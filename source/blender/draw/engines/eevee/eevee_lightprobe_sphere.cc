@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup eevee
+ */
+
 #include "eevee_lightprobe_sphere.hh"
 #include "eevee_instance.hh"
 
@@ -18,7 +22,7 @@ int SphereProbeModule::probe_render_extent() const
 
 void SphereProbeModule::init()
 {
-  if (!instance_.is_viewport()) {
+  if (!instance_.is_viewport() || instance_.is_image_render) {
     /* TODO(jbakker): should we check on the subtype as well? Now it also populates even when
      * there are other light probes in the scene. */
     update_probes_next_sample_ = DEG_id_type_any_exists(instance_.depsgraph, ID_LP);
@@ -285,29 +289,28 @@ void SphereProbeModule::set_view(View & /*view*/)
   }
 
   /* Stable sorting of probes. */
-  std::sort(
-      probe_active.begin(), probe_active.end(), [](const SphereProbe *a, const SphereProbe *b) {
-        if (a->volume != b->volume) {
-          /* Smallest first. */
-          return a->volume < b->volume;
-        }
-        /* Volumes are identical. Any arbitrary criteria can be used to sort them.
-         * Use position to avoid unstable result caused by depsgraph non deterministic eval
-         * order. This could also become a priority parameter. */
-        float3 _a = a->location;
-        float3 _b = b->location;
-        if (_a.x != _b.x) {
-          return _a.x < _b.x;
-        }
-        if (_a.y != _b.y) {
-          return _a.y < _b.y;
-        }
-        if (_a.z != _b.z) {
-          return _a.z < _b.z;
-        }
-        /* Fallback to memory address, since there's no good alternative. */
-        return a < b;
-      });
+  std::ranges::sort(probe_active, [](const SphereProbe *a, const SphereProbe *b) {
+    if (a->volume != b->volume) {
+      /* Smallest first. */
+      return a->volume < b->volume;
+    }
+    /* Volumes are identical. Any arbitrary criteria can be used to sort them.
+     * Use position to avoid unstable result caused by depsgraph non deterministic eval
+     * order. This could also become a priority parameter. */
+    float3 _a = a->location;
+    float3 _b = b->location;
+    if (_a.x != _b.x) {
+      return _a.x < _b.x;
+    }
+    if (_a.y != _b.y) {
+      return _a.y < _b.y;
+    }
+    if (_a.z != _b.z) {
+      return _a.z < _b.z;
+    }
+    /* Fallback to memory address, since there's no good alternative. */
+    return a < b;
+  });
 
   /* Push all sorted data to the UBO. */
   int probe_id = 0;

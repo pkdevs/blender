@@ -8,17 +8,16 @@
 
 #include <cmath>
 
+#include "DNA_brush_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
-
-#include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_rect.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_rect.hh"
 
 #include "BLT_translation.hh"
 
@@ -26,11 +25,16 @@
 #include "BKE_bvhutils.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
+#include "BKE_curves.hh"
 #include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_sample.hh"
+#include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_report.hh"
+#include "DNA_curves_types.h"
+#include "DNA_grease_pencil_types.h"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -38,62 +42,81 @@
 
 #include "RE_texture.h"
 
+#include "ED_mesh.hh" /* for face mask functions */
 #include "ED_screen.hh"
 #include "ED_select_utils.hh"
 #include "ED_view3d.hh"
-
-#include "ED_mesh.hh" /* for face mask functions */
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "paint_intern.hh"
 
-bool paint_convert_bb_to_rect(rcti *rect,
-                              const float bb_min[3],
-                              const float bb_max[3],
-                              const ARegion &region,
-                              const RegionView3D &rv3d,
-                              const Object &ob)
+namespace blender {
+
+static float3 paint_init_pivot_mesh(Object *ob)
 {
-  int i, j, k;
-
-  BLI_rcti_init_minmax(rect);
-
-  /* return zero if the bounding box has non-positive volume */
-  if (bb_min[0] > bb_max[0] || bb_min[1] > bb_max[1] || bb_min[2] > bb_max[2]) {
-    return false;
+  const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob);
+  if (!mesh_eval) {
+    mesh_eval = id_cast<const Mesh *>(ob->data);
   }
 
-  const blender::float4x4 projection = ED_view3d_ob_project_mat_get(&rv3d, &ob);
-
-  for (i = 0; i < 2; i++) {
-    for (j = 0; j < 2; j++) {
-      for (k = 0; k < 2; k++) {
-        float vec[3];
-        int proj_i[2];
-        vec[0] = i ? bb_min[0] : bb_max[0];
-        vec[1] = j ? bb_min[1] : bb_max[1];
-        vec[2] = k ? bb_min[2] : bb_max[2];
-        /* convert corner to screen space */
-        const blender::float2 proj = ED_view3d_project_float_v2_m4(&region, vec, projection);
-        /* expand 2D rectangle */
-
-        /* we could project directly to int? */
-        proj_i[0] = proj[0];
-        proj_i[1] = proj[1];
-
-        BLI_rcti_do_minmax_v(rect, proj_i);
-      }
-    }
+  const std::optional<Bounds<float3>> bounds = mesh_eval->bounds_min_max();
+  if (!bounds) {
+    return float3(0.0f);
   }
 
-  /* return false if the rectangle has non-positive area */
-  return rect->xmin < rect->xmax && rect->ymin < rect->ymax;
+  return math::midpoint(bounds->min, bounds->max);
+}
+
+static float3 paint_init_pivot_curves(Object *ob)
+{
+  const Curves &curves = *id_cast<const Curves *>(ob->data);
+  const std::optional<Bounds<float3>> bounds = curves.geometry.wrap().bounds_min_max();
+  if (bounds.has_value()) {
+    return math::midpoint(bounds->min, bounds->max);
+  }
+  return float3(0);
+}
+
+static float3 paint_init_pivot_grease_pencil(Object *ob, const int frame)
+{
+  const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(ob->data);
+  const std::optional<Bounds<float3>> bounds = grease_pencil.bounds_min_max(frame);
+  if (bounds.has_value()) {
+    return math::midpoint(bounds->min, bounds->max);
+  }
+  return float3(0.0f);
+}
+
+void paint_init_pivot(Object *ob, Scene *scene, Paint *paint)
+{
+  bke::PaintRuntime &paint_runtime = *paint->runtime;
+
+  float3 location;
+  switch (ob->type) {
+    case OB_MESH:
+      location = paint_init_pivot_mesh(ob);
+      break;
+    case OB_CURVES:
+      location = paint_init_pivot_curves(ob);
+      break;
+    case OB_GREASE_PENCIL:
+      location = paint_init_pivot_grease_pencil(ob, scene->r.cfra);
+      break;
+    default:
+      BLI_assert_unreachable();
+      paint_runtime.last_stroke_valid = false;
+      return;
+  }
+
+  mul_m4_v3(ob->object_to_world().ptr(), location);
+
+  bke::paint::stroke_set_location(*paint, location);
 }
 
 float paint_calc_object_space_radius(const ViewContext &vc,
-                                     const blender::float3 &center,
+                                     const float3 &center,
                                      const float pixel_radius)
 {
   Object *ob = vc.obact;
@@ -139,36 +162,55 @@ bool paint_get_tex_pixel(const MTex *mtex,
 void paint_stroke_operator_properties(wmOperatorType *ot)
 {
   static const EnumPropertyItem stroke_mode_items[] = {
-      {BRUSH_STROKE_NORMAL, "NORMAL", 0, "Regular", "Apply brush normally"},
-      {BRUSH_STROKE_INVERT,
+      {int(BrushStrokeMode::Normal), "NORMAL", 0, "Regular", "Apply brush normally"},
+      {int(BrushStrokeMode::Invert),
        "INVERT",
        0,
        "Invert",
        "Invert action of brush for duration of stroke"},
-      {BRUSH_STROKE_SMOOTH,
+      {0},
+  };
+
+  static const EnumPropertyItem temporary_brush_toggle_items[] = {
+      {int(BrushSwitchMode::None), "None", 0, "None", "Apply brush normally"},
+      {int(BrushSwitchMode::Smooth),
        "SMOOTH",
        0,
        "Smooth",
-       "Switch brush to smooth mode for duration of stroke"},
-      {BRUSH_STROKE_ERASE,
+       "Switch to smooth brush for duration of stroke"},
+      {int(BrushSwitchMode::Erase),
        "ERASE",
        0,
        "Erase",
-       "Switch brush to erase mode for duration of stroke"},
+       "Switch to erase brush for duration of stroke"},
+      {int(BrushSwitchMode::Mask),
+       "MASK",
+       0,
+       "Mask",
+       "Switch to mask brush for duration of stroke"},
       {0},
   };
 
   PropertyRNA *prop;
 
-  prop = RNA_def_collection_runtime(ot->srna, "stroke", &RNA_OperatorStrokeElement, "Stroke", "");
+  prop = RNA_def_collection_runtime(ot->srna, "stroke", RNA_OperatorStrokeElement, "Stroke", "");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   prop = RNA_def_enum(ot->srna,
                       "mode",
                       stroke_mode_items,
-                      BRUSH_STROKE_NORMAL,
+                      int(BrushStrokeMode::Normal),
                       "Stroke Mode",
                       "Action taken when a paint stroke is made");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_enum(ot->srna,
+                      "brush_toggle",
+                      temporary_brush_toggle_items,
+                      int(BrushSwitchMode::None),
+                      "Temporary Brush Toggle Type",
+                      "Brush to use for duration of stroke");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
@@ -340,6 +382,36 @@ void PAINT_OT_face_select_loop(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend the selection");
 }
 
+static wmOperatorStatus paintvert_select_loop_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent *event)
+{
+  const bool select = RNA_boolean_get(op->ptr, "select");
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  if (!extend) {
+    paintvert_deselect_all_visible(CTX_data_active_object(C), SEL_DESELECT, false);
+  }
+  view3d_operator_needs_gpu(C);
+  paintvert_select_loop(C, CTX_data_active_object(C), event->mval, select);
+  ED_region_tag_redraw(CTX_wm_region(C));
+  return OPERATOR_FINISHED;
+}
+
+void PAINT_OT_vert_select_loop(wmOperatorType *ot)
+{
+  ot->name = "Select Loop";
+  ot->description = "Select vertex loop under the cursor";
+  ot->idname = "PAINT_OT_vert_select_loop";
+
+  ot->invoke = paintvert_select_loop_invoke;
+  ot->poll = vert_paint_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_boolean(ot->srna, "select", true, "Select", "If false, vertices will be deselected");
+  RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend the selection");
+}
+
 static wmOperatorStatus vert_select_all_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
@@ -366,9 +438,9 @@ void PAINT_OT_vert_select_all(wmOperatorType *ot)
 static wmOperatorStatus vert_select_ungrouped_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
-  if (BLI_listbase_is_empty(&mesh->vertex_group_names) || mesh->deform_verts().is_empty()) {
+  if (mesh->vertex_group_names.is_empty() || mesh->deform_verts().is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No weights/vertex groups on object");
     return OPERATOR_CANCELLED;
   }
@@ -603,3 +675,5 @@ void PAINT_OT_face_vert_reveal(wmOperatorType *ot)
                   "Select",
                   "Specifies whether the newly revealed geometry should be selected");
 }
+
+}  // namespace blender

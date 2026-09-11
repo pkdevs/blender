@@ -60,6 +60,20 @@
 
 namespace blender::gpu::render_graph {
 class VKScheduler;
+class VKRenderGraph;
+
+/**
+ * Holds a reference to a node data allocated via VKRenderGraph::alloc_node.
+ *
+ * Stores the node handle (for finalization) and a direct reference to the
+ * in-place data stored inside the render graph.
+ */
+template<typename NodeInfo> struct VKNodeData {
+  NodeHandle node_handle;
+  typename NodeInfo::Data &data;
+
+  void finalize(VKRenderGraph &render_graph, const typename NodeInfo::CreateInfo &create_info);
+};
 
 class VKRenderGraph : public NonCopyable {
   friend class VKCommandBuilder;
@@ -67,10 +81,12 @@ class VKRenderGraph : public NonCopyable {
   using DebugGroupNameID = int64_t;
   using DebugGroupID = int64_t;
 
-  /** All links inside the graph indexable via NodeHandle. */
-  Vector<VKRenderGraphNodeLinks, 1024> links_;
   /** All nodes inside the graph indexable via NodeHandle. */
   Vector<VKRenderGraphNode, 1024> nodes_;
+  /**
+   * Node read/write links to buffer and image resources.
+   */
+  VKRenderGraphLinks links_;
   /** Storage for large node datas to improve CPU cache pre-loading. */
   VKRenderGraphStorage storage_;
 
@@ -88,7 +104,8 @@ class VKRenderGraph : public NonCopyable {
     std::string name;
     ColorTheme4f color;
 
-    BLI_STRUCT_EQUALITY_OPERATORS_2(DebugGroup, name, color)
+    friend bool operator==(const DebugGroup &a, const DebugGroup &b) = default;
+
     uint64_t hash() const
     {
       return get_default_hash<std::string, ColorTheme4f>(name, color);
@@ -113,10 +130,10 @@ class VKRenderGraph : public NonCopyable {
     /**
      * Map of a node_handle to an index of debug group in used_groups.
      *
-     * <source>
+     * \code{.cc}
      * int used_group_id = node_group_map[node_handle];
      * const Vector<DebugGroupNameID> &used_group = used_groups[used_group_id];
-     * </source>
+     * \endcode
      */
     Vector<DebugGroupID> node_group_map;
   } debug_;
@@ -129,6 +146,47 @@ class VKRenderGraph : public NonCopyable {
    * parameter.
    */
   VKRenderGraph(VKResourceStateTracker &resources);
+
+  /**
+   * Allocate a draw node in the render graph.
+   *
+   * Returns a reference to the in-place storage data that the caller can fill
+   * before calling finalize_node.
+   */
+  template<typename NodeInfo> VKNodeData<NodeInfo> alloc_node()
+  {
+    static VKRenderGraphNode node_template = {};
+    NodeHandle node_handle = nodes_.append_and_get_index(node_template);
+    VKRenderGraphNode &node = nodes_[node_handle];
+    typename NodeInfo::Data &data = node.alloc_node_data<NodeInfo>(storage_);
+    return {node_handle, data};
+  }
+
+  /**
+   * Finalize a draw node that was previously allocated via alloc_node.
+   *
+   * Builds resource links, records debug groups, etc.
+   */
+  template<typename NodeInfo>
+  void finalize_node(NodeHandle node_handle, const typename NodeInfo::CreateInfo &create_info)
+  {
+    std::scoped_lock lock(resources_.mutex);
+    VKRenderGraphNode &node = nodes_[node_handle];
+    BLI_assert(node.type == NodeInfo::node_type);
+
+    if (G.debug & G_DEBUG_GPU) {
+      if (!debug_.group_used) {
+        debug_.group_used = true;
+        debug_.used_groups.append(debug_.group_stack);
+      }
+      if (nodes_.size() > debug_.node_group_map.size()) {
+        debug_.node_group_map.resize(nodes_.size());
+      }
+      debug_.node_group_map[node_handle] = debug_.used_groups.size() - 1;
+    }
+
+    node.template finalize_node<NodeInfo>(storage_, resources_, links_, create_info);
+  }
 
  private:
   /**
@@ -148,16 +206,9 @@ class VKRenderGraph : public NonCopyable {
       std::cout << "break\n";
     }
 #endif
-    if (nodes_.size() > links_.size()) {
-      links_.resize(nodes_.size());
-    }
     VKRenderGraphNode &node = nodes_[node_handle];
     node.set_node_data<NodeInfo>(storage_, create_info);
-
-    VKRenderGraphNodeLinks &node_links = links_[node_handle];
-    BLI_assert(node_links.inputs.is_empty());
-    BLI_assert(node_links.outputs.is_empty());
-    node.build_links<NodeInfo>(resources_, node_links, create_info);
+    node.build_links<NodeInfo>(resources_, links_, create_info);
 
     if (G.debug & G_DEBUG_GPU) {
       if (!debug_.group_used) {
@@ -180,6 +231,7 @@ class VKRenderGraph : public NonCopyable {
   }
   ADD_NODE(VKBeginQueryNode)
   ADD_NODE(VKBeginRenderingNode)
+  ADD_NODE(VKBuildAccelerationStructureNode)
   ADD_NODE(VKEndQueryNode)
   ADD_NODE(VKEndRenderingNode)
   ADD_NODE(VKClearAttachmentsNode)
@@ -193,10 +245,6 @@ class VKRenderGraph : public NonCopyable {
   ADD_NODE(VKBlitImageNode)
   ADD_NODE(VKDispatchNode)
   ADD_NODE(VKDispatchIndirectNode)
-  ADD_NODE(VKDrawNode)
-  ADD_NODE(VKDrawIndexedNode)
-  ADD_NODE(VKDrawIndexedIndirectNode)
-  ADD_NODE(VKDrawIndirectNode)
   ADD_NODE(VKResetQueryPoolNode)
   ADD_NODE(VKUpdateBufferNode)
   ADD_NODE(VKUpdateMipmapsNode)
@@ -214,6 +262,18 @@ class VKRenderGraph : public NonCopyable {
     VKRenderGraphNode &node = nodes_[node_handle];
     BLI_assert(node.type == VKNodeType::COPY_BUFFER);
     return node.copy_buffer;
+  }
+
+  /**
+   * To reduce small allocations the caller can copy push constants inside the render graph.
+   * The returned index range can than be used by the command builder to retrieve the push
+   * constants.
+   */
+  IndexRange copy_push_constants(Span<uint8_t> push_constants)
+  {
+    int64_t start = storage_.push_constants.size();
+    storage_.push_constants.extend(push_constants);
+    return IndexRange::from_begin_size(start, push_constants.size());
   }
 
   /**
@@ -263,7 +323,35 @@ class VKRenderGraph : public NonCopyable {
 
   void memstats() const;
 
+  /** Get the images that are linked by the given node. */
+  inline Span<VKRenderGraphImage> linked_images(const VKRenderGraphNode &node) const
+  {
+    return links_.images.as_span().slice(node.links.images);
+  }
+  /** Get the images that are linked by the given node_handle. */
+  inline Span<VKRenderGraphImage> linked_images(const NodeHandle node_handle) const
+  {
+    return linked_images(nodes_[node_handle]);
+  }
+  /** Get the buffers that are linked by the given node. */
+  inline Span<VKRenderGraphBuffer> linked_buffers(const VKRenderGraphNode &node) const
+  {
+    return links_.buffers.as_span().slice(node.links.buffers);
+  }
+  /** Get the buffers that are linked by the given node_handle. */
+  inline Span<VKRenderGraphBuffer> linked_buffers(const NodeHandle node_handle) const
+  {
+    return linked_buffers(nodes_[node_handle]);
+  }
+
  private:
 };
+
+template<typename NodeInfo>
+void VKNodeData<NodeInfo>::finalize(VKRenderGraph &render_graph,
+                                    const typename NodeInfo::CreateInfo &create_info)
+{
+  render_graph.finalize_node<NodeInfo>(node_handle, create_info);
+}
 
 }  // namespace blender::gpu::render_graph

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <fmt/format.h>
 
 #include "NOD_geometry_nodes_closure_eval.hh"
@@ -21,7 +25,7 @@
 
 #include "FN_lazy_function_execute.hh"
 
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string_utf8_symbols.hh"
 
 namespace blender::nodes {
 
@@ -196,6 +200,7 @@ class LazyFunctionForClosureZone : public LazyFunction {
     closure_indices.inputs.output_usages = lf_graph.graph_inputs().index_range().take_back(
         storage.output_items.items_num);
 
+    Vector<const bke::SocketValueVariant *> captured_values;
     for (const int i : zone_.border_links.index_range()) {
       bke::SocketValueVariant *input_ptr = params.try_get_input_data_ptr<bke::SocketValueVariant>(
           zone_info_.indices.inputs.border_links[i]);
@@ -204,6 +209,7 @@ class LazyFunctionForClosureZone : public LazyFunction {
       /* The value is captured here and we need to make sure that it doesn't reference data which
        * may become dangling. */
       stored_ptr.ensure_owns_direct_data();
+      captured_values.append(&stored_ptr);
       lf_body_node.input(body_fn_.indices.inputs.border_links[i]).set_default_value(&stored_ptr);
     }
 
@@ -267,10 +273,11 @@ class LazyFunctionForClosureZone : public LazyFunction {
                                         closure_indices,
                                         std::move(default_input_values),
                                         source_location,
-                                        std::make_shared<ClosureEvalLog>())};
+                                        std::make_shared<ClosureEvalLog>(),
+                                        std::move(captured_values))};
 
     params.set_output(zone_info_.indices.outputs.main[0],
-                      bke::SocketValueVariant::From(std::move(closure)));
+                      bke::SocketValueVariant::from(std::move(closure)));
   }
 };
 
@@ -314,9 +321,7 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
           outputs_.append_and_get_index_as(bsocket.name, CPPType::get<bke::SocketValueVariant>()));
       indices_.inputs.output_usages.append(
           inputs_.append_and_get_index_as("Usage", CPPType::get<bool>(), lf::ValueUsage::Maybe));
-      if (bke::node_tree_reference_lifetimes::can_contain_referenced_data(
-              eNodeSocketDatatype(bsocket.type)))
-      {
+      if (bke::node_tree_reference_lifetimes::can_contain_referenced_data(bsocket.type)) {
         const int input_i = inputs_.append_and_get_index_as(
             "Reference Set",
             CPPType::get<bke::GeometryNodesReferenceSet>(),
@@ -354,29 +359,30 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
     auto local_user_data = *static_cast<GeoNodesLocalUserData *>(context.local_user_data);
 
     if (!eval_storage.graph_executor) {
-      if (this->is_recursive_call(user_data)) {
-        if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(
-                user_data))
-        {
-          tree_logger->node_warnings.append(
-              *tree_logger->allocator,
-              {bnode_.identifier,
-               {NodeWarningType::Error, TIP_("Recursive closure is not allowed")}});
-        }
-        this->set_default_outputs(params);
-        return;
-      }
-
       eval_storage.closure = params.extract_input<bke::SocketValueVariant>(indices_.inputs.main[0])
                                  .extract<ClosurePtr>();
       if (eval_storage.closure) {
-        this->generate_closure_compatibility_warnings(*eval_storage.closure, context);
-        this->initialize_execution_graph(eval_storage);
+        if (user_data.is_stack_limit_reached()) {
+          this->initialize_pass_through_graph(eval_storage);
+          if (eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(
+                  user_data))
+          {
+            tree_logger->node_warnings.append(
+                *tree_logger->allocator,
+                {bnode_.identifier,
+                 {NodeWarningType::Error,
+                  TIP_("Stack limit reached. Closure becomes pass-through.")}});
+          }
+        }
+        else {
+          this->generate_closure_compatibility_warnings(*eval_storage.closure, context);
+          this->initialize_execution_graph(eval_storage);
 
-        const bNodeTree &btree_orig = *DEG_get_original(&btree_);
-        ClosureEvalLocation eval_location{
-            btree_orig.id.session_uid, bnode_.identifier, user_data.compute_context->hash()};
-        eval_storage.closure->log_evaluation(eval_location);
+          const bNodeTree &btree_orig = *DEG_get_original(&btree_);
+          ClosureEvalLocation eval_location{
+              btree_orig.id.session_uid, bnode_.identifier, user_data.compute_context->hash()};
+          eval_storage.closure->log_evaluation(eval_location);
+        }
       }
       else {
         /* If no closure is provided, the Evaluate Closure node behaves as if it was muted. So some
@@ -392,8 +398,8 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
         user_data.compute_context, bnode_.identifier, &btree_, closure_source_location};
     GeoNodesUserData closure_user_data = user_data;
     closure_user_data.compute_context = &closure_compute_context;
-    closure_user_data.log_socket_values = should_log_socket_values_for_context(
-        user_data, closure_compute_context.hash());
+    closure_user_data.verbose_log = should_log_verbose_in_context(user_data,
+                                                                  closure_compute_context.hash());
     GeoNodesLocalUserData closure_local_user_data{closure_user_data};
 
     lf::Context eval_graph_context{
@@ -434,7 +440,7 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
     const auto &node_storage = *static_cast<const NodeEvaluateClosure *>(bnode_.storage);
     const auto &user_data = *static_cast<GeoNodesUserData *>(context.user_data);
     const auto &local_user_data = *static_cast<GeoNodesLocalUserData *>(context.local_user_data);
-    geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data);
+    eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data);
     if (tree_logger == nullptr) {
       return;
     }
@@ -445,9 +451,7 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
       const bke::bNodeSocketType *item_type = bke::node_socket_type_find_static(item.socket_type);
       if (const std::optional<int> i = signature.find_input_index(item.name)) {
         const ClosureSignature::Item &closure_item = signature.inputs[*i];
-        if (!btree_.typeinfo->validate_link(eNodeSocketDatatype(item.socket_type),
-                                            eNodeSocketDatatype(closure_item.type->type)))
-        {
+        if (!btree_.typeinfo->validate_link(item.socket_type, closure_item.type->type)) {
           tree_logger->node_warnings.append(
               *tree_logger->allocator,
               {bnode_.identifier,
@@ -490,9 +494,7 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
       const bke::bNodeSocketType *item_type = bke::node_socket_type_find_static(item.socket_type);
       if (const std::optional<int> i = signature.find_output_index(item.name)) {
         const ClosureSignature::Item &closure_item = signature.outputs[*i];
-        if (!btree_.typeinfo->validate_link(eNodeSocketDatatype(closure_item.type->type),
-                                            eNodeSocketDatatype(item.socket_type)))
-        {
+        if (!btree_.typeinfo->validate_link(closure_item.type->type, item.socket_type)) {
           tree_logger->node_warnings.append(
               *tree_logger->allocator,
               {bnode_.identifier,

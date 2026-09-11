@@ -6,9 +6,13 @@
  * \ingroup bke
  */
 
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_memory_utils.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_ID.h"
 #include "DNA_asset_types.h"
@@ -16,13 +20,16 @@
 #include "DNA_userdef_types.h"
 
 #include "AS_asset_library.hh"
+#include "AS_essentials_library.hh"
 
+#include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_blendfile_link_append.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -38,6 +45,27 @@
 #include "DEG_depsgraph_build.hh"
 
 namespace blender::bke {
+
+static const char *asset_name_in_library(const ID &id)
+{
+  /* Get the original name from the weak reference, in case the datablock was renamed. */
+  if (ID_IS_LINKED(&id) && id.library_weak_reference) {
+    return id.library_weak_reference->library_id_name + 2;
+  }
+
+  return BKE_id_name(id);
+}
+
+static void asset_name_in_library_set(ID &id, const char *name)
+{
+  BLI_assert(ID_IS_LINKED(&id));
+
+  char id_name[MAX_ID_NAME];
+  STRNCPY(id_name, id.name);
+  BLI_strncpy(id_name + 2, name, sizeof(id_name) - 2);
+
+  BKE_main_library_weak_reference_add(&id, id.lib->filepath, id_name);
+}
 
 static ID *asset_link_id(Main &global_main,
                          const ID_Type id_type,
@@ -81,6 +109,9 @@ static ID *asset_link_id(Main &global_main,
     {
       local_asset->lib->runtime->tag |= LIBRARY_ASSET_FILE_WRITABLE;
     }
+
+    /* Keep original name in weak reference, in case this datablock gets renamed. */
+    asset_name_in_library_set(*local_asset, asset_name);
   }
 
   return local_asset;
@@ -198,7 +229,7 @@ static ID *asset_reload(Main &global_main, ID &id, ReportList *reports)
 {
   BLI_assert(ID_IS_LINKED(&id));
 
-  const std::string name = BKE_id_name(id);
+  const std::string name = asset_name_in_library(id);
   const std::string filepath = id.lib->runtime->filepath_abs;
   const ID_Type id_type = GS(id.name);
 
@@ -239,10 +270,40 @@ static AssetWeakReference asset_weak_reference_for_user_library(
   return weak_ref;
 }
 
+static AssetWeakReference asset_weak_reference_for_online_essentials(const short idcode,
+                                                                     const char *idname,
+                                                                     const char *filepath)
+{
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+  BLI_assert(
+      BLI_path_contains(asset_system::online_essentials_cache_directory_path().c_str(), filepath));
+
+  char relative_filepath[FILE_MAX];
+  STRNCPY(relative_filepath, filepath);
+  char online_essentials_path[FILE_MAXDIR];
+  STRNCPY(online_essentials_path, asset_system::online_essentials_cache_directory_path().c_str());
+  BLI_path_slash_ensure(online_essentials_path, sizeof(online_essentials_path));
+  BLI_path_rel(relative_filepath, online_essentials_path);
+  const char *asset_blend_path = relative_filepath + 2; /* Strip out // prefix. */
+
+  AssetWeakReference weak_ref;
+  weak_ref.asset_library_type = ASSET_LIBRARY_ONLINE_ESSENTIALS;
+  weak_ref.relative_asset_identifier = BLI_sprintfN(
+      "%s/%s/%s", asset_blend_path, BKE_idtype_idcode_to_name(idcode), idname);
+
+  return weak_ref;
+}
+
 static AssetWeakReference asset_weak_reference_for_essentials(const short idcode,
                                                               const char *idname,
                                                               const char *filepath)
 {
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+  BLI_assert(!BLI_path_contains(asset_system::online_essentials_cache_directory_path().c_str(),
+                                filepath));
+
   AssetWeakReference weak_ref;
   weak_ref.asset_library_type = ASSET_LIBRARY_ESSENTIALS;
   weak_ref.relative_asset_identifier = BLI_sprintfN("%s/%s/%s/%s",
@@ -280,7 +341,7 @@ std::optional<std::string> asset_edit_id_save_as(Main &global_main,
   return final_full_asset_filepath;
 }
 
-bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
+bool asset_edit_id_save(Main &global_main, ID &id, ReportList &reports)
 {
   if (!asset_edit_id_is_writable(id)) {
     return false;
@@ -297,6 +358,21 @@ bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
   if (!success) {
     BKE_report(&reports, RPT_ERROR, "Failed to write to asset library");
     return false;
+  }
+
+  const std::optional<AssetWeakReference> old_weak_ref = asset_edit_weak_reference_from_id(id);
+
+  asset_name_in_library_set(id, BKE_id_name(id));
+
+  const std::optional<AssetWeakReference> new_weak_ref = asset_edit_weak_reference_from_id(id);
+
+  /* Update any weak references to the renamed asset. */
+  if (old_weak_ref && new_weak_ref && *old_weak_ref != *new_weak_ref) {
+    BKE_asset_weak_reference_foreach_main(global_main, [&](AssetWeakReference &weak_ref) {
+      if (weak_ref == *old_weak_ref) {
+        weak_ref = *new_weak_ref;
+      }
+    });
   }
 
   return true;
@@ -348,18 +424,21 @@ ID *asset_edit_id_from_weak_reference(Main &global_main,
 
   BLI_assert(asset_name != nullptr);
 
-  /* Test if asset has been loaded already. */
-  ID *local_asset = BKE_libblock_find_name_and_library_filepath(
-      &global_main, id_type, asset_name, asset_lib_path);
-  if (local_asset) {
-    return local_asset;
+  /* Is the asset already in the file we have loaded? */
+  if (asset_lib_path == nullptr) {
+    return BKE_libblock_find_name(&global_main, id_type, asset_name, nullptr);
+  }
+
+  /* Find already loaded asset in a library. */
+  if (Library *lib = library::search_filepath_abs(&global_main.libraries, asset_lib_path)) {
+    for (ID &local_asset : *which_libbase(&global_main, id_type)) {
+      if (local_asset.lib == lib && STREQ(asset_name_in_library(local_asset), asset_name)) {
+        return &local_asset;
+      }
+    }
   }
 
   /* Try linking in the required file. */
-  if (asset_lib_path == nullptr) {
-    return nullptr;
-  }
-
   return asset_link_id(global_main, id_type, asset_lib_path, asset_name);
 }
 
@@ -384,13 +463,22 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
       &U, id.lib->runtime->filepath_abs);
 
   const short idcode = GS(id.name);
+  const char *idname = asset_name_in_library(id);
 
   if (user_library && user_library->dirpath[0]) {
     return asset_weak_reference_for_user_library(
-        *user_library, idcode, id.name + 2, id.lib->runtime->filepath_abs);
+        *user_library, idcode, idname, id.lib->runtime->filepath_abs);
   }
 
-  return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime->filepath_abs);
+  const bool is_online_essential = BLI_path_contains(
+      asset_system::online_essentials_cache_directory_path().c_str(),
+      id.lib->runtime->filepath_abs);
+  if (is_online_essential) {
+    return asset_weak_reference_for_online_essentials(
+        idcode, idname, id.lib->runtime->filepath_abs);
+  }
+
+  return asset_weak_reference_for_essentials(idcode, idname, id.lib->runtime->filepath_abs);
 }
 
 bool asset_edit_id_is_editable(const ID &id)
@@ -419,15 +507,82 @@ ID *asset_edit_id_ensure_local(Main &global_main, ID &id)
     return local_id;
   }
 
-  /* Make local and create weak library reference for reuse. */
-  BKE_lib_id_make_local(&global_main,
-                        &id,
-                        LIB_ID_MAKELOCAL_FORCE_COPY | LIB_ID_MAKELOCAL_INDIRECT |
-                            LIB_ID_MAKELOCAL_ASSET_DATA_CLEAR);
-  BLI_assert(id.newid != nullptr);
-  BKE_main_library_weak_reference_add(id.newid, id.lib->filepath, id.name);
+  /* Keep a copy in case the ID gets made local in-place and the library data cleared. */
+  std::string filepath = id.lib->filepath;
 
-  return id.newid;
+  /* Recursively make local (creating copies of the given ID and its dependencies) and create weak
+   * library reference for reuse. */
+
+  {
+    /* Recurse to collect IDs to make local. */
+
+    /* #BKE_library_make_local() only processes IDs not tagged with #ID_TAG_PRE_EXISTING (for
+     * historic reasons). */
+    BKE_main_id_tag_all(&global_main, ID_TAG_PRE_EXISTING, true);
+
+    /* Mark this ID for processing. */
+    id.tag &= ~ID_TAG_PRE_EXISTING;
+    BKE_library_foreach_ID_link(
+        &global_main,
+        &id,
+        [&](const LibraryIDLinkCallbackData *cb_data) {
+          /* A direct or indirect dependency of #id. */
+          ID *dependency_id = *cb_data->id_pointer;
+          if (!dependency_id || !ID_TYPE_SUPPORTS_ASSET_EDITABLE(GS(dependency_id->name))) {
+            return IDWALK_RET_STOP_RECURSION;
+          }
+          /* Mark this ID for processing. */
+          dependency_id->tag &= ~ID_TAG_PRE_EXISTING;
+          return IDWALK_RET_NOP;
+        },
+        nullptr,
+        IDWALK_RECURSE);
+  }
+
+  GHash *old_to_new_id = BLI_ghash_ptr_new_ex(__func__, 4);
+  BLI_SCOPED_DEFER([&] { BLI_ghash_free(old_to_new_id, nullptr, nullptr); });
+
+  BKE_library_make_local(&global_main, nullptr, old_to_new_id, true, false, true);
+
+  /* #ID_TAG_PRE_EXISTING should be reset after use. */
+  BKE_main_id_tag_all(&global_main, ID_TAG_PRE_EXISTING, false);
+
+  /* #BKE_library_foreach_ID_link() may modify IDs in-place and doesn't add it to the hash
+   * table then. Can be recognized by the fact that the library pointer is null now. */
+  if (id.lib == nullptr) {
+    BLI_ghash_insert(old_to_new_id, &id, &id);
+  }
+
+  /* If any of the processed IDs are still using linked IDs (probably because they are not covered
+   * by #ID_TYPE_SUPPORTS_ASSET_EDITABLE()), clear that usage so the IDs are definitely only using
+   * local data. */
+  {
+    GHashIterator gh_iter;
+    GHASH_ITER (gh_iter, old_to_new_id) {
+      ID *now_local_id = static_cast<ID *>(BLI_ghashIterator_getValue(&gh_iter));
+      BKE_library_foreach_ID_link(
+          &global_main,
+          now_local_id,
+          [&](const LibraryIDLinkCallbackData *cb_data) {
+            if (*cb_data->id_pointer && ID_IS_LINKED(*cb_data->id_pointer)) {
+              *cb_data->id_pointer = nullptr;
+            }
+            return IDWALK_RET_NOP;
+          },
+          nullptr,
+          IDWALK_NOP);
+    }
+  }
+
+  ID *newid = reinterpret_cast<ID *>(BLI_ghash_lookup(old_to_new_id, &id));
+  if (!newid) {
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+
+  BKE_main_library_weak_reference_add(newid, filepath.c_str(), id.name);
+
+  return newid;
 }
 
 }  // namespace blender::bke

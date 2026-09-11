@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -14,7 +16,7 @@
 namespace blender::eevee {
 #endif
 
-enum eSamplingDimension : uint32_t {
+enum [[host_shared]] eSamplingDimension : uint32_t {
   SAMPLING_FILTER_U = 0u,
   SAMPLING_FILTER_V = 1u,
   SAMPLING_LENS_U = 2u,
@@ -44,23 +46,23 @@ enum eSamplingDimension : uint32_t {
   SAMPLING_SHADOW_I = 26u,
   SAMPLING_SHADOW_J = 27u,
   SAMPLING_SHADOW_K = 28u,
-  SAMPLING_UNUSED_0 = 29u,
-  SAMPLING_UNUSED_1 = 30u,
-  SAMPLING_UNUSED_2 = 31u,
+  SAMPLING_GBUFFER_U = 29u,
+  SAMPLING_GBUFFER_V = 30u,
+  SAMPLING_GBUFFER_W = 31u,
+  SAMPLING_FILM_U = 32u,
 };
 
 /**
  * IMPORTANT: Make sure the array can contain all sampling dimensions.
  * Also note that it needs to be multiple of 4.
  */
-#define SAMPLING_DIMENSION_COUNT 32
+#define SAMPLING_DIMENSION_COUNT 36
 
 /* NOTE(@fclem): Needs to be used in #StorageBuffer because of arrays of scalar. */
-struct SamplingData {
+struct [[host_shared]] SamplingData {
   /** Array containing random values from Low Discrepancy Sequence in [0..1) range. */
   float dimensions[SAMPLING_DIMENSION_COUNT];
 };
-BLI_STATIC_ASSERT_ALIGN(SamplingData, 16)
 
 /* Returns total sample count in a web pattern of the given size. */
 static inline int sampling_web_sample_count_get(int web_density, int in_ring_count)

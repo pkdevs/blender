@@ -7,7 +7,7 @@
  */
 
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_bvhutils.hh"
 #include "BKE_mesh.hh"
@@ -57,7 +57,7 @@ static void mesh_corner_tris_raycast_backface_culling_cb(void *userdata,
                                                          const BVHTreeRay *ray,
                                                          BVHTreeRayHit *hit)
 {
-  const bke::BVHTreeFromMesh *data = (bke::BVHTreeFromMesh *)userdata;
+  const bke::BVHTreeFromMesh *data = static_cast<bke::BVHTreeFromMesh *>(userdata);
   const Span<float3> positions = data->vert_positions;
   const int3 &tri = data->corner_tris[index];
   const float *vtri_co[3] = {
@@ -151,11 +151,11 @@ static bool raycastMesh(SnapObjectContext *sctx,
     data.ob_uuid = ob_index;
     data.hit_list = sctx->runtime.hit_list;
 
-    void *hit_last_prev = data.hit_list->last;
+    void *hit_last_prev = data.hit_list->last();
     BLI_bvhtree_ray_cast_all(
         treedata.tree, ray_start_local, ray_normal_local, 0.0f, depth_max, raycast_all_cb, &data);
 
-    retval = hit_last_prev != data.hit_list->last;
+    retval = hit_last_prev != data.hit_list->last();
   }
   else {
     BVHTreeRayHit hit{};
@@ -491,8 +491,9 @@ static eSnapMode mesh_snap_mode_supported(const Mesh *mesh, bool skip_hidden)
   /* When skipping hidden geometry, we still cannot obtain the number of loose verts
    * until computing #BVHTREE_FROM_LOOSEVERTS_NO_HIDDEN. Therefore, consider #SCE_SNAP_TO_POINT
    * supported even if the mesh has no loose vertices in this case. */
-  eSnapMode snap_mode_supported = (skip_hidden || mesh->loose_verts().count) ? SCE_SNAP_TO_POINT :
-                                                                               SCE_SNAP_TO_NONE;
+  eSnapMode snap_mode_supported = (skip_hidden || !mesh->loose_verts().is_empty()) ?
+                                      SCE_SNAP_TO_POINT :
+                                      SCE_SNAP_TO_NONE;
   if (mesh->faces_num) {
     snap_mode_supported |= SCE_SNAP_TO_FACE | SCE_SNAP_TO_FACE_MIDPOINT |
                            SCE_SNAP_INDIVIDUAL_NEAREST | SNAP_TO_EDGE_ELEMENTS;
@@ -575,18 +576,19 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
   }
 
   if (snap_to & SCE_SNAP_TO_FACE_MIDPOINT) {
-    BLI_bvhtree_find_nearest_projected(
-        treedata.tree,
-        nearest2d.pmat_local.ptr(),
-        sctx->runtime.win_size,
-        sctx->runtime.mval,
-        reinterpret_cast<float (*)[4]>(nearest2d.clip_planes.data()),
-        nearest2d.clip_planes.size(),
-        &nearest,
-        cb_snap_tri_faces_midpoint,
-        &nearest2d);
-
-    if (nearest.index != -1) {
+    if (treedata.tree) {
+      BLI_bvhtree_find_nearest_projected(
+          treedata.tree,
+          nearest2d.pmat_local.ptr(),
+          sctx->runtime.win_size,
+          sctx->runtime.mval,
+          reinterpret_cast<float (*)[4]>(nearest2d.clip_planes.data()),
+          nearest2d.clip_planes.size(),
+          &nearest,
+          cb_snap_tri_faces_midpoint,
+          &nearest2d);
+    }
+    if (last_index != nearest.index) {
       last_index = nearest.index;
       elem = SCE_SNAP_TO_FACE_MIDPOINT;
     }

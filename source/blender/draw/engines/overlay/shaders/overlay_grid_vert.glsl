@@ -7,8 +7,9 @@
 VERTEX_SHADER_CREATE_INFO(overlay_grid_next)
 
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
+#include "overlay_grid_common_lib.glsl"
 
 struct LineData {
   float2 P;
@@ -63,36 +64,16 @@ LineData decode_axis_data(uint vertex_id)
   return line;
 }
 
-/* Returns true if components of `v` fall within `epsilon` of 0. */
-bool2 is_zero(float2 v, float epsilon)
-{
-  return lessThanEqual(abs(v), float2(epsilon));
-}
-
-/* Test if the current line falls under an active axis line which occludes it. */
-bool is_occluded_by_axis(float3 vertex_pos_global)
-{
-  if (flag_test(grid_flag, SHOW_GRID)) {
-    return (flag_test(grid_flag, AXIS_X) && all(is_zero(vertex_pos_global.yz, 1e-4f))) ||
-           (flag_test(grid_flag, AXIS_Y) && all(is_zero(vertex_pos_global.xz, 1e-4f))) ||
-           (flag_test(grid_flag, AXIS_Z) && all(is_zero(vertex_pos_global.xy, 1e-4f)));
-  }
-  return false;
-}
-
 /* Test if the current line falls under another line on a higher level, which occludes it. */
 bool is_occluded_by_higher_level(LineData line, uint level)
 {
   if (flag_test(grid_flag, SHOW_GRID) && !flag_test(grid_flag, GRID_SIMA)) {
     if (line.level < OVERLAY_GRID_STEPS_DRAW - 1 && level < OVERLAY_GRID_STEPS_LEN - 1) {
-      float step_size_curr = grid_buf.steps[level][line.axis];
-      float step_size_next = grid_buf.steps[level + 1][line.axis];
-
-      float2 step_offs_curr = round(grid_buf.offset / step_size_curr) * step_size_curr;
-      float2 step_offs_next = round(step_offs_curr / step_size_next) * step_size_next;
-      float2 diff = step_offs_next + (line.P - step_offs_next) / step_size_next;
-
-      if (is_equal(fract(diff[1 - line.axis]), 0.0f, 1e-4)) {
+      /* To determine if a higher up line occludes the current line; we solve the following:
+       * given scalars s1, s2 and integer i, is there an integer j : i*s1 = j*s2. The value in
+       * `line.P` holds i*s1, so we compute j = i*s1/s2 and verify if it is an integer.  */
+      float j = abs(line.P[1 - line.axis]) / grid_buf.steps[level + 1][line.axis];
+      if (is_equal(floor(j), j, 1e-4f)) {
         return true;
       }
     }
@@ -105,6 +86,11 @@ float2 screen_position(float4 p)
   return ((p.xy / p.w) * 0.5f + 0.5f) * uniform_buf.size_viewport;
 }
 
+bool use_level_offset(uint grid_flag)
+{
+  return !flag_test(grid_flag, GRID_SIMA | GRID_ALIGNED);
+}
+
 void main()
 {
   gl_Position = float4(NAN_FLT); /* Discard by default. */
@@ -112,17 +98,29 @@ void main()
                                                     decode_axis_data(gl_VertexID);
 
   /* Compute the actual level of a line, offset by -1 to force a sub-level in the 3D viewport. */
-  int level = int(grid_buf.level) + int(line.level) - (flag_test(grid_flag, GRID_SIMA) ? 0 : 1);
-  if (level < 0 || level >= OVERLAY_GRID_STEPS_LEN) {
-    return; /* Discard line. */
-  }
+  int level = int(grid_buf.level) + int(line.level) - (use_level_offset(grid_flag) ? 1 : 0);
+  level = clamp(level, 0, OVERLAY_GRID_STEPS_LEN - 1);
 
   /* Compute per-level size, camera offset for lines. Offset is rounded to the nearest
    * level-dependent line position for grid, while axes simply move with the camera. */
-  float step_size = grid_buf.steps[level][line.axis];
-  float2 step_offs = flag_test(grid_flag, SHOW_GRID) ?
-                         round(grid_buf.offset / step_size) * step_size :
-                         float2(drw_view_position()[line.axis], 0.0f);
+  uint step_axis = flag_test(grid_flag, GRID_SIMA) ? 1u - line.axis : line.axis;
+  float step_size = grid_buf.steps[level][step_axis];
+
+  float2 step_offs = grid_buf.offset;
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
+  if (flag_test(grid_flag, SHOW_GRID)) {
+    /* Line moves with offset along its axis, but snaps to the rounded offset on the other axis. */
+    if (line.axis == 0) {
+      step_offs.y = round(grid_buf.offset.y / step_size) * step_size;
+    }
+    else {
+      step_offs.x = round(grid_buf.offset.x / step_size) * step_size;
+    }
+  }
+  else if (flag_test(grid_flag, SHOW_AXES)) {
+    /* Store axis value on X-axis for now, it is swapped later. */
+    step_offs = float2(drw_view_position()[line.axis], 0.0f);
+  } /* else: GRID_SIMA, do nothing. */
 
   /* Output vertex position in [-1,1], which we use to fade level boundaries. */
   vertex_out.coord = line.P / max(float(grid_buf.num_lines >> 1), 1.0f);
@@ -140,21 +138,30 @@ void main()
   line.P = step_offs + step_size * line.P;
 
   /* Compute clipping rectangle. */
-  float2 clip_min, clip_max;
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
+  float2 clip_min = float2(-FLT_MAX), clip_max = float2(FLT_MAX);
   if (flag_test(grid_flag, GRID_SIMA)) {
+    /* SpaceImage view has user-specified clipping rectangle */
     clip_min = float2(-1.0f);
     clip_max = grid_buf.clip_rect * 2.0f - 1.0f;
   }
   else if (flag_test(grid_flag, SHOW_GRID)) {
-    clip_min = grid_buf.offset - grid_buf.clip_rect;
-    clip_max = grid_buf.offset + grid_buf.clip_rect;
+    clip_min = step_offs - grid_buf.clip_rect;
+    clip_max = step_offs + grid_buf.clip_rect;
   }
-  else { /* SHOW_AXES */
-    clip_min = float2(grid_buf.offset[line.axis] - grid_buf.clip_rect[line.axis], 0.0f);
-    clip_max = float2(grid_buf.offset[line.axis] + grid_buf.clip_rect[line.axis], 0.0f);
+  else /* SHOW_AXES */ {
+    /* Z-axis does not have a clip value to unpack. */
+    float clip_rect = (line.axis == 2) ?
+                          grid_buf.clip_rect.x :
+                          grid::unpack_xy_to_axis(grid_buf.clip_rect, grid_flag, line.axis);
+
+    /* Clipping is applied to the x-axis, where vertex data is stored.
+     * It is swapped to the correct axis below. */
+    clip_min = float2(step_offs.x - clip_rect, 0.0f);
+    clip_max = float2(step_offs.x + clip_rect, 0.0f);
   }
 
-  /* Clip/clamp; lines entirely outside the rectangle get discarded; others get brought
+  /* Clip/clamp; lines entirely outside the rectangle get discarded; others are brought
    * inside the rectangle to avoid precision problems with large lines. */
   bool line_outside_rect = all(lessThan(line.P, clip_min)) || all(greaterThan(line.P, clip_max));
   if (line_outside_rect) {
@@ -163,6 +170,7 @@ void main()
   line.P = clamp(line.P, clip_min, clip_max);
 
   /* Output world-space position. */
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
   vertex_out.pos = float3(0.0f);
   if (flag_test(grid_flag, SHOW_GRID)) {
     /* Position is placed on the correct plane. */
@@ -176,9 +184,9 @@ void main()
       vertex_out.pos.yz = line.P;
     }
     else { /* GRID_SIMA */
-      /* Set z to place the grid in front of/behind image, and always behind the UV mesh.
+      /* Set z to place the grid in front of/behind images/UDIMS, and always behind the UV mesh.
        * See `overlay_edit_uv_edges_vert.glsl` for the full z-order. */
-      float z = flag_test(grid_flag, GRID_OVER_IMAGE) ? 0.74f : 0.76f;
+      float z = flag_test(grid_flag, GRID_OVER_IMAGE) ? 0.45f : 0.76f;
       vertex_out.pos = float3(line.P * 0.5f + 0.5f, z);
     }
   }
@@ -192,25 +200,26 @@ void main()
   }
 
   /* Additional culling steps to discard occluded lines. */
-  if (is_occluded_by_axis(vertex_out.pos) || is_occluded_by_higher_level(line, level)) {
-    return;
+  if (is_occluded_by_higher_level(line, level)) {
+    return; /* Discard line. */
   }
 
   gl_Position = drw_view().winmat * (drw_view().viewmat * float4(vertex_out.pos, 1.0f));
 
-  /* Adjust z-component */
-  if (drw_view_is_perspective()) {
-    /* To minimize z-fighting, the grid is drawn N times with progressive alpha and z-bias,
-     * making it fade through geometry. The smaller the range below, the more it pops in. */
+  /* Adjust z-component. */
+  if (drw_view_is_perspective() || flag_test(grid_flag, GRID_SIMA)) {
+    /* To minimize z-fighting, the grid is drawn N times with progressive z-bias, making it fade
+     * through geometry. The slight negative z-offset makes the grid "ghost" over geometry on the
+     * same plane, while the offset range determines how much fade-in there is. */
+    constexpr float z_min_offset = -0.00020f;
+    constexpr float z_max_offset = 0.00025f;
     float z_factor = float(grid_iter * OVERLAY_GRID_STEPS_DRAW + line.level) /
                      float(OVERLAY_GRID_ITER_LEN * OVERLAY_GRID_STEPS_DRAW);
-    gl_Position.z += mix(5e-4f, 1e-4f, z_factor);
+    gl_Position.z += mix(z_max_offset, z_min_offset, z_factor);
   }
-  else { /* orthographic */
-    /* Set z to far plane in orthographic, so it is behind all things. */
-    if (!flag_test(grid_flag, GRID_SIMA)) {
-      gl_Position.z = 1.0f;
-    }
+  else if (flag_test(grid_flag, GRID_BEHIND_GEOMETRY)) {
+    /* Set z to far plane, placing the grid behind all geometry. */
+    gl_Position.z = 1.0f;
   }
 
   /* Stage output for viewport anti-aliasing/alpha dithering. */

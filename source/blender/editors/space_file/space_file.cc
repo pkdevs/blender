@@ -8,12 +8,14 @@
 
 #include <cstring>
 
+#include "AS_asset_library.hh"
+
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_context.hh"
@@ -22,6 +24,8 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
+
+#include "BLT_translation.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -44,10 +48,13 @@
 
 #include "BLO_read_write.hh"
 
+#include "file_banner.hh"
 #include "file_indexer.hh"
 #include "file_intern.hh" /* own include */
 #include "filelist.hh"
-#include "fsmenu.h"
+#include "fsmenu.hh"
+
+namespace blender {
 
 /* ******************** default callbacks for file space ***************** */
 
@@ -56,7 +63,7 @@ static SpaceLink *file_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   ARegion *region;
   SpaceFile *sfile;
 
-  sfile = MEM_callocN<SpaceFile>("initfile");
+  sfile = MEM_new<SpaceFile>("initfile");
   sfile->spacetype = SPACE_FILE;
 
   /* header */
@@ -103,13 +110,13 @@ static SpaceLink *file_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   region->v2d.keeptot = V2D_KEEPTOT_STRICT;
   region->v2d.minzoom = region->v2d.maxzoom = 1.0f;
 
-  return (SpaceLink *)sfile;
+  return reinterpret_cast<SpaceLink *>(sfile);
 }
 
 /* Doesn't free the space-link itself. */
 static void file_free(SpaceLink *sl)
 {
-  SpaceFile *sfile = (SpaceFile *)sl;
+  SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
 
   BLI_assert(sfile->previews_timer == nullptr);
 
@@ -122,28 +129,27 @@ static void file_free(SpaceLink *sl)
 
   folder_history_list_free(sfile);
 
-  MEM_SAFE_FREE(sfile->params);
-  MEM_SAFE_FREE(sfile->asset_params);
+  MEM_SAFE_DELETE(sfile->params);
+  MEM_SAFE_DELETE(sfile->asset_params);
   if (sfile->runtime != nullptr) {
     BKE_reports_free(&sfile->runtime->is_blendfile_readable_reports);
   }
-  MEM_SAFE_FREE(sfile->runtime);
+  MEM_SAFE_DELETE(sfile->runtime);
 
-  MEM_SAFE_FREE(sfile->layout);
+  MEM_SAFE_DELETE(sfile->layout);
 }
 
 /* spacetype; init callback, area size changes, screen set, etc */
 static void file_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
-  SpaceFile *sfile = (SpaceFile *)area->spacedata.first;
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
 
   if (sfile->layout) {
     sfile->layout->dirty = true;
   }
 
   if (sfile->runtime == nullptr) {
-    sfile->runtime = static_cast<SpaceFile_Runtime *>(
-        MEM_callocN(sizeof(*sfile->runtime), __func__));
+    sfile->runtime = MEM_new_zeroed<SpaceFile_Runtime>(__func__);
     BKE_reports_init(&sfile->runtime->is_blendfile_readable_reports, RPT_STORE);
   }
   /* Validate the params right after file read. */
@@ -152,7 +158,7 @@ static void file_init(wmWindowManager * /*wm*/, ScrArea *area)
 
 static void file_exit(wmWindowManager *wm, ScrArea *area)
 {
-  SpaceFile *sfile = (SpaceFile *)area->spacedata.first;
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
 
   if (sfile->previews_timer) {
     WM_event_timer_remove_notifier(wm, nullptr, sfile->previews_timer);
@@ -164,8 +170,8 @@ static void file_exit(wmWindowManager *wm, ScrArea *area)
 
 static SpaceLink *file_duplicate(SpaceLink *sl)
 {
-  SpaceFile *sfileo = (SpaceFile *)sl;
-  SpaceFile *sfilen = static_cast<SpaceFile *>(MEM_dupallocN(sl));
+  SpaceFile *sfileo = reinterpret_cast<SpaceFile *>(sl);
+  SpaceFile *sfilen = MEM_dupalloc(reinterpret_cast<SpaceFile *>(sl));
 
   /* clear or remove stuff from old */
   sfilen->op = nullptr; /* file window doesn't own operators */
@@ -181,19 +187,19 @@ static SpaceLink *file_duplicate(SpaceLink *sl)
   }
 
   if (sfileo->params) {
-    sfilen->params = static_cast<FileSelectParams *>(MEM_dupallocN(sfileo->params));
+    sfilen->params = MEM_dupalloc(sfileo->params);
   }
   if (sfileo->asset_params) {
     sfilen->asset_params = static_cast<FileAssetSelectParams *>(
-        MEM_dupallocN(sfileo->asset_params));
+        MEM_dupalloc(sfileo->asset_params));
   }
 
   sfilen->folder_histories = folder_history_list_duplicate(&sfileo->folder_histories);
 
   if (sfileo->layout) {
-    sfilen->layout = static_cast<FileLayout *>(MEM_dupallocN(sfileo->layout));
+    sfilen->layout = MEM_dupalloc(sfileo->layout);
   }
-  return (SpaceLink *)sfilen;
+  return reinterpret_cast<SpaceLink *>(sfilen);
 }
 
 static void file_refresh(const bContext *C, ScrArea *area)
@@ -234,8 +240,26 @@ static void file_refresh(const bContext *C, ScrArea *area)
   filelist_settype(sfile->files, params->type);
   filelist_setdir(sfile->files, params->dir);
   filelist_setrecursion(sfile->files, params->recursion_level);
+  filelist_setglob(sfile->files, params->filter_glob);
   filelist_setsorting(sfile->files, params->sort, params->flag & FILE_SORT_INVERT);
-  filelist_setlibrary(sfile->files, asset_params ? &asset_params->asset_library_ref : nullptr);
+  filelist_setlibrary(
+      sfile->files, asset_params ? &asset_params->asset_library_ref : nullptr, [&]() {
+        /* When switching to the essentials library and the "Unassigned" catalog is active, switch
+         * to the "All" library instead. The "Unassigned" catalog should be empty for the
+         * essentials library and isn't shown in the UI. */
+        if ((asset_params->asset_library_ref.type == ASSET_LIBRARY_ESSENTIALS) &&
+            asset_params->asset_catalog_visibility == FILE_SHOW_ASSETS_WITHOUT_CATALOG)
+        {
+          asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
+        }
+      });
+
+  const bool show_assets_online = asset_params && ELEM(asset_params->asset_access,
+                                                       AssetAccess::OnlineAndOffline,
+                                                       AssetAccess::OnlyOnline);
+  const bool show_assets_offline = asset_params && ELEM(asset_params->asset_access,
+                                                        AssetAccess::OnlineAndOffline,
+                                                        AssetAccess::OnlyOffline);
   filelist_setfilter_options(
       sfile->files,
       (params->flag & FILE_FILTER) != 0,
@@ -244,9 +268,11 @@ static void file_refresh(const bContext *C, ScrArea *area)
       params->filter,
       params->filter_id,
       (params->flag & FILE_ASSETS_ONLY) != 0,
-      params->filter_glob,
+      /*filter_assets_hide_online=*/!show_assets_online,
+      /*filter_assets_hide_offline=*/!show_assets_offline,
       params->filter_search);
   if (asset_params) {
+    filelist_set_asset_include_online(sfile->files, show_assets_online);
     filelist_set_asset_catalog_filter_options(
         sfile->files,
         eFileSel_Params_AssetCatalogVisibility(asset_params->asset_catalog_visibility),
@@ -321,7 +347,7 @@ static void file_refresh(const bContext *C, ScrArea *area)
       }
     }
     if (region_flag_old != region_props->flag) {
-      ED_region_visibility_change_update((bContext *)C, area, region_props);
+      ED_region_visibility_change_update(const_cast<bContext *>(C), area, region_props);
     }
   }
 
@@ -360,10 +386,15 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
 {
   ScrArea *area = listener_params->area;
   const wmNotifier *wmn = listener_params->notifier;
-  SpaceFile *sfile = (SpaceFile *)area->spacedata.first;
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
 
   /* context changes */
   switch (wmn->category) {
+    case NC_UI:
+      if (wmn->data == ND_UI_LANG && sfile) {
+        filelist_tag_force_reset(sfile->files);
+      }
+      break;
     case NC_SPACE:
       switch (wmn->data) {
         case ND_SPACE_FILE_LIST:
@@ -403,7 +434,7 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
             FileSelectParams *params = ED_fileselect_get_active_params(sfile);
             params->rename_id = active_file_id;
             file_params_invoke_rename_postscroll(
-                static_cast<wmWindowManager *>(G_MAIN->wm.first), listener_params->window, sfile);
+                G_MAIN->wm.first(), listener_params->window, sfile);
           }
 
           /* Force list to update sorting (with a full reset for now). */
@@ -424,6 +455,9 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
         case NA_EDITED:
           file_reset_filelist_showing_main_data(area, sfile);
           break;
+        case NA_DOWNLOAD_FINISHED:
+          ED_area_tag_redraw(area);
+          break;
       }
       break;
     }
@@ -435,7 +469,7 @@ static void file_main_region_init(wmWindowManager *wm, ARegion *region)
 {
   wmKeyMap *keymap;
 
-  view2d_region_reinit(&region->v2d, blender::ui::V2D_COMMONVIEW_LIST, region->winx, region->winy);
+  view2d_region_reinit(&region->v2d, ui::V2D_COMMONVIEW_LIST, region->winx, region->winy);
 
   region->flag |= RGN_FLAG_INDICATE_OVERFLOW;
 
@@ -488,7 +522,7 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
   bScreen *screen = params->screen;
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
 
   FileSelectParams *file_params = ED_fileselect_ensure_active_params(sfile);
   /* This is a bit odd that a region owns the subscriber for an area,
@@ -501,7 +535,7 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
 
   /* SpaceFile itself. */
   {
-    PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, &RNA_SpaceFileBrowser, sfile);
+    PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_SpaceFileBrowser, sfile);
 
     /* All properties for this space type. */
     WM_msg_subscribe_rna(mbus, &ptr, nullptr, &msg_sub_value_area_tag_refresh, __func__);
@@ -509,7 +543,7 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
 
   /* FileSelectParams */
   {
-    PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, &RNA_FileSelectParams, file_params);
+    PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_FileSelectParams, file_params);
 
     /* All properties for this space type. */
     WM_msg_subscribe_rna(mbus, &ptr, nullptr, &msg_sub_value_area_tag_refresh, __func__);
@@ -518,11 +552,44 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
   /* Experimental Asset Browser features option. */
   {
     PointerRNA ptr = RNA_pointer_create_discrete(
-        nullptr, &RNA_PreferencesExperimental, &U.experimental);
+        nullptr, RNA_PreferencesExperimental, &U.experimental);
     PropertyRNA *prop = RNA_struct_find_property(&ptr, "use_extended_asset_browser");
 
     /* All properties for this space type. */
     WM_msg_subscribe_rna(mbus, &ptr, prop, &msg_sub_value_area_tag_refresh, __func__);
+  }
+
+  /* Use online access option (for remote asset libraries). */
+  {
+    wmMsgSubscribeValue msg_sub_value_region_clear_remote_libraries{};
+    msg_sub_value_region_clear_remote_libraries.owner = region;
+    msg_sub_value_region_clear_remote_libraries.user_data = sfile;
+    msg_sub_value_region_clear_remote_libraries.notify = [](/* Follow wmMsgNotifyFn spec */
+                                                            bContext *C,
+                                                            wmMsgSubscribeKey * /*msg_key*/,
+                                                            wmMsgSubscribeValue *msg_val) {
+      SpaceFile *sfile = static_cast<SpaceFile *>(msg_val->user_data);
+      if (const FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile)) {
+        if (blender::asset_system::is_or_contains_remote_libraries(
+                asset_params->asset_library_ref))
+        {
+          /* Calls #ED_fileselect_clear() for all open asset browsers. */
+          ed::asset::list::clear(&asset_params->asset_library_ref, C);
+        }
+      }
+    };
+    WM_msg_subscribe_rna_prop(mbus,
+                              nullptr,
+                              &U,
+                              PreferencesSystem,
+                              use_online_access,
+                              &msg_sub_value_region_clear_remote_libraries);
+    WM_msg_subscribe_rna_prop(mbus,
+                              nullptr,
+                              &U,
+                              PreferencesExperimental,
+                              use_remote_asset_libraries,
+                              &msg_sub_value_region_clear_remote_libraries);
   }
 }
 
@@ -556,7 +623,7 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
   }
 
   /* clear and setup matrix */
-  blender::ui::theme::frame_buffer_clear(TH_BACK);
+  ui::theme::frame_buffer_clear(TH_BACK);
 
   /* Allow dynamically sliders to be set, saves notifiers etc. */
 
@@ -583,13 +650,7 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
     }
   }
   /* v2d has initialized flag, so this call will only set the mask correct */
-  view2d_region_reinit(v2d, blender::ui::V2D_COMMONVIEW_LIST, region->winx, region->winy);
-
-  /* sets tile/border settings in sfile */
-  file_calc_previews(C, region);
-
-  /* set view */
-  blender::ui::view2d_view_ortho(v2d);
+  view2d_region_reinit(v2d, ui::V2D_COMMONVIEW_LIST, region->winx, region->winy);
 
   /* on first read, find active file */
   if (params->highlight_file == -1) {
@@ -597,17 +658,27 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
     file_highlight_set(sfile, region, event->xy[0], event->xy[1]);
   }
 
+  file_banners_update(*sfile);
+  ED_fileselect_init_layout(sfile, region);
+
   if (!file_draw_hint_if_invalid(C, sfile, region)) {
+    ui::view2d_totRect_set(v2d, sfile->layout->width, sfile->layout->height);
+
+    /* set view */
+    ui::view2d_view_ortho(v2d);
+
     file_draw_list(C, region);
+    /* After the list, so it draws on top. */
+    file_draw_banner(C, sfile, region);
   }
 
   /* reset view matrix */
-  blender::ui::view2d_view_restore(C);
+  ui::view2d_view_restore(C);
 
   /* scrollers */
   rcti view_rect;
   ED_fileselect_layout_maskrect(sfile->layout, v2d, &view_rect);
-  blender::ui::view2d_scrollers_draw(v2d, &view_rect);
+  ui::view2d_scrollers_draw(v2d, &view_rect);
 
   ED_region_draw_overflow_indication(CTX_wm_area(C), region, &view_rect);
 }
@@ -661,20 +732,20 @@ static void file_keymap(wmKeyConfig *keyconf)
 
 static bool file_region_poll(const RegionPollParams *params)
 {
-  const SpaceFile *sfile = (SpaceFile *)params->area->spacedata.first;
+  const SpaceFile *sfile = params->area->spacedata.first_as<SpaceFile>();
   /* Always visible except when browsing assets. */
   return sfile->browse_mode != FILE_BROWSE_MODE_ASSETS;
 }
 
 static bool file_tool_props_region_poll(const RegionPollParams *params)
 {
-  const SpaceFile *sfile = (SpaceFile *)params->area->spacedata.first;
+  const SpaceFile *sfile = params->area->spacedata.first_as<SpaceFile>();
   return (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) || (sfile->op != nullptr);
 }
 
 static bool file_execution_region_poll(const RegionPollParams *params)
 {
-  const SpaceFile *sfile = (SpaceFile *)params->area->spacedata.first;
+  const SpaceFile *sfile = params->area->spacedata.first_as<SpaceFile>();
   return sfile->op != nullptr;
 }
 
@@ -820,7 +891,7 @@ static void filepath_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 /* region dropbox definition */
 static void file_dropboxes()
 {
-  ListBase *lb = WM_dropboxmap_find("Window", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  ListBaseT<wmDropBox> *lb = WM_dropboxmap_find("Window", SPACE_EMPTY, RGN_TYPE_WINDOW);
 
   WM_dropbox_add(
       lb, "FILE_OT_filepath_drop", filepath_drop_poll, filepath_drop_copy, nullptr, nullptr);
@@ -828,18 +899,18 @@ static void file_dropboxes()
 
 static int file_space_subtype_get(ScrArea *area)
 {
-  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
   return sfile->browse_mode;
 }
 
 static void file_space_subtype_set(ScrArea *area, int value)
 {
-  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
   /* Force re-init. */
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    region->v2d.flag &= ~V2D_IS_INIT;
+  for (ARegion &region : area->regionbase) {
+    region.v2d.flag &= ~V2D_IS_INIT;
   }
-  sfile->browse_mode = value;
+  sfile->browse_mode = eFileBrowse_Mode(value);
 }
 
 static void file_space_subtype_item_extend(bContext * /*C*/, EnumPropertyItem **item, int *totitem)
@@ -847,9 +918,9 @@ static void file_space_subtype_item_extend(bContext * /*C*/, EnumPropertyItem **
   RNA_enum_items_add(item, totitem, rna_enum_space_file_browse_mode_items);
 }
 
-static blender::StringRefNull file_space_name_get(const ScrArea *area)
+static StringRefNull file_space_name_get(const ScrArea *area)
 {
-  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
   const int index = RNA_enum_from_value(rna_enum_space_file_browse_mode_items, sfile->browse_mode);
   const EnumPropertyItem item = rna_enum_space_file_browse_mode_items[index];
   return item.name;
@@ -857,17 +928,15 @@ static blender::StringRefNull file_space_name_get(const ScrArea *area)
 
 static int file_space_icon_get(const ScrArea *area)
 {
-  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
   const int index = RNA_enum_from_value(rna_enum_space_file_browse_mode_items, sfile->browse_mode);
   const EnumPropertyItem item = rna_enum_space_file_browse_mode_items[index];
   return item.icon;
 }
 
-static void file_id_remap(ScrArea *area,
-                          SpaceLink *sl,
-                          const blender::bke::id::IDRemapper & /*mappings*/)
+static void file_id_remap(ScrArea *area, SpaceLink *sl, const bke::id::IDRemapper & /*mappings*/)
 {
-  SpaceFile *sfile = (SpaceFile *)sl;
+  SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
 
   /* If the file shows main data (IDs), tag it for reset.
    * Full reset of the file list if main data was changed, don't even attempt remap pointers.
@@ -892,18 +961,18 @@ static void file_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
 
 static void file_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 {
-  SpaceFile *sfile = (SpaceFile *)sl;
+  SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
 
   /* this sort of info is probably irrelevant for reloading...
    * plus, it isn't saved to files yet!
    */
   sfile->folders_prev = sfile->folders_next = nullptr;
-  BLI_listbase_clear(&sfile->folder_histories);
+  sfile->folder_histories.clear_no_delete();
   sfile->files = nullptr;
   sfile->layout = nullptr;
   sfile->op = nullptr;
   sfile->previews_timer = nullptr;
-  sfile->tags = 0;
+  sfile->tags = eFileTags{};
   sfile->runtime = nullptr;
   BLO_read_struct(reader, FileSelectParams, &sfile->params);
   BLO_read_struct(reader, FileAssetSelectParams, &sfile->asset_params);
@@ -920,6 +989,7 @@ static void file_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
       case FILE_ASSET_IMPORT_APPEND:
       case FILE_ASSET_IMPORT_APPEND_REUSE:
       case FILE_ASSET_IMPORT_FOLLOW_PREFS:
+      case FILE_ASSET_IMPORT_PACK:
         break;
       default:
         sfile->asset_params->import_method = FILE_ASSET_IMPORT_FOLLOW_PREFS;
@@ -938,14 +1008,14 @@ static void file_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 
 static void file_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  SpaceFile *sfile = (SpaceFile *)sl;
+  SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
 
-  BLO_write_struct(writer, SpaceFile, sl);
+  writer->write_struct_cast<SpaceFile>(sl);
   if (sfile->params) {
-    BLO_write_struct(writer, FileSelectParams, sfile->params);
+    writer->write_struct(sfile->params);
   }
   if (sfile->asset_params) {
-    BLO_write_struct(writer, FileAssetSelectParams, sfile->asset_params);
+    writer->write_struct(sfile->asset_params);
   }
 }
 
@@ -980,7 +1050,7 @@ void ED_spacetype_file()
   st->blend_write = file_space_blend_write;
 
   /* regions: main window */
-  art = MEM_callocN<ARegionType>("spacetype file region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file region");
   art->regionid = RGN_TYPE_WINDOW;
   art->init = file_main_region_init;
   art->draw = file_main_region_draw;
@@ -990,7 +1060,7 @@ void ED_spacetype_file()
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: header */
-  art = MEM_callocN<ARegionType>("spacetype file region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file region");
   art->regionid = RGN_TYPE_HEADER;
   art->prefsizey = HEADERY;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_HEADER;
@@ -1000,8 +1070,9 @@ void ED_spacetype_file()
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: ui */
-  art = MEM_callocN<ARegionType>("spacetype file region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::HideSinglePanelCategories;
   art->keymapflag = ED_KEYMAP_UI;
   art->poll = file_region_poll;
   art->listener = file_region_listener;
@@ -1010,7 +1081,7 @@ void ED_spacetype_file()
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: execution */
-  art = MEM_callocN<ARegionType>("spacetype file region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file region");
   art->regionid = RGN_TYPE_EXECUTE;
   art->keymapflag = ED_KEYMAP_UI;
   art->poll = file_execution_region_poll;
@@ -1021,7 +1092,7 @@ void ED_spacetype_file()
   file_execute_region_panels_register(art);
 
   /* regions: channels (directories) */
-  art = MEM_callocN<ARegionType>("spacetype file region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file region");
   art->regionid = RGN_TYPE_TOOLS;
   art->prefsizex = 240;
   art->prefsizey = 60;
@@ -1033,7 +1104,7 @@ void ED_spacetype_file()
   file_tools_region_panels_register(art);
 
   /* regions: tool properties */
-  art = MEM_callocN<ARegionType>("spacetype file operator region");
+  art = MEM_new_zeroed<ARegionType>("spacetype file operator region");
   art->regionid = RGN_TYPE_TOOL_PROPS;
   art->prefsizex = 240;
   art->prefsizey = 60;
@@ -1070,11 +1141,29 @@ void ED_file_read_bookmarks()
 
   fsmenu_free();
 
-  fsmenu_read_system(ED_fsmenu_get(), true);
+  FSMenu *fsmenu = ED_fsmenu_get();
+
+  const char *blendfile_path = BKE_main_blendfile_path_from_global();
+  if (blendfile_path && blendfile_path[0]) {
+    /* Folder containing the currently-loaded Blend file. */
+    char dir[FILE_MAX];
+    BLI_path_split_dir_part(blendfile_path, dir, sizeof(dir));
+    fsmenu_insert_entry(fsmenu,
+                        FS_CATEGORY_SYSTEM_BOOKMARKS,
+                        dir,
+                        IFACE_("Current File"),
+                        FSMENU_CURRENT_FILE_ICON,
+                        FS_INSERT_FIRST);
+  }
+
+  fsmenu_read_system(fsmenu, true);
+  fsmenu_add_common_platform_directories(fsmenu);
 
   if (cfgdir.has_value()) {
     char filepath[FILE_MAX];
     BLI_path_join(filepath, sizeof(filepath), cfgdir->c_str(), BLENDER_BOOKMARK_FILE);
-    fsmenu_read_bookmarks(ED_fsmenu_get(), filepath);
+    fsmenu_read_bookmarks(fsmenu, filepath);
   }
 }
+
+}  // namespace blender

@@ -16,7 +16,7 @@
 #include "Stroke.h"
 #include "StrokeIterators.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "BKE_global.hh"
 
@@ -758,7 +758,7 @@ static int __recursiveSplit(Chain *_curve,
     new_curve_a->push_vertex_back(&(*vit));
   }
   if ((vit == vitend) || (vnext == vitend)) {
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "The split takes place in bad location" << endl;
     }
     newChains.push_back(_curve);
@@ -942,7 +942,7 @@ static int __recursiveSplit(Chain *_curve,
     new_curve_a->push_vertex_back(&(*vit));
   }
   if ((vit == vitend) || (vnext == vitend)) {
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "The split takes place in bad location" << endl;
     }
     newChains.push_back(_curve);
@@ -1043,12 +1043,12 @@ int Operators::recursiveSplit(UnaryFunction0D<double> &func,
 // Internal class
 class PredicateWrapper {
  public:
-  inline PredicateWrapper(BinaryPredicate1D &pred)
+  PredicateWrapper(BinaryPredicate1D &pred)
   {
     _pred = &pred;
   }
 
-  inline bool operator()(Interface1D *i1, Interface1D *i2)
+  bool operator()(Interface1D *i1, Interface1D *i2)
   {
     if (i1 == i2) {
       return false;
@@ -1070,7 +1070,7 @@ int Operators::sort(BinaryPredicate1D &pred)
   }
   PredicateWrapper wrapper(pred);
   try {
-    std::sort(_current_set->begin(), _current_set->end(), wrapper);
+    std::ranges::sort(*_current_set, wrapper);
   }
   catch (std::runtime_error &e) {
     cerr << "Warning: Operator.sort(): " << e.what() << endl;
@@ -1251,7 +1251,7 @@ static Stroke *createStroke(Interface1D &inter)
       ++v;
       ++vnext;
     }
-    if (warning && G.debug & G_DEBUG_FREESTYLE) {
+    if (warning && blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       printf("Warning: stroke contains singular points.\n");
     }
   }

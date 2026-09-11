@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "usd_writer_abstract.hh"
 #include "usd_attribute_utils.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_hierarchy_iterator.hh"
 #include "usd_utils.hh"
 #include "usd_writer_material.hh"
@@ -12,15 +13,18 @@
 #include <pxr/usd/usdGeom/scope.h>
 #include <pxr/usd/usdUI/accessibilityAPI.h>
 
-#include "BKE_customdata.hh"
-
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_bounds_types.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 
+#include "WM_types.hh"
+
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
 /* TfToken objects are not cheap to construct, so we do it once. */
@@ -52,7 +56,7 @@ static std::optional<AccessibilityPropertyName> parse_accessibility_property_nam
       /* Sanitize the namespace since this is user-generated and might need to be conformed
        * to the `allow_unicode` export setting. */
       property_name.property_namespace = pxr::TfToken(
-          blender::io::usd::make_safe_name(property_tokens[1], allow_unicode));
+          io::usd::make_safe_name(property_tokens[1], allow_unicode));
       property_name.property_base_name = basename;
       return property_name;
     }
@@ -104,7 +108,7 @@ static std::string get_mesh_active_uvlayer_name(const Object *ob)
     return "";
   }
 
-  const Mesh *mesh = static_cast<Mesh *>(ob->data);
+  const Mesh *mesh = id_cast<Mesh *>(ob->data);
   return mesh->active_uv_map_name();
 }
 
@@ -133,7 +137,7 @@ bool set_vec_attrib(const pxr::UsdPrim &prim,
   return vec_attr.Set(vec_value, time);
 }
 
-namespace blender::io::usd {
+namespace io::usd {
 
 static void create_vector_attrib(const pxr::UsdPrim &prim,
                                  const IDProperty *prop,
@@ -237,6 +241,11 @@ pxr::UsdTimeCode USDAbstractWriter::get_export_time_code() const
   return pxr::UsdTimeCode::Default();
 }
 
+ReportList *USDAbstractWriter::reports() const
+{
+  return usd_export_context_.export_params.worker_status->reports;
+}
+
 void USDAbstractWriter::write(HierarchyContext &context)
 {
   if (!frame_has_been_written_) {
@@ -306,6 +315,7 @@ pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material_created(
   auto prim = usd_material.GetPrim();
   add_to_prim_map(prim.GetPath(), &material->id);
   write_id_properties(prim, material->id, get_export_time_code());
+  colorspace_apply_to_prim(prim);
 
   return usd_material;
 }
@@ -384,7 +394,7 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
   usd_export_context_.stage->DefinePrim(ref_path);
 
   if (!prim.GetReferences().AddInternalReference(ref_path)) {
-    /* See this URL for a description for why referencing may fail"
+    /* See this URL for a description for why referencing may fail:
      * https://graphics.pixar.com/usd/docs/api/class_usd_references.html#Usd_Failing_References
      */
     CLOG_WARN(&LOG,
@@ -445,7 +455,7 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
   const std::string default_namespace(
       usd_export_context_.export_params.custom_properties_namespace);
 
-  for (IDProperty *prop = (IDProperty *)properties->data.group.first; prop; prop = prop->next) {
+  for (IDProperty *prop = properties->data.group.first(); prop; prop = prop->next) {
     if (displayName_identifier == prop->name) {
       if (prop->type == IDP_STRING && prop->data.pointer) {
         prim.SetDisplayName(static_cast<char *>(prop->data.pointer));
@@ -524,6 +534,11 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
       case IDP_ARRAY:
         create_vector_attrib(prim, prop, prop_token, time);
         break;
+      case IDP_GROUP:
+      case IDP_ID:
+      case IDP_IDPARRAY:
+        /* Not supported. */
+        break;
     }
   }
 }
@@ -567,4 +582,5 @@ void USDAbstractWriter::add_to_prim_map(const pxr::SdfPath &usd_path, const ID *
   }
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

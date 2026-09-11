@@ -9,23 +9,26 @@
 #include <cstring>
 #include <fmt/format.h>
 
+#include "AS_remote_library.hh"
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_callbacks.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
+#include "BKE_screen.hh"
 
 #include "BKE_report.hh"
 
@@ -43,9 +46,14 @@
 #include "WM_types.hh"
 
 #include "ED_asset.hh"
+#include "ED_screen.hh"
 #include "ED_userpref.hh"
 
 #include "MEM_guardedalloc.h"
+
+#include "userpref_intern.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Reset Default Theme Operator
@@ -54,10 +62,11 @@
 static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
-  blender::ui::theme::init_default();
-  blender::ui::style_init_default();
+  ui::theme::init_default();
+  ui::style_init_default();
   WM_reinit_gizmomap_all(bmain);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_UI | ND_UI_FONT, nullptr);
   U.runtime.is_dirty = true;
   return OPERATOR_FINISHED;
 }
@@ -84,7 +93,7 @@ static void PREFERENCES_OT_reset_default_theme(wmOperatorType *ot)
 
 static wmOperatorStatus preferences_autoexec_add_exec(bContext * /*C*/, wmOperator * /*op*/)
 {
-  bPathCompare *path_cmp = MEM_callocN<bPathCompare>("bPathCompare");
+  bPathCompare *path_cmp = MEM_new<bPathCompare>("bPathCompare");
   BLI_addtail(&U.autoexec_paths, path_cmp);
   U.runtime.is_dirty = true;
   return OPERATOR_FINISHED;
@@ -139,36 +148,125 @@ static void PREFERENCES_OT_autoexec_path_remove(wmOperatorType *ot)
 
 static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperator *op)
 {
-  char *path = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
-  char dirname[FILE_MAXFILE];
+  const bUserAssetLibraryAddType library_type = bUserAssetLibraryAddType(
+      RNA_enum_get(op->ptr, "type"));
 
-  BLI_path_slash_rstrip(path);
-  BLI_path_split_file_part(path, dirname, sizeof(dirname));
+  char name[sizeof(bUserAssetLibrary::name)] = "";
+  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "name");
+  if (RNA_property_is_set(op->ptr, prop)) {
+    RNA_property_string_get(op->ptr, prop, name);
+  }
 
-  /* nullptr is a valid directory path here. A library without path will be created then. */
-  const bUserAssetLibrary *new_library = BKE_preferences_asset_library_add(&U, dirname, path);
-  /* Activate new library in the UI for further setup. */
-  U.active_asset_library = BLI_findindex(&U.asset_libraries, new_library);
+  switch (library_type) {
+    case bUserAssetLibraryAddType::Local: {
+      char *dirpath = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
+      ED_userpref_asset_library_new(C, name, dirpath, library_type, false, {}, {});
+      MEM_delete(dirpath);
+      break;
+    }
+    case bUserAssetLibraryAddType::Remote: {
+      char *remote_url = RNA_string_get_alloc(op->ptr, "remote_url", nullptr, 0, nullptr);
+      char *auth_token_str = RNA_string_get_alloc(op->ptr, "auth_token", nullptr, 0, nullptr);
+      const bool use_auth_token = RNA_boolean_get(op->ptr, "use_auth_token");
+      std::optional<char *> auth_token = {};
+      if (use_auth_token) {
+        auth_token = auth_token_str;
+      }
+      ED_userpref_asset_library_new(C, name, remote_url, library_type, false, {}, auth_token);
+      MEM_delete(remote_url);
+      MEM_delete(auth_token_str);
+      break;
+    }
+  }
+
   U.runtime.is_dirty = true;
-
-  /* There's no dedicated notifier for the Preferences. */
-  WM_main_add_notifier(NC_WINDOW, nullptr);
-  blender::ed::asset::list::clear_all_library(C);
-
-  MEM_freeN(path);
   return OPERATOR_FINISHED;
 }
 
 static wmOperatorStatus preferences_asset_library_add_invoke(bContext *C,
                                                              wmOperator *op,
-                                                             const wmEvent * /*event*/)
+                                                             const wmEvent *event)
 {
-  if (!RNA_struct_property_is_set(op->ptr, "directory")) {
+  const bUserAssetLibraryAddType library_type = bUserAssetLibraryAddType(
+      RNA_enum_get(op->ptr, "type"));
+
+  if ((library_type == bUserAssetLibraryAddType::Local) &&
+      !RNA_struct_property_is_set(op->ptr, "directory"))
+  {
     WM_event_add_fileselect(C, op);
     return OPERATOR_RUNNING_MODAL;
   }
 
-  return preferences_asset_library_add_exec(C, op);
+  return WM_operator_props_popup_confirm_ex(
+      C, op, event, IFACE_("Add Asset Library"), IFACE_("Create"));
+}
+
+static void preferences_asset_library_add_ui(bContext * /*C*/, wmOperator *op)
+{
+  blender::ui::Layout *layout = op->layout;
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
+
+  PointerRNA *ptr = op->ptr;
+  const bUserAssetLibraryAddType library_type = bUserAssetLibraryAddType(
+      RNA_enum_get(ptr, "type"));
+  switch (library_type) {
+    case bUserAssetLibraryAddType::Remote: {
+      layout->prop(op->ptr, "remote_url", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+
+      const bool use_auth_token = RNA_boolean_get(ptr, "use_auth_token");
+      const int token_icon = (use_auth_token && RNA_string_length(ptr, "auth_token")) ?
+                                 ICON_LOCKED :
+                                 ICON_UNLOCKED;
+
+      ui::Layout &col = layout->column(true, IFACE_("Authentication"));
+      col.prop(ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      if (use_auth_token) {
+        ui::Layout &row = col.row(false);
+        /* Use "immediate" flag to refresh the icon. */
+        row.prop(ptr, "auth_token", ui::ITEM_R_IMMEDIATE, IFACE_("Secret"), token_icon);
+      }
+      break;
+    }
+    case bUserAssetLibraryAddType::Local: {
+      layout->prop(op->ptr, "name", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+      break;
+    }
+  }
+}
+
+static constexpr EnumPropertyItem custom_library_type_items[] = {
+    {int(bUserAssetLibraryAddType::Remote),
+     "REMOTE",
+     ICON_INTERNET,
+     "Add Remote Asset Library",
+     "Add an asset library referencing a remote repository "
+     "with support for listing and updating asset libraries"},
+    {int(bUserAssetLibraryAddType::Local),
+     "LOCAL",
+     ICON_DISK_DRIVE,
+     "Add Local Asset Library",
+     "Add an asset library managed via the file system without referencing an external "
+     "repository"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static const EnumPropertyItem *custom_library_type_itemf(bContext * /*C*/,
+                                                         PointerRNA * /*ptr*/,
+                                                         PropertyRNA * /*prop*/,
+                                                         bool *r_free)
+{
+  *r_free = false;
+
+  if (USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries)) {
+    /* Experimental flag is enabled, just return all items. */
+    return custom_library_type_items;
+  }
+
+  /* Since the Remote item is the first in the list, we can just return a pointer to
+   * the 2nd item in the list, when remote asset libraries should be hidden. */
+  static_assert(custom_library_type_items[0].value == int(bUserAssetLibraryAddType::Remote));
+  return custom_library_type_items + 1;
 }
 
 static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
@@ -179,8 +277,9 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
 
   ot->exec = preferences_asset_library_add_exec;
   ot->invoke = preferences_asset_library_add_invoke;
+  ot->ui = preferences_asset_library_add_ui;
 
-  ot->flag = OPTYPE_INTERNAL;
+  ot->flag = OPTYPE_INTERNAL | OPTYPE_REGISTER;
 
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER,
@@ -189,6 +288,64 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
                                  WM_FILESEL_DIRECTORY,
                                  FILE_DEFAULTDISPLAY,
                                  FILE_SORT_DEFAULT);
+
+  /* Copy the RNA values are copied into the operator to avoid repetition. */
+  StructRNA *type_ref = RNA_UserAssetLibrary;
+
+  { /* Name. */
+    const char *prop_id = "name";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       sizeof(bUserExtensionRepo::name),
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+
+  { /* Remote Path. */
+    const char *prop_id = "remote_url";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       sizeof(bUserAssetLibrary::remote_url),
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+  { /* Use Authentication Token. */
+    const char *prop_id = "use_auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                        prop_id,
+                                        false,
+                                        RNA_property_ui_name_raw(prop_ref),
+                                        RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+  { /* Authentication Token (dynamic length). */
+    const char *prop_id = "auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       0,
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+    RNA_def_property_subtype(prop, PROP_PASSWORD);
+  }
+
+  ot->prop = RNA_def_enum(ot->srna,
+                          "type",
+                          custom_library_type_items,
+                          int(bUserAssetLibraryAddType::Local),
+                          "Type",
+                          "The kind of asset library to add");
+  RNA_def_enum_funcs(ot->prop, custom_library_type_itemf);
+  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
 
 /** \} */
@@ -199,7 +356,7 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
 
 static bool preferences_asset_library_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.asset_libraries)) {
+  if (U.asset_libraries.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no asset library to remove");
     return false;
   }
@@ -215,15 +372,8 @@ static wmOperatorStatus preferences_asset_library_remove_exec(bContext *C, wmOpe
     return OPERATOR_CANCELLED;
   }
 
-  BKE_preferences_asset_library_remove(&U, library);
-  const int count_remaining = BLI_listbase_count(&U.asset_libraries);
-  /* Update active library index to be in range. */
-  CLAMP(U.active_asset_library, 0, count_remaining - 1);
+  ED_userpref_asset_library_remove(C, library);
   U.runtime.is_dirty = true;
-
-  blender::ed::asset::list::clear_all_library(C);
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -315,7 +465,7 @@ static wmOperatorStatus preferences_extension_repo_add_exec(bContext *C, wmOpera
     if (name[0] == '\0') {
       switch (repo_type) {
         case bUserExtensionRepoAddType::Remote: {
-          BKE_preferences_extension_remote_to_name(remote_url, name);
+          BKE_preferences_remote_to_name(remote_url, name);
           break;
         }
         case bUserExtensionRepoAddType::Local: {
@@ -380,7 +530,7 @@ static wmOperatorStatus preferences_extension_repo_add_exec(bContext *C, wmOpera
 
   {
     PointerRNA new_repo_ptr = RNA_pointer_create_discrete(
-        nullptr, &RNA_UserExtensionRepo, new_repo);
+        nullptr, RNA_UserExtensionRepo, new_repo);
     PointerRNA *pointers[] = {&new_repo_ptr};
 
     BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
@@ -424,7 +574,7 @@ static wmOperatorStatus preferences_extension_repo_add_invoke(bContext *C,
 static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 {
 
-  blender::ui::Layout &layout = *op->layout;
+  ui::Layout &layout = *op->layout;
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
 
@@ -433,35 +583,36 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 
   switch (repo_type) {
     case bUserExtensionRepoAddType::Remote: {
-      layout.prop(op->ptr, "remote_url", blender::ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+      layout.prop(op->ptr, "remote_url", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
       layout.prop(op->ptr, "use_sync_on_startup", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-      layout.separator(0.2f, blender::ui::LayoutSeparatorType::Line);
+      layout.separator(0.2f, ui::LayoutSeparatorType::Line);
 
       const bool use_access_token = RNA_boolean_get(ptr, "use_access_token");
       const int token_icon = (use_access_token && RNA_string_length(op->ptr, "access_token")) ?
                                  ICON_LOCKED :
                                  ICON_UNLOCKED;
 
-      blender::ui::Layout &row = layout.row(true, IFACE_("Authentication"));
+      ui::Layout &row = layout.row(true, IFACE_("Authentication"));
       row.prop(op->ptr, "use_access_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      blender::ui::Layout &col = layout.row(false);
-      col.active_set(use_access_token);
-      /* Use "immediate" flag to refresh the icon. */
-      col.prop(op->ptr, "access_token", blender::ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
-
-      layout.separator(0.2f, blender::ui::LayoutSeparatorType::Line);
+      if (use_access_token) {
+        ui::Layout &col = layout.row(false);
+        col.active_set(use_access_token);
+        /* Use "immediate" flag to refresh the icon. */
+        col.prop(op->ptr, "access_token", ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
+      }
+      layout.separator(0.2f, ui::LayoutSeparatorType::Line);
 
       break;
     }
     case bUserExtensionRepoAddType::Local: {
-      layout.prop(op->ptr, "name", blender::ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+      layout.prop(op->ptr, "name", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
       break;
     }
   }
 
   layout.prop(op->ptr, "use_custom_directory", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  blender::ui::Layout &col = layout.row(false);
+  ui::Layout &col = layout.row(false);
   col.active_set(RNA_boolean_get(ptr, "use_custom_directory"));
   col.prop(op->ptr, "custom_directory", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
@@ -504,7 +655,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
    * setting the repositories URL (optionally the custom-directory). */
 
   /* Copy the RNA values are copied into the operator to avoid repetition. */
-  StructRNA *type_ref = &RNA_UserExtensionRepo;
+  StructRNA *type_ref = RNA_UserExtensionRepo;
 
   { /* Name. */
     const char *prop_id = "name";
@@ -601,7 +752,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 
 static bool preferences_extension_repo_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.extension_repos)) {
+  if (U.extension_repos.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no extension repository to remove");
     return false;
   }
@@ -659,7 +810,7 @@ static wmOperatorStatus preferences_extension_repo_remove_invoke(bContext *C,
                                             IFACE_("Remove Repository");
 
   return WM_operator_confirm_ex(
-      C, op, nullptr, message.c_str(), confirm_text, blender::ui::AlertIcon::Warning, true);
+      C, op, nullptr, message.c_str(), confirm_text, ui::AlertIcon::Warning, true);
 }
 
 static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
@@ -716,7 +867,7 @@ static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOp
        * If it's not empty there will be a warning that the directory couldn't be removed.
        * The user will have to do this manually which is good since unknown files
        * could be user data. */
-      BKE_callback_exec_string(bmain, BKE_CB_EVT_EXTENSION_REPOS_FILES_CLEAR, dirpath);
+      BKE_callback_exec_string(bmain, dirpath, BKE_CB_EVT_EXTENSION_REPOS_FILES_CLEAR);
 
       if (BLI_delete(dirpath, true, recursive) != 0) {
         BKE_reportf(op->reports,
@@ -738,7 +889,7 @@ static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOp
   }
 
   BKE_preferences_extension_repo_remove(&U, repo);
-  const int count_remaining = BLI_listbase_count(&U.extension_repos);
+  const int count_remaining = U.extension_repos.count();
   /* Update active repo index to be in range. */
   CLAMP(U.active_extension_repo, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
@@ -808,7 +959,7 @@ static wmOperatorStatus preferences_extension_url_drop_invoke(bContext *C,
     if (use_url) {
       RNA_string_set(&props_ptr, "url", url.c_str());
     }
-    WM_operator_name_call_ptr(C, ot, blender::wm::OpCallContext::InvokeDefault, &props_ptr, event);
+    WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, event);
     WM_operator_properties_free(&props_ptr);
     retval = OPERATOR_FINISHED;
   }
@@ -900,7 +1051,7 @@ static wmOperatorStatus associate_blend_exec(bContext * /*C*/, wmOperator *op)
     BKE_report(
         op->reports, RPT_ERROR, error_msg ? error_msg : "Unable to register file association");
     if (error_msg) {
-      MEM_freeN(error_msg);
+      MEM_delete(error_msg);
     }
     return OPERATOR_CANCELLED;
   }
@@ -948,7 +1099,7 @@ static wmOperatorStatus unassociate_blend_exec(bContext * /*C*/, wmOperator *op)
     BKE_report(
         op->reports, RPT_ERROR, error_msg ? error_msg : "Unable to unregister file association");
     if (error_msg) {
-      MEM_freeN(error_msg);
+      MEM_delete(error_msg);
     }
     return OPERATOR_CANCELLED;
   }
@@ -991,7 +1142,7 @@ static bool drop_extension_url_poll(bContext * /*C*/, wmDrag *drag, const wmEven
 
   /* Only URL formatted text. */
   const char *cstr = str.c_str();
-  if (BKE_preferences_extension_repo_remote_scheme_end(cstr) == 0) {
+  if (BKE_preferences_remote_scheme_end(cstr) == 0) {
     return false;
   }
 
@@ -1069,7 +1220,7 @@ static void drop_extension_path_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *
 
 static void ED_dropbox_drop_extension()
 {
-  ListBase *lb = WM_dropboxmap_find("Window", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  ListBaseT<wmDropBox> *lb = WM_dropboxmap_find("Window", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_dropbox_add(lb,
                  "PREFERENCES_OT_extension_url_drop",
                  drop_extension_url_poll,
@@ -1083,6 +1234,52 @@ static void ED_dropbox_drop_extension()
                  nullptr,
                  nullptr);
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Start / Clear Search Filter Operators
+ *
+ * \note Almost a duplicate of the file browser operator #FILE_OT_start_filter.
+ * \{ */
+
+static wmOperatorStatus preferences_start_filter_exec(bContext *C, wmOperator * /*op*/)
+{
+  SpaceUserPref *space = CTX_wm_space_userpref(C);
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_UI);
+  ED_region_activate_rna_prop(C, region, space, "search_filter");
+  return OPERATOR_FINISHED;
+}
+
+void PREFERENCES_OT_start_filter(wmOperatorType *ot)
+{
+  ot->name = "Filter";
+  ot->description = "Start entering filter text";
+  ot->idname = "PREFERENCES_OT_start_filter";
+  ot->exec = preferences_start_filter_exec;
+  ot->poll = ED_operator_preferences_active;
+}
+
+static wmOperatorStatus preferences_clear_filter_exec(bContext *C, wmOperator * /*op*/)
+{
+  SpaceUserPref *space = CTX_wm_space_userpref(C);
+  space->runtime->search_string[0] = '\0';
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *main_region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+  ED_region_search_filter_update(area, main_region);
+  ED_area_tag_redraw(area);
+  return OPERATOR_FINISHED;
+}
+
+void PREFERENCES_OT_clear_filter(wmOperatorType *ot)
+{
+  ot->name = "Clear Filter";
+  ot->description = "Clear the search filter";
+  ot->idname = "PREFERENCES_OT_clear_filter";
+  ot->exec = preferences_clear_filter_exec;
+  ot->poll = ED_operator_preferences_active;
+}
+
+/** \} */
 
 void ED_operatortypes_userpref()
 {
@@ -1101,5 +1298,10 @@ void ED_operatortypes_userpref()
   WM_operatortype_append(PREFERENCES_OT_associate_blend);
   WM_operatortype_append(PREFERENCES_OT_unassociate_blend);
 
+  WM_operatortype_append(PREFERENCES_OT_start_filter);
+  WM_operatortype_append(PREFERENCES_OT_clear_filter);
+
   ED_dropbox_drop_extension();
 }
+
+}  // namespace blender

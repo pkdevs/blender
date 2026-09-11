@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "FN_multi_function_procedure.hh"
 
 #include "BLI_dot_export.hh"
@@ -285,6 +289,13 @@ bool Procedure::validate() const
     return false;
   }
   return true;
+}
+
+void Procedure::prepare_for_execution()
+{
+  for (const CallInstruction *instruction : call_instructions_) {
+    instruction->fn().prepare_for_execution();
+  }
 }
 
 bool Procedure::validate_all_instruction_pointers_set() const

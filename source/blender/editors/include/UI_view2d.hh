@@ -10,8 +10,10 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_rect.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_rect.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Forward Declarations
@@ -34,7 +36,7 @@ struct wmOperatorType;
 
 /** \} */
 
-namespace blender::ui {
+namespace ui {
 
 /* -------------------------------------------------------------------- */
 /** \name General Defines
@@ -223,51 +225,60 @@ void view2d_dot_grid_draw(const View2D *v2d,
 /**
  * Draw horizontal lines.
  *
- * \param base: Defines in what step the lines are drawn.
- * Depending on the zoom level of the `v2d` the step is a full fraction of the given base.
+ * \param base: Defines in what distance the lines are drawn. Depending on the zoom level of the
+ * `v2d` the distance is always a full fraction or multiple of the given base.
  */
-void view2d_draw_lines_y__values(const View2D *v2d, int base);
-void view2d_draw_lines_x__values(const View2D *v2d, int base);
-void view2d_draw_lines_x__discrete_values(const View2D *v2d, int base, bool display_minor_lines);
-void view2d_draw_lines_x__discrete_time(const View2D *v2d, int base, bool display_minor_lines);
-void view2d_draw_lines_x__discrete_frames_or_seconds(const View2D *v2d,
-                                                     const Scene *scene,
-                                                     bool display_seconds,
-                                                     bool display_minor_lines);
-void view2d_draw_lines_x__frames_or_seconds(const View2D *v2d,
-                                            const Scene *scene,
-                                            bool display_seconds);
+void view2d_draw_lines_y(const View2D *v2d, bool show_fractions, int base);
+/**
+ * Draw vertical lines. Where lines are drawn is determined by the zoom factor and `base`.
+ *
+ * \param show_fractions: If true, lines will be drawn between full values too.
+ * \param draw_minor_lines: If true, draw extra lines with less visual weight to further break down
+ * the view area.
+ * \param base: Defines in what distance the lines are drawn. Depending on the zoom level of the
+ * `v2d` the distance is always a full fraction or multiple of the given base.
+ */
+void view2d_draw_lines_x(const View2D *v2d,
+                         const Scene *scene,
+                         bool display_seconds,
+                         bool show_fractions,
+                         bool draw_minor_lines,
+                         int base);
+/**
+ * Wrapper around `view2d_draw_lines_x` that calculates the `base` from the `scene` frame-rate.
+ */
+void view2d_draw_lines_x_frames(const View2D *v2d,
+                                const Scene *scene,
+                                bool display_seconds,
+                                bool show_fractions,
+                                bool draw_minor_lines);
 
-float view2d_grid_resolution_x__frames_or_seconds(const View2D *v2d, const Scene *scene);
+float view2d_grid_resolution_x(const View2D *v2d, const Scene *scene, bool display_seconds);
 float view2d_grid_resolution_y__values(const View2D *v2d, int base);
 
 /**
  * Scale indicator text drawing.
  */
-void view2d_draw_scale_y__values(
+void view2d_draw_scale_y(
     const ARegion *region, const View2D *v2d, const rcti *rect, int colorid, int base);
 /**
  * Draw a text scale in either frames or seconds.
- * The minimum step distance is 1, meaning no sub-frame indicators will be drawn.
+ *
+ * \param display_seconds: If true, the scale is interpreted as seconds and will draw a time-code.
+ * \param show_fractions: If true, fractional scales will be drawn when zoomed in far enough.
+ * Otherwise the minimum step distance is clamped to 1, meaning only whole number indicators will
+ * be drawn even when zoomed in. If `display_seconds` is true, this setting will always be false.
+ * \param base: Defines in what distance the numbers are drawn. Depending on the zoom level of the
+ * `v2d` the distance is always a full fraction or multiple of the given base.
  */
-void view2d_draw_scale_x__discrete_frames_or_seconds(const ARegion *region,
-                                                     const View2D *v2d,
-                                                     const rcti *rect,
-                                                     const Scene *scene,
-                                                     bool display_seconds,
-                                                     int colorid,
-                                                     int base);
-/**
- * Draw a text scale in either frames or seconds.
- * This can draw indicators on sub-frames, e.g. "1.5".
- */
-void view2d_draw_scale_x__frames_or_seconds(const ARegion *region,
-                                            const View2D *v2d,
-                                            const rcti *rect,
-                                            const Scene *scene,
-                                            bool display_seconds,
-                                            int colorid,
-                                            int base);
+void view2d_draw_scale_x(const ARegion *region,
+                         const View2D *v2d,
+                         const rcti *rect,
+                         const Scene *scene,
+                         bool display_seconds,
+                         bool show_fractions,
+                         int colorid,
+                         int base);
 
 /** \} */
 
@@ -292,7 +303,7 @@ void view2d_scrollers_draw(View2D *v2d, const rcti *mask_custom);
  *
  * \param columnwidth, rowheight: size of each 'cell'
  * \param startx, starty: coordinates (in 'tot' rect space) that the list starts from.
- * This should be (0,0) for most views. However, for those where the starting row was offsetted
+ * This should be (0,0) for most views. However, for those where the starting row was offset
  * (like for Animation Editor channel lists, to make the first entry more visible), these will be
  * the min-coordinates of the first item.
  * \param viewx, viewy: 2D-coordinates (in 2D-view / 'tot' rect space) to get the cell for
@@ -397,9 +408,11 @@ void view2d_scale_get(const View2D *v2d, float *r_x, float *r_y);
 float view2d_scale_get_x(const View2D *v2d);
 float view2d_scale_get_y(const View2D *v2d);
 /**
- * Same as `view2d_scale_get() - 1.0f / x, y`.
+ * Calculate the size of a pixel in view-space. This is the inverse of `view2d_scale_get()`.
  */
-void view2d_scale_get_inverse(const View2D *v2d, float *r_x, float *r_y);
+void view2d_pixel_size_get(const View2D *v2d, float *r_x, float *r_y);
+float view2d_pixel_size_get_x(const View2D *v2d);
+float view2d_pixel_size_get_y(const View2D *v2d);
 
 /**
  * Simple functions for consistent center offset access.
@@ -407,6 +420,7 @@ void view2d_scale_get_inverse(const View2D *v2d, float *r_x, float *r_y);
  */
 void view2d_center_get(const View2D *v2d, float *r_x, float *r_y);
 void view2d_center_set(View2D *v2d, float x, float y);
+void view2d_size_x_set(View2D *v2d, float size_x);
 
 /**
  * Simple pan function
@@ -475,7 +489,7 @@ void ED_keymap_view2d(wmKeyConfig *keyconf);
  */
 void view2d_smooth_view(const bContext *C, ARegion *region, const rctf *cur, int smooth_viewtx);
 
-#define UI_MARKER_MARGIN_Y (42 * UI_SCALE_FAC)
+#define UI_MARKER_MARGIN_Y (34 * UI_SCALE_FAC)
 #define UI_TIME_SCRUB_MARGIN_Y (23 * UI_SCALE_FAC)
 #define UI_TIME_CACHE_MARGIN_Y (UI_TIME_SCRUB_MARGIN_Y / 6.0f)
 #define UI_ANIM_MINY (HEADERY * UI_SCALE_FAC * 1.1f)
@@ -532,9 +546,11 @@ struct View2DEdgePanData {
   /** Delay in seconds before maximum speed is reached. */
   float delay;
   /**
-   * Influence factor for view zoom:
+   * Influence factor for horizontal view zoom:
    * - 0 = Constant speed in UI units.
-   * - 1 = Constant speed in view space, UI speed slows down when zooming out.
+   * - 1 = Constant speed in view space, UI speed slows down when zooming out horizontally.
+   * \note For spaces that have different zoom levels along separate axes, vertical pan speed is
+   * also based on this horizontal zoom, which may feel unexpected!
    */
   float zoom_influence;
 
@@ -548,6 +564,11 @@ struct View2DEdgePanData {
   double edge_pan_last_time;
   double edge_pan_start_time_x, edge_pan_start_time_y;
 };
+
+/**
+ * Whether the region in \a bContext has a #View2D that edge panning can actually move.
+ */
+bool view2d_edge_pan_poll(bContext *C);
 
 void view2d_edge_pan_init(bContext *C,
                           View2DEdgePanData *vpd,
@@ -596,4 +617,5 @@ void view2d_edge_pan_operator_init(bContext *C, View2DEdgePanData *vpd, wmOperat
 
 /** \} */
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

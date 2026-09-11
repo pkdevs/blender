@@ -34,18 +34,9 @@
 #  include "GHOST_NDOFManagerCocoa.hh"
 #endif
 
-#include "AssertMacros.h"
-
-#import <Cocoa/Cocoa.h>
-
 /* For the currently not ported to Cocoa keyboard layout functions (64bit & 10.6 compatible) */
 #include <Carbon/Carbon.h>
-
-#include <sys/sysctl.h>
 #include <sys/time.h>
-#include <sys/types.h>
-
-#include <mach/mach_time.h>
 
 /* --------------------------------------------------------------------
  * Keymaps, mouse converters.
@@ -535,13 +526,15 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
  * Initialization / Finalization.
  */
 
-GHOST_SystemCocoa::GHOST_SystemCocoa()
+GHOST_SystemCocoa::GHOST_SystemCocoa(const bool background)
 {
   modifier_mask_ = 0;
   outside_loop_event_processed_ = false;
   need_delayed_application_become_active_event_processing_ = false;
 
   ignore_window_sized_messages_ = false;
+  background_mode_ = background;
+
   ignore_momentum_scroll_ = false;
   multi_touch_scroll_ = false;
   last_warp_timestamp_ = 0;
@@ -667,6 +660,12 @@ GHOST_TSuccess GHOST_SystemCocoa::init()
        * application without a macOS tab bar, and should explicitly opt-out of this.
        * This is also controlled by the macOS user default #NSWindowTabbingEnabled. */
       NSWindow.allowsAutomaticWindowTabbing = NO;
+
+      if (background_mode_) {
+        /* Do not display the application in the Dock when started in background-mode,
+         * without which the app icon would bounce indefinitely. */
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
+      }
 
       [NSApp finishLaunching];
     }
@@ -852,6 +851,31 @@ GHOST_TSuccess GHOST_SystemCocoa::getCursorPosition(int32_t &x, int32_t &y) cons
   return GHOST_kSuccess;
 }
 
+/* Private CoreGraphicsSPI used to read the Accessibility cursor scale factor.
+ * Available since macOS 10.7, but not in the public headers. */
+extern "C" {
+typedef int CGSConnectionID;
+CGSConnectionID CGSMainConnectionID(void);
+CGError CGSGetCursorScale(CGSConnectionID connection, CGFloat *scale);
+}
+
+uint32_t GHOST_SystemCocoa::getCursorPreferredLogicalSize() const
+{
+  /* Apply the Accessibility pointer-size scale (1.0 .. 4.0) to a default base size.
+   *
+   * Take care, for hardware cursors this is already applied on-top of the cursor bitmap,
+   * there doesn't seem to be a way to express that the cursor data is pre-scaled.
+   * Therefor, a larger cursor will work but look blurry.
+   * Only use this for software cursors. */
+  const CGFloat default_size = 21.0;
+
+  CGFloat scale = 1.0;
+  if (CGSGetCursorScale(CGSMainConnectionID(), &scale) != kCGErrorSuccess || !(scale > 0.0)) {
+    scale = 1.0;
+  }
+  return lround(default_size * scale);
+}
+
 /**
  * \note expect Cocoa screen coordinates.
  */
@@ -979,8 +1003,6 @@ GHOST_TCapabilityFlag GHOST_SystemCocoa::getCapabilities() const
           /* Cocoa doesn't define a Hyper modifier key,
            * it's possible another modifier could be optionally used in it's place. */
           GHOST_kCapabilityKeyboardHyperKey |
-          /* No support yet for RGBA mouse cursors. */
-          GHOST_kCapabilityCursorRGBA |
           /* No support yet for dynamic cursor generation. */
           GHOST_kCapabilityCursorGenerator));
 }
@@ -1201,6 +1223,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleWindowEvent(GHOST_TEventType eventType,
       if (!ignore_window_sized_messages_) {
         /* Enforce only one resize message per event loop
          * (coalescing all the live resize messages). */
+        window->updateDrawingSize();
         window->updateDrawingContext();
         pushEvent(
             std::make_unique<GHOST_Event>(getMilliSeconds(), GHOST_kEventWindowSize, window));
@@ -1215,6 +1238,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleWindowEvent(GHOST_TEventType eventType,
       }
       break;
     case GHOST_kEventNativeResolutionChange:
+      window->updateDrawingSize();
 
       if (native_pixel_) {
         window->setNativePixelSize();
@@ -1250,10 +1274,11 @@ static NSSize getNSImagePixelSize(NSImage *image)
  * \param image: NSImage to convert.
  * \return Pointer to the resulting allocated ImBuf. Caller must free.
  */
-static ImBuf *NSImageToImBuf(NSImage *image)
+static blender::ImBuf *NSImageToImBuf(NSImage *image)
 {
   const NSSize imageSize = getNSImagePixelSize(image);
-  ImBuf *ibuf = IMB_allocImBuf(imageSize.width, imageSize.height, 32, IB_byte_data);
+  blender::ImBuf *ibuf = blender::IMB_allocImBuf(
+      imageSize.width, imageSize.height, blender::ImBufFlags::ByteData);
 
   if (!ibuf) {
     return nullptr;
@@ -1274,7 +1299,7 @@ static ImBuf *NSImageToImBuf(NSImage *image)
       return nullptr;
     }
 
-    uint8_t *ibuf_data = ibuf->byte_buffer.data;
+    uint8_t *ibuf_data = ibuf->byte_data_for_write();
     uint8_t *bmp_data = (uint8_t *)bitmapImage.bitmapData;
 
     /* Vertical Flip. */
@@ -1375,7 +1400,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
           }
           case GHOST_kDragnDropTypeBitmap: {
             NSImage *droppedImg = static_cast<NSImage *>(data);
-            ImBuf *ibuf = NSImageToImBuf(droppedImg);
+            blender::ImBuf *ibuf = NSImageToImBuf(droppedImg);
 
             eventData = static_cast<GHOST_TDragnDropDataPtr>(ibuf);
 
@@ -2108,7 +2133,7 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
       return nullptr;
     }
 
-    ImBuf *ibuf = NSImageToImBuf(clipboardImage);
+    blender::ImBuf *ibuf = NSImageToImBuf(clipboardImage);
     const NSSize clipboardImageSize = getNSImagePixelSize(clipboardImage);
 
     if (ibuf) {
@@ -2116,12 +2141,12 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
       uint *rgba = (uint *)malloc(byteCount);
 
       if (!rgba) {
-        IMB_freeImBuf(ibuf);
+        blender::IMB_freeImBuf(ibuf);
         return nullptr;
       }
 
-      memcpy(rgba, ibuf->byte_buffer.data, byteCount);
-      IMB_freeImBuf(ibuf);
+      memcpy(rgba, ibuf->byte_data(), byteCount);
+      blender::IMB_freeImBuf(ibuf);
 
       *r_width = clipboardImageSize.width;
       *r_height = clipboardImageSize.height;

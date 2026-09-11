@@ -8,11 +8,13 @@
  * BM element callback functions.
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_callback_generic.hh"
+
+namespace blender {
 
 bool BM_elem_cb_check_hflag_ex(BMElem *ele, void *user_data)
 {
@@ -41,3 +43,5 @@ bool BM_elem_cb_check_elem_not_equal(BMElem *ele, void *user_data)
 {
   return (ele != user_data);
 }
+
+}  // namespace blender

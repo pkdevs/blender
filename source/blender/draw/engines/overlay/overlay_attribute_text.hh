@@ -10,7 +10,7 @@
 
 #include "BLI_color.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_pointcloud_types.h"
@@ -98,6 +98,8 @@ class AttributeTexts : Overlay {
         add_attributes_to_text_cache(dt, curves.attributes(), object_to_world);
         break;
       }
+      default:
+        break;
     }
   }
 
@@ -235,8 +237,7 @@ class AttributeTexts : Overlay {
     uchar col[4];
     ui::theme::get_color_4ubv(TH_TEXT_HI, col);
 
-    bke::attribute_math::convert_to_static_type(values.type(), [&](auto dummy) {
-      using T = decltype(dummy);
+    bke::attribute_math::to_static_type(values.type(), [&]<typename T>() {
       const VArray<T> &values_typed = values.typed<T>();
       for (const int i : values.index_range()) {
         const float3 position = math::transform_point(object_to_world, positions[i]);

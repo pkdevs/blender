@@ -4,11 +4,13 @@
 
 #include "testing/testing.h"
 
-#include "BLI_rand.h"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_rand_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 /* Note that 'common' UTF8 variants of string functions (like copy, etc.) are tested in
  * `BLI_string_test.cc` However, tests below are specific UTF8 conformance ones,
@@ -1020,10 +1022,10 @@ TEST(string, StrCursorStepNextUtf32Invalid)
 
 TEST(string, StrCursorStepPrevUtf32Empty)
 {
-  const char32_t emtpy[] = U"";
+  const char32_t empty[] = U"";
   const size_t len = 0;
   int pos = 0;
-  EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(emtpy, len, &pos));
+  EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(empty, len, &pos));
 }
 
 /** \} */
@@ -1414,3 +1416,5 @@ TEST(string, StrCursorStepPrevUtf8Invalid)
 }
 
 /** \} */
+
+}  // namespace blender

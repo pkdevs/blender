@@ -12,14 +12,14 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_curve_types.h"
@@ -53,6 +53,8 @@
 #include "WM_types.hh"
 #include "wm_event_types.hh"
 
+namespace blender {
+
 /* Don't use translation strings in versioning!
  * These depend on the preferences already being read.
  * If this is important we can set the translations as part of versioning preferences,
@@ -68,7 +70,6 @@
 
 static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
 {
-
 #define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_FILE_ATLEAST(userdef, ver, subver)
 #define FROM_DEFAULT_V4_UCHAR(member) copy_v4_v4_uchar(btheme->member, U_theme_default.member)
 
@@ -394,19 +395,19 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
   if (!USER_VERSION_ATLEAST(500, 111)) {
     MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
     /* Update text styles to match. */
-    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
-      style->paneltitle.points = 11.0f;
-      style->paneltitle.shadow = 3;
-      style->paneltitle.shadowalpha = 0.5f;
-      style->paneltitle.shadowcolor = 0.0f;
-      style->widget.points = 11.0f;
-      style->widget.shadow = 1;
-      style->widget.shadowalpha = 0.5f;
-      style->widget.shadowcolor = 0.0f;
-      style->tooltip.shadow = 1;
-      style->tooltip.points = 11.0f;
-      style->tooltip.shadowalpha = 0.5f;
-      style->tooltip.shadowcolor = 0.0f;
+    for (uiStyle &style : userdef->uistyles) {
+      style.paneltitle.points = 11.0f;
+      style.paneltitle.shadow = 3;
+      style.paneltitle.shadowalpha = 0.5f;
+      style.paneltitle.shadowcolor = 0.0f;
+      style.widget.points = 11.0f;
+      style.widget.shadow = 1;
+      style.widget.shadowalpha = 0.5f;
+      style.widget.shadowcolor = 0.0f;
+      style.tooltip.shadow = 1;
+      style.tooltip.points = 11.0f;
+      style.tooltip.shadowalpha = 0.5f;
+      style.tooltip.shadowcolor = 0.0f;
     }
 
     FROM_DEFAULT_V4_UCHAR(space_node.node_outline);
@@ -416,6 +417,39 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_action.anim_interpolation_other);
     FROM_DEFAULT_V4_UCHAR(space_action.anim_interpolation_constant);
     FROM_DEFAULT_V4_UCHAR(space_action.anim_interpolation_linear);
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 19)) {
+    FROM_DEFAULT_V4_UCHAR(space_preferences.match);
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 26)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.grid_major);
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 28)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.gp_wire_edit);
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 8)) {
+    FROM_DEFAULT_V4_UCHAR(tui.link);
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 32)) {
+    btheme->space_view3d.grid_axis_brightness = U_theme_default.space_view3d.grid_axis_brightness;
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 42)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_state.error);
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 5)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 19)) {
+    /* Alpha is now used, but was hardcoded to be opaque before. */
+    btheme->common.anim.playhead[3] = 255;
   }
 
   /**
@@ -519,19 +553,19 @@ static bool keymap_item_update_tweak_event(wmKeyMapItem *kmi, void * /*user_data
 }
 
 static void keymap_update_brushes_handle_add_item(
-    const blender::StringRef asset_prefix,
-    const blender::StringRef tool_property,
-    const blender::Map<blender::StringRef, blender::StringRefNull> &tool_tool_map,
-    const blender::Map<blender::StringRef, blender::StringRef> &tool_asset_map,
-    const blender::Map<int, blender::StringRef> &id_asset_map,
+    const StringRef asset_prefix,
+    const StringRef tool_property,
+    const Map<StringRef, StringRefNull> &tool_tool_map,
+    const Map<StringRef, StringRef> &tool_asset_map,
+    const Map<int, StringRef> &id_asset_map,
     wmKeyMapItem *kmi)
 {
-  std::optional<blender::StringRef> asset_id = {};
-  std::optional<blender::StringRefNull> tool_id = {};
+  std::optional<StringRef> asset_id = {};
+  std::optional<StringRefNull> tool_id = {};
   if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
     IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
     if (idprop && (idprop->type == IDP_STRING)) {
-      const blender::StringRef prop_val = IDP_string_get(idprop);
+      const StringRef prop_val = IDP_string_get(idprop);
       if (!prop_val.startswith("builtin_brush.")) {
         return;
       }
@@ -558,25 +592,23 @@ static void keymap_update_brushes_handle_add_item(
 
     WM_keymap_item_properties_reset(kmi, nullptr);
     STRNCPY(kmi->idname, "BRUSH_OT_asset_activate");
-    IDP_AddToGroup(
-        kmi->properties,
-        blender::bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
     IDP_AddToGroup(kmi->properties,
-                   blender::bke::idprop::create("relative_asset_identifier", full_path).release());
+                   bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
+    IDP_AddToGroup(kmi->properties,
+                   bke::idprop::create("relative_asset_identifier", full_path).release());
   }
   else if (tool_id) {
     WM_keymap_item_properties_reset(kmi, nullptr);
-    IDP_AddToGroup(kmi->properties, blender::bke::idprop::create("name", *tool_id).release());
+    IDP_AddToGroup(kmi->properties, bke::idprop::create("name", *tool_id).release());
   }
 }
 
-static void keymap_update_brushes_handle_remove_item(
-    const blender::StringRef asset_prefix,
-    const blender::StringRef tool_property,
-    const blender::Map<int, blender::StringRef> &id_asset_map,
-    wmKeyMapItem *kmi)
+static void keymap_update_brushes_handle_remove_item(const StringRef asset_prefix,
+                                                     const StringRef tool_property,
+                                                     const Map<int, StringRef> &id_asset_map,
+                                                     wmKeyMapItem *kmi)
 {
-  std::optional<blender::StringRef> asset_id = {};
+  std::optional<StringRef> asset_id = {};
   /* Only the paint.brush_select operator is stored in the default keymap & applicable to be
    * updated if the user removed it in a previous version. */
   if (STREQ(kmi->idname, "PAINT_OT_brush_select")) {
@@ -594,46 +626,39 @@ static void keymap_update_brushes_handle_remove_item(
 
     WM_keymap_item_properties_reset(kmi, nullptr);
     STRNCPY(kmi->idname, "BRUSH_OT_asset_activate");
-    IDP_AddToGroup(
-        kmi->properties,
-        blender::bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
     IDP_AddToGroup(kmi->properties,
-                   blender::bke::idprop::create("relative_asset_identifier", full_path).release());
+                   bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
+    IDP_AddToGroup(kmi->properties,
+                   bke::idprop::create("relative_asset_identifier", full_path).release());
   }
 }
 
-static void keymap_update_brushes(
-    wmKeyMap *keymap,
-    const blender::StringRef asset_prefix,
-    const blender::StringRef tool_property,
-    const blender::Map<blender::StringRef, blender::StringRefNull> &tool_tool_map,
-    const blender::Map<blender::StringRef, blender::StringRef> &tool_asset_map,
-    const blender::Map<int, blender::StringRef> &id_asset_map)
+static void keymap_update_brushes(wmKeyMap *keymap,
+                                  const StringRef asset_prefix,
+                                  const StringRef tool_property,
+                                  const Map<StringRef, StringRefNull> &tool_tool_map,
+                                  const Map<StringRef, StringRef> &tool_asset_map,
+                                  const Map<int, StringRef> &id_asset_map)
 {
-  LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
-    if (kmid->add_item) {
-      keymap_update_brushes_handle_add_item(asset_prefix,
-                                            tool_property,
-                                            tool_tool_map,
-                                            tool_asset_map,
-                                            id_asset_map,
-                                            kmid->add_item);
+  for (wmKeyMapDiffItem &kmid : keymap->diff_items) {
+    if (kmid.add_item) {
+      keymap_update_brushes_handle_add_item(
+          asset_prefix, tool_property, tool_tool_map, tool_asset_map, id_asset_map, kmid.add_item);
     }
-    if (kmid->remove_item) {
+    if (kmid.remove_item) {
       keymap_update_brushes_handle_remove_item(
-          asset_prefix, tool_property, id_asset_map, kmid->remove_item);
+          asset_prefix, tool_property, id_asset_map, kmid.remove_item);
     }
   }
 }
 
 static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix =
-      "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
-  constexpr blender::StringRef tool_property = "sculpt_tool";
+  constexpr StringRef asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
+  constexpr StringRef tool_property = "sculpt_tool";
 
   const auto tool_asset_map = []() {
-    blender::Map<blender::StringRef, blender::StringRef> map;
+    Map<StringRef, StringRef> map;
     map.add_new("builtin_brush.Draw Sharp", "Draw Sharp");
     map.add_new("builtin_brush.Clay", "Clay");
     map.add_new("builtin_brush.Clay Strips", "Clay Strips");
@@ -667,7 +692,7 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
   }();
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRefNull> map;
+    Map<StringRef, StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Paint", "builtin_brush.paint");
     map.add_new("builtin_brush.Mask", "builtin_brush.mask");
@@ -676,7 +701,7 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
   }();
 
   const auto id_asset_map = []() {
-    blender::Map<int, blender::StringRef> map;
+    Map<int, StringRef> map;
     map.add_new(SCULPT_BRUSH_TYPE_DRAW, "Draw");
     map.add_new(SCULPT_BRUSH_TYPE_DRAW_SHARP, "Draw Sharp");
     map.add_new(SCULPT_BRUSH_TYPE_CLAY, "Clay");
@@ -718,12 +743,11 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
 
 static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix =
-      "brushes/essentials_brushes-mesh_vertex.blend/Brush/";
-  constexpr blender::StringRef tool_property = "vertex_tool";
+  constexpr StringRef asset_prefix = "brushes/essentials_brushes-mesh_vertex.blend/Brush/";
+  constexpr StringRef tool_property = "vertex_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRefNull> map;
+    Map<StringRef, StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Blur", "builtin_brush.blur");
     map.add_new("builtin_brush.Average", "builtin_brush.average");
@@ -732,7 +756,7 @@ static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
   }();
 
   const auto id_asset_map = []() {
-    blender::Map<int, blender::StringRef> map;
+    Map<int, StringRef> map;
     map.add_new(VPAINT_BRUSH_TYPE_DRAW, "Paint Hard");
     map.add_new(VPAINT_BRUSH_TYPE_BLUR, "Blur");
     map.add_new(VPAINT_BRUSH_TYPE_AVERAGE, "Average");
@@ -745,12 +769,11 @@ static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
 
 static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix =
-      "brushes/essentials_brushes-mesh_weight.blend/Brush/";
-  constexpr blender::StringRef tool_property = "weight_tool";
+  constexpr StringRef asset_prefix = "brushes/essentials_brushes-mesh_weight.blend/Brush/";
+  constexpr StringRef tool_property = "weight_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRefNull> map;
+    Map<StringRef, StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Blur", "builtin_brush.blur");
     map.add_new("builtin_brush.Average", "builtin_brush.average");
@@ -759,8 +782,8 @@ static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
   }();
 
   const auto asset_id_map = []() {
-    blender::Map<int, blender::StringRef> map;
-    map.add_new(WPAINT_BRUSH_TYPE_DRAW, "Paint");
+    Map<int, StringRef> map;
+    map.add_new(WPAINT_BRUSH_TYPE_DRAW, "Add Weight");
     map.add_new(WPAINT_BRUSH_TYPE_BLUR, "Blur");
     map.add_new(WPAINT_BRUSH_TYPE_AVERAGE, "Average");
     map.add_new(WPAINT_BRUSH_TYPE_SMEAR, "Smear");
@@ -772,12 +795,11 @@ static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
 
 static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix =
-      "brushes/essentials_brushes-mesh_texture.blend/Brush/";
-  constexpr blender::StringRef tool_property = "image_tool";
+  constexpr StringRef asset_prefix = "brushes/essentials_brushes-mesh_texture.blend/Brush/";
+  constexpr StringRef tool_property = "image_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRefNull> map;
+    Map<StringRef, StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Soften", "builtin_brush.soften");
     map.add_new("builtin_brush.Smear", "builtin_brush.smear");
@@ -788,7 +810,7 @@ static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
   }();
 
   const auto id_asset_map = []() {
-    blender::Map<int, blender::StringRef> map;
+    Map<int, StringRef> map;
     map.add_new(IMAGE_PAINT_BRUSH_TYPE_DRAW, "Paint Hard");
     map.add_new(IMAGE_PAINT_BRUSH_TYPE_SOFTEN, "Blur");
     map.add_new(IMAGE_PAINT_BRUSH_TYPE_SMEAR, "Smear");
@@ -803,6 +825,8 @@ static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
 
 void blo_do_versions_userdef(UserDef *userdef)
 {
+  UserDef U_default = {};
+
 /* #UserDef & #Main happen to have the same struct member. */
 #define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_FILE_ATLEAST(userdef, ver, subver)
 
@@ -816,7 +840,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
   if (userdef->autokey_mode == 0) {
     /* 'add/replace' but not on */
-    userdef->autokey_mode = 2;
+    userdef->autokey_mode = eAutokey_Mode(2);
   }
   if (userdef->savetime <= 0) {
     userdef->savetime = 1;
@@ -833,12 +857,14 @@ void blo_do_versions_userdef(UserDef *userdef)
   /* If the userdef was created on a different platform, it may have an
    * unsupported GPU backend selected.  If so, pick a supported default. */
 #ifdef __APPLE__
-  if (userdef->gpu_backend == GPU_BACKEND_OPENGL || userdef->gpu_backend == GPU_BACKEND_VULKAN) {
-    userdef->gpu_backend = GPU_BACKEND_METAL;
+  if (userdef->gpu_backend == USER_GPU_BACKEND_OPENGL ||
+      userdef->gpu_backend == USER_GPU_BACKEND_VULKAN)
+  {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 #else
-  if (userdef->gpu_backend == GPU_BACKEND_METAL) {
-    userdef->gpu_backend = GPU_BACKEND_OPENGL;
+  if (userdef->gpu_backend == USER_GPU_BACKEND_METAL) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 #endif
 
@@ -918,54 +944,54 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(250, 8)) {
-    LISTBASE_FOREACH (wmKeyMap *, km, &userdef->user_keymaps) {
-      if (STREQ(km->idname, "Armature_Sketch")) {
-        STRNCPY(km->idname, "Armature Sketch");
+    for (wmKeyMap &km : userdef->user_keymaps) {
+      if (STREQ(km.idname, "Armature_Sketch")) {
+        STRNCPY(km.idname, "Armature Sketch");
       }
-      else if (STREQ(km->idname, "View3D")) {
-        STRNCPY(km->idname, "3D View");
+      else if (STREQ(km.idname, "View3D")) {
+        STRNCPY(km.idname, "3D View");
       }
-      else if (STREQ(km->idname, "View3D Generic")) {
-        STRNCPY(km->idname, "3D View Generic");
+      else if (STREQ(km.idname, "View3D Generic")) {
+        STRNCPY(km.idname, "3D View Generic");
       }
-      else if (STREQ(km->idname, "EditMesh")) {
-        STRNCPY(km->idname, "Mesh");
+      else if (STREQ(km.idname, "EditMesh")) {
+        STRNCPY(km.idname, "Mesh");
       }
-      else if (STREQ(km->idname, "UVEdit")) {
-        STRNCPY(km->idname, "UV Editor");
+      else if (STREQ(km.idname, "UVEdit")) {
+        STRNCPY(km.idname, "UV Editor");
       }
-      else if (STREQ(km->idname, "Animation_Channels")) {
-        STRNCPY(km->idname, "Animation Channels");
+      else if (STREQ(km.idname, "Animation_Channels")) {
+        STRNCPY(km.idname, "Animation Channels");
       }
-      else if (STREQ(km->idname, "GraphEdit Keys")) {
-        STRNCPY(km->idname, "Graph Editor");
+      else if (STREQ(km.idname, "GraphEdit Keys")) {
+        STRNCPY(km.idname, "Graph Editor");
       }
-      else if (STREQ(km->idname, "GraphEdit Generic")) {
-        STRNCPY(km->idname, "Graph Editor Generic");
+      else if (STREQ(km.idname, "GraphEdit Generic")) {
+        STRNCPY(km.idname, "Graph Editor Generic");
       }
-      else if (STREQ(km->idname, "Action_Keys")) {
-        STRNCPY(km->idname, "Dopesheet");
+      else if (STREQ(km.idname, "Action_Keys")) {
+        STRNCPY(km.idname, "Dopesheet");
       }
-      else if (STREQ(km->idname, "NLA Data")) {
-        STRNCPY(km->idname, "NLA Editor");
+      else if (STREQ(km.idname, "NLA Data")) {
+        STRNCPY(km.idname, "NLA Editor");
       }
-      else if (STREQ(km->idname, "Node Generic")) {
-        STRNCPY(km->idname, "Node Editor");
+      else if (STREQ(km.idname, "Node Generic")) {
+        STRNCPY(km.idname, "Node Editor");
       }
-      else if (STREQ(km->idname, "Logic Generic")) {
-        STRNCPY(km->idname, "Logic Editor");
+      else if (STREQ(km.idname, "Logic Generic")) {
+        STRNCPY(km.idname, "Logic Editor");
       }
-      else if (STREQ(km->idname, "File")) {
-        STRNCPY(km->idname, "File Browser");
+      else if (STREQ(km.idname, "File")) {
+        STRNCPY(km.idname, "File Browser");
       }
-      else if (STREQ(km->idname, "FileMain")) {
-        STRNCPY(km->idname, "File Browser Main");
+      else if (STREQ(km.idname, "FileMain")) {
+        STRNCPY(km.idname, "File Browser Main");
       }
-      else if (STREQ(km->idname, "FileButtons")) {
-        STRNCPY(km->idname, "File Browser Buttons");
+      else if (STREQ(km.idname, "FileButtons")) {
+        STRNCPY(km.idname, "File Browser Buttons");
       }
-      else if (STREQ(km->idname, "Buttons Generic")) {
-        STRNCPY(km->idname, "Property Editor");
+      else if (STREQ(km.idname, "Buttons Generic")) {
+        STRNCPY(km.idname, "Property Editor");
       }
     }
   }
@@ -1058,9 +1084,9 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(278, 6)) {
     /* Clear preference flags for re-use. */
-    userdef->flag &= ~(USER_FLAG_NUMINPUT_ADVANCED | (1 << 2) | USER_MENU_CLOSE_LEAVE |
-                       USER_FLAG_UNUSED_6 | USER_FLAG_UNUSED_7 | USER_INTERNET_ALLOW |
-                       USER_DEVELOPER_UI);
+    userdef->flag &= ~eUserPref_Flag(USER_FLAG_NUMINPUT_ADVANCED | (1 << 2) |
+                                     USER_MENU_CLOSE_LEAVE | USER_FLAG_UNUSED_6 |
+                                     USER_FLAG_UNUSED_7 | USER_INTERNET_ALLOW | USER_DEVELOPER_UI);
     userdef->uiflag &= ~USER_HEADER_BOTTOM;
     userdef->transopts &= ~(USER_TR_UNUSED_3 | USER_TR_UNUSED_4 | USER_TR_UNUSED_6 |
                             USER_TR_UNUSED_7);
@@ -1072,8 +1098,8 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->gpu_viewport_quality = 0.6f;
 
     /* Reset theme, old themes will not be compatible with minor version updates from now on. */
-    LISTBASE_FOREACH (bTheme *, btheme, &userdef->themes) {
-      MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
+    for (bTheme &btheme : userdef->themes) {
+      MEMCPY_STRUCT_AFTER(&btheme, &U_theme_default, name);
     }
 
     /* Annotations - new layer color
@@ -1090,18 +1116,18 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(280, 31)) {
     /* Remove select/action mouse from user defined keymaps. */
-    LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
-      LISTBASE_FOREACH (wmKeyMapDiffItem *, kmdi, &keymap->diff_items) {
-        if (kmdi->remove_item) {
-          do_version_select_mouse(userdef, kmdi->remove_item);
+    for (wmKeyMap &keymap : userdef->user_keymaps) {
+      for (wmKeyMapDiffItem &kmdi : keymap.diff_items) {
+        if (kmdi.remove_item) {
+          do_version_select_mouse(userdef, kmdi.remove_item);
         }
-        if (kmdi->add_item) {
-          do_version_select_mouse(userdef, kmdi->add_item);
+        if (kmdi.add_item) {
+          do_version_select_mouse(userdef, kmdi.add_item);
         }
       }
 
-      LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
-        do_version_select_mouse(userdef, kmi);
+      for (wmKeyMapItem &kmi : keymap.items) {
+        do_version_select_mouse(userdef, &kmi);
       }
     }
   }
@@ -1119,7 +1145,7 @@ void blo_do_versions_userdef(UserDef *userdef)
       BKE_keyconfig_pref_set_select_mouse(userdef, 1, false);
     }
 
-    userdef->flag &= ~USER_LMOUSESELECT;
+    userdef->flag &= ~eUserPref_Flag(USER_LMOUSESELECT);
   }
 
   if (!USER_VERSION_ATLEAST(280, 38)) {
@@ -1173,12 +1199,6 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(280, 51)) {
     userdef->move_threshold = 2;
-  }
-
-  if (!USER_VERSION_ATLEAST(280, 58)) {
-    if (userdef->image_draw_method != IMAGE_DRAW_METHOD_GLSL) {
-      userdef->image_draw_method = IMAGE_DRAW_METHOD_AUTO;
-    }
   }
 
   /* Patch to set dupli light-probes and grease-pencil. */
@@ -1301,7 +1321,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(292, 9)) {
-    if (BLI_listbase_is_empty(&userdef->asset_libraries)) {
+    if (userdef->asset_libraries.is_empty()) {
       BKE_preferences_asset_library_default_add(userdef);
     }
   }
@@ -1317,9 +1337,9 @@ void blo_do_versions_userdef(UserDef *userdef)
 
     BLI_string_replace_table_exact(
         userdef->keyconfigstr, sizeof(userdef->keyconfigstr), replace_table, replace_table_len);
-    LISTBASE_FOREACH (wmKeyConfigPref *, kpt, &userdef->user_keyconfig_prefs) {
+    for (wmKeyConfigPref &kpt : userdef->user_keyconfig_prefs) {
       BLI_string_replace_table_exact(
-          kpt->idname, sizeof(kpt->idname), replace_table, replace_table_len);
+          kpt.idname, sizeof(kpt.idname), replace_table, replace_table_len);
     }
   }
 
@@ -1355,20 +1375,20 @@ void blo_do_versions_userdef(UserDef *userdef)
      * since it doesn't handle translations and ignores user changes. But this was an alpha build
      * (experimental) feature and the name is just for display in the UI anyway. So it doesn't have
      * to work perfectly at all. */
-    LISTBASE_FOREACH (bUserAssetLibrary *, asset_library, &userdef->asset_libraries) {
+    for (bUserAssetLibrary &asset_library : userdef->asset_libraries) {
       /* Ignores translations, since that would depend on the current preferences (global `U`). */
-      if (STREQ(asset_library->name, "Default")) {
+      if (STREQ(asset_library.name, "Default")) {
         BKE_preferences_asset_library_name_set(
-            userdef, asset_library, BKE_PREFS_ASSET_LIBRARY_DEFAULT_NAME);
+            userdef, &asset_library, BKE_PREFS_ASSET_LIBRARY_DEFAULT_NAME);
       }
     }
   }
 
   if (!USER_VERSION_ATLEAST(300, 40)) {
-    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
+    for (uiStyle &style : userdef->uistyles) {
       const int default_title_points = 11; /* UI_DEFAULT_TITLE_POINTS */
-      style->paneltitle.points = default_title_points;
-      style->grouplabel.points = default_title_points;
+      style.paneltitle.points = default_title_points;
+      style.grouplabel.points = default_title_points;
     }
   }
 
@@ -1385,18 +1405,14 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->dupflag |= USER_DUP_CURVES | USER_DUP_POINTCLOUD;
   }
 
-  /* Set GPU backend to OpenGL. */
+  /* Set GPU backend to the default backend. */
   if (!USER_VERSION_ATLEAST(305, 5)) {
-#ifdef __APPLE__
-    userdef->gpu_backend = GPU_BACKEND_METAL;
-#else
-    userdef->gpu_backend = GPU_BACKEND_OPENGL;
-#endif
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
   }
 
   if (!USER_VERSION_ATLEAST(305, 10)) {
-    LISTBASE_FOREACH (bUserAssetLibrary *, asset_library, &userdef->asset_libraries) {
-      asset_library->import_method = ASSET_IMPORT_APPEND_REUSE;
+    for (bUserAssetLibrary &asset_library : userdef->asset_libraries) {
+      asset_library.import_method = ASSET_IMPORT_APPEND_REUSE;
     }
   }
 
@@ -1413,7 +1429,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(306, 5)) {
     if (userdef->pythondir_legacy[0]) {
-      bUserScriptDirectory *script_dir = MEM_callocN<bUserScriptDirectory>(
+      bUserScriptDirectory *script_dir = MEM_new<bUserScriptDirectory>(
           "Versioning user script path");
 
       STRNCPY(script_dir->dir_path, userdef->pythondir_legacy);
@@ -1423,8 +1439,8 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(306, 6)) {
-    LISTBASE_FOREACH (bUserAssetLibrary *, asset_library, &userdef->asset_libraries) {
-      asset_library->flag |= ASSET_LIBRARY_RELATIVE_PATH;
+    for (bUserAssetLibrary &asset_library : userdef->asset_libraries) {
+      asset_library.flag |= ASSET_LIBRARY_RELATIVE_PATH;
     }
   }
 
@@ -1448,7 +1464,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(400, 24)) {
     /* Clear deprecated USER_MENUFIXEDORDER user flag for reuse. */
-    userdef->uiflag &= ~(1 << 23);
+    userdef->uiflag &= ~eUserpref_UI_Flag(1 << 23);
   }
 
   if (!USER_VERSION_ATLEAST(400, 26)) {
@@ -1460,10 +1476,10 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(401, 3)) {
-    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
-      style->paneltitle.character_weight = 400;
-      style->grouplabel.character_weight = 400;
-      style->widget.character_weight = 400;
+    for (uiStyle &style : userdef->uistyles) {
+      style.paneltitle.character_weight = 400;
+      style.grouplabel.character_weight = 400;
+      style.widget.character_weight = 400;
     }
   }
 
@@ -1481,18 +1497,17 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(401, 21)) {
-    LISTBASE_FOREACH (wmKeyMap *, km, &userdef->user_keymaps) {
-      if (STREQ(km->idname, "NLA Channels")) {
-        STRNCPY(km->idname, "NLA Tracks");
+    for (wmKeyMap &km : userdef->user_keymaps) {
+      if (STREQ(km.idname, "NLA Channels")) {
+        STRNCPY(km.idname, "NLA Tracks");
       }
     }
   }
 
   if (!USER_VERSION_ATLEAST(402, 36)) {
     /* Reset repositories. */
-    while (!BLI_listbase_is_empty(&userdef->extension_repos)) {
-      BKE_preferences_extension_repo_remove(
-          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
+    while (!userdef->extension_repos.is_empty()) {
+      BKE_preferences_extension_repo_remove(userdef, userdef->extension_repos.first());
     }
 
     BKE_preferences_extension_repo_add_default_remote(userdef);
@@ -1549,13 +1564,13 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(403, 12)) {
-    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
-      style->tooltip.points = 11.0f; /* UI_DEFAULT_TOOLTIP_POINTS */
-      style->tooltip.character_weight = 400;
-      style->tooltip.shadow = 0;
-      style->tooltip.shady = -1;
-      style->tooltip.shadowalpha = 0.5f;
-      style->tooltip.shadowcolor = 0.0f;
+    for (uiStyle &style : userdef->uistyles) {
+      style.tooltip.points = 11.0f; /* UI_DEFAULT_TOOLTIP_POINTS */
+      style.tooltip.character_weight = 400;
+      style.tooltip.shadow = 0;
+      style.tooltip.shady = -1;
+      style.tooltip.shadowalpha = 0.5f;
+      style.tooltip.shadowcolor = 0.0f;
     }
   }
   if (!USER_VERSION_ATLEAST(403, 19)) {
@@ -1581,18 +1596,18 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(404, 9)) {
-    LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
-      if (STREQ("Sculpt", keymap->idname)) {
-        keymap_update_mesh_sculpt_brushes(keymap);
+    for (wmKeyMap &keymap : userdef->user_keymaps) {
+      if (STREQ("Sculpt", keymap.idname)) {
+        keymap_update_mesh_sculpt_brushes(&keymap);
       }
-      else if (STREQ("Vertex Paint", keymap->idname)) {
-        keymap_update_mesh_vertex_paint_brushes(keymap);
+      else if (STREQ("Vertex Paint", keymap.idname)) {
+        keymap_update_mesh_vertex_paint_brushes(&keymap);
       }
-      else if (STREQ("Weight Paint", keymap->idname)) {
-        keymap_update_mesh_weight_paint_brushes(keymap);
+      else if (STREQ("Weight Paint", keymap.idname)) {
+        keymap_update_mesh_weight_paint_brushes(&keymap);
       }
-      else if (STREQ("Image Paint", keymap->idname)) {
-        keymap_update_mesh_texture_paint_brushes(keymap);
+      else if (STREQ("Image Paint", keymap.idname)) {
+        keymap_update_mesh_texture_paint_brushes(&keymap);
       }
     }
   }
@@ -1606,7 +1621,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(405, 10)) {
-    static const blender::Map<std::string, std::string> keymap_renames = {
+    static const Map<std::string, std::string> keymap_renames = {
         {"SequencerCommon", "Video Sequence Editor"},
         {"SequencerPreview", "Preview"},
 
@@ -1626,10 +1641,10 @@ void blo_do_versions_userdef(UserDef *userdef)
         {"Sequencer Preview Tool: Select Box (fallback)", "Preview Tool: Select Box (fallback)"},
     };
 
-    LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
-      std::string old_name(keymap->idname);
+    for (wmKeyMap &keymap : userdef->user_keymaps) {
+      std::string old_name(keymap.idname);
       if (const std::string *new_name = keymap_renames.lookup_ptr(old_name)) {
-        STRNCPY(keymap->idname, new_name->c_str());
+        STRNCPY(keymap.idname, new_name->c_str());
       }
     }
   }
@@ -1651,18 +1666,18 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(405, 50)) {
-    LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
-      LISTBASE_FOREACH (wmKeyMapDiffItem *, kmdi, &keymap->diff_items) {
-        if (kmdi->remove_item) {
-          do_version_keyframe_jump(kmdi->remove_item);
+    for (wmKeyMap &keymap : userdef->user_keymaps) {
+      for (wmKeyMapDiffItem &kmdi : keymap.diff_items) {
+        if (kmdi.remove_item) {
+          do_version_keyframe_jump(kmdi.remove_item);
         }
-        if (kmdi->add_item) {
-          do_version_keyframe_jump(kmdi->add_item);
+        if (kmdi.add_item) {
+          do_version_keyframe_jump(kmdi.add_item);
         }
       }
 
-      LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
-        do_version_keyframe_jump(kmi);
+      for (wmKeyMapItem &kmi : keymap.items) {
+        do_version_keyframe_jump(&kmi);
       }
     }
   }
@@ -1674,7 +1689,8 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(500, 11)) {
-    userdef->gpu_flag &= ~USER_GPU_FLAG_UNUSED_0;
+    /* This used to be USER_GPU_FLAG_UNUSED_0. */
+    userdef->gpu_flag &= ~USER_GPU_FLAG_WORKBENCH_RT_SHADOWS;
   }
 
   if (!USER_VERSION_ATLEAST(500, 59)) {
@@ -1741,6 +1757,70 @@ void blo_do_versions_userdef(UserDef *userdef)
         userdef, "NODE_AST_compositor", "Utilities");
   }
 
+  if (!USER_VERSION_ATLEAST(501, 17)) {
+    userdef->flag |= USER_HIDE_DOT_DATABLOCK;
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 24)) {
+    /* Increase the base XR vignette value to match the previous default after logic refactor. */
+    /* Can be either 50 or 60 due to an oversight in the original feature (dde9d21b91) where
+     * the DNA default was set 60, but the versioning_userdef set it to 50. */
+    if (ELEM(userdef->xr_navigation.vignette_intensity, 50, 60)) {
+      userdef->xr_navigation.vignette_intensity = 70;
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 13)) {
+    userdef->nodes_stack_limit = 100;
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 35)) {
+    /* Instead of removing the flag entirely, it is forced to be on. Once it is 100% certain the
+     * Remote Asset Libraries feature will be shipped with 5.2 (which depends on other factors than
+     * just code), the flag can be removed. */
+    userdef->experimental.use_remote_asset_libraries = true;
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 1)) {
+    userdef->pref_flag |= USER_PREF_FLAG_PROJECT_SAVE;
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 2)) {
+    userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
+  }
+
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
+  if (!USER_VERSION_ATLEAST(503, 18)) {
+    const char *remapped_paths[][2] = {
+        {"Camera & Lens Effects", "Compositing/Camera & Lens Effects"},
+        {"Creative", "Compositing/Creative"},
+        {"Utilities", "Compositing/Utilities"},
+        {"Mask", "Compositing/Mask"},
+    };
+    for (const auto &remap : remapped_paths) {
+      if (BKE_preferences_asset_shelf_settings_disable_catalog_path(
+              userdef, "NODE_AST_compositor", remap[0]))
+      {
+        BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+            userdef, "NODE_AST_compositor", remap[1]);
+      }
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 21)) {
+    if (userdef->sequencer_default_strip_length == 0.0f) {
+      userdef->sequencer_default_strip_length = 1.0f;
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
@@ -1748,8 +1828,8 @@ void blo_do_versions_userdef(UserDef *userdef)
    * \note Keep this message at the bottom of the function.
    */
 
-  LISTBASE_FOREACH (bTheme *, btheme, &userdef->themes) {
-    do_versions_theme(userdef, btheme);
+  for (bTheme &btheme : userdef->themes) {
+    do_versions_theme(userdef, &btheme);
   }
 #undef USER_VERSION_ATLEAST
 }
@@ -1771,6 +1851,13 @@ void BLO_sanitize_experimental_features_userpref_blend(UserDef *userdef)
 #endif
 
   MEMSET_STRUCT_AFTER(&userdef->experimental, 0, SANITIZE_AFTER_HERE);
+
+  /* Instead of removing the flag entirely, it is forced to be on. Once it is 100% certain the
+   * Remote Asset Libraries feature will be shipped with 5.2 (which depends on other factors than
+   * just code), the flag can be removed. */
+  userdef->experimental.use_remote_asset_libraries = true;
 }
 
 #undef USER_LMOUSESELECT
+
+}  // namespace blender

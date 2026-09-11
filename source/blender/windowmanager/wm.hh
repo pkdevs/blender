@@ -8,9 +8,17 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include <optional>
+
+#include "BLI_compiler_attrs.hh"
 
 #include "BLI_math_vector_types.hh"
+
+#include "DNA_windowmanager_enums.h"
+
+#include "gizmo/wm_gizmo_wmapi.hh"
+
+namespace blender {
 
 struct wmDrag;
 struct wmOperator;
@@ -18,23 +26,6 @@ struct wmTimer;
 struct wmWindow;
 struct wmWindowManager;
 struct Main;
-
-#include "gizmo/wm_gizmo_wmapi.hh"
-
-struct wmPaintCursor {
-  wmPaintCursor *next, *prev;
-
-  void *customdata;
-
-  bool (*poll)(bContext *C);
-  void (*draw)(bContext *C,
-               const blender::int2 &xy,
-               const blender::float2 &tilt,
-               void *customdata);
-
-  short space_type;
-  short region_type;
-};
 
 /**
  * Cause a delayed #WM_exit()
@@ -95,6 +86,10 @@ void wm_gesture_tag_redraw(wmWindow *win);
  */
 void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt);
 /**
+ * Handle jobs that are ready and finished.
+ */
+void wm_jobs_handle_finished(const bContext *C);
+/**
  * Kill job entirely, also removes timer itself.
  */
 void wm_jobs_timer_end(wmWindowManager *wm, wmTimer *wt);
@@ -138,3 +133,5 @@ void wm_open_init_load_ui(wmOperator *op, bool use_prefs);
  * Return true if the script auto-execution should be cleared based on #WM_file_autoexec_init.
  */
 bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs) ATTR_WARN_UNUSED_RESULT;
+
+}  // namespace blender

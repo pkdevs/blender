@@ -9,10 +9,10 @@
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_vector.hh"
 
 #include "interface_intern.hh"
@@ -359,31 +359,31 @@ void block_align_calc(Block *block, const ARegion *region)
 
   const int sides_to_ui_but_align_flags[4] = SIDE_TO_BUT_ALIGN;
 
-  Vector<ButAlign, 256> butal_array(block->buttons.size());
+  Vector<ButAlign, 256> butal_array(block->buttons_ptrs.size());
 
   int n = 0;
   /* First loop: Initialize ButAlign data for each button and clear their align flag.
    * Tabs get some special treatment here, they get aligned to region border. */
-  for (const std::unique_ptr<Button> &but : block->buttons) {
+  for (Button &but : block->buttons()) {
     /* special case: tabs need to be aligned to a region border, drawflag tells which one */
-    if (but->type == ButtonType::Tab) {
-      block_align_but_to_region(but.get(), region);
+    if (but.type == ButtonType::Tab) {
+      block_align_but_to_region(&but, region);
     }
     else {
       /* Clear old align flags. */
-      but->drawflag &= ~BUT_ALIGN_ALL;
+      but.drawflag &= ~BUT_ALIGN_ALL;
     }
 
-    if (but->alignnr == 0) {
+    if (but.alignnr == 0) {
       continue;
     }
     ButAlign &butal = butal_array[n++];
     butal = {};
-    butal.but = but.get();
-    butal.borders[LEFT] = &but->rect.xmin;
-    butal.borders[RIGHT] = &but->rect.xmax;
-    butal.borders[DOWN] = &but->rect.ymin;
-    butal.borders[TOP] = &but->rect.ymax;
+    butal.but = &but;
+    butal.borders[LEFT] = &but.rect.xmin;
+    butal.borders[RIGHT] = &but.rect.xmax;
+    butal.borders[DOWN] = &but.rect.ymin;
+    butal.borders[TOP] = &but.rect.ymax;
     butal.dists = float4{FLT_MAX};
   }
   butal_array.resize(n);
@@ -396,7 +396,7 @@ void block_align_calc(Block *block, const ARegion *region)
   /* This will give us ButAlign items regrouped by align group, vertical and horizontal location.
    * Note that, given how buttons are defined in UI code,
    * butal_array shall already be "nearly sorted"... */
-  std::sort(butal_array.begin(), butal_array.end(), block_align_butal_cmp);
+  std::ranges::sort(butal_array, block_align_butal_cmp);
 
   /* Second loop: for each pair of buttons in the same align group,
    * we compute their potential proximity. Note that each pair is checked only once, and that we
@@ -501,6 +501,8 @@ int button_align_opposite_to_area_align_get(const ARegion *region)
       return BUT_ALIGN_RIGHT;
     case RGN_ALIGN_RIGHT:
       return BUT_ALIGN_LEFT;
+    default:
+      break;
   }
 
   return 0;

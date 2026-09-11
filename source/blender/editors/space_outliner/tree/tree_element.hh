@@ -12,16 +12,19 @@
 #include <optional>
 
 #include "BLI_string_ref.hh"
+#include "DNA_listBase.h"
 #include "UI_resources.hh"
 
+namespace blender {
+
 struct ID;
-struct ListBase;
 struct SpaceOutliner;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class AbstractTreeDisplay;
 struct TreeElement;
+struct TreeElementAddParams;
 
 /* -------------------------------------------------------------------- */
 /* Tree-Display Interface */
@@ -43,11 +46,6 @@ class AbstractTreeElement {
 
  public:
   virtual ~AbstractTreeElement() = default;
-
-  static std::unique_ptr<AbstractTreeElement> create_from_type(int type,
-                                                               TreeElement &legacy_te,
-                                                               ID *owner_id,
-                                                               void *create_data);
 
   /**
    * Check if the type is expandable in current context.
@@ -107,16 +105,33 @@ class AbstractTreeElement {
    */
   virtual void expand(SpaceOutliner & /*soops*/) const {}
 
-  /** See #AbstractTreeDisplay::add_element() (which this forwards to). */
-  TreeElement *add_element(ListBase *lb,
-                           ID *owner_id,
-                           void *create_data,
-                           TreeElement *parent,
-                           short type,
-                           short index,
-                           const bool expand = true) const;
+  /**
+   * See #AbstractTreeDisplay::add_element(). Adds a child to this element's own sub-tree by
+   * default, so #TreeElementAddParams.lb and #TreeElementAddParams.parent can usually be left
+   * unset:
+   * \code
+   * this->add_element<TreeElementConstraintBase>({}, object_);
+   * \endcode
+   *
+   * \note Defined in `tree_display.hh`, which is where the complete #AbstractTreeDisplay this
+   *       forwards to becomes available. Include it to use this.
+   */
+  template<typename ElementType, typename... Args>
+  TreeElement *add_element(const TreeElementAddParams &params, Args &&...args) const;
+
+  /** See #AbstractTreeDisplay::add_id_element() (which this forwards to). */
+  TreeElement *add_id_element(const TreeElementAddParams &params, ID *id) const;
+
+ private:
+  /**
+   * The tree-display to add children through, or null (with an assert) if this element wasn't
+   * registered through #AbstractTreeDisplay::add_element(). Fills in \a params defaults that refer
+   * to this element, shared by both `add_*_element()` above.
+   */
+  AbstractTreeDisplay *display_for_adding(TreeElementAddParams &params) const;
 };
 
 void tree_element_expand(const AbstractTreeElement &tree_element, SpaceOutliner &space_outliner);
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

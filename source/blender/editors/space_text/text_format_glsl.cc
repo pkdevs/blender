@@ -11,7 +11,7 @@
 
 #include <cstring>
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_space_types.h"
 #include "DNA_text_types.h"
@@ -19,6 +19,8 @@
 #include "BKE_text.h"
 
 #include "text_format.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Literal Definitions
@@ -332,7 +334,7 @@ static const Span<const char *> text_format_glsl_literals_specialvar(
 
 /** \} */
 
-/*---------------------------------------------------------------------*/
+/* -------------------------------------------------------------------- */
 /** \name Local Functions
  * \{ */
 
@@ -591,3 +593,5 @@ void ED_text_format_register_glsl()
 }
 
 /** \} */
+
+}  // namespace blender

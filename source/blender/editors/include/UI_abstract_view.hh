@@ -35,10 +35,12 @@
 
 #include "WM_types.hh"
 
+namespace blender {
+
 struct bContext;
 struct wmNotifier;
 
-namespace blender::ui {
+namespace ui {
 
 struct ViewLink;
 struct ButtonViewItem;
@@ -48,6 +50,13 @@ class AbstractViewItemDragController;
 enum class ViewScrollDirection {
   UP,
   DOWN,
+};
+
+enum class PageScrollDirection {
+  Up,
+  Down,
+  Top,
+  Bottom,
 };
 
 struct Layout;
@@ -155,6 +164,15 @@ class AbstractView {
   void clear_search_highlight();
   void allow_multiselect_items();
   bool is_multiselect_supported() const;
+  virtual AbstractViewItem *find_active_or_visible_item() const = 0;
+  virtual AbstractViewItem *navigate_left(AbstractViewItem *from) = 0;
+  virtual AbstractViewItem *navigate_right(AbstractViewItem *from) = 0;
+  virtual AbstractViewItem *navigate_up(AbstractViewItem *from) = 0;
+  virtual AbstractViewItem *navigate_down(AbstractViewItem *from) = 0;
+
+  virtual void scroll_active_into_view(bContext *C, bool scroll_active_to_center = false) = 0;
+
+  virtual void page_scroll(bContext *C, PageScrollDirection direction) = 0;
 
  protected:
   AbstractView() = default;
@@ -198,9 +216,11 @@ class AbstractViewItem {
    */
   AbstractView *view_ = nullptr;
   /** See #view_item_button() */
-  blender::ui::ButtonViewItem *view_item_but_ = nullptr;
+  ui::ButtonViewItem *view_item_but_ = nullptr;
   bool is_activatable_ = true;
   bool is_interactive_ = true;
+  /** See #is_hovered(). */
+  bool is_hovered_ = false;
   bool is_active_ = false;
   /** Only change using #set_selected() so overrides can sync changes to data. */
   bool is_selected_ = false;
@@ -307,7 +327,7 @@ class AbstractViewItem {
    * visible item gets one during the layout building. Items that are not visible may not have one,
    * so null is a valid return value.
    */
-  blender::ui::ButtonViewItem *view_item_button() const;
+  ui::ButtonViewItem *view_item_button() const;
 
   /** Disable the interacting with this item, meaning the buttons drawn will be disabled and there
    * will be no mouse hover feedback for the view row. */
@@ -347,6 +367,12 @@ class AbstractViewItem {
    */
   void activate_for_context_menu(bContext &C);
   void deactivate();
+  /**
+   * Is the item currently hovered by the mouse cursor? Can be used in the #build_
+   * Requires the view to have completed reconstruction, see #is_reconstructed(). Otherwise we
+   * can't be sure about the item state.
+   */
+  bool is_hovered() const;
   /**
    * Requires the view to have completed reconstruction, see #is_reconstructed(). Otherwise we
    * can't be sure about the item state.
@@ -429,8 +455,10 @@ class AbstractViewItemDragController {
   /**
    * Called when beginning to drag. Also called when #get_drag_type() doesn't return a value, so an
    * arbitrary action can be executed.
+   * \param item: The item this drag controller was created from. It's passed so it doesn't have to
+   *        be stored (especially as non-const).
    */
-  virtual void on_drag_start(bContext &C);
+  virtual void on_drag_start(bContext &C, ui::AbstractViewItem &item);
 
   /** Request the view the item is registered for as type #ViewType. Throws a `std::bad_cast`
    * exception if the view is not of the requested type. */
@@ -446,4 +474,5 @@ template<class ViewType> ViewType &AbstractViewItemDragController::get_view() co
 
 /** \} */
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

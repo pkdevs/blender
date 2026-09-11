@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -93,7 +93,7 @@ void morphological_blur(Context &context,
                         Result &output,
                         const float2 &radius,
                         const MorphologicalBlurOperation operation,
-                        const int filter_type)
+                        const math::FilterKernel filter_type)
 {
   BLI_assert(input.type() == ResultType::Float);
 

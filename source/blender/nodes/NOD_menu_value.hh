@@ -2,10 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_hash.hh"
-#include "BLI_struct_equality_utils.hh"
+#include "BLI_unique_hash.hh"
 
 namespace blender::nodes {
 
@@ -19,8 +23,10 @@ struct MenuValue {
   MenuValue() = default;
   explicit MenuValue(const int value) : value(value) {}
 
-  template<typename EnumT, BLI_ENABLE_IF((std::is_enum_v<EnumT>))>
-  MenuValue(const EnumT value) : value(int(value))
+  template<typename EnumT>
+  MenuValue(const EnumT value)
+    requires(std::is_enum_v<EnumT>)
+      : value(int(value))
   {
   }
 
@@ -29,7 +35,12 @@ struct MenuValue {
     return get_default_hash(this->value);
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_1(MenuValue, value)
+  void hash_unique(UniqueHashBytes &hash) const
+  {
+    hash_unique_default(this->value, hash);
+  }
+
+  friend bool operator==(const MenuValue &a, const MenuValue &b) = default;
 };
 
 }  // namespace blender::nodes

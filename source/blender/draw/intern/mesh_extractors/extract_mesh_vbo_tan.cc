@@ -8,7 +8,7 @@
 
 #include <climits>
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "GPU_attribute_convert.hh"
 
@@ -108,7 +108,7 @@ static Array<Array<float4>> extract_tan_init_common(const MeshRenderData &mr,
   }
 
   if (uv_names.is_empty()) {
-    GPU_vertformat_attr_add(format, "dummy", blender::gpu::VertAttrType::SFLOAT_32);
+    GPU_vertformat_attr_add(format, "dummy", gpu::VertAttrType::SFLOAT_32);
     return {};
   }
 
@@ -138,7 +138,7 @@ static Array<Array<float4>> extract_tan_init_common(const MeshRenderData &mr,
   }
 
   if (format->attr_len == 0) {
-    GPU_vertformat_attr_add(format, "dummy", blender::gpu::VertAttrType::SFLOAT_32);
+    GPU_vertformat_attr_add(format, "dummy", gpu::VertAttrType::SFLOAT_32);
   }
 
   return results;
@@ -171,12 +171,12 @@ gpu::VertBufPtr extract_tangents(const MeshRenderData &mr,
     BLI_assert(vbo_index == tan_data.size());
   }
   else {
-    MutableSpan tan_data = vbo->data<gpu::PackedNormal>();
+    MutableSpan tan_data = vbo->data<int1010102_norm>();
     int vbo_index = 0;
     for (const int i : tangents.index_range()) {
       const Span<float4> layer_data = tangents[i];
       for (int corner = 0; corner < mr.corners_num; corner++) {
-        tan_data[vbo_index] = gpu::convert_normal<gpu::PackedNormal>(float3(layer_data[corner]));
+        tan_data[vbo_index] = gpu::convert_normal<int1010102_norm>(float3(layer_data[corner]));
         tan_data[vbo_index].w = (layer_data[corner][3] > 0.0f) ? 1 : -2;
         vbo_index++;
       }

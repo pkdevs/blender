@@ -9,7 +9,7 @@
 #include <cstring>
 
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
@@ -19,6 +19,7 @@
 
 #include "../outliner_intern.hh"
 #include "tree_display.hh"
+#include "tree_element_seq.hh"
 
 namespace blender::ed::outliner {
 
@@ -29,9 +30,9 @@ TreeDisplaySequencer::TreeDisplaySequencer(SpaceOutliner &space_outliner)
 {
 }
 
-ListBase TreeDisplaySequencer::build_tree(const TreeSourceData &source_data)
+ListBaseT<TreeElement> TreeDisplaySequencer::build_tree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  ListBaseT<TreeElement> tree = {nullptr};
   Scene *sequencer_scene = source_data.workspace->sequencer_scene;
   if (!sequencer_scene) {
     return tree;
@@ -45,10 +46,10 @@ ListBase TreeDisplaySequencer::build_tree(const TreeSourceData &source_data)
   for (Strip *strip : List<Strip>(ed->current_strips())) {
     StripAddOp op = need_add_strip_dup(strip);
     if (op == StripAddOp::None) {
-      add_element(&tree, nullptr, strip, nullptr, TSE_STRIP, 0);
+      add_element<TreeElementStrip>({.lb = &tree}, *strip);
     }
     else if (op == StripAddOp::Add) {
-      TreeElement *te = add_element(&tree, nullptr, strip, nullptr, TSE_STRIP_DUP, 0);
+      TreeElement *te = add_element<TreeElementStripDuplicate>({.lb = &tree}, *strip);
       add_strip_dup(strip, te, 0);
     }
   }
@@ -105,7 +106,7 @@ void TreeDisplaySequencer::add_strip_dup(Strip *strip, TreeElement *te, short in
     }
 
     if (STREQ(p->data->stripdata->filename, strip->data->stripdata->filename)) {
-      add_element(&te->subtree, nullptr, (void *)p, te, TSE_STRIP, index);
+      add_element<TreeElementStrip>({.parent = te, .index = index}, *p);
     }
     p = p->next;
   }

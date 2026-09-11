@@ -16,15 +16,16 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_task.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_task_c.hh"
 
 #include "BKE_ccg.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.hh"
 #include "BKE_mesh_types.hh"
@@ -33,6 +34,7 @@
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
 #include "BKE_scene.hh"
+#include "BKE_subdiv.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BKE_object.hh"
@@ -41,6 +43,8 @@
 
 #include <cmath>
 #include <cstring>
+
+namespace blender {
 
 /* MULTIRES MODIFIER */
 static const int multires_grid_tot[] = {
@@ -100,34 +104,37 @@ Mesh *BKE_multires_create_mesh(Depsgraph *depsgraph, Object *object, MultiresMod
 {
   Object *object_eval = DEG_get_evaluated(depsgraph, object);
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
-  Mesh *deformed_mesh = blender::bke::mesh_get_eval_deform(
+  const Mesh *deformed_mesh = bke::mesh_get_eval_deform(
       depsgraph, scene_eval, object_eval, &CD_MASK_BAREMESH);
   ModifierEvalContext modifier_ctx{};
   modifier_ctx.depsgraph = depsgraph;
   modifier_ctx.object = object_eval;
   modifier_ctx.flag = MOD_APPLY_USECACHE | MOD_APPLY_IGNORE_SIMPLIFY;
 
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(mmd->modifier.type));
-  Mesh *result = mti->modify_mesh(&mmd->modifier, &modifier_ctx, deformed_mesh);
+  Mesh *input_i = BKE_mesh_copy_for_eval(*deformed_mesh);
 
-  if (result == deformed_mesh) {
-    result = BKE_mesh_copy_for_eval(*deformed_mesh);
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(mmd->modifier.type);
+  Mesh *result = mti->modify_mesh(&mmd->modifier, &modifier_ctx, input_i);
+
+  if (result != input_i) {
+    BKE_id_free(nullptr, input_i);
   }
   return result;
 }
 
-blender::Array<blender::float3> BKE_multires_create_deformed_base_mesh_vert_coords(
-    Depsgraph *depsgraph, Object *object, MultiresModifierData *mmd)
+Array<float3> BKE_multires_create_deformed_base_mesh_vert_coords(Depsgraph *depsgraph,
+                                                                 Object *object,
+                                                                 MultiresModifierData *mmd)
 {
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Object *object_eval = DEG_get_evaluated(depsgraph, object);
 
-  Object object_for_eval = blender::dna::shallow_copy(*object_eval);
-  blender::bke::ObjectRuntime runtime = *object_eval->runtime;
+  Object object_for_eval = dna::shallow_copy(*object_eval);
+  bke::ObjectRuntime runtime = *object_eval->runtime;
   object_for_eval.runtime = &runtime;
 
   object_for_eval.data = object->data;
-  object_for_eval.sculpt = nullptr;
+  object_for_eval.runtime->sculpt_session = nullptr;
 
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   ModifierEvalContext mesh_eval_context = {depsgraph, &object_for_eval, ModifierApplyFlag(0)};
@@ -140,12 +147,12 @@ blender::Array<blender::float3> BKE_multires_create_deformed_base_mesh_vert_coor
   ModifierData *first_md = BKE_modifiers_get_virtual_modifierlist(&object_for_eval,
                                                                   &virtual_modifier_data);
 
-  Mesh *base_mesh = static_cast<Mesh *>(object->data);
+  Mesh *base_mesh = id_cast<Mesh *>(object->data);
 
-  blender::Array<blender::float3> deformed_verts(base_mesh->vert_positions());
+  Array<float3> deformed_verts(base_mesh->vert_positions());
 
   for (ModifierData *md = first_md; md != nullptr; md = md->next) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
     if (md == &mmd->modifier) {
       break;
     }
@@ -180,14 +187,14 @@ MultiresModifierData *get_multires_modifier(Scene *scene, Object *ob, const bool
   MultiresModifierData *mmd = nullptr, *firstmmd = nullptr;
 
   /* find first active multires modifier */
-  LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
-    if (md->type == eModifierType_Multires) {
+  for (ModifierData &md : ob->modifiers) {
+    if (md.type == eModifierType_Multires) {
       if (!firstmmd) {
-        firstmmd = reinterpret_cast<MultiresModifierData *>(md);
+        firstmmd = reinterpret_cast<MultiresModifierData *>(&md);
       }
 
-      if (BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) {
-        mmd = reinterpret_cast<MultiresModifierData *>(md);
+      if (BKE_modifier_is_enabled(scene, &md, eModifierMode_Realtime)) {
+        mmd = reinterpret_cast<MultiresModifierData *>(&md);
         break;
       }
     }
@@ -259,7 +266,7 @@ void multires_mark_as_modified(Depsgraph *depsgraph,
    *
    * In a longer term maybe special dependency graph tag can help sanitizing this a bit. */
   Object *object_eval = DEG_get_evaluated(depsgraph, object);
-  Mesh *mesh = static_cast<Mesh *>(object_eval->data);
+  Mesh *mesh = id_cast<Mesh *>(object_eval->data);
   SubdivCCG *subdiv_ccg = mesh->runtime->subdiv_ccg.get();
   if (subdiv_ccg == nullptr) {
     return;
@@ -269,18 +276,16 @@ void multires_mark_as_modified(Depsgraph *depsgraph,
 
 void multires_flush_sculpt_updates(Object *object)
 {
-  if (object == nullptr || object->sculpt == nullptr) {
+  if (object == nullptr || object->runtime->sculpt_session == nullptr) {
     return;
   }
-  const blender::bke::pbvh::Tree *pbvh = blender::bke::object::pbvh_get(*object);
+  const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(*object);
   if (!pbvh) {
     return;
   }
 
-  SculptSession *sculpt_session = object->sculpt;
-  if (pbvh->type() != blender::bke::pbvh::Type::Grids || !sculpt_session->multires.active ||
-      sculpt_session->multires.modifier == nullptr)
-  {
+  SculptSession *sculpt_session = object->runtime->sculpt_session;
+  if (pbvh->type() != bke::pbvh::Type::Grids || sculpt_session->multires_modifier == nullptr) {
     return;
   }
 
@@ -293,7 +298,7 @@ void multires_flush_sculpt_updates(Object *object)
     return;
   }
 
-  Mesh *mesh = static_cast<Mesh *>(object->data);
+  Mesh *mesh = id_cast<Mesh *>(object->data);
 
   /* Check that the multires modifier still exists.
    * Fixes crash when deleting multires modifier
@@ -318,7 +323,7 @@ void multires_flush_sculpt_updates(Object *object)
   }
 
   multiresModifier_reshapeFromCCG(
-      sculpt_session->multires.modifier->totlvl, mesh, sculpt_session->subdiv_ccg);
+      sculpt_session->multires_modifier->totlvl, mesh, sculpt_session->subdiv_ccg);
 
   subdiv_ccg->dirty.coords = false;
   subdiv_ccg->dirty.hidden = false;
@@ -326,10 +331,9 @@ void multires_flush_sculpt_updates(Object *object)
 
 void multires_force_sculpt_rebuild(Object *object)
 {
-  using namespace blender;
   multires_flush_sculpt_updates(object);
 
-  if (object == nullptr || object->sculpt == nullptr) {
+  if (object == nullptr || object->runtime->sculpt_session == nullptr) {
     return;
   }
 
@@ -347,8 +351,8 @@ void multires_force_external_reload(Object *object)
 /* reset the multires levels to match the number of mdisps */
 static int get_levels_from_disps(Object *ob)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
-  const blender::OffsetIndices faces = mesh->faces();
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
+  const OffsetIndices faces = mesh->faces();
   int totlvl = 0;
 
   const MDisps *mdisp = static_cast<const MDisps *>(
@@ -384,7 +388,7 @@ static int get_levels_from_disps(Object *ob)
 
 void multiresModifier_set_levels_from_disps(MultiresModifierData *mmd, Object *ob)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   const MDisps *mdisp;
 
   if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
@@ -410,7 +414,6 @@ static void multires_set_tot_mdisps(Mesh *mesh, const int lvl)
   if (mdisps) {
     for (int i = 0; i < mesh->corners_num; i++, mdisps++) {
       mdisps->totdisp = multires_grid_tot[lvl];
-      mdisps->level = lvl;
     }
   }
 }
@@ -448,7 +451,7 @@ static void multires_grid_paint_mask_downsample(GridPaintMask *gpm, const int le
 {
   if (level < gpm->level) {
     const int gridsize = CCG_grid_size(level);
-    float *data = MEM_calloc_arrayN<float>(size_t(square_i(gridsize)), __func__);
+    float *data = MEM_new_array_zeroed<float>(size_t(square_i(gridsize)), __func__);
 
     for (int y = 0; y < gridsize; y++) {
       for (int x = 0; x < gridsize; x++) {
@@ -456,7 +459,7 @@ static void multires_grid_paint_mask_downsample(GridPaintMask *gpm, const int le
       }
     }
 
-    MEM_freeN(gpm->data);
+    MEM_delete(gpm->data);
     gpm->data = data;
     gpm->level = level;
   }
@@ -464,8 +467,8 @@ static void multires_grid_paint_mask_downsample(GridPaintMask *gpm, const int le
 
 static void multires_del_higher(MultiresModifierData *mmd, Object *ob, const int lvl)
 {
-  Mesh *mesh = (Mesh *)ob->data;
-  const blender::OffsetIndices faces = mesh->faces();
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
+  const OffsetIndices faces = mesh->faces();
   const int levels = mmd->totlvl - lvl;
   MDisps *mdisps;
   GridPaintMask *gpm;
@@ -489,7 +492,7 @@ static void multires_del_higher(MultiresModifierData *mmd, Object *ob, const int
           MDisps *mdisp = &mdisps[corner];
           const int totdisp = multires_grid_tot[lvl];
 
-          float (*disps)[3] = MEM_calloc_arrayN<float[3]>(totdisp, "multires disps");
+          float (*disps)[3] = MEM_new_array_zeroed<float[3]>(totdisp, "multires disps");
 
           if (mdisp->disps != nullptr) {
             float (*ndisps)[3] = disps;
@@ -497,17 +500,16 @@ static void multires_del_higher(MultiresModifierData *mmd, Object *ob, const int
 
             multires_copy_grid(ndisps, hdisps, nsize, hsize);
             if (mdisp->hidden) {
-              BLI_bitmap *gh = multires_mdisps_downsample_hidden(mdisp->hidden, mdisp->level, lvl);
-              MEM_freeN(mdisp->hidden);
+              BLI_bitmap *gh = multires_mdisps_downsample_hidden(mdisp->hidden, mmd->totlvl, lvl);
+              MEM_delete(mdisp->hidden);
               mdisp->hidden = gh;
             }
 
-            MEM_freeN(mdisp->disps);
+            MEM_delete(mdisp->disps);
           }
 
           mdisp->disps = disps;
           mdisp->totdisp = totdisp;
-          mdisp->level = lvl;
 
           if (gpm) {
             multires_grid_paint_mask_downsample(&gpm[corner], lvl);
@@ -548,11 +550,10 @@ void multiresModifier_del_levels(MultiresModifierData *mmd,
 
 void multires_stitch_grids(Object *ob)
 {
-  using namespace blender;
   if (ob == nullptr) {
     return;
   }
-  SculptSession *sculpt_session = ob->sculpt;
+  SculptSession *sculpt_session = ob->runtime->sculpt_session;
   if (sculpt_session == nullptr) {
     return;
   }
@@ -561,7 +562,7 @@ void multires_stitch_grids(Object *ob)
     return;
   }
   BLI_assert(bke::object::pbvh_get(*ob) &&
-             bke::object::pbvh_get(*ob)->type() == blender::bke::pbvh::Type::Grids);
+             bke::object::pbvh_get(*ob)->type() == bke::pbvh::Type::Grids);
   BKE_subdiv_ccg_average_stitch_faces(*subdiv_ccg, IndexMask(subdiv_ccg->faces.size()));
 }
 
@@ -642,7 +643,7 @@ static void multires_sync_levels(Scene *scene, Object *ob_src, Object *ob_dst)
     /* NOTE(@sergey): object could have MDISP even when there is no multires modifier
      * this could lead to troubles due to I've got no idea how mdisp could be
      * up-sampled correct without modifier data. Just remove mdisps if no multires present. */
-    multires_customdata_delete(static_cast<Mesh *>(ob_src->data));
+    multires_customdata_delete(id_cast<Mesh *>(ob_src->data));
   }
 
   if (mmd_src && mmd_dst) {
@@ -652,7 +653,7 @@ static void multires_sync_levels(Scene *scene, Object *ob_src, Object *ob_dst)
 
 static void multires_apply_uniform_scale(Object *object, const float scale)
 {
-  Mesh *mesh = static_cast<Mesh *>(object->data);
+  Mesh *mesh = id_cast<Mesh *>(object->data);
   MDisps *mdisps = static_cast<MDisps *>(
       CustomData_get_layer_for_write(&mesh->corner_data, CD_MDISPS, mesh->corners_num));
   for (int i = 0; i < mesh->corners_num; i++) {
@@ -673,7 +674,7 @@ static void multires_apply_smat(Depsgraph * /*depsgraph*/,
     return;
   }
   /* Make sure layer present. */
-  Mesh *mesh = static_cast<Mesh *>(object->data);
+  Mesh *mesh = id_cast<Mesh *>(object->data);
   multiresModifier_ensure_external_read(mesh, mmd);
   if (!CustomData_get_layer(&mesh->corner_data, CD_MDISPS)) {
     return;
@@ -731,8 +732,7 @@ void multiresModifier_prepare_join(Depsgraph *depsgraph, Scene *scene, Object *o
 
 void multires_topology_changed(Mesh *mesh)
 {
-
-  CustomData_external_read(&mesh->corner_data, &mesh->id, CD_MASK_MDISPS, mesh->corners_num);
+  CustomData_external_read(&mesh->corner_data, "", &mesh->id, CD_MASK_MDISPS, mesh->corners_num);
   MDisps *mdisp = static_cast<MDisps *>(
       CustomData_get_layer_for_write(&mesh->corner_data, CD_MDISPS, mesh->corners_num));
 
@@ -755,7 +755,7 @@ void multires_topology_changed(Mesh *mesh)
     if (!mdisp->totdisp || !mdisp->disps) {
       if (grid) {
         mdisp->totdisp = grid;
-        mdisp->disps = MEM_calloc_arrayN<float[3]>(mdisp->totdisp, "mdisp topology");
+        mdisp->disps = MEM_new_array_zeroed<float[3]>(mdisp->totdisp, "mdisp topology");
       }
 
       continue;
@@ -780,9 +780,12 @@ void multires_ensure_external_read(Mesh *mesh, const int top_level)
 
   const int totloop = mesh->corners_num;
 
+  const int grid_size = bke::subdiv::grid_size_from_level(top_level);
+  const int grid_area = grid_size * grid_size;
+
   for (int i = 0; i < totloop; ++i) {
-    if (mdisps[i].level != top_level) {
-      MEM_SAFE_FREE(mdisps[i].disps);
+    if (mdisps[i].totdisp != grid_area) {
+      MEM_SAFE_DELETE(mdisps[i].disps);
     }
 
     /* NOTE: CustomData_external_read will take care of allocation of displacement vectors if
@@ -790,12 +793,13 @@ void multires_ensure_external_read(Mesh *mesh, const int top_level)
 
     const int totdisp = multires_grid_tot[top_level];
     mdisps[i].totdisp = totdisp;
-    mdisps[i].level = top_level;
   }
 
-  CustomData_external_read(&mesh->corner_data, &mesh->id, CD_MASK_MDISPS, mesh->corners_num);
+  CustomData_external_read(&mesh->corner_data, "", &mesh->id, CD_MASK_MDISPS, mesh->corners_num);
 }
 void multiresModifier_ensure_external_read(Mesh *mesh, const MultiresModifierData *mmd)
 {
   multires_ensure_external_read(mesh, mmd->totlvl);
 }
+
+}  // namespace blender

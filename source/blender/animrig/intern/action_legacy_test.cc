@@ -5,6 +5,7 @@
 #include "ANIM_action_legacy.hh"
 
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -12,29 +13,14 @@
 
 #include "DNA_anim_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionLegacyTest : public testing::Test {
+class ActionLegacyTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -53,8 +39,8 @@ class ActionLegacyTest : public testing::Test {
 
   FCurve *fcurve_add_legacy(bAction *action, const StringRefNull rna_path, const int array_index)
   {
-    FCurve *fcurve = MEM_callocN<FCurve>(__func__);
-    BKE_fcurve_rnapath_set(*fcurve, rna_path);
+    FCurve *fcurve = BKE_fcurve_create();
+    fcurve->rna_path_set(rna_path);
     fcurve->array_index = array_index;
     BLI_addtail(&action->curves, fcurve);
     return fcurve;
@@ -86,36 +72,6 @@ TEST_F(ActionLegacyTest, fcurves_all)
 
   Vector<FCurve *> fcurves_expect = {&fcurve1, &fcurve2};
   EXPECT_EQ(fcurves_expect, legacy::fcurves_all(&action));
-}
-
-TEST_F(ActionLegacyTest, fcurves_for_action_slot)
-{
-  { /* nil pointer. */
-    bAction *action = nullptr;
-    Vector<FCurve *> fcurves = legacy::fcurves_for_action_slot(action, Slot::unassigned);
-    EXPECT_TRUE(fcurves.is_empty());
-  }
-
-  { /* Empty Action. */
-    Vector<FCurve *> fcurves = legacy::fcurves_for_action_slot(create_empty_action(),
-                                                               Slot::unassigned);
-    EXPECT_TRUE(fcurves.is_empty());
-  }
-  Action &action = create_empty_action()->wrap();
-  Slot &slot1 = action.slot_add();
-  Slot &slot2 = action.slot_add();
-
-  action.layer_keystrip_ensure();
-  StripKeyframeData &key_data = action.layer(0)->strip(0)->data<StripKeyframeData>(action);
-
-  FCurve &fcurve1 = key_data.channelbag_for_slot_ensure(slot1).fcurve_ensure(bmain,
-                                                                             {"location", 1});
-  FCurve &fcurve2 = key_data.channelbag_for_slot_ensure(slot2).fcurve_ensure(bmain, {"scale", 2});
-
-  Vector<FCurve *> fcurve1_expect = {&fcurve1};
-  Vector<FCurve *> fcurve2_expect = {&fcurve2};
-  EXPECT_EQ(fcurve1_expect, legacy::fcurves_for_action_slot(&action, slot1.handle));
-  EXPECT_EQ(fcurve2_expect, legacy::fcurves_for_action_slot(&action, slot2.handle));
 }
 
 TEST_F(ActionLegacyTest, action_fcurves_remove)
@@ -150,7 +106,8 @@ TEST_F(ActionLegacyTest, action_fcurves_remove)
   EXPECT_TRUE(legacy::action_fcurves_remove(action, slot_1.handle, "rotation"));
 
   Vector<FCurve *> fcurves_bag_1_expect = {&fcurve_loc_x, &fcurve_loc_y};
-  EXPECT_EQ(fcurves_bag_1_expect, legacy::fcurves_for_action_slot(&action, slot_1.handle));
+  EXPECT_EQ(fcurves_bag_1_expect.as_span(),
+            animrig::fcurves_for_action_slot(action, slot_1.handle));
 
   EXPECT_EQ(4, bag_2.fcurves().size())
       << "Expected all F-Curves for slot 2 to be there after manipulating slot 1";

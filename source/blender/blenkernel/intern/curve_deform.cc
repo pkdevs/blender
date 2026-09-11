@@ -11,10 +11,10 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_meshdata_types.h"
@@ -27,6 +27,8 @@
 #include "BKE_object_types.hh"
 
 #include "BKE_deform.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Curve Deform Internal Utilities
@@ -62,7 +64,7 @@ static void init_curve_deform(const Object *ob_curve, const Object *ob_target, C
 static bool calc_curve_deform(
     const Object *ob_curve, float co[3], const short axis, const CurveDeform *cd, float r_quat[4])
 {
-  const Curve *cu = static_cast<const Curve *>(ob_curve->data);
+  const Curve *cu = id_cast<const Curve *>(ob_curve->data);
   float fac, loc[4], dir[3], new_quat[4], radius;
   short index;
   const bool is_neg_axis = (axis > 2);
@@ -81,7 +83,7 @@ static bool calc_curve_deform(
     index = axis - 3;
     if (cu->flag & CU_STRETCH) {
       const float divisor = cd->dmax[index] - cd->dmin[index];
-      if (LIKELY(divisor > FLT_EPSILON)) {
+      if (divisor > FLT_EPSILON) [[likely]] {
         fac = -(co[index] - cd->dmax[index]) / divisor;
       }
       else {
@@ -91,7 +93,7 @@ static bool calc_curve_deform(
     else {
       const CurveCache *cc = ob_curve->runtime->curve_cache;
       float totdist = BKE_anim_path_get_length(cc);
-      if (LIKELY(totdist > FLT_EPSILON)) {
+      if (totdist > FLT_EPSILON) [[likely]] {
         fac = -(co[index] - cd->dmax[index]) / totdist;
       }
       else {
@@ -103,7 +105,7 @@ static bool calc_curve_deform(
     index = axis;
     if (cu->flag & CU_STRETCH) {
       const float divisor = cd->dmax[index] - cd->dmin[index];
-      if (LIKELY(divisor > FLT_EPSILON)) {
+      if (divisor > FLT_EPSILON) [[likely]] {
         fac = (co[index] - cd->dmin[index]) / divisor;
       }
       else {
@@ -113,7 +115,7 @@ static bool calc_curve_deform(
     else {
       const CurveCache *cc = ob_curve->runtime->curve_cache;
       float totdist = BKE_anim_path_get_length(cc);
-      if (LIKELY(totdist > FLT_EPSILON)) {
+      if (totdist > FLT_EPSILON) [[likely]] {
         fac = +(co[index] - cd->dmin[index]) / totdist;
       }
       else {
@@ -217,7 +219,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
     return;
   }
 
-  cu = static_cast<Curve *>(ob_curve->data);
+  cu = id_cast<Curve *>(ob_curve->data);
 
   init_curve_deform(ob_curve, ob_target, &cd);
 
@@ -440,3 +442,5 @@ void BKE_curve_deform_co(const Object *ob_curve,
 }
 
 /** \} */
+
+}  // namespace blender

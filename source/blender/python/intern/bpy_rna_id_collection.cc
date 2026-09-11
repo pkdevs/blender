@@ -13,8 +13,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_bitmap.h"
-#include "BLI_string.h"
+#include "BLI_bitmap.hh"
+#include "BLI_string.hh"
 
 #include "BKE_bpath.hh"
 #include "BKE_global.hh"
@@ -41,6 +41,8 @@
 
 #include "bpy_rna.hh"
 
+namespace blender {
+
 static Main *pyrna_bmain_FromPyObject(PyObject *obj)
 {
   if (!BPy_StructRNA_Check(obj)) {
@@ -51,7 +53,7 @@ static Main *pyrna_bmain_FromPyObject(PyObject *obj)
   }
   BPy_StructRNA *pyrna = reinterpret_cast<BPy_StructRNA *>(obj);
   PYRNA_STRUCT_CHECK_OBJ(pyrna);
-  if (!(pyrna->ptr && pyrna->ptr->type == &RNA_BlendData && pyrna->ptr->data)) {
+  if (!(pyrna->ptr && pyrna->ptr->type == RNA_BlendData && *pyrna->ptr)) {
     PyErr_Format(PyExc_TypeError,
                  "Expected a StructRNA of type BlendData, not %.200s",
                  Py_TYPE(pyrna)->tp_name);
@@ -76,12 +78,12 @@ struct IDUserMapData {
 
 static int id_code_as_index(const short idcode)
 {
-  return int(*((ushort *)&idcode));
+  return int(*(reinterpret_cast<ushort *>(const_cast<short *>(&idcode))));
 }
 
 static bool id_check_type(const ID *id, const BLI_bitmap *types_bitmap)
 {
-  return BLI_BITMAP_TEST_BOOL(types_bitmap, id_code_as_index(GS(id->name)));
+  return BLI_BITMAP_TEST_BOOL(types_bitmap, id_code_as_index(id->id_type()));
 }
 
 static int foreach_libblock_id_user_map_callback(LibraryIDLinkCallbackData *cb_data)
@@ -116,6 +118,7 @@ static int foreach_libblock_id_user_map_callback(LibraryIDLinkCallbackData *cb_d
     if ((set = PyDict_GetItem(data->user_map, key)) == nullptr) {
       /* limit to key's added already */
       if (data->is_subset) {
+        Py_DECREF(key);
         return IDWALK_RET_NOP;
       }
 
@@ -138,8 +141,6 @@ static int foreach_libblock_id_user_map_callback(LibraryIDLinkCallbackData *cb_d
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_user_map_doc,
-    /* NOTE: These documented default values (None) are here just to signal that these parameters
-     * are optional. Explicitly passing None is not valid, and will raise a TypeError. */
     ".. method:: user_map(*, subset=None, key_types=None, value_types=None)\n"
     "\n"
     "   Returns a mapping of all ID data-blocks in current ``bpy.data`` to a set of all "
@@ -148,13 +149,13 @@ PyDoc_STRVAR(
     "   For list of valid set members for key_types & value_types, see: "
     ":class:`bpy.types.KeyingSetPath.id_type`.\n"
     "\n"
-    "   :arg subset: When passed, only these data-blocks and their users will be "
+    "   :param subset: When passed, only these data-blocks and their users will be "
     "included as keys/values in the map.\n"
-    "   :type subset: Sequence[:class:`bpy.types.ID`]\n"
-    "   :arg key_types: Filter the keys mapped by ID types.\n"
-    "   :type key_types: set[str]\n"
-    "   :arg value_types: Filter the values in the set by ID types.\n"
-    "   :type value_types: set[str]\n"
+    "   :type subset: Sequence[:class:`bpy.types.ID`] | None\n"
+    "   :param key_types: Filter the keys mapped by ID types.\n"
+    "   :type key_types: set[str] | None\n"
+    "   :param value_types: Filter the values in the set by ID types.\n"
+    "   :type value_types: set[str] | None\n"
     "   :return: dictionary that maps data-blocks ID's to their users.\n"
     "   :rtype: dict[:class:`bpy.types.ID`, set[:class:`bpy.types.ID`]]\n");
 static PyObject *bpy_user_map(PyObject *self, PyObject *args, PyObject *kwds)
@@ -164,13 +165,15 @@ static PyObject *bpy_user_map(PyObject *self, PyObject *args, PyObject *kwds)
     return nullptr;
   }
 
-  ListBase *lb;
+  ListBaseT<ID> *lb;
   ID *id;
 
-  PyObject *subset = nullptr;
+  PyObject *subset = Py_None;
 
   PyObject *key_types = nullptr;
+  PyC_TypeOrNone key_types_or_none = {&PySet_Type, &key_types};
   PyObject *val_types = nullptr;
+  PyC_TypeOrNone val_types_or_none = {&PySet_Type, &val_types};
   BLI_bitmap *key_types_bitmap = nullptr;
   BLI_bitmap *val_types_bitmap = nullptr;
 
@@ -180,17 +183,22 @@ static PyObject *bpy_user_map(PyObject *self, PyObject *args, PyObject *kwds)
 
   static const char *_keywords[] = {"subset", "key_types", "value_types", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O"  /* `subset` */
-      "O!" /* `key_types` */
-      "O!" /* `value_types` */
+      "O&" /* `key_types` */
+      "O&" /* `value_types` */
       ":user_map",
       _keywords,
       nullptr,
   };
-  if (!_PyArg_ParseTupleAndKeywordsFast(
-          args, kwds, &_parser, &subset, &PySet_Type, &key_types, &PySet_Type, &val_types))
+  if (!_PyArg_ParseTupleAndKeywordsFast(args,
+                                        kwds,
+                                        &_parser,
+                                        &subset,
+                                        PyC_ParseTypeOrNone,
+                                        &key_types_or_none,
+                                        PyC_ParseTypeOrNone,
+                                        &val_types_or_none))
   {
     return nullptr;
   }
@@ -211,7 +219,7 @@ static PyObject *bpy_user_map(PyObject *self, PyObject *args, PyObject *kwds)
     }
   }
 
-  if (subset) {
+  if (subset != Py_None) {
     PyObject *subset_fast = PySequence_Fast(subset, "user_map");
     if (subset_fast == nullptr) {
       goto error;
@@ -297,10 +305,10 @@ static PyObject *bpy_user_map(PyObject *self, PyObject *args, PyObject *kwds)
 
 error:
   if (key_types_bitmap != nullptr) {
-    MEM_freeN(key_types_bitmap);
+    MEM_delete(key_types_bitmap);
   }
   if (val_types_bitmap != nullptr) {
-    MEM_freeN(val_types_bitmap);
+    MEM_delete(val_types_bitmap);
   }
 
   return ret;
@@ -367,17 +375,17 @@ PyDoc_STRVAR(
     "   For list of valid set members for key_types, see: "
     ":class:`bpy.types.KeyingSetPath.id_type`.\n"
     "\n"
-    "   :arg subset: When given, only these data-blocks and their used file paths "
+    "   :param subset: When given, only these data-blocks and their used file paths "
     "will be included as keys/values in the map.\n"
-    "   :type subset: sequence\n"
-    "   :arg key_types: When given, filter the keys mapped by ID types. Ignored if ``subset`` is "
-    "also given.\n"
-    "   :type key_types: set[str]\n"
-    "   :arg include_libraries: Include library file paths of linked data. False by default.\n"
+    "   :type subset: Sequence[:class:`bpy.types.ID`] | None\n"
+    "   :param key_types: When given, filter the keys mapped by ID types. "
+    "Ignored if ``subset`` is also given.\n"
+    "   :type key_types: set[str] | None\n"
+    "   :param include_libraries: Include library file paths of linked data. False by default.\n"
     "   :type include_libraries: bool\n"
     "   :return: dictionary of :class:`bpy.types.ID` instances, with sets of file path "
     "strings as their values.\n"
-    "   :rtype: dict\n");
+    "   :rtype: dict[:class:`bpy.types.ID`, set[str]]\n");
 static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwds)
 {
   Main *bmain = pyrna_bmain_FromPyObject(self);
@@ -385,9 +393,10 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
     return nullptr;
   }
 
-  PyObject *subset = nullptr;
+  PyObject *subset = Py_None;
 
   PyObject *key_types = nullptr;
+  PyC_TypeOrNone key_types_or_none = {&PySet_Type, &key_types};
   PyObject *include_libraries = nullptr;
   BLI_bitmap *key_types_bitmap = nullptr;
 
@@ -398,10 +407,9 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
 
   static const char *_keywords[] = {"subset", "key_types", "include_libraries", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O"  /* `subset` */
-      "O!" /* `key_types` */
+      "O&" /* `key_types` */
       "O!" /* `include_libraries` */
       ":file_path_map",
       _keywords,
@@ -411,8 +419,8 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
                                         kwds,
                                         &_parser,
                                         &subset,
-                                        &PySet_Type,
-                                        &key_types,
+                                        PyC_ParseTypeOrNone,
+                                        &key_types_or_none,
                                         &PyBool_Type,
                                         &include_libraries))
   {
@@ -435,7 +443,7 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
 
   filepathmap_data.include_libraries = (include_libraries == Py_True);
 
-  if (subset) {
+  if (subset != Py_None) {
     PyObject *subset_fast = PySequence_Fast(subset, "subset");
     if (subset_fast == nullptr) {
       goto error;
@@ -471,7 +479,7 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
     Py_DECREF(subset_fast);
   }
   else {
-    ListBase *lb;
+    ListBaseT<ID> *lb;
     ID *id;
     filepathmap_data.file_path_map = PyDict_New();
 
@@ -500,7 +508,7 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
 
 error:
   if (key_types_bitmap != nullptr) {
-    MEM_freeN(key_types_bitmap);
+    MEM_delete(key_types_bitmap);
   }
 
   return ret;
@@ -510,7 +518,7 @@ struct IDFilePathForeachData {
   /**
    * Python callback function for visiting each path.
    *
-   * `def visit_path_fn(owner_id: bpy.types.ID, path: str) -> str | None`
+   * `def visit_path_fn(owner_id: bpy.types.ID, path: str, meta: BlendDataPathMeta) -> str | None`
    *
    * If the function returns a string, the path is replaced with the return
    * value.
@@ -544,12 +552,6 @@ const EnumPropertyItem rna_enum_file_path_foreach_flag_items[] = {
      0,
      "Skip Packed",
      "Skip paths when their matching data is packed"},
-    {BKE_BPATH_FOREACH_PATH_RESOLVE_TOKEN,
-     "RESOLVE_TOKEN",
-     0,
-     "Resolve Token",
-     "Resolve tokens within a virtual filepath to a single, concrete, filepath. Currently only "
-     "used for UDIM tiles"},
     {BKE_BPATH_TRAVERSE_SKIP_WEAK_REFERENCES,
      "SKIP_WEAK_REFERENCES",
      0,
@@ -569,8 +571,171 @@ const EnumPropertyItem rna_enum_file_path_foreach_flag_items[] = {
      0,
      "Reload Edited",
      "Reload data when the path is edited"},
+    {BKE_BPATH_FOREACH_PATH_RESOLVE_TOKEN,
+     "RESOLVE_TOKEN",
+     0,
+     "Resolve Tokens",
+     "Resolve tokens within a virtual filepath to a single, concrete, filepath. Currently only "
+     "used for UDIM tiles"},
+    {BKE_BPATH_FOREACH_PATH_EXPAND_TOKENS,
+     "EXPAND_TOKENS",
+     0,
+     "Expand Tokens",
+     "Expand template tokens in virtual file paths and invoke the callback once for each "
+     "concrete file. Currently only used for UDIM tiles"},
+    {BKE_BPATH_FOREACH_PATH_EXPAND_SEQUENCES,
+     "EXPAND_SEQUENCES",
+     0,
+     "Expand Sequences",
+     "Expand image and volume sequences, invoking the callback once per file on disk"},
+    {BKE_BPATH_FOREACH_PATH_EXPAND_CACHES,
+     "EXPAND_CACHES",
+     0,
+     "Expand Caches",
+     "Visit cache files, like texture cache files associated with images"},
     {0, nullptr, 0, nullptr, nullptr},
 };
+
+/**
+ * Metadata for path visited by `file_path_foreach`.
+ *
+ * In the future it may be useful to extend this:
+ *  - Is the path intended to reference a directory or a file.
+ *  - Does the path support templates.
+ *  - Is the path referring to input or output (the render output, or file output nodes).
+ */
+struct BPy_FilePathMeta {
+  PyObject_HEAD
+  bool is_expanded;
+  bool is_cache;
+  bool is_readonly;
+};
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_file_path_meta_is_expanded_doc,
+    "True when the path was expanded from a UDIM tile or sequence frame. These paths can not be "
+    "edited.\n"
+    "\n"
+    ":type: bool\n");
+static PyObject *bpy_file_path_meta_get_is_expanded(BPy_FilePathMeta *self, void * /*closure*/)
+{
+  return PyBool_FromLong(self->is_expanded);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_file_path_meta_is_cache_doc,
+    "True when the path is a cache file, like the image texture cache. These paths can not be "
+    "edited.\n"
+    "\n"
+    ":type: bool\n");
+static PyObject *bpy_file_path_meta_get_is_cache(BPy_FilePathMeta *self, void * /*closure*/)
+{
+  return PyBool_FromLong(self->is_cache);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_file_path_meta_is_readonly_doc,
+    "True when the path is read-only and can not be edited.\n"
+    "\n"
+    ":type: bool\n");
+static PyObject *bpy_file_path_meta_get_is_readonly(BPy_FilePathMeta *self, void * /*closure*/)
+{
+  return PyBool_FromLong(self->is_readonly);
+}
+
+static PyGetSetDef bpy_file_path_meta_getset[] = {
+    {"is_expanded",
+     reinterpret_cast<getter>(bpy_file_path_meta_get_is_expanded),
+     nullptr,
+     bpy_file_path_meta_is_expanded_doc,
+     nullptr},
+    {"is_cache",
+     reinterpret_cast<getter>(bpy_file_path_meta_get_is_cache),
+     nullptr,
+     bpy_file_path_meta_is_cache_doc,
+     nullptr},
+    {"is_readonly",
+     reinterpret_cast<getter>(bpy_file_path_meta_get_is_readonly),
+     nullptr,
+     bpy_file_path_meta_is_readonly_doc,
+     nullptr},
+    {nullptr},
+};
+
+static void bpy_file_path_meta_dealloc(BPy_FilePathMeta *self)
+{
+  Py_TYPE(self)->tp_free(reinterpret_cast<PyObject *>(self));
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_file_path_meta_doc,
+    "Metadata about a file path visited by :class:`bpy.types.BlendData.file_path_foreach`.\n");
+static PyTypeObject BPyFilePathMeta_Type = {
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
+    /*tp_name*/ "BlendDataPathMeta",
+    /*tp_basicsize*/ sizeof(BPy_FilePathMeta),
+    /*tp_itemsize*/ 0,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(bpy_file_path_meta_dealloc),
+    /*tp_vectorcall_offset*/ 0,
+    /*tp_getattr*/ nullptr,
+    /*tp_setattr*/ nullptr,
+    /*tp_as_async*/ nullptr,
+    /*tp_repr*/ nullptr,
+    /*tp_as_number*/ nullptr,
+    /*tp_as_sequence*/ nullptr,
+    /*tp_as_mapping*/ nullptr,
+    /*tp_hash*/ nullptr,
+    /*tp_call*/ nullptr,
+    /*tp_str*/ nullptr,
+    /*tp_getattro*/ nullptr,
+    /*tp_setattro*/ nullptr,
+    /*tp_as_buffer*/ nullptr,
+    /*tp_flags*/ Py_TPFLAGS_DEFAULT,
+    /*tp_doc*/ bpy_file_path_meta_doc,
+    /*tp_traverse*/ nullptr,
+    /*tp_clear*/ nullptr,
+    /*tp_richcompare*/ nullptr,
+    /*tp_weaklistoffset*/ 0,
+    /*tp_iter*/ nullptr,
+    /*tp_iternext*/ nullptr,
+    /*tp_methods*/ nullptr,
+    /*tp_members*/ nullptr,
+    /*tp_getset*/ bpy_file_path_meta_getset,
+    /*tp_base*/ nullptr,
+    /*tp_dict*/ nullptr,
+    /*tp_descr_get*/ nullptr,
+    /*tp_descr_set*/ nullptr,
+    /*tp_dictoffset*/ 0,
+    /*tp_init*/ nullptr,
+    /*tp_alloc*/ nullptr,
+    /* Prevent users from creating instances directly. */
+    /*tp_new*/ nullptr,
+};
+
+PyObject *BPyInit_blend_data_path_meta_type()
+{
+  if (PyType_Ready(&BPyFilePathMeta_Type) < 0) {
+    return nullptr;
+  }
+  return reinterpret_cast<PyObject *>(&BPyFilePathMeta_Type);
+}
+
+static PyObject *bpy_file_path_meta_CreatePyObject(const BPathForeachPathData *bpath_data)
+{
+  BPy_FilePathMeta *self = reinterpret_cast<BPy_FilePathMeta *>(
+      BPyFilePathMeta_Type.tp_alloc(&BPyFilePathMeta_Type, 0));
+  if (self == nullptr) {
+    return nullptr;
+  }
+  self->is_expanded = bpath_data->is_expanded;
+  self->is_cache = bpath_data->is_cache;
+  self->is_readonly = bpath_data->is_readonly;
+  return reinterpret_cast<PyObject *>(self);
+}
 
 static bool foreach_id_file_path_foreach_callback(BPathForeachPathData *bpath_data,
                                                   char *path_dst,
@@ -596,14 +761,8 @@ static bool foreach_id_file_path_foreach_callback(BPathForeachPathData *bpath_da
   PyObject *py_owner_id = pyrna_struct_CreatePyObject(&id_ptr);
   /* args[1]: */
   PyObject *py_path_src = PyUnicode_FromString(path_src);
-  /* args[2]: currently-unused parameter for passing metadata of the path to the Python function.
-   * This is intended pass info like:
-   *  - Is the path intended to reference a directory or a file.
-   *  - Does the path support templates.
-   *  - Is the path referring to input or output (the render output, or file output nodes).
-   * Even though this is not implemented currently, the parameter is already added so that the
-   * eventual implementation is not an API-breaking change. */
-  PyObject *py_path_meta = Py_NewRef(Py_None);
+  /* args[2]: */
+  PyObject *py_path_meta = bpy_file_path_meta_CreatePyObject(bpath_data);
   PyTuple_SET_ITEMS(args, py_owner_id, py_path_src, py_path_meta);
 
   /* Call the Python callback function. */
@@ -636,13 +795,31 @@ static bool foreach_id_file_path_foreach_callback(BPathForeachPathData *bpath_da
     return false;
   }
 
-  /* Copy the returned string back into the path. */
   Py_ssize_t replacement_path_length = 0;
   PyObject *value_coerce = nullptr;
   const char *replacement_path = PyC_UnicodeAsBytesAndSize(
       result, &replacement_path_length, &value_coerce);
 
-  /* BLI_strncpy wants buffer size, but PyC_UnicodeAsBytesAndSize reports string
+  /* Path was unchanged, treat as not edited. */
+  if (STREQ(replacement_path, path_src)) {
+    Py_XDECREF(value_coerce);
+    Py_DECREF(result);
+    return false;
+  }
+
+  if (bpath_data->is_readonly) {
+    PyErr_Format(PyExc_RuntimeError,
+                 "visit_path_fn() changed a read-only path \"%s\" for owner_id=\"%s\"",
+                 path_src,
+                 bpath_data->owner_id->name);
+    data.seen_error = true;
+    Py_XDECREF(value_coerce);
+    Py_DECREF(result);
+    return false;
+  }
+
+  /* Copy the returned string back into the path.
+   * BLI_strncpy wants buffer size, but PyC_UnicodeAsBytesAndSize reports string
    * length, hence the +1. */
   BLI_strncpy(
       path_dst, replacement_path, std::min(path_dst_maxncpy, size_t(replacement_path_length + 1)));
@@ -664,18 +841,20 @@ PyDoc_STRVAR(
     "   For list of valid set members for visit_types, see: "
     ":class:`bpy.types.KeyingSetPath.id_type`.\n"
     "\n"
-    "   :arg visit_path_fn: function that takes three parameters: the data-block, a file path, "
-    "and a placeholder for future use. The function should return either ``None`` or a ``str``. "
-    "In the latter case, the visited file path will be replaced with the returned string.\n"
-    "   :type visit_path_fn: Callable[[:class:`bpy.types.ID`, str, Any], str|None]\n"
-    "   :arg subset: When given, only these data-blocks and their used file paths "
+    "   :param visit_path_fn: function that takes three parameters: the data-block, a file path, "
+    "and a :class:`bpy.types.BlendDataPathMeta` metadata object. "
+    "The function should return either ``None`` or a ``str``. In the latter case, the visited "
+    "file path will be replaced with the returned string.\n"
+    "   :type visit_path_fn: Callable[[:class:`bpy.types.ID`, str, "
+    ":class:`bpy.types.BlendDataPathMeta`], str|None]\n"
+    "   :param subset: When given, only these data-blocks and their used file paths "
     "will be visited.\n"
-    "   :type subset: set[str]\n"
-    "   :arg visit_types: When given, only visit data-blocks of these types. Ignored if "
+    "   :type subset: set[str] | None\n"
+    "   :param visit_types: When given, only visit data-blocks of these types. Ignored if "
     "``subset`` is also given.\n"
-    "   :type visit_types: set[str]\n"
+    "   :type visit_types: set[str] | None\n"
     "   :type flags: set[str]\n"
-    "   :arg flags: Set of flags that influence which data-blocks are visited. See "
+    "   :param flags: Set of flags that influence which data-blocks are visited. See "
     ":ref:`rna_enum_file_path_foreach_flag_items`.\n");
 static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject *kwds)
 {
@@ -685,9 +864,10 @@ static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject 
   }
 
   PyObject *visit_path_fn = nullptr;
-  PyObject *subset = nullptr;
+  PyObject *subset = Py_None;
   PyObject *visit_types = nullptr;
-  std::unique_ptr<BLI_bitmap, MEM_freeN_smart_ptr_deleter> visit_types_bitmap;
+  PyC_TypeOrNone visit_types_or_none = {&PySet_Type, &visit_types};
+  std::unique_ptr<BLI_bitmap, MEM_smart_ptr_deleter<BLI_bitmap>> visit_types_bitmap;
   PyObject *py_flags = nullptr;
 
   IDFilePathForeachData filepathforeach_data{};
@@ -695,11 +875,10 @@ static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject 
 
   static const char *_keywords[] = {"visit_path_fn", "subset", "visit_types", "flags", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O!" /* `visit_path_fn` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O"  /* `subset` */
-      "O!" /* `visit_types` */
+      "O&" /* `visit_types` */
       "O!" /* `flags` */
       ":file_path_foreach",
       _keywords,
@@ -711,8 +890,8 @@ static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject 
                                         &PyFunction_Type,
                                         &visit_path_fn,
                                         &subset,
-                                        &PySet_Type,
-                                        &visit_types,
+                                        PyC_ParseTypeOrNone,
+                                        &visit_types_or_none,
                                         &PySet_Type,
                                         &py_flags))
   {
@@ -747,7 +926,7 @@ static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject 
   filepathforeach_data.visit_path_fn = visit_path_fn;
   filepathforeach_data.seen_error = false;
 
-  if (subset) {
+  if (subset != Py_None) {
     /* Visit the given subset of IDs. */
     PyObject *subset_fast = PySequence_Fast(subset, "subset");
     if (!subset_fast) {
@@ -780,7 +959,7 @@ static PyObject *bpy_file_path_foreach(PyObject *self, PyObject *args, PyObject 
   }
   else {
     /* Visit all IDs, filtered by type if necessary. */
-    ListBase *lb;
+    ListBaseT<ID> *lb;
     FOREACH_MAIN_LISTBASE_BEGIN (bmain, lb) {
       ID *id;
       FOREACH_MAIN_LISTBASE_ID_BEGIN (lb, id) {
@@ -815,7 +994,7 @@ PyDoc_STRVAR(
     "   ID collections), but less safe/versatile (it can break Blender, e.g. by removing "
     "all scenes...).\n"
     "\n"
-    "   :arg ids: Sequence of IDs (types can be mixed).\n"
+    "   :param ids: Sequence of IDs (types can be mixed).\n"
     "   :type ids: Sequence[:class:`bpy.types.ID`]\n");
 static PyObject *bpy_batch_remove(PyObject *self, PyObject *args, PyObject *kwds)
 {
@@ -828,7 +1007,6 @@ static PyObject *bpy_batch_remove(PyObject *self, PyObject *args, PyObject *kwds
 
   static const char *_keywords[] = {"ids", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O" /* `ids` */
       ":batch_remove",
       _keywords,
@@ -849,7 +1027,7 @@ static PyObject *bpy_batch_remove(PyObject *self, PyObject *args, PyObject *kwds
 
   PyObject **ids_array = PySequence_Fast_ITEMS(ids_fast);
   Py_ssize_t ids_len = PySequence_Fast_GET_SIZE(ids_fast);
-  blender::Set<ID *> ids_to_delete;
+  Set<ID *> ids_to_delete;
   for (; ids_len; ids_array++, ids_len--) {
     ID *id;
     if (!pyrna_id_FromPyObject(*ids_array, &id)) {
@@ -873,18 +1051,19 @@ static PyObject *bpy_batch_remove(PyObject *self, PyObject *args, PyObject *kwds
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_orphans_purge_doc,
-    ".. method:: orphans_purge()\n"
+    ".. method:: orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=False)\n"
     "\n"
     "   Remove (delete) all IDs with no user.\n"
     "\n"
-    "   :arg do_local_ids: Include unused local IDs in the deletion, defaults to True\n"
-    "   :type do_local_ids: bool, optional\n"
-    "   :arg do_linked_ids: Include unused linked IDs in the deletion, defaults to True\n"
-    "   :type do_linked_ids: bool, optional\n"
-    "   :arg do_recursive: Recursively check for unused IDs, ensuring no orphaned one "
+    "   :param do_local_ids: Include unused local IDs in the deletion, defaults to True\n"
+    "   :type do_local_ids: bool\n"
+    "   :param do_linked_ids: Include unused linked IDs in the deletion, defaults to True\n"
+    "   :type do_linked_ids: bool\n"
+    "   :param do_recursive: Recursively check for unused IDs, ensuring no orphaned one "
     "remain after a single run of that function, defaults to False\n"
-    "   :type do_recursive: bool, optional\n"
-    "   :return: The number of deleted IDs.\n");
+    "   :type do_recursive: bool\n"
+    "   :return: The number of deleted IDs.\n"
+    "   :rtype: int\n");
 static PyObject *bpy_orphans_purge(PyObject *self, PyObject *args, PyObject *kwds)
 {
   Main *bmain = pyrna_bmain_FromPyObject(self);
@@ -899,7 +1078,6 @@ static PyObject *bpy_orphans_purge(PyObject *self, PyObject *args, PyObject *kwd
 
   static const char *_keywords[] = {"do_local_ids", "do_linked_ids", "do_recursive", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "|"  /* Optional arguments. */
       "O&" /* `do_local_ids` */
       "O&" /* `do_linked_ids` */
@@ -947,31 +1125,31 @@ static PyObject *bpy_orphans_purge(PyObject *self, PyObject *args, PyObject *kwd
 
 PyMethodDef BPY_rna_id_collection_user_map_method_def = {
     "user_map",
-    (PyCFunction)bpy_user_map,
+    reinterpret_cast<PyCFunction>(bpy_user_map),
     METH_VARARGS | METH_KEYWORDS,
     bpy_user_map_doc,
 };
 PyMethodDef BPY_rna_id_collection_file_path_map_method_def = {
     "file_path_map",
-    (PyCFunction)bpy_file_path_map,
+    reinterpret_cast<PyCFunction>(bpy_file_path_map),
     METH_VARARGS | METH_KEYWORDS,
     bpy_file_path_map_doc,
 };
 PyMethodDef BPY_rna_id_collection_file_path_foreach_method_def = {
     "file_path_foreach",
-    (PyCFunction)bpy_file_path_foreach,
+    reinterpret_cast<PyCFunction>(bpy_file_path_foreach),
     METH_VARARGS | METH_KEYWORDS,
     bpy_file_path_foreach_doc,
 };
 PyMethodDef BPY_rna_id_collection_batch_remove_method_def = {
     "batch_remove",
-    (PyCFunction)bpy_batch_remove,
+    reinterpret_cast<PyCFunction>(bpy_batch_remove),
     METH_VARARGS | METH_KEYWORDS,
     bpy_batch_remove_doc,
 };
 PyMethodDef BPY_rna_id_collection_orphans_purge_method_def = {
     "orphans_purge",
-    (PyCFunction)bpy_orphans_purge,
+    reinterpret_cast<PyCFunction>(bpy_orphans_purge),
     METH_VARARGS | METH_KEYWORDS,
     bpy_orphans_purge_doc,
 };
@@ -983,3 +1161,5 @@ PyMethodDef BPY_rna_id_collection_orphans_purge_method_def = {
 #    pragma GCC diagnostic pop
 #  endif
 #endif
+
+}  // namespace blender

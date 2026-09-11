@@ -13,8 +13,8 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 
@@ -23,6 +23,8 @@
 #include "WM_api.hh"
 #include "WM_keymap.hh"
 #include "WM_types.hh"
+
+namespace blender {
 
 /* Menu wrapper for #WM_keymap_add_item. */
 
@@ -164,7 +166,7 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
         km_id = "Sculpt Curves";
         break;
       case CTX_MODE_PAINT_GREASE_PENCIL:
-        km_id = "Grease Pencil Paint Mode";
+        km_id = "Grease Pencil Draw Mode";
         break;
       case CTX_MODE_SCULPT_GREASE_PENCIL:
         km_id = "Grease Pencil Sculpt Mode";
@@ -178,9 +180,8 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
     }
   }
   else if (sl->spacetype == SPACE_IMAGE) {
-    const SpaceImage *sima = (SpaceImage *)sl;
+    const SpaceImage *sima = reinterpret_cast<SpaceImage *>(sl);
     const eSpaceImage_Mode mode = eSpaceImage_Mode(sima->mode);
-    space_type = SPACE_IMAGE;
     switch (mode) {
       case SI_MODE_VIEW:
         km_id = "Image";
@@ -197,7 +198,7 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
     }
   }
   else if (sl->spacetype == SPACE_SEQ) {
-    const SpaceSeq *sseq = (SpaceSeq *)sl;
+    const SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(sl);
     const enum eSpaceSeq_Displays view = eSpaceSeq_Displays(sseq->view);
     space_type = SPACE_SEQ;
     switch (view) {
@@ -298,7 +299,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
     km = WM_keymap_find_all(wm, "Mesh", SPACE_EMPTY, RGN_TYPE_WINDOW);
 
     /* Some mesh operators are active in object mode too, like add-prim. */
-    if (km && !WM_keymap_poll((bContext *)C, km)) {
+    if (km && !WM_keymap_poll(const_cast<bContext *>(C), km)) {
       km = WM_keymap_find_all(wm, "Object Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
     }
   }
@@ -306,7 +307,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
     km = WM_keymap_find_all(wm, "Curve", SPACE_EMPTY, RGN_TYPE_WINDOW);
 
     /* Some curve operators are active in object mode too, like add-prim. */
-    if (km && !WM_keymap_poll((bContext *)C, km)) {
+    if (km && !WM_keymap_poll(const_cast<bContext *>(C), km)) {
       km = WM_keymap_find_all(wm, "Object Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
     }
   }
@@ -314,7 +315,15 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
     km = WM_keymap_find_all(wm, "Armature", SPACE_EMPTY, RGN_TYPE_WINDOW);
   }
   else if (STRPREFIX(opname, "POSE_OT") || STRPREFIX(opname, "POSELIB_OT")) {
-    km = WM_keymap_find_all(wm, "Pose", SPACE_EMPTY, RGN_TYPE_WINDOW);
+    switch (CTX_data_mode_enum(C)) {
+      case CTX_MODE_OBJECT:
+        /* Some POSE operators are now working in object mode. See #159734. */
+        km = WM_keymap_find_all(wm, "Object Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
+        break;
+      default:
+        km = WM_keymap_find_all(wm, "Pose", SPACE_EMPTY, RGN_TYPE_WINDOW);
+        break;
+    }
   }
   else if (STRPREFIX(opname, "SCULPT_OT")) {
     switch (CTX_data_mode_enum(C)) {
@@ -335,7 +344,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
     km = WM_keymap_find_all(wm, "Metaball", SPACE_EMPTY, RGN_TYPE_WINDOW);
 
     /* Some meta-ball operators are active in object mode too, like add-primitive. */
-    if (km && !WM_keymap_poll((bContext *)C, km)) {
+    if (km && !WM_keymap_poll(const_cast<bContext *>(C), km)) {
       km = WM_keymap_find_all(wm, "Object Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
     }
   }
@@ -381,7 +390,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
      * Mesh keymap is probably not ideal, but best place I could find to put those. */
     if (sl->spacetype == SPACE_VIEW3D) {
       km = WM_keymap_find_all(wm, "Mesh", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      if (km && !WM_keymap_poll((bContext *)C, km)) {
+      if (km && !WM_keymap_poll(const_cast<bContext *>(C), km)) {
         km = nullptr;
       }
     }
@@ -418,7 +427,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
           km = WM_keymap_find_all(wm, "User Interface", SPACE_EMPTY, RGN_TYPE_WINDOW);
         }
       }
-      if (km && !WM_keymap_poll((bContext *)C, km)) {
+      if (km && !WM_keymap_poll(const_cast<bContext *>(C), km)) {
         km = nullptr;
       }
     }
@@ -571,9 +580,9 @@ static bool wm_keymap_item_uses_modifier(const wmKeyMapItem *kmi, const int even
 
 bool WM_keymap_uses_event_modifier(const wmKeyMap *keymap, const int event_modifier)
 {
-  LISTBASE_FOREACH (const wmKeyMapItem *, kmi, &keymap->items) {
-    if ((kmi->flag & KMI_INACTIVE) == 0) {
-      if (wm_keymap_item_uses_modifier(kmi, event_modifier)) {
+  for (const wmKeyMapItem &kmi : keymap->items) {
+    if ((kmi.flag & KMI_INACTIVE) == 0) {
+      if (wm_keymap_item_uses_modifier(&kmi, event_modifier)) {
         return true;
       }
     }
@@ -584,3 +593,5 @@ bool WM_keymap_uses_event_modifier(const wmKeyMap *keymap, const int event_modif
 void WM_keymap_fix_linking() {}
 
 /** \} */
+
+}  // namespace blender

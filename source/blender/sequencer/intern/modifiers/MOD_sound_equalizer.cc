@@ -9,7 +9,7 @@
 #include <fmt/format.h>
 
 #include "BKE_colortools.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLO_read_write.hh"
 #include "BLT_translation.hh"
 
@@ -30,7 +30,7 @@ namespace blender::seq {
 static void sound_equalizermodifier_draw(const bContext * /*C*/, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
-  PointerRNA *ptr = blender::ui::panel_custom_data_get(panel);
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
 
   layout.use_property_split_set(true);
 
@@ -41,7 +41,7 @@ static void sound_equalizermodifier_draw(const bContext * /*C*/, Panel *panel)
     const float clip_max_x = RNA_float_get(&curve_mapping, "clip_max_x");
 
     ui::Layout &col = flow.column(false);
-    ui::Layout &split = col.split(0.4f, false);
+    ui::Layout &split = col.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
     split.label(fmt::format("{:.2f}", clip_min_x), ICON_NONE);
     split.label("Hz", ICON_NONE);
     split.alignment_set(ui::LayoutAlign::Right);
@@ -64,9 +64,9 @@ static void sound_equalizermodifier_write(BlendWriter *writer, const StripModifi
 {
   const SoundEqualizerModifierData *semd = reinterpret_cast<const SoundEqualizerModifierData *>(
       smd);
-  LISTBASE_FOREACH (EQCurveMappingData *, eqcmd, &semd->graphics) {
-    BLO_write_struct_by_name(writer, "EQCurveMappingData", eqcmd);
-    BKE_curvemapping_blend_write(writer, &eqcmd->curve_mapping);
+  for (EQCurveMappingData &eqcmd : semd->graphics) {
+    writer->write_struct_by_name("EQCurveMappingData", &eqcmd);
+    BKE_curvemapping_blend_write(writer, &eqcmd.curve_mapping);
   }
 }
 
@@ -74,8 +74,8 @@ static void sound_equalizermodifier_read(BlendDataReader *reader, StripModifierD
 {
   SoundEqualizerModifierData *semd = reinterpret_cast<SoundEqualizerModifierData *>(smd);
   BLO_read_struct_list(reader, EQCurveMappingData, &semd->graphics);
-  LISTBASE_FOREACH (EQCurveMappingData *, eqcmd, &semd->graphics) {
-    BKE_curvemapping_blend_read(reader, &eqcmd->curve_mapping);
+  for (EQCurveMappingData &eqcmd : semd->graphics) {
+    BKE_curvemapping_blend_read(reader, &eqcmd.curve_mapping);
   }
 }
 

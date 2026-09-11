@@ -9,8 +9,8 @@
  */
 
 #include "BLI_colorspace.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -45,6 +45,8 @@
 
 #include "wm_files.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Set Working Color Space Operator
  * \{ */
@@ -68,7 +70,7 @@ static bool wm_set_working_space_check_safe(bContext *C, wmOperator *op)
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
 
-  if (WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY)) {
+  if (WM_jobs_has_running(wm, scene, WM_JOB_TYPE_ANY, WM_JOB_BACKGROUND)) {
     BKE_report(
         op->reports, RPT_WARNING, RPT_("Can't change working space while jobs are running"));
     return false;
@@ -111,31 +113,30 @@ static wmOperatorStatus wm_set_working_color_space_exec(bContext *C, wmOperator 
     const bool depsgraph_tag = true;
     IMB_colormanagement_working_space_convert(bmain,
                                               bmain->colorspace.scene_linear_to_xyz,
-                                              blender::colorspace::xyz_to_scene_linear,
+                                              colorspace::xyz_to_scene_linear,
                                               depsgraph_tag);
   }
 
   STRNCPY(bmain->colorspace.scene_linear_name, working_space);
-  bmain->colorspace.scene_linear_to_xyz = blender::colorspace::scene_linear_to_xyz;
+  bmain->colorspace.scene_linear_to_xyz = colorspace::scene_linear_to_xyz;
 
   /* Free all render, compositor and sequencer caches. */
   RE_FreeAllRenderResults();
   RE_FreeInteractiveCompositorRenders();
-  blender::seq::prefetch_stop_all();
-  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-    blender::seq::cache_cleanup(scene, blender::seq::CacheCleanup::All);
+  seq::prefetch_stop_all();
+  for (Scene &scene : bmain->scenes) {
+    seq::cache_cleanup(&scene, seq::CacheCleanup::All);
   }
 
   /* Free all images, they may have scene linear float buffers. */
-  LISTBASE_FOREACH (Image *, image, &bmain->images) {
-    DEG_id_tag_update(&image->id, ID_RECALC_SOURCE);
-    BKE_image_signal(bmain, image, nullptr, IMA_SIGNAL_COLORMANAGE);
-    BKE_image_partial_update_mark_full_update(image);
+  for (Image &image : bmain->images) {
+    DEG_id_tag_update(&image.id, ID_RECALC_SOURCE);
+    BKE_image_signal(bmain, &image, nullptr, IMA_SIGNAL_COLORMANAGE);
   }
-  LISTBASE_FOREACH (MovieClip *, clip, &bmain->movieclips) {
-    BKE_movieclip_clear_cache(clip);
-    BKE_movieclip_free_gputexture(clip);
-    DEG_id_tag_update(&clip->id, ID_RECALC_SOURCE);
+  for (MovieClip &clip : bmain->movieclips) {
+    BKE_movieclip_clear_cache(&clip);
+    BKE_movieclip_free_gputexture(&clip);
+    DEG_id_tag_update(&clip.id, ID_RECALC_SOURCE);
   }
 
   /* Redraw everything. */
@@ -204,8 +205,11 @@ void WM_OT_set_working_color_space(wmOperatorType *ot)
                                    "Working Space",
                                    "Color space to set");
   RNA_def_enum_funcs(prop, working_space_itemf);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
 
   ot->prop = prop;
 }
 
 /** \} */
+
+}  // namespace blender

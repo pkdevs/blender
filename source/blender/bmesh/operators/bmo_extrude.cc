@@ -12,8 +12,8 @@
 
 #include "DNA_meshdata_types.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_customdata.hh"
@@ -21,6 +21,8 @@
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define USE_EDGE_REGION_FLAGS
 
@@ -63,7 +65,7 @@ void bmo_extrude_discrete_faces_exec(BMesh *bm, BMOperator *op)
       BMEditSelection *ese;
       ese = static_cast<BMEditSelection *>(BLI_ghash_lookup(select_history_map, f_org));
       if (ese) {
-        ese->ele = (BMElem *)f_new;
+        ese->ele = reinterpret_cast<BMElem *>(f_new);
       }
     }
 
@@ -94,11 +96,11 @@ void bmo_extrude_discrete_faces_exec(BMesh *bm, BMOperator *op)
 
         ese = static_cast<BMEditSelection *>(BLI_ghash_lookup(select_history_map, l_org->v));
         if (ese) {
-          ese->ele = (BMElem *)l_new->v;
+          ese->ele = reinterpret_cast<BMElem *>(l_new->v);
         }
         ese = static_cast<BMEditSelection *>(BLI_ghash_lookup(select_history_map, l_org->e));
         if (ese) {
-          ese->ele = (BMElem *)l_new->e;
+          ese->ele = reinterpret_cast<BMElem *>(l_new->e);
         }
       }
 
@@ -134,7 +136,7 @@ static void bm_extrude_copy_face_loop_attributes(BMesh *bm, BMFace *f)
   BMLoop *l_other_0;
   BMLoop *l_other_1;
 
-  if (UNLIKELY(l_first_0 == l_first_0->radial_next)) {
+  if (l_first_0 == l_first_0->radial_next) [[unlikely]] {
     return;
   }
 
@@ -153,13 +155,11 @@ static void bm_extrude_copy_face_loop_attributes(BMesh *bm, BMFace *f)
 }
 
 /* Disable the skin root flag on the input vert, assumes that the vert
- * data includes an CD_MVERT_SKIN layer */
+ * data includes a "skin_modifier_root" layer. */
 static void bm_extrude_disable_skin_root(BMesh *bm, BMVert *v)
 {
-  MVertSkin *vs;
-
-  vs = static_cast<MVertSkin *>(CustomData_bmesh_get(&bm->vdata, v->head.data, CD_MVERT_SKIN));
-  vs->flag &= ~MVERT_SKIN_ROOT;
+  const int offset = CustomData_get_offset_named(&bm->vdata, CD_PROP_BOOL, "skin_modifier_root");
+  BM_ELEM_CD_SET_BOOL(v, offset, false);
 }
 
 void bmo_extrude_edge_only_exec(BMesh *bm, BMOperator *op)
@@ -186,7 +186,7 @@ void bmo_extrude_edge_only_exec(BMesh *bm, BMOperator *op)
   BMO_op_exec(bm, &dupeop);
 
   /* disable root flag on all new skin nodes */
-  if (CustomData_has_layer(&bm->vdata, CD_MVERT_SKIN)) {
+  if (CustomData_has_layer_named(&bm->vdata, CD_PROP_BOOL, "skin_modifier_root")) {
     BMVert *v;
     BMO_ITER (v, &siter, dupeop.slots_out, "geom.out", BM_VERT) {
       bm_extrude_disable_skin_root(bm, v);
@@ -237,7 +237,8 @@ void bmo_extrude_vert_indiv_exec(BMesh *bm, BMOperator *op)
   BMOIter siter;
   BMVert *v, *dupev;
   BMEdge *e;
-  const bool has_vskin = CustomData_has_layer(&bm->vdata, CD_MVERT_SKIN);
+  const bool has_vskin = CustomData_has_layer_named(
+      &bm->vdata, CD_PROP_BOOL, "skin_modifier_root");
   GHash *select_history_map = nullptr;
 
   if (use_select_history) {
@@ -258,7 +259,7 @@ void bmo_extrude_vert_indiv_exec(BMesh *bm, BMOperator *op)
       BMEditSelection *ese;
       ese = static_cast<BMEditSelection *>(BLI_ghash_lookup(select_history_map, v));
       if (ese) {
-        ese->ele = (BMElem *)dupev;
+        ese->ele = reinterpret_cast<BMElem *>(dupev);
       }
     }
 
@@ -413,7 +414,7 @@ void bmo_extrude_face_region_exec(BMesh *bm, BMOperator *op)
   BMO_op_exec(bm, &dupeop);
 
   /* disable root flag on all new skin nodes */
-  if (CustomData_has_layer(&bm->vdata, CD_MVERT_SKIN)) {
+  if (CustomData_has_layer_named(&bm->vdata, CD_PROP_BOOL, "skin_modifier_root")) {
     BMO_ITER (v, &siter, dupeop.slots_out, "geom.out", BM_VERT) {
       bm_extrude_disable_skin_root(bm, v);
     }
@@ -457,8 +458,7 @@ void bmo_extrude_face_region_exec(BMesh *bm, BMOperator *op)
     int boundary_edges_len = BMO_slot_map_len(dupeop.slots_out, "boundary_map.out");
     /* We do not know the real number of boundary vertices. */
     int boundary_verts_len_maybe = 2 * boundary_edges_len;
-    dissolve_verts = static_cast<BMVert **>(
-        MEM_mallocN(boundary_verts_len_maybe * sizeof(*dissolve_verts), __func__));
+    dissolve_verts = MEM_new_array_uninitialized<BMVert *>(boundary_verts_len_maybe, __func__);
   }
 
   BMO_slot_copy(&dupeop, slots_out, "geom.out", op, slots_out, "geom.out");
@@ -620,7 +620,7 @@ void bmo_extrude_face_region_exec(BMesh *bm, BMOperator *op)
         BLI_assert(!BM_vert_is_edge_pair(v));
       }
     }
-    MEM_freeN(dissolve_verts);
+    MEM_delete(dissolve_verts);
   }
 
   /* cleanup */
@@ -646,7 +646,7 @@ static void calc_solidify_normals(BMesh *bm)
   int i;
 
   /* can't use BM_edge_face_count because we need to count only marked faces */
-  int *edge_face_count = MEM_calloc_arrayN<int>(bm->totedge, __func__);
+  int *edge_face_count = MEM_new_array_zeroed<int>(bm->totedge, __func__);
 
   BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
     BM_elem_flag_enable(v, BM_ELEM_TAG);
@@ -685,7 +685,7 @@ static void calc_solidify_normals(BMesh *bm)
       BMO_vert_flag_enable(bm, e->v2, VERT_NONMAN);
     }
   }
-  MEM_freeN(edge_face_count);
+  MEM_delete(edge_face_count);
   edge_face_count = nullptr; /* don't re-use */
 
   BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
@@ -787,12 +787,13 @@ static void solidify_add_thickness(BMesh *bm, const float dist)
   BMVert *v;
   BMLoop *l;
   BMIter iter, loopIter;
-  float *vert_angles = MEM_calloc_arrayN<float>(size_t(bm->totvert) * 2, "solidify"); /* 2 in 1 */
+  float *vert_angles = MEM_new_array_zeroed<float>(size_t(bm->totvert) * 2,
+                                                   "solidify"); /* 2 in 1 */
   float *vert_accum = vert_angles + bm->totvert;
   int i, index;
 
-  blender::Vector<float, BM_DEFAULT_NGON_STACK_SIZE> face_angles;
-  blender::Vector<float *, BM_DEFAULT_NGON_STACK_SIZE> verts;
+  Vector<float, BM_DEFAULT_NGON_STACK_SIZE> face_angles;
+  Vector<float *, BM_DEFAULT_NGON_STACK_SIZE> verts;
 
   BM_mesh_elem_index_ensure(bm, BM_VERT);
 
@@ -828,7 +829,7 @@ static void solidify_add_thickness(BMesh *bm, const float dist)
     }
   }
 
-  MEM_freeN(vert_angles);
+  MEM_delete(vert_angles);
 }
 
 void bmo_solidify_face_region_exec(BMesh *bm, BMOperator *op)
@@ -860,3 +861,5 @@ void bmo_solidify_face_region_exec(BMesh *bm, BMOperator *op)
 
   BMO_op_finish(bm, &extrudeop);
 }
+
+}  // namespace blender

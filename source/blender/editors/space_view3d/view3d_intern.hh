@@ -10,6 +10,8 @@
 
 #include "ED_view3d.hh"
 
+namespace blender {
+
 /* internal exports only */
 
 struct ARegion;
@@ -41,6 +43,7 @@ void view3d_operatortypes();
 /* `view3d_edit.cc` */
 
 void VIEW3D_OT_zoom_camera_1_to_1(wmOperatorType *ot);
+void VIEW3D_OT_view_roll_set(wmOperatorType *ot);
 void VIEW3D_OT_view_lock_clear(wmOperatorType *ot);
 void VIEW3D_OT_view_lock_to_active(wmOperatorType *ot);
 void VIEW3D_OT_view_center_camera(wmOperatorType *ot);
@@ -192,11 +195,16 @@ void VIEW3D_OT_snap_cursor_to_active(wmOperatorType *ot);
 
 void VIEW3D_OT_interactive_add(wmOperatorType *ot);
 
+/* `view3d_location_scouting.cc` */
+
+void vr_location_scouting_capture_review_modal_keymap(wmKeyConfig *keyconf);
+void VIEW3D_OT_vr_location_scouting_capture_review(wmOperatorType *ot);
+
 /* space_view3d.cc */
 
 extern "C" const char *view3d_context_dir[]; /* doc access */
 
-/* view3d_widgets.c */
+/* view3d_gizmo_*.cc */
 
 void VIEW3D_GGT_light_spot(wmGizmoGroupType *gzgt);
 void VIEW3D_GGT_light_point(wmGizmoGroupType *gzgt);
@@ -236,3 +244,5 @@ extern bool view3d_camera_border_hack_test;
 
 /* view3d_navigate_smoothview.cc */
 void view3d_smooth_free(RegionView3D *rv3d);
+
+}  // namespace blender

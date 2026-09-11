@@ -11,10 +11,12 @@
 #  include <io.h>
 #endif
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
 
 #include "BLO_core_file_reader.hh"
+
+namespace blender {
 
 FileReader *BLO_file_reader_uncompressed_from_descriptor(int filedes)
 {
@@ -59,3 +61,5 @@ FileReader *BLO_file_reader_uncompressed(FileReader *rawfile)
   rawfile->close(rawfile);
   return nullptr;
 }
+
+}  // namespace blender

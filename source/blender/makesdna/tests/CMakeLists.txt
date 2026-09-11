@@ -10,6 +10,7 @@ if(WITH_GTESTS)
   add_custom_command(
     OUTPUT
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
+      ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
@@ -21,6 +22,7 @@ if(WITH_GTESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
+      ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
       ${CMAKE_SOURCE_DIR}/source/blender/makesdna/tests/dna/
     DEPENDS
       makesdna
@@ -29,6 +31,7 @@ if(WITH_GTESTS)
 
   set_source_files_properties(
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
@@ -38,26 +41,23 @@ if(WITH_GTESTS)
   set(TEST_SRC
     makesdna_test.cc
 
+    dna/dna_test.h
+
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
-
-    ../DNA_genfile.h
-
-    ../intern/dna_genfile.cc
-    ../intern/dna_utils.cc
-    ../intern/dna_utils.h
   )
   set(TEST_INC
     PRIVATE ..
     PRIVATE ../intern
   )
   set(TEST_LIB
+    # bf::blenlib twice to avoid ld link error with circular dependency.
     PRIVATE bf::blenlib
-    PRIVATE bf::extern::fmtlib
+    PRIVATE bf::dna
+    PRIVATE bf::blenlib
   )
 
   blender_add_test_executable(makesdna "${TEST_SRC}" "${TEST_INC}" "${INC_SYS}" "${TEST_LIB}")
-  target_compile_definitions(makesdna_test PRIVATE WITH_DNA_GHASH)
 endif()

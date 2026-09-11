@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+
+namespace blender {
 
 struct bTheme;
 
@@ -47,6 +49,7 @@ enum ThemeColorID {
   TH_WARNING,
   TH_INFO,
   TH_SUCCESS,
+  TH_LINK,
 
   TH_THEMEUI,
   /* Common colors among spaces. */
@@ -56,7 +59,6 @@ enum ThemeColorID {
   TH_BACK_GRAD,
   TH_TEXT,
   TH_TEXT_HI,
-  TH_TITLE,
 
   /* Tabs. */
   TH_TAB_TEXT,
@@ -68,8 +70,6 @@ enum ThemeColorID {
   TH_TAB_OUTLINE_ACTIVE,
 
   TH_HEADER,
-  TH_HEADER_TEXT,
-  TH_HEADER_TEXT_HI,
 
   /* panels */
   TH_PANEL_HEADER,
@@ -83,6 +83,7 @@ enum ThemeColorID {
   TH_HILITE,
 
   TH_GRID,
+  TH_GRID_MAJOR,
   TH_WIRE,
   TH_WIRE_INNER,
   TH_WIRE_EDIT,
@@ -371,12 +372,12 @@ enum ThemeColorID {
   TH_FREESTYLE,
 };
 
-namespace blender::ui::theme {
+namespace ui::theme {
 
 /* Specific defines per space should have higher define values. */
 
 struct bThemeState {
-  bTheme *theme;
+  const bTheme *theme;
   int spacetype, regionid;
 };
 
@@ -506,7 +507,7 @@ void theme_set(int spacetype, int regionid);
 /**
  * Get current theme.
  */
-bTheme *theme_get();
+const bTheme *theme_get();
 
 /**
  * For the rare case we need to temp swap in a different theme (off-screen render).
@@ -522,8 +523,9 @@ int get_menu_shadow_width();
 /**
  * Only for buttons in theme editor!
  */
-const unsigned char *get_color_ptr(bTheme *btheme, int spacetype, int colorid);
+const unsigned char *get_color_ptr(const bTheme *btheme, int spacetype, int colorid);
 
 void make_axis_color(const unsigned char col[3], char axis, unsigned char r_col[3]);
 
-}  // namespace blender::ui::theme
+}  // namespace ui::theme
+}  // namespace blender

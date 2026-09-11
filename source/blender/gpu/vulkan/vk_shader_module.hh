@@ -34,7 +34,14 @@ class VKShader;
 class VKShaderModule {
  public:
   /**
-   * Single string containing GLSL source code.
+   * Single string containing GLSL source code before preprocessing.
+   *
+   * Is cleared after compilation phase has completed. (VKShader::finalize_post).
+   */
+  std::string original_sources;
+
+  /**
+   * Single string containing GLSL source code after preprocessing.
    *
    * Is cleared after compilation phase has completed. (VKShader::finalize_post).
    */
@@ -76,8 +83,14 @@ class VKShaderModule {
    */
   void finalize(StringRefNull name);
 
-  /** Build the sources hash from the combined_sources. */
-  void build_sources_hash();
+  /**
+   * Build the sources hash from the combined_sources.
+   *
+   * \param extra: Additional data folded into the hash. This is used to distinguish cache entries
+   * with differing SPIR-V binary even though the sources are identical (e.g., the injected
+   * OpString shader name or potentially in the future whether debug information was generated).
+   */
+  void build_sources_hash(StringRef extra);
 };
 
 }  // namespace blender::gpu

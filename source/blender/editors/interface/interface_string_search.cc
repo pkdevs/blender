@@ -2,13 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edinterface
+ */
+
 #include "BKE_appdir.hh"
 
 #include "DNA_userdef_types.h"
 
 #include "UI_string_search.hh"
 
-#include "BLI_fileops.h"
 #include "BLI_fileops.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
@@ -83,7 +86,7 @@ void write_recent_searches_file()
   for (const auto item : storage.cache.logical_time_by_str.items()) {
     values.append({item.value, item.key});
   }
-  std::sort(values.begin(), values.end());
+  std::ranges::sort(values);
 
   fstream file(*path, std::ios::out);
   for (const auto &item : values) {

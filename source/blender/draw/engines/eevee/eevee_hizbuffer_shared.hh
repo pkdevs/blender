@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -14,13 +16,12 @@
 namespace blender::eevee {
 #endif
 
-struct HiZData {
+struct [[host_shared]] HiZData {
   /** Scale factor to remove HiZBuffer padding. */
   float2 uv_scale;
 
   float2 _pad0;
 };
-BLI_STATIC_ASSERT_ALIGN(HiZData, 16)
 
 #ifndef GPU_SHADER
 }  // namespace blender::eevee

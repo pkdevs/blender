@@ -8,13 +8,14 @@
 
 #include "DNA_curve_types.h"
 
-#include "BLI_dial_2d.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -35,6 +36,8 @@
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* Prototypes. */
 static const ViewOpsType *view3d_navigation_type_from_idname(const char *idname);
@@ -84,7 +87,7 @@ void ViewOpsData::init_context(bContext *C)
   this->scene = CTX_data_scene(C);
   this->area = CTX_wm_area(C);
   this->region = CTX_wm_region(C);
-  this->v3d = static_cast<View3D *>(this->area->spacedata.first);
+  this->v3d = this->area->spacedata.first_as<View3D>();
   this->rv3d = static_cast<RegionView3D *>(this->region->regiondata);
 }
 
@@ -95,6 +98,7 @@ void ViewOpsData::state_backup()
   this->init.camdx = rv3d->camdx;
   this->init.camdy = rv3d->camdy;
   this->init.camzoom = rv3d->camzoom;
+  this->init.camroll = rv3d->camroll;
   this->init.dist = rv3d->dist;
   copy_qt_qt(this->init.quat, rv3d->viewquat);
 
@@ -157,6 +161,7 @@ void ViewOpsData::state_restore()
   {
     /* Note this does not remove auto-keys on locked cameras. */
     copy_qt_qt(this->rv3d->viewquat, this->init.quat);
+    this->rv3d->camroll = this->init.camroll;
   }
 
   /* ROTATE. */
@@ -231,7 +236,6 @@ void ViewOpsData::init_navigation(bContext *C,
                                   const float dyn_ofs_override[3],
                                   const bool use_cursor_init)
 {
-  using namespace blender;
   this->nav_type = nav_type;
   eViewOpsFlag viewops_flag = nav_type->flag & viewops_flag_from_prefs();
   constexpr eViewOpsFlag viewops_flag_dynamic_ofs = VIEWOPS_FLAG_DEPTH_NAVIGATE |
@@ -416,7 +420,7 @@ void ViewOpsData::end_navigation(bContext *C)
 struct ViewOpsData_Utility : ViewOpsData {
   /* To track only the navigation #wmKeyMapItem items and allow changes to them, an internal
    * #wmKeyMap is created with their copy. */
-  ListBase keymap_items;
+  ListBaseT<wmKeyMapItem> keymap_items;
 
   /* Used by #ED_view3d_navigation_do. */
   bool is_modal_event = false;
@@ -433,18 +437,18 @@ struct ViewOpsData_Utility : ViewOpsData {
 
     wmKeyMap keymap_tmp = {};
 
-    LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
-      if (!STRPREFIX(kmi->idname, "VIEW3D")) {
+    for (wmKeyMapItem &kmi : keymap->items) {
+      if (!STRPREFIX(kmi.idname, "VIEW3D")) {
         continue;
       }
-      if (kmi->flag & KMI_INACTIVE) {
+      if (kmi.flag & KMI_INACTIVE) {
         continue;
       }
-      if (view3d_navigation_type_from_idname(kmi->idname) == nullptr) {
+      if (view3d_navigation_type_from_idname(kmi.idname) == nullptr) {
         continue;
       }
 
-      wmKeyMapItem *kmi_cpy = WM_keymap_add_item_copy(&keymap_tmp, kmi);
+      wmKeyMapItem *kmi_cpy = WM_keymap_add_item_copy(&keymap_tmp, &kmi);
       if (kmi_merge) {
         if (kmi_merge->shift == KM_MOD_HELD ||
             ELEM(kmi_merge->type, EVT_RIGHTSHIFTKEY, EVT_LEFTSHIFTKEY))
@@ -494,7 +498,7 @@ struct ViewOpsData_Utility : ViewOpsData {
   MEM_CXX_CLASS_ALLOC_FUNCS("ViewOpsData_Utility")
 };
 
-static bool view3d_navigation_poll_impl(bContext *C, const char viewlock)
+static bool view3d_navigation_poll_impl(bContext *C, const eRegionView3D_ViewLock viewlock)
 {
   if (!ED_operator_region_view3d_active(C)) {
     return false;
@@ -585,7 +589,7 @@ wmOperatorStatus view3d_navigate_invoke_impl(bContext *C,
   vod->init_context(C);
   wmOperatorStatus ret = view3d_navigation_invoke_generic(
       C, vod, event, op->ptr, nav_type, nullptr);
-  op->customdata = (void *)vod;
+  op->customdata = static_cast<void *>(vod);
 
   if (ret == OPERATOR_RUNNING_MODAL) {
     WM_event_add_modal_handler(C, op);
@@ -781,11 +785,11 @@ static void view3d_orbit_apply_dyn_ofs_ortho_correction(float ofs[3],
 
   const float angle_cos = max_ff(0.0f, dot_v3v3(view_z_init, view_z_curr));
   /* 1.0 or more means no rotation, there is nothing to do in that case. */
-  if (LIKELY(angle_cos < 1.0f)) {
+  if (angle_cos < 1.0f) [[likely]] {
     const float dot_ofs_curr = dot_v3v3(view_z_curr, ofs);
     const float dot_ofs_next = dot_v3v3(view_z_curr, dyn_ofs);
     const float ofs_delta = dot_ofs_next - dot_ofs_curr;
-    if (LIKELY(ofs_delta != 0.0f)) {
+    if (ofs_delta != 0.0f) [[likely]] {
       /* Calculate a factor where 0.0 represents no rotation and 1.0 represents 90d or more.
        * NOTE: Without applying the factor, the distances immediately changes
        * (useful for testing), but not good for the users experience as minor rotations
@@ -812,16 +816,16 @@ void viewrotate_apply_dyn_ofs(ViewOpsData *vod, const float viewquat_new[4])
 
 bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 {
-  using namespace blender;
   float3 ofs = float3(0);
   bool is_set = false;
 
   const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Paint *paint = BKE_paint_get_active_from_context(C);
   ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
   View3D *v3d = CTX_wm_view3d(C);
-  BKE_view_layer_synced_ensure(scene_eval, view_layer_eval);
+  /* Evaluated view layers should always be in sync with the evaluated scene and its collections.
+   */
+  BLI_assert(BKE_view_layer_is_synced(*view_layer_eval));
   Object *ob_act_eval = BKE_view_layer_active_object_get(view_layer_eval);
   Object *ob_act = DEG_get_original(ob_act_eval);
 
@@ -829,11 +833,11 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
     ofs = -float3(v3d->runtime.ofs_last_center);
   }
 
-  if (ob_act && (ob_act->mode & OB_MODE_ALL_PAINT) &&
+  if (ob_act && (ob_act->mode & OB_MODE_ALL_PAINT_MESH) &&
       /* with weight-paint + pose-mode, fall through to using calculateTransformCenter */
       ((ob_act->mode & OB_MODE_WEIGHT_PAINT) && BKE_object_pose_armature_get(ob_act)) == 0)
   {
-    BKE_paint_stroke_get_average(paint, ob_act_eval, ofs);
+    ofs = bke::paint::stroke_get_average(paint, ob_act_eval);
     is_set = true;
   }
   else if (ob_act && ELEM(ob_act->mode,
@@ -843,11 +847,11 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
                           OB_MODE_VERTEX_GREASE_PENCIL,
                           OB_MODE_WEIGHT_GREASE_PENCIL))
   {
-    BKE_paint_stroke_get_average(paint, ob_act_eval, ofs);
+    ofs = bke::paint::stroke_get_average(paint, ob_act_eval);
     is_set = true;
   }
   else if (ob_act && (ob_act->mode & OB_MODE_EDIT) && (ob_act->type == OB_FONT)) {
-    Curve *cu = static_cast<Curve *>(ob_act_eval->data);
+    Curve *cu = id_cast<Curve *>(ob_act_eval->data);
     EditFont *ef = cu->editfont;
 
     ofs = float3(0);
@@ -866,10 +870,10 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
     float3 select_center(0);
 
     zero_v3(select_center);
-    LISTBASE_FOREACH (const Base *, base_eval, BKE_view_layer_object_bases_get(view_layer_eval)) {
-      if (BASE_SELECTED(v3d, base_eval)) {
+    for (const Base &base_eval : *BKE_view_layer_object_bases_get(view_layer_eval)) {
+      if (BASE_SELECTED(v3d, &base_eval)) {
         /* Use the bounding-box if we can. */
-        const Object *ob_eval = base_eval->object;
+        const Object *ob_eval = base_eval.object;
 
         if (const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob_eval)) {
           const float3 center = math::midpoint(bounds->min, bounds->max);
@@ -890,7 +894,7 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
   else {
     /* If there's no selection, `ofs` is unmodified, the last offset will be used if set.
      * Otherwise the value of `ofs` is zero and should not be used. */
-    is_set = blender::ed::transform::calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, ofs);
+    is_set = ed::transform::calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, ofs);
   }
 
   if (is_set) {
@@ -933,9 +937,9 @@ void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
                    const float quat_[4],
-                   char view,
-                   char view_axis_roll,
-                   int perspo,
+                   eRegionView3D_View view,
+                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                   eRegionView3D_Persp perspo,
                    const float *align_to_quat,
                    const int smooth_viewtx)
 {
@@ -943,9 +947,9 @@ void axis_set_view(bContext *C,
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
   float quat[4];
-  const short orig_persp = rv3d->persp;
-  const char orig_view = rv3d->view;
-  const char orig_view_axis_roll = rv3d->view_axis_roll;
+  const eRegionView3D_Persp orig_persp = rv3d->persp;
+  const eRegionView3D_View orig_view = rv3d->view;
+  const eRegionView3D_ViewAxisRoll orig_view_axis_roll = rv3d->view_axis_roll;
 
   normalize_qt_qt(quat, quat_);
 
@@ -1002,7 +1006,7 @@ void axis_set_view(bContext *C,
 
     /* so we animate _from_ the camera location */
     Object *camera_eval = DEG_get_evaluated(CTX_data_ensure_evaluated_depsgraph(C), v3d->camera);
-    ED_view3d_from_object(camera_eval, rv3d->ofs, nullptr, &rv3d->dist, nullptr);
+    ED_view3d_from_object(camera_eval, rv3d->ofs, nullptr, &rv3d->dist, 0.0f, nullptr);
 
     V3D_SmoothParams sview = {nullptr};
     sview.camera_old = camera_eval;
@@ -1074,6 +1078,113 @@ void viewmove_apply(ViewOpsData *vod, int x, int y)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Generic View Horizon Utilities
+ * \{ */
+
+/** Threshold for both the horizon axis length & the roll angle. */
+static const float view3d_horizon_eps = 1e-5f;
+
+/**
+ * The roll of `quat` relative to the horizon, see #view3d_horizon_correct_quat.
+ *
+ * \param angle_target: The roll to rotate to, zero levels the view.
+ * \param use_ease_out: Scale the angle down as the view turns to face along `horizon_plane`.
+ * \return the angle to rotate by, zero when there is nothing to do.
+ */
+static float view3d_horizon_angle_calc(const float quat[4],
+                                       const float horizon_plane[3],
+                                       const bool horizon_plane_no_flip,
+                                       const float axis_fallback[3],
+                                       const float angle_target,
+                                       const bool use_ease_out)
+{
+  BLI_ASSERT_UNIT_V3(horizon_plane);
+
+  float imat[3][3];
+  quat_to_mat3(imat, quat);
+  transpose_m3(imat);
+
+  float axis_horizon[3];
+  cross_v3_v3v3(axis_horizon, horizon_plane, imat[2]);
+  const float axis_length = normalize_v3(axis_horizon);
+  if (axis_length < view3d_horizon_eps) {
+    /* Undefined when looking along `horizon_plane`. */
+    if (axis_fallback == nullptr) {
+      return 0.0f;
+    }
+    BLI_ASSERT_UNIT_V3(axis_fallback);
+    /* A fallback parallel to the plane leaves nothing to use. */
+    project_plane_normalized_v3_v3v3(axis_horizon, axis_fallback, horizon_plane);
+    if (normalize_v3(axis_horizon) < view3d_horizon_eps) {
+      return 0.0f;
+    }
+  }
+
+  float angle = angle_wrap_rad(angle_signed_on_axis_v3v3_v3(axis_horizon, imat[0], imat[2]));
+
+  if (horizon_plane_no_flip) {
+    /* Align to the closer end of the horizon axis. */
+    if (angle > float(M_PI_2)) {
+      angle -= float(M_PI);
+    }
+    else if (angle < -float(M_PI_2)) {
+      angle += float(M_PI);
+    }
+  }
+
+  if (use_ease_out) {
+    /* Distance of the view X axis from the horizon plane,
+     * signed from `angle` which may have been flipped above.
+     * The same as: `angle = sinf(angle) * axis_length;`. */
+    angle = copysignf(dot_v3v3(imat[0], horizon_plane), angle);
+  }
+
+  angle -= angle_target;
+
+  return (fabsf(angle) < view3d_horizon_eps) ? 0.0f : angle;
+}
+
+/** Roll `quat` by `angle` about the view Z axis. */
+static void view3d_horizon_angle_apply(float quat[4], const float angle)
+{
+  float quat_roll[4];
+  axis_angle_to_quat_single(quat_roll, 'Z', -angle);
+  mul_qt_qtqt(quat, quat_roll, quat);
+}
+
+float view3d_horizon_correct_quat(float quat[4],
+                                  const float horizon_plane[3],
+                                  const bool horizon_plane_no_flip,
+                                  const float axis_fallback[3],
+                                  const float angle_target,
+                                  const float factor)
+{
+  const float angle = view3d_horizon_angle_calc(
+      quat, horizon_plane, horizon_plane_no_flip, axis_fallback, angle_target, false);
+  if (angle != 0.0f) {
+    view3d_horizon_angle_apply(quat, angle * factor);
+  }
+
+  return angle;
+}
+
+float view3d_horizon_correct_quat_ease_out(float quat[4],
+                                           const float horizon_plane[3],
+                                           const bool horizon_plane_no_flip,
+                                           const float factor)
+{
+  const float angle = view3d_horizon_angle_calc(
+      quat, horizon_plane, horizon_plane_no_flip, nullptr, 0.0f, true);
+  if (angle != 0.0f) {
+    view3d_horizon_angle_apply(quat, angle * factor);
+  }
+
+  return angle;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Navigation Utilities
  * \{ */
 
@@ -1081,7 +1192,7 @@ void viewmove_apply(ViewOpsData *vod, int x, int y)
  * `wmKeyMapItem::idname`) */
 static const ViewOpsType *view3d_navigation_type_from_idname(const char *idname)
 {
-  const blender::Array<const ViewOpsType *> nav_types = {
+  const Array<const ViewOpsType *> nav_types = {
       &ViewOpsType_zoom,
       &ViewOpsType_rotate,
       &ViewOpsType_move,
@@ -1147,18 +1258,18 @@ bool ED_view3d_navigation_do(bContext *C,
     }
   }
   else {
-    LISTBASE_FOREACH (wmKeyMapItem *, kmi, &vod_intern->keymap_items) {
-      if (!WM_event_match(event, kmi)) {
+    for (wmKeyMapItem &kmi : vod_intern->keymap_items) {
+      if (!WM_event_match(event, &kmi)) {
         continue;
       }
 
-      const ViewOpsType *nav_type = view3d_navigation_type_from_idname(kmi->idname);
+      const ViewOpsType *nav_type = view3d_navigation_type_from_idname(kmi.idname);
       if (nav_type->poll_fn && !nav_type->poll_fn(C)) {
         break;
       }
 
       op_return = view3d_navigation_invoke_generic(
-          C, vod, event, kmi->ptr, nav_type, depth_loc_override);
+          C, vod, event, kmi.ptr, nav_type, depth_loc_override);
 
       if (op_return == OPERATOR_RUNNING_MODAL) {
         vod_intern->is_modal_event = true;
@@ -1198,3 +1309,5 @@ void ED_view3d_navigation_free(bContext *C, ViewOpsData *vod)
 }
 
 /** \} */
+
+}  // namespace blender

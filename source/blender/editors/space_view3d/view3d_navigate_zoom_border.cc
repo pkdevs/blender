@@ -10,10 +10,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_report.hh"
 
 #include "WM_api.hh"
@@ -22,6 +23,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Border Zoom Operator
@@ -55,7 +58,7 @@ static wmOperatorStatus view3d_zoom_border_exec(bContext *C, wmOperator *op)
   /* check if zooming in/out view */
   const bool zoom_in = !RNA_boolean_get(op->ptr, "zoom_out");
 
-  const blender::Bounds<float> dist_range = ED_view3d_dist_soft_range_get(v3d, rv3d->is_persp);
+  const Bounds<float> dist_range = ED_view3d_dist_soft_range_get(v3d, rv3d->is_persp);
 
   ED_view3d_depth_override(CTX_data_ensure_evaluated_depsgraph(C),
                            region,
@@ -74,7 +77,7 @@ static wmOperatorStatus view3d_zoom_border_exec(bContext *C, wmOperator *op)
     /* find the closest Z pixel */
     depth_close = view3d_depth_near(&depth_temp);
 
-    MEM_SAFE_FREE(depth_temp.depths);
+    MEM_SAFE_DELETE(depth_temp.depths);
   }
 
   /* Resize border to the same ratio as the window. */
@@ -185,6 +188,15 @@ static wmOperatorStatus view3d_zoom_border_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static bool view3d_zoom_border_poll(bContext *C)
+{
+  /* Depends on reading depth from the GPU. */
+  if (G.background) {
+    return false;
+  }
+  return view3d_zoom_or_dolly_poll(C);
+}
+
 void VIEW3D_OT_zoom_border(wmOperatorType *ot)
 {
   /* identifiers */
@@ -198,7 +210,7 @@ void VIEW3D_OT_zoom_border(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->cancel = WM_gesture_box_cancel;
 
-  ot->poll = view3d_zoom_or_dolly_poll;
+  ot->poll = view3d_zoom_border_poll;
 
   /* flags */
   ot->flag = 0;
@@ -208,3 +220,5 @@ void VIEW3D_OT_zoom_border(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

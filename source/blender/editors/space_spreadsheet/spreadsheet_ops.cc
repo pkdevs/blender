@@ -10,8 +10,8 @@
 #include "ED_screen.hh"
 #include "ED_spreadsheet.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -58,8 +58,8 @@ static wmOperatorStatus row_filter_remove_exec(bContext *C, wmOperator *op)
 {
   SpaceSpreadsheet *sspreadsheet = CTX_wm_space_spreadsheet(C);
 
-  SpreadsheetRowFilter *row_filter = (SpreadsheetRowFilter *)BLI_findlink(
-      &sspreadsheet->row_filters, RNA_int_get(op->ptr, "index"));
+  SpreadsheetRowFilter *row_filter = static_cast<SpreadsheetRowFilter *>(
+      BLI_findlink(&sspreadsheet->row_filters, RNA_int_get(op->ptr, "index")));
   if (row_filter == nullptr) {
     return OPERATOR_CANCELLED;
   }

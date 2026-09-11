@@ -32,6 +32,9 @@ DEF_ENUM(rna_enum_curve_fit_method_items)
 DEF_ENUM(rna_enum_mesh_select_mode_items)
 DEF_ENUM(rna_enum_mesh_select_mode_uv_items)
 DEF_ENUM(rna_enum_mesh_delimit_mode_items)
+DEF_ENUM(rna_enum_mesh_walk_delimit_edge_loop_items)
+DEF_ENUM(rna_enum_mesh_walk_delimit_edge_ring_items)
+DEF_ENUM(rna_enum_mesh_walk_delimit_face_loop_items)
 DEF_ENUM(rna_enum_space_graph_mode_items)
 DEF_ENUM(rna_enum_space_file_browse_mode_items)
 DEF_ENUM(rna_enum_space_sequencer_view_type_items)
@@ -40,7 +43,9 @@ DEF_ENUM(rna_enum_space_image_mode_items)
 DEF_ENUM(rna_enum_space_image_mode_all_items)
 DEF_ENUM(rna_enum_space_action_mode_items)
 DEF_ENUM(rna_enum_fileselect_params_sort_items)
+DEF_ENUM(rna_enum_asset_access_items)
 DEF_ENUM(rna_enum_region_type_items)
+DEF_ENUM(rna_enum_region_panel_category_items)
 DEF_ENUM(rna_enum_object_modifier_type_items)
 DEF_ENUM(rna_enum_constraint_type_items)
 DEF_ENUM(rna_enum_boidrule_type_items)
@@ -75,9 +80,7 @@ DEF_ENUM(rna_enum_stereo3d_display_items)
 DEF_ENUM(rna_enum_stereo3d_anaglyph_type_items)
 DEF_ENUM(rna_enum_stereo3d_interlace_type_items)
 
-#ifdef WITH_IMAGE_OPENEXR
 DEF_ENUM(rna_enum_exr_codec_items)
-#endif
 DEF_ENUM(rna_enum_color_sets_items)
 
 DEF_ENUM(rna_enum_beztriple_keyframe_type_items)
@@ -107,7 +110,7 @@ DEF_ENUM(rna_enum_operator_type_flag_items)
 DEF_ENUM(rna_enum_operator_return_items)
 DEF_ENUM(rna_enum_operator_property_tag_items)
 
-DEF_ENUM(rna_enum_brush_automasking_flag_items)
+DEF_ENUM(rna_enum_shared_automasking_flag_items)
 DEF_ENUM(rna_enum_brush_sculpt_brush_type_items)
 DEF_ENUM(rna_enum_brush_vertex_brush_type_items)
 DEF_ENUM(rna_enum_brush_weight_brush_type_items)
@@ -147,6 +150,7 @@ DEF_ENUM(rna_enum_rigidbody_object_shape_items)
 DEF_ENUM(rna_enum_rigidbody_constraint_type_items)
 
 DEF_ENUM(rna_enum_object_axis_items)
+DEF_ENUM(rna_enum_object_axis_flip_items)
 
 DEF_ENUM(rna_enum_bake_pass_type_items)
 DEF_ENUM(rna_enum_bake_pass_filter_type_items)
@@ -222,6 +226,8 @@ DEF_ENUM(rna_enum_context_mode_items)
 DEF_ENUM(rna_enum_preference_section_items)
 
 DEF_ENUM(rna_enum_attribute_type_items)
+DEF_ENUM(rna_enum_attrtype_items)
+DEF_ENUM(rna_enum_attr_storage_type_items)
 DEF_ENUM(rna_enum_color_attribute_type_items)
 DEF_ENUM(rna_enum_attribute_type_with_auto_items)
 DEF_ENUM(rna_enum_attribute_domain_items)
@@ -238,6 +244,8 @@ DEF_ENUM(rna_enum_attribute_domain_with_auto_items)
 DEF_ENUM(rna_enum_geometry_component_type_items)
 DEF_ENUM(rna_enum_node_combsep_color_items)
 DEF_ENUM(rna_enum_node_socket_data_type_items)
+DEF_ENUM(rna_enum_node_grease_pencil_stroke_type_items)
+DEF_ENUM(rna_enum_node_grease_pencil_merge_mode_items)
 
 DEF_ENUM(rna_enum_node_geometry_curve_handle_side_items)
 DEF_ENUM(rna_enum_node_geometry_mesh_circle_fill_type_items)
@@ -260,6 +268,8 @@ DEF_ENUM(rna_enum_curve_normal_mode_items)
 
 DEF_ENUM(rna_enum_geometry_nodes_gizmo_color_items)
 DEF_ENUM(rna_enum_geometry_nodes_linear_gizmo_draw_style_items)
+
+DEF_ENUM(rna_enum_asset_import_method_items)
 
 /* Not available to RNA pre-processing (`makesrna`).
  * Defined in editors for example. */

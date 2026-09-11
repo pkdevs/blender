@@ -16,21 +16,22 @@
 #include "DNA_camera_types.h"
 #include "DNA_text_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
@@ -63,7 +64,7 @@
 #include "text_format.hh"
 #include "text_intern.hh"
 
-using blender::VectorSet;
+namespace blender {
 
 static void space_text_screen_clamp(SpaceText *st, const ARegion *region);
 
@@ -181,7 +182,7 @@ static char *buf_tabs_to_spaces(const char *in_buf, const int tab_size, int *r_o
 
   /* Allocate output before with extra space for expanded tabs. */
   const int out_size = strlen(in_buf) + num_tabs * (tab_size - 1) + 1;
-  char *out_buf = MEM_malloc_arrayN<char>(out_size, __func__);
+  char *out_buf = MEM_new_array_uninitialized<char>(out_size, __func__);
 
   /* Fill output buffer. */
   int spaces_until_tab = 0;
@@ -221,11 +222,14 @@ static char *buf_tabs_to_spaces(const char *in_buf, const int tab_size, int *r_o
 BLI_INLINE int space_text_pixel_x_to_column(const SpaceText *st, const int x)
 {
   /* Add half the char width so mouse cursor selection is in between letters. */
-  return (x + (st->runtime->cwidth_px / 2)) / st->runtime->cwidth_px;
+  return (x + (st->runtime->char_width_px / 2)) / st->runtime->char_width_px;
 }
 
 static void text_select_update_primary_clipboard(const Text *text)
 {
+  if (G.background) {
+    return;
+  }
   if ((WM_capabilities_flag() & WM_CAPABILITY_CLIPBOARD_PRIMARY) == 0) {
     return;
   }
@@ -237,7 +241,7 @@ static void text_select_update_primary_clipboard(const Text *text)
     return;
   }
   WM_clipboard_text_set(buf, true);
-  MEM_freeN(buf);
+  MEM_delete(buf);
 }
 
 /** \} */
@@ -328,13 +332,13 @@ void text_update_line_edited(TextLine *line)
   }
 
   /* We just free format here, and let it rebuild during draw. */
-  MEM_SAFE_FREE(line->format);
+  MEM_SAFE_DELETE(line->format);
 }
 
 void text_update_edited(Text *text)
 {
-  LISTBASE_FOREACH (TextLine *, line, &text->lines) {
-    text_update_line_edited(line);
+  for (TextLine &line : text->lines) {
+    text_update_line_edited(&line);
   }
 }
 
@@ -355,7 +359,7 @@ static wmOperatorStatus text_new_exec(bContext *C, wmOperator * /*op*/)
   text = BKE_text_add(bmain, DATA_("Text"));
 
   /* Hook into UI. */
-  blender::ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
+  ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
 
   if (prop) {
     PointerRNA idptr = RNA_id_pointer_create(&text->id);
@@ -402,7 +406,7 @@ static void text_open_init(bContext *C, wmOperator *op)
   PropertyPointerRNA *pprop = MEM_new<PropertyPointerRNA>(__func__);
 
   op->customdata = pprop;
-  blender::ui::context_active_but_prop_get_templateID(C, &pprop->ptr, &pprop->prop);
+  ui::context_active_but_prop_get_templateID(C, &pprop->ptr, &pprop->prop);
 }
 
 static void text_open_cancel(bContext * /*C*/, wmOperator *op)
@@ -574,7 +578,7 @@ static wmOperatorStatus text_reload_invoke(bContext *C, wmOperator *op, const wm
                                 IFACE_("Reload active text file?"),
                                 nullptr,
                                 IFACE_("Reload"),
-                                blender::ui::AlertIcon::None,
+                                ui::AlertIcon::None,
                                 false);
 }
 
@@ -636,7 +640,7 @@ static wmOperatorStatus text_unlink_invoke(bContext *C, wmOperator *op, const wm
                                 IFACE_("Delete active text file?"),
                                 nullptr,
                                 IFACE_("Delete"),
-                                blender::ui::AlertIcon::None,
+                                ui::AlertIcon::None,
                                 false);
 }
 
@@ -668,7 +672,7 @@ static wmOperatorStatus text_make_internal_exec(bContext *C, wmOperator * /*op*/
 
   text->flags |= TXT_ISMEM | TXT_ISDIRTY;
 
-  MEM_SAFE_FREE(text->filepath);
+  MEM_SAFE_DELETE(text->filepath);
 
   space_text_update_cursor_moved(C);
   WM_event_add_notifier(C, NC_TEXT | NA_EDITED, text);
@@ -728,9 +732,9 @@ static void txt_write_file(Main *bmain, Text *text, ReportList *reports)
     return;
   }
 
-  LISTBASE_FOREACH (TextLine *, tmp, &text->lines) {
-    fputs(tmp->line, fp);
-    if (tmp->next) {
+  for (TextLine &tmp : text->lines) {
+    fputs(tmp.line, fp);
+    if (tmp.next) {
       fputc('\n', fp);
     }
   }
@@ -774,8 +778,7 @@ static wmOperatorStatus text_save_invoke(bContext *C, wmOperator *op, const wmEv
 
   /* Internal and texts without a filepath will go to "Save As". */
   if (text->filepath == nullptr || (text->flags & TXT_ISMEM)) {
-    WM_operator_name_call(
-        C, "TEXT_OT_save_as", blender::wm::OpCallContext::InvokeDefault, nullptr, event);
+    WM_operator_name_call(C, "TEXT_OT_save_as", wm::OpCallContext::InvokeDefault, nullptr, event);
     return OPERATOR_CANCELLED;
   }
   return text_save_exec(C, op);
@@ -813,7 +816,7 @@ static wmOperatorStatus text_save_as_exec(bContext *C, wmOperator *op)
   RNA_string_get(op->ptr, "filepath", filepath);
 
   if (text->filepath) {
-    MEM_freeN(text->filepath);
+    MEM_delete(text->filepath);
   }
   text->filepath = BLI_strdup(filepath);
   text->flags &= ~TXT_ISMEM;
@@ -986,14 +989,14 @@ static wmOperatorStatus text_paste_exec(bContext *C, wmOperator *op)
   /* Convert clipboard content indentation to spaces if specified. */
   if (text->flags & TXT_TABSTOSPACES) {
     char *new_buf = buf_tabs_to_spaces(buf, TXT_TABSIZE, &buf_len);
-    MEM_freeN(buf);
+    MEM_delete(buf);
     buf = new_buf;
   }
 
   txt_insert_buf(text, buf, buf_len);
   text_update_edited(text);
 
-  MEM_freeN(buf);
+  MEM_delete(buf);
 
   space_text_update_cursor_moved(C);
   WM_event_add_notifier(C, NC_TEXT | NA_EDITED, text);
@@ -1087,7 +1090,7 @@ static void txt_copy_clipboard(const Text *text)
 
   if (buf) {
     WM_clipboard_text_set(buf, false);
-    MEM_freeN(buf);
+    MEM_delete(buf);
   }
 }
 
@@ -1169,11 +1172,10 @@ static wmOperatorStatus text_indent_or_autocomplete_exec(bContext *C, wmOperator
   bool text_before_cursor = text->curc != 0 && !ELEM(line->line[text->curc - 1], ' ', '\t');
   if (text_before_cursor && (txt_has_sel(text) == false)) {
     WM_operator_name_call(
-        C, "TEXT_OT_autocomplete", blender::wm::OpCallContext::InvokeDefault, nullptr, nullptr);
+        C, "TEXT_OT_autocomplete", wm::OpCallContext::InvokeDefault, nullptr, nullptr);
   }
   else {
-    WM_operator_name_call(
-        C, "TEXT_OT_indent", blender::wm::OpCallContext::ExecDefault, nullptr, nullptr);
+    WM_operator_name_call(C, "TEXT_OT_indent", wm::OpCallContext::ExecDefault, nullptr, nullptr);
   }
   return OPERATOR_FINISHED;
 }
@@ -1438,33 +1440,33 @@ static wmOperatorStatus text_convert_whitespace_exec(bContext *C, wmOperator *op
 
   /* First convert to all space, this make it a lot easier to convert to tabs
    * because there is no mixtures of ` ` && `\t`. */
-  LISTBASE_FOREACH (TextLine *, tmp, &text->lines) {
+  for (TextLine &tmp : text->lines) {
     char *new_line;
 
-    BLI_assert(tmp->line);
+    BLI_assert(tmp.line);
 
-    flatten_string(st, &fs, tmp->line);
+    flatten_string(st, &fs, tmp.line);
     new_line = BLI_strdup(fs.buf);
     flatten_string_free(&fs);
 
-    MEM_freeN(tmp->line);
-    if (tmp->format) {
-      MEM_freeN(tmp->format);
+    MEM_delete(tmp.line);
+    if (tmp.format) {
+      MEM_delete(tmp.format);
     }
 
     /* Put new_line in the tmp->line spot still need to try and set the curc correctly. */
-    tmp->line = new_line;
-    tmp->len = strlen(new_line);
-    tmp->format = nullptr;
-    max_len = std::max<size_t>(tmp->len, max_len);
+    tmp.line = new_line;
+    tmp.len = strlen(new_line);
+    tmp.format = nullptr;
+    max_len = std::max<size_t>(tmp.len, max_len);
   }
 
   if (type == TO_TABS) {
-    char *tmp_line = MEM_malloc_arrayN<char>(max_len + 1, __func__);
+    char *tmp_line = MEM_new_array_uninitialized<char>(max_len + 1, __func__);
 
-    LISTBASE_FOREACH (TextLine *, tmp, &text->lines) {
-      const char *text_check_line = tmp->line;
-      const int text_check_line_len = tmp->len;
+    for (TextLine &tmp : text->lines) {
+      const char *text_check_line = tmp.line;
+      const int text_check_line_len = tmp.len;
       char *tmp_line_cur = tmp_line;
       const size_t tab_len = st->tabnumber;
 
@@ -1517,23 +1519,23 @@ static wmOperatorStatus text_convert_whitespace_exec(bContext *C, wmOperator *op
         BLI_assert(tmp_line_cur - tmp_line <= max_len);
 
         flatten_string(st, &fs, tmp_line);
-        BLI_assert(STREQ(fs.buf, tmp->line));
+        BLI_assert(STREQ(fs.buf, tmp.line));
         flatten_string_free(&fs);
 #endif
 
-        MEM_freeN(tmp->line);
-        if (tmp->format) {
-          MEM_freeN(tmp->format);
+        MEM_delete(tmp.line);
+        if (tmp.format) {
+          MEM_delete(tmp.format);
         }
 
         /* Put new_line in the `tmp->line` spot. */
-        tmp->len = strlen(tmp_line);
-        tmp->line = BLI_strdupn(tmp_line, tmp->len);
-        tmp->format = nullptr;
+        tmp.len = strlen(tmp_line);
+        tmp.line = BLI_strdupn(tmp_line, tmp.len);
+        tmp.format = nullptr;
       }
     }
 
-    MEM_freeN(tmp_line);
+    MEM_delete(tmp_line);
   }
 
   if (curc_column != -1) {
@@ -2426,9 +2428,7 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
 {
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
-  short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first),
-                              static_cast<TextLine *>(text->lines.last)) +
-                 1;
+  short nlines = txt_get_span(text->lines.first(), text->lines.last()) + 1;
 
   if (line < 1) {
     txt_move_toline(text, 1, false);
@@ -2485,6 +2485,12 @@ static const EnumPropertyItem delete_type_items[] = {
 
 static wmOperatorStatus text_delete_exec(bContext *C, wmOperator *op)
 {
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_edit_maybe(C)) {
+    return *status;
+  }
+#endif
+
   SpaceText *st = CTX_wm_space_text(C);
   Text *text = CTX_data_edit_text(C);
   int type = RNA_enum_get(op->ptr, "type");
@@ -2691,7 +2697,7 @@ static void text_scroll_state_init(TextScroll *tsc, SpaceText *st, ARegion *regi
   tsc->state.ofs_max[1] = max_ii(
       0, space_text_get_total_lines(st, region) - (st->runtime->viewlines / 2));
 
-  tsc->state.size_px[0] = st->runtime->cwidth_px;
+  tsc->state.size_px[0] = st->runtime->char_width_px;
   tsc->state.size_px[1] = TXT_LINE_HEIGHT(st);
 }
 
@@ -2824,7 +2830,7 @@ static void scroll_exit(bContext *C, wmOperator *op)
   st->runtime->scroll_ofs_px[1] = 0;
   ED_area_tag_redraw(CTX_wm_area(C));
 
-  MEM_freeN(tsc);
+  MEM_delete(tsc);
   op->customdata = nullptr;
 }
 
@@ -2879,7 +2885,7 @@ static wmOperatorStatus text_scroll_invoke(bContext *C, wmOperator *op, const wm
     return text_scroll_exec(C, op);
   }
 
-  tsc = MEM_callocN<TextScroll>("TextScroll");
+  tsc = MEM_new_zeroed<TextScroll>("TextScroll");
   tsc->is_first = true;
   tsc->zone = SCROLLHANDLE_BAR;
 
@@ -2894,8 +2900,8 @@ static wmOperatorStatus text_scroll_invoke(bContext *C, wmOperator *op, const wm
 
     copy_v2_v2_int(tsc->mval_prev, event->xy);
     /* Sensitivity of scroll set to 4pix per line/char. */
-    tsc->mval_delta[0] = (event->xy[0] - event->prev_xy[0]) * st->runtime->cwidth_px / 4;
-    tsc->mval_delta[1] = (event->xy[1] - event->prev_xy[1]) * st->runtime->lheight_px / 4;
+    tsc->mval_delta[0] = (event->xy[0] - event->prev_xy[0]) * st->runtime->char_width_px / 4;
+    tsc->mval_delta[1] = (event->xy[1] - event->prev_xy[1]) * st->runtime->line_height_px / 4;
     tsc->is_first = false;
     tsc->is_scrollbar = false;
     text_scroll_apply(C, op, event);
@@ -2994,7 +3000,7 @@ static wmOperatorStatus text_scroll_bar_invoke(bContext *C, wmOperator *op, cons
     return OPERATOR_PASS_THROUGH;
   }
 
-  tsc = MEM_callocN<TextScroll>("TextScroll");
+  tsc = MEM_new_zeroed<TextScroll>("TextScroll");
   tsc->is_first = true;
   tsc->is_scrollbar = true;
   tsc->zone = zone;
@@ -3089,7 +3095,7 @@ static TextLine *space_text_get_line_pos_wrapped(const SpaceText *st,
                                                  const ARegion *region,
                                                  int *y)
 {
-  TextLine *linep = static_cast<TextLine *>(st->text->lines.first);
+  TextLine *linep = st->text->lines.first();
   int i, lines;
 
   if (*y < -st->top) {
@@ -3215,11 +3221,11 @@ static void space_text_cursor_set_to_pos_wrapped(
     }
   }
   else if (y < 0) { /* Before start of text. */
-    linep = static_cast<TextLine *>(st->text->lines.first);
+    linep = st->text->lines.first();
     charp = 0;
   }
   else { /* Beyond end of text. */
-    linep = static_cast<TextLine *>(st->text->lines.last);
+    linep = st->text->lines.last();
     charp = linep->len;
   }
 
@@ -3263,7 +3269,7 @@ static void text_cursor_set_to_pos(
       charp = &text->curc;
     }
 
-    y -= txt_get_span(static_cast<TextLine *>(text->lines.first), *linep) - st->top;
+    y -= txt_get_span(text->lines.first(), *linep) - st->top;
 
     if (y > 0) {
       while (y-- != 0) {
@@ -3364,7 +3370,7 @@ static void text_cursor_set_exit(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
 
   text_cursor_timer_remove(C, ssel);
-  MEM_freeN(ssel);
+  MEM_delete(ssel);
 }
 
 static wmOperatorStatus text_selection_set_invoke(bContext *C,
@@ -3378,13 +3384,13 @@ static wmOperatorStatus text_selection_set_invoke(bContext *C,
     return OPERATOR_PASS_THROUGH;
   }
 
-  op->customdata = MEM_callocN(sizeof(SetSelection), "SetCursor");
+  op->customdata = MEM_new_zeroed<SetSelection>("SetCursor");
   ssel = static_cast<SetSelection *>(op->customdata);
 
   ssel->mval_prev[0] = event->mval[0];
   ssel->mval_prev[1] = event->mval[1];
 
-  ssel->sell = txt_get_span(static_cast<TextLine *>(st->text->lines.first), st->text->sell);
+  ssel->sell = txt_get_span(st->text->lines.first(), st->text->sell);
   ssel->selc = st->text->selc;
 
   WM_event_add_modal_handler(C, op);
@@ -3510,7 +3516,7 @@ static wmOperatorStatus text_line_number_invoke(bContext *C,
   }
 
   if (!(mval[0] > 2 &&
-        mval[0] < (TXT_NUMCOL_WIDTH(st) + (TXT_BODY_LPAD * st->runtime->cwidth_px)) &&
+        mval[0] < (TXT_NUMCOL_WIDTH(st) + (TXT_BODY_LPAD * st->runtime->char_width_px)) &&
         mval[1] > 2 && mval[1] < region->winy - 2))
   {
     return OPERATOR_PASS_THROUGH;
@@ -3570,6 +3576,14 @@ static wmOperatorStatus text_insert_exec(bContext *C, wmOperator *op)
 
   str = RNA_string_get_alloc(op->ptr, "text", nullptr, 0, &str_len);
 
+  /* NOTE: we rely on this check to ensure `done` will never be false,
+   * this area of code should be refactored not to depend on `done`
+   * being set as a side-effect of a successful insert. */
+  if (*str == '\0' || text->curl == nullptr) {
+    MEM_delete(str);
+    return OPERATOR_CANCELLED;
+  }
+
   ED_text_undo_push_init(C);
 
   if (st && st->overwrite) {
@@ -3585,11 +3599,10 @@ static wmOperatorStatus text_insert_exec(bContext *C, wmOperator *op)
     }
   }
 
-  MEM_freeN(str);
+  MEM_delete(str);
 
-  if (!done) {
-    return OPERATOR_CANCELLED;
-  }
+  BLI_assert(done);
+  UNUSED_VARS_NDEBUG(done);
 
   text_update_line_edited(text->curl);
 
@@ -3617,6 +3630,14 @@ static wmOperatorStatus text_insert_invoke(bContext *C, wmOperator *op, const wm
     int selc;
     int curc;
   } auto_close_select = {nullptr}, auto_close_select_backup = {nullptr};
+
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_insert_maybe(
+          C, op, event, "text"))
+  {
+    return *status;
+  }
+#endif
 
   /* NOTE: the "text" property is always set from key-map,
    * so we can't use #RNA_struct_property_is_set, check the length instead. */
@@ -3791,7 +3812,7 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
         ED_text_undo_push_init(C);
         txt_insert_buf(text, st->replacestr, strlen(st->replacestr));
         if (text->curl && text->curl->format) {
-          MEM_freeN(text->curl->format);
+          MEM_delete(text->curl->format);
           text->curl->format = nullptr;
         }
         space_text_update_cursor_moved(C);
@@ -3799,7 +3820,7 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
         space_text_drawcache_tag_update(st, true);
       }
     }
-    MEM_freeN(tmp);
+    MEM_delete(tmp);
     tmp = nullptr;
   }
 
@@ -3813,7 +3834,7 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
       text = st->text = static_cast<Text *>(text->id.next);
     }
     else {
-      text = st->text = static_cast<Text *>(bmain->texts.first);
+      text = st->text = bmain->texts.first();
     }
     txt_move_toline(text, 0, false);
     space_text_update_cursor_moved(C);
@@ -3875,7 +3896,7 @@ static wmOperatorStatus text_replace_all(bContext *C)
     do {
       txt_insert_buf(text, st->replacestr, strlen(st->replacestr));
       if (text->curl && text->curl->format) {
-        MEM_freeN(text->curl->format);
+        MEM_delete(text->curl->format);
         text->curl->format = nullptr;
       }
       found = txt_find_string(text, st->findstr, 0, flags & ST_MATCH_CASE);
@@ -3936,7 +3957,7 @@ static wmOperatorStatus text_find_set_selected_exec(bContext *C, wmOperator *op)
 
   tmp = txt_sel_to_buf(text, nullptr);
   STRNCPY_UTF8(st->findstr, tmp);
-  MEM_freeN(tmp);
+  MEM_delete(tmp);
 
   if (!st->findstr[0]) {
     return OPERATOR_FINISHED;
@@ -3971,7 +3992,7 @@ static wmOperatorStatus text_replace_set_selected_exec(bContext *C, wmOperator *
 
   tmp = txt_sel_to_buf(text, nullptr);
   STRNCPY_UTF8(st->replacestr, tmp);
-  MEM_freeN(tmp);
+  MEM_delete(tmp);
 
   return OPERATOR_FINISHED;
 }
@@ -4032,7 +4053,7 @@ static bool text_jump_to_file_at_point_external(bContext *C,
     else {
       BKE_report(reports, RPT_ERROR, expr_result);
     }
-    MEM_freeN(expr_result);
+    MEM_delete(expr_result);
   }
 #else
   UNUSED_VARS(C, reports, filepath, line_index, column_index);
@@ -4050,23 +4071,23 @@ static bool text_jump_to_file_at_point_internal(bContext *C,
   Text *text = nullptr;
   BLI_assert(!BLI_path_is_rel(filepath));
 
-  LISTBASE_FOREACH (Text *, text_iter, &bmain->texts) {
-    if (text_iter->filepath == nullptr) {
+  for (Text &text_iter : bmain->texts) {
+    if (text_iter.filepath == nullptr) {
       continue;
     }
     const char *filepath_iter;
     char filepath_iter_buf[FILE_MAX];
-    if (BLI_path_is_rel(text_iter->filepath)) {
-      STRNCPY(filepath_iter_buf, text_iter->filepath);
-      BLI_path_abs(filepath_iter_buf, ID_BLEND_PATH(bmain, &text_iter->id));
+    if (BLI_path_is_rel(text_iter.filepath)) {
+      STRNCPY(filepath_iter_buf, text_iter.filepath);
+      BLI_path_abs(filepath_iter_buf, ID_BLEND_PATH(bmain, &text_iter.id));
       filepath_iter = filepath_iter_buf;
     }
     else {
-      filepath_iter = text_iter->filepath;
+      filepath_iter = text_iter.filepath;
     }
 
     if (BLI_path_cmp(filepath, filepath_iter) == 0) {
-      text = text_iter;
+      text = &text_iter;
       break;
     }
   }
@@ -4119,7 +4140,7 @@ static wmOperatorStatus text_jump_to_file_at_point_exec(bContext *C, wmOperator 
 
   char filepath[FILE_MAX];
   RNA_property_string_get(op->ptr, prop_filepath, filepath);
-  if (UNLIKELY(BLI_path_is_rel(filepath))) {
+  if (BLI_path_is_rel(filepath)) [[unlikely]] {
     BLI_path_abs(filepath, BKE_main_blendfile_path(bmain));
   }
   const int line_index = RNA_property_int_get(op->ptr, prop_line);
@@ -4227,9 +4248,9 @@ static wmOperatorStatus text_resolve_conflict_invoke(bContext *C,
     case 1:
       if (text->flags & TXT_ISDIRTY) {
         /* Modified locally and externally, ah. offer more possibilities. */
-        blender::ui::PopupMenu *pup = blender::ui::popup_menu_begin(
+        ui::PopupMenu *pup = ui::popup_menu_begin(
             C, IFACE_("File Modified Outside and Inside Blender"), ICON_NONE);
-        blender::ui::Layout &layout = *popup_menu_layout(pup);
+        ui::Layout &layout = *popup_menu_layout(pup);
         PointerRNA op_ptr = layout.op(
             op->type, IFACE_("Reload from disk (ignore local changes)"), ICON_NONE);
         RNA_enum_set(&op_ptr, "resolution", RESOLVE_RELOAD);
@@ -4240,9 +4261,9 @@ static wmOperatorStatus text_resolve_conflict_invoke(bContext *C,
         popup_menu_end(C, pup);
       }
       else {
-        blender::ui::PopupMenu *pup = blender::ui::popup_menu_begin(
+        ui::PopupMenu *pup = ui::popup_menu_begin(
             C, IFACE_("File Modified Outside Blender"), ICON_NONE);
-        blender::ui::Layout &layout = *popup_menu_layout(pup);
+        ui::Layout &layout = *popup_menu_layout(pup);
         PointerRNA op_ptr = layout.op(op->type, IFACE_("Reload from disk"), ICON_NONE);
         RNA_enum_set(&op_ptr, "resolution", RESOLVE_RELOAD);
         op_ptr = layout.op(op->type, IFACE_("Make text internal (separate copy)"), ICON_NONE);
@@ -4253,9 +4274,9 @@ static wmOperatorStatus text_resolve_conflict_invoke(bContext *C,
       }
       break;
     case 2:
-      blender::ui::PopupMenu *pup = blender::ui::popup_menu_begin(
+      ui::PopupMenu *pup = ui::popup_menu_begin(
           C, IFACE_("File Deleted Outside Blender"), ICON_NONE);
-      blender::ui::Layout &layout = *popup_menu_layout(pup);
+      ui::Layout &layout = *popup_menu_layout(pup);
       PointerRNA op_ptr = layout.op(op->type, IFACE_("Make text internal"), ICON_NONE);
       RNA_enum_set(&op_ptr, "resolution", RESOLVE_MAKE_INTERNAL);
       op_ptr = layout.op(op->type, IFACE_("Recreate file"), ICON_NONE);
@@ -4362,7 +4383,7 @@ static bool text_update_shader_text_recursive(RenderEngine *engine,
   /* Update each script that is using this text datablock. */
   for (bNode *node : ntree->all_nodes()) {
     if (node->type_legacy == NODE_GROUP) {
-      bNodeTree *ngroup = (bNodeTree *)node->id;
+      bNodeTree *ngroup = id_cast<bNodeTree *>(node->id);
       if (ngroup && !done_trees.contains(ngroup)) {
         found |= text_update_shader_text_recursive(engine, type, ngroup, text, done_trees);
       }
@@ -4402,9 +4423,9 @@ static wmOperatorStatus text_update_shader_exec(bContext *C, wmOperator *op)
 
   /* Update all cameras using text data-block. */
   if (type->update_custom_camera != nullptr) {
-    LISTBASE_FOREACH (Camera *, cam, &bmain->cameras) {
-      if (cam->custom_shader == text) {
-        type->update_custom_camera(engine, cam);
+    for (Camera &cam : bmain->cameras) {
+      if (cam.custom_shader == text) {
+        type->update_custom_camera(engine, &cam);
         found = true;
       }
     }
@@ -4437,3 +4458,5 @@ void TEXT_OT_update_shader(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

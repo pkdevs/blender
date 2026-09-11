@@ -11,15 +11,18 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_collection.hh"
 #include "BKE_context.hh"
 #include "BKE_light_linking.h"
+#include "BKE_scene.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -48,7 +51,7 @@ class CollectionDropTarget {
       return false;
     }
 
-    const wmDragID *drag_id = static_cast<wmDragID *>(drag.ids.first);
+    const wmDragID *drag_id = drag.ids.first();
     if (!drag_id) {
       return false;
     }
@@ -72,14 +75,74 @@ class CollectionDropTarget {
   }
 };
 
+class CollectionInsertDropTarget : public CollectionDropTarget {
+  Main &bmain_;
+
+ public:
+  bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const
+  {
+    if (!CollectionDropTarget::can_drop(drag, r_disabled_hint)) {
+      return false;
+    }
+
+    bool have_ids_outside_collection = false;
+    for (const wmDragID &drag_id : drag.ids) {
+      const ID *id = drag_id.id;
+
+      /* Allow insertion if the ID is already in the target collection.
+       * This is to support reordering within the target collection. */
+      const ID_Type id_type = GS(id->name);
+      switch (id_type) {
+        case ID_OB: {
+          const Object *drag_object = id_cast<const Object *>(id);
+          if (!BKE_collection_has_object(&get_collection(), drag_object)) {
+            have_ids_outside_collection = true;
+          }
+          break;
+        }
+        case ID_GR: {
+          const Collection *drag_collection = id_cast<const Collection *>(id);
+          if (!BKE_collection_has_collection(&get_collection(), drag_collection)) {
+            have_ids_outside_collection = true;
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      if (have_ids_outside_collection) {
+        break;
+      }
+    }
+
+    if (have_ids_outside_collection) {
+      if (BKE_scene_find_from_collection(&bmain_, &get_collection()) != nullptr) {
+        *r_disabled_hint = "Can not modify collection that is used by a scene";
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  CollectionInsertDropTarget(Main &bmain, Collection &collection)
+      : CollectionDropTarget(collection), bmain_(bmain)
+  {
+  }
+};
+
 /**
  * Drop target for the view (when dropping into empty space of the view), not for an item.
  */
 class InsertCollectionDropTarget : public DropTargetInterface {
-  CollectionDropTarget collection_target_;
+  CollectionInsertDropTarget collection_target_;
 
  public:
-  InsertCollectionDropTarget(Collection &collection) : collection_target_(collection) {}
+  InsertCollectionDropTarget(Main &bmain, Collection &collection)
+      : collection_target_(bmain, collection)
+  {
+  }
 
   bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const override
   {
@@ -96,10 +159,10 @@ class InsertCollectionDropTarget : public DropTargetInterface {
     Main *bmain = CTX_data_main(C);
     Scene *scene = CTX_data_scene(C);
 
-    LISTBASE_FOREACH (wmDragID *, drag_id, &drag.drag_data.ids) {
+    for (wmDragID &drag_id : drag.drag_data.ids) {
       BKE_light_linking_add_receiver_to_collection(bmain,
                                                    &collection_target_.get_collection(),
-                                                   drag_id->id,
+                                                   drag_id.id,
                                                    COLLECTION_LIGHT_LINKING_STATE_INCLUDE);
     }
 
@@ -157,25 +220,24 @@ class ReorderCollectionDropTarget : public TreeViewItemDropTarget {
     Collection &collection = collection_target_.get_collection();
     const eCollectionLightLinkingState link_state = COLLECTION_LIGHT_LINKING_STATE_INCLUDE;
 
-    LISTBASE_FOREACH (wmDragID *, drag_id, &drag.drag_data.ids) {
-      if (drag_id->id == &drop_id_) {
+    for (wmDragID &drag_id : drag.drag_data.ids) {
+      if (drag_id.id == &drop_id_) {
         continue;
       }
 
-      BKE_light_linking_unlink_id_from_collection(bmain, &collection, drag_id->id, nullptr);
+      BKE_light_linking_unlink_id_from_collection(bmain, &collection, drag_id.id, nullptr);
 
       switch (drag.drop_location) {
         case DropLocation::Into:
-          BKE_light_linking_add_receiver_to_collection(
-              bmain, &collection, drag_id->id, link_state);
+          BKE_light_linking_add_receiver_to_collection(bmain, &collection, drag_id.id, link_state);
           break;
         case DropLocation::Before:
           BKE_light_linking_add_receiver_to_collection_before(
-              bmain, &collection, drag_id->id, &drop_id_, link_state);
+              bmain, &collection, drag_id.id, &drop_id_, link_state);
           break;
         case DropLocation::After:
           BKE_light_linking_add_receiver_to_collection_after(
-              bmain, &collection, drag_id->id, &drop_id_, link_state);
+              bmain, &collection, drag_id.id, &drop_id_, link_state);
           break;
       }
     }
@@ -195,10 +257,7 @@ class ItemDragController : public AbstractViewItemDragController {
   ID &id_;
 
  public:
-  explicit ItemDragController(AbstractView &view, ID &id)
-      : AbstractViewItemDragController(view), id_(id)
-  {
-  }
+  ItemDragController(AbstractView &view, ID &id) : AbstractViewItemDragController(view), id_(id) {}
 
   std::optional<eWM_DragDataType> get_drag_type() const override
   {
@@ -293,7 +352,7 @@ class CollectionViewItem : public BasicTreeViewItem {
     const int icon = get_state_icon();
 
     PointerRNA collection_light_linking_ptr = RNA_pointer_create_discrete(
-        &collection_.id, &RNA_CollectionLightLinking, &collection_light_linking_);
+        &collection_.id, RNA_CollectionLightLinking, &collection_light_linking_);
 
     Button *button = uiDefIconButR(block,
                                    ButtonType::But,
@@ -317,38 +376,39 @@ class CollectionViewItem : public BasicTreeViewItem {
 
 class CollectionView : public AbstractTreeView {
   Layout &context_layout_;
+  Main &bmain_;
   Collection &collection_;
 
  public:
-  CollectionView(Layout &context_layout, Collection &collection)
-      : context_layout_(context_layout), collection_(collection)
+  CollectionView(Layout &context_layout, Main &bmain, Collection &collection)
+      : context_layout_(context_layout), bmain_(bmain), collection_(collection)
   {
   }
 
   void build_tree() override
   {
-    LISTBASE_FOREACH (CollectionChild *, collection_child, &collection_.children) {
-      Collection *child_collection = collection_child->collection;
+    for (CollectionChild &collection_child : collection_.children) {
+      Collection *child_collection = collection_child.collection;
       add_tree_item<CollectionViewItem>(context_layout_,
                                         collection_,
                                         child_collection->id,
-                                        collection_child->light_linking,
+                                        collection_child.light_linking,
                                         ICON_OUTLINER_COLLECTION);
     }
 
-    LISTBASE_FOREACH (CollectionObject *, collection_object, &collection_.gobject) {
-      Object *child_object = collection_object->ob;
+    for (CollectionObject &collection_object : collection_.gobject) {
+      Object *child_object = collection_object.ob;
       add_tree_item<CollectionViewItem>(context_layout_,
                                         collection_,
                                         child_object->id,
-                                        collection_object->light_linking,
+                                        collection_object.light_linking,
                                         ICON_OBJECT_DATA);
     }
   }
 
   std::unique_ptr<DropTargetInterface> create_drop_target() override
   {
-    return std::make_unique<InsertCollectionDropTarget>(collection_);
+    return std::make_unique<InsertCollectionDropTarget>(bmain_, collection_);
   }
 };
 
@@ -361,7 +421,7 @@ void template_light_linking_collection(Layout *layout,
                                        PointerRNA *ptr,
                                        const StringRefNull propname)
 {
-  if (!ptr->data) {
+  if (!*ptr) {
     return;
   }
 
@@ -383,10 +443,10 @@ void template_light_linking_collection(Layout *layout,
   }
 
   const PointerRNA collection_ptr = RNA_property_pointer_get(ptr, prop);
-  if (!collection_ptr.data) {
+  if (!collection_ptr) {
     return;
   }
-  if (collection_ptr.type != &RNA_Collection) {
+  if (collection_ptr.type != RNA_Collection) {
     printf("%s: expected collection pointer property for %s.%s\n",
            __func__,
            RNA_struct_identifier(ptr->type),
@@ -401,7 +461,8 @@ void template_light_linking_collection(Layout *layout,
   AbstractTreeView *tree_view = block_add_view(
       *block,
       "Light Linking Collection Tree View",
-      std::make_unique<light_linking::CollectionView>(*context_layout, *collection));
+      std::make_unique<light_linking::CollectionView>(
+          *context_layout, *CTX_data_main(C), *collection));
   tree_view->set_context_menu_title("Light Linking");
   tree_view->set_default_rows(5);
 

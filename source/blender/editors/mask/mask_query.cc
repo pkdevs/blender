@@ -11,9 +11,9 @@
 #include "BKE_context.hh"
 #include "BKE_mask.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -27,6 +27,8 @@
 #include "UI_view2d.hh"
 
 #include "mask_intern.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Spatial Queries
@@ -68,8 +70,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
@@ -77,15 +79,17 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
       continue;
     }
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
       int i;
       MaskSplinePoint *cur_point_eval;
 
-      for (i = 0, cur_point_eval = use_deform ? spline_eval->points_deform : spline_eval->points;
+      for (i = 0,
+          cur_point_eval = use_deform ? spline_eval->runtime->points_deform.data() :
+                                        spline_eval->points;
            i < spline_eval->tot_point;
            i++, cur_point_eval++)
       {
@@ -129,7 +133,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
               point_mask_layer = mask_layer_orig;
               point_spline = spline_orig;
               point = use_deform ?
-                          &spline_orig->points[(cur_point_eval - spline_eval->points_deform)] :
+                          &spline_orig->points[(cur_point_eval -
+                                                spline_eval->runtime->points_deform.data())] :
                           &spline_orig->points[(cur_point_eval - spline_eval->points)];
               dist_best_sq = dist_sq;
               u = float(j) / tot_point;
@@ -137,9 +142,9 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
           }
 
           if (feather_points != nullptr) {
-            MEM_freeN(feather_points);
+            MEM_delete(feather_points);
           }
-          MEM_freeN(diff_points);
+          MEM_delete(diff_points);
         }
       }
     }
@@ -230,8 +235,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
@@ -240,8 +245,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
       continue;
     }
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -387,14 +392,14 @@ bool ED_mask_feather_find_nearest(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -440,7 +445,7 @@ bool ED_mask_feather_find_nearest(const bContext *C,
         }
       }
 
-      MEM_freeN(feather_points);
+      MEM_delete(feather_points);
     }
   }
 
@@ -488,17 +493,17 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_clip_mouse_pos(sc, region, mval, r_co);
         BKE_mask_coord_from_movieclip(sc->clip, &sc->user, r_co, r_co);
         break;
       }
       case SPACE_SEQ: {
-        blender::ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &r_co[0], &r_co[1]);
+        ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &r_co[0], &r_co[1]);
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_image_mouse_pos(sima, region, mval, r_co);
         BKE_mask_coord_from_image(sima->image, &sima->iuser, r_co, r_co);
         break;
@@ -523,7 +528,7 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_clip_point_stable_pos(sc, region, x, y, &co[0], &co[1]);
         BKE_mask_coord_from_movieclip(sc->clip, &sc->user, co, co);
         break;
@@ -532,7 +537,7 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
         zero_v2(co); /* MASKTODO */
         break;
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_image_point_pos(sima, region, x, y, &co[0], &co[1]);
         BKE_mask_coord_from_image(sima->image, &sima->iuser, co, co);
         break;
@@ -561,7 +566,7 @@ void ED_mask_point_pos__reverse(
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         co[0] = x;
         co[1] = y;
         BKE_mask_coord_to_movieclip(sc->clip, &sc->user, co, co);
@@ -572,7 +577,7 @@ void ED_mask_point_pos__reverse(
         zero_v2(co); /* MASKTODO */
         break;
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         co[0] = x;
         co[1] = y;
         BKE_mask_coord_to_image(sima->image, &sima->iuser, co, co);
@@ -597,10 +602,10 @@ void ED_mask_point_pos__reverse(
 
 static void handle_position_for_minmax(const MaskSplinePoint *point,
                                        eMaskWhichHandle which_handle,
-                                       bool handles_as_control_point,
+                                       bool handles_as_knot,
                                        float r_handle[2])
 {
-  if (handles_as_control_point) {
+  if (handles_as_knot) {
     copy_v2_v2(r_handle, point->bezt.vec[1]);
     return;
   }
@@ -610,7 +615,8 @@ static void handle_position_for_minmax(const MaskSplinePoint *point,
 bool ED_mask_selected_minmax(const bContext *C,
                              float min[2],
                              float max[2],
-                             bool handles_as_control_point)
+                             const bool handles_as_knot,
+                             const bool handles_as_knot_selected_only)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Mask *mask = CTX_data_edit_mask(C);
@@ -627,41 +633,42 @@ bool ED_mask_selected_minmax(const bContext *C,
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask);
 
   INIT_MINMAX2(min, max);
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask_eval->masklayers) {
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &mask_layer : mask_eval->masklayers) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
-    LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-      MaskSplinePoint *points_array = BKE_mask_spline_point_array(spline);
-      for (int i = 0; i < spline->tot_point; i++) {
-        const MaskSplinePoint *point = &spline->points[i];
+    for (MaskSpline &spline : mask_layer.splines) {
+      MaskSplinePoint *points_array = BKE_mask_spline_point_array(&spline);
+      for (int i = 0; i < spline.tot_point; i++) {
+        const MaskSplinePoint *point = &spline.points[i];
         const MaskSplinePoint *deform_point = &points_array[i];
         const BezTriple *bezt = &point->bezt;
         float handle[2];
         if (!BKE_mask_point_selected(point)) {
           continue;
         }
-        if (bezt->f2 & SELECT) {
+        if (bezt->f2 & SELECT || handles_as_knot_selected_only) {
           minmax_v2v2_v2(min, max, deform_point->bezt.vec[1]);
           ok = true;
+          continue;
         }
 
         if (BKE_mask_point_handles_mode_get(point) == MASK_HANDLE_MODE_STICK) {
           handle_position_for_minmax(
-              deform_point, MASK_WHICH_HANDLE_STICK, handles_as_control_point, handle);
+              deform_point, MASK_WHICH_HANDLE_STICK, handles_as_knot, handle);
           minmax_v2v2_v2(min, max, handle);
           ok = true;
         }
         else {
           if ((bezt->f1 & SELECT) && (bezt->h1 != HD_VECT)) {
             handle_position_for_minmax(
-                deform_point, MASK_WHICH_HANDLE_LEFT, handles_as_control_point, handle);
+                deform_point, MASK_WHICH_HANDLE_LEFT, handles_as_knot, handle);
             minmax_v2v2_v2(min, max, handle);
             ok = true;
           }
           if ((bezt->f3 & SELECT) && (bezt->h2 != HD_VECT)) {
             handle_position_for_minmax(
-                deform_point, MASK_WHICH_HANDLE_RIGHT, handles_as_control_point, handle);
+                deform_point, MASK_WHICH_HANDLE_RIGHT, handles_as_knot, handle);
             minmax_v2v2_v2(min, max, handle);
             ok = true;
           }
@@ -672,11 +679,16 @@ bool ED_mask_selected_minmax(const bContext *C,
   return ok;
 }
 
-void ED_mask_center_from_pivot_ex(
-    const bContext *C, ScrArea *area, float r_center[2], char mode, bool *r_has_select)
+void ED_mask_center_from_pivot_ex(const bContext *C,
+                                  ScrArea *area,
+                                  const char mode,
+                                  const bool handles_as_knot_selected_only,
+                                  float r_center[2],
+                                  bool *r_has_select)
 {
   float min[2], max[2];
-  const bool mask_selected = ED_mask_selected_minmax(C, min, max, false);
+  const bool mask_selected = ED_mask_selected_minmax(
+      C, min, max, false, handles_as_knot_selected_only);
 
   switch (mode) {
     case V3D_AROUND_CURSOR:
@@ -699,10 +711,10 @@ void ED_mask_center_from_pivot_ex(
 
 void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
 {
-  if (area && area->spacedata.first) {
+  if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_size(sc, r_width, r_height);
         break;
       }
@@ -712,7 +724,7 @@ void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_size(sima, r_width, r_height);
         break;
       }
@@ -733,10 +745,10 @@ void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
 
 void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy)
 {
-  if (area && area->spacedata.first) {
+  if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_zoom(sc, region, r_zoomx, r_zoomy);
         break;
       }
@@ -745,7 +757,7 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_zoom(sima, region, r_zoomx, r_zoomy);
         break;
       }
@@ -764,10 +776,10 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
 
 void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, float *r_aspy)
 {
-  if (area && area->spacedata.first) {
+  if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_aspect(sc, r_aspx, r_aspy);
         break;
       }
@@ -776,7 +788,7 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_aspect(sima, r_aspx, r_aspy);
         break;
       }
@@ -795,13 +807,13 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
 
 void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, float *r_scaley)
 {
-  if (area && area->spacedata.first) {
+  if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         float aspx, aspy;
 
-        blender::ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
+        ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
         ED_space_clip_get_aspect(sc, &aspx, &aspy);
 
         *r_scalex *= aspx;
@@ -813,10 +825,10 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         float aspx, aspy;
 
-        blender::ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
+        ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
         ED_space_image_get_aspect(sima, &aspx, &aspy);
 
         *r_scalex *= aspx;
@@ -841,7 +853,7 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *space_clip = static_cast<SpaceClip *>(area->spacedata.first);
+        SpaceClip *space_clip = area->spacedata.first_as<SpaceClip>();
         copy_v2_v2(cursor, space_clip->cursor);
         break;
       }
@@ -850,7 +862,7 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *space_image = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *space_image = area->spacedata.first_as<SpaceImage>();
         copy_v2_v2(cursor, space_image->cursor);
         break;
       }
@@ -868,3 +880,5 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
 }
 
 /** \} */
+
+}  // namespace blender

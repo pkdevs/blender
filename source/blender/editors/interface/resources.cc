@@ -16,10 +16,10 @@
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_addon.h"
 #include "BKE_appdir.hh"
@@ -66,7 +66,7 @@ void resources_free()
 
 void style_init_default()
 {
-  BLI_freelistN(&U.uistyles);
+  U.uistyles.free_no_destruct();
   /* gets automatically re-allocated */
   style_init();
 }
@@ -77,9 +77,9 @@ namespace theme {
 /** \name Themes
  * \{ */
 
-const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
+const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
 {
-  ThemeSpace *ts = nullptr;
+  const ThemeSpace *ts = nullptr;
   static uchar error[4] = {240, 0, 240, 255};
   static uchar back[4] = {0, 0, 0, 255};
   static uchar none[4] = {0, 0, 0, 0};
@@ -120,6 +120,9 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
         case TH_SUCCESS:
           cp = btheme->tui.wcol_state.success;
           break;
+        case TH_LINK:
+          cp = btheme->tui.link;
+          break;
       }
     }
     else {
@@ -159,6 +162,7 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           ts = &btheme->space_info;
           break;
         case SPACE_USERPREF:
+        case SPACE_PROJECT:
           ts = &btheme->space_preferences;
           break;
         case SPACE_CONSOLE:
@@ -224,19 +228,12 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           break;
         case TH_TEXT:
           if (ELEM(g_theme_state.regionid, RGN_TYPE_UI, RGN_TYPE_TOOLS) ||
-              ELEM(g_theme_state.spacetype, SPACE_PROPERTIES, SPACE_USERPREF))
+              ELEM(g_theme_state.spacetype, SPACE_PROPERTIES, SPACE_USERPREF, SPACE_PROJECT))
           {
             cp = btheme->tui.panel_text;
           }
           else if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = btheme->regions.channels.text;
-          }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_text;
           }
           else {
             cp = ts->text;
@@ -246,44 +243,13 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = btheme->regions.channels.text_selected;
           }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_text_hi;
-          }
           else {
             cp = ts->text_hi;
-          }
-          break;
-        case TH_TITLE:
-          if (ELEM(g_theme_state.regionid, RGN_TYPE_UI, RGN_TYPE_TOOLS, RGN_TYPE_CHANNELS) ||
-              ELEM(g_theme_state.spacetype, SPACE_PROPERTIES, SPACE_USERPREF))
-          {
-            cp = btheme->tui.panel_title;
-          }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_title;
-          }
-          else {
-            cp = ts->title;
           }
           break;
 
         case TH_HEADER:
           cp = ts->header;
-          break;
-
-        case TH_HEADER_TEXT:
-          cp = ts->header_text;
-          break;
-        case TH_HEADER_TEXT_HI:
-          cp = ts->header_text_hi;
           break;
 
         case TH_PANEL_HEADER:
@@ -337,6 +303,9 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
         case TH_GRID:
           cp = ts->grid;
           break;
+        case TH_GRID_MAJOR:
+          cp = ts->grid_major;
+          break;
         case TH_TIME_SCRUB_BACKGROUND:
           cp = btheme->regions.scrubbing.back;
           break;
@@ -374,7 +343,12 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           cp = ts->empty;
           break;
         case TH_SELECT:
-          cp = ts->select;
+          if (g_theme_state.spacetype == SPACE_IMAGE) {
+            cp = btheme->space_view3d.select;
+          }
+          else {
+            cp = ts->select;
+          }
           break;
         case TH_ACTIVE:
           cp = ts->active;
@@ -386,7 +360,12 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           cp = btheme->common.anim.channel_group_active;
           break;
         case TH_TRANSFORM:
-          cp = ts->transform;
+          if (g_theme_state.spacetype == SPACE_IMAGE) {
+            cp = btheme->space_view3d.transform;
+          }
+          else {
+            cp = ts->transform;
+          }
           break;
         case TH_VERTEX:
           cp = ts->vertex;
@@ -1115,7 +1094,7 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
     }
   }
 
-  return (const uchar *)cp;
+  return cp;
 }
 
 void init_default()
@@ -1124,12 +1103,12 @@ void init_default()
   bTheme *btheme = static_cast<bTheme *>(
       BLI_findstring(&U.themes, U_theme_default.name, offsetof(bTheme, name)));
   if (btheme == nullptr) {
-    btheme = MEM_callocN<bTheme>(__func__);
+    btheme = MEM_new_zeroed<bTheme>(__func__);
     STRNCPY_UTF8(btheme->name, U_theme_default.name);
     BLI_addhead(&U.themes, btheme);
   }
 
-  /* Must be first, see `U.themes` doc-string. */
+  /* Must be first, see `U.themes` docstring. */
   BLI_listbase_rotate_first(&U.themes, btheme);
 
   theme_set(0, 0); /* make sure the global used in this file is set */
@@ -1143,27 +1122,27 @@ void theme_set(int spacetype, int regionid)
 {
   if (spacetype) {
     /* later on, a local theme can be found too */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = spacetype;
     g_theme_state.regionid = regionid;
   }
   else if (regionid) {
     /* popups */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = SPACE_PROPERTIES;
     g_theme_state.regionid = regionid;
   }
   else {
     /* for safety, when theme was deleted */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = SPACE_VIEW3D;
     g_theme_state.regionid = RGN_TYPE_WINDOW;
   }
 }
 
-bTheme *theme_get()
+const bTheme *theme_get()
 {
-  return static_cast<bTheme *>(U.themes.first);
+  return U.themes.first();
 }
 
 void theme_store(bThemeState *theme_state)
@@ -1606,5 +1585,4 @@ void make_axis_color(const uchar col[3], const char axis, uchar r_col[3])
 /** \} */
 
 }  // namespace theme
-
 }  // namespace blender::ui

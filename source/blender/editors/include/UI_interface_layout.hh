@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editorui
+ */
+
 #pragma once
 
 #include <functional>
@@ -14,6 +18,8 @@
 #include "BLI_vector.hh"
 
 #include "UI_interface_types.hh"
+
+namespace blender {
 
 struct bContext;
 struct bContextStore;
@@ -28,6 +34,11 @@ struct PointerRNA;
 struct PropertyRNA;
 struct StructRNA;
 struct wmOperatorType;
+struct TextboxState;
+
+namespace wm {
+enum class OpCallContext : int8_t;
+}
 
 /* Layout
  *
@@ -39,7 +50,7 @@ struct wmOperatorType;
  *   operator, label or menu. Also regular buttons can be used when setting
  *   uiBlockCurLayout. */
 
-namespace blender::ui {
+namespace ui {
 enum class ItemType : int8_t;
 enum class ItemInternalFlag : uint8_t;
 enum class EmbossType : uint8_t;
@@ -52,13 +63,6 @@ struct ItemInternal;
 struct LayoutInternal;
 struct Layout;
 struct LayoutRoot;
-}  // namespace blender::ui
-
-namespace blender::wm {
-enum class OpCallContext : int8_t;
-}
-
-namespace blender::ui {
 
 struct PanelLayout {
   Layout *header;
@@ -76,8 +80,8 @@ struct Item {
 
   [[nodiscard]] ItemType type() const;
 
-  [[nodiscard]] blender::int2 size() const;
-  [[nodiscard]] blender::int2 offset() const;
+  [[nodiscard]] int2 size() const;
+  [[nodiscard]] int2 offset() const;
 
  protected:
   ItemInternalFlag flag_ = {};
@@ -86,7 +90,7 @@ struct Item {
   friend struct ItemInternal;
 };
 
-enum eUI_Item_Flag : uint16_t;
+enum eUI_Item_Flag : uint32_t;
 
 enum class LayoutSeparatorType : int8_t {
   Auto,
@@ -99,7 +103,23 @@ enum class NodeAssetMenuOperatorType : int8_t {
   Swap,
 };
 
+/**
+ * Panel popup draw direction.
+ */
+enum class PopupAttachDirection : int8_t {
+  Vertical = 0,
+  Horizontal = 1,
+};
+
+enum class EnumTabExpand {
+  Default = 0,
+  Row,
+};
+
 struct Layout : public Item, NonCopyable, NonMovable {
+
+  static constexpr float PROPERTY_SPLIT_FACTOR = 0.4f;
+
  protected:
   LayoutRoot *root_ = nullptr;
   bContextStore *context_ = nullptr;
@@ -226,14 +246,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Sets when to split property's label into a separate button when adding new property buttons.
    */
-  void use_property_split_set(bool value);
+  void use_property_split_set(bool is_sep);
 
   [[nodiscard]] bool use_property_decorate() const;
   /**
    * Sets when to add an extra button to insert keyframes next to new property buttons added in the
    * layout.
    */
-  void use_property_decorate_set(bool is_sep);
+  void use_property_decorate_set(bool is_decorate);
 
   [[nodiscard]] int width() const;
 
@@ -315,10 +335,10 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * The open-state of the panel is defined by an RNA property which is passed in as a pointer +
    * property name pair. This gives the caller flexibility to decide who should own the open-state.
    *
+   * \note Only layouts that span the full width of the region are supported for now.
+   *
    * \param C: The context is necessary because sometimes the panel may be forced to be open by the
    * context even of the open-property is `false`. This can happen with e.g. property search.
-   * \param layout: The `Layout` that should contain the sub-panel.
-   * Only layouts that span the full width of the region are supported for now.
    * \param open_prop_owner: Data that contains the open-property.
    * \param open_prop_name: Name of the open-property in `open_prop_owner`.
    *
@@ -369,7 +389,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /**
    * Add a new split sub-layout, items placed in this sub-layout are added horizontally next to
-   * each other in row, but width is splitted between the first item and remaining items.
+   * each other in row, but width is split between the first item and remaining items.
    * \param percentage: Width percent to split.
    */
   Layout &split(float percentage, bool align);
@@ -390,6 +410,19 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /** Adds a label item that will display text and/or icon in the layout. */
   void label(StringRef name, int icon);
+  /**
+   * Adds a multi-line label that will display wrapped text and/or icon in the layout.
+   * \param max_lines: Number of maximum lines to display in the layout, 0 means all.
+   */
+  void label_multiline(StringRefNull label,
+                       int icon,
+                       FontStyleAlign align = UI_STYLE_TEXT_LEFT,
+                       int max_lines = 0);
+
+  /**
+   * Adds link item, displays a url that can be clicked in the layout.
+   */
+  void link(StringRef url, StringRef name, int icon);
 
   /**
    * Adds a menu item, which is a button that when active will display a menu.
@@ -445,8 +478,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * Adds a operator item, places a button in the layout to call the operator.
    * \param opname: Operator id name.
    * \param name: Text to show in the layout.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op(StringRefNull opname, std::optional<StringRef> name, int icon);
 
@@ -455,8 +487,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * \param opname: Operator id name.
    * \param name: Text to show in the layout.
    * \param context: Operator call context for #WM_operator_name_call.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op(StringRefNull opname,
                 std::optional<StringRef> name,
@@ -501,7 +532,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a #op_enum menu.
    * \returns Operator pointer to write extra properties to set when menu buttons are
-   * displayed, might be #PointerRNA_NULL if operator does not exist.
+   * displayed, might be null if operator does not exist.
    */
   PointerRNA op_menu_enum(const bContext *C,
                           wmOperatorType *ot,
@@ -511,7 +542,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a #op_enum menu.
    * \returns Operator pointer to write extra properties to set when menu buttons are
-   * displayed, might be #PointerRNA_NULL if operator does not exist.
+   * displayed, might be null if operator does not exist.
    */
   PointerRNA op_menu_enum(const bContext *C,
                           StringRefNull opname,
@@ -525,8 +556,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * \param name: Text to show in the layout.
    * \param context: Operator call context for #WM_operator_name_call.
    * \param menu_id: menu to show on held down.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op_menu_hold(wmOperatorType *ot,
                           std::optional<StringRef> name,
@@ -563,7 +593,8 @@ struct Layout : public Item, NonCopyable, NonMovable {
   void popover(const bContext *C,
                StringRef panel_type,
                std::optional<StringRef> name_opt,
-               int icon);
+               int icon,
+               PopupAttachDirection direction = PopupAttachDirection::Vertical);
   void popover_group(
       bContext *C, int space_id, int region_id, const char *context, const char *category);
 
@@ -604,7 +635,8 @@ struct Layout : public Item, NonCopyable, NonMovable {
                       PropertyRNA *prop,
                       PointerRNA *ptr_highlight,
                       PropertyRNA *prop_highlight,
-                      bool icon_only);
+                      bool icon_only,
+                      EnumTabExpand expand_as = EnumTabExpand::Default);
 
   /** Expands enum property value items as radio buttons. */
   void props_enum(PointerRNA *ptr, StringRefNull propname);
@@ -613,9 +645,9 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * Adds a RNA enum/pointer/string/ property item, and exposes it into the layout. Button input
    * would suggest values from the search property collection.
    * \param searchprop: Collection property in \a searchptr from where to take input values.
-   * \param results_are_suggestions: Allow inputs that not match any suggested value.
    * \param item_searchpropname: The name of the string property in the collection items to use for
-   *        searching (if unset, code will use RNA_struc.
+   *        searching (if unset, code will use RNA_struct).
+   * \param results_are_suggestions: Allow inputs that not match any suggested value.
    */
   void prop_search(PointerRNA *ptr,
                    PropertyRNA *prop,
@@ -628,7 +660,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a RNA enum/pointer/string/ property item, and exposes it into the layout. Button input
    * would suggest values from the search property collection, input must match a suggested value.
-   * \param searchprop: Collection property in \a searchptr from where to take input values.
+   * \param searchpropname: Collection property in \a searchptr from where to take input values.
    */
   void prop_search(PointerRNA *ptr,
                    StringRefNull propname,
@@ -636,6 +668,24 @@ struct Layout : public Item, NonCopyable, NonMovable {
                    StringRefNull searchpropname,
                    std::optional<StringRefNull> name,
                    int icon);
+
+  /**
+   * Adds a string property item as textbox, this will let multi-line text editing, textbox state
+   * will stored in the current context region.
+   */
+  void textbox(const bContext *C,
+               PointerRNA *ptr,
+               StringRefNull propname,
+               std::optional<StringRefNull> placeholder = std::nullopt,
+               const int initial_visible_lines = 3);
+  /**
+   * Adds a string property item as textbox, this will let multi-line text editing.
+   * \param textbox_state: custom allocation for persistent textbox state.
+   */
+  void textbox_with_state(PointerRNA *ptr,
+                          StringRefNull propname,
+                          TextboxState *textbox_state,
+                          std::optional<StringRefNull> placeholder = std::nullopt);
 
   /**
    * Adds a RNA property item, and sets a custom popover to expose its value.
@@ -649,6 +699,15 @@ struct Layout : public Item, NonCopyable, NonMovable {
                          int icon,
                          const char *panel_type);
 
+  /**
+   * Adds a RNA property item, and sets a custom menu to expose its value.
+   */
+  void prop_with_menu(PointerRNA *ptr,
+                      blender::StringRefNull propname,
+                      eUI_Item_Flag flag,
+                      std::optional<blender::StringRefNull> name,
+                      int icon,
+                      const char *menu_type);
   /**
    * Adds a RNA property item, and sets a custom menu to expose its value.
    */
@@ -692,6 +751,11 @@ struct Layout : public Item, NonCopyable, NonMovable {
   virtual void estimate_impl();
   void resolve();
   virtual void resolve_impl();
+  /**
+   * Resolve layouts containing items whose heights depends on their resolved width.
+   * Currently only for layouts containing multi-line labels.
+   */
+  virtual void resolve_dynamic_height();
 };
 
 inline bool Layout::active() const
@@ -849,8 +913,9 @@ bool block_layout_needs_resolving(const Block *block);
  */
 void block_layout_free(Block *block);
 
-enum eUI_Item_Flag : uint16_t {
-  /* ITEM_O_RETURN_PROPS = 1 << 0, */ /* UNUSED */
+enum eUI_Item_Flag : uint32_t {
+  /** Align text input to the right. */
+  ITEM_R_TEXT_RIGHT = 1 << 0,
   ITEM_R_EXPAND = 1 << 1,
   ITEM_R_SLIDER = 1 << 2,
   /**
@@ -884,9 +949,11 @@ enum eUI_Item_Flag : uint16_t {
    * text input while leaving the remaining UI interactive).
    */
   ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15,
+  /** Text buttons with no emboss styled like labels. */
+  ITEM_R_TEXT_BUT_LABEL_STYLE = 1 << 16,
 };
 ENUM_OPERATORS(eUI_Item_Flag)
-#define UI_ITEM_NONE blender::ui::eUI_Item_Flag(0)
+#define UI_ITEM_NONE ui::eUI_Item_Flag(0)
 
 /**
  * Apply property search behavior, setting panel flags and deactivating buttons that don't match.
@@ -895,18 +962,16 @@ ENUM_OPERATORS(eUI_Item_Flag)
  */
 bool block_apply_search_filter(Block *block, const char *search_filter);
 
-void uiLayoutSetFunc(Layout *layout, MenuHandleFunc handlefunc, void *argv);
-
 /**
  * Set tooltip function for all buttons in the layout.
  * func, arg and free_arg are passed on to button_func_tooltip_set, so their meaning is the same.
  *
  * \param func: The callback function that gets called to get tooltip content
  * \param arg: An optional opaque pointer that gets passed to func
- * \param free_arg: An optional callback for freeing arg (can be set to e.g. MEM_freeN)
  * \param copy_arg: An optional callback for duplicating arg in case button_func_tooltip_set
- * is being called on multiple buttons (can be set to e.g. MEM_dupallocN). If set to NULL, arg will
+ * is being called on multiple buttons (can be set to e.g. MEM_dupalloc). If set to NULL, arg will
  * be passed as-is to all buttons.
+ * \param free_arg: An optional callback for freeing arg (can be set to e.g. MEM_delete)
  */
 void uiLayoutSetTooltipFunc(
     Layout *layout, ButtonToolTipFunc func, void *arg, CopyArgFunc copy_arg, FreeArgFunc free_arg);
@@ -972,7 +1037,7 @@ void uiItemLDrag(Layout *layout, PointerRNA *ptr, StringRef name, int icon);
 /**
  * Evaluate layout items as a Python dictionary.
  */
-const char *UI_layout_introspect(Layout *layout);
+std::string layout_introspect(Layout *layout);
 
 /**
  * Helpers to add a big icon and create a split layout for alert popups.
@@ -985,4 +1050,5 @@ Layout *uiItemsAlertBox(Block *block,
                         const int icon_size);
 Layout *uiItemsAlertBox(Block *block, const int size, const AlertIcon icon);
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

@@ -10,11 +10,11 @@
 
 #include <cstring>
 
-#include "BLI_dynstr.h"
-#include "BLI_fileops.h"
-#include "BLI_linklist.h"
+#include "BLI_dynstr.hh"
+#include "BLI_fileops.hh"
+#include "BLI_linklist.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -25,6 +25,8 @@
 #include "GPU_platform.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
 
 #define WM_PLATFORM_SUPPORT_TEXT_SIZE 1024
 
@@ -252,3 +254,5 @@ bool WM_platform_support_perform_checks()
 
   return result;
 }
+
+}  // namespace blender

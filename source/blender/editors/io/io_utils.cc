@@ -2,10 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editor/io
+ */
+
 #include <fmt/format.h>
 
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -89,7 +93,7 @@ Vector<std::string> paths_from_operator_properties(PointerRNA *ptr)
     }
 
     PropertyRNA *files_prop = RNA_struct_find_collection_property_check(
-        *ptr, "files", &RNA_OperatorFileListElement);
+        *ptr, "files", RNA_OperatorFileListElement);
 
     BLI_assert(files_prop);
 
@@ -123,7 +127,7 @@ void paths_to_operator_properties(PointerRNA *ptr, const Span<std::string> paths
   RNA_collection_clear(ptr, "files");
   for (const auto &path : paths) {
     char file[FILE_MAX];
-    STRNCPY_UTF8(file, path.c_str());
+    STRNCPY(file, path.c_str());
     BLI_path_rel(file, dir);
 
     PointerRNA itemptr{};

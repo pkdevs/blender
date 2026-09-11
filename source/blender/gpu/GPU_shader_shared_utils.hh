@@ -75,9 +75,9 @@
 #else                /* C / C++ */
 #  ifndef GPU_SHADER /* Avoid parsing this into shader code. */
 
-#    include "BLI_assert.h"
+#    include "BLI_assert.hh"
 #    include "BLI_enum_flags.hh"
-#    include "BLI_sys_types.h"
+#    include "BLI_sys_types.hh"
 
 #    include <math.h>
 
@@ -95,8 +95,10 @@ using blender::int2;
 using blender::int4;
 using blender::uint2;
 using blender::uint4;
-/** IMPORTANT: Do not use in shared struct. Use packed_(float/int/uint)3 instead.
- * Here for static functions usage only. */
+/**
+ * IMPORTANT: Do not use in shared struct. Use packed_(float/int/uint)3 instead.
+ * Here for static functions usage only.
+ */
 using blender::float3;
 using blender::int3;
 using blender::uint3;
@@ -115,16 +117,31 @@ using blender::float2x4;
 using blender::float3x4;
 using blender::float4x4;
 
-#  endif
+/**
+ * Wrapper type for members of unions in host shared structure.
+ * Passthrough implementation when compiled with host code.
+ * See gpu_shader_compat_cxx.hh for the C++ stub implementation.
+ * This implementation needs to have the correct base type and can safely cast to it.
+ */
+template<typename T> struct union_t {
+  T data;
 
-/* For assert support. */
-#  if defined(GPU_VERTEX_SHADER)
-#    define GPU_THREAD uint3(gl_VertexID, gl_InstanceID, 0)
-#  elif defined(GPU_FRAGMENT_SHADER)
-#    define GPU_THREAD uint3(gl_FragCoord.x, gl_FragCoord.y, 0)
-#  elif defined(GPU_COMPUTE_SHADER)
-#    define GPU_THREAD gl_GlobalInvocationID
-#  else
-#    define GPU_THREAD error_not_in_a_shader_question_mark
+  const T &operator()() const
+  {
+    return *reinterpret_cast<const T *>(this);
+  }
+
+  T &operator()()
+  {
+    return *reinterpret_cast<T *>(this);
+  }
+};
+
+/* Mute the following attributes. Avoid warning about unknown attribute.
+ * These are parsed by our shader translation tool. */
+
+/* To be used on struct. Means the layout is to be used with uniform or storage buffers. */
+#    define host_shared
+
 #  endif
 #endif

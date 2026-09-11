@@ -16,13 +16,13 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -60,7 +60,7 @@ struct SearchItems {
   char **names;
   void **pointers;
   int *icons;
-  int *but_flags;
+  int64_t *but_flags;
   uint8_t *name_prefix_offsets;
 
   /** Is there any item with an icon? */
@@ -105,7 +105,7 @@ bool search_item_add(SearchItems *items,
                      const StringRef name,
                      void *poin,
                      int iconid,
-                     const int but_flag,
+                     const int64_t but_flag,
                      const uint8_t name_prefix_offset)
 {
   /* hijack for autocomplete */
@@ -151,8 +151,7 @@ bool search_item_add(SearchItems *items,
   if (name_prefix_offset != 0) {
     /* Lazy initialize, as this isn't used often. */
     if (items->name_prefix_offsets == nullptr) {
-      items->name_prefix_offsets = (uint8_t *)MEM_callocN(
-          items->maxitem * sizeof(*items->name_prefix_offsets), __func__);
+      items->name_prefix_offsets = MEM_new_array_zeroed<uint8_t>(items->maxitem, __func__);
     }
     items->name_prefix_offsets[items->totitem] = name_prefix_offset;
   }
@@ -225,7 +224,7 @@ int searchbox_size_x_guess(const bContext *C, const ButtonSearchUpdateFn update_
   update_fn(C, arg, "", &items, true);
 
   /* This is lazy-initialized in #search_item_add. */
-  MEM_SAFE_FREE(items.name_prefix_offsets);
+  MEM_SAFE_DELETE(items.name_prefix_offsets);
 
   return searchbox_size_x_from_items(items);
 }
@@ -336,7 +335,7 @@ bool searchbox_inside(ARegion *region, const int xy[2])
 bool searchbox_apply(Button *but, ARegion *region)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
-  ButtonSearch *search_but = (ButtonSearch *)but;
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
 
   BLI_assert(but->type == ButtonType::SearchMenu);
 
@@ -358,7 +357,7 @@ bool searchbox_apply(Button *but, ARegion *region)
     }
 
     search_but->item_active = data->items.pointers[data->active];
-    MEM_SAFE_FREE(search_but->item_active_str);
+    MEM_SAFE_DELETE(search_but->item_active_str);
     search_but->item_active_str = BLI_strdup(data->items.names[data->active]);
 
     return true;
@@ -371,13 +370,13 @@ static ARegion *wm_searchbox_tooltip_init(
 {
   *r_exit_on_event = true;
 
-  LISTBASE_FOREACH (Block *, block, &region->runtime->uiblocks) {
-    for (const std::unique_ptr<Button> &but : block->buttons) {
-      if (but->type != ButtonType::SearchMenu) {
+  for (Block &block : region->runtime->uiblocks) {
+    for (Button &but : block.buttons()) {
+      if (but.type != ButtonType::SearchMenu) {
         continue;
       }
 
-      ButtonSearch *search_but = (ButtonSearch *)but.get();
+      ButtonSearch *search_but = static_cast<ButtonSearch *>(&but);
       if (!search_but->item_tooltip_fn) {
         continue;
       }
@@ -391,7 +390,7 @@ static ARegion *wm_searchbox_tooltip_init(
       searchbox_butrect(&rect, data, data->active);
 
       return search_but->item_tooltip_fn(
-          C, region, &rect, search_but->arg, search_but->item_active);
+          C, region, &rect, search_but->arg.get(), search_but->item_active);
     }
   }
   return nullptr;
@@ -401,7 +400,7 @@ bool searchbox_event(
     bContext *C, ARegion *region, Button *but, ARegion *butregion, const wmEvent *event)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
-  ButtonSearch *search_but = (ButtonSearch *)but;
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
   int type = event->type, val = event->val;
   bool handled = false;
   bool tooltip_timer_started = false;
@@ -436,7 +435,7 @@ bool searchbox_event(
             {
 
               void *active = data->items.pointers[data->active];
-              if (search_but->item_context_menu_fn(C, search_but->arg, active, event)) {
+              if (search_but->item_context_menu_fn(C, search_but->arg.get(), active, event)) {
                 handled = true;
               }
             }
@@ -510,12 +509,12 @@ static void searchbox_update_fn(bContext *C,
     WM_tooltip_clear(C, win);
   }
   const bool is_first_search = !but->changed;
-  but->items_update_fn(C, but->arg, str, items, is_first_search);
+  but->items_update_fn(C, but->arg.get(), str, items, is_first_search);
 }
 
 void searchbox_update(bContext *C, ARegion *region, Button *but, const bool reset)
 {
-  ButtonSearch *search_but = (ButtonSearch *)but;
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
 
   BLI_assert(but->type == ButtonType::SearchMenu);
@@ -585,6 +584,27 @@ void searchbox_update(bContext *C, ARegion *region, Button *but, const bool rese
     }
   }
 
+  /* Nothing active, check at mouse location. */
+  if (data->active == -1) {
+    wmWindow *win = CTX_wm_window(C);
+    if (win && win->runtime && win->runtime->eventstate) {
+      const int cursor_x = win->runtime->eventstate->xy[0];
+      const int cursor_y = win->runtime->eventstate->xy[1];
+      if (BLI_rcti_isect_pt(&region->winrct, cursor_x, cursor_y)) {
+        rcti rect;
+        for (int a = 0; a < data->items.totitem; a++) {
+          searchbox_butrect(&rect, data, a);
+          if (BLI_rcti_isect_pt(
+                  &rect, cursor_x - region->winrct.xmin, cursor_y - region->winrct.ymin))
+          {
+            data->active = a;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   /* validate selected item */
   searchbox_select(C, region, but, 0);
 
@@ -593,7 +613,7 @@ void searchbox_update(bContext *C, ARegion *region, Button *but, const bool rese
 
 int searchbox_autocomplete(bContext *C, ARegion *region, Button *but, char *str)
 {
-  ButtonSearch *search_but = (ButtonSearch *)but;
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
   int match = AUTOCOMPLETE_NO_MATCH;
 
@@ -665,7 +685,7 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
     if (data->preview) {
       /* draw items */
       for (int a = 0; a < data->items.totitem; a++) {
-        const int but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
+        const int64_t but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
 
         /* ensure icon is up-to-date */
         icon_ensure_deferred(C, data->items.icons[a], data->preview);
@@ -706,7 +726,7 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
       const int search_sep_len = data->sep_string ? strlen(data->sep_string) : 0;
       /* draw items */
       for (int a = 0; a < data->items.totitem; a++) {
-        const int but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
+        const int64_t but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
         const char *name = data->items.names[a];
         int icon = data->items.icons[a];
         char *name_sep_test = nullptr;
@@ -822,18 +842,18 @@ static void searchbox_region_free_fn(ARegion *region)
 
   /* free search data */
   for (int a = 0; a < data->items.maxitem; a++) {
-    MEM_freeN(data->items.names[a]);
+    MEM_delete(data->items.names[a]);
   }
-  MEM_freeN(data->items.names);
-  MEM_freeN(data->items.pointers);
-  MEM_freeN(data->items.icons);
-  MEM_freeN(data->items.but_flags);
+  MEM_delete(data->items.names);
+  MEM_delete(data->items.pointers);
+  MEM_delete(data->items.icons);
+  MEM_delete(data->items.but_flags);
 
   if (data->items.name_prefix_offsets != nullptr) {
-    MEM_freeN(data->items.name_prefix_offsets);
+    MEM_delete(data->items.name_prefix_offsets);
   }
 
-  MEM_freeN(data);
+  MEM_delete(data);
   region->regiondata = nullptr;
 }
 
@@ -847,7 +867,7 @@ static void searchbox_region_listen_fn(const wmRegionListenerParams *params)
 
 static void searchbox_region_layout_fn(const bContext *C, ARegion *region)
 {
-  uiSearchboxData *data = (uiSearchboxData *)region->regiondata;
+  uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
 
   if (data->size_set) {
     /* Already set. */
@@ -983,8 +1003,8 @@ static ARegion *searchbox_create_generic_ex(bContext *C,
   region->runtime->type = &type;
 
   /* Create search-box data. */
-  uiSearchboxData *data = MEM_callocN<uiSearchboxData>(__func__);
-  data->search_arg = but->arg;
+  uiSearchboxData *data = MEM_new<uiSearchboxData>(__func__);
+  data->search_arg = but->arg.get();
   data->search_but = but;
   data->butregion = butregion;
   data->size_set = false;
@@ -1031,13 +1051,13 @@ static ARegion *searchbox_create_generic_ex(bContext *C,
   /* In case the button's string is dynamic, make sure there are buffers available. */
   data->items.maxstrlen = but->hardmax == 0 ? UI_MAX_NAME_STR : but->hardmax;
   data->items.totitem = 0;
-  data->items.names = (char **)MEM_callocN(data->items.maxitem * sizeof(void *), __func__);
-  data->items.pointers = (void **)MEM_callocN(data->items.maxitem * sizeof(void *), __func__);
-  data->items.icons = MEM_calloc_arrayN<int>(data->items.maxitem, __func__);
-  data->items.but_flags = MEM_calloc_arrayN<int>(data->items.maxitem, __func__);
+  data->items.names = MEM_new_array_zeroed<char *>(data->items.maxitem, __func__);
+  data->items.pointers = MEM_new_array_zeroed<void *>(data->items.maxitem, __func__);
+  data->items.icons = MEM_new_array_zeroed<int>(data->items.maxitem, __func__);
+  data->items.but_flags = MEM_new_array_zeroed<int64_t>(data->items.maxitem, __func__);
   data->items.name_prefix_offsets = nullptr; /* Lazy initialized as needed. */
   for (int i = 0; i < data->items.maxitem; i++) {
-    data->items.names[i] = (char *)MEM_callocN(data->items.maxstrlen + 1, __func__);
+    data->items.names[i] = MEM_new_array_zeroed<char>(data->items.maxstrlen + 1, __func__);
   }
 
   return region;
@@ -1100,7 +1120,7 @@ static void searchbox_region_draw_cb__operator(const bContext * /*C*/, ARegion *
       /* widget itself */
       /* NOTE: i18n messages extracting tool does the same, please keep it in sync. */
       {
-        const int but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
+        const int64_t but_flag = ((a == data->active) ? UI_HOVER : 0) | data->items.but_flags[a];
 
         wmOperatorType *ot = static_cast<wmOperatorType *>(data->items.pointers[a]);
         char text_pre[128];
@@ -1205,17 +1225,18 @@ void button_search_refresh(ButtonSearch *but)
     return;
   }
 
-  SearchItems *items = MEM_callocN<SearchItems>(__func__);
+  SearchItems *items = MEM_new<SearchItems>(__func__);
 
   /* setup search struct */
   items->maxitem = 10;
   items->maxstrlen = 256;
-  items->names = (char **)MEM_callocN(items->maxitem * sizeof(void *), __func__);
+  items->names = MEM_new_array_zeroed<char *>(items->maxitem, __func__);
   for (int i = 0; i < items->maxitem; i++) {
-    items->names[i] = (char *)MEM_callocN(but->hardmax + 1, __func__);
+    items->names[i] = MEM_new_array_zeroed<char>(but->hardmax + 1, __func__);
   }
 
-  searchbox_update_fn((bContext *)but->block->evil_C, but, but->drawstr.c_str(), items);
+  searchbox_update_fn(
+      static_cast<bContext *>(but->block->evil_C), but, but->drawstr.c_str(), items);
 
   if (!but->results_are_suggestions) {
     /* Only red-alert when we are sure of it, this can miss cases when >10 matches. */
@@ -1230,10 +1251,10 @@ void button_search_refresh(ButtonSearch *but)
   }
 
   for (int i = 0; i < items->maxitem; i++) {
-    MEM_freeN(items->names[i]);
+    MEM_delete(items->names[i]);
   }
-  MEM_freeN(items->names);
-  MEM_freeN(items);
+  MEM_delete(items->names);
+  MEM_delete(items);
 }
 
 /** \} */

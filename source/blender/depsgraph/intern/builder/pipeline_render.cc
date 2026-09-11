@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include "pipeline_render.h"
 
 #include "intern/builder/deg_builder_nodes.h"
@@ -28,7 +32,8 @@ class RenderDepsgraphRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-RenderBuilderPipeline::RenderBuilderPipeline(::Depsgraph *graph) : AbstractBuilderPipeline(graph)
+RenderBuilderPipeline::RenderBuilderPipeline(blender::Depsgraph *graph)
+    : AbstractBuilderPipeline(graph)
 {
   deg_graph_->is_render_pipeline_depsgraph = true;
 }

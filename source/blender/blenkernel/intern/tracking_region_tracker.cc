@@ -11,7 +11,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_defaults.h"
 #include "DNA_movieclip_types.h"
 
 #include "BKE_movieclip.hh"
@@ -22,6 +21,8 @@
 
 #include "libmv-capi.h"
 #include "tracking_private.hh"
+
+namespace blender {
 
 /* **** utility functions for tracking **** */
 
@@ -76,15 +77,15 @@ static float *track_get_search_floatbuf(ImBuf *ibuf,
   width = searchibuf->x;
   height = searchibuf->y;
 
-  gray_pixels = MEM_calloc_arrayN<float>(width * height, "tracking floatBuf");
+  gray_pixels = MEM_new_array_zeroed<float>(width * height, "tracking floatBuf");
 
-  if (searchibuf->float_buffer.data) {
+  if (searchibuf->float_data()) {
     float_rgba_to_gray(
-        searchibuf->float_buffer.data, gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
+        searchibuf->float_data(), gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
   }
   else {
     uint8_rgba_to_float_gray(
-        searchibuf->byte_buffer.data, gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
+        searchibuf->byte_data(), gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
   }
 
   IMB_freeImBuf(searchibuf);
@@ -261,7 +262,7 @@ static bool configure_and_run_tracker(ImBuf *destination_ibuf,
                               dst_pixel_x,
                               dst_pixel_y);
 
-  MEM_freeN(patch_new);
+  MEM_delete(patch_new);
 
   return tracked;
 }
@@ -304,9 +305,9 @@ void BKE_tracking_refine_marker(MovieClip *clip,
   float *search_area, *mask = nullptr;
   int frame_width, frame_height;
   int search_area_height, search_area_width;
-  MovieClipFlag clip_flag = MovieClipFlag(clip->flag & MCLIP_TIMECODE_FLAGS);
+  MovieClipFlag clip_flag = MovieClipFlag(clip->flag & MCLIP_PROXY_FLAGS);
   int reference_framenr;
-  MovieClipUser user = *DNA_struct_default_get(MovieClipUser);
+  MovieClipUser user = {};
   double dst_pixel_x[5], dst_pixel_y[5];
   bool tracked;
 
@@ -369,10 +370,12 @@ void BKE_tracking_refine_marker(MovieClip *clip,
   }
 
   /* Free memory used for refining */
-  MEM_freeN(search_area);
+  MEM_delete(search_area);
   if (mask) {
-    MEM_freeN(mask);
+    MEM_delete(mask);
   }
   IMB_freeImBuf(reference_ibuf);
   IMB_freeImBuf(destination_ibuf);
 }
+
+}  // namespace blender

@@ -11,9 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "AS_asset_library.hh"
+#include "AS_asset_representation.hh"
 
 #include "BLT_translation.hh"
 
@@ -22,9 +21,14 @@
 #include "BKE_idprop.hh"
 #include "BKE_screen.hh"
 
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_asset_list.hh"
+#include "ED_asset_menu_utils.hh"
 #include "ED_screen.hh"
 
 #include "UI_interface_layout.hh"
@@ -34,6 +38,8 @@
 #include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
  * \{ */
@@ -41,7 +47,7 @@
 static const char *screen_menu_context_string(const bContext *C, const SpaceLink *sl)
 {
   if (sl->spacetype == SPACE_NODE) {
-    const SpaceNode *snode = (const SpaceNode *)sl;
+    const SpaceNode *snode = reinterpret_cast<const SpaceNode *>(sl);
     return snode->tree_idname;
   }
   return CTX_data_mode_string(C);
@@ -65,8 +71,7 @@ bUserMenu **ED_screen_user_menus_find(const bContext *C, uint *r_len)
   const char *context_mode = CTX_data_mode_string(C);
   const char *context = screen_menu_context_string(C, sl);
   uint array_len = 3;
-  bUserMenu **um_array = static_cast<bUserMenu **>(
-      MEM_calloc_arrayN(array_len, sizeof(*um_array), __func__));
+  bUserMenu **um_array = MEM_new_array_zeroed<bUserMenu *>(array_len, __func__);
   um_array[0] = BKE_blender_user_menu_find(&U.user_menus, sl->spacetype, context);
   um_array[1] = (sl->spacetype != SPACE_TOPBAR) ?
                     BKE_blender_user_menu_find(&U.user_menus, SPACE_TOPBAR, context_mode) :
@@ -92,22 +97,22 @@ bUserMenu *ED_screen_user_menu_ensure(bContext *C)
 /** \name Menu Item
  * \{ */
 
-bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(ListBase *lb,
+bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(ListBaseT<bUserMenuItem> *lb,
                                                          const wmOperatorType *ot,
                                                          IDProperty *prop,
                                                          const char *op_prop_enum,
-                                                         blender::wm::OpCallContext opcontext)
+                                                         wm::OpCallContext opcontext)
 {
-  LISTBASE_FOREACH (bUserMenuItem *, umi, lb) {
-    if (umi->type == USER_MENU_TYPE_OPERATOR) {
-      bUserMenuItem_Op *umi_op = (bUserMenuItem_Op *)umi;
-      const bool ok_idprop = prop ? IDP_EqualsProperties(prop, umi_op->prop) : true;
+  for (bUserMenuItem &umi : *lb) {
+    if (umi.type == USER_MENU_TYPE_OPERATOR) {
+      bUserMenuItem_Op *umi_op = reinterpret_cast<bUserMenuItem_Op *>(&umi);
+      const bool is_strict = prop && umi_op->prop;
+      const bool ok_idprop = IDP_EqualsProperties_ex(prop, umi_op->prop, is_strict);
       const bool ok_prop_enum = (umi_op->op_prop_enum[0] != '\0') ?
                                     STREQ(umi_op->op_prop_enum, op_prop_enum) :
                                     true;
       if (STREQ(ot->idname, umi_op->op_idname) &&
-          (opcontext == blender::wm::OpCallContext(umi_op->opcontext)) && ok_idprop &&
-          ok_prop_enum)
+          (opcontext == wm::OpCallContext(umi_op->opcontext)) && ok_idprop && ok_prop_enum)
       {
         return umi_op;
       }
@@ -116,11 +121,12 @@ bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(ListBase *lb,
   return nullptr;
 }
 
-bUserMenuItem_Menu *ED_screen_user_menu_item_find_menu(ListBase *lb, const MenuType *mt)
+bUserMenuItem_Menu *ED_screen_user_menu_item_find_menu(ListBaseT<bUserMenuItem> *lb,
+                                                       const MenuType *mt)
 {
-  LISTBASE_FOREACH (bUserMenuItem *, umi, lb) {
-    if (umi->type == USER_MENU_TYPE_MENU) {
-      bUserMenuItem_Menu *umi_mt = (bUserMenuItem_Menu *)umi;
+  for (bUserMenuItem &umi : *lb) {
+    if (umi.type == USER_MENU_TYPE_MENU) {
+      bUserMenuItem_Menu *umi_mt = reinterpret_cast<bUserMenuItem_Menu *>(&umi);
       if (STREQ(mt->idname, umi_mt->mt_idname)) {
         return umi_mt;
       }
@@ -129,14 +135,14 @@ bUserMenuItem_Menu *ED_screen_user_menu_item_find_menu(ListBase *lb, const MenuT
   return nullptr;
 }
 
-bUserMenuItem_Prop *ED_screen_user_menu_item_find_prop(ListBase *lb,
+bUserMenuItem_Prop *ED_screen_user_menu_item_find_prop(ListBaseT<bUserMenuItem> *lb,
                                                        const char *context_data_path,
                                                        const char *prop_id,
                                                        int prop_index)
 {
-  LISTBASE_FOREACH (bUserMenuItem *, umi, lb) {
-    if (umi->type == USER_MENU_TYPE_PROP) {
-      bUserMenuItem_Prop *umi_pr = (bUserMenuItem_Prop *)umi;
+  for (bUserMenuItem &umi : *lb) {
+    if (umi.type == USER_MENU_TYPE_PROP) {
+      bUserMenuItem_Prop *umi_pr = reinterpret_cast<bUserMenuItem_Prop *>(&umi);
       if (STREQ(context_data_path, umi_pr->context_data_path) && STREQ(prop_id, umi_pr->prop_id) &&
           (prop_index == umi_pr->prop_index))
       {
@@ -147,15 +153,15 @@ bUserMenuItem_Prop *ED_screen_user_menu_item_find_prop(ListBase *lb,
   return nullptr;
 }
 
-void ED_screen_user_menu_item_add_operator(ListBase *lb,
+void ED_screen_user_menu_item_add_operator(ListBaseT<bUserMenuItem> *lb,
                                            const char *ui_name,
                                            const wmOperatorType *ot,
                                            const IDProperty *prop,
                                            const char *op_prop_enum,
-                                           blender::wm::OpCallContext opcontext)
+                                           wm::OpCallContext opcontext)
 {
-  bUserMenuItem_Op *umi_op = (bUserMenuItem_Op *)BKE_blender_user_menu_item_add(
-      lb, USER_MENU_TYPE_OPERATOR);
+  bUserMenuItem_Op *umi_op = reinterpret_cast<bUserMenuItem_Op *>(
+      BKE_blender_user_menu_item_add(lb, USER_MENU_TYPE_OPERATOR));
   umi_op->opcontext = int8_t(opcontext);
   if (!STREQ(ui_name, ot->name)) {
     STRNCPY_UTF8(umi_op->item.ui_name, ui_name);
@@ -165,31 +171,33 @@ void ED_screen_user_menu_item_add_operator(ListBase *lb,
   umi_op->prop = prop ? IDP_CopyProperty(prop) : nullptr;
 }
 
-void ED_screen_user_menu_item_add_menu(ListBase *lb, const char *ui_name, const MenuType *mt)
+void ED_screen_user_menu_item_add_menu(ListBaseT<bUserMenuItem> *lb,
+                                       const char *ui_name,
+                                       const MenuType *mt)
 {
-  bUserMenuItem_Menu *umi_mt = (bUserMenuItem_Menu *)BKE_blender_user_menu_item_add(
-      lb, USER_MENU_TYPE_MENU);
+  bUserMenuItem_Menu *umi_mt = reinterpret_cast<bUserMenuItem_Menu *>(
+      BKE_blender_user_menu_item_add(lb, USER_MENU_TYPE_MENU));
   if (!STREQ(ui_name, mt->label)) {
     STRNCPY_UTF8(umi_mt->item.ui_name, ui_name);
   }
   STRNCPY_UTF8(umi_mt->mt_idname, mt->idname);
 }
 
-void ED_screen_user_menu_item_add_prop(ListBase *lb,
+void ED_screen_user_menu_item_add_prop(ListBaseT<bUserMenuItem> *lb,
                                        const char *ui_name,
                                        const char *context_data_path,
                                        const char *prop_id,
                                        int prop_index)
 {
-  bUserMenuItem_Prop *umi_pr = (bUserMenuItem_Prop *)BKE_blender_user_menu_item_add(
-      lb, USER_MENU_TYPE_PROP);
+  bUserMenuItem_Prop *umi_pr = reinterpret_cast<bUserMenuItem_Prop *>(
+      BKE_blender_user_menu_item_add(lb, USER_MENU_TYPE_PROP));
   STRNCPY_UTF8(umi_pr->item.ui_name, ui_name);
   STRNCPY_UTF8(umi_pr->context_data_path, context_data_path);
   STRNCPY_UTF8(umi_pr->prop_id, prop_id);
   umi_pr->prop_index = prop_index;
 }
 
-void ED_screen_user_menu_item_remove(ListBase *lb, bUserMenuItem *umi)
+void ED_screen_user_menu_item_remove(ListBaseT<bUserMenuItem> *lb, bUserMenuItem *umi)
 {
   BLI_remlink(lb, umi);
   BKE_blender_user_menu_item_free(umi);
@@ -201,9 +209,61 @@ void ED_screen_user_menu_item_remove(ListBase *lb, bUserMenuItem *umi)
 /** \name Menu Definition
  * \{ */
 
+static bool all_loading_finished()
+{
+  AssetLibraryReference all_library_ref = asset_system::all_library_reference();
+  return ed::asset::list::is_loaded(&all_library_ref);
+}
+
+/**
+ * When adding operators that reference an asset (see
+ * `ed::asset::operator_asset_reference_props_is_set`) make sure the asset libraries are loaded.
+ */
+static void handle_operator_asset_reference_props(const bContext &C,
+                                                  bUserMenuItem_Op &umi_op,
+                                                  ui::Layout &row,
+                                                  wmOperatorType *ot,
+                                                  int &r_icon,
+                                                  bool &r_add_operator)
+{
+  if (!umi_op.prop) {
+    return;
+  }
+  PointerRNA opptr = WM_operator_properties_create_ptr(ot);
+  opptr.data = bke::idprop::create_group("wmOperatorProperties").release();
+  IDP_CopyPropertyContent(opptr.data_as<IDProperty>(), umi_op.prop);
+  if (ed::asset::operator_asset_reference_props_is_set(opptr)) {
+    const bool loading_finished = all_loading_finished();
+    if (!loading_finished) {
+      row.label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
+      r_add_operator = false;
+    }
+    else {
+      /* Set `check_context_asset` to false because we're setting the context pointer after getting
+       * the asset from the operator properties. */
+      const asset_system::AssetRepresentation *asset =
+          ed::asset::operator_asset_reference_props_get_asset_from_all_library(
+              C, opptr, CTX_wm_reports(&C));
+      if (asset) {
+        if (asset->is_online_only()) {
+          r_icon = ICON_INTERNET;
+        }
+        PointerRNA asset_ptr = RNA_pointer_create_discrete(
+            nullptr,
+            RNA_AssetRepresentation,
+            const_cast<asset_system::AssetRepresentation *>(asset));
+        row.context_ptr_set("asset", &asset_ptr);
+      }
+      else {
+        r_add_operator = false;
+      }
+    }
+  }
+  WM_operator_properties_free(&opptr);
+}
+
 static void screen_user_menu_draw(const bContext *C, Menu *menu)
 {
-  using namespace blender;
   /* Enable when we have the ability to edit menus. */
   const bool show_missing = false;
   char label[512];
@@ -216,21 +276,27 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
     if (um == nullptr) {
       continue;
     }
-    LISTBASE_FOREACH (bUserMenuItem *, umi, &um->items) {
-      std::optional<StringRefNull> ui_name = umi->ui_name[0] ?
-                                                 std::make_optional<StringRefNull>(umi->ui_name) :
+    for (bUserMenuItem &umi : um->items) {
+      std::optional<StringRefNull> ui_name = umi.ui_name[0] ?
+                                                 std::make_optional<StringRefNull>(umi.ui_name) :
                                                  std::nullopt;
-      if (umi->type == USER_MENU_TYPE_OPERATOR) {
-        bUserMenuItem_Op *umi_op = (bUserMenuItem_Op *)umi;
+      if (umi.type == USER_MENU_TYPE_OPERATOR) {
+        bUserMenuItem_Op *umi_op = reinterpret_cast<bUserMenuItem_Op *>(&umi);
         if (wmOperatorType *ot = WM_operatortype_find(umi_op->op_idname, false)) {
           if (ui_name) {
             ui_name = CTX_IFACE_(ot->translation_context, ui_name->c_str());
           }
           if (umi_op->op_prop_enum[0] == '\0') {
-            PointerRNA ptr = menu->layout->op(
-                ot, ui_name, ICON_NONE, wm::OpCallContext(umi_op->opcontext), UI_ITEM_NONE);
-            if (umi_op->prop) {
-              IDP_CopyPropertyContent(ptr.data_as<IDProperty>(), umi_op->prop);
+            ui::Layout &row = menu->layout->row(true);
+            int icon = ICON_NONE;
+            bool add_operator = true;
+            handle_operator_asset_reference_props(*C, *umi_op, row, ot, icon, add_operator);
+            if (add_operator) {
+              PointerRNA ptr = row.op(
+                  ot, ui_name, icon, wm::OpCallContext(umi_op->opcontext), UI_ITEM_NONE);
+              if (umi_op->prop) {
+                IDP_CopyPropertyContent(ptr.data_as<IDProperty>(), umi_op->prop);
+              }
             }
           }
           else {
@@ -247,8 +313,8 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
           }
         }
       }
-      else if (umi->type == USER_MENU_TYPE_MENU) {
-        bUserMenuItem_Menu *umi_mt = (bUserMenuItem_Menu *)umi;
+      else if (umi.type == USER_MENU_TYPE_MENU) {
+        bUserMenuItem_Menu *umi_mt = reinterpret_cast<bUserMenuItem_Menu *>(&umi);
         MenuType *mt = WM_menutype_find(umi_mt->mt_idname, false);
         if (mt != nullptr) {
           menu->layout->menu(mt, ui_name, ICON_NONE);
@@ -261,16 +327,16 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
           }
         }
       }
-      else if (umi->type == USER_MENU_TYPE_PROP) {
-        bUserMenuItem_Prop *umi_pr = (bUserMenuItem_Prop *)umi;
+      else if (umi.type == USER_MENU_TYPE_PROP) {
+        bUserMenuItem_Prop *umi_pr = reinterpret_cast<bUserMenuItem_Prop *>(&umi);
 
         char *data_path = strchr(umi_pr->context_data_path, '.');
         if (data_path) {
           *data_path = '\0';
         }
         PointerRNA ptr = CTX_data_pointer_get(C, umi_pr->context_data_path);
-        if (ptr.type == nullptr) {
-          PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, (void *)C);
+        if (!ptr.has_type()) {
+          PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_Context, (void *)C);
           if (!RNA_path_resolve_full(&ctx_ptr, umi_pr->context_data_path, &ptr, nullptr, nullptr))
           {
             ptr.type = nullptr;
@@ -282,7 +348,7 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
         }
 
         bool ok = false;
-        if (ptr.type != nullptr) {
+        if (ptr.has_type()) {
           PropertyRNA *prop = nullptr;
           PointerRNA prop_ptr = ptr;
           if ((data_path == nullptr) ||
@@ -305,13 +371,13 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
           }
         }
       }
-      else if (umi->type == USER_MENU_TYPE_SEP) {
+      else if (umi.type == USER_MENU_TYPE_SEP) {
         menu->layout->separator();
       }
     }
   }
   if (um_array) {
-    MEM_freeN(um_array);
+    MEM_delete(um_array);
   }
 
   if (is_empty) {
@@ -322,12 +388,15 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
 
 void ED_screen_user_menu_register()
 {
-  MenuType *mt = MEM_callocN<MenuType>(__func__);
+  MenuType *mt = MEM_new_zeroed<MenuType>(__func__);
   STRNCPY_UTF8(mt->idname, "SCREEN_MT_user_menu");
   STRNCPY_UTF8(mt->label, N_("Quick Favorites"));
   STRNCPY_UTF8(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
   mt->draw = screen_user_menu_draw;
+  mt->listener = ed::asset::list::asset_reading_region_listen_fn;
   WM_menutype_add(mt);
 }
 
 /** \} */
+
+}  // namespace blender

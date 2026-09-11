@@ -2,31 +2,37 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "BLI_array.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "mesh_extractors/extract_mesh.hh"
 
+namespace blender {
+
 struct BMesh;
-namespace blender::gpu {
+namespace gpu {
 class IndexBuf;
 class UniformBuf;
 class VertBuf;
-}  // namespace blender::gpu
+}  // namespace gpu
 struct GPUVertFormat;
 struct Mesh;
 struct Object;
-namespace blender::bke::subdiv {
+namespace bke::subdiv {
 struct Subdiv;
 }
 struct ToolSettings;
 
-namespace blender::draw {
+namespace draw {
 
 struct MeshBatchCache;
 struct MeshBufferCache;
@@ -274,4 +280,5 @@ inline int subdiv_full_vbo_size(const MeshRenderData &mr, const DRWSubdivCache &
   return cache.num_subdiv_loops + subdiv_loose_edges_num(mr, cache) * 2 + mr.loose_verts.size();
 }
 
-}  // namespace blender::draw
+}  // namespace draw
+}  // namespace blender

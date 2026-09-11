@@ -10,14 +10,15 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_layer_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.hh"
@@ -29,7 +30,6 @@
 #include "BKE_multires.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include "BKE_subdiv.hh"
 
 #include "RE_multires_bake.h"
 #include "RE_pipeline.h"
@@ -86,7 +86,7 @@ struct MultiresBakerJobData {
 /* data passing to multires-baker job */
 struct MultiresBakeJob {
   Scene *scene;
-  ListBase data;
+  ListBaseT<MultiresBakerJobData> data;
   /** Clear the images before baking */
   bool bake_clear;
   /** Margin size in pixels. */
@@ -120,7 +120,7 @@ static bool multiresbake_check(bContext *C, wmOperator *op)
       break;
     }
 
-    mesh = (Mesh *)ob->data;
+    mesh = id_cast<Mesh *>(ob->data);
     mmd = get_multires_modifier(scene, ob, false);
 
     /* Multi-resolution should be and be last in the stack */
@@ -129,7 +129,7 @@ static bool multiresbake_check(bContext *C, wmOperator *op)
 
       ok = mmd->totlvl > 0;
 
-      for (md = (ModifierData *)mmd->modifier.next; md && ok; md = md->next) {
+      for (md = static_cast<ModifierData *>(mmd->modifier.next); md && ok; md = md->next) {
         if (BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) {
           ok = false;
         }
@@ -166,10 +166,10 @@ static bool multiresbake_check(bContext *C, wmOperator *op)
           ok = false;
         }
         else {
-          LISTBASE_FOREACH (ImageTile *, tile, &ima->tiles) {
+          for (ImageTile &tile : ima->tiles) {
             ImageUser iuser;
             BKE_imageuser_default(&iuser);
-            iuser.tile = tile->tile_number;
+            iuser.tile = tile.tile_number;
 
             ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
 
@@ -180,11 +180,11 @@ static bool multiresbake_check(bContext *C, wmOperator *op)
               ok = false;
             }
             else {
-              if (ibuf->byte_buffer.data == nullptr && ibuf->float_buffer.data == nullptr) {
+              if (ibuf->byte_data() == nullptr && ibuf->float_data() == nullptr) {
                 ok = false;
               }
 
-              if (ibuf->float_buffer.data && !ELEM(ibuf->channels, 0, 4)) {
+              if (ibuf->float_data() && !ELEM(ibuf->channels, 0, 4)) {
                 ok = false;
               }
 
@@ -223,21 +223,21 @@ static void clear_single_image(Image *image, ClearFlag flag)
   const float disp_solid[4] = {0.5f, 0.5f, 0.5f, 1.0f};
 
   if ((image->id.tag & ID_TAG_DOIT) == 0) {
-    LISTBASE_FOREACH (ImageTile *, tile, &image->tiles) {
+    for (ImageTile &tile : image->tiles) {
       ImageUser iuser;
       BKE_imageuser_default(&iuser);
-      iuser.tile = tile->tile_number;
+      iuser.tile = tile.tile_number;
 
       ImBuf *ibuf = BKE_image_acquire_ibuf(image, &iuser, nullptr);
 
       if (flag == CLEAR_TANGENT_NORMAL) {
-        IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? nor_alpha : nor_solid);
+        IMB_rectfill(ibuf, ibuf->can_contain_alpha() ? nor_alpha : nor_solid);
       }
       else if (flag == CLEAR_DISPLACEMENT) {
-        IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? disp_alpha : disp_solid);
+        IMB_rectfill(ibuf, ibuf->can_contain_alpha() ? disp_alpha : disp_solid);
       }
       else {
-        IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? vec_alpha : vec_solid);
+        IMB_rectfill(ibuf, ibuf->can_contain_alpha() ? vec_alpha : vec_solid);
       }
 
       image->id.tag |= ID_TAG_DOIT;
@@ -321,7 +321,7 @@ static wmOperatorStatus multiresbake_image_exec_locked(bContext *C, wmOperator *
 
     bake.ob_image = bake_object_image_get_array(object);
 
-    bake.base_mesh = static_cast<Mesh *>(object.data);
+    bake.base_mesh = id_cast<Mesh *>(object.data);
     bake.multires_modifier = get_multires_modifier(scene, &object, false);
 
     RE_multires_bake_images(bake);
@@ -368,7 +368,7 @@ static void init_multiresbake_job(bContext *C, MultiresBakeJob *bkj)
 
     data->ob_image = bake_object_image_get_array(object);
 
-    data->base_mesh = static_cast<Mesh *>(object.data);
+    data->base_mesh = id_cast<Mesh *>(object.data);
     data->multires_modifier = get_multires_modifier(scene, &object, false);
 
     BLI_addtail(&bkj->data, data);
@@ -381,10 +381,10 @@ static void multiresbake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
   MultiresBakeJob *bkj = static_cast<MultiresBakeJob *>(bkv);
   int baked_objects = 0, tot_obj;
 
-  tot_obj = BLI_listbase_count(&bkj->data);
+  tot_obj = bkj->data.count();
 
   if (bkj->bake_clear) { /* clear images */
-    LISTBASE_FOREACH (MultiresBakerJobData *, data, &bkj->data) {
+    for (MultiresBakerJobData &data : bkj->data) {
       ClearFlag clear_flag = ClearFlag(0);
 
       if (bkj->type == R_BAKE_NORMALS) {
@@ -394,11 +394,11 @@ static void multiresbake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
         clear_flag = CLEAR_DISPLACEMENT;
       }
 
-      clear_images_poly(data->ob_image, clear_flag);
+      clear_images_poly(data.ob_image, clear_flag);
     }
   }
 
-  LISTBASE_FOREACH (MultiresBakerJobData *, data, &bkj->data) {
+  for (MultiresBakerJobData &data : bkj->data) {
     MultiresBakeRender bake;
 
     /* copy data stored in job descriptor */
@@ -407,10 +407,10 @@ static void multiresbake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
     bake.type = bkj->type;
     bake.displacement_space = bkj->displacement_space;
     bake.use_low_resolution_mesh = bkj->use_low_resolution_mesh;
-    bake.ob_image = data->ob_image;
+    bake.ob_image = data.ob_image;
 
-    bake.base_mesh = data->base_mesh;
-    bake.multires_modifier = data->multires_modifier;
+    bake.base_mesh = data.base_mesh;
+    bake.multires_modifier = data.multires_modifier;
 
     /* needed for proper progress bar */
     bake.num_total_objects = tot_obj;
@@ -422,7 +422,7 @@ static void multiresbake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
 
     RE_multires_bake_images(bake);
 
-    data->images = bake.images;
+    data.images = bake.images;
 
     baked_objects++;
   }
@@ -433,20 +433,15 @@ static void multiresbake_freejob(void *bkv)
   MultiresBakeJob *bkj = static_cast<MultiresBakeJob *>(bkv);
   MultiresBakerJobData *data, *next;
 
-  data = static_cast<MultiresBakerJobData *>(bkj->data.first);
+  data = bkj->data.first();
   while (data) {
     next = data->next;
-
     /* delete here, since this delete will be called from main thread */
-    for (Image *image : data->images) {
-      BKE_image_partial_update_mark_full_update(image);
-    }
-
     MEM_delete(data);
     data = next;
   }
 
-  MEM_freeN(bkj);
+  MEM_delete(bkj);
 }
 
 static wmOperatorStatus multiresbake_image_exec(bContext *C, wmOperator *op)
@@ -457,12 +452,12 @@ static wmOperatorStatus multiresbake_image_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  MultiresBakeJob *bkr = MEM_callocN<MultiresBakeJob>(__func__);
+  MultiresBakeJob *bkr = MEM_new_zeroed<MultiresBakeJob>(__func__);
   init_multiresbake_job(C, bkr);
 
-  if (!bkr->data.first) {
+  if (!bkr->data.first_) {
     BKE_report(op->reports, RPT_ERROR, "No objects found to bake from");
-    MEM_freeN(bkr);
+    MEM_delete(bkr);
     return OPERATOR_CANCELLED;
   }
 
@@ -496,7 +491,8 @@ static wmOperatorStatus objects_bake_render_modal(bContext *C,
                                                   const wmEvent *event)
 {
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_BAKE_TEXTURE)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_BAKE_TEXTURE))
+  {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 

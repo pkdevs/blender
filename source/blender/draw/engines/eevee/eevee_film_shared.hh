@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -16,36 +18,39 @@ namespace blender::eevee {
 
 #define FILM_PRECOMP_SAMPLE_MAX 16
 
-enum eFilmWeightLayerIndex : uint32_t {
-  FILM_WEIGHT_LAYER_ACCUMULATION = 0u,
-  FILM_WEIGHT_LAYER_DISTANCE = 1u,
+enum [[host_shared]] eFilmWeightLayerIndex : uint32_t {
+  FILM_WEIGHT_LAYER_ACCUMULATION,
+  FILM_WEIGHT_LAYER_DISTANCE,
 };
 
-enum ePassStorageType : uint32_t {
-  PASS_STORAGE_COLOR = 0u,
-  PASS_STORAGE_VALUE = 1u,
-  PASS_STORAGE_CRYPTOMATTE = 2u,
+enum [[host_shared]] ePassStorageType : uint32_t {
+  PASS_STORAGE_COLOR,
+  PASS_STORAGE_VALUE,
+  PASS_STORAGE_CRYPTOMATTE,
+  PASS_STORAGE_DENOISING_DEPTH
 };
 
-enum PassCategory : uint32_t {
+enum [[host_shared]] PassCategory : uint32_t {
   PASS_CATEGORY_DATA = 1u << 0,
   PASS_CATEGORY_COLOR_1 = 1u << 1,
   PASS_CATEGORY_COLOR_2 = 1u << 2,
   PASS_CATEGORY_COLOR_3 = 1u << 3,
   PASS_CATEGORY_AOV = 1u << 4,
   PASS_CATEGORY_CRYPTOMATTE = 1u << 5,
+  PASS_CATEGORY_DENOISE = 1u << 6,
 };
+#ifndef GPU_SHADER
 ENUM_OPERATORS(PassCategory)
+#endif
 
-struct FilmSample {
+struct [[host_shared]] FilmSample {
   int2 texel;
   float weight;
   /** Used for accumulation. */
   float weight_sum_inv;
 };
-BLI_STATIC_ASSERT_ALIGN(FilmSample, 16)
 
-struct FilmData {
+struct [[host_shared]] FilmData {
   /** Size of the film in pixels. */
   int2 extent;
   /** Offset to convert from Display space to Film space, in pixels. */
@@ -72,7 +77,8 @@ struct FilmData {
   /** Controlled by user in lookdev mode or by render settings. */
   float background_opacity;
   /** Output counts per type. */
-  int color_len, value_len;
+  int color_len;
+  int value_len;
   /** Index in color_accum_img or value_accum_img of each pass. -1 if pass is not enabled. */
   int mist_id;
   int normal_id;
@@ -88,18 +94,23 @@ struct FilmData {
   int shadow_id;
   int ambient_occlusion_id;
   int transparent_id;
+  int denoising_depth_id;
+  int denoising_normal_id;
+  int denoising_roughness_id;
+  int denoising_diffuse_albedo_id;
+  int denoising_specular_albedo_id;
   /** Not indexed but still not -1 if enabled. */
   int depth_id;
   int combined_id;
   /** Id of the render-pass to be displayed. -1 for combined. */
   int display_id;
   /** Storage type of the render-pass to be displayed. */
-  ePassStorageType display_storage_type;
-  /** True if we bypass the accumulation and directly output the accumulation buffer. */
-  bool32_t display_only;
+  enum ePassStorageType display_storage_type;
   /** Start of AOVs and number of aov. */
-  int aov_color_id, aov_color_len;
-  int aov_value_id, aov_value_len;
+  int aov_color_id;
+  int aov_color_len;
+  int aov_value_id;
+  int aov_value_len;
   /** Start of cryptomatte per layer (-1 if pass is not enabled). */
   int cryptomatte_object_id;
   int cryptomatte_asset_id;
@@ -107,7 +118,9 @@ struct FilmData {
   /** Max number of samples stored per layer (is even number). */
   int cryptomatte_samples_len;
   /** Settings to render mist pass */
-  float mist_scale, mist_bias, mist_exponent;
+  float mist_scale;
+  float mist_bias;
+  float mist_exponent;
   /** Scene exposure used for better noise reduction. */
   float exposure_scale;
   /** Scaling factor for scaled resolution rendering. */
@@ -120,10 +133,9 @@ struct FilmData {
   int samples_len;
   /** Sum of the weights of all samples in the sample table. */
   float samples_weight_total;
-  int _pad2;
-  FilmSample samples[FILM_PRECOMP_SAMPLE_MAX];
+  int _pad0;
+  struct FilmSample samples[FILM_PRECOMP_SAMPLE_MAX];
 };
-BLI_STATIC_ASSERT_ALIGN(FilmData, 16)
 
 static inline float film_filter_weight(float filter_radius, float sample_distance_sqr)
 {

@@ -10,9 +10,9 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_image.hh"
@@ -23,10 +23,11 @@
 
 #include "BLF_api.hh"
 
+namespace blender {
+
 void BKE_image_buf_fill_color(
     uchar *rect_byte, float *rect_float, int width, int height, const float color[4])
 {
-  using namespace blender;
   threading::parallel_for(
       IndexRange(int64_t(width) * height), 64 * 1024, [&](const IndexRange i_range) {
         if (rect_float != nullptr) {
@@ -150,7 +151,6 @@ static void image_buf_fill_checker_slice(
 
 void BKE_image_buf_fill_checker(uchar *rect, float *rect_float, int width, int height)
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
     int64_t offset = y_range.first() * width * 4;
     uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
@@ -303,7 +303,7 @@ static void checker_board_text(
 
   /* Using nullptr will assume the byte buffer has sRGB color-space, which currently
    * matches the default color-space of new images. */
-  BLF_buffer(mono, rect_float, rect, width, height, nullptr);
+  BLF_buffer(mono, rect_float, rect, width, height, 4, nullptr);
 
   const float text_color[4] = {0.0, 0.0, 0.0, 1.0};
   const float text_outline[4] = {1.0, 1.0, 1.0, 1.0};
@@ -355,7 +355,7 @@ static void checker_board_text(
   }
 
   /* cleanup the buffer. */
-  BLF_buffer(mono, nullptr, nullptr, 0, 0, nullptr);
+  BLF_buffer(mono, nullptr, nullptr, 0, 0, 4, nullptr);
 }
 
 static void checker_board_color_prepare_slice(
@@ -371,7 +371,6 @@ static void checker_board_color_prepare_slice(
 
 void BKE_image_buf_fill_checker_color(uchar *rect, float *rect_float, int width, int height)
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
     int64_t offset = y_range.first() * width * 4;
     uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
@@ -383,19 +382,10 @@ void BKE_image_buf_fill_checker_color(uchar *rect, float *rect_float, int width,
   checker_board_text(rect, rect_float, width, height, 128, 2);
 
   if (rect_float != nullptr) {
-    /* TODO(sergey): Currently it's easier to fill in form buffer and
-     * linearize it afterwards. This could be optimized with some smart
-     * trickery around blending factors and such.
-     */
-    IMB_buffer_float_from_float_threaded(rect_float,
-                                         rect_float,
-                                         4,
-                                         IB_PROFILE_LINEAR_RGB,
-                                         IB_PROFILE_SRGB,
-                                         true,
-                                         width,
-                                         height,
-                                         width,
-                                         width);
+    /* It is easier to fill the buffer in sRGB and linearize it afterwards.
+     * Maybe this could be optimized with some smart trickery around blending factors. */
+    IMB_buffer_float_rgba_srgb_to_linear(rect_float, width, height);
   }
 }
+
+}  // namespace blender

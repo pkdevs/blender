@@ -11,11 +11,11 @@
 #include "AS_asset_catalog.hh"
 #include "AS_asset_catalog_tree.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_screen_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -61,7 +61,8 @@ class AssetCatalogSelectorTree : public ui::AbstractTreeView {
   void build_tree() override
   {
     if (catalog_tree_.is_empty()) {
-      auto &item = add_tree_item<ui::BasicTreeViewItem>(RPT_("No asset catalogs"), ICON_INFO);
+      auto &item = add_tree_item<ui::BasicTreeViewItem>(RPT_("No asset catalogs"),
+                                                        ICON_STATUS_INFO);
       item.disable_interaction();
       this->is_flat_ = true;
       return;
@@ -148,8 +149,8 @@ class AssetCatalogSelectorTree : public ui::AbstractTreeView {
       subrow.label(catalog_item_.get_name(), ICON_NONE);
       ui::block_layout_set_current(block, &row);
 
-      ui::Button *toggle_but = uiDefButC(block,
-                                         blender::ui::ButtonType::Checkbox,
+      ui::Button *toggle_but = uiDefButV(block,
+                                         ui::ButtonType::Checkbox,
                                          "",
                                          0,
                                          0,
@@ -164,9 +165,9 @@ class AssetCatalogSelectorTree : public ui::AbstractTreeView {
         send_redraw_notifier(C);
       });
       if (!is_catalog_path_enabled() && has_enabled_in_subtree()) {
-        button_drawflag_enable(toggle_but, blender::ui::BUT_INDETERMINATE);
+        button_drawflag_enable(toggle_but, ui::BUT_INDETERMINATE);
       }
-      button_flag_disable(toggle_but, blender::ui::BUT_UNDO);
+      button_flag_disable(toggle_but, ui::BUT_UNDO);
     }
   };
 };
@@ -187,12 +188,13 @@ void library_selector_draw(const bContext *C, ui::Layout &layout, AssetShelf &sh
   layout.operator_context_set(wm::OpCallContext::InvokeDefault);
 
   PointerRNA shelf_ptr = RNA_pointer_create_discrete(
-      &CTX_wm_screen(C)->id, &RNA_AssetShelf, &shelf);
+      &CTX_wm_screen(C)->id, RNA_AssetShelf, &shelf);
 
   ui::Layout &row = layout.row(true);
   row.prop(&shelf_ptr, "asset_library_reference", UI_ITEM_NONE, "", ICON_NONE);
   if (shelf.settings.asset_library_reference.type != ASSET_LIBRARY_LOCAL) {
-    row.op("ASSET_OT_library_refresh", "", ICON_FILE_REFRESH);
+    PointerRNA ptr = row.op("ASSET_OT_library_refresh", "", ICON_FILE_REFRESH);
+    RNA_boolean_set(&ptr, "use_shift_for_remote_listing", true);
   }
 }
 
@@ -202,6 +204,8 @@ static void catalog_selector_panel_draw(const bContext *C, Panel *panel)
   if (!shelf) {
     return;
   }
+
+  settings_ensure_valid_library_ref(shelf->settings);
 
   ui::Layout &layout = *panel->layout;
 
@@ -230,7 +234,7 @@ void catalog_selector_panel_register(ARegionType *region_type)
     return;
   }
 
-  PanelType *pt = MEM_callocN<PanelType>(__func__);
+  PanelType *pt = MEM_new_zeroed<PanelType>(__func__);
   STRNCPY_UTF8(pt->idname, "ASSETSHELF_PT_catalog_selector");
   STRNCPY_UTF8(pt->label, N_("Catalog Selector"));
   STRNCPY_UTF8(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);

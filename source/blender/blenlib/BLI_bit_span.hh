@@ -12,10 +12,12 @@
 
 #include "BLI_bit_ref.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_bits.h"
+#include "BLI_math_bits.hh"
 #include "BLI_memory_utils.hh"
 
-namespace blender::bits {
+namespace blender {
+
+namespace bits {
 
 /** Base class for a const and non-const bit-iterator. */
 class BitIteratorBase {
@@ -127,8 +129,10 @@ inline OneBitIteratorRange iter_1_indices(BitInt value)
  */
 class BitSpan {
  protected:
-  /** Base pointer to the integers containing the bits. The actual bit span might start at a much
-   * higher address when `bit_range_.start()` is large. */
+  /**
+   * Base pointer to the integers containing the bits. The actual bit span might start at a much
+   * higher address when `bit_range_.start()` is large.
+   */
   const BitInt *data_ = nullptr;
   /** The range of referenced bits. */
   IndexRange bit_range_ = {0, 0};
@@ -474,11 +478,11 @@ constexpr bool all_bounded_spans =
 std::ostream &operator<<(std::ostream &stream, const BitSpan &span);
 std::ostream &operator<<(std::ostream &stream, const MutableBitSpan &span);
 
-}  // namespace blender::bits
+}  // namespace bits
 
-namespace blender {
 using bits::BitSpan;
 using bits::BoundedBitSpan;
 using bits::MutableBitSpan;
 using bits::MutableBoundedBitSpan;
+
 }  // namespace blender

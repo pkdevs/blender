@@ -94,6 +94,11 @@ static float3 calculate_aligned_handle(const float3 &position,
   const float length = math::distance(aligned_handle, position);
   /* Set the other handle to directly opposite from the current handle. */
   const float3 dir = math::normalize(other_handle - position);
+  if (math::is_zero(dir)) {
+    /* There is no direction to align against when the opposite handle coincides with the
+     * control point, so preserve the existing aligned handle. */
+    return aligned_handle;
+  }
   return position - dir * length;
 }
 
@@ -235,10 +240,12 @@ void calculate_single_aligned_handles(const IndexMask &selection,
                                       const Span<float3> align_with,
                                       MutableSpan<float3> align_handles)
 {
-  selection.foreach_index_optimized<int>(GrainSize(4096), [&](const int point) {
-    align_handles[point] = calculate_aligned_handle(
-        positions[point], align_with[point], align_handles[point]);
-  });
+  selection.foreach_index_optimized<int>(
+      [&](const int point) {
+        align_handles[point] = calculate_aligned_handle(
+            positions[point], align_with[point], align_handles[point]);
+      },
+      exec_mode::grain_size(4096));
 }
 
 void calculate_aligned_handles(const IndexMask &selection,
@@ -248,12 +255,14 @@ void calculate_aligned_handles(const IndexMask &selection,
                                MutableSpan<float3> align_handles_left,
                                MutableSpan<float3> align_handles_right)
 {
-  selection.foreach_index_optimized<int>(GrainSize(4096), [&](const int point) {
-    const auto [new_left, new_right] = calculate_align_both_handles(
-        positions[point], handles_left[point], handles_right[point]);
-    align_handles_left[point] = new_left;
-    align_handles_right[point] = new_right;
-  });
+  selection.foreach_index_optimized<int>(
+      [&](const int point) {
+        const auto [new_left, new_right] = calculate_align_both_handles(
+            positions[point], handles_left[point], handles_right[point]);
+        align_handles_left[point] = new_left;
+        align_handles_right[point] = new_right;
+      },
+      exec_mode::grain_size(4096));
 }
 
 void calculate_auto_handles(const bool cyclic,
@@ -433,8 +442,7 @@ void interpolate_to_evaluated(const GSpan src,
                               const OffsetIndices<int> evaluated_offsets,
                               GMutableSpan dst)
 {
-  attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(src.type(), [&]<typename T>() {
     if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
       interpolate_to_evaluated(src.typed<T>(), evaluated_offsets, dst.typed<T>());
     }

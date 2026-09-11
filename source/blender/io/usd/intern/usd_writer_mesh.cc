@@ -16,13 +16,14 @@
 #include <pxr/usd/usdShade/materialBindingAPI.h>
 #include <pxr/usd/usdSkel/bindingAPI.h>
 
+#include "IO_mesh_utils.hh"
+
 #include "BLI_array_utils.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute.hh"
-#include "BKE_customdata.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
@@ -40,11 +41,15 @@
 #include "DNA_key_types.h"
 #include "DNA_material_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_object_types.h"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
-namespace blender::io::usd {
+namespace io::usd {
 
 USDGenericMeshWriter::USDGenericMeshWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
 {
@@ -63,7 +68,7 @@ static const SubsurfModifierData *get_last_subdiv_modifier(eEvaluationMode eval_
   /* Return the subdiv modifier if it is the last modifier and has
    * the required mode enabled. */
 
-  ModifierData *md = (ModifierData *)(obj->modifiers.last);
+  ModifierData *md = obj->modifiers.last();
 
   if (!md) {
     return nullptr;
@@ -223,7 +228,7 @@ void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
                                               const bke::AttributeIter &attr)
 {
   const pxr::TfToken pv_name(
-      make_safe_name(attr.name, usd_export_context_.export_params.allow_unicode));
+      make_safe_primvar_name(attr.name, usd_export_context_.export_params.allow_unicode));
   const bool use_color3f_type = pv_name == usdtokens::displayColor;
   const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(attr.domain);
   const std::optional<pxr::SdfValueTypeName> pv_type = convert_blender_type_to_usd(
@@ -316,13 +321,18 @@ void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
 
   const pxr::UsdTimeCode time = get_export_time_code();
   const pxr::TfToken pv_name(
-      make_safe_name(name, usd_export_context_.export_params.allow_unicode));
+      make_safe_primvar_name(name, usd_export_context_.export_params.allow_unicode));
   const pxr::UsdGeomPrimvarsAPI pv_api = pxr::UsdGeomPrimvarsAPI(usd_mesh);
 
   pxr::UsdGeomPrimvar pv_uv = pv_api.CreatePrimvar(
       pv_name, pxr::SdfValueTypeNames->TexCoord2fArray, pxr::UsdGeomTokens->faceVarying);
   set_attribute(pv_uv, unique_uvs, time, usd_value_writer_);
-  pv_uv.SetIndices(indices, time);
+
+  pxr::UsdAttribute attr_indices = pv_uv.CreateIndicesAttr();
+  if (!attr_indices.HasValue()) {
+    attr_indices.Set(indices, time);
+  }
+  usd_value_writer_.SetAttribute(attr_indices, pxr::VtValue(indices), time);
 }
 
 void USDGenericMeshWriter::free_export_mesh(Mesh *mesh)
@@ -470,7 +480,7 @@ pxr::TfToken USDGenericMeshWriter::get_subdiv_scheme(const SubsurfModifierData *
 
   if (subsurfData) {
     if (subsurfData->subdivType == SUBSURF_TYPE_CATMULL_CLARK) {
-      if (usd_export_context_.export_params.export_subdiv == USD_SUBDIV_BEST_MATCH) {
+      if (usd_export_context_.export_params.export_subdiv == SubdivExportMode::Match) {
         /* If a subdivision modifier exists, and it uses Catmull-Clark, then apply Catmull-Clark
          * SubD scheme. */
         subdiv_scheme = pxr::UsdGeomTokens->catmullClark;
@@ -621,7 +631,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
                                             const pxr::UsdGeomMesh &usd_mesh,
                                             const MaterialFaceGroups &usd_face_groups)
 {
-  if (context.object->totcol == 0) {
+  const int totcol = BKE_object_material_count_eval(context.object);
+  if (totcol == 0) {
     return;
   }
 
@@ -631,8 +642,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
   bool mesh_material_bound = false;
   auto mesh_prim = usd_mesh.GetPrim();
   pxr::UsdShadeMaterialBindingAPI material_binding_api(mesh_prim);
-  for (int mat_num = 0; mat_num < context.object->totcol; mat_num++) {
-    Material *material = BKE_object_material_get(context.object, mat_num + 1);
+  for (int mat_num = 0; mat_num < totcol; mat_num++) {
+    Material *material = BKE_object_material_get_eval(context.object, mat_num + 1);
     if (material == nullptr) {
       continue;
     }
@@ -672,7 +683,7 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     short material_number = face_group.key;
     const pxr::VtIntArray &face_indices = face_group.value;
 
-    Material *material = BKE_object_material_get(context.object, material_number + 1);
+    Material *material = BKE_object_material_get_eval(context.object, material_number + 1);
     if (material == nullptr) {
       continue;
     }
@@ -694,36 +705,36 @@ void USDGenericMeshWriter::write_normals(const Mesh *mesh, pxr::UsdGeomMesh &usd
 {
   pxr::UsdTimeCode time = get_export_time_code();
 
+  Span<float3> src_normals;
   pxr::VtVec3fArray loop_normals;
-  loop_normals.resize(mesh->corners_num);
-
-  MutableSpan dst_normals(reinterpret_cast<float3 *>(loop_normals.data()), loop_normals.size());
-
+  pxr::TfToken interpolation;
   switch (mesh->normals_domain()) {
     case bke::MeshNormalDomain::Point: {
-      array_utils::gather(mesh->vert_normals(), mesh->corner_verts(), dst_normals);
+      src_normals = mesh->vert_normals();
+      interpolation = pxr::UsdGeomTokens->vertex;
       break;
     }
     case bke::MeshNormalDomain::Face: {
-      const OffsetIndices faces = mesh->faces();
-      const Span<float3> face_normals = mesh->face_normals();
-      for (const int i : faces.index_range()) {
-        dst_normals.slice(faces[i]).fill(face_normals[i]);
-      }
+      src_normals = mesh->face_normals();
+      interpolation = pxr::UsdGeomTokens->uniform;
       break;
     }
     case bke::MeshNormalDomain::Corner: {
-      array_utils::copy(mesh->corner_normals(), dst_normals);
+      src_normals = mesh->corner_normals();
+      interpolation = pxr::UsdGeomTokens->faceVarying;
       break;
     }
   }
 
+  loop_normals.resize(src_normals.size());
+  MutableSpan dst_normals(reinterpret_cast<float3 *>(loop_normals.data()), loop_normals.size());
+  array_utils::copy(src_normals, dst_normals);
   pxr::UsdAttribute attr_normals = usd_mesh.CreateNormalsAttr(pxr::VtValue(), true);
   if (!attr_normals.HasValue()) {
     attr_normals.Set(loop_normals, pxr::UsdTimeCode::Default());
   }
   usd_value_writer_.SetAttribute(attr_normals, pxr::VtValue(loop_normals), time);
-  usd_mesh.SetNormalsInterpolation(pxr::UsdGeomTokens->faceVarying);
+  usd_mesh.SetNormalsInterpolation(interpolation);
 }
 
 void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh,
@@ -732,7 +743,7 @@ void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh,
   /* Export velocity attribute output by fluid sim, sequence cache modifier
    * and geometry nodes. */
   const VArraySpan velocity = *mesh->attributes().lookup<float3>("velocity",
-                                                                 blender::bke::AttrDomain::Point);
+                                                                 bke::AttrDomain::Point);
   if (velocity.is_empty()) {
     return;
   }
@@ -893,12 +904,16 @@ Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree)
   }
 
   if (write_skinned_mesh_) {
-    r_needsfree = false;
     /* We must export the skinned mesh in its rest pose.  We therefore
      * return the pre-modified mesh, so that the armature modifier isn't
-     * applied. */
-    /* TODO: Store the "needs free" mesh in a separate variable. */
-    return const_cast<Mesh *>(BKE_object_get_pre_modified_mesh(object_eval));
+     * applied. Objects without a pre-modified mesh of their own (curves,
+     * NURBS surfaces, ...) get one converted on demand. */
+    MeshCoerceForExport coerce;
+    const Mesh *mesh = mesh_coerce_for_export_setup(
+        coerce, usd_export_context_.depsgraph, object_eval, false);
+    r_needsfree = coerce.owned != nullptr;
+    coerce.owned = nullptr;
+    return const_cast<Mesh *>(mesh);
   }
 
   /* Return the fully evaluated mesh. */
@@ -947,4 +962,5 @@ void USDMeshWriter::add_shape_key_weights_sample(const Object *obj)
   temp_weights_attr.Set(weights, time);
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

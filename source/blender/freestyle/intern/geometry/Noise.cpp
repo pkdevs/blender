@@ -12,9 +12,9 @@
 #include <cstdlib>
 #include <ctime>
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_rand.h"
-#include "BLI_sys_types.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_sys_types.hh"
 
 #include "Noise.h"
 
@@ -228,7 +228,7 @@ float Noise::smoothNoise3(Vec3f &vec)
 Noise::Noise(long seed)
 {
   /* Use Blender RNG for repeatable results across platforms. */
-  RNG *rng = BLI_rng_new(seed);
+  blender::RNG *rng = blender::BLI_rng_new(seed);
   int i, j, k;
 
   for (i = 0; i < _NOISE_B; i++) {

@@ -8,12 +8,7 @@
 
 #pragma once
 
-struct UndoStack;
-struct wmMsgBus;
-struct wmKeyConfig;
-struct wmEvent;
-struct wmWindow;
-struct wmIMEData;
+#include <optional>
 
 #include "BKE_report.hh"
 
@@ -21,7 +16,21 @@ struct wmIMEData;
 
 #include "BLI_set.hh"
 
-namespace blender::bke {
+namespace blender {
+
+struct UndoStack;
+struct wmMsgBus;
+struct wmKeyConfig;
+struct wmEvent;
+struct wmWindow;
+struct wmIMEData;
+struct wmGesture;
+struct wmJob;
+struct wmDrag;
+struct wmPaintCursor;
+struct WindowDrawCB;
+
+namespace bke {
 
 struct wmNotifierHashForQueue {
   uint64_t operator()(const wmNotifier *note) const;
@@ -49,6 +58,18 @@ struct WindowManagerRuntime {
   /** Indicates whether interface is locked for user interaction. */
   bool is_interface_locked = false;
 
+  /** Indicates whether modified images should be saved when saving the blend file. */
+  char save_modified_images_when_file_is_saved = true;
+
+  /**
+   * Indicates the main loop (#WM_main()) to stop processing the event queue and move to the next
+   * step. The Remaining events will then be processed during the next iteration of the loop.
+   *
+   * This is used e.g. to avoid handling events immediately after an undo/redo action, when UI has
+   * not yet been updated.
+   */
+  bool break_events_handling = false;
+
   /** Information and error reports. */
   ReportList reports;
 
@@ -58,7 +79,7 @@ struct WindowManagerRuntime {
    * With the exception of clearing notifiers for data which has been removed,
    * see: #NOTE_CATEGORY_TAG_CLEARED.
    */
-  ListBase notifier_queue = {nullptr, nullptr};
+  ListBaseT<wmNotifier> notifier_queue = {nullptr, nullptr};
   /**
    * For duplicate detection.
    * \note keep in sync with `notifier_queue` adding/removing elements must also update this set.
@@ -69,25 +90,25 @@ struct WindowManagerRuntime {
   const wmNotifier *notifier_current = nullptr;
 
   /** Operator registry. */
-  ListBase operators = {nullptr, nullptr};
+  ListBaseT<wmOperator> operators = {nullptr, nullptr};
 
   /** Extra overlay cursors to draw, like circles. */
-  ListBase paintcursors = {nullptr, nullptr};
+  ListBaseT<wmPaintCursor> paintcursors = {nullptr, nullptr};
 
   /**
    * Known key configurations.
    * This includes all the #wmKeyConfig members (`defaultconf`, `addonconf`, etc).
    */
-  ListBase keyconfigs = {nullptr, nullptr};
+  ListBaseT<wmKeyConfig> keyconfigs = {nullptr, nullptr};
 
   /** Active timers. */
-  ListBase timers = {nullptr, nullptr};
+  ListBaseT<wmTimer> timers = {nullptr, nullptr};
 
   /** Threaded jobs manager. */
-  ListBase jobs = {nullptr, nullptr};
+  ListBaseT<wmJob> jobs = {nullptr, nullptr};
 
   /** Active dragged items. */
-  ListBase drags = {nullptr, nullptr};
+  ListBaseT<wmDrag> drags = {nullptr, nullptr};
 
   /** Default configuration. */
   wmKeyConfig *defaultconf = nullptr;
@@ -98,7 +119,11 @@ struct WindowManagerRuntime {
   /** User configuration. */
   wmKeyConfig *userconf = nullptr;
 
-  /** All undo history. */
+  /**
+   * All undo history.
+   *
+   * \note This will be null in background mode unless explicitly created.
+   */
   UndoStack *undo_stack = nullptr;
 
   wmMsgBus *message_bus = nullptr;
@@ -107,16 +132,61 @@ struct WindowManagerRuntime {
   ~WindowManagerRuntime();
 };
 
+/**
+ * The kind of UI element that began the window's IME session, see #WindowRuntime::ime_owner.
+ *
+ * Popups store the type of session with the element that began them.
+ * Avoids buttons/regions acting on an IME popup it doesn't own.
+ */
+enum class wmIMEOwnerType : int8_t {
+  /**
+   * A region's `cursor_ime` callback (via #WM_window_IME_region_refresh),
+   * always the screen's active region.
+   */
+  Region,
+  /** A text button being edited (which may be in a popup floating over an unrelated region). */
+  Button,
+};
+
 struct WindowRuntime {
   /** All events #wmEvent (ghost level events were handled). */
-  ListBase event_queue = {nullptr, nullptr};
+  ListBaseT<wmEvent> event_queue = {nullptr, nullptr};
 
   /**
    * Input Method Editor data - complex character input (especially for Asian character input)
    * Only used when `WITH_INPUT_IME` is defined.
    */
   wmIMEData *ime_data = nullptr;
+  /**
+   * The UI element this session was begun with.
+   * Set by #WM_window_IME_begin, cleared by #WM_window_IME_end.
+   */
+  std::optional<wmIMEOwnerType> ime_owner;
+  /**
+   * True while the user is composing text via an IME
+   * (set by #WM_IME_COMPOSITE_START, cleared by #WM_IME_COMPOSITE_END or #WM_window_IME_end).
+   *
+   * Operators
+   * =========
+   *
+   * When true, text input operators that support IME are skipped (returning canceled).
+   * This is needed because keys that edit the composition (backspace, enter, arrow-keys... etc)
+   * are consumed by the IME but *also* pass-through as regular key events,
+   * which the key-map handles as usual: a backspace that removes a pre-edit
+   * character would also delete committed text.
+   * Theoretically these events could be filtered out before being handled,
+   * however only the IME knows which keys it consumes and this isn't exposed by any API,
+   * so operators must skip them while composing.
+   * Canceling instead of passing the event through prevents other key-map items from matching it.
+   *
+   * See:
+   * - #WM_operator_IME_edit_maybe
+   * - #WM_operator_IME_insert_maybe
+   */
   bool ime_data_is_composing = false;
+
+  /* Optionally store the size and position using this key in the user's recents file. */
+  std::string recents_storage_key = {};
 
   /** Don't want to include ghost.h stuff. */
   void *ghostwin = nullptr;
@@ -125,13 +195,16 @@ struct WindowRuntime {
   void *gpuctx = nullptr;
 
   /** Window+screen handlers, handled last. */
-  ListBase handlers = {nullptr, nullptr};
+  ListBaseT<wmEventHandler> handlers = {nullptr, nullptr};
 
   /** Priority handlers, handled first. */
-  ListBase modalhandlers = {nullptr, nullptr};
+  ListBaseT<wmEventHandler> modalhandlers = {nullptr, nullptr};
+
+  /** Custom drawing callbacks. */
+  ListBaseT<WindowDrawCB> drawcalls = {nullptr, nullptr};
 
   /** Gesture stuff. */
-  ListBase gesture = {nullptr, nullptr};
+  ListBaseT<wmGesture> gesture = {nullptr, nullptr};
 
   /**
    * Keep the last handled event in `event_queue` here (owned and must be freed).
@@ -160,7 +233,7 @@ struct WindowRuntime {
   wmEvent *eventstate = nullptr;
 
   /**
-   * The time when the key is pressed in milliseconds (see #GHOST_GetEventTime).
+   * The time when the key is pressed in milliseconds (see #GHOST_IEvent::getTime).
    * Used to detect double-click events.
    */
   uint64_t eventstate_prev_press_time_ms = 0;
@@ -172,4 +245,5 @@ struct WindowRuntime {
   ~WindowRuntime();
 };
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

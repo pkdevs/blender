@@ -44,7 +44,7 @@ LANGUAGES = (
     (13, "Chinese (Simplified) - 简体中文", "zh_HANS"),
     (14, "Chinese (Traditional) - 繁體中文", "zh_HANT"),
     (15, "Russian - Русский", "ru_RU"),
-    (16, "Croatian - Hrvatski", "hr_HR"),
+    (16, "Croatian - Hrvatski", "hr"),
     (17, "Serbian (Cyrillic) - Српски", "sr_RS"),
     (18, "Ukrainian - Українська", "uk_UA"),
     (19, "Polish - Polski", "pl_PL"),
@@ -54,7 +54,7 @@ LANGUAGES = (
     (22, "Bulgarian - Български", "bg_BG"),
     (23, "Greek - Ελληνικά", "el_GR"),
     (24, "Korean - 한국어", "ko_KR"),
-    (25, "Nepali - नेपाली", "ne_NP"),
+    # 25 is free, used to be "Nepali - नेपाली", ("ne_NP").
     # Using the utf8 flipped form of Persian (فارسی).
     (26, "Persian - ﯽﺳﺭﺎﻓ", "fa_IR"),
     (27, "Indonesian - Bahasa indonesia", "id_ID"),
@@ -65,25 +65,25 @@ LANGUAGES = (
     (32, "Portuguese (Brazil) - Português brasileiro", "pt_BR"),
     # Using the utf8 flipped form of Hebrew (עִבְרִית)).
     (33, "Hebrew - תירִבְעִ", "he_IL"),
-    (34, "Estonian - Eesti keel", "et_EE"),
+    # 34 is free, used to be "Estonian - Eesti keel" ("et_EE").
     (35, "Esperanto - Esperanto", "eo"),
-    # 36 is free, used to be 'Spanish from Spain' (`es_ES`).
-    (37, "Amharic - አማርኛ", "am_ET"),
-    (38, "Uzbek (Latin) - Oʻzbek", "uz_UZ@latin"),
-    (39, "Uzbek (Cyrillic) - Ўзбек", "uz_UZ@cyrillic"),
+    # 36 is free, used to be "Spanish from Spain" ("es_ES").
+    # 37 is free, used to be "Amharic - አማርኛ" ("am_ET").
+    # 38 is free, used to be "Uzbek (Latin) - Oʻzbek" ("uz_UZ@latin").
+    # 39 is free, used to be "Uzbek (Cyrillic) - Ўзбек" ("uz_UZ@cyrillic").
     (40, "Hindi - हिन्दी", "hi_IN"),
     (41, "Vietnamese - Tiếng Việt", "vi_VN"),
     (42, "Basque - Euskara", "eu_EU"),
-    (43, "Hausa - Hausa", "ha"),
-    (44, "Kazakh - Қазақша", "kk_KZ"),
+    # 43 is free, used to be "Hausa - Hausa" ("ha").
+    # 44 is free, used to be "Kazakh - Қазақша" ("kk_KZ").
     (45, "Abkhaz - Аԥсуа бызшәа", "ab"),
     (46, "Thai - ภาษาไทย", "th_TH"),
     (47, "Slovak - Slovenčina", "sk_SK"),
     (48, "Georgian - ქართული", "ka"),
     (49, "Tamil - தமிழ்", "ta"),
-    (50, "Khmer - ខ្មែរ", "km"),
+    # 50 is free, used to be "Khmer - ខ្មែរ" ("km").
     (51, "Swahili - Kiswahili", "sw"),
-    (52, "Belarusian - беларуску", "be"),
+    (52, "Belarusian - Беларуская", "be"),
     (53, "Danish - Dansk", "da"),
     (54, "Slovenian - Slovenščina", "sl"),
     # Using the utf8 flipped form of Urdu (اُردُو).
@@ -107,9 +107,7 @@ LANGUAGES_FILE = "languages"
 IMPORT_MIN_LEVEL = 0.0
 
 # Languages in the working repository that should not be imported in the Blender one currently...
-IMPORT_LANGUAGES_SKIP = {
-    'am_ET', 'et_EE', 'uz_UZ@latin', 'uz_UZ@cyrillic', 'kk_KZ',
-}
+IMPORT_LANGUAGES_SKIP = set()
 
 # Languages that need RTL pre-processing.
 IMPORT_LANGUAGES_RTL = {
@@ -218,6 +216,7 @@ _str_base = (
             ".(?!(?P={_}2))"
         ")*.)"  # Don't forget the last char!
     "(?P={_}2)"  # And closing quote.
+    "(?:_ustr)?" # Optional trailing _ustr.
 )
 str_clean_re = _str_base.format(_="g", capt="P<clean>")
 _inbetween_str_re = (
@@ -343,16 +342,14 @@ PYGETTEXT_KEYWORDS = (() +
 
 # autopep8: on
 
-
-# Check printf mismatches between msgid and msgstr.
-CHECK_PRINTF_FORMAT = (
-    r"(?!<%)(?:%%)*%"          # Beginning, with handling for crazy things like '%%%%%s'
-    r"[-+#0]?"                 # Flags (note: do not add the ' ' (space) flag here, generates too much false positives!)
-    r"(?:\*|[0-9]+)?"          # Width
-    r"(?:\.(?:\*|[0-9]+))?"    # Precision
-    r"(?:[hljztL]|hh|ll)?"     # Length
-    r"[tldiuoxXfFeEgGaAcspn]"  # Specifiers (note we have Blender-specific %t and %l ones too)
-)
+# The few rare message strings that use a 'format-like' syntax outside of formatting context.
+# Ensure that they are skipped when checking for valid formatting tokens and order in the translated strings.
+MSGID_FORMATTING_VALIDATION_SKIP = {
+    "Property is a path which supports the \"{variable_name}\" variable expression syntax, "
+    "which substitutes the value of the referenced variable in place of the expression",
+    "Empty identifier cannot be used when explicit identifier was used before. For "
+    "example, \"{} {x}\" is ok but \"{x} {}\" is not.",
+}
 
 # Should po parser warn when finding a first letter not capitalized?
 WARN_MSGID_NOT_CAPITALIZED = True

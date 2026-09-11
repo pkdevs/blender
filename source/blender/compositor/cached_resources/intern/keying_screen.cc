@@ -7,16 +7,15 @@
 #include <string>
 
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
 #include "IMB_imbuf.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_tracking_types.h"
 
@@ -72,33 +71,35 @@ static void compute_marker_points(MovieClip *movie_clip,
     return;
   }
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &movie_tracking_object->tracks) {
-    const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, movie_clip_user.framenr);
+  for (MovieTrackingTrack &track : movie_tracking_object->tracks) {
+    const MovieTrackingMarker *marker = BKE_tracking_marker_get(&track, movie_clip_user.framenr);
     if (marker->flag & MARKER_DISABLED) {
       continue;
     }
 
     /* Skip out of bound markers since they have no corresponding color. */
-    const float2 position = float2(marker->pos) + float2(track->offset);
+    const float2 position = float2(marker->pos) + float2(track.offset);
     if (math::clamp(position, float2(0.0f), float2(1.0f)) != position) {
       continue;
     }
 
     ImBuf *pattern_image_buffer = BKE_tracking_get_pattern_imbuf(
-        image_buffer, track, marker, true, false);
+        image_buffer, &track, marker, true, false);
     if (!pattern_image_buffer) {
       continue;
     }
 
     /* Find the mean color of the rectangular search pattern of the marker. */
     float4 mean_color = float4(0.0f);
+    const uchar *byte_data = pattern_image_buffer->byte_data();
+    const float *float_data = pattern_image_buffer->float_data();
     for (int i = 0; i < pattern_image_buffer->x * pattern_image_buffer->y; i++) {
-      if (pattern_image_buffer->float_buffer.data) {
-        mean_color += float4(&pattern_image_buffer->float_buffer.data[i * 4]);
+      if (float_data) {
+        mean_color += float4(&float_data[i * 4]);
       }
       else {
         float4 linear_color;
-        uchar4 srgb_color = uchar4(&pattern_image_buffer->byte_buffer.data[i * 4]);
+        uchar4 srgb_color = uchar4(&byte_data[i * 4]);
         srgb_to_linearrgb_uchar4(linear_color, srgb_color);
         mean_color += linear_color;
       }
@@ -117,7 +118,7 @@ static void compute_marker_points(MovieClip *movie_clip,
 /* Get a MovieClipUser with an initialized clip frame number. */
 static MovieClipUser get_movie_clip_user(Context &context, MovieClip *movie_clip)
 {
-  MovieClipUser movie_clip_user = *DNA_struct_default_get(MovieClipUser);
+  MovieClipUser movie_clip_user = {};
   const int scene_frame = context.get_frame_number();
   const int clip_frame = BKE_movieclip_remap_scene_to_clip_frame(movie_clip, scene_frame);
   BKE_movieclip_user_set_frame(&movie_clip_user, clip_frame);

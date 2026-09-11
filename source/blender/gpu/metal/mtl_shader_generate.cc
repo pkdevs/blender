@@ -2,21 +2,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup gpu
+ */
+
 #include <fmt/format.h>
 #include <sstream>
 #include <string>
 
-#include "BLI_math_bits.h"
+#include "BLI_math_bits.hh"
 
-#include "gpu_shader_dependency_private.hh"
 #include "mtl_backend.hh"
 #include "mtl_shader_generate.hh"
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu;
 using namespace blender::gpu::shader;
 
-namespace blender::gpu {
+namespace gpu {
 
 struct Separator {};
 
@@ -333,7 +337,7 @@ static const char *get_stage_out_class_name(ShaderStage stage, const ShaderCreat
       return "mtl_VertOut";
     case ShaderStage::FRAGMENT:
       return (info.fragment_outputs_.is_empty() && info.depth_write_ == DepthWrite::UNCHANGED &&
-              bool(info.builtins_ & BuiltinBits::STENCIL_REF) == false) ?
+              flag_is_set(info.builtins_combined(), BuiltinBits::STENCIL_REF) == false) ?
                  "void" :
                  "mtl_FragOut";
     case ShaderStage::COMPUTE:
@@ -457,7 +461,7 @@ static const char *to_string(const Interpolation &interp)
 #if 0
 #  define LINE ""
 #else
-#  define LINE "\n#line " STRINGIFY(__LINE__) " \"" __FILE__ "\"\n"
+#  define LINE "\n#line " STRINGIFY(__LINE__) "\n"
 #endif
 
 std::string wrap_type(StringRefNull type_name, const ShaderStage stage)
@@ -537,7 +541,7 @@ static void generate_uniforms(GeneratedStreams &generated,
 
 static void generate_buffer(GeneratedStreams &generated,
                             const bool writeable,
-                            StringRefNull type,
+                            std::string type,
                             ResourceString name,
                             int slot,
                             const ShaderStage stage)
@@ -700,9 +704,42 @@ static void generate_texture(GeneratedStreams &generated,
   }
 }
 
+static void generate_acceleration_structure(GeneratedStreams &generated,
+                                            StringRefNull name,
+                                            int slot)
+{
+  {
+    /* Reference definition for global access. */
+    auto &out = generated.wrapper_class_members;
+    out << "  instance_acceleration_structure " << name << ";\n";
+  }
+  {
+    /* Constructor parameters. */
+    auto &out = generated.wrapper_constructor_parameters;
+    out << Sep() << "instance_acceleration_structure " << name;
+  }
+  {
+    /* Constructor assignments. */
+    auto &out = generated.wrapper_constructor_assign;
+    out << Sep() << name << "(" << name << ")";
+  }
+  {
+    /* Constructor arguments. */
+    auto &out = generated.wrapper_instance_init;
+    out << Sep() << name;
+  }
+  {
+    /* Entry point arguments. */
+    auto &out = generated.entry_point_parameters;
+    out << Sep() << "instance_acceleration_structure " << name;
+    out << " [[buffer(" << slot << ")]]";
+  }
+}
+
 static void generate_resource(GeneratedStreams &generated,
                               const ShaderCreateInfo::Resource &res,
                               const ShaderStage stage,
+                              const ShaderCreateInfo &info,
                               const bool use_sampler_argument_buffer)
 {
   switch (res.bind_type) {
@@ -728,7 +765,7 @@ static void generate_resource(GeneratedStreams &generated,
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       generate_buffer(generated,
                       false,
-                      res.uniformbuf.type_name,
+                      info.buffer_typename(res.uniformbuf.type_name, true),
                       res.uniformbuf.name,
                       MTL_UBO_SLOT_OFFSET + res.slot,
                       stage);
@@ -736,10 +773,14 @@ static void generate_resource(GeneratedStreams &generated,
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
       generate_buffer(generated,
                       bool(res.storagebuf.qualifiers & shader::Qualifier::write),
-                      res.storagebuf.type_name,
+                      info.buffer_typename(res.storagebuf.type_name),
                       res.storagebuf.name,
                       MTL_SSBO_SLOT_OFFSET + res.slot,
                       stage);
+      break;
+    case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      generate_acceleration_structure(
+          generated, res.acceleration_structure.name, MTL_ACCELERATION_STRUCTURE_SLOT + res.slot);
       break;
   }
 }
@@ -750,7 +791,7 @@ static void generate_compilation_constant(GeneratedStreams &generated,
   /* Global scope definition before the wrapper class. */
   auto &out = generated.wrapper_class_prefix;
   out << "constant " << constant.type << " " << constant.name;
-  out << " = " << to_string(constant.type, constant.value) << ";\n";
+  out << " [[maybe_unused]] = " << to_string(constant.type, constant.value) << ";\n";
 }
 
 static void generate_specialization_constant(GeneratedStreams &generated,
@@ -814,8 +855,8 @@ void generate_resources(GeneratedStreams &generated,
                         const ShaderStage stage,
                         const ShaderCreateInfo &info)
 {
-  const bool use_sampler_argument_buffer = bool(info.builtins_ &
-                                                BuiltinBits::USE_SAMPLER_ARG_BUFFER);
+  const bool use_sampler_argument_buffer = flag_is_set(info.builtins_combined(),
+                                                       BuiltinBits::USE_SAMPLER_ARG_BUFFER);
 
   int specialization_constant_index = MTL_SPECIALIZATION_CONSTANT_OFFSET;
   for (const SpecializationConstant &sc : info.specialization_constants_) {
@@ -831,13 +872,13 @@ void generate_resources(GeneratedStreams &generated,
   }
 
   for (const ShaderCreateInfo::Resource &res : info.pass_resources_) {
-    generate_resource(generated, res, stage, use_sampler_argument_buffer);
+    generate_resource(generated, res, stage, info, use_sampler_argument_buffer);
   }
   for (const ShaderCreateInfo::Resource &res : info.batch_resources_) {
-    generate_resource(generated, res, stage, use_sampler_argument_buffer);
+    generate_resource(generated, res, stage, info, use_sampler_argument_buffer);
   }
   for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
-    generate_resource(generated, res, stage, use_sampler_argument_buffer);
+    generate_resource(generated, res, stage, info, use_sampler_argument_buffer);
   }
 
   if (use_sampler_argument_buffer) {
@@ -928,29 +969,59 @@ static std::string generate_raster_builtins(GeneratedStreams &ss,
   if (stage == ShaderStage::VERTEX) {
     generate_raster_builtin(ss, decl, "float4", "gl_Position", pos_attr);
   }
-  else if (bool(info.builtins_ & BuiltinBits::FRAG_COORD) && stage == ShaderStage::FRAGMENT) {
+  else if (flag_is_set(info.builtins_combined(), BuiltinBits::FRAG_COORD) &&
+           stage == ShaderStage::FRAGMENT)
+  {
     generate_raster_builtin(ss, decl, "float4", "gl_FragCoord", pos_attr, "", true);
   }
 
-  if (bool(info.builtins_ & BuiltinBits::LAYER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::LAYER)) {
     generate_raster_builtin(
         ss, decl, "uint", "gpu_Layer", "[[render_target_array_index]]", "", is_frag);
   }
-  if (bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
     generate_raster_builtin(
         ss, decl, "uint", "gpu_ViewportIndex", "[[viewport_array_index]]", "", is_frag);
   }
-  if (bool(info.builtins_ & BuiltinBits::POINT_SIZE) && stage == ShaderStage::VERTEX) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::POINT_SIZE) &&
+      stage == ShaderStage::VERTEX)
+  {
     generate_raster_builtin(ss, decl, "float", "gl_PointSize", "[[point_size]]");
   }
-  if (bool(info.builtins_ & BuiltinBits::CLIP_DISTANCES) && stage == ShaderStage::VERTEX) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_DISTANCES) &&
+      stage == ShaderStage::VERTEX)
+  {
+    /* WORKAROUND: BSL has currently no way to disable clip distances using compilation constant.
+     * This induce a huge performance gap with the BSL port of workbench shader (see #155865).
+     * This adds back the same preprocessor check that was previously here. However, this code is
+     * heavily tailored to workbench and assume exact match with the compilation constant name.
+     * GLSL doesn't suffer the same issue as gl_ClipDistance is only considered used if assigned.
+     */
+    std::string start_cond =
+        "\n#if (defined(SRT_CONSTANT_use_clipping) ? (SRT_CONSTANT_use_clipping == 1) : "
+        "defined(USE_WORLD_CLIP_PLANES))\n";
+    std::string end_cond = "\n#endif\n";
+
+    decl << start_cond;
+    ss.wrapper_class_members << start_cond;
+    ss.wrapper_constructor_assign << start_cond;
+
     generate_raster_builtin(ss, decl, "float", "gl_ClipDistance", "[[clip_distance]]", " [6]");
+
+    decl << end_cond;
+    ss.wrapper_class_members << end_cond;
+    ss.wrapper_constructor_assign << end_cond;
+
+    ss.entry_point_start << start_cond;
+
     /* We always create all planes and initialize them to 1 (passing). This way the shader doesn't
      * have to write to them for the ones it doesn't need. */
     StringRefNull vert_inout_inst = get_stage_out_instance_name(stage);
     for ([[maybe_unused]] const int i : IndexRange(6)) {
       ss.entry_point_start << "  " << vert_inout_inst << ".gl_ClipDistance[" << i << "] = 1.0f;\n";
     }
+
+    ss.entry_point_start << end_cond;
   }
   return decl.str();
 }
@@ -971,7 +1042,6 @@ static void generate_vertex_out(GeneratedStreams &generated,
                                 const ShaderStage stage)
 {
   std::string out_class_local = get_stage_out_class_name(ShaderStage::VERTEX, info);
-  std::string out_class = get_stage_class_name(ShaderStage::VERTEX) + ("::" + out_class_local);
 
   StringRefNull const_qual = (stage == ShaderStage::FRAGMENT) ? "const " : "";
   StringRefNull mem_scope = "thread ";
@@ -1003,7 +1073,6 @@ static void generate_vertex_out(GeneratedStreams &generated,
     out << "  struct " << out_class_local << " {\n";
     out << builtins_decl;
     for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-      out << "    /* " << iface->name << " */\n";
       for (const StageInterfaceInfo::InOut &inout : iface->inouts) {
         generate_inout(out, iface->instance_name, inout);
       }
@@ -1095,7 +1164,7 @@ static std::string generate_fragment_builtins(GeneratedStreams &ss, const Shader
     generate_fragment_builtin(ss, decl, "float", "gl_FragDepth", "float", attr(info.depth_write_));
   }
 
-  if (bool(info.builtins_ & BuiltinBits::STENCIL_REF)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::STENCIL_REF)) {
     generate_fragment_builtin(ss, decl, "int", "gl_FragStencilRefARB", "uint", "[[stencil]]");
   }
 
@@ -1162,7 +1231,6 @@ static void generate_fragment_out(GeneratedStreams &generated, const ShaderCreat
 {
   constexpr ShaderStage stage = ShaderStage::FRAGMENT;
   StringRefNull out_class_local = get_stage_out_class_name(stage, info);
-  std::string out_class = get_stage_class_name(stage) + ("::" + out_class_local);
 
   std::string builtins_decl = generate_fragment_builtins(generated, info);
 
@@ -1285,42 +1353,42 @@ static void generate_builtins(GeneratedStreams &ss,
                               const ShaderCreateInfo &info)
 {
   if (stage == ShaderStage::VERTEX) {
-    if (bool(info.builtins_ & BuiltinBits::VERTEX_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::VERTEX_ID)) {
       generate_builtin(ss, "int", "gl_VertexID", "uint", "[[vertex_id]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::INSTANCE_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::INSTANCE_ID)) {
       generate_instance_id(ss);
     }
   }
   else if (stage == ShaderStage::FRAGMENT) {
-    if (bool(info.builtins_ & BuiltinBits::FRONT_FACING)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::FRONT_FACING)) {
       generate_builtin(ss, "bool", "gl_FrontFacing", "[[front_facing]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::PRIMITIVE_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::PRIMITIVE_ID)) {
       generate_builtin(ss, "int", "gl_PrimitiveID", "uint", "[[primitive_id]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::POINT_COORD)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::POINT_COORD)) {
       generate_builtin(ss, "float2", "gl_PointCoord", "[[point_coord]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD)) {
       generate_builtin(ss, "float3", "gpu_BaryCoord", "[[barycentric_coord]]");
     }
   }
   else if (stage == ShaderStage::COMPUTE) {
     /* Compute shader global variables. */
-    if (bool(info.builtins_ & BuiltinBits::GLOBAL_INVOCATION_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::GLOBAL_INVOCATION_ID)) {
       generate_builtin(ss, "uint3", "gl_GlobalInvocationID", "[[thread_position_in_grid]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::WORK_GROUP_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::WORK_GROUP_ID)) {
       generate_builtin(ss, "uint3", "gl_WorkGroupID", "[[threadgroup_position_in_grid]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::NUM_WORK_GROUP)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::NUM_WORK_GROUP)) {
       generate_builtin(ss, "uint3", "gl_NumWorkGroups", "[[threadgroups_per_grid]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::LOCAL_INVOCATION_INDEX)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::LOCAL_INVOCATION_INDEX)) {
       generate_builtin(ss, "uint", "gl_LocalInvocationIndex", "[[thread_index_in_threadgroup]]");
     }
-    if (bool(info.builtins_ & BuiltinBits::LOCAL_INVOCATION_ID)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::LOCAL_INVOCATION_ID)) {
       generate_builtin(ss, "uint3", "gl_LocalInvocationID", "[[thread_position_in_threadgroup]]");
     }
   }
@@ -1348,6 +1416,8 @@ std::pair<std::string, std::string> generate_entry_point(const ShaderCreateInfo 
   generate_resources(generated, stage, info);
 
   std::stringstream prefix;
+  /* Note: The shader log class expect a `#line 1 "filename"` For correct filename. */
+  prefix << "#line 1 \"" __FILE__ "\"\n";
   prefix << LINE;
   prefix << generated.wrapper_class_prefix.str() << "\n\n";
   prefix << "struct " << stage_class_name << " {\n";
@@ -1360,6 +1430,7 @@ std::pair<std::string, std::string> generate_entry_point(const ShaderCreateInfo 
    * case they are used inside resources declaration. */
   out << "#undef color\n";
   out << "#undef user\n";
+  out << "#pragma blender dead_code_elimination off\n";
 
   out << generated.wrapper_class_members.str();
   out << "\n";
@@ -1438,6 +1509,9 @@ uint32_t available_buffer_slots(const ShaderCreateInfo &info)
       case ShaderCreateInfo::Resource::BindType::SAMPLER:
       case ShaderCreateInfo::Resource::BindType::IMAGE:
         break;
+      case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+        free_slots &= ~(1u << (MTL_ACCELERATION_STRUCTURE_SLOT + res.slot));
+        break;
     };
   };
 
@@ -1455,7 +1529,7 @@ uint32_t available_buffer_slots(const ShaderCreateInfo &info)
     free_slots &= ~(1u << MTL_PUSH_CONSTANT_BUFFER_SLOT);
   }
 
-  if (bool(info.builtins_ & BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
     free_slots &= ~(1u << MTL_SAMPLER_ARGUMENT_BUFFER_SLOT);
   }
 
@@ -1500,6 +1574,7 @@ void patch_create_info_atomic_workaround(std::unique_ptr<PatchedShaderCreateInfo
         break;
       case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
+      case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
         break;
     }
   };
@@ -1515,4 +1590,5 @@ void patch_create_info_atomic_workaround(std::unique_ptr<PatchedShaderCreateInfo
   }
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender
