@@ -248,6 +248,14 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   mask_group->drawings = drawings;
 
+  constexpr std::array<float2, 4> corner_positions(
+      {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
+
+  for (int i = 0; i < 4; i++) {
+    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
+    corner_pin_data->corner_pos = corner_positions[i];
+  }
+
   if (box) {
     printf("box %f, %f\n", box->size().x, box->size().y);
 
@@ -286,6 +294,11 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
     }
   }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
 }
 
 /* translate callbacks */
@@ -494,6 +507,8 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
   const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
 
+  mask_group->update_data.context = const_cast<bContext *>(C);
+
   RNA_enum_set(mask_group->border->ptr,
                "transform",
                ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
@@ -517,9 +532,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   // params.foreach_rna_prop_fn = gizmo_node_box_mask_foreach_rna_prop;
   WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
 
-  constexpr std::array<float2, 4> corner_positions(
-      {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
-
   for (int i = 0; i < 4; i++) {
     mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
     CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
@@ -536,7 +548,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
     gz->scale_basis = 0.1f;
 
     corner_pin_data->index = i;
-    corner_pin_data->corner_pos = corner_positions[i];
 
     wmGizmoPropertyFnParams params{};
     params.value_get_fn = gizmo_bisect_prop_translate_get;
