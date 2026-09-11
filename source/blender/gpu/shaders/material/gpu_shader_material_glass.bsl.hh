@@ -14,7 +14,7 @@ void node_bsdf_glass(float4 color,
                      float /*anisotropy*/,
                      float /*rotation*/,
                      float ior,
-                     float retroreflectivity,
+                     float /*retroreflectivity*/,
                      float3 N,
                      float3 /*T*/,
                      float weight,
@@ -27,7 +27,6 @@ void node_bsdf_glass(float4 color,
   roughness = saturate(roughness);
   ior = max(ior, 1e-5f);
   N = safe_normalize(N);
-  /* retroreflectivity = saturate(retroreflectivity); */
 
   float3 V = coordinate_incoming(g_data.P);
   float NV = dot(N, V);

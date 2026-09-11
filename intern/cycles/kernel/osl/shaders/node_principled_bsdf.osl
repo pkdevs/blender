@@ -21,6 +21,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                             float Roughness = 0.5,
                             float Anisotropic = 0.0,
                             float AnisotropicRotation = 0.0,
+                            float Retroreflectivity = 0.0,
                             float SheenWeight = 0.0,
                             float SheenRoughness = 0.5,
                             color SheenTint = 0.5,
@@ -138,7 +139,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                             "thinfilm_thickness",
                                             ThinFilmThickness,
                                             "thinfilm_ior",
-                                            thinfilm_ior),
+                                            thinfilm_ior,
+                                            "retroreflectivity",
+                                            Retroreflectivity),
                    BSDF);
     }
   }
@@ -153,7 +156,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                                eta,
                                                r2,
                                                ThinFilmThickness,
-                                               ThinFilmIOR);
+                                               ThinFilmIOR,
+                                               "retroreflectivity",
+                                               Retroreflectivity);
       BSDF = mix(ThinGlassBSDF, BSDF, 1.0 - transmission);
     }
     else {
@@ -177,7 +182,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                                                 "thinfilm_ior",
                                                                 ThinFilmIOR,
                                                                 "inv_abbe",
-                                                                inv_abbe);
+                                                                inv_abbe,
+                                                                "retroreflectivity",
+                                                                Retroreflectivity);
       BSDF = mix(TransmissionBSDF, BSDF, 1.0 - transmission);
     }
   }
@@ -196,7 +203,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                        "thinfilm_thickness",
                                        ThinFilmThickness,
                                        "thinfilm_ior",
-                                       ThinFilmIOR);
+                                       ThinFilmIOR,
+                                       "retroreflectivity",
+                                       Retroreflectivity);
     BSDF = mix(MetallicBSDF, BSDF, 1.0 - metallic);
   }
 

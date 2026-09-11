@@ -21,7 +21,6 @@ void node_bsdf_glossy(float4 color,
   roughness = saturate(roughness);
   N = safe_normalize(N);
   /* anisotropy = clamp(anisotropy, -0.99f, 0.99f) */
-  /* retroreflectivity = saturate(retroreflectivity) */
 
   float3 V = coordinate_incoming(g_data.P);
   float NV = dot(N, V);
