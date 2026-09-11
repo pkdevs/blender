@@ -1753,6 +1753,8 @@ static void find_intersections_between_curves(const Span<float2> points_i,
   }
 }
 
+/* TODO: This method of finding intersections is O(N^2) and should replaced with something faster.
+ * This should be optimized with a BVH. */
 static void find_intersections_between_shapes(const Span<float2> points,
                                               const GroupedSpan<int> shapes,
                                               const IndexMask &shapes_i,
