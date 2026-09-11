@@ -28,6 +28,25 @@ ccl_device int svm_integer_math_gcd(int a, int b)
   return a;
 }
 
+ccl_device int svm_integer_math_power(int base, int exponent)
+{
+  if (exponent < 0) {
+    if (base == 1 || base == -1) {
+      return (base < 0 && (exponent & 1) != 0) ? -1 : 1;
+    }
+    return 0;
+  }
+  int result = 1;
+  while (exponent != 0) {
+    if ((exponent & 1) != 0) {
+      result *= base;
+    }
+    exponent >>= 1;
+    base *= base;
+  }
+  return result;
+}
+
 ccl_device int svm_integer_math(const NodeIntegerMathType type,
                                 const int a,
                                 const int b,
@@ -45,7 +64,7 @@ ccl_device int svm_integer_math(const NodeIntegerMathType type,
     case NODE_INTEGER_MATH_MULTIPLY_ADD:
       return a * b + c;
     case NODE_INTEGER_MATH_POWER:
-      return int(powf(float(a), float(b)));
+      return svm_integer_math_power(a, b);
     case NODE_INTEGER_MATH_FLOORED_MODULO:
       return (b != 0) ? (((a % b) + b) % b) : 0;
     case NODE_INTEGER_MATH_ABSOLUTE:

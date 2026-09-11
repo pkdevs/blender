@@ -54,10 +54,29 @@ void integer_math_multiply_add(int a, int b, int c, int &result)
   result = a * b + c;
 }
 
+int integer_power(int base, int exponent)
+{
+  if (exponent < 0) {
+    if (base == 1 || base == -1) {
+      return (base < 0 && (exponent & 1) != 0) ? -1 : 1;
+    }
+    return 0;
+  }
+  int result = 1;
+  while (exponent != 0) {
+    if ((exponent & 1) != 0) {
+      result *= base;
+    }
+    exponent >>= 1;
+    base *= base;
+  }
+  return result;
+}
+
 [[node]]
 void integer_math_power(int base, int exponent, int /*c*/, int &result)
 {
-  result = int(pow(float(base), float(exponent)));
+  result = integer_power(base, exponent);
 }
 
 [[node]]
