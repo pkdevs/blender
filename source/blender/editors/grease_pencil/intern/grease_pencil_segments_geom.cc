@@ -1855,6 +1855,7 @@ static void create_connections_from_intersection_points(
       connect(start_a, end_b);
     }
     else if (is_start_a && !is_end_a && !is_start_b && !is_end_b) {
+      /* Pass. */
     }
     else if (!is_start_a && is_end_a && is_start_b && is_end_b) {
       connect(start_b, end_b);
@@ -1866,15 +1867,19 @@ static void create_connections_from_intersection_points(
       connect(end_a, end_b);
     }
     else if (!is_start_a && is_end_a && !is_start_b && !is_end_b) {
+      /* Pass. */
     }
     else if (!is_start_a && !is_end_a && is_start_b && is_end_b) {
       connect(start_b, end_b);
     }
     else if (!is_start_a && !is_end_a && is_start_b && !is_end_b) {
+      /* Pass. */
     }
     else if (!is_start_a && !is_end_a && !is_start_b && is_end_b) {
+      /* Pass. */
     }
     else if (!is_start_a && !is_end_a && !is_start_b && !is_end_b) {
+      /* Pass. */
     }
   }
 }
