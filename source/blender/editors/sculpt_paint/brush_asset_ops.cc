@@ -103,15 +103,6 @@ static wmOperatorStatus brush_asset_activate_exec(bContext *C, wmOperator *op)
   }
   Brush *brush = reinterpret_cast<Brush *>(
       bke::asset_edit_id_from_weak_reference(*bmain, ID_BR, brush_asset_reference));
-  if (brush == nullptr) {
-    /* The weak reference can fail to resolve, e.g. when the asset library path was changed and the
-     * brush's asset blend can no longer be found at the stored location. */
-    BKE_reportf(op->reports,
-                RPT_ERROR,
-                "Could not find brush asset '%s', check that its asset library path is correct",
-                asset->get_name().c_str());
-    return OPERATOR_CANCELLED;
-  }
 
   /* Activate brush through tool system rather than calling #BKE_paint_brush_set() directly, to let
    * the tool system switch tools if necessary, and update which brush was the last recently used
