@@ -322,7 +322,6 @@ def cmd_build(env: api.TestEnvironment, argv: list):
         help="Skip updating submodules when checking out revisions. Useful when testing performance regressions for library changes.")
     args = parser.parse_args(argv)
 
-    exit_code = 0
     update_submodules = not args.no_submodules
 
     configs = env.get_configs(args.config)
@@ -361,9 +360,7 @@ def cmd_build(env: api.TestEnvironment, argv: list):
                 print(f"{revision} done")
             else:
                 print(f"{revision} failed")
-                exit_code = 1
-
-    sys.exit(exit_code)
+                sys.exit(1)
 
 
 def cmd_run(env: api.TestEnvironment, argv: list, update_only: bool):
