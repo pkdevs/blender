@@ -1,0 +1,1 @@
+Referenced by issue #163789, Abkhaz letters Ԥ ԥ Ҟ ҟ draw as the missing-glyph box in the UI since the switch to Inter (regression of #62009)
