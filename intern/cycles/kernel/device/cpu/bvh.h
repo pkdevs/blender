@@ -260,6 +260,7 @@ ccl_device_forceinline void kernel_embree_custom_intersection_func_impl(
   const int prim_offset = kernel_data_fetch(object_prim_offset, object);
   const int prim = args->primID + prim_offset;
 
+  /* Currently only gaussian splats are handled via the custom geometry. */
   const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
   kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
 
@@ -339,6 +340,7 @@ ccl_device_forceinline void kernel_embree_custom_occluded_func_impl(
   const int prim_offset = kernel_data_fetch(object_prim_offset, object);
   const int prim = args->primID + prim_offset;
 
+  /* Currently only gaussian splats are handled via the custom geometry. */
   const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
   kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
 
