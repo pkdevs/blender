@@ -1686,10 +1686,14 @@ class ShaderNodesInliner {
       return src_value;
     }
     if (std::get_if<LinkedSocketValue>(&src_value.value)) {
-      if (to_socket_type.type == SOCK_BOOLEAN &&
-          ELEM(from_socket_type.type, SOCK_FLOAT, SOCK_INT, SOCK_RGBA))
-      {
-        return {this->insert_float_to_bool_conversion(src_value)};
+      if (to_socket_type.type == SOCK_BOOLEAN) {
+        if (ELEM(from_socket_type.type, SOCK_FLOAT, SOCK_INT, SOCK_RGBA)) {
+          /* The same to-bool conversion happens to work for integer and color sockets too. */
+          return {this->insert_float_to_bool_conversion(src_value)};
+        }
+        if (from_socket_type.type == SOCK_VECTOR) {
+          return {this->insert_vector_to_bool_conversion(src_value)};
+        }
       }
       return src_value;
     }
@@ -1744,12 +1748,24 @@ class ShaderNodesInliner {
   {
     bNode &math_node = *this->add_node("ShaderNodeMath"_ustr);
     math_node.custom1 = NODE_MATH_GREATER_THAN;
-    bNodeSocket &value_in = *static_cast<bNodeSocket *>(math_node.inputs.first);
+    bNodeSocket &value_in = *math_node.inputs.first();
     bNodeSocket &threshold_in = *value_in.next;
-    bNodeSocket &value_out = *static_cast<bNodeSocket *>(math_node.outputs.first);
+    bNodeSocket &value_out = *math_node.outputs.first();
     this->set_input_socket_value({}, math_node, value_in, src_value);
     static_cast<bNodeSocketValueFloat *>(threshold_in.default_value)->value = 0.0f;
     return {&math_node, &value_out};
+  }
+
+  /** This mimics #float3_to_bool. */
+  LinkedSocketValue insert_vector_to_bool_conversion(const SocketValue &src_value)
+  {
+    bNode &length_node = *this->add_node("ShaderNodeVectorMath"_ustr);
+    length_node.custom1 = NODE_VECTOR_MATH_LENGTH;
+    length_node.typeinfo->updatefunc(&dst_tree_, &length_node);
+    bNodeSocket &vector_in = *length_node.inputs.first();
+    bNodeSocket &length_out = *bke::node_find_socket(length_node, SOCK_OUT, "Value"_ustr);
+    this->set_input_socket_value({}, length_node, vector_in, src_value);
+    return this->insert_float_to_bool_conversion({LinkedSocketValue{&length_node, &length_out}});
   }
 
   void set_input_socket_value(const NodeInContext &original_node,
