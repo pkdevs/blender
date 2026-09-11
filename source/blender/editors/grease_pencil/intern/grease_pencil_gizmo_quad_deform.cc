@@ -126,12 +126,7 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
   selection.foreach_index(
       [&](const int point_i) {
         const float2 screen_co = project_to_screen(positions[point_i]);
-        // const float2 screen_co = float2(positions[point_i].x, positions[point_i].z);
-        // const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
-
         if (screen_co.x != V2D_IS_CLIPPED) {
-          // const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
-          // const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
           const float pixels = radii[point_i];
 
           std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
@@ -153,11 +148,6 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   // wmGizmo *gz = gzgroup->gizmos.first();
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
   wmGizmo *gz = mask_group->border;
-
-  // SpaceImage *sima = CTX_wm_space_image(C);
-  // const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
-
-  // node_gizmo_calc_matrix_space(region, sima->zoom, offset, gz->matrix_space);
 
   PointerRNA ptr;
   bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
@@ -296,15 +286,6 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
     }
   }
-
-  // box.min = float2(-1.0f, -1.0f);
-  // box.max = float2(1.0f, 1.0f);
-
-  // mul_v3_fl(gz->matrix_space[0], box.size().x);
-  // mul_v3_fl(gz->matrix_space[1], box.size().y);
-
-  // gz->matrix_space[3][0] = box.center().x;
-  // gz->matrix_space[3][1] = box.center().y;
 }
 
 /* translate callbacks */
@@ -323,11 +304,6 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
   values[0] = corner_pin_data->corner_pos[0];
   values[1] = corner_pin_data->corner_pos[1];
   values[2] = 0.0f;
-  // UNUSED_VARS_NDEBUG(gz_prop);
-
-  // corner_pin_data->corner_pos
-
-  // RNA_property_float_get_array(op->ptr, ggd->data.prop_plane_co, static_cast<float *>(value_p));
 }
 
 static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
@@ -471,8 +447,6 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
                                             const void *value_p)
 {
   BLI_assert(gz_prop->type->array_length == 3);
-  // GizmoGroup *ggd = static_cast<GizmoGroup *>(gz->parent_gzgroup->customdata);
-  // wmOperator *op = ggd->data.op;
 
   const float *values = static_cast<const float *>(value_p);
   const float3 position_value = float3(values);
@@ -480,13 +454,6 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
   CornerPinData *corner_pin_data = static_cast<CornerPinData *>(gz_prop->custom_func.user_data);
 
   corner_pin_data->corner_pos = float2(position_value.x, position_value.y);
-
-  // UNUSED_VARS_NDEBUG(gz_prop);
-
-  // RNA_property_float_set_array(
-  //     op->ptr, ggd->data.prop_plane_co, static_cast<const float *>(value_p));
-
-  // gizmo_bisect_exec(ggd);
 
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
@@ -506,43 +473,7 @@ static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo * /*gz*/,
   BLI_assert(gz_prop->type->array_length == 16);
 
   printf("gizmo_node_box_mask_prop_matrix_get\n");
-  // NodeBBoxWidgetGroup *mask_group = static_cast<NodeBBoxWidgetGroup *>(
-  //     gz->parent_gzgroup->customdata);
-  // const float2 dims = mask_group->state.dims;
-  // const float2 offset = mask_group->state.offset;
-  // const bNode *node = static_cast<const bNode *>(gz_prop->custom_func.user_data);
-  // const float aspect = dims.x / dims.y;
-
-  // float loc[3], rot[3][3], size[3];
-  // mat4_to_loc_rot_size(loc, rot, size, matrix);
-
-  // const bNodeSocket *rotation_input = bke::node_find_socket(*node, SOCK_IN, "Rotation"_ustr);
-  // const float rotation = rotation_input->default_value_typed<bNodeSocketValueFloat>()->value;
-  // axis_angle_to_mat3_single(rot, 'Z', rotation);
-
-  // const bNodeSocket *position_input = bke::node_find_socket(*node, SOCK_IN, "Position"_ustr);
-  // const float2 position = position_input->default_value_typed<bNodeSocketValueVector>()->value;
-  // loc[0] = (position.x - 0.5) * dims.x + offset.x;
-  // loc[1] = (position.y - 0.5) * dims.y + offset.y;
-  // loc[2] = 0;
-
-  // const bNodeSocket *size_input = bke::node_find_socket(*node, SOCK_IN, "Size"_ustr);
-  // const float2 size_value = size_input->default_value_typed<bNodeSocketValueVector>()->value;
-  // size[0] = size_value.x;
-  // size[1] = size_value.y * aspect;
-  // size[2] = 1;
-
-  // loc_rot_size_to_mat4(matrix, loc, rot, size);
 }
-
-// static void gizmo_node_bbox_update(NodeBBoxWidgetGroup *bbox_group)
-// {
-//   RNA_property_update(
-//       bbox_group->update_data.context, &bbox_group->update_data.ptr,
-//       bbox_group->update_data.prop);
-// }
-
-// struct Data
 
 static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
                                                 wmGizmoProperty *gz_prop,
@@ -555,50 +486,6 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
   update_positions_transform(mask_group, mat);
-
-  // const float2 dims = mask_group->state.dims;
-  // const float2 offset = mask_group->state.offset;
-  // bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
-
-  // bNodeSocket *position_input = bke::node_find_socket(*node, SOCK_IN, "Position"_ustr);
-  // const float2 position = position_input->default_value_typed<bNodeSocketValueVector>()->value;
-
-  // bNodeSocket *size_input = bke::node_find_socket(*node, SOCK_IN, "Size"_ustr);
-  // const float2 size_value = size_input->default_value_typed<bNodeSocketValueVector>()->value;
-
-  // const float aspect = dims.x / dims.y;
-  // rctf rct;
-  // rct.xmin = position.x - size_value.x / 2;
-  // rct.xmax = position.x + size_value.x / 2;
-  // rct.ymin = position.y - size_value.y / 2;
-  // rct.ymax = position.y + size_value.y / 2;
-
-  // float loc[3];
-  // float rot[3][3];
-  // float size[3];
-  // mat4_to_loc_rot_size(loc, rot, size, matrix);
-
-  // float eul[3];
-
-  // /* Rotation can't be extracted from matrix when the gizmo width or height is zero. */
-  // if (size[0] != 0 and size[1] != 0) {
-  //   mat4_to_eul(eul, matrix);
-  //   bNodeSocket *rotation_input = bke::node_find_socket(*node, SOCK_IN, "Rotation"_ustr);
-  //   rotation_input->default_value_typed<bNodeSocketValueFloat>()->value = eul[2];
-  // }
-
-  // BLI_rctf_resize(&rct, fabsf(size[0]), fabsf(size[1]) / aspect);
-  // BLI_rctf_recenter(
-  //     &rct, ((loc[0] - offset.x) / dims.x) + 0.5, ((loc[1] - offset.y) / dims.y) + 0.5);
-
-  // size_input->default_value_typed<bNodeSocketValueVector>()->value[0] = size[0];
-  // size_input->default_value_typed<bNodeSocketValueVector>()->value[1] = size[1] / aspect;
-  // position_input->default_value_typed<bNodeSocketValueVector>()->value[0] = rct.xmin + size[0] /
-  // 2; position_input->default_value_typed<bNodeSocketValueVector>()->value[1] = rct.ymin +
-  //                                                                           size[1] / aspect /
-  //                                                                           2;
-
-  // gizmo_node_bbox_update(mask_group);
 }
 
 static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
@@ -706,37 +593,7 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
 
-  // void *lock;
-  // Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Render Result");
-  // ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
-
-  // if (ibuf == nullptr) [[unlikely]] {
-  //   WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-  //   BKE_image_release_ibuf(ima, ibuf, lock);
-  //   return;
-  // }
-
-  // mask_group->state.dims = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
-  // mask_group->state.offset = flag_is_set(ibuf->flags, ImBufFlags::HasDisplayWindow) ?
-  //                                float2(ibuf->display_offset) :
-  //                                float2(0.0f);
-
-  // RNA_float_set_array(gz->ptr, "dimensions", mask_group->state.dims);
-  // WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-
-  // const SpaceNode *snode = find_active_node_editor(C);
-  // BLI_assert(snode != nullptr);
-
-  // bNode *node = bke::node_get_active(*snode->edittree);
-
   mask_group->update_data.context = const_cast<bContext *>(C);
-  // bNodeSocket *source_input = bke::node_find_socket(*node, SOCK_IN, "Mask"_ustr);
-  // mask_group->update_data.ptr = RNA_pointer_create_discrete(
-  //     reinterpret_cast<ID *>(snode->edittree), RNA_NodeSocket, source_input);
-  // mask_group->update_data.prop = RNA_struct_find_property(&mask_group->update_data.ptr,
-  // "enabled"); BLI_assert(mask_group->update_data.prop != nullptr);
-
-  // BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
 static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
@@ -772,8 +629,6 @@ void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
   gzgt->draw_prepare = bbox_draw_prepare_space_image;
 
   RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::FREE), "Mode", "");
-
-  // RNA_def_enum_flag(gzgt->srna, "axis", rna_enum_axis_flag_xyz_items, (1 << 2), "Axis", "");
 }
 
 }  // namespace ed::greasepencil
