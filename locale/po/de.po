@@ -1,11 +1,11 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'f5df8c32f99b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:38+0000\n"
-"PO-Revision-Date: 2026-08-11 22:16+0000\n"
-"Last-Translator: Raimund Klink <raimund.klink97@yahoo.de>\n"
+"POT-Creation-Date: 2026-09-07 07:47+0000\n"
+"PO-Revision-Date: 2026-08-25 20:13+0000\n"
+"Last-Translator: \"Mattis V.\" <mattis@users.noreply.translate.blender.org>\n"
 "Language-Team: German <https://translate.blender.org/projects/blender-ui/ui/de/>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
@@ -3208,10 +3208,6 @@ msgstr "Blendfile Import Kontext Bibliotheken"
 
 msgid "Collection of source libraries, i.e. blendfile paths"
 msgstr "Sammlung von Quellbibliotheken, d.h. Blenddateien-Pfade"
-
-
-msgid "Blendfile Import Context Library"
-msgstr "Blenddatei Import Kontext Bibliothek"
 
 
 msgid "Dirty"
@@ -11110,7 +11106,7 @@ msgstr "Durchschnitt"
 
 
 msgid "Subframes"
-msgstr "Unterrahmen"
+msgstr "Teilbild"
 
 
 msgid "Is Planar"
@@ -19300,20 +19296,16 @@ msgid "Material slot name"
 msgstr "Materialsteckplatzname"
 
 
-msgid "Snap"
-msgstr "Einrasten"
+msgid "Select More/Less"
+msgstr "Mehr/weniger anzeigen"
 
 
-msgid "Proportional Editing Falloff"
-msgstr "Proportionaler Bearbeitungsabfall"
+msgid "Instances"
+msgstr "Instanzen"
 
 
 msgid "Read"
 msgstr "Lesen"
-
-
-msgid "Mask Edit"
-msgstr "Maskenbearbeitung"
 
 
 msgid "Sample"
@@ -19328,60 +19320,16 @@ msgid "Primitives"
 msgstr "Grundkörper"
 
 
-msgid "Vertex Group Locks"
-msgstr "Punktgruppen sperren"
-
-
-msgid "Instances"
-msgstr "Instanzen"
-
-
 msgid "Import"
 msgstr "Importieren"
 
 
-msgid "Mirror"
-msgstr "Spiegeln"
-
-
-msgid "Local View"
-msgstr "Lokale Ansicht"
+msgid "Select Loops"
+msgstr "Schleifen auswählen"
 
 
 msgid "Viewpoint"
 msgstr "Ansicht"
-
-
-msgid "Navigation"
-msgstr "Navigation"
-
-
-msgid "Align View"
-msgstr "Ansicht ausrichten"
-
-
-msgid "Align View to Active"
-msgstr "Ansicht auf Aktiv ausrichten"
-
-
-msgid "View Regions"
-msgstr "Vierfenster Ansicht"
-
-
-msgid "Select More/Less"
-msgstr "Mehr/weniger anzeigen"
-
-
-msgid "Math"
-msgstr "Mathematisch"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Select Similar"
-msgstr "Ähnliche auswählen"
 
 
 msgid "Select All by Trait"
@@ -19392,84 +19340,96 @@ msgid "Select Linked"
 msgstr "Verknüpfte auswählen"
 
 
-msgid "Select Loops"
-msgstr "Schleifen auswählen"
+msgid "Select Similar"
+msgstr "Ähnliche auswählen"
 
 
-msgid "Assign Material"
-msgstr "Material zuweisen"
+msgid "Math"
+msgstr "Mathe"
 
 
-msgid "Metaball"
-msgstr "Metaball"
+msgid "Align View to Active"
+msgstr "Ansicht auf Aktiv ausrichten"
 
 
-msgid "Light"
-msgstr "Licht"
+msgid "UV"
+msgstr "UV"
 
 
-msgid "Light Probe"
-msgstr "Lichtsonde"
+msgid "View Regions"
+msgstr "Vierfenster Ansicht"
 
 
-msgid "Add Image"
-msgstr "Bild hinzufügen"
+msgid "Navigation"
+msgstr "Navigation"
 
 
-msgid "Relations"
-msgstr "Beziehungen"
+msgid "Align View"
+msgstr "Ansicht ausrichten"
 
 
-msgid "Rigid Body"
-msgstr "Rigid Body"
+msgid "Local View"
+msgstr "Lokale Ansicht"
 
 
-msgid "Apply"
-msgstr "Anwenden"
+msgid "Snap"
+msgstr "Einrasten"
 
 
-msgid "Track"
-msgstr "Spur"
+msgid "Mirror"
+msgstr "Spiegeln"
 
 
-msgid "Quick Effects"
-msgstr "Schnelle Effekte"
+msgid "Vertex Group Locks"
+msgstr "Punktgruppen sperren"
 
 
-msgid "Show/Hide"
-msgstr "Zeigen/Verbergen"
+msgid "Mask Edit"
+msgstr "Maskenbearbeitung"
 
 
-msgid "Linked"
-msgstr "Verknüpft"
+msgid "Proportional Editing Falloff"
+msgstr "Proportionaler Bearbeitungsabfall"
+
+
+msgid "Pivot Point"
+msgstr "Drehpunkt"
 
 
 msgid "Clean Up"
 msgstr "Aufräumen"
 
 
+msgid "Show/Hide"
+msgstr "Zeigen/Verbergen"
+
+
+msgid "Names"
+msgstr "Namen"
+
+
+msgid "Linked"
+msgstr "Verknüpft"
+
+
 msgid "Layout"
 msgstr "Layout"
 
 
-msgid "Asset"
-msgstr "Asset"
+msgid "Metaball"
+msgstr "Metaball"
 
 
-msgid "Make Single User"
-msgstr "Einfachen Benutzer erzeugen"
+msgid "Kerning"
+msgstr "Kerning"
 
 
-msgid "Convert"
-msgstr "Konvertieren"
+msgid "Special Characters"
+msgstr "Sonderzeichen"
 
 
-msgid "Hooks"
-msgstr "Haken"
-
-
-msgid "Random Mask"
-msgstr "Zufällige Maske"
+msgid "Merge"
+msgstr "Zusammenführen"
 
 
 msgid "Keying"
@@ -19480,52 +19440,88 @@ msgid "Tracking"
 msgstr "Verfolgen"
 
 
-msgid "Clear Transform"
-msgstr "Transformation löschen"
-
-
-msgid "In-Betweens"
-msgstr "Dazwischen"
-
-
-msgid "Names"
-msgstr "Namen"
-
-
-msgid "Toggle Bone Options"
-msgstr "Knochen-Optionen umschalten"
-
-
-msgid "Enable Bone Options"
-msgstr "Knochen-Optionen einschalten"
-
-
-msgid "Disable Bone Options"
-msgstr "Knochen-Optionen ausschalten"
+msgid "Face Data"
+msgstr "Flächendaten"
 
 
 msgid "Mesh Select Mode"
 msgstr "Maschenauswahlmodus"
 
 
-msgid "Face Data"
-msgstr "Flächendaten"
+msgid "Disable Bone Options"
+msgstr "Knochen-Optionen ausschalten"
 
 
-msgid "Merge"
-msgstr "Zusammenführen"
+msgid "Enable Bone Options"
+msgstr "Knochen-Optionen einschalten"
 
 
-msgid "Special Characters"
-msgstr "Sonderzeichen"
+msgid "Toggle Bone Options"
+msgstr "Knochen-Optionen umschalten"
 
 
-msgid "Kerning"
-msgstr "Kerning"
+msgid "Apply"
+msgstr "Anwenden"
 
 
-msgid "Pivot Point"
-msgstr "Drehpunkt"
+msgid "In-Betweens"
+msgstr "Dazwischen"
+
+
+msgid "Clear Transform"
+msgstr "Transformation löschen"
+
+
+msgid "Random Mask"
+msgstr "Zufällige Maske"
+
+
+msgid "Hooks"
+msgstr "Haken"
+
+
+msgid "Make Single User"
+msgstr "Einfachen Benutzer erzeugen"
+
+
+msgid "Convert"
+msgstr "Konvertieren"
+
+
+msgid "Asset"
+msgstr "Asset"
+
+
+msgid "Quick Effects"
+msgstr "Schnelle Effekte"
+
+
+msgid "Track"
+msgstr "Spur"
+
+
+msgid "Rigid Body"
+msgstr "Rigid Body"
+
+
+msgid "Add Image"
+msgstr "Bild hinzufügen"
+
+
+msgid "Relations"
+msgstr "Beziehungen"
+
+
+msgid "Light Probe"
+msgstr "Lichtsonde"
+
+
+msgid "Assign Material"
+msgstr "Material zuweisen"
+
+
+msgid "Light"
+msgstr "Licht"
 
 
 msgid "Assets"
@@ -20262,7 +20258,7 @@ msgstr "Punkt Strich"
 
 
 msgid "Dynamic Paint"
-msgstr "Dynamisch Malen"
+msgstr "Dynamische Farbe"
 
 
 msgid "Explode"
@@ -20846,7 +20842,7 @@ msgstr "Texturkoordinaten Objekt"
 
 
 msgid "Dynamic Paint Modifier"
-msgstr "Dynamisch Malen Modifikator"
+msgstr "Dynamische Farbe Modifikator"
 
 
 msgid "EdgeSplit Modifier"
@@ -24880,6 +24876,10 @@ msgid "Vector Curves"
 msgstr "Vektorkurve"
 
 
+msgid "Vector Math"
+msgstr "Vektormathe"
+
+
 msgid "A cross B"
 msgstr "A geschnitten B"
 
@@ -25742,6 +25742,11 @@ msgstr "Studiolicht deinstallieren"
 msgctxt "Operator"
 msgid "Install Theme..."
 msgstr "Thema installieren..."
+
+
+msgctxt "Operator"
+msgid "Add Asset Library"
+msgstr "Hinzufügen der Asset-Bibliothek"
 
 
 msgid "Add an Integrator Preset"
@@ -27203,8 +27208,8 @@ msgstr "Kontextmenü"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Akzeptieren"
+msgid "Select Directory"
+msgstr "Verzeichnis auswählen"
 
 
 msgid "Open a directory browser, hold Shift to open the file, Alt to browse containing directory"
@@ -28635,7 +28640,7 @@ msgstr "Ausgabedateipfad"
 
 msgctxt "Operator"
 msgid "Dynamic Paint Bake"
-msgstr "Dynamisch-Malen backen"
+msgstr "Dynamische Farbe backen"
 
 
 msgctxt "Operator"
@@ -29222,11 +29227,6 @@ msgid "Select or deselect all files"
 msgstr "Alle Dateien aus-/abwählen"
 
 
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Verzeichnis auswählen"
-
-
 msgid "Walk Direction"
 msgstr "Laufrichtung"
 
@@ -29286,7 +29286,7 @@ msgstr "Gesamte Flüssigkeitssimulation backen"
 
 msgctxt "Operator"
 msgid "Bake Data"
-msgstr "Backdaten"
+msgstr "Daten backen"
 
 
 msgid "Bake Fluid Data"
@@ -29315,7 +29315,7 @@ msgstr "Partikel backen"
 
 msgctxt "Operator"
 msgid "Free All"
-msgstr "Alles frei"
+msgstr "Alles freigeben"
 
 
 msgctxt "Operator"
@@ -35307,11 +35307,6 @@ msgstr "Entfernen vorhandener Vorlage mit derselben ID"
 
 
 msgctxt "Operator"
-msgid "Add Asset Library"
-msgstr "Hinzufügen der Asset-Bibliothek"
-
-
-msgctxt "Operator"
 msgid "Remove Asset Library"
 msgstr "Asset Library entfernen"
 
@@ -35898,6 +35893,10 @@ msgstr "Neuer Bildschirm"
 
 msgid "Add a new screen"
 msgstr "Neues Layout hinzufügen"
+
+
+msgid "Active Section"
+msgstr "Aktive Auswahl"
 
 
 msgctxt "Operator"
@@ -36746,6 +36745,10 @@ msgstr "Eingänge vertauschen"
 msgctxt "Operator"
 msgid "Deselect All"
 msgstr "Alles abwählen"
+
+
+msgid "Add a text strip to the sequencer"
+msgstr "Textstreifen zum Sequenzer hinzufügen"
 
 
 msgctxt "Operator"
@@ -39328,20 +39331,32 @@ msgid "Active Palette Color"
 msgstr "Aktive Farbpalette"
 
 
-msgid "Active Tool"
-msgstr "Aktives Werkzeug"
+msgid "Guides"
+msgstr "Hilfslinien"
 
 
-msgid "View Lock"
-msgstr "Ansicht sperren"
+msgid "Drawing Plane"
+msgstr "Malfläche"
 
 
-msgid "Shadow Settings"
-msgstr "Schatteneinstellungen"
+msgid "Transform Orientations"
+msgstr "Transformationsausrichtung"
 
 
-msgid "SSAO Settings"
-msgstr "SSAO Einstellungen"
+msgid "Curve Edit Mode"
+msgstr "Kurven-Bearbeitungsmodus"
+
+
+msgid "Measurement"
+msgstr "Messung"
+
+
+msgid "Mesh Edit Mode"
+msgstr "Maschenbearbeitungsmodus"
+
+
+msgid "Motion Tracking"
+msgstr "Bewegungsverfolgung"
 
 
 msgid "Cavity"
@@ -39356,52 +39371,40 @@ msgid "Overlays"
 msgstr "Überlagerungen"
 
 
-msgid "Guides"
-msgstr "Hilfslinien"
+msgid "SSAO Settings"
+msgstr "SSAO Einstellungen"
 
 
-msgid "Motion Tracking"
-msgstr "Bewegungsverfolgung"
+msgid "Shadow Settings"
+msgstr "Schatteneinstellungen"
 
 
-msgid "Mesh Edit Mode"
-msgstr "Maschenbearbeitungsmodus"
+msgid "Active Tool"
+msgstr "Aktives Werkzeug"
 
 
-msgid "Measurement"
-msgstr "Messung"
+msgid "View Lock"
+msgstr "Ansicht sperren"
 
 
-msgid "Curve Edit Mode"
-msgstr "Kurven-Bearbeitungsmodus"
-
-
-msgid "Transform Orientations"
-msgstr "Transformationsausrichtung"
-
-
-msgid "Drawing Plane"
-msgstr "Malfläche"
-
-
-msgid "Quad View"
-msgstr "Vierfenster-Ansicht"
-
-
-msgid "Onion Skin"
-msgstr "Zwiebelhaut"
-
-
-msgid "Stereoscopy"
-msgstr "Stereoskopie"
+msgid "VR"
+msgstr "VR"
 
 
 msgid "Auto-Masking"
 msgstr "Automatisches Maskieren"
 
 
-msgid "VR"
-msgstr "VR"
+msgid "Stereoscopy"
+msgstr "Stereoskopie"
+
+
+msgid "Onion Skin"
+msgstr "Zwiebelhaut"
+
+
+msgid "Quad View"
+msgstr "Vierfenster-Ansicht"
 
 
 msgid "Chain Scaling"
@@ -40331,7 +40334,7 @@ msgstr "Aktionskarten"
 
 
 msgid "Passepartout"
-msgstr "Hauptschlüssel"
+msgstr "Passepartout"
 
 
 msgid "VR Session"
@@ -41024,10 +41027,6 @@ msgstr "IK Rotationskontrolle"
 
 msgid "Global preferences"
 msgstr "GlobaleEinstellungen"
-
-
-msgid "Active Section"
-msgstr "Aktive Auswahl"
 
 
 msgid "Apps"
@@ -42967,6 +42966,10 @@ msgid "Region height"
 msgstr "Regionhöhe"
 
 
+msgid "Live search filtering string"
+msgstr "Suchfilter-Zeichenkette"
+
+
 msgid "View2D"
 msgstr "2D anschauen"
 
@@ -43468,7 +43471,7 @@ msgstr "Existierende Dateien beim Rendern überschreiben"
 
 
 msgid "Persistent Data"
-msgstr "Elternteil setzen"
+msgstr "Bleibende Daten"
 
 
 msgid "Placeholders"
@@ -44973,7 +44976,7 @@ msgstr "Gewebe-Punkt-Puffer der aktiven Objekte anzeigen"
 
 
 msgid "Show the active object's Dynamic Paint cache"
-msgstr "'Dynamisch Malen' Cache der aktiven Objekte anzeigen"
+msgstr "Cache der dynamischen Farbe des aktiven Objekts anzeigen"
 
 
 msgid "Show the active object's particle point cache"
@@ -45325,10 +45328,6 @@ msgid "Show only selectable objects"
 msgstr "Nur selektierbare Objekte anzeigen"
 
 
-msgid "Live search filtering string"
-msgstr "Suchfilter-Zeichenkette"
-
-
 msgid "Hierarchies"
 msgstr "Hierarchieen"
 
@@ -45477,16 +45476,16 @@ msgid "Active Tool and Workspace settings"
 msgstr "Aktive Werkzeug- und Arbeitsbereichseinstellungen"
 
 
-msgid "Scene Properties"
-msgstr "Szeneneigenschaften"
-
-
 msgid "Render Properties"
 msgstr "Rendereigenschaften"
 
 
 msgid "Output Properties"
 msgstr "Ausgabeeigenschaften"
+
+
+msgid "Scene Properties"
+msgstr "Szeneneigenschaften"
 
 
 msgid "View Layer Properties"
@@ -47204,6 +47203,10 @@ msgid "Bone Solid"
 msgstr "Solider Knochen"
 
 
+msgid "Camera Passepartout"
+msgstr "Kamera-Passepartout"
+
+
 msgid "Camera Path"
 msgstr "Kamerapfad"
 
@@ -47685,6 +47688,10 @@ msgid "Display units in pairs (e.g. 1m 0cm)"
 msgstr "Einheiten in Paaren darstellen, z.B. 1m 0cm"
 
 
+msgid "UUID"
+msgstr "UUID"
+
+
 msgid "Group of vertices, used for armature deform and other purposes"
 msgstr "Gruppe von Knoten, benützt zur Skelettdeformation und für andere Zwecke"
 
@@ -47787,6 +47794,10 @@ msgstr "Z Achsenlinie anzeigen"
 
 msgid "Show Bones"
 msgstr "Knochen anzeigen"
+
+
+msgid "Show camera passepartout"
+msgstr "Kamera-Passepartout anzeigen"
 
 
 msgid "Show 3D Cursor"
@@ -48441,46 +48452,6 @@ msgstr "3D Ansichtswerkzeug: Transformieren (Plan B)"
 
 
 msgctxt "WindowManager"
-msgid "Generic Tool: Annotate"
-msgstr "Allgemeines Werkzeug: Kommentar"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate (fallback)"
-msgstr "Allgemeines Werkzeug: Kommentar (Plan B)"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Line"
-msgstr "Allgemeines Werkzeug: Linienkommentar"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Line (fallback)"
-msgstr "Allgemeines Werkzeug: Linienkommentar (Plan B)"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Polygon"
-msgstr "Allgemeines Werkzeug: Polygonkommentar"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Polygon (fallback)"
-msgstr "Allgemeines Werkzeug: Polygonkommentar (Plan B)"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Eraser"
-msgstr "Allgemeines Werkzeug: Radiergummikommentar"
-
-
-msgctxt "WindowManager"
-msgid "Generic Tool: Annotate Eraser (fallback)"
-msgstr "Allgemeines Werkzeug: Radiergummikommentar (Plan B)"
-
-
-msgctxt "WindowManager"
 msgid "3D View Tool: Measure"
 msgstr "3D Ansichtswerkzeug: Messen"
 
@@ -48878,6 +48849,26 @@ msgstr "Y Ebene"
 msgctxt "WindowManager"
 msgid "Z Plane"
 msgstr "Z Ebene"
+
+
+msgctxt "WindowManager"
+msgid "Generic Tool: Annotate"
+msgstr "Allgemeines Werkzeug: Kommentar"
+
+
+msgctxt "WindowManager"
+msgid "Generic Tool: Annotate Line"
+msgstr "Allgemeines Werkzeug: Linienkommentar"
+
+
+msgctxt "WindowManager"
+msgid "Generic Tool: Annotate Polygon"
+msgstr "Allgemeines Werkzeug: Polygonkommentar"
+
+
+msgctxt "WindowManager"
+msgid "Generic Tool: Annotate Eraser"
+msgstr "Allgemeines Werkzeug: Radiergummikommentar"
 
 
 msgctxt "Operator"
@@ -51250,10 +51241,6 @@ msgid "Asset Catalog:"
 msgstr "Asset Katalog:"
 
 
-msgid "UUID"
-msgstr "UUID"
-
-
 msgid "Simple Name"
 msgstr "Einfacher Name"
 
@@ -51615,12 +51602,12 @@ msgid "All View Layers"
 msgstr "Alle Ebenen anzeigen"
 
 
-msgid "Object Contents"
-msgstr "Objektinhalt"
-
-
 msgid "Object Children"
 msgstr "Objekt Kinder"
+
+
+msgid "Object Contents"
+msgstr "Objektinhalt"
 
 
 msgctxt "Operator"
@@ -51718,6 +51705,11 @@ msgstr "Springe zum nächsten Streifen (Zentrum)"
 
 
 msgctxt "Operator"
+msgid "Text"
+msgstr "Text"
+
+
+msgctxt "Operator"
 msgid "Fade"
 msgstr "Fading"
 
@@ -51810,23 +51802,8 @@ msgstr "Griff"
 
 
 msgctxt "Operator"
-msgid "Clip..."
-msgstr "Clip..."
-
-
-msgctxt "Operator"
-msgid "Mask..."
-msgstr "Maske..."
-
-
-msgctxt "Operator"
 msgid "Color"
 msgstr "Farbe"
-
-
-msgctxt "Operator"
-msgid "Text"
-msgstr "Text"
 
 
 msgctxt "Operator"
@@ -51881,11 +51858,6 @@ msgstr "Ausblendung löschen"
 
 msgid "Resolutions"
 msgstr "Auflösung"
-
-
-msgctxt "Operator"
-msgid "Clip"
-msgstr "Clip"
 
 
 msgctxt "Operator"
@@ -55690,7 +55662,7 @@ msgstr "Keine Einzelbilder zum Backen"
 
 
 msgid "Bake failed: no Dynamic Paint modifier found"
-msgstr "Backen fehlgeschlagen: kein Dynamisch Malen-Modifikator gefunden"
+msgstr "Backen fehlgeschlagen: kein Dynamische Farbe-Modifikator gefunden"
 
 
 msgid "Bake failed: invalid canvas"
@@ -56596,10 +56568,6 @@ msgstr "(leer)"
 
 msgid "Add a color strip to the sequencer"
 msgstr "Farbstreifeneffekt zum Sequenzer hinzufügen"
-
-
-msgid "Add a text strip to the sequencer"
-msgstr "Textstreifen zum Sequenzer hinzufügen"
 
 
 msgid "Add a color mix effect strip to the sequencer"
@@ -57945,12 +57913,12 @@ msgid "BSDF"
 msgstr "BSDF"
 
 
-msgid "IOR"
-msgstr "Brechungsindex"
-
-
 msgid "Anisotropy"
 msgstr "Anisotropisch"
+
+
+msgid "IOR"
+msgstr "Brechungsindex"
 
 
 msgid "RoughnessU"
