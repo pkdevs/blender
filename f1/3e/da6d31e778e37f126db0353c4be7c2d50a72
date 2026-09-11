@@ -1,3 +1,4 @@
 Referenced by issue #158055, Box selecting origin in pose mode selects first bone in armature
 Referenced by issue #163605, Clicking a motion tracking reconstruction bundle in the 3D viewport no longer selects the track
 Referenced by pull request #163607, Fix #163605: Viewport pick selection of motion tracks fails
+Referenced by commit af8e35b83435027aaf61de934ef2b82fb0990a1b, Fix #163605: Viewport pick selection of motion tracks fails
