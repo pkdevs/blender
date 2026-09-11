@@ -54,6 +54,9 @@ static const EnumPropertyItem prop_deform_modes[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+constexpr float gizmo_scale_basis_grid = 0.03f;
+constexpr float gizmo_scale_basis_perspective = 0.08f;
+
 static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupType *gzgt)
 {
   if (!ED_gizmo_poll_or_unlink_delayed_from_tool(C, gzgt)) {
@@ -254,6 +257,17 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   for (int i = 0; i < 4; i++) {
     CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
     corner_pin_data->corner_pos = corner_positions[i];
+    wmGizmo *gz = corner_pin_data->gizmos;
+
+    if (mask_group->mode == DeformMode::GRID) {
+      RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
+
+      gz->scale_basis = gizmo_scale_basis_grid;
+    }
+    else {
+      RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+      gz->scale_basis = gizmo_scale_basis_perspective;
+    }
   }
 
   if (box) {
@@ -545,13 +559,9 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
     corner_pin_data->gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
 
     wmGizmo *gz = corner_pin_data->gizmos;
-    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
-    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
 
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
     // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
-
-    gz->scale_basis = 0.1f;
 
     corner_pin_data->index = i;
 
