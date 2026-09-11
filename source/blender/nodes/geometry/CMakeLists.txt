@@ -359,6 +359,7 @@ set(LIB
   PRIVATE bf::windowmanager
   PRIVATE bf::dependencies::optional::gmp
   PRIVATE bf::dependencies::optional::bullet
+  PRIVATE bf::dependencies::optional::jolt
 )
 
 if(WITH_IO_STL)
@@ -394,13 +395,6 @@ endif()
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
 endif()
-
-list(APPEND INC_SYS
-  ${JOLT_INCLUDE_DIRS}
-)
-list(APPEND LIB
-  ${JOLT_LIBRARIES}
-)
 
 add_node_discovery(
   bf_nodes_geometry_generated

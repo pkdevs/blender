@@ -151,6 +151,7 @@ set(LIB
   PRIVATE bf::extern::curve_fit_nd
   PRIVATE bf::dependencies::optional::manifold
   PRIVATE bf::dependencies::optional::gmp
+  PRIVATE bf::dependencies::optional::jolt
 )
 
 if(WITH_UV_SLIM)
@@ -163,13 +164,6 @@ endif()
 if(WITH_MANIFOLD)
   add_definitions(-DWITH_MANIFOLD)
 endif()
-
-list(APPEND INC_SYS
-  ${JOLT_INCLUDE_DIRS}
-)
-list(APPEND LIB
-  ${JOLT_LIBRARIES}
-)
 
 blender_add_lib(bf_geometry "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::geometry ALIAS bf_geometry)
