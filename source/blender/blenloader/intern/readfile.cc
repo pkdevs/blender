@@ -4114,6 +4114,10 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
   BLO_read_struct_list(reader, bPathCompare, &user->autoexec_paths);
   BLO_read_struct_list(reader, bUserScriptDirectory, &user->script_directories);
   BLO_read_struct_list(reader, bUserAssetLibrary, &user->asset_libraries);
+  BLO_read_struct_list(reader, bUserKeymapLabel, &user->keymap_labels);
+  BLO_read_struct_list(reader, bUserKeymapLabelItem, &user->keymap_label_items);
+  BLO_read_struct_list(reader, bUserKeymapHidden, &user->keymap_hidden);
+  BLO_read_struct_list(reader, bUserKeymapName, &user->keymap_names);
   BLO_read_struct_list(reader, bUserExtensionRepo, &user->extension_repos);
   BLO_read_struct_list(reader, bUserAssetShelfSettings, &user->asset_shelves_settings);
 

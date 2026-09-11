@@ -26,6 +26,7 @@
 #include "BKE_context.hh"
 #include "BKE_idprop.hh"
 #include "BKE_main.hh"
+#include "BKE_preferences.h"
 #include "BKE_screen.hh"
 
 #include "ED_asset.hh"
@@ -356,6 +357,8 @@ static void remove_shortcut_func(bContext *C, Button *but)
                                             EVT_TYPE_MASK_HOTKEY_EXCLUDE,
                                             &km);
   BLI_assert(kmi != nullptr);
+
+  BKE_preferences_keymap_item_forget(&U, km->idname, km->spaceid, km->regionid, kmi->id);
 
   WM_keymap_remove_item(km, kmi);
   U.runtime.is_dirty = true;

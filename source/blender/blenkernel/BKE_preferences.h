@@ -40,6 +40,103 @@ bool exists();
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Key Map Labels \{ */
+
+struct bUserKeymapLabel *BKE_preferences_keymap_label_find(const struct UserDef *userdef,
+                                                           const char *name) ATTR_NONNULL(1, 2);
+/** Find or create the label, null for an empty name. */
+struct bUserKeymapLabel *BKE_preferences_keymap_label_ensure(struct UserDef *userdef,
+                                                             const char *name)
+    ATTR_NONNULL(1, 2);
+/** Remove the label and every item carrying it. */
+void BKE_preferences_keymap_label_remove(struct UserDef *userdef,
+                                         struct bUserKeymapLabel *label) ATTR_NONNULL(1, 2);
+bool BKE_preferences_keymap_label_item_has(const struct UserDef *userdef,
+                                           const char *label,
+                                           const char *keymap_idname,
+                                           int spaceid,
+                                           int regionid,
+                                           int item_id) ATTR_NONNULL(1, 2, 3);
+/** Add or remove a label on a key map item, returns true when changed. */
+bool BKE_preferences_keymap_label_item_set(struct UserDef *userdef,
+                                           const char *label,
+                                           const char *keymap_idname,
+                                           int spaceid,
+                                           int regionid,
+                                           int item_id,
+                                           bool value) ATTR_NONNULL(1, 2, 3);
+/** Remove every label from a key map item, returns true when changed. */
+bool BKE_preferences_keymap_label_items_clear(struct UserDef *userdef,
+                                              const char *keymap_idname,
+                                              int spaceid,
+                                              int regionid,
+                                              int item_id) ATTR_NONNULL(1, 2);
+void BKE_preferences_keymap_labels_clear(struct UserDef *userdef) ATTR_NONNULL(1);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key Map Item Names \{ */
+
+/** The user defined name of a key map item, or null. */
+const char *BKE_preferences_keymap_name_get(const struct UserDef *userdef,
+                                            const char *keymap_idname,
+                                            int spaceid,
+                                            int regionid,
+                                            int item_id) ATTR_NONNULL(1, 2);
+/** Set the name, a null or empty \a name removes it. Returns true when changed. */
+bool BKE_preferences_keymap_name_set(struct UserDef *userdef,
+                                     const char *keymap_idname,
+                                     int spaceid,
+                                     int regionid,
+                                     int item_id,
+                                     const char *name) ATTR_NONNULL(1, 2);
+void BKE_preferences_keymap_names_clear(struct UserDef *userdef) ATTR_NONNULL(1);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Usage History Hidden Items \{ */
+
+/** Whether a key map item is excluded from the usage history. */
+bool BKE_preferences_keymap_is_hidden(const struct UserDef *userdef,
+                                      const char *keymap_idname,
+                                      int spaceid,
+                                      int regionid,
+                                      int item_id) ATTR_NONNULL(1, 2);
+/** Hide or unhide a key map item, returns true when changed. */
+bool BKE_preferences_keymap_hidden_set(struct UserDef *userdef,
+                                       const char *keymap_idname,
+                                       int spaceid,
+                                       int regionid,
+                                       int item_id,
+                                       bool value) ATTR_NONNULL(1, 2);
+bool BKE_preferences_operator_is_hidden(const struct UserDef *userdef,
+                                        const char *idname,
+                                        const char *variant) ATTR_NONNULL(1, 2);
+bool BKE_preferences_operator_hidden_set(struct UserDef *userdef,
+                                         const char *idname,
+                                         const char *variant,
+                                         bool value) ATTR_NONNULL(1, 2);
+void BKE_preferences_hidden_clear(struct UserDef *userdef) ATTR_NONNULL(1);
+/** Hide the default set of operators (timers, view navigation, key map editor operators). */
+void BKE_preferences_hidden_defaults_add(struct UserDef *userdef) ATTR_NONNULL(1);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key Map Item Removal \{ */
+
+/** Remove the name, labels and hidden entry of a key map item. Returns true when changed. */
+bool BKE_preferences_keymap_item_forget(struct UserDef *userdef,
+                                        const char *keymap_idname,
+                                        int spaceid,
+                                        int regionid,
+                                        int item_id) ATTR_NONNULL(1, 2);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Assert Libraries
  * \{ */
 

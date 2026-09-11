@@ -406,6 +406,12 @@ enum ButtonFlag : int64_t {
    * buttons currently.
    */
   BUT_FORCE_SEMI_MODAL_ACTIVE = int64_t(1) << 33,
+
+  /** Highlight with the warning state color #TH_WARNING, as #BUT_REDALERT. */
+  BUT_WARNALERT = int64_t(1) << 34,
+
+  /** Highlight with the info state color #TH_INFO, as #BUT_REDALERT. */
+  BUT_INFOALERT = int64_t(1) << 35,
 };
 
 /** #Button.dragflag */

@@ -1349,6 +1349,22 @@ static void write_userdef(BlendWriter *writer, const UserDef *userdef)
   asset_libraries->first_ = asset_libraries_backup.first();
   asset_libraries->last_ = asset_libraries_backup.last();
 
+  for (const bUserKeymapLabel &keymap_label : userdef->keymap_labels) {
+    writer->write_struct(&keymap_label);
+  }
+
+  for (const bUserKeymapLabelItem &keymap_label_item : userdef->keymap_label_items) {
+    writer->write_struct(&keymap_label_item);
+  }
+
+  for (const bUserKeymapHidden &keymap_hidden : userdef->keymap_hidden) {
+    writer->write_struct(&keymap_hidden);
+  }
+
+  for (const bUserKeymapName &keymap_name : userdef->keymap_names) {
+    writer->write_struct(&keymap_name);
+  }
+
   for (const bUserExtensionRepo &repo_ref : userdef->extension_repos) {
     writer->write_struct(&repo_ref);
     BKE_preferences_extension_repo_write_data(writer, &repo_ref);

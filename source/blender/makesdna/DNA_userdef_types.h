@@ -649,6 +649,70 @@ struct bUserMenuItem_Prop {
   char _pad0[4] = {};
 };
 
+/** A user defined group of key map items, see #UserDef.keymap_labels. */
+struct bUserKeymapLabel {
+  struct bUserKeymapLabel *next = nullptr, *prev = nullptr;
+
+  char name[/*MAX_NAME*/ 64] = "";
+  /** #eUserKeymapLabel_Flag. */
+  char flag = 0;
+  char _pad0[7] = {};
+};
+
+/** #bUserKeymapLabel.flag */
+enum eUserKeymapLabel_Flag {
+  /** The key map editor only lists items carrying a label with this set. */
+  USER_KEYMAP_LABEL_FILTER = (1 << 0),
+};
+
+/** A key map item carrying a label, see #UserDef.keymap_label_items. */
+struct bUserKeymapLabelItem {
+  struct bUserKeymapLabelItem *next = nullptr, *prev = nullptr;
+
+  /** #wmKeyMap.idname. */
+  char keymap_idname[/*KMAP_MAX_NAME*/ 64] = "";
+  /** #wmKeyMap.spaceid, #wmKeyMap.regionid (`idname` alone is not unique). */
+  int spaceid = 0;
+  int regionid = 0;
+  /** #wmKeyMapItem.id. */
+  int item_id = 0;
+  char _pad0[4] = {};
+  /** #bUserKeymapLabel.name. */
+  char label[/*MAX_NAME*/ 64] = "";
+};
+
+/** A user defined name for a key map item, shown instead of the operator name. */
+struct bUserKeymapName {
+  struct bUserKeymapName *next = nullptr, *prev = nullptr;
+
+  /** #wmKeyMap.idname. */
+  char keymap_idname[/*KMAP_MAX_NAME*/ 64] = "";
+  int spaceid = 0;
+  int regionid = 0;
+  /** #wmKeyMapItem.id. */
+  int item_id = 0;
+  char _pad0[4] = {};
+  /** Never empty, entries with no name are removed. */
+  char name[/*MAX_NAME*/ 64] = "";
+};
+
+/** A key map item or operator excluded from the usage history. */
+struct bUserKeymapHidden {
+  struct bUserKeymapHidden *next = nullptr, *prev = nullptr;
+
+  /** #wmKeyMap.idname, empty when this hides an operator (see `idname`). */
+  char keymap_idname[/*KMAP_MAX_NAME*/ 64] = "";
+  int spaceid = 0;
+  int regionid = 0;
+  /** #wmKeyMapItem.id. */
+  int item_id = 0;
+  char _pad0[4] = {};
+  /** #wmOperatorType.idname (operator entries only). */
+  char idname[/*OP_MAX_TYPENAME*/ 64] = "";
+  /** See #WM_operator_usage_variant. */
+  char variant[/*OP_MAX_USAGE_VARIANT*/ 128] = "";
+};
+
 struct bUserAssetLibrary {
   struct bUserAssetLibrary *next = nullptr, *prev = nullptr;
 
@@ -1103,6 +1167,14 @@ struct UserDef {
   ListBaseT<bUserAssetLibrary> asset_libraries = {nullptr, nullptr};
   ListBaseT<bUserExtensionRepo> extension_repos = {nullptr, nullptr};
   ListBaseT<bUserAssetShelfSettings> asset_shelves_settings = {nullptr, nullptr};
+  /** #bUserKeymapLabel. */
+  ListBaseT<bUserKeymapLabel> keymap_labels = {nullptr, nullptr};
+  /** #bUserKeymapLabelItem. */
+  ListBaseT<bUserKeymapLabelItem> keymap_label_items = {nullptr, nullptr};
+  /** #bUserKeymapHidden. */
+  ListBaseT<bUserKeymapHidden> keymap_hidden = {nullptr, nullptr};
+  /** #bUserKeymapName. */
+  ListBaseT<bUserKeymapName> keymap_names = {nullptr, nullptr};
 
   char keyconfigstr[64] = "Blender";
 

@@ -146,6 +146,65 @@ wmKeyMapItem *WM_keymap_add_item_copy(wmKeyMap *keymap, const wmKeyMapItem *kmi_
 void WM_keymap_remove_item(wmKeyMap *keymap, wmKeyMapItem *kmi);
 std::optional<std::string> WM_keymap_item_to_string(const wmKeyMapItem *kmi, bool compact);
 
+/** Record \a kmi in the usage history. */
+void WM_keymap_activity_record(wmWindowManager *wm,
+                               const wmKeyMap *keymap,
+                               const wmKeyMapItem *kmi);
+/** Record a modal key map item, named by its modal action. */
+void WM_keymap_activity_record_modal(wmWindowManager *wm,
+                                     const wmKeyMap *keymap,
+                                     const wmKeyMapItem *kmi);
+/**
+ * Record an operator run without a shortcut.
+ * \param spaceid: An #eSpace_Type or #SPACE_EMPTY, needed to offer a key map to bind it in.
+ */
+void WM_keymap_activity_record_unbound(wmWindowManager *wm,
+                                       const char *idname,
+                                       const char *variant,
+                                       int spaceid);
+/** Clear the usage history. */
+void WM_keymap_activity_clear(wmWindowManager *wm);
+
+/* -------------------------------------------------------------------- */
+/** \name Key-Map Editor Selection
+ * \{ */
+
+/** Whether \a kmi is selected. */
+bool WM_keymap_selection_contains(const wmWindowManager *wm,
+                                  const wmKeyMap *keymap,
+                                  const wmKeyMapItem *kmi);
+/** Select or deselect \a kmi. */
+void WM_keymap_selection_set(wmWindowManager *wm,
+                             const wmKeyMap *keymap,
+                             const wmKeyMapItem *kmi,
+                             bool value);
+/** Deselect all. */
+void WM_keymap_selection_clear(wmWindowManager *wm);
+/** Copy the event of \a kmi to the other selected items. */
+void WM_keymap_selection_propagate_event(wmKeyMapItem *kmi);
+/** Copy the active state of \a kmi to the other selected items. */
+void WM_keymap_selection_propagate_active(wmKeyMapItem *kmi);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key-Map Editor Undo
+ * \{ */
+
+/** Push an undo step if the key configuration changed since the last checkpoint. */
+void WM_keymap_undo_checkpoint(wmWindowManager *wm);
+/** Undo the last key configuration change, false when there is none. */
+bool WM_keymap_undo(wmWindowManager *wm);
+/** Redo the last undone change, false when there is none. */
+bool WM_keymap_redo(wmWindowManager *wm);
+/** Number of undo/redo steps available. */
+int WM_keymap_undo_len(const wmWindowManager *wm);
+int WM_keymap_redo_len(const wmWindowManager *wm);
+/** Free the undo history on window manager runtime teardown. */
+void wm_keymap_undo_runtime_free(bke::WindowManagerRuntime &runtime);
+
+/** \} */
+
 wmKeyMap *WM_keymap_list_find(ListBaseT<wmKeyMap> *lb,
                               const char *idname,
                               int spaceid,

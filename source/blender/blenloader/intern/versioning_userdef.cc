@@ -1821,6 +1821,11 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
+  /* Idempotent: bump the version check when new defaults are added. */
+  if (!USER_VERSION_ATLEAST(503, 22)) {
+    BKE_preferences_hidden_defaults_add(userdef);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

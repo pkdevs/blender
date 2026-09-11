@@ -1429,6 +1429,9 @@ def km_preferences(_params):
     items.extend([
         ("preferences.start_filter", {"intent": "filter"}, None),
         ("preferences.clear_filter", {"intent": "filter_clear"}, None),
+        # A click on empty space clears the key map selection.
+        ("preferences.keymap_select_all", {"type": 'LEFTMOUSE', "value": 'PRESS'},
+         {"properties": [("action", 'DESELECT')]}),
     ])
 
     return keymap
