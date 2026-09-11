@@ -92,9 +92,7 @@ struct QuadWidgetGroup2 {
   IndexMaskMemory memory;
   DeformMode mode;
 
-  struct {
-    CornerPinData *corner_data[4];
-  } corner_pin;
+  Vector<CornerPinData> corner_data;
 
   struct {
     PointerRNA ptr;
@@ -254,14 +252,13 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   constexpr std::array<float2, 4> corner_positions(
       {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
 
-  for (int i = 0; i < 4; i++) {
-    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
-    corner_pin_data->corner_pos = corner_positions[i];
-    wmGizmo *gz = corner_pin_data->gizmos;
+  for (const int i : mask_group->corner_data.index_range()) {
+    CornerPinData &corner_pin_data = mask_group->corner_data[i];
+    corner_pin_data.corner_pos = corner_positions[i];
+    wmGizmo *gz = corner_pin_data.gizmos;
 
     if (mask_group->mode == DeformMode::GRID) {
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
-
       gz->scale_basis = gizmo_scale_basis_grid;
     }
     else {
@@ -287,23 +284,23 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       gz->matrix_space[3][1] = box->center().y;
     }
 
-    for (int i = 0; i < 4; i++) {
-      wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
+    for (const int i : mask_group->corner_data.index_range()) {
+      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
       copy_m4_m4(gz2->matrix_space, gz->matrix_space);
     }
 
     if (mask_group->mode == DeformMode::TRANSFORM) {
       // RNA_float_set_array(gz->ptr, "dimensions", box->size());
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-      for (int i = 0; i < 4; i++) {
-        wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
+      for (const int i : mask_group->corner_data.index_range()) {
+        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
       }
     }
     else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-      for (int i = 0; i < 4; i++) {
-        wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
+      for (const int i : mask_group->corner_data.index_range()) {
+        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
@@ -311,8 +308,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   else {
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
 
-    for (int i = 0; i < 4; i++) {
-      wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
+    for (const int i : mask_group->corner_data.index_range()) {
+      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
       WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
     }
   }
@@ -343,10 +340,10 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
 
 static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
 {
-  float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos + float2(0.5f);
-  float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos + float2(0.5f);
-  float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos + float2(0.5f);
-  float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos + float2(0.5f);
+  float2 lower_left = mask_group->corner_data[0].corner_pos + float2(0.5f);
+  float2 lower_right = mask_group->corner_data[1].corner_pos + float2(0.5f);
+  float2 upper_right = mask_group->corner_data[2].corner_pos + float2(0.5f);
+  float2 upper_left = mask_group->corner_data[3].corner_pos + float2(0.5f);
 
   if (!is_quad_convex_v2(lower_left, lower_right, upper_right, upper_left)) {
     return std::nullopt;
@@ -452,10 +449,10 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
     selected_points.foreach_index([&](const int point_i) {
-      const float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos;
-      const float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos;
-      const float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos;
-      const float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos;
+      const float2 lower_left = mask_group->corner_data[0].corner_pos;
+      const float2 lower_right = mask_group->corner_data[1].corner_pos;
+      const float2 upper_right = mask_group->corner_data[2].corner_pos;
+      const float2 upper_left = mask_group->corner_data[3].corner_pos;
 
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
                             float2(0.5f);
@@ -552,24 +549,24 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   // params.foreach_rna_prop_fn = gizmo_node_box_mask_foreach_rna_prop;
   WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
 
-  for (int i = 0; i < 4; i++) {
-    mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
-    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
+  for (const int i : IndexRange(4)) {
+    mask_group->corner_data.append({});
+    CornerPinData &corner_pin_data = mask_group->corner_data[i];
 
-    corner_pin_data->gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+    corner_pin_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
 
-    wmGizmo *gz = corner_pin_data->gizmos;
+    wmGizmo *gz = corner_pin_data.gizmos;
 
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
     // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
 
-    corner_pin_data->index = i;
+    corner_pin_data.index = i;
 
     wmGizmoPropertyFnParams params{};
     params.value_get_fn = gizmo_bisect_prop_translate_get;
     params.value_set_fn = gizmo_bisect_prop_translate_set;
     params.range_get_fn = nullptr;
-    params.user_data = corner_pin_data;
+    params.user_data = &corner_pin_data;
     WM_gizmo_target_property_def_func(gz, "offset", &params);
   }
 
