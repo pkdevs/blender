@@ -308,6 +308,7 @@ void PointCloud::update_gsplat_radii()
    *     Nicolas Moenne-Loccoz et. al.
    *     "3D Gaussian Ray Tracing: Fast Tracing of Particle Scenes" (2024)
    *     ACM Transactions on Graphics and SIGGRAPH Asia
+   *     https://gaussiantracer.github.io/
    *
    * Using Formula (7) from the paper with some tweaks.
    * Since spheres are rotation-agnostic we only consider scale. */
