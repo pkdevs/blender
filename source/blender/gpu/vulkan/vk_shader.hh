@@ -60,6 +60,56 @@ class VKShader : public Shader {
    */
   uint32_t max_input_attachment_index_ = 0;
 
+  /**
+   * Per-shader cache for the resolved graphics pipeline.
+   *
+   * The inputs listed in `resolve_key` are exactly the inputs that feed
+   * `VKGraphicsInfo` (the device pipeline-pool key), given a fixed shader. When all of them
+   * are unchanged since the last miss, we reuse the cached `vk_pipeline` instead of
+   * re-running the full `VKGraphicsInfo` equality/hash lookup against the device pool.
+   *
+   * The cache is intentionally single-entry: a shader is typically used with one or a
+   * small set of configurations, and a wider cache would only grow the invalidation
+   * surface without measurably improving the dominant cost (the `VKGraphicsInfo`
+   * equality check, which we avoid).
+   */
+  struct GraphicsPipelineCache {
+    VKVertexInputDescriptionPool::Key vertex_input_key;
+    uint64_t state_data;
+    uint32_t viewport_count;
+    GPUPrimType primitive_type;
+    VkFormat depth_attachment_format;
+    VkFormat stencil_attachment_format;
+    VkFormat color_attachment_formats[GPU_FB_MAX_COLOR_ATTACHMENT];
+    uint32_t color_attachment_count;
+    uint64_t spec_generation;
+
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
+
+    bool operator==(const GraphicsPipelineCache &other) const
+    {
+      if (vertex_input_key != other.vertex_input_key ||
+          state_data != other.state_data ||
+          viewport_count != other.viewport_count ||
+          primitive_type != other.primitive_type ||
+          depth_attachment_format != other.depth_attachment_format ||
+          stencil_attachment_format != other.stencil_attachment_format ||
+          color_attachment_count != other.color_attachment_count ||
+          spec_generation != other.spec_generation)
+      {
+        return false;
+      }
+      for (uint32_t i = 0; i < color_attachment_count; i++) {
+        if (color_attachment_formats[i] != other.color_attachment_formats[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+  };
+
+  GraphicsPipelineCache resolved_graphics_;
+
  public:
   VKShaderModule vertex_module;
   VKShaderModule geometry_module;
@@ -109,12 +159,24 @@ class VKShader : public Shader {
   VkPipeline ensure_and_get_compute_pipeline(
       const shader::SpecializationConstants &constants_state);
   bool ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_states);
-   VkPipeline ensure_and_get_graphics_pipeline(
-       GPUPrimType primitive,
-       VKVertexInputDescriptionPool::Key vertex_input_description_key,
-       const GPUState &state,
-       const VKFrameBuffer &framebuffer,
-       shader::SpecializationConstants &constants_state);
+    VkPipeline ensure_and_get_graphics_pipeline(
+        GPUPrimType primitive,
+        VKVertexInputDescriptionPool::Key vertex_input_description_key,
+        const GPUState &state,
+        const VKFrameBuffer &framebuffer,
+        shader::SpecializationConstants &constants_state);
+
+  /**
+   * Resolve the graphics pipeline for the given draw parameters, using the cached
+   * `GraphicsPipelineCache` when the parameters are unchanged. Falls back to
+   * `ensure_and_get_graphics_pipeline` on a key mismatch (or the first call).
+   *
+   * \returns: The VkPipeline handle for the current draw configuration.
+   */
+  VkPipeline resolve_graphics(GPUPrimType primitive,
+                              VKVertexInputDescriptionPool::Key vertex_input_description_key,
+                              const GPUState &state,
+                              const VKFrameBuffer &framebuffer);
 
   const VKShaderInterface &interface_get() const;
 

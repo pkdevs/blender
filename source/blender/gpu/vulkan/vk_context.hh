@@ -58,6 +58,9 @@ class VKContext : public Context, NonCopyable {
 
   /* Active shader specialization constants state. */
   shader::SpecializationConstants constants_state_;
+  /* Bumped whenever the specialization constants change, so per-pipeline caches that
+   * bake `constants_state_` into the pool key can cheaply invalidate. */
+  uint64_t spec_generation_ = 0;
 
   /* Debug scope timings. Adapted form GLContext::TimeQuery.
    * Only supports CPU timings for now. */
@@ -160,6 +163,26 @@ class VKContext : public Context, NonCopyable {
   static void openxr_release_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
 
   void specialization_constants_set(const shader::SpecializationConstants *constants_state);
+
+  /**
+   * Monotonically increasing generation of the specialization constants state.
+   *
+   * Bumped by `specialization_constants_set` so per-shader caches that bake the
+   * specialization constants into a key can cheaply detect a change without hashing
+   * the (potentially large) `SpecializationConstants` struct.
+   */
+  uint64_t spec_generation_get() const
+  {
+    return spec_generation_;
+  }
+  const shader::SpecializationConstants &constants_state_get() const
+  {
+    return constants_state_;
+  }
+  shader::SpecializationConstants &constants_state_get()
+  {
+    return constants_state_;
+  }
 
   std::unique_ptr<VKStreamingBuffer> &get_or_create_streaming_buffer(
       VKBuffer &buffer, VkDeviceSize min_offset_alignment);

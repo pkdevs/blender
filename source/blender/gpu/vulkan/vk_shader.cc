@@ -1396,6 +1396,43 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
   return true;
 }
 
+VkPipeline VKShader::resolve_graphics(GPUPrimType primitive,
+                                      VKVertexInputDescriptionPool::Key vertex_input_description_key,
+                                      const GPUState &state,
+                                      const VKFrameBuffer &framebuffer)
+{
+  VKContext &context = *VKContext::get();
+
+  GraphicsPipelineCache key;
+  key.vertex_input_key = vertex_input_description_key;
+  key.state_data = state.data;
+  key.viewport_count = framebuffer.viewport_size();
+  key.primitive_type = primitive;
+  key.depth_attachment_format = framebuffer.depth_attachment_format_get();
+  key.stencil_attachment_format = framebuffer.stencil_attachment_format_get();
+  const Span<VkFormat> color_formats = framebuffer.color_attachment_formats_get();
+  key.color_attachment_count = (uint32_t)color_formats.size();
+  for (uint32_t i = 0; i < key.color_attachment_count; i++) {
+    key.color_attachment_formats[i] = color_formats[i];
+  }
+  key.spec_generation = context.spec_generation_get();
+  key.vk_pipeline = VK_NULL_HANDLE;
+
+  if (resolved_graphics_ == key && resolved_graphics_.vk_pipeline != VK_NULL_HANDLE) {
+    /* Cache hit: none of the inputs that feed the pipeline-pool key changed. Re-use
+     * the resolved VkPipeline without touching the device pool. */
+    return resolved_graphics_.vk_pipeline;
+  }
+
+  VkPipeline vk_pipeline = ensure_and_get_graphics_pipeline(
+      primitive, vertex_input_description_key, state, framebuffer, context.constants_state_get());
+  if (vk_pipeline != VK_NULL_HANDLE) {
+    resolved_graphics_ = key;
+    resolved_graphics_.vk_pipeline = vk_pipeline;
+  }
+  return vk_pipeline;
+}
+
 VkPipeline VKShader::ensure_and_get_graphics_pipeline(
     GPUPrimType primitive,
     VKVertexInputDescriptionPool::Key vertex_input_description_key,
