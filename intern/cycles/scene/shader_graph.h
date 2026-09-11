@@ -283,6 +283,11 @@ class ShaderNode : public Node {
   /* Disconnect the input with the given name if it is connected.
    * Used to optimize away unused inputs. */
   void disconnect_unused_input(const char *name);
+
+  /* Checks whether the given input is potentially not too small to ignore. */
+  bool is_possibly_nonnegligible(const char *name);
+  /* Checks whether the given input is potentially positive. */
+  bool is_possibly_positive(const char *name);
 };
 
 /* Node definition utility macros */

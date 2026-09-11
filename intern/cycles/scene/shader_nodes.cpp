@@ -44,6 +44,50 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Shder Node.  */
+bool ShaderNode::is_possibly_nonnegligible(const char *name)
+{
+  ShaderInput *shader_input = input(name);
+  assert(shader_input);
+  if (!shader_input || shader_input->link) {
+    return true;
+  }
+
+  if (shader_input->socket_type.type == SocketType::FLOAT) {
+    return get_float(shader_input->socket_type) > CLOSURE_WEIGHT_CUTOFF;
+  }
+  if (SocketType::is_float3(shader_input->socket_type.type)) {
+    return reduce_max(get_float3(shader_input->socket_type)) > CLOSURE_WEIGHT_CUTOFF;
+  }
+
+  /* TODO: implement for other types if necessary. */
+  assert(false);
+  return true;
+}
+
+bool ShaderNode::is_possibly_positive(const char *name)
+{
+  ShaderInput *shader_input = input(name);
+  assert(shader_input);
+  if (!shader_input || shader_input->link) {
+    return true;
+  }
+
+  if (shader_input->socket_type.type == SocketType::FLOAT) {
+    return get_float(shader_input->socket_type) > 0.0f;
+  }
+  if (shader_input->socket_type.type == SocketType::BOOLEAN) {
+    return get_bool(shader_input->socket_type);
+  }
+  if (shader_input->socket_type.type == SocketType::INT) {
+    return get_int(shader_input->socket_type);
+  }
+
+  /* TODO: implement for other types if necessary. */
+  assert(false);
+  return true;
+}
+
 /* Texture Mapping */
 
 #define TEXTURE_MAPPING_DEFINE(TextureNode) \
@@ -2767,31 +2811,31 @@ void PrincipledBsdfNode::simplify_settings(Scene * /* scene */)
     disconnect_unused_input("Subsurface Anisotropy");
   }
 
-  if (!has_nonzero_weight("Coat Weight")) {
+  if (!is_possibly_nonnegligible("Coat Weight")) {
     disconnect_unused_input("Coat Weight");
     disconnect_unused_input("Coat IOR");
     disconnect_unused_input("Coat Roughness");
     disconnect_unused_input("Coat Tint");
   }
 
-  if (!has_nonzero_weight("Sheen Weight")) {
+  if (!is_possibly_nonnegligible("Sheen Weight")) {
     disconnect_unused_input("Sheen Weight");
     disconnect_unused_input("Sheen Roughness");
     disconnect_unused_input("Sheen Tint");
   }
 
-  if (!has_nonzero_weight("Anisotropic")) {
+  if (!is_possibly_nonnegligible("Anisotropic")) {
     disconnect_unused_input("Anisotropic");
     disconnect_unused_input("Anisotropic Rotation");
     disconnect_unused_input("Tangent");
   }
 
-  if (!has_nonzero_weight("Thin Film Thickness")) {
+  if (!is_possibly_nonnegligible("Thin Film Thickness")) {
     disconnect_unused_input("Thin Film Thickness");
     disconnect_unused_input("Thin Film IOR");
   }
 
-  if (!has_nonzero_weight("Transmission Weight")) {
+  if (!is_possibly_nonnegligible("Transmission Weight")) {
     disconnect_unused_input("Transmission Dispersion Scale");
     disconnect_unused_input("Transmission Dispersion Abbe Number");
   }
@@ -2804,7 +2848,7 @@ bool PrincipledBsdfNode::has_surface_transparent()
   }
 
   /* Smooth thin glass are treated as transparent for non-camera rays. */
-  if ((input("Thin Wall")->link || thin_wall) && has_nonzero_weight("Transmission Weight")) {
+  if (is_possibly_positive("Thin Wall") && is_possibly_nonnegligible("Transmission Weight")) {
     if (input("Roughness")->link || input("IOR")->link) {
       return true;
     }
@@ -2824,17 +2868,14 @@ bool PrincipledBsdfNode::is_thin_wall()
 
 bool PrincipledBsdfNode::has_surface_emission()
 {
-  return (input("Emission Color")->link != nullptr ||
-          reduce_max(emission_color) > CLOSURE_WEIGHT_CUTOFF) &&
-         (input("Emission Strength")->link != nullptr ||
-          emission_strength > CLOSURE_WEIGHT_CUTOFF);
+  return is_possibly_nonnegligible("Emission Color") &&
+         is_possibly_nonnegligible("Emission Strength");
 }
 
 bool PrincipledBsdfNode::subsurface_has_positive_weight()
 {
-  return (input("Subsurface Weight")->link != nullptr ||
-          subsurface_weight > CLOSURE_WEIGHT_CUTOFF) &&
-         (input("Subsurface Scale")->link != nullptr || subsurface_scale != 0.0f);
+  return is_possibly_nonnegligible("Subsurface Weight") &&
+         is_possibly_positive("Subsurface Scale");
 }
 
 bool PrincipledBsdfNode::has_surface_bssrdf()
@@ -2850,20 +2891,8 @@ bool PrincipledBsdfNode::has_surface_bssrdf()
 
 bool PrincipledBsdfNode::has_dispersion()
 {
-  return has_nonzero_weight("Transmission Dispersion Scale") &&
-         has_nonzero_weight("Transmission Weight");
-}
-
-bool PrincipledBsdfNode::has_nonzero_weight(const char *name)
-{
-  ShaderInput *weight_in = input(name);
-  if (weight_in == nullptr) {
-    return true;
-  }
-  if (weight_in->link != nullptr) {
-    return true;
-  }
-  return (get_float(weight_in->socket_type) >= CLOSURE_WEIGHT_CUTOFF);
+  return is_possibly_nonnegligible("Transmission Dispersion Scale") &&
+         is_possibly_nonnegligible("Transmission Weight");
 }
 
 void PrincipledBsdfNode::attributes(Shader *shader, AttributeRequestSet *attributes)
@@ -2881,7 +2910,7 @@ void PrincipledBsdfNode::attributes(Shader *shader, AttributeRequestSet *attribu
 void PrincipledBsdfNode::compile(SVMCompiler &compiler)
 {
   SVMStackOffset tangent_offset = SVM_STACK_INVALID;
-  if (has_nonzero_weight("Anisotropic")) {
+  if (is_possibly_nonnegligible("Anisotropic")) {
     tangent_offset = compiler.input_link("Tangent");
   }
 
@@ -3619,12 +3648,12 @@ void PrincipledVolumeNode::attributes(Shader *shader, AttributeRequestSet *attri
 {
   if (shader->has_volume) {
 
-    if (input("Density")->link || density > 0.0f) {
+    if (is_possibly_positive("Density")) {
       attributes->add_name_or_standard(density_attribute);
       attributes->add_name_or_standard(color_attribute);
     }
 
-    if (input("Blackbody Intensity")->link || blackbody_intensity > 0.0f) {
+    if (is_possibly_positive("Blackbody Intensity")) {
       attributes->add_name_or_standard(temperature_attribute);
     }
 
