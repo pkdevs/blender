@@ -38,6 +38,13 @@ void VKPipeline::resolve_compute()
 
 void VKPipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
 {
+  const BindSpaceTextures::Elem *elem = textures_.get(unit);
+  if (elem && elem->resource_type == BindSpaceTextures::Type::Texture && elem->resource == tex &&
+      elem->sampler == sampler)
+  {
+    /* Same texture + sampler already bound at this unit: no descriptor change. */
+    return;
+  }
   textures_.bind(BindSpaceTextures::Type::Texture, tex, sampler, unit);
   descriptor_dirty_ = true;
 }
@@ -56,6 +63,10 @@ void VKPipeline::texture_unbind_all()
 
 void VKPipeline::image_bind(Texture *tex, int unit)
 {
+  if (images_.get_or_null(unit) == unwrap(tex)) {
+    /* Same image already bound at this unit: no descriptor change. */
+    return;
+  }
   images_.bind(unwrap(tex), unit);
   descriptor_dirty_ = true;
 }
@@ -104,6 +115,13 @@ void VKPipeline::tlas_unbind(TopLevelAS *tlas)
 
 void VKPipeline::texel_buffer_bind(VKVertexBuffer &vertex_buffer, int binding)
 {
+  const BindSpaceTextures::Elem *elem = textures_.get(binding);
+  if (elem && elem->resource_type == BindSpaceTextures::Type::VertexBuffer &&
+      elem->resource == &vertex_buffer)
+  {
+    /* Same texel buffer already bound at this slot: no descriptor change. */
+    return;
+  }
   textures_.bind(BindSpaceTextures::Type::VertexBuffer,
                  &vertex_buffer,
                  GPUSamplerState::default_sampler(),
@@ -119,6 +137,10 @@ void VKPipeline::texel_buffer_unbind(VKVertexBuffer &vertex_buffer)
 
 void VKPipeline::uniform_buffer_bind(VKUniformBuffer *uniform_buffer, int binding)
 {
+  if (uniform_buffers_.get_or_null(binding) == uniform_buffer) {
+    /* Same uniform buffer already bound at this slot: no descriptor change. */
+    return;
+  }
   uniform_buffers_.bind(uniform_buffer, binding);
   descriptor_dirty_ = true;
 }
@@ -136,10 +158,17 @@ void VKPipeline::uniform_buffer_unbind_all()
 }
 
 void VKPipeline::storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
-                                     void *resource,
-                                     int binding,
-                                     VkDeviceSize offset)
+                                      void *resource,
+                                      int binding,
+                                      VkDeviceSize offset)
 {
+  const BindSpaceStorageBuffers::Elem *elem = storage_buffers_.get_or_null(binding);
+  if (elem != nullptr && elem->resource_type == resource_type && elem->resource == resource &&
+      elem->offset == offset)
+  {
+    /* Same storage buffer already bound at this slot: no descriptor change. */
+    return;
+  }
   storage_buffers_.bind(resource_type, resource, binding, offset);
   descriptor_dirty_ = true;
 }
@@ -158,6 +187,10 @@ void VKPipeline::storage_buffer_unbind_all()
 
 void VKPipeline::toplevelas_bind(VKTopLevelAS *tlas, int slot)
 {
+  if (acceleration_structures_.get_or_null(slot) == tlas) {
+    /* Same acceleration structure already bound at this slot: no descriptor change. */
+    return;
+  }
   acceleration_structures_.bind(tlas, slot);
   descriptor_dirty_ = true;
 }

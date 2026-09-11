@@ -51,6 +51,14 @@ class BindSpaceUniformBuffers {
     return bound_resources[binding];
   }
 
+  VKUniformBuffer *get_or_null(int binding) const
+  {
+    if (binding >= (int)bound_resources.size()) {
+      return nullptr;
+    }
+    return bound_resources[binding];
+  }
+
   void unbind(void *resource)
   {
     for (int index : IndexRange(bound_resources.size())) {
@@ -88,6 +96,17 @@ template<int Offset> class BindSpaceImages {
   {
     if (binding >= Offset) {
       binding -= Offset;
+    }
+    return bound_resources[binding];
+  }
+
+  VKTexture *get_or_null(int binding) const
+  {
+    if (binding >= Offset) {
+      binding -= Offset;
+    }
+    if (binding >= (int)bound_resources.size()) {
+      return nullptr;
     }
     return bound_resources[binding];
   }
@@ -138,6 +157,14 @@ class BindSpaceStorageBuffers {
   const Elem &get(int binding) const
   {
     return bound_resources[binding];
+  }
+
+  const Elem *get_or_null(int binding) const
+  {
+    if (binding >= (int)bound_resources.size()) {
+      return nullptr;
+    }
+    return &bound_resources[binding];
   }
 
   void unbind(void *resource)
@@ -224,6 +251,14 @@ class BindSpaceTopLevelAS {
 
   VKTopLevelAS *get(int binding) const
   {
+    return bound_resources[binding];
+  }
+
+  VKTopLevelAS *get_or_null(int binding) const
+  {
+    if (binding >= (int)bound_resources.size()) {
+      return nullptr;
+    }
     return bound_resources[binding];
   }
 
