@@ -249,19 +249,33 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   mask_group->drawings = drawings;
 
-  constexpr std::array<float2, 4> corner_positions(
-      {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
+  if (mask_group->mode == DeformMode::GRID) {
+    const int x_num = 2;
+    const int y_num = 2;
 
-  for (const int i : mask_group->corner_data.index_range()) {
-    CornerPinData &corner_pin_data = mask_group->corner_data[i];
-    corner_pin_data.corner_pos = corner_positions[i];
-    wmGizmo *gz = corner_pin_data.gizmos;
+    BLI_assert(x_num * y_num == mask_group->corner_data.size());
 
-    if (mask_group->mode == DeformMode::GRID) {
-      RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
-      gz->scale_basis = gizmo_scale_basis_grid;
+    for (const int x_i : IndexRange(x_num)) {
+      for (const int y_i : IndexRange(y_num)) {
+        CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
+        corner_pin_data.corner_pos = float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
+                                     float2(0.5f);
+        wmGizmo *gz = corner_pin_data.gizmos;
+
+        RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
+        gz->scale_basis = gizmo_scale_basis_grid;
+      }
     }
-    else {
+  }
+  else if (mask_group->mode == DeformMode::PERSPECTIVE) {
+    constexpr std::array<float2, 4> corner_positions(
+        {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
+
+    for (const int i : mask_group->corner_data.index_range()) {
+      CornerPinData &corner_pin_data = mask_group->corner_data[i];
+      corner_pin_data.corner_pos = corner_positions[i];
+      wmGizmo *gz = corner_pin_data.gizmos;
+
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
       gz->scale_basis = gizmo_scale_basis_perspective;
     }
@@ -451,8 +465,8 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
     selected_points.foreach_index([&](const int point_i) {
       const float2 lower_left = mask_group->corner_data[0].corner_pos;
       const float2 lower_right = mask_group->corner_data[1].corner_pos;
-      const float2 upper_right = mask_group->corner_data[2].corner_pos;
-      const float2 upper_left = mask_group->corner_data[3].corner_pos;
+      const float2 upper_left = mask_group->corner_data[2].corner_pos;
+      const float2 upper_right = mask_group->corner_data[3].corner_pos;
 
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
                             float2(0.5f);
