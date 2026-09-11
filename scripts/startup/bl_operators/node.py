@@ -790,6 +790,7 @@ class NODE_OT_swap_empty_group(NodeSwapOperator, bpy.types.Operator):
         output_node.location.x = 200
         return group
 
+
 def node_name_from_type(node_type, tree_type):
     """Utility function to get a node name from its type. The tree_type argument is necessary because the function relies on instantiating a temporary node in a node tree to get its name."""
     tmp_group = bpy.data.node_groups.new("temp group", tree_type)

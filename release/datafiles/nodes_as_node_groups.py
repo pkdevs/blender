@@ -34,6 +34,7 @@ COMPOSITOR_NODE_TYPES = (
     and hasattr(bpy.types, node_type)
 )
 
+
 def file_cleanup():
     """Cleans up the file for publish by removing all unnecessary data."""
 
@@ -73,7 +74,8 @@ def create_compositor_node_groups():
             continue
         group = node.group_make()
 
-        # Using node names is more prune to conflicts, for example when a deprecated node has the same name as its replacement.
+        # Using node names is more prune to conflicts, for example when a
+        # deprecated node has the same name as its replacement.
         group.name = node.bl_idname
 
         group.use_fake_user = True
