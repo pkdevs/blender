@@ -212,6 +212,10 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
       scene->update_stats->integrator.times.add_entry({"device_update", time});
     }
   });
+  
+  if (use_denoise && (denoiser_type == DENOISER_DLSS || denoiser_type == DENOISER_MTLFX)) {
+     use_pixel_jitter = true;
+  }
 
   KernelIntegrator *kintegrator = &dscene->data.integrator;
 

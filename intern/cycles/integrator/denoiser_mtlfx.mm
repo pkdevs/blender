@@ -355,6 +355,8 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.outputTexture         = (id<MTLTexture>) output_texture;
   denoiser.jitterOffsetX         = context.pixel_jitter.x;
   denoiser.jitterOffsetY         = context.pixel_jitter.y;
+  denoiser.motionVectorScaleX    = context.buffer_params.width;
+  denoiser.motionVectorScaleY    = context.buffer_params.height;
   
   [denoiser encodeToCommandBuffer: command_buffer];
     
