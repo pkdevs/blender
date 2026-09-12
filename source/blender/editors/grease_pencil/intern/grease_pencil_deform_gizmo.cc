@@ -330,6 +330,28 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
   return drawing_bounds;
 }
 
+static void add_corner(QuadWidgetGroup2 *mask_group, wmGizmoGroup *gzgroup)
+{
+  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
+  const int i = mask_group->corner_data.size();
+
+  mask_group->corner_data.append({});
+  CornerPinData &corner_pin_data = mask_group->corner_data[i];
+
+  corner_pin_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+
+  wmGizmo *gz = corner_pin_data.gizmos;
+
+  WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
+
+  wmGizmoPropertyFnParams params{};
+  params.value_get_fn = gizmo_bisect_prop_translate_get;
+  params.value_set_fn = gizmo_bisect_prop_translate_set;
+  params.range_get_fn = nullptr;
+  params.user_data = reinterpret_cast<void *>(static_cast<intptr_t>(i));
+  WM_gizmo_target_property_def_func(gz, "offset", &params);
+}
+
 static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 {
   const Scene &scene = *CTX_data_scene(C);
@@ -489,7 +511,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
   mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
-  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
 
   mask_group->update_data.context = const_cast<bContext *>(C);
 
@@ -515,21 +536,8 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
 
   for (const int i : IndexRange(4)) {
-    mask_group->corner_data.append({});
-    CornerPinData &corner_pin_data = mask_group->corner_data[i];
-
-    corner_pin_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
-
-    wmGizmo *gz = corner_pin_data.gizmos;
-
-    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
-
-    wmGizmoPropertyFnParams params{};
-    params.value_get_fn = gizmo_bisect_prop_translate_get;
-    params.value_set_fn = gizmo_bisect_prop_translate_set;
-    params.range_get_fn = nullptr;
-    params.user_data = reinterpret_cast<void *>(static_cast<intptr_t>(i));
-    WM_gizmo_target_property_def_func(gz, "offset", &params);
+    UNUSED_VARS(i);
+    add_corner(mask_group, gzgroup);
   }
 
   mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
