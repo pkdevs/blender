@@ -337,11 +337,6 @@ class VIEW3D_PT_tools_brush_settings_advanced(Panel, View3DPaintBrushPanel):
     @classmethod
     def poll(cls, context):
         mode = cls.get_brush_mode(context)
-        if mode == 'SCULPT_GREASE_PENCIL':
-            settings = cls.paint_settings_from_active_tool(context)
-            tool = settings.brush.gpencil_sculpt_brush_type
-            return tool in {'SMOOTH', 'RANDOMIZE'}
-
         return mode is not None and mode != 'SCULPT_CURVES'
 
     def draw(self, context):
@@ -1555,12 +1550,15 @@ def tool_use_brush(context):
 
     return True
 
+
 class GreasePencilSculptPanel:
     bl_context = ".grease_pencil_sculpt"
     bl_category = "Tool"
 
+
 class VIEW3D_PT_tools_grease_pencil_sculpt_select(View3DPanel, Panel, GreasePencilSculptPanel, BrushSelectPanel):
     bl_label = "Brush Asset"
+
 
 class VIEW3D_PT_tools_grease_pencil_sculpt_settings(Panel, View3DPanel, GreasePencilSculptPanel):
     bl_label = "Brush Settings"
@@ -1586,10 +1584,11 @@ class VIEW3D_PT_tools_grease_pencil_sculpt_settings(Panel, View3DPanel, GreasePe
         tool = settings.brush.gpencil_sculpt_brush_type
         if tool in {'SMOOTH', 'RANDOMIZE'}:
             col = layout.column(heading="Affect", align=True)
-            col.prop(settings, "use_edit_position", text="Position")
-            col.prop(settings, "use_edit_strength", text="Strength", text_ctxt=i18n_contexts.id_gpencil)
-            col.prop(settings, "use_edit_thickness", text="Thickness")
-            col.prop(settings, "use_edit_uv", text="UV")
+            col.prop(brush.gpencil_settings, "use_edit_position", text="Position")
+            col.prop(brush.gpencil_settings, "use_edit_strength", text="Strength", text_ctxt=i18n_contexts.id_gpencil)
+            col.prop(brush.gpencil_settings, "use_edit_thickness", text="Thickness")
+            col.prop(brush.gpencil_settings, "use_edit_uv", text="UV")
+
 
 class VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover(GreasePencilSculptAdvancedPanel, View3DPanel, Panel):
     bl_context = ".grease_pencil_sculpt"
@@ -1607,6 +1606,7 @@ class VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover(GreasePencilSculptAdvan
 
         tool = brush.gpencil_sculpt_brush_type
         return tool in {'SMOOTH', 'RANDOMIZE'}
+
 
 class VIEW3D_PT_tools_grease_pencil_brush_sculpt_falloff(GreasePencilBrushFalloff, Panel, View3DPaintPanel):
     bl_context = ".grease_pencil_sculpt"

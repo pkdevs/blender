@@ -1478,16 +1478,6 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         if capabilities.has_color and popover:
             draw_color_jitter_panel(container, context, brush)
 
-    # TODO: This should be moved elsewhere
-    elif mode == 'SCULPT_GREASE_PENCIL':
-        gp_settings = brush.gpencil_settings
-
-        col = container.column(heading="Affect", align=True)
-        col.prop(gp_settings, "use_edit_position", text="Position")
-        col.prop(gp_settings, "use_edit_strength", text="Strength", text_ctxt=i18n_contexts.id_gpencil)
-        col.prop(gp_settings, "use_edit_thickness", text="Thickness")
-        col.prop(gp_settings, "use_edit_uv", text="UV")
-
     # 3D and 2D Texture Paint.
     elif mode in {'PAINT_TEXTURE', 'PAINT_2D'}:
         container.prop(brush, "image_brush_type")
@@ -1866,6 +1856,7 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
         row.prop(gp_settings, "pin_draw_mode", text="")
 
+
 def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, compact=False):
     gp_settings = brush.gpencil_settings
     paint = context.tool_settings.gpencil_paint
@@ -2011,6 +2002,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         layout.popover("VIEW3D_PT_tools_brush_falloff")
         layout.prop(gp_settings, "use_active_layer_only")
 
+
 def brush_basic_grease_pencil_sculpt_settings(layout, context, brush, *, compact=False):
     UnifiedPaintPanel.prop_unified(
         layout,
@@ -2036,6 +2028,7 @@ def brush_basic_grease_pencil_sculpt_settings(layout, context, brush, *, compact
     )
 
     return
+
 
 def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact=False):
     UnifiedPaintPanel.prop_unified(
