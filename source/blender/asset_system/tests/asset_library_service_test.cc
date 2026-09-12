@@ -13,8 +13,10 @@
 #include "BKE_global.hh"
 #include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
+#include "BKE_preferences.h"
 
 #include "DNA_asset_types.h"
+#include "DNA_userdef_types.h"
 
 #include "CLG_log.h"
 
@@ -387,6 +389,70 @@ TEST_F(AssetLibraryServiceTest,
     /* Force a new current file runtime library to be created. */
     EXPECT_NE(service->get_asset_library_current_file(), on_disk_lib);
   }
+}
+
+/**
+ * Regression test for #161158. Changing the path of an asset library in the Preferences leaves the
+ * already loaded instance for the old path in the service, keyed by that old path. It must not be
+ * treated as enabled anymore, otherwise the "All" library keeps listing assets from the old path,
+ * while activating one of them resolves the library name to the *new* path, where the file doesn't
+ * exist.
+ */
+TEST_F(AssetLibraryServiceTest, preferences_library_stale_after_path_change)
+{
+  AssetLibraryService *const service = AssetLibraryService::get();
+
+  const CatalogFilePath temp_dir = create_temp_path(); /* Has trailing slash. */
+  const CatalogFilePath old_dir = temp_dir + "old_library" + SEP_STR;
+  const CatalogFilePath new_dir = temp_dir + "new_library" + SEP_STR;
+  ASSERT_TRUE(BLI_dir_create_recursive(old_dir.c_str()));
+  ASSERT_TRUE(BLI_dir_create_recursive(new_dir.c_str()));
+
+  bUserAssetLibrary *library_pref = BKE_preferences_asset_library_add(
+      &U, "Test Library", old_dir.c_str());
+  ASSERT_NE(nullptr, library_pref);
+
+  /* Returns whether #foreach_loaded_asset_library() still visits the given library. */
+  auto is_visited = [service](const AssetLibrary *library) {
+    bool visited = false;
+    service->foreach_loaded_asset_library(
+        [&](AssetLibrary &loaded_library) {
+          if (&loaded_library == library) {
+            visited = true;
+          }
+        },
+        /*include_all_library=*/false);
+    return visited;
+  };
+
+  AssetLibrary *const old_library = service->get_asset_library_on_disk_custom_preferences(
+      library_pref);
+  ASSERT_NE(nullptr, old_library);
+  EXPECT_TRUE(is_visited(old_library)) << "A freshly loaded library should be visited";
+
+  BKE_preferences_asset_library_path_set(library_pref, new_dir.c_str());
+
+  AssetLibrary *const new_library = service->get_asset_library_on_disk_custom_preferences(
+      library_pref);
+  ASSERT_NE(nullptr, new_library);
+  ASSERT_NE(old_library, new_library)
+      << "Loading after a path change should create a new library instance";
+
+  EXPECT_FALSE(is_visited(old_library))
+      << "The instance for the old path should be stale after the path changed";
+  EXPECT_TRUE(is_visited(new_library))
+      << "The instance for the new path should be visited after the path changed";
+
+  /* Changing the path back should make the original instance valid again, and turn the one for the
+   * intermediate path into the stale one. */
+  BKE_preferences_asset_library_path_set(library_pref, old_dir.c_str());
+
+  EXPECT_EQ(old_library, service->get_asset_library_on_disk_custom_preferences(library_pref))
+      << "Changing the path back should return the already loaded instance for that path";
+  EXPECT_TRUE(is_visited(old_library));
+  EXPECT_FALSE(is_visited(new_library));
+
+  BKE_preferences_asset_library_remove(&U, library_pref);
 }
 
 }  // namespace blender::asset_system::tests
