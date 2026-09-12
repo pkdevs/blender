@@ -4156,8 +4156,10 @@ static void node_draw_comment(const bContext &C,
   const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
 
   if (is_render) {
+    ColorTheme4f color;
+    node_frame_get_color(node, color);
     ui::draw_roundbox_corner_set(ui::CNR_ALL);
-    ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, color);
   }
 
   block_end_ex(&C,
