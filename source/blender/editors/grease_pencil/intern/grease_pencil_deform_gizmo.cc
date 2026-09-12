@@ -221,6 +221,13 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   mask_group->drawings = drawings;
 
+  if (box) {
+    mask_group->state.dims = box->size();
+  }
+  else {
+    mask_group->state.dims = float2(1.0f);
+  }
+
   if (mask_group->mode == DeformMode::GRID) {
     const int x_num = 2;
     const int y_num = 2;
@@ -230,8 +237,9 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     for (const int x_i : IndexRange(x_num)) {
       for (const int y_i : IndexRange(y_num)) {
         CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
-        corner_pin_data.corner_pos = float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
-                                     float2(0.5f);
+        corner_pin_data.corner_pos = (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
+                                      float2(0.5f)) *
+                                     mask_group->state.dims;
         wmGizmo *gz = corner_pin_data.gizmos;
 
         RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
@@ -245,7 +253,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
     for (const int i : mask_group->corner_data.index_range()) {
       CornerPinData &corner_pin_data = mask_group->corner_data[i];
-      corner_pin_data.corner_pos = corner_positions[i];
+      corner_pin_data.corner_pos = corner_positions[i] * mask_group->state.dims;
       wmGizmo *gz = corner_pin_data.gizmos;
 
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
@@ -263,11 +271,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     mat[3] += mat[0] * box->center().x;
     mat[3] += mat[1] * box->center().y;
 
-    mat[0] *= box->size().x;
-    mat[1] *= box->size().y;
-
     copy_m4_m4(gz->matrix_space, mat.ptr());
-    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
+    RNA_float_set_array(gz->ptr, "dimensions", box->size());
 
     for (const int i : mask_group->corner_data.index_range()) {
       wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
@@ -311,10 +316,10 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
 
 static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
 {
-  float2 lower_left = mask_group->corner_data[0].corner_pos + float2(0.5f);
-  float2 lower_right = mask_group->corner_data[1].corner_pos + float2(0.5f);
-  float2 upper_right = mask_group->corner_data[2].corner_pos + float2(0.5f);
-  float2 upper_left = mask_group->corner_data[3].corner_pos + float2(0.5f);
+  float2 lower_left = mask_group->corner_data[0].corner_pos;
+  float2 lower_right = mask_group->corner_data[1].corner_pos;
+  float2 upper_right = mask_group->corner_data[2].corner_pos;
+  float2 upper_left = mask_group->corner_data[3].corner_pos;
 
   if (!is_quad_convex_v2(lower_left, lower_right, upper_right, upper_left)) {
     return std::nullopt;
@@ -325,7 +330,11 @@ static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 
                          {lower_right.x, lower_right.y},
                          {upper_right.x, upper_right.y},
                          {upper_left.x, upper_left.y}};
-  float identity_corners[4][2] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+  float identity_corners[4][2] = {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}};
+  for (const int i : IndexRange(4)) {
+    identity_corners[i][0] *= mask_group->state.dims.x;
+    identity_corners[i][1] *= mask_group->state.dims.y;
+  }
   BKE_tracking_homography_between_two_quads(identity_corners, corners, homography_matrix.ptr());
   return homography_matrix;
 }
@@ -385,13 +394,12 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
     MutableSpan<float3> positions = strokes.positions_for_write();
 
     selected_points.foreach_index([&](const int point_i) {
-      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
-                            float2(0.5f);
+      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i]));
 
       const float3 pos_3d_out = (*homography_mat) * float3(pos_2d, 1.0f);
       const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
 
-      positions[point_i] = math::transform_point(mat, float3(pos_2d_out - float2(0.5f), 0.0f));
+      positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
     });
 
     info.drawing.tag_positions_changed();
@@ -425,7 +433,8 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
       const float2 upper_left = mask_group->corner_data[2].corner_pos;
       const float2 upper_right = mask_group->corner_data[3].corner_pos;
 
-      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
+      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) /
+                                mask_group->state.dims +
                             float2(0.5f);
 
       const float2 pos_2d_out = math::interpolate(
