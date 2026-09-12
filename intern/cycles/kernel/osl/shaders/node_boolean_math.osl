@@ -9,8 +9,8 @@ shader node_boolean_math(string math_type = "and",
                          int Boolean2 = 0,
                          output int Boolean = 0)
 {
-  int a = (Boolean1 != 0);
-  int b = (Boolean2 != 0);
+  int a = Boolean1 > 0;
+  int b = Boolean2 > 0;
 
   if (math_type == "and")
     Boolean = a && b;
