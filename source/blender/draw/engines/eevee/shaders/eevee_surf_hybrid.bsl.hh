@@ -125,7 +125,8 @@ struct HybridFragOut {
 
 /* NOTE: This removes the possibility of using gl_FragDepth. */
 [[fragment]] [[early_fragment_tests]]
-void surf_hybrid([[resource_table]] PipelineConstants &pipe,
+void surf_hybrid([[resource_table]] KernelGlobals &kg,
+                 [[resource_table]] PipelineConstants &pipe,
                  [[resource_table]] SurfaceHybrid &srt,
                  [[resource_table]] gbuffer::PackParameters &gbuf_params,
                  [[resource_table]] LightEvalIterator & /*lights*/,
@@ -153,11 +154,12 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  g_thickness = Thickness::from(nodetree_thickness(), thickness_mode);
+  ShadingData sd;
+  g_thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
 
-  fragment_displacement();
+  fragment_displacement(kg, sd);
 
-  nodetree_surface(closure_rand);
+  nodetree_surface(kg, sd, closure_rand);
 
   g_holdout = saturate(g_holdout);
 

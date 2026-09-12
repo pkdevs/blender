@@ -38,7 +38,8 @@ struct SurfaceCapture {
 };
 
 [[fragment]]
-void surf_capture([[resource_table]] SurfaceCapture &srt,
+void surf_capture([[resource_table]] KernelGlobals &kg,
+                  [[resource_table]] SurfaceCapture &srt,
                   [[resource_table]] const Uniform &uni,
                   [[resource_table]] const draw::View &views,
                   [[resource_table]] const UtilityTexture & /*util_tx*/,
@@ -52,7 +53,8 @@ void surf_capture([[resource_table]] SurfaceCapture &srt,
   /* TODO(fclem): Remove random sampling for capture and accumulate color. */
   float closure_rand = 0.5f;
 
-  nodetree_surface(closure_rand);
+  ShadingData sd;
+  nodetree_surface(kg, sd, closure_rand);
 
   float3 albedo = float3(0.0f);
 

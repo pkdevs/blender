@@ -96,7 +96,8 @@ struct SurfVolume {
     imageStoreFast(out_phase_weight_img, froxel, phase.yyyy);
   }
 
-  VolumeProperties eval_froxel([[resource_table]] const Uniform &uni,
+  VolumeProperties eval_froxel([[resource_table]] KernelGlobals &kg,
+                               [[resource_table]] const Uniform &uni,
                                const ViewMatrices view,
                                const ObjectMatrices obj,
                                const ObjectInfos ob_infos,
@@ -114,7 +115,9 @@ struct SurfVolume {
 
     g_data = init_globals(view, wP);
     attrib_load(VolumePoint{lP, lP_orco});
-    nodetree_volume();
+
+    ShadingData sd;
+    nodetree_volume(kg, sd);
 
     if (is_volume_object) [[static_branch]] {
       const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
@@ -134,7 +137,8 @@ struct SurfVolume {
 
 /* Note: Only the front fragments have to be invoked. */
 [[fragment]] [[early_fragment_tests]] [[texture_atomic]]
-void surf_volume([[resource_table]] PipelineConstants & /*pipe*/,
+void surf_volume([[resource_table]] KernelGlobals &kg,
+                 [[resource_table]] PipelineConstants & /*pipe*/,
                  [[resource_table]] SurfVolume &srt,
                  [[resource_table]] const Uniform &uni,
                  [[resource_table]] const draw::Model &models,
@@ -161,7 +165,7 @@ void surf_volume([[resource_table]] PipelineConstants & /*pipe*/,
   if (srt.is_homogenous) [[static_branch]] {
     /* Homogenous volumes only evaluate properties at volume entrance and write the same values for
      * each froxel. */
-    prop = srt.eval_froxel(uni, view, obj, ob_infos, froxel, jitter);
+    prop = srt.eval_froxel(kg, uni, view, obj, ob_infos, froxel, jitter);
   }
 
   occupancy::Bits occupancy;
@@ -189,7 +193,7 @@ void surf_volume([[resource_table]] PipelineConstants & /*pipe*/,
 
       if (!srt.is_homogenous) [[static_branch]] {
         /* Heterogeneous volumes evaluate properties at every froxel position. */
-        prop = srt.eval_froxel(uni, view, obj, ob_infos, froxel, jitter);
+        prop = srt.eval_froxel(kg, uni, view, obj, ob_infos, froxel, jitter);
       }
       srt.write_froxel(froxel, prop);
     }

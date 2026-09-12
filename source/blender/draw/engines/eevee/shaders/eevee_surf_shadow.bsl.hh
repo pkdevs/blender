@@ -41,7 +41,8 @@ struct SurfShadow {
 };
 
 [[fragment]] [[texture_atomic]]
-void surf_shadow([[resource_table]] PipelineConstants &pipe,
+void surf_shadow([[resource_table]] KernelGlobals &kg,
+                 [[resource_table]] PipelineConstants &pipe,
                  [[resource_table]] SurfShadow &srt,
                  [[resource_table]] const Uniform &uni,
                  [[resource_table]] const draw::View &views,
@@ -65,7 +66,8 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
     const ViewMatrices view = views.get(shadow_iface.shadow_view_id);
     init_globals(uni, view, front_face);
 
-    nodetree_surface(0.0f);
+    ShadingData sd;
+    nodetree_surface(kg, sd, 0.0f);
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float random_threshold = pcg4d(float4(g_data.P, noise_offset)).x;

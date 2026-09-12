@@ -1347,13 +1347,17 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                          (displacement_type != MAT_DISPLACEMENT_BUMP) &&
                                          !ELEM(geometry_type, MAT_GEOM_WORLD, MAT_GEOM_VOLUME);
 
-    vert_gen << "float3 nodetree_displacement()\n";
+    vert_gen << "#line 1 \"" __FILE__ "\"\n";
+    vert_gen << "#line " STRINGIFY(__LINE__) "\n";
+    vert_gen << "float3 nodetree_displacement(KernelGlobals kg, ShadingData sd)\n";
     vert_gen << "{\n";
     vert_gen << ((use_vertex_displacement) ? codegen.displacement.serialized :
                                              "return float3(0);\n");
     vert_gen << "}\n\n";
 
     Vector<StringRefNull> dependencies = {};
+    /* Needed for KernelGlobals and ShadingData. */
+    dependencies.append("eevee_pipeline.bsl.hh");
     if (use_vertex_displacement) {
       dependencies.append("eevee_geom_types_lib.bsl.hh");
       dependencies.append("eevee_nodetree_lib.bsl.hh");
@@ -1365,6 +1369,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
   if (pipeline_type != MAT_PIPE_VOLUME_OCCUPANCY) {
     Vector<StringRefNull> dependencies;
+    dependencies.append("eevee_nodetree_type_lib.glsl");
     if (use_ao_node) {
       dependencies.append("eevee_fast_gi.bsl.hh");
     }
@@ -1380,7 +1385,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       /* Bump displacement. Needed to recompute normals after displacement. */
       info.define("MAT_DISPLACEMENT_BUMP");
 
-      frag_gen << "float3 nodetree_displacement()\n";
+      vert_gen << "#line 1 \"" __FILE__ "\"\n";
+      vert_gen << "#line " STRINGIFY(__LINE__) "\n";
+      frag_gen << "float3 nodetree_displacement(KernelGlobals kg, ShadingData sd)\n";
       frag_gen << "{\n";
       frag_gen << codegen.displacement.serialized;
       dependencies.extend(codegen.displacement.dependencies);
@@ -1391,7 +1398,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     frag_gen << "#line 1 \"" __FILE__ "\"\n";
     frag_gen << "#line " STRINGIFY(__LINE__) "\n";
 
-    frag_gen << "Closure nodetree_surface(float closure_rand)\n";
+    frag_gen << "Closure nodetree_surface(KernelGlobals kg, ShadingData sd, float closure_rand)\n";
     frag_gen << "{\n";
     frag_gen << "  closure_weights_reset(closure_rand);\n";
     frag_gen << codegen.surface.serialized_or_default("return Closure(0);\n");
@@ -1401,7 +1408,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     /* TODO(fclem): Find a way to pass material parameters inside the material UBO. */
     info.define("thickness_mode", thickness_type == MAT_THICKNESS_SLAB ? "false" : "true");
 
-    frag_gen << "float nodetree_thickness()\n";
+    frag_gen << "float nodetree_thickness(KernelGlobals kg, ShadingData sd)\n";
     frag_gen << "{\n";
     if (codegen.thickness.empty()) {
       /* Check presence of closure needing thickness to not add mandatory dependency on obinfos. */
@@ -1431,7 +1438,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     }
     frag_gen << "}\n\n";
 
-    frag_gen << "Closure nodetree_volume()\n";
+    frag_gen << "Closure nodetree_volume(KernelGlobals kg, ShadingData sd)\n";
     frag_gen << "{\n";
     frag_gen << "  closure_weights_reset(0.0);\n";
     frag_gen << codegen.volume.serialized_or_default("return Closure(0);\n");

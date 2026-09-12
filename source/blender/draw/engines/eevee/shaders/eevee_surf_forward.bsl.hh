@@ -106,7 +106,8 @@ struct SurfaceForwardFragOut {
 /* Early fragment test is needed for render passes support for forward surfaces. */
 /* NOTE: This removes the possibility of using gl_FragDepth. */
 [[fragment]] [[early_fragment_tests]]
-void surf_forward([[resource_table]] PipelineConstants &pipe,
+void surf_forward([[resource_table]] KernelGlobals &kg,
+                  [[resource_table]] PipelineConstants &pipe,
                   [[resource_table]] SurfaceForward & /*srt*/,
                   [[resource_table]] LightEvalIterator & /*lights*/,
                   [[resource_table]] LightprobeRenderData & /*lightprobes*/,
@@ -135,11 +136,12 @@ void surf_forward([[resource_table]] PipelineConstants &pipe,
   float noise = util_tx.fetch(gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  fragment_displacement();
+  ShadingData sd;
+  fragment_displacement(kg, sd);
 
-  g_thickness_forward = Thickness::from(nodetree_thickness(), thickness_mode);
+  g_thickness_forward = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
 
-  nodetree_surface(closure_rand);
+  nodetree_surface(kg, sd, closure_rand);
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(

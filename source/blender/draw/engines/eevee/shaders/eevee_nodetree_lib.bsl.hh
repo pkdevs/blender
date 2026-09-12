@@ -424,10 +424,10 @@ void raycast_eval([[maybe_unused]] float3 position,
 }
 
 #ifndef GPU_METAL
-Closure nodetree_surface(float closure_rand);
-Closure nodetree_volume();
-float3 nodetree_displacement();
-float nodetree_thickness();
+Closure nodetree_surface(KernelGlobals & /*kg*/, ShadingData /*sd*/, float /*closure_rand*/);
+Closure nodetree_volume(KernelGlobals & /*kg*/, ShadingData /*sd*/);
+float3 nodetree_displacement(KernelGlobals & /*kg*/, ShadingData /*sd*/);
+float nodetree_thickness(KernelGlobals & /*kg*/, ShadingData /*sd*/);
 float4 closure_to_rgba(Closure cl);
 #endif
 
@@ -619,7 +619,8 @@ float derivative_scale_get();
 
 #ifdef MAT_DISPLACEMENT_BUMP
 /* Return new shading normal. */
-float3 displacement_bump()
+float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
+                         [[maybe_unused]] ShadingData sd)
 {
 #  if !defined(MAT_GEOM_CURVES)
   /* This is the filter width for automatic displacement + bump mapping, which is fixed.
@@ -627,7 +628,8 @@ float3 displacement_bump()
   constexpr float bump_filter_width = 0.1f;
 
   float2 dHd;
-  dF_branch(dot(nodetree_displacement(), g_data.N + dF_impl(g_data.N)), bump_filter_width, dHd);
+  dF_branch(
+      dot(nodetree_displacement(kg, sd), g_data.N + dF_impl(g_data.N)), bump_filter_width, dHd);
 
   float3 dPdx = gpu_dfdx(g_data.P) * derivative_scale_get();
   float3 dPdy = gpu_dfdy(g_data.P) * derivative_scale_get();
@@ -649,10 +651,11 @@ float3 displacement_bump()
 }
 #endif
 
-void fragment_displacement()
+void fragment_displacement([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
+                           [[maybe_unused]] ShadingData sd)
 {
 #ifdef MAT_DISPLACEMENT_BUMP
-  g_data.N = displacement_bump();
+  g_data.N = displacement_bump(kg, sd);
 #endif
 }
 

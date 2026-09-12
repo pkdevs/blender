@@ -36,6 +36,7 @@ struct GeomCurve {
 };
 
 [[vertex]] [[clip_control]] void geom_curves(
+    [[resource_table]] KernelGlobals &kg,
     [[resource_table]] const PipelineConstants &pipe,
     [[resource_table]] const GeomCurve & /*srt*/,
     [[resource_table]] const Uniform &uni,
@@ -123,7 +124,8 @@ struct GeomCurve {
   init_globals(uni, view, true);
   attrib_load(CurvesPoint{ws_pt.curve_id, ws_pt.point_id, ws_pt.curve_segment, lP_orco});
 
-  interp.P += nodetree_displacement();
+  ShadingData sd;
+  interp.P += nodetree_displacement(kg, sd);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
     /* Since curves always face the view, camera and shadow orientation don't match.

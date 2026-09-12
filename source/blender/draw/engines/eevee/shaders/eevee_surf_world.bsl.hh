@@ -42,7 +42,8 @@ struct SurfWorldFragOut {
 };
 
 [[fragment]] [[early_fragment_tests]]
-void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
+void surf_world([[resource_table]] KernelGlobals &kg,
+                [[resource_table]] PipelineConstants & /*pipe*/,
                 [[resource_table]] SurfWorld &srt,
                 [[resource_table]] const LightprobeRenderData &lightprobes,
                 [[resource_table]] RenderPassOutput &render_passes,
@@ -63,7 +64,8 @@ void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
   g_data.P = -g_data.N;
   attrib_load(WorldPoint{g_data.P});
 
-  nodetree_surface(0.0f);
+  ShadingData sd;
+  nodetree_surface(kg, sd, 0.0f);
 
   g_holdout = saturate(g_holdout);
 

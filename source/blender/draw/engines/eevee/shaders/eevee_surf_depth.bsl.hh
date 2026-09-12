@@ -54,7 +54,8 @@ template<> struct SurfaceDepthFragOut<true> {
 
 template<bool with_velocity>
 [[fragment]]
-void surf_depth([[resource_table]] PipelineConstants &pipe,
+void surf_depth([[resource_table]] KernelGlobals &kg,
+                [[resource_table]] PipelineConstants &pipe,
                 [[resource_table]] SurfaceDepth & /*srt*/,
                 [[resource_table]] const Uniform &uni,
                 [[resource_table]] const Sampling &sampling,
@@ -73,7 +74,8 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
 
     init_globals(uni, view, front_face);
 
-    nodetree_surface(0.0f);
+    ShadingData sd;
+    nodetree_surface(kg, sd, 0.0f);
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float threshold = hashed_transparency::alpha_threshold(
@@ -115,7 +117,8 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
   frag_out.object_id = interp_flat.resource_id_raw & uint(0xFFFF);
 }
 
-template void surf_depth<true>(PipelineConstants &,
+template void surf_depth<true>(KernelGlobals &,
+                               PipelineConstants &,
                                SurfaceDepth &,
                                const Uniform &,
                                const Sampling &,
@@ -124,7 +127,8 @@ template void surf_depth<true>(PipelineConstants &,
                                const float4,
                                SurfaceDepthFragOut<true> &,
                                const bool);
-template void surf_depth<false>(PipelineConstants &,
+template void surf_depth<false>(KernelGlobals &,
+                                PipelineConstants &,
                                 SurfaceDepth &,
                                 const Uniform &,
                                 const Sampling &,
