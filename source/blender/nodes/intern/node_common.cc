@@ -1208,7 +1208,7 @@ void register_node_type_group_output()
 static void node_comment_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeComment *data = MEM_new<NodeComment>(__func__);
-  data->text = BLI_strdup("# Comment");
+  data->text = BLI_strdup("## Comment");
   data->flag |= NodeCommentFlag::Render;
   data->textbox_state_node.visible_lines = 5;
   data->textbox_state_panel.visible_lines = 5;
