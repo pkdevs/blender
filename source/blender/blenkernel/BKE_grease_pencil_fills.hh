@@ -29,7 +29,7 @@ std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids);
  * shape_map:     0 1 2 4 6 3 5 7 8
  * shape_offsets: 0 1 2     5 6 7   9
  * shapes:        _ _ _____ _ _ ___
- *                    a       c b           (ordered by the first occurrence in `fill_id`)
+ *                    a       c b     (ordered by the first occurrence in `fill_id`)
  *
  * Returns a pair with #shape_map and #shape_offsets to be used in a #GroupedSpan
  */
