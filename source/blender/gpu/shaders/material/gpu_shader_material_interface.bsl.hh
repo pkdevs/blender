@@ -247,27 +247,34 @@ float4 attr_load_uniform(float4 /*attr*/, uint /*attr_hash*/)
 {
   return float4(0);
 }
-float4 node_attribute_light_impl(int /*light_index*/, uint /*attr_hash*/)
+float4 node_attribute_light_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                 int /*light_index*/,
+                                 uint /*attr_hash*/)
 {
   return float4(0);
 }
-bool node_attribute_light_is_sun_impl(int /*light_index*/)
+bool node_attribute_light_is_sun_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                      int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_point_impl(int /*light_index*/)
+bool node_attribute_light_is_point_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                        int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_spot_impl(int /*light_index*/)
+bool node_attribute_light_is_spot_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                       int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_area_impl(int /*light_index*/)
+bool node_attribute_light_is_area_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                       int /*light_index*/)
 {
   return false;
 }
-float node_attribute_light_cutoff_distance_impl(int /*light_index*/)
+float node_attribute_light_cutoff_distance_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                                int /*light_index*/)
 {
   return float(0);
 }
@@ -278,7 +285,8 @@ void scene_time_uniforms(float & /*seconds*/, float & /*frame*/) {}
 
 /* Shadow Raycast Node. */
 
-void node_shadow_raycast_impl(int /*light_index*/,
+void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
+                              int /*light_index*/,
                               float3 /*position*/,
                               float /*softness*/,
                               float4 & /*color*/)
@@ -287,7 +295,8 @@ void node_shadow_raycast_impl(int /*light_index*/,
 
 /* Light Accumulation Node. */
 
-void node_light_accumulation_impl(int /*light_index*/,
+void node_light_accumulation_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                  int /*light_index*/,
                                   float3 /*diffuse_light*/,
                                   float3 /*diffuse_color*/,
                                   float3 /*glossy_light*/,
@@ -301,7 +310,8 @@ void node_light_accumulation_impl(int /*light_index*/,
 
 /* Light Info Node. */
 
-void node_light_info_impl(const int /*light_index*/,
+void node_light_info_impl([[resource_table]] KernelGlobals & /*kg*/,
+                          const int /*light_index*/,
                           float4 & /*color*/,
                           float & /*power*/,
                           float3 & /*position*/)
@@ -310,7 +320,8 @@ void node_light_info_impl(const int /*light_index*/,
 
 /* Light Evaluation Node. */
 
-void node_light_evaluation_common_impl(int /*light_index*/,
+void node_light_evaluation_common_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                       int /*light_index*/,
                                        float3 /*position*/,
                                        float3 & /*direction*/,
                                        float & /*distance*/,
@@ -319,7 +330,8 @@ void node_light_evaluation_common_impl(int /*light_index*/,
 }
 
 template<bool use_diffuse>
-void node_light_evaluation_impl(int /*light_index*/,
+void node_light_evaluation_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                int /*light_index*/,
                                 float3 /*position*/,
                                 float3 /*normal*/,
                                 float /*roughness*/,

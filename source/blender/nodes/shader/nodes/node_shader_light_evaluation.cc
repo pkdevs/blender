@@ -103,7 +103,8 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
              in[1].link,
              &out[1].link,
              &out[2].link,
-             &out[3].link);
+             &out[3].link,
+             GPU_kernel_globals());
   }
 
   return true;
