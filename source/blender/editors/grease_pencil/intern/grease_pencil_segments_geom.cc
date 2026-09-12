@@ -1792,31 +1792,27 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
     }
   }
 
-  Array<bool> is_segments_clipping(results_all.segments.size());
+  results_all.is_segments_clipping = Array<bool>(results_all.segments.size());
   for (const int seg_i : results_all.segments.index_range()) {
     const Segment &segment = results_all.segments[seg_i];
-    is_segments_clipping[seg_i] = is_src_curve_clipping[segment.curve];
+    results_all.is_segments_clipping[seg_i] = is_src_curve_clipping[segment.curve];
   }
 
-  results_all.is_segments_clipping = is_segments_clipping;
-
-  Array<int> dst_to_src_curves(dst_segments_by_curve.size());
+  results_all.dst_to_src_curves = Array<int>(dst_segments_by_curve.size());
   for (const int i : dst_segments_by_curve.index_range()) {
     const IndexRange segment_range = dst_segments_by_curve[i];
     const int subj_first_curve = results_all.subj_first_curves[i];
-    dst_to_src_curves[i] = subj_first_curve;
+    results_all.dst_to_src_curves[i] = subj_first_curve;
 
     /* Prioritize non-clipping curves. */
     for (const int seg_i : segment_range) {
       const int curve_i = results_all.segments[seg_i].curve;
       if (!is_src_curve_clipping[curve_i]) {
-        dst_to_src_curves[i] = curve_i;
+        results_all.dst_to_src_curves[i] = curve_i;
         break;
       }
     }
   }
-
-  results_all.dst_to_src_curves = dst_to_src_curves;
 
   results_all.unchanged_curves = calculate_unchanged_curves(
       results_all.segments, results_all.is_segments_clipping, dst_segments_by_curve);
