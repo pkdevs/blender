@@ -9511,9 +9511,9 @@ static void def_comment(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, nullptr);
 
-  prop = RNA_def_property(srna, "edit", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", int(NodeCommentFlag::Edit));
-  RNA_def_property_ui_text(prop, "Edit", "Enable editing the text in the node");
+  prop = RNA_def_property(srna, "render", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", int(NodeCommentFlag::Render));
+  RNA_def_property_ui_text(prop, "Render", "Show this comment as rendered markdown");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, nullptr);
 }
 

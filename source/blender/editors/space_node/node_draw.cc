@@ -3602,13 +3602,13 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                           ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
-  const bool is_edit = bool(storage.flag & NodeCommentFlag::Edit);
+  const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
   const StringRef text = storage.text;
 
   const float2 loc = node_to_view(node.location);
   /* Different paddings are used here to compensate for padding applied elsewhere. */
   const int pad_left = 0.2 * UI_UNIT_X;
-  const int pad_right = (is_edit ? 0.1 : 0.25) * UI_UNIT_X;
+  const int pad_right = (is_render ? 0.25 : 0.1) * UI_UNIT_X;
   const int pad_top = 0.15 * UI_UNIT_Y;
   const int pad_bottom = 0.2 * UI_UNIT_Y;
 
@@ -3622,18 +3622,18 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                         0,
                                         ui::style_get_dpi());
   PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &node);
-  if (is_edit) {
-    layout.textbox_with_state(&node_ptr, "text", &storage.textbox_state_node);
+  if (is_render) {
+    layout.label_markdown(text);
   }
   else {
-    layout.label_markdown(text);
+    layout.textbox_with_state(&node_ptr, "text", &storage.textbox_state_node);
   }
 
   block_align_end(&block);
   const float bottom_y = ui::block_layout_resolve(&block).y;
   const float icon_pad = 0.25f * U.widget_unit;
   float height = std::max<float>(
-      is_edit || !text.trim().is_empty() ? loc.y - bottom_y + pad_bottom : 0,
+      !is_render || !text.trim().is_empty() ? loc.y - bottom_y + pad_bottom : 0,
       NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
   node.runtime->draw_bounds.xmin = loc.x;
@@ -3644,13 +3644,13 @@ static void comment_node_prepare_for_draw(const bContext &C,
   block_emboss_set(&block, ui::EmbossType::None);
   uiDefIconButR(&block,
                 ui::ButtonType::IconToggle,
-                is_edit ? ICON_HIDE_OFF : ICON_GREASEPENCIL,
+                is_render ? ICON_GREASEPENCIL : ICON_HIDE_OFF,
                 node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE,
                 node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE,
                 NODE_HEADER_ICON_SIZE,
                 NODE_HEADER_ICON_SIZE,
                 &node_ptr,
-                "edit",
+                "render",
                 -1,
                 0,
                 0,

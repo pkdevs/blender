@@ -4024,7 +4024,7 @@ struct NodeStoreBundleItem {
 };
 
 enum class NodeCommentFlag : uint8_t {
-  Edit = (1 << 0),
+  Render = (1 << 0),
 };
 ENUM_OPERATORS(NodeCommentFlag)
 
