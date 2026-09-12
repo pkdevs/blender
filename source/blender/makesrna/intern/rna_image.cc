@@ -118,9 +118,11 @@ static void rna_Image_source_set(PointerRNA *ptr, int value)
     }
     ImageUser iuser;
     ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
-    ED_image_undo_push_begin_with_image("Change Image Source", ima, ibuf, &iuser);
-    ED_image_undo_push_end();
-    BKE_image_release_ibuf(ima, ibuf, nullptr);
+    if (ibuf != nullptr) {
+      ED_image_undo_push_begin_with_image("Change Image Source", ima, ibuf, &iuser);
+      ED_image_undo_push_end();
+      BKE_image_release_ibuf(ima, ibuf, nullptr);
+    }
 
     DEG_id_tag_update(&ima->id, 0);
     DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS | ID_RECALC_SOURCE);
