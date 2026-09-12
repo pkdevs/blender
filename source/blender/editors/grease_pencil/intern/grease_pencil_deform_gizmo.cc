@@ -157,8 +157,6 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   mask_group->mode = DeformMode(
       RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
 
-  float3 placement_normal_;
-
   unit_m4(gz->matrix_space);
   unit_m4(gz->matrix_offset);
 
@@ -166,65 +164,35 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   switch (scene.toolsettings->gp_sculpt.lock_axis) {
     case GP_LOCKAXIS_VIEW:
-      // plane_ = DrawingPlacementPlane::View;
+      mat = float4x4(rv3d->viewinv);
+
+      mat[3] = float4(float3(0.0f), 1.0f);
       break;
     case GP_LOCKAXIS_Y:
-      // plane_ = DrawingPlacementPlane::Front;
-      placement_normal_ = float3(0, 1, 0);
-
-      rotate_m4(mat.ptr(), 'X', M_PI / 2.0f);
+      mat = float4x4({1.0f, 0.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 1.0f, 0.0f},
+                     {0.0f, 1.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 0.0f, 1.0f});
       break;
     case GP_LOCKAXIS_X:
-      // plane_ = DrawingPlacementPlane::Side;
-      placement_normal_ = float3(1, 0, 0);
-
-      rotate_m4(mat.ptr(), 'Y', M_PI / 2.0f);
-      rotate_m4(mat.ptr(), 'Z', M_PI / 2.0f);
+      mat = float4x4({0.0f, 1.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 1.0f, 0.0f},
+                     {1.0f, 0.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 0.0f, 1.0f});
       break;
     case GP_LOCKAXIS_Z:
-      // plane_ = DrawingPlacementPlane::Top;
-      placement_normal_ = float3(0, 0, 1);
+      mat = float4x4::identity();
       break;
     case GP_LOCKAXIS_CURSOR: {
-      // plane_ = DrawingPlacementPlane::Cursor;
-
-      // rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
-
-      placement_normal_ = scene.cursor.matrix<float3x3>() * float3(0, 0, 1);
+      mat = scene.cursor.matrix<float4x4>();
       break;
     }
   }
 
+  const float4x4 mat_inv = math::invert(mat);
+
   auto projection_function = [&](const float3 position) {
-    switch (scene.toolsettings->gp_sculpt.lock_axis) {
-      case GP_LOCKAXIS_VIEW:
-        // plane_ = DrawingPlacementPlane::View;
-        break;
-      case GP_LOCKAXIS_Y:
-        // plane_ = DrawingPlacementPlane::Front;
-
-        return float2(position.x, position.z);
-
-        break;
-      case GP_LOCKAXIS_X:
-        // plane_ = DrawingPlacementPlane::Side;
-
-        return float2(position.y, position.z);
-
-        break;
-      case GP_LOCKAXIS_Z:
-        // plane_ = DrawingPlacementPlane::Top;
-        return float2(position.x, position.y);
-        break;
-      case GP_LOCKAXIS_CURSOR: {
-        // plane_ = DrawingPlacementPlane::Cursor;
-
-        // placement_normal_ = scene.cursor.matrix<float3x3>() * float3(0, 0, 1);
-        break;
-      }
-    }
-
-    return float2(position.x, position.y);
+    return float2(math::transform_point(mat_inv, position));
   };
 
   std::optional<Bounds<float2>> box;
