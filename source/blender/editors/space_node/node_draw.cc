@@ -3595,11 +3595,7 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
-static void comment_node_prepare_for_draw(const bContext &C,
-                                          TreeDrawContext &tree_draw_ctx,
-                                          bNodeTree &ntree,
-                                          bNode &node,
-                                          ui::Block &block)
+static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
@@ -3681,7 +3677,7 @@ static void node_update_nodetree(const bContext &C,
       reroute_node_prepare_for_draw(node);
     }
     else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(C, tree_draw_ctx, ntree, node, block);
+      comment_node_prepare_for_draw(ntree, node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {
@@ -4130,8 +4126,6 @@ static void reroute_node_draw(const bContext &C,
 static void node_draw_comment(const bContext &C,
                               TreeDrawContext &tree_draw_ctx,
                               ARegion &region,
-                              const SpaceNode &snode,
-                              bNodeTree &ntree,
                               bNode &node,
                               ui::Block &block)
 {
@@ -4462,12 +4456,11 @@ static void node_draw_zones_and_frames(const ARegion &region,
 static void draw_comments(const bContext &C,
                           TreeDrawContext &tree_draw_ctx,
                           ARegion &region,
-                          const SpaceNode &snode,
                           bNodeTree &ntree,
                           Span<ui::Block *> blocks)
 {
   for (bNode *node : ntree.nodes_by_type("NodeComment"_ustr)) {
-    node_draw_comment(C, tree_draw_ctx, region, snode, ntree, *node, *blocks[node->index()]);
+    node_draw_comment(C, tree_draw_ctx, region, *node, *blocks[node->index()]);
   }
 }
 
@@ -4848,7 +4841,7 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
 
   node_update_nodetree(C, tree_draw_ctx, ntree, nodes, blocks);
   node_draw_zones_and_frames(region, *snode, ntree);
-  draw_comments(C, tree_draw_ctx, region, *snode, ntree, blocks);
+  draw_comments(C, tree_draw_ctx, region, ntree, blocks);
   node_draw_nodetree(C, tree_draw_ctx, region, *snode, ntree, nodes, blocks);
 }
 
