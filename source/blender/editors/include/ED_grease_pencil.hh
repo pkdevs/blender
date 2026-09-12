@@ -1071,15 +1071,22 @@ void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
                                     MutableSpan<bool> all_inside_left,
                                     MutableSpan<bool> all_inside_right);
 
-void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unchanged_curves);
+/* Project the point from local space to the clipping 2d space. */
+using ProjectionFunc = FunctionRef<float2(const float3)>;
+
+void separate_fill_islands(bke::CurvesGeometry &dst,
+                           const Span<bool> unchanged_curves,
+                           ProjectionFunc project);
 
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
+                                  ProjectionFunc project,
                                   GroupedSpan<int> shapes,
                                   const IndexMask &clipping_shapes);
 
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
+                                              ProjectionFunc project,
                                               GroupedSpan<int> shapes,
                                               Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,

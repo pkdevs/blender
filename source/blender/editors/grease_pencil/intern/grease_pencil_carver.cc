@@ -55,12 +55,15 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   bke::crazyspace::GeometryDeformation deformation =
       bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(&ob_eval, obact, drawing);
 
+  auto project = [&](const float3 &position) {
+    return ED_view3d_project_float_v2_m4(&region, position, projection);
+  };
+
   /* Compute screen space positions. */
   Array<float2> screen_space_positions(src.points_num());
   threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
     for (const int src_point : src_points) {
-      screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-          &region, deformation.positions[src_point], projection);
+      screen_space_positions[src_point] = project(deformation.positions[src_point]);
     }
   });
 
@@ -82,13 +85,6 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
 
   bke::MutableAttributeAccessor attributes = input_curves.attributes_for_write();
 
-  bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-
-  pos_writer.span.slice(src.points_range()).copy_from(screen_space_positions);
-  pos_writer.span.take_back(mcoords.size()).copy_from(mcoords);
-  pos_writer.finish();
-
   placement.project(mcoords, input_curves.positions_for_write().take_back(mcoords.size()));
 
   bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_span<int>(
@@ -107,11 +103,10 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   input_curves.cyclic_for_write().last() = true;
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Point,
-      bke::attribute_filter_from_skip_ref({"position", ".positions_2d"}),
-      clipping_points);
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref({"position"}),
+                                    clipping_points);
   bke::fill_attribute_range_default(
       attributes,
       bke::AttrDomain::Curve,
@@ -122,16 +117,17 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
    * shape to poly. */
   if (!input_curves.is_single_type(CURVE_TYPE_POLY)) {
     const OffsetIndices<int> points_by_curve = input_curves.points_by_curve();
-    const VArray<float2> src_positions_2d_attribute = *attributes.lookup<float2>(
-        ".positions_2d", bke::AttrDomain::Point);
-    BLI_assert(src_positions_2d_attribute.is_span());
-    const Span<float2> src_positions_2d = src_positions_2d_attribute.get_internal_span();
+    Array<float2> src_positions_2d(input_curves.points_num());
+    const Span<float3> positions = input_curves.positions();
+    for (const int i : input_curves.points_range()) {
+      src_positions_2d[i] = project(positions[i]);
+    }
 
     Array<Bounds<float2>> screen_space_bbox(input_curves.curves_num());
     threading::parallel_for(points_by_curve.index_range(), 512, [&](const IndexRange curves_i) {
       for (const int curve_i : curves_i) {
         const IndexRange points_i = points_by_curve[curve_i];
-        screen_space_bbox[curve_i] = *bounds::min_max(src_positions_2d.slice(points_i));
+        screen_space_bbox[curve_i] = *bounds::min_max(src_positions_2d.as_span().slice(points_i));
       }
     });
 
@@ -160,23 +156,6 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
     if (!curves_to_convert.is_empty()) {
       input_curves = geometry::resample_to_evaluated(input_curves, curves_to_convert);
       *r_converted = true;
-
-      /* Recompute screen space positions. */
-      bke::SpanAttributeWriter<float2> pos_writer =
-          attributes.lookup_or_add_for_write_span<float2>(".positions_2d", bke::AttrDomain::Point);
-      MutableSpan<float2> screen_space_positions = pos_writer.span;
-      const Span<float3> positions = input_curves.positions();
-      const IndexRange subject_points = IndexRange(
-          input_curves.points_by_curve()[src.curves_num()].last());
-
-      threading::parallel_for(subject_points, 4096, [&](const IndexRange src_points) {
-        for (const int src_point : src_points) {
-          screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-              &region, positions[src_point], projection);
-        }
-      });
-
-      pos_writer.finish();
     }
   }
 
@@ -189,8 +168,14 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-  bke::CurvesGeometry carved_strokes = segment::carver::curve_boolean_with_planes(
-      op_params, input_curves, shapes, curve_planes, clipping_shapes, layer_to_world, region);
+  bke::CurvesGeometry carved_strokes = segment::carver::curve_boolean_with_planes(op_params,
+                                                                                  input_curves,
+                                                                                  project,
+                                                                                  shapes,
+                                                                                  curve_planes,
+                                                                                  clipping_shapes,
+                                                                                  layer_to_world,
+                                                                                  region);
 
   carved_strokes.attributes_for_write().remove(".positions_2d");
 

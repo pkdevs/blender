@@ -1934,7 +1934,7 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
             .copy_from(src.slice(src_points_by_curve[dst_to_src_curves[i]]));
       });
 
-      if (iter.name != ".positions_2d") {
+      if (iter.name != "position") {
         GMutableSpan attribute_data = dst.span;
         bke::attribute_math::to_static_type(attribute_data.type(), [&]<typename T>() {
           MutableSpan<T> span_data = attribute_data.typed<T>();
@@ -1996,18 +1996,17 @@ static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
 
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
+                                  const ProjectionFunc project,
                                   const GroupedSpan<int> shapes,
                                   const IndexMask &clipping_shapes)
 {
-  const bke::AttributeAccessor src_attributes = curves.attributes();
+  Array<float2> src_positions_2d(curves.points_num());
+  const Span<float3> positions = curves.positions();
+  for (const int i : curves.points_range()) {
+    src_positions_2d[i] = project(positions[i]);
+  }
 
-  const VArray<float2> src_positions_2d_attribute = *src_attributes.lookup<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-
-  BLI_assert(src_positions_2d_attribute.is_span());
-  const Span<float2> src_positions_2d = src_positions_2d_attribute.get_internal_span();
-
-  const VArray<int> fill_ids = *src_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
+  const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
 
   const BooleanResult result = execute_boolean(op_params,
                                                src_positions_2d,
@@ -2076,7 +2075,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves, unchanged_curves);
+    separate_fill_islands(dst_curves, unchanged_curves, project);
   }
 
   return dst_curves;
@@ -2084,21 +2083,20 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
 
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
+                                              const ProjectionFunc project,
                                               const GroupedSpan<int> shapes,
                                               const Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,
                                               const float4x4 &layer_to_world,
                                               const ARegion &region)
 {
-  const bke::AttributeAccessor src_attributes = curves.attributes();
+  Array<float2> src_positions_2d(curves.points_num());
+  const Span<float3> src_positions = curves.positions();
+  for (const int i : curves.points_range()) {
+    src_positions_2d[i] = project(src_positions[i]);
+  }
 
-  const VArray<float2> src_positions_2d_attribute = *src_attributes.lookup<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-
-  BLI_assert(src_positions_2d_attribute.is_span());
-  const Span<float2> src_positions_2d = src_positions_2d_attribute.get_internal_span();
-
-  const VArray<int> fill_ids = *src_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
+  const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
 
   const BooleanResult result = execute_boolean(op_params,
                                                src_positions_2d,
@@ -2158,13 +2156,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
                                                                op_params.skip_clipping_attributes,
                                                                is_point_clipping);
 
-  const VArray<float2> dst_positions_2d_attribute = *dst_curves.attributes().lookup<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-
   const OffsetIndices<int> points_by_curve = dst_curves.points_by_curve();
-  BLI_assert(dst_positions_2d_attribute.is_span());
-  const Span<float2> positions_2d = dst_positions_2d_attribute.get_internal_span();
-
   MutableSpan<float3> positions = dst_curves.positions_for_write();
   const float4x4 world_to_layer = math::invert(layer_to_world);
   for (const int curve_i : dst_curves.curves_range()) {
@@ -2174,8 +2166,8 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
 
     for (const int point_i : points) {
       if (is_point_clipping[point_i]) {
-        ED_view3d_win_to_3d_on_plane(
-            &region, plane, positions_2d[point_i], false, positions[point_i]);
+        const float2 positions_2d = project(positions[point_i]);
+        ED_view3d_win_to_3d_on_plane(&region, plane, positions_2d, false, positions[point_i]);
         positions[point_i] = math::transform_point(world_to_layer, positions[point_i]);
       }
     }
@@ -2190,7 +2182,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves, unchanged_curves);
+    separate_fill_islands(dst_curves, unchanged_curves, project);
   }
 
   return dst_curves;
