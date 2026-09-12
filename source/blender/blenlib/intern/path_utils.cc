@@ -668,7 +668,19 @@ void BLI_path_normalize_unc_16(wchar_t *path_16)
 }
 #endif
 
-void BLI_path_rel(char path[FILE_MAX], const char *basepath)
+/**
+ * Shared logic of #BLI_path_rel and #BLI_path_relative_to.
+ *
+ * \param path: Absolute path to make relative.
+ * \param basepath: Absolute file path, only the directory part is used.
+ * \param walk_up: Allow `../` when #path is not inside the base directory.
+ * \param blend_relative: Prefix the result with the `//`.
+ * \return True when #path was made relative.
+ */
+static bool path_relative_to_impl(char path[FILE_MAX],
+                                  const char *basepath,
+                                  const bool walk_up,
+                                  const bool blend_relative)
 {
   BLI_string_debug_size_after_nil(path, FILE_MAX);
   /* A `basepath` starting with `//` will be made relative multiple times. */
@@ -679,12 +691,12 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
 
   /* If path is already relative, bail out. */
   if (BLI_path_is_rel(path)) {
-    return;
+    return false;
   }
 
   /* Also bail out if relative path is not set. */
   if (basepath[0] == '\0') {
-    return;
+    return false;
   }
 
 #ifdef WIN32
@@ -708,7 +720,7 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
 
     /* Ensure paths are both UNC paths or are both drives. */
     if (BLI_path_is_unc(temp) != is_unc) {
-      return;
+      return false;
     }
 
     /* Ensure both UNC paths are on the same share. */
@@ -717,7 +729,7 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
       int slash = 0;
       for (off = 0; temp[off] && slash < 4; off++) {
         if (temp[off] != path[off]) {
-          return;
+          return false;
         }
 
         if (temp[off] == '\\') {
@@ -726,7 +738,7 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
       }
     }
     else if ((temp[1] == ':' && path[1] == ':') && (tolower(temp[0]) != tolower(path[0]))) {
-      return;
+      return false;
     }
   }
 #else
@@ -780,7 +792,7 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
     }
 
     char res[FILE_MAX] = "//";
-    char *r = res + 2;
+    char *r = res + (blend_relative ? 2 : 0);
 
     /* `p` now points to the slash that is at the beginning of the part
      * where the path is different from the relative path.
@@ -791,6 +803,9 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
     }
     while (p && p < lslash) {
       if (*p == '/') {
+        if (!walk_up) {
+          return false;
+        }
         r += BLI_strncpy_rlen(r, "../", sizeof(res) - (r - res));
       }
       p++;
@@ -801,10 +816,20 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
     UNUSED_VARS(r);
 
 #ifdef WIN32
-    BLI_string_replace_char(res + 2, '/', '\\');
+    BLI_string_replace_char(res + (blend_relative ? 2 : 0), '/', '\\');
 #endif
     BLI_strncpy(path, res, FILE_MAX);
+    return true;
   }
+
+  return false;
+}
+
+void BLI_path_rel(char path[FILE_MAX], const char *basepath)
+{
+  const bool walk_up = true;
+  const bool blend_relative = true;
+  path_relative_to_impl(path, basepath, walk_up, blend_relative);
 }
 
 bool BLI_path_suffix(char *path, size_t path_maxncpy, const char *suffix, const char *sep)
@@ -1926,6 +1951,35 @@ bool BLI_path_contains(const char *container_path, const char *containee_path)
   return BLI_str_startswith(containee_native, container_native);
 }
 
+bool BLI_path_relative_to(const char *path,
+                          const char *base_dir,
+                          const bool walk_up,
+                          char *r_path_relative,
+                          const size_t r_path_relative_maxncpy)
+{
+  if (r_path_relative) {
+    r_path_relative[0] = '\0';
+  }
+
+  /* Add a trailing slash, other path_relative_to_impl assumes it's a file. */
+  char base_dir_slash[FILE_MAX];
+  STRNCPY(base_dir_slash, base_dir);
+  BLI_path_slash_ensure(base_dir_slash, sizeof(base_dir_slash));
+
+  char path_rel[FILE_MAX];
+  STRNCPY(path_rel, path);
+
+  const bool blend_relative = false;
+  if (!path_relative_to_impl(path_rel, base_dir_slash, walk_up, blend_relative)) {
+    return false;
+  }
+
+  if (r_path_relative) {
+    BLI_strncpy(r_path_relative, path_rel, r_path_relative_maxncpy);
+  }
+  return true;
+}
+
 const char *BLI_path_slash_find(const char *path)
 {
   const char *const ffslash = strchr(path, '/');
@@ -2008,6 +2062,11 @@ void BLI_path_slash_native(char *path)
 #else
   BLI_string_replace_char(path + BLI_path_unc_prefix_len(path), ALTSEP, SEP);
 #endif
+}
+
+void BLI_path_slash_forward(char *path)
+{
+  BLI_string_replace_char(path, SEP, '/');
 }
 
 int BLI_path_cmp_normalized(const char *p1, const char *p2)
