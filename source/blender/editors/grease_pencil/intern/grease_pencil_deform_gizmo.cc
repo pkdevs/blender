@@ -224,6 +224,11 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
 
   const int x_num = 2 + mask_group->subdivisions;
 
+  auto xy_to_index = [&](const int2 xy) {
+    const int2 xy_clamped = math::clamp(xy, 0, x_num - 1);
+    return xy_clamped.x + x_num * xy_clamped.y;
+  };
+
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask &selected_points = selections[drawing_i];
@@ -240,13 +245,13 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
       const int2 grid_xy = int2(math::floor(pos_2d * (mask_group->subdivisions + 1)));
 
       const float2 lower_left =
-          mask_group->corner_data[grid_xy.x + 0 + x_num * (grid_xy.y + 0)].corner_pos;
+          mask_group->corner_data[xy_to_index(grid_xy + int2(0, 0))].corner_pos;
       const float2 lower_right =
-          mask_group->corner_data[grid_xy.x + 1 + x_num * (grid_xy.y + 0)].corner_pos;
+          mask_group->corner_data[xy_to_index(grid_xy + int2(1, 0))].corner_pos;
       const float2 upper_left =
-          mask_group->corner_data[grid_xy.x + 0 + x_num * (grid_xy.y + 1)].corner_pos;
+          mask_group->corner_data[xy_to_index(grid_xy + int2(0, 1))].corner_pos;
       const float2 upper_right =
-          mask_group->corner_data[grid_xy.x + 1 + x_num * (grid_xy.y + 1)].corner_pos;
+          mask_group->corner_data[xy_to_index(grid_xy + int2(1, 1))].corner_pos;
 
       const float2 pos_2d_out = math::interpolate(
           math::interpolate(lower_left, lower_right, local_uv.x),
