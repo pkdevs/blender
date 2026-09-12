@@ -10094,9 +10094,9 @@ static void rna_def_node_internal_link(BlenderRNA *brna)
   PropertyRNA *prop;
 
   srna = RNA_def_struct(brna, "NodeInternalLink", nullptr);
-  RNA_def_struct_ui_text(
-      srna, "Node Internal Link", "Internal input-to-output connection for muting");
-  RNA_def_struct_ui_icon(srna, ICON_NODE);
+  RNA_def_struct_ui_text(srna,
+                         "Node Internal Link",
+                         "Internal link used by muted nodes to connect input to output sockets");
 
   prop = RNA_def_property(srna, "from_socket", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "NodeSocket");
