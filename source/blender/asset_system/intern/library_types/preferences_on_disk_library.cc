@@ -13,6 +13,7 @@
 
 #include "common.hh"
 #include "preferences_on_disk_library.hh"
+#include "utils.hh"
 
 namespace blender::asset_system {
 
@@ -71,8 +72,13 @@ bool PreferencesOnDiskAssetLibrary::is_enabled() const
   if (!library_definition) {
     return false;
   }
-
-  return (library_definition->flag & ASSET_LIBRARY_DISABLED) == 0;
+  if (library_definition->flag & ASSET_LIBRARY_DISABLED) {
+    return false;
+  }
+  /* The path may have been changed in the Preferences since this instance was created. The
+   * service creates a new instance for the new path, so this one is stale and must not be
+   * visited anymore. Resolve the same way the service builds its lookup key. */
+  return utils::resolve_directory_path(library_definition->resolved_dirpath) == this->root_path();
 }
 
 }  // namespace blender::asset_system
