@@ -1478,6 +1478,7 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         if capabilities.has_color and popover:
             draw_color_jitter_panel(container, context, brush)
 
+    # TODO: This should be moved elsewhere
     elif mode == 'SCULPT_GREASE_PENCIL':
         gp_settings = brush.gpencil_settings
 
@@ -1865,7 +1866,6 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
         row.prop(gp_settings, "pin_draw_mode", text="")
 
-
 def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, compact=False):
     gp_settings = brush.gpencil_settings
     paint = context.tool_settings.gpencil_paint
@@ -2011,6 +2011,31 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         layout.popover("VIEW3D_PT_tools_brush_falloff")
         layout.prop(gp_settings, "use_active_layer_only")
 
+def brush_basic_grease_pencil_sculpt_settings(layout, context, brush, *, compact=False):
+    UnifiedPaintPanel.prop_unified(
+        layout,
+        context,
+        brush,
+        "size",
+        pressure_name="use_pressure_size",
+        unified_name="use_unified_size",
+        text="Size",
+        slider=True,
+        header=compact,
+    )
+
+    UnifiedPaintPanel.prop_unified(
+        layout,
+        context,
+        brush,
+        "strength",
+        pressure_name="use_pressure_strength",
+        unified_name="use_unified_strength",
+        text="Strength",
+        header=compact,
+    )
+
+    return
 
 def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact=False):
     UnifiedPaintPanel.prop_unified(
@@ -2025,14 +2050,12 @@ def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact
         header=compact,
     )
 
-    capabilities = brush.sculpt_capabilities
-    pressure_name = "use_pressure_strength" if capabilities.has_strength_pressure else None
     UnifiedPaintPanel.prop_unified(
         layout,
         context,
         brush,
         "strength",
-        pressure_name=pressure_name,
+        pressure_name="use_pressure_strength",
         unified_name="use_unified_strength",
         text="Strength",
         header=compact,

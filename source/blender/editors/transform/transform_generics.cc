@@ -275,7 +275,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
 
     if (object_mode &
-        (OB_MODE_ALL_PAINT_MESH | OB_MODE_SCULPT_CURVES | OB_MODE_SCULPT_GREASE_PENCIL))
+        (OB_MODE_ALL_PAINT_MESH | OB_MODE_SCULPT_CURVES ))
     {
       Paint *paint = BKE_paint_get_active_from_context(C);
       Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
