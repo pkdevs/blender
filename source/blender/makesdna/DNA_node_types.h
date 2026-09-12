@@ -215,8 +215,7 @@ enum eNode_Flag : int {
   NODE_MUTED = 1 << 9,
   // NODE_CUSTOM_NAME = 1 << 10, /* Deprecated, dirty. */
   // NODE_CONST_OUTPUT = 1 << 11, /* Deprecated, dirty. */
-  /** Node is always behind others. */
-  NODE_BACKGROUND = 1 << 12,
+  // NODE_BACKGROUND = 1 << 12, /* Deprecated, dirty. */
   /** Automatic flag for nodes included in transforms */
   // NODE_TRANSFORM = 1 << 13, /* Deprecated, dirty. */
 
@@ -479,6 +478,12 @@ enum eNodeGlossy_Dist : short {
   SHD_GLOSSY_MULTI_GGX = 4,
 };
 
+/* Light evaluation mode. */
+enum eNodeLightEval_Mode : short {
+  SHD_LIGHT_EVAL_DIFFUSE = 0,
+  SHD_LIGHT_EVAL_GLOSSY = 1,
+};
+
 /* sheen distributions */
 #define SHD_SHEEN_ASHIKHMIN 0
 #define SHD_SHEEN_MICROFIBER 1
@@ -502,6 +507,7 @@ enum eNodeShader_AttributeType : short {
   SHD_ATTRIBUTE_OBJECT = 1,
   SHD_ATTRIBUTE_INSTANCER = 2,
   SHD_ATTRIBUTE_VIEW_LAYER = 3,
+  SHD_ATTRIBUTE_LIGHT = 4,
 };
 
 /* toon modes */
@@ -1742,6 +1748,7 @@ struct bNode {
   int index() const;
   StringRefNull label_or_name() const;
   bool is_muted() const;
+  bool is_selected() const;
   bool is_reroute() const;
   bool is_frame() const;
   bool is_group() const;
@@ -1904,7 +1911,11 @@ struct bNodeTree {
   /** Width of the current view. Used to store and set zoom level. */
   float view_width = 0.0f;
 
-  char _pad[4];
+  /**
+   * Seed used when generating the next #bNode.identifier randomly. Using a more predictable seed
+   * helps keeping .blend files more stable.
+   */
+  uint32_t next_node_identifier_seed = 0;
 
   ListBaseT<bNode> nodes;
   ListBaseT<bNodeLink> links;
