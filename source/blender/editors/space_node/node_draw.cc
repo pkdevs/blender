@@ -3602,11 +3602,13 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                           ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
+  const bool is_edit = bool(storage.flag & NodeCommentFlag::Edit);
+  const StringRef text = storage.text;
 
   const float2 loc = node_to_view(node.location);
   /* Different paddings are used here to compensate for padding applied elsewhere. */
   const int pad_left = 0.2 * UI_UNIT_X;
-  const int pad_right = 0.25 * UI_UNIT_X;
+  const int pad_right = (is_edit ? 0.1 : 0.25) * UI_UNIT_X;
   const int pad_top = 0.15 * UI_UNIT_Y;
   const int pad_bottom = 0.2 * UI_UNIT_Y;
 
@@ -3620,21 +3622,40 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                         0,
                                         ui::style_get_dpi());
   PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &node);
-  layout.prop(&node_ptr, "edit", UI_ITEM_NONE, std::nullopt, ICON_GREASEPENCIL);
-  if (bool(storage.flag & NodeCommentFlag::Edit)) {
+  if (is_edit) {
     layout.textbox_with_state(&node_ptr, "text", &storage.textbox_state_node);
   }
   else {
-    layout.label_markdown(storage.text);
+    layout.label_markdown(text);
   }
 
   block_align_end(&block);
   const float bottom_y = ui::block_layout_resolve(&block).y;
+  const float icon_pad = 0.25f * U.widget_unit;
+  float height = std::max<float>(
+      is_edit || !text.trim().is_empty() ? loc.y - bottom_y + pad_bottom : 0,
+      NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
   node.runtime->draw_bounds.xmin = loc.x;
   node.runtime->draw_bounds.xmax = loc.x + node.width;
-  node.runtime->draw_bounds.ymin = bottom_y - pad_bottom;
+  node.runtime->draw_bounds.ymin = loc.y - height;
   node.runtime->draw_bounds.ymax = loc.y;
+
+  block_emboss_set(&block, ui::EmbossType::None);
+  uiDefIconButR(&block,
+                ui::ButtonType::IconToggle,
+                is_edit ? ICON_HIDE_OFF : ICON_GREASEPENCIL,
+                node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE,
+                node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE,
+                NODE_HEADER_ICON_SIZE,
+                NODE_HEADER_ICON_SIZE,
+                &node_ptr,
+                "edit",
+                -1,
+                0,
+                0,
+                std::nullopt);
+  block_emboss_set(&block, ui::EmbossType::Emboss);
 }
 
 static void node_update_nodetree(const bContext &C,
