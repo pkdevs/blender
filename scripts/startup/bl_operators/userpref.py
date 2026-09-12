@@ -440,9 +440,9 @@ class PREFERENCES_OT_keyitem_restore(Operator):
 
 
 class PREFERENCES_OT_keyitem_intent_detach(Operator):
-    """Detach the key map item from its intent, so it keeps a key of its own"""
+    """Detach the key map item from its shared shortcut, so it keeps a key of its own"""
     bl_idname = "preferences.keyitem_intent_detach"
-    bl_label = "Detach from Intent"
+    bl_label = "Detach from Shared Shortcut"
 
     item_id: IntProperty(
         name="Item Identifier",
@@ -465,8 +465,8 @@ class PREFERENCES_OT_keyitem_intent_detach(Operator):
             self,
             event,
             title=self.bl_label,
-            message=rpt_("Detach \"{:s}\" from intent \"{:s}\"? "
-                         "The item keeps its current key but no longer follows the intent.").format(
+            message=rpt_("Detach \"{:s}\" from shared shortcut \"{:s}\"? "
+                         "The item keeps its current key but no longer follows the shared shortcut.").format(
                 kmi.name or kmi.idname, label),
             confirm_text="Detach",
             translate=False,
@@ -483,14 +483,14 @@ class PREFERENCES_OT_keyitem_intent_detach(Operator):
 
 
 class PREFERENCES_OT_keyintent_category_toggle(Operator):
-    """Show or hide the intents of this category"""
+    """Show or hide the shared shortcuts of this category"""
     bl_idname = "preferences.keyintent_category_toggle"
-    bl_label = "Toggle Intent Category"
+    bl_label = "Toggle Shared Shortcut Category"
     bl_options = {'INTERNAL'}
 
     category: StringProperty(
         name="Category",
-        description="Category of intents to show or hide",
+        description="Category of shared shortcuts to show or hide",
     )
 
     def execute(self, context):
@@ -507,13 +507,13 @@ class PREFERENCES_OT_keyintent_category_toggle(Operator):
 
 
 class PREFERENCES_OT_keyintent_restore(Operator):
-    """Restore the key of the intent to the key configuration preset"""
+    """Restore the key of the shared shortcut to the key configuration preset"""
     bl_idname = "preferences.keyintent_restore"
-    bl_label = "Restore Intent"
+    bl_label = "Restore Shared Shortcut"
 
     intent: StringProperty(
-        name="Intent",
-        description="Identifier of the intent to restore",
+        name="Shared Shortcut",
+        description="Identifier of the shared shortcut to restore",
     )
 
     def execute(self, context):
@@ -527,14 +527,14 @@ class PREFERENCES_OT_keyintent_restore(Operator):
 
 
 class PREFERENCES_OT_keyintent_reveal(Operator):
-    """Show this intent in the intents column"""
+    """Show this shared shortcut in the Shared Shortcuts column"""
     bl_idname = "preferences.keyintent_reveal"
-    bl_label = "Show Intent"
+    bl_label = "Show Shared Shortcut"
     bl_options = {'INTERNAL'}
 
     intent: StringProperty(
-        name="Intent",
-        description="Identifier of the intent to show",
+        name="Shared Shortcut",
+        description="Identifier of the shared shortcut to show",
     )
 
     @classmethod
@@ -542,7 +542,7 @@ class PREFERENCES_OT_keyintent_reveal(Operator):
         intent = context.window_manager.keyconfigs.user.intents.get(props.intent)
         if intent is None:
             return None
-        return rpt_("Show \"{:s}\" in the intents column").format(intent.label)
+        return rpt_("Show \"{:s}\" in the Shared Shortcuts column").format(intent.label)
 
     def execute(self, context):
         import rna_keymap_ui

@@ -628,7 +628,7 @@ static wmKeyIntent *rna_KeyIntents_new(wmKeyConfig *keyconf,
                                        const char *category)
 {
   if (idname[0] == '\0') {
-    BKE_report(reports, RPT_ERROR, "Intent identifier must not be empty");
+    BKE_report(reports, RPT_ERROR, "Shared shortcut identifier must not be empty");
     return nullptr;
   }
 
@@ -1743,7 +1743,7 @@ void RNA_api_keyintents(StructRNA *srna)
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(
       func,
-      "Ensure the intent exists. This will return the one with the given identifier, "
+      "Ensure the shared shortcut exists. This will return the one with the given identifier, "
       "updating its label and key, or create a new one if it does not exist yet.");
   parm = RNA_def_string(func, "idname", nullptr, 0, "Identifier", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
@@ -1762,20 +1762,20 @@ void RNA_api_keyintents(StructRNA *srna)
   RNA_def_enum(func, "key_modifier", rna_enum_event_type_items, 0, "Key Modifier", "");
   RNA_def_enum(func, "direction", rna_enum_event_direction_items, KM_ANY, "Direction", "");
   RNA_def_string(
-      func, "category", nullptr, 0, "Category", "Groups the intent in the interface, may be empty");
-  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Intent", "Added intent");
+      func, "category", nullptr, 0, "Category", "Groups the shared shortcut in the interface, may be empty");
+  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Shared Shortcut", "Added shared shortcut");
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_KeyIntents_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
-  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Intent", "Removed intent");
+  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Shared Shortcut", "Removed shared shortcut");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 
   func = RNA_def_function(srna, "find", "rna_KeyIntents_find");
   parm = RNA_def_string(func, "idname", nullptr, 0, "Identifier", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Intent", "Corresponding intent");
+  parm = RNA_def_pointer(func, "intent", "KeyIntent", "Shared Shortcut", "Corresponding shared shortcut");
   RNA_def_function_return(func, parm);
 }
 
@@ -1786,7 +1786,7 @@ void RNA_api_keyintent(StructRNA *srna)
   func = RNA_def_function(srna, "restore_to_default", "rna_KeyIntent_restore_to_default");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   RNA_def_function_ui_description(
-      func, "Restore the key of this intent to the active key configuration preset");
+      func, "Restore the key of this shared shortcut to the active key configuration preset");
 }
 
 void RNA_api_keyconfigs(StructRNA *srna)

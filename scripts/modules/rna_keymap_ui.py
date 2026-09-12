@@ -2027,7 +2027,7 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level, use_local_expand=False
 
         if not km.is_modal:
             subrow = box.row()
-            subrow.prop_search(kmi, "intent", kc, "intents", text="Intent", icon='LINKED')
+            subrow.prop_search(kmi, "intent", kc, "intents", text="Shared Shortcut", icon='LINKED')
 
         # Operator properties
         box.template_keymap_item_properties(kmi)
@@ -3073,7 +3073,7 @@ def _draw_intent(kc, intent, layout, served):
             props.item_id = kmi.id
             row.label(text=kmi.name or kmi.idname, translate=False)
     else:
-        box.label(text="No key map items are bound through this intent")
+        box.label(text="No key map items use this shared shortcut")
 
 
 def draw_intents(context, layout, kc):
@@ -3084,15 +3084,15 @@ def draw_intents(context, layout, kc):
 
     col = layout.column()
     row = col.row(align=True)
-    row.label(text=iface_("Intents ({:d})").format(len(kc.intents)), translate=False)
+    row.label(text=iface_("Shared Shortcuts ({:d})").format(len(kc.intents)), translate=False)
     sub = col.column()
     sub.active = False
-    sub.label(text="A shortcut with a meaning, shared by the key maps bound through it")
+    sub.label(text="One shortcut used by several key maps, changing it changes them all")
     _intent_row_advance(2.0 + _KMI_ROW_SEPARATOR)
     col.separator()
 
     if not kc.intents:
-        col.label(text="The active key configuration defines no intents")
+        col.label(text="The active key configuration defines no shared shortcuts")
         return
 
     served_all = _intents_served_items_all(kc)

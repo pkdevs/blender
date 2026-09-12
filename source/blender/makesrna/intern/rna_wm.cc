@@ -3870,7 +3870,7 @@ static void rna_def_wm_keyintents(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_property_srna(cprop, "KeyIntents");
   srna = RNA_def_struct(brna, "KeyIntents", nullptr);
   RNA_def_struct_sdna(srna, "wmKeyConfig");
-  RNA_def_struct_ui_text(srna, "Key Intents", "Collection of key intents");
+  RNA_def_struct_ui_text(srna, "Shared Shortcuts", "Collection of shared shortcuts");
 
   RNA_api_keyintents(srna);
 }
@@ -3930,9 +3930,9 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   prop = RNA_def_property(srna, "intents", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "KeyIntent");
   RNA_def_property_ui_text(prop,
-                           "Intents",
-                           "Shortcuts with a meaning shared by key map items across key maps, "
-                           "changing the key of an intent changes every item bound through it");
+                           "Shared Shortcuts",
+                           "Shortcuts used by key map items across several key maps, "
+                           "changing the key of a shared shortcut changes every item using it");
   rna_def_wm_keyintents(brna, prop);
 
   prop = RNA_def_property(srna, "is_user_defined", PROP_BOOLEAN, PROP_NONE);
@@ -4251,8 +4251,8 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   RNA_def_property_string_funcs(
       prop, "rna_KeyMapItem_intent_get", "rna_KeyMapItem_intent_length", "rna_KeyMapItem_intent_set");
   RNA_def_property_ui_text(prop,
-                           "Intent",
-                           "Identifier of the intent this item takes its key from, "
+                           "Shared Shortcut",
+                           "Identifier of the shared shortcut this item takes its key from, "
                            "an empty string for an item with its own key");
   RNA_def_property_update(prop, 0, "rna_KeyMapItem_update");
 
@@ -4286,8 +4286,8 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "KeyIntent", nullptr);
   RNA_def_struct_sdna(srna, "wmKeyIntent");
   RNA_def_struct_ui_text(srna,
-                         "Key Intent",
-                         "A shortcut with a meaning, shared by key map items across key maps");
+                         "Shared Shortcut",
+                         "A shortcut used by key map items across several key maps");
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "idname");
@@ -4303,7 +4303,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   prop = RNA_def_property(srna, "category", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "category");
   RNA_def_property_ui_text(
-      prop, "Category", "Groups the intent with others in the interface, may be empty");
+      prop, "Category", "Groups the shared shortcut with others in the interface, may be empty");
   RNA_def_property_update(prop, 0, "rna_KeyIntent_update");
 
   prop = RNA_def_property(srna, "map_type", PROP_ENUM, PROP_NONE);
@@ -4412,7 +4412,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_expanded", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_EXPANDED);
-  RNA_def_property_ui_text(prop, "Expanded", "Show the key maps bound through this intent");
+  RNA_def_property_ui_text(prop, "Expanded", "Show the key maps using this shared shortcut");
   RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
 
   prop = RNA_def_property(srna, "show_category_expanded", PROP_BOOLEAN, PROP_NONE);
@@ -4420,19 +4420,19 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_CATEGORY_EXPANDED);
   RNA_def_property_ui_text(prop,
                            "Category Expanded",
-                           "Show the intents of this category in the key map editor, "
-                           "kept the same for every intent of the category");
+                           "Show the shared shortcuts of this category in the key map editor, "
+                           "kept the same for every shared shortcut of the category");
 
   prop = RNA_def_property(srna, "is_user_modified", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_USER_MODIFIED);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "User Modified", "The key of this intent was changed by the user");
+  RNA_def_property_ui_text(prop, "User Modified", "The key of this shared shortcut was changed by the user");
 
   prop = RNA_def_property(srna, "is_user_defined", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_USER_DEFINED);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(
-      prop, "User Defined", "This intent was added by the user, no preset defines it");
+      prop, "User Defined", "This shared shortcut was added by the user, no preset defines it");
 
   prop = RNA_def_property(srna, "contexts", PROP_INT, PROP_NONE);
   RNA_def_property_int_funcs(prop, "rna_KeyIntent_contexts_get", nullptr, nullptr);

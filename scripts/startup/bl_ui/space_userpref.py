@@ -2568,7 +2568,7 @@ class USERPREF_PT_keymap_usage(KeymapPanel, Panel):
 
 
 class USERPREF_PT_keymap_intents(KeymapPanel, Panel):
-    bl_label = "Keymap Intents"
+    bl_label = "Shared Shortcuts"
     bl_region_type = 'CHANNELS'
     bl_options = {'HIDE_HEADER'}
 
