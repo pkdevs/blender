@@ -235,12 +235,12 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
     context.pass_motion,
     context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
+    context.buffer_params.get_pass_offset(PASS_DIFFUSE_COLOR),
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
     context.num_samples,
   };
   
-  printf("motion: %d\n", passParams.render_pass_motion);
+  printf("diffuse: %d\n", passParams.render_pass_diffuse_albedo);
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
   
@@ -359,7 +359,7 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.motionVectorScaleY    = context.buffer_params.height;
   
   [denoiser encodeToCommandBuffer: command_buffer];
-    
+  
   [command_buffer commit];
   [command_buffer waitUntilCompleted];
 
