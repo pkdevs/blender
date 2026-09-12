@@ -14,7 +14,8 @@ void node_bsdf_glossy(float4 color,
                       float3 T,
                       float weight,
                       const float do_multiscatter,
-                      Closure &result)
+                      Closure &result,
+                      ShadingData &sd)
 {
   color = max(color, float4(0.0f));
   roughness = saturate(roughness);
@@ -35,5 +36,5 @@ void node_bsdf_glossy(float4 color,
   reflection_data.N = N;
   reflection_data.roughness = roughness;
 
-  result = closure_eval(reflection_data);
+  result = closure_eval(sd, reflection_data);
 }

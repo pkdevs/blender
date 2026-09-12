@@ -24,7 +24,7 @@
 /* Global thickness because it is needed for closure_to_rgba. */
 Thickness g_thickness_forward;
 
-float4 closure_to_rgba_forward(Closure /*cl_unused*/)
+float4 closure_to_rgba_forward(ShadingData & /*sd*/, Closure /*cl_unused*/)
 {
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);

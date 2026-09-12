@@ -1357,10 +1357,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
     Vector<StringRefNull> dependencies = {};
     /* Needed for KernelGlobals and ShadingData. */
-    dependencies.append("eevee_pipeline.bsl.hh");
+    dependencies.append("eevee_nodetree_lib.bsl.hh");
     if (use_vertex_displacement) {
       dependencies.append("eevee_geom_types_lib.bsl.hh");
-      dependencies.append("eevee_nodetree_lib.bsl.hh");
       dependencies.extend(codegen.displacement.dependencies);
     }
 

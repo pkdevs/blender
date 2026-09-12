@@ -22,7 +22,7 @@
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_shadow(Closure /*cl*/)
+float4 closure_to_rgba_shadow(ShadingData & /*sd*/, Closure /*cl*/)
 {
   float3 transmittance = g_transmittance;
   closure_weights_reset(0.0f);

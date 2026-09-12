@@ -129,7 +129,8 @@ static int node_shader_gpu_bsdf_metallic(GPUMaterial *mat,
                         in,
                         out,
                         GPU_constant(&use_multi_scatter),
-                        GPU_constant(&use_complex_ior));
+                        GPU_constant(&use_complex_ior),
+                        GPU_shading_data());
 }
 
 static void node_shader_update_metallic(bNodeTree *ntree, bNode *node)

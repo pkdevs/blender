@@ -92,8 +92,13 @@ static int node_shader_gpu_subsurface_scattering(GPUMaterial *mat,
   }
   random_walk_radius_scale = GPU_constant(&random_walk_scale);
 
-  return GPU_stack_link(
-      mat, node, "node_subsurface_scattering", in, out, random_walk_radius_scale);
+  return GPU_stack_link(mat,
+                        node,
+                        "node_subsurface_scattering",
+                        in,
+                        out,
+                        random_walk_radius_scale,
+                        GPU_shading_data());
 }
 
 static void node_shader_update_subsurface_scattering(bNodeTree *ntree, bNode *node)

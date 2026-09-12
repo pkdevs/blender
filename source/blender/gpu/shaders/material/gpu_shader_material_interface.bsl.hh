@@ -39,8 +39,32 @@ enum eObjectInfoFlag : uint32_t {
 #define RAY_TYPE_DIFFUSE 2
 #define RAY_TYPE_GLOSSY 3
 
+/* Expected members of ViewMatrices. */
+struct ViewMatrices {
+  float4x4 viewmat;
+  float4x4 viewinv;
+  float4x4 winmat;
+  float4x4 wininv;
+};
+
+/* Expected members of ObjectMatrices. */
+struct ObjectMatrices {
+  float4x4 model;
+  float4x4 model_inverse;
+};
+
+/* Expected members of ObjectInfos. */
+struct ObjectInfos {
+  float4 ob_color;
+  uint index;
+  float random;
+  eObjectInfoFlag flag;
+};
+
 /* Should eventually carry the needed resource tables. */
-// struct KernelGlobals {
+struct KernelGlobals {};
+
+struct ShadingData {};
 
 /* Closure Nodes. */
 
@@ -52,75 +76,84 @@ Closure closure_mix(Closure /*cl1*/, Closure /*cl2*/, float /*fac*/)
 {
   return {};
 }
-Closure closure_eval(ClosureDiffuse /*diffuse*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureDiffuse /*diffuse*/)
 {
   return {};
 }
-Closure closure_eval(ClosureSubsurface /*diffuse*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureSubsurface /*diffuse*/)
 {
   return {};
 }
-Closure closure_eval(ClosureTranslucent /*translucent*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureTranslucent /*translucent*/)
 {
   return {};
 }
-Closure closure_eval(ClosureReflection /*reflection*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureReflection /*reflection*/)
 {
   return {};
 }
-Closure closure_eval(ClosureRefraction /*refraction*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ClosureThinRefraction /*refraction*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureThinRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ClosureEmission /*emission*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureEmission /*emission*/)
 {
   return {};
 }
-Closure closure_eval(ClosureTransparency /*transparency*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureTransparency /*transparency*/)
 {
   return {};
 }
-Closure closure_eval(ClosureVolumeScatter /*volume_scatter*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureVolumeScatter /*volume_scatter*/)
 {
   return {};
 }
-Closure closure_eval(ClosureVolumeAbsorption /*volume_absorption*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureVolumeAbsorption /*volume_absorption*/)
 {
   return {};
 }
-Closure closure_eval(ClosureHair /*hair*/)
+Closure closure_eval(ShadingData & /*sd*/, ClosureHair /*hair*/)
 {
   return {};
 }
-Closure closure_eval(ClosureReflection /*reflection*/, ClosureRefraction /*refraction*/)
+Closure closure_eval(ShadingData & /*sd*/,
+                     ClosureReflection /*reflection*/,
+                     ClosureRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ClosureDiffuse /*diffuse*/, ClosureReflection /*reflection*/)
+Closure closure_eval(ShadingData & /*sd*/,
+                     ClosureDiffuse /*diffuse*/,
+                     ClosureReflection /*reflection*/)
 {
   return {};
 }
-Closure closure_eval(ClosureReflection /*reflection*/, ClosureReflection /*coat*/)
-{
-  return {};
-}
-Closure closure_eval(ClosureVolumeScatter /*volume_scatter*/,
-                     ClosureVolumeAbsorption /*volume_absorption*/,
-                     ClosureEmission /*emission*/)
-{
-  return {};
-}
-Closure closure_eval(ClosureDiffuse /*diffuse*/,
+Closure closure_eval(ShadingData & /*sd*/,
                      ClosureReflection /*reflection*/,
                      ClosureReflection /*coat*/)
 {
   return {};
 }
-Closure closure_eval(ClosureDiffuse /*diffuse*/,
+Closure closure_eval(ShadingData & /*sd*/,
+                     ClosureVolumeScatter /*volume_scatter*/,
+                     ClosureVolumeAbsorption /*volume_absorption*/,
+                     ClosureEmission /*emission*/)
+{
+  return {};
+}
+Closure closure_eval(ShadingData & /*sd*/,
+                     ClosureDiffuse /*diffuse*/,
+                     ClosureReflection /*reflection*/,
+                     ClosureReflection /*coat*/)
+{
+  return {};
+}
+Closure closure_eval(ShadingData & /*sd*/,
+                     ClosureDiffuse /*diffuse*/,
                      ClosureReflection /*reflection*/,
                      ClosureReflection /*coat*/,
                      ClosureRefraction /*refraction*/)
@@ -128,7 +161,7 @@ Closure closure_eval(ClosureDiffuse /*diffuse*/,
   return {};
 }
 
-float4 closure_to_rgba(Closure /*closure*/)
+float4 closure_to_rgba(ShadingData & /*sd*/, Closure /*closure*/)
 {
   return float4(0);
 }
@@ -333,34 +366,10 @@ void output_aov(int2 /*texel*/,
 
 /* Matrices. */
 
-struct ObjectMatrices {
-  float4x4 model;
-  float4x4 model_inverse;
-};
-
-struct ObjectInfos {
-  /** Uploaded as center + size. Converted to mul+bias to local coord. */
-  packed_float3 orco_add;
-  uint object_attrs_offset;
-  packed_float3 orco_mul;
-  uint object_attrs_len;
-
-  float4 ob_color;
-  uint index;
-  /** Used for Light Linking in EEVEE */
-  uint light_and_shadow_set_membership;
-  float random;
-  eObjectInfoFlag flag;
-  float shadow_terminator_normal_offset;
-  float shadow_terminator_geometry_offset;
-};
-
-struct ViewMatrices {
-  float4x4 viewmat;
-  float4x4 viewinv;
-  float4x4 winmat;
-  float4x4 wininv;
-};
+ViewMatrices view_matrices_get()
+{
+  return {};
+}
 
 ObjectMatrices object_matrices_get()
 {
@@ -371,10 +380,3 @@ ObjectInfos object_infos_get()
 {
   return {};
 }
-
-ViewMatrices view_matrices_get()
-{
-  return {};
-}
-
-//}; // KernelGlobals

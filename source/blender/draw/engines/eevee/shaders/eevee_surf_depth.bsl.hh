@@ -18,7 +18,7 @@
 #include "eevee_utility_tx.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
-float4 closure_to_rgba_depth(Closure /*cl*/)
+float4 closure_to_rgba_depth(ShadingData & /*sd*/, Closure /*cl*/)
 {
   float4 out_color;
   out_color.rgb = g_emission;

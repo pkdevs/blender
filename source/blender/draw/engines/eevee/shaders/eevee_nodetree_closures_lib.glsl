@@ -88,6 +88,7 @@ template<typename T> struct Reservoir {
 template struct Reservoir<ClosureUndetermined>;
 
 /* Sampled closure parameters. */
+/* TODO(fclem): Move to ShadingData. */
 Reservoir<ClosureUndetermined> g_closure_bins[CLOSURE_BIN_COUNT];
 
 Reservoir<ClosureUndetermined> g_closure_get(uchar i)

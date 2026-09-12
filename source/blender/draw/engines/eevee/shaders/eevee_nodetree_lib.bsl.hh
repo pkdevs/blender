@@ -28,6 +28,12 @@
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
+struct KernelGlobals {
+  [[push_constant]] int test;
+};
+
+struct ShadingData {};
+
 /* Global thickness because it is needed for closure_to_rgba. */
 Thickness g_thickness;
 uint g_resource_id;
@@ -82,7 +88,7 @@ ViewMatrices view_matrices_get()
   cl.type = closure_type_get(in_cl);
 
 /* Single BSDFs. */
-Closure closure_eval(ClosureDiffuse diffuse)
+Closure closure_eval(ShadingData /*sd*/, ClosureDiffuse diffuse)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, diffuse);
@@ -96,7 +102,7 @@ Closure closure_eval(ClosureDiffuse diffuse)
   return Closure(0);
 }
 
-Closure closure_eval(ClosureSubsurface diffuse)
+Closure closure_eval(ShadingData /*sd*/, ClosureSubsurface diffuse)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, diffuse);
@@ -106,7 +112,7 @@ Closure closure_eval(ClosureSubsurface diffuse)
   return Closure(0);
 }
 
-Closure closure_eval(ClosureTranslucent translucent)
+Closure closure_eval(ShadingData /*sd*/, ClosureTranslucent translucent)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, translucent);
@@ -132,7 +138,7 @@ bool g_closure_reflection_bin = true;
   } \
   g_closure_reflection_bin = !g_closure_reflection_bin;
 
-Closure closure_eval(ClosureReflection reflection)
+Closure closure_eval(ShadingData /*sd*/, ClosureReflection reflection)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, reflection);
@@ -166,7 +172,7 @@ Closure closure_eval(ClosureReflection reflection)
   return Closure(0);
 }
 
-Closure closure_eval(ClosureRefraction refraction)
+Closure closure_eval(ShadingData /*sd*/, ClosureRefraction refraction)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, refraction);
@@ -177,7 +183,7 @@ Closure closure_eval(ClosureRefraction refraction)
   return Closure(0);
 }
 
-Closure closure_eval(ClosureThinRefraction refraction)
+Closure closure_eval(ShadingData /*sd*/, ClosureThinRefraction refraction)
 {
   ClosureUndetermined cl;
   closure_base_copy(cl, refraction);
@@ -187,92 +193,97 @@ Closure closure_eval(ClosureThinRefraction refraction)
   return Closure(0);
 }
 
-Closure closure_eval(ClosureEmission emission)
+Closure closure_eval(ShadingData /*sd*/, ClosureEmission emission)
 {
   g_emission += emission.emission;
   return Closure(0);
 }
 
-Closure closure_eval(ClosureTransparency transparency)
+Closure closure_eval(ShadingData /*sd*/, ClosureTransparency transparency)
 {
   g_transmittance += transparency.transmittance;
   g_holdout += transparency.holdout;
   return Closure(0);
 }
 
-Closure closure_eval(ClosureVolumeScatter volume_scatter)
+Closure closure_eval(ShadingData /*sd*/, ClosureVolumeScatter volume_scatter)
 {
   g_volume_scattering += volume_scatter.scattering;
   g_volume_anisotropy += volume_scatter.anisotropy;
   return Closure(0);
 }
 
-Closure closure_eval(ClosureVolumeAbsorption volume_absorption)
+Closure closure_eval(ShadingData /*sd*/, ClosureVolumeAbsorption volume_absorption)
 {
   g_volume_absorption += volume_absorption.absorption;
   return Closure(0);
 }
 
-Closure closure_eval(ClosureHair /*hair*/)
+Closure closure_eval(ShadingData /*sd*/, ClosureHair /*hair*/)
 {
   /* TODO */
   return Closure(0);
 }
 
 /* Glass BSDF. */
-Closure closure_eval(ClosureReflection reflection, ClosureRefraction refraction)
+Closure closure_eval(ShadingData sd, ClosureReflection reflection, ClosureRefraction refraction)
 {
-  closure_eval(reflection);
-  closure_eval(refraction);
+  closure_eval(sd, reflection);
+  closure_eval(sd, refraction);
   return Closure(0);
 }
 
 /* Dielectric BSDF. */
-Closure closure_eval(ClosureDiffuse diffuse, ClosureReflection reflection)
+Closure closure_eval(ShadingData sd, ClosureDiffuse diffuse, ClosureReflection reflection)
 {
-  closure_eval(diffuse);
-  closure_eval(reflection);
+  closure_eval(sd, diffuse);
+  closure_eval(sd, reflection);
   return Closure(0);
 }
 
 /* Coat BSDF. */
-Closure closure_eval(ClosureReflection reflection, ClosureReflection coat)
+Closure closure_eval(ShadingData sd, ClosureReflection reflection, ClosureReflection coat)
 {
-  closure_eval(reflection);
-  closure_eval(coat);
+  closure_eval(sd, reflection);
+  closure_eval(sd, coat);
   return Closure(0);
 }
 
 /* Volume BSDF. */
-Closure closure_eval(ClosureVolumeScatter volume_scatter,
+Closure closure_eval(ShadingData sd,
+                     ClosureVolumeScatter volume_scatter,
                      ClosureVolumeAbsorption volume_absorption,
                      ClosureEmission emission)
 {
-  closure_eval(volume_scatter);
-  closure_eval(volume_absorption);
-  closure_eval(emission);
+  closure_eval(sd, volume_scatter);
+  closure_eval(sd, volume_absorption);
+  closure_eval(sd, emission);
   return Closure(0);
 }
 
 /* Specular BSDF. */
-Closure closure_eval(ClosureDiffuse diffuse, ClosureReflection reflection, ClosureReflection coat)
+Closure closure_eval(ShadingData sd,
+                     ClosureDiffuse diffuse,
+                     ClosureReflection reflection,
+                     ClosureReflection coat)
 {
-  closure_eval(diffuse);
-  closure_eval(reflection);
-  closure_eval(coat);
+  closure_eval(sd, diffuse);
+  closure_eval(sd, reflection);
+  closure_eval(sd, coat);
   return Closure(0);
 }
 
 /* Principled BSDF. */
-Closure closure_eval(ClosureDiffuse diffuse,
+Closure closure_eval(ShadingData sd,
+                     ClosureDiffuse diffuse,
                      ClosureReflection reflection,
                      ClosureReflection coat,
                      ClosureRefraction refraction)
 {
-  closure_eval(diffuse);
-  closure_eval(reflection);
-  closure_eval(coat);
-  closure_eval(refraction);
+  closure_eval(sd, diffuse);
+  closure_eval(sd, reflection);
+  closure_eval(sd, coat);
+  closure_eval(sd, refraction);
   return Closure(0);
 }
 

@@ -20,7 +20,7 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_world(Closure /*cl*/)
+float4 closure_to_rgba_world(ShadingData & /*sd*/, Closure /*cl*/)
 {
   float3 transmittance = g_transmittance;
   closure_weights_reset(0.0f);

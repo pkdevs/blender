@@ -7,12 +7,12 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_shader_to_rgba(Closure cl, float4 &outcol, float &outalpha)
+void node_shader_to_rgba(Closure cl, float4 &outcol, float &outalpha, ShadingData &sd)
 {
 #ifdef GPU_VERTEX_SHADER
   outcol = float4(0.0f);
 #else
-  outcol = closure_to_rgba(cl);
+  outcol = closure_to_rgba(sd, cl);
 #endif
   outalpha = outcol.a;
 }

@@ -19,7 +19,7 @@
 #include "eevee_surf_common.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
 
-float4 closure_to_rgba_capture(Closure /*cl*/)
+float4 closure_to_rgba_capture(ShadingData & /*sd*/, Closure /*cl*/)
 {
   float3 transmittance = g_transmittance;
   closure_weights_reset(0.0f);

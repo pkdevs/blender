@@ -20,7 +20,8 @@ void node_bsdf_glass(float4 color,
                      float /*thin_film_thickness*/,
                      float /*thin_film_ior*/,
                      const float do_multiscatter,
-                     Closure &result)
+                     Closure &result,
+                     ShadingData &sd)
 {
   color = max(color, float4(0.0f));
   roughness = saturate(roughness);
@@ -43,5 +44,5 @@ void node_bsdf_glass(float4 color,
   refraction_data.roughness = roughness;
   refraction_data.ior = ior;
 
-  result = closure_eval(reflection_data, refraction_data);
+  result = closure_eval(sd, reflection_data, refraction_data);
 }

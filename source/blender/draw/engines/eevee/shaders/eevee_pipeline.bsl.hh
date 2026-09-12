@@ -20,9 +20,3 @@ struct PipelineConstants {
 };
 
 }  // namespace eevee
-
-struct KernelGlobals {
-  [[push_constant]] int test_sdfs;
-};
-
-struct ShadingData {};

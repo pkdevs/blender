@@ -15,7 +15,8 @@ void node_volume_scatter(float4 color,
                          float /*alpha*/,
                          float /*diameter*/,
                          float weight,
-                         Closure &result)
+                         Closure &result,
+                         ShadingData &sd)
 {
   color = max(color, float4(0.0f));
   density = max(density, 0.0f);
@@ -24,5 +25,5 @@ void node_volume_scatter(float4 color,
   volume_scatter_data.scattering = color.rgb * (density * weight);
   volume_scatter_data.anisotropy = anisotropy * weight;
 
-  result = closure_eval(volume_scatter_data);
+  result = closure_eval(sd, volume_scatter_data);
 }

@@ -418,7 +418,15 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     if (output.is_zone_io) {
       break;
     }
-    eval_ss << output.type << " " << &output << ";\n";
+    switch (output.type) {
+      case GPU_SHADING_DATA:
+      case GPU_KERNEL_GLOBALS:
+        /* Defined as inputs to the node-tree eval function. */
+        break;
+      default:
+        eval_ss << output.type << " " << &output << ";\n";
+        break;
+    }
   }
 
   /* Function call. */
@@ -448,7 +456,17 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     if (output.is_zone_io) {
       break;
     }
-    eval_ss << &output;
+    switch (output.type) {
+      case GPU_KERNEL_GLOBALS:
+        eval_ss << "kg";
+        break;
+      case GPU_SHADING_DATA:
+        eval_ss << "sd";
+        break;
+      default:
+        eval_ss << &output;
+        break;
+    }
     if (output.next && !output.next->is_zone_io) {
       eval_ss << ", ";
     }

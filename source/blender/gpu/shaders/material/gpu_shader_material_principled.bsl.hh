@@ -9,7 +9,8 @@
 #include "gpu_shader_math_vector_safe.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
-float3 principled_eval_translucent(float3 weight,
+float3 principled_eval_translucent([[maybe_unused]] ShadingData &sd,
+                                   float3 weight,
                                    [[maybe_unused]] const Specular specular,
                                    [[maybe_unused]] const Transmission transmission,
                                    [[maybe_unused]] const float3 N,
@@ -40,13 +41,14 @@ float3 principled_eval_translucent(float3 weight,
   }
 
   weight = openpbr_eval_translucent(
-      weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
+      sd, weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
 #endif
 
   return weight;
 }
 
-float3 principled_eval_gloss(const float3 weight,
+float3 principled_eval_gloss(ShadingData &sd,
+                             const float3 weight,
                              const Specular specular,
                              const float3 N,
                              const float NV,
@@ -63,7 +65,7 @@ float3 principled_eval_gloss(const float3 weight,
   reflection_data.N = N;
   reflection_data.roughness = specular.roughness;
   reflection_data.color += weight * reflectance;
-  closure_eval(reflection_data);
+  closure_eval(sd, reflection_data);
 
   /* Attenuate lower layers */
   return weight * max((1.0f - math_reduce_max(reflectance)), 0.0f);
@@ -106,7 +108,8 @@ void node_bsdf_principled(float4 base_color,
                           const float /*thin_film_ior*/,
                           const float do_multiscatter,
                           const float subsurface_random_walk_radius_scale,
-                          Closure &result)
+                          Closure &result,
+                          ShadingData &sd)
 {
   /* Match Cycles. */
   metallic = saturate(metallic);
@@ -160,17 +163,17 @@ void node_bsdf_principled(float4 base_color,
   ClosureDiffuse diffuse_data;
   ClosureReflection reflection_data;
 
-  weight = openpbr_eval_transparency(weight, alpha);
-  weight = openpbr_eval_fuzz(weight, coat, fuzz, N, V, diffuse_data);
-  weight = openpbr_eval_coat(weight, coat, V);
-  weight = openpbr_eval_emission(weight, emission.rgb, emission_strength);
+  weight = openpbr_eval_transparency(sd, weight, alpha);
+  weight = openpbr_eval_fuzz(sd, weight, coat, fuzz, N, V, diffuse_data);
+  weight = openpbr_eval_coat(sd, weight, coat, V);
+  weight = openpbr_eval_emission(sd, weight, emission.rgb, emission_strength);
   weight = openpbr_eval_metal(
       weight, clamped_base_color, specular, metallic, NV, multiggx, reflection_data);
   weight = principled_eval_translucent(
-      weight, specular, transmission, N, NV, thin_wall, multiggx, reflection_data);
-  weight = principled_eval_gloss(weight, specular, N, NV, multiggx, reflection_data);
-  weight = openpbr_eval_subsurface(weight, subsurface, thin_wall, N, diffuse_data);
-  openpbr_eval_diffuse(weight, base_color.rgb, N, diffuse_data);
+      sd, weight, specular, transmission, N, NV, thin_wall, multiggx, reflection_data);
+  weight = principled_eval_gloss(sd, weight, specular, N, NV, multiggx, reflection_data);
+  weight = openpbr_eval_subsurface(sd, weight, subsurface, thin_wall, N, diffuse_data);
+  openpbr_eval_diffuse(sd, weight, base_color.rgb, N, diffuse_data);
 
   /* TODO(fclem): EEVEE implementation leaking. */
   result = CLOSURE_DEFAULT;

@@ -38,7 +38,8 @@ void node_bsdf_metallic(float4 base_color,
                         float /*thin_film_ior*/,
                         const float do_multiscatter,
                         const float use_complex_ior,
-                        Closure &result)
+                        Closure &result,
+                        ShadingData &sd)
 {
   float3 F0 = base_color.rgb;
   float3 F82 = edge_tint.rgb;
@@ -67,5 +68,5 @@ void node_bsdf_metallic(float4 base_color,
   brdf_f82_tint_lut(F0, F82, NV, roughness, do_multiscatter != 0.0f, metallic_brdf);
   reflection_data.color = metallic_brdf * weight;
 
-  result = closure_eval(reflection_data);
+  result = closure_eval(sd, reflection_data);
 }

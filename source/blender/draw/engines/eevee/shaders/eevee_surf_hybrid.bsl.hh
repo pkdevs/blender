@@ -22,7 +22,7 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_hybrid(Closure /*cl*/)
+float4 closure_to_rgba_hybrid(ShadingData & /*sd*/, Closure /*cl*/)
 {
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
