@@ -47,6 +47,7 @@
 #include "IMB_partial_update.hh"
 
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
 #include "BKE_paint.hh"
@@ -1058,6 +1059,10 @@ void ED_image_undosys_type(UndoType *ut)
 PaintTileMap *ED_image_paint_tile_map_get()
 {
   UndoStack *ustack = ED_undo_stack_get();
+  if (ustack == nullptr) {
+    BLI_assert(G.background);
+    return nullptr;
+  }
   UndoStep *us_prev = ustack->step_init;
   UndoStep *us_p = BKE_undosys_stack_init_or_active_with_type(ustack, BKE_UNDOSYS_TYPE_IMAGE);
   ImageUndoStep *us = reinterpret_cast<ImageUndoStep *>(us_p);
@@ -1081,6 +1086,10 @@ void ED_image_undo_restore(UndoStep *us)
 static ImageUndoStep *image_undo_push_begin(const char *name, PaintMode paint_mode)
 {
   UndoStack *ustack = ED_undo_stack_get();
+  if (ustack == nullptr) {
+    BLI_assert(G.background);
+    return nullptr;
+  }
   bContext *C = nullptr; /* special case, we never read from this. */
   UndoStep *us_p = BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_IMAGE);
   ImageUndoStep *us = reinterpret_cast<ImageUndoStep *>(us_p);
@@ -1100,6 +1109,9 @@ void ED_image_undo_push_begin_with_image(const char *name,
                                          ImageUser *iuser)
 {
   ImageUndoStep *us = image_undo_push_begin(name, PaintMode::Texture2D);
+  if (us == nullptr) {
+    return;
+  }
 
   ED_image_undo_push(image, ibuf, iuser, us);
 }
@@ -1109,6 +1121,9 @@ void ED_image_undo_push_begin_with_image_all_udims(const char *name,
                                                    ImageUser *iuser)
 {
   ImageUndoStep *us = image_undo_push_begin(name, PaintMode::Texture2D);
+  if (us == nullptr) {
+    return;
+  }
 
   for (ImageTile &current_tile : image->tiles) {
     iuser->tile = current_tile.tile_number;
@@ -1152,6 +1167,10 @@ void ED_image_undo_push(Image *image, ImBuf *ibuf, ImageUser *iuser, ImageUndoSt
 void ED_image_undo_push_end()
 {
   UndoStack *ustack = ED_undo_stack_get();
+  if (ustack == nullptr) {
+    BLI_assert(G.background);
+    return;
+  }
   BKE_undosys_step_push(ustack, nullptr, nullptr, UndoEncodeHints::None);
   BKE_undosys_stack_limit_steps_and_memory_defaults(ustack);
   WM_file_tag_modified();
