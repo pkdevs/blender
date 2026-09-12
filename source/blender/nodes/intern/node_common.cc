@@ -1208,6 +1208,10 @@ void register_node_type_group_output()
 static void node_comment_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeComment *data = MEM_new<NodeComment>(__func__);
+  data->text = BLI_strdup("# Comment");
+  data->flag |= NodeCommentFlag::Render;
+  data->textbox_state_node.visible_lines = 5;
+  data->textbox_state_panel.visible_lines = 5;
   node->storage = data;
 }
 
@@ -1255,6 +1259,7 @@ void register_node_type_comment()
   ntype.draw_buttons_ex = node_comment_layout_ex;
   ntype.initfunc = node_comment_init;
   ntype.maxwidth = FLT_MAX;
+  ntype.default_width = bke::NodeWidth::_200;
   ntype.blend_write_storage_content = node_comment_blend_write;
   ntype.blend_data_read_storage_content = node_comment_blend_read;
   bke::node_type_storage(ntype, "NodeComment", node_comment_free, node_comment_copy);
