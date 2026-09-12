@@ -1054,7 +1054,6 @@ namespace {
 struct RectTransformInteraction {
   float orig_mouse[2];
   float orig_matrix_offset[4][4];
-  float orig_matrix_final_no_offset[4][4];
   Dial *dial;
   bool use_temp_uniform;
 };
@@ -1083,7 +1082,6 @@ static wmOperatorStatus gizmo_cage2d_invoke(bContext *C, wmGizmo *gz, const wmEv
   RectTransformInteraction *data = MEM_new_zeroed<RectTransformInteraction>("cage_interaction");
 
   copy_m4_m4(data->orig_matrix_offset, gz->matrix_offset);
-  WM_gizmo_calc_matrix_final_no_offset(gz, data->orig_matrix_final_no_offset);
 
   if (gizmo_window_project_2d(C, gz, float2(int2(event->mval)), 2, false, data->orig_mouse) == 0) {
     zero_v2(data->orig_mouse);
@@ -1210,44 +1208,24 @@ static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
                               (point_local[1] - data->orig_mouse[1]);
   }
   else if (gz->highlight_part == ED_GIZMO_CAGE2D_PART_ROTATE) {
-
-#define MUL_V2_V3_M4_FINAL(test_co, mouse_co) \
-  mul_v3_m4v3(test_co, data->orig_matrix_final_no_offset, float3{UNPACK2(mouse_co), 0.0})
-
-    float test_co[3];
-
     if (data->dial == nullptr) {
-      MUL_V2_V3_M4_FINAL(test_co, data->orig_matrix_offset[3]);
+      data->dial = BLI_dial_init(data->orig_matrix_offset[3], FLT_EPSILON);
 
-      data->dial = BLI_dial_init(test_co, FLT_EPSILON);
-
-      MUL_V2_V3_M4_FINAL(test_co, data->orig_mouse);
-      BLI_dial_angle(data->dial, test_co);
+      BLI_dial_angle(data->dial, data->orig_mouse);
     }
 
     /* rotate */
-    MUL_V2_V3_M4_FINAL(test_co, point_local);
-    const float angle = BLI_dial_angle(data->dial, test_co);
+    const float angle = BLI_dial_angle(data->dial, point_local);
 
-    float matrix_space_inv[4][4];
     float matrix_rotate[4][4];
-    float pivot[3];
-
-    copy_v3_v3(pivot, data->orig_matrix_offset[3]);
-
-    invert_m4_m4(matrix_space_inv, gz->matrix_space);
 
     unit_m4(matrix_rotate);
-    mul_m4_m4m4(matrix_rotate, matrix_rotate, matrix_space_inv);
     rotate_m4(matrix_rotate, 'Z', -angle);
-    mul_m4_m4m4(matrix_rotate, matrix_rotate, gz->matrix_space);
 
     zero_v3(matrix_rotate[3]);
-    transform_pivot_set_m4(matrix_rotate, pivot);
+    transform_pivot_set_m4(matrix_rotate, data->orig_matrix_offset[3]);
 
     mul_m4_m4m4(gz->matrix_offset, matrix_rotate, data->orig_matrix_offset);
-
-#undef MUL_V2_V3_M4_FINAL
   }
   else {
     /* scale */
