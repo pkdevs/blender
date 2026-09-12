@@ -101,15 +101,16 @@ struct QuadWidgetGroup2 {
 };
 
 /* translate callbacks */
-static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
+static void gizmo_bisect_prop_translate_get(const wmGizmo *gz,
                                             wmGizmoProperty *gz_prop,
                                             void *value_p)
 {
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
+  const CornerPinData *corner_pin_data = &mask_group->corner_data[index];
+
   BLI_assert(gz_prop->type->array_length == 3);
   float *values = static_cast<float *>(value_p);
-
-  const CornerPinData *corner_pin_data = static_cast<CornerPinData *>(
-      gz_prop->custom_func.user_data);
 
   values[0] = corner_pin_data->corner_pos[0];
   values[1] = corner_pin_data->corner_pos[1];
@@ -260,16 +261,16 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
                                             wmGizmoProperty *gz_prop,
                                             const void *value_p)
 {
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
+  CornerPinData *corner_pin_data = &mask_group->corner_data[index];
+
   BLI_assert(gz_prop->type->array_length == 3);
 
   const float *values = static_cast<const float *>(value_p);
   const float3 position_value = float3(values);
 
-  CornerPinData *corner_pin_data = static_cast<CornerPinData *>(gz_prop->custom_func.user_data);
-
   corner_pin_data->corner_pos = float2(position_value.x, position_value.y);
-
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
   if (mask_group->mode == DeformMode::PERSPECTIVE) {
     update_positions_prespective(mask_group);
@@ -530,7 +531,7 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
     params.value_get_fn = gizmo_bisect_prop_translate_get;
     params.value_set_fn = gizmo_bisect_prop_translate_set;
     params.range_get_fn = nullptr;
-    params.user_data = &corner_pin_data;
+    params.user_data = reinterpret_cast<void *>(static_cast<intptr_t>(i));
     WM_gizmo_target_property_def_func(gz, "offset", &params);
   }
 
