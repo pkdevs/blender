@@ -1764,7 +1764,7 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
                                                        const OffsetIndices<int> segment_offsets,
                                                        const Span<bool> unchanged_curves,
                                                        const bool skip_clipping_attributes,
-                                                       Vector<bool> &is_point_clipping)
+                                                       Vector<bool> &r_is_point_clipping)
 {
   IndexMaskMemory memory;
   const IndexMask unchanged_curves_mask = IndexMask::from_bools(unchanged_curves, memory);
@@ -1799,11 +1799,11 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
         const float start_alpha = segment.intersection_factor[reversed ? Side::End : Side::Start];
         const int2 start_edge = segment.edge(reversed ? Side::End : Side::Start);
         point_to_interpolate.append({i, start_edge.x, start_edge.y, start_alpha});
-        is_point_clipping.append(is_clipping);
+        r_is_point_clipping.append(is_clipping);
         i++;
       }
 
-      is_point_clipping.append_n_times(is_clipping, point_num);
+      r_is_point_clipping.append_n_times(is_clipping, point_num);
 
       if (!unchanged && !is_clipping) {
         segment.foreach_point(
@@ -1834,7 +1834,7 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
         const float end_alpha = segment.intersection_factor[reversed ? Side::Start : Side::End];
         const int2 end_edge = segment.edge(reversed ? Side::Start : Side::End);
         point_to_interpolate.append({i, end_edge.x, end_edge.y, end_alpha});
-        is_point_clipping.append(is_clipping);
+        r_is_point_clipping.append(is_clipping);
         i++;
       }
     }
@@ -1853,7 +1853,7 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
   Vector<InterpolatePoint> clipping_point_to_interpolate;
   for (const int curve_i : dst_points_by_curve.index_range()) {
     const IndexRange points = dst_points_by_curve[curve_i];
-    const Span<bool> range_is_clipping = is_point_clipping.as_span().slice(points);
+    const Span<bool> range_is_clipping = r_is_point_clipping.as_span().slice(points);
 
     const IndexMask clipping_ranges = IndexMask::from_bools(range_is_clipping, memory);
     clipping_ranges.foreach_range([&](const IndexRange &range) {
