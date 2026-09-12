@@ -128,7 +128,13 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
                                       attr->type == SHD_ATTRIBUTE_INSTANCER,
                                       reinterpret_cast<uint32_t *>(&attr_hash));
 
-      GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
+      GPU_link(mat,
+               "node_attribute_uniform",
+               cd_attr,
+               GPU_constant(&attr_hash),
+               &cd_attr,
+               GPU_kernel_globals(),
+               GPU_shading_data());
       break;
     }
   }

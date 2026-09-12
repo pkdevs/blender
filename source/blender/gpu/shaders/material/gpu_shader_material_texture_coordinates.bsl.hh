@@ -22,19 +22,22 @@ void node_tex_coord(float4x4 obmatinv,
                     float3 &object,
                     float3 &camera,
                     float3 &window,
-                    float3 &reflection)
+                    float3 &reflection,
+                    [[resource_table]] KernelGlobals &kg,
+                    ShadingData &sd)
 {
+  Coordinates coords = coordinate_impl(kg, sd, g_data.P, g_data.N);
   generated = attr_orco;
-  normal_transform_world_to_object(g_data.N, normal);
+  normal_transform_world_to_object(g_data.N, normal, kg, sd);
   uv = attr_uv.xyz;
   bool valid_mat = (obmatinv[3][3] != 0.0f);
   if (valid_mat) {
     object = (obmatinv * float4(g_data.P, 1.0f)).xyz;
   }
   else {
-    point_transform_world_to_object(g_data.P, object);
+    point_transform_world_to_object(g_data.P, object, kg, sd);
   }
-  camera = coordinate_camera(g_data.P);
-  window = coordinate_screen(g_data.P);
-  reflection = coordinate_reflect(g_data.P, g_data.N);
+  camera = coords.camera;
+  window = coords.screen;
+  reflection = coords.reflect;
 }

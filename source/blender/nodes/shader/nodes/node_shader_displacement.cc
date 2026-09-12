@@ -52,7 +52,8 @@ static int gpu_shader_displacement(GPUMaterial *mat,
   }
 
   if (node->custom1 == SHD_SPACE_OBJECT) {
-    return GPU_stack_link(mat, node, "node_displacement_object", in, out);
+    return GPU_stack_link(
+        mat, node, "node_displacement_object", in, out, GPU_kernel_globals(), GPU_shading_data());
   }
 
   return GPU_stack_link(mat, node, "node_displacement_world", in, out);

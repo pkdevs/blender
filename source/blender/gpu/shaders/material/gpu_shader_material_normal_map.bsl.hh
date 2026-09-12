@@ -24,7 +24,13 @@ void input_normal_original(float3 &out_N)
 }
 
 [[node]]
-void node_normal_map(float4 T, float strength, float3 tex_normal, float3 N, float3 &out_N)
+void node_normal_map(float4 T,
+                     float strength,
+                     float3 tex_normal,
+                     float3 N,
+                     float3 &out_N,
+                     [[resource_table]] KernelGlobals &kg,
+                     ShadingData &sd)
 {
   if (all(equal(T, float4(0.0f, 0.0f, 0.0f, 1.0f)))) {
     out_N = N;
@@ -33,7 +39,7 @@ void node_normal_map(float4 T, float strength, float3 tex_normal, float3 N, floa
   T *= (FrontFacing ? 1.0f : -1.0f);
   float3 B = T.w * cross(N, T.xyz);
   /* TODO(fclem): EEVEE implementation leaking. */
-  B *= (object_infos_get().flag & OBJECT_NEGATIVE_SCALE) != 0 ? -1.0f : 1.0f;
+  B *= (kg.object_infos_get(sd).flag & OBJECT_NEGATIVE_SCALE) != 0 ? -1.0f : 1.0f;
 
   /* Apply strength here instead of in node_normal_map_mix for T space. */
   tex_normal.xy *= strength;

@@ -267,7 +267,7 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
       input->source = GPU_SOURCE_FUNCTION_CALL;
       /* NOTE(@fclem): End of function call is the return variable set during codegen. */
       SNPRINTF(input->function_call,
-               "dF_branch_incomplete(%s(), %g, ",
+               "dF_branch_incomplete(%s(kg, sd), %g, ",
                link->differentiate_float.function_name,
                link->differentiate_float.filter_width);
       break;

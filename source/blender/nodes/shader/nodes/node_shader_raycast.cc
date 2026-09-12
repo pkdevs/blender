@@ -224,7 +224,9 @@ static int node_shader_gpu(GPUMaterial *mat,
                   &GPU_node_get_output(*node, out, "Self Hit").link,
                   &GPU_node_get_output(*node, out, "Hit Distance").link,
                   &GPU_node_get_output(*node, out, "Hit Position").link,
-                  &GPU_node_get_output(*node, out, "Hit Normal").link);
+                  &GPU_node_get_output(*node, out, "Hit Normal").link,
+                  GPU_kernel_globals(),
+                  GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN

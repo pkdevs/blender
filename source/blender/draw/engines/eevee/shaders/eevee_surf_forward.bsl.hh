@@ -162,7 +162,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
   vol.scattering -= vol.scattering * g_transmittance;
   radiance = radiance * vol.transmittance + vol.scattering;
 
-  eObjectInfoFlag ob_flag = object_infos_get().flag;
+  eObjectInfoFlag ob_flag = kg.object_infos_get(sd).flag;
   if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
     g_holdout = 1.0f - average(g_transmittance);
     radiance *= 0.0f;

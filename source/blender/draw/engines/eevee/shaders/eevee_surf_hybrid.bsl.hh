@@ -167,8 +167,10 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
   float alpha = 1.0f - average(g_transmittance);
   float alpha_rcp = safe_rcp(alpha);
 
+  ObjectInfos object_infos = kg.object_infos_get(sd);
+
   /* Object holdout. */
-  eObjectInfoFlag ob_flag = object_infos_get().flag;
+  eObjectInfoFlag ob_flag = object_infos.flag;
   if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
     /* alpha is set from rejected pixels / dithering. */
     g_holdout = 1.0f;
@@ -181,7 +183,6 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   int2 out_texel = int2(frag_co.xy);
 
-  ObjectInfos object_infos = object_infos_get();
   bool use_light_linking = receiver_light_set_get(object_infos) != 0;
   bool use_terminator_offset = object_infos.shadow_terminator_normal_offset > 0.0;
 

@@ -475,6 +475,7 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
                         out,
                         GPU_constant(&use_multi_scatter),
                         subsurface_random_walk_radius_scale,
+                        GPU_kernel_globals(),
                         GPU_shading_data());
 }
 

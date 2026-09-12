@@ -18,6 +18,7 @@ void node_eevee_specular(float4 diffuse,
                          float weight,
                          const float use_clearcoat,
                          Closure &result,
+                         [[resource_table]] KernelGlobals &kg,
                          ShadingData &sd)
 {
   diffuse = max(diffuse, float4(0));
@@ -29,7 +30,7 @@ void node_eevee_specular(float4 diffuse,
   clearcoat_roughness = saturate(clearcoat_roughness);
   CN = safe_normalize(CN);
 
-  float3 V = coordinate_incoming(g_data.P);
+  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
 
   ClosureEmission emission_data;
   emission_data.emission = emissive.rgb * weight;

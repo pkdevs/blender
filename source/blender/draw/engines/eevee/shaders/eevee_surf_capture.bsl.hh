@@ -78,7 +78,7 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
     if (is_surface_view_aligned) {
       uint surfel_id = atomicAdd(srt.capture_info_buf.surfel_len, 1u);
       if (srt.capture_info_buf.do_surfel_output) {
-        ObjectInfos object_infos = object_infos_get();
+        ObjectInfos object_infos = kg.object_infos_get(sd);
         srt.surfel_buf[surfel_id].position = g_data.P;
         srt.surfel_buf[surfel_id].normal = front_face ? g_data.Ng : -g_data.Ng;
         srt.surfel_buf[surfel_id].albedo_front = albedo;

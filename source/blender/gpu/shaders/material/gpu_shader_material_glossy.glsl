@@ -15,6 +15,7 @@ void node_bsdf_glossy(float4 color,
                       float weight,
                       const float do_multiscatter,
                       Closure &result,
+                      [[resource_table]] KernelGlobals &kg,
                       ShadingData &sd)
 {
   color = max(color, float4(0.0f));
@@ -22,7 +23,7 @@ void node_bsdf_glossy(float4 color,
   N = safe_normalize(N);
   /* anisotropy = clamp(anisotropy, -0.99f, 0.99f) */
 
-  float3 V = coordinate_incoming(g_data.P);
+  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
   float NV = dot(N, V);
 
   /* TODO(fclem): EEVEE implementation leaking. */

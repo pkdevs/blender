@@ -29,64 +29,66 @@
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
+struct ShadingData {};
+
 struct KernelGlobals {
+  [[resource_table]] srt_t<draw::View> view;
+  [[resource_table]] srt_t<draw::Model> model;
+  [[resource_table]] srt_t<draw::Infos> infos;
   [[resource_table]] srt_t<eevee::PipelineConstants> pipe;
 
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
-  [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<draw::Infos> infos;
-  [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::Uniform> uni;
-};
+  [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::Uniform> uniforms;
 
-struct ShadingData {};
+  uint resource_id_get(const ShadingData & /*sd*/)
+  {
+    /* clang-format off */ /* Multi-line macro mess the shader log line. */
+    [[resource_table]] const eevee::PipelineConstants &pipeline = resource_table_get(eevee::PipelineConstants);
+    /* clang-format on */
+    auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+    draw::ID id{interp_flat.resource_id_raw};
+    if (pipeline.is_shadow_pipe) {
+      return id.resource_id<64>();
+    }
+    return id.resource_id<1>();
+  }
+
+  uint view_id_get(const ShadingData & /*sd*/)
+  {
+    /* clang-format off */ /* Multi-line macro mess the shader log line. */
+    [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
+    /* clang-format on */
+    auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+    draw::ID id{interp_flat.resource_id_raw};
+    if (pipeline.is_shadow_pipe) {
+      return id.view_id<64>();
+    }
+    return id.view_id<1>();
+  }
+
+  ObjectMatrices object_matrices_get(const ShadingData &sd)
+  {
+    [[resource_table]] const draw::Model &models = this->model;
+    return models.get(resource_id_get(sd));
+  }
+
+  ObjectInfos object_infos_get(const ShadingData &sd)
+  {
+    [[resource_table]] const draw::Infos &info = this->infos;
+    return info.get(resource_id_get(sd));
+  }
+
+  ViewMatrices view_matrices_get(const ShadingData &sd)
+  {
+    [[resource_table]] const draw::View &views = this->view;
+    return views.get(view_id_get(sd));
+  }
+};
 
 /* Global thickness because it is needed for closure_to_rgba. */
 Thickness g_thickness;
 uint g_resource_id;
-
-uint resource_id_get()
-{
-  /* clang-format off */ /* Multi-line macro mess the shader log line. */
-  [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
-  /* clang-format on */
-  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
-  draw::ID id{interp_flat.resource_id_raw};
-  if (pipe.is_shadow_pipe) {
-    return id.resource_id<64>();
-  }
-  return id.resource_id<1>();
-}
-
-uint view_id_get()
-{
-  /* clang-format off */ /* Multi-line macro mess the shader log line. */
-  [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
-  /* clang-format on */
-  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
-  draw::ID id{interp_flat.resource_id_raw};
-  if (pipe.is_shadow_pipe) {
-    return id.view_id<64>();
-  }
-  return id.view_id<1>();
-}
-
-ObjectMatrices object_matrices_get()
-{
-  [[resource_table]] const draw::Model &models = resource_table_get(draw::Model);
-  return models.get(resource_id_get());
-}
-
-ObjectInfos object_infos_get()
-{
-  [[resource_table]] const draw::Infos &infos = resource_table_get(draw::Infos);
-  return infos.get(resource_id_get());
-}
-
-ViewMatrices view_matrices_get()
-{
-  [[resource_table]] const draw::View &views = resource_table_get(draw::View);
-  return views.get(view_id_get());
-}
 
 #define closure_base_copy(cl, in_cl) \
   cl.color = in_cl.color; \
@@ -355,7 +357,9 @@ float ambient_occlusion_eval([[maybe_unused]] float3 normal,
   }
 }
 
-void raycast_eval([[maybe_unused]] float3 position,
+void raycast_eval([[resource_table]] KernelGlobals &kg,
+                  const ShadingData &sd,
+                  [[maybe_unused]] float3 position,
                   float3 direction,
                   float max_distance,
                   [[maybe_unused]] bool self_only,
@@ -414,7 +418,7 @@ void raycast_eval([[maybe_unused]] float3 position,
     float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
 
     float2 hit_uv = float2(0.0f);
-    uint self_id = resource_id_get() & uint(0xFFFF);
+    uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
 
     float result = raytrace_screen_2(views.get(0),
                                      view.point_world_to_view(ws_start),
@@ -685,85 +689,62 @@ void fragment_displacement([[resource_table]] [[maybe_unused]] KernelGlobals &kg
  *
  * \{ */
 
-float3 coordinate_camera(float3 P)
-{
-  float3 vP;
-  if (false /* Probe. */) {
-    /* Unsupported. It would make the probe camera-dependent. */
-    vP = P;
-  }
-  else {
-#ifdef MAT_GEOM_WORLD
-    const ViewMatrices view = view_matrices_get();
-    vP = view.normal_world_to_view(P);
-#else
-    [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
-    const CameraData cam = uni.uniform_buf.camera;
-    if (is_panoramic(cam.type)) {
-      /* Panoramic camera render through per-face sub-views.
-       * Can't use `view` here because that's only one sub-view, not the camera. */
-      vP = transform_point(cam.viewmat, P);
-    }
-    else {
-      const ViewMatrices view = view_matrices_get();
-      vP = view.point_world_to_view(P);
-    }
-#endif
-  }
-  vP.z = -vP.z;
-  return vP;
-}
+struct Coordinates {
+  float3 camera;
+  float3 screen;
+  float3 reflect;
+  float3 incoming;
+};
 
-float3 coordinate_screen(float3 P)
+Coordinates coordinate_impl([[resource_table]] KernelGlobals &kg,
+                            const ShadingData &sd,
+                            float3 P,
+                            float3 N)
 {
-  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
-  float3 window = float3(0.0f);
+  const ViewMatrices view = kg.view_matrices_get(sd);
+
+  Coordinates coords = {};
+
   if (false /* Probe. */) {
     /* Unsupported. It would make the probe camera-dependent. */
-    window.xy = float2(0.5f);
+    coords.camera = P;
+    coords.screen.xy = float2(0.5f);
   }
   else {
 #ifdef MAT_GEOM_WORLD
-    const ViewMatrices view = view_matrices_get();
-    window.xy = view.point_view_to_screen(interp.P).xy;
-    window.xy = window.xy * uni.uniform_buf.camera.uv_scale + uni.uniform_buf.camera.uv_bias;
+    coords.camera = view.normal_world_to_view(P);
+    coords.screen.xy = view.point_view_to_screen(interp.P).xy;
+    coords.screen.xy = coords.screen.xy * uni.uniform_buf.camera.uv_scale +
+                       uni.uniform_buf.camera.uv_bias;
 #else
+    [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
     const CameraData cam = uni.uniform_buf.camera;
     if (is_panoramic(cam.type)) {
       /* Panoramic camera render through per-face sub-views.
        * Can't use `view` here because that's only one sub-view, not the camera. */
+      coords.camera = transform_point(cam.viewmat, P);
       float3 dir = P - cam.viewinv[3].xyz;
-      window.xy = fract(eevee::camera::uv_from_world(cam, dir) + cam.uv_bias);
+      coords.screen.xy = fract(eevee::camera::uv_from_world(cam, dir) + cam.uv_bias);
     }
     else {
-      const ViewMatrices view = view_matrices_get();
+      const ViewMatrices view = kg.view_matrices_get(sd);
+      coords.camera = view.point_world_to_view(P);
       /* TODO(fclem): Actual camera transform. */
-      window.xy = view.point_world_to_screen(P).xy;
-      window.xy = window.xy * cam.uv_scale + cam.uv_bias;
+      coords.screen.xy = view.point_world_to_screen(P).xy;
+      coords.screen.xy = coords.screen.xy * cam.uv_scale + cam.uv_bias;
     }
 #endif
   }
-  return window;
-}
+  coords.camera.z = -coords.camera.z;
 
-float3 coordinate_reflect(float3 P, float3 N)
-{
 #ifdef MAT_GEOM_WORLD
-  return N;
+  coords.reflect = N;
+  coords.incoming = -P;
 #else
-  const ViewMatrices view = view_matrices_get();
-  return -reflect(view.world_incident_vector(P), N);
+  coords.reflect = -reflect(view.world_incident_vector(P), N);
+  coords.incoming = view.world_incident_vector(P);
 #endif
-}
-
-float3 coordinate_incoming(float3 P)
-{
-#ifdef MAT_GEOM_WORLD
-  return -P;
-#else
-  const ViewMatrices view = view_matrices_get();
-  return view.world_incident_vector(P);
-#endif
+  return coords;
 }
 
 /** \} */
@@ -843,11 +824,14 @@ float4 attr_load_color_post(float4 attr)
  *
  * \{ */
 
-float4 attr_load_uniform(float4 /*attr*/, const uint attr_hash)
+float4 attr_load_uniform([[resource_table]] KernelGlobals &kg,
+                         const ShadingData &sd,
+                         float4 /*attr*/,
+                         const uint attr_hash)
 {
   const auto &attrs_buf = buffer_get(draw_object_attributes, drw_attrs);
 
-  ObjectInfos infos = object_infos_get();
+  ObjectInfos infos = kg.object_infos_get(sd);
   uint index = infos.object_attrs_offset;
   for (uint i = 0; i < infos.object_attrs_len; i++, index++) {
     ObjectAttribute attr = attrs_buf[index];
@@ -858,7 +842,7 @@ float4 attr_load_uniform(float4 /*attr*/, const uint attr_hash)
   return float4(0.0f);
 }
 
-void scene_time_uniforms(float &seconds, float &frame)
+void scene_time_uniforms([[resource_table]] KernelGlobals &kg, float &seconds, float &frame)
 {
   [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
 
@@ -866,18 +850,20 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
-void light_iter_init([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
+void light_iter_init([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
+                     [[maybe_unused]] const ShadingData &sd,
+                     [[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
-#ifdef GPU_FRAGMENT_SHADER
-  const ViewMatrices view = view_matrices_get();
+#if defined(GPU_FRAGMENT_SHADER)
+  const ViewMatrices view = kg.view_matrices_get(sd);
   const float3 forward = view.forward();
   const float linear_view_z = dot(forward, g_data.P) - dot(forward, view.position());
-  iter.init(gl_FragCoord.xy, linear_view_z, receiver_light_set_get(object_infos_get()));
+  iter.init(gl_FragCoord.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
 #endif
 }
 bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
-#ifdef GPU_FRAGMENT_SHADER
+#if defined(GPU_FRAGMENT_SHADER)
   return iter.next();
 #else
   return false;
@@ -885,7 +871,7 @@ bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 }
 bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
-#ifdef GPU_FRAGMENT_SHADER
+#if defined(GPU_FRAGMENT_SHADER)
   return iter.should_skip(g_data.P);
 #else
   return true;
@@ -898,7 +884,7 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
 #  define LIGHT_ITER_BEGIN(light_index) \
     { \
       eevee::light::VisibleLightIterator iter; \
-      light_iter_init(iter); \
+      light_iter_init(kg, sd, iter); \
       while (light_iter_next(iter)) { \
         if (light_iter_should_skip(iter)) { \
           continue; \
@@ -962,6 +948,7 @@ void node_light_evaluation_common_impl([[resource_table]] KernelGlobals &kg,
 
 template<bool use_diffuse>
 void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
+                                const ShadingData &sd,
                                 int light_index,
                                 float3 position,
                                 float3 normal,
@@ -976,7 +963,7 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
   LightVector lv = light_vector_get(light, is_directional, position);
   LightVertices light_shape_vertices = light_shape_corners(light, lv);
 
-  const ViewMatrices view = view_matrices_get();
+  const ViewMatrices view = kg.view_matrices_get(sd);
   const float3 V = view.world_incident_vector(position);
 
   /* TODO(not_mark): remove, and update tests as this causes precision change. */
@@ -1002,12 +989,13 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
 }
 
 template void node_light_evaluation_impl<true>(
-    KernelGlobals &, int, float3, float3, float, float &);
+    KernelGlobals &, const ShadingData &, int, float3, float3, float, float &);
 
 template void node_light_evaluation_impl<false>(
-    KernelGlobals &, int, float3, float3, float, float &);
+    KernelGlobals &, const ShadingData &, int, float3, float3, float, float &);
 
 void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
+                              [[maybe_unused]] const ShadingData &sd,
                               [[maybe_unused]] const int light_index,
                               [[maybe_unused]] float3 position,
                               [[maybe_unused]] float softness,
@@ -1036,7 +1024,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
   int ray_step_count = uni.uniform_buf.shadow.step_count;
 #  endif
 
-  ObjectInfos object_infos = object_infos_get();
+  ObjectInfos object_infos = kg.object_infos_get(sd);
 
   float shadow = eevee::shadow_eval(srd,
                                     light,

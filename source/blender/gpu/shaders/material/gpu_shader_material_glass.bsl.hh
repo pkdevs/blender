@@ -21,6 +21,7 @@ void node_bsdf_glass(float4 color,
                      float /*thin_film_ior*/,
                      const float do_multiscatter,
                      Closure &result,
+                     [[resource_table]] KernelGlobals &kg,
                      ShadingData &sd)
 {
   color = max(color, float4(0.0f));
@@ -28,7 +29,7 @@ void node_bsdf_glass(float4 color,
   ior = max(ior, 1e-5f);
   N = safe_normalize(N);
 
-  float3 V = coordinate_incoming(g_data.P);
+  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
   float NV = dot(N, V);
 
   float2 bsdf = bsdf_lut(NV, roughness, ior, do_multiscatter != 0.0f);

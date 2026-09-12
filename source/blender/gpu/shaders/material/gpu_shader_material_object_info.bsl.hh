@@ -13,11 +13,12 @@ void node_object_info(float mat_index,
                       float &alpha,
                       float &object_index,
                       float &material_index,
-                      float &random)
+                      float &random,
+                      [[resource_table]] KernelGlobals &kg,
+                      ShadingData &sd)
 {
-  /* TODO(fclem): EEVEE implementation leaking. */
-  location = object_matrices_get().model[3].xyz;
-  ObjectInfos info = object_infos_get();
+  location = kg.object_matrices_get(sd).model[3].xyz;
+  ObjectInfos info = kg.object_infos_get(sd);
   color = info.ob_color;
   alpha = info.ob_color.a;
   object_index = info.index;

@@ -1419,12 +1419,12 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       else {
         /* TODO(fclem): Should use `to_scale` but the gpu_shader_math_matrix_lib.glsl isn't
          * included everywhere yet. */
-        frag_gen << "ObjectMatrices obj = object_matrices_get();\n";
+        frag_gen << "ObjectMatrices obj = _object_matrices_get(kg, sd);\n";
         frag_gen << "float3 ob_scale;\n";
         frag_gen << "ob_scale.x = length(obj.model[0].xyz);\n";
         frag_gen << "ob_scale.y = length(obj.model[1].xyz);\n";
         frag_gen << "ob_scale.z = length(obj.model[2].xyz);\n";
-        frag_gen << "ObjectInfos infos = object_infos_get();\n";
+        frag_gen << "ObjectInfos infos = _object_infos_get(kg, sd);\n";
         frag_gen << "float3 ls_dimensions = safe_rcp(abs(infos.orco_mul.xyz));\n";
         frag_gen << "float3 ws_dimensions = ob_scale * ls_dimensions;\n";
         /* Choose the minimum axis so that cuboids are better represented. */

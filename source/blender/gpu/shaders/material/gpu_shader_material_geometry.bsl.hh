@@ -17,10 +17,12 @@ void node_geometry(float3 orco_attr,
                    float3 &parametric,
                    float &backfacing,
                    float &pointiness,
-                   float &random_per_island)
+                   float &random_per_island,
+                   [[resource_table]] KernelGlobals &kg,
+                   ShadingData &sd)
 {
   /* handle perspective/orthographic */
-  incoming = coordinate_incoming(g_data.P);
+  incoming = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
   position = g_data.P;
   normal = g_data.N;
   true_normal = g_data.Ng;
@@ -30,7 +32,7 @@ void node_geometry(float3 orco_attr,
   }
   else {
     tangent_orco_z(orco_attr, orco_attr);
-    node_tangent(orco_attr, tangent);
+    node_tangent(orco_attr, tangent, kg, sd);
   }
 
   parametric = float3(g_data.barycentric_coords, 0.0f);

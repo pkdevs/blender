@@ -39,6 +39,7 @@ void node_bsdf_metallic(float4 base_color,
                         const float do_multiscatter,
                         const float use_complex_ior,
                         Closure &result,
+                        [[resource_table]] KernelGlobals &kg,
                         ShadingData &sd)
 {
   float3 F0 = base_color.rgb;
@@ -57,7 +58,7 @@ void node_bsdf_metallic(float4 base_color,
   /* anisotropy = saturate(anisotropy); */
 
   N = safe_normalize(N);
-  float3 V = coordinate_incoming(g_data.P);
+  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
   float NV = dot(N, V);
 
   ClosureReflection reflection_data;

@@ -36,11 +36,15 @@ void node_attribute_flame(float4 attr, float &out_attr)
 }
 
 [[node]]
-void node_attribute_uniform(float4 attr, const float attr_hash, float4 &out_attr)
+void node_attribute_uniform(float4 attr,
+                            const float attr_hash,
+                            float4 &out_attr,
+                            [[resource_table]] KernelGlobals &kg,
+                            const ShadingData &sd)
 {
   /* Temporary solution to support both old UBO attributes and new SSBO loading.
    * Old UBO load is already done through `attr` and will just be passed through. */
-  out_attr = attr_load_uniform(attr, floatBitsToUint(attr_hash));
+  out_attr = attr_load_uniform(kg, sd, attr, floatBitsToUint(attr_hash));
 }
 
 [[node]]

@@ -7,10 +7,14 @@
 #include "gpu_shader_material_transform_utils.bsl.hh"
 
 [[node]]
-void camera(float3 &outview, float &outdepth, float &outdist)
+void camera(float3 &outview,
+            float &outdepth,
+            float &outdist,
+            [[resource_table]] KernelGlobals &kg,
+            const ShadingData &sd)
 {
   float3 vP;
-  point_transform_world_to_view(g_data.P, vP);
+  point_transform_world_to_view(g_data.P, vP, kg, sd);
   vP.z = -vP.z;
   outdepth = abs(vP.z);
   outdist = length(vP);

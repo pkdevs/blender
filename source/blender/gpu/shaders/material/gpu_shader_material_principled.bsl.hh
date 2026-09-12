@@ -109,6 +109,7 @@ void node_bsdf_principled(float4 base_color,
                           const float do_multiscatter,
                           const float subsurface_random_walk_radius_scale,
                           Closure &result,
+                          [[resource_table]] KernelGlobals &kg,
                           ShadingData &sd)
 {
   /* Match Cycles. */
@@ -155,7 +156,7 @@ void node_bsdf_principled(float4 base_color,
 
   /* Geometry. */
   N = normalize_fallback(N, g_data.N);
-  const float3 V = coordinate_incoming(g_data.P);
+  const float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
   const float NV = dot(N, V);
   const bool multiggx = thin_wall || (do_multiscatter != 0.0f);
 

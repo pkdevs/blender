@@ -61,10 +61,26 @@ struct ObjectInfos {
   eObjectInfoFlag flag;
 };
 
-/* Should eventually carry the needed resource tables. */
-struct KernelGlobals {};
-
 struct ShadingData {};
+
+/* Should eventually carry the needed resource tables. */
+struct KernelGlobals {
+
+  ViewMatrices view_matrices_get(const ShadingData & /*sd*/)
+  {
+    return {};
+  }
+
+  ObjectMatrices object_matrices_get(const ShadingData & /*sd*/)
+  {
+    return {};
+  }
+
+  ObjectInfos object_infos_get(const ShadingData & /*sd*/)
+  {
+    return {};
+  }
+};
 
 /* Closure Nodes. */
 
@@ -214,21 +230,19 @@ float F0_from_ior(float /*eta*/)
 
 /* Coordinates. */
 
-float3 coordinate_camera(float3 /*P*/)
+struct Coordinates {
+  float3 camera;
+  float3 screen;
+  float3 reflect;
+  float3 incoming;
+};
+
+Coordinates coordinate_impl([[resource_table]] KernelGlobals & /*kg*/,
+                            const ShadingData & /*sd*/,
+                            float3 /*P*/,
+                            float3 /*N*/)
 {
-  return float3(0);
-}
-float3 coordinate_screen(float3 /*P*/)
-{
-  return float3(0);
-}
-float3 coordinate_reflect(float3 /*P*/, float3 /*N*/)
-{
-  return float3(0);
-}
-float3 coordinate_incoming(float3 /*P*/)
-{
-  return float3(0);
+  return {};
 }
 
 /* Ambient occlusion node. */
@@ -243,7 +257,10 @@ float ambient_occlusion_eval(float3 normal,
 float4 attr_load_color_post(float4 attr);
 float attr_load_temperature_post(float attr);
 /* TODO remove attr as parameter. */
-float4 attr_load_uniform(float4 /*attr*/, uint /*attr_hash*/)
+float4 attr_load_uniform([[resource_table]] KernelGlobals & /*kg*/,
+                         const ShadingData & /*sd*/,
+                         float4 /*attr*/,
+                         uint /*attr_hash*/)
 {
   return float4(0);
 }
@@ -281,11 +298,16 @@ float node_attribute_light_cutoff_distance_impl([[resource_table]] KernelGlobals
 
 /* Scene Time Node. */
 
-void scene_time_uniforms(float & /*seconds*/, float & /*frame*/) {}
+void scene_time_uniforms([[resource_table]] KernelGlobals & /*kg*/,
+                         float & /*seconds*/,
+                         float & /*frame*/)
+{
+}
 
 /* Shadow Raycast Node. */
 
 void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
+                              const ShadingData &sd,
                               int /*light_index*/,
                               float3 /*position*/,
                               float /*softness*/,
@@ -331,6 +353,7 @@ void node_light_evaluation_common_impl([[resource_table]] KernelGlobals & /*kg*/
 
 template<bool use_diffuse>
 void node_light_evaluation_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                const ShadingData & /*sd*/,
                                 int /*light_index*/,
                                 float3 /*position*/,
                                 float3 /*normal*/,
@@ -341,7 +364,9 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Raycast Node. */
 
-void raycast_eval(float3 /*position*/,
+void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
+                  const ShadingData & /*sd*/,
+                  float3 /*position*/,
                   float3 /*direction*/,
                   float /*max_distance*/,
                   bool /*self_only*/,
@@ -377,18 +402,3 @@ void output_aov(int2 /*texel*/,
 }
 
 /* Matrices. */
-
-ViewMatrices view_matrices_get()
-{
-  return {};
-}
-
-ObjectMatrices object_matrices_get()
-{
-  return {};
-}
-
-ObjectInfos object_infos_get()
-{
-  return {};
-}

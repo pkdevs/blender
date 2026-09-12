@@ -89,10 +89,22 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
 
   if (out[0].hasoutput) {
     if (mode == SHD_LIGHT_EVAL_GLOSSY) {
-      GPU_stack_link(mat, node, "node_light_evaluation_glossy", in, out);
+      GPU_stack_link(mat,
+                     node,
+                     "node_light_evaluation_glossy",
+                     in,
+                     out,
+                     GPU_kernel_globals(),
+                     GPU_shading_data());
     }
     else {
-      GPU_stack_link(mat, node, "node_light_evaluation_diffuse", in, out);
+      GPU_stack_link(mat,
+                     node,
+                     "node_light_evaluation_diffuse",
+                     in,
+                     out,
+                     GPU_kernel_globals(),
+                     GPU_shading_data());
     }
   }
   else {
