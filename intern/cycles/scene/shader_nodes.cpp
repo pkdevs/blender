@@ -7067,6 +7067,8 @@ BooleanMathNode::BooleanMathNode() : ShaderNode(get_node_type()) {}
 
 void BooleanMathNode::constant_fold(const ConstantFolder &folder)
 {
+  /* In the future this could constant fold for e.g. the AND operation when the first input is
+   * false, even if the second input is not constant.*/
   if (folder.all_inputs_constant()) {
     folder.make_constant(svm_boolean_math(math_type, boolean1, boolean2));
   }
