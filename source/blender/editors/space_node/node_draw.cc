@@ -3601,7 +3601,7 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                           bNode &node,
                                           ui::Block &block)
 {
-  const NodeComment &storage = *static_cast<const NodeComment *>(node.storage);
+  NodeComment &storage = *static_cast<NodeComment *>(node.storage);
 
   const float2 loc = node_to_view(node.location);
   /* Different paddings are used here to compensate for padding applied elsewhere. */
@@ -3619,7 +3619,14 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                         0,
                                         0,
                                         ui::style_get_dpi());
-  layout.label_markdown(storage.text);
+  PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &node);
+  layout.prop(&node_ptr, "edit", UI_ITEM_NONE, std::nullopt, ICON_GREASEPENCIL);
+  if (bool(storage.flag & NodeCommentFlag::Edit)) {
+    layout.textbox_with_state(&node_ptr, "text", &storage.textbox_state_node);
+  }
+  else {
+    layout.label_markdown(storage.text);
+  }
 
   block_align_end(&block);
   const float bottom_y = ui::block_layout_resolve(&block).y;

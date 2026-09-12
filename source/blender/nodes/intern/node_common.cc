@@ -1226,7 +1226,9 @@ static void node_comment_copy(bNodeTree * /*dest_ntree*/, bNode *dst_node, const
 
 static void node_comment_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
-  layout.textbox(C, ptr, "text");
+  bNode &node = *ptr->data_as<bNode>();
+  NodeComment &storage = *static_cast<NodeComment *>(node.storage);
+  layout.textbox_with_state(ptr, "text", &storage.textbox_state_panel);
 }
 
 static void node_comment_blend_write(const bNodeTree & /*ntree*/,

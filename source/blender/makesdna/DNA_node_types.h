@@ -4023,8 +4023,17 @@ struct NodeStoreBundleItem {
   char _pad = {};
 };
 
+enum class NodeCommentFlag : uint8_t {
+  Edit = (1 << 0),
+};
+ENUM_OPERATORS(NodeCommentFlag)
+
 struct NodeComment {
   char *text = nullptr;
+  TextboxState textbox_state_node;
+  TextboxState textbox_state_panel;
+  NodeCommentFlag flag = {};
+  char _pad[7] = {};
 };
 
 }  // namespace blender
