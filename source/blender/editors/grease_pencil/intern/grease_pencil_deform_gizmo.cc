@@ -23,7 +23,6 @@
 #include "DEG_depsgraph.hh"
 
 #include "WM_api.hh"
-// #include "WM_gizmo_types.hh"
 #include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
@@ -32,10 +31,6 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-
-// /* Local module include. */
-// #include "transform.hh"
-// #include "transform_gizmo.hh"
 
 namespace blender {
 
@@ -104,9 +99,6 @@ struct QuadWidgetGroup2 {
 };
 
 static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
-    const RegionView3D & /*rv3d*/,
-    Object &object,
-    const int /*layer_index*/,
     const IndexMask selection,
     const bke::greasepencil::Drawing &drawing,
     const FunctionRef<float2(const float3 &position)> project_to_screen)
@@ -116,11 +108,6 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
 
   std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
 
-  BLI_assert(object.type == OB_GREASE_PENCIL);
-  // GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
-
-  // const Layer &layer = *grease_pencil.layers()[layer_index];
-  // const float4x4 layer_to_world = layer.to_world_space(object);
   const VArray<float> radii = drawing.radii();
   const bke::CurvesGeometry &strokes = drawing.strokes();
   const Span<float3> positions = strokes.positions();
@@ -147,7 +134,6 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  // wmGizmo *gz = gzgroup->gizmos.first();
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
   wmGizmo *gz = mask_group->border;
 
@@ -215,8 +201,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
     box = bounds::merge(
         box,
-        compute_screen_space_drawing_bounds(
-            *rv3d, *object, info.layer_index, selected_points, info.drawing, projection_function));
+        compute_screen_space_drawing_bounds(selected_points, info.drawing, projection_function));
   }
 
   mask_group->drawings = drawings;
@@ -303,8 +288,6 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
 {
   BLI_assert(gz_prop->type->array_length == 3);
   float *values = static_cast<float *>(value_p);
-  // GizmoGroup *ggd = static_cast<GizmoGroup *>(gz->parent_gzgroup->customdata);
-  // wmOperator *op = ggd->data.op;
 
   const CornerPinData *corner_pin_data = static_cast<CornerPinData *>(
       gz_prop->custom_func.user_data);
@@ -525,8 +508,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
   params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
   params.range_get_fn = nullptr;
-  // params.user_data = node;
-  // params.foreach_rna_prop_fn = gizmo_node_box_mask_foreach_rna_prop;
   WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
 
   for (const int i : IndexRange(4)) {
@@ -538,7 +519,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
     wmGizmo *gz = corner_pin_data.gizmos;
 
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
-    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
 
     corner_pin_data.index = i;
 
@@ -615,13 +595,6 @@ void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
   gzgt->name = "Deform Gizmo";
   gzgt->idname = "VIEW3D_GGT_grease_pencil_deform";
 
-  // gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE |
-  //               WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
-  //               WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
-
-  // gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
-  //               WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
-
   gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_PERSISTENT |
                 WM_GIZMOGROUPTYPE_DRAW_MODAL_ALL;
 
@@ -632,7 +605,6 @@ void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
   gzgt->setup = box_mask_setup;
   gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
   gzgt->refresh = box_mask_refresh;
-  // gzgt->message_subscribe = WIDGETGROUP_xform_shear_message_subscribe;
   gzgt->draw_prepare = bbox_draw_prepare_space_image;
 
   RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::TRANSFORM), "Mode", "");
