@@ -38,9 +38,7 @@ void ED_mesh_mirror_spatial_table_begin(Object *ob, Mesh *mesh_eval)
   BMEditMesh *em = BKE_editmesh_from_object(ob);
   const bool use_em = (!mesh_eval && em);
   BMesh *bm = use_em ? BKE_editmesh_bmesh_get_for_write(ob) : nullptr;
-  const int totvert = use_em    ? bm->totvert :
-                      mesh_eval ? mesh_eval->verts_num :
-                                  mesh->verts_num;
+  const int totvert = use_em ? bm->totvert : mesh_eval ? mesh_eval->verts_num : mesh->verts_num;
 
   if (MirrKdStore.tree) { /* happens when entering this call without ending it */
     ED_mesh_mirror_spatial_table_end(ob);
@@ -371,8 +369,9 @@ std::optional<EditMeshSymmetryHelper> EditMeshSymmetryHelper::create_if_needed(O
   }
   Mesh *mesh = id_cast<Mesh *>(ob->data);
   BMEditMesh *em = BKE_editmesh_from_object(ob);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
 
-  if (!em || !em->bm || mesh->symmetry == 0) {
+  if (!em || !bm || mesh->symmetry == 0) {
     return std::nullopt;
   }
   return EditMeshSymmetryHelper(ob, htype);

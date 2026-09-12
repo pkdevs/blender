@@ -529,7 +529,7 @@ static bool uv_shortest_path_pick_ex(Scene *scene,
   if (ok) {
     if (flush != 0) {
       const bool select = (flush == 1);
-      BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
         ED_uvedit_select_sync_flush(scene->toolsettings, bm, select);
       }
@@ -819,7 +819,7 @@ static wmOperatorStatus uv_shortest_path_select_exec(bContext *C, wmOperator *op
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
       *bmain, scene, view_layer, nullptr);
   for (Object *obedit : objects) {
-    BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 

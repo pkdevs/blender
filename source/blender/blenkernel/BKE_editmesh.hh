@@ -123,7 +123,7 @@ Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
                                              const BMesh *bm,
                                              Scene *scene,
                                              Object *ob);
-Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMesh *bm);
+Array<float3> BKE_editmesh_vert_coords_alloc_orco(const BMesh *bm);
 Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
                                                     Scene *scene,
                                                     Object *obedit,

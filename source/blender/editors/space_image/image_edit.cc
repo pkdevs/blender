@@ -488,12 +488,7 @@ bool ED_space_image_show_uvedit(const SpaceImage *sima, Object *obedit)
   }
 
   if (obedit && obedit->type == OB_MESH) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    bool ret;
-
-    ret = EDBM_uv_check(em);
-
-    return ret;
+    return EDBM_uv_check(id_cast<const Mesh *>(obedit->data));
   }
 
   return false;

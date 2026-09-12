@@ -360,7 +360,7 @@ std::string BKE_attribute_calc_unique_name(const AttributeOwner &owner, const St
     const auto is_used_vertex_group = [&](const StringRef check_name) {
       return BKE_defgroup_name_index(&mesh.vertex_group_names, check_name) != -1;
     };
-    if (mesh.runtime->edit_mesh) {
+    if (const BMesh *bm = BKE_editmesh_bmesh_get(&mesh)) {
       Set<StringRef, 8> names;
       const auto add_names = [&](const CustomData &data) {
         for (const CustomDataLayer &layer : Span(data.layers, data.totlayer)) {
@@ -369,11 +369,10 @@ std::string BKE_attribute_calc_unique_name(const AttributeOwner &owner, const St
           }
         }
       };
-      const BMesh &bm = *mesh.runtime->edit_mesh->bm;
-      add_names(bm.vdata);
-      add_names(bm.edata);
-      add_names(bm.pdata);
-      add_names(bm.ldata);
+      add_names(bm->vdata);
+      add_names(bm->edata);
+      add_names(bm->pdata);
+      add_names(bm->ldata);
       return BLI_uniquename_cb(
           [&](const StringRef new_name) {
             return names.contains(new_name) || BM_attribute_stored_in_bmesh_builtin(new_name) ||

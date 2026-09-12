@@ -151,7 +151,7 @@ bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_sele
   if (ob->type == OB_MESH) {
     Mesh *mesh = id_cast<Mesh *>(ob->data);
 
-    if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+    if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
       const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
 
       if (cd_dvert_offset != -1) {

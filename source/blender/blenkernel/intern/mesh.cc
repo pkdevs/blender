@@ -1348,7 +1348,7 @@ void Mesh::uv_maps_active_set(const StringRef name)
   if (!name.is_empty()) {
     this->active_uv_map_attribute = BLI_strdupn(name.data(), name.size());
   }
-  if (BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(this)) {
     int index = CustomData_get_named_layer_index(&bm->ldata, CD_PROP_FLOAT2, name);
     if (index == -1) {
       index = CustomData_get_layer_index(&bm->ldata, CD_PROP_FLOAT2);
@@ -1363,7 +1363,7 @@ void Mesh::uv_maps_default_set(const StringRef name)
   if (!name.is_empty()) {
     this->default_uv_map_attribute = BLI_strdupn(name.data(), name.size());
   }
-  if (BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(this)) {
     int index = CustomData_get_named_layer_index(&bm->ldata, CD_PROP_FLOAT2, name);
     if (index == -1) {
       index = CustomData_get_layer_index(&bm->ldata, CD_PROP_FLOAT2);
@@ -1869,7 +1869,7 @@ void BKE_mesh_material_remap(Mesh *mesh, const uint *remap, uint remap_len)
   } \
   ((void)0)
 
-  if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
     BMIter iter;
     BMFace *efa;
 
@@ -1974,7 +1974,7 @@ std::optional<int> Mesh::material_index_max() const
 {
   this->runtime->max_material_index.ensure([&](std::optional<int> &value) {
     if (use_bmesh_material_indices(*this)) {
-      BMesh *bm = this->runtime->edit_mesh->bm;
+      const BMesh *bm = BKE_editmesh_bmesh_get(this);
       if (bm->totface == 0) {
         value = std::nullopt;
         return;
@@ -1982,7 +1982,7 @@ std::optional<int> Mesh::material_index_max() const
       int max_material_index = 0;
       BMFace *efa;
       BMIter iter;
-      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      BM_ITER_MESH (efa, &iter, const_cast<BMesh *>(bm), BM_FACES_OF_MESH) {
         max_material_index = std::max<int>(max_material_index, efa->mat_nr);
       }
       value = max_material_index;
@@ -2017,10 +2017,10 @@ const VectorSet<int> &Mesh::material_indices_used() const
     /* Find used indices in parallel and then create the vector set in the end. */
     Array<bool> used_indices(max_material_index + 1, false);
     if (use_bmesh_material_indices(*this)) {
-      BMesh *bm = this->runtime->edit_mesh->bm;
+      const BMesh *bm = BKE_editmesh_bmesh_get(this);
       BMFace *efa;
       BMIter iter;
-      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      BM_ITER_MESH (efa, &iter, const_cast<BMesh *>(bm), BM_FACES_OF_MESH) {
         used_indices[clamp_material_index(efa->mat_nr)] = true;
       }
     }
@@ -2236,8 +2236,7 @@ void BKE_mesh_mselect_active_set(Mesh *mesh, int index, eMSelect_Type type)
 void BKE_mesh_count_selected_items(const Mesh *mesh, int r_count[3])
 {
   r_count[0] = r_count[1] = r_count[2] = 0;
-  if (mesh->runtime->edit_mesh) {
-    BMesh *bm = mesh->runtime->edit_mesh->bm;
+  if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
     r_count[0] = bm->totvertsel;
     r_count[1] = bm->totedgesel;
     r_count[2] = bm->totfacesel;

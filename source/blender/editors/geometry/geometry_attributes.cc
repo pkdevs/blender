@@ -234,8 +234,8 @@ bool attribute_set_poll(bContext &C, const ID &object_data)
 
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh *mesh = owner.get_mesh();
-    if (mesh->runtime->edit_mesh) {
-      BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm, *name);
+    if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+      BMDataLayerLookup attr = BM_data_layer_lookup(*bm, *name);
       if (ELEM(attr.type,
                bke::AttrType::String,
                bke::AttrType::Float4x4,
@@ -379,7 +379,7 @@ static wmOperatorStatus geometry_attribute_add_exec(bContext *C, wmOperator *op)
 
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh &mesh = *id_cast<Mesh *>(id);
-    if (BMesh *bm = BKE_editmesh_bmesh_get(&mesh)) {
+    if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(&mesh)) {
       CustomDataLayer *layer = BKE_attribute_new(mesh, *bm, name, cd_type, domain, op->reports);
       if (layer == nullptr) {
         return OPERATOR_CANCELLED;

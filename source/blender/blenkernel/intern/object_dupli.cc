@@ -470,7 +470,7 @@ static void make_child_duplis(const DupliContext *ctx,
  * \{ */
 
 static const Mesh *mesh_data_from_duplicator_object(Object *ob,
-                                                    BMEditMesh **r_em,
+                                                    BMesh **r_bm,
                                                     Span<float3> *r_vert_coords,
                                                     Span<float3> *r_vert_normals)
 {
@@ -478,7 +478,7 @@ static const Mesh *mesh_data_from_duplicator_object(Object *ob,
   BMEditMesh *em = BKE_editmesh_from_object(ob);
   const Mesh *mesh_eval;
 
-  *r_em = nullptr;
+  *r_bm = nullptr;
   *r_vert_coords = {};
   if (r_vert_normals != nullptr) {
     *r_vert_normals = {};
@@ -495,8 +495,8 @@ static const Mesh *mesh_data_from_duplicator_object(Object *ob,
     if ((mesh_eval == nullptr) || (mesh_eval->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH)) {
       bke::EditMeshData *emd = mesh_eval ? mesh_eval->runtime->edit_data.get() : nullptr;
 
-      /* Only assign edit-mesh in the case we can't use `mesh_eval`. */
-      *r_em = em;
+      /* Only assign the bmesh in the case we can't use `mesh_eval`. */
+      *r_bm = em->bm;
       mesh_eval = nullptr;
 
       if ((emd != nullptr) && !emd->vert_positions.is_empty()) {
@@ -743,21 +743,21 @@ static void make_duplis_verts(const DupliContext *ctx)
   const bool use_rotation = parent->transflag & OB_DUPLIROT;
 
   /* Gather mesh info. */
-  BMEditMesh *em = nullptr;
+  BMesh *bm = nullptr;
   Span<float3> vert_positions_deform;
   Span<float3> vert_normals_deform;
   const Mesh *mesh_eval = mesh_data_from_duplicator_object(
-      parent, &em, &vert_positions_deform, use_rotation ? &vert_normals_deform : nullptr);
-  if (em == nullptr && mesh_eval == nullptr) {
+      parent, &bm, &vert_positions_deform, use_rotation ? &vert_normals_deform : nullptr);
+  if (bm == nullptr && mesh_eval == nullptr) {
     return;
   }
 
   VertexDupliData_Params vdd_params{ctx, use_rotation};
 
-  if (em != nullptr) {
+  if (bm != nullptr) {
     VertexDupliData_EditMesh vdd{};
     vdd.params = vdd_params;
-    vdd.bm = em->bm;
+    vdd.bm = bm;
     vdd.vert_positions_deform = vert_positions_deform;
     vdd.vert_normals_deform = vert_normals_deform;
     vdd.has_orco = !vert_positions_deform.is_empty();
@@ -1328,18 +1328,17 @@ static void make_duplis_faces(const DupliContext *ctx)
   Object *parent = ctx->object;
 
   /* Gather mesh info. */
-  BMEditMesh *em = nullptr;
+  BMesh *bm = nullptr;
   Span<float3> vert_positions_deform;
   const Mesh *mesh_eval = mesh_data_from_duplicator_object(
-      parent, &em, &vert_positions_deform, nullptr);
-  if (em == nullptr && mesh_eval == nullptr) {
+      parent, &bm, &vert_positions_deform, nullptr);
+  if (bm == nullptr && mesh_eval == nullptr) {
     return;
   }
 
   FaceDupliData_Params fdd_params = {ctx, (parent->transflag & OB_DUPLIFACES_SCALE) != 0};
 
-  if (em != nullptr) {
-    BMesh *bm = em->bm;
+  if (bm != nullptr) {
     const int cd_loop_uv_offset = CustomData_get_offset_named(
         &bm->ldata,
         CD_PROP_FLOAT2,

@@ -56,7 +56,7 @@ static const int multires_side_tot[] = {
 
 void multires_customdata_delete(Mesh *mesh)
 {
-  if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
     /* CustomData_external_remove is used here only to mark layer
      * as non-external for further freeing, so zero element count
      * looks safer than `bm->totface`. */

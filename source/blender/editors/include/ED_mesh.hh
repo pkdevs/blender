@@ -195,7 +195,7 @@ int *BM_uv_element_map_ensure_unique_index(UvElementMap *element_map);
 /**
  * Can we edit UVs for this mesh?
  */
-bool EDBM_uv_check(Mesh *mesh);
+bool EDBM_uv_check(const Mesh *mesh);
 /**
  * last_sel, use em->act_face otherwise get the last selected face in the edit-selections
  * at the moment, last_sel is mainly useful for making sure the space image doesn't flicker.
@@ -612,7 +612,7 @@ void ED_mesh_mirror_topo_table_end(Object *ob);
  */
 int mesh_get_x_mirror_vert(Object *ob, Mesh *mesh_eval, int index, bool use_topology);
 BMVert *editbmesh_get_x_mirror_vert(
-    Object *ob, BMEditMesh *em, BMVert *eve, const float co[3], int index, bool use_topology);
+    Object *ob, BMesh *bm, BMVert *eve, const float co[3], int index, bool use_topology);
 /**
  * This is a Mesh-based copy of #mesh_get_x_mirror_faces().
  */

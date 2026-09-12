@@ -244,7 +244,7 @@ struct Instance : public DrawEngine {
   {
     using namespace blender::draw;
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
-    BMesh *bm = BKE_editmesh_bmesh_get(&mesh);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(&mesh);
 
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);

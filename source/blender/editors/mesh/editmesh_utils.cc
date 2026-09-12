@@ -1268,10 +1268,11 @@ UvElement *BM_uv_element_get_head(UvElementMap *element_map, UvElement *child)
 
 BMFace *EDBM_uv_active_face_get(Mesh *mesh, const bool sloppy, const bool selected)
 {
-  if (!EDBM_uv_check(em)) {
+  if (!EDBM_uv_check(mesh)) {
     return nullptr;
   }
-  BMFace *efa = BM_mesh_active_face_get(em->bm, sloppy, selected);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+  BMFace *efa = BM_mesh_active_face_get(bm, sloppy, selected);
   if (efa) {
     return efa;
   }
@@ -1279,10 +1280,19 @@ BMFace *EDBM_uv_active_face_get(Mesh *mesh, const bool sloppy, const bool select
   return nullptr;
 }
 
-bool EDBM_uv_check(Mesh *mesh)
+bool EDBM_uv_check(const Mesh *mesh)
 {
-  /* some of these checks could be a touch overkill */
-  return em && em->bm->totface && CustomData_has_layer(&em->bm->ldata, CD_PROP_FLOAT2);
+  if (!mesh->runtime->edit_mesh) {
+    return false;
+  }
+  const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
+  if (!bm->totface) {
+    return false;
+  }
+  if (!CustomData_has_layer(&bm->ldata, CD_PROP_FLOAT2)) {
+    return false;
+  }
+  return true;
 }
 
 /** \} */
@@ -1303,7 +1313,7 @@ static BMVert *cache_mirr_intptr_as_bmvert(const intptr_t *index_lookup, int ind
  * \code{.c}
  * EDBM_verts_mirror_cache_begin(em, ...);
  *
- * BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+ * BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
  *     v_mirror = EDBM_verts_mirror_get(em, v);
  *     e_mirror = EDBM_verts_mirror_get_edge(em, e);
  *     f_mirror = EDBM_verts_mirror_get_face(em, f);

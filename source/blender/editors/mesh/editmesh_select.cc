@@ -4068,10 +4068,8 @@ static void select_linked_delimit_begin(BMesh *bm, int delimit)
   }
 }
 
-static void select_linked_delimit_end(BMEditMesh *em)
+static void select_linked_delimit_end(BMesh *bm)
 {
-  BMesh *bm = em->bm;
-
   BM_mesh_elem_toolflags_clear(bm);
 }
 
@@ -4272,7 +4270,7 @@ static wmOperatorStatus edbm_select_linked_exec(bContext *C, wmOperator *op)
     }
 
     if (delimit) {
-      select_linked_delimit_end(em);
+      select_linked_delimit_end(bm);
     }
 
     EDBM_uvselect_clear(bm);
@@ -4437,7 +4435,7 @@ static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, in
   EDBM_uvselect_clear(bm);
 
   if (delimit) {
-    select_linked_delimit_end(em);
+    select_linked_delimit_end(bm);
   }
 }
 
@@ -5270,11 +5268,10 @@ static bool bm_faces_form_cyclic_chain(BMFace *f_start)
   return true;
 }
 
-static void walker_deselect_nth_vertex_chain(BMEditMesh *em,
+static void walker_deselect_nth_vertex_chain(BMesh *bm,
                                              const CheckerIntervalParams *op_params,
                                              BMVert *v_start)
 {
-  BMesh *bm = em->bm;
   BMVert *v_prev = nullptr;
   BMVert *v_curr = v_start;
   int index = 0;
@@ -5303,11 +5300,10 @@ static void walker_deselect_nth_vertex_chain(BMEditMesh *em,
   }
 }
 
-static void walker_deselect_nth_edge_chain(BMEditMesh *em,
+static void walker_deselect_nth_edge_chain(BMesh *bm,
                                            const CheckerIntervalParams *op_params,
                                            BMEdge *e_start)
 {
-  BMesh *bm = em->bm;
   BMEdge *e_curr = e_start;
   BMVert *v_through = e_start->v1;
   int index = 0;
@@ -5336,11 +5332,10 @@ static void walker_deselect_nth_edge_chain(BMEditMesh *em,
   }
 }
 
-static void walker_deselect_nth_face_chain(BMEditMesh *em,
+static void walker_deselect_nth_face_chain(BMesh *bm,
                                            const CheckerIntervalParams *op_params,
                                            BMFace *f_start)
 {
-  BMesh *bm = em->bm;
   BMFace *f_prev = nullptr;
   BMFace *f_curr = f_start;
   int index = 0;
@@ -5399,7 +5394,7 @@ static void walker_deselect_nth(BMEditMesh *em,
   if (h_act->htype == BM_VERT) {
     BMVert *v_start = reinterpret_cast<BMVert *>(h_act);
     if (bm_verts_form_cyclic_chain(v_start)) {
-      walker_deselect_nth_vertex_chain(em, op_params, v_start);
+      walker_deselect_nth_vertex_chain(bm, op_params, v_start);
       EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
       return;
     }
@@ -5407,7 +5402,7 @@ static void walker_deselect_nth(BMEditMesh *em,
   else if (h_act->htype == BM_EDGE) {
     BMEdge *e_start = reinterpret_cast<BMEdge *>(h_act);
     if (bm_edges_form_cyclic_chain(e_start)) {
-      walker_deselect_nth_edge_chain(em, op_params, e_start);
+      walker_deselect_nth_edge_chain(bm, op_params, e_start);
       EDBM_selectmode_flush_ex(em, SCE_SELECT_EDGE);
       return;
     }
@@ -5415,7 +5410,7 @@ static void walker_deselect_nth(BMEditMesh *em,
   else if (h_act->htype == BM_FACE) {
     BMFace *f_start = reinterpret_cast<BMFace *>(h_act);
     if (bm_faces_form_cyclic_chain(f_start)) {
-      walker_deselect_nth_face_chain(em, op_params, f_start);
+      walker_deselect_nth_face_chain(bm, op_params, f_start);
       EDBM_selectmode_flush_ex(em, SCE_SELECT_FACE);
       return;
     }

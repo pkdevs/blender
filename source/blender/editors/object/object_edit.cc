@@ -644,13 +644,10 @@ static bool editmode_load_free_ex(Main *bmain,
     if (mesh->runtime->edit_mesh == nullptr) {
       return false;
     }
-
-    if (mesh->runtime->edit_mesh->bm->totvert > MESH_MAX_VERTS) {
+    const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
+    if (bm->totvert > MESH_MAX_VERTS) {
       /* This used to be warned int the UI, we could warn again although it's quite rare. */
-      CLOG_WARN(&LOG,
-                "Too many vertices for mesh '%s' (%d)",
-                mesh->id.name + 2,
-                mesh->runtime->edit_mesh->bm->totvert);
+      CLOG_WARN(&LOG, "Too many vertices for mesh '%s' (%d)", mesh->id.name + 2, bm->totvert);
       return false;
     }
 

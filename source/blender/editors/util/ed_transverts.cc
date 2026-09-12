@@ -192,9 +192,9 @@ void ED_transverts_update_obedit(TransVertStore *tvs, Object *obedit)
 static void set_mapped_co(void *vuserdata, int index, const float co[3], const float /*no*/[3])
 {
   void **userdata = static_cast<void **>(vuserdata);
-  BMEditMesh *em = static_cast<BMEditMesh *>(userdata[0]);
+  BMesh *bm = static_cast<BMesh *>(userdata[0]);
   TransVert *tv = static_cast<TransVert *>(userdata[1]);
-  BMVert *eve = BM_vert_at_index(em->bm, index);
+  BMVert *eve = BM_vert_at_index(bm, index);
 
   if (BM_elem_index_get(eve) != TM_INDEX_SKIP) {
     tv = &tv[BM_elem_index_get(eve)];
@@ -248,7 +248,7 @@ void ED_transverts_create_from_obedit(TransVertStore *tvs, const Object *obedit,
     BMEditMesh *em = mesh.runtime->edit_mesh.get();
     BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(obedit));
     BMIter iter;
-    void *userdata[2] = {em, nullptr};
+    void *userdata[2] = {bm, nullptr};
     // int proptrans = 0; /*UNUSED*/
 
     /* abuses vertex index all over, set, just set dirty here,

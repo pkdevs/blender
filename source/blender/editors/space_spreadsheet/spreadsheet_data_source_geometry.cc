@@ -416,7 +416,7 @@ static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
 {
   const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
   const IndexRange range(attributes_eval.domain_size(bke::AttrDomain::Face));
-  BMesh *bm = mesh_orig.runtime->edit_mesh->bm;
+  BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(&mesh_orig));
 
   BM_mesh_elem_table_ensure(bm, BM_FACE);
   if (mesh_eval.faces_num == bm->totface) {
@@ -447,7 +447,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
 {
   const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
   const IndexRange range(attributes_eval.domain_size(domain));
-  BMesh *bm = mesh_orig.runtime->edit_mesh->bm;
+  BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(&mesh_orig));
 
   switch (domain) {
     case bke::AttrDomain::Point: {

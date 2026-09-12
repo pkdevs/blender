@@ -552,11 +552,11 @@ static void mesh_defvert_mirror_update_em(
     Object *ob, BMVert *eve, int def_nr, int vidx, const int cd_dvert_offset)
 {
   Mesh *mesh = id_cast<Mesh *>(ob->data);
-  BMEditMesh *em = mesh->runtime->edit_mesh.get();
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
   BMVert *eve_mirr;
   bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
-  eve_mirr = editbmesh_get_x_mirror_vert(ob, em, eve, eve->co, vidx, use_topology);
+  eve_mirr = editbmesh_get_x_mirror_vert(ob, bm, eve, eve->co, vidx, use_topology);
 
   if (eve_mirr && eve_mirr != eve) {
     MDeformVert *dvert_src = static_cast<MDeformVert *>(
@@ -1696,9 +1696,8 @@ static void vgroup_smooth_subset(Object *ob,
   const float expand = fabsf(fac_expand);
   const float iexpand = 1.0f - expand;
 
-  BMEditMesh *em = BKE_editmesh_from_object(ob);
-  BMesh *bm = em ? em->bm : nullptr;
-  Mesh *mesh = em ? nullptr : id_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
 
   float *weight_accum_prev;
   float *weight_accum_curr;

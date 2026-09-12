@@ -504,7 +504,7 @@ class ArmatureDeformTestBase {
     create_params.use_toolflags = true;
     BMesh *bm = BKE_mesh_to_bmesh(mesh, 0, false, &create_params);
     BMEditMesh *edit_mesh = BKE_editmesh_create(bm);
-    Array<float3> bm_verts_wrapper = BM_mesh_vert_coords_alloc(edit_mesh->bm);
+    Array<float3> bm_verts_wrapper = BM_mesh_vert_coords_alloc(bm);
 
     Array<float3x3> deform_mats;
     std::optional<MutableSpan<float3x3>> deform_mats_opt;

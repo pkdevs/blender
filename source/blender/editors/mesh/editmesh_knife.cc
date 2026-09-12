@@ -213,7 +213,6 @@ struct KnifeObjectInfo {
 
   /** Only assigned for convenient access. */
   BMEditMesh *em;
-  /** Only assigned for convenient access, same as `em->bm`. */
   BMesh *bm;
 };
 

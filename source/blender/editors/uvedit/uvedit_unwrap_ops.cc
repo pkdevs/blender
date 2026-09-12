@@ -1461,8 +1461,7 @@ static void uvedit_pack_islands_multi(const Scene *scene,
       bm = bmesh_override[ob_index];
     }
     else {
-      BMEditMesh *em = BKE_editmesh_from_object(obedit);
-      bm = em->bm;
+      bm = BKE_editmesh_bmesh_get_for_write(obedit);
     }
     BLI_assert(bm);
 

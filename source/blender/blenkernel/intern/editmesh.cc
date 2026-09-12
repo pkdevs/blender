@@ -215,7 +215,7 @@ Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
   return vert_positions;
 }
 
-Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMesh *bm)
+Array<float3> BKE_editmesh_vert_coords_alloc_orco(const BMesh *bm)
 {
   return BM_mesh_vert_coords_alloc(bm);
 }

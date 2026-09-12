@@ -302,7 +302,7 @@ int mesh_get_x_mirror_vert(Object *ob, Mesh *mesh_eval, int index, const bool us
   return mesh_get_x_mirror_vert_spatial(ob, mesh_eval, index);
 }
 
-static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMEditMesh *em, const float co[3])
+static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMesh *bm, const float co[3])
 {
   float vec[3];
   int i;
@@ -318,19 +318,17 @@ static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMEditMesh *em, c
 
   i = ED_mesh_mirror_spatial_table_lookup(ob, nullptr, vec);
   if (i != -1) {
-    return BM_vert_at_index(em->bm, i);
+    return BM_vert_at_index(bm, i);
   }
   return nullptr;
 }
 
-static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMEditMesh *em, BMVert *eve, int index)
+static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMesh *bm, BMVert *eve, int index)
 {
   intptr_t poinval;
   if (!ed_mesh_mirror_topo_table_update(ob, nullptr)) {
     return nullptr;
   }
-
-  BMesh *bm = em->bm;
 
   if (index == -1) {
     BMIter iter;
@@ -358,12 +356,12 @@ static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMEditMesh *em, BMVe
 }
 
 BMVert *editbmesh_get_x_mirror_vert(
-    Object *ob, BMEditMesh *em, BMVert *eve, const float co[3], int index, const bool use_topology)
+    Object *ob, BMesh *bm, BMVert *eve, const float co[3], int index, const bool use_topology)
 {
   if (use_topology) {
-    return editbmesh_get_x_mirror_vert_topo(ob, em, eve, index);
+    return editbmesh_get_x_mirror_vert_topo(ob, bm, eve, index);
   }
-  return editbmesh_get_x_mirror_vert_spatial(ob, em, co);
+  return editbmesh_get_x_mirror_vert_spatial(ob, bm, co);
 }
 
 int ED_mesh_mirror_get_vert(Object *ob, int index)
@@ -372,10 +370,10 @@ int ED_mesh_mirror_get_vert(Object *ob, int index)
   bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
   int index_mirr;
 
-  if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob)) {
     BMVert *eve, *eve_mirr;
-    eve = BM_vert_at_index(em->bm, index);
-    eve_mirr = editbmesh_get_x_mirror_vert(ob, em, eve, eve->co, index, use_topology);
+    eve = BM_vert_at_index(bm, index);
+    eve_mirr = editbmesh_get_x_mirror_vert(ob, bm, eve, eve->co, index, use_topology);
     index_mirr = eve_mirr ? BM_elem_index_get(eve_mirr) : -1;
   }
   else {
