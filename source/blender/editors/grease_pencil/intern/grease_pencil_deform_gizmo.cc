@@ -440,10 +440,16 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   }
 
   if (mask_group->mode == DeformMode::GRID) {
-    const int x_num = 2;
-    const int y_num = 2;
+    const int x_num = 2 + mask_group->subdivisions;
+    const int y_num = 2 + mask_group->subdivisions;
 
-    BLI_assert(x_num * y_num == mask_group->corner_data.size());
+    if (mask_group->corner_data.size() < x_num * y_num) {
+      for (const int i : IndexRange::from_begin_end(mask_group->corner_data.size(), x_num * y_num))
+      {
+        UNUSED_VARS(i);
+        add_corner(mask_group, gzgroup);
+      }
+    }
 
     for (const int x_i : IndexRange(x_num)) {
       for (const int y_i : IndexRange(y_num)) {
@@ -462,7 +468,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     constexpr std::array<float2, 4> corner_positions(
         {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
 
-    for (const int i : mask_group->corner_data.index_range()) {
+    for (const int i : IndexRange(4)) {
       CornerPinData &corner_pin_data = mask_group->corner_data[i];
       corner_pin_data.corner_pos = corner_positions[i] * mask_group->state.dims;
       wmGizmo *gz = corner_pin_data.gizmos;
@@ -493,8 +499,17 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     if (mask_group->mode == DeformMode::TRANSFORM) {
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
     }
-    else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
-      for (const int i : mask_group->corner_data.index_range()) {
+    else if (mask_group->mode == DeformMode::PERSPECTIVE) {
+      for (const int i : IndexRange(4)) {
+        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
+      }
+    }
+    else if (mask_group->mode == DeformMode::GRID) {
+      const int x_num = 2 + mask_group->subdivisions;
+      const int y_num = 2 + mask_group->subdivisions;
+
+      for (const int i : IndexRange(x_num * y_num)) {
         wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
