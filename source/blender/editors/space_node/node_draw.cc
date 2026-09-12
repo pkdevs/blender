@@ -3607,10 +3607,10 @@ static void comment_node_prepare_for_draw(const bContext &C,
 
   const float2 loc = node_to_view(node.location);
   /* Different paddings are used here to compensate for padding applied elsewhere. */
-  const int pad_left = 0.2 * UI_UNIT_X;
-  const int pad_right = (is_render ? 0.25 : 0.1) * UI_UNIT_X;
-  const int pad_top = 0.15 * UI_UNIT_Y;
-  const int pad_bottom = 0.2 * UI_UNIT_Y;
+  const int pad_left = is_render ? 0.2 * UI_UNIT_X : 0;
+  const int pad_right = is_render ? 0.25 * UI_UNIT_X : 0;
+  const int pad_top = is_render ? 0.15 * UI_UNIT_Y : 0;
+  const int pad_bottom = is_render ? 0.2 * UI_UNIT_Y : 0;
 
   ui::Layout &layout = ui::block_layout(&block,
                                         ui::LayoutDirection::Vertical,
@@ -4152,8 +4152,13 @@ static void node_draw_comment(const bContext &C,
     return;
   }
 
-  ui::draw_roundbox_corner_set(ui::CNR_ALL);
-  ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, float4(0.0f, 0.0f, 0.0f, 1.0f));
+  const NodeComment &storage = *static_cast<const NodeComment *>(node.storage);
+  const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
+
+  if (is_render) {
+    ui::draw_roundbox_corner_set(ui::CNR_ALL);
+    ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, float4(0.0f, 0.0f, 0.0f, 1.0f));
+  }
 
   block_end_ex(&C,
                tree_draw_ctx.bmain,
@@ -4164,7 +4169,7 @@ static void node_draw_comment(const bContext &C,
                &block);
   block_draw(&C, &block);
 
-  if (node.flag & SELECT) {
+  if (node.flag & SELECT && is_render) {
     ColorTheme4f outline_color;
     if (node.flag & NODE_ACTIVE) {
       ui::theme::get_color_shade_alpha_4fv(TH_ACTIVE, 0, -40, outline_color);
