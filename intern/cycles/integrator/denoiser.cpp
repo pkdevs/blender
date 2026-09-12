@@ -6,6 +6,7 @@
 
 #include "device/device.h"
 
+#include "integrator/denoiser_dlss.h"
 #include "integrator/denoiser_oidn.h"
 #include "session/display_driver.h"
 
@@ -109,6 +110,18 @@ bool use_gpu_oidn_denoiser(Device *denoiser_device, const DenoiseParams &params)
 #endif
 }
 
+bool use_dlss_denoiser(Device *denoiser_device, const DenoiseParams &params)
+{
+#ifdef WITH_DLSS
+  return (params.type == DENOISER_DLSS &&
+          DLSSDenoiser::is_device_supported(denoiser_device->info));
+#else
+  (void)denoiser_device;
+  (void)params;
+  return false;
+#endif
+}
+
 bool use_mtlfx_denoiser(Device *denoiser_device, const DenoiseParams &params)
 {
 #ifdef WITH_METALFX
@@ -150,7 +163,9 @@ DenoiseParams get_effective_denoise_params(Device *denoiser_device,
   const bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
   if (is_cpu_denoiser_device == false) {
     if (use_optix_denoiser(single_denoiser_device, effective_denoise_params) ||
-        use_gpu_oidn_denoiser(single_denoiser_device, effective_denoise_params) || use_mtlfx_denoiser(single_denoiser_device, effective_denoise_params))
+        use_gpu_oidn_denoiser(single_denoiser_device, effective_denoise_params) ||
+        use_dlss_denoiser(single_denoiser_device, effective_denoise_params) || 
+        use_mtlfx_denoiser(single_denoiser_device, effective_denoise_params))
     {
       /* Denoising parameters are correct and there is no need to fall back to CPU OIDN. */
       return effective_denoise_params;
@@ -189,6 +204,12 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
       return make_unique<OIDNDenoiserGPU>(single_denoiser_device, effective_denoiser_params);
     }
 #endif
+
+#ifdef WITH_DLSS
+    if (use_dlss_denoiser(single_denoiser_device, effective_denoiser_params)) {
+      return make_unique<DLSSDenoiser>(single_denoiser_device, effective_denoiser_params);
+    }
+#endif
   }
   
 #ifdef WITH_METALFX
@@ -218,10 +239,10 @@ bool Denoiser::is_device_supported(DenoiserType type, const DeviceInfo &denoise_
    case DENOISER_OPENIMAGEDENOISE:
      return OIDNDenoiserGPU::is_device_supported(denoise_device_info);
   #endif
-//  #ifdef WITH_DLSS
-//   case DENOISER_DLSS:
-//     return DLSSDenoiser::is_device_supported(denoise_device_info);
-//  #endif
+  #ifdef WITH_DLSS
+   case DENOISER_DLSS:
+     return DLSSDenoiser::is_device_supported(denoise_device_info);
+  #endif
   #ifdef WITH_METALFX
     case DENOISER_MTLFX:
       return MetalFXDenoiser::is_device_supported(denoise_device_info);
