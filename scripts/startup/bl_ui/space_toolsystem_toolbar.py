@@ -2278,6 +2278,8 @@ class _defs_grease_pencil_paint:
             row.prop(props, "mode", text="", expand=True, icon_only=True)
             props = tool.gizmo_group_properties("VIEW3D_GGT_grease_pencil_deform")
             row.prop(props, "mode", expand=True)
+            if props.mode == "GRID":
+                row.prop(props, "subdivisions")
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",

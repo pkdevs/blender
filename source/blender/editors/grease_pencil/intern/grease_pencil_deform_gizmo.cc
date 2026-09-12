@@ -86,6 +86,7 @@ struct QuadWidgetGroup2 {
 
   IndexMaskMemory memory;
   DeformMode mode;
+  int subdivisions;
   int lock_axis;
 
   Vector<CornerPinData> corner_data;
@@ -94,6 +95,7 @@ struct QuadWidgetGroup2 {
     PointerRNA ptr;
     PropertyRNA *prop;
     PropertyRNA *gzgt_mode_prop;
+    PropertyRNA *gzgt_subdivisions_prop;
     bContext *context;
   } update_data;
 };
@@ -342,6 +344,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
   mask_group->mode = DeformMode(
       RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
+  mask_group->subdivisions = RNA_property_int_get(&ptr,
+                                                  mask_group->update_data.gzgt_subdivisions_prop);
 
   unit_m4(gz->matrix_space);
   unit_m4(gz->matrix_offset);
@@ -532,6 +536,8 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
   mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
                                                                          "mode");
+  mask_group->update_data.gzgt_subdivisions_prop = RNA_struct_type_find_property(
+      gzgroup->type->srna, "subdivisions");
 
   update_things(C, gzgroup);
 }
@@ -572,6 +578,11 @@ static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
   {
     return true;
   }
+  if (mask_group->subdivisions !=
+      RNA_property_int_get(&ptr, mask_group->update_data.gzgt_subdivisions_prop))
+  {
+    return true;
+  }
 
   return false;
 }
@@ -608,6 +619,8 @@ void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
   gzgt->draw_prepare = bbox_draw_prepare_space_image;
 
   RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::TRANSFORM), "Mode", "");
+
+  RNA_def_int(gzgt->srna, "subdivisions", 1, 0, 10, "Subdivisions", "", 0, 5);
 }
 
 }  // namespace ed::greasepencil
