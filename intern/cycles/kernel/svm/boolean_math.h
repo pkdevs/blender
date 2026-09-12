@@ -11,8 +11,8 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device int svm_boolean_math(const NodeBooleanMathType type, const int a_int, const int b_int)
 {
-  const bool a = a_int != 0;
-  const bool b = b_int != 0;
+  const bool a = a_int > 0;
+  const bool b = b_int > 0;
   bool result = false;
 
   switch (type) {
