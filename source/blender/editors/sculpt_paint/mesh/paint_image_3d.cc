@@ -178,21 +178,35 @@ static void allocate_scratch_buffers(ImageData &image_data,
       continue;
     }
 
-    ImBuf *scratch_buffer = IMB_allocImBuf(buffer->x, buffer->y, ImBufFlags::Zero);
-    if (buffer->byte_data()) {
-      IMB_alloc_byte_pixels(scratch_buffer);
+    ImBuf *scratch = image_data.scratch_image_buffers.lookup_or_add_cb(tile.tile_number, [&]() {
+      ImBuf *new_imbuf = IMB_allocImBuf(buffer->x, buffer->y, ImBufFlags::Zero);
+      if (buffer->byte_data()) {
+        IMB_alloc_byte_pixels(new_imbuf);
+      }
+      else {
+        IMB_alloc_float_pixels(new_imbuf, 4);
+      }
+      printf("Allocated %p for %d\n", new_imbuf, tile.tile_number);
+      return new_imbuf;
+    });
+
+    if (scratch == nullptr) {
+      BLI_assert(0);
+      continue;
+    }
+
+    if (scratch->byte_data()) {
       image_data.scratch_data_buffers.add_overwrite(
           tile.tile_number,
-          MutableSpan(reinterpret_cast<uchar4 *>(buffer->byte_data_for_write()),
+          MutableSpan(reinterpret_cast<uchar4 *>(scratch->byte_data_for_write()),
                       IMB_get_pixel_count(buffer)));
     }
     else {
-      BLI_assert(ELEM(buffer->channels, 0, 4));
-      IMB_alloc_float_pixels(scratch_buffer, 4);
+      BLI_assert(ELEM(scratch->channels, 0, 4));
       image_data.scratch_data_buffers.add_overwrite(
           tile.tile_number,
-          MutableSpan(reinterpret_cast<float4 *>(buffer->float_data_for_write()),
-                      IMB_get_pixel_count(buffer)));
+          MutableSpan(reinterpret_cast<float4 *>(scratch->float_data_for_write()),
+                      IMB_get_pixel_count(scratch)));
     }
   }
 }
@@ -1120,10 +1134,11 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
     modified.as_mutable_span().fill(0);
   }
 
-  /* TODO: We need to create a separate "blur" image instead of applying this blend incrementally
-   */
   /* Naive first implementation: Allocate a same sized image and write the blur information there,
    * use this when determining the actual pixel data. */
+  /* Maybe we should fill an entire image of greyscale with the computed factors, so the final pass
+   * only needs to do the blending, combine this with the tile-chunking used for undo / seam
+   * bleeding? */
 
   node_mask.foreach_index([&](const int i) {
     fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
