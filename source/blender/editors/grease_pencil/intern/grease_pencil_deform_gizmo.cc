@@ -98,189 +98,6 @@ struct QuadWidgetGroup2 {
   } update_data;
 };
 
-static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
-    const IndexMask selection,
-    const bke::greasepencil::Drawing &drawing,
-    const FunctionRef<float2(const float3 &position)> project_to_screen)
-{
-  using bke::greasepencil::Drawing;
-  using bke::greasepencil::Layer;
-
-  std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
-
-  const VArray<float> radii = drawing.radii();
-  const bke::CurvesGeometry &strokes = drawing.strokes();
-  const Span<float3> positions = strokes.positions();
-
-  selection.foreach_index(
-      [&](const int point_i) {
-        const float2 screen_co = project_to_screen(positions[point_i]);
-        if (screen_co.x != V2D_IS_CLIPPED) {
-          const float pixels = radii[point_i];
-
-          std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
-          point_bounds->pad(pixels);
-          drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
-        }
-      },
-      exec_mode::grain_size(512));
-
-  return drawing_bounds;
-}
-
-static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
-{
-  const Scene &scene = *CTX_data_scene(C);
-
-  ARegion *region = CTX_wm_region(C);
-  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->border;
-
-  PointerRNA ptr;
-  bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
-  WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
-  mask_group->mode = DeformMode(
-      RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
-
-  unit_m4(gz->matrix_space);
-  unit_m4(gz->matrix_offset);
-
-  float4x4 mat = float4x4::identity();
-
-  switch (scene.toolsettings->gp_sculpt.lock_axis) {
-    case GP_LOCKAXIS_VIEW:
-      mat = float4x4(rv3d->viewinv);
-
-      mat[3] = float4(float3(0.0f), 1.0f);
-      break;
-    case GP_LOCKAXIS_Y:
-      mat = float4x4({1.0f, 0.0f, 0.0f, 0.0f},
-                     {0.0f, 0.0f, 1.0f, 0.0f},
-                     {0.0f, 1.0f, 0.0f, 0.0f},
-                     {0.0f, 0.0f, 0.0f, 1.0f});
-      break;
-    case GP_LOCKAXIS_X:
-      mat = float4x4({0.0f, 1.0f, 0.0f, 0.0f},
-                     {0.0f, 0.0f, 1.0f, 0.0f},
-                     {1.0f, 0.0f, 0.0f, 0.0f},
-                     {0.0f, 0.0f, 0.0f, 1.0f});
-      break;
-    case GP_LOCKAXIS_Z:
-      mat = float4x4::identity();
-      break;
-    case GP_LOCKAXIS_CURSOR: {
-      mat = scene.cursor.matrix<float4x4>();
-      break;
-    }
-  }
-
-  const float4x4 mat_inv = math::invert(mat);
-
-  auto projection_function = [&](const float3 position) {
-    return float2(math::transform_point(mat_inv, position));
-  };
-
-  std::optional<Bounds<float2>> box;
-
-  Object *object = CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
-
-  mask_group->grease_pencil_src = &grease_pencil;
-  mask_group->lock_axis = scene.toolsettings->gp_sculpt.lock_axis;
-
-  mask_group->selections = Vector<IndexMask>();
-  mask_group->src_positions = Vector<Array<float3>>();
-  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
-  for (const MutableDrawingInfo &info : drawings) {
-    const IndexMask selected_points = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, mask_group->memory);
-
-    mask_group->selections.append(selected_points);
-    mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
-
-    box = bounds::merge(
-        box,
-        compute_screen_space_drawing_bounds(selected_points, info.drawing, projection_function));
-  }
-
-  mask_group->drawings = drawings;
-
-  if (box) {
-    mask_group->state.dims = box->size();
-  }
-  else {
-    mask_group->state.dims = float2(1.0f);
-  }
-
-  if (mask_group->mode == DeformMode::GRID) {
-    const int x_num = 2;
-    const int y_num = 2;
-
-    BLI_assert(x_num * y_num == mask_group->corner_data.size());
-
-    for (const int x_i : IndexRange(x_num)) {
-      for (const int y_i : IndexRange(y_num)) {
-        CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
-        corner_pin_data.corner_pos = (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
-                                      float2(0.5f)) *
-                                     mask_group->state.dims;
-        wmGizmo *gz = corner_pin_data.gizmos;
-
-        RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
-        gz->scale_basis = gizmo_scale_basis_grid;
-      }
-    }
-  }
-  else if (mask_group->mode == DeformMode::PERSPECTIVE) {
-    constexpr std::array<float2, 4> corner_positions(
-        {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
-
-    for (const int i : mask_group->corner_data.index_range()) {
-      CornerPinData &corner_pin_data = mask_group->corner_data[i];
-      corner_pin_data.corner_pos = corner_positions[i] * mask_group->state.dims;
-      wmGizmo *gz = corner_pin_data.gizmos;
-
-      RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
-      gz->scale_basis = gizmo_scale_basis_perspective;
-    }
-  }
-
-  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-  for (const int i : mask_group->corner_data.index_range()) {
-    wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-    WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
-  }
-
-  if (box) {
-    mat[3] += mat[0] * box->center().x;
-    mat[3] += mat[1] * box->center().y;
-
-    copy_m4_m4(gz->matrix_space, mat.ptr());
-    RNA_float_set_array(gz->ptr, "dimensions", box->size());
-
-    for (const int i : mask_group->corner_data.index_range()) {
-      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-      copy_m4_m4(gz2->matrix_space, mat.ptr());
-    }
-
-    if (mask_group->mode == DeformMode::TRANSFORM) {
-      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-    }
-    else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
-      for (const int i : mask_group->corner_data.index_range()) {
-        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
-      }
-    }
-  }
-
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
-                        NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
-}
-
 /* translate callbacks */
 static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
                                             wmGizmoProperty *gz_prop,
@@ -479,6 +296,189 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
   update_positions_transform(mask_group, mat);
+}
+
+static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
+    const IndexMask selection,
+    const bke::greasepencil::Drawing &drawing,
+    const FunctionRef<float2(const float3 &position)> project_to_screen)
+{
+  using bke::greasepencil::Drawing;
+  using bke::greasepencil::Layer;
+
+  std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
+
+  const VArray<float> radii = drawing.radii();
+  const bke::CurvesGeometry &strokes = drawing.strokes();
+  const Span<float3> positions = strokes.positions();
+
+  selection.foreach_index(
+      [&](const int point_i) {
+        const float2 screen_co = project_to_screen(positions[point_i]);
+        if (screen_co.x != V2D_IS_CLIPPED) {
+          const float pixels = radii[point_i];
+
+          std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
+          point_bounds->pad(pixels);
+          drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
+        }
+      },
+      exec_mode::grain_size(512));
+
+  return drawing_bounds;
+}
+
+static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  const Scene &scene = *CTX_data_scene(C);
+
+  ARegion *region = CTX_wm_region(C);
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  wmGizmo *gz = mask_group->border;
+
+  PointerRNA ptr;
+  bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
+  WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
+  mask_group->mode = DeformMode(
+      RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
+
+  unit_m4(gz->matrix_space);
+  unit_m4(gz->matrix_offset);
+
+  float4x4 mat = float4x4::identity();
+
+  switch (scene.toolsettings->gp_sculpt.lock_axis) {
+    case GP_LOCKAXIS_VIEW:
+      mat = float4x4(rv3d->viewinv);
+
+      mat[3] = float4(float3(0.0f), 1.0f);
+      break;
+    case GP_LOCKAXIS_Y:
+      mat = float4x4({1.0f, 0.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 1.0f, 0.0f},
+                     {0.0f, 1.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 0.0f, 1.0f});
+      break;
+    case GP_LOCKAXIS_X:
+      mat = float4x4({0.0f, 1.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 1.0f, 0.0f},
+                     {1.0f, 0.0f, 0.0f, 0.0f},
+                     {0.0f, 0.0f, 0.0f, 1.0f});
+      break;
+    case GP_LOCKAXIS_Z:
+      mat = float4x4::identity();
+      break;
+    case GP_LOCKAXIS_CURSOR: {
+      mat = scene.cursor.matrix<float4x4>();
+      break;
+    }
+  }
+
+  const float4x4 mat_inv = math::invert(mat);
+
+  auto projection_function = [&](const float3 position) {
+    return float2(math::transform_point(mat_inv, position));
+  };
+
+  std::optional<Bounds<float2>> box;
+
+  Object *object = CTX_data_active_object(C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
+
+  mask_group->grease_pencil_src = &grease_pencil;
+  mask_group->lock_axis = scene.toolsettings->gp_sculpt.lock_axis;
+
+  mask_group->selections = Vector<IndexMask>();
+  mask_group->src_positions = Vector<Array<float3>>();
+  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
+  for (const MutableDrawingInfo &info : drawings) {
+    const IndexMask selected_points = retrieve_editable_and_selected_points(
+        *object, info.drawing, info.layer_index, mask_group->memory);
+
+    mask_group->selections.append(selected_points);
+    mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
+
+    box = bounds::merge(
+        box,
+        compute_screen_space_drawing_bounds(selected_points, info.drawing, projection_function));
+  }
+
+  mask_group->drawings = drawings;
+
+  if (box) {
+    mask_group->state.dims = box->size();
+  }
+  else {
+    mask_group->state.dims = float2(1.0f);
+  }
+
+  if (mask_group->mode == DeformMode::GRID) {
+    const int x_num = 2;
+    const int y_num = 2;
+
+    BLI_assert(x_num * y_num == mask_group->corner_data.size());
+
+    for (const int x_i : IndexRange(x_num)) {
+      for (const int y_i : IndexRange(y_num)) {
+        CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
+        corner_pin_data.corner_pos = (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
+                                      float2(0.5f)) *
+                                     mask_group->state.dims;
+        wmGizmo *gz = corner_pin_data.gizmos;
+
+        RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
+        gz->scale_basis = gizmo_scale_basis_grid;
+      }
+    }
+  }
+  else if (mask_group->mode == DeformMode::PERSPECTIVE) {
+    constexpr std::array<float2, 4> corner_positions(
+        {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
+
+    for (const int i : mask_group->corner_data.index_range()) {
+      CornerPinData &corner_pin_data = mask_group->corner_data[i];
+      corner_pin_data.corner_pos = corner_positions[i] * mask_group->state.dims;
+      wmGizmo *gz = corner_pin_data.gizmos;
+
+      RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+      gz->scale_basis = gizmo_scale_basis_perspective;
+    }
+  }
+
+  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+  for (const int i : mask_group->corner_data.index_range()) {
+    wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+    WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
+  }
+
+  if (box) {
+    mat[3] += mat[0] * box->center().x;
+    mat[3] += mat[1] * box->center().y;
+
+    copy_m4_m4(gz->matrix_space, mat.ptr());
+    RNA_float_set_array(gz->ptr, "dimensions", box->size());
+
+    for (const int i : mask_group->corner_data.index_range()) {
+      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+      copy_m4_m4(gz2->matrix_space, mat.ptr());
+    }
+
+    if (mask_group->mode == DeformMode::TRANSFORM) {
+      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+    }
+    else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
+      for (const int i : mask_group->corner_data.index_range()) {
+        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
+      }
+    }
+  }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
 }
 
 static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
