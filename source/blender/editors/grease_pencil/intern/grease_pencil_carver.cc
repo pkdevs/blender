@@ -55,18 +55,6 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   bke::crazyspace::GeometryDeformation deformation =
       bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(&ob_eval, obact, drawing);
 
-  auto project = [&](const float3 &position) {
-    return ED_view3d_project_float_v2_m4(&region, position, projection);
-  };
-
-  /* Compute screen space positions. */
-  Array<float2> screen_space_positions(src.points_num());
-  threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
-    for (const int src_point : src_points) {
-      screen_space_positions[src_point] = project(deformation.positions[src_point]);
-    }
-  });
-
   const Span<float3> normals = drawing.curve_plane_normals();
 
   Array<float4> curve_planes(src.curves_num());
@@ -112,6 +100,10 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
       bke::AttrDomain::Curve,
       bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
       clipping_curves);
+
+  auto project = [&](const float3 &position) {
+    return ED_view3d_project_float_v2_m4(&region, position, projection);
+  };
 
   /* WORKAROUND. Currently only poly curves are supported. Convert any curve close to the clipping
    * shape to poly. */
