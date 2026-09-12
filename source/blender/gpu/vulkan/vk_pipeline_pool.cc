@@ -162,7 +162,7 @@ static VkPipeline create_graphics_pipeline_no_libs(const VKGraphicsInfo &graphic
   /* Build pipeline. */
   VkPipeline pipeline = VK_NULL_HANDLE;
   double start_time = BLI_time_now_seconds();
-  printf("DEBUG: vkCreateGraphicsPipelines no_libs\n");
+
   device.functions.vkCreateGraphicsPipelines(device.vk_handle(),
                                              vk_pipeline_cache,
                                              1,
@@ -224,7 +224,7 @@ static VkPipeline create_graphics_pipeline_libs(const VKGraphicsInfo &graphics_i
       vk_pipeline_base,
       0};
   double start_link_time = BLI_time_now_seconds();
-  printf("DEBUG: vkCreateGraphicsPipelines linking\n");
+
   device.functions.vkCreateGraphicsPipelines(
       device.vk_handle(), vk_pipeline_cache, 1, &linking_pipeline_create_info, nullptr, &pipeline);
   double end_time = BLI_time_now_seconds();
@@ -520,7 +520,7 @@ VkPipeline VKPipelineMap<VKGraphicsInfo::VertexIn>::create(
   /* Build pipeline. */
   VkPipeline pipeline = VK_NULL_HANDLE;
   double start_time = BLI_time_now_seconds();
-  printf("DEBUG: vkCreateGraphicsPipelines vertex_input_lib\n");
+
   device.functions.vkCreateGraphicsPipelines(device.vk_handle(),
                                              vk_pipeline_cache,
                                              1,
@@ -562,7 +562,7 @@ VkPipeline VKPipelineMap<VKGraphicsInfo::Shaders>::create(
   /* Build pipeline. */
   VkPipeline pipeline = VK_NULL_HANDLE;
   double start_time = BLI_time_now_seconds();
-  printf("DEBUG: vkCreateGraphicsPipelines shaders_lib\n");
+
   device.functions.vkCreateGraphicsPipelines(device.vk_handle(),
                                              vk_pipeline_cache,
                                              1,
@@ -604,7 +604,7 @@ VkPipeline VKPipelineMap<VKGraphicsInfo::FragmentOut>::create(
   /* Build pipeline. */
   VkPipeline pipeline = VK_NULL_HANDLE;
   double start_time = BLI_time_now_seconds();
-  printf("DEBUG: vkCreateGraphicsPipelines fragment_output_lib\n");
+
   device.functions.vkCreateGraphicsPipelines(device.vk_handle(),
                                              vk_pipeline_cache,
                                              1,
