@@ -1,1 +1,2 @@
 Referenced by commit e4ffb0dd8c8950cfe3f5c54f97cf750980434211, Fix: blendfile/linking related tests after recent changes.
+Referenced by issue #163844, Linked node groups do not show up in add menu
