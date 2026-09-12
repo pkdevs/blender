@@ -5639,8 +5639,7 @@ static void stroke_cache_update(ViewContext &vc,
   cache.radius_squared = cache.radius * cache.radius;
 
   cache.hardness = brush.hardness;
-  if (bke::brush::supports_hardness_pressure(brush) && brush.flag & BRUSH_HARDNESS_PRESSURE)
-  {
+  if (bke::brush::supports_hardness_pressure(brush) && brush.flag & BRUSH_HARDNESS_PRESSURE) {
     cache.hardness *= BKE_curvemapping_evaluateF(brush.curve_hardness, 0, cache.pressure);
   }
 
