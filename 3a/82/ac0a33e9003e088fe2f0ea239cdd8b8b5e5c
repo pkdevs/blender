@@ -7,3 +7,4 @@ Referenced by issue #155985, 5.1 breaks legacy hair simulation grooms when objec
 Referenced by pull request #156529, Fix #155985: Mesh merge doesn't propagate legacy particle system data
 Referenced by commit 47b975422d0939490dd3e70ddae4b2ca4956510c, Fix #155985: Mesh merge doesn't propagate legacy particle system data
 Referenced by pull request #163825, Fix #163762: Mesh merge doesn't propagate multires data
+Referenced by commit 41c8aa5054f5ed2f195335fa0735667ec6c6c04b, Fix #163762: Mesh merge doesn't propagate multires data
