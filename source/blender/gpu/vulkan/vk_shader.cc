@@ -1138,7 +1138,6 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
     }
   }
 
-
   int fragment_out_location = 0;
   for (const ShaderCreateInfo::FragOut &output : info.fragment_outputs_) {
     /* When using dynamic rendering the attachment location doesn't change. When using render
@@ -1443,7 +1442,6 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
         graphics_info.fragment_out.color_attachment_formats.size());
 
     bool pipeline_created = false;
-
     VkPipeline vk_pipeline = device.pipelines.get_or_create_graphics_pipeline(
         graphics_info, is_static_shader_, vk_pipeline_base_, name_get(), pipeline_created);
     has_precompiled_pipelines_ = true;
@@ -1524,7 +1522,6 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(
       graphics_info.fragment_out.color_attachment_formats.size());
 
   bool pipeline_created = false;
-
   VkPipeline vk_pipeline = device.pipelines.get_or_create_graphics_pipeline(
       graphics_info, is_static_shader_, vk_pipeline_base_, name_get(), pipeline_created);
 

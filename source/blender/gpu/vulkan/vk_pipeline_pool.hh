@@ -96,6 +96,7 @@ struct VKGraphicsInfo {
     bool has_depth;
     bool has_stencil;
     uint32_t max_input_attachment_index = 0;
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     /* Color attachment count of the render pass this shaders library is linked with.
      *
      * When VK_KHR_dynamic_rendering_local_read is used and the shader declares input attachments,
@@ -114,6 +115,7 @@ struct VKGraphicsInfo {
              specialization_constants == other.specialization_constants &&
              has_depth == other.has_depth && has_stencil == other.has_stencil &&
              max_input_attachment_index == other.max_input_attachment_index &&
+             vk_render_pass == other.vk_render_pass &&
              color_attachment_count == other.color_attachment_count &&
              viewports.size() == other.viewports.size() &&
              scissors.size() == other.scissors.size() &&
@@ -138,6 +140,7 @@ struct VKGraphicsInfo {
       hash = hash * 33 ^ specialization_constants.hash();
       hash = hash * 33 ^ (uint64_t(has_depth) << 1 | uint64_t(has_stencil));
       hash = hash * 33 ^ uint64_t(max_input_attachment_index);
+      hash = hash * 33 ^ (uint64_t(vk_render_pass) >> 4);
       hash = hash * 33 ^ uint64_t(color_attachment_count);
       return hash;
     }
@@ -154,13 +157,16 @@ struct VKGraphicsInfo {
     VkFormat depth_attachment_format;
     VkFormat stencil_attachment_format;
     Vector<VkFormat, GPU_FB_MAX_COLOR_ATTACHMENT> color_attachment_formats;
+    /* Render pass rendering */
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
 
     bool operator==(const FragmentOut &other) const
     {
 #if 0
       return hash() == other.hash();
 #else
-      if (state != other.state || depth_attachment_format != other.depth_attachment_format ||
+      if (state != other.state || vk_render_pass != other.vk_render_pass ||
+          depth_attachment_format != other.depth_attachment_format ||
           stencil_attachment_format != other.stencil_attachment_format ||
           color_attachment_formats != other.color_attachment_formats)
       {
@@ -173,7 +179,8 @@ struct VKGraphicsInfo {
 
     uint64_t hash() const
     {
-      uint64_t hash = uint64_t(depth_attachment_format);
+      uint64_t hash = uint64_t(vk_render_pass);
+      hash = hash * 33 ^ uint64_t(depth_attachment_format);
       hash = hash * 33 ^ uint64_t(stencil_attachment_format);
       hash = hash * 33 ^ XXH3_64bits(color_attachment_formats.data(),
                                      color_attachment_formats.size() * sizeof(VkFormat));
