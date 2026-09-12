@@ -59,6 +59,10 @@ static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
       return stream << "attr_load_layer(" << input->layer_attr->hash_code << ")";
     case GPU_SOURCE_STRUCT:
       return stream << (input->is_zone_io ? "zone" : "strct") << input->id;
+    case GPU_SOURCE_SHADING_DATA:
+      return stream << "sd";
+    case GPU_SOURCE_KERNEL_GLOBALS:
+      return stream << "kg";
     case GPU_SOURCE_TEX:
       return stream << input->texture->sampler_name;
     case GPU_SOURCE_TEX_TILED_MAPPING:
@@ -380,6 +384,10 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     switch (input.source) {
       case GPU_SOURCE_FUNCTION_CALL:
         eval_ss << type() << " " << &input << "; " << input.function_call << &input << ");\n";
+        break;
+      case GPU_SOURCE_SHADING_DATA:
+      case GPU_SOURCE_KERNEL_GLOBALS:
+        /* Defined as inputs to the node-tree eval function. */
         break;
       case GPU_SOURCE_STRUCT:
         eval_ss << input.type << " " << &input << " = CLOSURE_DEFAULT;\n";
