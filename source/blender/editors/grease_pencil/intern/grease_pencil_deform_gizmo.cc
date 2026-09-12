@@ -49,8 +49,8 @@ static const EnumPropertyItem prop_deform_modes[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-constexpr float gizmo_scale_basis_grid = 0.03f;
-constexpr float gizmo_scale_basis_perspective = 0.08f;
+constexpr float gizmo_scale_basis_grid = 0.06f;
+constexpr float gizmo_scale_basis_perspective = 0.10f;
 
 static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupType *gzgt)
 {
