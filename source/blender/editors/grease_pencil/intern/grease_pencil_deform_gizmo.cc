@@ -162,6 +162,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   unit_m4(gz->matrix_space);
   unit_m4(gz->matrix_offset);
 
+  float4x4 mat = float4x4::identity();
+
   switch (scene.toolsettings->gp_sculpt.lock_axis) {
     case GP_LOCKAXIS_VIEW:
       // plane_ = DrawingPlacementPlane::View;
@@ -170,14 +172,14 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       // plane_ = DrawingPlacementPlane::Front;
       placement_normal_ = float3(0, 1, 0);
 
-      rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
+      rotate_m4(mat.ptr(), 'X', M_PI / 2.0f);
       break;
     case GP_LOCKAXIS_X:
       // plane_ = DrawingPlacementPlane::Side;
       placement_normal_ = float3(1, 0, 0);
 
-      rotate_m4(gz->matrix_space, 'Y', M_PI / 2.0f);
-      rotate_m4(gz->matrix_space, 'Z', M_PI / 2.0f);
+      rotate_m4(mat.ptr(), 'Y', M_PI / 2.0f);
+      rotate_m4(mat.ptr(), 'Z', M_PI / 2.0f);
       break;
     case GP_LOCKAXIS_Z:
       // plane_ = DrawingPlacementPlane::Top;
@@ -290,26 +292,18 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   }
 
   if (box) {
-    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
-    mul_v3_fl(gz->matrix_space[0], box->size().x);
-    mul_v3_fl(gz->matrix_space[1], box->size().y);
+    mat[3] += mat[0] * box->center().x;
+    mat[3] += mat[1] * box->center().y;
 
-    if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_Y) {
-      gz->matrix_space[3][0] = box->center().x;
-      gz->matrix_space[3][2] = box->center().y;
-    }
-    else if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_X) {
-      gz->matrix_space[3][1] = box->center().x;
-      gz->matrix_space[3][2] = box->center().y;
-    }
-    else if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_Z) {
-      gz->matrix_space[3][0] = box->center().x;
-      gz->matrix_space[3][1] = box->center().y;
-    }
+    mat[0] *= box->size().x;
+    mat[1] *= box->size().y;
+
+    copy_m4_m4(gz->matrix_space, mat.ptr());
+    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
 
     for (const int i : mask_group->corner_data.index_range()) {
       wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-      copy_m4_m4(gz2->matrix_space, gz->matrix_space);
+      copy_m4_m4(gz2->matrix_space, mat.ptr());
     }
 
     if (mask_group->mode == DeformMode::TRANSFORM) {
