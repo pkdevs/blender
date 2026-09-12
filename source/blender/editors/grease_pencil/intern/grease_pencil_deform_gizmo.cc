@@ -222,6 +222,8 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
   const float4x4 mat = float4x4(mask_group->border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
 
+  const int x_num = 2 + mask_group->subdivisions;
+
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask &selected_points = selections[drawing_i];
@@ -230,19 +232,26 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
     selected_points.foreach_index([&](const int point_i) {
-      const float2 lower_left = mask_group->corner_data[0].corner_pos;
-      const float2 lower_right = mask_group->corner_data[1].corner_pos;
-      const float2 upper_left = mask_group->corner_data[2].corner_pos;
-      const float2 upper_right = mask_group->corner_data[3].corner_pos;
-
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) /
                                 mask_group->state.dims +
                             float2(0.5f);
 
+      const float2 local_uv = math::fract(pos_2d * (mask_group->subdivisions + 1));
+      const int2 grid_xy = int2(math::floor(pos_2d * (mask_group->subdivisions + 1)));
+
+      const float2 lower_left =
+          mask_group->corner_data[grid_xy.x + 0 + x_num * (grid_xy.y + 0)].corner_pos;
+      const float2 lower_right =
+          mask_group->corner_data[grid_xy.x + 1 + x_num * (grid_xy.y + 0)].corner_pos;
+      const float2 upper_left =
+          mask_group->corner_data[grid_xy.x + 0 + x_num * (grid_xy.y + 1)].corner_pos;
+      const float2 upper_right =
+          mask_group->corner_data[grid_xy.x + 1 + x_num * (grid_xy.y + 1)].corner_pos;
+
       const float2 pos_2d_out = math::interpolate(
-          math::interpolate(lower_left, lower_right, pos_2d.x),
-          math::interpolate(upper_left, upper_right, pos_2d.x),
-          pos_2d.y);
+          math::interpolate(lower_left, lower_right, local_uv.x),
+          math::interpolate(upper_left, upper_right, local_uv.x),
+          local_uv.y);
 
       positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
     });
@@ -451,8 +460,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       }
     }
 
-    for (const int x_i : IndexRange(x_num)) {
-      for (const int y_i : IndexRange(y_num)) {
+    for (const int y_i : IndexRange(y_num)) {
+      for (const int x_i : IndexRange(x_num)) {
         CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
         corner_pin_data.corner_pos = (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
                                       float2(0.5f)) *
