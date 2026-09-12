@@ -65,7 +65,6 @@ static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupT
 }
 
 struct CornerPinData {
-  int index;
   wmGizmo *gizmos;
   float2 corner_pos;
 };
@@ -524,8 +523,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
     wmGizmo *gz = corner_pin_data.gizmos;
 
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
-
-    corner_pin_data.index = i;
 
     wmGizmoPropertyFnParams params{};
     params.value_get_fn = gizmo_bisect_prop_translate_get;
