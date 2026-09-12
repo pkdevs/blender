@@ -202,10 +202,10 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
   return brush_test;
 }
 
-void apply_selection_filter(const Span<int> corner_tri_faces,
-                            const Span<int> tri_indices,
-                            const Span<bool> select_poly,
-                            BitVector<> &brush_test)
+static void apply_selection_filter(const Span<int> corner_tri_faces,
+                                   const Span<int> tri_indices,
+                                   const Span<bool> select_poly,
+                                   BitVector<> &brush_test)
 {
   BLI_assert(tri_indices.size() == brush_test.size());
 
