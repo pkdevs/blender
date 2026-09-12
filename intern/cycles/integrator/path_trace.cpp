@@ -585,6 +585,7 @@ void PathTrace::set_denoiser_params(const DenoiseParams &params)
     const bool is_cpu_denoising = old_denoiser_params.type == DENOISER_OPENIMAGEDENOISE &&
                                   old_denoiser_params.use_gpu == false;
     const bool always_gpu_denoising = effective_denoise_params.type == DENOISER_DLSS ||
+                                      effective_denoise_params.type == DENOISER_MTLFX ||
                                       effective_denoise_params.type == DENOISER_OPTIX;
     const bool requested_gpu_denoising = always_gpu_denoising ||
                                          (effective_denoise_params.type ==

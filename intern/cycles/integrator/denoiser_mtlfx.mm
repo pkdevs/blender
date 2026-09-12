@@ -207,7 +207,7 @@ bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &cont
   return true;
 }
 
-bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &context)
+bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
 {
   denoiser_queue_->synchronize();
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();

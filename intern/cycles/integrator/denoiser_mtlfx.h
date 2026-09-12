@@ -1,4 +1,5 @@
-/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2026 Blender Authors
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -48,7 +49,7 @@ private:
   
   bool denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass) override;
   
-  bool denoise_filter_guiding_preprocess(const DenoiseContext &context) override;
+  bool denoise_filter_guiding_preprocess(DenoiseContext &context) override;
 
   bool denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass) override;
   
@@ -193,8 +194,8 @@ private:
         const device float *motion = buffer + pass.render_pass_motion;
         float4 color;
         
-        color.x = motion[0] * pixelScale;
-        color.y = motion[1] * pixelScale;
+        color.x = -motion[0] * pixelScale;
+        color.y = -motion[1] * pixelScale;
         
         motion_tex.write(float4(color.x, color.y, 0.0f, 1.0f), flip_tid);
       }
