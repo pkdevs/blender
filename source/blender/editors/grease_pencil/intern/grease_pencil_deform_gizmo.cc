@@ -91,6 +91,7 @@ struct QuadWidgetGroup2 {
 
   IndexMaskMemory memory;
   DeformMode mode;
+  int lock_axis;
 
   Vector<CornerPinData> corner_data;
 
@@ -230,6 +231,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
 
   mask_group->grease_pencil_src = &grease_pencil;
+  mask_group->lock_axis = scene.toolsettings->gp_sculpt.lock_axis;
 
   mask_group->selections = Vector<IndexMask>();
   mask_group->src_positions = Vector<Array<float3>>();
@@ -586,6 +588,12 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+
+  const Scene &scene = *CTX_data_scene(C);
+
+  if (mask_group->lock_axis != scene.toolsettings->gp_sculpt.lock_axis) {
+    return true;
+  }
 
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
