@@ -242,31 +242,8 @@ class Instance : public DrawEngine {
   {
     RegionView3D *rv3d = draw_ctx->rv3d;
     ARegion *region = draw_ctx->region;
-
-    /* Create render engine. */
-    RenderEngine *render_engine = nullptr;
-    RenderEngineType *engine_type = nullptr;
-    bool need_render_engine_update = false;
-    if (!rv3d->view_render) {
-      engine_type = ED_view3d_engine_type(draw_ctx->scene, draw_ctx->v3d->shading.type);
-
-      if (!(engine_type->view_update && engine_type->view_draw)) {
-        return;
-      }
-
-      rv3d->view_render = RE_NewViewRender(engine_type);
-      render_engine = RE_view_engine_get(rv3d->view_render);
-
-      if (ScrArea *area = CTX_wm_area(draw_ctx->evil_C)) {
-        ED_area_tag_redraw_regiontype(area, RGN_TYPE_HEADER);
-      }
-
-      need_render_engine_update = true;
-    }
-    else {
-      render_engine = RE_view_engine_get(rv3d->view_render);
-      engine_type = render_engine->type;
-    }
+    RenderEngineType *engine_type = ED_view3d_engine_type(draw_ctx->scene,
+                                                          draw_ctx->v3d->shading.type);
 
     if (engine_type->flag & RE_WRITE_VIEWPORT_DEPTH) {
       draw::command::StateSet::set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
@@ -278,12 +255,28 @@ class Instance : public DrawEngine {
 
     /* The external engine can use the OpenGL rendering API directly, so make sure the state is
      * already applied.
-     * We should only need this before view_draw, but we do it also before view_update anyway for
-     * compatibility (matching previous Blender versions) */
+     * We should only need this before view_draw, but we do it here for compatibility
+     * (matching previous Blender versions) */
     GPU_apply_state();
 
-    if (need_render_engine_update) {
+    /* Create render engine. */
+    RenderEngine *render_engine = nullptr;
+    if (!rv3d->view_render) {
+      if (!(engine_type->view_update && engine_type->view_draw)) {
+        return;
+      }
+
+      rv3d->view_render = RE_NewViewRender(engine_type);
+      render_engine = RE_view_engine_get(rv3d->view_render);
+
+      if (ScrArea *area = CTX_wm_area(draw_ctx->evil_C)) {
+        ED_area_tag_redraw_regiontype(area, RGN_TYPE_HEADER);
+      }
+
       engine_type->view_update(render_engine, draw_ctx->evil_C, draw_ctx->depsgraph);
+    }
+    else {
+      render_engine = RE_view_engine_get(rv3d->view_render);
     }
 
     /* Rendered draw. */
