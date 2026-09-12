@@ -3386,10 +3386,9 @@ bool uvedit_select_is_any_selected_multi(const Scene *scene, const Span<Object *
   return found;
 }
 
-static void uv_select_all(const Scene *scene, BMEditMesh *em, bool select_all)
+static void uv_select_all(const Scene *scene, BMesh *bm, bool select_all)
 {
   const ToolSettings *ts = scene->toolsettings;
-  BMesh *bm = em->bm;
 
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     /* Clear all partial selection as there is no need for it. */
@@ -3422,16 +3421,15 @@ static void uv_select_all(const Scene *scene, BMEditMesh *em, bool select_all)
   }
 }
 
-static void uv_select_toggle_all(const Scene *scene, BMEditMesh *em)
+static void uv_select_toggle_all(const Scene *scene, BMesh *bm)
 {
-  bool select_any = uvedit_select_is_any_selected(scene, em->bm);
-  uv_select_all(scene, em, !select_any);
+  bool select_any = uvedit_select_is_any_selected(scene, bm);
+  uv_select_all(scene, bm, !select_any);
 }
 
-static void uv_select_invert(const Scene *scene, BMEditMesh *em)
+static void uv_select_invert(const Scene *scene, BMEditMesh *em, BMesh *bm)
 {
   const ToolSettings *ts = scene->toolsettings;
-  BMesh *bm = em->bm;
 
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if (ED_uvedit_sync_uvselect_ignore(ts)) {
@@ -3585,19 +3583,19 @@ void ED_uvedit_deselect_all(const Scene *scene, Object *obedit, int action)
 
   switch (action) {
     case SEL_TOGGLE: {
-      uv_select_toggle_all(scene, em);
+      uv_select_toggle_all(scene, bm);
       break;
     }
     case SEL_SELECT: {
-      uv_select_all(scene, em, true);
+      uv_select_all(scene, bm, true);
       break;
     }
     case SEL_DESELECT: {
-      uv_select_all(scene, em, false);
+      uv_select_all(scene, bm, false);
       break;
     }
     case SEL_INVERT: {
-      uv_select_invert(scene, em);
+      uv_select_invert(scene, em, bm);
       break;
     }
   }

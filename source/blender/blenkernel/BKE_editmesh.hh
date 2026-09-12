@@ -120,7 +120,7 @@ bool BKE_editmesh_eval_orig_map_available(const Mesh &mesh_eval, const Mesh *mes
 void BKE_editmesh_free_data(BMEditMesh *em);
 
 Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
-                                             BMEditMesh *em,
+                                             const BMesh *bm,
                                              Scene *scene,
                                              Object *ob);
 Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMesh *bm);

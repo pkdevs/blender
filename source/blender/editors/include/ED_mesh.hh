@@ -146,7 +146,7 @@ void EDBM_selectmode_flush(BMEditMesh *em);
  */
 void EDBM_select_flush_from_verts(BMEditMesh *em, bool select);
 
-bool EDBM_vert_color_check(BMEditMesh *em);
+bool EDBM_vert_color_check(Mesh *mesh);
 
 /**
  * Swap is 0 or 1, if 1 it hides not selected.
@@ -197,7 +197,7 @@ int *BM_uv_element_map_ensure_unique_index(UvElementMap *element_map);
 /**
  * Can we edit UVs for this mesh?
  */
-bool EDBM_uv_check(BMEditMesh *em);
+bool EDBM_uv_check(Mesh *mesh);
 /**
  * last_sel, use em->act_face otherwise get the last selected face in the edit-selections
  * at the moment, last_sel is mainly useful for making sure the space image doesn't flicker.
@@ -224,8 +224,7 @@ bool BMBVH_EdgeVisible(const BMBVHTree *tree,
                        const View3D *v3d,
                        const Object *obedit);
 
-void EDBM_project_snap_verts(
-    bContext *C, Depsgraph *depsgraph, ARegion *region, Object *obedit, BMEditMesh *em);
+void EDBM_project_snap_verts(bContext *C, Depsgraph *depsgraph, ARegion *region, Object *obedit);
 
 /* `editmesh_automerge.cc` */
 
@@ -375,9 +374,9 @@ bool EDBM_selectmode_disable(Scene *scene,
                              short selectmode_disable,
                              short selectmode_fallback);
 
-bool EDBM_deselect_by_material(BMEditMesh *em, short index, bool select);
+bool EDBM_deselect_by_material(BMesh *bm, short index, bool select);
 
-void EDBM_select_toggle_all(BMEditMesh *em);
+void EDBM_select_toggle_all(BMesh *bm);
 
 void EDBM_select_swap(BMEditMesh *em, BMesh *bm); /* exported for UV */
 bool EDBM_select_interior_faces(BMEditMesh *em);
@@ -434,7 +433,7 @@ eEditMesh_PreSelPreviewAction EDBM_preselect_action_get(EditMesh_PreSelElem *pse
  * Extrudes individual edges.
  */
 bool EDBM_extrude_edges_indiv(BMesh *bm, wmOperator *op, char hflag, bool use_normal_flip);
-bool EDBM_smooth_vert(BMEditMesh *em, wmOperator *op);
+bool EDBM_smooth_vert(BMesh *bm, wmOperator *op);
 
 /* `mesh_ops.cc` */
 
@@ -509,11 +508,11 @@ struct MirrTopoStore_t {
   bool prev_is_editmode;
 };
 
-bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *mesh_topo_store);
-void ED_mesh_mirrtopo_init(BMEditMesh *em,
+bool ED_mesh_mirrtopo_recalc_check(BMesh *bm, Mesh *mesh, MirrTopoStore_t *mesh_topo_store);
+void ED_mesh_mirrtopo_init(BMesh *bm,
                            Mesh *mesh,
                            MirrTopoStore_t *mesh_topo_store,
-                           bool skip_em_vert_array_init);
+                           bool skip_bm_vert_array_init);
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
 
 /* `mesh_data.cc` */
@@ -595,12 +594,9 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
 /* Mirror lookup API. */
 
 /* Spatial Mirror */
-void ED_mesh_mirror_spatial_table_begin(Object *ob, BMEditMesh *em, Mesh *mesh_eval);
+void ED_mesh_mirror_spatial_table_begin(Object *ob, Mesh *mesh_eval);
 void ED_mesh_mirror_spatial_table_end(Object *ob);
-int ED_mesh_mirror_spatial_table_lookup(Object *ob,
-                                        BMEditMesh *em,
-                                        Mesh *mesh_eval,
-                                        const float co[3]);
+int ED_mesh_mirror_spatial_table_lookup(Object *ob, Mesh *mesh_eval, const float co[3]);
 
 /* Topology Mirror */
 
@@ -622,7 +618,7 @@ BMVert *editbmesh_get_x_mirror_vert(
 /**
  * This is a Mesh-based copy of #mesh_get_x_mirror_faces().
  */
-int *mesh_get_x_mirror_faces(Object *ob, BMEditMesh *em, Mesh *mesh_eval);
+int *mesh_get_x_mirror_faces(Object *ob, Mesh *mesh_eval);
 
 /**
  * Wrapper for object-mode/edit-mode.

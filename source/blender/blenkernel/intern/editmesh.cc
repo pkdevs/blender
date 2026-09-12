@@ -80,7 +80,7 @@ void BKE_editmesh_looptris_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_P
 {
   BMesh *bm = em->bm;
   em->looptris.reinitialize(poly_to_tri_count(bm->totface, bm->totloop));
-  BM_mesh_calc_tessellation_ex(em->bm, em->looptris, params);
+  BM_mesh_calc_tessellation_ex(bm, em->looptris, params);
 }
 
 void BKE_editmesh_looptris_calc(BMEditMesh *em)
@@ -92,22 +92,24 @@ void BKE_editmesh_looptris_calc(BMEditMesh *em)
 
 void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em)
 {
+  BMesh *bm = em->bm;
   BMeshCalcTessellation_Params looptris_params{};
   looptris_params.face_normals = true;
   BKE_editmesh_looptris_calc_ex(em, &looptris_params);
   BMeshNormalsUpdate_Params normals_params{};
   normals_params.face_normals = false;
-  BM_mesh_normals_update_ex(em->bm, &normals_params);
+  BM_mesh_normals_update_ex(bm, &normals_params);
 }
 
 void BKE_editmesh_looptris_calc_with_partial_ex(BMEditMesh *em,
                                                 BMPartialUpdate *bmpinfo,
                                                 const BMeshCalcTessellation_Params *params)
 {
-  BLI_assert(em->looptris.size() == poly_to_tri_count(em->bm->totface, em->bm->totloop));
-  BLI_assert(!(em->bm->totface && em->looptris.is_empty()));
+  BMesh *bm = em->bm;
+  BLI_assert(em->looptris.size() == poly_to_tri_count(bm->totface, bm->totloop));
+  BLI_assert(!(bm->totface && em->looptris.is_empty()));
 
-  BM_mesh_calc_tessellation_with_partial_ex(em->bm, em->looptris, bmpinfo, params);
+  BM_mesh_calc_tessellation_with_partial_ex(bm, em->looptris, bmpinfo, params);
 }
 
 void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo)
@@ -131,8 +133,8 @@ void BKE_editmesh_free_data(BMEditMesh *em)
 {
   em->looptris = {};
 
-  if (em->bm) {
-    BM_mesh_free(em->bm);
+  if (BMesh *bm = em->bm) {
+    BM_mesh_free(bm);
   }
 }
 
@@ -156,19 +158,19 @@ static void cage_mapped_verts_callback(void *user_data,
 }
 
 Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
-                                             BMEditMesh *em,
+                                             const BMesh *bm,
                                              Scene *scene,
                                              Object *ob)
 {
   const Mesh *cage = bke::editbmesh_get_eval_cage(depsgraph, scene, ob, &CD_MASK_BAREMESH);
-  Array<float3> positions_cage(em->bm->totvert);
+  Array<float3> positions_cage(bm->totvert);
 
   /* When initializing cage verts, we only want the first cage coordinate for each vertex,
    * so that e.g. mirror or array use original vertex coordinates and not mirrored or duplicate. */
-  BLI_bitmap *visit_bitmap = BLI_BITMAP_NEW(em->bm->totvert, __func__);
+  BLI_bitmap *visit_bitmap = BLI_BITMAP_NEW(bm->totvert, __func__);
 
   CageUserData data;
-  data.totvert = em->bm->totvert;
+  data.totvert = bm->totvert;
   data.positions_cage = positions_cage;
   data.visit_bitmap = visit_bitmap;
 
@@ -188,10 +190,10 @@ Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
   const Object *object_eval = DEG_get_evaluated(depsgraph, ob);
   const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(object_eval);
   const Mesh *mesh_cage = BKE_object_get_editmesh_eval_cage(ob);
+  const BMesh *bm = BKE_editmesh_bmesh_get(object_orig);
 
   Span<float3> vert_positions;
   if (mesh_cage && mesh_cage->runtime->deformed_only) {
-    [[maybe_unused]] const BMesh *bm = BKE_editmesh_bmesh_get(ob);
     BLI_assert(BKE_mesh_wrapper_vert_len(mesh_cage) == bm->totvert);
     /* Deformed, and we have deformed coords already. */
     vert_positions = BKE_mesh_wrapper_vert_coords(mesh_cage);
@@ -207,7 +209,7 @@ Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
   }
   else {
     /* Constructive modifiers have been used, we need to allocate coordinates. */
-    r_alloc = BKE_editmesh_vert_coords_alloc(depsgraph, em, scene, ob);
+    r_alloc = BKE_editmesh_vert_coords_alloc(depsgraph, bm, scene, ob);
     return r_alloc.as_span();
   }
   return vert_positions;

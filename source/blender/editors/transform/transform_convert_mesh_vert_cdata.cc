@@ -142,7 +142,7 @@ static void createTransMeshVertCData(bContext * /*C*/, TransInfo *t)
     }
 
     /* Detect CrazySpace [tm]. */
-    transform_convert_mesh_crazyspace_detect(t, tc, em, &crazyspace_data);
+    transform_convert_mesh_crazyspace_detect(t, tc, &crazyspace_data);
 
     /* Create TransData. */
     BLI_assert(data_len >= 1);

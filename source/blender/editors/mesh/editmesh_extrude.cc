@@ -188,6 +188,7 @@ static bool edbm_extrude_verts_indiv(BMesh *bm, wmOperator *op, const char hflag
 
 static char edbm_extrude_htype_from_em_select(BMEditMesh *em)
 {
+  BMesh *bm = em->bm;
   char htype = BM_ALL_NOLOOP;
 
   if (em->selectmode & SCE_SELECT_VERTEX) {
@@ -200,10 +201,10 @@ static char edbm_extrude_htype_from_em_select(BMEditMesh *em)
     htype &= ~(BM_VERT | BM_EDGE);
   }
 
-  if (em->bm->totedgesel == 0) {
+  if (bm->totedgesel == 0) {
     htype &= ~(BM_EDGE | BM_FACE);
   }
-  else if (em->bm->totfacesel == 0) {
+  else if (bm->totfacesel == 0) {
     htype &= ~BM_FACE;
   }
 
@@ -853,7 +854,7 @@ static wmOperatorStatus edbm_dupli_extrude_cursor_invoke(bContext *C,
 
         /* Also project the source, for retopology workflow. */
         if (use_proj) {
-          EDBM_project_snap_verts(C, depsgraph, vc.region, vc.obedit, vc.em);
+          EDBM_project_snap_verts(C, depsgraph, vc.region, vc.obedit);
         }
       }
 
@@ -886,7 +887,7 @@ static wmOperatorStatus edbm_dupli_extrude_cursor_invoke(bContext *C,
     }
 
     if (use_proj) {
-      EDBM_project_snap_verts(C, depsgraph, vc.region, vc.obedit, vc.em);
+      EDBM_project_snap_verts(C, depsgraph, vc.region, vc.obedit);
     }
 
     /* This normally happens when pushing undo but modal operators

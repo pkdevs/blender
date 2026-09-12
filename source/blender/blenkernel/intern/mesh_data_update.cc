@@ -90,14 +90,14 @@ static void mesh_set_only_copy(Mesh *mesh, const CustomData_MeshMasks *mask)
 
 /* orco custom data layer */
 static Span<float3> get_orco_coords(const Object &ob,
-                                    const BMEditMesh *em,
+                                    BMesh *bm,
                                     eCustomDataType layer_type,
                                     Array<float3> &storage)
 {
   if (layer_type == CD_ORCO) {
 
-    if (em) {
-      storage = BM_mesh_vert_coords_alloc(em->bm);
+    if (bm) {
+      storage = BM_mesh_vert_coords_alloc(bm);
       return storage;
     }
     storage = BKE_mesh_orco_verts_get(&ob);
@@ -106,7 +106,7 @@ static Span<float3> get_orco_coords(const Object &ob,
   if (layer_type == CD_CLOTH_ORCO) {
     /* apply shape key for cloth, this should really be solved
      * by a more flexible customdata system, but not simple */
-    if (!em) {
+    if (!bm) {
       const ClothModifierData *clmd = reinterpret_cast<const ClothModifierData *>(
           BKE_modifiers_findby_type(&ob, eModifierType_Cloth));
       if (clmd && clmd->sim_parms->shapekey_rest) {
@@ -127,12 +127,12 @@ static Span<float3> get_orco_coords(const Object &ob,
 
 static Mesh *create_orco_mesh(const Object &ob,
                               const Mesh &mesh,
-                              const BMEditMesh *em,
+                              BMesh *bm,
                               eCustomDataType layer)
 {
   Mesh *orco_mesh;
-  if (em) {
-    orco_mesh = BKE_mesh_from_bmesh_for_eval_nomain(em->bm, nullptr, &mesh);
+  if (bm) {
+    orco_mesh = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, &mesh);
     BKE_mesh_ensure_default_orig_index_customdata(orco_mesh);
   }
   else {
@@ -140,7 +140,7 @@ static Mesh *create_orco_mesh(const Object &ob,
   }
 
   Array<float3> storage;
-  const Span<float3> orco = get_orco_coords(ob, em, layer, storage);
+  const Span<float3> orco = get_orco_coords(ob, bm, layer, storage);
 
   if (!orco.is_empty()) {
     orco_mesh->vert_positions_for_write().copy_from(orco);
@@ -160,7 +160,7 @@ static MutableSpan<float3> orco_coord_layer_ensure(Mesh &mesh, const eCustomData
 }
 
 static void add_orco_mesh(Object &ob,
-                          const BMEditMesh *em,
+                          BMesh *bm,
                           Mesh &mesh,
                           const Mesh *mesh_orco,
                           const eCustomDataType layer)
@@ -182,7 +182,7 @@ static void add_orco_mesh(Object &ob,
     /* TODO(@sybren): `totvert` should potentially change here, as `ob->data`
      * or `em` may have a different number of vertices than the evaluated `mesh`. */
     Array<float3> storage;
-    const Span<float3> orco = get_orco_coords(ob, em, layer, storage);
+    const Span<float3> orco = get_orco_coords(ob, bm, layer, storage);
     if (!orco.is_empty()) {
       layer_orco = orco_coord_layer_ensure(mesh, layer);
       layer_orco.copy_from(orco);
@@ -799,7 +799,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
       mti->required_data_mask(md, &mask);
       if (mask.vmask & CD_MASK_ORCO) {
         if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
-          add_orco_mesh(ob, &em_input, *mesh, mesh_orco, CD_ORCO);
+          add_orco_mesh(ob, em_input.bm, *mesh, mesh_orco, CD_ORCO);
         }
       }
     }
@@ -826,7 +826,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
       CustomData_MeshMasks mask = md_datamask->mask;
       if (mask.vmask & CD_MASK_ORCO) {
         if (!mesh_orco) {
-          mesh_orco = create_orco_mesh(ob, mesh_input, &em_input, CD_ORCO);
+          mesh_orco = create_orco_mesh(ob, mesh_input, em_input.bm, CD_ORCO);
         }
 
         mask.vmask &= ~CD_MASK_ORCO;
@@ -890,7 +890,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       BKE_mesh_wrapper_ensure_mdata(mesh);
 
-      add_orco_mesh(ob, &em_input, *mesh, mesh_orco, CD_ORCO);
+      add_orco_mesh(ob, em_input.bm, *mesh, mesh_orco, CD_ORCO);
     }
   }
 
@@ -1175,7 +1175,6 @@ const Mesh *editbmesh_get_eval_cage_from_orig(Depsgraph *depsgraph,
   BLI_assert((obedit->id.tag & ID_TAG_COPIED_ON_EVAL) == 0);
   const Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   Object *obedit_eval = DEG_get_evaluated(depsgraph, obedit);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
   return editbmesh_get_eval_cage(depsgraph, scene_eval, obedit_eval, dataMask);
 }
 

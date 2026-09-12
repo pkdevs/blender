@@ -352,7 +352,6 @@ void transform_convert_mesh_mirrordata_free(TransMirrorData *mirror_data);
  */
 void transform_convert_mesh_crazyspace_detect(TransInfo *t,
                                               TransDataContainer *tc,
-                                              BMEditMesh *em,
                                               TransMeshDataCrazySpace *r_crazyspace_data);
 void transform_convert_mesh_crazyspace_transdata_set(const float mtx[3][3],
                                                      const float smtx[3][3],

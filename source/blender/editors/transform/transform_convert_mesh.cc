@@ -1327,7 +1327,6 @@ void transform_convert_mesh_mirrordata_free(TransMirrorData *mirror_data)
 
 void transform_convert_mesh_crazyspace_detect(TransInfo *t,
                                               TransDataContainer *tc,
-                                              BMEditMesh *em,
                                               TransMeshDataCrazySpace *r_crazyspace_data)
 {
   float (*quats)[4] = nullptr;
@@ -1361,8 +1360,9 @@ void transform_convert_mesh_crazyspace_detect(TransInfo *t,
     {
       const Array<float3> mappedcos = BKE_crazyspace_get_mapped_editverts(t->depsgraph,
                                                                           tc->obedit);
-      quats = MEM_new_array_uninitialized<float[4]>(em->bm->totvert, "crazy quats");
-      BKE_crazyspace_set_quats_editmesh(em->bm, defcos, mappedcos, quats, !prop_mode);
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
+      quats = MEM_new_array_uninitialized<float[4]>(bm->totvert, "crazy quats");
+      BKE_crazyspace_set_quats_editmesh(bm, defcos, mappedcos, quats, !prop_mode);
     }
   }
   r_crazyspace_data->quats = quats;
@@ -1601,7 +1601,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     }
 
     /* Detect CrazySpace [tm]. */
-    transform_convert_mesh_crazyspace_detect(t, tc, em, &crazyspace_data);
+    transform_convert_mesh_crazyspace_detect(t, tc, &crazyspace_data);
 
     /* Create TransData. */
     BLI_assert(data_len >= 1);

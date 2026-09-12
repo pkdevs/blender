@@ -32,11 +32,13 @@ static struct {
   KDTree<float3> *tree;
 } MirrKdStore = {nullptr};
 
-void ED_mesh_mirror_spatial_table_begin(Object *ob, BMEditMesh *em, Mesh *mesh_eval)
+void ED_mesh_mirror_spatial_table_begin(Object *ob, Mesh *mesh_eval)
 {
   Mesh *mesh = id_cast<Mesh *>(ob->data);
-  const bool use_em = (!mesh_eval && em && mesh->runtime->edit_mesh.get() == em);
-  const int totvert = use_em    ? em->bm->totvert :
+  BMEditMesh *em = BKE_editmesh_from_object(ob);
+  const bool use_em = (!mesh_eval && em);
+  BMesh *bm = use_em ? BKE_editmesh_bmesh_get_for_write(ob) : nullptr;
+  const int totvert = use_em    ? bm->totvert :
                       mesh_eval ? mesh_eval->verts_num :
                                   mesh->verts_num;
 
@@ -52,9 +54,9 @@ void ED_mesh_mirror_spatial_table_begin(Object *ob, BMEditMesh *em, Mesh *mesh_e
     int i;
 
     /* this needs to be valid for index lookups later (callers need) */
-    BM_mesh_elem_table_ensure(em->bm, BM_VERT);
+    BM_mesh_elem_table_ensure(bm, BM_VERT);
 
-    BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
+    BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {
       kdtree_insert<float3>(MirrKdStore.tree, i, eve->co);
     }
   }
@@ -69,13 +71,10 @@ void ED_mesh_mirror_spatial_table_begin(Object *ob, BMEditMesh *em, Mesh *mesh_e
   kdtree_balance<float3>(MirrKdStore.tree);
 }
 
-int ED_mesh_mirror_spatial_table_lookup(Object *ob,
-                                        BMEditMesh *em,
-                                        Mesh *mesh_eval,
-                                        const float co[3])
+int ED_mesh_mirror_spatial_table_lookup(Object *ob, Mesh *mesh_eval, const float co[3])
 {
   if (MirrKdStore.tree == nullptr) {
-    ED_mesh_mirror_spatial_table_begin(ob, em, mesh_eval);
+    ED_mesh_mirror_spatial_table_begin(ob, mesh_eval);
   }
 
   if (MirrKdStore.tree) {
@@ -139,15 +138,15 @@ static int mirrtopo_vert_sort(const void *v1, const void *v2)
   return 0;
 }
 
-bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *mesh_topo_store)
+bool ED_mesh_mirrtopo_recalc_check(BMesh *bm, Mesh *mesh, MirrTopoStore_t *mesh_topo_store)
 {
-  const bool is_editmode = em != nullptr;
+  const bool is_editmode = bm != nullptr;
   int totvert;
   int totedge;
 
-  if (em) {
-    totvert = em->bm->totvert;
-    totedge = em->bm->totedge;
+  if (bm) {
+    totvert = bm->totvert;
+    totedge = bm->totedge;
   }
   else {
     totvert = mesh->verts_num;
@@ -163,15 +162,15 @@ bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *
   return false;
 }
 
-void ED_mesh_mirrtopo_init(BMEditMesh *em,
+void ED_mesh_mirrtopo_init(BMesh *bm,
                            Mesh *mesh,
                            MirrTopoStore_t *mesh_topo_store,
-                           const bool skip_em_vert_array_init)
+                           const bool skip_bm_vert_array_init)
 {
-  if (em) {
+  if (bm) {
     BLI_assert(mesh == nullptr);
   }
-  const bool is_editmode = (em != nullptr);
+  const bool is_editmode = (bm != nullptr);
 
   /* Edit-mode variables. */
   BMEdge *eed;
@@ -189,10 +188,10 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
 
   mesh_topo_store->prev_is_editmode = is_editmode;
 
-  if (em) {
-    BM_mesh_elem_index_ensure(em->bm, BM_VERT);
+  if (bm) {
+    BM_mesh_elem_index_ensure(bm, BM_VERT);
 
-    totvert = em->bm->totvert;
+    totvert = bm->totvert;
   }
   else {
     totvert = mesh->verts_num;
@@ -201,10 +200,10 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
   MirrTopoHash_t *topo_hash = MEM_new_array_zeroed<MirrTopoHash_t>(totvert, __func__);
 
   /* Initialize the vert-edge-user counts used to detect unique topology */
-  if (em) {
-    totedge = em->bm->totedge;
+  if (bm) {
+    totedge = bm->totedge;
 
-    BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
+    BM_ITER_MESH (eed, &iter, bm, BM_EDGES_OF_MESH) {
       const int i1 = BM_elem_index_get(eed->v1), i2 = BM_elem_index_get(eed->v2);
       topo_hash[i1]++;
       topo_hash[i2]++;
@@ -228,8 +227,8 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
     tot_unique_edges = 0;
 
     /* This can make really big numbers, wrapping around here is fine */
-    if (em) {
-      BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
+    if (bm) {
+      BM_ITER_MESH (eed, &iter, bm, BM_EDGES_OF_MESH) {
         const int i1 = BM_elem_index_get(eed->v1), i2 = BM_elem_index_get(eed->v2);
         topo_hash[i1] += topo_hash_prev[i2] * topo_pass;
         topo_hash[i2] += topo_hash_prev[i1] * topo_pass;
@@ -275,9 +274,9 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
   /* since we are looping through verts, initialize these values here too */
   intptr_t *index_lookup = MEM_new_array_uninitialized<intptr_t>(totvert, "mesh_topo_lookup");
 
-  if (em) {
-    if (skip_em_vert_array_init == false) {
-      BM_mesh_elem_table_ensure(em->bm, BM_VERT);
+  if (bm) {
+    if (skip_bm_vert_array_init == false) {
+      BM_mesh_elem_table_ensure(bm, BM_VERT);
     }
   }
 
@@ -296,8 +295,8 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
   /* Get the pairs out of the sorted hashes.
    * NOTE: `totvert + 1` means we can use the previous 2,
    * but you can't ever access the last 'a' index of #MirrTopoPairs. */
-  if (em) {
-    BMVert **vtable = em->bm->vtable;
+  if (bm) {
+    BMVert **vtable = bm->vtable;
     for (a = 1; a <= totvert; a++) {
       // printf("I %d %ld %d\n",
       //        (a - last), MirrTopoPairs[a].hash, MirrTopoPairs[a].v_index);

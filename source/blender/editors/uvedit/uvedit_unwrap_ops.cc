@@ -3707,9 +3707,8 @@ static wmOperatorStatus reset_exec(bContext *C, wmOperator * /*op*/)
       *bmain, scene, view_layer, v3d);
   for (Object *obedit : objects) {
     Mesh *mesh = id_cast<Mesh *>(obedit->data);
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (em->bm->totfacesel == 0) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+    if (bm->totfacesel == 0) {
       continue;
     }
 

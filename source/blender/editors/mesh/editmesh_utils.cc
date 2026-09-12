@@ -410,10 +410,11 @@ void EDBM_select_flush_from_verts(BMEditMesh *em, const bool select)
 
 void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
 {
+  BMesh *bm = em->bm;
   BMOperator bmop;
   const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
 
-  BMO_op_initf(em->bm,
+  BMO_op_initf(bm,
                &bmop,
                BMO_FLAG_DEFAULTS,
                "region_extend geom=%hvef use_contract=%b use_faces=%b use_face_step=%b",
@@ -421,22 +422,23 @@ void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
                false,
                use_faces,
                use_face_step);
-  BMO_op_exec(em->bm, &bmop);
+  BMO_op_exec(bm, &bmop);
   /* Don't flush selection in edge/vertex mode. */
   BMO_slot_buffer_hflag_enable(
-      em->bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
-  BMO_op_finish(em->bm, &bmop);
+      bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
+  BMO_op_finish(bm, &bmop);
 
   EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em->bm);
+  EDBM_uvselect_clear(bm);
 }
 
 void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
 {
+  BMesh *bm = em->bm;
   BMOperator bmop;
   const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
 
-  BMO_op_initf(em->bm,
+  BMO_op_initf(bm,
                &bmop,
                BMO_FLAG_DEFAULTS,
                "region_extend geom=%hvef use_contract=%b use_faces=%b use_face_step=%b",
@@ -444,17 +446,17 @@ void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
                true,
                use_faces,
                use_face_step);
-  BMO_op_exec(em->bm, &bmop);
+  BMO_op_exec(bm, &bmop);
   /* Don't flush selection in edge/vertex mode. */
   BMO_slot_buffer_hflag_disable(
-      em->bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
-  BMO_op_finish(em->bm, &bmop);
+      bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
+  BMO_op_finish(bm, &bmop);
 
   EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em->bm);
+  EDBM_uvselect_clear(bm);
 
   /* only needed for select less, ensure we don't have isolated elements remaining */
-  BM_mesh_select_mode_clean(em->bm);
+  BM_mesh_select_mode_clean(bm);
 }
 
 void EDBM_flag_disable_all(BMesh *bm, const char hflag)
@@ -1264,7 +1266,7 @@ UvElement *BM_uv_element_get_head(UvElementMap *element_map, UvElement *child)
 /** \name Data Layer Checks
  * \{ */
 
-BMFace *EDBM_uv_active_face_get(BMEditMesh *em, const bool sloppy, const bool selected)
+BMFace *EDBM_uv_active_face_get(Mesh *mesh, const bool sloppy, const bool selected)
 {
   if (!EDBM_uv_check(em)) {
     return nullptr;
@@ -1277,13 +1279,13 @@ BMFace *EDBM_uv_active_face_get(BMEditMesh *em, const bool sloppy, const bool se
   return nullptr;
 }
 
-bool EDBM_uv_check(BMEditMesh *em)
+bool EDBM_uv_check(Mesh *mesh)
 {
   /* some of these checks could be a touch overkill */
   return em && em->bm->totface && CustomData_has_layer(&em->bm->ldata, CD_PROP_FLOAT2);
 }
 
-bool EDBM_vert_color_check(BMEditMesh *em)
+bool EDBM_vert_color_check(Mesh *mesh)
 {
   /* some of these checks could be a touch overkill */
   return em && em->bm->totface && CustomData_has_layer(&em->bm->ldata, CD_PROP_BYTE_COLOR);
@@ -1363,7 +1365,7 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   BM_mesh_elem_index_ensure(bm, BM_VERT);
 
   if (use_topology) {
-    ED_mesh_mirrtopo_init(em, nullptr, &mesh_topo_store, true);
+    ED_mesh_mirrtopo_init(bm, nullptr, &mesh_topo_store, true);
   }
   else {
     tree = kdtree_new<float3>(bm->totvert);
@@ -1458,20 +1460,21 @@ void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
 
 BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMVert *v)
 {
+  BMesh *bm = em->bm;
   const int *mirr = static_cast<const int *>(
-      CustomData_bmesh_get_layer_n(&em->bm->vdata, v->head.data, em->mirror_cdlayer));
+      CustomData_bmesh_get_layer_n(&bm->vdata, v->head.data, em->mirror_cdlayer));
 
   BLI_assert(em->mirror_cdlayer != -1); /* invalid use */
 
-  if (mirr && *mirr >= 0 && *mirr < em->bm->totvert) {
-    if (!em->bm->vtable) {
+  if (mirr && *mirr >= 0 && *mirr < bm->totvert) {
+    if (!bm->vtable) {
       printf(
           "err: should only be called between "
           "EDBM_verts_mirror_cache_begin and EDBM_verts_mirror_cache_end");
       return nullptr;
     }
 
-    return em->bm->vtable[*mirr];
+    return bm->vtable[*mirr];
   }
 
   return nullptr;
@@ -1510,8 +1513,9 @@ BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f)
 
 void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMVert *v)
 {
+  BMesh *bm = em->bm;
   int *mirr = static_cast<int *>(
-      CustomData_bmesh_get_layer_n(&em->bm->vdata, v->head.data, em->mirror_cdlayer));
+      CustomData_bmesh_get_layer_n(&bm->vdata, v->head.data, em->mirror_cdlayer));
 
   BLI_assert(em->mirror_cdlayer != -1); /* invalid use */
 
@@ -1527,12 +1531,13 @@ void EDBM_verts_mirror_cache_end(BMEditMesh *em)
 
 void EDBM_verts_mirror_apply(BMEditMesh *em, const int sel_from, const int sel_to)
 {
+  BMesh *bm = em->bm;
   BMIter iter;
   BMVert *v;
 
-  BLI_assert((em->bm->vtable != nullptr) && ((em->bm->elem_table_dirty & BM_VERT) == 0));
+  BLI_assert((bm->vtable != nullptr) && ((bm->elem_table_dirty & BM_VERT) == 0));
 
-  BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
     if (BM_elem_flag_test(v, BM_ELEM_SELECT) == sel_from) {
       BMVert *mirr = EDBM_verts_mirror_get(em, v);
       if (mirr) {
@@ -1553,6 +1558,7 @@ void EDBM_verts_mirror_apply(BMEditMesh *em, const int sel_from, const int sel_t
 
 bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
 {
+  BMesh *bm = em->bm;
   BMIter iter;
   BMElem *ele;
   int itermode;
@@ -1569,10 +1575,10 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
     itermode = BM_FACES_OF_MESH;
   }
 
-  BM_ITER_MESH (ele, &iter, em->bm, itermode) {
+  BM_ITER_MESH (ele, &iter, bm, itermode) {
     if (!BM_elem_flag_test(ele, BM_ELEM_HIDDEN)) {
       if (BM_elem_flag_test(ele, BM_ELEM_SELECT) ^ hflag_swap) {
-        BM_elem_hide_set(em->bm, ele, true);
+        BM_elem_hide_set(bm, ele, true);
         changed = true;
       }
     }
@@ -1583,12 +1589,12 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
     /* In face select mode, also hide loose edges that aren't part of any visible face. */
     if (itermode == BM_FACES_OF_MESH) {
       BMEdge *e;
-      BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
+      BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
         if (!BM_edge_is_wire(e)) {
           continue;
         }
         if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN) && !BM_elem_flag_test(e, BM_ELEM_SELECT)) {
-          BM_elem_hide_set(em->bm, (BMElem *)e, true);
+          BM_elem_hide_set(bm, (BMElem *)e, true);
           changed = true;
         }
       }
@@ -1596,12 +1602,12 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
     /* In edge or face select mode, also hide isolated verts that aren't connected to an edge. */
     if (ELEM(itermode, BM_EDGES_OF_MESH, BM_FACES_OF_MESH)) {
       BMVert *v;
-      BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+      BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
         if (v->e) {
           continue;
         }
         if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN) && !BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-          BM_elem_hide_set(em->bm, (BMElem *)v, true);
+          BM_elem_hide_set(bm, (BMElem *)v, true);
           changed = true;
         }
       }
@@ -1610,7 +1616,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
 
   if (changed) {
     EDBM_selectmode_flush(em);
-    EDBM_uvselect_clear(em->bm);
+    EDBM_uvselect_clear(bm);
   }
   return changed;
 
@@ -1626,6 +1632,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
 
 bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
 {
+  BMesh *bm = em->bm;
   const char iter_types[3] = {
       BM_VERTS_OF_MESH,
       BM_EDGES_OF_MESH,
@@ -1646,7 +1653,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
     BMIter iter;
     BMElem *ele;
 
-    BM_ITER_MESH (ele, &iter, em->bm, iter_types[i]) {
+    BM_ITER_MESH (ele, &iter, bm, iter_types[i]) {
       if (BM_elem_flag_test(ele, BM_ELEM_HIDDEN)) {
         BM_elem_flag_enable(ele, BM_ELEM_TAG);
         changed = true;
@@ -1662,7 +1669,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
   }
 
   /* Reveal everything */
-  EDBM_flag_disable_all(em->bm, BM_ELEM_HIDDEN);
+  EDBM_flag_disable_all(bm, BM_ELEM_HIDDEN);
 
   /* Select relevant just-revealed elements */
   for (i = 0; i < 3; i++) {
@@ -1673,21 +1680,20 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
       continue;
     }
 
-    BM_ITER_MESH (ele, &iter, em->bm, iter_types[i]) {
+    BM_ITER_MESH (ele, &iter, bm, iter_types[i]) {
       if (BM_elem_flag_test(ele, BM_ELEM_TAG)) {
-        BM_elem_select_set(em->bm, ele, select);
+        BM_elem_select_set(bm, ele, select);
       }
     }
   }
 
-  if (em->bm->uv_select_sync_valid) {
-    BMesh *bm = em->bm;
+  if (bm->uv_select_sync_valid) {
     /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
      * Although in practice it's OK to assume "connected" sticky in this case. */
     const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
     if (cd_loop_uv_offset == -1) {
       /* Not expected but not an error either, clear if the UV's have been removed. */
-      EDBM_uvselect_clear(em->bm);
+      EDBM_uvselect_clear(bm);
     }
     else {
       BMIter iter;
@@ -1730,7 +1736,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
   EDBM_selectmode_flush(em);
 
   /* hidden faces can have invalid normals */
-  EDBM_mesh_normals_update(em->bm);
+  EDBM_mesh_normals_update(bm);
 
   return true;
 }
@@ -1923,8 +1929,9 @@ int EDBM_elem_to_index_any_multi(const Main &bmain,
   for (const int base_index : bases.index_range()) {
     Base *base_iter = bases[base_index];
     if (BKE_editmesh_from_object(base_iter->object) == em) {
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(base_iter->object);
       *r_object_index = base_index;
-      elem_index = EDBM_elem_to_index_any(em, ele);
+      elem_index = EDBM_elem_to_index_any(bm, ele);
       break;
     }
   }
@@ -1943,8 +1950,8 @@ BMElem *EDBM_elem_from_index_any_multi(const Main &bmain,
   *r_obedit = nullptr;
   Object *obedit = (object_index < bases.size()) ? bases[object_index]->object : nullptr;
   if (obedit != nullptr) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMElem *ele = EDBM_elem_from_index_any(em, elem_index);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    BMElem *ele = EDBM_elem_from_index_any(bm, elem_index);
     if (ele != nullptr) {
       *r_obedit = obedit;
       return ele;
@@ -2057,14 +2064,14 @@ bool BMBVH_EdgeVisible(const BMBVHTree *tree,
 /** \name BMesh Vertex Projection API
  * \{ */
 
-void EDBM_project_snap_verts(
-    bContext *C, Depsgraph *depsgraph, ARegion *region, Object *obedit, BMEditMesh *em)
+void EDBM_project_snap_verts(bContext *C, Depsgraph *depsgraph, ARegion *region, Object *obedit)
 {
   using namespace blender::ed;
   BMIter iter;
   BMVert *eve;
 
   ED_view3d_init_mats_rv3d(obedit, static_cast<RegionView3D *>(region->regiondata));
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   const Scene *scene = CTX_data_scene(C);
   transform::SnapObjectContext *snap_context = transform::snap_object_context_create();
@@ -2079,7 +2086,7 @@ void EDBM_project_snap_verts(
   SET_FLAG_FROM_TEST(
       target_op, (snap_flag & SCE_SNAP_TO_ONLY_SELECTABLE), SCE_SNAP_TARGET_ONLY_SELECTABLE);
 
-  BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
+  BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
     if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
       float mval[2], co_proj[3];
       if (ED_view3d_project_float_object(region, eve->co, mval, V3D_PROJ_TEST_NOP) ==
@@ -2113,9 +2120,9 @@ void EDBM_project_snap_verts(
 
 /** \} */
 
-bool EDBM_smooth_vert(BMEditMesh *em, wmOperator *op)
+bool EDBM_smooth_vert(BMesh *bm, wmOperator *op)
 {
-  return EDBM_op_callf(em->bm,
+  return EDBM_op_callf(bm,
                        op,
                        "smooth_vert verts=%hv factor=%f mirror_clip_x=%b mirror_clip_y=%b "
                        "mirror_clip_z=%b "
