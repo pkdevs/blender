@@ -1285,12 +1285,6 @@ bool EDBM_uv_check(Mesh *mesh)
   return em && em->bm->totface && CustomData_has_layer(&em->bm->ldata, CD_PROP_FLOAT2);
 }
 
-bool EDBM_vert_color_check(Mesh *mesh)
-{
-  /* some of these checks could be a touch overkill */
-  return em && em->bm->totface && CustomData_has_layer(&em->bm->ldata, CD_PROP_BYTE_COLOR);
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
