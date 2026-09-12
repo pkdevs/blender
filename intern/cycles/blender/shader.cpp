@@ -544,6 +544,11 @@ static ShaderNode *add_node(Scene *scene,
     math_node->set_use_clamp(b_node.custom2);
     node = math_node;
   }
+  else if (b_node.is_type("FunctionNodeBooleanMath"_ustr)) {
+    BooleanMathNode *boolean_math_node = graph->create_node<BooleanMathNode>();
+    boolean_math_node->set_math_type((NodeBooleanMathType)b_node.custom1);
+    node = boolean_math_node;
+  }
   else if (b_node.is_type("FunctionNodeIntegerMath"_ustr)) {
     IntegerMathNode *integer_math_node = graph->create_node<IntegerMathNode>();
     integer_math_node->set_math_type((NodeIntegerMathType)b_node.custom1);
