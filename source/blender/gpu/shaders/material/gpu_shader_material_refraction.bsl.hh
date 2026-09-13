@@ -14,8 +14,8 @@ void node_bsdf_refraction(float4 color,
                           float ior,
                           float3 N,
                           float weight,
-                          Closure &result,
-                          ShadingData &sd)
+                          ShadingData &sd,
+                          Closure &result)
 {
   color = max(color, float4(0.0f));
   roughness = saturate(roughness);

@@ -16,8 +16,8 @@ void node_light_accumulation(const float light_index,
                              float4 transmission_light,
                              float4 transmission_color,
                              float weight,
-                             Closure &result,
-                             [[resource_table]] KernelGlobals &kg)
+                             [[resource_table]] KernelGlobals &kg,
+                             Closure &result)
 {
   diffuse_light = max(diffuse_light, float4(0.0f));
   diffuse_color = saturate(diffuse_color);

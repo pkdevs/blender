@@ -10,10 +10,10 @@
 [[node]]
 void node_layer_weight(float blend,
                        float3 N,
-                       float &fresnel,
-                       float &facing,
                        [[resource_table]] KernelGlobals &kg,
-                       ShadingData &sd)
+                       ShadingData &sd,
+                       float &fresnel,
+                       float &facing)
 {
   N = normalize(N);
 

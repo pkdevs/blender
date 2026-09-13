@@ -24,8 +24,8 @@ void node_volume_principled(float4 color,
                             float4 temperature_attribute,
                             sampler1DArray spectrum_map,
                             float layer,
-                            Closure &result,
-                            ShadingData &sd)
+                            ShadingData &sd,
+                            Closure &result)
 {
   color = max(color, float4(0.0f));
   density = max(density, 0.0f);

@@ -307,7 +307,7 @@ void scene_time_uniforms([[resource_table]] KernelGlobals & /*kg*/,
 /* Shadow Raycast Node. */
 
 void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
-                              const ShadingData &sd,
+                              const ShadingData & /*sd*/,
                               int /*light_index*/,
                               float3 /*position*/,
                               float /*softness*/,

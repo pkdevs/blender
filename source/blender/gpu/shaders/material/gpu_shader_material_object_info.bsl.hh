@@ -8,14 +8,14 @@
 
 [[node]]
 void node_object_info(float mat_index,
+                      [[resource_table]] KernelGlobals &kg,
+                      ShadingData &sd,
                       float3 &location,
                       float4 &color,
                       float &alpha,
                       float &object_index,
                       float &material_index,
-                      float &random,
-                      [[resource_table]] KernelGlobals &kg,
-                      ShadingData &sd)
+                      float &random)
 {
   location = kg.object_matrices_get(sd).model[3].xyz;
   ObjectInfos info = kg.object_infos_get(sd);

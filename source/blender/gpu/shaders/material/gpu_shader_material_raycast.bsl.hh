@@ -9,13 +9,13 @@
 void node_raycast(float3 position,
                   float3 direction,
                   float length,
+                  [[resource_table]] KernelGlobals &kg,
+                  const ShadingData &sd,
                   float &is_hit,
                   float &is_self_hit,
                   float &hit_distance,
                   float3 &hit_position,
-                  float3 &hit_normal,
-                  [[resource_table]] KernelGlobals &kg,
-                  const ShadingData &sd)
+                  float3 &hit_normal)
 {
   bool hit = false;
   bool self_hit = false;
@@ -38,13 +38,13 @@ void node_raycast(float3 position,
 void node_raycast_only_local(float3 position,
                              float3 direction,
                              float length,
+                             [[resource_table]] KernelGlobals &kg,
+                             const ShadingData &sd,
                              float &is_hit,
                              float &is_self_hit,
                              float &hit_distance,
                              float3 &hit_position,
-                             float3 &hit_normal,
-                             [[resource_table]] KernelGlobals &kg,
-                             const ShadingData &sd)
+                             float3 &hit_normal)
 {
   bool hit = false;
   bool self_hit = false;

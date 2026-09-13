@@ -127,9 +127,9 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPU_link(mat,
                  "normal_transform_world_to_object",
                  vnor,
-                 &wnor,
                  GPU_kernel_globals(),
-                 GPU_shading_data());
+                 GPU_shading_data(),
+                 &wnor);
         GPU_link(mat, gpu_node_name, in[0].link, wnor, gpu_image, &col1, &col2, &col3);
         GPU_link(mat, "tex_box_blend", wnor, col1, col2, col3, blend, &out[0].link, &out[1].link);
         break;

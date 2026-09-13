@@ -220,13 +220,13 @@ static int node_shader_gpu(GPUMaterial *mat,
                   GPU_node_get_input_link(*node, in, "Position"),
                   GPU_node_get_input_link(*node, in, "Direction"),
                   GPU_node_get_input_link(*node, in, "Length"),
+                  GPU_kernel_globals(),
+                  GPU_shading_data(),
                   &GPU_node_get_output(*node, out, "Is Hit").link,
                   &GPU_node_get_output(*node, out, "Self Hit").link,
                   &GPU_node_get_output(*node, out, "Hit Distance").link,
                   &GPU_node_get_output(*node, out, "Hit Position").link,
-                  &GPU_node_get_output(*node, out, "Hit Normal").link,
-                  GPU_kernel_globals(),
-                  GPU_shading_data());
+                  &GPU_node_get_output(*node, out, "Hit Normal").link);
 }
 
 NODE_SHADER_MATERIALX_BEGIN

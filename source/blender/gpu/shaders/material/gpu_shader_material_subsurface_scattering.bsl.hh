@@ -17,8 +17,8 @@ void node_subsurface_scattering(float4 color,
                                 float3 N,
                                 float weight,
                                 float random_walk_radius_scale,
-                                Closure &result,
-                                ShadingData &sd)
+                                ShadingData &sd,
+                                Closure &result)
 {
   color = max(color, float4(0.0f));
   ior = max(ior, 1e-5f);

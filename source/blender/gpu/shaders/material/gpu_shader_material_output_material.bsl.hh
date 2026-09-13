@@ -26,9 +26,9 @@ void node_output_material_displacement(float3 displacement, float3 &out_displace
 
 [[node]]
 void node_output_material_thickness(float thickness,
-                                    float &out_thickness,
                                     [[resource_table]] KernelGlobals &kg,
-                                    ShadingData &sd)
+                                    ShadingData &sd,
+                                    float &out_thickness)
 {
   const ObjectMatrices obj = kg.object_matrices_get(sd);
 

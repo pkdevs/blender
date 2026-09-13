@@ -113,10 +113,10 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
              "node_light_evaluation_common",
              in[0].link,
              in[1].link,
+             GPU_kernel_globals(),
              &out[1].link,
              &out[2].link,
-             &out[3].link,
-             GPU_kernel_globals());
+             &out[3].link);
   }
 
   return true;

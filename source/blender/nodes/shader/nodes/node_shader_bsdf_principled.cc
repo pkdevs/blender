@@ -382,7 +382,7 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
   if (!in[SOCK_TANGENT_ID].link) {
     GPUNodeLink *orco = GPU_attribute(CD_ORCO, "");
     GPU_link(mat, "tangent_orco_z", orco, &in[SOCK_TANGENT_ID].link);
-    GPU_link(mat, "node_tangent", in[SOCK_TANGENT_ID].link, &in[SOCK_TANGENT_ID].link);
+    GPU_link(mat, "node_tangent", in[SOCK_TANGENT_ID].link, GPU_kernel_globals(), GPU_shading_data(), &in[SOCK_TANGENT_ID].link);
   }
 #endif
 

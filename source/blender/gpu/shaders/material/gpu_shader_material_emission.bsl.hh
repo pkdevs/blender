@@ -7,7 +7,7 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_emission(float4 color, float strength, float weight, Closure &result, ShadingData &sd)
+void node_emission(float4 color, float strength, float weight, ShadingData &sd, Closure &result)
 {
   color = max(color, float4(0.0f));
   strength = max(strength, 0.0f);

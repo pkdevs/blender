@@ -125,18 +125,18 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
                strength,
                newnormal,
                input_normal,
-               &out[0].link,
                GPU_kernel_globals(),
-               GPU_shading_data());
+               GPU_shading_data(),
+               &out[0].link);
       return true;
     case SHD_SPACE_OBJECT:
     case SHD_SPACE_BLENDER_OBJECT:
       GPU_link(mat,
                "normal_transform_object_to_world",
                newnormal,
-               &newnormal,
                GPU_kernel_globals(),
-               GPU_shading_data());
+               GPU_shading_data(),
+               &newnormal);
       break;
     case SHD_SPACE_WORLD:
     case SHD_SPACE_BLENDER_WORLD:

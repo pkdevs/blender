@@ -16,8 +16,8 @@ void node_volume_coefficients(float weight,
                               float /*alpha*/,
                               float /*diameter*/,
                               float3 emission_coefficients,
-                              Closure &result,
-                              ShadingData &sd)
+                              ShadingData &sd,
+                              Closure &result)
 {
   ClosureVolumeScatter volume_scatter_data;
   volume_scatter_data.scattering = scatter_coefficients * weight;

@@ -28,9 +28,9 @@ void node_normal_map(float4 T,
                      float strength,
                      float3 tex_normal,
                      float3 N,
-                     float3 &out_N,
                      [[resource_table]] KernelGlobals &kg,
-                     ShadingData &sd)
+                     ShadingData &sd,
+                     float3 &out_N)
 {
   if (all(equal(T, float4(0.0f, 0.0f, 0.0f, 1.0f)))) {
     out_N = N;

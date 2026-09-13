@@ -7,7 +7,7 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_holdout(float weight, Closure &result, ShadingData &sd)
+void node_holdout(float weight, ShadingData &sd, Closure &result)
 {
   ClosureTransparency transparency_data;
   transparency_data.transmittance = float3(0.0f);

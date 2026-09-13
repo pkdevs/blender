@@ -9,10 +9,10 @@
 [[node]]
 void node_light_evaluation_common(const float light_index,
                                   float3 position,
+                                  [[resource_table]] KernelGlobals &kg,
                                   float &mask,
                                   float3 &direction,
-                                  float &distance,
-                                  [[resource_table]] KernelGlobals &kg)
+                                  float &distance)
 {
   node_light_evaluation_common_impl(kg, int(light_index), position, direction, distance, mask);
 }
@@ -22,12 +22,12 @@ void node_light_evaluation_diffuse(const float light_index,
                                    float3 position,
                                    float3 normal,
                                    float roughness,
+                                   [[resource_table]] KernelGlobals &kg,
+                                   const ShadingData &sd,
                                    float &factor,
                                    float &mask,
                                    float3 &direction,
-                                   float &distance,
-                                   [[resource_table]] KernelGlobals &kg,
-                                   const ShadingData &sd)
+                                   float &distance)
 {
   node_light_evaluation_common_impl(kg, int(light_index), position, direction, distance, mask);
   node_light_evaluation_impl<true>(kg, sd, int(light_index), position, normal, roughness, factor);
@@ -38,12 +38,12 @@ void node_light_evaluation_glossy(const float light_index,
                                   float3 position,
                                   float3 normal,
                                   float roughness,
+                                  [[resource_table]] KernelGlobals &kg,
+                                  const ShadingData &sd,
                                   float &factor,
                                   float &mask,
                                   float3 &direction,
-                                  float &distance,
-                                  [[resource_table]] KernelGlobals &kg,
-                                  const ShadingData &sd)
+                                  float &distance)
 {
   node_light_evaluation_common_impl(kg, int(light_index), position, direction, distance, mask);
   node_light_evaluation_impl<false>(kg, sd, int(light_index), position, normal, roughness, factor);

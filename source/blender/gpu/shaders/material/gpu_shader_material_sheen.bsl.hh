@@ -10,7 +10,7 @@
 
 [[node]]
 void node_bsdf_sheen(
-    float4 color, float roughness, float3 N, float weight, Closure &result, ShadingData &sd)
+    float4 color, float roughness, float3 N, float weight, ShadingData &sd, Closure &result)
 {
   color = max(color, float4(0.0f));
   roughness = saturate(roughness);

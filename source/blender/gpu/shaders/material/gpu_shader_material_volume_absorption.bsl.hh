@@ -8,7 +8,7 @@
 
 [[node]]
 void node_volume_absorption(
-    float4 color, float density, float weight, Closure &result, ShadingData &sd)
+    float4 color, float density, float weight, ShadingData &sd, Closure &result)
 {
   color = max(color, float4(0.0f));
   density = max(density, 0.0f);

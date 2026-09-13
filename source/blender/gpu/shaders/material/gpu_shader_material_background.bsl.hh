@@ -7,7 +7,7 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_background(float4 color, float strength, float weight, Closure &result, ShadingData &sd)
+void node_background(float4 color, float strength, float weight, ShadingData &sd, Closure &result)
 {
   ClosureEmission emission_data;
   emission_data.emission = color.rgb * (strength * weight);

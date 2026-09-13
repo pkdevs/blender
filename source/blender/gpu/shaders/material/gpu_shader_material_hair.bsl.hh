@@ -13,8 +13,8 @@ void node_bsdf_hair(float4 color,
                     float /*roughness_v*/,
                     float3 /*T*/,
                     float weight,
-                    Closure &result,
-                    ShadingData &sd)
+                    ShadingData &sd,
+                    Closure &result)
 {
   color = max(color, float4(0.0f));
 
@@ -54,8 +54,8 @@ void node_bsdf_hair_principled(float4 color,
                                float /*random_roughness*/,
                                float /*random*/,
                                float weight,
-                               Closure &result,
-                               ShadingData &sd)
+                               ShadingData &sd,
+                               Closure &result)
 {
   /* Placeholder closure.
    * Some computation will have to happen here just like the Principled BSDF.

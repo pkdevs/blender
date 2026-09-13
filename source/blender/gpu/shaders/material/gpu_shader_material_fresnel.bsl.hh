@@ -36,7 +36,7 @@ float fresnel_dielectric(float3 Incoming, float3 Normal, float eta)
 
 [[node]]
 void node_fresnel(
-    float ior, float3 N, float &result, [[resource_table]] KernelGlobals &kg, ShadingData &sd)
+    float ior, float3 N, [[resource_table]] KernelGlobals &kg, ShadingData &sd, float &result)
 {
   N = normalize(N);
   float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;

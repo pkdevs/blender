@@ -17,9 +17,9 @@ void node_eevee_specular(float4 diffuse,
                          float3 CN,
                          float weight,
                          const float use_clearcoat,
-                         Closure &result,
                          [[resource_table]] KernelGlobals &kg,
-                         ShadingData &sd)
+                         ShadingData &sd,
+                         Closure &result)
 {
   diffuse = max(diffuse, float4(0));
   specular = max(specular, float4(0));

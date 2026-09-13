@@ -72,23 +72,23 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
         cd_attr = GPU_constant(error_attr);
       }
       else if (STREQ(attr->name, "is_sun")) {
-        GPU_link(mat, "node_attribute_light_is_sun", in[0].link, &cd_attr, GPU_kernel_globals());
+        GPU_link(mat, "node_attribute_light_is_sun", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_point")) {
-        GPU_link(mat, "node_attribute_light_is_point", in[0].link, &cd_attr, GPU_kernel_globals());
+        GPU_link(mat, "node_attribute_light_is_point", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_spot")) {
-        GPU_link(mat, "node_attribute_light_is_spot", in[0].link, &cd_attr, GPU_kernel_globals());
+        GPU_link(mat, "node_attribute_light_is_spot", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_area")) {
-        GPU_link(mat, "node_attribute_light_is_area", in[0].link, &cd_attr, GPU_kernel_globals());
+        GPU_link(mat, "node_attribute_light_is_area", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "cutoff_distance")) {
         GPU_link(mat,
                  "node_attribute_light_cutoff_distance",
                  in[0].link,
-                 &cd_attr,
-                 GPU_kernel_globals());
+                 GPU_kernel_globals(),
+                 &cd_attr);
       }
       else {
         GPU_material_flag_set(mat, GPU_MATFLAG_LIGHT_ATTRIBUTE);
@@ -101,8 +101,8 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
                  "node_attribute_light",
                  in[0].link,
                  GPU_uniform(&attr_hash),
-                 &cd_attr,
-                 GPU_kernel_globals());
+                 GPU_kernel_globals(),
+                 &cd_attr);
       }
       break;
     }
@@ -132,9 +132,9 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
                "node_attribute_uniform",
                cd_attr,
                GPU_constant(&attr_hash),
-               &cd_attr,
                GPU_kernel_globals(),
-               GPU_shading_data());
+               GPU_shading_data(),
+               &cd_attr);
       break;
     }
   }

@@ -108,9 +108,9 @@ void node_bsdf_principled(float4 base_color,
                           const float /*thin_film_ior*/,
                           const float do_multiscatter,
                           const float subsurface_random_walk_radius_scale,
-                          Closure &result,
                           [[resource_table]] KernelGlobals &kg,
-                          ShadingData &sd)
+                          ShadingData &sd,
+                          Closure &result)
 {
   /* Match Cycles. */
   metallic = saturate(metallic);

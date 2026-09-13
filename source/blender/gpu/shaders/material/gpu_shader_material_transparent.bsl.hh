@@ -7,7 +7,7 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_bsdf_transparent(float4 color, float weight, Closure &result, ShadingData &sd)
+void node_bsdf_transparent(float4 color, float weight, ShadingData &sd, Closure &result)
 {
   color = max(color, float4(0.0f));
 

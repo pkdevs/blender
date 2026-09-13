@@ -11,8 +11,8 @@ void node_bsdf_ray_portal(float4 color,
                           float3 /*position*/,
                           float3 /*direction*/,
                           float weight,
-                          Closure &result,
-                          ShadingData &sd)
+                          ShadingData &sd,
+                          Closure &result)
 {
   ClosureTransparency transparency_data;
   transparency_data.transmittance = color.rgb * weight;

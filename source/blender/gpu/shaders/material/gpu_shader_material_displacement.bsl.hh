@@ -11,15 +11,15 @@ void node_displacement_object(float height,
                               float midlevel,
                               float scale,
                               float3 N,
-                              float3 &result,
                               [[resource_table]] KernelGlobals &kg,
-                              ShadingData &sd)
+                              ShadingData &sd,
+                              float3 &result)
 {
   float3 lN;
-  direction_transform_world_to_object(N, lN, kg, sd);
+  direction_transform_world_to_object(N, kg, sd, lN);
   float3 l_displacement = (height - midlevel) * scale * normalize(lN);
   /* Apply object scale and orientation. */
-  direction_transform_object_to_world(l_displacement, result, kg, sd);
+  direction_transform_object_to_world(l_displacement, kg, sd, result);
 }
 
 [[node]]
