@@ -49,12 +49,118 @@
  * considered coincident.  If zero is supplied, a default of 1e-8 is used.
  */
 
+#include <limits>
+
 #include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
+#include "BLI_vector.hh"
+
+namespace blender {
+struct HeapNode;
+}
 
 namespace blender::straightskeleton {
+
+class StraightSkeletonInput;
+
+/* -------------------------------------------------------------------- */
+/** \name Kinetic Triangle Events
+ * \{ */
+
+enum class TriangleEventType {
+  NONE,
+  EDGE_COLLAPSE,
+  SPLIT,
+  FLIP,
+  MULTI_SPLIT,
+  UNBOUNDED_COLLAPSE,
+};
+
+struct TriangleEvent {
+  int triangle_index{-1};
+  double time{std::numeric_limits<double>::infinity()};
+  TriangleEventType type{TriangleEventType::NONE};
+  int edge_index{-1};          /* Half-edge index involved in the event */
+  int vert_index{-1};          /* Vertex index involved in the event */
+  double2 event_pos{0.0, 0.0}; /* Coordinates where event occurs */
+  HeapNode *heap_node{nullptr};
+};
+
+const char *triangle_event_type_name(TriangleEventType type);
+
+/** For testing: calculate initial collapse events in the priority queue. */
+Array<TriangleEvent> straight_skeleton_initial_events(const StraightSkeletonInput &input);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Skeleton Graph & Kinetic Vertices
+ * \{ */
+
+struct SkeletonNode {
+  int id{-1};                 /* Node index in SkeletonGraph */
+  double2 pos{0.0, 0.0};      /* 2D position (x, y) */
+  double time{0.0};           /* Event time / height t (0 for input verts) */
+  int orig_vert{-1};          /* Index of coincident input vertex, or -1 for interior nodes */
+  Vector<int> incident_edges; /* Incident SkeletonEdge indices */
+};
+
+struct SkeletonEdge {
+  int id{-1};                    /* Unique edge index in SkeletonGraph */
+  int node1{-1};                 /* First endpoint (lower time or start) */
+  int node2{-1};                 /* Second endpoint (higher time or end) */
+  int orig_edge{-1};             /* Coincident input edge index, or -1 for skeleton arcs */
+  int input_face{-1};            /* Incident input face index, or -1 */
+  int side{0};                   /* Side 0 or Side 1 */
+  double time_start{0.0};        /* Time at node1 */
+  double time_end{0.0};          /* Time at node2 */
+  bool is_input_boundary{false}; /* True for input edges / face boundaries at t=0 */
+};
+
+class SkeletonGraph {
+ public:
+  Vector<SkeletonNode> nodes;
+  Vector<SkeletonEdge> edges;
+
+  int add_node(const double2 &pos, double time, int orig_vert = -1);
+  int add_edge(int node1,
+               int node2,
+               int orig_edge = -1,
+               int input_face = -1,
+               int side = 0,
+               double time_start = 0.0,
+               double time_end = 0.0,
+               bool is_input_boundary = false);
+};
+
+struct KineticVertex {
+  int id{-1};                  /* Unique kinetic vertex index */
+  int start_node{-1};          /* SkeletonNode index where this vertex was born */
+  double start_time{0.0};      /* Creation time (t_birth) */
+  double2 start_pos{0.0, 0.0}; /* Position at start_time */
+  double2 velocity{0.0, 0.0};  /* Velocity vector v */
+
+  int end_node{-1}; /* SkeletonNode index where this vertex crashes */
+  double end_time{std::numeric_limits<double>::infinity()}; /* Collapse time */
+
+  int input_edge{-1}; /* Incident input edge (or -1) */
+  int input_face{-1}; /* Incident input face (or -1) */
+  int side{0};        /* 0 or 1 */
+
+  bool is_active{true};
+
+  double2 position_at(const double t) const
+  {
+    return start_pos + (t - start_time) * velocity;
+  }
+};
+
+/** For testing: return the initial skeleton graph built from input. */
+SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input);
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Input

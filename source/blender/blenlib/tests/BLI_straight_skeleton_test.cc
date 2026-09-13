@@ -214,6 +214,9 @@ TEST(straight_skeleton, SingleSegment)
   input.label = "SingleSegment";
   StraightSkeletonOutput output = straight_skeleton_calc(input);
 
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  EXPECT_TRUE(events.is_empty());
+
 #if DO_DEBUG_DRAW
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
 #endif
@@ -246,6 +249,14 @@ TEST(straight_skeleton, Triangle)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "Triangle";
   StraightSkeletonOutput output = straight_skeleton_calc(input);
+
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  ASSERT_EQ(events.size(), 1);
+  EXPECT_EQ(events[0].triangle_index, 0);
+  EXPECT_EQ(events[0].type, TriangleEventType::EDGE_COLLAPSE);
+  EXPECT_NEAR(events[0].time, std::sqrt(3.0) / 6.0, 1e-6);
+  EXPECT_NEAR(events[0].event_pos.x, 0.5, 1e-5);
+  EXPECT_NEAR(events[0].event_pos.y, std::sqrt(3.0) / 6.0, 1e-5);
 
 #if DO_DEBUG_DRAW
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
@@ -332,9 +343,86 @@ TEST(straight_skeleton, MixedSegmentsAndFaces)
   input.label = "MixedSegmentsAndFaces";
   StraightSkeletonOutput output = straight_skeleton_calc(input);
 
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  EXPECT_FALSE(events.is_empty());
+  /* Earliest events are facing free ends 9 and 12 meeting in the middle. */
+  EXPECT_NEAR(events[0].time, 0.395285, 1e-4);
+  EXPECT_NEAR(events[0].event_pos.x, 5.0, 1e-4);
+  EXPECT_NEAR(events[0].event_pos.y, 6.75, 1e-4);
+  EXPECT_EQ(events[0].type, TriangleEventType::MULTI_SPLIT);
+
 #if DO_DEBUG_DRAW
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
 #endif
+}
+
+/**
+ * Initial Skeleton Graph verification.
+ * Confirms that static input vertices and edges remain at t=0 in SkeletonGraph.
+ */
+TEST(straight_skeleton, SkeletonGraphInitial)
+{
+  /* Test 1: Single segment with 2 verts, 1 edge. */
+  {
+    const char *spec = R"(2 1 0
+0.0 0.0
+4.0 0.0
+0 1
+)";
+    InputStorage storage;
+    StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    SkeletonGraph graph = straight_skeleton_initial_graph(input);
+
+    EXPECT_EQ(graph.nodes.size(), 2);
+    for (const int i : IndexRange(2)) {
+      EXPECT_EQ(graph.nodes[i].id, i);
+      EXPECT_EQ(graph.nodes[i].orig_vert, i);
+      EXPECT_EQ(graph.nodes[i].time, 0.0);
+      EXPECT_EQ(graph.nodes[i].pos.x, input.vert[i].x);
+      EXPECT_EQ(graph.nodes[i].pos.y, input.vert[i].y);
+      EXPECT_EQ(graph.nodes[i].incident_edges.size(), 1);
+    }
+
+    EXPECT_EQ(graph.edges.size(), 1);
+    EXPECT_EQ(graph.edges[0].id, 0);
+    EXPECT_EQ(graph.edges[0].node1, 0);
+    EXPECT_EQ(graph.edges[0].node2, 1);
+    EXPECT_EQ(graph.edges[0].orig_edge, 0);
+    EXPECT_TRUE(graph.edges[0].is_input_boundary);
+    EXPECT_EQ(graph.edges[0].time_start, 0.0);
+    EXPECT_EQ(graph.edges[0].time_end, 0.0);
+  }
+
+  /* Test 2: Triangle with 3 verts, 1 face (3 boundary edges). */
+  {
+    const char *spec = R"(3 0 1
+0.0 0.0
+1.0 0.0
+0.5 0.8660254037844387
+0 1 2
+)";
+    InputStorage storage;
+    StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    SkeletonGraph graph = straight_skeleton_initial_graph(input);
+
+    EXPECT_EQ(graph.nodes.size(), 3);
+    for (const int i : IndexRange(3)) {
+      EXPECT_EQ(graph.nodes[i].id, i);
+      EXPECT_EQ(graph.nodes[i].orig_vert, i);
+      EXPECT_EQ(graph.nodes[i].time, 0.0);
+      EXPECT_EQ(graph.nodes[i].incident_edges.size(), 2);
+    }
+
+    EXPECT_EQ(graph.edges.size(), 3);
+    for (const int ei : IndexRange(3)) {
+      EXPECT_EQ(graph.edges[ei].id, ei);
+      EXPECT_TRUE(graph.edges[ei].is_input_boundary);
+      EXPECT_EQ(graph.edges[ei].input_face, 0);
+      EXPECT_EQ(graph.edges[ei].orig_edge, -1);
+      EXPECT_EQ(graph.edges[ei].time_start, 0.0);
+      EXPECT_EQ(graph.edges[ei].time_end, 0.0);
+    }
+  }
 }
 
 /** \} */
