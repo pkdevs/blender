@@ -27,6 +27,10 @@
 #include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
+#include "GPU_immediate.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
+
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
@@ -740,6 +744,89 @@ static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
   }
 }
 
+static void deform_gizmo_background(const bContext * /*C*/, wmGizmoGroup *gzgroup)
+{
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gzgroup->customdata);
+
+  if (deform_group->mode == DeformMode::TRANSFORM) {
+    return;
+  }
+
+  float background_color[4];
+  ui::theme::get_color_4fv(TH_HEADER, background_color);
+  background_color[3] = std::max(background_color[3], 0.3f);
+
+  const float line_width = 2.0f;
+
+  const float4x4 mat = float4x4(deform_group->transform_border->matrix_space);
+
+  GPUVertFormat *format = immVertexFormat();
+  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
+
+  float viewport_size[4];
+  GPU_viewport_size_get_f(viewport_size);
+  immUniform2f("viewport_size", viewport_size[2], viewport_size[3]);
+
+  GPU_line_width(line_width);
+
+  immUniformColor4fv(background_color);
+  immUniform1i("colors_len", 0);
+  immUniform1f("dash_width", 30.0f);
+  if (deform_group->mode == DeformMode::PERSPECTIVE) {
+    immUniform1f("udash_factor", 1.0f);
+
+    Array<float3> positions(4);
+
+    for (const int index : IndexRange(4)) {
+      positions[index] = math::transform_point(
+          mat, float3(deform_group->control_points[index].control_position, 0.0f));
+    }
+
+    immBegin(GPU_PRIM_LINE_STRIP, positions.size() + 1);
+
+    for (const int point_i : positions.index_range()) {
+      immVertex3fv(attr_pos, positions[point_i]);
+    }
+    immVertex3fv(attr_pos, positions.first());
+
+    immEnd();
+  }
+  else if (deform_group->mode == DeformMode::GRID) {
+    immUniform1f("udash_factor", 0.5f);
+
+    const int x_num = 2 + deform_group->subdivisions;
+    const int y_num = 2 + deform_group->subdivisions;
+
+    Array<float3> control_positions(x_num * y_num);
+
+    for (const int index : IndexRange(x_num * y_num)) {
+      control_positions[index] = math::transform_point(
+          mat, float3(deform_group->control_points[index].control_position, 0.0f));
+    }
+
+    immBeginAtMost(GPU_PRIM_LINES, 2 * ((x_num - 1) * y_num + (y_num - 1) * x_num));
+
+    for (const int x : IndexRange(x_num)) {
+      for (const int y : IndexRange(y_num - 1)) {
+        immVertex3fv(attr_pos, control_positions[x + x_num * y]);
+        immVertex3fv(attr_pos, control_positions[x + x_num * (y + 1)]);
+      }
+    }
+
+    for (const int x : IndexRange(x_num - 1)) {
+      for (const int y : IndexRange(y_num)) {
+        immVertex3fv(attr_pos, control_positions[x + x_num * y]);
+        immVertex3fv(attr_pos, control_positions[x + 1 + x_num * y]);
+      }
+    }
+
+    immEnd();
+  }
+
+  immUnbindProgram();
+}
+
 void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
 {
   gzgt->name = "Deform Gizmo";
@@ -756,6 +843,7 @@ void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
   gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
   gzgt->refresh = deform_gizmo_refresh;
   gzgt->draw_prepare = deform_gizmo_draw_prepare;
+  gzgt->draw_background = deform_gizmo_background;
 
   RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::TRANSFORM), "Mode", "");
 
