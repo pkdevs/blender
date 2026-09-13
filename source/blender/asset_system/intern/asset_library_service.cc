@@ -163,6 +163,7 @@ AssetLibrary *AssetLibraryService::get_preferences_remote_asset_library(
   if (lib_uptr_ptr != nullptr) {
     CLOG_DEBUG(&LOG, "get \"%s\" (cached)", remote_url.c_str());
     AssetLibrary *lib = lib_uptr_ptr->get();
+    lib->may_override_import_method_ = true;
     lib->load_or_reload_catalogs();
     return lib;
   }
@@ -170,6 +171,7 @@ AssetLibrary *AssetLibraryService::get_preferences_remote_asset_library(
   std::unique_ptr<PreferencesRemoteAssetLibrary> lib_uptr =
       std::make_unique<PreferencesRemoteAssetLibrary>(custom_library);
   AssetLibrary *lib = lib_uptr.get();
+  lib->may_override_import_method_ = true;
   lib->load_or_reload_catalogs();
 
   remote_libraries_.add_new(remote_url, std::move(lib_uptr));

@@ -173,6 +173,16 @@ std::optional<StringRefNull> PreferencesRemoteAssetLibrary::auth_token() const
   return token;
 }
 
+std::optional<eAssetImportMethod> PreferencesRemoteAssetLibrary::import_method() const
+{
+  const bUserAssetLibrary *library_definition = user_library_.user_asset_library();
+  if (!library_definition) {
+    return {};
+  }
+
+  return eAssetImportMethod(library_definition->import_method);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
