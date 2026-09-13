@@ -97,4 +97,4 @@ private:
 
 };
 }
-#endif /* COPYROTATION_H_ */
+#endif /* COPYPOSE_H_ */
