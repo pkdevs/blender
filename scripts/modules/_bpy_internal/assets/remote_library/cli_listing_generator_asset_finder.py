@@ -473,7 +473,7 @@ def _file_info(filepath: Path, asset_library_root: Path) -> api_models.FileV1:
         url=file_url,
         hash=hashing.hash_file(filepath),
         size_in_bytes=stat.st_size,
-        blender_version=None,  # Determined later if this file a blend file.
+        blender_version=None,  # Determined later if this file is a blend file.
     )
 
 
