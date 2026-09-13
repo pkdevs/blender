@@ -104,9 +104,9 @@ struct DeformGizmoGroup {
 };
 
 /* translate callbacks */
-static void gizmo_bisect_prop_translate_get(const wmGizmo *gz,
-                                            wmGizmoProperty *gz_prop,
-                                            void *value_p)
+static void gizmo_control_point_position_get(const wmGizmo *gz,
+                                             wmGizmoProperty *gz_prop,
+                                             void *value_p)
 {
   DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
@@ -329,9 +329,9 @@ static void update_positions_grid(DeformGizmoGroup *deform_group)
                         deform_group->grease_pencil_src);
 }
 
-static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
-                                            wmGizmoProperty *gz_prop,
-                                            const void *value_p)
+static void gizmo_control_point_position_set(const wmGizmo *gz,
+                                             wmGizmoProperty *gz_prop,
+                                             const void *value_p)
 {
   DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
@@ -352,17 +352,17 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
   }
 }
 
-static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo * /*gz*/,
-                                                wmGizmoProperty *gz_prop,
-                                                void * /*value_p*/)
+static void gizmo_transform_border_matrix_get(const wmGizmo * /*gz*/,
+                                              wmGizmoProperty *gz_prop,
+                                              void * /*value_p*/)
 {
   // float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
 }
 
-static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
-                                                wmGizmoProperty *gz_prop,
-                                                const void *value_p)
+static void gizmo_transform_border_matrix_set(const wmGizmo *gz,
+                                              wmGizmoProperty *gz_prop,
+                                              const void *value_p)
 {
   BLI_assert(gz_prop->type->array_length == 16);
   const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
@@ -418,8 +418,8 @@ static void add_corner(DeformGizmoGroup *deform_group, wmGizmoGroup *gzgroup)
   WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
 
   wmGizmoPropertyFnParams params{};
-  params.value_get_fn = gizmo_bisect_prop_translate_get;
-  params.value_set_fn = gizmo_bisect_prop_translate_set;
+  params.value_get_fn = gizmo_control_point_position_get;
+  params.value_set_fn = gizmo_control_point_position_set;
   params.range_get_fn = nullptr;
   params.user_data = reinterpret_cast<void *>(static_cast<intptr_t>(i));
   WM_gizmo_target_property_def_func(gz, "offset", &params);
@@ -628,8 +628,8 @@ static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
   };
 
   wmGizmoPropertyFnParams params{};
-  params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
-  params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
+  params.value_get_fn = gizmo_transform_border_matrix_get;
+  params.value_set_fn = gizmo_transform_border_matrix_set;
   params.range_get_fn = nullptr;
   WM_gizmo_target_property_def_func(deform_group->transform_border, "matrix", &params);
 
