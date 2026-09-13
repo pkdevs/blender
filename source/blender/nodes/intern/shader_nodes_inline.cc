@@ -1546,98 +1546,104 @@ class ShaderNodesInliner {
       return std::nullopt;
     };
 
-    const SocketValue a = value_by_socket_.lookup(node.input_socket(0));
-    const SocketValue b = value_by_socket_.lookup(node.input_socket(1));
-    const std::optional<bool> a_primitive = try_get_primitive_bool(a);
-    const std::optional<bool> b_primitive = try_get_primitive_bool(b);
+    Vector<SocketValue> values;
+    Vector<std::optional<bool>> primitives;
+    for (const bNodeSocket *input_socket : node->input_sockets()) {
+      if (this->socket_is_ignored(*input_socket)) {
+        continue;
+      }
+      const SocketValue &value = value_by_socket_.lookup({node.context, input_socket});
+      values.append(value);
+      primitives.append(try_get_primitive_bool(value));
+    }
 
     switch (op) {
       case NODE_BOOLEAN_MATH_AND: {
-        if (a_primitive == false || b_primitive == false) {
+        if (primitives[0] == false || primitives[1] == false) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
           return true;
         }
-        if (a_primitive == true) {
-          this->store_socket_value(output_socket, b);
+        if (primitives[0] == true) {
+          this->store_socket_value(output_socket, values[1]);
           return true;
         }
-        if (b_primitive == true) {
-          this->store_socket_value(output_socket, a);
+        if (primitives[1] == true) {
+          this->store_socket_value(output_socket, values[0]);
           return true;
         }
         break;
       }
       case NODE_BOOLEAN_MATH_OR: {
-        if (a_primitive == true || b_primitive == true) {
+        if (primitives[0] == true || primitives[1] == true) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
           return true;
         }
-        if (a_primitive == false) {
-          this->store_socket_value(output_socket, b);
+        if (primitives[0] == false) {
+          this->store_socket_value(output_socket, values[1]);
           return true;
         }
-        if (b_primitive == false) {
-          this->store_socket_value(output_socket, a);
+        if (primitives[1] == false) {
+          this->store_socket_value(output_socket, values[0]);
           return true;
         }
         break;
       }
       case NODE_BOOLEAN_MATH_NAND: {
-        if (a_primitive == false || b_primitive == false) {
+        if (primitives[0] == false || primitives[1] == false) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
           return true;
         }
-        if (a_primitive == true) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, b));
+        if (primitives[0] == true) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[1]));
           return true;
         }
-        if (b_primitive == true) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, a));
+        if (primitives[1] == true) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[0]));
           return true;
         }
         break;
       }
       case NODE_BOOLEAN_MATH_NOR: {
-        if (a_primitive == true || b_primitive == true) {
+        if (primitives[0] == true || primitives[1] == true) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
           return true;
         }
-        if (a_primitive == false) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, b));
+        if (primitives[0] == false) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[1]));
           return true;
         }
-        if (b_primitive == false) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, a));
+        if (primitives[1] == false) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[0]));
           return true;
         }
         break;
       }
       case NODE_BOOLEAN_MATH_IMPLY: {
-        if (a_primitive == false || b_primitive == true) {
+        if (primitives[0] == false || primitives[1] == true) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
           return true;
         }
-        if (a_primitive == true) {
-          this->store_socket_value(output_socket, b);
+        if (primitives[0] == true) {
+          this->store_socket_value(output_socket, values[1]);
           return true;
         }
-        if (b_primitive == false) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, a));
+        if (primitives[1] == false) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[0]));
           return true;
         }
         break;
       }
       case NODE_BOOLEAN_MATH_NIMPLY: {
-        if (a_primitive == false || b_primitive == true) {
+        if (primitives[0] == false || primitives[1] == true) {
           this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
           return true;
         }
-        if (a_primitive == true) {
-          this->store_socket_value(output_socket, this->invert_bool_value(node, b));
+        if (primitives[0] == true) {
+          this->store_socket_value(output_socket, this->invert_bool_value(node, values[1]));
           return true;
         }
-        if (b_primitive == false) {
-          this->store_socket_value(output_socket, a);
+        if (primitives[1] == false) {
+          this->store_socket_value(output_socket, values[0]);
           return true;
         }
         break;
