@@ -42,7 +42,7 @@ float4 closure_to_rgba_hybrid(ShadingData &sd, Closure /*cl*/)
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
-  closure_weights_reset(closure_rand);
+  closure_weights_reset(sd, closure_rand);
 
 #if defined(MAT_TRANSPARENT) && defined(MAT_SHADER_TO_RGBA)
   { /* Limit resource guard to this scope. */
@@ -160,10 +160,10 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   nodetree_surface(kg, sd, closure_rand);
 
-  g_holdout = saturate(g_holdout);
+  sd.holdout = saturate(sd.holdout);
 
   /** Transparency weight is already applied through dithering, remove it from other closures. */
-  float alpha = 1.0f - average(g_transmittance);
+  float alpha = 1.0f - average(sd.transmittance);
   float alpha_rcp = safe_rcp(alpha);
 
   ObjectInfos object_infos = kg.object_infos_get(sd);
@@ -172,13 +172,13 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
   eObjectInfoFlag ob_flag = object_infos.flag;
   if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
     /* alpha is set from rejected pixels / dithering. */
-    g_holdout = 1.0f;
+    sd.holdout = 1.0f;
 
     /* Set alpha to 0.0 so that lighting is not computed. */
     alpha_rcp = 0.0f;
   }
 
-  g_emission *= alpha_rcp;
+  sd.emission *= alpha_rcp;
 
   int2 out_texel = int2(frag_co.xy);
 
@@ -192,44 +192,48 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
     const auto &nt = buffer_get(eevee_nodetree, node_tree);
     cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
     render_passes.store_color(
-        out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
+        out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
   }
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
-    float light_sample_rcp = safe_rcp(float(g_light_accumulation_count));
-    g_diffuse_color *= light_sample_rcp;
-    g_diffuse_light *= alpha_rcp;
-    g_glossy_color *= light_sample_rcp;
-    g_glossy_light *= alpha_rcp;
-    g_transmission_color *= light_sample_rcp;
-    g_transmission_light *= alpha_rcp;
+    float light_sample_rcp = safe_rcp(float(sd.light_accum.light_accumulation_count));
+    sd.light_accum.diffuse_color *= light_sample_rcp;
+    sd.light_accum.diffuse_light *= alpha_rcp;
+    sd.light_accum.glossy_color *= light_sample_rcp;
+    sd.light_accum.glossy_light *= alpha_rcp;
+    sd.light_accum.transmission_color *= light_sample_rcp;
+    sd.light_accum.transmission_light *= alpha_rcp;
 
     if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
         uni.uniform_buf.render_pass.diffuse_color_id >= 0)
     {
-      render_passes.store_color(
-          out_texel, uni.uniform_buf.render_pass.diffuse_light_id, float4(g_diffuse_light, 1.0f));
-      render_passes.store_color(
-          out_texel, uni.uniform_buf.render_pass.diffuse_color_id, float4(g_diffuse_color, 1.0f));
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.diffuse_light_id,
+                                float4(sd.light_accum.diffuse_light, 1.0f));
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.diffuse_color_id,
+                                float4(sd.light_accum.diffuse_color, 1.0f));
     }
     else {
-      g_emission += g_diffuse_light;
+      sd.emission += sd.light_accum.diffuse_light;
     }
 
     if (uni.uniform_buf.render_pass.specular_light_id >= 0 &&
         uni.uniform_buf.render_pass.specular_color_id >= 0)
     {
-      render_passes.store_color(out_texel,
-                                uni.uniform_buf.render_pass.specular_light_id,
-                                float4(g_glossy_light + g_transmission_light, 1.0f));
+      render_passes.store_color(
+          out_texel,
+          uni.uniform_buf.render_pass.specular_light_id,
+          float4(sd.light_accum.glossy_light + sd.light_accum.transmission_light, 1.0f));
       /* TODO(fclem): Adding color passes together is wrong. Split the passes. */
-      render_passes.store_color(out_texel,
-                                uni.uniform_buf.render_pass.specular_color_id,
-                                float4(g_glossy_color + g_transmission_color, 1.0f));
+      render_passes.store_color(
+          out_texel,
+          uni.uniform_buf.render_pass.specular_color_id,
+          float4(sd.light_accum.glossy_color + sd.light_accum.transmission_color, 1.0f));
     }
     else {
-      g_emission += g_glossy_light;
-      g_emission += g_transmission_light;
+      sd.emission += sd.light_accum.glossy_light;
+      sd.emission += sd.light_accum.transmission_light;
     }
 
 #if 0 /* TODO Transmission pass */
@@ -238,13 +242,13 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
     {
       render_passes.store_color(out_texel,
                                 uni.uniform_buf.render_pass.transmission_light_id,
-                                float4(g_transmission_light, 1.0f));
+                                float4(sd.light_accum.transmission_light, 1.0f));
       render_passes.store_color(out_texel,
                                 uni.uniform_buf.render_pass.transmission_color_id,
-                                float4(g_transmission_color, 1.0f));
+                                float4(sd.light_accum.transmission_color, 1.0f));
     }
     else {
-      g_emission += g_transmission_light;
+      sd.emission += sd.light_accum.transmission_light;
     }
 #endif
   }
@@ -258,7 +262,7 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
   }
   for (int i = 0; i < 3; i++) [[unroll]] {
     if (pipe.closure_bin_count > i) [[static_branch]] {
-      gbuf_data.closure[i] = g_closure_get_resolved(i, alpha_rcp);
+      gbuf_data.closure[i] = sd.closure_get_resolved(i, alpha_rcp);
     }
   }
   const bool use_object_id = pipe.use_sss || use_light_linking || use_terminator_offset;
@@ -328,8 +332,8 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
   /* ----- Radiance output ----- */
 
   /* Only output emission during the gbuffer pass. */
-  frag_out.radiance = float4(g_emission, 0.0f);
-  frag_out.radiance.rgb *= 1.0f - g_holdout;
-  frag_out.radiance.a = g_holdout;
+  frag_out.radiance = float4(sd.emission, 0.0f);
+  frag_out.radiance.rgb *= 1.0f - sd.holdout;
+  frag_out.radiance.a = sd.holdout;
 }
 }  // namespace eevee

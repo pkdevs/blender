@@ -19,10 +19,10 @@
 #include "eevee_surf_common.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
 
-float4 closure_to_rgba_capture(ShadingData & /*sd*/, Closure /*cl*/)
+float4 closure_to_rgba_capture(ShadingData &sd, Closure /*cl*/)
 {
-  float3 transmittance = g_transmittance;
-  closure_weights_reset(0.0f);
+  float3 transmittance = sd.transmittance;
+  closure_weights_reset(sd, 0.0f);
   return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
@@ -58,7 +58,7 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
   float3 albedo = float3(0.0f);
 
   for (int i = 0; i < CLOSURE_BIN_COUNT; i++) {
-    ClosureUndetermined cl = g_closure_get_resolved(uchar(i), 1.0f);
+    ClosureUndetermined cl = sd.closure_get_resolved(uchar(i), 1.0f);
     if (cl.weight() <= CLOSURE_WEIGHT_CUTOFF) {
       continue;
     }
@@ -81,11 +81,11 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
         srt.surfel_buf[surfel_id].position = sd.P;
         srt.surfel_buf[surfel_id].normal = front_face ? sd.Ng : -sd.Ng;
         srt.surfel_buf[surfel_id].albedo_front = albedo;
-        srt.surfel_buf[surfel_id].radiance_direct.front.rgb = g_emission;
+        srt.surfel_buf[surfel_id].radiance_direct.front.rgb = sd.emission;
         srt.surfel_buf[surfel_id].radiance_direct.front.a = 0.0f;
         /* TODO(fclem): 2nd surface evaluation. */
         srt.surfel_buf[surfel_id].albedo_back = srt.is_double_sided ? albedo : float3(0);
-        srt.surfel_buf[surfel_id].radiance_direct.back.rgb = srt.is_double_sided ? g_emission :
+        srt.surfel_buf[surfel_id].radiance_direct.back.rgb = srt.is_double_sided ? sd.emission :
                                                                                    float3(0);
         srt.surfel_buf[surfel_id].radiance_direct.back.a = 0.0f;
         srt.surfel_buf[surfel_id].double_sided = srt.is_double_sided;

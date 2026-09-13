@@ -45,7 +45,7 @@ float4 closure_to_rgba_forward(ShadingData &sd, Closure /*cl_unused*/)
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
-  closure_weights_reset(closure_rand);
+  closure_weights_reset(sd, closure_rand);
 
 #if defined(MAT_TRANSPARENT) && defined(MAT_SHADER_TO_RGBA)
   { /* Limit resource guard to this scope. */
@@ -147,9 +147,9 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
       sd, view, resource_id, g_thickness_forward, gl_FragCoord.xy, radiance, transmittance);
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
-    radiance += g_diffuse_light;
-    radiance += g_glossy_light;
-    radiance += g_transmission_light;
+    radiance += sd.light_accum.diffuse_light;
+    radiance += sd.light_accum.glossy_light;
+    radiance += sd.light_accum.transmission_light;
   }
 
   /* Volumetric resolve and compositing. */
@@ -158,18 +158,18 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
   /* Removes the part of the volume scattering that has
    * already been added to the destination pixels by the opaque resolve.
    * Since we do that using the blending pipeline we need to account for material transmittance. */
-  vol.scattering -= vol.scattering * g_transmittance;
+  vol.scattering -= vol.scattering * sd.transmittance;
   radiance = radiance * vol.transmittance + vol.scattering;
 
   eObjectInfoFlag ob_flag = kg.object_infos_get(sd).flag;
   if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
-    g_holdout = 1.0f - average(g_transmittance);
+    sd.holdout = 1.0f - average(sd.transmittance);
     radiance *= 0.0f;
   }
 
-  g_holdout = saturate(g_holdout);
+  sd.holdout = saturate(sd.holdout);
 
-  radiance *= 1.0f - g_holdout;
+  radiance *= 1.0f - sd.holdout;
 
   /* There can be 2 frame-buffer layout for forward transparency:
    * - Combined RGB radiance with Monochromatic transmittance.
@@ -181,7 +181,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
     frag_out.combined_r = float4(radiance.r, 0.0f, 0.0f, transmittance.r);
     frag_out.combined_g = float4(radiance.g, 0.0f, 0.0f, transmittance.g);
     frag_out.combined_b = float4(radiance.b, 0.0f, 0.0f, transmittance.b);
-    frag_out.combined_a = float4(g_holdout, 0.0f, 0.0f, average(transmittance));
+    frag_out.combined_a = float4(sd.holdout, 0.0f, 0.0f, average(transmittance));
   }
 }
 

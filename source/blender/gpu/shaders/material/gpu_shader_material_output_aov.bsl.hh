@@ -10,6 +10,7 @@
 void node_output_aov([[maybe_unused]] float4 color,
                      [[maybe_unused]] float value,
                      [[maybe_unused]] float hash,
+                     [[maybe_unused]] const ShadingData &sd,
                      [[maybe_unused]] Closure &dummy)
 {
 #ifdef GPU_FRAGMENT_SHADER
@@ -18,7 +19,7 @@ void node_output_aov([[maybe_unused]] float4 color,
              color,
              value,
              floatBitsToUint(hash),
-             g_holdout,
+             sd.holdout,
              object_infos_get().flag);
 #  else
   output_aov(int2(gl_FragCoord.xy), color, value, floatBitsToUint(hash), 0.0f, 0u);

@@ -18,14 +18,14 @@
 #include "eevee_utility_tx.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
-float4 closure_to_rgba_depth(ShadingData & /*sd*/, Closure /*cl*/)
+float4 closure_to_rgba_depth(ShadingData &sd, Closure /*cl*/)
 {
   float4 out_color;
-  out_color.rgb = g_emission;
-  out_color.a = saturate(1.0f - average(g_transmittance));
+  out_color.rgb = sd.emission;
+  out_color.a = saturate(1.0f - average(sd.transmittance));
 
   /* Reset for the next closure tree. */
-  closure_weights_reset(0.0f);
+  closure_weights_reset(sd, 0.0f);
 
   return out_color;
 }
@@ -80,7 +80,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
     float threshold = hashed_transparency::alpha_threshold(
         uni.pipeline_buf.alpha_hash_scale, noise_offset, sd.P);
 
-    float transparency = average(g_transmittance);
+    float transparency = average(sd.transmittance);
     if (transparency > threshold) {
       gpu_discard_fragment();
       return;

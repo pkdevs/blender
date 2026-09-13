@@ -1349,7 +1349,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
     vert_gen << "#line 1 \"" __FILE__ "\"\n";
     vert_gen << "#line " STRINGIFY(__LINE__) "\n";
-    vert_gen << "float3 nodetree_displacement(KernelGlobals kg, ShadingData sd)\n";
+    vert_gen << "float3 nodetree_displacement(KernelGlobals kg, _ref(ShadingData, sd))\n";
     vert_gen << "{\n";
     vert_gen << ((use_vertex_displacement) ? codegen.displacement.serialized :
                                              "return float3(0);\n");
@@ -1386,7 +1386,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
       vert_gen << "#line 1 \"" __FILE__ "\"\n";
       vert_gen << "#line " STRINGIFY(__LINE__) "\n";
-      frag_gen << "float3 nodetree_displacement(KernelGlobals kg, ShadingData sd)\n";
+      frag_gen << "float3 nodetree_displacement(KernelGlobals kg, _ref(ShadingData, sd))\n";
       frag_gen << "{\n";
       frag_gen << codegen.displacement.serialized;
       dependencies.extend(codegen.displacement.dependencies);
@@ -1397,9 +1397,10 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     frag_gen << "#line 1 \"" __FILE__ "\"\n";
     frag_gen << "#line " STRINGIFY(__LINE__) "\n";
 
-    frag_gen << "Closure nodetree_surface(KernelGlobals kg, ShadingData sd, float closure_rand)\n";
+    frag_gen << "Closure nodetree_surface(KernelGlobals kg, _ref(ShadingData, sd), float "
+                "closure_rand)\n";
     frag_gen << "{\n";
-    frag_gen << "  closure_weights_reset(closure_rand);\n";
+    frag_gen << "  closure_weights_reset(sd, closure_rand);\n";
     frag_gen << codegen.surface.serialized_or_default("return Closure(0);\n");
     dependencies.extend(codegen.surface.dependencies);
     frag_gen << "}\n\n";
@@ -1407,7 +1408,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     /* TODO(fclem): Find a way to pass material parameters inside the material UBO. */
     info.define("thickness_mode", thickness_type == MAT_THICKNESS_SLAB ? "false" : "true");
 
-    frag_gen << "float nodetree_thickness(KernelGlobals kg, ShadingData sd)\n";
+    frag_gen << "float nodetree_thickness(KernelGlobals kg, _ref(ShadingData, sd))\n";
     frag_gen << "{\n";
     if (codegen.thickness.empty()) {
       /* Check presence of closure needing thickness to not add mandatory dependency on obinfos. */
@@ -1437,9 +1438,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     }
     frag_gen << "}\n\n";
 
-    frag_gen << "Closure nodetree_volume(KernelGlobals kg, ShadingData sd)\n";
+    frag_gen << "Closure nodetree_volume(KernelGlobals kg, _ref(ShadingData, sd))\n";
     frag_gen << "{\n";
-    frag_gen << "  closure_weights_reset(0.0);\n";
+    frag_gen << "  closure_weights_reset(sd, 0.0);\n";
     frag_gen << codegen.volume.serialized_or_default("return Closure(0);\n");
     dependencies.extend(codegen.volume.dependencies);
     frag_gen << "}\n\n";

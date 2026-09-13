@@ -344,6 +344,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
 /* Light Accumulation Node. */
 
 void node_light_accumulation_impl([[resource_table]] KernelGlobals & /*kg*/,
+                                  ShadingData & /*sd*/,
                                   int /*light_index*/,
                                   float3 /*diffuse_light*/,
                                   float3 /*diffuse_color*/,

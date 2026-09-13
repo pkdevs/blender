@@ -120,16 +120,16 @@ struct SurfVolume {
 
     if (is_volume_object) [[static_branch]] {
       const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
-      g_volume_scattering *= drw_volume.density_scale;
-      g_volume_absorption *= drw_volume.density_scale;
-      g_emission *= drw_volume.density_scale;
+      sd.volume_scattering *= drw_volume.density_scale;
+      sd.volume_absorption *= drw_volume.density_scale;
+      sd.emission *= drw_volume.density_scale;
     }
 
     VolumeProperties prop;
-    prop.scattering = g_volume_scattering;
-    prop.absorption = g_volume_absorption;
-    prop.emission = g_emission;
-    prop.anisotropy = g_volume_anisotropy;
+    prop.scattering = sd.volume_scattering;
+    prop.absorption = sd.volume_absorption;
+    prop.emission = sd.emission;
+    prop.anisotropy = sd.volume_anisotropy;
     return prop;
   }
 };

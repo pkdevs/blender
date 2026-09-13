@@ -65,7 +65,7 @@ void forward_lighting_eval(const ShadingData &sd,
   light::EvalCtx<false> ctx;
   for (uint i = 0u; i < 3; i++) [[unroll]] {
     if (srt.light_closure_eval_count_reflect > i) [[static_branch]] {
-      ClosureUndetermined cl = g_closure_get(uchar(i)).data;
+      ClosureUndetermined cl = sd.closure_get(uchar(i)).data;
       ctx.stack.cl[i] = closure_light_new(util_tx, cl, V);
     }
   }
@@ -86,7 +86,7 @@ void forward_lighting_eval(const ShadingData &sd,
   lights.eval_reflection(ctx, vPz);
 
   if (srt.light_closure_eval_count_transmit > 0) [[static_branch]] {
-    ClosureUndetermined cl_transmit = g_closure_get(0).data;
+    ClosureUndetermined cl_transmit = sd.closure_get(0).data;
     if (closure_has_transmission(cl_transmit.type) || cl_transmit.type == CLOSURE_BSSRDF_BURLEY_ID)
     {
       light::EvalCtx<true> ctx_tr = light::init_from_reflect_ctx(ctx);
@@ -125,7 +125,7 @@ void forward_lighting_eval(const ShadingData &sd,
     /* Get average normal.  */
     for (uint i = 0u; i < 3; i++) [[unroll]] {
       if (srt.light_closure_eval_count_reflect > i) [[static_branch]] {
-        ClosureUndetermined cl = g_closure_get(uchar(i)).data;
+        ClosureUndetermined cl = sd.closure_get(uchar(i)).data;
         average_N += cl.N * cl.weight();
       }
     }
@@ -163,7 +163,7 @@ void forward_lighting_eval(const ShadingData &sd,
 
   for (uint i = 0u; i < 3; i++) [[unroll]] {
     if (srt.light_closure_eval_count_reflect > i) [[static_branch]] {
-      ClosureUndetermined cl = g_closure_get_resolved(uchar(i), 1.0f);
+      ClosureUndetermined cl = sd.closure_get_resolved(uchar(i), 1.0f);
       if (cl.weight() > CLOSURE_WEIGHT_CUTOFF) {
         float3 direct_light = ctx.stack.cl[i].light_shadowed;
         float3 indirect_light = lightprobes.eval(samp, cl, sd.P, V, thickness);
@@ -199,9 +199,9 @@ void forward_lighting_eval(const ShadingData &sd,
   radiance_direct *= uni.uniform_buf.clamp.direct_scale;
   radiance_indirect *= uni.uniform_buf.clamp.indirect_scale;
 
-  radiance = radiance_direct + radiance_indirect + g_emission;
+  radiance = radiance_direct + radiance_indirect + sd.emission;
 
-  transmittance = g_transmittance;
+  transmittance = sd.transmittance;
 }
 
 }  // namespace eevee

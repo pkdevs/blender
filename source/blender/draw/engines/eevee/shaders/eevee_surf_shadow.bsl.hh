@@ -22,10 +22,10 @@
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_shadow(ShadingData & /*sd*/, Closure /*cl*/)
+float4 closure_to_rgba_shadow(ShadingData &sd, Closure /*cl*/)
 {
-  float3 transmittance = g_transmittance;
-  closure_weights_reset(0.0f);
+  float3 transmittance = sd.transmittance;
+  closure_weights_reset(sd, 0.0f);
   return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
@@ -71,7 +71,7 @@ void surf_shadow([[resource_table]] KernelGlobals &kg,
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float random_threshold = pcg4d(float4(sd.P, noise_offset)).x;
 
-    float transparency = average(g_transmittance);
+    float transparency = average(sd.transmittance);
     if (transparency > random_threshold) {
       gpu_discard_fragment();
       return;
