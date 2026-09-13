@@ -2425,6 +2425,21 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
     kv.end_node = -1;
     kv.end_time = std::numeric_limits<double>::infinity();
     kv.is_active = true;
+    kv.side = (k < orig_verts_num) ? 0 : 1;
+  }
+  for (const ContourEdge &ce : contours.edges) {
+    if (ce.side >= 0) {
+      if (ce.start >= 0 && ce.start < total_verts_num) {
+        kinetic_verts[ce.start].side = ce.side;
+        kinetic_verts[ce.start].input_face = ce.input_face;
+        kinetic_verts[ce.start].input_edge = ce.input_edge;
+      }
+      if (ce.end >= 0 && ce.end < total_verts_num) {
+        kinetic_verts[ce.end].side = ce.side;
+        kinetic_verts[ce.end].input_face = ce.input_face;
+        kinetic_verts[ce.end].input_edge = ce.input_edge;
+      }
+    }
   }
 
   /* Compute initial collapse events and build the priority queue. */
@@ -3836,6 +3851,138 @@ SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input
   return state.skeleton_graph();
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Output Face Reconstruction
+ * \{ */
+
+static void build_output_faces(const StraightSkeletonInput &input,
+                               const SkeletonGraph &skel,
+                               StraightSkeletonOutput &r_output)
+{
+  if (input.face_offsets.size() == 0) {
+    return;
+  }
+
+  const int nodes_num = int(skel.nodes.size());
+
+  /* 1. Build adjacency list of interior straight skeleton edges and boundary edges.
+   * Only edges with side == 0 (or is_input_boundary) belong to the interior straight skeleton. */
+  Array<Vector<int>> adj(nodes_num);
+  for (const SkeletonEdge &edge : skel.edges) {
+    if (edge.side == 0 || edge.is_input_boundary) {
+      const int u = edge.node1;
+      const int v = edge.node2;
+      if (u >= 0 && u < nodes_num && v >= 0 && v < nodes_num && u != v) {
+        if (!adj[u].contains(v)) {
+          adj[u].append(v);
+        }
+        if (!adj[v].contains(u)) {
+          adj[v].append(u);
+        }
+      }
+    }
+  }
+
+  /* 2. Sort outgoing edges counter-clockwise around each vertex by polar angle. */
+  for (const int u : IndexRange(nodes_num)) {
+    const double2 p_u = skel.nodes[u].pos;
+    std::sort(adj[u].begin(), adj[u].end(), [&](int a, int b) {
+      const double2 p_a = skel.nodes[a].pos;
+      const double2 p_b = skel.nodes[b].pos;
+      const double ang_a = std::atan2(p_a.y - p_u.y, p_a.x - p_u.x);
+      const double ang_b = std::atan2(p_b.y - p_u.y, p_b.x - p_u.x);
+      return ang_a < ang_b;
+    });
+  }
+
+  /* 3. For each input face and each boundary edge u -> v, traverse the face cycle. */
+  Vector<int> face_indices;
+  Vector<int> face_lens;
+  Vector<int> face_orig_list;
+
+  const Span<int> fvi = input.face_vert_indices;
+  for (const int fi : input.face_offsets.index_range()) {
+    const IndexRange r = input.face_offsets[fi];
+    const int face_verts_num = int(r.size());
+
+    for (const int k : IndexRange(face_verts_num)) {
+      const int u_start = fvi[r[k]];
+      const int v_start = fvi[r[(k + 1) % face_verts_num]];
+
+      /* Start directed half-edge: u_start -> v_start. */
+      Vector<int> cycle;
+      cycle.append(u_start);
+
+      int curr_u = u_start;
+      int curr_v = v_start;
+      int step = 0;
+      const int max_steps = 4 * nodes_num;
+
+      while (step < max_steps) {
+        cycle.append(curr_v);
+        if (curr_v == u_start) {
+          break;
+        }
+
+        /* At curr_v entered from curr_u, find reverse edge curr_v -> curr_u. */
+        const Vector<int> &out_edges = adj[curr_v];
+        const int out_num = int(out_edges.size());
+        if (out_num == 0) {
+          break;
+        }
+
+        const int *idx_ptr = std::find(out_edges.begin(), out_edges.end(), curr_u);
+        if (idx_ptr == out_edges.end()) {
+          break;
+        }
+        const int idx = int(idx_ptr - out_edges.begin());
+
+        /* Take the sharpest right turn: predecessor in CCW cyclic order. */
+        const int next_idx = (idx - 1 + out_num) % out_num;
+        const int next_v = out_edges[next_idx];
+
+        curr_u = curr_v;
+        curr_v = next_v;
+        step++;
+      }
+
+      /* If cycle successfully closed, remove the duplicated start node at the end. */
+      if (cycle.size() >= 3 && cycle.last() == u_start) {
+        cycle.pop_last();
+
+        /* Verify that face has positive (CCW) signed area. */
+        double area = 0.0;
+        const int n = int(cycle.size());
+        for (const int i : IndexRange(n)) {
+          const double2 p1 = skel.nodes[cycle[i]].pos;
+          const double2 p2 = skel.nodes[cycle[(i + 1) % n]].pos;
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        area *= 0.5;
+
+        if (area > 1e-9) {
+          face_indices.extend(cycle.as_span());
+          face_lens.append(n);
+          face_orig_list.append(fi);
+        }
+      }
+    }
+  }
+
+  /* 4. Store reconstructed faces in output. */
+  const int face_count = int(face_lens.size());
+  r_output.face_offsets_data.reinitialize(face_count + 1);
+  r_output.face_offsets_data[0] = 0;
+  for (const int i : IndexRange(face_count)) {
+    r_output.face_offsets_data[i + 1] = r_output.face_offsets_data[i] + face_lens[i];
+  }
+  r_output.face_offsets = OffsetIndices<int>(r_output.face_offsets_data.as_span());
+  r_output.face_vert_indices = Array<int>(face_indices.as_span());
+  r_output.face_orig = Array<int>(face_orig_list.as_span());
+}
+
+/** \} */
+
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
 {
   StraightSkeletonState state(input);
@@ -3843,7 +3990,6 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
   state.run_event_loop(1000, /*dbg_level=*/0);
 
   const SkeletonGraph &skel = state.skeleton_graph();
-  const Span<KineticVertex> kverts = state.kinetic_vertices();
 
   StraightSkeletonOutput output;
   const int nodes_num = int(skel.nodes.size());
@@ -3862,40 +4008,8 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
     output.edge_orig[i] = skel.edges[i].orig_edge;
   }
 
-  /* Construct output faces for simple face inputs. */
-  if (input.face_offsets.size() > 0) {
-    Vector<int> face_indices;
-    Vector<int> face_lens;
-    Vector<int> face_orig_list;
-
-    for (const int fi : input.face_offsets.index_range()) {
-      const IndexRange r = input.face_offsets[fi];
-      const int f_verts_num = int(r.size());
-      for (const int k : IndexRange(f_verts_num)) {
-        const int u = input.face_vert_indices[r[k]];
-        const int v = input.face_vert_indices[r[(k + 1) % f_verts_num]];
-        const int end_u = kverts[u].end_node;
-        const int end_v = kverts[v].end_node;
-        if (end_u != -1 && end_u == end_v) {
-          face_indices.append(u);
-          face_indices.append(v);
-          face_indices.append(end_u);
-          face_lens.append(3);
-          face_orig_list.append(fi);
-        }
-      }
-    }
-
-    const int face_count = int(face_lens.size());
-    output.face_offsets_data.reinitialize(face_count + 1);
-    output.face_offsets_data[0] = 0;
-    for (const int i : IndexRange(face_count)) {
-      output.face_offsets_data[i + 1] = output.face_offsets_data[i] + face_lens[i];
-    }
-    output.face_offsets = OffsetIndices<int>(output.face_offsets_data.as_span());
-    output.face_vert_indices = Array<int>(face_indices.as_span());
-    output.face_orig = Array<int>(face_orig_list.as_span());
-  }
+  /* Construct output faces for input faces. */
+  build_output_faces(input, skel, output);
 
   return output;
 }

@@ -4,18 +4,40 @@
 
 #include "testing/testing.h"
 
+#include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <utility>
 
 #include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
+#include "BLI_set.hh"
 #include "BLI_straight_skeleton.hh"
 #include "BLI_vector.hh"
 
-/* Set to 1 to write an HTML debug drawing for each test to /tmp/skel_debug_draw.html. */
-#define DO_DEBUG_DRAW 0
+/* Debug output mode for tests:
+ *   DebugOutputMode::NONE   (0) - No debug output (standard quiet test run, assert failures only).
+ *   DebugOutputMode::STEPS  (1) - Algorithm event loop steps (kinetic triangulation, priority
+ * queue). DebugOutputMode::OUTPUT (2) - Final straight skeleton output: vertices, edges, faces,
+ * orig_ values, and SVG diagrams. queue). DebugOutputMode::OUTPUT (2) - Final straight skeleton
+ * output: vertices, edges, faces, and orig_ values.
+ *
+ * Can also be overridden at runtime via the STRAIGHT_SKELETON_DEBUG environment variable:
+ *   STRAIGHT_SKELETON_DEBUG=none / 0
+ *   STRAIGHT_SKELETON_DEBUG=steps / 1
+ *   STRAIGHT_SKELETON_DEBUG=output / 2
+ */
+enum class DebugOutputMode {
+  NONE = 0,
+  STEPS = 1,
+  OUTPUT = 2,
+};
+
+static constexpr DebugOutputMode debug_output_mode = DebugOutputMode::NONE;
 
 namespace blender::straightskeleton::test {
 
@@ -96,95 +118,316 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
 /** \name Debug drawing
  * \{ */
 
-#if DO_DEBUG_DRAW
-static void write_debug_html(const StraightSkeletonInput &input,
-                             const StraightSkeletonOutput &output,
-                             const char *path)
+static void write_debug_svg(const char *test_name,
+                            const StraightSkeletonInput &input,
+                            const StraightSkeletonOutput &output)
 {
-  /* Compute bounding box of input vertices for the SVG viewport. */
-  double xmin = 1e30, xmax = -1e30, ymin = 1e30, ymax = -1e30;
+  const char *svg_dir_env = std::getenv("STRAIGHT_SKELETON_SVG_DIR");
+  std::string dir = svg_dir_env ? svg_dir_env : "/tmp";
+  std::string file_path = dir + "/" + (test_name ? test_name : "test") + ".svg";
+
+  /* Compute bounding box of input vertices. */
+  double in_xmin = 1e30, in_xmax = -1e30, in_ymin = 1e30, in_ymax = -1e30;
   for (const double2 &v : input.vert) {
-    xmin = std::min(xmin, v.x);
-    xmax = std::max(xmax, v.x);
-    ymin = std::min(ymin, v.y);
-    ymax = std::max(ymax, v.y);
+    in_xmin = std::min(in_xmin, v.x);
+    in_xmax = std::max(in_xmax, v.x);
+    in_ymin = std::min(in_ymin, v.y);
+    in_ymax = std::max(in_ymax, v.y);
   }
+  if (in_xmin > in_xmax) {
+    in_xmin = 0.0;
+    in_xmax = 1.0;
+    in_ymin = 0.0;
+    in_ymax = 1.0;
+  }
+  double in_dx = in_xmax - in_xmin;
+  double in_dy = in_ymax - in_ymin;
+  if (in_dx < 1e-4) {
+    in_dx = 1.0;
+  }
+  if (in_dy < 1e-4) {
+    in_dy = 1.0;
+  }
+
+  /* Expand bounding box to include nearby output vertices, filtering out distant ray
+   * intersections. */
+  double xmin = in_xmin - 0.15 * in_dx;
+  double xmax = in_xmax + 0.15 * in_dx;
+  double ymin = in_ymin - 0.15 * in_dy;
+  double ymax = in_ymax + 0.15 * in_dy;
   for (const double2 &v : output.vert) {
-    xmin = std::min(xmin, v.x);
-    xmax = std::max(xmax, v.x);
-    ymin = std::min(ymin, v.y);
-    ymax = std::max(ymax, v.y);
+    if (v.x >= in_xmin - 1.0 * in_dx && v.x <= in_xmax + 1.0 * in_dx &&
+        v.y >= in_ymin - 1.0 * in_dy && v.y <= in_ymax + 1.0 * in_dy)
+    {
+      xmin = std::min(xmin, v.x);
+      xmax = std::max(xmax, v.x);
+      ymin = std::min(ymin, v.y);
+      ymax = std::max(ymax, v.y);
+    }
   }
-  const double pad = std::max(xmax - xmin, ymax - ymin) * 0.1 + 0.01;
+
+  double dx = xmax - xmin;
+  double dy = ymax - ymin;
+  const double pad = std::max(dx, dy) * 0.1;
   xmin -= pad;
   xmax += pad;
   ymin -= pad;
   ymax += pad;
-  const double width = 600.0;
-  const double height = 600.0;
-  const double sx = width / (xmax - xmin);
-  const double sy = height / (ymax - ymin);
+  dx = xmax - xmin;
+  dy = ymax - ymin;
 
-  auto tx = [&](double x) { return (x - xmin) * sx; };
-  /* SVG y-axis is flipped vs. math convention. */
-  auto ty = [&](double y) { return height - (y - ymin) * sy; };
+  const double base_size = 650.0;
+  const double scale = std::min(base_size / dx, base_size / dy);
+  const double width = dx * scale + 100.0;
+  const double height = dy * scale + 120.0;
 
-  std::ofstream f(path);
-  f << "<!DOCTYPE html>\n<html><body>\n";
-  f << "<svg width=\"" << width << "\" height=\"" << height << "\" "
-    << "style=\"border:1px solid black\">\n";
+  auto tx = [&](double x) { return 50.0 + (x - xmin) * scale; };
+  auto ty = [&](double y) { return height - 50.0 - (y - ymin) * scale; };
 
-  /* Draw output faces in light gray. */
+  std::ofstream f(file_path);
+  if (!f.is_open()) {
+    return;
+  }
+
+  f << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+  f << "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " << width << " " << height
+    << "\" width=\"" << width << "\" height=\"" << height
+    << "\" style=\"background-color:#ffffff; overflow:hidden; font-family: -apple-system, "
+       "BlinkMacSystemFont, "
+       "'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\">\n";
+
+  /* Definitions & styles. */
+  f << "<defs>\n"
+    << "  <filter id=\"shadow\" x=\"-10%\" y=\"-10%\" width=\"120%\" height=\"120%\">\n"
+    << "    <feDropShadow dx=\"1\" dy=\"1\" stdDeviation=\"1.5\" flood-opacity=\"0.2\"/>\n"
+    << "  </filter>\n"
+    << "</defs>\n";
+
+  /* Title. */
+  f << "<text x=\"30\" y=\"40\" font-size=\"20\" font-weight=\"bold\" fill=\"#2c3e50\">"
+    << (test_name ? test_name : "Straight Skeleton") << "</text>\n";
+
+  /* Pastel face color palette. */
+  static const char *face_colors[] = {
+      "#d4e6f1",
+      "#d5f5e3",
+      "#fdebd0",
+      "#e8daef",
+      "#fcf3cf",
+      "#fadbd8",
+      "#d0ece7",
+      "#ebf5fb",
+      "#eafaf1",
+      "#fef9e7",
+  };
+  const int num_colors = int(sizeof(face_colors) / sizeof(face_colors[0]));
+
+  /* Draw faces. */
   const Span<int> fvi = output.face_vert_indices;
   for (const int fi : output.face_offsets.index_range()) {
     const IndexRange r = output.face_offsets[fi];
-    f << "<polygon points=\"";
-    for (const int idx : r) {
-      f << tx(output.vert[fvi[idx]].x) << "," << ty(output.vert[fvi[idx]].y) << " ";
+    const int n = int(r.size());
+    if (n < 3) {
+      continue;
     }
-    f << "\" fill=\"#e0e8f0\" stroke=\"#6688aa\" stroke-width=\"1\"/>\n";
+    const char *col = face_colors[fi % num_colors];
+    f << "<polygon points=\"";
+    double cx = 0.0, cy = 0.0;
+    for (const int idx : r) {
+      const double2 p = output.vert[fvi[idx]];
+      f << tx(p.x) << "," << ty(p.y) << " ";
+      cx += p.x;
+      cy += p.y;
+    }
+    cx /= double(n);
+    cy /= double(n);
+    f << "\" fill=\"" << col << "\" stroke=\"#7f8c8d\" stroke-width=\"1\" opacity=\"0.85\"/>\n";
+
+    /* Face label at centroid. */
+    f << "<text x=\"" << tx(cx) << "\" y=\"" << ty(cy)
+      << "\" font-size=\"14\" font-weight=\"bold\" fill=\"#34495e\" text-anchor=\"middle\" "
+         "dominant-baseline=\"middle\" filter=\"url(#shadow)\">f"
+      << fi << "</text>\n";
   }
 
-  /* Draw input boundary in dark blue. */
+  /* Identify input boundary edges to distinguish from straight skeleton internal edges. */
+  Set<std::pair<int, int>> input_boundary_edges;
   const Span<int> ivi = input.face_vert_indices;
   for (const int fi : input.face_offsets.index_range()) {
     const IndexRange r = input.face_offsets[fi];
-    for (int k = 0; k < int(r.size()); k++) {
-      const int a = ivi[r[k]];
-      const int b = ivi[r[(k + 1) % int(r.size())]];
-      f << "<line x1=\"" << tx(input.vert[a].x) << "\" y1=\"" << ty(input.vert[a].y) << "\""
-        << " x2=\"" << tx(input.vert[b].x) << "\" y2=\"" << ty(input.vert[b].y) << "\""
-        << " stroke=\"#0000cc\" stroke-width=\"2\"/>\n";
+    const int n = int(r.size());
+    for (int k = 0; k < n; k++) {
+      const int u = ivi[r[k]];
+      const int v = ivi[r[(k + 1) % n]];
+      input_boundary_edges.add({std::min(u, v), std::max(u, v)});
+    }
+  }
+  for (const int2 &e : input.edge) {
+    input_boundary_edges.add({std::min(e[0], e[1]), std::max(e[0], e[1])});
+  }
+
+  /* Draw straight skeleton edges (non-boundary internal arcs in crimson red). */
+  for (const int2 &e : output.edge) {
+    const std::pair<int, int> pair_e = {std::min(e[0], e[1]), std::max(e[0], e[1])};
+    if (input_boundary_edges.contains(pair_e)) {
+      continue;
+    }
+    const double2 p1 = output.vert[e[0]];
+    const double2 p2 = output.vert[e[1]];
+    f << "<line x1=\"" << tx(p1.x) << "\" y1=\"" << ty(p1.y) << "\" x2=\"" << tx(p2.x)
+      << "\" y2=\"" << ty(p2.y)
+      << "\" stroke=\"#e74c3c\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>\n";
+  }
+
+  /* Draw input boundary edges in bold dark blue. */
+  for (const auto &e : input_boundary_edges) {
+    if (e.first < output.vert.size() && e.second < output.vert.size()) {
+      const double2 p1 = output.vert[e.first];
+      const double2 p2 = output.vert[e.second];
+      f << "<line x1=\"" << tx(p1.x) << "\" y1=\"" << ty(p1.y) << "\" x2=\"" << tx(p2.x)
+        << "\" y2=\"" << ty(p2.y)
+        << "\" stroke=\"#2980b9\" stroke-width=\"3.5\" stroke-linecap=\"round\"/>\n";
     }
   }
 
-  /* Draw input line segments in dark blue. */
-  for (const int2 &e : input.edge) {
-    f << "<line x1=\"" << tx(input.vert[e[0]].x) << "\" y1=\"" << ty(input.vert[e[0]].y) << "\""
-      << " x2=\"" << tx(input.vert[e[1]].x) << "\" y2=\"" << ty(input.vert[e[1]].y) << "\""
-      << " stroke=\"#0000cc\" stroke-width=\"2\"/>\n";
+  /* Draw vertices and vertex labels. */
+  for (const int vi : output.vert.index_range()) {
+    const double2 p = output.vert[vi];
+    const bool is_input_vert = (vi < input.vert.size());
+    const char *circle_color = is_input_vert ? "#2980b9" : "#e74c3c";
+    const double r = is_input_vert ? 5.0 : 4.0;
+
+    f << "<circle cx=\"" << tx(p.x) << "\" cy=\"" << ty(p.y) << "\" r=\"" << r << "\" fill=\""
+      << circle_color << "\" stroke=\"#ffffff\" stroke-width=\"1.5\" filter=\"url(#shadow)\"/>\n";
+
+    /* Offset label away from vertex. */
+    f << "<text x=\"" << (tx(p.x) + 7.0) << "\" y=\"" << (ty(p.y) - 6.0)
+      << "\" font-size=\"11\" font-weight=\"bold\" fill=\""
+      << (is_input_vert ? "#1a5276" : "#922b21") << "\">v" << vi << "</text>\n";
   }
 
-  /* Draw output edges in red (skeleton + side edges). */
-  for (const int2 &e : output.edge) {
-    f << "<line x1=\"" << tx(output.vert[e[0]].x) << "\" y1=\"" << ty(output.vert[e[0]].y) << "\""
-      << " x2=\"" << tx(output.vert[e[1]].x) << "\" y2=\"" << ty(output.vert[e[1]].y) << "\""
-      << " stroke=\"#cc0000\" stroke-width=\"1\"/>\n";
-  }
+  /* Legend in top-right corner. */
+  const double leg_x = width - 200.0;
+  f << "<g transform=\"translate(" << leg_x << ", 15)\">\n"
+    << "  <rect width=\"180\" height=\"75\" fill=\"#f8f9fa\" stroke=\"#dee2e6\" rx=\"6\"/>\n"
+    << "  <line x1=\"15\" y1=\"20\" x2=\"45\" y2=\"20\" stroke=\"#2980b9\" "
+       "stroke-width=\"3.5\"/>\n"
+    << "  <text x=\"55\" y=\"24\" font-size=\"12\" fill=\"#2c3e50\">Input Boundary</text>\n"
+    << "  <line x1=\"15\" y1=\"40\" x2=\"45\" y2=\"40\" stroke=\"#e74c3c\" "
+       "stroke-width=\"2.5\"/>\n"
+    << "  <text x=\"55\" y=\"44\" font-size=\"12\" fill=\"#2c3e50\">Skeleton Edge</text>\n"
+    << "  <rect x=\"15\" y=\"52\" width=\"30\" height=\"12\" fill=\"#d4e6f1\" stroke=\"#7f8c8d\" "
+       "stroke-width=\"1\"/>\n"
+    << "  <text x=\"55\" y=\"63\" font-size=\"12\" fill=\"#2c3e50\">Output Face</text>\n"
+    << "</g>\n";
 
-  /* Label output vertices. */
-  for (const int vi : IndexRange(output.vert.size())) {
-    f << "<circle cx=\"" << tx(output.vert[vi].x) << "\" cy=\"" << ty(output.vert[vi].y)
-      << "\" r=\"3\" fill=\"#cc0000\"/>\n";
-    f << "<text x=\"" << (tx(output.vert[vi].x) + 4) << "\" y=\"" << ty(output.vert[vi].y)
-      << "\" font-size=\"10\" fill=\"#330000\">" << vi << "</text>\n";
-  }
-
-  f << "</svg>\n</body></html>\n";
+  f << "</svg>\n";
   f.close();
-  std::cout << "Debug drawing written to " << path << "\n";
+  std::cout << "SVG picture written to: " << file_path << "\n";
 }
-#endif /* DO_DEBUG_DRAW */
+
+static DebugOutputMode get_debug_output_mode()
+{
+  const char *env = std::getenv("STRAIGHT_SKELETON_DEBUG");
+  if (env != nullptr) {
+    const std::string s(env);
+    if (s == "steps" || s == "1") {
+      return DebugOutputMode::STEPS;
+    }
+    if (s == "output" || s == "2") {
+      return DebugOutputMode::OUTPUT;
+    }
+    if (s == "none" || s == "0") {
+      return DebugOutputMode::NONE;
+    }
+  }
+  return debug_output_mode;
+}
+
+static int test_debug_level()
+{
+  return (get_debug_output_mode() == DebugOutputMode::STEPS) ? 1 : 0;
+}
+
+static double total_faces_area(const StraightSkeletonOutput &output)
+{
+  double total = 0.0;
+  const Span<int> fvi = output.face_vert_indices;
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange r = output.face_offsets[fi];
+    const int n = int(r.size());
+    double area = 0.0;
+    for (const int i : IndexRange(n)) {
+      const double2 p1 = output.vert[fvi[r[i]]];
+      const double2 p2 = output.vert[fvi[r[(i + 1) % n]]];
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total += 0.5 * area;
+  }
+  return total;
+}
+
+static void print_test_output(const char *test_name,
+                              const StraightSkeletonInput &input,
+                              const StraightSkeletonOutput &output)
+{
+  if (get_debug_output_mode() != DebugOutputMode::OUTPUT) {
+    return;
+  }
+
+  write_debug_svg(test_name, input, output);
+
+  std::cout << "\n============================================================\n";
+  std::cout << "Straight Skeleton Output: " << (test_name ? test_name : "Test") << "\n";
+  std::cout << "============================================================\n";
+
+  std::cout << "Vertices (" << output.vert.size() << "):\n";
+  for (const int vi : output.vert.index_range()) {
+    std::cout << "  v" << vi << ": pos=(" << std::fixed << std::setprecision(4)
+              << output.vert[vi].x << ", " << output.vert[vi].y << ")";
+    if (vi < output.vert_orig.size()) {
+      std::cout << " | vert_orig=" << output.vert_orig[vi];
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "\nEdges (" << output.edge.size() << "):\n";
+  for (const int ei : output.edge.index_range()) {
+    std::cout << "  e" << ei << ": (" << output.edge[ei][0] << " -> " << output.edge[ei][1] << ")";
+    if (ei < output.edge_orig.size()) {
+      std::cout << " | edge_orig=" << output.edge_orig[ei];
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "\nFaces (" << output.face_offsets.size() << "):\n";
+  const Span<int> fvi = output.face_vert_indices;
+  double total_area = 0.0;
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange r = output.face_offsets[fi];
+    const int n = int(r.size());
+    double area = 0.0;
+    for (const int i : IndexRange(n)) {
+      const double2 p1 = output.vert[fvi[r[i]]];
+      const double2 p2 = output.vert[fvi[r[(i + 1) % n]]];
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    area *= 0.5;
+    total_area += area;
+
+    std::cout << "  f" << fi << ": verts=[";
+    for (int i = 0; i < n; i++) {
+      std::cout << (i > 0 ? ", " : "") << fvi[r[i]];
+    }
+    std::cout << "] | area=" << std::fixed << std::setprecision(4) << area;
+    if (fi < output.face_orig.size()) {
+      std::cout << " | face_orig=" << output.face_orig[fi];
+    }
+    std::cout << "\n";
+  }
+  std::cout << "Total Face Area: " << std::fixed << std::setprecision(6) << total_area << "\n";
+  std::cout << "============================================================\n\n";
+}
 
 /** \} */
 
@@ -214,17 +457,14 @@ TEST(straight_skeleton, SingleSegment)
   input.label = "SingleSegment";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.events_processed_num, 0);
 
   StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
   EXPECT_TRUE(events.is_empty());
-
-#if DO_DEBUG_DRAW
-  write_debug_html(input, output, "/tmp/skel_debug_draw.html");
-#endif
 }
 
 /**
@@ -255,10 +495,11 @@ TEST(straight_skeleton, Triangle)
   input.label = "Triangle";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.edge_collapses_num, 1);
 
   StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
   ASSERT_EQ(events.size(), 1);
@@ -267,10 +508,6 @@ TEST(straight_skeleton, Triangle)
   EXPECT_NEAR(events[0].time, std::sqrt(3.0) / 6.0, 1e-6);
   EXPECT_NEAR(events[0].event_pos.x, 0.5, 1e-5);
   EXPECT_NEAR(events[0].event_pos.y, std::sqrt(3.0) / 6.0, 1e-5);
-
-#if DO_DEBUG_DRAW
-  write_debug_html(input, output, "/tmp/skel_debug_draw.html");
-#endif
 
 #if 1 /* Output assertions for the completed straight skeleton. */
   /* Triangle skeleton: 3 original verts + 1 incenter = 4 verts, 3 output faces. */
@@ -351,6 +588,7 @@ TEST(straight_skeleton, MixedSegmentsAndFaces)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "MixedSegmentsAndFaces";
   StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
   EXPECT_FALSE(events.is_empty());
@@ -361,12 +599,18 @@ TEST(straight_skeleton, MixedSegmentsAndFaces)
   EXPECT_EQ(events[0].type, TriangleEventType::MULTI_SPLIT);
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_GT(stats.events_processed_num, 0);
 
-#if DO_DEBUG_DRAW
-  write_debug_html(input, output, "/tmp/skel_debug_draw.html");
-#endif
+  EXPECT_EQ(output.face_offsets.size(), 7);
+  EXPECT_NEAR(total_faces_area(output), 14.5, 1e-4);
+  /* The first 3 faces come from input face 0; the next 4 come from input face 1. */
+  for (int i = 0; i < 3; i++) {
+    EXPECT_EQ(output.face_orig[i], 0);
+  }
+  for (int i = 3; i < 7; i++) {
+    EXPECT_EQ(output.face_orig[i], 1);
+  }
 }
 
 /**
@@ -385,7 +629,8 @@ TEST(straight_skeleton, SkeletonGraphInitial)
     InputStorage storage;
     StraightSkeletonInput input = fill_input_from_string(spec, storage);
     input.label = "SkeletonGraphInitial_Segment";
-    straight_skeleton_run_events_test(input, 0, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+    straight_skeleton_run_events_test(
+        input, 0, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
     SkeletonGraph graph = straight_skeleton_initial_graph(input);
 
     EXPECT_EQ(graph.nodes.size(), 2);
@@ -419,7 +664,8 @@ TEST(straight_skeleton, SkeletonGraphInitial)
     InputStorage storage;
     StraightSkeletonInput input = fill_input_from_string(spec, storage);
     input.label = "SkeletonGraphInitial_Triangle";
-    straight_skeleton_run_events_test(input, 0, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+    straight_skeleton_run_events_test(
+        input, 0, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
     SkeletonGraph graph = straight_skeleton_initial_graph(input);
 
     EXPECT_EQ(graph.nodes.size(), 3);
@@ -464,6 +710,7 @@ TEST(straight_skeleton, FlipEventNotchedPolygon)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "FlipEventNotchedPolygon";
   StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
   const TriangleEvent *ev6 = nullptr;
@@ -487,7 +734,7 @@ TEST(straight_skeleton, FlipEventNotchedPolygon)
    * Other event types (EDGE_COLLAPSE, MULTI_SPLIT) will print "yet to be implemented"
    * and be skipped for this isolated flip test. */
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 4, /*dbg_level=*/1, /*handle_edge_collapses=*/false);
+      input, 4, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/false);
   EXPECT_GE(stats.flips_num, 1);
 
   /* After the flip event, spoke [3, 1] is replaced by the new diagonal [5, 2].
@@ -549,12 +796,18 @@ TEST(straight_skeleton, NotchedPolygonFull)
   input.label = "NotchedPolygonFull";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 20, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 13);
   EXPECT_EQ(output.edge.size(), 20);
+  EXPECT_EQ(output.face_offsets.size(), 7);
+  EXPECT_NEAR(total_faces_area(output), 71.1, 1e-4);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 TEST(straight_skeleton, Square)
@@ -572,12 +825,19 @@ TEST(straight_skeleton, Square)
   input.label = "Square";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 5);
   EXPECT_EQ(output.edge.size(), 8);
+  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_NEAR(total_faces_area(output), 4.0, 1e-6);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_offsets[fi].size(), 3);
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 TEST(straight_skeleton, LShape)
@@ -597,12 +857,18 @@ TEST(straight_skeleton, LShape)
   input.label = "LShape";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 20, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 9);
   EXPECT_EQ(output.edge.size(), 14);
+  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_NEAR(total_faces_area(output), 12.0, 1e-6);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 TEST(straight_skeleton, RectangleEdgeCollapse)
@@ -625,12 +891,13 @@ TEST(straight_skeleton, RectangleEdgeCollapse)
 
   /* Run the event loop with edge collapses enabled. Both width-2 edges collapse at t = 1.0. */
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.events_processed_num, 1);
   EXPECT_EQ(stats.edge_collapses_num, 3);
 
   /* Full straight skeleton output: 4 original corners + 2 ridge vertices = 6 vertices. */
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 6);
   EXPECT_EQ(output.edge.size(), 9);
   int new_verts_count = 0;
@@ -644,6 +911,12 @@ TEST(straight_skeleton, RectangleEdgeCollapse)
     }
   }
   EXPECT_EQ(new_verts_count, 2);
+
+  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_NEAR(total_faces_area(output), 8.0, 1e-6);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 /**
@@ -667,11 +940,12 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
   input.label = "ElongatedRectangleInfiniteSpeed";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.events_processed_num, 1);
   EXPECT_EQ(stats.edge_collapses_num, 3);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 6);
   EXPECT_EQ(output.edge.size(), 9);
 
@@ -685,6 +959,12 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
     }
   }
   EXPECT_EQ(new_verts_count, 2);
+
+  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_NEAR(total_faces_area(output), 16.0, 1e-6);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 TEST(straight_skeleton, MultiSplitHourglass)
@@ -707,13 +987,19 @@ TEST(straight_skeleton, MultiSplitHourglass)
   ASSERT_FALSE(events.is_empty());
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 20, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.multi_splits_num, 1);
   EXPECT_EQ(stats.edge_collapses_num, 2);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 9);
   EXPECT_EQ(output.edge.size(), 14);
+  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_NEAR(total_faces_area(output), 6.0, 1e-6);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
+  }
 }
 
 /**
@@ -756,17 +1042,23 @@ TEST(straight_skeleton, Flipper)
   ASSERT_FALSE(events.is_empty());
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 50, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+      input, 50, /*dbg_level=*/test_debug_level(), /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.flips_num, 2);
   EXPECT_EQ(stats.edge_collapses_num, 22);
   EXPECT_EQ(stats.splits_num, 3);
   EXPECT_EQ(stats.multi_splits_num, 1);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 46);
   EXPECT_EQ(output.edge.size(), 73);
   for (const double2 &v : output.vert) {
     EXPECT_GE(v.y, -1e-6);
+  }
+  EXPECT_EQ(output.face_offsets.size(), 20);
+  EXPECT_NEAR(total_faces_area(output), 1.021875, 1e-5);
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
 
