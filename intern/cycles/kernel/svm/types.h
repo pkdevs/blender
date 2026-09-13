@@ -14,6 +14,13 @@ CCL_NAMESPACE_BEGIN
 /* Stack offset type. Stack offsets are in the range [0, SVM_STACK_SIZE]. */
 using SVMStackOffset = uint8_t;
 
+/* Store int value and stack offset. */
+struct SVMInputInt {
+  int value;
+  SVMStackOffset offset;
+  uint8_t _pad[3];
+};
+
 /* Encodes a node float input, as either float value or a stack offset
  * encoded in a NaN bit pattern. */
 struct SVMInputFloat {
@@ -60,7 +67,9 @@ enum NodeAttributeType : uint8_t {
   NODE_ATTR_FLOAT3,
   NODE_ATTR_FLOAT4,
   NODE_ATTR_RGBA,
-  NODE_ATTR_MATRIX
+  NODE_ATTR_MATRIX,
+  NODE_ATTR_QUATERNION,
+  NODE_ATTR_SPHERICAL_HARMONICS_REST,
 };
 
 enum NodeGeometry : uint8_t {
@@ -210,6 +219,18 @@ enum NodeMathType : uint {
   NODE_MATH_SMOOTH_MIN,
   NODE_MATH_SMOOTH_MAX,
   NODE_MATH_FLOORED_MODULO,
+};
+
+enum NodeBooleanMathType : uint {
+  NODE_BOOLEAN_MATH_AND,
+  NODE_BOOLEAN_MATH_OR,
+  NODE_BOOLEAN_MATH_NOT,
+  NODE_BOOLEAN_MATH_NAND,
+  NODE_BOOLEAN_MATH_NOR,
+  NODE_BOOLEAN_MATH_XNOR,
+  NODE_BOOLEAN_MATH_XOR,
+  NODE_BOOLEAN_MATH_IMPLY,
+  NODE_BOOLEAN_MATH_NIMPLY,
 };
 
 enum NodeVectorMathType : uint {
@@ -463,6 +484,7 @@ enum ClosureType : uint {
   /* Diffuse */
   CLOSURE_BSDF_DIFFUSE_ID,
   CLOSURE_BSDF_OREN_NAYAR_ID,
+  CLOSURE_BSDF_ROUGH_TRANSLUCENT_ID,
   CLOSURE_BSDF_BURLEY_ID,
   CLOSURE_BSDF_DIFFUSE_RAMP_ID,
   CLOSURE_BSDF_SHEEN_ID,
@@ -484,6 +506,7 @@ enum ClosureType : uint {
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID,
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID,
+  CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID,
   CLOSURE_BSDF_HAIR_TRANSMISSION_ID,
 
   /* Glass */
@@ -541,7 +564,7 @@ static_assert(NBUILTIN_CLOSURES < 256, "Too many Closure types (need to change S
 #define CLOSURE_IS_BSDF_MICROFACET(type) \
   ((type >= CLOSURE_BSDF_MICROFACET_GGX_ID && type <= CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID) || \
    (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID && \
-    type <= CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID) || \
+    type <= CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID) || \
    (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID && \
     type <= CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID))
 #define CLOSURE_IS_BSDF_OR_BSSRDF(type) \

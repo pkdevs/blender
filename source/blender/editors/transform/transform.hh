@@ -193,6 +193,15 @@ enum eTFlag {
 
   /** Transform origin. */
   T_ORIGIN = 1 << 27,
+
+  /**
+   * The view matrix is flipped (has a negative determinant),
+   * typically from a flipped camera view.
+   *
+   * In most cases there is no need for special handling however
+   * rotation is reversed for some input calculation, which need to account for this.
+   */
+  T_VIEW_NEGATIVE = 1 << 28,
 };
 ENUM_OPERATORS(eTFlag);
 
@@ -527,6 +536,8 @@ struct TransData : public TransDataBasic {
   short protectflag;
 };
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Transform Types
  * \{ */
@@ -716,6 +727,9 @@ struct TransDataContainer {
    */
   bool use_local_mat;
 
+  /* True if the mirror modifier's clipping boundary has been hit. */
+  bool has_mirror_clipping;
+
   /** Mirror option. */
   union {
     struct {
@@ -825,7 +839,7 @@ struct TransInfo {
   eTFlag flag;
   /** Special modifiers, by function, not key. */
   eTModifier modifiers;
-  /** Current state (running, canceled. */
+  /** Current state (running, canceled, ...). */
   eTState state;
   /** Redraw flag. */
   eRedrawFlag redraw;

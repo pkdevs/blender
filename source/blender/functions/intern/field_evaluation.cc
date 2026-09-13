@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "BLI_array_utils.hh"
 #include "BLI_map.hh"
 #include "BLI_multi_value_map.hh"
@@ -44,6 +48,7 @@ struct FieldTreeInfo {
  */
 static FieldTreeInfo preprocess_field_tree(Span<GFieldRef> entry_fields)
 {
+  PRF_scope(ProfileCategory::Default);
   FieldTreeInfo field_tree_info;
 
   Stack<GFieldRef> fields_to_check;
@@ -79,8 +84,7 @@ static FieldTreeInfo preprocess_field_tree(Span<GFieldRef> entry_fields)
             /* Nothing to do. */
           }
           else {
-            /* Ensure all cases handled. */
-            static_assert(sizeof(T) == 0);
+            BLI_assert_unreachable_static_t(T);
           }
         },
         field_variant);
@@ -153,6 +157,7 @@ static void build_multi_function_procedure_for_fields(mf::Procedure &procedure,
                                                       const FieldTreeInfo &field_tree_info,
                                                       Span<GFieldRef> output_fields)
 {
+  PRF_scope(ProfileCategory::Default);
   mf::ProcedureBuilder builder{procedure};
   /* Every input, intermediate and output field corresponds to a variable in the procedure. */
   Map<UniqueHash, mf::Variable *> variable_by_field;
@@ -223,7 +228,7 @@ static void build_multi_function_procedure_for_fields(mf::Procedure &procedure,
                     const GFieldRef output_field{field_multi_fn, param_output_index};
                     /* NOTE: This abuses the deep hash cache as a set of the fields in the tree. At
                      * the cost of either hashing this output field or building a separate set of
-                     * visisted GFieldRefs, we wouldn't have to use the cache in this way. */
+                     * visited GFieldRefs, we wouldn't have to use the cache in this way. */
                     if (!field_tree_info.deep_hashes.contains(output_field)) {
                       /* Ignored outputs don't need a variable. */
                       variables[param_index] = nullptr;
@@ -253,8 +258,7 @@ static void build_multi_function_procedure_for_fields(mf::Procedure &procedure,
               variable_by_field.add_new(field_hash, &new_variable);
             }
             else {
-              /* Ensure all cases handled. */
-              static_assert(sizeof(T) == 0);
+              BLI_assert_unreachable_static_t(T);
             }
           },
           field_variant);
@@ -299,6 +303,7 @@ Vector<GVArray> evaluate_fields(ResourceScope &scope,
                                 const FieldContext &context,
                                 Span<GVMutableArray> dst_varrays)
 {
+  PRF_scope(ProfileCategory::Default);
   Vector<GVArray> varrays(fields_to_evaluate.size());
   Array<bool> is_output_written_to_dst(fields_to_evaluate.size(), false);
   const int array_size = mask.min_array_size();
@@ -366,8 +371,7 @@ Vector<GVArray> evaluate_fields(ResourceScope &scope,
             varrays[out_index] = GVArray::from_single_ref(*v.type, mask.min_array_size(), v.value);
           }
           else {
-            /* Ensure all cases handled. */
-            static_assert(sizeof(T) == 0);
+            BLI_assert_unreachable_static_t(T);
           }
         },
         field_variant);
@@ -475,6 +479,8 @@ Vector<GVArray> evaluate_fields(ResourceScope &scope,
       }
       /* Still have to copy over the data in the destination provided by the caller. */
       if (dst_varray.is_span()) {
+        computed_varray.type().default_construct_indices(dst_varray.get_internal_span().data(),
+                                                         mask);
         array_utils::copy(computed_varray,
                           mask,
                           dst_varray.get_internal_span().take_front(mask.min_array_size()));
@@ -536,7 +542,7 @@ static IndexMask index_mask_from_selection(const IndexMask full_mask,
                                            const VArray<bool> &selection,
                                            ResourceScope &scope)
 {
-  return IndexMask::from_bools(full_mask, selection, scope.construct<IndexMaskMemory>());
+  return IndexMask::from_bools(full_mask, selection, scope.allocator());
 }
 
 int FieldEvaluator::add_with_destination(GField field, GVMutableArray dst)
@@ -591,8 +597,16 @@ void FieldEvaluator::evaluate()
 
   Vector<GFieldRef> fields;
   fields.reserve(fields_to_evaluate_.size());
+  static constexpr bool true_value = true;
   for (const int i : fields_to_evaluate_.index_range()) {
-    fields.append(fields_to_evaluate_[i]);
+    const GField &field = fields_to_evaluate_[i];
+    if (field == selection_field_) {
+      /* Avoid evaluating the selection field again. */
+      fields.append(GFieldRef::from_constant(CPPType::get<bool>(), &true_value));
+    }
+    else {
+      fields.append(field);
+    }
   }
   evaluated_varrays_ = evaluate_fields(scope_, fields, selection_mask_, context_, dst_varrays_);
   BLI_assert(fields_to_evaluate_.size() == evaluated_varrays_.size());

@@ -14,10 +14,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
@@ -124,7 +124,7 @@ static void outliner_main_region_listener(const wmRegionListenerParams *params)
   ScrArea *area = params->area;
   ARegion *region = params->region;
   const wmNotifier *wmn = params->notifier;
-  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = area->spacedata.first_as<SpaceOutliner>();
 
   /* context changes */
   switch (wmn->category) {
@@ -330,7 +330,7 @@ static void outliner_main_region_message_subscribe(const wmRegionMessageSubscrib
   wmMsgBus *mbus = params->message_bus;
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = area->spacedata.first_as<SpaceOutliner>();
 
   wmMsgSubscribeValue msg_sub_value_region_tag_redraw{};
   msg_sub_value_region_tag_redraw.owner = region;
@@ -399,7 +399,8 @@ static SpaceLink *outliner_create(const ScrArea * /*area*/, const Scene * /*scen
   space_outliner->show_restrict_flags = SO_RESTRICT_ENABLE | SO_RESTRICT_HIDE | SO_RESTRICT_RENDER;
   space_outliner->outlinevis = SO_VIEW_LAYER;
   space_outliner->sync_select_dirty |= WM_OUTLINER_SYNC_SELECT_FROM_ALL;
-  space_outliner->flag = SO_SYNC_SELECT | SO_MODE_COLUMN | SO_SCROLL_TO_ACTIVE;
+  space_outliner->flag = SO_SYNC_SELECT | SO_MODE_COLUMN | SO_SCROLL_TO_ACTIVE |
+                         SO_EXPAND_ON_FOCUS;
   space_outliner->filter = SO_FILTER_NO_VIEW_LAYERS;
 
   /* header */
@@ -440,7 +441,7 @@ static SpaceLink *outliner_duplicate(SpaceLink *sl)
   SpaceOutliner *space_outliner_new = MEM_new<SpaceOutliner>(__func__, *space_outliner);
   space_outliner_new->runtime = MEM_new<SpaceOutliner_Runtime>(__func__, *space_outliner->runtime);
 
-  BLI_listbase_clear(&space_outliner_new->runtime->tree);
+  space_outliner_new->runtime->tree.clear_no_delete();
   space_outliner_new->treestore = nullptr;
 
   space_outliner_new->sync_select_dirty = WM_OUTLINER_SYNC_SELECT_FROM_ALL;
@@ -531,7 +532,7 @@ static void outliner_foreach_id(SpaceLink *space_link, LibraryForeachIDData *dat
 static void outliner_deactivate(ScrArea *area)
 {
   /* Remove hover highlights */
-  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = area->spacedata.first_as<SpaceOutliner>();
   outliner_flag_set(*space_outliner, TSE_HIGHLIGHTED_ANY, false);
   ED_region_tag_redraw_no_rebuild(BKE_area_find_region_type(area, RGN_TYPE_WINDOW));
 }
@@ -563,7 +564,7 @@ static void outliner_space_blend_read_data(BlendDataReader *reader, SpaceLink *s
     /* we only saved what was used */
     space_outliner->storeflag |= SO_TREESTORE_CLEANUP; /* at first draw */
   }
-  BLI_listbase_clear(&space_outliner->runtime->tree);
+  space_outliner->runtime->tree.clear_no_delete();
 }
 
 static void outliner_space_blend_read_after_liblink(BlendLibReader * /*reader*/,

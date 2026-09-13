@@ -15,11 +15,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_kdopbvh.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -200,6 +200,7 @@ IDTypeInfo IDType_ID_TE = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = texture_blend_write,

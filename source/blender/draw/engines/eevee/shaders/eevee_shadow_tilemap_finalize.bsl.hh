@@ -9,13 +9,7 @@
 #include "eevee_shadow_shared.hh"
 
 #include "eevee_shadow_tilemap_lib.bsl.hh"
-#include "gpu_shader_math_matrix_projection_lib.glsl"
-
-shared int rect_min_x;
-shared int rect_min_y;
-shared int rect_max_x;
-shared int rect_max_y;
-shared uint lod_rendered;
+#include "gpu_shader_math_matrix_projection.bsl.hh"
 
 namespace eevee::shadow {
 
@@ -44,6 +38,12 @@ struct TilemapFinalize {
   [[storage(5, write)]] ShadowRenderView (&render_view_buf)[SHADOW_VIEW_MAX];
   [[storage(6, read)]] const ShadowTileMapClip (&tilemaps_clip_buf)[];
   [[image(0, write, UINT_32)]] uimage2D tilemaps_img;
+
+  [[shared]] int rect_min_x;
+  [[shared]] int rect_min_y;
+  [[shared]] int rect_max_x;
+  [[shared]] int rect_max_y;
+  [[shared]] uint lod_rendered;
 };
 
 /**
@@ -66,7 +66,7 @@ void tilemap_finalize_main([[resource_table]] TilemapFinalize &srt,
   bool is_cubemap = (tilemap_data.projection_type == SHADOW_PROJECTION_CUBEFACE);
   int lod_max = is_cubemap ? SHADOW_TILEMAP_LOD : 0;
 
-  lod_rendered = 0u;
+  srt.lod_rendered = 0u;
 
   for (int lod = lod_max; lod >= 0; lod--) {
     int2 tile_co_lod = tile_co >> lod;
@@ -74,10 +74,10 @@ void tilemap_finalize_main([[resource_table]] TilemapFinalize &srt,
 
     /* Compute update area. */
     if (local_index == 0u) {
-      rect_min_x = SHADOW_TILEMAP_RES;
-      rect_min_y = SHADOW_TILEMAP_RES;
-      rect_max_x = 0;
-      rect_max_y = 0;
+      srt.rect_min_x = SHADOW_TILEMAP_RES;
+      srt.rect_min_y = SHADOW_TILEMAP_RES;
+      srt.rect_max_x = 0;
+      srt.rect_max_y = 0;
     }
 
     barrier();
@@ -86,16 +86,16 @@ void tilemap_finalize_main([[resource_table]] TilemapFinalize &srt,
     bool lod_valid_thread = all(equal(tile_co, tile_co_lod << lod));
     bool do_page_render = tile.is_used && tile.do_update && lod_valid_thread;
     if (do_page_render) {
-      atomicMin(rect_min_x, tile_co_lod.x);
-      atomicMin(rect_min_y, tile_co_lod.y);
-      atomicMax(rect_max_x, tile_co_lod.x + 1);
-      atomicMax(rect_max_y, tile_co_lod.y + 1);
+      atomicMin(srt.rect_min_x, tile_co_lod.x);
+      atomicMin(srt.rect_min_y, tile_co_lod.y);
+      atomicMax(srt.rect_max_x, tile_co_lod.x + 1);
+      atomicMax(srt.rect_max_y, tile_co_lod.y + 1);
     }
 
     barrier();
 
-    int2 rect_min = int2(rect_min_x, rect_min_y);
-    int2 rect_max = int2(rect_max_x, rect_max_y);
+    int2 rect_min = int2(srt.rect_min_x, srt.rect_min_y);
+    int2 rect_max = int2(srt.rect_max_x, srt.rect_max_y);
 
     int viewport_index = viewport_select(rect_max - rect_min);
     int2 viewport_size = shadow_viewport_size_get(uint(viewport_index));
@@ -106,7 +106,7 @@ void tilemap_finalize_main([[resource_table]] TilemapFinalize &srt,
       if (lod_has_update) {
         int view_index = atomicAdd(srt.statistics_buf.view_needed_count, 1);
         if (view_index < SHADOW_VIEW_MAX) {
-          lod_rendered |= 1u << lod;
+          srt.lod_rendered |= 1u << lod;
 
           /* Setup the view. */
           srt.view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
@@ -178,7 +178,7 @@ void tilemap_finalize_main([[resource_table]] TilemapFinalize &srt,
     int tile_index = shadow_tile_offset(uint2(tile_co_lod), tilemap_data.tiles_index, lod);
     ShadowTileData tile = shadow_tile_unpack(srt.tiles_buf[tile_index]);
 
-    bool lod_is_rendered = ((lod_rendered >> lod) & 1u) == 1u;
+    bool lod_is_rendered = ((srt.lod_rendered >> lod) & 1u) == 1u;
     if (tile.is_used && tile.is_allocated && (!tile.do_update || lod_is_rendered)) {
       /* Save highest lod for this thread. */
       valid_tile_index = tile_index;
@@ -250,13 +250,11 @@ void rendermap_finalize_main([[resource_table]] RendermapFinalize &srt,
     int lod_res = SHADOW_TILEMAP_RES >> lod;
     int2 relative_tile_co = (viewport_tile_co + lod_res) % lod_res;
     if (all(lessThan(relative_tile_co, viewport_size))) {
-      bool do_page_render = tile.is_used && tile.do_update;
-      uint page_packed = shadow_page_pack(tile.page);
-      /* Add page to render map. */
-      int render_page_index = shadow_render_page_index_get(view_index, relative_tile_co);
-      srt.render_map_buf[render_page_index] = do_page_render ? page_packed : 0xFFFFFFFFu;
-
-      if (do_page_render) {
+      if (tile.is_used && tile.do_update) {
+        uint page_packed = shadow_page_pack(tile.page);
+        /* Add page to render map. */
+        int render_page_index = shadow_render_page_index_get(view_index, relative_tile_co);
+        srt.render_map_buf[render_page_index] = page_packed;
         /* Add page to clear dispatch. */
         uint page_index = atomicAdd(srt.clear_dispatch_buf.num_groups_z, 1u);
         /* Add page to tile processing. */
@@ -264,7 +262,7 @@ void rendermap_finalize_main([[resource_table]] RendermapFinalize &srt,
         /* Add page mapping for indexing the page position in atlas and in the frame-buffer. */
         srt.dst_coord_buf[page_index] = page_packed;
         srt.src_coord_buf[page_index] = packUvec4x8(
-            uint4(int4(relative_tile_co.x, relative_tile_co.y, view_index, 0)));
+            uint4(relative_tile_co.x, relative_tile_co.y, view_index, 0));
         /* Tag tile as rendered. Should be safe since only one thread is reading and writing. */
         srt.tiles_buf[tile_index] |= SHADOW_IS_RENDERED;
         /* Statistics. */

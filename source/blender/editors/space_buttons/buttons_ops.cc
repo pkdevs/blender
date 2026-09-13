@@ -13,10 +13,10 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -58,7 +58,7 @@ static wmOperatorStatus buttons_start_filter_exec(bContext *C, wmOperator * /*op
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
 
-  ui::textbutton_activate_rna(C, region, space, "search_filter");
+  ED_region_activate_rna_prop(C, region, space, "search_filter");
 
   return OPERATOR_FINISHED;
 }
@@ -373,7 +373,7 @@ static wmOperatorStatus file_browse_invoke(bContext *C, wmOperator *op, const wm
         is_relative = BLI_path_is_rel(path);
       }
 
-      if (UNLIKELY(ptr.data == &U || is_userdef)) {
+      if (ptr.data == &U || is_userdef) [[unlikely]] {
         is_relative = false;
       }
 
@@ -449,7 +449,7 @@ static bool file_browse_poll_property(const bContext * /*C*/,
 void BUTTONS_OT_file_browse(wmOperatorType *ot)
 {
   /* Identifiers. */
-  ot->name = "Accept";
+  ot->name = "Select File";
   ot->description =
       "Open a file browser, hold Shift to open the file, Alt to browse containing directory";
   ot->idname = "BUTTONS_OT_file_browse";
@@ -481,7 +481,7 @@ void BUTTONS_OT_file_browse(wmOperatorType *ot)
 void BUTTONS_OT_directory_browse(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Accept";
+  ot->name = "Select Directory";
   ot->description =
       "Open a directory browser, hold Shift to open the file, Alt to browse containing directory";
   ot->idname = "BUTTONS_OT_directory_browse";

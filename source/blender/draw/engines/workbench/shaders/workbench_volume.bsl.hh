@@ -8,16 +8,13 @@
 
 #include "draw_object_infos_infos.hh"
 
-SHADER_LIBRARY_CREATE_INFO(draw_mesh)
-SHADER_LIBRARY_CREATE_INFO(draw_resource_id_varying)
-
 #include "draw_model_lib.glsl"
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
-#include "gpu_shader_math_vector_reduce_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 namespace workbench::volume {
 
@@ -147,7 +144,7 @@ struct Resources {
     if (this->interpolation == 2) [[static_branch]] {
       return sample_tricubic(ima, co);
     }
-    /* Use hardware interpolation*/
+    /* Use hardware interpolation. */
     return texture(ima, co);
   }
 };
@@ -330,6 +327,8 @@ struct VertOut {
                                 [[out, condition(use_slice)]] VertOut &v_out,
                                 [[position]] float4 &out_position)
 {
+  SHADER_LIBRARY_CREATE_INFO(draw_resource_id_varying);
+
   drw_ResourceID_iface.resource_id = drw_resource_id_raw();
 
   float3 final_pos;

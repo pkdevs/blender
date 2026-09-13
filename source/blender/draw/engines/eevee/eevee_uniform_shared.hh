@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -49,6 +51,13 @@ struct [[host_shared]] ShadowSceneData {
   int _pad2;
 };
 
+struct [[host_shared]] SceneData {
+  float time;
+  float frame;
+  uint _pad0;
+  uint _pad1;
+};
+
 /* Light Clamping. */
 struct [[host_shared]] ClampData {
   float sun_threshold;
@@ -82,7 +91,9 @@ struct [[host_shared]] PipelineInfoData {
   int gbuffer_additional_data_layer_id;
   /* Use monochromatic transmittance for the forward pipeline. */
   bool32_t use_monochromatic_transmittance;
-  bool32_t _pad0;
+  /* True if the pipeline can use the raycast node.
+   * The value is valid only if `MAT_RAYCAST` is defined. */
+  bool32_t can_raycast;
   bool32_t _pad1;
   bool32_t _pad2;
 };
@@ -97,11 +108,13 @@ struct [[host_shared]] UniformData {
   struct RenderBuffersInfoData render_pass;
   struct ShadowSceneData shadow;
   struct VolumesInfoData volumes;
+  struct SceneData scene;
 };
 
 /**
  * World space clip plane equation. Used to render planar light-probes.
- * Moved here to avoid dependencies to light-probe just for this. */
+ * Moved here to avoid dependencies to light-probe just for this.
+ */
 struct [[host_shared]] ClipPlaneData {
   float4 plane;
 };

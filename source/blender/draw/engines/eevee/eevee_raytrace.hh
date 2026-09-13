@@ -168,8 +168,10 @@ class RayTraceModule {
   /** Dispatch with enough tiles for the tracing resolution. */
   int3 tracing_dispatch_size_ = int3(1);
   int3 fast_gi_tracing_dispatch_size_ = int3(1);
-  /** 2D tile mask to check which unused adjacent tile we need to clear and which tile we need to
-   * dispatch for each work type. */
+  /**
+   * 2D tile mask to check which unused adjacent tile we need to clear and which tile we need to
+   * dispatch for each work type.
+   */
   Texture tile_raytrace_denoise_tx_ = {"tile_raytrace_denoise_tx_"};
   Texture tile_raytrace_tracing_tx_ = {"tile_raytrace_tracing_tx_"};
   Texture tile_fast_gi_denoise_tx_ = {"tile_fast_gi_denoise_tx_"};
@@ -290,7 +292,7 @@ class RayTraceModule {
 
   /**
    * Update screen space thickness parameters.
-   * Needs to be called early in the frame to allow raycast node usage.
+   * Needs to be called early in the frame to allow ray-cast node usage.
    * Needs uniform_data.push_update() to be called afterward to take effect.
    */
   void thickness_parameters_setup(const float4x4 &winmat, const int2 extent);

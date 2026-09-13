@@ -11,7 +11,7 @@
 #include "BKE_main_invariants.hh"
 #include "BKE_node_tree_interface.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -91,7 +91,7 @@ class NodeSocketViewItem : public BasicTreeViewItem {
   NodeSocketViewItem(bNodeTree &nodetree,
                      bNodeTreeInterface &interface,
                      bNodeTreeInterfaceSocket &socket)
-      : BasicTreeViewItem(socket.name, ICON_NONE), nodetree_(nodetree), socket_(socket)
+      : BasicTreeViewItem(socket.name(), ICON_NONE), nodetree_(nodetree), socket_(socket)
   {
     set_is_active_fn([interface, &socket]() { return interface.active_item() == &socket.item; });
     set_on_activate_fn([&interface](bContext & /*C*/, BasicTreeViewItem &new_active) {
@@ -159,9 +159,9 @@ class NodeSocketViewItem : public BasicTreeViewItem {
   }
   bool rename(const bContext &C, StringRefNull new_name) override
   {
-    MEM_SAFE_DELETE(socket_.name);
+    MEM_SAFE_DELETE(socket_.name_);
 
-    socket_.name = BLI_strdup(new_name.c_str());
+    socket_.name_ = BLI_strdup(new_name.c_str());
     nodetree_.tree_interface.tag_item_property_changed();
     BKE_main_ensure_invariants(*CTX_data_main(&C), nodetree_.id);
     ED_undo_push(&const_cast<bContext &>(C), new_name.c_str());
@@ -169,7 +169,7 @@ class NodeSocketViewItem : public BasicTreeViewItem {
   }
   StringRef get_rename_string() const override
   {
-    return socket_.name;
+    return socket_.name();
   }
 
   void delete_item(bContext *C) override
@@ -195,7 +195,7 @@ class NodePanelViewItem : public BasicTreeViewItem {
   NodePanelViewItem(bNodeTree &nodetree,
                     bNodeTreeInterface &interface,
                     bNodeTreeInterfacePanel &panel)
-      : BasicTreeViewItem(panel.name, ICON_NONE), nodetree_(nodetree), panel_(panel)
+      : BasicTreeViewItem(panel.name(), ICON_NONE), nodetree_(nodetree), panel_(panel)
   {
     set_is_active_fn([interface, &panel]() { return interface.active_item() == &panel.item; });
     set_on_activate_fn([&interface](bContext & /*C*/, BasicTreeViewItem &new_active) {
@@ -279,7 +279,7 @@ class NodePanelViewItem : public BasicTreeViewItem {
   }
   StringRef get_rename_string() const override
   {
-    return panel_.name;
+    return panel_.name();
   }
 
   void delete_item(bContext *C) override
@@ -331,8 +331,8 @@ class NodeTreeInterfaceView : public AbstractTreeView {
       if (item == skip_item) {
         continue;
       }
-      switch (eNodeTreeInterfaceItemType(item->item_type)) {
-        case NODE_INTERFACE_SOCKET: {
+      switch (item->item_type) {
+        case NodeTreeInterfaceItemType::Socket: {
           bNodeTreeInterfaceSocket *socket = node_interface::get_item_as<bNodeTreeInterfaceSocket>(
               item);
           NodeSocketViewItem &socket_item = parent_item.add_tree_item<NodeSocketViewItem>(
@@ -340,7 +340,7 @@ class NodeTreeInterfaceView : public AbstractTreeView {
           socket_item.uncollapse_by_default();
           break;
         }
-        case NODE_INTERFACE_PANEL: {
+        case NodeTreeInterfaceItemType::Panel: {
           bNodeTreeInterfacePanel *panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(
               item);
           NodePanelViewItem &panel_item = parent_item.add_tree_item<NodePanelViewItem>(
@@ -407,15 +407,15 @@ void gather_drag_items_recursive(bNodeTreeInterfacePanel &panel,
     }
 
     bool is_selected = false;
-    switch (eNodeTreeInterfaceItemType(item->item_type)) {
-      case NODE_INTERFACE_PANEL: {
+    switch (item->item_type) {
+      case NodeTreeInterfaceItemType::Panel: {
         bNodeTreeInterfacePanel *panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(
             item);
         is_selected = (panel->flag & NODE_INTERFACE_PANEL_SELECT);
         gather_drag_items_recursive(*panel, r_items, is_selected);
         break;
       }
-      case NODE_INTERFACE_SOCKET: {
+      case NodeTreeInterfaceItemType::Socket: {
         bNodeTreeInterfaceSocket *socket = node_interface::get_item_as<bNodeTreeInterfaceSocket>(
             item);
         is_selected = (socket->flag & NODE_INTERFACE_SOCKET_SELECT);
@@ -518,7 +518,7 @@ bool on_drop_interface_items(bContext *C,
   switch (drag_info.drop_location) {
     case DropLocation::Into: {
       /* Insert into target */
-      if (drop_target_item.item_type != NODE_INTERFACE_PANEL) {
+      if (drop_target_item.item_type != NodeTreeInterfaceItemType::Panel) {
         return false;
       }
       parent = node_interface::get_item_as<bNodeTreeInterfacePanel>(&drop_target_item);
@@ -600,7 +600,7 @@ bool NodePanelDropTarget::on_drop(bContext *C, const DragInfo &drag_info) const
 
 void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr)
 {
-  if (!ptr->data) {
+  if (!*ptr) {
     return;
   }
   if (!RNA_struct_is_a(ptr->type, RNA_NodeTreeInterface)) {

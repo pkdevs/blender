@@ -31,15 +31,19 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh whose elements are converted to points");
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
+      .hide_value();
   b.add_input<decl::Vector>("Position"_ustr)
-      .implicit_field_on_all(NODE_DEFAULT_INPUT_POSITION_FIELD);
+      .evaluated_geometry_field()
+      .default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
   b.add_input<decl::Float>("Radius"_ustr)
       .default_value(0.05f)
       .min(0.0f)
       .subtype(PROP_DISTANCE)
-      .field_on_all();
-  b.add_output<decl::Geometry>("Points"_ustr).propagate_all();
+      .evaluated_geometry_field();
+  b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -82,6 +86,10 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
   evaluator.add(radius_field);
   evaluator.evaluate();
   const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
+  if (selection.is_empty()) {
+    geometry_set.keep_only({GeometryComponent::Type::Edit});
+    return;
+  }
   const VArray<float3> positions_eval = evaluator.get_evaluated<float3>(0);
   const VArray<float> radii_eval = evaluator.get_evaluated<float>(1);
 

@@ -14,20 +14,21 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_array.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_color.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_geom.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_set.hh"
-#include "BLI_stack.h"
-#include "BLI_string_utf8.h"
+#include "BLI_stack_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -454,7 +455,7 @@ static void knifetool_draw_visible_distances(const KnifeTool_OpData *kcd)
   }
   else {
     BKE_unit_value_as_string_scaled(
-        numstr, sizeof(numstr), cut_len, distance_precision, B_UNIT_LENGTH, unit, false);
+        numstr, sizeof(numstr), cut_len, distance_precision, B_UNIT_LENGTH, unit, false, true);
   }
 
   BLF_enable(blf_mono_font, BLF_ROTATION);
@@ -535,7 +536,7 @@ static void knifetool_draw_angle(const KnifeTool_OpData *kcd,
     const float px_scale =
         3.0f * inverse_average_scale *
         (ED_view3d_pixel_size_no_ui_scale(rv3d, mid) *
-         min_fff(arc_size, len_v2v2(start_ss, mid_ss) / 2.0f, len_v2v2(end_ss, mid_ss) / 2.0f));
+         std::min({arc_size, len_v2v2(start_ss, mid_ss) / 2.0f, len_v2v2(end_ss, mid_ss) / 2.0f}));
 
     sub_v3_v3v3(dir_a, start, mid);
     sub_v3_v3v3(dir_b, end, mid);
@@ -583,8 +584,14 @@ static void knifetool_draw_angle(const KnifeTool_OpData *kcd,
     SNPRINTF_UTF8(numstr, "%.*f" BLI_STR_UTF8_DEGREE_SIGN, angle_precision, RAD2DEGF(angle));
   }
   else {
-    BKE_unit_value_as_string(
-        numstr, sizeof(numstr), double(angle), angle_precision, B_UNIT_ROTATION, unit, false);
+    BKE_unit_value_as_string(numstr,
+                             sizeof(numstr),
+                             double(angle),
+                             angle_precision,
+                             B_UNIT_ROTATION,
+                             unit,
+                             false,
+                             true);
   }
 
   BLF_enable(blf_mono_font, BLF_ROTATION);
@@ -638,7 +645,7 @@ static void knifetool_draw_visible_angles(const KnifeTool_OpData *kcd)
     float angle = 0.0f;
     float *end;
 
-    kfe = static_cast<KnifeEdge *>((static_cast<LinkData *>(kfv->edges.first))->data);
+    kfe = static_cast<KnifeEdge *>(kfv->edges.first()->data);
     for (LinkData &ref : kfv->edges) {
       tempkfe = static_cast<KnifeEdge *>(ref.data);
       if (tempkfe->v1 != kfv) {
@@ -721,7 +728,7 @@ static void knifetool_draw_visible_angles(const KnifeTool_OpData *kcd)
     }
     else {
       /* Choose minimum angle edge. */
-      kfe = static_cast<KnifeEdge *>((static_cast<LinkData *>(kfv->edges.first))->data);
+      kfe = static_cast<KnifeEdge *>(kfv->edges.first()->data);
       for (LinkData &ref : kfv->edges) {
         tempkfe = static_cast<KnifeEdge *>(ref.data);
         if (tempkfe->v1 != kfv) {
@@ -1508,8 +1515,8 @@ static BMElem *bm_elem_from_knife_vert(KnifeVert *kfv, KnifeEdge **r_kfe)
 
   /* face? */
   if (ele_test == nullptr) {
-    if (BLI_listbase_is_single(&kfe->faces)) {
-      ele_test = static_cast<BMElem *>((static_cast<LinkData *>(kfe->faces.first))->data);
+    if (kfe->faces.is_single()) {
+      ele_test = static_cast<BMElem *>(kfe->faces.first()->data);
     }
   }
 
@@ -1541,7 +1548,7 @@ static ListBaseT<LinkData> *knife_empty_list(KnifeTool_OpData *kcd)
 
   list = static_cast<ListBaseT<LinkData> *>(
       BLI_memarena_alloc(kcd->arena, sizeof(ListBaseT<LinkData>)));
-  BLI_listbase_clear(list);
+  list->clear_no_delete();
   return list;
 }
 
@@ -2055,7 +2062,7 @@ static void knife_cut_face(KnifeTool_OpData *kcd, BMFace *f, ListBaseT<LinkData>
     return;
   }
 
-  for (r = static_cast<LinkData *>(hits->first); r->next; r = r->next) {
+  for (r = hits->first(); r->next; r = r->next) {
     knife_add_single_cut(
         kcd, static_cast<KnifeLineHit *>(r->data), static_cast<KnifeLineHit *>(r->next->data), f);
   }
@@ -2067,7 +2074,7 @@ static void knife_make_face_cuts(KnifeTool_OpData *kcd,
                                  ListBaseT<LinkData> *kfedges)
 {
   KnifeEdge *kfe;
-  int edge_array_len = BLI_listbase_count(kfedges);
+  int edge_array_len = kfedges->count();
   int i;
 
   blender::Array<BMEdge *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> edge_array_buf(edge_array_len);
@@ -2425,7 +2432,7 @@ static int get_lowest_face_tri(KnifeTool_OpData *kcd, BMFace *f)
  * Find intersection of v1-v2 with face f.
  * Only take intersections that are at least \a face_tol_sq (in screen space) away
  * from other intersection elements.
- * If v1-v2 is coplanar with f, call that "no intersection though
+ * If v1-v2 is coplanar with f, call that "no intersection" though
  * it really means "infinite number of intersections".
  * In such a case we should have gotten hits on edges or verts of the face.
  */
@@ -3432,8 +3439,8 @@ static bool knife_snap_angle_screen(const KnifeTool_OpData *kcd,
                                     float3 &r_cage,
                                     float &r_angle)
 {
-  const float3 &vec_x = kcd->vc.rv3d->viewinv[0];
-  const float3 &vec_z = kcd->vc.rv3d->viewinv[2];
+  const float3 vec_x = kcd->vc.rv3d->viewinv[0];
+  const float3 vec_z = kcd->vc.rv3d->viewinv[2];
   return knife_snap_angle_impl(kcd, vec_x, vec_z, ray_orig, ray_dir, r_cage, r_angle);
 }
 
@@ -4724,16 +4731,12 @@ void MESH_OT_knife_tool(wmOperatorType *ot)
  * Can be used for internal slicing operations.
  * \{ */
 
-static bool edbm_mesh_knife_point_isect(LinkNode *polys, const float cent_ss[2])
+static bool edbm_mesh_knife_point_isect(const Span<Array<float2>> polys, const float2 cent_ss)
 {
-  LinkNode *p = polys;
   int isect = 0;
 
-  while (p) {
-    const float (*mval_fl)[2] = static_cast<const float (*)[2]>(p->link);
-    const int mval_tot = MEM_allocN_len(mval_fl) / sizeof(*mval_fl);
-    isect += int(isect_point_poly_v2(cent_ss, mval_fl, mval_tot - 1));
-    p = p->next;
+  for (const Array<float2> &poly : polys) {
+    isect += int(math::isect_point_poly(cent_ss, poly.as_span().drop_back(1)));
   }
 
   if (isect % 2) {
@@ -4742,8 +4745,11 @@ static bool edbm_mesh_knife_point_isect(LinkNode *polys, const float cent_ss[2])
   return false;
 }
 
-void EDBM_mesh_knife(
-    ViewContext *vc, const Span<Object *> objects, LinkNode *polys, bool use_tag, bool cut_through)
+void EDBM_mesh_knife(ViewContext *vc,
+                     const Span<Object *> objects,
+                     const Span<Array<float2>> polys,
+                     bool use_tag,
+                     bool cut_through)
 {
   KnifeTool_OpData *kcd;
 
@@ -4775,26 +4781,19 @@ void EDBM_mesh_knife(
 
   /* Execute. */
   {
-    LinkNode *p = polys;
-
     knife_recalc_ortho(kcd);
 
-    while (p) {
-      const float (*mval_fl)[2] = static_cast<const float (*)[2]>(p->link);
-      const int mval_tot = MEM_allocN_len(mval_fl) / sizeof(*mval_fl);
-      int i;
-
-      knife_start_cut(kcd, mval_fl[0]);
+    for (const Array<float2> &poly : polys) {
+      knife_start_cut(kcd, poly[0]);
       kcd->mode = MODE_DRAGGING;
 
-      for (i = 1; i < mval_tot; i++) {
-        knifetool_update_mval(kcd, mval_fl[i]);
+      for (const float2 &mval : poly.as_span().drop_front(1)) {
+        knifetool_update_mval(kcd, mval);
         knife_add_cut(kcd);
       }
 
       knife_finish_cut(kcd);
       kcd->mode = MODE_IDLE;
-      p = p->next;
     }
   }
 
@@ -4912,7 +4911,7 @@ void EDBM_mesh_knife(
 
     for (Object *ob : kcd->objects) {
       /* Defer freeing data until the BVH tree is finished with, see: #point_is_visible and
-       * the doc-string for #knifetool_finish_single_post. */
+       * the docstring for #knifetool_finish_single_post. */
       knifetool_finish_single_post(kcd, ob);
     }
 

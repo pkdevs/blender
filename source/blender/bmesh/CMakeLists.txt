@@ -42,9 +42,11 @@ set(SRC
   operators/bmo_planar_faces.cc
   operators/bmo_poke.cc
   operators/bmo_primitive.cc
+  operators/bmo_relax_edge_loops.cc
   operators/bmo_removedoubles.cc
   operators/bmo_rotate_edges.cc
   operators/bmo_smooth_laplacian.cc
+  operators/bmo_space_edge_loops_evenly.cc
   operators/bmo_split_edges.cc
   operators/bmo_subdivide.cc
   operators/bmo_subdivide_edgering.cc
@@ -70,6 +72,7 @@ set(SRC
   intern/bmesh_iterators.cc
   intern/bmesh_iterators.hh
   intern/bmesh_iterators_inline.hh
+  intern/bmesh_iterators_parallel.hh
   intern/bmesh_log.cc
   intern/bmesh_log.hh
   intern/bmesh_marking.cc

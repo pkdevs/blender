@@ -1372,7 +1372,7 @@ def url_retrieve_to_data_iter(
         )
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter(
         url: str,
         filepath: str,
@@ -1397,7 +1397,7 @@ def url_retrieve_to_filepath_iter(
             yield len(block)
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def filepath_retrieve_to_filepath_iter(
         filepath_src: str,
         filepath: str,
@@ -1442,7 +1442,7 @@ def url_retrieve_to_data_iter_or_filesystem(
         )
 
 
-# See `url_retrieve_to_data_iter` doc-string.
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter_or_filesystem(
         url: str,
         filepath: str,
@@ -3215,7 +3215,7 @@ def generic_arg_package_valid_tags(subparse: argparse.ArgumentParser) -> None:
             "The contents must be a dictionary of lists where the ``key`` matches the extension type.\n"
             "\n"
             "For example:\n"
-            "   ``{\"add-ons\": [\"Example\", \"Another\"], \"theme\": [\"Other\", \"Tags\"]}``\n"
+            "   ``{\"add-on\": [\"Example\", \"Another\"], \"theme\": [\"Other\", \"Tags\"]}``\n"
             "\n"
             "To disable validating tags, pass in an empty path ``--valid-tags=\"\"``."
         ),

@@ -15,8 +15,8 @@
 
 #include "BLI_math_vector.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_material_types.h"
 
@@ -308,6 +308,7 @@ static const FbxStdTextureToSocket fbx_std_to_socket[] = {
     {UFBX_MATERIAL_FBX_TRANSPARENCY_FACTOR, "Alpha"},
     {UFBX_MATERIAL_FBX_TRANSPARENCY_COLOR, "Alpha"},
     {UFBX_MATERIAL_FBX_BUMP, "Normal"},
+    {UFBX_MATERIAL_FBX_REFLECTION_FACTOR, "Metallic"},
 };
 
 static void add_image_texture(Main *bmain,
@@ -386,7 +387,7 @@ static void add_image_texture(Main *bmain,
       /* Link base color alpha (if we have one) to output alpha. */
       void *lock;
       ImBuf *ibuf = BKE_image_acquire_ibuf(image, nullptr, &lock);
-      bool has_alpha = ibuf != nullptr && ibuf->planes == R_IMF_PLANES_RGBA;
+      bool has_alpha = ibuf != nullptr && ibuf->can_contain_alpha();
       BKE_image_release_ibuf(image, ibuf, lock);
 
       if (has_alpha) {

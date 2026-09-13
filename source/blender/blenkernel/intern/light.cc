@@ -21,7 +21,7 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_icons.hh"
 #include "BKE_idtype.hh"
@@ -187,6 +187,7 @@ IDTypeInfo IDType_ID_LA = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = light_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = light_blend_write,

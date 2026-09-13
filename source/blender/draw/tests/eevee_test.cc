@@ -66,6 +66,7 @@ static void test_eevee_shadow_shift_clear()
 
   PassSimple pass("Test");
   pass.shader_set(sh);
+  pass.push_constant("reset_used_flag", true);
   pass.bind_ssbo("tilemaps_buf", tilemaps_data);
   pass.bind_ssbo("tilemaps_clip_buf", tilemaps_clip);
   pass.bind_ssbo("tiles_buf", tiles_data);
@@ -152,6 +153,7 @@ static void test_eevee_shadow_shift()
 
   PassSimple pass("Test");
   pass.shader_set(sh);
+  pass.push_constant("reset_used_flag", true);
   pass.bind_ssbo("tilemaps_buf", tilemaps_data);
   pass.bind_ssbo("tilemaps_clip_buf", tilemaps_clip);
   pass.bind_ssbo("tiles_buf", tiles_data);
@@ -813,27 +815,27 @@ static void test_eevee_shadow_finalize()
     tile.do_update = true;
     tiles_data[lod2_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(0, 1, 0);
+    tile.page = uint3(4, 0, 0);
     tile.do_update = true;
     tiles_data[lod3_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(1, 1, 0);
+    tile.page = uint3(5, 0, 0);
     tile.do_update = true;
     tiles_data[lod4_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(2, 1, 0);
+    tile.page = uint3(6, 0, 0);
     tile.do_update = true;
     tiles_data[lod5_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(3, 1, 0);
+    tile.page = uint3(7, 0, 0);
     tile.do_update = true;
     tiles_data[lod0_ofs + 31] = shadow_tile_pack(tile);
 
-    tile.page = uint3(0, 2, 0);
+    tile.page = uint3(0, 1, 0);
     tile.do_update = true;
     tiles_data[lod3_ofs + 8] = shadow_tile_pack(tile);
 
-    tile.page = uint3(1, 2, 0);
+    tile.page = uint3(1, 1, 0);
     tile.do_update = true;
     tiles_data[lod0_ofs + 32 * 16 - 8] = shadow_tile_pack(tile);
 
@@ -887,7 +889,7 @@ static void test_eevee_shadow_finalize()
   StorageArrayBuffer<uint, SHADOW_RENDER_MAP_SIZE> render_map_buf = {"render_map_buf"};
   StorageArrayBuffer<uint, SHADOW_VIEW_MAX> viewport_index_buf = {"viewport_index_buf"};
 
-  render_map_buf.clear_to_zero();
+  GPU_storagebuf_clear(render_map_buf, 0xFFFFFFFFu);
   clear_dispatch_buf.clear_to_zero();
 
   gpu::Shader *sh = GPU_shader_create_from_info_name("eevee_shadow_tilemap_finalize");
@@ -996,7 +998,7 @@ static void test_eevee_shadow_finalize()
     auto stringify_view = [](Span<uint> data) -> std::string {
       std::string result;
       for (auto x : data) {
-        result += (x == 0u) ? '-' : ((x == 0xFFFFFFFFu) ? 'x' : '0' + (x % 10));
+        result += (x == 0u) ? 'x' : ((x == 0xFFFFFFFFu) ? '-' : '0' + (x % 10));
       }
       return result;
     };
@@ -1071,10 +1073,10 @@ static void test_eevee_shadow_finalize()
         "--------------------------------";
 
     StringRefNull expected_view2 =
-        "4xxx----------------------------"
-        "xxxx----------------------------"
-        "8xxx----------------------------"
-        "xxxx----------------------------"
+        "4-------------------------------"
+        "--------------------------------"
+        "8-------------------------------"
+        "--------------------------------"
         "--------------------------------"
         "--------------------------------"
         "--------------------------------"
@@ -1139,22 +1141,22 @@ static void test_eevee_shadow_finalize()
         "--------------------------------";
 
     StringRefNull expected_view4 =
-        "xxxxxxx7xxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "9xxxxxxxxxxxxxxx----------------"
+        "-------7------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "9-------------------------------"
         "--------------------------------"
         "--------------------------------"
         "--------------------------------"
@@ -1310,6 +1312,7 @@ static void test_eevee_shadow_tilemap_amend()
   pass.bind_ssbo(LIGHT_BUF_SLOT, culling_light_buf);
   pass.bind_ssbo(LIGHT_ZBIN_BUF_SLOT, culling_zbin_buf);
   pass.bind_ssbo(LIGHT_TILE_BUF_SLOT, culling_tile_buf);
+  pass.bind_ssbo("light_buf_write", culling_light_buf);
   pass.dispatch(int3(1));
   pass.barrier(GPU_BARRIER_TEXTURE_UPDATE);
 

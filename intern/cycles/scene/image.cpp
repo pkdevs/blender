@@ -265,7 +265,9 @@ void ImageManager::load_image_metadata(ImageSingle *img, Progress &progress)
                                       .auto_texture_cache = auto_texture_cache,
                                       .texture_cache_path = texture_cache_path,
                                       .colorspace = img->params.colorspace,
-                                      .alpha_type = img->params.alpha_type};
+                                      .alpha_type = img->params.alpha_type,
+                                      .load_failure_num = load_failure_num,
+                                      .tx_failure_num = tx_failure_num};
 
     ImageMetaData &metadata = img->metadata;
     metadata = ImageMetaData();
@@ -498,7 +500,7 @@ void ImageManager::device_load_image(Device *device,
       tex.height = std::max(1, tex.height / 2);
       max_dim /= 2;
     }
-    image_cache.load_image_tiled(scene->dscene, img->metadata, tex);
+    image_cache.load_image_tiled(img->metadata, tex);
   }
   else {
     /* Compute texture resolution scale factor from texture size limit. */
@@ -518,6 +520,13 @@ void ImageManager::device_load_image(Device *device,
   /* Cleanup memory in image loader. */
   img->loader->cleanup();
   img->need_load = false;
+}
+
+void ImageManager::device_load_tiled_descriptors(Scene *scene)
+{
+  DeviceScene &dscene = scene->dscene;
+  image_cache.load_image_tiled_descriptors(
+      dscene, {dscene.image_textures.data(), dscene.image_textures.size()});
 }
 
 void ImageManager::device_free_image(Scene *scene, size_t image_texture_id)
@@ -666,6 +675,8 @@ void ImageManager::device_update(Device *device, Scene *scene, Progress &progres
   }
 
   pool.wait_work();
+  device_load_tiled_descriptors(scene);
+  report_failures();
 
   /* Copy device arrays. */
   device_copy_image_textures(device, scene);
@@ -704,6 +715,8 @@ void ImageManager::device_load_images(Device *device,
     });
   }
   pool.wait_work();
+  device_load_tiled_descriptors(scene);
+  report_failures();
 
   /* Copy device arrays. */
   device_copy_image_textures(device, scene);
@@ -729,6 +742,8 @@ void ImageManager::device_load_builtin(Device *device, Scene *scene, Progress &p
   }
 
   pool.wait_work();
+  device_load_tiled_descriptors(scene);
+  report_failures();
 }
 
 void ImageManager::device_free_builtin(Scene *scene)
@@ -843,6 +858,22 @@ bool ImageManager::get_use_texture_cache() const
 bool ImageManager::get_auto_texture_cache() const
 {
   return auto_texture_cache;
+}
+
+void ImageManager::report_failures()
+{
+  /* Report failure once after the full update. If we report an error immediately then
+   * exit-on-error will abort the process without waiting for other threads to cleanly finish
+   * generating their tx files. */
+  const int load_num = load_failure_num.exchange(0);
+  if (load_num > 0) {
+    LOG_ERROR << "Failed to load " << load_num << " image files";
+  }
+
+  const int tx_num = tx_failure_num.exchange(0);
+  if (tx_num > 0) {
+    LOG_ERROR << "Failed to generate " << tx_num << " tx files";
+  }
 }
 
 CCL_NAMESPACE_END

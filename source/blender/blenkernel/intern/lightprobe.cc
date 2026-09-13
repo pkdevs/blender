@@ -14,8 +14,8 @@
 #include "DNA_lightprobe_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
@@ -70,6 +70,7 @@ IDTypeInfo IDType_ID_LP = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = lightprobe_blend_write,

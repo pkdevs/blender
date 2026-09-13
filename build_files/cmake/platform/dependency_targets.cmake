@@ -316,7 +316,7 @@ endif()
 add_library(bf_deps_optional_embree INTERFACE)
 add_library(bf::dependencies::optional::embree ALIAS bf_deps_optional_embree)
 
-if(WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   target_include_directories(bf_deps_optional_embree SYSTEM INTERFACE ${EMBREE_INCLUDE_DIRS})
   target_link_libraries(bf_deps_optional_embree INTERFACE ${EMBREE_LIBRARIES})
 endif()
@@ -348,8 +348,8 @@ endif()
 add_library(bf_deps_epoxy INTERFACE)
 add_library(bf::dependencies::epoxy ALIAS bf_deps_epoxy)
 
-target_include_directories(bf_deps_epoxy SYSTEM INTERFACE ${Epoxy_INCLUDE_DIRS})
-target_link_libraries(bf_deps_epoxy INTERFACE ${Epoxy_LIBRARIES})
+target_include_directories(bf_deps_epoxy SYSTEM INTERFACE ${EPOXY_INCLUDE_DIRS})
+target_link_libraries(bf_deps_epoxy INTERFACE ${EPOXY_LIBRARIES})
 
 # -----------------------------------------------------------------------------
 # Configure Gflags
@@ -511,6 +511,6 @@ add_library(bf_deps_optional_tracy_client INTERFACE)
 add_library(bf::dependencies::optional::tracy_client ALIAS bf_deps_optional_tracy_client)
 
 if(WITH_TRACY)
-  target_compile_definitions(bf_deps_optional_tracy_client INTERFACE WITH_TRACY_CLIENT)
+  target_compile_definitions(bf_deps_optional_tracy_client INTERFACE WITH_TRACY)
   target_link_libraries(bf_deps_optional_tracy_client INTERFACE Tracy::TracyClient)
 endif()

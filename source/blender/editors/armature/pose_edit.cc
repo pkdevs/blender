@@ -7,9 +7,9 @@
  * Pose Mode API's and Operators for Pose Mode armatures.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -53,8 +53,11 @@ namespace blender {
 #undef DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
+/* -------------------------------------------------------------------- */
+/** \name Pose Mode Enter/Exit
+ * \{ */
 
 Object *ED_pose_object_from_context(bContext *C)
 {
@@ -131,13 +134,16 @@ bool ED_object_posemode_exit(bContext *C, Object *ob)
   if (ok) {
     WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_MODE_OBJECT, nullptr);
   }
+  /** \} */
+
   return ok;
 }
 
-/* ********************************************** */
-/* Motion Paths */
+/* -------------------------------------------------------------------- */
+/** \name Motion Paths
+ * \{ */
 
-void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCalcRange range)
+void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob)
 {
   /* Transform doesn't always have context available to do update. */
   if (C == nullptr) {
@@ -147,10 +153,7 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCa
   Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  Depsgraph *depsgraph;
-  bool free_depsgraph = false;
-
-  Vector<MPathTarget *> targets;
+  Vector<MPathTarget> targets;
   /* set flag to force recalc, then grab the relevant bones to target */
   ob->pose->avs.recalc |= ANIMVIZ_RECALC_PATHS;
   animviz_build_motionpath_targets(ob, targets);
@@ -160,37 +163,17 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCa
   TIMEIT_START(pose_path_calc);
 #endif
 
-  /* For a single frame update it's faster to re-use existing dependency graph and avoid overhead
-   * of building all the relations and so on for a temporary one. */
-  if (range == ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
-    /* NOTE: Dependency graph will be evaluated at all the frames, but we first need to access some
-     * nested pointers, like animation data. */
-    depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    free_depsgraph = false;
-  }
-  else {
-    depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
-    free_depsgraph = true;
-  }
-
-  animviz_calc_motionpaths(depsgraph, bmain, scene, targets, range);
+  Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
+  animviz_calc_motionpaths(depsgraph, scene, targets, BKE_scene_frame_get(scene));
 
 #ifdef DEBUG_TIME
   TIMEIT_END(pose_path_calc);
 #endif
 
-  animviz_free_motionpath_targets(targets);
-
-  if (range != ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
-    /* Tag armature object for copy-on-eval - so paths will draw/redraw.
-     * For currently frame only we update evaluated object directly. */
-    DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
-  }
+  DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
 
   /* Free temporary depsgraph. */
-  if (free_depsgraph) {
-    DEG_graph_free(depsgraph);
-  }
+  DEG_graph_free(depsgraph);
 }
 
 /* show popup to determine settings */
@@ -248,7 +231,10 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
   /* set up path data for bones being calculated */
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
     /* verify makes sure that the selected bone has a bone with the appropriate settings */
-    animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    bke::motionpath::ensure(op->reports, scene, ob, pchan);
+    if (pchan->mpath) {
+      ed::motionpath::tag_for_recalc(*pchan->mpath);
+    }
   }
   CTX_DATA_END;
 
@@ -258,7 +244,7 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
 
   /* Calculate the bones that now have motion-paths. */
   /* TODO: only make for the selected bones? */
-  ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
+  ED_pose_recalculate_paths(C, scene, ob);
 
 #ifdef DEBUG_TIME
   TIMEIT_END(recalc_pose_paths);
@@ -312,7 +298,7 @@ void POSE_OT_paths_calculate(wmOperatorType *ot)
 static bool pose_update_paths_poll(bContext *C)
 {
   if (ED_operator_posemode_exclusive(C)) {
-    Object *ob = CTX_data_active_object(C);
+    Object *ob = ed::object::context_active_object(C);
     return (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) != 0;
   }
 
@@ -331,13 +317,17 @@ static wmOperatorStatus pose_update_paths_exec(bContext *C, wmOperator *op)
 
   /* set up path data for bones being calculated */
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
-    animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    bke::motionpath::ensure(op->reports, scene, ob, pchan);
+    if (pchan->mpath) {
+      /* We enforce a full update since this is a direct user action. */
+      ed::motionpath::tag_for_recalc(*pchan->mpath);
+    }
   }
   CTX_DATA_END;
 
   /* Calculate the bones that now have motion-paths. */
   /* TODO: only make for the selected bones? */
-  ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
+  ED_pose_recalculate_paths(C, scene, ob);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
@@ -375,7 +365,7 @@ static void pose_clear_paths(Object *ob, bool only_selected)
   for (bPoseChannel &pchan : ob->pose->chanbase) {
     if (pchan.mpath) {
       if ((only_selected == false) || (pchan.flag & POSE_SELECTED)) {
-        animviz_free_motionpath(pchan.mpath);
+        bke::motionpath::free(pchan.mpath);
         pchan.mpath = nullptr;
       }
       else {
@@ -484,7 +474,11 @@ void POSE_OT_paths_range_update(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ********************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Bone Name Operators
+ * \{ */
 
 static wmOperatorStatus pose_flip_names_exec(bContext *C, wmOperator *op)
 {
@@ -505,7 +499,7 @@ static wmOperatorStatus pose_flip_names_exec(bContext *C, wmOperator *op)
 
     ED_armature_bones_flip_names(bmain, arm, &bones_names, do_strip_numbers);
 
-    BLI_freelistN(&bones_names);
+    bones_names.free_no_destruct();
 
     /* Since we renamed stuff... */
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -602,10 +596,17 @@ void POSE_OT_autoside_names(wmOperatorType *ot)
   ot->prop = RNA_def_enum(ot->srna, "axis", axis_items, 0, "Axis", "Axis to tag names with");
 }
 
-/* ********************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Set Rotation Mode Operator
+ * \{ */
 
 static wmOperatorStatus pose_bone_rotmode_exec(bContext *C, wmOperator *op)
 {
+  BKE_report(op->reports,
+             RPT_WARNING,
+             "pose.rotation_mode_set is deprecated. Use anim.rotation_mode_convert instead");
   const eRotationModes mode = eRotationModes(RNA_enum_get(op->ptr, "type"));
   Object *prev_ob = nullptr;
 
@@ -651,8 +652,11 @@ void POSE_OT_rotation_mode_set(wmOperatorType *ot)
       ot->srna, "type", rna_enum_object_rotation_mode_items, 0, "Rotation Mode", "");
 }
 
-/* ********************************************** */
-/* Show/Hide Bones */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Show/Hide Bones
+ * \{ */
 
 /* active object is armature in posemode, poll checked */
 static wmOperatorStatus pose_hide_exec(bContext *C, wmOperator *op)
@@ -765,6 +769,8 @@ void POSE_OT_reveal(wmOperatorType *ot)
 
   RNA_def_boolean(ot->srna, "select", true, "Select", "");
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Flip Quaternions

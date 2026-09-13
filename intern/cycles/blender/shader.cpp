@@ -21,7 +21,7 @@
 #include "util/string.h"
 #include "util/task.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_duplilist.hh"
 #include "BKE_node.hh"
@@ -200,7 +200,7 @@ static float3 get_node_output_vector(blender::bNode &b_node, const string &name)
 
 static SocketType::Type convert_socket_type(const blender::bNodeSocket &b_socket)
 {
-  switch (blender::eNodeSocketDatatype(b_socket.type)) {
+  switch (b_socket.type) {
     case blender::SOCK_FLOAT:
       return SocketType::FLOAT;
     case blender::SOCK_BOOLEAN:
@@ -368,7 +368,7 @@ static ShaderNode *add_node(Scene *scene,
   if (b_node.is_type("ShaderNodeRGBCurve"_ustr)) {
     const auto &mapping = *static_cast<blender::CurveMapping *>(b_node.storage);
     RGBCurvesNode *curves = graph->create_node<RGBCurvesNode>();
-    array<float3> curve_mapping_curves;
+    array<packed_float3> curve_mapping_curves;
     float min_x;
     float max_x;
     curvemapping_color_to_array(mapping, curve_mapping_curves, RAMP_TABLE_SIZE, true);
@@ -382,7 +382,7 @@ static ShaderNode *add_node(Scene *scene,
   if (b_node.is_type("ShaderNodeVectorCurve"_ustr)) {
     const auto &mapping = *static_cast<blender::CurveMapping *>(b_node.storage);
     VectorCurvesNode *curves = graph->create_node<VectorCurvesNode>();
-    array<float3> curve_mapping_curves;
+    array<packed_float3> curve_mapping_curves;
     float min_x;
     float max_x;
     curvemapping_color_to_array(mapping, curve_mapping_curves, RAMP_TABLE_SIZE, false);
@@ -410,7 +410,7 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_type("ShaderNodeValToRGB"_ustr)) {
     RGBRampNode *ramp = graph->create_node<RGBRampNode>();
     const auto &b_color_ramp = *static_cast<blender::ColorBand *>(b_node.storage);
-    array<float3> ramp_values;
+    array<packed_float3> ramp_values;
     array<float> ramp_alpha;
     colorramp_to_array(b_color_ramp, ramp_values, ramp_alpha, RAMP_TABLE_SIZE);
     ramp->set_ramp(ramp_values);
@@ -506,6 +506,9 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_type("ShaderNodeSeparateXYZ"_ustr)) {
     node = graph->create_node<SeparateXYZNode>();
   }
+  else if (b_node.is_type("FunctionNodeGetVectorComponent"_ustr)) {
+    node = graph->create_node<GetVectorComponentNode>();
+  }
   else if (b_node.is_type("ShaderNodeCombineXYZ"_ustr)) {
     node = graph->create_node<CombineXYZNode>();
   }
@@ -540,6 +543,11 @@ static ShaderNode *add_node(Scene *scene,
     math_node->set_math_type((NodeMathType)b_node.custom1);
     math_node->set_use_clamp(b_node.custom2);
     node = math_node;
+  }
+  else if (b_node.is_type("FunctionNodeBooleanMath"_ustr)) {
+    BooleanMathNode *boolean_math_node = graph->create_node<BooleanMathNode>();
+    boolean_math_node->set_math_type((NodeBooleanMathType)b_node.custom1);
+    node = boolean_math_node;
   }
   else if (b_node.is_type("ShaderNodeVectorMath"_ustr)) {
     VectorMathNode *vector_math_node = graph->create_node<VectorMathNode>();
@@ -1189,6 +1197,9 @@ static ShaderNode *add_node(Scene *scene,
     raycast_add_output_attribute_sockets(raycast, b_node);
     node = raycast;
   }
+  else if (b_node.is_type("GeometryNodeInputSceneTime"_ustr)) {
+    node = graph->create_node<SceneTimeNode>();
+  }
 
   if (node) {
     node->name = b_node.name;
@@ -1349,8 +1360,8 @@ static void add_nodes_inlined(Scene *scene,
   for (blender::bNode *b_node : b_ntree.all_nodes()) {
     if (b_node->is_muted() || b_node->is_reroute()) {
       /* replace muted node with internal links */
-      for (blender::bNodeLink &b_link : b_node->runtime->internal_links) {
-        blender::bNodeSocket *to_socket = b_link.tosock;
+      for (blender::bNodeInternalLink &b_link : b_node->runtime->internal_links) {
+        blender::bNodeSocket *to_socket = b_link.out;
         const SocketType::Type to_socket_type = convert_socket_type(*to_socket);
         if (to_socket_type == SocketType::UNDEFINED) {
           continue;
@@ -1360,8 +1371,8 @@ static void add_nodes_inlined(Scene *scene,
 
         /* Muted nodes can result in multiple Cycles input sockets mapping to the same Blender
          * input socket, so this needs to be a multimap. */
-        input_map.emplace(b_link.fromsock, proxy->inputs[0]);
-        output_map[b_link.tosock] = proxy->outputs[0];
+        input_map.emplace(b_link.in, proxy->inputs[0]);
+        output_map[b_link.out] = proxy->outputs[0];
       }
     }
     else if (b_node->is_group()) {
@@ -1634,7 +1645,9 @@ bool BlenderSync::scene_attr_needs_recalc(Shader *shader, blender::Depsgraph &b_
 
 /* Sync Materials */
 
-void BlenderSync::sync_materials(blender::Depsgraph &b_depsgraph, bool update_all)
+void BlenderSync::sync_materials(blender::Depsgraph &b_depsgraph,
+                                 bool update_all,
+                                 bool update_time)
 {
   shader_map.set_default(scene->default_surface);
 
@@ -1671,7 +1684,7 @@ void BlenderSync::sync_materials(blender::Depsgraph &b_depsgraph, bool update_al
               blender::ID *,
               b_id)
   {
-    if (GS(b_id->name) != blender::ID_MA) {
+    if (b_id->id_type() != blender::ID_MA) {
       continue;
     }
 
@@ -1680,7 +1693,8 @@ void BlenderSync::sync_materials(blender::Depsgraph &b_depsgraph, bool update_al
 
     /* test if we need to sync */
     if (shader_map.add_or_update(&shader, &b_mat.id) || update_all ||
-        scene_attr_needs_recalc(shader, b_depsgraph) || aovs_changed_between_view_layers)
+        scene_attr_needs_recalc(shader, b_depsgraph) || aovs_changed_between_view_layers ||
+        (shader->has_time_dependency && update_time))
     {
       unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
 
@@ -1755,7 +1769,8 @@ void BlenderSync::sync_materials(blender::Depsgraph &b_depsgraph, bool update_al
 void BlenderSync::sync_world(blender::Depsgraph &b_depsgraph,
                              blender::bScreen *b_screen,
                              blender::View3D *b_v3d,
-                             bool update_all)
+                             bool update_all,
+                             bool update_time)
 {
   Background *background = scene->background;
   Integrator *integrator = scene->integrator;
@@ -1770,7 +1785,7 @@ void BlenderSync::sync_world(blender::Depsgraph &b_depsgraph,
 
   if (world_recalc || update_all || b_world != world_map ||
       viewport_parameters.shader_modified(new_viewport_parameters) ||
-      scene_attr_needs_recalc(shader, b_depsgraph))
+      scene_attr_needs_recalc(shader, b_depsgraph) || (shader->has_time_dependency && update_time))
   {
     unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
 
@@ -1847,13 +1862,18 @@ void BlenderSync::sync_world(blender::Depsgraph &b_depsgraph,
     if (b_world) {
       blender::PointerRNA world_rna_ptr = RNA_id_pointer_create(&b_world->id);
       blender::PointerRNA cvisibility = RNA_pointer_get(&world_rna_ptr, "cycles_visibility");
-      uint visibility = 0;
+      PathRayVisibility visibility = PATH_RAY_VISIBILITY_NONE;
 
-      visibility |= get_boolean(cvisibility, "camera") ? PATH_RAY_CAMERA : PathRayFlag(0);
-      visibility |= get_boolean(cvisibility, "diffuse") ? PATH_RAY_DIFFUSE : PathRayFlag(0);
-      visibility |= get_boolean(cvisibility, "glossy") ? PATH_RAY_GLOSSY : PathRayFlag(0);
-      visibility |= get_boolean(cvisibility, "transmission") ? PATH_RAY_TRANSMIT : PathRayFlag(0);
-      visibility |= get_boolean(cvisibility, "scatter") ? PATH_RAY_VOLUME_SCATTER : PathRayFlag(0);
+      visibility |= get_boolean(cvisibility, "camera") ? PATH_RAY_VISIBILITY_CAMERA :
+                                                         PATH_RAY_VISIBILITY_NONE;
+      visibility |= get_boolean(cvisibility, "diffuse") ? PATH_RAY_VISIBILITY_DIFFUSE :
+                                                          PATH_RAY_VISIBILITY_NONE;
+      visibility |= get_boolean(cvisibility, "glossy") ? PATH_RAY_VISIBILITY_GLOSSY :
+                                                         PATH_RAY_VISIBILITY_NONE;
+      visibility |= get_boolean(cvisibility, "transmission") ? PATH_RAY_VISIBILITY_TRANSMIT :
+                                                               PATH_RAY_VISIBILITY_NONE;
+      visibility |= get_boolean(cvisibility, "scatter") ? PATH_RAY_VISIBILITY_VOLUME_SCATTER :
+                                                          PATH_RAY_VISIBILITY_NONE;
 
       background->set_visibility(visibility);
     }
@@ -1913,7 +1933,7 @@ void BlenderSync::sync_world(blender::Depsgraph &b_depsgraph,
 
 /* Sync Lights */
 
-void BlenderSync::sync_lights(blender::Depsgraph &b_depsgraph, bool update_all)
+void BlenderSync::sync_lights(blender::Depsgraph &b_depsgraph, bool update_all, bool update_time)
 {
   shader_map.set_default(scene->default_light);
 
@@ -1926,7 +1946,7 @@ void BlenderSync::sync_lights(blender::Depsgraph &b_depsgraph, bool update_all)
               blender::ID *,
               b_id)
   {
-    if (GS(b_id->name) != blender::ID_LA) {
+    if (b_id->id_type() != blender::ID_LA) {
       continue;
     }
 
@@ -1935,7 +1955,8 @@ void BlenderSync::sync_lights(blender::Depsgraph &b_depsgraph, bool update_all)
 
     /* test if we need to sync */
     if (shader_map.add_or_update(&shader, &b_light.id) || update_all ||
-        scene_attr_needs_recalc(shader, b_depsgraph))
+        scene_attr_needs_recalc(shader, b_depsgraph) ||
+        (shader->has_time_dependency && update_time))
     {
       unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
 
@@ -1966,13 +1987,14 @@ void BlenderSync::sync_lights(blender::Depsgraph &b_depsgraph, bool update_all)
 void BlenderSync::sync_shaders(blender::Depsgraph &b_depsgraph,
                                blender::bScreen *b_screen,
                                blender::View3D *b_v3d,
-                               bool update_all)
+                               bool update_all,
+                               bool update_time)
 {
   shader_map.pre_sync();
 
-  sync_world(b_depsgraph, b_screen, b_v3d, update_all);
-  sync_lights(b_depsgraph, update_all);
-  sync_materials(b_depsgraph, update_all);
+  sync_world(b_depsgraph, b_screen, b_v3d, update_all, update_time);
+  sync_lights(b_depsgraph, update_all, update_time);
+  sync_materials(b_depsgraph, update_all, update_time);
 }
 
 CCL_NAMESPACE_END
