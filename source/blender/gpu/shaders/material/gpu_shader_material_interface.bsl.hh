@@ -62,6 +62,8 @@ struct ObjectInfos {
 };
 
 struct ShadingData {
+  /** Fragment coordinate. */
+  float4 frag_co;
   /** World position. */
   packed_float3 P;
   /** Surface Normal. Normalized, overridden by bump displacement. */
@@ -85,6 +87,9 @@ struct ShadingData {
   uchar ray_type;
   /** Is hair. */
   bool is_strand;
+
+  /* TODO(fclem): Supposed to be an implementation detail. */
+  float holdout;
 };
 
 /* Should eventually carry the needed resource tables. */
@@ -201,7 +206,9 @@ Closure closure_eval(ShadingData & /*sd*/,
   return {};
 }
 
-float4 closure_to_rgba(ShadingData & /*sd*/, Closure /*closure*/)
+float4 closure_to_rgba([[resource_table]] KernelGlobals & /*kg*/,
+                       ShadingData & /*sd*/,
+                       Closure /*closure*/)
 {
   return float4(0);
 }
@@ -216,7 +223,8 @@ template<typename T> float3 F_brdf_multi_scatter(float3 /*f0*/, float3 /*f90*/, 
   return float3(0);
 }
 
-void brdf_f82_tint_lut(float3 /*F0*/,
+void brdf_f82_tint_lut([[resource_table]] const KernelGlobals & /*kg*/,
+                       float3 /*F0*/,
                        float3 /*F82*/,
                        float /*cos_theta*/,
                        float /*roughness*/,
@@ -225,7 +233,8 @@ void brdf_f82_tint_lut(float3 /*F0*/,
 {
 }
 
-void bsdf_lut(float3 /*F0*/,
+void bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
+              float3 /*F0*/,
               float3 /*F90*/,
               float3 /*transmission_tint*/,
               float /*cos_theta*/,
@@ -237,7 +246,11 @@ void bsdf_lut(float3 /*F0*/,
 {
 }
 
-float2 bsdf_lut(float /*cos_theta*/, float /*roughness*/, float /*ior*/, bool /*do_multiscatter*/)
+float2 bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
+                float /*cos_theta*/,
+                float /*roughness*/,
+                float /*ior*/,
+                bool /*do_multiscatter*/)
 {
   return float2(0);
 }
@@ -271,7 +284,7 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Ambient occlusion node. */
 
-float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
+float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
                              const ShadingData &sd,
                              float3 normal,
                              float max_distance,
@@ -407,12 +420,12 @@ void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Image Texture Node. */
 
-float texture_lod_bias_get()
+float texture_lod_bias_get([[resource_table]] KernelGlobals & /*kg*/)
 {
   return 0.0;
 }
 
-float derivative_scale_get()
+float derivative_scale_get([[resource_table]] KernelGlobals & /*kg*/)
 {
   return 1.0;
 }

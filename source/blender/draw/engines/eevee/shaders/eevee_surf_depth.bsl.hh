@@ -18,14 +18,14 @@
 #include "eevee_utility_tx.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 
-float4 closure_to_rgba_depth(ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_depth([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
   float4 out_color;
   out_color.rgb = sd.emission;
   out_color.a = saturate(1.0f - average(sd.transmittance));
 
   /* Reset for the next closure tree. */
-  closure_weights_reset(sd, 0.0f);
+  closure_weights_reset(kg, sd, 0.0f);
 
   return out_color;
 }
@@ -61,7 +61,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
                 [[resource_table]] const Sampling &sampling,
                 [[resource_table]] const UtilityTexture & /*util_tx*/,
                 [[resource_table]] const draw::View &views,
-                [[frag_coord]] const float4 /*frag_co*/,
+                [[frag_coord]] const float4 frag_co,
                 [[out]] SurfaceDepthFragOut<with_velocity> &frag_out,
                 [[front_facing]] const bool front_face)
 {
@@ -72,7 +72,7 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(0);
 
-    ShadingData sd = init_globals(uni, view, front_face);
+    ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
     nodetree_surface(kg, sd, 0.0f);
 

@@ -27,6 +27,7 @@
 [[nodiscard]] ShadingData init_globals(const ViewMatrices view, float3 wP)
 {
   ShadingData sd;
+  sd.frag_co = float4(0);
   sd.P = wP;
   sd.N = float3(0.0f);
   sd.Ng = float3(0.0f);

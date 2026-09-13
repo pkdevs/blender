@@ -22,10 +22,12 @@
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_shadow(ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_shadow([[resource_table]] KernelGlobals &kg,
+                              ShadingData &sd,
+                              Closure /*cl*/)
 {
   float3 transmittance = sd.transmittance;
-  closure_weights_reset(sd, 0.0f);
+  closure_weights_reset(kg, sd, 0.0f);
   return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
@@ -64,7 +66,7 @@ void surf_shadow([[resource_table]] KernelGlobals &kg,
 
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(shadow_iface.shadow_view_id);
-    ShadingData sd = init_globals(uni, view, front_face);
+    ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
     nodetree_surface(kg, sd, 0.0f);
 

@@ -89,7 +89,7 @@ struct GeomMeshVertIn {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = vert_in.pos * ob_infos.orco_mul + ob_infos.orco_add;
 
-  ShadingData sd = init_globals(uni, view, true);
+  ShadingData sd = init_globals(uni, view, true, float4(0));
   attrib_load(MeshVertex{vert_in.pos, to_float3x3(obj.model_inverse), lP_orco});
 
   interp.P += nodetree_displacement(kg, sd);

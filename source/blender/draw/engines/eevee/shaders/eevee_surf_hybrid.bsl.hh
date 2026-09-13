@@ -22,7 +22,9 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_hybrid(ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
+                              ShadingData &sd,
+                              Closure /*cl*/)
 {
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
@@ -42,7 +44,7 @@ float4 closure_to_rgba_hybrid(ShadingData &sd, Closure /*cl*/)
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
-  closure_weights_reset(sd, closure_rand);
+  closure_weights_reset(kg, sd, closure_rand);
 
 #if defined(MAT_TRANSPARENT) && defined(MAT_SHADER_TO_RGBA)
   { /* Limit resource guard to this scope. */
@@ -149,7 +151,7 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));

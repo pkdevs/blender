@@ -115,7 +115,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
     switch (tex->projection) {
       case SHD_PROJ_FLAT: {
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
       case SHD_PROJ_BOX: {
@@ -130,7 +130,15 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
                  GPU_kernel_globals(),
                  GPU_shading_data(),
                  &wnor);
-        GPU_link(mat, gpu_node_name, in[0].link, wnor, gpu_image, &col1, &col2, &col3);
+        GPU_link(mat,
+                 gpu_node_name,
+                 in[0].link,
+                 wnor,
+                 gpu_image,
+                 GPU_kernel_globals(),
+                 &col1,
+                 &col2,
+                 &col3);
         GPU_link(mat, "tex_box_blend", wnor, col1, col2, col3, blend, &out[0].link, &out[1].link);
         break;
       }
@@ -141,7 +149,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_sphere", *texco, texco);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
       case SHD_PROJ_TUBE: {
@@ -151,7 +159,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_tube", *texco, texco);
-        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image);
+        GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, GPU_kernel_globals());
         break;
       }
     }

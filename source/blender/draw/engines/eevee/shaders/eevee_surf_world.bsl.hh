@@ -20,10 +20,10 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_world(ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_world([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
   float3 transmittance = sd.transmittance;
-  closure_weights_reset(sd, 0.0f);
+  closure_weights_reset(kg, sd, 0.0f);
   return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
@@ -58,7 +58,7 @@ void surf_world([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face, frag_co);
   /* View position is passed to keep accuracy. */
   sd.N = view.normal_view_to_world(view.view_incident_vector(interp.P));
   sd.Ng = sd.N;

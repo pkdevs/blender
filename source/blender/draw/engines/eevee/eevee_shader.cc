@@ -1400,7 +1400,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     frag_gen << "Closure nodetree_surface(KernelGlobals kg, _ref(ShadingData, sd), float "
                 "closure_rand)\n";
     frag_gen << "{\n";
-    frag_gen << "  closure_weights_reset(sd, closure_rand);\n";
+    frag_gen << "  closure_weights_reset(kg, sd, closure_rand);\n";
     frag_gen << codegen.surface.serialized_or_default("return Closure(0);\n");
     dependencies.extend(codegen.surface.dependencies);
     frag_gen << "}\n\n";
@@ -1440,7 +1440,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
     frag_gen << "Closure nodetree_volume(KernelGlobals kg, _ref(ShadingData, sd))\n";
     frag_gen << "{\n";
-    frag_gen << "  closure_weights_reset(sd, 0.0);\n";
+    frag_gen << "  closure_weights_reset(kg, sd, 0.0);\n";
     frag_gen << codegen.volume.serialized_or_default("return Closure(0);\n");
     dependencies.extend(codegen.volume.dependencies);
     frag_gen << "}\n\n";

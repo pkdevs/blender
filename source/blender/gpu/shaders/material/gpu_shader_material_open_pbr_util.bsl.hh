@@ -10,6 +10,7 @@
 #include "gpu_shader_material_interface.bsl.hh"
 #include "gpu_shader_math_base.bsl.hh"
 #include "gpu_shader_math_fast.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
 float ior_from_F0(const float F0)
@@ -85,9 +86,9 @@ float3 openpbr_eval_transparency(ShadingData &sd, const float3 weight, const flo
   return weight * opacity;
 }
 
-float3 openpbr_eval_fuzz([[maybe_unused]] ShadingData &sd,
+float3 openpbr_eval_fuzz(ShadingData & /*sd*/,
                          const float3 weight,
-                         [[maybe_unused]] const Coat coat,
+                         const Coat coat,
                          const Fuzz fuzz,
                          const float3 N,
                          const float3 V,
@@ -99,7 +100,7 @@ float3 openpbr_eval_fuzz([[maybe_unused]] ShadingData &sd,
   }
 
   float fuzz_NV = dot(N, V);
-#ifdef MAT_CLEARCOAT
+#if defined(MAT_CLEARCOAT) || defined(GLSL_CPP_STUBS)
   if (coat.weight > 0.0f) {
     const float3 fuzz_N = safe_normalize(mix(N, coat.N, coat.weight));
     fuzz_NV = dot(fuzz_N, V);
@@ -115,18 +116,19 @@ float3 openpbr_eval_fuzz([[maybe_unused]] ShadingData &sd,
   return weight * max((1.0f - math_reduce_max(fuzz_color)), 0.0f);
 }
 
-float3 openpbr_eval_coat([[maybe_unused]] ShadingData &sd,
+float3 openpbr_eval_coat([[resource_table]] const KernelGlobals &kg,
+                         ShadingData &sd,
                          float3 weight,
-                         [[maybe_unused]] Coat coat,
-                         [[maybe_unused]] const float3 V)
+                         Coat coat,
+                         const float3 V)
 {
-#ifdef MAT_CLEARCOAT
+#if defined(MAT_CLEARCOAT) || defined(GLSL_CPP_STUBS)
   if (coat.weight == 0.0f) {
     return weight;
   }
 
   const float coat_NV = dot(coat.N, V);
-  const float reflectance = bsdf_lut(coat_NV, coat.roughness, coat.ior, false).x;
+  const float reflectance = bsdf_lut(kg, coat_NV, coat.roughness, coat.ior, false).x;
 
   ClosureReflection coat_data;
   coat_data.N = coat.N;
@@ -156,7 +158,8 @@ float3 openpbr_eval_emission(ShadingData &sd,
   return weight;
 }
 
-float3 openpbr_eval_metal(const float3 weight,
+float3 openpbr_eval_metal([[resource_table]] const KernelGlobals &kg,
+                          const float3 weight,
                           const float3 F0,
                           const Specular specular,
                           const float metalness,
@@ -171,7 +174,7 @@ float3 openpbr_eval_metal(const float3 weight,
 
   float3 reflectance;
   brdf_f82_tint_lut(
-      saturate(F0), saturate(specular.tint), NV, specular.roughness, multiggx, reflectance);
+      kg, saturate(F0), saturate(specular.tint), NV, specular.roughness, multiggx, reflectance);
   reflection_data.color = weight * metalness * reflectance;
 
   /* Attenuate lower layers */
@@ -246,7 +249,7 @@ float3 openpbr_eval_subsurface(ShadingData &sd,
     translucent_data.N = N;
     closure_eval(sd, translucent_data);
   }
-#ifdef MAT_SUBSURFACE
+#if defined(MAT_SUBSURFACE) || defined(GLSL_CPP_STUBS)
   else {
     ClosureSubsurface sss_data;
     sss_data.N = N;
@@ -260,13 +263,13 @@ float3 openpbr_eval_subsurface(ShadingData &sd,
   return weight * max((1.0f - subsurface.weight), 0.0f);
 }
 
-void openpbr_eval_diffuse([[maybe_unused]] ShadingData &sd,
-                          [[maybe_unused]] const float3 weight,
-                          [[maybe_unused]] const float3 color,
-                          [[maybe_unused]] const float3 N,
-                          [[maybe_unused]] ClosureDiffuse &diffuse_data)
+void openpbr_eval_diffuse(ShadingData &sd,
+                          const float3 weight,
+                          const float3 color,
+                          const float3 N,
+                          ClosureDiffuse &diffuse_data)
 {
-#ifdef MAT_DIFFUSE
+#if defined(MAT_DIFFUSE) || defined(GLSL_CPP_STUBS)
   diffuse_data.N = N;
   diffuse_data.color += weight * color;
 

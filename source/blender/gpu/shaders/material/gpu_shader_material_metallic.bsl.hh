@@ -66,7 +66,7 @@ void node_bsdf_metallic(float4 base_color,
   reflection_data.roughness = roughness;
 
   float3 metallic_brdf;
-  brdf_f82_tint_lut(F0, F82, NV, roughness, do_multiscatter != 0.0f, metallic_brdf);
+  brdf_f82_tint_lut(kg, F0, F82, NV, roughness, do_multiscatter != 0.0f, metallic_brdf);
   reflection_data.color = metallic_brdf * weight;
 
   result = closure_eval(sd, reflection_data);

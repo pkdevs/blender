@@ -23,22 +23,23 @@ void differentiate_texco(float4 v, float3 &df)
 }
 
 [[node]]
-void node_bump([[maybe_unused]] float strength,
-               [[maybe_unused]] float dist,
-               [[maybe_unused]] float filter_width,
-               [[maybe_unused]] float height,
+void node_bump(float strength,
+               float dist,
+               float filter_width,
+               float height,
                float3 N,
-               [[maybe_unused]] float2 height_xy,
-               [[maybe_unused]] float invert,
-               [[maybe_unused]] const ShadingData &sd,
+               float2 height_xy,
+               float invert,
+               [[resource_table]] KernelGlobals &kg,
+               const ShadingData &sd,
                float3 &result)
 {
   N = normalize(N);
-#ifdef GPU_FRAGMENT_SHADER
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   dist *= FrontFacing ? invert : -invert;
 
-  float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get();
-  float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get();
+  float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get(kg);
+  float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get(kg);
 
   /* Get surface tangents from normal. */
   float3 Rx = cross(dPdy, N);

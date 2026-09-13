@@ -19,15 +19,18 @@ void node_wireframe(float size, const ShadingData &sd, float &fac)
 }
 
 [[node]]
-void node_wireframe_screenspace([[maybe_unused]] float size, const ShadingData &sd, float &fac)
+void node_wireframe_screenspace(float size,
+                                [[resource_table]] KernelGlobals &kg,
+                                const ShadingData &sd,
+                                float &fac)
 {
   float3 barys = sd.barycentric_coords.xyy;
   barys.z = 1.0f - barys.x - barys.y;
 
-#ifdef GPU_FRAGMENT_SHADER
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   size *= (1.0f / 3.0f);
-  float3 dx = gpu_dfdx(barys) * derivative_scale_get();
-  float3 dy = gpu_dfdy(barys) * derivative_scale_get();
+  float3 dx = gpu_dfdx(barys) * derivative_scale_get(kg);
+  float3 dy = gpu_dfdy(barys) * derivative_scale_get(kg);
   float3 deltas = sqrt(dx * dx + dy * dy);
 
   float3 s = step(-deltas * size, -barys);

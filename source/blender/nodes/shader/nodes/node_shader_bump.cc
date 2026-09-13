@@ -98,8 +98,15 @@ static int gpu_shader_bump(GPUMaterial *mat,
 
   float invert = (node->custom1) ? -1.0 : 1.0;
 
-  return GPU_stack_link(
-      mat, node, "node_bump", in, out, dheight, GPU_constant(&invert), GPU_shading_data());
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bump",
+                        in,
+                        out,
+                        dheight,
+                        GPU_constant(&invert),
+                        GPU_kernel_globals(),
+                        GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN

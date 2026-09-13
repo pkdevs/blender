@@ -19,10 +19,12 @@
 #include "eevee_surf_common.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
 
-float4 closure_to_rgba_capture(ShadingData &sd, Closure /*cl*/)
+float4 closure_to_rgba_capture([[resource_table]] KernelGlobals &kg,
+                               ShadingData &sd,
+                               Closure /*cl*/)
 {
   float3 transmittance = sd.transmittance;
-  closure_weights_reset(sd, 0.0f);
+  closure_weights_reset(kg, sd, 0.0f);
   return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
@@ -43,12 +45,12 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
                   [[resource_table]] const Uniform &uni,
                   [[resource_table]] const draw::View &views,
                   [[resource_table]] const UtilityTexture & /*util_tx*/,
-                  [[frag_coord]] const float4 /*frag_co*/,
+                  [[frag_coord]] const float4 frag_co,
                   [[front_facing]] const bool front_face)
 {
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
   /* TODO(fclem): Remove random sampling for capture and accumulate color. */
   float closure_rand = 0.5f;

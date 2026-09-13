@@ -48,6 +48,8 @@ struct LightAccumulation {
 #endif
 
 struct ShadingData {
+  /** Fragment coordinate. */
+  float4 frag_co;
   /** World position. */
   packed_float3 P;
   /** Surface Normal. Normalized, overridden by bump displacement. */
@@ -122,17 +124,20 @@ struct KernelGlobals {
   [[resource_table]] srt_t<draw::View> view;
   [[resource_table]] srt_t<draw::Model> model;
   [[resource_table]] srt_t<draw::Infos> infos;
+
   [[resource_table]] srt_t<eevee::PipelineConstants> pipe;
+  [[resource_table]] srt_t<UtilityTexture> util_tx;
+  [[resource_table]] srt_t<eevee::Uniform> uniforms;
+  [[resource_table]] srt_t<eevee::Sampling> sampling;
+  [[resource_table]] srt_t<eevee::HiZ> hiz;
 
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
-  [[resource_table]] srt_t<eevee::Uniform> uniforms;
-  [[resource_table]] srt_t<eevee::Sampling> sampling;
 
   uint resource_id_get(const ShadingData & /*sd*/)
   {
     /* clang-format off */ /* Multi-line macro mess the shader log line. */
-    [[resource_table]] const eevee::PipelineConstants &pipeline = resource_table_get(eevee::PipelineConstants);
+    [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
     /* clang-format on */
     auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
     draw::ID id{interp_flat.resource_id_raw};
@@ -174,7 +179,9 @@ struct KernelGlobals {
   }
 };
 
-void closure_weights_reset(ShadingData &sd, float closure_rand)
+void closure_weights_reset([[resource_table]] KernelGlobals &kg,
+                           ShadingData &sd,
+                           float closure_rand)
 {
   sd.closure_bins[0].reset(closure_rand);
 #if CLOSURE_BIN_COUNT > 1
@@ -197,7 +204,7 @@ void closure_weights_reset(ShadingData &sd, float closure_rand)
 
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   /* clang-format off */ /* Multi-line macros would break line count. */
-  [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
   /* clang-format on */
   if (pipe.use_lighting_nodes) [[static_branch]] {
     sd.light_accum = {};
@@ -430,13 +437,11 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
 {
   FRAGMENT_SHADER_CREATE_INFO(draw_view);
 
-  /* clang-format off */ /* Multi-line macros would break line count. */
   [[resource_table]] [[maybe_unused]] const eevee::Sampling &samp = kg.sampling;
-  [[resource_table]] [[maybe_unused]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
-  [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = resource_table_get(eevee::HiZ);
+  [[resource_table]] [[maybe_unused]] const UtilityTexture &util_tx = kg.util_tx;
+  [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = kg.hiz;
   [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = kg.uniforms;
   [[resource_table]] [[maybe_unused]] const draw::View &views = kg.view;
-  /* clang-format on */
 
   {
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_AMBIENT_OCCLUSION) && !defined(MAT_DEPTH) && \
@@ -487,7 +492,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
                   float3 &hit_position,
                   float3 &hit_normal)
 {
-  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
 
   is_hit = false;
   self_hit = false;
@@ -515,8 +520,8 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
   {
     FRAGMENT_SHADER_CREATE_INFO(draw_view);
 
-    [[resource_table]] const draw::View &views = resource_table_get(draw::View);
-    [[resource_table]] const eevee::Sampling &samp = resource_table_get(eevee::Sampling);
+    [[resource_table]] const draw::View &views = kg.view;
+    [[resource_table]] const eevee::Sampling &samp = kg.sampling;
     const auto &raycast_depth_tx = sampler_get(eevee_raycast, raycast_depth_tx);
     const auto &prepass_normal_tx = sampler_get(eevee_raycast, prepass_normal_tx);
     const auto &object_id_tx = sampler_get(eevee_raycast, object_id_tx);
@@ -563,11 +568,11 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 }
 
 #ifndef GPU_METAL
-Closure nodetree_surface(KernelGlobals & /*kg*/, ShadingData & /*sd*/, float /*closure_rand*/);
-Closure nodetree_volume(KernelGlobals & /*kg*/, ShadingData & /*sd*/);
-float3 nodetree_displacement(KernelGlobals & /*kg*/, ShadingData & /*sd*/);
-float nodetree_thickness(KernelGlobals & /*kg*/, ShadingData & /*sd*/);
-float4 closure_to_rgba(Closure cl);
+Closure nodetree_surface(KernelGlobals &kg, ShadingData &sd, float closure_rand);
+Closure nodetree_volume(KernelGlobals &kg, ShadingData &sd);
+float3 nodetree_displacement(KernelGlobals &kg, ShadingData &sd);
+float nodetree_thickness(KernelGlobals &kg, ShadingData &sd);
+float4 closure_to_rgba(KernelGlobals &kg, Closure cl);
 #endif
 
 /**
@@ -635,16 +640,16 @@ template float3 F_brdf_multi_scatter<eevee::lut::GGXBsdfData>(float3,
                                                               float3,
                                                               eevee::lut::GGXBsdfData);
 
-void brdf_f82_tint_lut(float3 F0,
+void brdf_f82_tint_lut([[resource_table]] KernelGlobals &kg,
+                       float3 F0,
                        float3 F82,
                        float cos_theta,
                        float roughness,
                        bool do_multiscatter,
                        float3 &reflectance)
 {
-  [[resource_table]] const UtilityTexture util_tx = resource_table_get(UtilityTexture);
   eevee::lut::GGXBrdfData lut = eevee::lut::GGXBrdfData::sample_utility_tx(
-      util_tx, cos_theta, roughness);
+      kg.util_tx, cos_theta, roughness);
 
   reflectance = do_multiscatter ? F_brdf_multi_scatter(F0, float3(1.0f), lut) :
                                   F_brdf_single_scatter(F0, float3(1.0f), lut);
@@ -666,7 +671,8 @@ void brdf_f82_tint_lut(float3 F0,
 
 /* Computes the reflectance and transmittance based on the tint (`f0`, `f90`, `transmission_tint`)
  * and the BSDF LUT. */
-void bsdf_lut(float3 F0,
+void bsdf_lut([[resource_table]] KernelGlobals &kg,
+              float3 F0,
               float3 F90,
               float3 transmission_tint,
               float cos_theta,
@@ -676,7 +682,6 @@ void bsdf_lut(float3 F0,
               float3 &reflectance,
               float3 &transmittance)
 {
-  [[resource_table]] const UtilityTexture util_tx = resource_table_get(UtilityTexture);
   if (ior == 1.0f) {
     reflectance = float3(0.0f);
     transmittance = transmission_tint;
@@ -696,16 +701,16 @@ void bsdf_lut(float3 F0,
     }
 
     eevee::lut::GGXBrdfData brdf_lut = eevee::lut::GGXBrdfData::sample_utility_tx(
-        util_tx, cos_theta, roughness);
+        kg.util_tx, cos_theta, roughness);
     eevee::lut::GGXBtdfGt1Data btdf_lut = eevee::lut::GGXBtdfGt1Data::sample_utility_tx(
-        util_tx, cos_theta, roughness, f0);
+        kg.util_tx, cos_theta, roughness, f0);
 
     lut.scale = brdf_lut.scale;
     lut.bias = brdf_lut.bias;
     lut.transmission_factor = btdf_lut.transmission_factor;
   }
   else {
-    lut = eevee::lut::GGXBsdfData::sample_utility_tx(util_tx, cos_theta, roughness, ior);
+    lut = eevee::lut::GGXBsdfData::sample_utility_tx(kg.util_tx, cos_theta, roughness, ior);
   }
 
   reflectance = F_brdf_single_scatter(F0, F90, lut);
@@ -726,12 +731,17 @@ void bsdf_lut(float3 F0,
 }
 
 /* Computes the reflectance and transmittance based on the BSDF LUT. */
-float2 bsdf_lut(float cos_theta, float roughness, float ior, bool do_multiscatter)
+float2 bsdf_lut([[resource_table]] KernelGlobals &kg,
+                float cos_theta,
+                float roughness,
+                float ior,
+                bool do_multiscatter)
 {
   float F0 = F0_from_ior(ior);
   float3 color = float3(1.0f);
   float3 reflectance, transmittance;
-  bsdf_lut(float3(F0),
+  bsdf_lut(kg,
+           float3(F0),
            color,
            color,
            cos_theta,
@@ -769,8 +779,8 @@ float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   float2 dHd;
   dF_branch(dot(nodetree_displacement(kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
 
-  float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get();
-  float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get();
+  float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get(kg);
+  float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get(kg);
 
   /* Get surface tangents from normal. */
   float3 Rx = cross(dPdy, sd.N);
@@ -873,9 +883,9 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals &kg,
  *
  * \{ */
 
-float texture_lod_bias_get()
+float texture_lod_bias_get([[resource_table]] KernelGlobals &kg)
 {
-  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
   return uni.uniform_buf.film.texture_lod_bias;
 }
 
@@ -885,9 +895,9 @@ float texture_lod_bias_get()
  * uses neighboring pixels to compute derivatives and thus the value increases as we lower the
  * resolution. So we compensate by scaling them back to the expected amplitude at full resolution.
  */
-float derivative_scale_get()
+float derivative_scale_get([[resource_table]] KernelGlobals &kg)
 {
-  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
   return 1.0f / float(uni.uniform_buf.film.scaling_factor);
 }
 
@@ -1035,7 +1045,7 @@ void node_light_info_impl([[resource_table]] KernelGlobals &kg,
                           float3 &position)
 {
   [[resource_table]] const eevee::LightRenderData &lrd = kg.lrd;
-  [[resource_table]] const draw::Model &models = resource_table_get(draw::Model);
+  [[resource_table]] const draw::Model &models = kg.model;
 
   LightData light = lrd.light_buf[light_index];
 
@@ -1076,7 +1086,7 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
                                 float &factor)
 {
   [[resource_table]] const eevee::LightRenderData &lrd = kg.lrd;
-  [[resource_table]] UtilityTexture &util_tx = resource_table_get(UtilityTexture);
+  [[resource_table]] UtilityTexture &util_tx = kg.util_tx;
 
   LightData light = lrd.light_buf[light_index];
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
@@ -1123,8 +1133,8 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
 {
   [[resource_table]] [[maybe_unused]] const eevee::LightRenderData &lrd = kg.lrd;
   [[resource_table]] [[maybe_unused]] eevee::ShadowRenderData &srd = kg.srd;
-  [[resource_table]] [[maybe_unused]] draw::Infos &infos = resource_table_get(draw::Infos);
-  [[resource_table]] [[maybe_unused]] eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  [[resource_table]] [[maybe_unused]] draw::Infos &infos = kg.infos;
+  [[resource_table]] [[maybe_unused]] eevee::Uniform &uni = kg.uniforms;
 
   color = float4(1.0f);
 

@@ -32,7 +32,7 @@ void node_bsdf_glass(float4 color,
   float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
   float NV = dot(N, V);
 
-  float2 bsdf = bsdf_lut(NV, roughness, ior, do_multiscatter != 0.0f);
+  float2 bsdf = bsdf_lut(kg, NV, roughness, ior, do_multiscatter != 0.0f);
 
   ClosureReflection reflection_data;
   reflection_data.color = color.rgb * (bsdf.x * weight);

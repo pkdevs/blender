@@ -72,11 +72,13 @@ void init_globals_curves(ShadingData &sd, const ViewMatrices view)
 
 [[nodiscard]] ShadingData init_globals([[resource_table]] const eevee::Uniform &uni,
                                        const ViewMatrices view,
-                                       bool front_face)
+                                       bool front_face,
+                                       float4 fragment_co)
 {
   auto &interp = interface_get(eevee_geom_iface_info, interp);
   ShadingData sd;
   /* Default values. */
+  sd.frag_co = fragment_co;
   sd.P = interp.P;
   sd.Ni = interp.N;
   sd.N = safe_normalize(interp.N);
@@ -99,7 +101,7 @@ void init_globals_curves(ShadingData &sd, const ViewMatrices view)
 
   sd.N = (front_face) ? sd.N : -sd.N;
   sd.Ni = (front_face) ? sd.Ni : -sd.Ni;
-#ifdef GPU_FRAGMENT_SHADER
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   sd.Ng = safe_normalize(cross(gpu_dfdx(sd.P), gpu_dfdy(sd.P)));
   if (uni.pipeline_buf.is_main_view_inverted) {
     sd.Ng = -sd.Ng;
