@@ -144,9 +144,9 @@ class ProjectEdit(Operator):
             return {'CANCELLED'}
 
         if image_new.is_float:
-            file_format, EXT = "OPEN_EXR", "exr"
+            file_format, ext = "OPEN_EXR", "exr"
         else:
-            file_format, EXT = "PNG", "png"
+            file_format, ext = "PNG", "png"
 
         filepath = os.path.basename(bpy.data.filepath)
         filepath = os.path.splitext(filepath)[0]
@@ -163,11 +163,11 @@ class ProjectEdit(Operator):
         if obj:
             filepath += "_" + bpy.path.clean_name(obj.name)
 
-        filepath_final = filepath + "." + EXT
+        filepath_final = filepath + "." + ext
         i = 0
 
         while os.path.exists(bpy.path.abspath(filepath_final)):
-            filepath_final = filepath + "{:03d}.{:s}".format(i, EXT)
+            filepath_final = filepath + "{:03d}.{:s}".format(i, ext)
             i += 1
 
         image_new.name = bpy.path.basename(filepath_final)

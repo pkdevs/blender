@@ -6505,48 +6505,6 @@ void PAINT_OT_project_image(wmOperatorType *ot)
   ot->prop = prop;
 }
 
-static bool texture_paint_image_is_float(const Image *ima)
-{
-  if (ima == nullptr) {
-    return false;
-  }
-  void *lock;
-  ImBuf *ibuf = BKE_image_acquire_ibuf(const_cast<Image *>(ima), nullptr, &lock);
-  if (ibuf == nullptr) {
-    return false;
-  }
-  const bool is_float = ibuf->float_data() != nullptr;
-  BKE_image_release_ibuf(const_cast<Image *>(ima), ibuf, lock);
-  return is_float;
-}
-
-static bool texture_paint_image_from_view_is_float(const Scene *scene, const Object *ob)
-{
-  const ImagePaintSettings &imapaint = scene->toolsettings->imapaint;
-
-  if (imapaint.mode == IMAGEPAINT_MODE_IMAGE) {
-    return texture_paint_image_is_float(imapaint.canvas);
-  }
-
-  if (ob == nullptr) {
-    return false;
-  }
-
-  Material *ma = BKE_object_material_get(const_cast<Object *>(ob), static_cast<short>(ob->actcol));
-  if (ma == nullptr) {
-    return false;
-  }
-
-  if (ma->texpaintslot == nullptr) {
-    BKE_texpaint_slot_refresh_cache(const_cast<Scene *>(scene), ma, ob);
-  }
-  if (ma->texpaintslot == nullptr || ma->paint_active_slot >= ma->tot_slots) {
-    return false;
-  }
-
-  return texture_paint_image_is_float(ma->texpaintslot[ma->paint_active_slot].ima);
-}
-
 static bool texture_paint_image_from_view_poll(bContext *C)
 {
   bScreen *screen = CTX_wm_screen(C);
@@ -6611,7 +6569,14 @@ static wmOperatorStatus texture_paint_image_from_view_exec(bContext *C, wmOperat
   v3d_copy.overlay.texture_paint_mode_opacity = v3d->overlay.texture_paint_mode_opacity;
 
   Object *paint_ob = BKE_view_layer_active_object_get(CTX_data_view_layer(C));
-  const bool is_float = texture_paint_image_from_view_is_float(scene, paint_ob);
+  std::optional<CanvasImageData> canvas = std::nullopt;
+  if (paint_ob != nullptr) {
+    canvas = BKE_paint_canvas_image_get(settings->imapaint, *paint_ob);
+  }
+  bool is_float = false;
+  if (canvas.has_value()) {
+    is_float = BKE_image_is_float(canvas->first);
+  }
   const ImBufFlags ibuf_flag = is_float ? ImBufFlags::FloatData : ImBufFlags::ByteData;
 
   ibuf = ED_view3d_draw_offscreen_imbuf(depsgraph,
