@@ -158,10 +158,16 @@ static void write_debug_html(const StraightSkeletonInput &input,
     }
   }
 
+  /* Draw input line segments in dark blue. */
+  for (const int2 &e : input.edge) {
+    f << "<line x1=\"" << tx(input.vert[e[0]].x) << "\" y1=\"" << ty(input.vert[e[0]].y) << "\""
+      << " x2=\"" << tx(input.vert[e[1]].x) << "\" y2=\"" << ty(input.vert[e[1]].y) << "\""
+      << " stroke=\"#0000cc\" stroke-width=\"2\"/>\n";
+  }
+
   /* Draw output edges in red (skeleton + side edges). */
   for (const int2 &e : output.edge) {
-    f << "<line x1=\"" << tx(output.vert[e[0]].x) << "\" y1=\"" << ty(output.vert[e[0]].y)
-      << "\""
+    f << "<line x1=\"" << tx(output.vert[e[0]].x) << "\" y1=\"" << ty(output.vert[e[0]].y) << "\""
       << " x2=\"" << tx(output.vert[e[1]].x) << "\" y2=\"" << ty(output.vert[e[1]].y) << "\""
       << " stroke=\"#cc0000\" stroke-width=\"1\"/>\n";
   }
@@ -245,6 +251,58 @@ TEST(straight_skeleton, Triangle)
   for (const int fi : IndexRange(output.face_orig.size())) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
+}
+
+/**
+ * Mixture of connected line segments with free ends and closed faces.
+ *
+ * Features:
+ * - Face 0 (Triangle): verts (0, 1, 2)
+ * - Face 1 (Quad): verts (3, 4, 5, 6)
+ * - Segment Chain 1: (7, 8) and (8, 9)
+ *   End 7 is on the convex hull; end 9 is interior with a free end.
+ * - Segment Chain 2: (10, 11) and (11, 12)
+ *   End 10 is on the convex hull; end 12 is interior with a free end.
+ *   Free ends 9 and 12 are both interior and connected by a Delaunay edge.
+ * - Segment Chain 3: (13, 14) and (14, 15)
+ *   Both ends (13 and 15) lie on the convex hull.
+ */
+TEST(straight_skeleton, MixedSegmentsAndFaces)
+{
+  const char *spec = R"(16 6 2
+0.0 0.0
+4.0 0.0
+1.0 3.0
+6.0 0.0
+10.0 0.0
+10.0 3.0
+7.0 2.0
+0.0 7.0
+3.0 7.0
+4.5 6.5
+10.0 7.0
+7.0 7.0
+5.5 6.5
+1.0 9.5
+5.0 10.0
+9.0 9.5
+7 8
+8 9
+10 11
+11 12
+13 14
+14 15
+0 1 2
+3 4 5 6
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  StraightSkeletonOutput output = straight_skeleton_calc(input);
+
+#if DO_DEBUG_DRAW
+  write_debug_html(input, output, "/tmp/skel_debug_draw.html");
+#endif
 }
 
 /** \} */

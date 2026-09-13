@@ -14,6 +14,7 @@
 
 #include "BLI_delaunay_2d.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_straight_skeleton.hh"
 
 namespace blender::straightskeleton {
@@ -141,8 +142,7 @@ class TriangleEdges {
 static void dump_triangles(const TriangleEdges &tri)
 {
   const int ntri = tri.num_triangles();
-  std::cout << "TriangleEdges: " << ntri << " triangles, " << tri.num_edges()
-            << " half-edges\n";
+  std::cout << "TriangleEdges: " << ntri << " triangles, " << tri.num_edges() << " half-edges\n";
   for (const int ti : IndexRange(ntri)) {
     const int e0 = 3 * ti;
     const int e1 = e0 + 1;
@@ -175,11 +175,28 @@ static void dump_triangles(const TriangleEdges &tri)
  */
 static void draw_triangulation_svg(const TriangleEdges &tri,
                                    const Span<double2> vert_pos,
+                                   const StraightSkeletonInput &input,
                                    const char *path)
 {
   const int nverts = int(vert_pos.size());
   const int ntri = tri.num_triangles();
   const int nedges = tri.num_edges();
+
+  /* Canonicalize all input constraint edges (both from explicit edges and face boundaries). */
+  Set<int2> input_edges;
+  for (const int2 &e : input.edge) {
+    input_edges.add(int2(std::min(e[0], e[1]), std::max(e[0], e[1])));
+  }
+  const Span<int> fvi = input.face_vert_indices;
+  for (const int fi : input.face_offsets.index_range()) {
+    const IndexRange r = input.face_offsets[fi];
+    const int sz = int(r.size());
+    for (const int k : IndexRange(sz)) {
+      const int a = fvi[r[k]];
+      const int b = fvi[r[(k + 1) % sz]];
+      input_edges.add(int2(std::min(a, b), std::max(a, b)));
+    }
+  }
 
   /* ---- bounding box ---- */
   double xmin = 1e30, xmax = -1e30, ymin = 1e30, ymax = -1e30;
@@ -304,6 +321,10 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
   f << "<svg width=\"" << svgw << "\" height=\"" << svgh
     << "\" style=\"border:1px solid #ccc; background:#f8f8f8\">\n";
   f << "<style>text { font-family: monospace; }</style>\n";
+  f << "<text x=\"15\" y=\"20\" font-size=\"11\" fill=\"#000088\" font-weight=\"bold\">― Input "
+       "edges (bold)</text>\n";
+  f << "<text x=\"15\" y=\"35\" font-size=\"11\" fill=\"#6688aa\">╌ Delaunay edges "
+       "(dashed)</text>\n";
 
   /* ---- fill bounded triangles ---- */
   for (const int ti : IndexRange(ntri)) {
@@ -335,9 +356,19 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
     /* Draw the geometric edge only once (lower-indexed half-edge of the pair). */
     const int paired = tri.paired_edge(ei);
     if (paired == -1 || ei < paired) {
-      f << "<line x1=\"" << tx(vert_pos[u].x) << "\" y1=\"" << ty(vert_pos[u].y) << "\" x2=\""
-        << tx(vert_pos[v].x) << "\" y2=\"" << ty(vert_pos[v].y)
-        << "\" stroke=\"#444466\" stroke-width=\"1.5\"/>\n";
+      const bool is_input = input_edges.contains(int2(std::min(u, v), std::max(u, v)));
+      if (is_input) {
+        /* Input constraint edge: bold solid line. */
+        f << "<line x1=\"" << tx(vert_pos[u].x) << "\" y1=\"" << ty(vert_pos[u].y) << "\" x2=\""
+          << tx(vert_pos[v].x) << "\" y2=\"" << ty(vert_pos[v].y)
+          << "\" stroke=\"#000088\" stroke-width=\"2.5\"/>\n";
+      }
+      else {
+        /* Non-input edge added for Delaunay triangulation: dashed line. */
+        f << "<line x1=\"" << tx(vert_pos[u].x) << "\" y1=\"" << ty(vert_pos[u].y) << "\" x2=\""
+          << tx(vert_pos[v].x) << "\" y2=\"" << ty(vert_pos[v].y)
+          << "\" stroke=\"#6688aa\" stroke-width=\"1.2\" stroke-dasharray=\"5,4\"/>\n";
+      }
     }
 
     /* Half-edge label: fixed perpendicular offset (SVG right-perp of the directed edge).
@@ -361,8 +392,7 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
     const double lx = mid_sx + px * label_off_px;
     const double ly = mid_sy + py * label_off_px;
     f << "<text x=\"" << lx << "\" y=\"" << ly
-      << "\" font-size=\"10\" fill=\"#880000\" text-anchor=\"middle\">" << ei
-      << "</text>\n";
+      << "\" font-size=\"10\" fill=\"#880000\" text-anchor=\"middle\">" << ei << "</text>\n";
   }
 
   /* ---- draw wing stubs (angle bisector direction) and label all wing edges ---- */
@@ -407,8 +437,8 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
         const double x1 = tx(vert_pos[vi].x);
         const double y1 = ty(vert_pos[vi].y);
         /* Draw at 40% length (shorter) and label at 25%. */
-        f << "<line x1=\"" << x1 << "\" y1=\"" << y1 << "\" x2=\""
-          << (x1 + ndx * ray_len * 0.4) << "\" y2=\"" << (y1 + ndy * ray_len * 0.4)
+        f << "<line x1=\"" << x1 << "\" y1=\"" << y1 << "\" x2=\"" << (x1 + ndx * ray_len * 0.4)
+          << "\" y2=\"" << (y1 + ndy * ray_len * 0.4)
           << "\" stroke=\"#bbbbbb\" stroke-width=\"1\" stroke-dasharray=\"3,3\"/>\n";
         /* Label incoming wing (e0+2) at 25% along the stub,
          * offset 8px to the left of the stub (perp = (-ndy, ndx)). */
@@ -470,8 +500,7 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
     f << "<circle cx=\"" << cx << "\" cy=\"" << cy
       << "\" r=\"5\" fill=\"#224488\" stroke=\"white\" stroke-width=\"1\"/>\n";
     f << "<text x=\"" << (cx + 7) << "\" y=\"" << (cy - 5)
-      << "\" font-size=\"12\" fill=\"#112233\" font-weight=\"bold\">" << vi
-      << "</text>\n";
+      << "\" font-size=\"12\" fill=\"#112233\" font-weight=\"bold\">" << vi << "</text>\n";
   }
 
   f << "</svg>\n</body></html>\n";
@@ -506,15 +535,14 @@ class StraightSkeletonState {
    * After this call #triangles contains the CDT of the input geometry
    * with unbounded triangles added for convex-hull edges.
    * \param dbg_level If > 0, dump the state to stdout and write an SVG to /tmp. */
-  void build_initial_kinetic_triangulation(const StraightSkeletonInput &input,
-                                           int dbg_level = 0);
+  void build_initial_kinetic_triangulation(const StraightSkeletonInput &input, int dbg_level = 0);
 };
 
-void StraightSkeletonState::build_initial_kinetic_triangulation(
-    const StraightSkeletonInput &input, int dbg_level)
+void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSkeletonInput &input,
+                                                                int dbg_level)
 {
   /* Pack input into a CDT_input and compute the constrained Delaunay triangulation.
-   * CDT_INSIDE keeps only triangles whose interiors lie inside the input faces. */
+   * CDT_FULL triangulates the entire convex hull of the input geometry. */
   meshintersect::CDT_input<double> cdt_in;
   cdt_in.vert = input.vert;
   cdt_in.edge = input.edge;
@@ -523,8 +551,7 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(
   cdt_in.epsilon = epsilon;
   cdt_in.needed_ids = CDT_NO_ORIG_IDS;
 
-  const meshintersect::CDT_result<double> cdt = meshintersect::delaunay_2d_calc(cdt_in,
-                                                                                CDT_INSIDE);
+  const meshintersect::CDT_result<double> cdt = meshintersect::delaunay_2d_calc(cdt_in, CDT_FULL);
 
   /* Load CDT triangles into TriangleEdges.  Each CDT output face is a triangle.
    * Reserve 4x to allow for convex-hull unbounded triangles and future flip triangles. */
@@ -586,7 +613,7 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(
 
   if (dbg_level > 0) {
     dump_triangles(triangles);
-    draw_triangulation_svg(triangles, vert_pos, "/tmp/skel_tri_debug.html");
+    draw_triangulation_svg(triangles, vert_pos, input, "/tmp/skel_tri_debug.html");
   }
 }
 
