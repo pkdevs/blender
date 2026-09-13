@@ -378,9 +378,11 @@ std::optional<EditMeshSymmetryHelper> EditMeshSymmetryHelper::create_if_needed(O
 }
 
 EditMeshSymmetryHelper::EditMeshSymmetryHelper(Object *ob, uchar htype)
-    : em_(BKE_editmesh_from_object(ob)), mesh_(id_cast<Mesh *>(ob->data)), htype_(htype)
+    : em_(BKE_editmesh_from_object(ob)),
+      mesh_(id_cast<Mesh *>(ob->data)),
+      bm_(BKE_editmesh_bmesh_get_for_write(mesh_)),
+      htype_(htype)
 {
-  BMesh *bmesh = em_->bm;
   use_topology_mirror_ = (mesh_->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
   Set<BMVert *> processed_verts;
@@ -400,7 +402,7 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(Object *ob, uchar htype)
 
       if (htype_ & BM_VERT) {
         BMVert *v_curr;
-        BM_ITER_MESH (v_curr, &iter, bmesh, BM_VERTS_OF_MESH) {
+        BM_ITER_MESH (v_curr, &iter, bm_, BM_VERTS_OF_MESH) {
           if (processed_verts.contains(v_curr)) {
             continue;
           }
@@ -419,7 +421,7 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(Object *ob, uchar htype)
 
       if (htype_ & BM_EDGE) {
         BMEdge *e_curr;
-        BM_ITER_MESH (e_curr, &iter, bmesh, BM_EDGES_OF_MESH) {
+        BM_ITER_MESH (e_curr, &iter, bm_, BM_EDGES_OF_MESH) {
           if (processed_edges.contains(e_curr)) {
             continue;
           }
@@ -438,7 +440,7 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(Object *ob, uchar htype)
 
       if (htype_ & BM_FACE) {
         BMFace *f_curr;
-        BM_ITER_MESH (f_curr, &iter, bmesh, BM_FACES_OF_MESH) {
+        BM_ITER_MESH (f_curr, &iter, bm_, BM_FACES_OF_MESH) {
           if (processed_faces.contains(f_curr)) {
             continue;
           }
@@ -540,7 +542,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_verts(BMVert *v,
 {
   apply_on_mirror_verts(v, [this, hflag, value](BMVert *v_mirr) {
     if (hflag & BM_ELEM_SELECT) {
-      BM_vert_select_set(this->em_->bm, v_mirr, value);
+      BM_vert_select_set(this->bm_, v_mirr, value);
     }
     const char hflag_test = char(hflag & ~BM_ELEM_SELECT);
     if (hflag_test) {
@@ -555,7 +557,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_edges(BMEdge *e,
 {
   apply_on_mirror_edges(e, [this, hflag, value](BMEdge *e_mirr) {
     if (hflag & BM_ELEM_SELECT) {
-      BM_edge_select_set(this->em_->bm, e_mirr, value);
+      BM_edge_select_set(this->bm_, e_mirr, value);
     }
     char hflag_test = char(hflag & ~BM_ELEM_SELECT);
     if (hflag_test) {
@@ -570,7 +572,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_faces(BMFace *f,
 {
   apply_on_mirror_faces(f, [this, hflag, value](BMFace *f_mirr) {
     if (hflag & BM_ELEM_SELECT) {
-      BM_face_select_set(this->em_->bm, f_mirr, value);
+      BM_face_select_set(this->bm_, f_mirr, value);
     }
     char hflag_test = char(hflag & ~BM_ELEM_SELECT);
     if (hflag_test) {

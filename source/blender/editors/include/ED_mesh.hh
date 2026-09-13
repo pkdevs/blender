@@ -72,6 +72,7 @@ class EditMeshSymmetryHelper {
 
   BMEditMesh *em_;
   Mesh *mesh_;
+  BMesh *bm_;
   uchar htype_;
   bool use_topology_mirror_;
 
