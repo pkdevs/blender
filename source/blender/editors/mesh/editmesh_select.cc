@@ -4926,8 +4926,8 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
   const int axis_flag = RNA_enum_get(op->ptr, "axis");
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   Object *obedit_active = CTX_data_edit_object(C);
-  BMEditMesh *em_active = BKE_editmesh_from_object(obedit_active);
-  const int select_mode = em_active->bm->selectmode;
+  BMesh *bm_active = BKE_editmesh_bmesh_get_for_write(obedit_active);
+  const int select_mode = bm_active->selectmode;
   int tot_mirr = 0, tot_fail = 0;
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -6618,7 +6618,8 @@ static bool edbm_select_by_attribute_poll(bContext *C)
     CTX_wm_operator_poll_msg_set(C, "There must be an active attribute");
     return false;
   }
-  const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm, *name);
+  const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
+  const BMDataLayerLookup attr = BM_data_layer_lookup(bm, *name);
   if (attr.type != bke::AttrType::Bool) {
     CTX_wm_operator_poll_msg_set(C, "The active attribute must have a boolean type");
     return false;

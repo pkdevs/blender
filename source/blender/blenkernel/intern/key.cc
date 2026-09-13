@@ -533,16 +533,16 @@ static char *key_block_get_data(Key *key, KeyBlock *actkb, KeyBlock *kb, char **
     if (GS(key->from->name) == ID_ME) {
 
       Mesh *mesh = id_cast<Mesh *>(key->from);
+      const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
 
-      if (mesh->runtime->edit_mesh && mesh->runtime->edit_mesh->bm->totvert == kb->totelem) {
+      if (mesh->runtime->edit_mesh && bm->totvert == kb->totelem) {
         int a = 0;
         float (*co)[3];
-        co = MEM_new_array_uninitialized<float[3]>(size_t(mesh->runtime->edit_mesh->bm->totvert),
-                                                   "key_block_get_data");
+        co = MEM_new_array_uninitialized<float[3]>(size_t(bm->totvert), "key_block_get_data");
 
         BMVert *eve;
         BMIter iter;
-        BM_ITER_MESH (eve, &iter, mesh->runtime->edit_mesh->bm, BM_VERTS_OF_MESH) {
+        BM_ITER_MESH (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH) {
           copy_v3_v3(co[a], eve->co);
           a++;
         }

@@ -376,9 +376,8 @@ static bool uv_texture_remove_poll(bContext *C)
   Object *ob = ed::object::context_object(C);
   Mesh *mesh = id_cast<Mesh *>(ob->data);
   const StringRef active_name = mesh->active_uv_map_name();
-  if (mesh->runtime->edit_mesh) {
-    const BMesh &bm = *mesh->runtime->edit_mesh->bm;
-    if (!CustomData_has_layer_named(&bm.ldata, CD_PROP_FLOAT2, active_name)) {
+  if (const BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
+    if (!CustomData_has_layer_named(&bm->ldata, CD_PROP_FLOAT2, active_name)) {
       return false;
     }
   }
@@ -1059,9 +1058,9 @@ void ED_mesh_report_mirror(ReportList &reports, int totmirr, int totfail)
 
 KeyBlock *ED_mesh_get_edit_shape_key(const Mesh *me)
 {
-  BLI_assert(me->runtime->edit_mesh && me->runtime->edit_mesh->bm);
-
-  return BKE_keyblock_find_by_index(me->key, me->runtime->edit_mesh->bm->shapenr - 1);
+  const BMesh *bm = BKE_editmesh_bmesh_get(me);
+  BLI_assert(me->runtime->edit_mesh && bm);
+  return BKE_keyblock_find_by_index(me->key, bm->shapenr - 1);
 }
 
 Mesh *ED_mesh_context(bContext *C)

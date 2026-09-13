@@ -823,6 +823,7 @@ class MeshUVs : Overlay {
 
     const Object *ob_orig = DEG_get_original(ob_ref.object);
     const Mesh &mesh_orig = ob_orig->type == OB_MESH ? *id_cast<Mesh *>(ob_orig->data) : mesh;
+    const BMesh *bm = BKE_editmesh_bmesh_get(&mesh_orig);
 
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
     const bool is_edit_object = DRW_object_is_in_edit_mode(&ob);
@@ -838,10 +839,9 @@ class MeshUVs : Overlay {
         active_uv_map);
     const bool has_active_object_uvmap = bke::mesh::is_uv_map(meta_data);
 
-    const bool has_active_edit_uvmap = is_edit_object && CustomData_has_layer_named(
-                                                             &mesh.runtime->edit_mesh->bm->ldata,
-                                                             CD_PROP_FLOAT2,
-                                                             active_uv_map);
+    const bool has_active_edit_uvmap = is_edit_object && CustomData_has_layer_named(&bm->ldata,
+                                                                                    CD_PROP_FLOAT2,
+                                                                                    active_uv_map);
 
     ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 

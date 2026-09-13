@@ -146,10 +146,10 @@ static wmOperatorStatus mesh_set_attribute_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   Mesh *active_mesh = ED_mesh_context(C);
+  BMesh *active_bm = BKE_editmesh_bmesh_get_for_write(active_mesh);
   AttributeOwner active_owner = AttributeOwner::from_id(&active_mesh->id);
   const StringRef name = *BKE_attributes_active_name_get(active_owner);
-  const BMDataLayerLookup active_attr = BM_data_layer_lookup(*active_mesh->runtime->edit_mesh->bm,
-                                                             name);
+  const BMDataLayerLookup active_attr = BM_data_layer_lookup(*active_bm, name);
   const bke::AttrType active_type = active_attr.type;
   const CPPType &type = bke::attribute_type_to_cpp_type(active_type);
 
@@ -216,11 +216,11 @@ static wmOperatorStatus mesh_set_attribute_invoke(bContext *C,
                                                   const wmEvent *event)
 {
   Mesh *mesh = ED_mesh_context(C);
-  BMesh *bm = mesh->runtime->edit_mesh->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
   AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
 
   const StringRef name = *BKE_attributes_active_name_get(owner);
-  const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm, name);
+  const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
   const bke::AttrType data_type = attr.type;
   const bke::AttrDomain domain = attr.domain;
   const BMElem *active_elem = BM_mesh_active_elem_get(bm);
@@ -252,9 +252,10 @@ static void mesh_set_attribute_ui(bContext *C, wmOperator *op)
   layout.use_property_decorate_set(false);
 
   Mesh *mesh = ED_mesh_context(C);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
   AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
   const StringRef name = *BKE_attributes_active_name_get(owner);
-  const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm, name);
+  const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
   const StringRefNull prop_name = geometry::rna_property_name_for_type(attr.type);
   layout.prop(op->ptr, prop_name, UI_ITEM_NONE, name, ICON_NONE);
 }

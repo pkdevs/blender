@@ -549,7 +549,7 @@ static wmOperatorStatus geometry_color_attribute_add_exec(bContext *C, wmOperato
 
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
-    if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+    if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
       CustomDataLayer *layer = BKE_attribute_new(*mesh, *bm, name, type, domain, op->reports);
       if (layer == nullptr) {
         return OPERATOR_CANCELLED;
@@ -824,8 +824,8 @@ static wmOperatorStatus geometry_color_attribute_set_render_exec(bContext *C, wm
   char name[MAX_NAME];
   RNA_string_get(op->ptr, "name", name);
   Mesh *mesh = id_cast<Mesh *>(id);
-  if (mesh->runtime->edit_mesh) {
-    const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm, name);
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
+    const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
     if (!attr) {
       return OPERATOR_CANCELLED;
     }

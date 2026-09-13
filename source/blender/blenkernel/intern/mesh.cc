@@ -541,9 +541,7 @@ bool BKE_mesh_attribute_required(const StringRef name)
 void BKE_mesh_ensure_skin_customdata(Mesh *mesh)
 {
   using namespace bke;
-  BMesh *bm = mesh->runtime->edit_mesh ? mesh->runtime->edit_mesh->bm : nullptr;
-
-  if (bm) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
     if (!CustomData_has_layer_named(&bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius")) {
       BM_data_layer_add_named(bm, &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
       const int offset = CustomData_get_offset_named(
@@ -585,9 +583,8 @@ void BKE_mesh_ensure_skin_customdata(Mesh *mesh)
 
 bool BKE_mesh_has_custom_loop_normals(Mesh *mesh)
 {
-  if (mesh->runtime->edit_mesh) {
-    return CustomData_has_layer_named(
-        &mesh->runtime->edit_mesh->bm->ldata, CD_PROP_INT16_2D, "custom_normal");
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
+    return CustomData_has_layer_named(&bm->ldata, CD_PROP_INT16_2D, "custom_normal");
   }
 
   return mesh->attributes().contains("custom_normal");
@@ -1966,8 +1963,7 @@ void Mesh::bounds_set_eager(const Bounds<float3> &bounds)
 
 static bool use_bmesh_material_indices(const Mesh &mesh)
 {
-  return mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH && mesh.runtime->edit_mesh &&
-         mesh.runtime->edit_mesh->bm;
+  return mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH && BKE_editmesh_bmesh_get(&mesh);
 }
 
 std::optional<int> Mesh::material_index_max() const

@@ -847,7 +847,7 @@ MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve)
   if (ob->mode & OB_MODE_EDIT && ob->type == OB_MESH) {
     Mesh *mesh = id_cast<Mesh *>(ob->data);
     if (!mesh->vertex_group_names.is_empty()) {
-      BMesh *bm = mesh->runtime->edit_mesh->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
       const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
 
       if (cd_dvert_offset != -1) {
