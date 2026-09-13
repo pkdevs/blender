@@ -53,7 +53,7 @@ static const EnumPropertyItem prop_deform_modes[] = {
 constexpr float gizmo_scale_basis_grid = 0.06f;
 constexpr float gizmo_scale_basis_perspective = 0.10f;
 
-static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupType *gzgt)
+static bool deform_gizmo_poll(const bContext *C, wmGizmoGroupType *gzgt)
 {
   if (!ED_gizmo_poll_or_unlink_delayed_from_tool(C, gzgt)) {
     return false;
@@ -425,7 +425,7 @@ static void add_corner(QuadWidgetGroup2 *mask_group, wmGizmoGroup *gzgroup)
   WM_gizmo_target_property_def_func(gz, "offset", &params);
 }
 
-static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
+static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
 {
   const Scene &scene = *CTX_data_scene(C);
 
@@ -604,7 +604,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
                         mask_group->grease_pencil_src);
 }
 
-static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
+static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
   mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
@@ -642,10 +642,10 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   mask_group->update_data.gzgt_subdivisions_prop = RNA_struct_type_find_property(
       gzgroup->type->srna, "subdivisions");
 
-  update_things(C, gzgroup);
+  recompute_gizmo_plane(C, gzgroup);
 }
 
-static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
+static bool should_recompute(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
 
@@ -697,14 +697,14 @@ static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
   return false;
 }
 
-static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+static void deform_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
 
   mask_group->update_data.context = const_cast<bContext *>(C);
 }
 
-static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
+static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
 
@@ -717,7 +717,7 @@ static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgro
     mask_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
 
     if (mask_group->mode == DeformMode::TRANSFORM) {
-      update_things(C, gzgroup);
+      recompute_gizmo_plane(C, gzgroup);
     }
     if (mask_group->mode == DeformMode::PERSPECTIVE) {
       update_positions_prespective(mask_group);
@@ -727,8 +727,8 @@ static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgro
     }
   }
 
-  if (should_update(C, gzgroup)) {
-    update_things(C, gzgroup);
+  if (should_recompute(C, gzgroup)) {
+    recompute_gizmo_plane(C, gzgroup);
   }
 }
 
@@ -743,11 +743,11 @@ void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
   gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
   gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
 
-  gzgt->poll = WIDGETGROUP_grease_pencil_quad_poll;
-  gzgt->setup = box_mask_setup;
+  gzgt->poll = deform_gizmo_poll;
+  gzgt->setup = deform_gizmo_setup;
   gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
-  gzgt->refresh = box_mask_refresh;
-  gzgt->draw_prepare = bbox_draw_prepare_space_image;
+  gzgt->refresh = deform_gizmo_refresh;
+  gzgt->draw_prepare = deform_gizmo_draw_prepare;
 
   RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::TRANSFORM), "Mode", "");
 
