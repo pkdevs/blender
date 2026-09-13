@@ -64,6 +64,13 @@ enum ColorManagedDisplaySpace {
 
 enum class ColorManagedFileOutput { Image, Video };
 
+enum class ColorManagedConfigSource {
+  EnvBlenderOCIO = 0, /**< BLENDER_OCIO environment variable. */
+  EnvOCIO = 1,        /**< OCIO environment variable. */
+  Bundled = 2,        /**< Blender bundled OCIO config. */
+  Fallback = 3,       /**< Embedded fallback OCIO config. */
+};
+
 /* -------------------------------------------------------------------- */
 /** \name Generic Functions
  * \{ */
