@@ -354,9 +354,9 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
                                                 wmGizmoProperty *gz_prop,
                                                 const void *value_p)
 {
+  BLI_assert(gz_prop->type->array_length == 16);
   const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
   const float4x4 mat = float4x4(matrix);
-  BLI_assert(gz_prop->type->array_length == 16);
 
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
