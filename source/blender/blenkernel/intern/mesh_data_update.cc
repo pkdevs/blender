@@ -671,7 +671,7 @@ static MutableSpan<float3> mesh_wrapper_vert_coords_ensure_for_write(Mesh *mesh)
     case ME_WRAPPER_TYPE_BMESH:
       if (mesh->runtime->edit_data->vert_positions.is_empty()) {
         mesh->runtime->edit_data->vert_positions = BM_mesh_vert_coords_alloc(
-            mesh->runtime->edit_mesh->bm);
+            BKE_editmesh_bmesh_get(mesh));
       }
       return mesh->runtime->edit_data->vert_positions;
     case ME_WRAPPER_TYPE_MDATA:
@@ -711,9 +711,9 @@ static GeometryComponentPtr cage_mesh_or_fallback(Object &ob,
     /* A non-empty `positions` array is needed because #BKE_mesh_wrapper_vert_coords
      * is expected to be able to return vertex coordinates.
      * Otherwise crazy-space calculation crashes, see: #160540. */
-    if (mesh_cage->runtime->edit_mesh->bm->totvert) {
-      mesh_cage->runtime->edit_data->vert_positions = BM_mesh_vert_coords_alloc(
-          mesh_input.runtime->edit_mesh->bm);
+    const BMesh *bm = BKE_editmesh_bmesh_get(&mesh_input);
+    if (bm->totvert) {
+      mesh_cage->runtime->edit_data->vert_positions = BM_mesh_vert_coords_alloc(bm);
     }
     return GeometryComponentPtr(new MeshComponent(mesh_cage));
   }
@@ -727,6 +727,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
 {
   const Mesh &mesh_input = *id_cast<const Mesh *>(ob.data);
   const BMEditMesh &em_input = *mesh_input.runtime->edit_mesh;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(&ob);
 
   /* Mesh with constructive modifiers but no deformation applied. Tracked
    * along with final mesh if undeformed / orco coordinates are requested
@@ -769,9 +770,9 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
 
   /* The mesh from edit mode should not have any original index layers already, since those
    * are added during evaluation when necessary and are redundant on an original mesh. */
-  BLI_assert(CustomData_get_layer(&em_input.bm->pdata, CD_ORIGINDEX) == nullptr &&
-             CustomData_get_layer(&em_input.bm->edata, CD_ORIGINDEX) == nullptr &&
-             CustomData_get_layer(&em_input.bm->pdata, CD_ORIGINDEX) == nullptr);
+  BLI_assert(CustomData_get_layer(&bm->pdata, CD_ORIGINDEX) == nullptr &&
+             CustomData_get_layer(&bm->edata, CD_ORIGINDEX) == nullptr &&
+             CustomData_get_layer(&bm->pdata, CD_ORIGINDEX) == nullptr);
 
   /* Clear errors before evaluation. */
   BKE_modifiers_clear_errors(&ob);
@@ -799,7 +800,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
       mti->required_data_mask(md, &mask);
       if (mask.vmask & CD_MASK_ORCO) {
         if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
-          add_orco_mesh(ob, em_input.bm, *mesh, mesh_orco, CD_ORCO);
+          add_orco_mesh(ob, bm, *mesh, mesh_orco, CD_ORCO);
         }
       }
     }
@@ -826,7 +827,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
       CustomData_MeshMasks mask = md_datamask->mask;
       if (mask.vmask & CD_MASK_ORCO) {
         if (!mesh_orco) {
-          mesh_orco = create_orco_mesh(ob, mesh_input, em_input.bm, CD_ORCO);
+          mesh_orco = create_orco_mesh(ob, mesh_input, bm, CD_ORCO);
         }
 
         mask.vmask &= ~CD_MASK_ORCO;
@@ -890,7 +891,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       BKE_mesh_wrapper_ensure_mdata(mesh);
 
-      add_orco_mesh(ob, em_input.bm, *mesh, mesh_orco, CD_ORCO);
+      add_orco_mesh(ob, bm, *mesh, mesh_orco, CD_ORCO);
     }
   }
 

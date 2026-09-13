@@ -3888,7 +3888,6 @@ static wmOperatorStatus edbm_blend_from_shape_exec(bContext *C, wmOperator *op)
   Mesh *me_ref = id_cast<Mesh *>(obedit_ref->data);
   Key *key_ref = me_ref->key;
   KeyBlock *kb_ref = nullptr;
-  BMEditMesh *em_ref = me_ref->runtime->edit_mesh.get();
   BMVert *eve;
   BMIter iter;
   const Main *bmain = CTX_data_main(C);
@@ -3902,7 +3901,8 @@ static wmOperatorStatus edbm_blend_from_shape_exec(bContext *C, wmOperator *op)
   const bool use_add = RNA_boolean_get(op->ptr, "add");
 
   /* Sanity check. */
-  totshape_ref = CustomData_number_of_layers(&em_ref->bm->vdata, CD_SHAPEKEY);
+  totshape_ref = CustomData_number_of_layers(&BKE_editmesh_bmesh_get(obedit_ref)->vdata,
+                                             CD_SHAPEKEY);
 
   if (totshape_ref == 0 || shape_ref < 0) {
     BKE_report(op->reports, RPT_ERROR, "Active mesh does not have shape keys");
@@ -8594,7 +8594,7 @@ static void bmesh_selected_verts_center_calc(BMesh *bm, float *r_center)
 static void point_normals_apply(bContext *C, wmOperator *op, float target[3], const bool do_reset)
 {
   Object *obedit = CTX_data_edit_object(C);
-  BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   BMLoopNorEditDataArray *lnors_ed_arr = static_cast<BMLoopNorEditDataArray *>(op->customdata);
 
   const bool do_invert = RNA_boolean_get(op->ptr, "invert");
