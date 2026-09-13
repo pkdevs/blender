@@ -44,9 +44,17 @@ enum class DeformMode : int8_t {
 };
 
 static const EnumPropertyItem prop_deform_modes[] = {
-    {int(DeformMode::TRANSFORM), "TRANSFORM", 0, "Transform", "TODO"},
-    {int(DeformMode::PERSPECTIVE), "PERSPECTIVE", 0, "Perspective", "TODO"},
-    {int(DeformMode::GRID), "GRID", 0, "Grid", "TODO"},
+    {int(DeformMode::TRANSFORM), "TRANSFORM", 0, "Transform", "Transform the selected strokes"},
+    {int(DeformMode::PERSPECTIVE),
+     "PERSPECTIVE",
+     0,
+     "Perspective",
+     "Deform the selected strokes with a perspective transform"},
+    {int(DeformMode::GRID),
+     "GRID",
+     0,
+     "Grid",
+     "Deform the selected strokes with a grid of control points"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
