@@ -11,6 +11,7 @@
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_scene.hh"
 #include "BKE_tracking.hh"
 
@@ -223,18 +224,12 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
   const float4x4 mat_inv = math::invert(mat);
 
   const int x_num = 2 + mask_group->subdivisions;
+  const int y_num = 2 + mask_group->subdivisions;
 
-  auto xy_to_index = [&](const int2 xy) {
-    const int2 xy_clamped = math::clamp(xy, 0, x_num - 1);
-    return xy_clamped.x + x_num * xy_clamped.y;
-  };
-
-  auto weight_function = [&](const float x) {
-    const float x_abs = math::abs(x);
-    if (x_abs < 1.0f) {
-      return 1.0f - x_abs;
-    }
-    return 0.0f;
+  auto xy_to_position = [&](const int2 xy) {
+    const int2 xy_clamped = math::clamp(xy, int2(0), int2(x_num - 1, y_num - 1));
+    const int index = xy_clamped.x + x_num * xy_clamped.y;
+    return mask_group->corner_data[index].corner_pos;
   };
 
   for (const int drawing_i : drawings.index_range()) {
@@ -252,15 +247,32 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
       const float2 local_uv = math::fract(pos_2d * (mask_group->subdivisions + 1));
       const int2 grid_xy = int2(math::floor(pos_2d * (mask_group->subdivisions + 1)));
 
+      float4 data_x;
+      float4 data_y;
+      key_curve_position_weights(local_uv.x, data_x, KeyInterpolationType::KEY_BSPLINE);
+      key_curve_position_weights(local_uv.y, data_y, KeyInterpolationType::KEY_BSPLINE);
+
+      /* Prevent distortion around the edges of the grid. */
+      if (grid_xy.x == 0) {
+        data_x = float4(0.0f, data_x.x * 2.0f + data_x.y, data_x.z - data_x.x, data_x.w);
+      }
+      if (grid_xy.y == 0) {
+        data_y = float4(0.0f, data_y.x * 2.0f + data_y.y, data_y.z - data_y.x, data_y.w);
+      }
+      if (grid_xy.x == x_num - 2) {
+        data_x = float4(data_x.x, data_x.y - data_x.w, data_x.w * 2.0f + data_x.z, 0.0f);
+      }
+      if (grid_xy.y == y_num - 2) {
+        data_y = float4(data_y.x, data_y.y - data_y.w, data_y.w * 2.0f + data_y.z, 0.0f);
+      }
+
       float2 pos_2d_out = float2(0.0f);
 
-      for (const int x : IndexRange(2)) {
-        for (const int y : IndexRange(2)) {
-          const int2 xy_offset = int2(x, y);
-          const float weight = weight_function(local_uv.x - float(xy_offset.x)) *
-                               weight_function(local_uv.y - float(xy_offset.y));
-          pos_2d_out += weight *
-                        mask_group->corner_data[xy_to_index(grid_xy + xy_offset)].corner_pos;
+      for (const int x : IndexRange(4)) {
+        for (const int y : IndexRange(4)) {
+          const int2 xy_offset = int2(x - 1, y - 1);
+          const float weight = data_x[x] * data_y[y];
+          pos_2d_out += weight * xy_to_position(grid_xy + xy_offset);
         }
       }
 
