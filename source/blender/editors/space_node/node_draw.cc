@@ -4462,8 +4462,13 @@ static void draw_comments(const bContext &C,
                           Span<ui::Block *> blocks)
 {
   Vector<bNode *> comment_nodes = ntree.nodes_by_type("NodeComment"_ustr);
-  std::ranges::sort(comment_nodes,
-                    [](const bNode *a, const bNode *b) { return a->ui_order < b->ui_order; });
+  std::ranges::sort(comment_nodes, [](const bNode *a, const bNode *b) {
+    auto to_key = [](const bNode &n) {
+      const NodeComment &storage = *static_cast<const NodeComment *>(n.storage);
+      return std::make_pair(!bool(storage.flag & NodeCommentFlag::Render), n.ui_order);
+    };
+    return to_key(*a) < to_key(*b);
+  });
   for (bNode *node : comment_nodes) {
     node_draw_comment(C, tree_draw_ctx, region, *node, *blocks[node->index()]);
   }
