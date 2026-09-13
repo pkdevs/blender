@@ -81,6 +81,9 @@ class StraightSkeletonInput {
 
   /** Coincidence threshold.  Pass 0.0 to use the default (1e-8). */
   double epsilon{0.0};
+
+  /** Optional identifying label for debug drawings and logging. */
+  const char *label{nullptr};
 };
 
 /** \} */
@@ -136,4 +139,27 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
 
 /** \} */
 
-}  // namespace blender::straightskeleton
+/* -------------------------------------------------------------------- */
+/** \name Debug Output Controls
+ * \{ */
+
+/**
+ * When true, debug drawing functions open a new file (truncating existing content)
+ * and write the HTML document header.  When false, they append new sections to the
+ * existing file.  Debug drawing functions automatically set this to false after opening
+ * a new file.
+ */
+extern bool debug_new_file;
+
+/** Alias for convenience. */
+inline bool &straight_skeleton_debug_new_file = debug_new_file;
+
+/** Filepath for debug HTML output. */
+extern const char *debug_html_filepath;
+
+/** Reset the debug file flag so the next debug drawing starts a new file. */
+void debug_reset_file();
+
+/** \} */
+
+} /* namespace blender::straightskeleton */
