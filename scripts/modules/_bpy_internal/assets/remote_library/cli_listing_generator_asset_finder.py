@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import unicodedata
+import typing
 import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterable
@@ -273,7 +274,7 @@ def _find_tiled_images_dependencies(r_dependencies: set[DependencyFile],
 
 
 def _find_dependencies_recursive_impl(
-        visited_pointers: set[any],
+        visited_pointers: set[typing.Any],
         data) -> set[bpy.types.ID]:
 
     dependencies: set[bpy.types.ID] = set()
@@ -316,7 +317,7 @@ def _find_dependencies_recursive_impl(
 
 def _find_dependencies_recursive(
         # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
-        visited_pointers: set[any],
+        visited_pointers: set[typing.Any],
         data) -> set[bpy.types.ID]:
 
     # Avoid infinite recusion calls with circular references
