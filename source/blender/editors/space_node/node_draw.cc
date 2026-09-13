@@ -3613,7 +3613,7 @@ static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Blo
                                         ui::LayoutType::Panel,
                                         loc.x + pad_left,
                                         loc.y - pad_top,
-                                        node.width - pad_left - pad_right,
+                                        node.width * UI_SCALE_FAC - pad_left - pad_right,
                                         0,
                                         0,
                                         ui::style_get_dpi());
@@ -3633,7 +3633,7 @@ static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Blo
       NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
   node.runtime->draw_bounds.xmin = loc.x;
-  node.runtime->draw_bounds.xmax = loc.x + node.width;
+  node.runtime->draw_bounds.xmax = loc.x + node.width * UI_SCALE_FAC;
   node.runtime->draw_bounds.ymin = loc.y - height;
   node.runtime->draw_bounds.ymax = loc.y;
 
