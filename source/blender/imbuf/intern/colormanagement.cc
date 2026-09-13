@@ -405,6 +405,16 @@ void colormanagement_exit()
   colormanage_free_config();
 }
 
+StringRefNull IMB_colormanagement_config_path_get()
+{
+  return g_config_active().path;
+}
+
+ColorManagedConfigSource IMB_colormanagement_config_source_get()
+{
+  return g_config_active().source;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

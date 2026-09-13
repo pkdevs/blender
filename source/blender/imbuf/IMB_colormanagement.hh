@@ -70,6 +70,9 @@ enum class ColorManagedFileOutput { Image, Video };
 
 ColorManagedConfig &IMB_colormanagement_get_config();
 
+StringRefNull IMB_colormanagement_config_path_get();
+ColorManagedConfigSource IMB_colormanagement_config_source_get();
+
 void IMB_colormanagement_check_file_config(Main *bmain);
 
 /**
