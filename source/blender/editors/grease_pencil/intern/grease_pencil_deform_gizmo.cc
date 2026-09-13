@@ -103,7 +103,6 @@ struct DeformGizmoGroup {
   } update_data;
 };
 
-/* translate callbacks */
 static void gizmo_control_point_position_get(const wmGizmo *gz,
                                              wmGizmoProperty *gz_prop,
                                              void *value_p)
@@ -373,7 +372,7 @@ static void gizmo_transform_border_matrix_set(const wmGizmo *gz,
   update_positions_transform(deform_group, mat);
 }
 
-static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
+static std::optional<Bounds<float2>> compute_plane_space_drawing_bounds(
     const IndexMask selection,
     const bke::greasepencil::Drawing &drawing,
     const FunctionRef<float2(const float3 &position)> project_to_screen)
@@ -403,7 +402,7 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
   return drawing_bounds;
 }
 
-static void add_corner(DeformGizmoGroup *deform_group, wmGizmoGroup *gzgroup)
+static void create_and_add_control_point(DeformGizmoGroup *deform_group, wmGizmoGroup *gzgroup)
 {
   const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
   const int i = deform_group->control_points.size();
@@ -509,7 +508,7 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
 
     box = bounds::merge(
         box,
-        compute_screen_space_drawing_bounds(selected_points, info.drawing, projection_function));
+        compute_plane_space_drawing_bounds(selected_points, info.drawing, projection_function));
   }
 
   deform_group->drawings = drawings;
@@ -530,7 +529,7 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
            IndexRange::from_begin_end(deform_group->control_points.size(), x_num * y_num))
       {
         UNUSED_VARS(i);
-        add_corner(deform_group, gzgroup);
+        create_and_add_control_point(deform_group, gzgroup);
       }
     }
 
@@ -635,7 +634,7 @@ static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
   for (const int i : IndexRange(4)) {
     UNUSED_VARS(i);
-    add_corner(deform_group, gzgroup);
+    create_and_add_control_point(deform_group, gzgroup);
   }
 
   deform_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
