@@ -37,7 +37,7 @@ float4 closure_to_rgba_hybrid(ShadingData &sd, Closure /*cl*/)
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      sd, views.get(0), resource_id, g_thickness, frag_co, radiance, transmittance);
+      sd, views.get(0), resource_id, sd.thickness, frag_co, radiance, transmittance);
 
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
@@ -154,7 +154,7 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  g_thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
+  sd.thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
 
   fragment_displacement(kg, sd);
 
@@ -269,7 +269,7 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   float3 gbuffer_dither = sampling.rng_3D_get(SAMPLING_GBUFFER_U);
   gbuffer::Packed gbuf = gbuffer::pack(
-      gbuf_params, gbuf_data, sd.Ng, sd.N, g_thickness, use_object_id);
+      gbuf_params, gbuf_data, sd.Ng, sd.N, sd.thickness, use_object_id);
 
   /* Output header and first closure using frame-buffer attachment. */
   frag_out.gbuf_header = gbuf.header;

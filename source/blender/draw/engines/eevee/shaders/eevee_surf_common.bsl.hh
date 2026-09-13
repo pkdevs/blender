@@ -95,6 +95,7 @@ void init_globals_curves(ShadingData &sd, const ViewMatrices view)
   sd.ray_length = distance(sd.P, view.position());
   sd.barycentric_coords = float2(0.0f);
   sd.barycentric_dists = float3(0.0f);
+  sd.thickness = Thickness::zero();
 
   sd.N = (front_face) ? sd.N : -sd.N;
   sd.Ni = (front_face) ? sd.Ni : -sd.Ni;

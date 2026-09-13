@@ -82,6 +82,9 @@ struct ShadingData {
   float volume_anisotropy;
   packed_float3 volume_absorption;
 
+  /* Global thickness set after nodetree_thickness evaluation. Otherwise set to 0.0f. */
+  Thickness thickness;
+
   /* Sampled closure parameters. */
   Reservoir<ClosureUndetermined> closure_bins[CLOSURE_BIN_COUNT];
 
@@ -201,10 +204,6 @@ void closure_weights_reset(ShadingData &sd, float closure_rand)
   }
 #endif
 }
-
-/* Global thickness because it is needed for closure_to_rgba. */
-Thickness g_thickness;
-uint g_resource_id;
 
 #define closure_base_copy(cl, in_cl) \
   cl.color = in_cl.color; \
@@ -1153,7 +1152,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
                                     false,
                                     false,
                                     gl_FragCoord.xy,
-                                    g_thickness,
+                                    sd.thickness,
                                     position,
                                     sd.Ng,
                                     sd.N,

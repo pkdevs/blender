@@ -24,7 +24,7 @@
 #include "eevee_occupancy_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 
-ShadingData init_globals(const ViewMatrices view, float3 wP)
+[[nodiscard]] ShadingData init_globals(const ViewMatrices view, float3 wP)
 {
   ShadingData sd;
   sd.P = wP;
@@ -38,6 +38,7 @@ ShadingData init_globals(const ViewMatrices view, float3 wP)
   sd.ray_type = RAY_TYPE_CAMERA;
   sd.ray_depth = 0.0f;
   sd.ray_length = distance(sd.P, view.position());
+  sd.thickness = Thickness::zero();
   return sd;
 }
 
