@@ -930,6 +930,9 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
       break;
   }
 
+  info.compilation_constant(
+      gpu::shader::Type::bool_t, "use_aov_output", pipeline_type == MAT_PIPE_DEFERRED);
+
   if (!pipeline_info_name.is_empty()) {
     info.additional_info(pipeline_info_name);
   }

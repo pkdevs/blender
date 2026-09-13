@@ -29,9 +29,9 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
 
-  [[resource_table]] const draw::View &views = resource_table_get(draw::View);
-  [[resource_table]] const eevee::Sampling &sampling = resource_table_get(eevee::Sampling);
-  [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
+  [[resource_table]] const draw::View &views = kg.view;
+  [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
+  [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
   auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
@@ -48,9 +48,7 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
 
 #if defined(MAT_TRANSPARENT) && defined(MAT_SHADER_TO_RGBA)
   { /* Limit resource guard to this scope. */
-    /* clang-format off */ /* Multi-line macro breaks error line counting. */
-    [[resource_table]] eevee::LightprobeRenderData &lightprobes = resource_table_get(eevee::LightprobeRenderData);
-    /* clang-format on */
+    [[resource_table]] eevee::LightprobeRenderData &lightprobes = kg.lightprobes;
     [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
 
     float3 V = -views.get(0).world_incident_vector(sd.P);

@@ -432,7 +432,8 @@ float derivative_scale_get([[resource_table]] KernelGlobals & /*kg*/)
 
 /* AOV Output. */
 
-void output_aov(int2 /*texel*/,
+void output_aov([[resource_table]] KernelGlobals &kg,
+                int2 /*texel*/,
                 float4 /*color*/,
                 float /*value*/,
                 uint /*hash*/,

@@ -24,17 +24,14 @@
 
 float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
-  /* Workaround for gl_FragCoord. */
-  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
-
-  [[resource_table]] const eevee::Sampling &sampling = resource_table_get(eevee::Sampling);
-  [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
+  [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
+  [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
   float4 out_color;
   out_color.rgb = sd.emission;
   out_color.a = saturate(1.0f - average(sd.transmittance));
 
   /* Reset for the next closure tree. */
-  float noise = util_tx.fetch(gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
+  float noise = util_tx.fetch(sd.frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
   closure_weights_reset(kg, sd, closure_rand);
 
