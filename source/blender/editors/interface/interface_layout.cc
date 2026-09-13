@@ -2817,7 +2817,8 @@ void Layout::textbox(const bContext *C,
 void Layout::textbox_with_state(PointerRNA *ptr,
                                 StringRefNull propname,
                                 TextboxState *textbox_state,
-                                std::optional<StringRefNull> placeholder)
+                                std::optional<StringRefNull> placeholder,
+                                const float hit_inset_x)
 {
 
   Block *block = this->block();
@@ -2860,6 +2861,7 @@ void Layout::textbox_with_state(PointerRNA *ptr,
       std::nullopt);
   ButtonTextBox *textbox = static_cast<ButtonTextBox *>(but);
   textbox->state = textbox_state;
+  textbox->hit_inset_x = hit_inset_x;
   if (placeholder) {
     button_placeholder_set(but, *placeholder);
   }

@@ -3595,7 +3595,10 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
-static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Block &block)
+static void comment_node_prepare_for_draw(SpaceNode &snode,
+                                          bNodeTree &ntree,
+                                          bNode &node,
+                                          ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
@@ -3622,7 +3625,10 @@ static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Blo
     layout.label_markdown(text);
   }
   else {
-    layout.textbox_with_state(&node_ptr, "text", &storage.textbox_state_node);
+    /* The hit-inset is necessary to make the textbox horizontally resizable. */
+    const float hit_inset_x = NODE_RESIZE_MARGIN * math::max(snode.runtime->aspect, 1.0f);
+    layout.textbox_with_state(
+        &node_ptr, "text", &storage.textbox_state_node, std::nullopt, hit_inset_x);
   }
 
   block_align_end(&block);
@@ -3679,7 +3685,7 @@ static void node_update_nodetree(const bContext &C,
       reroute_node_prepare_for_draw(node);
     }
     else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(ntree, node, block);
+      comment_node_prepare_for_draw(*snode, ntree, node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {

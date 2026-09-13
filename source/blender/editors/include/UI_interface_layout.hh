@@ -687,11 +687,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a string property item as textbox, this will let multi-line text editing.
    * \param textbox_state: custom allocation for persistent textbox state.
+   * \param hit_inset_x: Horizontal inset for hit-testing only (does not affect drawing). This can
+   *   be used to externally implement horizontall resizing of the textbox.
    */
   void textbox_with_state(PointerRNA *ptr,
                           StringRefNull propname,
                           TextboxState *textbox_state,
-                          std::optional<StringRefNull> placeholder = std::nullopt);
+                          std::optional<StringRefNull> placeholder = std::nullopt,
+                          float hit_inset_x = 0.0f);
 
   /**
    * Adds a RNA property item, and sets a custom popover to expose its value.
