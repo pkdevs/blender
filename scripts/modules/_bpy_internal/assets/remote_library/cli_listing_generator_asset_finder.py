@@ -250,8 +250,9 @@ def _find_dependencies_recursive_impl(
                     continue
                 dependencies |= _find_dependencies_recursive(visited_pointers, value)
 
-    if not isinstance(data, bpy.types.ID):
+    if getattr(data, "id_data") is None:
         return dependencies
+
     for _, value in data.items():
         dependencies |= _find_dependencies_recursive(visited_pointers, value)
     return dependencies
