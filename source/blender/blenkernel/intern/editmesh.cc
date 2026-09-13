@@ -62,6 +62,34 @@ BMEditMesh *BKE_editmesh_from_object(Object *ob)
   return (id_cast<Mesh *>(ob->data))->runtime->edit_mesh.get();
 }
 
+const BMesh *BKE_editmesh_bmesh_get(const Object *ob)
+{
+  const Mesh *mesh = id_cast<const Mesh *>(ob->data);
+  return BKE_editmesh_bmesh_get(mesh);
+}
+
+const BMesh *BKE_editmesh_bmesh_get(const Mesh *mesh)
+{
+  if (!mesh->runtime->edit_mesh) {
+    return nullptr;
+  }
+  return mesh->runtime->edit_mesh->bm;
+}
+
+BMesh *BKE_editmesh_bmesh_get_for_write(Mesh *mesh)
+{
+  if (!mesh->runtime->edit_mesh) {
+    return nullptr;
+  }
+  return mesh->runtime->edit_mesh->bm;
+}
+
+BMesh *BKE_editmesh_bmesh_get_for_write(Object *ob)
+{
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
+  return BKE_editmesh_bmesh_get_for_write(mesh);
+}
+
 bool BKE_editmesh_eval_orig_map_available(const Mesh &mesh_eval, const Mesh *mesh_orig)
 {
   if (!mesh_orig) {
