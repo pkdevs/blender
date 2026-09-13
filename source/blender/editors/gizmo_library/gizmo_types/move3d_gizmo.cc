@@ -87,6 +87,7 @@ struct MoveInteraction {
 
 static void move_geom_draw(const wmGizmo *gz,
                            const float color[4],
+                           const float line_width,
                            const bool select,
                            const int draw_options)
 {
@@ -110,7 +111,7 @@ static void move_geom_draw(const wmGizmo *gz,
   float viewport[4];
   GPU_viewport_size_get_f(viewport);
   immUniform2fv("viewportSize", &viewport[2]);
-  immUniform1f("lineWidth", (gz->line_width * U.pixelsize) + WM_gizmo_select_bias(select));
+  immUniform1f("lineWidth", (line_width * U.pixelsize) + WM_gizmo_select_bias(select));
 
   immUniformColor4fv(color);
 
@@ -177,9 +178,11 @@ static void move3d_draw_intern(const bContext *C,
   MoveInteraction *inter = static_cast<MoveInteraction *>(gz->interaction_data);
   const int draw_options = RNA_enum_get(gz->ptr, "draw_options");
   const bool align_view = (draw_options & ED_GIZMO_MOVE_DRAW_FLAG_ALIGN_VIEW) != 0;
-  float color[4];
+  float color[4], black[3] = {0, 0, 0};
   float matrix_final[4][4];
   float matrix_align[4][4];
+
+  const float outline_line_width = gz->line_width + 3.0f;
 
   gizmo_color_get(gz, highlight, color);
   WM_gizmo_calc_matrix_final(gz, matrix_final);
@@ -198,7 +201,8 @@ static void move3d_draw_intern(const bContext *C,
   }
 
   GPU_blend(GPU_BLEND_ALPHA);
-  move_geom_draw(gz, color, select, draw_options);
+  move_geom_draw(gz, black, outline_line_width, select, draw_options);
+  move_geom_draw(gz, color, gz->line_width, select, draw_options);
   GPU_blend(GPU_BLEND_NONE);
   GPU_matrix_pop();
 
@@ -211,7 +215,7 @@ static void move3d_draw_intern(const bContext *C,
     }
 
     GPU_blend(GPU_BLEND_ALPHA);
-    move_geom_draw(gz, float4(0.5f, 0.5f, 0.5f, 0.5f), select, draw_options);
+    move_geom_draw(gz, float4(0.5f, 0.5f, 0.5f, 0.5f), gz->line_width, select, draw_options);
     GPU_blend(GPU_BLEND_NONE);
     GPU_matrix_pop();
   }
