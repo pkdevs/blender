@@ -7,7 +7,10 @@
  * \brief Node breadcrumbs drawing
  */
 
+#include <algorithm>
+
 #include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_node_types.h"
@@ -81,20 +84,6 @@ static void activate_and_push_node_tree(ARegion *region,
   ED_node_tree_push(region, snode, group_tree, group_node);
 }
 
-static bool node_tree_has_group_node(const bNodeTree *ntree)
-{
-  if (ntree == nullptr) {
-    return false;
-  }
-
-  for (const bNode *node : ntree->all_nodes()) {
-    if (node->is_group() && node->id != nullptr) {
-      return true;
-    }
-  }
-  return false;
-}
-
 static BIFIconID node_tree_icon(const ID &tree_id)
 {
   if (ID_IS_PACKED(&tree_id)) {
@@ -114,57 +103,76 @@ static void navigate_menu_draw(bContext *C, ui::Layout *layout, void *arg)
   if (arg == nullptr) {
     return;
   }
+  SpaceNode *snode = CTX_wm_space_node(C);
   bNodeTree *clicked_tree = nullptr;
   ID *id = static_cast<ID *>(arg);
   if (GS(id->name) == ID_NT) {
     clicked_tree = id_cast<bNodeTree *>(id);
   }
   else {
-    SpaceNode *snode = CTX_wm_space_node(C);
     clicked_tree = snode->nodetree;
   }
   if (!clicked_tree) {
     return;
   }
 
+  /* The child of #clicked_tree that the treepath descends into. */
+  bNodeTree *child_tree_in_path = nullptr;
+  for (bNodeTreePath &path_item : snode->treepath) {
+    if (path_item.nodetree == clicked_tree && path_item.next) {
+      child_tree_in_path = path_item.next->nodetree;
+      break;
+    }
+  }
+
   Set<bNodeTree *> added_groups;
+  Vector<bNode *> group_nodes;
   for (bNode *node : clicked_tree->all_nodes()) {
     if (!node->is_group() || !node->id) {
       continue;
     }
-    bNodeTree *group = id_cast<bNodeTree *>(node->id);
-    if (added_groups.contains(group)) {
-      continue;
+    if (added_groups.add(id_cast<bNodeTree *>(node->id))) {
+      group_nodes.append(node);
     }
-    added_groups.add(group);
+  }
+  std::ranges::sort(group_nodes, [](const bNode *a, const bNode *b) {
+    return BLI_strcasecmp_natural(a->id->name + 2, b->id->name + 2) < 0;
+  });
+
+  for (bNode *node : group_nodes) {
+    bNodeTree *group = id_cast<bNodeTree *>(node->id);
 
     auto enter_group_func = [clicked_tree, node, group](bContext &C) {
       SpaceNode *snode = CTX_wm_space_node(&C);
       ARegion *region = CTX_wm_region(&C);
 
-      if (snode->edittree != clicked_tree) {
-        bool is_parent = false;
-        for (bNodeTreePath &path_item : snode->treepath) {
-          if (path_item.nodetree == clicked_tree) {
-            is_parent = true;
-            break;
-          }
-        }
-        if (!is_parent) {
-          return;
-        }
-
-        while (snode->edittree != clicked_tree) {
-          ED_node_tree_pop(region, snode);
-        }
+      while (snode->edittree != clicked_tree) {
+        ED_node_tree_pop(region, snode);
       }
-      if (snode->edittree == clicked_tree) {
-        activate_and_push_node_tree(region, snode, group, node);
-      }
+      activate_and_push_node_tree(region, snode, group, node);
     };
 
-    layout->button(node->id->name + 2, node_tree_icon(*node->id), enter_group_func);
+    ui::Button *but = layout->button(
+        node->id->name + 2, node_tree_icon(*node->id), enter_group_func);
+    if (group == child_tree_in_path) {
+      /* Highlight the current path item. Side effect: it becomes the default item for Enter. */
+      ui::button_flag_enable(but, ui::BUT_ACTIVE_DEFAULT);
+    }
   }
+}
+
+static bool node_tree_has_group_node(const bNodeTree *ntree)
+{
+  if (ntree == nullptr) {
+    return false;
+  }
+
+  for (const bNode *node : ntree->all_nodes()) {
+    if (node->is_group() && node->id != nullptr) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
@@ -172,13 +180,13 @@ static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
                                                         StructRNA &rna_type,
                                                         void *ptr)
 {
-  const bool in_root_tree = (snode.nodetree != snode.edittree);
-  const bool has_group = node_tree_has_group_node(snode.nodetree);
+  const bool in_root_tree = (snode.nodetree == snode.edittree);
+  const bool has_group = in_root_tree ? node_tree_has_group_node(snode.nodetree) : true;
   ui::context_path_add_generic(path,
                                rna_type,
                                ptr,
                                ICON_NONE,
-                               in_root_tree ? tree_path_handle_func(0) : nullptr,
+                               in_root_tree ? nullptr : tree_path_handle_func(0),
                                has_group ? navigate_menu_draw : nullptr);
 }
 
@@ -198,13 +206,13 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
     const BIFIconID icon = node_tree_icon(path_item.nodetree->id);
 
     /* We don't need to add handle function to last node-tree. */
-    const bool is_last_item = (&path_item == snode.treepath.last);
-    const bool has_group = node_tree_has_group_node(path_item.nodetree);
+    const bool is_last_path = (&path_item == snode.treepath.last);
+    const bool has_group = is_last_path ? node_tree_has_group_node(path_item.nodetree) : true;
     ui::context_path_add_generic(path,
                                  *RNA_NodeTree,
                                  path_item.nodetree,
                                  icon,
-                                 is_last_item ? nullptr : tree_path_handle_func(i),
+                                 is_last_path ? nullptr : tree_path_handle_func(i),
                                  has_group ? navigate_menu_draw : nullptr);
   }
 }
