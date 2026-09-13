@@ -5,7 +5,6 @@
 #pragma once
 
 #include "graph/node.h"
-#include "util/transform.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -91,8 +90,6 @@ class DenoiseParams : public Node {
   DenoiserPrefilter prefilter = DENOISER_PREFILTER_FAST;
   DenoiserQuality quality = DENOISER_QUALITY_HIGH;
   float upscale_factor = 1.0f;
-  
-  Transform camera_to_world = transform_identity();
 
   static const NodeEnum *get_type_enum();
   static const NodeEnum *get_prefilter_enum();
