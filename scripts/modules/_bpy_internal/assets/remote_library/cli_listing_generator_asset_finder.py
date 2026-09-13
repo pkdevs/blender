@@ -52,7 +52,7 @@ class FileVersionInfo:
 
 @dataclass
 class DependencyFile:
-    absolute_path: Path = ""
+    absolute_path: Path
     blendlib_version: BlenderVersion | None = None  # None means the file is not at blender file
 
     def __hash__(self):
@@ -128,7 +128,6 @@ def list_assets(blendfile_version_info: FileVersionInfo,
                                                    list[api_models.AssetV1],
                                                    list[api_models.FileV1]]:
     blendfile = blendfile_version_info.path
-
     # Start by erasing everything from memory.
     bpy.ops.wm.read_homefile(use_factory_startup=True, use_empty=True, load_ui=False)
 
@@ -208,9 +207,9 @@ def list_assets(blendfile_version_info: FileVersionInfo,
     return blendfile_info, assets, file_dependencies
 
 
-def _absolute_path(filepath: str, blend_filepath: Path):
+def _absolute_path(filepath: str, base_path: Path):
     if filepath.startswith("//"):
-        return Path(os.path.join(str(blend_filepath.parent), filepath[2::])).absolute()
+        return (base_path / filepath[2::]).absolute()
     else:
         return Path(filepath)
 
@@ -275,31 +274,17 @@ def _find_tiled_images_dependencies(r_dependencies: set[DependencyFile],
 
 def _find_dependencies_recursive_impl(
         visited_pointers: set[any],
-        r_dependencies: set[DependencyFile],
-        data,
-        blend_filepath: Path,
-        asset_library_root: Path):
+        data) -> set[bpy.types.ID]:
 
-    if getattr(data, '__module__', None) not in ('bpy.types', '_bpy_types'):
-        return
+    dependencies: set[bpy.types.ID] = set()
 
-    if isinstance(data, (bpy.types.Image, bpy.types.Sound, bpy.types.VectorFont)) and data.filepath:
-        if isinstance(data, bpy.types.Image) and data.source in ('SEQUENCE', 'TILED'):
-            if data.source == 'SEQUENCE':
-                _find_image_sequence_dependencies(r_dependencies, data, blend_filepath)
-            elif data.source == 'TILED':
-                _find_tiled_images_dependencies(r_dependencies, data, blend_filepath)
-        else:
-            dependency = DependencyFile(_absolute_path(data.filepath, blend_filepath), None)
-            r_dependencies.add(dependency)
+    if getattr(data, 'bl_rna') is None:
+        return set()
 
-    if isinstance(data, bpy.types.ID) and data.id_data and data.id_data.library and data.id_data.library.filepath:
-        dependency = DependencyFile(
-            _absolute_path(
-                data.id_data.library.filepath,
-                blend_filepath),
-            data.id_data.library.version)
-        r_dependencies.add(dependency)
+    dependencies: set[bpy.types.ID] = set()
+
+    if isinstance(data, bpy.types.ID):
+        dependencies.add(data)
 
     for prop in data.bl_rna.properties:
         if prop.is_deprecated:
@@ -313,45 +298,36 @@ def _find_dependencies_recursive_impl(
             case 'BOOLEAN' | 'INT' | 'FLOAT' | 'ENUM' | 'STRING':
                 continue
             case 'COLLECTION':
-                value = getattr(data, attr, None)
+                value = getattr(data, attr)
                 for item in value:
-                    _find_dependencies_recursive(
-                        visited_pointers, r_dependencies, item, blend_filepath, asset_library_root)
+                    dependencies |= _find_dependencies_recursive(visited_pointers, item)
             case 'POINTER':
-                value = getattr(data, attr, None)
-                _find_dependencies_recursive(
-                    visited_pointers, r_dependencies, value, blend_filepath, asset_library_root)
+                value = getattr(data, attr)
+                if not value:
+                    continue
+                dependencies |= _find_dependencies_recursive(visited_pointers, value)
 
     if not isinstance(data, bpy.types.ID):
-        return
+        return dependencies
     for _, value in data.items():
-        if getattr(data, '__module__', None) not in ('bpy.types', '_bpy_types'):
-            continue
-        _find_dependencies_recursive(
-            visited_pointers, r_dependencies, value, blend_filepath, asset_library_root)
+        dependencies |= _find_dependencies_recursive(visited_pointers, value)
+    return dependencies
 
 
 def _find_dependencies_recursive(
         # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
         visited_pointers: set[any],
-        r_dependencies: set[DependencyFile],  # Return set for all gathered dependencies
-        data,
-        blend_filepath: Path,
-        asset_library_root: Path):
+        data) -> set[bpy.types.ID]:
 
     # Avoid infinite recusion calls with circular references
     if data in visited_pointers:
-        return
+        return set()
     visited_pointers.add(data)
-    _find_dependencies_recursive_impl(visited_pointers, r_dependencies, data, blend_filepath, asset_library_root)
+    return _find_dependencies_recursive_impl(visited_pointers, data)
 
 
-def _find_asset_dependencies(datablock, blendfile_relpath: str, asset_library_root: Path) -> set[DependencyFile]:
-    dependencies: set[DependencyFile] = set()
-    blend_filepath = Path(os.path.join(asset_library_root, blendfile_relpath)).absolute()
-
-    _find_dependencies_recursive(set(), dependencies, datablock, blend_filepath, asset_library_root)
-    return dependencies
+def _find_asset_dependencies(datablock) -> set[bpy.types.ID]:
+    return _find_dependencies_recursive(set(), datablock)
 
 
 def _find_assets(
@@ -369,11 +345,24 @@ def _find_assets(
         asset_data: bpy.types.AssetData = datablock.asset_data
         if not asset_data:
             continue
-        asset_dependencies = _find_asset_dependencies(
-            datablock, blendfile_relpath, asset_library_root)
+        asset_dependencies: set[bpy.types.ID] = _find_asset_dependencies(datablock)
         files = [blendfile_relpath]
-        files.extend([dependency.absolute_path.relative_to(asset_library_root).as_posix()
-                     for dependency in asset_dependencies])
+        asset_dependencias_filenames = set()
+
+        def visit_path_fn(owner_id: bpy.types.ID, path: str, meta):
+            posixname = _absolute_path(path, asset_library_root).relative_to(asset_library_root).as_posix()
+            asset_dependencias_filenames.add(posixname)
+            dependency_file = DependencyFile(
+                _absolute_path(path, asset_library_root), owner_id.version if isinstance(
+                    owner_id, bpy.types.Library) else None)
+            dependencies.add(dependency_file)
+
+        bpy.data.file_path_foreach(visit_path_fn, subset=asset_dependencies, flags={
+            'RESOLVE_TOKEN', 'EXPAND_TOKENS', 'EXPAND_SEQUENCES', 'EXPAND_CACHES'})
+
+        asset_dependencias_filenames.remove(blendfile_relpath)
+        files.extend(asset_dependencias_filenames)
+
         thumbnail_path = _thumbnail_path(datablock, thumbnail_dir)
         if thumbnail_path and should_write_thumbnails:
             _save_thumbnail(datablock, thumbnail_path)
@@ -386,7 +375,7 @@ def _find_assets(
             )
         else:
             thumbnail = None
-
+        assert (files[0] == blendfile_relpath)
         asset = api_models.AssetV1(
             name=datablock.name,
             id_type=datablock.id_type,
@@ -397,7 +386,6 @@ def _find_assets(
         )
 
         assets.append(asset)
-        dependencies.update(asset_dependencies)
     return assets, dependencies
 
 
