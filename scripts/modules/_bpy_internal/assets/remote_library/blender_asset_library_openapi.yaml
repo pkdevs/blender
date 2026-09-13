@@ -403,10 +403,11 @@ components:
         "blender_version":
           type: string
           description: >
-            If this file is a Blender file this indicates the Version of Blender used to
-            write this file. Only contains the major and minor version, no patch version
-            ("5.2", "6.3", etc. but not "5.2.1"). This would be unset for other file types.
+            Version of Blender used to write this file. Only contains the major and
+            minor version, no patch version ("5.2", "6.3", etc. but not "5.2.1").
+            This migth be `null` if this file is not a Blender file.
       required:
         - "path"
         - "size_in_bytes"
         - "hash"
+        - "blender_version"
