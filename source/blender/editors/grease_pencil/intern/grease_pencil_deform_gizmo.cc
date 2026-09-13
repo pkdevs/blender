@@ -81,13 +81,16 @@ struct QuadWidgetGroup2 {
   Vector<MutableDrawingInfo> drawings;
   Vector<IndexMask> selections;
   Vector<Array<float3>> src_positions;
+  Vector<Array<float>> src_radii;
 
   GreasePencil *grease_pencil_src;
 
   IndexMaskMemory memory;
+
   DeformMode mode;
   int subdivisions;
   int lock_axis;
+  bool is_scale_thickness;
 
   Vector<CornerPinData> corner_data;
 
@@ -147,21 +150,31 @@ static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+  const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
   const float4x4 transform = float4x4(mask_group->border->matrix_space) * mat *
                              math::invert(float4x4(mask_group->border->matrix_space));
+
+  const float scale_fac = math::sqrt(math::abs(math::determinant(float3x3(transform))));
 
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask &selected_points = selections[drawing_i];
     const Span<float3> src_positions_i = src_positions[drawing_i];
+    const Span<float> src_radii_i = src_radii[drawing_i];
 
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
+    MutableSpan<float> radii = strokes.radius_for_write();
 
     selected_points.foreach_index([&](const int point_i) {
       positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
     });
+
+    if (mask_group->is_scale_thickness) {
+      selected_points.foreach_index(
+          [&](const int point_i) { radii[point_i] = src_radii_i[point_i] * scale_fac; });
+    }
 
     info.drawing.tag_positions_changed();
   }
@@ -177,6 +190,7 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+  const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
   const float4x4 mat = float4x4(mask_group->border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
@@ -188,13 +202,17 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
     return;
   }
 
+  const float scale_fac = math::sqrt(math::abs(math::determinant(float2x2(*homography_mat))));
+
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask &selected_points = selections[drawing_i];
     const Span<float3> src_positions_i = src_positions[drawing_i];
+    const Span<float> src_radii_i = src_radii[drawing_i];
 
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
+    MutableSpan<float> radii = strokes.radius_for_write();
 
     selected_points.foreach_index([&](const int point_i) {
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i]));
@@ -203,6 +221,10 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
       const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
 
       positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
+
+      if (mask_group->is_scale_thickness) {
+        radii[point_i] = src_radii_i[point_i] * scale_fac / pos_3d_out.z;
+      }
     });
 
     info.drawing.tag_positions_changed();
@@ -219,6 +241,7 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+  const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
   const float4x4 mat = float4x4(mask_group->border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
@@ -236,9 +259,12 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask &selected_points = selections[drawing_i];
     const Span<float3> src_positions_i = src_positions[drawing_i];
+    const Span<float> src_radii_i = src_radii[drawing_i];
 
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
+    MutableSpan<float> radii = strokes.radius_for_write();
+
     selected_points.foreach_index([&](const int point_i) {
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) /
                                 mask_group->state.dims +
@@ -277,6 +303,11 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
       }
 
       positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
+
+      if (mask_group->is_scale_thickness) {
+        /* TODO. */
+        radii[point_i] = src_radii_i[point_i];
+      }
     });
 
     info.drawing.tag_positions_changed();
@@ -441,6 +472,9 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   std::optional<Bounds<float2>> box;
 
+  const ToolSettings *ts = scene.toolsettings;
+  mask_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
+
   Object *object = CTX_data_active_object(C);
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
 
@@ -449,6 +483,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
   mask_group->selections = Vector<IndexMask>();
   mask_group->src_positions = Vector<Array<float3>>();
+  mask_group->src_radii = Vector<Array<float>>();
+
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
   for (const MutableDrawingInfo &info : drawings) {
     const IndexMask selected_points = retrieve_editable_and_selected_points(
@@ -456,6 +492,10 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
 
     mask_group->selections.append(selected_points);
     mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
+
+    Array<float> radius(info.drawing.strokes().points_num());
+    array_utils::copy(info.drawing.strokes().radius(), radius.as_mutable_span());
+    mask_group->src_radii.append(radius);
 
     box = bounds::merge(
         box,
@@ -600,6 +640,13 @@ static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
 
   const Scene &scene = *CTX_data_scene(C);
+  const ToolSettings *ts = scene.toolsettings;
+
+  if (mask_group->is_scale_thickness !=
+      bool(ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS))
+  {
+    return true;
+  }
 
   if (mask_group->lock_axis != scene.toolsettings->gp_sculpt.lock_axis) {
     return true;

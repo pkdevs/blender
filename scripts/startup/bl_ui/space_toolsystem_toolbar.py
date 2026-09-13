@@ -2271,15 +2271,22 @@ class _defs_grease_pencil_paint:
 
     @ToolDef.from_fn
     def lasso_select():
-        def draw_settings(_context, layout, tool):
+        def draw_settings(context, layout, tool):
+            tool_settings = context.tool_settings
+            settings = tool_settings.gpencil_sculpt
+
             props = tool.operator_properties("view3d.select_lasso")
             row = layout.row()
             row.use_property_split = False
             row.prop(props, "mode", text="", expand=True, icon_only=True)
+
             props = tool.gizmo_group_properties("VIEW3D_GGT_grease_pencil_deform")
             row.prop(props, "mode", expand=True)
+
             if props.mode == "GRID":
                 row.prop(props, "subdivisions")
+
+            row.prop(settings, "use_scale_thickness", text="Scale Thickness")
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",
