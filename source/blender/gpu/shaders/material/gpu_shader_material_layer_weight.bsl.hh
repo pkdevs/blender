@@ -19,7 +19,7 @@ void node_layer_weight(float blend,
 
   /* fresnel */
   float eta = max(1.0f - blend, 0.00001f);
-  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
+  float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
 
   fresnel = fresnel_dielectric(V, N, (FrontFacing) ? 1.0f / eta : eta);
 

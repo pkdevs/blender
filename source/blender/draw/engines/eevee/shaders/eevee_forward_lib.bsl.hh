@@ -18,6 +18,7 @@
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"
 #include "eevee_nodetree_closures_lib.glsl"
+#include "eevee_nodetree_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_subsurface_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
@@ -40,7 +41,8 @@
 
 namespace eevee {
 
-void forward_lighting_eval(const ViewMatrices view,
+void forward_lighting_eval(const ShadingData &sd,
+                           const ViewMatrices view,
                            uint resource_id,
                            Thickness thickness,
                            float2 frag_co,
@@ -57,8 +59,8 @@ void forward_lighting_eval(const ViewMatrices view,
   [[resource_table]] LightEvalData &srt = lights.inner;
   [[resource_table]] draw::Infos &infos = resource_table_get(draw::Infos);
 
-  float vPz = dot(view.forward(), g_data.P) - dot(view.forward(), view.position());
-  float3 V = view.world_incident_vector(g_data.P);
+  float vPz = dot(view.forward(), sd.P) - dot(view.forward(), view.position());
+  float3 V = view.world_incident_vector(sd.P);
 
   light::EvalCtx<false> ctx;
   for (uint i = 0u; i < 3; i++) [[unroll]] {
@@ -68,8 +70,8 @@ void forward_lighting_eval(const ViewMatrices view,
     }
   }
 
-  ctx.P = g_data.P;
-  ctx.Ng = g_data.Ng;
+  ctx.P = sd.P;
+  ctx.Ng = sd.Ng;
   ctx.V = V;
   ctx.texel = frag_co;
   ctx.thickness = thickness;
@@ -109,7 +111,7 @@ void forward_lighting_eval(const ViewMatrices view,
     }
   }
 
-  LightProbeSample samp = lightprobes.load(frag_co, g_data.P, g_data.N, V);
+  LightProbeSample samp = lightprobes.load(frag_co, sd.P, sd.N, V);
 
   float clamp_indirect_sh = uni.uniform_buf.clamp.surface_indirect;
   samp.volume_irradiance = spherical_harmonics::clamp_energy(samp.volume_irradiance,
@@ -118,7 +120,7 @@ void forward_lighting_eval(const ViewMatrices view,
 #ifdef MAT_REFLECTION /* Disable if only rough surfaces. */
   /* Planar reflection. */
   float3 planar_probe_radiance = float3(0.0f);
-  float3 average_N = g_data.Ng * 0.001f;
+  float3 average_N = sd.Ng * 0.001f;
   {
     /* Get average normal.  */
     for (uint i = 0u; i < 3; i++) [[unroll]] {
@@ -129,14 +131,14 @@ void forward_lighting_eval(const ViewMatrices view,
     }
     average_N = safe_normalize(average_N);
 
-    const int planar_id = lightprobe_planes.select_probe(g_data.P, average_N);
+    const int planar_id = lightprobe_planes.select_probe(sd.P, average_N);
 
     if (planar_id == -1) {
       average_N = float3(0.0f);
     }
     else {
       float3 P_reflected = lightprobe::plane::parallax(
-          lightprobe_planes.probe_planar_buf[planar_id], g_data.P, average_N, V);
+          lightprobe_planes.probe_planar_buf[planar_id], sd.P, average_N, V);
 
       float2 ndc_P_reflected = view.point_world_to_ndc(P_reflected).xy;
       /* Planar probes are rendered upside down. */
@@ -164,7 +166,7 @@ void forward_lighting_eval(const ViewMatrices view,
       ClosureUndetermined cl = g_closure_get_resolved(uchar(i), 1.0f);
       if (cl.weight() > CLOSURE_WEIGHT_CUTOFF) {
         float3 direct_light = ctx.stack.cl[i].light_shadowed;
-        float3 indirect_light = lightprobes.eval(samp, cl, g_data.P, V, thickness);
+        float3 indirect_light = lightprobes.eval(samp, cl, sd.P, V, thickness);
 
 #ifdef MAT_REFLECTION
         if (cl.type == CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID) {

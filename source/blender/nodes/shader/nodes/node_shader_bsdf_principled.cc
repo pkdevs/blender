@@ -369,12 +369,12 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
 {
   /* Normals */
   if (!in[SOCK_NORMAL_ID].link) {
-    GPU_link(mat, "world_normals_get", &in[SOCK_NORMAL_ID].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[SOCK_NORMAL_ID].link);
   }
 
   /* Coat Normals */
   if (!in[SOCK_COAT_NORMAL_ID].link) {
-    GPU_link(mat, "world_normals_get", &in[SOCK_COAT_NORMAL_ID].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[SOCK_COAT_NORMAL_ID].link);
   }
 
 #if 0 /* Not used at the moment. */

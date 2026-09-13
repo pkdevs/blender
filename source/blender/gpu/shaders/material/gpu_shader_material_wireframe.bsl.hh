@@ -7,21 +7,21 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void node_wireframe(float size, float &fac)
+void node_wireframe(float size, const ShadingData &sd, float &fac)
 {
-  float3 barys = g_data.barycentric_coords.xyy;
+  float3 barys = sd.barycentric_coords.xyy;
   barys.z = 1.0f - barys.x - barys.y;
 
   size *= 0.5f;
-  float3 s = step(-size, -barys * g_data.barycentric_dists);
+  float3 s = step(-size, -barys * sd.barycentric_dists);
 
   fac = max(s.x, max(s.y, s.z));
 }
 
 [[node]]
-void node_wireframe_screenspace([[maybe_unused]] float size, float &fac)
+void node_wireframe_screenspace([[maybe_unused]] float size, const ShadingData &sd, float &fac)
 {
-  float3 barys = g_data.barycentric_coords.xyy;
+  float3 barys = sd.barycentric_coords.xyy;
   barys.z = 1.0f - barys.x - barys.y;
 
 #ifdef GPU_FRAGMENT_SHADER

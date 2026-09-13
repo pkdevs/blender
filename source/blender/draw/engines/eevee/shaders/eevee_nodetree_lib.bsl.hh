@@ -29,7 +29,31 @@
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
-struct ShadingData {};
+struct ShadingData {
+  /** World position. */
+  packed_float3 P;
+  /** Surface Normal. Normalized, overridden by bump displacement. */
+  packed_float3 N;
+  /** Raw interpolated normal (non-normalized) data. */
+  packed_float3 Ni;
+  /** Geometric Normal. */
+  packed_float3 Ng;
+  /** Curve Tangent Space. */
+  packed_float3 curve_T, curve_B, curve_N;
+  /** Barycentric coordinates. */
+  packed_float2 barycentric_coords;
+  packed_float3 barycentric_dists;
+  /** Hair thickness in world space. */
+  float hair_diameter;
+  /** Index of the strand for per strand effects. */
+  int hair_strand_id;
+  /** Ray properties (approximation). */
+  float ray_depth;
+  float ray_length;
+  uchar ray_type;
+  /** Is hair. */
+  bool is_strand;
+};
 
 struct KernelGlobals {
   [[resource_table]] srt_t<draw::View> view;
@@ -39,7 +63,8 @@ struct KernelGlobals {
 
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
-  [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::Uniform> uniforms;
+  [[resource_table]] srt_t<eevee::Uniform> uniforms;
+  [[resource_table]] srt_t<eevee::Sampling> sampling;
 
   uint resource_id_get(const ShadingData & /*sd*/)
   {
@@ -305,7 +330,9 @@ Closure closure_mix(Closure /*cl1*/, Closure /*cl2*/, float /*fac*/)
   return Closure(0);
 }
 
-float ambient_occlusion_eval([[maybe_unused]] float3 normal,
+float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
+                             [[maybe_unused]] const ShadingData &sd,
+                             [[maybe_unused]] float3 normal,
                              [[maybe_unused]] float max_distance,
                              [[maybe_unused]] const float inverted,
                              [[maybe_unused]] const float sample_count)
@@ -313,11 +340,11 @@ float ambient_occlusion_eval([[maybe_unused]] float3 normal,
   FRAGMENT_SHADER_CREATE_INFO(draw_view);
 
   /* clang-format off */ /* Multi-line macros would break line count. */
-  [[resource_table]] [[maybe_unused]] const eevee::Sampling &samp = resource_table_get(eevee::Sampling);
+  [[resource_table]] [[maybe_unused]] const eevee::Sampling &samp = kg.sampling;
   [[resource_table]] [[maybe_unused]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
   [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = resource_table_get(eevee::HiZ);
-  [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
-  [[resource_table]] [[maybe_unused]] const draw::View &views = resource_table_get(draw::View);
+  [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = kg.uniforms;
+  [[resource_table]] [[maybe_unused]] const draw::View &views = kg.view;
   /* clang-format on */
 
   {
@@ -326,7 +353,7 @@ float ambient_occlusion_eval([[maybe_unused]] float3 normal,
 
     const ViewMatrices view = views.get(0);
 
-    float3 vP = view.point_world_to_view(g_data.P);
+    float3 vP = view.point_world_to_view(sd.P);
     float3 vN = view.normal_world_to_view(normal);
 
     int2 texel = int2(gl_FragCoord.xy);
@@ -641,7 +668,7 @@ float derivative_scale_get();
 #ifdef MAT_DISPLACEMENT_BUMP
 /* Return new shading normal. */
 float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
-                         [[maybe_unused]] ShadingData sd)
+                         [[maybe_unused]] const ShadingData &sd)
 {
 #  if !defined(MAT_GEOM_CURVES)
   /* This is the filter width for automatic displacement + bump mapping, which is fixed.
@@ -649,15 +676,14 @@ float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   constexpr float bump_filter_width = 0.1f;
 
   float2 dHd;
-  dF_branch(
-      dot(nodetree_displacement(kg, sd), g_data.N + dF_impl(g_data.N)), bump_filter_width, dHd);
+  dF_branch(dot(nodetree_displacement(kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
 
-  float3 dPdx = gpu_dfdx(g_data.P) * derivative_scale_get();
-  float3 dPdy = gpu_dfdy(g_data.P) * derivative_scale_get();
+  float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get();
+  float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get();
 
   /* Get surface tangents from normal. */
-  float3 Rx = cross(dPdy, g_data.N);
-  float3 Ry = cross(g_data.N, dPdx);
+  float3 Rx = cross(dPdy, sd.N);
+  float3 Ry = cross(sd.N, dPdx);
 
   /* Compute surface gradient and determinant. */
   float det = dot(dPdx, Rx);
@@ -665,18 +691,18 @@ float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   float3 surfgrad = dHd.x * Rx + dHd.y * Ry;
 
   float facing = FrontFacing ? 1.0f : -1.0f;
-  return normalize(bump_filter_width * abs(det) * g_data.N - facing * sign(det) * surfgrad);
+  return normalize(bump_filter_width * abs(det) * sd.N - facing * sign(det) * surfgrad);
 #  else
-  return g_data.N;
+  return sd.N;
 #  endif
 }
 #endif
 
 void fragment_displacement([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
-                           [[maybe_unused]] ShadingData sd)
+                           [[maybe_unused]] ShadingData &sd)
 {
 #ifdef MAT_DISPLACEMENT_BUMP
-  g_data.N = displacement_bump(kg, sd);
+  sd.N = displacement_bump(kg, sd);
 #endif
 }
 
@@ -844,7 +870,7 @@ float4 attr_load_uniform([[resource_table]] KernelGlobals &kg,
 
 void scene_time_uniforms([[resource_table]] KernelGlobals &kg, float &seconds, float &frame)
 {
-  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
 
   seconds = uni.uniform_buf.scene.time;
   frame = uni.uniform_buf.scene.frame;
@@ -857,10 +883,11 @@ void light_iter_init([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
 #if defined(GPU_FRAGMENT_SHADER)
   const ViewMatrices view = kg.view_matrices_get(sd);
   const float3 forward = view.forward();
-  const float linear_view_z = dot(forward, g_data.P) - dot(forward, view.position());
+  const float linear_view_z = dot(forward, sd.P) - dot(forward, view.position());
   iter.init(gl_FragCoord.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
 #endif
 }
+
 bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
 #if defined(GPU_FRAGMENT_SHADER)
@@ -869,10 +896,12 @@ bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
   return false;
 #endif
 }
-bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
+
+bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator &iter,
+                            [[maybe_unused]] float3 P)
 {
 #if defined(GPU_FRAGMENT_SHADER)
-  return iter.should_skip(g_data.P);
+  return iter.should_skip(P);
 #else
   return true;
 #endif
@@ -886,7 +915,7 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
       eevee::light::VisibleLightIterator iter; \
       light_iter_init(kg, sd, iter); \
       while (light_iter_next(iter)) { \
-        if (light_iter_should_skip(iter)) { \
+        if (light_iter_should_skip(iter, sd.P)) { \
           continue; \
         } \
         light_index = iter.index;
@@ -1034,8 +1063,8 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
                                     gl_FragCoord.xy,
                                     g_thickness,
                                     position,
-                                    g_data.Ng,
-                                    g_data.N,
+                                    sd.Ng,
+                                    sd.N,
                                     object_infos.shadow_terminator_normal_offset,
                                     object_infos.shadow_terminator_geometry_offset,
                                     softness,

@@ -57,14 +57,14 @@ void surf_world([[resource_table]] KernelGlobals &kg,
   FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
 
   const ViewMatrices view = views.get(0);
-  init_globals(uni, view, front_face);
-  /* View position is passed to keep accuracy. */
-  g_data.N = view.normal_view_to_world(view.view_incident_vector(interp.P));
-  g_data.Ng = g_data.N;
-  g_data.P = -g_data.N;
-  attrib_load(WorldPoint{g_data.P});
 
-  ShadingData sd;
+  ShadingData sd = init_globals(uni, view, front_face);
+  /* View position is passed to keep accuracy. */
+  sd.N = view.normal_view_to_world(view.view_incident_vector(interp.P));
+  sd.Ng = sd.N;
+  sd.P = -sd.N;
+  attrib_load(WorldPoint{sd.P});
+
   nodetree_surface(kg, sd, 0.0f);
 
   g_holdout = saturate(g_holdout);
@@ -72,7 +72,7 @@ void surf_world([[resource_table]] KernelGlobals &kg,
   frag_out.background.rgb = colorspace::safe_color(g_emission) * (1.0f - g_holdout);
   frag_out.background.a = saturate(average(g_transmittance)) * g_holdout;
 
-  if (g_data.ray_type == RAY_TYPE_CAMERA && srt.world_background_blur != 0.0f) {
+  if (sd.ray_type == RAY_TYPE_CAMERA && srt.world_background_blur != 0.0f) {
     [[resource_table]] const LightprobeVolumeRenderData &lp_volumes = lightprobes.volumes;
     [[resource_table]] const LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
 
@@ -80,11 +80,11 @@ void surf_world([[resource_table]] KernelGlobals &kg,
     float lod = max(1.0f, base_lod);
     float mix_factor = min(1.0f, base_lod);
     SphereProbeUvArea world_atlas_coord = reinterpret_as_atlas_coord(srt.world_coord_packed);
-    float4 probe_color = lp_spheres.sample_probe(-g_data.N, lod, world_atlas_coord);
+    float4 probe_color = lp_spheres.sample_probe(-sd.N, lod, world_atlas_coord);
     frag_out.background.rgb = mix(frag_out.background.rgb, probe_color.rgb, mix_factor);
 
     SphericalHarmonicL1<float4> volume_irradiance = lp_volumes.world();
-    float3 radiance_sh = volume_irradiance.evaluate_lambert(-g_data.N).rgb;
+    float3 radiance_sh = volume_irradiance.evaluate_lambert(-sd.N).rgb;
     float radiance_mix_factor = lightprobe::sphere::roughness_to_mix_fac(
         srt.world_background_blur);
     frag_out.background.rgb = mix(frag_out.background.rgb, radiance_sh, radiance_mix_factor);

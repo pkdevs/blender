@@ -48,12 +48,11 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
 {
   const ViewMatrices view = views.get(0);
 
-  init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face);
 
   /* TODO(fclem): Remove random sampling for capture and accumulate color. */
   float closure_rand = 0.5f;
 
-  ShadingData sd;
   nodetree_surface(kg, sd, closure_rand);
 
   float3 albedo = float3(0.0f);
@@ -73,14 +72,14 @@ void surf_capture([[resource_table]] KernelGlobals &kg,
 
   if (srt.capture_info_buf.do_surfel_count) {
     /* Generate a surfel only once. This check allow cases where no axis is dominant. */
-    float3 vNg = views.get(0).normal_world_to_view(g_data.Ng);
+    float3 vNg = views.get(0).normal_world_to_view(sd.Ng);
     bool is_surface_view_aligned = dominant_axis(vNg) == 2;
     if (is_surface_view_aligned) {
       uint surfel_id = atomicAdd(srt.capture_info_buf.surfel_len, 1u);
       if (srt.capture_info_buf.do_surfel_output) {
         ObjectInfos object_infos = kg.object_infos_get(sd);
-        srt.surfel_buf[surfel_id].position = g_data.P;
-        srt.surfel_buf[surfel_id].normal = front_face ? g_data.Ng : -g_data.Ng;
+        srt.surfel_buf[surfel_id].position = sd.P;
+        srt.surfel_buf[surfel_id].normal = front_face ? sd.Ng : -sd.Ng;
         srt.surfel_buf[surfel_id].albedo_front = albedo;
         srt.surfel_buf[surfel_id].radiance_direct.front.rgb = g_emission;
         srt.surfel_buf[surfel_id].radiance_direct.front.a = 0.0f;

@@ -72,14 +72,13 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(0);
 
-    init_globals(uni, view, front_face);
+    ShadingData sd = init_globals(uni, view, front_face);
 
-    ShadingData sd;
     nodetree_surface(kg, sd, 0.0f);
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float threshold = hashed_transparency::alpha_threshold(
-        uni.pipeline_buf.alpha_hash_scale, noise_offset, g_data.P);
+        uni.pipeline_buf.alpha_hash_scale, noise_offset, sd.P);
 
     float transparency = average(g_transmittance);
     if (transparency > threshold) {

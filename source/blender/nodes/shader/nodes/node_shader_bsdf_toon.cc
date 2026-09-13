@@ -48,7 +48,7 @@ static int node_shader_gpu_bsdf_toon(GPUMaterial *mat,
                                      GPUNodeStack *out)
 {
   if (!in[3].link) {
-    GPU_link(mat, "world_normals_get", &in[3].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[3].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);

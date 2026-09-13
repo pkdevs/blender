@@ -13,11 +13,11 @@ void node_vector_displacement_tangent(float4 vector,
                                       float scale,
                                       float4 T,
                                       [[resource_table]] KernelGlobals &kg,
-                                      ShadingData &sd,
+                                      const ShadingData &sd,
                                       float3 &result)
 {
   float3 oN, oT, oB;
-  normal_transform_world_to_object(g_data.N, kg, sd, oN);
+  normal_transform_world_to_object(sd.N, kg, sd, oN);
   normal_transform_world_to_object(T.xyz, kg, sd, oT);
   oN = normalize(oN);
   oT = normalize(oT);
@@ -33,7 +33,7 @@ void node_vector_displacement_object(float4 vector,
                                      float midlevel,
                                      float scale,
                                      [[resource_table]] KernelGlobals &kg,
-                                     ShadingData &sd,
+                                     const ShadingData &sd,
                                      float3 &result)
 {
   float3 disp = (vector.xyz - midlevel) * scale;

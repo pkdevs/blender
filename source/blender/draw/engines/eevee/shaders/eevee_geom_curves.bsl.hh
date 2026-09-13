@@ -121,10 +121,9 @@ struct GeomCurve {
   float3 lP_root = curves::get_curve_root_pos(ws_pt.point_id, ws_pt.curve_segment);
   float3 lP_orco = lP_root * ob_infos.orco_mul + ob_infos.orco_add;
 
-  init_globals(uni, view, true);
+  ShadingData sd = init_globals(uni, view, true);
   attrib_load(CurvesPoint{ws_pt.curve_id, ws_pt.point_id, ws_pt.curve_segment, lP_orco});
 
-  ShadingData sd;
   interp.P += nodetree_displacement(kg, sd);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {

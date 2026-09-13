@@ -58,7 +58,7 @@ void node_bsdf_metallic(float4 base_color,
   /* anisotropy = saturate(anisotropy); */
 
   N = safe_normalize(N);
-  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
+  float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
   float NV = dot(N, V);
 
   ClosureReflection reflection_data;

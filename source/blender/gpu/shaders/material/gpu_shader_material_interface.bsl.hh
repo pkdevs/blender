@@ -61,7 +61,31 @@ struct ObjectInfos {
   eObjectInfoFlag flag;
 };
 
-struct ShadingData {};
+struct ShadingData {
+  /** World position. */
+  packed_float3 P;
+  /** Surface Normal. Normalized, overridden by bump displacement. */
+  packed_float3 N;
+  /** Raw interpolated normal (non-normalized) data. */
+  packed_float3 Ni;
+  /** Geometric Normal. */
+  packed_float3 Ng;
+  /** Curve Tangent Space. */
+  packed_float3 curve_T, curve_B, curve_N;
+  /** Barycentric coordinates. */
+  packed_float2 barycentric_coords;
+  packed_float3 barycentric_dists;
+  /** Hair thickness in world space. */
+  float hair_diameter;
+  /** Index of the strand for per strand effects. */
+  int hair_strand_id;
+  /** Ray properties (approximation). */
+  float ray_depth;
+  float ray_length;
+  uchar ray_type;
+  /** Is hair. */
+  bool is_strand;
+};
 
 /* Should eventually carry the needed resource tables. */
 struct KernelGlobals {
@@ -247,7 +271,9 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Ambient occlusion node. */
 
-float ambient_occlusion_eval(float3 normal,
+float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
+                             const ShadingData &sd,
+                             float3 normal,
                              float max_distance,
                              float inverted,
                              float sample_count);

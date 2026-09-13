@@ -30,7 +30,7 @@ void node_eevee_specular(float4 diffuse,
   clearcoat_roughness = saturate(clearcoat_roughness);
   CN = safe_normalize(CN);
 
-  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
+  float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
 
   ClosureEmission emission_data;
   emission_data.emission = emissive.rgb * weight;

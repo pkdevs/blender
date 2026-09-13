@@ -24,7 +24,7 @@
 /* Global thickness because it is needed for closure_to_rgba. */
 Thickness g_thickness_forward;
 
-float4 closure_to_rgba_forward(ShadingData & /*sd*/, Closure /*cl_unused*/)
+float4 closure_to_rgba_forward(ShadingData &sd, Closure /*cl_unused*/)
 {
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
@@ -40,7 +40,7 @@ float4 closure_to_rgba_forward(ShadingData & /*sd*/, Closure /*cl_unused*/)
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      views.get(0), resource_id, g_thickness_forward, frag_co, radiance, transmittance);
+      sd, views.get(0), resource_id, g_thickness_forward, frag_co, radiance, transmittance);
 
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
@@ -55,10 +55,10 @@ float4 closure_to_rgba_forward(ShadingData & /*sd*/, Closure /*cl_unused*/)
     /* clang-format on */
     [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
 
-    float3 V = -views.get(0).world_incident_vector(g_data.P);
-    eevee::LightProbeSample samp = lightprobes.load(frag_co, g_data.P, g_data.N, V);
+    float3 V = -views.get(0).world_incident_vector(sd.P);
+    eevee::LightProbeSample samp = lightprobes.load(frag_co, sd.P, sd.N, V);
     float3 radiance_behind = lp_spheres.spherical_sample_normalized_with_parallax(
-        samp, g_data.P, V, 0.0);
+        samp, sd.P, V, 0.0);
 
 #  ifndef MAT_FIRST_LAYER
     { /* Limit resource guard to this scope. */
@@ -131,12 +131,11 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face);
 
   float noise = util_tx.fetch(gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  ShadingData sd;
   fragment_displacement(kg, sd);
 
   g_thickness_forward = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
@@ -145,7 +144,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      view, resource_id, g_thickness_forward, gl_FragCoord.xy, radiance, transmittance);
+      sd, view, resource_id, g_thickness_forward, gl_FragCoord.xy, radiance, transmittance);
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
     radiance += g_diffuse_light;

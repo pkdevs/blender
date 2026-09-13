@@ -115,10 +115,9 @@ struct GeomPointCloud {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = ls_pt.P * ob_infos.orco_mul + ob_infos.orco_add;
 
-  init_globals(uni, view, true);
+  ShadingData sd = init_globals(uni, view, true);
   attrib_load(PointCloudPoint{ls_pt.P, ws_pt.point_id, lP_orco});
 
-  ShadingData sd;
   interp.P += nodetree_displacement(kg, sd);
 
   if (pipe.use_clip_plane) [[static_branch]] {

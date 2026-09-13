@@ -123,7 +123,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *vnor, *wnor, *col1, *col2, *col3;
         GPUNodeLink *blend = GPU_uniform(&tex->projection_blend);
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
-        GPU_link(mat, "world_normals_get", &vnor);
+        GPU_link(mat, "world_normals_get", GPU_shading_data(), &vnor);
         GPU_link(mat,
                  "normal_transform_world_to_object",
                  vnor,

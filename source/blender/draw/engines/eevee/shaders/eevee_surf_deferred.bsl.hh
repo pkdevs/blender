@@ -109,12 +109,11 @@ void surf_deferred([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face);
 
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  ShadingData sd;
   fragment_displacement(kg, sd);
 
   nodetree_surface(kg, sd, closure_rand);
@@ -171,7 +170,7 @@ void surf_deferred([[resource_table]] KernelGlobals &kg,
 
   float3 gbuffer_dither = sampling.rng_3D_get(SAMPLING_GBUFFER_U);
   gbuffer::Packed gbuf = gbuffer::pack(
-      gbuf_params, gbuf_data, g_data.Ng, g_data.N, thickness, use_object_id);
+      gbuf_params, gbuf_data, sd.Ng, sd.N, thickness, use_object_id);
 
   /* Output header and first closure using frame-buffer attachment. */
   frag_out.gbuf_header = gbuf.header;

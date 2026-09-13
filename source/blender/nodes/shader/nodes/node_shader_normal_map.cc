@@ -112,7 +112,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
                                   "input_normal_original";
 
   GPUNodeLink *input_normal;
-  GPU_link(mat, input_fn_name, &input_normal);
+  GPU_link(mat, input_fn_name, GPU_shading_data(), &input_normal);
 
   switch (nm->space) {
     case SHD_SPACE_TANGENT:
@@ -145,7 +145,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
   }
 
   /* Final step - mix and apply strength for all other than tangent space. */
-  GPU_link(mat, "node_normal_map_mix", strength, newnormal, &out[0].link);
+  GPU_link(mat, "node_normal_map_mix", strength, newnormal, GPU_shading_data(), &out[0].link);
 
   return true;
 }

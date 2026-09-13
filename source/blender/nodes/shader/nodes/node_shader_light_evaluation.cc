@@ -81,10 +81,10 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
   }
 
   if (!in[1].link) {
-    GPU_link(mat, "world_position_get", &in[1].link);
+    GPU_link(mat, "world_position_get", GPU_shading_data(), &in[1].link);
   }
   if (!in[2].link) {
-    GPU_link(mat, "world_normals_get", &in[2].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[2].link);
   }
 
   if (out[0].hasoutput) {

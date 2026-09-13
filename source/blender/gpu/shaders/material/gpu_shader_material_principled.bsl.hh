@@ -145,7 +145,7 @@ void node_bsdf_principled(float4 base_color,
   Coat coat;
   coat.tint = max(coat_tint.rgb, float3(0.0f));
   coat.roughness = saturate(coat_roughness);
-  coat.N = normalize_fallback(CN, g_data.N);
+  coat.N = normalize_fallback(CN, sd.N);
   coat.ior = max(coat_ior, 1.0f);
   coat.weight = saturate(coat_weight);
 
@@ -155,8 +155,8 @@ void node_bsdf_principled(float4 base_color,
   fuzz.weight = max(sheen_weight, 0.0f);
 
   /* Geometry. */
-  N = normalize_fallback(N, g_data.N);
-  const float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
+  N = normalize_fallback(N, sd.N);
+  const float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
   const float NV = dot(N, V);
   const bool multiggx = thin_wall || (do_multiscatter != 0.0f);
 

@@ -24,21 +24,21 @@
 #include "eevee_occupancy_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 
-GlobalData init_globals(const ViewMatrices view, float3 wP)
+ShadingData init_globals(const ViewMatrices view, float3 wP)
 {
-  GlobalData surf;
-  surf.P = wP;
-  surf.N = float3(0.0f);
-  surf.Ng = float3(0.0f);
-  surf.is_strand = false;
-  surf.hair_diameter = 0.0f;
-  surf.hair_strand_id = 0;
-  surf.barycentric_coords = float2(0.0f);
-  surf.barycentric_dists = float3(0.0f);
-  surf.ray_type = RAY_TYPE_CAMERA;
-  surf.ray_depth = 0.0f;
-  surf.ray_length = distance(surf.P, view.position());
-  return surf;
+  ShadingData sd;
+  sd.P = wP;
+  sd.N = float3(0.0f);
+  sd.Ng = float3(0.0f);
+  sd.is_strand = false;
+  sd.hair_diameter = 0.0f;
+  sd.hair_strand_id = 0;
+  sd.barycentric_coords = float2(0.0f);
+  sd.barycentric_dists = float3(0.0f);
+  sd.ray_type = RAY_TYPE_CAMERA;
+  sd.ray_depth = 0.0f;
+  sd.ray_length = distance(sd.P, view.position());
+  return sd;
 }
 
 namespace eevee {
@@ -113,10 +113,9 @@ struct SurfVolume {
     /* Compute Original Coordinate (ORCO). */
     float3 lP_orco = lP * ob_infos.orco_mul + ob_infos.orco_add;
 
-    g_data = init_globals(view, wP);
+    ShadingData sd = init_globals(view, wP);
     attrib_load(VolumePoint{lP, lP_orco});
 
-    ShadingData sd;
     nodetree_volume(kg, sd);
 
     if (is_volume_object) [[static_branch]] {

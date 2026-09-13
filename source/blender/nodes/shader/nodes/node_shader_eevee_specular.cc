@@ -56,12 +56,12 @@ static int node_shader_gpu_eevee_specular(GPUMaterial *mat,
 {
   /* Normals */
   if (!in[5].link) {
-    GPU_link(mat, "world_normals_get", &in[5].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[5].link);
   }
 
   /* Coat Normals */
   if (!in[8].link) {
-    GPU_link(mat, "world_normals_get", &in[8].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[8].link);
   }
 
   bool use_transparency = in[4].socket_not_zero();

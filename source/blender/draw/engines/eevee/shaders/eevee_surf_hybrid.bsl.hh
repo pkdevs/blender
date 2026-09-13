@@ -22,7 +22,7 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_hybrid(ShadingData & /*sd*/, Closure /*cl*/)
+float4 closure_to_rgba_hybrid(ShadingData &sd, Closure /*cl*/)
 {
   /* Workaround for gl_FragCoord. */
   FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
@@ -37,7 +37,7 @@ float4 closure_to_rgba_hybrid(ShadingData & /*sd*/, Closure /*cl*/)
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      views.get(0), resource_id, g_thickness, frag_co, radiance, transmittance);
+      sd, views.get(0), resource_id, g_thickness, frag_co, radiance, transmittance);
 
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
@@ -51,10 +51,10 @@ float4 closure_to_rgba_hybrid(ShadingData & /*sd*/, Closure /*cl*/)
     /* clang-format on */
     [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
 
-    float3 V = -views.get(0).world_incident_vector(g_data.P);
-    eevee::LightProbeSample samp = lightprobes.load(frag_co.xy, g_data.P, g_data.N, V);
+    float3 V = -views.get(0).world_incident_vector(sd.P);
+    eevee::LightProbeSample samp = lightprobes.load(frag_co.xy, sd.P, sd.N, V);
     float3 radiance_behind = lp_spheres.spherical_sample_normalized_with_parallax(
-        samp, g_data.P, V, 0.0);
+        samp, sd.P, V, 0.0);
 
 #  ifndef MAT_FIRST_LAYER
     { /* Limit resource guard to this scope. */
@@ -149,12 +149,11 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  init_globals(uni, view, front_face);
+  ShadingData sd = init_globals(uni, view, front_face);
 
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  ShadingData sd;
   g_thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
 
   fragment_displacement(kg, sd);
@@ -266,7 +265,7 @@ void surf_hybrid([[resource_table]] KernelGlobals &kg,
 
   float3 gbuffer_dither = sampling.rng_3D_get(SAMPLING_GBUFFER_U);
   gbuffer::Packed gbuf = gbuffer::pack(
-      gbuf_params, gbuf_data, g_data.Ng, g_data.N, g_thickness, use_object_id);
+      gbuf_params, gbuf_data, sd.Ng, sd.N, g_thickness, use_object_id);
 
   /* Output header and first closure using frame-buffer attachment. */
   frag_out.gbuf_header = gbuf.header;

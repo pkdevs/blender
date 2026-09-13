@@ -78,7 +78,7 @@ static int node_shader_gpu_subsurface_scattering(GPUMaterial *mat,
                                                  GPUNodeStack *out)
 {
   if (!in[6].link) {
-    GPU_link(mat, "world_normals_get", &in[6].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[6].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_SUBSURFACE);

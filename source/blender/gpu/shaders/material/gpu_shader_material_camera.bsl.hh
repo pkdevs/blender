@@ -14,7 +14,7 @@ void camera([[resource_table]] KernelGlobals &kg,
             float &outdist)
 {
   float3 vP;
-  point_transform_world_to_view(g_data.P, kg, sd, vP);
+  point_transform_world_to_view(sd.P, kg, sd, vP);
   vP.z = -vP.z;
   outdepth = abs(vP.z);
   outdist = length(vP);

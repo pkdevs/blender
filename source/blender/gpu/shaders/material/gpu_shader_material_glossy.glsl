@@ -23,7 +23,7 @@ void node_bsdf_glossy(float4 color,
   N = safe_normalize(N);
   /* anisotropy = clamp(anisotropy, -0.99f, 0.99f) */
 
-  float3 V = coordinate_impl(kg, sd, g_data.P, g_data.N).incoming;
+  float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
   float NV = dot(N, V);
 
   /* TODO(fclem): EEVEE implementation leaking. */
