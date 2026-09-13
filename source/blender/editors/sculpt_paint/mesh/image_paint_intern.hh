@@ -27,6 +27,7 @@ struct TileColorspaceProcessor : NonCopyable {
 };
 
 using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan<uchar4>>;
+using ScratchBufferType = std::variant<std::monostate, MutableSpan<float4>>;
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
@@ -35,9 +36,10 @@ struct ImageData : NonCopyable {
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
 
-  /* Used for algorithms which need a state prior to the stroke (e.g. Blur) */
+  /* Used for algorithms which need a state prior to the stroke (e.g. Blur).
+   * Assumed to store scene linear float data. */
   Map<bke::image::TileNumber, ImBuf *> scratch_image_buffers = {};
-  Map<bke::image::TileNumber, BufferType> scratch_data_buffers = {};
+  Map<bke::image::TileNumber, ScratchBufferType> scratch_data_buffers = {};
 
   Map<bke::image::TileNumber, TileColorspaceProcessor> processors = {};
 
