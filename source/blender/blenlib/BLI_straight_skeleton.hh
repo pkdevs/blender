@@ -150,6 +150,7 @@ struct KineticVertex {
   int side{0};        /* 0 or 1 */
 
   bool is_active{true};
+  bool is_infinitely_fast{false};
 
   double2 position_at(const double t) const
   {
@@ -159,6 +160,26 @@ struct KineticVertex {
 
 /** For testing: return the initial skeleton graph built from input. */
 SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input);
+
+struct EventLoopStats {
+  int events_processed_num{0};
+  int flips_num{0};
+  int edge_collapses_num{0};
+  int multi_splits_num{0};
+};
+
+/** For testing: run the straight skeleton event loop up to \a max_events. */
+EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &input,
+                                                 int max_events = 100,
+                                                 int dbg_level = 0,
+                                                 bool handle_edge_collapses = true);
+
+/** For testing: return active triangles (as triples of vertex indices) after running \a
+ * max_events. */
+Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput &input,
+                                                     int max_events = 100,
+                                                     int dbg_level = 0,
+                                                     bool handle_edge_collapses = true);
 
 /** \} */
 
@@ -212,6 +233,9 @@ class StraightSkeletonOutput {
 
   /** Output edges as pairs of indices into #vert. */
   Array<int2> edge;
+
+  /** Storage backing face_offsets. */
+  Array<int> face_offsets_data;
 
   /** Per-face vertex ranges into #face_vert_indices. */
   OffsetIndices<int> face_offsets;

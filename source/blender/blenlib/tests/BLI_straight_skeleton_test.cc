@@ -262,8 +262,7 @@ TEST(straight_skeleton, Triangle)
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
 #endif
 
-#if 0 /* Output assertions for the completed straight skeleton; enable once kinetic event \
-       * loop is implemented. */
+#if 1 /* Output assertions for the completed straight skeleton. */
   /* Triangle skeleton: 3 original verts + 1 incenter = 4 verts, 3 output faces. */
   EXPECT_EQ(output.vert.size(), 4);
   EXPECT_EQ(output.face_offsets.size(), 3);
@@ -351,6 +350,9 @@ TEST(straight_skeleton, MixedSegmentsAndFaces)
   EXPECT_NEAR(events[0].event_pos.y, 6.75, 1e-4);
   EXPECT_EQ(events[0].type, TriangleEventType::MULTI_SPLIT);
 
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+
 #if DO_DEBUG_DRAW
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
 #endif
@@ -423,6 +425,277 @@ TEST(straight_skeleton, SkeletonGraphInitial)
       EXPECT_EQ(graph.edges[ei].time_end, 0.0);
     }
   }
+}
+
+/**
+ * Notched polygon from Figure 5 of Palfrader's straight skeleton paper.
+ * A reflex vertex at the notch tip moves rightward toward the internal spoke
+ * between the top-left and bottom-right vertices, causing a flip event.
+ */
+TEST(straight_skeleton, FlipEventNotchedPolygon)
+{
+  const char *spec = R"(7 0 1
+0.0 0.0
+7.0 2.0
+14.0 7.0
+0.0 9.0
+0.2 5.5
+1.5 4.5
+0.2 3.5
+0 1 2 3 4 5 6
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "FlipEventNotchedPolygon";
+  StraightSkeletonOutput output = straight_skeleton_calc(input);
+
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  const TriangleEvent *ev6 = nullptr;
+  for (const TriangleEvent &ev : events) {
+    if (ev.triangle_index == 6) {
+      ev6 = &ev;
+      break;
+    }
+  }
+  ASSERT_NE(ev6, nullptr);
+  /* Yellow triangle 6 has vertices (5, 1, 3). Edge 19 is (1 -> 3), sharing spoke [3, 1]
+   * with adjacent triangle 7 (1, 2, 3). Vertex 5 (notch tip) moves over spoke [3, 1]. */
+  EXPECT_EQ(ev6->type, TriangleEventType::FLIP);
+  EXPECT_EQ(ev6->vert_index, 5);
+  EXPECT_EQ(ev6->edge_index, 19);
+  EXPECT_NEAR(ev6->time, 2.3914, 1e-3);
+  EXPECT_NEAR(ev6->event_pos.x, 5.4222, 1e-3);
+  EXPECT_NEAR(ev6->event_pos.y, 4.5000, 1e-3);
+
+  /* Run events through the event loop until the FLIP event on spoke [3, 1] is processed.
+   * Other event types (EDGE_COLLAPSE, MULTI_SPLIT) will print "yet to be implemented"
+   * and be skipped for this isolated flip test. */
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/false);
+  EXPECT_GE(stats.flips_num, 1);
+
+  /* After the flip event, spoke [3, 1] is replaced by the new diagonal [5, 2].
+   * Yellow triangle (5, 1, 3) and adjacent triangle (1, 2, 3) are replaced by
+   * (5, 1, 2) and (5, 2, 3). */
+  const Vector<int3> active_tris = straight_skeleton_active_triangles_test(
+      input, 10, /*dbg_level=*/0, /*handle_edge_collapses=*/false);
+  bool has_edge_3_1 = false;
+  bool has_edge_5_2 = false;
+  bool has_tri_5_1_2 = false;
+  bool has_tri_5_2_3 = false;
+  for (const int3 &t : active_tris) {
+    const int a = t[0];
+    const int b = t[1];
+    const int c = t[2];
+    auto has_edge = [&](int u, int v) {
+      return (a == u && b == v) || (b == u && c == v) || (c == u && a == v) ||
+             (a == v && b == u) || (b == v && c == u) || (c == v && a == u);
+    };
+    if (has_edge(3, 1)) {
+      has_edge_3_1 = true;
+    }
+    if (has_edge(5, 2)) {
+      has_edge_5_2 = true;
+    }
+    auto is_tri = [&](int u, int v, int w) {
+      return (a == u && b == v && c == w) || (a == v && b == w && c == u) ||
+             (a == w && b == u && c == v) || (a == u && b == w && c == v) ||
+             (a == w && b == v && c == u) || (a == v && b == u && c == w);
+    };
+    if (is_tri(5, 1, 2)) {
+      has_tri_5_1_2 = true;
+    }
+    if (is_tri(5, 2, 3)) {
+      has_tri_5_2_3 = true;
+    }
+  }
+  EXPECT_FALSE(has_edge_3_1);
+  EXPECT_TRUE(has_edge_5_2);
+  EXPECT_TRUE(has_tri_5_1_2);
+  EXPECT_TRUE(has_tri_5_2_3);
+}
+
+TEST(straight_skeleton, NotchedPolygonFull)
+{
+  const char *spec = R"(7 0 1
+0.0 0.0
+7.0 2.0
+14.0 7.0
+0.0 9.0
+0.2 5.5
+1.5 4.5
+0.2 3.5
+0 1 2 3 4 5 6
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "NotchedPolygonFull";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 13);
+  EXPECT_EQ(output.edge.size(), 20);
+}
+
+TEST(straight_skeleton, Square)
+{
+  const char *spec = R"(4 0 1
+0.0 0.0
+2.0 0.0
+2.0 2.0
+0.0 2.0
+0 1 2 3
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "Square";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 5);
+  EXPECT_EQ(output.edge.size(), 8);
+}
+
+TEST(straight_skeleton, LShape)
+{
+  const char *spec = R"(6 0 1
+0.0 0.0
+4.0 0.0
+4.0 2.0
+2.0 2.0
+2.0 4.0
+0.0 4.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "LShape";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 9);
+  EXPECT_EQ(output.edge.size(), 14);
+}
+
+TEST(straight_skeleton, RectangleEdgeCollapse)
+{
+  const char *spec = R"(4 0 1
+0.0 0.0
+4.0 0.0
+4.0 2.0
+0.0 2.0
+0 1 2 3
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "RectangleEdgeCollapse";
+
+  /* Initial events should include edge collapse events for the shorter vertical edges. */
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  ASSERT_GE(events.size(), 1);
+
+  /* Run the event loop with edge collapses enabled. Both width-2 edges collapse at t = 1.0. */
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.events_processed_num, 1);
+  EXPECT_EQ(stats.edge_collapses_num, 3);
+
+  /* Full straight skeleton output: 4 original corners + 2 ridge vertices = 6 vertices. */
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 6);
+  EXPECT_EQ(output.edge.size(), 9);
+  int new_verts_count = 0;
+  for (const int vi : IndexRange(output.vert.size())) {
+    if (output.vert_orig[vi] == -1) {
+      new_verts_count++;
+      /* Ridge nodes should be at y = 1.0, x = 1.0 or x = 3.0. */
+      EXPECT_NEAR(output.vert[vi].y, 1.0, 1e-5);
+      EXPECT_TRUE(std::abs(output.vert[vi].x - 1.0) < 1e-5 ||
+                  std::abs(output.vert[vi].x - 3.0) < 1e-5);
+    }
+  }
+  EXPECT_EQ(new_verts_count, 2);
+}
+
+/**
+ * Elongated rectangle (8 x 2).
+ *
+ * Tests the infinite speed vertex propagation over an extended distance of 6 units
+ * along the ridge y = 1.0 between x = 1.0 and x = 7.0 at t = 1.0.
+ */
+TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
+{
+  const char *spec = R"(4 0 1
+0.0 0.0
+8.0 0.0
+8.0 2.0
+0.0 2.0
+0 1 2 3
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ElongatedRectangleInfiniteSpeed";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/0, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.events_processed_num, 1);
+  EXPECT_EQ(stats.edge_collapses_num, 3);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 6);
+  EXPECT_EQ(output.edge.size(), 9);
+
+  int new_verts_count = 0;
+  for (const int vi : IndexRange(output.vert.size())) {
+    if (output.vert_orig[vi] == -1) {
+      new_verts_count++;
+      EXPECT_NEAR(output.vert[vi].y, 1.0, 1e-5);
+      EXPECT_TRUE(std::abs(output.vert[vi].x - 1.0) < 1e-5 ||
+                  std::abs(output.vert[vi].x - 7.0) < 1e-5);
+    }
+  }
+  EXPECT_EQ(new_verts_count, 2);
+}
+
+TEST(straight_skeleton, MultiSplitHourglass)
+{
+  const char *spec = R"(6 0 1
+0.0 0.0
+4.0 0.0
+3.0 1.0
+4.0 2.0
+0.0 2.0
+1.0 1.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MultiSplitHourglass";
+
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  ASSERT_FALSE(events.is_empty());
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.multi_splits_num, 1);
+  EXPECT_EQ(stats.edge_collapses_num, 2);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 9);
+  EXPECT_EQ(output.edge.size(), 14);
 }
 
 /** \} */

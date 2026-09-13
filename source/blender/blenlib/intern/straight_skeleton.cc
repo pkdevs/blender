@@ -47,7 +47,7 @@ static inline int next_triangle_edge(int edge_index)
 [[maybe_unused]]
 static inline int prev_triangle_edge(int edge_index)
 {
-  edge_index += edge_index % 3 == 0 ? 2 : 1;
+  edge_index += (edge_index % 3 == 0) ? 2 : -1;
   return edge_index;
 }
 
@@ -144,6 +144,11 @@ class TriangleEdges {
   void mark_triangle_deleted(int triangle_index)
   {
     start_[3 * triangle_index] = -1;
+    start_[3 * triangle_index + 1] = -1;
+    start_[3 * triangle_index + 2] = -1;
+    paired_[3 * triangle_index] = -1;
+    paired_[3 * triangle_index + 1] = -1;
+    paired_[3 * triangle_index + 2] = -1;
   }
 
   bool is_triangle_deleted(int triangle_index) const
@@ -248,8 +253,121 @@ static void dump_triangles(const TriangleEdges &tri, std::ostream &os = std::cou
   }
 }
 
+/**
+ * Flip the internal diagonal shared by two adjacent triangles in TriangleEdges.
+ * Replaces diagonal (v1, v2) with (v, v3) in quadrilateral (v, v1, v3, v2).
+ * Returns true if the flip succeeded, false if edge cannot be flipped.
+ */
+static bool flip_edge(TriangleEdges &tri, const int edge_index)
+{
+  const int e1 = edge_index;
+  const int e2 = tri.paired_edge(e1);
+  if (e2 == -1) {
+    return false;
+  }
+
+  const int ti1 = tri.triangle(e1);
+  const int ti2 = tri.triangle(e2);
+  if (ti1 == ti2 || tri.is_triangle_unbounded(ti1) || tri.is_triangle_unbounded(ti2)) {
+    return false;
+  }
+
+  /* Half-edges of triangle 1 in CCW cycle:
+   *   h1_0 (e1): v1 -> v2
+   *   h1_1:      v2 -> v
+   *   h1_2:      v  -> v1
+   * Vertex v is opposite to e1 in ti1. */
+  const int h1_0 = e1;
+  const int h1_1 = next_triangle_edge(h1_0);
+  const int h1_2 = prev_triangle_edge(h1_0);
+
+  const int v1 = tri.start_vert(h1_0);
+  const int v2 = tri.start_vert(h1_1);
+  const int v = tri.start_vert(h1_2);
+
+  const int p1_1 = tri.paired_edge(h1_1);
+  const int p1_2 = tri.paired_edge(h1_2);
+
+  /* Half-edges of triangle 2 in CCW cycle:
+   *   h2_0 (e2): v2 -> v1
+   *   h2_1:      v1 -> v3
+   *   h2_2:      v3 -> v2
+   * Vertex v3 is opposite to e2 in ti2. */
+  const int h2_0 = e2;
+  const int h2_1 = next_triangle_edge(h2_0);
+  const int h2_2 = prev_triangle_edge(h2_0);
+
+  if (tri.start_vert(h2_0) != v2 || tri.end_vert(h2_0) != v1) {
+    return false;
+  }
+
+  const int v3 = tri.start_vert(h2_2);
+
+  const int p2_1 = tri.paired_edge(h2_1);
+  const int p2_2 = tri.paired_edge(h2_2);
+
+  /* New triangle 1: (v, v1, v3)
+   *   edge 0 (3 * ti1 + 0): v  -> v1, paired with p1_2
+   *   edge 1 (3 * ti1 + 1): v1 -> v3, paired with p2_1
+   *   edge 2 (3 * ti1 + 2): v3 -> v,  paired with (3 * ti2 + 2) [new diagonal] */
+  const int slot1_0 = 3 * ti1 + 0;
+  const int slot1_1 = 3 * ti1 + 1;
+  const int slot1_2 = 3 * ti1 + 2;
+
+  tri.set_start_vert(slot1_0, v);
+  tri.set_start_vert(slot1_1, v1);
+  tri.set_start_vert(slot1_2, v3);
+
+  tri.set_paired(slot1_0, p1_2);
+  if (p1_2 != -1) {
+    tri.set_paired(p1_2, slot1_0);
+  }
+
+  tri.set_paired(slot1_1, p2_1);
+  if (p2_1 != -1) {
+    tri.set_paired(p2_1, slot1_1);
+  }
+
+  /* New triangle 2: (v, v3, v2)
+   *   edge 0 (3 * ti2 + 0): v3 -> v2, paired with p2_2
+   *   edge 1 (3 * ti2 + 1): v2 -> v,  paired with p1_1
+   *   edge 2 (3 * ti2 + 2): v  -> v3, paired with (3 * ti1 + 2) [new diagonal] */
+  const int slot2_0 = 3 * ti2 + 0;
+  const int slot2_1 = 3 * ti2 + 1;
+  const int slot2_2 = 3 * ti2 + 2;
+
+  tri.set_start_vert(slot2_0, v3);
+  tri.set_start_vert(slot2_1, v2);
+  tri.set_start_vert(slot2_2, v);
+
+  tri.set_paired(slot2_0, p2_2);
+  if (p2_2 != -1) {
+    tri.set_paired(p2_2, slot2_0);
+  }
+
+  tri.set_paired(slot2_1, p1_1);
+  if (p1_1 != -1) {
+    tri.set_paired(p1_1, slot2_1);
+  }
+
+  /* Connect new diagonal between ti1 and ti2 */
+  tri.set_paired(slot1_2, slot2_2);
+  tri.set_paired(slot2_2, slot1_2);
+
+  return true;
+}
+
 int SkeletonGraph::add_node(const double2 &pos, double time, int orig_vert)
 {
+  if (orig_vert == -1) {
+    for (const SkeletonNode &existing : nodes) {
+      if (std::abs(existing.time - time) < 1e-6 &&
+          std::hypot(existing.pos.x - pos.x, existing.pos.y - pos.y) < 1e-6)
+      {
+        return existing.id;
+      }
+    }
+  }
   const int id = int(nodes.size());
   SkeletonNode node;
   node.id = id;
@@ -269,6 +387,20 @@ int SkeletonGraph::add_edge(int node1,
                             double time_end,
                             bool is_input_boundary)
 {
+  if (node1 == node2) {
+    return -1;
+  }
+  for (const SkeletonEdge &existing : edges) {
+    if ((existing.node1 == node1 && existing.node2 == node2) ||
+        (existing.node1 == node2 && existing.node2 == node1))
+    {
+      if (std::abs(existing.time_start - time_start) < 1e-6 &&
+          std::abs(existing.time_end - time_end) < 1e-6)
+      {
+        return existing.id;
+      }
+    }
+  }
   const int id = int(edges.size());
   SkeletonEdge edge;
   edge.id = id;
@@ -652,8 +784,7 @@ static Array<double2> compute_kinetic_velocities(const ContourSequences &contour
 
 static TriangleEvent compute_triangle_collapse(const int ti,
                                                const TriangleEdges &tri,
-                                               const Span<double2> vert_pos,
-                                               const Span<double2> vert_vel,
+                                               const Span<KineticVertex> kinetic_verts,
                                                const Span<double2> edge_normals,
                                                const ContourSequences &contours,
                                                [[maybe_unused]] const StraightSkeletonInput &input,
@@ -668,7 +799,7 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     return best_event;
   }
 
-  const int total_verts_num = int(vert_pos.size());
+  const int total_verts_num = int(kinetic_verts.size());
 
   if (tri.is_triangle_unbounded(ti)) {
     const int e0 = 3 * ti;
@@ -677,11 +808,14 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     if (vi < 0 || vi >= total_verts_num || ui < 0 || ui >= total_verts_num) {
       return best_event;
     }
+    if (kinetic_verts[vi].is_infinitely_fast || kinetic_verts[ui].is_infinitely_fast) {
+      return best_event;
+    }
 
-    const double2 p_v = vert_pos[vi];
-    const double2 p_u = vert_pos[ui];
-    const double2 v_v = vert_vel[vi];
-    const double2 v_u = vert_vel[ui];
+    const double2 p_v = kinetic_verts[vi].position_at(current_time);
+    const double2 p_u = kinetic_verts[ui].position_at(current_time);
+    const double2 v_v = kinetic_verts[vi].velocity;
+    const double2 v_u = kinetic_verts[ui].velocity;
 
     /* 1. Base edge collapse. */
     const double2 dp0 = p_u - p_v;
@@ -689,17 +823,22 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     const double dv_sq = dv.x * dv.x + dv.y * dv.y;
     if (dv_sq > 1e-14) {
       const double dt = -(dp0.x * dv.x + dp0.y * dv.y) / dv_sq;
-      if (dt > 1e-9) {
-        const double t = current_time + dt;
+      const bool is_valid_time = (current_time > 0.0 && dt > -1e-9) || dt > 1e-9;
+      if (is_valid_time) {
+        const double eff_dt = std::max(0.0, dt);
+        const double t = current_time + eff_dt;
         const double2 p_at_t = dp0 + dt * dv;
         const double len_at_t = std::hypot(p_at_t.x, p_at_t.y);
         if (len_at_t < 1e-7) {
-          const bool is_wf = contours.edge_by_verts.contains(int2(vi, ui));
-          best_event.time = t;
-          best_event.type = is_wf ? TriangleEventType::EDGE_COLLAPSE :
-                                    TriangleEventType::UNBOUNDED_COLLAPSE;
-          best_event.edge_index = e0;
-          best_event.event_pos = p_v + dt * v_v;
+          const int *cei_ptr = contours.edge_by_verts.lookup_ptr(int2(vi, ui));
+          const bool is_wf = (cei_ptr != nullptr && contours.edges[*cei_ptr].side >= 0);
+          if (is_wf || dt > 1e-9) {
+            best_event.time = t;
+            best_event.type = is_wf ? TriangleEventType::EDGE_COLLAPSE :
+                                      TriangleEventType::UNBOUNDED_COLLAPSE;
+            best_event.edge_index = e0;
+            best_event.event_pos = p_v + eff_dt * v_v;
+          }
         }
       }
     }
@@ -734,10 +873,18 @@ static TriangleEvent compute_triangle_collapse(const int ti,
   {
     return best_event;
   }
+  if (kinetic_verts[v0].is_infinitely_fast || kinetic_verts[v1].is_infinitely_fast ||
+      kinetic_verts[v2].is_infinitely_fast)
+  {
+    return best_event;
+  }
 
   const int tri_v[3] = {v0, v1, v2};
-  const double2 p[3] = {vert_pos[v0], vert_pos[v1], vert_pos[v2]};
-  const double2 v[3] = {vert_vel[v0], vert_vel[v1], vert_vel[v2]};
+  const double2 p[3] = {kinetic_verts[v0].position_at(current_time),
+                        kinetic_verts[v1].position_at(current_time),
+                        kinetic_verts[v2].position_at(current_time)};
+  const double2 v[3] = {
+      kinetic_verts[v0].velocity, kinetic_verts[v1].velocity, kinetic_verts[v2].velocity};
 
   bool is_wf[3] = {false, false, false};
   int wf_edge_contour_idx[3] = {-1, -1, -1};
@@ -747,7 +894,7 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     const int start_v = tri_v[k];
     const int end_v = tri_v[(k + 1) % 3];
     const int *cei = contours.edge_by_verts.lookup_ptr(int2(start_v, end_v));
-    if (cei != nullptr) {
+    if (cei != nullptr && contours.edges[*cei].side >= 0) {
       is_wf[k] = true;
       wf_edge_contour_idx[k] = *cei;
       wf_count++;
@@ -775,23 +922,25 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     const double dv_sq = dv.x * dv.x + dv.y * dv.y;
     if (dv_sq > 1e-14) {
       const double dt = -(dp0.x * dv.x + dp0.y * dv.y) / dv_sq;
-      if (dt > 1e-9) {
+      const bool is_valid_time = (current_time > 0.0 && dt > -1e-9) || dt > 1e-9;
+      if (is_valid_time) {
+        const double eff_dt = std::max(0.0, dt);
         const double2 p_at_t = dp0 + dt * dv;
         const double len_at_t = std::hypot(p_at_t.x, p_at_t.y);
         if (is_wf[k]) {
           if (len_at_t < 1e-7) {
             TriangleEvent cand;
             cand.triangle_index = ti;
-            cand.time = current_time + dt;
+            cand.time = current_time + eff_dt;
             cand.type = TriangleEventType::EDGE_COLLAPSE;
             cand.edge_index = e0 + k;
             cand.vert_index = u_idx;
-            cand.event_pos = p[k] + dt * v[k];
+            cand.event_pos = p[k] + eff_dt * v[k];
             consider_candidate(cand);
           }
         }
         else {
-          if (len_at_t < 1e-7) {
+          if (len_at_t < 1e-7 && dt > 1e-9) {
             TriangleEvent cand;
             cand.triangle_index = ti;
             cand.time = current_time + dt;
@@ -881,20 +1030,55 @@ static TriangleEvent compute_triangle_collapse(const int ti,
       const double2 p1_t = p[1] + dt * v[1];
       const double2 p2_t = p[2] + dt * v[2];
       const double d01 = std::hypot(p1_t.x - p0_t.x, p1_t.y - p0_t.y);
-      const double d02 = std::hypot(p2_t.x - p0_t.x, p2_t.y - p0_t.y);
+      const double d12 = std::hypot(p2_t.x - p1_t.x, p2_t.y - p1_t.y);
+      const double d20 = std::hypot(p0_t.x - p2_t.x, p0_t.y - p2_t.y);
 
       TriangleEvent cand;
       cand.triangle_index = ti;
       cand.time = current_time + dt;
-      if (d01 < 1e-7 && d02 < 1e-7) {
+      if (d01 < 1e-7 && d12 < 1e-7) {
         cand.type = TriangleEventType::MULTI_SPLIT;
+        cand.edge_index = e0;
+        cand.vert_index = v0;
+        cand.event_pos = (p0_t + p1_t + p2_t) / 3.0;
       }
       else {
-        cand.type = TriangleEventType::FLIP;
+        /* A vertex is moving over an edge.
+         * The three edges in cyclic order:
+         *   edge 0 (e0 + 0): v0 -> v1, opposite vertex v2
+         *   edge 1 (e0 + 1): v1 -> v2, opposite vertex v0
+         *   edge 2 (e0 + 2): v2 -> v0, opposite vertex v1
+         */
+        int moving_v = -1;
+        int hit_edge = -1;
+        double2 hit_pos = p0_t;
+        if (d01 + d12 < d20 + 1e-5) {
+          /* v1 is between v0 and v2. v1 moves over edge 2 (v2 -> v0). */
+          moving_v = v1;
+          hit_edge = e0 + 2;
+          hit_pos = p1_t;
+        }
+        else if (d12 + d20 < d01 + 1e-5) {
+          /* v2 is between v1 and v0. v2 moves over edge 0 (v0 -> v1). */
+          moving_v = v2;
+          hit_edge = e0 + 0;
+          hit_pos = p2_t;
+        }
+        else {
+          /* v0 is between v2 and v1. v0 moves over edge 1 (v1 -> v2). */
+          moving_v = v0;
+          hit_edge = e0 + 1;
+          hit_pos = p0_t;
+        }
+
+        const int start_u = tri.start_vert(hit_edge);
+        const int end_w = tri.end_vert(hit_edge);
+        const bool is_hit_wf = contours.edge_by_verts.contains(int2(start_u, end_w));
+        cand.type = is_hit_wf ? TriangleEventType::SPLIT : TriangleEventType::FLIP;
+        cand.edge_index = hit_edge;
+        cand.vert_index = moving_v;
+        cand.event_pos = hit_pos;
       }
-      cand.edge_index = e0;
-      cand.vert_index = v0;
-      cand.event_pos = (p0_t + p1_t + p2_t) / 3.0;
       consider_candidate(cand);
     }
   }
@@ -919,22 +1103,22 @@ static Array<double2> compute_cosmetic_displacements(const Span<double2> vert_po
   const int verts_num = int(vert_pos.size());
   Array<double2> accum(verts_num, double2(0.0, 0.0));
 
-  for (const ContourEdge &ce : contours.edges) {
+  auto process_contour_edge = [&](const ContourEdge &ce) {
     if (ce.side == -1) {
       /* Skip 0-length cap edges (normal is undefined). */
-      continue;
+      return;
     }
     const int u = ce.start;
     const int v = ce.end;
     if (u < 0 || u >= verts_num || v < 0 || v >= verts_num) {
-      continue;
+      return;
     }
     /* Directed vector in SVG pixels (SVG y is flipped relative to math y). */
     const double dx_s = (vert_pos[v].x - vert_pos[u].x) * scale;
     const double dy_s = -(vert_pos[v].y - vert_pos[u].y) * scale;
     const double dist_s = std::sqrt(dx_s * dx_s + dy_s * dy_s);
     if (dist_s < 1e-6) {
-      continue;
+      return;
     }
     /* Left-perpendicular in SVG pixels: (dy_s, -dx_s) / dist_s.
      * Points to the left of the directed edge in math coordinates (into the triangulation area).
@@ -943,6 +1127,19 @@ static Array<double2> compute_cosmetic_displacements(const Span<double2> vert_po
     const double py = -dx_s / dist_s;
     accum[u] += double2(px, py);
     accum[v] += double2(px, py);
+  };
+
+  if (!contours.loops.is_empty()) {
+    for (const Vector<int> &loop : contours.loops) {
+      for (const int cei : loop) {
+        process_contour_edge(contours.edges[cei]);
+      }
+    }
+  }
+  else {
+    for (const ContourEdge &ce : contours.edges) {
+      process_contour_edge(ce);
+    }
   }
 
   Array<double2> offsets(verts_num, double2(0.0, 0.0));
@@ -1178,6 +1375,8 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
        "velocities (green)</text>\n";
   f << "<text x=\"15\" y=\"80\" font-size=\"11\" fill=\"#111111\">― Static input "
        "edges &amp; ● vertices</text>\n";
+  f << "<text x=\"15\" y=\"95\" font-size=\"11\" fill=\"#d97706\" font-weight=\"bold\">― "
+       "Straight skeleton arcs (orange)</text>\n";
 
   /* Fill bounded triangles. */
   for (const int ti : IndexRange(triangles_num)) {
@@ -1326,12 +1525,12 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
     }
   }
 
-  /* Draw any contour edges (wavefronts and end caps) not already drawn as part of tri. */
-  for (const ContourEdge &ce : contours.edges) {
+  /* Draw any active contour edges (wavefronts and end caps) not already drawn as part of tri. */
+  auto draw_single_contour_edge = [&](const ContourEdge &ce) {
     const int u = ce.start;
     const int v = ce.end;
     if (u < 0 || u >= verts_num || v < 0 || v >= verts_num) {
-      continue;
+      return;
     }
     const int2 geom_edge(std::min(u, v), std::max(u, v));
     if (drawn_geom_edges.add(geom_edge)) {
@@ -1346,6 +1545,49 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
         f << "<line x1=\"" << vert_svg_pos[u].x << "\" y1=\"" << vert_svg_pos[u].y << "\" x2=\""
           << vert_svg_pos[v].x << "\" y2=\"" << vert_svg_pos[v].y
           << "\" stroke=\"#000088\" stroke-width=\"2.5\"/>\n";
+      }
+    }
+  };
+
+  if (!contours.loops.is_empty()) {
+    for (const Vector<int> &loop : contours.loops) {
+      for (const int cei : loop) {
+        draw_single_contour_edge(contours.edges[cei]);
+      }
+    }
+  }
+  else {
+    for (const ContourEdge &ce : contours.edges) {
+      draw_single_contour_edge(ce);
+    }
+  }
+
+  /* Draw straight skeleton edges and nodes. */
+  if (skeleton != nullptr) {
+    for (const SkeletonEdge &se : skeleton->edges) {
+      if (se.is_input_boundary) {
+        continue;
+      }
+      if (se.node1 < 0 || se.node1 >= skeleton->nodes.size() || se.node2 < 0 ||
+          se.node2 >= skeleton->nodes.size())
+      {
+        continue;
+      }
+      const double2 &p1 = skeleton->nodes[se.node1].pos;
+      const double2 &p2 = skeleton->nodes[se.node2].pos;
+      f << "<line x1=\"" << tx(p1.x) << "\" y1=\"" << ty(p1.y) << "\" x2=\"" << tx(p2.x)
+        << "\" y2=\"" << ty(p2.y)
+        << "\" stroke=\"#d97706\" stroke-width=\"3.0\" stroke-linecap=\"round\"/>\n";
+    }
+
+    for (const SkeletonNode &sn : skeleton->nodes) {
+      if (sn.orig_vert == -1) {
+        const double sx = tx(sn.pos.x);
+        const double sy = ty(sn.pos.y);
+        f << "<circle cx=\"" << sx << "\" cy=\"" << sy
+          << "\" r=\"5.5\" fill=\"#d97706\" stroke=\"white\" stroke-width=\"1.5\"/>\n";
+        f << "<text x=\"" << (sx + 8) << "\" y=\"" << (sy + 12)
+          << "\" font-size=\"11\" fill=\"#b45309\" font-weight=\"bold\">n" << sn.id << "</text>\n";
       }
     }
   }
@@ -1909,10 +2151,13 @@ class StraightSkeletonState {
   TriangleEdges triangles;
   /** Coincidence threshold used throughout the computation. */
   double epsilon{1e-8};
-  /** 2D positions of all vertices (original [0, N-1] and duplicate [N, 2N-1]). */
-  Array<double2> vert_pos;
+  /** 2D positions of all vertices (original [0, N-1] and duplicate [N, 2N-1], plus new vertices).
+   */
+  Vector<double2> vert_pos;
   /** 2D velocities of all vertices. */
-  Array<double2> vert_vel;
+  Vector<double2> vert_vel;
+  /** Unit inward normals of contour edges. */
+  Array<double2> edge_normals;
   /** Contour sequences (loops of wavefront edges). */
   ContourSequences contours;
   /** Priority queue of triangles ordered by collapse time. */
@@ -1921,16 +2166,34 @@ class StraightSkeletonState {
   SkeletonGraph skeleton;
   /** Active and completed kinetic vertices. */
   Vector<KineticVertex> kinetic_verts;
+  /** Pointer to original input. */
+  const StraightSkeletonInput *input_{nullptr};
+  /** Current simulation time. */
+  double current_time_{0.0};
+  /** Number of flip events processed. */
+  int flips_count_{0};
+  /** Number of edge collapse events processed. */
+  int edge_collapses_count_{0};
+  /** Number of multi-split events processed. */
+  int multi_splits_count_{0};
+  /** Whether to handle edge collapse events (true by default, false for isolated event tests). */
+  bool handle_edge_collapses_{true};
 
  public:
-  StraightSkeletonState(const StraightSkeletonInput &input) : epsilon(input.epsilon)
+  StraightSkeletonState(const StraightSkeletonInput &input)
+      : epsilon(input.epsilon), input_(&input)
   {
     const int orig_verts_num = int(input.vert.size());
-    vert_pos.reinitialize(2 * orig_verts_num);
+    vert_pos.resize(2 * orig_verts_num);
     for (const int i : IndexRange(orig_verts_num)) {
       vert_pos[i] = input.vert[i];
       vert_pos[i + orig_verts_num] = input.vert[i];
     }
+  }
+
+  void set_handle_edge_collapses(const bool val)
+  {
+    handle_edge_collapses_ = val;
   }
 
   const TrianglePriorityQueue &priority_queue() const
@@ -1940,7 +2203,7 @@ class StraightSkeletonState {
 
   Span<double2> velocities() const
   {
-    return vert_vel;
+    return vert_vel.as_span();
   }
 
   const SkeletonGraph &skeleton_graph() const
@@ -1953,16 +2216,63 @@ class StraightSkeletonState {
     return kinetic_verts.as_span();
   }
 
+  const TriangleEdges &triangulation() const
+  {
+    return triangles;
+  }
+
+  int flips_count() const
+  {
+    return flips_count_;
+  }
+
+  int edge_collapses_count() const
+  {
+    return edge_collapses_count_;
+  }
+
+  int multi_splits_count() const
+  {
+    return multi_splits_count_;
+  }
+
   /** Build the initial kinetic triangulation from \a input.
    * After this call #triangles contains the initial triangulation
    * with unbounded triangles added for exterior boundary edges.
    * \param dbg_level If > 0, dump the state to stdout and write an SVG to /tmp. */
   void build_initial_kinetic_triangulation(const StraightSkeletonInput &input, int dbg_level = 0);
+
+  /** Process the next event from the priority queue.
+   * Returns true if an event was popped and handled/skipped, false if queue is empty. */
+  bool process_next_event(int dbg_level = 0);
+
+  /** Process an edge collapse event. */
+  bool process_edge_collapse_event(const TriangleEvent &ev, int dbg_level = 0);
+
+  /** Process a multi-split event (collision of two vertices along an internal spoke). */
+  bool process_multi_split_event(const TriangleEvent &ev, int dbg_level = 0);
+
+  /** Process a cascade of edge collapses driven by an infinitely fast vertex. */
+  void process_infinite_speed_cascade(int v_prime,
+                                      int node_id,
+                                      double event_time,
+                                      int in_cei,
+                                      int out_cei,
+                                      int input_face,
+                                      int dbg_level = 0);
+
+  /** Run the event loop until \a max_events processed or queue is empty.
+   * Returns the total number of events processed or skipped. */
+  int run_event_loop(int max_events = 100, int dbg_level = 0);
 };
 
 void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSkeletonInput &input,
                                                                 int dbg_level)
 {
+  input_ = &input;
+  current_time_ = 0.0;
+  flips_count_ = 0;
+
   const int orig_verts_num = int(input.vert.size());
   skeleton.nodes.clear();
   skeleton.edges.clear();
@@ -2070,7 +2380,9 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   }
 
   /* Compute vertex velocities for the initial wavefront. */
-  vert_vel = compute_kinetic_velocities(contours, vert_pos, input);
+  const Array<double2> initial_vel = compute_kinetic_velocities(contours, vert_pos, input);
+  vert_vel.clear();
+  vert_vel.extend(initial_vel.as_span());
 
   /* Initialize kinetic vertices from the wavefront. */
   const int total_verts_num = int(vert_pos.size());
@@ -2089,12 +2401,12 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   }
 
   /* Compute initial collapse events and build the priority queue. */
-  const Array<double2> edge_normals = compute_contour_edge_normals(contours, vert_pos, input);
+  edge_normals = compute_contour_edge_normals(contours, vert_pos, input);
   pq.reinitialize(triangles.triangles_num());
   for (const int ti : IndexRange(triangles.triangles_num())) {
     if (!triangles.is_triangle_deleted(ti)) {
       const TriangleEvent ev = compute_triangle_collapse(
-          ti, triangles, vert_pos, vert_vel, edge_normals, contours, input, 0.0);
+          ti, triangles, kinetic_verts.as_span(), edge_normals, contours, input, 0.0);
       if (ev.type != TriangleEventType::NONE && !std::isinf(ev.time)) {
         pq.insert_or_update(ti, ev);
       }
@@ -2110,7 +2422,1032 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   }
 }
 
+static inline double dist_2d(const double2 &a, const double2 &b)
+{
+  return std::hypot(a.x - b.x, a.y - b.y);
+}
+
+void StraightSkeletonState::process_infinite_speed_cascade(const int v_prime,
+                                                           const int node_id,
+                                                           const double event_time,
+                                                           const int in_cei,
+                                                           const int out_cei,
+                                                           const int input_face,
+                                                           const int dbg_level)
+{
+  int curr_v = v_prime;
+  int curr_node = node_id;
+  double2 curr_pos = kinetic_verts[curr_v].start_pos;
+  int curr_in_cei = in_cei;
+  int curr_out_cei = out_cei;
+
+  if (dbg_level > 0) {
+    std::cout << "  Starting INFINITE SPEED cascade from node " << curr_node << " at time "
+              << event_time << "\n";
+  }
+
+  int iters = 0;
+  const int max_iters = 2 * int(contours.edges.size()) + 20;
+
+  while (curr_v >= 0 && curr_v < kinetic_verts.size() && kinetic_verts[curr_v].is_active &&
+         kinetic_verts[curr_v].is_infinitely_fast && ++iters <= max_iters)
+  {
+    const int u_prev = contours.edges[curr_in_cei].start;
+    const int u_next = contours.edges[curr_out_cei].end;
+
+    /* Check if the loop has collapsed completely (2-gon or less). */
+    if (u_prev == u_next || u_prev == curr_v || u_next == curr_v) {
+      const int other_v = (u_prev != curr_v) ? u_prev : u_next;
+      if (other_v >= 0 && other_v < kinetic_verts.size() && kinetic_verts[other_v].is_active) {
+        const double2 p_other = kinetic_verts[other_v].position_at(event_time);
+        int final_node = curr_node;
+        if (dist_2d(curr_pos, p_other) > 1e-7) {
+          final_node = skeleton.add_node(p_other, event_time);
+          skeleton.add_edge(curr_node, final_node, -1, input_face, 0, event_time, event_time);
+        }
+        kinetic_verts[curr_v].end_node = final_node;
+        kinetic_verts[curr_v].end_time = event_time;
+        kinetic_verts[curr_v].is_active = false;
+
+        kinetic_verts[other_v].end_node = final_node;
+        kinetic_verts[other_v].end_time = event_time;
+        kinetic_verts[other_v].is_active = false;
+        skeleton.add_edge(kinetic_verts[other_v].start_node,
+                          final_node,
+                          kinetic_verts[other_v].input_edge,
+                          kinetic_verts[other_v].input_face,
+                          kinetic_verts[other_v].side,
+                          kinetic_verts[other_v].start_time,
+                          event_time);
+      }
+      else {
+        kinetic_verts[curr_v].end_node = curr_node;
+        kinetic_verts[curr_v].end_time = event_time;
+        kinetic_verts[curr_v].is_active = false;
+      }
+
+      contours.edge_by_verts.remove(int2(u_prev, curr_v));
+      contours.edge_by_verts.remove(int2(curr_v, u_next));
+      for (Vector<int> &loop : contours.loops) {
+        if (loop.contains(curr_in_cei) || loop.contains(curr_out_cei)) {
+          loop.clear();
+          break;
+        }
+      }
+      for (const int ti : IndexRange(triangles.triangles_num())) {
+        if (!triangles.is_triangle_deleted(ti) && !triangles.is_triangle_unbounded(ti)) {
+          const int w0 = triangles.start_vert(3 * ti);
+          const int w1 = triangles.start_vert(3 * ti + 1);
+          const int w2 = triangles.start_vert(3 * ti + 2);
+          if (w0 == curr_v || w1 == curr_v || w2 == curr_v || w0 == other_v || w1 == other_v ||
+              w2 == other_v)
+          {
+            triangles.mark_triangle_deleted(ti);
+            pq.remove(ti);
+          }
+        }
+      }
+      edge_collapses_count_++;
+      if (dbg_level > 0) {
+        std::cout << "  Infinite speed cascade completed (loop closed).\n";
+      }
+      break;
+    }
+
+    /* Multi-vertex loop: compare lengths of the two incident wavefront edges at event_time. */
+    const double2 p_prev = kinetic_verts[u_prev].position_at(event_time);
+    const double2 p_next = kinetic_verts[u_next].position_at(event_time);
+    const double len_prev = dist_2d(p_prev, curr_pos);
+    const double len_next = dist_2d(p_next, curr_pos);
+
+    const bool choose_prev = (len_prev <= len_next);
+    const int target_v = choose_prev ? u_prev : u_next;
+    const double2 target_pos = choose_prev ? p_prev : p_next;
+    const int collapsing_cei = choose_prev ? curr_in_cei : curr_out_cei;
+
+    /* Find the active triangle containing edge between curr_v and target_v. */
+    int fan_ti = -1;
+    int fan_edge = -1;
+    for (const int ti : IndexRange(triangles.triangles_num())) {
+      if (triangles.is_triangle_deleted(ti) || triangles.is_triangle_unbounded(ti)) {
+        continue;
+      }
+      for (const int k : IndexRange(3)) {
+        const int e = 3 * ti + k;
+        const int su = triangles.start_vert(e);
+        const int sv = triangles.end_vert(e);
+        if ((su == curr_v && sv == target_v) || (su == target_v && sv == curr_v)) {
+          fan_ti = ti;
+          fan_edge = e;
+          break;
+        }
+      }
+      if (fan_ti != -1) {
+        break;
+      }
+    }
+
+    int next_node = curr_node;
+    if (dist_2d(curr_pos, target_pos) > 1e-7) {
+      next_node = skeleton.add_node(target_pos, event_time);
+      skeleton.add_edge(curr_node, next_node, -1, input_face, 0, event_time, event_time);
+    }
+
+    kinetic_verts[curr_v].end_node = next_node;
+    kinetic_verts[curr_v].end_time = event_time;
+    kinetic_verts[curr_v].is_active = false;
+
+    kinetic_verts[target_v].end_node = next_node;
+    kinetic_verts[target_v].end_time = event_time;
+    kinetic_verts[target_v].is_active = false;
+    skeleton.add_edge(kinetic_verts[target_v].start_node,
+                      next_node,
+                      kinetic_verts[target_v].input_edge,
+                      kinetic_verts[target_v].input_face,
+                      kinetic_verts[target_v].side,
+                      kinetic_verts[target_v].start_time,
+                      event_time);
+
+    const int v_new = int(vert_pos.size());
+    vert_pos.append(target_pos);
+    vert_vel.append(double2(0.0, 0.0));
+
+    KineticVertex kv_new;
+    kv_new.id = v_new;
+    kv_new.start_node = next_node;
+    kv_new.start_time = event_time;
+    kv_new.start_pos = target_pos;
+    kv_new.velocity = double2(0.0, 0.0);
+    kv_new.input_edge = contours.edges[collapsing_cei].input_edge;
+    kv_new.input_face = contours.edges[collapsing_cei].input_face;
+    kv_new.side = contours.edges[collapsing_cei].side;
+    kv_new.is_active = true;
+
+    /* Update contour sequences: remove collapsing_cei. */
+    if (choose_prev) {
+      const int prev_prev_cei = contours.edges[curr_in_cei].prev;
+      const int v_prev_prev_start = contours.edges[prev_prev_cei].start;
+      const int v_out_end = contours.edges[curr_out_cei].end;
+
+      contours.edge_by_verts.remove(int2(u_prev, curr_v));
+      contours.edge_by_verts.remove(int2(v_prev_prev_start, u_prev));
+      contours.edge_by_verts.remove(int2(curr_v, v_out_end));
+
+      contours.edges[prev_prev_cei].end = v_new;
+      contours.edges[prev_prev_cei].next = curr_out_cei;
+      contours.edge_by_verts.add(int2(v_prev_prev_start, v_new), prev_prev_cei);
+
+      contours.edges[curr_out_cei].start = v_new;
+      contours.edges[curr_out_cei].prev = prev_prev_cei;
+      contours.edge_by_verts.add(int2(v_new, v_out_end), curr_out_cei);
+
+      for (Vector<int> &loop : contours.loops) {
+        const int64_t idx = loop.first_index_of_try(curr_in_cei);
+        if (idx != -1) {
+          loop.remove(idx);
+          break;
+        }
+      }
+      curr_in_cei = prev_prev_cei;
+    }
+    else {
+      const int next_next_cei = contours.edges[curr_out_cei].next;
+      const int v_in_start = contours.edges[curr_in_cei].start;
+      const int v_next_next_end = contours.edges[next_next_cei].end;
+
+      contours.edge_by_verts.remove(int2(curr_v, u_next));
+      contours.edge_by_verts.remove(int2(v_in_start, curr_v));
+      contours.edge_by_verts.remove(int2(u_next, v_next_next_end));
+
+      contours.edges[curr_in_cei].end = v_new;
+      contours.edges[curr_in_cei].next = next_next_cei;
+      contours.edge_by_verts.add(int2(v_in_start, v_new), curr_in_cei);
+
+      contours.edges[next_next_cei].start = v_new;
+      contours.edges[next_next_cei].prev = curr_in_cei;
+      contours.edge_by_verts.add(int2(v_new, v_next_next_end), next_next_cei);
+
+      for (Vector<int> &loop : contours.loops) {
+        const int64_t idx = loop.first_index_of_try(curr_out_cei);
+        if (idx != -1) {
+          loop.remove(idx);
+          break;
+        }
+      }
+      curr_out_cei = next_next_cei;
+    }
+
+    /* Update triangulation: stitch hole left by fan_ti. */
+    if (fan_ti != -1) {
+      const int e_next = next_triangle_edge(fan_edge);
+      const int e_prev = prev_triangle_edge(fan_edge);
+      const int p_next = triangles.paired_edge(e_next);
+      const int p_prev = triangles.paired_edge(e_prev);
+      if (p_next != -1 && p_prev != -1) {
+        triangles.set_paired(p_next, p_prev);
+        triangles.set_paired(p_prev, p_next);
+      }
+      else if (p_next != -1) {
+        triangles.set_paired(p_next, -1);
+      }
+      else if (p_prev != -1) {
+        triangles.set_paired(p_prev, -1);
+      }
+      triangles.mark_triangle_deleted(fan_ti);
+      pq.remove(fan_ti);
+    }
+
+    /* Replace curr_v and target_v with v_new in surviving triangles. */
+    Vector<int> mod_triangles;
+    for (const int ti : IndexRange(triangles.triangles_num())) {
+      if (triangles.is_triangle_deleted(ti)) {
+        continue;
+      }
+      const int w0 = triangles.start_vert(3 * ti);
+      const int w1 = triangles.start_vert(3 * ti + 1);
+      const int w2 = triangles.start_vert(3 * ti + 2);
+      if (w0 == curr_v || w0 == target_v || w1 == curr_v || w1 == target_v || w2 == curr_v ||
+          w2 == target_v)
+      {
+        const int new_w0 = (w0 == curr_v || w0 == target_v) ? v_new : w0;
+        const int new_w1 = (w1 == curr_v || w1 == target_v) ? v_new : w1;
+        const int new_w2 = (w2 == curr_v || w2 == target_v) ? v_new : w2;
+        triangles.set_triangle_verts(ti, new_w0, new_w1, new_w2);
+        mod_triangles.append(ti);
+      }
+    }
+
+    /* Check if the loop is now a 2-gon or if v_new is still infinitely fast. */
+    const int new_u_prev = contours.edges[curr_in_cei].start;
+    const int new_u_next = contours.edges[curr_out_cei].end;
+    const bool is_loop_2gon = (new_u_prev == new_u_next || new_u_prev == v_new ||
+                               new_u_next == v_new);
+
+    const double2 n_in = edge_normals[curr_in_cei];
+    const double2 n_out = edge_normals[curr_out_cei];
+    const double det_new = n_in.x * n_out.y - n_in.y * n_out.x;
+    const double dot_new = n_in.x * n_out.x + n_in.y * n_out.y;
+    const bool is_still_inf_fast = (std::abs(det_new) < 1e-9 && dot_new < -0.999999);
+
+    edge_collapses_count_++;
+
+    if (is_loop_2gon || is_still_inf_fast) {
+      kv_new.is_infinitely_fast = true;
+      kinetic_verts.append(kv_new);
+      curr_v = v_new;
+      curr_node = next_node;
+      curr_pos = target_pos;
+      if (dbg_level > 0) {
+        std::cout << "  Infinite speed: merged with " << target_v << " at node " << next_node
+                  << " (cascade continuing)\n";
+      }
+    }
+    else {
+      kv_new.is_infinitely_fast = false;
+      double2 vel_new(0.0, 0.0);
+      if (std::abs(det_new) > 1e-12) {
+        vel_new = double2((n_out.y - n_in.y) / det_new, (n_in.x - n_out.x) / det_new);
+      }
+      else if (dot_new > 0.0) {
+        vel_new = n_in;
+      }
+      kv_new.velocity = vel_new;
+      vert_vel[v_new] = vel_new;
+      kinetic_verts.append(kv_new);
+
+      if (dbg_level > 0) {
+        std::cout << "  Infinite speed cascade ended at node " << next_node
+                  << " with finite velocity (" << vel_new.x << ", " << vel_new.y << ")\n";
+      }
+
+      /* Recompute PQ events for modified triangles. */
+      for (const int mod_ti : mod_triangles) {
+        const TriangleEvent new_ev = compute_triangle_collapse(mod_ti,
+                                                               triangles,
+                                                               kinetic_verts.as_span(),
+                                                               edge_normals,
+                                                               contours,
+                                                               *input_,
+                                                               current_time_);
+        if (new_ev.type != TriangleEventType::NONE && !std::isinf(new_ev.time)) {
+          pq.insert_or_update(mod_ti, new_ev);
+        }
+        else {
+          pq.remove(mod_ti);
+        }
+      }
+      break;
+    }
+  }
+}
+
+bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev,
+                                                        const int dbg_level)
+{
+  if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
+    return false;
+  }
+  const int e_coll = ev.edge_index;
+  const int v1 = triangles.start_vert(e_coll);
+  const int v2 = triangles.end_vert(e_coll);
+  if (v1 < 0 || v2 < 0 || v1 >= kinetic_verts.size() || v2 >= kinetic_verts.size()) {
+    return false;
+  }
+  if (!kinetic_verts[v1].is_active || !kinetic_verts[v2].is_active) {
+    return false;
+  }
+
+  current_time_ = ev.time;
+
+  const int *cei_ptr = contours.edge_by_verts.lookup_ptr(int2(v1, v2));
+  if (cei_ptr == nullptr) {
+    return false;
+  }
+  const int cei = *cei_ptr;
+  const ContourEdge &ce = contours.edges[cei];
+  const int prev_cei = ce.prev;
+  const int next_cei = ce.next;
+
+  int loop_len = 0;
+  int curr_cei = cei;
+  do {
+    loop_len++;
+    curr_cei = contours.edges[curr_cei].next;
+  } while (curr_cei != cei && curr_cei != -1 && loop_len <= contours.edges.size());
+
+  const int node_id = skeleton.add_node(ev.event_pos, ev.time);
+
+  if (loop_len == 3) {
+    /* 3-gon loop collapses to a single point. All 3 vertices terminate at node_id. */
+    const int v3 = contours.edges[next_cei].end;
+    for (const int v : {v1, v2, v3}) {
+      if (v >= 0 && v < kinetic_verts.size() && kinetic_verts[v].is_active) {
+        kinetic_verts[v].end_node = node_id;
+        kinetic_verts[v].end_time = ev.time;
+        kinetic_verts[v].is_active = false;
+        skeleton.add_edge(kinetic_verts[v].start_node,
+                          node_id,
+                          kinetic_verts[v].input_edge,
+                          kinetic_verts[v].input_face,
+                          kinetic_verts[v].side,
+                          kinetic_verts[v].start_time,
+                          ev.time);
+      }
+    }
+    contours.edge_by_verts.remove(int2(v1, v2));
+    contours.edge_by_verts.remove(int2(v2, v3));
+    contours.edge_by_verts.remove(int2(v3, v1));
+
+    for (Vector<int> &loop : contours.loops) {
+      if (loop.contains(cei)) {
+        loop.clear();
+        break;
+      }
+    }
+
+    triangles.mark_triangle_deleted(ev.triangle_index);
+    pq.remove(ev.triangle_index);
+    edge_collapses_count_++;
+    return true;
+  }
+
+  /* Loop length > 3: vertices v1 and v2 merge into new kinetic vertex v'. */
+  kinetic_verts[v1].end_node = node_id;
+  kinetic_verts[v1].end_time = ev.time;
+  kinetic_verts[v1].is_active = false;
+  skeleton.add_edge(kinetic_verts[v1].start_node,
+                    node_id,
+                    kinetic_verts[v1].input_edge,
+                    kinetic_verts[v1].input_face,
+                    kinetic_verts[v1].side,
+                    kinetic_verts[v1].start_time,
+                    ev.time);
+
+  kinetic_verts[v2].end_node = node_id;
+  kinetic_verts[v2].end_time = ev.time;
+  kinetic_verts[v2].is_active = false;
+  skeleton.add_edge(kinetic_verts[v2].start_node,
+                    node_id,
+                    kinetic_verts[v2].input_edge,
+                    kinetic_verts[v2].input_face,
+                    kinetic_verts[v2].side,
+                    kinetic_verts[v2].start_time,
+                    ev.time);
+
+  /* Compute velocity of v' from incident edge normals. */
+  const double2 n1 = edge_normals[prev_cei];
+  const double2 n2 = edge_normals[next_cei];
+  const double det = n1.x * n2.y - n1.y * n2.x;
+  const double dot = n1.x * n2.x + n1.y * n2.y;
+  const bool is_infinitely_fast = (std::abs(det) < 1e-9 && dot < -0.999999);
+
+  double2 vel_prime(0.0, 0.0);
+  if (!is_infinitely_fast) {
+    if (std::abs(det) > 1e-12) {
+      vel_prime = double2((n2.y - n1.y) / det, (n1.x - n2.x) / det);
+    }
+    else if (dot > 0.0) {
+      vel_prime = n1;
+    }
+  }
+
+  const int v_prime = int(vert_pos.size());
+  vert_pos.append(ev.event_pos);
+  vert_vel.append(vel_prime);
+
+  KineticVertex kv;
+  kv.id = v_prime;
+  kv.start_node = node_id;
+  kv.start_time = ev.time;
+  kv.start_pos = ev.event_pos;
+  kv.velocity = vel_prime;
+  kv.input_edge = ce.input_edge;
+  kv.input_face = ce.input_face;
+  kv.side = ce.side;
+  kv.is_active = true;
+  kv.is_infinitely_fast = is_infinitely_fast;
+  kinetic_verts.append(kv);
+
+  /* Update contour sequences. */
+  const int v_prev_start = contours.edges[prev_cei].start;
+  const int v_next_end = contours.edges[next_cei].end;
+
+  contours.edge_by_verts.remove(int2(v1, v2));
+  contours.edge_by_verts.remove(int2(v_prev_start, v1));
+  contours.edge_by_verts.remove(int2(v2, v_next_end));
+
+  contours.edges[prev_cei].end = v_prime;
+  contours.edges[prev_cei].next = next_cei;
+  contours.edge_by_verts.add(int2(v_prev_start, v_prime), prev_cei);
+
+  contours.edges[next_cei].start = v_prime;
+  contours.edges[next_cei].prev = prev_cei;
+  contours.edge_by_verts.add(int2(v_prime, v_next_end), next_cei);
+
+  for (Vector<int> &loop : contours.loops) {
+    const int64_t idx = loop.first_index_of_try(cei);
+    if (idx != -1) {
+      loop.remove(idx);
+      break;
+    }
+  }
+
+  /* Update triangulation: stitch hole left by collapsed triangle. */
+  const int e_next = next_triangle_edge(e_coll);
+  const int e_prev = prev_triangle_edge(e_coll);
+  const int p_next = triangles.paired_edge(e_next);
+  const int p_prev = triangles.paired_edge(e_prev);
+
+  if (p_next != -1 && p_prev != -1) {
+    triangles.set_paired(p_next, p_prev);
+    triangles.set_paired(p_prev, p_next);
+  }
+  else if (p_next != -1) {
+    triangles.set_paired(p_next, -1);
+  }
+  else if (p_prev != -1) {
+    triangles.set_paired(p_prev, -1);
+  }
+
+  triangles.mark_triangle_deleted(ev.triangle_index);
+  pq.remove(ev.triangle_index);
+
+  /* Replace v1 and v2 with v' in all surviving triangles. */
+  Vector<int> modified_triangles;
+  for (const int ti : IndexRange(triangles.triangles_num())) {
+    if (ti == ev.triangle_index || triangles.is_triangle_deleted(ti)) {
+      continue;
+    }
+    const int w0 = triangles.start_vert(3 * ti);
+    const int w1 = triangles.start_vert(3 * ti + 1);
+    const int w2 = triangles.start_vert(3 * ti + 2);
+    if (w0 == v1 || w0 == v2 || w1 == v1 || w1 == v2 || w2 == v1 || w2 == v2) {
+      const int new_w0 = (w0 == v1 || w0 == v2) ? v_prime : w0;
+      const int new_w1 = (w1 == v1 || w1 == v2) ? v_prime : w1;
+      const int new_w2 = (w2 == v1 || w2 == v2) ? v_prime : w2;
+      triangles.set_triangle_verts(ti, new_w0, new_w1, new_w2);
+      modified_triangles.append(ti);
+    }
+  }
+
+  edge_collapses_count_++;
+
+  if (is_infinitely_fast) {
+    process_infinite_speed_cascade(
+        v_prime, node_id, ev.time, prev_cei, next_cei, ce.input_face, dbg_level);
+  }
+  else {
+    /* Recompute priority queue events for modified triangles. */
+    for (const int mod_ti : modified_triangles) {
+      const TriangleEvent new_ev = compute_triangle_collapse(mod_ti,
+                                                             triangles,
+                                                             kinetic_verts.as_span(),
+                                                             edge_normals,
+                                                             contours,
+                                                             *input_,
+                                                             current_time_);
+      if (new_ev.type != TriangleEventType::NONE && !std::isinf(new_ev.time)) {
+        pq.insert_or_update(mod_ti, new_ev);
+      }
+      else {
+        pq.remove(mod_ti);
+      }
+    }
+  }
+
+  return true;
+}
+
+bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev, const int dbg_level)
+{
+  if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
+    return false;
+  }
+  const int e_coll = ev.edge_index;
+  const int v1 = triangles.start_vert(e_coll);
+  const int v2 = triangles.end_vert(e_coll);
+  if (v1 < 0 || v2 < 0 || v1 >= kinetic_verts.size() || v2 >= kinetic_verts.size()) {
+    return false;
+  }
+  if (!kinetic_verts[v1].is_active || !kinetic_verts[v2].is_active) {
+    return false;
+  }
+
+  current_time_ = ev.time;
+
+  const int node_id = skeleton.add_node(ev.event_pos, ev.time);
+
+  kinetic_verts[v1].end_node = node_id;
+  kinetic_verts[v1].end_time = ev.time;
+  kinetic_verts[v1].is_active = false;
+  skeleton.add_edge(kinetic_verts[v1].start_node,
+                    node_id,
+                    kinetic_verts[v1].input_edge,
+                    kinetic_verts[v1].input_face,
+                    kinetic_verts[v1].side,
+                    kinetic_verts[v1].start_time,
+                    ev.time);
+
+  kinetic_verts[v2].end_node = node_id;
+  kinetic_verts[v2].end_time = ev.time;
+  kinetic_verts[v2].is_active = false;
+  skeleton.add_edge(kinetic_verts[v2].start_node,
+                    node_id,
+                    kinetic_verts[v2].input_edge,
+                    kinetic_verts[v2].input_face,
+                    kinetic_verts[v2].side,
+                    kinetic_verts[v2].start_time,
+                    ev.time);
+
+  int in_v1 = -1, out_v1 = -1;
+  int in_v2 = -1, out_v2 = -1;
+  for (const int cei : IndexRange(contours.edges.size())) {
+    const ContourEdge &ce = contours.edges[cei];
+    if (ce.end == v1) {
+      in_v1 = cei;
+    }
+    if (ce.start == v1) {
+      out_v1 = cei;
+    }
+    if (ce.end == v2) {
+      in_v2 = cei;
+    }
+    if (ce.start == v2) {
+      out_v2 = cei;
+    }
+  }
+
+  const double dt_back = (ev.time > 1e-4) ? 1e-4 : 0.0;
+  const double2 p_v1 = kinetic_verts[v1].position_at(ev.time - dt_back);
+  const double2 p_v2 = kinetic_verts[v2].position_at(ev.time - dt_back);
+  double2 spoke_dir = p_v2 - p_v1;
+  if (std::hypot(spoke_dir.x, spoke_dir.y) < 1e-9) {
+    spoke_dir = kinetic_verts[v2].start_pos - kinetic_verts[v1].start_pos;
+  }
+
+  auto edge_side_cross = [&](int cei) {
+    if (cei == -1) {
+      return 0.0;
+    }
+    const ContourEdge &ce = contours.edges[cei];
+    const int other_v = (ce.start == v1 || ce.start == v2) ? ce.end : ce.start;
+    const double2 p_other = (other_v >= 0 && other_v < kinetic_verts.size()) ?
+                                kinetic_verts[other_v].position_at(ev.time - dt_back) :
+                                double2(0.0, 0.0);
+    const double2 d = p_other - p_v1;
+    return spoke_dir.x * d.y - spoke_dir.y * d.x;
+  };
+
+  const double c_in_v1 = edge_side_cross(in_v1);
+  const double c_out_v1 = edge_side_cross(out_v1);
+
+  int in_1 = -1, out_1 = -1;
+  int in_2 = -1, out_2 = -1;
+
+  if (c_in_v1 >= 0.0) {
+    in_1 = in_v1;
+    in_2 = in_v2;
+  }
+  else {
+    in_1 = in_v2;
+    in_2 = in_v1;
+  }
+
+  if (c_out_v1 >= 0.0) {
+    out_1 = out_v1;
+    out_2 = out_v2;
+  }
+  else {
+    out_1 = out_v2;
+    out_2 = out_v1;
+  }
+
+  auto compute_bisector_vel = [&](int in_cei, int out_cei, double2 &r_vel, bool &r_inf) {
+    if (in_cei < 0 || out_cei < 0 || in_cei >= edge_normals.size() ||
+        out_cei >= edge_normals.size())
+    {
+      r_vel = double2(0.0, 0.0);
+      r_inf = false;
+      return;
+    }
+    const double2 n_in = edge_normals[in_cei];
+    const double2 n_out = edge_normals[out_cei];
+    const double det = n_in.x * n_out.y - n_in.y * n_out.x;
+    const double dot = n_in.x * n_out.x + n_in.y * n_out.y;
+    if (std::abs(det) < 1e-9 && dot < -0.999999) {
+      r_inf = true;
+      r_vel = double2(0.0, 0.0);
+    }
+    else {
+      r_inf = false;
+      if (std::abs(det) > 1e-12) {
+        r_vel = double2((n_out.y - n_in.y) / det, (n_in.x - n_out.x) / det);
+      }
+      else if (dot > 0.0) {
+        r_vel = n_in;
+      }
+      else {
+        r_vel = double2(0.0, 0.0);
+      }
+    }
+  };
+
+  double2 vel_1(0.0, 0.0), vel_2(0.0, 0.0);
+  bool inf_1 = false, inf_2 = false;
+  compute_bisector_vel(in_1, out_1, vel_1, inf_1);
+  compute_bisector_vel(in_2, out_2, vel_2, inf_2);
+
+  const int v1_prime = int(vert_pos.size());
+  vert_pos.append(ev.event_pos);
+  vert_vel.append(vel_1);
+
+  KineticVertex kv1;
+  kv1.id = v1_prime;
+  kv1.start_node = node_id;
+  kv1.start_time = ev.time;
+  kv1.start_pos = ev.event_pos;
+  kv1.velocity = vel_1;
+  kv1.is_active = true;
+  kv1.is_infinitely_fast = inf_1;
+  if (in_1 != -1) {
+    kv1.input_edge = contours.edges[in_1].input_edge;
+    kv1.input_face = contours.edges[in_1].input_face;
+    kv1.side = contours.edges[in_1].side;
+  }
+  kinetic_verts.append(kv1);
+
+  const int v2_prime = int(vert_pos.size());
+  vert_pos.append(ev.event_pos);
+  vert_vel.append(vel_2);
+
+  KineticVertex kv2;
+  kv2.id = v2_prime;
+  kv2.start_node = node_id;
+  kv2.start_time = ev.time;
+  kv2.start_pos = ev.event_pos;
+  kv2.velocity = vel_2;
+  kv2.is_active = true;
+  kv2.is_infinitely_fast = inf_2;
+  if (in_2 != -1) {
+    kv2.input_edge = contours.edges[in_2].input_edge;
+    kv2.input_face = contours.edges[in_2].input_face;
+    kv2.side = contours.edges[in_2].side;
+  }
+  kinetic_verts.append(kv2);
+
+  if (in_1 != -1 && out_1 != -1) {
+    const int start_1 = contours.edges[in_1].start;
+    const int end_1 = contours.edges[out_1].end;
+    contours.edge_by_verts.remove(int2(contours.edges[in_1].start, contours.edges[in_1].end));
+    contours.edge_by_verts.remove(int2(contours.edges[out_1].start, contours.edges[out_1].end));
+
+    contours.edges[in_1].end = v1_prime;
+    contours.edges[in_1].next = out_1;
+    contours.edges[out_1].start = v1_prime;
+    contours.edges[out_1].prev = in_1;
+
+    contours.edge_by_verts.add(int2(start_1, v1_prime), in_1);
+    contours.edge_by_verts.add(int2(v1_prime, end_1), out_1);
+  }
+
+  if (in_2 != -1 && out_2 != -1) {
+    const int start_2 = contours.edges[in_2].start;
+    const int end_2 = contours.edges[out_2].end;
+    contours.edge_by_verts.remove(int2(contours.edges[in_2].start, contours.edges[in_2].end));
+    contours.edge_by_verts.remove(int2(contours.edges[out_2].start, contours.edges[out_2].end));
+
+    contours.edges[in_2].end = v2_prime;
+    contours.edges[in_2].next = out_2;
+    contours.edges[out_2].start = v2_prime;
+    contours.edges[out_2].prev = in_2;
+
+    contours.edge_by_verts.add(int2(start_2, v2_prime), in_2);
+    contours.edge_by_verts.add(int2(v2_prime, end_2), out_2);
+  }
+
+  contours.loops.clear();
+  Vector<bool> visited(contours.edges.size(), false);
+  for (const int start_ei : IndexRange(contours.edges.size())) {
+    if (visited[start_ei]) {
+      continue;
+    }
+    Vector<int> loop;
+    int curr = start_ei;
+    while (curr != -1 && !visited[curr]) {
+      visited[curr] = true;
+      loop.append(curr);
+      curr = contours.edges[curr].next;
+      if (curr == start_ei) {
+        break;
+      }
+    }
+    if (!loop.is_empty()) {
+      contours.loops.append(loop);
+    }
+  }
+
+  const int ti1 = ev.triangle_index;
+  const int e_paired = triangles.paired_edge(e_coll);
+  const int ti2 = (e_paired != -1) ? triangles.triangle(e_paired) : -1;
+
+  const int e1_next = next_triangle_edge(e_coll);
+  const int e1_prev = prev_triangle_edge(e_coll);
+  const int p1_next = triangles.paired_edge(e1_next);
+  const int p1_prev = triangles.paired_edge(e1_prev);
+
+  if (p1_next != -1 && p1_prev != -1) {
+    triangles.set_paired(p1_next, p1_prev);
+    triangles.set_paired(p1_prev, p1_next);
+  }
+  else if (p1_next != -1) {
+    triangles.set_paired(p1_next, -1);
+  }
+  else if (p1_prev != -1) {
+    triangles.set_paired(p1_prev, -1);
+  }
+  triangles.mark_triangle_deleted(ti1);
+  pq.remove(ti1);
+
+  if (ti2 != -1) {
+    const int e2_next = next_triangle_edge(e_paired);
+    const int e2_prev = prev_triangle_edge(e_paired);
+    const int p2_next = triangles.paired_edge(e2_next);
+    const int p2_prev = triangles.paired_edge(e2_prev);
+
+    if (p2_next != -1 && p2_prev != -1) {
+      triangles.set_paired(p2_next, p2_prev);
+      triangles.set_paired(p2_prev, p2_next);
+    }
+    else if (p2_next != -1) {
+      triangles.set_paired(p2_next, -1);
+    }
+    else if (p2_prev != -1) {
+      triangles.set_paired(p2_prev, -1);
+    }
+    triangles.mark_triangle_deleted(ti2);
+    pq.remove(ti2);
+  }
+
+  Vector<int> modified_triangles;
+  for (const int ti : IndexRange(triangles.triangles_num())) {
+    if (ti == ti1 || ti == ti2 || triangles.is_triangle_deleted(ti)) {
+      continue;
+    }
+    const int w0 = triangles.start_vert(3 * ti);
+    const int w1 = triangles.start_vert(3 * ti + 1);
+    const int w2 = triangles.start_vert(3 * ti + 2);
+    if (w0 == v1 || w0 == v2 || w1 == v1 || w1 == v2 || w2 == v1 || w2 == v2) {
+      int other_w = -1;
+      for (const int w : {w0, w1, w2}) {
+        if (w != v1 && w != v2 && w >= 0) {
+          other_w = w;
+          break;
+        }
+      }
+      int target_v = v1_prime;
+      if (other_w >= 0 && other_w < kinetic_verts.size()) {
+        const double2 p_other = kinetic_verts[other_w].position_at(ev.time - dt_back);
+        const double2 d = p_other - p_v1;
+        const double cross = spoke_dir.x * d.y - spoke_dir.y * d.x;
+        if (cross < 0.0) {
+          target_v = v2_prime;
+        }
+      }
+      const int new_w0 = (w0 == v1 || w0 == v2) ? target_v : w0;
+      const int new_w1 = (w1 == v1 || w1 == v2) ? target_v : w1;
+      const int new_w2 = (w2 == v1 || w2 == v2) ? target_v : w2;
+      triangles.set_triangle_verts(ti, new_w0, new_w1, new_w2);
+      modified_triangles.append(ti);
+    }
+  }
+
+  for (const int mod_ti : modified_triangles) {
+    const TriangleEvent new_ev = compute_triangle_collapse(
+        mod_ti, triangles, kinetic_verts.as_span(), edge_normals, contours, *input_, ev.time);
+    if (new_ev.type != TriangleEventType::NONE && !std::isinf(new_ev.time)) {
+      pq.insert_or_update(mod_ti, new_ev);
+    }
+    else {
+      pq.remove(mod_ti);
+    }
+  }
+
+  multi_splits_count_++;
+
+  if (inf_1 && in_1 != -1 && out_1 != -1) {
+    process_infinite_speed_cascade(
+        v1_prime, node_id, ev.time, in_1, out_1, kv1.input_face, dbg_level);
+  }
+  if (inf_2 && in_2 != -1 && out_2 != -1) {
+    process_infinite_speed_cascade(
+        v2_prime, node_id, ev.time, in_2, out_2, kv2.input_face, dbg_level);
+  }
+
+  return true;
+}
+
+bool StraightSkeletonState::process_next_event(const int dbg_level)
+{
+  while (!pq.is_empty()) {
+    const TriangleEvent ev = pq.pop_min();
+    if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
+      continue;
+    }
+    if (std::isinf(ev.time) || ev.type == TriangleEventType::NONE) {
+      continue;
+    }
+
+    if (ev.type == TriangleEventType::FLIP) {
+      if (dbg_level > 0) {
+        std::cout << "Processing FLIP event on spoke edge " << ev.edge_index << " in tri "
+                  << ev.triangle_index << " at time " << ev.time << "\n";
+      }
+      current_time_ = ev.time;
+      const int e1 = ev.edge_index;
+      const int e2 = triangles.paired_edge(e1);
+      if (e2 == -1) {
+        continue;
+      }
+      const int ti1 = triangles.triangle(e1);
+      const int ti2 = triangles.triangle(e2);
+
+      if (!flip_edge(triangles, e1)) {
+        if (dbg_level > 0) {
+          std::cout << "  Failed to flip edge " << e1 << "\n";
+        }
+        continue;
+      }
+
+      /* Recompute collapse events for the two modified triangles at current_time_. */
+      const TriangleEvent ev1 = compute_triangle_collapse(
+          ti1, triangles, kinetic_verts.as_span(), edge_normals, contours, *input_, current_time_);
+      const TriangleEvent ev2 = compute_triangle_collapse(
+          ti2, triangles, kinetic_verts.as_span(), edge_normals, contours, *input_, current_time_);
+
+      if (ev1.type != TriangleEventType::NONE && !std::isinf(ev1.time)) {
+        pq.insert_or_update(ti1, ev1);
+      }
+      else {
+        pq.remove(ti1);
+      }
+
+      if (ev2.type != TriangleEventType::NONE && !std::isinf(ev2.time)) {
+        pq.insert_or_update(ti2, ev2);
+      }
+      else {
+        pq.remove(ti2);
+      }
+
+      flips_count_++;
+
+      if (dbg_level > 0) {
+        dump_triangles(triangles);
+        dump_priority_queue(pq);
+        draw_triangulation_svg(triangles, vert_pos, *input_, contours, vert_vel, &pq, &skeleton);
+      }
+      return true;
+    }
+    else if (ev.type == TriangleEventType::EDGE_COLLAPSE) {
+      if (!handle_edge_collapses_) {
+        std::cout << "Event type EDGE_COLLAPSE for tri " << ev.triangle_index << " at time "
+                  << ev.time << ": yet to be implemented\n";
+        return true;
+      }
+      if (dbg_level > 0) {
+        std::cout << "Processing EDGE_COLLAPSE event on edge " << ev.edge_index << " in tri "
+                  << ev.triangle_index << " at time " << ev.time << "\n";
+      }
+      if (!process_edge_collapse_event(ev, dbg_level)) {
+        if (dbg_level > 0) {
+          std::cout << "  Failed to process edge collapse on edge " << ev.edge_index << "\n";
+        }
+        continue;
+      }
+
+      if (dbg_level > 0) {
+        dump_triangles(triangles);
+        dump_priority_queue(pq);
+        dump_skeleton_graph(skeleton);
+        draw_triangulation_svg(triangles, vert_pos, *input_, contours, vert_vel, &pq, &skeleton);
+      }
+      return true;
+    }
+    else if (ev.type == TriangleEventType::MULTI_SPLIT) {
+      if (dbg_level > 0) {
+        std::cout << "Processing MULTI_SPLIT event on spoke edge " << ev.edge_index << " in tri "
+                  << ev.triangle_index << " at time " << ev.time << "\n";
+      }
+      if (!process_multi_split_event(ev, dbg_level)) {
+        if (dbg_level > 0) {
+          std::cout << "  Failed to process multi-split on edge " << ev.edge_index << "\n";
+        }
+        continue;
+      }
+
+      if (dbg_level > 0) {
+        dump_triangles(triangles);
+        dump_priority_queue(pq);
+        dump_skeleton_graph(skeleton);
+        draw_triangulation_svg(triangles, vert_pos, *input_, contours, vert_vel, &pq, &skeleton);
+      }
+      return true;
+    }
+    else {
+      std::cout << "Event type " << triangle_event_type_name(ev.type) << " for tri "
+                << ev.triangle_index << " at time " << ev.time << ": yet to be implemented\n";
+      return true;
+    }
+  }
+  return false;
+}
+
+int StraightSkeletonState::run_event_loop(const int max_events, const int dbg_level)
+{
+  int events_count = 0;
+  while (events_count < max_events && process_next_event(dbg_level)) {
+    events_count++;
+  }
+  return events_count;
+}
+
 /** \} */
+
+EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &input,
+                                                 const int max_events,
+                                                 const int dbg_level,
+                                                 const bool handle_edge_collapses)
+{
+  StraightSkeletonState state(input);
+  state.set_handle_edge_collapses(handle_edge_collapses);
+  state.build_initial_kinetic_triangulation(input, dbg_level);
+  const int processed = state.run_event_loop(max_events, dbg_level);
+  EventLoopStats stats;
+  stats.events_processed_num = processed;
+  stats.flips_num = state.flips_count();
+  stats.edge_collapses_num = state.edge_collapses_count();
+  stats.multi_splits_num = state.multi_splits_count();
+  return stats;
+}
+
+Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput &input,
+                                                     const int max_events,
+                                                     const int dbg_level,
+                                                     const bool handle_edge_collapses)
+{
+  StraightSkeletonState state(input);
+  state.set_handle_edge_collapses(handle_edge_collapses);
+  state.build_initial_kinetic_triangulation(input, dbg_level);
+  state.run_event_loop(max_events, dbg_level);
+  Vector<int3> result;
+  const TriangleEdges &tri = state.triangulation();
+  for (const int ti : IndexRange(tri.triangles_num())) {
+    if (!tri.is_triangle_deleted(ti) && !tri.is_triangle_unbounded(ti)) {
+      result.append(
+          int3(tri.start_vert(3 * ti), tri.start_vert(3 * ti + 1), tri.start_vert(3 * ti + 2)));
+    }
+  }
+  return result;
+}
 
 Array<TriangleEvent> straight_skeleton_initial_events(const StraightSkeletonInput &input)
 {
@@ -2145,9 +3482,65 @@ SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
 {
   StraightSkeletonState state(input);
-  state.build_initial_kinetic_triangulation(input, /*dbg_level=*/1);
-  /* TODO: run event loop. */
-  return StraightSkeletonOutput{};
+  state.build_initial_kinetic_triangulation(input, /*dbg_level=*/0);
+  state.run_event_loop(1000, /*dbg_level=*/0);
+
+  const SkeletonGraph &skel = state.skeleton_graph();
+  const Span<KineticVertex> kverts = state.kinetic_vertices();
+
+  StraightSkeletonOutput output;
+  const int nodes_num = int(skel.nodes.size());
+  output.vert.reinitialize(nodes_num);
+  output.vert_orig.reinitialize(nodes_num);
+  for (const int i : IndexRange(nodes_num)) {
+    output.vert[i] = skel.nodes[i].pos;
+    output.vert_orig[i] = skel.nodes[i].orig_vert;
+  }
+
+  const int edges_num = int(skel.edges.size());
+  output.edge.reinitialize(edges_num);
+  output.edge_orig.reinitialize(edges_num);
+  for (const int i : IndexRange(edges_num)) {
+    output.edge[i] = int2(skel.edges[i].node1, skel.edges[i].node2);
+    output.edge_orig[i] = skel.edges[i].orig_edge;
+  }
+
+  /* Construct output faces for simple face inputs. */
+  if (input.face_offsets.size() > 0) {
+    Vector<int> face_indices;
+    Vector<int> face_lens;
+    Vector<int> face_orig_list;
+
+    for (const int fi : input.face_offsets.index_range()) {
+      const IndexRange r = input.face_offsets[fi];
+      const int f_verts_num = int(r.size());
+      for (const int k : IndexRange(f_verts_num)) {
+        const int u = input.face_vert_indices[r[k]];
+        const int v = input.face_vert_indices[r[(k + 1) % f_verts_num]];
+        const int end_u = kverts[u].end_node;
+        const int end_v = kverts[v].end_node;
+        if (end_u != -1 && end_u == end_v) {
+          face_indices.append(u);
+          face_indices.append(v);
+          face_indices.append(end_u);
+          face_lens.append(3);
+          face_orig_list.append(fi);
+        }
+      }
+    }
+
+    const int face_count = int(face_lens.size());
+    output.face_offsets_data.reinitialize(face_count + 1);
+    output.face_offsets_data[0] = 0;
+    for (const int i : IndexRange(face_count)) {
+      output.face_offsets_data[i + 1] = output.face_offsets_data[i] + face_lens[i];
+    }
+    output.face_offsets = OffsetIndices<int>(output.face_offsets_data.as_span());
+    output.face_vert_indices = Array<int>(face_indices.as_span());
+    output.face_orig = Array<int>(face_orig_list.as_span());
+  }
+
+  return output;
 }
 
 } /* namespace blender::straightskeleton */
