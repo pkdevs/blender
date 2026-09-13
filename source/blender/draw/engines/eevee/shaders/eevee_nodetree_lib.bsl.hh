@@ -14,7 +14,10 @@
 #include "eevee_camera_lib.bsl.hh"
 #include "eevee_hiz.bsl.hh"
 #include "eevee_light_data.bsl.hh"
+#include "eevee_light_eval.bsl.hh"
 #include "eevee_light_iter.bsl.hh"
+#include "eevee_lightprobe.bsl.hh"
+#include "eevee_lightprobe_plane.bsl.hh"
 #include "eevee_nodetree_closures_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_ray_trace_screen_lib.bsl.hh"
@@ -131,14 +134,19 @@ struct KernelGlobals {
   [[resource_table]] srt_t<eevee::Sampling> sampling;
   [[resource_table]] srt_t<eevee::HiZ> hiz;
 
+  [[resource_table]] [[condition(
+      use_forward_lighting)]] srt_t<eevee::LightEvalIterator> light_eval;
+  [[resource_table]] [[condition(
+      use_forward_lighting)]] srt_t<eevee::LightprobeRenderData> lightprobes;
+  [[resource_table]] [[condition(
+      use_forward_lighting)]] srt_t<eevee::LightprobePlaneRenderData> lightprobe_planes;
+
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
 
   uint resource_id_get(const ShadingData & /*sd*/)
   {
-    /* clang-format off */ /* Multi-line macro mess the shader log line. */
     [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
-    /* clang-format on */
     auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
     draw::ID id{interp_flat.resource_id_raw};
     if (pipeline.is_shadow_pipe) {
@@ -149,9 +157,7 @@ struct KernelGlobals {
 
   uint view_id_get(const ShadingData & /*sd*/)
   {
-    /* clang-format off */ /* Multi-line macro mess the shader log line. */
     [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
-    /* clang-format on */
     auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
     draw::ID id{interp_flat.resource_id_raw};
     if (pipeline.is_shadow_pipe) {

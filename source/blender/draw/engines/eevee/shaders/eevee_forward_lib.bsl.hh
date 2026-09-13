@@ -41,7 +41,8 @@
 
 namespace eevee {
 
-void forward_lighting_eval(const ShadingData &sd,
+void forward_lighting_eval([[resource_table]] KernelGlobals &kg,
+                           const ShadingData &sd,
                            const ViewMatrices view,
                            uint resource_id,
                            Thickness thickness,
@@ -49,15 +50,12 @@ void forward_lighting_eval(const ShadingData &sd,
                            float3 &radiance,
                            float3 &transmittance)
 {
-  [[resource_table]] LightEvalIterator &lights = resource_table_get(eevee::LightEvalIterator);
-  [[resource_table]] UtilityTexture &util_tx = resource_table_get(UtilityTexture);
-  [[resource_table]] const Uniform &uni = resource_table_get(eevee::Uniform);
-  /* clang-format off */ /* Multi-line macro breaks error line counting. */
-  [[resource_table]] LightprobeRenderData &lightprobes = resource_table_get(eevee::LightprobeRenderData);
-  [[resource_table]] LightprobePlaneRenderData &lightprobe_planes = resource_table_get(eevee::LightprobePlaneRenderData);
-  /* clang-format on */
+  [[resource_table]] LightEvalIterator &lights = kg.light_eval;
+  [[resource_table]] const Uniform &uni = kg.uniforms;
+  [[resource_table]] LightprobeRenderData &lightprobes = kg.lightprobes;
+  [[resource_table]] LightprobePlaneRenderData &lightprobe_planes = kg.lightprobe_planes;
   [[resource_table]] LightEvalData &srt = lights.inner;
-  [[resource_table]] draw::Infos &infos = resource_table_get(draw::Infos);
+  [[resource_table]] draw::Infos &infos = kg.infos;
 
   float vPz = dot(view.forward(), sd.P) - dot(view.forward(), view.position());
   float3 V = view.world_incident_vector(sd.P);
@@ -66,7 +64,7 @@ void forward_lighting_eval(const ShadingData &sd,
   for (uint i = 0u; i < 3; i++) [[unroll]] {
     if (srt.light_closure_eval_count_reflect > i) [[static_branch]] {
       ClosureUndetermined cl = sd.closure_get(uchar(i)).data;
-      ctx.stack.cl[i] = closure_light_new(util_tx, cl, V);
+      ctx.stack.cl[i] = closure_light_new(kg.util_tx, cl, V);
     }
   }
 
@@ -90,7 +88,7 @@ void forward_lighting_eval(const ShadingData &sd,
     if (closure_has_transmission(cl_transmit.type) || cl_transmit.type == CLOSURE_BSSRDF_BURLEY_ID)
     {
       light::EvalCtx<true> ctx_tr = light::init_from_reflect_ctx(ctx);
-      ctx_tr.stack.cl[0] = closure_light_new(util_tx, cl_transmit, V, thickness);
+      ctx_tr.stack.cl[0] = closure_light_new(kg.util_tx, cl_transmit, V, thickness);
 
       /* NOTE: Only evaluates `stack.cl[0]`. */
       lights.eval_transmission(ctx_tr, vPz);
@@ -99,7 +97,7 @@ void forward_lighting_eval(const ShadingData &sd,
 #if defined(GLSL_CPP_STUBS) || defined(MAT_SUBSURFACE)
         /* Apply transmission profile onto transmitted light and sum with reflected light. */
         float3 sss_profile = subsurface_transmission(
-            util_tx, to_closure_subsurface(cl_transmit).sss_radius, thickness.value());
+            kg.util_tx, to_closure_subsurface(cl_transmit).sss_radius, thickness.value());
         ctx.stack.cl[0].light_shadowed += ctx_tr.stack.cl[0].light_shadowed * sss_profile;
         ctx.stack.cl[0].light_unshadowed += ctx_tr.stack.cl[0].light_unshadowed * sss_profile;
 #endif

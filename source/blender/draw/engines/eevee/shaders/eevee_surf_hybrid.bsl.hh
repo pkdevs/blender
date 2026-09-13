@@ -39,7 +39,7 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      sd, views.get(0), resource_id, sd.thickness, frag_co, radiance, transmittance);
+      kg, sd, views.get(0), resource_id, sd.thickness, frag_co, radiance, transmittance);
 
   /* Reset for the next closure tree. */
   float noise = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).r;
