@@ -1620,6 +1620,7 @@ class IMAGE_PT_overlay(Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Overlays"
+    bl_ui_units_x = 12
 
     def draw(self, context):
         pass
@@ -1773,7 +1774,7 @@ class IMAGE_PT_overlay_uv_display(Panel):
 class IMAGE_PT_overlay_image(Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'HEADER'
-    bl_label = "Text"
+    bl_label = "Image"
     bl_parent_id = "IMAGE_PT_overlay"
 
     @classmethod
