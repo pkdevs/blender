@@ -212,6 +212,11 @@ TEST(straight_skeleton, SingleSegment)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "SingleSegment";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.events_processed_num, 0);
+
   StraightSkeletonOutput output = straight_skeleton_calc(input);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
@@ -248,6 +253,11 @@ TEST(straight_skeleton, Triangle)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "Triangle";
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.edge_collapses_num, 1);
+
   StraightSkeletonOutput output = straight_skeleton_calc(input);
 
   const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
@@ -352,6 +362,7 @@ TEST(straight_skeleton, MixedSegmentsAndFaces)
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
       input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_GT(stats.events_processed_num, 0);
 
 #if DO_DEBUG_DRAW
   write_debug_html(input, output, "/tmp/skel_debug_draw.html");
@@ -373,6 +384,8 @@ TEST(straight_skeleton, SkeletonGraphInitial)
 )";
     InputStorage storage;
     StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    input.label = "SkeletonGraphInitial_Segment";
+    straight_skeleton_run_events_test(input, 0, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
     SkeletonGraph graph = straight_skeleton_initial_graph(input);
 
     EXPECT_EQ(graph.nodes.size(), 2);
@@ -405,6 +418,8 @@ TEST(straight_skeleton, SkeletonGraphInitial)
 )";
     InputStorage storage;
     StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    input.label = "SkeletonGraphInitial_Triangle";
+    straight_skeleton_run_events_test(input, 0, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
     SkeletonGraph graph = straight_skeleton_initial_graph(input);
 
     EXPECT_EQ(graph.nodes.size(), 3);
@@ -472,14 +487,14 @@ TEST(straight_skeleton, FlipEventNotchedPolygon)
    * Other event types (EDGE_COLLAPSE, MULTI_SPLIT) will print "yet to be implemented"
    * and be skipped for this isolated flip test. */
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/false);
+      input, 4, /*dbg_level=*/1, /*handle_edge_collapses=*/false);
   EXPECT_GE(stats.flips_num, 1);
 
   /* After the flip event, spoke [3, 1] is replaced by the new diagonal [5, 2].
    * Yellow triangle (5, 1, 3) and adjacent triangle (1, 2, 3) are replaced by
    * (5, 1, 2) and (5, 2, 3). */
   const Vector<int3> active_tris = straight_skeleton_active_triangles_test(
-      input, 10, /*dbg_level=*/0, /*handle_edge_collapses=*/false);
+      input, 4, /*dbg_level=*/0, /*handle_edge_collapses=*/false);
   bool has_edge_3_1 = false;
   bool has_edge_5_2 = false;
   bool has_tri_5_1_2 = false;
@@ -535,6 +550,7 @@ TEST(straight_skeleton, NotchedPolygonFull)
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
       input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   EXPECT_EQ(output.vert.size(), 13);
@@ -557,6 +573,7 @@ TEST(straight_skeleton, Square)
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
       input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   EXPECT_EQ(output.vert.size(), 5);
@@ -581,6 +598,7 @@ TEST(straight_skeleton, LShape)
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
       input, 20, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   EXPECT_EQ(output.vert.size(), 9);
@@ -649,7 +667,7 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
   input.label = "ElongatedRectangleInfiniteSpeed";
 
   const EventLoopStats stats = straight_skeleton_run_events_test(
-      input, 10, /*dbg_level=*/0, /*handle_edge_collapses=*/true);
+      input, 10, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
   EXPECT_EQ(stats.events_processed_num, 1);
   EXPECT_EQ(stats.edge_collapses_num, 3);
 
@@ -696,6 +714,60 @@ TEST(straight_skeleton, MultiSplitHourglass)
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   EXPECT_EQ(output.vert.size(), 9);
   EXPECT_EQ(output.edge.size(), 14);
+}
+
+/**
+ * "Flipper" test adapted from the straightskel_2022 branch.
+ *
+ * A polygon with curved reflex corner and 4 notches along the top edge of varying depths.
+ * Tests multiple flip events as reflex vertices move across internal triangulation spokes.
+ */
+TEST(straight_skeleton, Flipper)
+{
+  const char *spec = R"(20 0 1
+0.0 0.0
+1.5 0.0
+1.375 0.025
+1.25 0.06
+1.125 0.11
+1.0 0.2
+1.0 1.0
+0.79 1.0
+0.75 0.95
+0.71 1.0
+0.585 1.0
+0.55 0.9
+0.515 1.0
+0.38 1.0
+0.35 0.85
+0.32 1.0
+0.175 1.0
+0.15 0.8
+0.125 1.0
+0.0 1.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "Flipper";
+
+  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
+  ASSERT_FALSE(events.is_empty());
+
+  const EventLoopStats stats = straight_skeleton_run_events_test(
+      input, 50, /*dbg_level=*/1, /*handle_edge_collapses=*/true);
+  EXPECT_EQ(stats.flips_num, 2);
+  EXPECT_EQ(stats.edge_collapses_num, 22);
+  EXPECT_EQ(stats.splits_num, 3);
+  EXPECT_EQ(stats.multi_splits_num, 1);
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  EXPECT_EQ(output.vert.size(), 46);
+  EXPECT_EQ(output.edge.size(), 73);
+  for (const double2 &v : output.vert) {
+    EXPECT_GE(v.y, -1e-6);
+  }
 }
 
 /** \} */

@@ -166,6 +166,7 @@ struct EventLoopStats {
   int flips_num{0};
   int edge_collapses_num{0};
   int multi_splits_num{0};
+  int splits_num{0};
 };
 
 /** For testing: run the straight skeleton event loop up to \a max_events. */
