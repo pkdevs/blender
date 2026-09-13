@@ -48,14 +48,14 @@ std::string path_reference(StringRefNull filepath,
     return filepath_abs;
   }
   if (mode == PATH_REFERENCE_RELATIVE) {
+    const bool walk_up = true;
     char rel_path[PATH_MAX];
-    STRNCPY(rel_path, filepath_abs);
-    BLI_path_rel(rel_path, base_dst.c_str());
     /* Can't always find relative path (e.g. between different drives). */
-    if (!BLI_path_is_rel(rel_path)) {
+    if (!BLI_path_relative_to(filepath_abs, base_dst.c_str(), walk_up, rel_path, sizeof(rel_path)))
+    {
       return filepath_abs;
     }
-    return rel_path + 2; /* Skip blender's internal "//" prefix. */
+    return rel_path;
   }
   if (mode == PATH_REFERENCE_STRIP) {
     return BLI_path_basename(filepath_abs);
