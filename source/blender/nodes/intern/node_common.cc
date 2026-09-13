@@ -1228,7 +1228,7 @@ static void node_comment_copy(bNodeTree * /*dest_ntree*/, bNode *dst_node, const
   dst_node->storage = dst_data;
 }
 
-static void node_comment_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
+static void node_comment_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
   bNode &node = *ptr->data_as<bNode>();
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
