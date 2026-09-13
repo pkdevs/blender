@@ -90,6 +90,9 @@ struct DeformGizmoGroup {
     float2 offset;
   } state;
 
+  bool gizmo_visible;
+  bool perspective_valid;
+
   Vector<MutableDrawingInfo> drawings;
   Vector<IndexMask> selections;
   Vector<Array<float3>> src_positions;
@@ -214,8 +217,11 @@ static void update_positions_prespective(DeformGizmoGroup *deform_group)
 
   /* If the matrix can not be created leave the all points at the last valid position. */
   if (!homography_mat) {
+    deform_group->perspective_valid = false;
     return;
   }
+
+  deform_group->perspective_valid = true;
 
   const float scale_fac = math::sqrt(math::abs(math::determinant(float2x2(*homography_mat))));
 
@@ -526,9 +532,11 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
   deform_group->drawings = drawings;
 
   if (box) {
+    deform_group->gizmo_visible = true;
     deform_group->state.dims = box->size();
   }
   else {
+    deform_group->gizmo_visible = false;
     deform_group->state.dims = float2(1.0f);
   }
 
@@ -559,6 +567,8 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
   else if (deform_group->mode == DeformMode::PERSPECTIVE) {
+    deform_group->perspective_valid = true;
+
     constexpr std::array<float2, 4> corner_positions(
         {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
 
@@ -752,9 +762,17 @@ static void deform_gizmo_background(const bContext * /*C*/, wmGizmoGroup *gzgrou
     return;
   }
 
+  if (!deform_group->gizmo_visible) {
+    return;
+  }
+
   float background_color[4];
   ui::theme::get_color_4fv(TH_HEADER, background_color);
   background_color[3] = std::max(background_color[3], 0.3f);
+
+  if (deform_group->mode == DeformMode::PERSPECTIVE && !deform_group->perspective_valid) {
+    ui::theme::get_color_4fv(TH_ERROR, background_color);
+  }
 
   const float line_width = 2.0f;
 
