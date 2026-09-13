@@ -85,6 +85,7 @@ class FrameChangeModalData {
   AnimKeylist *keylist;
   /** Playback state to restore when scrubbing ends. */
   std::optional<PreScrubbingState> pre_scrubbing;
+  float initial_frame = 0.0f;
 
   FrameChangeModalData()
   {
@@ -700,6 +701,13 @@ static wmOperatorStatus change_frame_invoke(bContext *C, wmOperator *op, const w
   FrameChangeModalData *op_data = MEM_new<FrameChangeModalData>(__func__);
   op->customdata = op_data;
 
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+
+  if (scene) {
+    op_data->initial_frame = BKE_scene_frame_get(scene);
+  }
+
   /* This check is done in case scrubbing and strip tweaking in the sequencer are bound to the same
    * event (e.g. RCS keymap where both are activated on left mouse press). Tweaking should take
    * precedence. */
@@ -771,6 +779,13 @@ static void change_frame_cancel(bContext *C, wmOperator *op)
   }
 }
 
+static void change_frame_restore_initial(bContext *C, wmOperator *op)
+{
+  FrameChangeModalData *op_data = static_cast<FrameChangeModalData *>(op->customdata);
+  RNA_float_set(op->ptr, "frame", op_data->initial_frame);
+  change_frame_apply(C, op, true);
+}
+
 /* Modal event handling of frame changing */
 static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
@@ -778,7 +793,8 @@ static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wm
   /* execute the events */
   switch (event->type) {
     case EVT_ESCKEY:
-      ret = OPERATOR_FINISHED;
+      change_frame_restore_initial(C, op);
+      ret = OPERATOR_CANCELLED;
       break;
 
     case MOUSEMOVE:
@@ -787,11 +803,17 @@ static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wm
       break;
 
     case LEFTMOUSE:
-    case RIGHTMOUSE:
     case MIDDLEMOUSE:
       /* We check for either mouse-button to end, to work with all user keymaps. */
       if (event->val == KM_RELEASE) {
         ret = OPERATOR_FINISHED;
+      }
+      break;
+
+    case RIGHTMOUSE:
+      if (event->val == KM_PRESS) {
+        change_frame_restore_initial(C, op);
+        ret = OPERATOR_CANCELLED;
       }
       break;
 
