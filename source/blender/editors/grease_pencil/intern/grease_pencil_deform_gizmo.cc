@@ -175,6 +175,10 @@ static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float
       selected_points.foreach_index(
           [&](const int point_i) { radii[point_i] = src_radii_i[point_i] * scale_fac; });
     }
+    else {
+      selected_points.foreach_index(
+          [&](const int point_i) { radii[point_i] = src_radii_i[point_i]; });
+    }
 
     info.drawing.tag_positions_changed();
   }
@@ -224,6 +228,9 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
 
       if (mask_group->is_scale_thickness) {
         radii[point_i] = src_radii_i[point_i] * scale_fac / pos_3d_out.z;
+      }
+      else {
+        radii[point_i] = src_radii_i[point_i];
       }
     });
 
@@ -306,6 +313,9 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
 
       if (mask_group->is_scale_thickness) {
         /* TODO. */
+        radii[point_i] = src_radii_i[point_i];
+      }
+      else {
         radii[point_i] = src_radii_i[point_i];
       }
     });
@@ -696,6 +706,27 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
 static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 {
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+
+  const Scene &scene = *CTX_data_scene(C);
+  const ToolSettings *ts = scene.toolsettings;
+
+  if (mask_group->is_scale_thickness !=
+      bool(ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS))
+  {
+    mask_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
+
+    if (mask_group->mode == DeformMode::TRANSFORM) {
+      update_things(C, gzgroup);
+    }
+    if (mask_group->mode == DeformMode::PERSPECTIVE) {
+      update_positions_prespective(mask_group);
+    }
+    else if (mask_group->mode == DeformMode::GRID) {
+      update_positions_grid(mask_group);
+    }
+  }
+
   if (should_update(C, gzgroup)) {
     update_things(C, gzgroup);
   }
