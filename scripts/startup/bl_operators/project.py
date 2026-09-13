@@ -393,10 +393,12 @@ def find_and_load_project_for_blend_path(context, blend_path, report=None):
         # local unsaved changes if auto-save isn't turned on.
         return
 
-    bpy.data.project_clear()
-
-    # Load project.
-    config = read_project_toml_config(root_path, report)
+    # Load project, or clear on error loading configuration.
+    try:
+        config = read_project_toml_config(root_path, report)
+    except ProjectLoadException:
+        bpy.data.project_clear()
+        raise
     bpy.data.project_init(config.name, str(root_path))
     config.populate_real(bpy.data.project)
     bpy.data.project.is_dirty = False

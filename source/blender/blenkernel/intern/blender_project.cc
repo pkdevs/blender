@@ -391,17 +391,29 @@ bke::BlenderProject *BKE_blender_project_get(const Main *bmain)
   return &*project;
 }
 
+static void blender_project_clear()
+{
+  for (auto &user_library : U.asset_libraries.items_mutable()) {
+    if ((user_library.flag & ASSET_LIBRARY_PROJECT_DEFINED)) {
+      /* Usually we also poke some UI code when removing asset libraries.
+       * However this should be fine as the UI should be refreshed when
+       * we are in the process of changing the project data.
+       */
+      BKE_preferences_asset_library_remove(&U, &user_library);
+    }
+  }
+}
+
 bool BKE_blender_project_init(blender::StringRef name, blender::StringRef root_path)
 {
   if (name.is_empty() || root_path.is_empty()) {
     return false;
   }
 
-  BKE_blender_project_clear();
-
   bke::with_blender_project_write_lock([&] {
     std::optional<bke::BlenderProject> &project = get_project();
 
+    blender_project_clear();
     project = blender::bke::BlenderProject();
 
     project->set_name(name);
@@ -416,16 +428,7 @@ void BKE_blender_project_clear()
   bke::with_blender_project_write_lock([&] {
     std::optional<bke::BlenderProject> &project = get_project();
 
-    for (auto &user_library : U.asset_libraries.items_mutable()) {
-      if ((user_library.flag & ASSET_LIBRARY_PROJECT_DEFINED)) {
-        /* Usually we also poke some UI code when removing asset libraries.
-         * However this should be fine as the UI should be refreshed when
-         * we are in the process of clearing out the project data.
-         */
-        BKE_preferences_asset_library_remove(&U, &user_library);
-      }
-    }
-
+    blender_project_clear();
     project = std::nullopt;
   });
 }
