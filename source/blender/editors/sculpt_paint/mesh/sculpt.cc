@@ -6245,7 +6245,7 @@ Span<int> fake_neighbors_ensure(const Depsgraph &depsgraph, Object &ob, const fl
     return ss.fake_neighbors.fake_neighbor_index;
   }
 
-  islands::ensure_cache(ob);
+  islands::ensure_vert_cache(ob);
   fake_neighbor_init(ob, max_dist);
   fake_neighbor_search(depsgraph, ob, max_dist * max_dist, ss.fake_neighbors.fake_neighbor_index);
 
@@ -6321,25 +6321,25 @@ int vert_id_get(const SculptSession &ss, const int vert)
      * Still avoid crashing in release builds though. */
     return 0;
   }
-  const SculptTopologyIslandCache &cache = *ss.topology_island_cache;
-  if (!cache.vert_island_ids.is_empty()) {
-    return cache.vert_island_ids[vert];
+  if (std::holds_alternative<std::monostate>(ss.topology_island_cache->vert_island_ids)) {
+    BLI_assert(0);
+    return 0;
   }
-  return 0;
-}
+  if (std::holds_alternative<SingleIsland>(ss.topology_island_cache->vert_island_ids)) {
+    return 0;
+  }
+  const Span<uint8_t> vert_island_ids = std::get<Array<uint8_t>>(ss.topology_island_cache->vert_island_ids);
+  BLI_assert(!vert_island_ids.is_empty());
 
-void invalidate(SculptSession &ss)
-{
-  ss.topology_island_cache.reset();
+  return vert_island_ids[vert];
 }
-
-static SculptTopologyIslandCache vert_disjoint_set_to_islands(const AtomicDisjointSet &vert_sets,
-                                                              const int verts_num)
+static IslandIds vert_disjoint_set_to_islands(const AtomicDisjointSet &vert_sets,
+                                              const int verts_num)
 {
   Array<int> island_indices(verts_num);
   const int islands_num = vert_sets.calc_reduced_ids(island_indices);
   if (islands_num == 1) {
-    return {};
+    return SingleIsland();
   }
 
   Array<uint8_t> island_ids(island_indices.size());
@@ -6349,12 +6349,10 @@ static SculptTopologyIslandCache vert_disjoint_set_to_islands(const AtomicDisjoi
     }
   });
 
-  SculptTopologyIslandCache cache;
-  cache.vert_island_ids = std::move(island_ids);
-  return cache;
+  return island_ids;
 }
 
-static SculptTopologyIslandCache calc_topology_islands_mesh(const Mesh &mesh)
+static IslandIds calc_vert_topology_islands_mesh(const Mesh &mesh)
 {
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
@@ -6381,7 +6379,7 @@ static SculptTopologyIslandCache calc_topology_islands_mesh(const Mesh &mesh)
 /**
  * \todo Take grid face visibility into account.
  */
-static SculptTopologyIslandCache calc_topology_islands_grids(const Object &object)
+static IslandIds calc_vert_topology_islands_grids(const Object &object)
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
   const SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
@@ -6406,7 +6404,7 @@ static SculptTopologyIslandCache calc_topology_islands_grids(const Object &objec
   return vert_disjoint_set_to_islands(disjoint_set, subdiv_ccg.positions.size());
 }
 
-static SculptTopologyIslandCache calc_topology_islands_bmesh(const Object &object)
+static IslandIds calc_vert_topology_islands_bmesh(const Object &object)
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -6436,28 +6434,120 @@ static SculptTopologyIslandCache calc_topology_islands_bmesh(const Object &objec
   return vert_disjoint_set_to_islands(disjoint_set, bm.totvert);
 }
 
-static SculptTopologyIslandCache calculate_cache(const Object &object)
+static IslandIds calculate_vert_cache(const Object &object)
 {
   PRF_scope(ProfileCategory::Editor);
   switch (bke::object::pbvh_get(object)->type()) {
     case bke::pbvh::Type::Mesh:
-      return calc_topology_islands_mesh(*id_cast<const Mesh *>(object.data));
+      return calc_vert_topology_islands_mesh(*id_cast<const Mesh *>(object.data));
     case bke::pbvh::Type::Grids:
-      return calc_topology_islands_grids(object);
+      return calc_vert_topology_islands_grids(object);
     case bke::pbvh::Type::BMesh:
-      return calc_topology_islands_bmesh(object);
+      return calc_vert_topology_islands_bmesh(object);
   }
   BLI_assert_unreachable();
   return {};
 }
 
-void ensure_cache(Object &object)
+void ensure_vert_cache(Object &object)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
-  if (ss.topology_island_cache) {
+  if (ss.topology_island_cache &&
+      !std::holds_alternative<std::monostate>(ss.topology_island_cache->vert_island_ids))
+  {
     return;
   }
-  ss.topology_island_cache = std::make_unique<SculptTopologyIslandCache>(calculate_cache(object));
+
+  if (!ss.topology_island_cache) {
+    ss.topology_island_cache = std::make_unique<TopologyIslandCache>();
+  }
+  ss.topology_island_cache->vert_island_ids = std::move(calculate_vert_cache(object));
+}
+
+static IslandIds face_disjoint_set_to_islands(const AtomicDisjointSet &vert_sets,
+                                              const int verts_num,
+                                              const int faces_num,
+                                              OffsetIndices<int> faces,
+                                              Span<int> corner_verts)
+{
+  Array<int> island_indices(verts_num);
+  const int islands_num = vert_sets.calc_reduced_ids(island_indices);
+  if (islands_num == 1) {
+    return SingleIsland();
+  }
+
+  Array<uint8_t> island_ids(faces_num);
+  threading::parallel_for(island_ids.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      const Span<int> face_verts = corner_verts.slice(faces[i]);
+      island_ids[i] = uint8_t(island_indices[face_verts[0]]);
+    }
+  });
+
+  return island_ids;
+}
+
+static IslandIds calc_face_topology_islands_mesh(const Mesh &mesh)
+{
+  const OffsetIndices<int> faces = mesh.faces();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const bke::AttributeAccessor attributes = mesh.attributes();
+  const VArraySpan<bool> hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
+  IndexMaskMemory memory;
+  const IndexMask visible_faces = hide_poly.is_empty() ?
+                                      IndexMask(faces.size()) :
+                                      IndexMask::from_bools_inverse(
+                                          faces.index_range(), hide_poly, memory);
+
+  AtomicDisjointSet disjoint_set(mesh.verts_num);
+  visible_faces.foreach_index(
+      [&](const int face) {
+        const Span<int> face_verts = corner_verts.slice(faces[face]);
+        for (const int i : face_verts.index_range().drop_front(1)) {
+          disjoint_set.join(face_verts.first(), face_verts[i]);
+        }
+      },
+      exec_mode::grain_size(1024));
+  return face_disjoint_set_to_islands(
+      disjoint_set, mesh.verts_num, mesh.faces_num, faces, corner_verts);
+}
+
+static IslandIds calculate_face_cache(const Object &object)
+{
+  PRF_scope(ProfileCategory::Editor);
+  switch (bke::object::pbvh_get(object)->type()) {
+    case bke::pbvh::Type::Mesh:
+      return calc_face_topology_islands_mesh(*id_cast<const Mesh *>(object.data));
+    case bke::pbvh::Type::Grids:
+      BLI_assert(0);
+      return {};
+    case bke::pbvh::Type::BMesh:
+      BLI_assert(0);
+      return {};
+  }
+  BLI_assert_unreachable();
+  return {};
+}
+
+void ensure_face_cache(Object &object)
+{
+  SculptSession &ss = *object.runtime->sculpt_session;
+  if (ss.topology_island_cache &&
+      !std::holds_alternative<std::monostate>(ss.topology_island_cache->face_island_ids))
+  {
+    return;
+  }
+
+  if (!ss.topology_island_cache) {
+    ss.topology_island_cache = std::make_unique<TopologyIslandCache>();
+  }
+  ss.topology_island_cache->face_island_ids = std::move(calculate_face_cache(object));
+
+}
+
+void invalidate(SculptSession &ss)
+{
+  ss.topology_island_cache.reset();
 }
 
 }  // namespace islands

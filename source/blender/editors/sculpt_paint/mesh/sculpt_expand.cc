@@ -561,7 +561,7 @@ static void check_topology_islands(Object &ob, FalloffType falloff_type)
                                     FalloffType::Normals);
 
   if (expand_cache.check_islands) {
-    islands::ensure_cache(ob);
+    islands::ensure_vert_cache(ob);
   }
 }
 
@@ -2428,7 +2428,7 @@ static void move_propagation_origin(bContext *C,
 static void ensure_sculptsession_data(Object &ob)
 {
   SculptSession &ss = *ob.runtime->sculpt_session;
-  islands::ensure_cache(ob);
+  islands::ensure_vert_cache(ob);
   vert_random_access_ensure(ob);
   boundary::ensure_boundary_info(ob);
   if (!ss.tex_pool) {

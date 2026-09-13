@@ -164,7 +164,7 @@ static wmOperatorStatus sculpt_mask_init_exec(bContext *C, wmOperator *op)
           break;
         }
         case InitMode::Island:
-          islands::ensure_cache(ob);
+          islands::ensure_vert_cache(ob);
           write_mask_mesh(depsgraph, ob, node_mask, [&](MutableSpan<float> mask, Span<int> verts) {
             for (const int vert : verts) {
               const int island = islands::vert_id_get(ss, vert);
@@ -221,7 +221,7 @@ static wmOperatorStatus sculpt_mask_init_exec(bContext *C, wmOperator *op)
           break;
         }
         case InitMode::Island: {
-          islands::ensure_cache(ob);
+          islands::ensure_vert_cache(ob);
           init_mask_grids(bmain,
                           scene,
                           depsgraph,

@@ -742,14 +742,14 @@ void calc_vert_factors(const Depsgraph &depsgraph,
   }
 }
 
-void calc_face_factors(const Depsgraph &depsgraph,
-                       const Object &object,
-                       const OffsetIndices<int> faces,
-                       const Span<int> corner_verts,
-                       const Cache &automasking,
-                       const bke::pbvh::MeshNode & /*node*/,
-                       const Span<int> face_indices,
-                       const MutableSpan<float> factors)
+void calc_interpolated_face_factors(const Depsgraph &depsgraph,
+                                    const Object &object,
+                                    const OffsetIndices<int> faces,
+                                    const Span<int> corner_verts,
+                                    const Cache &automasking,
+                                    const bke::pbvh::MeshNode & /*node*/,
+                                    const Span<int> face_indices,
+                                    const MutableSpan<float> factors)
 {
   PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
@@ -803,28 +803,6 @@ void calc_face_factors(const Depsgraph &depsgraph,
         }
       }
 
-      /* The filter tools do not take symmetry into consideration, use the "generic" (i.e. 0)
-       * symmetry pass instead */
-      const int current_symmetry_pass = ss.cache ? ss.cache->mirror_symmetry_pass : 0;
-      if (!automasking.settings.topology_use_brush_limit &&
-          automasking.settings.flags & BRUSH_AUTOMASKING_TOPOLOGY &&
-          islands::vert_id_get(ss, vert) !=
-              automasking.settings.initial_island_nr[current_symmetry_pass])
-      {
-        factor = 0.0f;
-        continue;
-      }
-
-      if (automasking.settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
-        if (automasking.settings.initial_face_set != face_set_none_id &&
-            !face_set::vert_has_face_set(
-                vert_to_face_map, face_sets, vert, automasking.settings.initial_face_set))
-        {
-          factor = 0.0f;
-          continue;
-        }
-      }
-
       if (automasking.settings.flags & BRUSH_AUTOMASKING_BOUNDARY_EDGES) {
         if (boundary::vert_is_boundary(vert_to_face_map, hide_poly, boundary_verts, vert)) {
           factor = 0.0f;
@@ -843,12 +821,6 @@ void calc_face_factors(const Depsgraph &depsgraph,
           factor = 0.0f;
           continue;
         }
-      }
-
-      if ((ss.cache || ss.filter_cache) &&
-          (automasking.settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL))
-      {
-        factor *= calc_view_normal_factor(automasking, object, vert_normals[vert]);
       }
 
       if (automasking.settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
@@ -1697,7 +1669,7 @@ std::unique_ptr<Cache> cache_init(const Depsgraph &depsgraph,
 
   vert_random_access_ensure(ob);
   if (mode & BRUSH_AUTOMASKING_TOPOLOGY && ss.active_vert_index() != -1) {
-    islands::ensure_cache(ob);
+    islands::ensure_vert_cache(ob);
 
     std::array<int, PAINT_SYMM_AREAS> symm_verts = find_all_symm_verts(
         depsgraph, ob, ss.active_vert_index());

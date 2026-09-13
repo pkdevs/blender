@@ -181,15 +181,17 @@ inline void calc_vert_factors(const Depsgraph &depsgraph,
 
 /**
  * Calculate all auto-masking influence on each face.
+ *
+ * TODO: This method is odd and only used for the Draw Face Set brush on meshes, reevaluate usage
  */
-void calc_face_factors(const Depsgraph &depsgraph,
-                       const Object &object,
-                       OffsetIndices<int> faces,
-                       Span<int> corner_verts,
-                       const Cache &automasking,
-                       const bke::pbvh::MeshNode &node,
-                       Span<int> face_indices,
-                       MutableSpan<float> factors);
+void calc_interpolated_face_factors(const Depsgraph &depsgraph,
+                                    const Object &object,
+                                    OffsetIndices<int> faces,
+                                    Span<int> corner_verts,
+                                    const Cache &automasking,
+                                    const bke::pbvh::MeshNode &node,
+                                    Span<int> face_indices,
+                                    MutableSpan<float> factors);
 
 }  // namespace ed::sculpt_paint::auto_mask
 

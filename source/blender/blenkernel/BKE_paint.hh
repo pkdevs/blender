@@ -346,12 +346,13 @@ struct SculptFakeNeighbors {
   Array<int> fake_neighbor_index;
 };
 
-struct SculptTopologyIslandCache {
-  /**
-   * An ID for the island containing each geometry vertex. Will be empty if there is only a single
-   * island.
-   */
-  Array<uint8_t> vert_island_ids;
+/** Helper struct indicating a mesh with all elements being part of the same island */
+struct SingleIsland {};
+using IslandIds = std::variant<std::monostate, SingleIsland, Array<uint8_t>>;
+
+struct TopologyIslandCache {
+  IslandIds vert_island_ids;
+  IslandIds face_island_ids;
 };
 
 using ActiveVert = std::variant<std::monostate, int, BMVert *>;
@@ -494,7 +495,7 @@ struct SculptSession : NonCopyable, NonMovable {
   std::optional<std::string> last_paint_canvas_key = {};
   float3 last_normal;
 
-  std::unique_ptr<SculptTopologyIslandCache> topology_island_cache;
+  std::unique_ptr<TopologyIslandCache> topology_island_cache;
 
  private:
   /* In general, this value is expected to be valid (non-empty) as long as the cursor is over the
