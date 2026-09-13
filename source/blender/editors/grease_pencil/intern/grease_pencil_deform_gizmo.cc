@@ -70,7 +70,7 @@ struct ControlPointData {
   float2 control_position;
 };
 
-struct QuadWidgetGroup2 {
+struct DeformGizmoGroup {
   wmGizmo *transform_border;
 
   struct {
@@ -108,9 +108,9 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo *gz,
                                             wmGizmoProperty *gz_prop,
                                             void *value_p)
 {
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
-  const ControlPointData *control_point_data = &mask_group->control_points[index];
+  const ControlPointData *control_point_data = &deform_group->control_points[index];
 
   BLI_assert(gz_prop->type->array_length == 3);
   float *values = static_cast<float *>(value_p);
@@ -120,12 +120,12 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo *gz,
   values[2] = 0.0f;
 }
 
-static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
+static std::optional<float3x3> compute_homography_matrix(const DeformGizmoGroup *deform_group)
 {
-  float2 lower_left = mask_group->control_points[0].control_position;
-  float2 lower_right = mask_group->control_points[1].control_position;
-  float2 upper_right = mask_group->control_points[2].control_position;
-  float2 upper_left = mask_group->control_points[3].control_position;
+  float2 lower_left = deform_group->control_points[0].control_position;
+  float2 lower_right = deform_group->control_points[1].control_position;
+  float2 upper_right = deform_group->control_points[2].control_position;
+  float2 upper_left = deform_group->control_points[3].control_position;
 
   if (!is_quad_convex_v2(lower_left, lower_right, upper_right, upper_left)) {
     return std::nullopt;
@@ -138,22 +138,22 @@ static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 
                          {upper_left.x, upper_left.y}};
   float identity_corners[4][2] = {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}};
   for (const int i : IndexRange(4)) {
-    identity_corners[i][0] *= mask_group->state.dims.x;
-    identity_corners[i][1] *= mask_group->state.dims.y;
+    identity_corners[i][0] *= deform_group->state.dims.x;
+    identity_corners[i][1] *= deform_group->state.dims.y;
   }
   BKE_tracking_homography_between_two_quads(identity_corners, corners, homography_matrix.ptr());
   return homography_matrix;
 }
 
-static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float4x4 &mat)
+static void update_positions_transform(DeformGizmoGroup *deform_group, const float4x4 &mat)
 {
-  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-  const Vector<IndexMask> selections = mask_group->selections;
-  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-  const Vector<Array<float>> &src_radii = mask_group->src_radii;
+  const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+  const Vector<IndexMask> selections = deform_group->selections;
+  const Vector<Array<float3>> &src_positions = deform_group->src_positions;
+  const Vector<Array<float>> &src_radii = deform_group->src_radii;
 
-  const float4x4 transform = float4x4(mask_group->transform_border->matrix_space) * mat *
-                             math::invert(float4x4(mask_group->transform_border->matrix_space));
+  const float4x4 transform = float4x4(deform_group->transform_border->matrix_space) * mat *
+                             math::invert(float4x4(deform_group->transform_border->matrix_space));
 
   const float scale_fac = math::sqrt(math::abs(math::determinant(float3x3(transform))));
 
@@ -171,7 +171,7 @@ static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float
       positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
     });
 
-    if (mask_group->is_scale_thickness) {
+    if (deform_group->is_scale_thickness) {
       selected_points.foreach_index(
           [&](const int point_i) { radii[point_i] = src_radii_i[point_i] * scale_fac; });
     }
@@ -183,23 +183,23 @@ static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float
     info.drawing.tag_positions_changed();
   }
 
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
+  DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(deform_group->update_data.context,
                         NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
+                        deform_group->grease_pencil_src);
 }
 
-static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
+static void update_positions_prespective(DeformGizmoGroup *deform_group)
 {
-  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-  const Vector<IndexMask> selections = mask_group->selections;
-  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-  const Vector<Array<float>> &src_radii = mask_group->src_radii;
+  const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+  const Vector<IndexMask> selections = deform_group->selections;
+  const Vector<Array<float3>> &src_positions = deform_group->src_positions;
+  const Vector<Array<float>> &src_radii = deform_group->src_radii;
 
-  const float4x4 mat = float4x4(mask_group->transform_border->matrix_space);
+  const float4x4 mat = float4x4(deform_group->transform_border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
 
-  const std::optional<float3x3> homography_mat = compute_homography_matrix(mask_group);
+  const std::optional<float3x3> homography_mat = compute_homography_matrix(deform_group);
 
   /* If the matrix can not be created leave the all points at the last valid position. */
   if (!homography_mat) {
@@ -226,7 +226,7 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
 
       positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
 
-      if (mask_group->is_scale_thickness) {
+      if (deform_group->is_scale_thickness) {
         radii[point_i] = src_radii_i[point_i] * scale_fac / pos_3d_out.z;
       }
       else {
@@ -237,29 +237,29 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
     info.drawing.tag_positions_changed();
   }
 
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
+  DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(deform_group->update_data.context,
                         NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
+                        deform_group->grease_pencil_src);
 }
 
-static void update_positions_grid(QuadWidgetGroup2 *mask_group)
+static void update_positions_grid(DeformGizmoGroup *deform_group)
 {
-  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-  const Vector<IndexMask> selections = mask_group->selections;
-  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-  const Vector<Array<float>> &src_radii = mask_group->src_radii;
+  const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+  const Vector<IndexMask> selections = deform_group->selections;
+  const Vector<Array<float3>> &src_positions = deform_group->src_positions;
+  const Vector<Array<float>> &src_radii = deform_group->src_radii;
 
-  const float4x4 mat = float4x4(mask_group->transform_border->matrix_space);
+  const float4x4 mat = float4x4(deform_group->transform_border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
 
-  const int x_num = 2 + mask_group->subdivisions;
-  const int y_num = 2 + mask_group->subdivisions;
+  const int x_num = 2 + deform_group->subdivisions;
+  const int y_num = 2 + deform_group->subdivisions;
 
   auto xy_to_position = [&](const int2 xy) {
     const int2 xy_clamped = math::clamp(xy, int2(0), int2(x_num - 1, y_num - 1));
     const int index = xy_clamped.x + x_num * xy_clamped.y;
-    return mask_group->control_points[index].control_position;
+    return deform_group->control_points[index].control_position;
   };
 
   for (const int drawing_i : drawings.index_range()) {
@@ -274,11 +274,11 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
 
     selected_points.foreach_index([&](const int point_i) {
       const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) /
-                                mask_group->state.dims +
+                                deform_group->state.dims +
                             float2(0.5f);
 
-      const float2 local_uv = math::fract(pos_2d * (mask_group->subdivisions + 1));
-      const int2 grid_xy = int2(math::floor(pos_2d * (mask_group->subdivisions + 1)));
+      const float2 local_uv = math::fract(pos_2d * (deform_group->subdivisions + 1));
+      const int2 grid_xy = int2(math::floor(pos_2d * (deform_group->subdivisions + 1)));
 
       float4 data_x;
       float4 data_y;
@@ -311,7 +311,7 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
 
       positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
 
-      if (mask_group->is_scale_thickness) {
+      if (deform_group->is_scale_thickness) {
         /* TODO. */
         radii[point_i] = src_radii_i[point_i];
       }
@@ -323,19 +323,19 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
     info.drawing.tag_positions_changed();
   }
 
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
+  DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(deform_group->update_data.context,
                         NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
+                        deform_group->grease_pencil_src);
 }
 
 static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
                                             wmGizmoProperty *gz_prop,
                                             const void *value_p)
 {
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
-  ControlPointData *control_point_data = &mask_group->control_points[index];
+  ControlPointData *control_point_data = &deform_group->control_points[index];
 
   BLI_assert(gz_prop->type->array_length == 3);
 
@@ -344,11 +344,11 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
 
   control_point_data->control_position = float2(position_value.x, position_value.y);
 
-  if (mask_group->mode == DeformMode::PERSPECTIVE) {
-    update_positions_prespective(mask_group);
+  if (deform_group->mode == DeformMode::PERSPECTIVE) {
+    update_positions_prespective(deform_group);
   }
-  else if (mask_group->mode == DeformMode::GRID) {
-    update_positions_grid(mask_group);
+  else if (deform_group->mode == DeformMode::GRID) {
+    update_positions_grid(deform_group);
   }
 }
 
@@ -368,9 +368,9 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
   const float4x4 mat = float4x4(matrix);
 
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gz->parent_gzgroup->customdata);
 
-  update_positions_transform(mask_group, mat);
+  update_positions_transform(deform_group, mat);
 }
 
 static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
@@ -403,13 +403,13 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
   return drawing_bounds;
 }
 
-static void add_corner(QuadWidgetGroup2 *mask_group, wmGizmoGroup *gzgroup)
+static void add_corner(DeformGizmoGroup *deform_group, wmGizmoGroup *gzgroup)
 {
   const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
-  const int i = mask_group->control_points.size();
+  const int i = deform_group->control_points.size();
 
-  mask_group->control_points.append({});
-  ControlPointData &control_point_data = mask_group->control_points[i];
+  deform_group->control_points.append({});
+  ControlPointData &control_point_data = deform_group->control_points[i];
 
   control_point_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
 
@@ -431,16 +431,16 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
 
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->transform_border;
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gzgroup->customdata);
+  wmGizmo *gz = deform_group->transform_border;
 
   PointerRNA ptr;
   bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
   WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
-  mask_group->mode = DeformMode(
-      RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
-  mask_group->subdivisions = RNA_property_int_get(&ptr,
-                                                  mask_group->update_data.gzgt_subdivisions_prop);
+  deform_group->mode = DeformMode(
+      RNA_property_enum_get(&ptr, deform_group->update_data.gzgt_mode_prop));
+  deform_group->subdivisions = RNA_property_int_get(
+      &ptr, deform_group->update_data.gzgt_subdivisions_prop);
 
   unit_m4(gz->matrix_space);
   unit_m4(gz->matrix_offset);
@@ -483,63 +483,63 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
   std::optional<Bounds<float2>> box;
 
   const ToolSettings *ts = scene.toolsettings;
-  mask_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
+  deform_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
 
   Object *object = CTX_data_active_object(C);
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
 
-  mask_group->grease_pencil_src = &grease_pencil;
-  mask_group->lock_axis = scene.toolsettings->gp_sculpt.lock_axis;
+  deform_group->grease_pencil_src = &grease_pencil;
+  deform_group->lock_axis = scene.toolsettings->gp_sculpt.lock_axis;
 
-  mask_group->selections = Vector<IndexMask>();
-  mask_group->src_positions = Vector<Array<float3>>();
-  mask_group->src_radii = Vector<Array<float>>();
+  deform_group->selections = Vector<IndexMask>();
+  deform_group->src_positions = Vector<Array<float3>>();
+  deform_group->src_radii = Vector<Array<float>>();
 
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
   for (const MutableDrawingInfo &info : drawings) {
     const IndexMask selected_points = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, mask_group->memory);
+        *object, info.drawing, info.layer_index, deform_group->memory);
 
-    mask_group->selections.append(selected_points);
-    mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
+    deform_group->selections.append(selected_points);
+    deform_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
 
     Array<float> radius(info.drawing.strokes().points_num());
     array_utils::copy(info.drawing.strokes().radius(), radius.as_mutable_span());
-    mask_group->src_radii.append(radius);
+    deform_group->src_radii.append(radius);
 
     box = bounds::merge(
         box,
         compute_screen_space_drawing_bounds(selected_points, info.drawing, projection_function));
   }
 
-  mask_group->drawings = drawings;
+  deform_group->drawings = drawings;
 
   if (box) {
-    mask_group->state.dims = box->size();
+    deform_group->state.dims = box->size();
   }
   else {
-    mask_group->state.dims = float2(1.0f);
+    deform_group->state.dims = float2(1.0f);
   }
 
-  if (mask_group->mode == DeformMode::GRID) {
-    const int x_num = 2 + mask_group->subdivisions;
-    const int y_num = 2 + mask_group->subdivisions;
+  if (deform_group->mode == DeformMode::GRID) {
+    const int x_num = 2 + deform_group->subdivisions;
+    const int y_num = 2 + deform_group->subdivisions;
 
-    if (mask_group->control_points.size() < x_num * y_num) {
+    if (deform_group->control_points.size() < x_num * y_num) {
       for (const int i :
-           IndexRange::from_begin_end(mask_group->control_points.size(), x_num * y_num))
+           IndexRange::from_begin_end(deform_group->control_points.size(), x_num * y_num))
       {
         UNUSED_VARS(i);
-        add_corner(mask_group, gzgroup);
+        add_corner(deform_group, gzgroup);
       }
     }
 
     for (const int y_i : IndexRange(y_num)) {
       for (const int x_i : IndexRange(x_num)) {
-        ControlPointData &control_point_data = mask_group->control_points[x_i + y_i * x_num];
+        ControlPointData &control_point_data = deform_group->control_points[x_i + y_i * x_num];
         control_point_data.control_position =
             (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) - float2(0.5f)) *
-            mask_group->state.dims;
+            deform_group->state.dims;
         wmGizmo *gz = control_point_data.gizmos;
 
         RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
@@ -547,13 +547,13 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
       }
     }
   }
-  else if (mask_group->mode == DeformMode::PERSPECTIVE) {
+  else if (deform_group->mode == DeformMode::PERSPECTIVE) {
     constexpr std::array<float2, 4> corner_positions(
         {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
 
     for (const int i : IndexRange(4)) {
-      ControlPointData &control_point_data = mask_group->control_points[i];
-      control_point_data.control_position = corner_positions[i] * mask_group->state.dims;
+      ControlPointData &control_point_data = deform_group->control_points[i];
+      control_point_data.control_position = corner_positions[i] * deform_group->state.dims;
       wmGizmo *gz = control_point_data.gizmos;
 
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
@@ -562,8 +562,8 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
   }
 
   WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-  for (const int i : mask_group->control_points.index_range()) {
-    wmGizmo *gz2 = mask_group->control_points[i].gizmos;
+  for (const int i : deform_group->control_points.index_range()) {
+    wmGizmo *gz2 = deform_group->control_points[i].gizmos;
     WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
   }
 
@@ -574,73 +574,73 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     copy_m4_m4(gz->matrix_space, mat.ptr());
     RNA_float_set_array(gz->ptr, "dimensions", box->size());
 
-    for (const int i : mask_group->control_points.index_range()) {
-      wmGizmo *gz2 = mask_group->control_points[i].gizmos;
+    for (const int i : deform_group->control_points.index_range()) {
+      wmGizmo *gz2 = deform_group->control_points[i].gizmos;
       copy_m4_m4(gz2->matrix_space, mat.ptr());
     }
 
-    if (mask_group->mode == DeformMode::TRANSFORM) {
+    if (deform_group->mode == DeformMode::TRANSFORM) {
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
     }
-    else if (mask_group->mode == DeformMode::PERSPECTIVE) {
+    else if (deform_group->mode == DeformMode::PERSPECTIVE) {
       for (const int i : IndexRange(4)) {
-        wmGizmo *gz2 = mask_group->control_points[i].gizmos;
+        wmGizmo *gz2 = deform_group->control_points[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
-    else if (mask_group->mode == DeformMode::GRID) {
-      const int x_num = 2 + mask_group->subdivisions;
-      const int y_num = 2 + mask_group->subdivisions;
+    else if (deform_group->mode == DeformMode::GRID) {
+      const int x_num = 2 + deform_group->subdivisions;
+      const int y_num = 2 + deform_group->subdivisions;
 
       for (const int i : IndexRange(x_num * y_num)) {
-        wmGizmo *gz2 = mask_group->control_points[i].gizmos;
+        wmGizmo *gz2 = deform_group->control_points[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
   }
 
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
+  DEG_id_tag_update(&deform_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(deform_group->update_data.context,
                         NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
+                        deform_group->grease_pencil_src);
 }
 
 static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
-  mask_group->transform_border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
+  DeformGizmoGroup *deform_group = MEM_new<DeformGizmoGroup>(__func__);
+  deform_group->transform_border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
 
-  mask_group->update_data.context = const_cast<bContext *>(C);
+  deform_group->update_data.context = const_cast<bContext *>(C);
 
-  RNA_enum_set(mask_group->transform_border->ptr,
+  RNA_enum_set(deform_group->transform_border->ptr,
                "transform",
                ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
                    ED_GIZMO_CAGE_XFORM_FLAG_SCALE | ED_GIZMO_CAGE_XFORM_FLAG_SCALE_SIGNED);
 
-  RNA_enum_set(mask_group->transform_border->ptr,
+  RNA_enum_set(deform_group->transform_border->ptr,
                "draw_options",
                ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
                    ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
 
-  gzgroup->customdata = mask_group;
+  gzgroup->customdata = deform_group;
   gzgroup->customdata_free = [](void *customdata) {
-    MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
+    MEM_delete(static_cast<DeformGizmoGroup *>(customdata));
   };
 
   wmGizmoPropertyFnParams params{};
   params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
   params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
   params.range_get_fn = nullptr;
-  WM_gizmo_target_property_def_func(mask_group->transform_border, "matrix", &params);
+  WM_gizmo_target_property_def_func(deform_group->transform_border, "matrix", &params);
 
   for (const int i : IndexRange(4)) {
     UNUSED_VARS(i);
-    add_corner(mask_group, gzgroup);
+    add_corner(deform_group, gzgroup);
   }
 
-  mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
-                                                                         "mode");
-  mask_group->update_data.gzgt_subdivisions_prop = RNA_struct_type_find_property(
+  deform_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
+                                                                           "mode");
+  deform_group->update_data.gzgt_subdivisions_prop = RNA_struct_type_find_property(
       gzgroup->type->srna, "subdivisions");
 
   recompute_gizmo_plane(C, gzgroup);
@@ -648,23 +648,23 @@ static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
 static bool should_recompute(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gzgroup->customdata);
 
   const Scene &scene = *CTX_data_scene(C);
   const ToolSettings *ts = scene.toolsettings;
 
-  if (mask_group->is_scale_thickness !=
+  if (deform_group->is_scale_thickness !=
       bool(ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS))
   {
     return true;
   }
 
-  if (mask_group->lock_axis != scene.toolsettings->gp_sculpt.lock_axis) {
+  if (deform_group->lock_axis != scene.toolsettings->gp_sculpt.lock_axis) {
     return true;
   }
 
-  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-  const Vector<IndexMask> selections = mask_group->selections;
+  const Vector<MutableDrawingInfo> drawings = deform_group->drawings;
+  const Vector<IndexMask> selections = deform_group->selections;
 
   Object *object = CTX_data_active_object(C);
 
@@ -672,7 +672,7 @@ static bool should_recompute(const bContext *C, wmGizmoGroup *gzgroup)
     const MutableDrawingInfo &info = drawings[drawing_i];
 
     const IndexMask selected_points_1 = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, mask_group->memory);
+        *object, info.drawing, info.layer_index, deform_group->memory);
 
     const IndexMask selected_points_2 = selections[drawing_i];
 
@@ -684,13 +684,13 @@ static bool should_recompute(const bContext *C, wmGizmoGroup *gzgroup)
   PointerRNA ptr;
   bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
   WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
-  if (mask_group->mode !=
-      DeformMode(RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop)))
+  if (deform_group->mode !=
+      DeformMode(RNA_property_enum_get(&ptr, deform_group->update_data.gzgt_mode_prop)))
   {
     return true;
   }
-  if (mask_group->subdivisions !=
-      RNA_property_int_get(&ptr, mask_group->update_data.gzgt_subdivisions_prop))
+  if (deform_group->subdivisions !=
+      RNA_property_int_get(&ptr, deform_group->update_data.gzgt_subdivisions_prop))
   {
     return true;
   }
@@ -700,31 +700,31 @@ static bool should_recompute(const bContext *C, wmGizmoGroup *gzgroup)
 
 static void deform_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gzgroup->customdata);
 
-  mask_group->update_data.context = const_cast<bContext *>(C);
+  deform_group->update_data.context = const_cast<bContext *>(C);
 }
 
 static void deform_gizmo_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  DeformGizmoGroup *deform_group = static_cast<DeformGizmoGroup *>(gzgroup->customdata);
 
   const Scene &scene = *CTX_data_scene(C);
   const ToolSettings *ts = scene.toolsettings;
 
-  if (mask_group->is_scale_thickness !=
+  if (deform_group->is_scale_thickness !=
       bool(ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS))
   {
-    mask_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
+    deform_group->is_scale_thickness = ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS;
 
-    if (mask_group->mode == DeformMode::TRANSFORM) {
+    if (deform_group->mode == DeformMode::TRANSFORM) {
       recompute_gizmo_plane(C, gzgroup);
     }
-    if (mask_group->mode == DeformMode::PERSPECTIVE) {
-      update_positions_prespective(mask_group);
+    if (deform_group->mode == DeformMode::PERSPECTIVE) {
+      update_positions_prespective(deform_group);
     }
-    else if (mask_group->mode == DeformMode::GRID) {
-      update_positions_grid(mask_group);
+    else if (deform_group->mode == DeformMode::GRID) {
+      update_positions_grid(deform_group);
     }
   }
 
