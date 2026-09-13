@@ -51,13 +51,10 @@ class FileVersionInfo:
     path: Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class DependencyFile:
     absolute_path: Path
     blendlib_version: BlenderVersion | None = None  # None means the file is not at blender file
-
-    def __hash__(self):
-        return hash((self.absolute_path, self.blendlib_version))
 
 
 # Match numbers after `@b`, but do not allow leading zeroes. This prevents having different markers (and thus different
@@ -208,13 +205,6 @@ def list_assets(blendfile_version_info: FileVersionInfo,
     return blendfile_info, assets, file_dependencies
 
 
-def _absolute_path(filepath: str, base_path: Path):
-    if filepath.startswith("//"):
-        return (base_path / filepath[2::]).absolute()
-    else:
-        return Path(filepath)
-
-
 def _find_dependencies_recursive_impl(
         visited_pointers: set[typing.Any],
         data: bpy.types.bpy_struct) -> set[bpy.types.ID]:
@@ -263,6 +253,7 @@ def _find_dependencies_recursive(
         # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
         visited_pointers: set[typing.Any],
         data: bpy.types.bpy_struct) -> set[bpy.types.ID]:
+    """Loops the data-block properties searching for Id references wich will be considered as dependencies."""
 
     # Avoid infinite recusion calls with circular references
     if data in visited_pointers:
@@ -295,12 +286,11 @@ def _find_assets(
         asset_dependencias_filenames = set()
 
         def visit_path_fn(owner_id: bpy.types.ID, path: str, meta):
-            posixname = _absolute_path(path, asset_library_root).relative_to(asset_library_root).as_posix()
-            asset_dependencias_filenames.add(posixname)
-            dependency_file = DependencyFile(
-                _absolute_path(path, asset_library_root), owner_id.version if isinstance(
-                    owner_id, bpy.types.Library) else None)
-            dependencies.add(dependency_file)
+            absolute_path = Path(bpy.path.abspath(path, library=owner_id.library))
+            bl_version = owner_id.version if isinstance(owner_id, bpy.types.Library) else None
+            dependencies.add(DependencyFile(absolute_path, bl_version))
+
+            asset_dependencias_filenames.add(absolute_path.relative_to(asset_library_root).as_posix())
 
         bpy.data.file_path_foreach(visit_path_fn, subset=asset_dependencies, flags={
             'RESOLVE_TOKEN', 'EXPAND_TOKENS', 'EXPAND_SEQUENCES', 'EXPAND_CACHES'})
