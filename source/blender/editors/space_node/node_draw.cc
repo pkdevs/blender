@@ -3637,21 +3637,23 @@ static void comment_node_prepare_for_draw(bNodeTree &ntree, bNode &node, ui::Blo
   node.runtime->draw_bounds.ymin = loc.y - height;
   node.runtime->draw_bounds.ymax = loc.y;
 
-  block_emboss_set(&block, ui::EmbossType::None);
-  uiDefIconButR(&block,
-                ui::ButtonType::IconToggle,
-                is_render ? ICON_GREASEPENCIL : ICON_HIDE_OFF,
-                node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE,
-                node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE,
-                NODE_HEADER_ICON_SIZE,
-                NODE_HEADER_ICON_SIZE,
-                &node_ptr,
-                "render",
-                -1,
-                0,
-                0,
-                std::nullopt);
-  block_emboss_set(&block, ui::EmbossType::Emboss);
+  if (node.is_selected() || !is_render) {
+    block_emboss_set(&block, ui::EmbossType::None);
+    uiDefIconButR(&block,
+                  ui::ButtonType::IconToggle,
+                  is_render ? ICON_GREASEPENCIL : ICON_HIDE_OFF,
+                  node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE,
+                  node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE,
+                  NODE_HEADER_ICON_SIZE,
+                  NODE_HEADER_ICON_SIZE,
+                  &node_ptr,
+                  "render",
+                  -1,
+                  0,
+                  0,
+                  std::nullopt);
+    block_emboss_set(&block, ui::EmbossType::Emboss);
+  }
 }
 
 static void node_update_nodetree(const bContext &C,
