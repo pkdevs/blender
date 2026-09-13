@@ -196,7 +196,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
 {
 
   for (const auto [i, path_item] : snode.treepath.enumerate()) {
-    if (skip_base && &path_item == snode.treepath.first) {
+    if (skip_base && &path_item == snode.treepath.first_) {
       continue;
     }
     if (path_item.nodetree == nullptr) {
@@ -206,7 +206,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
     const BIFIconID icon = node_tree_icon(path_item.nodetree->id);
 
     /* We don't need to add handle function to last node-tree. */
-    const bool is_last_path = (&path_item == snode.treepath.last);
+    const bool is_last_path = (&path_item == snode.treepath.last());
     const bool has_group = is_last_path ? node_tree_has_group_node(path_item.nodetree) : true;
     ui::context_path_add_generic(path,
                                  *RNA_NodeTree,
