@@ -10,6 +10,7 @@
 #include <cinttypes>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 
 #include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
@@ -82,6 +83,8 @@ class FrameChangeModalData {
    */
  public:
   AnimKeylist *keylist;
+  /** Playback state to restore when scrubbing ends. */
+  std::optional<PreScrubbingState> pre_scrubbing;
 
   FrameChangeModalData()
   {
@@ -136,7 +139,7 @@ static bool change_frame_poll(bContext *C)
       }
     }
     if (area->spacetype == SPACE_GRAPH) {
-      const SpaceGraph *sipo = static_cast<const SpaceGraph *>(area->spacedata.first);
+      const SpaceGraph *sipo = area->spacedata.first_as<SpaceGraph>();
       /* Driver Editor's X axis is not time. */
       if (sipo->mode != SIPO_MODE_DRIVERS) {
         return true;
@@ -662,7 +665,7 @@ static bool use_playhead_snapping(bContext *C)
   ScrArea *area = CTX_wm_area(C);
 
   if (area->spacetype == SPACE_GRAPH) {
-    SpaceGraph *graph_editor = static_cast<SpaceGraph *>(area->spacedata.first);
+    SpaceGraph *graph_editor = area->spacedata.first_as<SpaceGraph>();
     /* Snapping is disabled for driver mode. Need to evaluate if it makes sense there and what form
      * it should take. */
     if (graph_editor->mode == SIPO_MODE_DRIVERS) {
@@ -716,7 +719,7 @@ static wmOperatorStatus change_frame_invoke(bContext *C, wmOperator *op, const w
     RNA_boolean_set(op->ptr, "snap", true);
   }
 
-  screen->scrubbing = true;
+  op_data->pre_scrubbing = ED_screen_scrubbing_enable(*C, *screen);
 
   if (RNA_boolean_get(op->ptr, "seq_solo_preview")) {
     SpaceSeq *sseq = CTX_wm_space_seq(C);
@@ -749,8 +752,11 @@ static bool need_extra_redraw_after_scrubbing_ends(bContext *C)
 
 static void change_frame_cancel(bContext *C, wmOperator *op)
 {
+  FrameChangeModalData *op_data = static_cast<FrameChangeModalData *>(op->customdata);
   bScreen *screen = CTX_wm_screen(C);
-  screen->scrubbing = false;
+  if (screen) {
+    ED_screen_scrubbing_disable(*C, *screen, op_data->pre_scrubbing);
+  }
 
   if (RNA_boolean_get(op->ptr, "seq_solo_preview")) {
     SpaceSeq *sseq = CTX_wm_space_seq(C);
@@ -820,9 +826,10 @@ static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wm
   if (ret != OPERATOR_RUNNING_MODAL) {
     ED_workspace_status_text(C, nullptr);
     bScreen *screen = CTX_wm_screen(C);
-    screen->scrubbing = false;
-
     FrameChangeModalData *op_data = static_cast<FrameChangeModalData *>(op->customdata);
+    if (screen) {
+      ED_screen_scrubbing_disable(*C, *screen, op_data->pre_scrubbing);
+    }
     MEM_delete(op_data);
     op->customdata = nullptr;
 
@@ -1839,6 +1846,8 @@ static void ANIM_OT_rotation_mode_convert(wmOperatorType *ot)
                   "Creates a key on every frame before conversion so interpolation is preserved "
                   "in the new mode");
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Registration

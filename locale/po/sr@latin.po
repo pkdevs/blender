@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'96294be75080')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'f5df8c32f99b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-20 07:29+0000\n"
+"POT-Creation-Date: 2026-09-07 07:47+0000\n"
 "PO-Revision-Date: 2025-07-23 14:56+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Serbian (Latin script) <https://translate.blender.org/projects/blender-ui/ui/sr_Latn/>\n"
@@ -1035,10 +1035,6 @@ msgid "Particles"
 msgstr "Čestice"
 
 
-msgid "Project"
-msgstr "Projekcija"
-
-
 msgid "Screens"
 msgstr "Ekrani"
 
@@ -1966,14 +1962,6 @@ msgid "Kill collided particles"
 msgstr "Ubi čestice pri sudaru"
 
 
-msgid "Display"
-msgstr "Prikaz"
-
-
-msgid "Input Color Space"
-msgstr "Prostor boja ulaza"
-
-
 msgid "Curve"
 msgstr "Kriva"
 
@@ -1986,16 +1974,8 @@ msgid "Gamma"
 msgstr "Gama"
 
 
-msgid "Look"
-msgstr "Izgled"
-
-
 msgid "Use Curves"
 msgstr "Koristi krive"
-
-
-msgid "View"
-msgstr "Pogled"
 
 
 msgid "Temperature"
@@ -2092,6 +2072,10 @@ msgstr "Alfa"
 
 msgid "Position"
 msgstr "Pozicija"
+
+
+msgid "Identifier"
+msgstr "Identifikator"
 
 
 msgid "Console Input"
@@ -2772,6 +2756,10 @@ msgid "Nearest Surface Point"
 msgstr "Najbliža tačka na površi"
 
 
+msgid "Project"
+msgstr "Projekcija"
+
+
 msgid "Nearest Vertex"
 msgstr "Najbliže teme"
 
@@ -2990,6 +2978,10 @@ msgstr "Metoda"
 
 msgid "Plane"
 msgstr "Ploča"
+
+
+msgid "View"
+msgstr "Pogled"
 
 
 msgid "Radius"
@@ -3790,10 +3782,6 @@ msgstr "Jačina uticaja vetra"
 
 msgid "Description of the item's purpose"
 msgstr "Opis svrhe stavke"
-
-
-msgid "Identifier"
-msgstr "Identifikator"
 
 
 msgid "Unique name used in the code and scripting"
@@ -5157,6 +5145,14 @@ msgstr "Snaga pritiska"
 
 msgid "Use Texture Overlay"
 msgstr "Koristi dodatnu providnost"
+
+
+msgid "Use Unified Strength"
+msgstr "Jedinstvena jačina"
+
+
+msgid "Use Unified Weight"
+msgstr "Koristi jedinstvenu težinu"
 
 
 msgid "Forward"
@@ -6673,6 +6669,10 @@ msgstr "Vlaženje"
 
 msgid "Amount of damping"
 msgstr "Vrednost vlaženja"
+
+
+msgid "Display"
+msgstr "Prikaz"
 
 
 msgid "Percentage of particles to display in 3D view"
@@ -8498,100 +8498,20 @@ msgid "Material slot name"
 msgstr "Naziv slota materijala"
 
 
-msgid "Apply"
-msgstr "Primeni"
+msgid "Import"
+msgstr "Uvoz"
 
 
-msgid "Track"
-msgstr "Staza"
-
-
-msgid "Quick Effects"
-msgstr "Brzi efekti"
-
-
-msgid "Show/Hide"
-msgstr "Prikaži/sakrij"
-
-
-msgid "Hooks"
-msgstr "Udice"
+msgid "Select Linked"
+msgstr "Izaberi povezano"
 
 
 msgid "Math"
 msgstr "Matematika"
 
 
-msgid "Clear Transform"
-msgstr "Očisti transformacije"
-
-
-msgid "In-Betweens"
-msgstr "U međuvremenu"
-
-
-msgid "Propagate"
-msgstr "Prenesi"
-
-
-msgid "Names"
-msgstr "Imena"
-
-
-msgid "Toggle Bone Options"
-msgstr "Manje/više informacija"
-
-
-msgid "Enable Bone Options"
-msgstr "Omogući opcije kostiju"
-
-
-msgid "Disable Bone Options"
-msgstr "Onemogući opcije kostiju"
-
-
-msgid "Mesh Select Mode"
-msgstr "Mod izbora mreže"
-
-
-msgid "Merge"
-msgstr "Sjedini"
-
-
-msgid "Special Characters"
-msgstr "Specijalni znaci"
-
-
-msgid "Metaball"
-msgstr "Meta lopta"
-
-
-msgid "Import"
-msgstr "Uvoz"
-
-
-msgid "Bone Roll"
-msgstr "Rolna kostiju"
-
-
 msgid "UV"
 msgstr "UV"
-
-
-msgid "Snap"
-msgstr "Lepljenje"
-
-
-msgid "Mirror"
-msgstr "Ogledalo"
-
-
-msgid "UV Mapping"
-msgstr "UV Mapiranje"
-
-
-msgid "Local View"
-msgstr "Lokalni pogled"
 
 
 msgid "Navigation"
@@ -8602,12 +8522,48 @@ msgid "Align View"
 msgstr "Poravnaj pogled"
 
 
+msgid "UV Mapping"
+msgstr "UV Mapiranje"
+
+
+msgid "Local View"
+msgstr "Lokalni pogled"
+
+
+msgid "Snap"
+msgstr "Lepljenje"
+
+
+msgid "Bone Roll"
+msgstr "Rolna kostiju"
+
+
+msgid "Mirror"
+msgstr "Ogledalo"
+
+
+msgid "Show/Hide"
+msgstr "Prikaži/sakrij"
+
+
+msgid "Names"
+msgstr "Imena"
+
+
 msgid "Linked"
 msgstr "Povezano"
 
 
-msgid "Select Linked"
-msgstr "Izaberi povezano"
+msgid "Metaball"
+msgstr "Meta lopta"
+
+
+msgid "Special Characters"
+msgstr "Specijalni znaci"
+
+
+msgid "Merge"
+msgstr "Sjedini"
 
 
 msgid "Keying"
@@ -8618,16 +8574,60 @@ msgid "Tracking"
 msgstr "Praćenje"
 
 
-msgid "Light"
-msgstr "Svetlost"
+msgid "Mesh Select Mode"
+msgstr "Mod izbora mreže"
+
+
+msgid "Disable Bone Options"
+msgstr "Onemogući opcije kostiju"
+
+
+msgid "Enable Bone Options"
+msgstr "Omogući opcije kostiju"
+
+
+msgid "Toggle Bone Options"
+msgstr "Manje/više informacija"
+
+
+msgid "Apply"
+msgstr "Primeni"
+
+
+msgid "Propagate"
+msgstr "Prenesi"
+
+
+msgid "In-Betweens"
+msgstr "U međuvremenu"
+
+
+msgid "Clear Transform"
+msgstr "Očisti transformacije"
+
+
+msgid "Hooks"
+msgstr "Udice"
+
+
+msgid "Quick Effects"
+msgstr "Brzi efekti"
+
+
+msgid "Track"
+msgstr "Staza"
+
+
+msgid "Rigid Body"
+msgstr "Kruto telo"
 
 
 msgid "Relations"
 msgstr "Odnosi"
 
 
-msgid "Rigid Body"
-msgstr "Kruto telo"
+msgid "Light"
+msgstr "Svetlost"
 
 
 msgid "Basic"
@@ -10562,10 +10562,6 @@ msgid "ITU 709"
 msgstr "YCbCr (ITU 709)"
 
 
-msgid "To"
-msgstr "Ka"
-
-
 msgid "Corner Pin"
 msgstr "Zakači ugao"
 
@@ -11052,6 +11048,10 @@ msgstr "Izlaz čvora"
 
 msgid "Value to Normal"
 msgstr "Vrednost u normalu"
+
+
+msgid "Scalar"
+msgstr "Skalar"
 
 
 msgid "Name of the socket"
@@ -11593,11 +11593,6 @@ msgstr "Nervozno"
 
 msgid "Generated"
 msgstr "Generisano"
-
-
-msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "Stvori veze..."
 
 
 msgctxt "Operator"
@@ -12242,10 +12237,6 @@ msgid "Remove Boid State"
 msgstr "Izaberite sliku za pozadinu"
 
 
-msgid "Scalar"
-msgstr "Skalar"
-
-
 msgid "Factor to scale brush size by"
 msgstr "Faktor uvećanja veličine četkice"
 
@@ -12264,8 +12255,8 @@ msgstr "Poništi trensformacije"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Prihvati"
+msgid "Select Directory"
+msgstr "Izaberi direktorijum"
 
 
 msgid "Select the file relative to the blend file"
@@ -13574,11 +13565,6 @@ msgstr "Izaberi sve datoteke"
 
 msgid "Select or deselect all files"
 msgstr "Bira ili poništava izbor svih datoteka"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Izaberi direktorijum"
 
 
 msgid "Previous"
@@ -17237,6 +17223,10 @@ msgid "Add a new screen"
 msgstr "Dodaje novi Senzor"
 
 
+msgid "Active Section"
+msgstr "Aktivni odeljak"
+
+
 msgctxt "Operator"
 msgid "Region Alpha"
 msgstr "Providnost ikonica"
@@ -19054,12 +19044,12 @@ msgid "Restrict"
 msgstr "Ograniči"
 
 
-msgid "Motion Tracking"
-msgstr "Praćenje pokreta"
-
-
 msgid "Transform Orientations"
 msgstr "Transformacija orijentacija"
+
+
+msgid "Motion Tracking"
+msgstr "Praćenje pokreta"
 
 
 msgid "Bone Constraints"
@@ -19727,10 +19717,6 @@ msgstr "IK Y granica"
 
 msgid "IK Z Limit"
 msgstr "IK Z granica"
-
-
-msgid "Active Section"
-msgstr "Aktivni odeljak"
 
 
 msgid "Edit Methods"
@@ -21887,10 +21873,6 @@ msgid "Window Background"
 msgstr "Pozadina prozora"
 
 
-msgid "Header Text Highlight"
-msgstr "Tekst istaknutog naslova"
-
-
 msgid "Text Highlight"
 msgstr "Istaknut tekst"
 
@@ -22113,14 +22095,6 @@ msgstr "Sortiraj po imenu"
 
 msgid "Sort items by their name"
 msgstr "Sortiraj stavke po njihovim imenima"
-
-
-msgid "Use Unified Strength"
-msgstr "Jedinstvena jačina"
-
-
-msgid "Use Unified Weight"
-msgstr "Koristi jedinstvenu težinu"
 
 
 msgid "Unit Scale"
@@ -22446,11 +22420,6 @@ msgstr "UV Uređivač"
 
 
 msgctxt "WindowManager"
-msgid "UV Sculpt"
-msgstr "UV Vajanje"
-
-
-msgctxt "WindowManager"
 msgid "Image Generic"
 msgstr "Početna slika"
 
@@ -22584,11 +22553,6 @@ msgstr "Upozorenje:"
 
 msgid "File:"
 msgstr "Datoteka:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Primeni"
 
 
 msgid "Options:"
@@ -23751,6 +23715,11 @@ msgstr "Brza izmena"
 
 
 msgctxt "Operator"
+msgid "Apply"
+msgstr "Primeni"
+
+
+msgctxt "Operator"
 msgid "Apply Camera Image"
 msgstr "Primeni sliku kamere"
 
@@ -24045,6 +24014,10 @@ msgstr "U redu"
 
 msgid "Menu \"%s\" not found"
 msgstr "Nije pronađen meni \"%s\""
+
+
+msgid "Look"
+msgstr "Izgled"
 
 
 msgid "Pos"
@@ -24380,10 +24353,6 @@ msgstr "Objekat (zadrži transformaciju)"
 
 msgid "No active bone"
 msgstr "Bez aktivne kosti"
-
-
-msgid "Editmode lattice is not supported yet"
-msgstr "Format nije podržan u datoteci: \"%s\"."
 
 
 msgid "Vertex group is locked"
@@ -24842,10 +24811,6 @@ msgid "Object as Camera"
 msgstr "Objekat kao kamera"
 
 
-msgid "Cannot fly an object with constraints"
-msgstr "Ograničenja objekta"
-
-
 msgid "No active camera"
 msgstr "Bez aktivne kamere"
 
@@ -25111,12 +25076,12 @@ msgid "BSDF"
 msgstr "BSDF"
 
 
-msgid "IOR"
-msgstr "IOR"
-
-
 msgid "Anisotropy"
 msgstr "Anizotropno"
+
+
+msgid "IOR"
+msgstr "IOR"
 
 
 msgid "RoughnessU"
