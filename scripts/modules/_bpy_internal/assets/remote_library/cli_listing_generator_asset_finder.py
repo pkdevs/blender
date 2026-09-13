@@ -217,12 +217,11 @@ def _absolute_path(filepath: str, base_path: Path):
 
 def _find_dependencies_recursive_impl(
         visited_pointers: set[typing.Any],
-        data) -> set[bpy.types.ID]:
+        data: bpy.types.bpy_struct) -> set[bpy.types.ID]:
 
     dependencies: set[bpy.types.ID] = set()
 
-    if getattr(data, 'bl_rna') is None:
-        return set()
+    assert (isinstance(data, bpy.types.bpy_struct))
 
     dependencies: set[bpy.types.ID] = set()
 
@@ -250,10 +249,12 @@ def _find_dependencies_recursive_impl(
                     continue
                 dependencies |= _find_dependencies_recursive(visited_pointers, value)
 
-    if getattr(data, "id_data") is None:
+    if not data.id_data:
         return dependencies
 
-    for _, value in data.items():
+    for _, value in data.id_data.items():
+        if not isinstance(value, bpy.types.bpy_struct):
+            continue
         dependencies |= _find_dependencies_recursive(visited_pointers, value)
     return dependencies
 
@@ -261,7 +262,7 @@ def _find_dependencies_recursive_impl(
 def _find_dependencies_recursive(
         # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
         visited_pointers: set[typing.Any],
-        data) -> set[bpy.types.ID]:
+        data: bpy.types.bpy_struct) -> set[bpy.types.ID]:
 
     # Avoid infinite recusion calls with circular references
     if data in visited_pointers:

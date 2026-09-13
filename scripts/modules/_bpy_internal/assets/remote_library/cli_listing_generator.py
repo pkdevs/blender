@@ -94,8 +94,8 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
     _sort_assets(assets)
 
     # Avoid duplicate file entries
-    unique_paths = set()
-    unique_files = []
+    unique_paths:set[str] = set()
+    unique_files:list[api_models.FileV1] = []
     for file in files:
         if file.path in unique_paths:
             continue
