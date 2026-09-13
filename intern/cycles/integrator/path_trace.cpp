@@ -675,6 +675,13 @@ void PathTrace::denoise(const RenderWork &render_work)
   bool allow_inplace_modification = false;
 
   Device *denoiser_device = denoiser_->get_denoiser_device();
+  
+  if (denoiser_->get_params().type == DENOISER_MTLFX) {
+    DenoiseParams new_params = denoiser_->get_params();
+    new_params.camera_to_world = device_scene_->data.cam.cameratoworld;
+    denoiser_->set_params(new_params);
+  }
+  
   if (path_trace_works_.size() > 1 && denoiser_device && !big_tile_denoise_work_) {
     big_tile_denoise_work_ = PathTraceWork::create(denoiser_device, film_, device_scene_, nullptr);
   }

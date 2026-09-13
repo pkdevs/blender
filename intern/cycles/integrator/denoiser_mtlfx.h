@@ -127,6 +127,12 @@ private:
       int num_components;
       float upscale_factor;
     };
+  
+    struct Transform {
+      float4 x;
+      float4 y;
+      float4 z;
+    };
 
     // MARK: Color preprocess
     kernel void filter_color_preprocess(
@@ -159,6 +165,7 @@ private:
                                           texture2d<float, access::write> specular_albedo_tex [[texture(5)]],
                                           constant KernelParams &params [[buffer(1)]],
                                           constant PassParams &pass [[buffer(2)]],
+                                          constant Transform &camera_to_world [[buffer(3)]],
                                           uint2 tid [[thread_position_in_grid]]
                                           )
     {
@@ -205,10 +212,19 @@ private:
       if (pass.render_pass_normal != PASS_UNUSED) {
         const device float *normal = buffer + pass.render_pass_normal;
         float4 normalColor;
+  
+        // Convert view space normals to world space normals.
+        float3 normal_view = float3(normal[0], normal[1], normal[2]);
+  
+        float3 normal_world;
+        normal_world.x = dot(camera_to_world.x.xyz, normal_view);
+        normal_world.y = dot(camera_to_world.y.xyz, normal_view);
+        normal_world.z = dot(camera_to_world.z.xyz, normal_view);
+        normal_world = normalize(normal_world);
         
-        normalColor.x = normal[0] * pixelScale;
-        normalColor.y = normal[1] * pixelScale;
-        normalColor.z = normal[2] * pixelScale;
+        normalColor.x = normal_world[0] * pixelScale;
+        normalColor.y = normal_world[1] * pixelScale;
+        normalColor.z = normal_world[2] * pixelScale;
         normalColor.w = 1.0f;
         
         normal_tex.write(normalColor, flip_tid);

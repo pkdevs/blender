@@ -1256,7 +1256,7 @@ bool RenderScheduler::is_denoise_active_during_update() const
 
 bool RenderScheduler::is_denoiser_interactive() const
 {
-  return denoiser_params_.use && (denoiser_params_.type == DENOISER_DLSS || denoiser_params_.type == DENOISER_MTLFX);
+  return denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS;
 }
 
 bool RenderScheduler::work_is_usable_for_first_render_estimation(const RenderWork &render_work)

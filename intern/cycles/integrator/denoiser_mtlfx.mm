@@ -232,10 +232,13 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   PassParams passParams = {
     context.pass_sample_count,
     context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
+    // TODO: MetalFX expects de-jittered motion vectors.
     context.pass_motion,
-    context.buffer_params.get_pass_offset(PASS_NORMAL),
+    // TODO: Denoising normal shows normals in reflections, while regular normal does not.
+    // I may need to use the denoising normal and convert view space to world space.
+    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-    context.buffer_params.get_pass_offset(PASS_DIFFUSE_COLOR),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
     context.num_samples,
   };
@@ -253,6 +256,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
   [encoder setTexture: (id<MTLTexture>) specular_albedo_texture atIndex: 5];
   [encoder setBytes: &params length: sizeof(params) atIndex: 1];
   [encoder setBytes: &passParams length: sizeof(passParams) atIndex:2];
+  [encoder setBytes: &context.denoise_params.camera_to_world length: sizeof(context.denoise_params.camera_to_world) atIndex:3];
   
   MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
   id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) guiding_pre_pso;
