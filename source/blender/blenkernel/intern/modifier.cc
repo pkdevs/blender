@@ -945,7 +945,8 @@ static void ensure_non_lazy_normals(Mesh *mesh)
         BKE_editmesh_cache_ensure_vert_normals(*mesh->runtime->edit_mesh, edit_data);
       }
       else {
-        BM_mesh_normals_update(mesh->runtime->edit_mesh->bm);
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+        BM_mesh_normals_update(bm);
       }
       break;
     }

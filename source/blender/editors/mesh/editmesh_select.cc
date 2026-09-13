@@ -6619,7 +6619,7 @@ static bool edbm_select_by_attribute_poll(bContext *C)
     return false;
   }
   const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
-  const BMDataLayerLookup attr = BM_data_layer_lookup(bm, *name);
+  const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, *name);
   if (attr.type != bke::AttrType::Bool) {
     CTX_wm_operator_poll_msg_set(C, "The active attribute must have a boolean type");
     return false;
