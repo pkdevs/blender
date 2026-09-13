@@ -65,13 +65,13 @@ static bool deform_gizmo_poll(const bContext *C, wmGizmoGroupType *gzgt)
   return true;
 }
 
-struct CornerPinData {
+struct ControlPointData {
   wmGizmo *gizmos;
-  float2 corner_pos;
+  float2 control_position;
 };
 
 struct QuadWidgetGroup2 {
-  wmGizmo *border;
+  wmGizmo *transform_border;
 
   struct {
     float2 dims;
@@ -92,7 +92,7 @@ struct QuadWidgetGroup2 {
   int lock_axis;
   bool is_scale_thickness;
 
-  Vector<CornerPinData> corner_data;
+  Vector<ControlPointData> control_points;
 
   struct {
     PointerRNA ptr;
@@ -110,22 +110,22 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo *gz,
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
-  const CornerPinData *corner_pin_data = &mask_group->corner_data[index];
+  const ControlPointData *control_point_data = &mask_group->control_points[index];
 
   BLI_assert(gz_prop->type->array_length == 3);
   float *values = static_cast<float *>(value_p);
 
-  values[0] = corner_pin_data->corner_pos[0];
-  values[1] = corner_pin_data->corner_pos[1];
+  values[0] = control_point_data->control_position[0];
+  values[1] = control_point_data->control_position[1];
   values[2] = 0.0f;
 }
 
 static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
 {
-  float2 lower_left = mask_group->corner_data[0].corner_pos;
-  float2 lower_right = mask_group->corner_data[1].corner_pos;
-  float2 upper_right = mask_group->corner_data[2].corner_pos;
-  float2 upper_left = mask_group->corner_data[3].corner_pos;
+  float2 lower_left = mask_group->control_points[0].control_position;
+  float2 lower_right = mask_group->control_points[1].control_position;
+  float2 upper_right = mask_group->control_points[2].control_position;
+  float2 upper_left = mask_group->control_points[3].control_position;
 
   if (!is_quad_convex_v2(lower_left, lower_right, upper_right, upper_left)) {
     return std::nullopt;
@@ -152,8 +152,8 @@ static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
   const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
-  const float4x4 transform = float4x4(mask_group->border->matrix_space) * mat *
-                             math::invert(float4x4(mask_group->border->matrix_space));
+  const float4x4 transform = float4x4(mask_group->transform_border->matrix_space) * mat *
+                             math::invert(float4x4(mask_group->transform_border->matrix_space));
 
   const float scale_fac = math::sqrt(math::abs(math::determinant(float3x3(transform))));
 
@@ -196,7 +196,7 @@ static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
   const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
-  const float4x4 mat = float4x4(mask_group->border->matrix_space);
+  const float4x4 mat = float4x4(mask_group->transform_border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
 
   const std::optional<float3x3> homography_mat = compute_homography_matrix(mask_group);
@@ -250,7 +250,7 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
   const Vector<Array<float3>> &src_positions = mask_group->src_positions;
   const Vector<Array<float>> &src_radii = mask_group->src_radii;
 
-  const float4x4 mat = float4x4(mask_group->border->matrix_space);
+  const float4x4 mat = float4x4(mask_group->transform_border->matrix_space);
   const float4x4 mat_inv = math::invert(mat);
 
   const int x_num = 2 + mask_group->subdivisions;
@@ -259,7 +259,7 @@ static void update_positions_grid(QuadWidgetGroup2 *mask_group)
   auto xy_to_position = [&](const int2 xy) {
     const int2 xy_clamped = math::clamp(xy, int2(0), int2(x_num - 1, y_num - 1));
     const int index = xy_clamped.x + x_num * xy_clamped.y;
-    return mask_group->corner_data[index].corner_pos;
+    return mask_group->control_points[index].control_position;
   };
 
   for (const int drawing_i : drawings.index_range()) {
@@ -335,14 +335,14 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
   const int index = static_cast<int>(reinterpret_cast<intptr_t>(gz_prop->custom_func.user_data));
-  CornerPinData *corner_pin_data = &mask_group->corner_data[index];
+  ControlPointData *control_point_data = &mask_group->control_points[index];
 
   BLI_assert(gz_prop->type->array_length == 3);
 
   const float *values = static_cast<const float *>(value_p);
   const float3 position_value = float3(values);
 
-  corner_pin_data->corner_pos = float2(position_value.x, position_value.y);
+  control_point_data->control_position = float2(position_value.x, position_value.y);
 
   if (mask_group->mode == DeformMode::PERSPECTIVE) {
     update_positions_prespective(mask_group);
@@ -406,14 +406,14 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
 static void add_corner(QuadWidgetGroup2 *mask_group, wmGizmoGroup *gzgroup)
 {
   const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
-  const int i = mask_group->corner_data.size();
+  const int i = mask_group->control_points.size();
 
-  mask_group->corner_data.append({});
-  CornerPinData &corner_pin_data = mask_group->corner_data[i];
+  mask_group->control_points.append({});
+  ControlPointData &control_point_data = mask_group->control_points[i];
 
-  corner_pin_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+  control_point_data.gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
 
-  wmGizmo *gz = corner_pin_data.gizmos;
+  wmGizmo *gz = control_point_data.gizmos;
 
   WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
 
@@ -432,7 +432,7 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->border;
+  wmGizmo *gz = mask_group->transform_border;
 
   PointerRNA ptr;
   bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
@@ -525,8 +525,9 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     const int x_num = 2 + mask_group->subdivisions;
     const int y_num = 2 + mask_group->subdivisions;
 
-    if (mask_group->corner_data.size() < x_num * y_num) {
-      for (const int i : IndexRange::from_begin_end(mask_group->corner_data.size(), x_num * y_num))
+    if (mask_group->control_points.size() < x_num * y_num) {
+      for (const int i :
+           IndexRange::from_begin_end(mask_group->control_points.size(), x_num * y_num))
       {
         UNUSED_VARS(i);
         add_corner(mask_group, gzgroup);
@@ -535,11 +536,11 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
 
     for (const int y_i : IndexRange(y_num)) {
       for (const int x_i : IndexRange(x_num)) {
-        CornerPinData &corner_pin_data = mask_group->corner_data[x_i + y_i * x_num];
-        corner_pin_data.corner_pos = (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) -
-                                      float2(0.5f)) *
-                                     mask_group->state.dims;
-        wmGizmo *gz = corner_pin_data.gizmos;
+        ControlPointData &control_point_data = mask_group->control_points[x_i + y_i * x_num];
+        control_point_data.control_position =
+            (float2(x_i / float(x_num - 1), y_i / float(y_num - 1)) - float2(0.5f)) *
+            mask_group->state.dims;
+        wmGizmo *gz = control_point_data.gizmos;
 
         RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
         gz->scale_basis = gizmo_scale_basis_grid;
@@ -551,9 +552,9 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
         {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
 
     for (const int i : IndexRange(4)) {
-      CornerPinData &corner_pin_data = mask_group->corner_data[i];
-      corner_pin_data.corner_pos = corner_positions[i] * mask_group->state.dims;
-      wmGizmo *gz = corner_pin_data.gizmos;
+      ControlPointData &control_point_data = mask_group->control_points[i];
+      control_point_data.control_position = corner_positions[i] * mask_group->state.dims;
+      wmGizmo *gz = control_point_data.gizmos;
 
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
       gz->scale_basis = gizmo_scale_basis_perspective;
@@ -561,8 +562,8 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
   }
 
   WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-  for (const int i : mask_group->corner_data.index_range()) {
-    wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+  for (const int i : mask_group->control_points.index_range()) {
+    wmGizmo *gz2 = mask_group->control_points[i].gizmos;
     WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
   }
 
@@ -573,8 +574,8 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     copy_m4_m4(gz->matrix_space, mat.ptr());
     RNA_float_set_array(gz->ptr, "dimensions", box->size());
 
-    for (const int i : mask_group->corner_data.index_range()) {
-      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+    for (const int i : mask_group->control_points.index_range()) {
+      wmGizmo *gz2 = mask_group->control_points[i].gizmos;
       copy_m4_m4(gz2->matrix_space, mat.ptr());
     }
 
@@ -583,7 +584,7 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
     }
     else if (mask_group->mode == DeformMode::PERSPECTIVE) {
       for (const int i : IndexRange(4)) {
-        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+        wmGizmo *gz2 = mask_group->control_points[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
@@ -592,7 +593,7 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
       const int y_num = 2 + mask_group->subdivisions;
 
       for (const int i : IndexRange(x_num * y_num)) {
-        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+        wmGizmo *gz2 = mask_group->control_points[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
@@ -607,16 +608,16 @@ static void recompute_gizmo_plane(const bContext *C, wmGizmoGroup *gzgroup)
 static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
-  mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
+  mask_group->transform_border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
 
   mask_group->update_data.context = const_cast<bContext *>(C);
 
-  RNA_enum_set(mask_group->border->ptr,
+  RNA_enum_set(mask_group->transform_border->ptr,
                "transform",
                ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
                    ED_GIZMO_CAGE_XFORM_FLAG_SCALE | ED_GIZMO_CAGE_XFORM_FLAG_SCALE_SIGNED);
 
-  RNA_enum_set(mask_group->border->ptr,
+  RNA_enum_set(mask_group->transform_border->ptr,
                "draw_options",
                ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
                    ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
@@ -630,7 +631,7 @@ static void deform_gizmo_setup(const bContext *C, wmGizmoGroup *gzgroup)
   params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
   params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
   params.range_get_fn = nullptr;
-  WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
+  WM_gizmo_target_property_def_func(mask_group->transform_border, "matrix", &params);
 
   for (const int i : IndexRange(4)) {
     UNUSED_VARS(i);
