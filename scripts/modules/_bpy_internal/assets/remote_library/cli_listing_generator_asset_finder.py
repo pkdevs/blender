@@ -215,64 +215,6 @@ def _absolute_path(filepath: str, base_path: Path):
         return Path(filepath)
 
 
-def _find_image_sequence_dependencies(r_dependencies: set[DependencyFile],
-                                      data: bpy.types.Image,
-                                      blend_filepath: Path):
-
-    # List all images that matches the filepath sequence file name.
-    # See #BLI_path_sequence_decode and #BLI_path_extension_or_end
-    path = _absolute_path(data.filepath, blend_filepath)
-    filename = path.name
-    filename_split = os.path.splitext(filename)
-
-    # Find head-number-tail image sequence format
-    found_number = False
-    number_end = number_begin = len(filename_split[0])
-    for char in reversed(filename_split[0]):
-        if char.isdigit():
-            found_number = True
-            number_begin = number_begin - 1
-        else:
-            if found_number:
-                break
-            number_end = number_end - 1
-            number_begin = number_begin - 1
-    if not found_number:
-        number_end = number_begin = len(filename_split[0])
-    head = filename[:number_begin]
-    tail = filename[number_end:]
-
-    # List files that matches the head-number-tail image sequence format
-    sequence_format = re.compile("{}\\d*{}".format(re.escape(head), re.escape(tail)))
-    directory = path.parent
-    for file in directory.iterdir():
-        if not file.is_file():
-            continue
-        if sequence_format.search(file.name):
-            dependency = DependencyFile(file, None)
-            r_dependencies.add(dependency)
-
-
-def _find_tiled_images_dependencies(r_dependencies: set[DependencyFile],
-                                    data: bpy.types.Image,
-                                    blend_filepath: Path):
-    path = _absolute_path(data.filepath, blend_filepath)
-    filename = path.name
-    tile_format_udim = "<UDIM>" in filename
-
-    # Finds each tile's image source, see #BKE_image_set_filepath_from_tile_number
-    for tile in data.tiles:
-        tile_filename = None
-        if tile_format_udim:
-            tile_filename = filename.replace("<UDIM>", str(tile.number))
-        else:
-            u = int((tile.number - 1001) % 10)
-            v = int((tile.number - 1001) / 10)
-            tile_filename = filename.replace("<UVTILE>", "u{:d}_v{:d}".format(u + 1, v + 1))
-        tile_filepath = Path(path.parent, tile_filename)
-        r_dependencies.add(DependencyFile(tile_filepath, None))
-
-
 def _find_dependencies_recursive_impl(
         visited_pointers: set[typing.Any],
         data) -> set[bpy.types.ID]:
