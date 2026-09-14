@@ -930,7 +930,7 @@ class ShaderNodesInliner {
 
     if (socket->index() == 0) {
       /* The first output is the current iteration index. */
-      this->store_socket_value(socket, {PrimitiveSocketValue{iteration}});
+      this->store_socket_value_primitive(socket, iteration);
       return;
     }
 
@@ -1212,7 +1212,7 @@ class ShaderNodesInliner {
     }
     /* Set the value of the mask output. */
     const bool is_selected = selected_index == socket->index() - 1;
-    this->store_socket_value(socket, {PrimitiveSocketValue{is_selected}});
+    this->store_socket_value_primitive(socket, is_selected);
   }
 
   struct MixNodeInfo {
@@ -1576,7 +1576,7 @@ class ShaderNodesInliner {
     switch (op) {
       case NODE_BOOLEAN_MATH_AND: {
         if (primitives[0] == false || primitives[1] == false) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
+          this->store_socket_value_primitive(output_socket, false);
           return true;
         }
         if (primitives[0] == true) {
@@ -1591,7 +1591,7 @@ class ShaderNodesInliner {
       }
       case NODE_BOOLEAN_MATH_OR: {
         if (primitives[0] == true || primitives[1] == true) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
+          this->store_socket_value_primitive(output_socket, true);
           return true;
         }
         if (primitives[0] == false) {
@@ -1606,7 +1606,7 @@ class ShaderNodesInliner {
       }
       case NODE_BOOLEAN_MATH_NAND: {
         if (primitives[0] == false || primitives[1] == false) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
+          this->store_socket_value_primitive(output_socket, true);
           return true;
         }
         if (primitives[0] == true) {
@@ -1621,7 +1621,7 @@ class ShaderNodesInliner {
       }
       case NODE_BOOLEAN_MATH_NOR: {
         if (primitives[0] == true || primitives[1] == true) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
+          this->store_socket_value_primitive(output_socket, false);
           return true;
         }
         if (primitives[0] == false) {
@@ -1636,7 +1636,7 @@ class ShaderNodesInliner {
       }
       case NODE_BOOLEAN_MATH_IMPLY: {
         if (primitives[0] == false || primitives[1] == true) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{true}});
+          this->store_socket_value_primitive(output_socket, true);
           return true;
         }
         if (primitives[0] == true) {
@@ -1651,7 +1651,7 @@ class ShaderNodesInliner {
       }
       case NODE_BOOLEAN_MATH_NIMPLY: {
         if (primitives[0] == false || primitives[1] == true) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{false}});
+          this->store_socket_value_primitive(output_socket, false);
           return true;
         }
         if (primitives[0] == true) {
@@ -1711,14 +1711,14 @@ class ShaderNodesInliner {
     switch (op) {
       case NODE_MATH_MULTIPLY: {
         if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
         }
         break;
       }
       case NODE_MATH_DIVIDE: {
         if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
         }
         break;
@@ -1756,14 +1756,14 @@ class ShaderNodesInliner {
     switch (op) {
       case NODE_INTEGER_MATH_MULTIPLY: {
         if (primitives[0] == 0 || primitives[1] == 0) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{0}});
+          this->store_socket_value_primitive(output_socket, 0);
           return true;
         }
         break;
       }
       case NODE_INTEGER_MATH_DIVIDE: {
         if (primitives[0] == 0 || primitives[1] == 0) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{0}});
+          this->store_socket_value_primitive(output_socket, 0);
           return true;
         }
         break;
@@ -1812,7 +1812,7 @@ class ShaderNodesInliner {
         const std::optional<float3> a = try_get_float3(0);
         const std::optional<float3> b = try_get_float3(1);
         if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          this->store_socket_value_primitive(output_socket, float3(0));
           return true;
         }
         break;
@@ -1821,7 +1821,7 @@ class ShaderNodesInliner {
         const std::optional<float3> a = try_get_float3(0);
         const std::optional<float3> b = try_get_float3(1);
         if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          this->store_socket_value_primitive(output_socket, float3(0));
           return true;
         }
         break;
@@ -1830,7 +1830,7 @@ class ShaderNodesInliner {
         const std::optional<float3> a = try_get_float3(0);
         const std::optional<float3> b = try_get_float3(1);
         if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          this->store_socket_value_primitive(output_socket, float3(0));
           return true;
         }
         break;
@@ -1839,7 +1839,7 @@ class ShaderNodesInliner {
         const std::optional<float3> a = try_get_float3(0);
         const std::optional<float3> b = try_get_float3(1);
         if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
         }
       }
@@ -1847,7 +1847,7 @@ class ShaderNodesInliner {
         const std::optional<float3> a = try_get_float3(0);
         const std::optional<float> scale = try_get_float(1);
         if (a == float3(0.0f) || scale == 0.0f) {
-          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          this->store_socket_value_primitive(output_socket, float3(0));
           return true;
         }
         break;
@@ -2330,6 +2330,11 @@ class ShaderNodesInliner {
       return;
     }
     this->schedule_socket(origin);
+  }
+
+  template<typename T> void store_socket_value_primitive(const SocketInContext &socket, T value)
+  {
+    value_by_socket_.add_new(socket, {PrimitiveSocketValue{value}});
   }
 
   void store_socket_value(const SocketInContext &socket, SocketValue value)
