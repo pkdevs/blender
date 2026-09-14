@@ -2027,8 +2027,6 @@ def brush_basic_grease_pencil_sculpt_settings(layout, context, brush, *, compact
         header=compact,
     )
 
-    return
-
 
 def brush_basic_grease_pencil_weight_settings(layout, context, brush, *, compact=False):
     UnifiedPaintPanel.prop_unified(
