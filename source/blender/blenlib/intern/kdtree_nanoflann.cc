@@ -152,7 +152,7 @@ template<typename T> class KDTree {
     /** Nodes per batch, and so the most that can go unused per thread that built a subtree. */
     static constexpr int batch_size = 256;
 
-    LinearAllocator<> allocator;
+    LinearAllocator<> buffers;
     MutableSpan<Node> batch;
     /* Equal to the (empty) batch size, so that the first allocation starts a batch. */
     int used = 0;
@@ -161,21 +161,12 @@ template<typename T> class KDTree {
     Node *allocate(const int num)
     {
       if (used + num > batch.size()) {
-        batch = allocator.allocate_array<Node>(batch_size);
+        batch = buffers.allocate_array<Node>(batch_size);
         used = 0;
       }
       Node *nodes = &batch[used];
       used += num;
       return nodes;
-    }
-
-    /**
-     * One node, without starting a batch for it. For a tree that is a single leaf, where a batch
-     * would be orders of magnitude larger than the tree itself.
-     */
-    Node *allocate_single()
-    {
-      return allocator.template allocate<Node>();
     }
   };
 
@@ -183,14 +174,16 @@ template<typename T> class KDTree {
   struct BuildState {
     /** The points being reordered, which #indices_ is taken from once the tree is built. */
     MutableSpan<BuildPoint> points;
+    /** The pool of a build that stays on one thread. */
+    NodeAllocator allocator;
     /**
-     * A pool per thread that takes part in the build. One pool behind a mutex would put every node
-     * in the tree through it, while a pool per subtree leaves a partly used batch behind for each
-     * of them and spreads the nodes of a subtree over several pools. Only built when there are
-     * threads to give pools to: reaching into thread local storage costs more than building a tree
-     * of a few points does. The buffers end up owned by the tree, see #build.
+     * A pool per thread that takes part in a threaded build. One pool behind a mutex would put
+     * every node in the tree through it, while a pool per subtree leaves a partly used batch
+     * behind for each of them and spreads the nodes of a subtree over several pools. Only built
+     * when there are threads to give pools to: reaching into thread local storage costs more than
+     * building a tree of a few points does.
      */
-    std::optional<threading::EnumerableThreadSpecific<NodeAllocator>> allocators;
+    std::optional<threading::EnumerableThreadSpecific<NodeAllocator>> thread_allocators;
   };
 
   Span<T> points_;
@@ -202,10 +195,10 @@ template<typename T> class KDTree {
   int leaf_size_;
 
   /**
-   * Every node in the tree. A threaded build fills the per thread pools of #BuildState instead,
-   * and hands their buffers over to this one when it is done with them.
+   * The buffers every node in the tree lives in. The build fills the pools of #BuildState, which
+   * hand their buffers over to this one once the nodes are where they will stay.
    */
-  NodeAllocator allocator_;
+  LinearAllocator<> allocator_;
 
  public:
   /**
@@ -285,7 +278,7 @@ template<typename T> class KDTree {
       math::min_max(points_[index], bounds_.min, bounds_.max);
     }
 
-    root_ = allocator_.allocate_single();
+    root_ = allocator_.allocate<Node>();
     root_->children = nullptr;
     root_->leaf.start = 0;
     root_->leaf.end = int(indices_.size());
@@ -300,15 +293,16 @@ template<typename T> class KDTree {
     const Bounds<BuildPoint> bounds = this->init_points(state, indices, threaded);
 
     if (threaded) {
-      state.allocators.emplace();
+      state.thread_allocators.emplace();
     }
-    NodeAllocator &allocator = threaded ? state.allocators->local() : allocator_;
+    NodeAllocator &allocator = threaded ? state.thread_allocators->local() : state.allocator;
     root_ = allocator.allocate(1);
     this->build_node(state, root_, 0, size, bounds, allocator, threaded);
 
-    if (state.allocators.has_value()) {
-      for (NodeAllocator &pool : *state.allocators) {
-        allocator_.allocator.transfer_ownership_from(pool.allocator);
+    allocator_.transfer_ownership_from(state.allocator.buffers);
+    if (state.thread_allocators.has_value()) {
+      for (NodeAllocator &allocator : *state.thread_allocators) {
+        allocator_.transfer_ownership_from(allocator.buffers);
       }
     }
 
@@ -449,7 +443,7 @@ template<typename T> class KDTree {
                              start,
                              middle,
                              left_bounds,
-                             state.allocators->local(),
+                             state.thread_allocators->local(),
                              true);
           },
           [&]() {
@@ -458,7 +452,7 @@ template<typename T> class KDTree {
                              middle,
                              end,
                              right_bounds,
-                             state.allocators->local(),
+                             state.thread_allocators->local(),
                              true);
           });
     }
