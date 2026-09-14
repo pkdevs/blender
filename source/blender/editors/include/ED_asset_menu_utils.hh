@@ -31,6 +31,10 @@ struct Layout;
 }  // namespace ui
 
 namespace ed::asset {
+struct AssetItemTree;
+}  // namespace ed::asset
+
+namespace ed::asset {
 
 void draw_menu_for_catalog(const asset_system::AssetCatalogTreeItem &item,
                            StringRefNull menu_name,
@@ -44,6 +48,12 @@ void draw_asset_menu_item(const asset_system::AssetRepresentation *asset,
                           StringRefNull opname,
                           wm::OpCallContext operator_call_context,
                           ui::Layout &layout);
+
+void draw_catalog_asset_menu_items(ui::Layout &layout,
+                                   const AssetItemTree &tree,
+                                   StringRef catalog_path,
+                                   StringRefNull operator_id,
+                                   StringRefNull catalog_menu_id);
 
 void operator_asset_reference_props_set(const asset_system::AssetRepresentation &asset,
                                         PointerRNA &ptr);

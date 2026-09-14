@@ -22,6 +22,7 @@
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
 
+#include "ED_asset_filter.hh"
 #include "ED_asset_list.hh"
 #include "ED_asset_menu_utils.hh"
 
@@ -184,6 +185,23 @@ void draw_asset_menu_item(const asset_system::AssetRepresentation *asset,
   PointerRNA props_ptr = row.op(
       opname, IFACE_(asset->get_name()), icon, operator_call_context, UI_ITEM_NONE);
   asset::operator_asset_reference_props_set(*asset, props_ptr);
+}
+
+void draw_catalog_asset_menu_items(ui::Layout &layout,
+                                   const AssetItemTree &tree,
+                                   const StringRef catalog_path,
+                                   const StringRefNull operator_id,
+                                   const StringRefNull catalog_menu_id)
+{
+  const asset_system::AssetCatalogTreeItem *item = tree.catalogs.find_item(catalog_path);
+  if (item == nullptr) {
+    return;
+  }
+
+  ui::Layout &col = layout.column(false);
+  col.context_string_set("asset_catalog_path", item->catalog_path().c_str());
+  col.context_string_set("operator_id", operator_id);
+  col.menu_contents(catalog_menu_id);
 }
 
 }  // namespace blender::ed::asset

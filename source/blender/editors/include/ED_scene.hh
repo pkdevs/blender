@@ -9,6 +9,7 @@
 #pragma once
 
 #include "BLI_compiler_attrs.hh"
+#include "BLI_string_ref.hh"
 
 #include "BKE_scene.hh"
 
@@ -18,6 +19,10 @@ struct ReportList;
 struct bContext;
 struct wmWindow;
 struct Strip;
+
+namespace ui {
+struct Layout;
+}  // namespace ui
 
 Scene *ED_scene_add(Main *bmain, bContext *C, wmWindow *win, eSceneCopyMethod method)
     ATTR_NONNULL();
@@ -87,6 +92,10 @@ void ED_scene_fps_average_clear(Scene *scene) ATTR_NONNULL(1);
 /* -------------------------------------------------------------------- */
 /** \name Scene Compositor
  * \{ */
+
+void ui_template_compositor_effect_asset_menu_items(ui::Layout &layout,
+                                                    const bContext &C,
+                                                    StringRef catalog_path);
 
 void ED_operatortypes_scene_compositor();
 void ED_menutypes_scene_compositor();

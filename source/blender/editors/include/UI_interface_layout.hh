@@ -101,6 +101,7 @@ enum class LayoutSeparatorType : int8_t {
 enum class NodeAssetMenuOperatorType : int8_t {
   Add,
   Swap,
+  CompositorEffect,
 };
 
 /**

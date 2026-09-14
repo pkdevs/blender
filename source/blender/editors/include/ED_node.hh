@@ -13,6 +13,7 @@
 #include "BLI_bounds.hh"
 #include "BLI_compute_context.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
@@ -183,6 +184,16 @@ bNode *find_common_parent_node(Span<bNode *> nodes);
  * node group the Make Group operator creates for a single node.
  */
 bNodeTree *node_wrapper_group_create(const bContext &C, bNodeTree &ntree, bNode &src_node);
+
+/**
+ * Used to avoid adding a separate root catalog when the assets have already been added to one of
+ * the builtin menus.
+ * TODO: The need to define the builtin menu labels here is completely non-ideal. We don't have
+ * any UI introspection that can do this though. This can be solved in the near future by
+ * removing the need to define the add menu completely, instead using a per-node-type path which
+ * can be merged with catalog tree.
+ */
+Set<StringRef> get_builtin_menus(int tree_type);
 
 }  // namespace ed::space_node
 

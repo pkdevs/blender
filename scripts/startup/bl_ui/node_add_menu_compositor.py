@@ -534,9 +534,6 @@ class NODE_MT_compositor_node_all_base(node_add_menu.NodeMenu):
 
 class CompositorEffectMenu(node_add_menu.NodeMenu):
     """Used by the "Add Effect" menu of the scene compositor in the properties editor."""
-
-    # Node group assets are listed by `SCENE_MT_add_compositor_effect_root_catalogs` instead.
-    # NOTE: `template_node_asset_menu_items` requires a node editor, it can't be used here.
     draw_assets = False
 
     main_operator_id = "scene.add_compositor_effect_node"
@@ -558,9 +555,8 @@ class CompositorEffectMenu(node_add_menu.NodeMenu):
         return node_type not in EFFECT_MENU_BLOCKLIST
 
     @classmethod
-    def draw_assets_for_catalog(cls, _layout, _catalog_path):
-        del _layout, _catalog_path
-        return None
+    def draw_assets_for_catalog(cls, layout, catalog_path):
+        layout.template_node_asset_menu_items(catalog_path=catalog_path, operator='EFFECT')
 
     @classmethod
     def new_empty_group(cls, _layout):

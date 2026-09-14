@@ -65,6 +65,7 @@ enum class TextAlignAnchor : int {
 #  include "ED_geometry.hh"
 #  include "ED_node.hh"
 #  include "ED_object.hh"
+#  include "ED_scene.hh"
 
 #  include "WM_api.hh"
 
@@ -1089,8 +1090,13 @@ static void rna_uiLayout_template_node_asset_menu_items(Layout *layout,
                                                         const char *catalog_path,
                                                         const int operator_type)
 {
-  ed::space_node::ui_template_node_asset_menu_items(
-      *layout, *C, StringRef(catalog_path), ui::NodeAssetMenuOperatorType(operator_type));
+  const ui::NodeAssetMenuOperatorType type = ui::NodeAssetMenuOperatorType(operator_type);
+  if (type == ui::NodeAssetMenuOperatorType::CompositorEffect) {
+    ui_template_compositor_effect_asset_menu_items(*layout, *C, StringRef(catalog_path));
+  }
+  else {
+    ed::space_node::ui_template_node_asset_menu_items(*layout, *C, StringRef(catalog_path), type);
+  }
 }
 
 static void rna_uiLayout_template_node_operator_asset_menu_items(Layout *layout,
@@ -1413,6 +1419,11 @@ void RNA_api_ui_layout(StructRNA *srna)
        0,
        "Swap Node",
        "Replace the selected nodes with the specified type."},
+      {int(ui::NodeAssetMenuOperatorType::CompositorEffect),
+       "EFFECT",
+       0,
+       "Compositor Effect",
+       "Add a node group as a scene compositor effect."},
       {0, nullptr, 0, nullptr, nullptr},
   };
   static const EnumPropertyItem rna_enum_text_align[] = {

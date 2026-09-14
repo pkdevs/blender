@@ -60,15 +60,7 @@ static asset::AssetItemTree build_catalog_tree(const bContext &C, const bNodeTre
       library, C, type_filter, meta_data_filter, node_tree.typeinfo->asset_catalog_path_prefix);
 }
 
-/**
- * Used to avoid adding a separate root catalog when the assets have already been added to one of
- * the builtin menus.
- * TODO: The need to define the builtin menu labels here is completely non-ideal. We don't have
- * any UI introspection that can do this though. This can be solved in the near future by
- * removing the need to define the add menu completely, instead using a per-node-type path which
- * can be merged with catalog tree.
- */
-static Set<StringRef> get_builtin_menus(const int tree_type)
+Set<StringRef> get_builtin_menus(const int tree_type)
 {
   Set<StringRef> menus;
   switch (tree_type) {
@@ -356,26 +348,17 @@ void ui_template_node_asset_menu_items(ui::Layout &layout,
   if (snode.runtime->assets_for_menu == nullptr) {
     return;
   }
-  asset::AssetItemTree &tree = *snode.runtime->assets_for_menu;
-  const asset_system::AssetCatalogTreeItem *item = tree.catalogs.find_item(catalog_path);
-  if (!item) {
-    return;
+
+  StringRefNull operator_id = "NODE_OT_add_group_asset";
+  if (operator_type == ui::NodeAssetMenuOperatorType::Swap) {
+    operator_id = "NODE_OT_swap_group_asset";
   }
 
-  StringRef operator_id;
-
-  switch (operator_type) {
-    case ui::NodeAssetMenuOperatorType::Swap:
-      operator_id = "NODE_OT_swap_group_asset";
-      break;
-    default:
-      operator_id = "NODE_OT_add_group_asset";
-  }
-
-  ui::Layout *col = &layout.column(false);
-  col->context_string_set("asset_catalog_path", item->catalog_path().str());
-  col->context_string_set("operator_id", operator_id);
-  col->menu_contents("NODE_MT_node_catalog_assets");
+  asset::draw_catalog_asset_menu_items(layout,
+                                       *snode.runtime->assets_for_menu,
+                                       catalog_path,
+                                       operator_id,
+                                       "NODE_MT_node_catalog_assets");
 }
 
 }  // namespace blender::ed::space_node

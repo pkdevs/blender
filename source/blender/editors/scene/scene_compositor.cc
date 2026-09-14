@@ -7,6 +7,8 @@
  */
 
 #include "BLI_listbase.hh"
+#include "BLI_set.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
@@ -53,6 +55,7 @@
 #include "ED_asset.hh"
 #include "ED_asset_import.hh"
 #include "ED_asset_menu_utils.hh"
+#include "ED_node.hh"
 #include "ED_object.hh"
 #include "ED_scene.hh"
 
@@ -628,8 +631,17 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
   if (!loading_finished) {
     layout.label(IFACE_("Loading Asset Libraries"), ICON_INFO);
   }
+  const Set<StringRef> builtin_menus = ed::space_node::get_builtin_menus(NTREE_COMPOSIT);
 
   tree.catalogs.foreach_root_item([&](const asset_system::AssetCatalogTreeItem &item) {
+    /* Catalogs that map onto a built-in effect menu are listed there instead. */
+    if (builtin_menus.contains_as(item.catalog_path().str())) {
+      return;
+    }
+    /* Don't add empty entries to the menu. */
+    if (tree.assets_per_path.lookup(item.catalog_path()).is_empty() && !item.has_children()) {
+      return;
+    }
     ed::asset::draw_menu_for_catalog(
         item, "SCENE_MT_add_compositor_effect_catalog_assets", layout);
   });
@@ -661,6 +673,11 @@ static MenuType SCENE_MT_add_compositor_effect_root_catalogs()
 static void catalog_assets_draw(const bContext *C, Menu *menu)
 {
   ed::asset::AssetItemTree &tree = get_static_item_tree();
+  /* The tree is normally built by `root_catalogs_draw`, but the built-in effect menus draw their
+   * catalog assets inline and may be drawn before that menu. */
+  if (tree.catalogs.is_empty()) {
+    tree = build_catalog_tree(*C);
+  }
 
   const std::optional<StringRefNull> menu_path = CTX_data_string_get(C, "asset_catalog_path");
   if (!menu_path) {
@@ -670,7 +687,9 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
       menu_path->data());
   const asset_system::AssetCatalogTreeItem *catalog_item = tree.catalogs.find_item(
       menu_path->data());
-  BLI_assert(catalog_item != nullptr);
+  if (catalog_item == nullptr) {
+    return;
+  }
 
   if (assets.is_empty() && !catalog_item->has_children()) {
     return;
@@ -693,7 +712,13 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
     ed::asset::draw_asset_menu_item(asset, ot->idname, wm::OpCallContext::InvokeDefault, layout);
   }
 
+  const Set<StringRef> builtin_menus = ed::space_node::get_builtin_menus(NTREE_COMPOSIT);
+
   catalog_item->foreach_child([&](const asset_system::AssetCatalogTreeItem &item) {
+    /* Catalogs that map onto a built-in effect menu are listed there instead. */
+    if (builtin_menus.contains_as(item.catalog_path().str())) {
+      return;
+    }
     ensure_separator();
     ed::asset::draw_menu_for_catalog(
         item, "SCENE_MT_add_compositor_effect_catalog_assets", layout);
@@ -708,6 +733,24 @@ static MenuType SCENE_MT_add_compositor_effect_catalog_assets()
   type.listener = ed::asset::list::asset_reading_region_listen_fn;
   type.flag = MenuTypeFlag::ContextDependent;
   return type;
+}
+
+void ui_template_compositor_effect_asset_menu_items(ui::Layout &layout,
+                                                    const bContext &C,
+                                                    const StringRef catalog_path)
+{
+  ed::asset::AssetItemTree &tree = get_static_item_tree();
+  /* The tree is normally built by `root_catalogs_draw`, but the built-in effect menus draw their
+   * catalog assets inline and may be drawn before that menu. */
+  if (tree.catalogs.is_empty()) {
+    tree = build_catalog_tree(C);
+  }
+
+  ed::asset::draw_catalog_asset_menu_items(layout,
+                                           tree,
+                                           catalog_path,
+                                           "SCENE_OT_add_compositor_effect_node_group_asset",
+                                           "SCENE_MT_add_compositor_effect_catalog_assets");
 }
 
 /** \} */
