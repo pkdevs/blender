@@ -158,11 +158,12 @@ struct DirichletBoundaryOp {
 
 struct NeumannBoundaryOp {
   const openvdb::Vec3SGrid::ConstAccessor gradient_accessor_;
-  const float gradient_scale_;
+  const openvdb::Mat3s gradient_transform_;
 
   NeumannBoundaryOp(const openvdb::Vec3SGrid &gradient_grid)
       : gradient_accessor_(gradient_grid.getConstAccessor()),
-        gradient_scale_(math::rcp(gradient_grid.voxelSize().x()))
+        gradient_transform_(
+            gradient_grid.transform().baseMap()->getAffineMap()->getMat4().getMat3().inverse())
   {
   }
 
@@ -172,8 +173,9 @@ struct NeumannBoundaryOp {
                   double & /*diagonal*/) const
   {
     const openvdb::math::Vec3s normal = neighbor.asVec3s() - ijk.asVec3s();
-    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
-    source -= gradient.dot(normal) * gradient_scale_;
+    const openvdb::math::Vec3s gradient = gradient_transform_.transform(
+        gradient_accessor_.getValue(neighbor));
+    source -= gradient.dot(normal);
   };
 };
 
@@ -182,7 +184,7 @@ struct MixedBoundaryOp {
   const openvdb::Vec3SGrid::ConstAccessor gradient_accessor_;
   const openvdb::FloatGrid::ConstAccessor factor_accessor_;
   const float value_scale_;
-  const float gradient_scale_;
+  const openvdb::Mat3s gradient_transform_;
 
   MixedBoundaryOp(const openvdb::FloatGrid &value_grid,
                   const openvdb::Vec3SGrid &gradient_grid,
@@ -191,7 +193,8 @@ struct MixedBoundaryOp {
         gradient_accessor_(gradient_grid.getConstAccessor()),
         factor_accessor_(factor_grid.getConstAccessor()),
         value_scale_(math::rcp(math::square(value_grid.voxelSize().x()))),
-        gradient_scale_(math::rcp(gradient_grid.voxelSize().x()))
+        gradient_transform_(
+            gradient_grid.transform().baseMap()->getAffineMap()->getMat4().getMat3().inverse())
   {
   }
 
@@ -202,11 +205,11 @@ struct MixedBoundaryOp {
   {
     const openvdb::math::Vec3s normal = neighbor.asVec3s() - ijk.asVec3s();
     const float value = value_accessor_.getValue(neighbor);
-    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
+    const openvdb::math::Vec3s gradient = gradient_transform_.transform(
+        gradient_accessor_.getValue(neighbor));
     const float factor = factor_accessor_.getValue(neighbor);
     diagonal -= 1.0 * (1.0f - factor);
-    source -= math::interpolate(
-        value * value_scale_, gradient.dot(normal) * gradient_scale_, factor);
+    source -= math::interpolate(value * value_scale_, gradient.dot(normal), factor);
   };
 };
 
