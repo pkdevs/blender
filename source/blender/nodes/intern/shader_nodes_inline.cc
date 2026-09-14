@@ -15,10 +15,13 @@
 #include "BKE_type_conversions.hh"
 
 #include "BLI_listbase.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
+
+#include "DNA_material_types.h"
 
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
@@ -1545,6 +1548,9 @@ class ShaderNodesInliner {
     if (node->is_type("ShaderNodeVectorMath"_ustr)) {
       return this->try_short_circuit__vector_math(node);
     }
+    if (node->is_type("ShaderNodeMixShader"_ustr)) {
+      return this->try_short_circuit__mix_shader(node);
+    }
     return false;
   }
 
@@ -1780,22 +1786,46 @@ class ShaderNodesInliner {
     return false;
   }
 
-  template<typename T>
-  std::optional<T> try_get_input(const NodeInContext &node, const UString identifier)
+  [[nodiscard]] bool try_short_circuit__mix_shader(const NodeInContext &node)
   {
-    const bNodeSocket *socket = node->input_by_identifier(identifier);
-    const SocketValue &value = this->get_input_value(node, identifier);
-    if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-            *socket->typeinfo))
+    const SocketInContext output_socket = node.output_socket(0);
+    const std::optional<float> factor = this->try_get_input<float>(node, "Fac"_ustr);
+    if (factor == 0.0f) {
+      this->store_socket_value(output_socket, this->get_input_value(node, "Shader"_ustr));
+      return true;
+    }
+    if (factor == 1.0f) {
+      this->store_socket_value(output_socket, this->get_input_value(node, "Shader_001"_ustr));
+      return true;
+    }
+    return false;
+  }
+
+  template<typename T>
+  std::optional<T> try_get_input(const NodeInContext &node, const bNodeSocket &socket)
+  {
+    const SocketValue &value = this->get_input_value(node, socket);
+    if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(*socket.typeinfo))
     {
       return std::get<T>(primitive->value);
     }
     return std::nullopt;
   }
 
+  template<typename T>
+  std::optional<T> try_get_input(const NodeInContext &node, const UString identifier)
+  {
+    return this->try_get_input<T>(node, *node->input_by_identifier(identifier));
+  }
+
+  SocketValue get_input_value(const NodeInContext &node, const bNodeSocket &socket)
+  {
+    return value_by_socket_.lookup({node.context, &socket});
+  }
+
   SocketValue get_input_value(const NodeInContext &node, const UString identifier)
   {
-    return value_by_socket_.lookup({node.context, node->input_by_identifier(identifier)});
+    return this->get_input_value(node, *node->input_by_identifier(identifier));
   }
 
   /**
