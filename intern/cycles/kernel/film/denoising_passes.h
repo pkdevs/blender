@@ -35,7 +35,10 @@ ccl_device_forceinline float denoising_depth_compute(KernelGlobals kg,
    * never be lower than the near clip plane. OIDN expects the denoising depth to be in the range
    * [near, far]. For orthographic cameras this is skipped, as `nearclip = -farclip / 2` is used
    * and OIDN does not accept negative near clip planes.*/
-  if (INTEGRATOR_STATE(state, path, bounce) == 0 && kernel_data.cam.nearclip > 0.0f) {
+  if (INTEGRATOR_STATE(state, path, bounce) == 0 &&
+      INTEGRATOR_STATE(state, path, transparent_bounce) == 0 &&
+      INTEGRATOR_STATE(state, path, volume_bounds_bounce) == 0 && kernel_data.cam.nearclip > 0.0f)
+  {
     if (follow_reflections && kernel_data.cam.type != CAMERA_PANORAMA &&
         kernel_data.cam.type != CAMERA_CUSTOM)
     {
@@ -318,7 +321,8 @@ ccl_device_forceinline void film_write_denoising_features_background(
     }
     if (kernel_data.cam.cliplength == FLT_MAX) {
       film_overwrite_pass_float(buffer + kernel_data.film.pass_denoising_depth, farclip_depth);
-    } else {
+    }
+    else {
       film_write_pass_float(buffer + kernel_data.film.pass_denoising_depth, farclip_depth);
     }
   }
