@@ -2966,6 +2966,12 @@ void file_directory_enter_handle(bContext *C, void * /*arg_unused*/, void *arg_b
 
   file_expand_directory(bmain, params);
 
+  /* Typed input may use the alternate separator (`/` on WIN32), convert so comparisons
+   * against the file-list root (which #BLI_path_abs makes native) match. */
+  if (BLI_path_slash_is_native_compat(ALTSEP)) {
+    BLI_path_slash_native(params->dir);
+  }
+
   /* Special case, user may have pasted a path including a file-name into the directory. */
   if (!filelist_is_dir(sfile->files, params->dir)) {
     char tdir[FILE_MAX_LIBEXTRA];
@@ -2997,11 +3003,13 @@ void file_directory_enter_handle(bContext *C, void * /*arg_unused*/, void *arg_b
 
   if (filelist_is_dir(sfile->files, params->dir)) {
     if (!STREQ(params->dir, filelist_dir(sfile->files))) {
+      /* Change directory first, so the re-activated text field holds the path as stored by the
+       * file list, otherwise a mismatch keeps re-activating the field on every apply. */
+      ED_file_change_dir(C);
       /* Keep focus to allow Tab auto-completion. #150689. */
       blender::ui::Button *but = static_cast<blender::ui::Button *>(arg_but);
       textbutton_activate_but(C, but);
       button_clear_selection(but);
-      ED_file_change_dir(C);
     }
     /* Avoids flickering when nothing's changed. */
     else if (!STREQ(params->dir, old_dir)) {
