@@ -156,7 +156,7 @@ static void statvis_calc_thickness(const MeshRenderData &mr,
     BMesh *bm = mr.bm;
     BM_mesh_elem_index_ensure(bm, BM_FACE);
 
-    BMBVHTree *bmtree = BKE_bmbvh_new_from_editmesh(em, 0, nullptr, false);
+    BMBVHTree *bmtree = BKE_bmbvh_new_from_editmesh(em, bm, 0, nullptr, false);
     const Span<std::array<BMLoop *, 3>> looptris = em->looptris;
     for (int i = 0; i < mr.corner_tris_num; i++) {
       const BMLoop *const *ltri = looptris[i].data();
@@ -298,7 +298,7 @@ static void statvis_calc_intersect(const MeshRenderData &mr, MutableSpan<float> 
 
     BM_mesh_elem_index_ensure(bm, BM_FACE);
 
-    BMBVHTree *bmtree = BKE_bmbvh_new_from_editmesh(em, 0, nullptr, false);
+    BMBVHTree *bmtree = BKE_bmbvh_new_from_editmesh(em, bm, 0, nullptr, false);
     BVHTreeOverlap *overlap = BKE_bmbvh_overlap_self(bmtree, &overlap_len);
 
     if (overlap) {
