@@ -266,20 +266,23 @@ void update_cache_invariants(VPaint &vp, SculptSession &ss, wmOperator *op, cons
 }
 
 /** \see #stroke_cache_update for a similar implementation for Sculpt Mode */
-void update_cache_variants(
-    Depsgraph &depsgraph, ViewContext &vc, VPaint &vp, Object &ob, Base &base, PointerRNA *ptr)
+void update_cache_variants(Depsgraph &depsgraph,
+                           ViewContext &vc,
+                           VPaint &vp,
+                           const PaintMode paint_mode,
+                           Object &ob,
+                           Base &base,
+                           const PaintStroke::StrokeStep &stroke_step)
 {
-  const PaintMode paint_mode = vp.paint.runtime->paint_mode;
   SculptSession &ss = *ob.runtime->sculpt_session;
   StrokeCache *cache = ss.cache;
   Brush &brush = *BKE_paint_brush(&vp.paint);
 
   /* TODO: When anchored strokes get supported, this needs to match the implementation in
    * #stroke_cache_update */
-  RNA_float_get_array(ptr, "location", cache->location);
-
-  RNA_float_get_array(ptr, "mouse", cache->mouse);
-  RNA_float_get_array(ptr, "mouse_event", cache->mouse_event);
+  cache->location = stroke_step.location;
+  cache->mouse = stroke_step.mouse;
+  cache->mouse_event = stroke_step.mouse_event;
 
   if (stroke_is_first_brush_step_of_symmetry_pass(*cache)) {
     cursor_geometry_info_update(
@@ -292,7 +295,7 @@ void update_cache_variants(
    * It's more an events design issue, which doesn't split coordinate/pressure/angle
    * changing events. We should avoid this after events system re-design */
   if (paint_supports_dynamic_size(brush, paint_mode) || cache->first_time) {
-    cache->pressure = RNA_float_get(ptr, "pressure");
+    cache->pressure = stroke_step.pressure;
   }
 
   /* Truly temporary data that isn't stored in properties */
@@ -538,7 +541,7 @@ static void paint_and_tex_color_alpha_intern(const VPaint &vp,
                                              float4 &r_rgba)
 {
   const Brush *brush = BKE_paint_brush_for_read(&vp.paint);
-  const MTex *mtex = BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT);
+  const MTex *mtex = BKE_brush_mask_texture_get(brush, PaintMode::Vertex);
   BLI_assert(mtex->tex != nullptr);
   if (mtex->brush_map_mode == MTEX_MAP_MODE_3D) {
     BKE_brush_sample_tex_3d(&vp.paint, brush, mtex, co, r_rgba, 0, nullptr);
@@ -587,14 +590,14 @@ void ED_object_vpaintmode_enter(bContext *C, Depsgraph &depsgraph)
 /** \name Exit Vertex Paint Mode
  * \{ */
 
-void ED_object_vpaintmode_exit_ex(Object &ob)
+void ED_object_vpaintmode_exit_ex(Scene &scene, Object &ob)
 {
-  ed::sculpt_paint::mode_exit_generic(ob, OB_MODE_VERTEX_PAINT);
+  ed::sculpt_paint::mode_exit_generic(scene, ob, OB_MODE_VERTEX_PAINT);
 }
 void ED_object_vpaintmode_exit(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
-  ED_object_vpaintmode_exit_ex(*ob);
+  ED_object_vpaintmode_exit_ex(*CTX_data_scene(C), *ob);
 }
 
 /** \} */
@@ -624,7 +627,7 @@ static wmOperatorStatus vpaint_mode_toggle_exec(bContext *C, wmOperator *op)
   Mesh *mesh = BKE_mesh_from_object(&ob);
 
   if (is_mode_set) {
-    ED_object_vpaintmode_exit_ex(ob);
+    ED_object_vpaintmode_exit_ex(scene, ob);
   }
   else {
     Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
@@ -773,7 +776,8 @@ struct VertexPaintStroke final : public PaintStroke {
   VPaint *vertex_paint_;
   Base *base_;
 
-  VertexPaintStroke(bContext *C, wmOperator *op, const wmEvent *event) : PaintStroke(C, op, event)
+  VertexPaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event, PaintMode::Vertex)
   {
     bmain_ = CTX_data_main(C);
     ToolSettings *ts = CTX_data_tool_settings(C);
@@ -785,7 +789,7 @@ struct VertexPaintStroke final : public PaintStroke {
   bool test_start(wmOperator *op, float2 mouse) override;
   void redraw(bool final) override;
   bool test_cancel() override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
@@ -904,25 +908,18 @@ static void do_vpaint_brush_blur_loops(const Depsgraph &depsgraph,
     select_poly = *attributes.lookup<bool>(".select_poly", bke::AttrDomain::Face);
   }
 
-  struct LocalData {
-    Vector<float> factors;
-    Vector<float> distances;
-  };
-  threading::EnumerableThreadSpecific<LocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
-        LocalData &tls = all_tls.local();
         const Span<int> verts = nodes[i].verts();
-        tls.factors.resize(verts.size());
-        const MutableSpan<float> factors = tls.factors;
+
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
         fill_factor_from_hide(hide_vert, verts, factors);
         filter_region_clip_factors(ss, vert_positions, verts, factors);
         if (!select_vert.is_empty()) {
           filter_factors_with_selection(select_vert, verts, factors);
         }
 
-        tls.distances.resize(verts.size());
-        const MutableSpan<float> distances = tls.distances;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
         calc_brush_distances(
             ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
         filter_distances_with_radius(cache.radius, distances, factors);
@@ -1066,25 +1063,17 @@ static void do_vpaint_brush_blur_verts(const Depsgraph &depsgraph,
     select_poly = *attributes.lookup<bool>(".select_poly", bke::AttrDomain::Face);
   }
 
-  struct LocalData {
-    Vector<float> factors;
-    Vector<float> distances;
-  };
-  threading::EnumerableThreadSpecific<LocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
-        LocalData &tls = all_tls.local();
         const Span<int> verts = nodes[i].verts();
-        tls.factors.resize(verts.size());
-        const MutableSpan<float> factors = tls.factors;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
         fill_factor_from_hide(hide_vert, verts, factors);
         filter_region_clip_factors(ss, vert_positions, verts, factors);
         if (!select_vert.is_empty()) {
           filter_factors_with_selection(select_vert, verts, factors);
         }
 
-        tls.distances.resize(verts.size());
-        const MutableSpan<float> distances = tls.distances;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
         calc_brush_distances(
             ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
         filter_distances_with_radius(cache.radius, distances, factors);
@@ -1229,25 +1218,17 @@ static void do_vpaint_brush_smear(const Depsgraph &depsgraph,
     select_poly = *attributes.lookup<bool>(".select_poly", bke::AttrDomain::Face);
   }
 
-  struct LocalData {
-    Vector<float> factors;
-    Vector<float> distances;
-  };
-  threading::EnumerableThreadSpecific<LocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
-        LocalData &tls = all_tls.local();
         const Span<int> verts = nodes[i].verts();
-        tls.factors.resize(verts.size());
-        const MutableSpan<float> factors = tls.factors;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
         fill_factor_from_hide(hide_vert, verts, factors);
         filter_region_clip_factors(ss, vert_positions, verts, factors);
         if (!select_vert.is_empty()) {
           filter_factors_with_selection(select_vert, verts, factors);
         }
 
-        tls.distances.resize(verts.size());
-        const MutableSpan<float> distances = tls.distances;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
         calc_brush_distances(
             ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
         filter_distances_with_radius(cache.radius, distances, factors);
@@ -1405,11 +1386,6 @@ static void calculate_average_color(VPaintData &vpd,
     select_vert = *attributes.lookup<bool>(".select_vert", bke::AttrDomain::Point);
   }
 
-  struct LocalData {
-    Vector<float> factors;
-    Vector<float> distances;
-  };
-  threading::EnumerableThreadSpecific<LocalData> all_tls;
   to_static_color_type(vpd.type, [&](auto dummy) {
     using T = decltype(dummy);
     using Color =
@@ -1422,19 +1398,17 @@ static void calculate_average_color(VPaintData &vpd,
     node_mask.foreach_index(
         [&](const int i) {
           VPaintAverageAccum<Blend> &accum2 = accum[i];
-          LocalData &tls = all_tls.local();
 
           const Span<int> verts = nodes[i].verts();
-          tls.factors.resize(verts.size());
-          const MutableSpan<float> factors = tls.factors;
+
+          Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
           fill_factor_from_hide(hide_vert, verts, factors);
           filter_region_clip_factors(ss, vert_positions, verts, factors);
           if (!select_vert.is_empty()) {
             filter_factors_with_selection(select_vert, verts, factors);
           }
 
-          tls.distances.resize(verts.size());
-          const MutableSpan<float> distances = tls.distances;
+          Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
           calc_brush_distances(
               ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
           filter_distances_with_radius(cache.radius, distances, factors);
@@ -1569,35 +1543,25 @@ static void vpaint_do_draw(const Depsgraph &depsgraph,
 
   const float3 brush_color = get_brush_color(&vp.paint, &brush, cache, vpd.paintcol);
 
-  struct LocalData {
-    Vector<float> factors;
-    Vector<float> automask_factors;
-    Vector<float> distances;
-  };
-  threading::EnumerableThreadSpecific<LocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
-        LocalData &tls = all_tls.local();
         const Span<int> verts = nodes[i].verts();
-        tls.factors.resize(verts.size());
-        const MutableSpan<float> factors = tls.factors;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
         fill_factor_from_hide(hide_vert, verts, factors);
         filter_region_clip_factors(ss, vert_positions, verts, factors);
         if (!select_vert.is_empty()) {
           filter_factors_with_selection(select_vert, verts, factors);
         }
 
-        tls.distances.resize(verts.size());
-        const MutableSpan<float> distances = tls.distances;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
         calc_brush_distances(
             ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
         filter_distances_with_radius(cache.radius, distances, factors);
         calc_brush_strength_factors(cache, brush, distances, factors);
 
-        MutableSpan<float> automask_factors;
+        Array<float, bke::pbvh::MESH_LEAF_LIMIT> automask_factors;
         if (cache.automasking) {
-          tls.automask_factors.resize(verts.size());
-          automask_factors = tls.automask_factors;
+          automask_factors.reinitialize(verts.size());
           automask_factors.fill(1.0f);
           auto_mask::calc_vert_factors(
               depsgraph, ob, *cache.automasking, nodes[i], verts, automask_factors);
@@ -1778,7 +1742,7 @@ static void vpaint_do_paint(const Depsgraph &depsgraph,
   attribute.finish();
 }
 
-void VertexPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
+void VertexPaintStroke::update_step(wmOperator * /*op*/, const StrokeStep &stroke_step)
 {
   VPaintData &vpd = *static_cast<VPaintData *>(mode_data_.get());
   ViewContext &vc = vpd.vc;
@@ -1788,7 +1752,8 @@ void VertexPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
 
   ss.cache->stroke_distance = this->stroke_distance();
 
-  vwpaint::update_cache_variants(*this->depsgraph, vc, *vertex_paint_, ob, *base_, itemptr);
+  vwpaint::update_cache_variants(
+      *this->depsgraph, vc, *vertex_paint_, this->paint_mode, ob, *base_, stroke_step);
 
   ed::sculpt_paint::do_symmetrical_brush_actions(
       *this->depsgraph, *this->scene, vertex_paint_->paint, ob, vpaint_do_paint, &vpd);

@@ -250,6 +250,15 @@ add_blender_test(
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_disk_file_hash_service_test.py
 )
 
+# Blender is launched by the script so each test controls the command-line arguments & preferences
+# `add_blender_test` hard-codes these arguments which isn't compatible with the tests,
+# see `TEST_BLENDER_EXE_PARAMS`.
+add_python_test(
+  script_blend_autoexec_cli
+  ${CMAKE_CURRENT_LIST_DIR}/bl_blend_autoexec_cli.py
+  --blender "${TEST_BLENDER_EXE}"
+)
+
 # test running operators doesn't segfault under various conditions
 if(WITH_TESTS_EXPERIMENTAL)
   add_blender_test(
@@ -740,6 +749,11 @@ add_blender_test(
 )
 
 add_blender_test(
+  bl_animation_context_markers
+  --python ${TEST_PYTHON_DIR}/bl_animation_context_markers.py
+)
+
+add_blender_test(
   bl_animation_rename
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_rename.py
 )
@@ -986,7 +1000,16 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     list(APPEND workbench_tests grease_pencil)
   endif()
 
+  set(gpu_render_tests ${render_tests})
+  # Remove cycles specific tests.
+  list(FILTER gpu_render_tests EXCLUDE REGEX light_group|shadow_catcher|denoise|guiding|reports)
+
+  # Add EEVEE specific tests.
+  set(eevee_tests ${gpu_render_tests};lighting_nodes)
+
   list(SORT render_tests)
+  list(SORT gpu_render_tests)
+  list(SORT eevee_tests)
   list(SORT workbench_tests)
 
   # Cycles
@@ -1053,9 +1076,6 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
   endif()
 
   if(WITH_GPU_RENDER_TESTS)
-    list(APPEND gpu_render_tests ${render_tests})
-    list(FILTER gpu_render_tests EXCLUDE REGEX light_group|shadow_catcher|denoise|guiding|reports)
-
     function(add_gpu_render_tests name script render_tests)
       if(WITH_OPENGL_BACKEND)
         foreach(render_test ${render_tests})
@@ -1098,7 +1118,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
       endif()
     endfunction()
 
-    add_gpu_render_tests(eevee "eevee_render_tests.py" "${gpu_render_tests}")
+    add_gpu_render_tests(eevee "eevee_render_tests.py" "${eevee_tests}")
     add_gpu_render_tests(workbench "workbench_render_tests.py" "${workbench_tests}")
     if(WITH_GPU_RENDER_TESTS_HEADED)
       add_gpu_render_tests(overlay "overlay_render_tests.py" "overlay")
@@ -1825,6 +1845,14 @@ if(WITH_UI_TESTS)
     test_tool_activation.image_editor
     test_tool_activation.node_editor
     test_tool_activation.sequencer
+    test_preferences_draw_all.test_preferences_draw_all
+    test_blend_autoexec.pref_enabled_drop_blend_file_untrusted
+    test_blend_autoexec.pref_enabled_drop_blend_file_trusted
+    test_blend_autoexec.pref_enabled_open_file_selector_trusted
+    test_blend_autoexec.pref_enabled_open_file_selector_untrusted
+    test_blend_autoexec.pref_disabled_open_file_selector
+    test_blend_autoexec.pref_disabled_drop_blend_file
+    test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
@@ -1836,6 +1864,15 @@ if(WITH_UI_TESTS)
     )
   endforeach()
   unset(_ui_tests)
+
+  # test_open_editor_types opens many areas, each needing its own GLContext.
+  # The number of available context is limit by driver and not queryable.
+  if(WITH_OPENGL_BACKEND)
+    set_tests_properties(
+      ui_opengl_test_editor_types.test_open_editor_types
+      PROPERTIES DISABLED TRUE
+    )
+  endif()
 endif()
 
 
