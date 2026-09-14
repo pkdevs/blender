@@ -412,7 +412,8 @@ struct BlendLibReader {
 
 /**
  * Makes a shallow copy of the ID for use in #IDTypeInfo::blend_write. The functions are currently
- * allowed to make shallow changes to the data-block which won't be written to the file.
+ * allowed to make shallow changes to the data-block which won't be written to the file. For
+ * example, #mesh_blend_write assumes that the passed in #Mesh is a shallow copy already.
  */
 struct BLO_Write_IDBuffer {
  private:
