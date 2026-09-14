@@ -300,7 +300,7 @@ static wmOperatorStatus mesh_bisect_exec(bContext *C, wmOperator *op)
 
     if (opdata != nullptr) {
       if (opdata->backup[ob_index].is_dirty) {
-        EDBM_redo_state_restore(&opdata->backup[ob_index].mesh_backup, em, false);
+        EDBM_redo_state_restore(&opdata->backup[ob_index].mesh_backup, em, bm, false);
         opdata->backup[ob_index].is_dirty = false;
       }
     }

@@ -219,7 +219,8 @@ static void edbm_inset_cancel(bContext *C, wmOperator *op)
     for (uint ob_index = 0; ob_index < opdata->ob_store_len; ob_index++) {
       Object *obedit = opdata->ob_store[ob_index].ob;
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
-      EDBM_redo_state_restore_and_free(&opdata->ob_store[ob_index].mesh_backup, em, true);
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+      EDBM_redo_state_restore_and_free(&opdata->ob_store[ob_index].mesh_backup, em, bm, true);
       EDBMUpdate_Params params{};
       params.calc_looptris = false;
       params.calc_normals = false;
@@ -260,7 +261,7 @@ static bool edbm_inset_calc(wmOperator *op)
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     if (opdata->is_modal) {
-      EDBM_redo_state_restore(&opdata->ob_store[ob_index].mesh_backup, em, false);
+      EDBM_redo_state_restore(&opdata->ob_store[ob_index].mesh_backup, em, bm, false);
     }
 
     if (use_individual) {

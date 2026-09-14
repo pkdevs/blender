@@ -61,27 +61,30 @@ BMBackup EDBM_redo_state_store(BMesh *bm)
   return backup;
 }
 
-void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
+void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, BMesh *bm, bool recalc_looptris)
 {
-  BM_mesh_data_free(em->bm);
+  BM_mesh_data_free(bm);
   BMesh *tmpbm = BM_mesh_copy(backup->bmcopy);
-  *em->bm = *tmpbm;
+  *bm = *tmpbm;
   MEM_delete(tmpbm);
   tmpbm = nullptr;
 
   if (recalc_looptris) {
-    BKE_editmesh_looptris_calc(em);
+    BKE_editmesh_looptris_calc(em, bm);
   }
 }
 
-void EDBM_redo_state_restore_and_free(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
+void EDBM_redo_state_restore_and_free(BMBackup *backup,
+                                      BMEditMesh *em,
+                                      BMesh *bm,
+                                      bool recalc_looptris)
 {
-  BM_mesh_data_free(em->bm);
-  *em->bm = *backup->bmcopy;
+  BM_mesh_data_free(bm);
+  *bm = *backup->bmcopy;
   MEM_delete(backup->bmcopy);
   backup->bmcopy = nullptr;
   if (recalc_looptris) {
-    BKE_editmesh_looptris_calc(em);
+    BKE_editmesh_looptris_calc(em, bm);
   }
 }
 

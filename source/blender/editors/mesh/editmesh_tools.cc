@@ -1269,7 +1269,7 @@ static bool edbm_connect_vert_pair(BMEditMesh *em, Mesh *mesh, wmOperator *op)
     }
     else if (failure) {
       len = 0;
-      EDBM_redo_state_restore_and_free(&em_backup, em, true);
+      EDBM_redo_state_restore_and_free(&em_backup, em, bm, true);
       em_backup_free = false;
     }
     else {

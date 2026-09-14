@@ -358,7 +358,7 @@ static bool edbm_bevel_calc(wmOperator *op)
 
     /* revert to original mesh */
     if (opdata->is_modal) {
-      EDBM_redo_state_restore(&ob_store.mesh_backup, em, false);
+      EDBM_redo_state_restore(&ob_store.mesh_backup, em, bm, false);
     }
 
     const int material = std::clamp(material_init, -1, obedit->totcol - 1);
@@ -471,7 +471,8 @@ static void edbm_bevel_cancel(bContext *C, wmOperator *op)
     for (BevelObjectStore &ob_store : opdata->ob_store) {
       Object *obedit = ob_store.ob;
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
-      EDBM_redo_state_restore_and_free(&ob_store.mesh_backup, em, true);
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+      EDBM_redo_state_restore_and_free(&ob_store.mesh_backup, em, bm, true);
 
       EDBMUpdate_Params params{};
       params.calc_looptris = false;

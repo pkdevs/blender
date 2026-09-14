@@ -568,13 +568,13 @@ BMBackup EDBM_redo_state_store(BMesh *bm);
 /**
  * Restore a BMesh from backup.
  */
-void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
-    ATTR_NONNULL(1, 2);
+void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, BMesh *bm, bool recalc_looptris)
+    ATTR_NONNULL(1, 2, 3);
 /**
  * Delete the backup, flushing it to an edit-mesh.
  */
-void EDBM_redo_state_restore_and_free(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
-    ATTR_NONNULL(1, 2);
+void EDBM_redo_state_restore_and_free(
+    BMBackup *backup, BMEditMesh *em, BMesh *bm, bool recalc_looptris) ATTR_NONNULL(1, 2, 3);
 void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);
 
 namespace ed::mesh {
