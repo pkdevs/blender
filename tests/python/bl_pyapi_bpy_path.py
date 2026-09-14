@@ -57,6 +57,24 @@ class TestBpyPath(unittest.TestCase):
         self.assertFalse(is_autoexec("/home/user/downloads/"))
         self.assertTrue(is_autoexec("/home/user/projects/"))
 
+        # The default for "Trusted Source" also checks the preference.
+        path_cmp.use_glob = False
+        path_cmp.path = "/untrusted/"
+        prefs_filepaths = prefs.filepaths
+        self.addCleanup(
+            setattr, prefs_filepaths, "use_scripts_auto_execute", prefs_filepaths.use_scripts_auto_execute)
+
+        prefs_filepaths.use_scripts_auto_execute = True
+        self.assertTrue(is_autoexec("/trusted/", runtime_environment=True))
+        self.assertFalse(is_autoexec("/untrusted/", runtime_environment=True))
+
+        # Nothing is trusted by default, only the excluded paths are still checked.
+        prefs_filepaths.use_scripts_auto_execute = False
+        self.assertFalse(is_autoexec("/trusted/", runtime_environment=True))
+        self.assertFalse(is_autoexec("/untrusted/", runtime_environment=True))
+        self.assertTrue(is_autoexec("/trusted/"))
+        self.assertFalse(is_autoexec("/untrusted/"))
+
 
 if __name__ == '__main__':
     import sys

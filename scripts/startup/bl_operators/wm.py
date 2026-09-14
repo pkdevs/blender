@@ -3718,11 +3718,17 @@ class WM_OT_drop_blend_file(Operator):
     )
 
     @classmethod
-    def _is_autoexec(cls, filepath):
+    def _is_autoexec(cls, filepath, *, runtime_environment=False):
         """
-        Return true when `filepath` is in a directory which isn't excluded.
+        Return true when the directory of ``filepath`` isn't excluded,
+        ``runtime_environment`` returns the default for "Trusted Source" instead.
         """
-        return bpy.path.is_autoexec(filepath, canonicalize=True, strip_filename=True)
+        return bpy.path.is_autoexec(
+            filepath,
+            runtime_environment=runtime_environment,
+            canonicalize=True,
+            strip_filename=True,
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -3739,8 +3745,15 @@ class WM_OT_drop_blend_file(Operator):
         props.display_file_selector = False
         props.use_scripts = self.use_scripts
 
+        # Excluded paths can't be trusted, unless the command line overrides the preference.
+        is_untrusted = (
+            context.preferences.filepaths.use_scripts_auto_execute and
+            not bpy.app.autoexec_override and
+            not self._is_autoexec(filepath)
+        )
+
         col = layout.column()
-        if not context.preferences.filepaths.use_scripts_auto_execute or self._is_autoexec(filepath):
+        if not is_untrusted:
             col.prop(self, "use_scripts")
         else:
             col.enabled = False
@@ -3764,11 +3777,8 @@ class WM_OT_drop_blend_file(Operator):
         return {'CANCELLED'}
 
     def invoke(self, context, _event):
-        # Match the file selector, which defaults to the preferences.
-        self.use_scripts = (
-            context.preferences.filepaths.use_scripts_auto_execute and
-            self._is_autoexec(self.filepath)
-        )
+        # Match the file selector.
+        self.use_scripts = self._is_autoexec(self.filepath, runtime_environment=True)
         # The popup shows this operators own UI, keeping it alive while it's open.
         return context.window_manager.invoke_popup(self, auto_keymap=True)
 

@@ -2481,11 +2481,23 @@ bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_scripts");
   bool use_scripts_autoexec_check = false;
   if (!RNA_property_is_set(op->ptr, prop)) {
-    /* Use #G_FLAG_SCRIPT_AUTOEXEC rather than the userpref because this means if
-     * the flag has been disabled from the command line, then opening
-     * from the menu won't enable this setting. */
-    bool value = use_prefs ? ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) :
-                             ((G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0);
+    bool value;
+    if (use_prefs) {
+      char filepath[FILE_MAX] = "";
+      if (PropertyRNA *prop_filepath = RNA_struct_find_property(op->ptr, "filepath")) {
+        RNA_property_string_get(op->ptr, prop_filepath, filepath);
+      }
+      value = BKE_autoexec_default_trust_source(filepath,
+                                                {
+                                                    .runtime_environment = true,
+                                                    .canonicalize = true,
+                                                    .strip_filename = true,
+                                                });
+    }
+    else {
+      /* Keep the trust of the current session rather than the preference. */
+      value = (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
+    }
 
     RNA_property_boolean_set(op->ptr, prop, value);
     use_scripts_autoexec_check = true;
@@ -3343,8 +3355,10 @@ static bool wm_open_mainfile_check(bContext * /*C*/, wmOperator *op)
 
   RNA_string_get(op->ptr, "filepath", filepath);
 
-  if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
-    if (BKE_autoexec_match(filepath, true, true) == true) {
+  /* Excluded paths can't be trusted, unless the command line overrides the preference. */
+  if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && ((G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) == 0))
+  {
+    if (BKE_autoexec_match(filepath, true, true)) {
       RNA_property_boolean_set(op->ptr, prop, false);
       is_untrusted = true;
     }
