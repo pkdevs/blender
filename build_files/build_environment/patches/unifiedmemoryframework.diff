@@ -1,8 +1,33 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 1eee98b..bff8eca 100644
+index 1eee98b..72b1016 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -507,6 +507,19 @@ if(WINDOWS AND UMF_USE_DEBUG_POSTFIX)
+@@ -372,21 +372,9 @@ if(WINDOWS)
+     message(STATUS "    LIBHWLOC_DLL_DIRS = ${LIBHWLOC_DLL_DIRS}")
+ endif()
+
+-if(hwloc_targ_SOURCE_DIR)
+-    # Apply security patch for HWLOC
+-    execute_process(
+-        COMMAND git apply ${PROJECT_SOURCE_DIR}/cmake/fix_coverity_issues.patch
+-        WORKING_DIRECTORY ${hwloc_targ_SOURCE_DIR}
+-        OUTPUT_VARIABLE UMF_HWLOC_PATCH_OUTPUT
+-        ERROR_VARIABLE UMF_HWLOC_PATCH_ERROR)
+-
+-    if(UMF_HWLOC_PATCH_OUTPUT)
+-        message(STATUS "HWLOC patch command output:\n${UMF_HWLOC_PATCH_OUTPUT}")
+-    endif()
+-    if(UMF_HWLOC_PATCH_ERROR)
+-        message(WARNING "HWLOC patch command output:\n${UMF_HWLOC_PATCH_ERROR}")
+-    endif()
+-endif()
++# We are applying the security patch for HWLOC at the Blender level
++# to avoid patching it over and over again, as we are reusing
++# the same HWLOC source code directory.
+
+ if(UMF_BUILD_LEVEL_ZERO_PROVIDER)
+     if(UMF_BUILD_GPU_TESTS OR UMF_BUILD_GPU_EXAMPLES)
+@@ -507,6 +495,19 @@ if(WINDOWS AND UMF_USE_DEBUG_POSTFIX)
      # The build_umfd target's configuration command requires to have
      # CMAKE_PREFIX_PATH with semicolons escaped
      string(JOIN "\;" UMFD_CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH})
@@ -22,7 +47,7 @@ index 1eee98b..bff8eca 100644
      add_custom_target(
          build_umfd ALL
          COMMAND
-@@ -532,6 +545,12 @@ if(WINDOWS AND UMF_USE_DEBUG_POSTFIX)
+@@ -532,6 +533,12 @@ if(WINDOWS AND UMF_USE_DEBUG_POSTFIX)
              -DUMF_USE_ASAN=OFF -DUMF_USE_UBSAN=OFF -DUMF_USE_TSAN=OFF
              -DUMF_USE_MSAN=OFF -DUMF_USE_VALGRIND=OFF -DUMF_USE_COVERAGE=OFF
              -DUMF_PROXY_LIB_BASED_ON_POOL=${UMF_PROXY_LIB_BASED_ON_POOL}
