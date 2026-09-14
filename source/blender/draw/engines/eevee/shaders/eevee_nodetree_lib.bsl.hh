@@ -12,6 +12,7 @@
 #include "draw_view.bsl.hh"
 #include "eevee_bxdf_lut_lib.bsl.hh"
 #include "eevee_camera_lib.bsl.hh"
+#include "eevee_fast_gi.bsl.hh"
 #include "eevee_hiz.bsl.hh"
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_eval.bsl.hh"
@@ -129,10 +130,12 @@ struct KernelGlobals {
   [[resource_table]] srt_t<draw::Infos> infos;
 
   [[resource_table]] srt_t<eevee::PipelineConstants> pipe;
-  [[resource_table]] srt_t<UtilityTexture> util_tx;
   [[resource_table]] srt_t<eevee::Uniform> uniforms;
   [[resource_table]] srt_t<eevee::Sampling> sampling;
-  [[resource_table]] srt_t<eevee::HiZ> hiz;
+
+  [[resource_table]] [[condition(!is_occupancy_pipe)]] srt_t<UtilityTexture> util_tx;
+
+  [[resource_table]] [[condition(use_ambient_occlusion)]] srt_t<eevee::HiZ> hiz;
 
   [[resource_table]] [[condition(use_aov_output)]] srt_t<eevee::RenderPassOutput> renderpass_out;
 
@@ -441,25 +444,21 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
                              [[maybe_unused]] const float inverted,
                              [[maybe_unused]] const float sample_count)
 {
-  FRAGMENT_SHADER_CREATE_INFO(draw_view);
-
-  [[resource_table]] [[maybe_unused]] const eevee::Sampling &samp = kg.sampling;
-  [[resource_table]] [[maybe_unused]] const UtilityTexture &util_tx = kg.util_tx;
-  [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = kg.hiz;
-  [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = kg.uniforms;
-  [[resource_table]] [[maybe_unused]] const draw::View &views = kg.view;
-
-  {
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_AMBIENT_OCCLUSION) && !defined(MAT_DEPTH) && \
-    !defined(MAT_SHADOW)
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.use_ambient_occlusion) [[static_branch]] {
+    [[resource_table]] [[maybe_unused]] const eevee::Sampling &samp = kg.sampling;
+    [[resource_table]] [[maybe_unused]] const UtilityTexture &util_tx = kg.util_tx;
+    [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = kg.hiz;
+    [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = kg.uniforms;
+    [[resource_table]] [[maybe_unused]] const draw::View &views = kg.view;
 
     const ViewMatrices view = views.get(0);
 
     float3 vP = view.point_world_to_view(sd.P);
     float3 vN = view.normal_world_to_view(normal);
 
-    int2 texel = int2(gl_FragCoord.xy);
-    float4 noise = util_tx.fetch(float2(texel), UTIL_BLUE_NOISE_LAYER);
+    float4 noise = util_tx.fetch(sd.frag_co.xy, UTIL_BLUE_NOISE_LAYER);
     noise = fract(noise + samp.rng_3D_get(SAMPLING_AO_U).xyzx);
 
     float result = eevee::fast_gi::eval<float>(uni,
@@ -480,10 +479,9 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals &kg,
                                                true);
 
     return saturate(result);
-#else
-    return 1.0f;
-#endif
   }
+#endif
+  return 1.0f;
 }
 
 void raycast_eval([[resource_table]] KernelGlobals &kg,

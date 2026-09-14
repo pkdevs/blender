@@ -699,14 +699,18 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                                               eMaterialPipeline pipeline_type,
                                               eMaterialGeometry geometry_type,
                                               const bool use_shader_to_rgba,
-                                              const bool use_lighting_nodes)
+                                              const bool use_lighting_nodes,
+                                              const bool use_ao_node)
 {
   using namespace blender::gpu::shader;
 
   info.compilation_constant(
       gpu::shader::Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
   info.compilation_constant(
+      gpu::shader::Type::bool_t, "is_occupancy_pipe", pipeline_type == MAT_PIPE_VOLUME_OCCUPANCY);
+  info.compilation_constant(
       gpu::shader::Type::bool_t, "use_clip_plane", pipeline_type == MAT_PIPE_PREPASS_PLANAR);
+  info.compilation_constant(gpu::shader::Type::bool_t, "use_ambient_occlusion", use_ao_node);
 
   StringRefNull pipeline_info_name;
   StringRefNull additional_info_name;
@@ -989,15 +993,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     info.define("UNI_ATTR(a)", "float4(0.0)");
   }
 
-  bool use_ao_node = false;
-
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_AO) &&
-      ELEM(pipeline_type, MAT_PIPE_FORWARD, MAT_PIPE_DEFERRED) &&
-      geometry_type_has_surface(geometry_type))
-  {
-    info.define("MAT_AMBIENT_OCCLUSION");
-    use_ao_node = true;
-  }
+  bool use_ao_node = (GPU_material_flag_get(gpumat, GPU_MATFLAG_AO) &&
+                      ELEM(pipeline_type, MAT_PIPE_FORWARD, MAT_PIPE_DEFERRED) &&
+                      geometry_type_has_surface(geometry_type));
 
   bool use_transparency = false;
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
@@ -1044,7 +1042,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
    * SlotAllocator. */
 
   SlotAllocator slots = add_pipeline_create_info(
-      info, pipeline_type, geometry_type, use_shader_to_rgba, use_lighting_nodes);
+      info, pipeline_type, geometry_type, use_shader_to_rgba, use_lighting_nodes, use_ao_node);
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
     info.define("MAT_SHADER_TO_RGBA");
@@ -1372,9 +1370,6 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   if (pipeline_type != MAT_PIPE_VOLUME_OCCUPANCY) {
     Vector<StringRefNull> dependencies;
     dependencies.append("eevee_nodetree_type_lib.glsl");
-    if (use_ao_node) {
-      dependencies.append("eevee_fast_gi.bsl.hh");
-    }
     dependencies.append("eevee_geom_types_lib.bsl.hh");
     dependencies.append("eevee_nodetree_lib.bsl.hh");
 
