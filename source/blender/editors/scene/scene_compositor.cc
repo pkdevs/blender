@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edscene
+ */
+
 #include "BLI_listbase.hh"
 #include "BLI_string_utf8.hh"
 
@@ -15,6 +19,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
 #include "WM_api.hh"
@@ -53,14 +58,61 @@
 
 namespace blender {
 
-/* --------------------------------------------------------------------
- * Add Effect Operator.
- */
+/* -------------------------------------------------------------------- */
+/** \name Operator Utilities
+ * \{ */
+
+/* If the "name" property is not set, fill the name property with the name of the effect with a UI
+ * panel below the mouse cursor, unless a specific effect is set with a context pointer. Used in
+ * order to apply effect operators on hover over their panels. */
+static wmOperatorStatus compositor_effect_invoke_properties_with_hover(bContext *C,
+                                                                       wmOperator *op,
+                                                                       const wmEvent *event)
+{
+  if (RNA_struct_property_is_set(op->ptr, "name")) {
+    return OPERATOR_FINISHED;
+  }
+
+  /* Note that the context pointer is *not* the active effect, it is set in UI layouts, see the
+   * panel_context_pointer_set calls in effect panel draw functions. */
+  PointerRNA ctx_ptr = CTX_data_pointer_get_type(C, "effect", RNA_SceneCompositorEffect);
+  if (ctx_ptr) {
+    SceneCompositorEffect *effect = static_cast<SceneCompositorEffect *>(ctx_ptr.data);
+    RNA_string_set(op->ptr, "name", effect->name);
+    return OPERATOR_FINISHED;
+  }
+
+  PointerRNA *panel_ptr = ui::region_panel_custom_data_under_cursor(C, event);
+  if (panel_ptr == nullptr || !*panel_ptr) {
+    /* The operators using this function can typically be called from UIs that aren't related to
+     * the effects UI at all. So include #OPERATOR_PASS_THROUGH to not block events from reaching
+     * other operators/handlers. */
+    return OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED;
+  }
+
+  if (!RNA_struct_is_a(panel_ptr->type, RNA_SceneCompositorEffect)) {
+    /* Work around multiple operators using the same shortcut. The operators for the other
+     * stacks in the property editor use the same key, and will not run after these return
+     * OPERATOR_CANCELLED. */
+    return OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED;
+  }
+
+  const SceneCompositorEffect *effect = static_cast<const SceneCompositorEffect *>(
+      panel_ptr->data);
+  RNA_string_set(op->ptr, "name", effect->name);
+  return OPERATOR_FINISHED;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Effect Operator
+ * \{ */
 
 static wmOperatorStatus add_compositor_effect_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
-  bke::compositor::new_effect(*scene, "Effect");
+  bke::compositor::new_effect(*scene, "Scene Effect");
 
   WM_event_add_notifier(C, NC_SCENE | ND_COMPO_RESULT, scene);
 
@@ -69,18 +121,20 @@ static wmOperatorStatus add_compositor_effect_exec(bContext *C, wmOperator * /*o
 
 static void SCENE_OT_add_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Add Scene Compositor Effect";
+  ot->name = "Add Scene Effect";
   ot->idname = "SCENE_OT_add_compositor_effect";
-  ot->description = "Add a scene compositor effect to the scene";
+  ot->description = "Add a compositor effect to the scene";
 
   ot->exec = add_compositor_effect_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* --------------------------------------------------------------------
- * Remove Effect Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remove Effect Operator
+ * \{ */
 
 static wmOperatorStatus remove_compositor_effect_exec(bContext *C, wmOperator *op)
 {
@@ -102,14 +156,27 @@ static wmOperatorStatus remove_compositor_effect_exec(bContext *C, wmOperator *o
 
   return OPERATOR_FINISHED;
 }
+
+static wmOperatorStatus remove_compositor_effect_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event)
+{
+  wmOperatorStatus status = compositor_effect_invoke_properties_with_hover(C, op, event);
+  if (!(status & OPERATOR_CANCELLED)) {
+    return remove_compositor_effect_exec(C, op);
+  }
+  return status;
+}
+
 static void SCENE_OT_remove_compositor_effect(wmOperatorType *ot)
 {
   PropertyRNA *prop;
 
-  ot->name = "Remove Scene Compositor Effect";
+  ot->name = "Remove Scene Effect";
   ot->idname = "SCENE_OT_remove_compositor_effect";
-  ot->description = "Remove a scene compositor effect from the scene";
+  ot->description = "Remove a scene effect from the scene";
 
+  ot->invoke = remove_compositor_effect_invoke;
   ot->exec = remove_compositor_effect_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -119,9 +186,11 @@ static void SCENE_OT_remove_compositor_effect(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-/* --------------------------------------------------------------------
- * Duplicate Effect Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Duplicate Effect Operator
+ * \{ */
 
 static wmOperatorStatus duplicate_compositor_effect_exec(bContext *C, wmOperator *op)
 {
@@ -154,12 +223,24 @@ static wmOperatorStatus duplicate_compositor_effect_exec(bContext *C, wmOperator
   return OPERATOR_FINISHED;
 }
 
+static wmOperatorStatus duplicate_compositor_effect_invoke(bContext *C,
+                                                           wmOperator *op,
+                                                           const wmEvent *event)
+{
+  wmOperatorStatus status = compositor_effect_invoke_properties_with_hover(C, op, event);
+  if (!(status & OPERATOR_CANCELLED)) {
+    return duplicate_compositor_effect_exec(C, op);
+  }
+  return status;
+}
+
 static void SCENE_OT_duplicate_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Duplicate Scene Compositor Effect";
+  ot->name = "Duplicate Scene Effect";
   ot->idname = "SCENE_OT_duplicate_compositor_effect";
-  ot->description = "Duplicate the active or the given scene compositor effect";
+  ot->description = "Duplicate the active or the given scene effect";
 
+  ot->invoke = duplicate_compositor_effect_invoke;
   ot->exec = duplicate_compositor_effect_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -174,9 +255,11 @@ static void SCENE_OT_duplicate_compositor_effect(wmOperatorType *ot)
   RNA_def_property_flag(ot->prop, PROP_HIDDEN);
 }
 
-/* --------------------------------------------------------------------
- * Move Effect To Index Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Move Effect to Index Operator
+ * \{ */
 
 static wmOperatorStatus move_compositor_effect_to_index_exec(bContext *C, wmOperator *op)
 {
@@ -212,10 +295,10 @@ static wmOperatorStatus move_compositor_effect_to_index_invoke(bContext *C,
 
 static void SCENE_OT_move_compositor_effect_to_index(wmOperatorType *ot)
 {
-  ot->name = "Move Active Scene Compositor Effect to Index";
+  ot->name = "Move Active Scene Effect to Index";
   ot->description =
-      "Change the scene compositor effect's index in the stack so it evaluates after the set "
-      "number of others";
+      "Change the scene effect's index in the stack so it evaluates after the set number of "
+      "others";
   ot->idname = "SCENE_OT_move_compositor_effect_to_index";
 
   ot->invoke = move_compositor_effect_to_index_invoke;
@@ -230,9 +313,11 @@ static void SCENE_OT_move_compositor_effect_to_index(wmOperatorType *ot)
       ot->srna, "index", 0, 0, INT_MAX, "Index", "The index to move the effect to", 0, INT_MAX);
 }
 
-/* --------------------------------------------------------------------
- * Set Active Effect Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Set Active Effect Operator
+ * \{ */
 
 static wmOperatorStatus set_active_compositor_effect_exec(bContext *C, wmOperator *op)
 {
@@ -253,15 +338,19 @@ static wmOperatorStatus set_active_compositor_effect_exec(bContext *C, wmOperato
 
 static wmOperatorStatus set_active_compositor_effect_invoke(bContext *C,
                                                             wmOperator *op,
-                                                            const wmEvent * /*event*/)
+                                                            const wmEvent *event)
 {
-  return set_active_compositor_effect_exec(C, op);
+  wmOperatorStatus status = compositor_effect_invoke_properties_with_hover(C, op, event);
+  if (!(status & OPERATOR_CANCELLED)) {
+    return set_active_compositor_effect_exec(C, op);
+  }
+  return status;
 }
 
 static void SCENE_OT_set_active_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Set Active Scene Compositor Effect";
-  ot->description = "Set the given scene compositor effect as the active one";
+  ot->name = "Set Active Scene Effect";
+  ot->description = "Set the given scene effect as the active one";
   ot->idname = "SCENE_OT_set_active_compositor_effect";
 
   ot->invoke = set_active_compositor_effect_invoke;
@@ -274,9 +363,11 @@ static void SCENE_OT_set_active_compositor_effect(wmOperatorType *ot)
   RNA_def_property_flag(ot->prop, PROP_HIDDEN);
 }
 
-/* --------------------------------------------------------------------
- * New Compositor Effect Node Group Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name New Compositor Effect Node Group Operator
+ * \{ */
 
 static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOperator * /*op*/)
 {
@@ -293,7 +384,7 @@ static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOpe
   Scene *scene = CTX_data_scene(C);
   SceneCompositorEffect *active_effect = bke::compositor::get_active_effect(*scene);
   if (!active_effect) {
-    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Effect");
+    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Scene Effect");
     active_effect = &effect;
   }
 
@@ -311,19 +402,20 @@ static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOpe
 
 static void SCENE_OT_new_compositor_effect_node_group(wmOperatorType *ot)
 {
-  ot->name = "New Scene Compositor Effect Node Group";
+  ot->name = "New Scene Effect Node Group";
   ot->idname = "SCENE_OT_new_compositor_effect_node_group";
-  ot->description =
-      "Create a new compositor node group and assign it to the active scene compositor effect";
+  ot->description = "Create a new compositor node group and assign it to the active scene effect";
 
   ot->exec = new_compositor_effect_node_group_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* --------------------------------------------------------------------
- * Duplicate Compositor Effect Node Group Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Duplicate Compositor Effect Node Group Operator
+ * \{ */
 
 static wmOperatorStatus duplicate_compositor_effect_node_group_exec(bContext *C, wmOperator *op)
 {
@@ -359,20 +451,21 @@ static wmOperatorStatus duplicate_compositor_effect_node_group_exec(bContext *C,
 
 static void SCENE_OT_duplicate_compositor_effect_node_group(wmOperatorType *ot)
 {
-  ot->name = "Duplicate Compositor Effect Node Group";
+  ot->name = "Duplicate Scene Effect Node Group";
   ot->idname = "SCENE_OT_duplicate_compositor_effect_node_group";
   ot->description =
-      "Duplicate the active scene compositor effect node group and assign the new node group to "
-      "the effect";
+      "Duplicate the active scene effect node group and assign the new node group to the effect";
 
   ot->exec = duplicate_compositor_effect_node_group_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* --------------------------------------------------------------------
- * Add Compositor Effect Node Group Asset Operator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Compositor Effect Node Group Asset Operator
+ * \{ */
 
 static bNodeTree *get_asset_or_local_node_group(const bContext &C,
                                                 PointerRNA &ptr,
@@ -453,8 +546,8 @@ static std::string add_compositor_effect_node_group_asset_get_description(
 
 static void SCENE_OT_add_compositor_effect_node_group_asset(wmOperatorType *ot)
 {
-  ot->name = "Add Scene Compositor Effect Node Group Asset";
-  ot->description = "Add a scene compositor effect to the scene with a node group asset";
+  ot->name = "Add Scene Effect Node Group Asset";
+  ot->description = "Add a scene effect with a node group asset";
   ot->idname = "SCENE_OT_add_compositor_effect_node_group_asset";
 
   ot->exec = add_compositor_effect_node_group_asset_exec;
@@ -466,9 +559,11 @@ static void SCENE_OT_add_compositor_effect_node_group_asset(wmOperatorType *ot)
   WM_operator_properties_id_lookup(ot, false);
 }
 
-/* --------------------------------------------------------------------
- * Root Asset Catalogues Menu.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Root Asset Catalogs Menu
+ * \{ */
 
 static ed::asset::AssetItemTree &get_static_item_tree()
 {
@@ -557,9 +652,11 @@ static MenuType SCENE_MT_add_compositor_effect_root_catalogs()
   return type;
 }
 
-/* --------------------------------------------------------------------
- * Catalogue Assets Menu.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Catalog Assets Menu
+ * \{ */
 
 static void catalog_assets_draw(const bContext *C, Menu *menu)
 {
@@ -613,9 +710,11 @@ static MenuType SCENE_MT_add_compositor_effect_catalog_assets()
   return type;
 }
 
-/* --------------------------------------------------------------------
- * Unassigned Assets Menu.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Unassigned Assets Menu
+ * \{ */
 
 static void unassigned_assets_draw(const bContext *C, Menu *menu)
 {
@@ -668,9 +767,11 @@ static MenuType SCENE_MT_add_compositor_effect_unassigned_assets()
   return type;
 }
 
-/* --------------------------------------------------------------------
- * Operator Registration.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Operator Registration
+ * \{ */
 
 void ED_operatortypes_scene_compositor()
 {
@@ -684,9 +785,11 @@ void ED_operatortypes_scene_compositor()
   WM_operatortype_append(SCENE_OT_add_compositor_effect_node_group_asset);
 }
 
-/* --------------------------------------------------------------------
- * Menu Registration.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Menu Registration
+ * \{ */
 
 void ED_menutypes_scene_compositor()
 {
@@ -694,5 +797,7 @@ void ED_menutypes_scene_compositor()
   WM_menutype_add(MEM_new<MenuType>(__func__, SCENE_MT_add_compositor_effect_catalog_assets()));
   WM_menutype_add(MEM_new<MenuType>(__func__, SCENE_MT_add_compositor_effect_unassigned_assets()));
 }
+
+/** \} */
 
 }  // namespace blender

@@ -213,6 +213,12 @@ def brush_asset_shelf_filter_draw(panel, context):
     layout.prop(prefs.view, "use_filter_brushes_by_tool", text="By Active Tool")
 
 
+def show_experimental_texture_paint(brush):
+    if not bpy.context.preferences.experimental.use_3d_texture_paint or not brush:
+        return False
+    return brush.image_brush_type in {'DRAW'}
+
+
 class UnifiedPaintPanel:
     # subclass must set
     # bl_space_type = 'IMAGE_EDITOR'
@@ -317,14 +323,14 @@ class UnifiedPaintPanel:
         else:
             ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
         prop_owner = brush
-        if unified_name and getattr(ups, unified_name):
+        if unified_name and getattr(brush, unified_name):
             prop_owner = ups
 
         row.prop(prop_owner, prop_name, icon='NONE', text=text, slider=slider)
 
         if unified_name and not header:
             # NOTE: We don't draw UnifiedPaintSettings in the header to reduce clutter. D5928#136281
-            row.prop(ups, unified_name, text="", icon='BRUSHES_ALL')
+            row.prop(brush, unified_name, text="", icon='BRUSHES_ALL')
 
         if pressure_name:
             row.prop(brush, pressure_name, text="")
@@ -360,13 +366,14 @@ class UnifiedPaintPanel:
     @staticmethod
     def prop_unified_color(parent, context, brush, prop_name, *, text=None):
         ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
-        prop_owner = ups if ups.use_unified_color else brush
+        prop_owner = ups if brush.use_unified_color else brush
+
         parent.prop(prop_owner, prop_name, text=text)
 
     @staticmethod
     def prop_unified_color_picker(parent, context, brush, prop_name, value_slider=True):
         ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
-        prop_owner = ups if ups.use_unified_color else brush
+        prop_owner = ups if brush.use_unified_color else brush
         parent.template_color_picker(prop_owner, prop_name, value_slider=value_slider)
 
 
@@ -601,7 +608,7 @@ class StrokePanel(BrushPanel):
             row = col.row(align=True)
             row.prop(brush, "spacing", text="Spacing")
 
-        if mode == 'SCULPT':
+        if mode == 'SCULPT' or (mode == 'PAINT_TEXTURE' and show_experimental_texture_paint(brush)):
             col.row().prop(brush, "use_scene_spacing", text="Spacing Distance", expand=True)
 
         if mode in {'PAINT_TEXTURE', 'PAINT_2D', 'SCULPT'}:
@@ -745,7 +752,6 @@ class ShapePanel(BrushPanel):
         settings = cls.paint_settings_from_active_tool(context)
         if not settings:
             return False
-        mode = cls.get_brush_mode(context)
         brush = settings.brush
 
         if not (brush and brush.curve_distance_falloff):
@@ -757,6 +763,7 @@ class ShapePanel(BrushPanel):
         settings = self.paint_settings_from_active_tool(context)
         mode = self.get_brush_mode(context)
         brush = settings.brush
+        experimental_texture_paint_enabled = show_experimental_texture_paint(brush)
 
         if brush is None:
             return
@@ -787,6 +794,22 @@ class ShapePanel(BrushPanel):
                 layout.prop(brush, "tip_roundness")
                 layout.prop(brush, "tip_scale_x")
                 layout.separator()
+        elif mode == 'PAINT_TEXTURE' and experimental_texture_paint_enabled:
+            # TODO: Update this once the "capabilities" block has been updated
+            row = layout.row(align=True)
+            row.prop(brush, "hardness", slider=True)
+            row.prop(brush, "use_hardness_pressure", text="")
+            if not self.is_popover:
+                UnifiedPaintPanel.prop_custom_pressure(
+                    layout,
+                    context,
+                    row,
+                    brush,
+                    pressure_name="use_hardness_pressure",
+                    curve_visibility_name="show_hardness_curve",
+                    custom_curve_name="curve_hardness",
+                )
+            layout.separator()
 
         layout.use_property_split = False
         col = layout.column(align=True)
@@ -808,6 +831,8 @@ class ShapePanel(BrushPanel):
 
         show_falloff_shape = False
         if mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT'} and brush.sculpt_brush_type != 'POSE':
+            show_falloff_shape = True
+        if mode == 'PAINT_TEXTURE' and experimental_texture_paint_enabled:
             show_falloff_shape = True
         if not show_falloff_shape and mode == 'SCULPT_CURVES' and context.space_data.type == 'PROPERTIES':
             show_falloff_shape = True
@@ -1015,7 +1040,7 @@ def brush_settings(layout, context, brush, popover=False):
             UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
             row.separator()
             row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="", emboss=False)
-            row.prop(ups, "use_unified_color", text="", icon='BRUSHES_ALL')
+            row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
             layout.prop(brush, "blend", text="Blend Mode")
 
         # Per sculpt tool options.
@@ -1231,6 +1256,8 @@ def brush_shared_settings(layout, context, brush, popover=False):
 
     # 3D and 2D Texture Paint #
     if mode in {'PAINT_TEXTURE', 'PAINT_2D'}:
+        if mode == 'PAINT_TEXTURE' and show_experimental_texture_paint(brush):
+            size_mode = True
         if not popover:
             blend_mode = brush.image_paint_capabilities.has_color
             size = brush.image_paint_capabilities.has_radius
@@ -1305,7 +1332,7 @@ def brush_shared_settings(layout, context, brush, popover=False):
             slider=True,
         )
 
-    size_owner = ups if ups.use_unified_size else brush
+    size_owner = ups if brush.use_unified_size else brush
     size_prop = "size"
     if size_mode and (size_owner.use_locked_size == 'SCENE'):
         size_prop = "unprojected_size"
@@ -1378,7 +1405,7 @@ def brush_shared_settings(layout, context, brush, popover=False):
 def draw_color_jitter_panel(layout, context, brush):
     ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
 
-    prop_owner = ups if ups.use_unified_color else brush
+    prop_owner = ups if brush.use_unified_color else brush
     layout.use_property_split = False
 
     header, panel = layout.panel("color_jitter_panel", default_closed=True)
@@ -1571,7 +1598,7 @@ def draw_mesh_automasking_settings(layout, settings, *, topbar=False, use_face_s
         else:
             col = parent.column()
             col.use_property_split = False
-            split = col.split(factor=0.4)
+            split = col.split(factor=col.property_split_factor)
             col = split.column()
             split.prop(settings, "boundary_edges_propagation_steps")
 
@@ -1639,7 +1666,7 @@ def draw_color_settings(context, layout, brush, color_type=False):
         UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
         row.separator()
         row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="", emboss=False)
-        row.prop(ups, "use_unified_color", text="", icon='BRUSHES_ALL')
+        row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
         draw_color_jitter_panel(layout, context, brush)
 
@@ -1751,6 +1778,8 @@ def brush_mask_texture_settings(layout, brush):
 
 def brush_basic_texpaint_settings(layout, context, brush, *, compact=False):
     """Draw Tool Settings header for Vertex Paint and 2D and 3D Texture Paint modes."""
+
+    # TODO: This shared method is incorrect and unnecessary, remove this layer of abstraction
     capabilities = brush.image_paint_capabilities
 
     if capabilities.has_color:
@@ -2061,6 +2090,10 @@ def brush_basic_grease_pencil_vertex_settings(layout, context, brush, *, compact
             row.prop_enum(gp_settings, "vertex_mode", 'BOTH', text="", icon='GP_DRAW_BOTH')
         else:
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
+
+
+def supports_shape_panel(mode):
+    return mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE'}
 
 
 classes = (
