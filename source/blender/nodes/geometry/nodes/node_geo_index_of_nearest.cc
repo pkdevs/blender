@@ -4,6 +4,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_kdtree_new.hh"
+#include "BLI_linear_allocator.hh"
 #include "BLI_map.hh"
 #include "BLI_task.hh"
 
@@ -111,10 +112,13 @@ class IndexOfNearestFieldInput final : public bke::GeometryFieldInput {
     const int avg_tree_size = domain_size / group_indexing.size();
     const int grain_size = std::max(8192 / avg_tree_size, 1);
     threading::parallel_for(IndexRange(groups_num), grain_size, [&](const IndexRange range) {
+      AlignedBuffer<4096, 8> tree_buffer;
       for (const int group_index : range) {
         const IndexMask &tree_mask = all_indices_by_group_id[group_index];
         const IndexMask &lookup_mask = lookup_indices_by_group_id[group_index];
-        const KDTreeNew<float3> tree(positions, tree_mask);
+        LinearAllocator<> tree_memory;
+        tree_memory.provide_buffer(tree_buffer);
+        const KDTreeNew<float3> tree(positions, tree_mask, tree_memory);
         find_neighbors(tree, positions, lookup_mask, result);
       }
     });

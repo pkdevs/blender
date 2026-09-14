@@ -6,6 +6,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree_new.hh"
+#include "BLI_linear_allocator.hh"
 
 #include "BKE_geometry_fields.hh"
 
@@ -42,10 +43,6 @@ static void set_no_cluster_value(MutableSpan<int> r_cluster_ids, const IndexMask
       },
       exec_mode::grain_size(4096));
 }
-
-struct Testssss {
-  KDTreeNew<float3> test;
-};
 
 class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
  private:
@@ -137,11 +134,14 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
         IndexRange(groups_num),
         1024,
         [&](const IndexRange range) {
+          AlignedBuffer<4096, 8> tree_buffer;
           for (const int group_i : range) {
             const Span<int> group = indices_by_group[group_i];
             /* Groups don't share indices, so the shared array can be written to directly. */
             cluster_ids.as_mutable_span().fill_indices(group, NO_CLUSTER_VALUE);
-            const KDTreeNew<float3> tree(positions, group);
+            LinearAllocator<> tree_memory;
+            tree_memory.provide_buffer(tree_buffer);
+            const KDTreeNew<float3> tree(positions, group, tree_memory);
             tree.calc_duplicates(distance_, cluster_ids);
             for (const int i : group) {
               if (cluster_ids[i] == NO_CLUSTER_VALUE) {
