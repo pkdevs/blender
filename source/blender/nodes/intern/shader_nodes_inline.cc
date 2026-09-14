@@ -1690,22 +1690,11 @@ class ShaderNodesInliner {
     const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeMathOperation(node->custom1);
 
-    auto try_get_float = [&](const UString identifier) -> std::optional<float> {
-      const bNodeSocket *socket = node->input_by_identifier(identifier);
-      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
-      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *socket->typeinfo))
-      {
-        return std::get<float>(primitive->value);
-      }
-      return std::nullopt;
-    };
-
     switch (op) {
       case NODE_MATH_MULTIPLY:
       case NODE_MATH_DIVIDE: {
-        const std::optional<float> a = try_get_float("Value"_ustr);
-        const std::optional<float> b = try_get_float("Value_001"_ustr);
+        const std::optional<float> a = this->try_get_input<float>(node, "Value"_ustr);
+        const std::optional<float> b = this->try_get_input<float>(node, "Value_001"_ustr);
         if (a == 0.0f || b == 0.0f) {
           this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
@@ -1724,22 +1713,11 @@ class ShaderNodesInliner {
     const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeIntegerMathOperation(node->custom1);
 
-    auto try_get_int = [&](const UString identifier) -> std::optional<int> {
-      const bNodeSocket *socket = node->input_by_identifier(identifier);
-      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
-      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *socket->typeinfo))
-      {
-        return std::get<int>(primitive->value);
-      }
-      return std::nullopt;
-    };
-
     switch (op) {
       case NODE_INTEGER_MATH_MULTIPLY:
       case NODE_INTEGER_MATH_DIVIDE: {
-        const std::optional<int> a = try_get_int("Value"_ustr);
-        const std::optional<int> b = try_get_int("Value_001"_ustr);
+        const std::optional<int> a = this->try_get_input<int>(node, "Value"_ustr);
+        const std::optional<int> b = this->try_get_input<int>(node, "Value_001"_ustr);
         if (a == 0 || b == 0) {
           this->store_socket_value_primitive(output_socket, 0);
           return true;
@@ -1757,26 +1735,6 @@ class ShaderNodesInliner {
   {
     const auto op = NodeVectorMathOperation(node->custom1);
 
-    auto try_get_float3 = [&](const UString identifier) -> std::optional<float3> {
-      const bNodeSocket *socket = node->input_by_identifier(identifier);
-      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
-      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *socket->typeinfo))
-      {
-        return std::get<float3>(primitive->value);
-      }
-      return std::nullopt;
-    };
-    auto try_get_float = [&](const UString identifier) -> std::optional<float> {
-      const bNodeSocket *socket = node->input_by_identifier(identifier);
-      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
-      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *socket->typeinfo))
-      {
-        return std::get<float>(primitive->value);
-      }
-      return std::nullopt;
-    };
     auto output_socket = [&](const UString identifier) -> SocketInContext {
       return {node.context, node->output_by_identifier(identifier)};
     };
@@ -1785,8 +1743,8 @@ class ShaderNodesInliner {
       case NODE_VECTOR_MATH_MULTIPLY:
       case NODE_VECTOR_MATH_DIVIDE:
       case NODE_VECTOR_MATH_CROSS_PRODUCT: {
-        const std::optional<float3> a = try_get_float3("Vector"_ustr);
-        const std::optional<float3> b = try_get_float3("Vector_001"_ustr);
+        const std::optional<float3> a = this->try_get_input<float3>(node, "Vector"_ustr);
+        const std::optional<float3> b = this->try_get_input<float3>(node, "Vector_001"_ustr);
         if (a == float3(0.0f) || b == float3(0.0f)) {
           this->store_socket_value_primitive(output_socket("Vector"_ustr), float3(0.0f));
           return true;
@@ -1794,8 +1752,8 @@ class ShaderNodesInliner {
         break;
       }
       case NODE_VECTOR_MATH_DOT_PRODUCT: {
-        const std::optional<float3> a = try_get_float3("Vector"_ustr);
-        const std::optional<float3> b = try_get_float3("Vector_001"_ustr);
+        const std::optional<float3> a = this->try_get_input<float3>(node, "Vector"_ustr);
+        const std::optional<float3> b = this->try_get_input<float3>(node, "Vector_001"_ustr);
         if (a == float3(0.0f) || b == float3(0.0f)) {
           this->store_socket_value_primitive(output_socket("Value"_ustr), 0.0f);
           return true;
@@ -1803,8 +1761,8 @@ class ShaderNodesInliner {
         break;
       }
       case NODE_VECTOR_MATH_SCALE: {
-        const std::optional<float3> a = try_get_float3("Vector"_ustr);
-        const std::optional<float> scale = try_get_float("Scale"_ustr);
+        const std::optional<float3> a = this->try_get_input<float3>(node, "Vector"_ustr);
+        const std::optional<float> scale = this->try_get_input<float>(node, "Scale"_ustr);
         if (a == float3(0.0f) || scale == 0.0f) {
           this->store_socket_value_primitive(output_socket("Vector"_ustr), float3(0.0f));
           return true;
@@ -1816,6 +1774,19 @@ class ShaderNodesInliner {
     }
 
     return false;
+  }
+
+  template<typename T>
+  std::optional<T> try_get_input(const NodeInContext &node, const UString identifier)
+  {
+    const bNodeSocket *socket = node->input_by_identifier(identifier);
+    const SocketValue &value = value_by_socket_.lookup({node.context, socket});
+    if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
+            *socket->typeinfo))
+    {
+      return std::get<T>(primitive->value);
+    }
+    return std::nullopt;
   }
 
   /**
