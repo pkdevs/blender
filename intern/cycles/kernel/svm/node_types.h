@@ -1246,8 +1246,8 @@ struct SVMNodeOpenPBRBsdfData {
   SVMStackOffset geometry_coat_normal_offset;
   SVMStackOffset geometry_coat_tangent_offset;
 };
-static_assert(alignof(SVMNodePrincipledBsdfData) <= alignof(uint));
-static_assert(sizeof(SVMNodePrincipledBsdfData) % sizeof(uint) == 0);
+static_assert(alignof(SVMNodeOpenPBRBsdfData) <= alignof(uint));
+static_assert(sizeof(SVMNodeOpenPBRBsdfData) % sizeof(uint) == 0);
 
 /* Principled Hair BSDF. */
 struct SVMNodePrincipledHairBsdfData {
