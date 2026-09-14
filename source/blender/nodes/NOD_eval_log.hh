@@ -259,6 +259,7 @@ class ViewerNodeLog {
  public:
   bool is_debug_view = false;
   bool is_persistent_debug_view_requested = false;
+  /** Persistent participation only; ViewerPath payload may still be logged when false. */
   bool is_shown = true;
 
   struct Item {

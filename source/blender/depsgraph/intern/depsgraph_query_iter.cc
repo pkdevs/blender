@@ -230,9 +230,7 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
 
     bool replace_object_with_preview = false;
     const bool use_viewer_path_preview = object_orig == data->object_orig_with_preview;
-    if (use_viewer_path_preview &&
-        !object_viewer_path_is_hidden_debug_view(*data->settings->viewer_path))
-    {
+    if (use_viewer_path_preview) {
       object_duplilist_preview(data->graph, object, data->settings->viewer_path, data->dupli_list);
       replace_object_with_preview = true;
     }

@@ -302,8 +302,10 @@ static void node_declare(NodeDeclarationBuilder &b)
     input_decl.custom_draw([](CustomSocketDrawParams &params) { draw_input_socket(params); });
     if (storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW) {
       input_decl.usage_inference(
-          [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
-            return params.bool_input_may_be("Show"_ustr, true);
+          [](const socket_usage_inference::SocketUsageParams & /*params*/) -> std::optional<bool> {
+            /* Static UI inference has no ViewerPath context. Ordinary viewing may still use
+             * this payload when persistent Show is false. */
+            return true;
           });
     }
   }

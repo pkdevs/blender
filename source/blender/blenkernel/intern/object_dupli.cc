@@ -1922,9 +1922,8 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph,
      * instances generated from different top-level preview sources. */
     DupliContext preview_ctx = ctx;
     preview_ctx.persistent_id[preview_ctx.level] =
-        nodes::debug_view::unique_persistent_id_namespace(candidate.compute_context_hash,
-                                                          candidate.viewer_node_id,
-                                                          used_preview_namespaces);
+        nodes::debug_view::unique_persistent_id_namespace(
+            candidate.compute_context_hash, candidate.viewer_node_id, used_preview_namespaces);
     preview_ctx.instance_idx[preview_ctx.level] = 0;
     preview_ctx.instance_data[preview_ctx.level] = nullptr;
     preview_ctx.level++;
@@ -1936,13 +1935,6 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph,
                                   ob_eval->type == OB_CURVES);
   }
   return source_found;
-}
-
-bool object_viewer_path_is_hidden_debug_view(const ViewerPath &viewer_path)
-{
-  const nodes::eval_log::ViewerNodeLog *viewer_log =
-      nodes::eval_log::NodesEvalLog::find_viewer_node_log_for_path(viewer_path);
-  return viewer_log && viewer_log->is_debug_view && !viewer_log->is_shown;
 }
 
 bke::Instances object_duplilist_legacy_instances(Depsgraph &depsgraph, Object &ob)

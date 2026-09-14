@@ -646,16 +646,16 @@ static void try_add_side_effect_node(const ModifierEvalContext &ctx,
   }
   local_side_effect_nodes.nodes_by_context.add(final_compute_context.hash(), lf_node);
   if (is_persistent_debug_view) {
-    local_side_effect_nodes.persistent_debug_view_nodes_by_context.add(
-        final_compute_context.hash(), lf_node);
+    r_side_effect_nodes.persistent_debug_view_nodes_by_context.add(final_compute_context.hash(),
+                                                                   lf_node);
+  }
+  else if (final_node->type_legacy == GEO_NODE_VIEWER) {
+    r_side_effect_nodes.viewer_path_nodes_by_context.add(final_compute_context.hash(), lf_node);
   }
 
   /* Successfully found all side effect nodes for the viewer path. */
   for (const auto item : local_side_effect_nodes.nodes_by_context.items()) {
     r_side_effect_nodes.nodes_by_context.add_multiple(item.key, item.value);
-  }
-  for (const auto item : local_side_effect_nodes.persistent_debug_view_nodes_by_context.items()) {
-    r_side_effect_nodes.persistent_debug_view_nodes_by_context.add_multiple(item.key, item.value);
   }
   for (const auto item : local_side_effect_nodes.iterations_by_iteration_zone.items()) {
     r_side_effect_nodes.iterations_by_iteration_zone.add_multiple(item.key, item.value);

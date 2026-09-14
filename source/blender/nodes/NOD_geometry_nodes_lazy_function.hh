@@ -147,6 +147,8 @@ struct GeoNodesSideEffectNodes {
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *> nodes_by_context;
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *>
       persistent_debug_view_nodes_by_context;
+  /** ViewerPath requests, independent of persistent requests for the same node. */
+  MultiValueMap<ComputeContextHash, const lf::FunctionNode *> viewer_path_nodes_by_context;
   /**
    * The repeat/foreach zone is identified by the compute context of the parent and the identifier
    * of the repeat output node.

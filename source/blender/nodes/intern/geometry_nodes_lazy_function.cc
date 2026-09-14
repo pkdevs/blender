@@ -843,27 +843,21 @@ class LazyFunctionForImplicitSelfObject : public LazyFunction {
   }
 };
 
-/**
- * The viewer node does not have outputs. Instead it is executed because the executor knows that it
- * has side effects. The side effect is that the inputs to the viewer are logged.
- */
-static bool modifier_requests_persistent_debug_views_at_root(const GeoNodesUserData &user_data)
+static bool viewer_path_requested(const GeoNodesUserData &user_data,
+                                  const lf::FunctionNode *self_node)
 {
-  return user_data.call_data->modifier_data &&
-         user_data.call_data->modifier_data->show_debug_views &&
-         dynamic_cast<const bke::GeometryNodesModifierComputeContext *>(
-             user_data.compute_context) != nullptr;
-}
-
-static void initialize_viewer_log(const bool is_debug_view, eval_log::ViewerNodeLog &log)
-{
-  log.is_debug_view = is_debug_view;
+  return self_node && user_data.call_data->side_effect_nodes &&
+         user_data.call_data->side_effect_nodes->viewer_path_nodes_by_context
+             .lookup(user_data.compute_context->hash())
+             .contains(self_node);
 }
 
 static bool persistent_debug_view_requested(const GeoNodesUserData &user_data,
                                             const lf::FunctionNode *self_node)
 {
-  if (modifier_requests_persistent_debug_views_at_root(user_data)) {
+  if (user_data.call_data->modifier_data && user_data.call_data->modifier_data->show_debug_views &&
+      dynamic_cast<const bke::GeometryNodesModifierComputeContext *>(user_data.compute_context))
+  {
     return true;
   }
   if (self_node == nullptr || user_data.call_data->side_effect_nodes == nullptr) {
@@ -875,6 +869,7 @@ static bool persistent_debug_view_requested(const GeoNodesUserData &user_data,
   return nodes.contains(self_node);
 }
 
+/** The Viewer has no outputs. It executes as a side effect to log its inputs. */
 class LazyFunctionForViewerNode : public LazyFunction {
  private:
   const bNode &bnode_;
@@ -911,20 +906,12 @@ class LazyFunctionForViewerNode : public LazyFunction {
                                                     persistent_debug_view_requested(user_data,
                                                                                     self_node);
 
-    if (is_debug_view_) {
-      bool is_enabled = modifier_requests_persistent_debug_views_at_root(user_data);
-      if (user_data.call_data->side_effect_nodes && self_node) {
-        const Span<const lf::FunctionNode *> side_effect_nodes =
-            user_data.call_data->side_effect_nodes->nodes_by_context.lookup(
-                user_data.compute_context->hash());
-        is_enabled |= side_effect_nodes.contains(self_node);
+    const bool is_viewer_path_requested = viewer_path_requested(user_data, self_node);
+    if (is_debug_view_ && !is_persistent_debug_view_requested && !is_viewer_path_requested) {
+      for (const int i : inputs_.index_range()) {
+        params.set_input_unused(i);
       }
-      if (!is_enabled) {
-        for (const int i : inputs_.index_range()) {
-          params.set_input_unused(i);
-        }
-        return;
-      }
+      return;
     }
 
     eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data);
@@ -938,7 +925,8 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     LinearAllocator<> &allocator = *tree_logger->allocator;
-    if (is_debug_view_) {
+    bool show = false;
+    if (is_persistent_debug_view_requested) {
       const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
       const int show_param_index = lf_index_by_bsocket_[show_socket.index_in_tree()];
       auto *show_variant = params.try_get_input_data_ptr_or_request<bke::SocketValueVariant>(
@@ -946,19 +934,19 @@ class LazyFunctionForViewerNode : public LazyFunction {
       if (!show_variant) {
         return;
       }
-      const bool show = show_variant->get<bool>();
-      if (!show) {
-        auto log = allocator.construct<eval_log::ViewerNodeLog>();
-        initialize_viewer_log(true, *log);
-        log->is_persistent_debug_view_requested = is_persistent_debug_view_requested;
-        log->is_shown = false;
-        tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
-        for (const int i : IndexRange(storage.items_num)) {
-          const bNodeSocket &socket = bnode_.input_socket(i);
-          params.set_input_unused(lf_index_by_bsocket_[socket.index_in_tree()]);
-        }
-        return;
+      show = show_variant->get<bool>();
+    }
+    else if (is_debug_view_) {
+      const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
+      params.set_input_unused(lf_index_by_bsocket_[show_socket.index_in_tree()]);
+    }
+    if (is_debug_view_ && !show && !is_viewer_path_requested) {
+      /* Hidden persistent viewers do not request any payload, including upstream group inputs. */
+      for (const int i : IndexRange(storage.items_num)) {
+        const bNodeSocket &socket = bnode_.input_socket(i);
+        params.set_input_unused(lf_index_by_bsocket_[socket.index_in_tree()]);
       }
+      return;
     }
 
     Vector<bke::SocketValueVariant *> values(storage.items_num, nullptr);
@@ -978,7 +966,8 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     auto log = allocator.construct<eval_log::ViewerNodeLog>();
-    initialize_viewer_log(is_debug_view_, *log);
+    log->is_debug_view = is_debug_view_;
+    log->is_shown = !is_debug_view_ || show;
     log->is_persistent_debug_view_requested = is_persistent_debug_view_requested;
     geo_viewer_node_log(bnode_, values, *log);
     tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
@@ -992,15 +981,10 @@ class LazyFunctionForViewerInputUsage : public LazyFunction {
  private:
   const lf::FunctionNode &lf_viewer_node_;
   const bool is_debug_view_;
-  const bool is_persistent_debug_view_;
 
  public:
-  LazyFunctionForViewerInputUsage(const lf::FunctionNode &lf_viewer_node,
-                                  const bool is_debug_view,
-                                  const bool is_persistent_debug_view)
-      : lf_viewer_node_(lf_viewer_node),
-        is_debug_view_(is_debug_view),
-        is_persistent_debug_view_(is_persistent_debug_view)
+  LazyFunctionForViewerInputUsage(const lf::FunctionNode &lf_viewer_node, const bool is_debug_view)
+      : lf_viewer_node_(lf_viewer_node), is_debug_view_(is_debug_view)
   {
     debug_name_ = "Viewer Input Usage";
     if (is_debug_view_) {
@@ -1016,23 +1000,18 @@ class LazyFunctionForViewerInputUsage : public LazyFunction {
   {
     GeoNodesUserData *user_data = dynamic_cast<GeoNodesUserData *>(context.user_data);
     BLI_assert(user_data != nullptr);
-    bool viewer_is_used = false;
-    if (user_data->call_data->side_effect_nodes) {
-      const ComputeContextHash &context_hash = user_data->compute_context->hash();
-      const Span<const lf::FunctionNode *> nodes_with_side_effects =
-          user_data->call_data->side_effect_nodes->nodes_by_context.lookup(context_hash);
-      viewer_is_used = nodes_with_side_effects.contains(&lf_viewer_node_);
-    }
-    if (is_persistent_debug_view_) {
-      viewer_is_used |= modifier_requests_persistent_debug_views_at_root(*user_data);
-    }
-    params.set_output(0, viewer_is_used);
-
+    const bool ordinary = viewer_path_requested(*user_data, &lf_viewer_node_);
     if (!is_debug_view_) {
+      params.set_output(0, ordinary);
       return;
     }
-    if (!viewer_is_used) {
-      params.set_output(1, false);
+    const bool persistent = persistent_debug_view_requested(*user_data, &lf_viewer_node_);
+    if (!params.output_was_set(0)) {
+      params.set_output(0, persistent);
+    }
+    if (ordinary || !persistent) {
+      params.set_input_unused(0);
+      params.set_output(1, ordinary);
       return;
     }
 
@@ -3462,8 +3441,6 @@ struct GeometryNodesLazyFunctionBuilder {
   {
     const NodeGeometryViewer &storage = *static_cast<const NodeGeometryViewer *>(bnode.storage);
     const bool is_debug_view = storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW;
-    const bool is_persistent_debug_view = is_debug_view &&
-                                          !tree_zones_->get_zone_by_node(bnode.identifier);
     auto &lazy_function = scope_.construct<LazyFunctionForViewerNode>(
         bnode, mapping_->lf_index_by_bsocket);
     lf::FunctionNode &lf_viewer_node = graph_params.lf_graph.add_function(lazy_function);
@@ -3480,8 +3457,8 @@ struct GeometryNodesLazyFunctionBuilder {
     mapping_->possible_side_effect_node_map.add(bnode.identifier, &lf_viewer_node);
 
     {
-      auto &usage_lazy_function = scope_.construct<LazyFunctionForViewerInputUsage>(
-          lf_viewer_node, is_debug_view, is_persistent_debug_view);
+      auto &usage_lazy_function = scope_.construct<LazyFunctionForViewerInputUsage>(lf_viewer_node,
+                                                                                    is_debug_view);
       lf::FunctionNode &lf_usage_node = graph_params.lf_graph.add_function(usage_lazy_function);
 
       if (is_debug_view) {
