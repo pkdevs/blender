@@ -278,8 +278,6 @@ ConcurrentStatesParams MetalDeviceQueue::concurrent_states_params() const
   /* Keep 10% of the working set free, and only grow within half of the remaining memory.
    * Limit to 4x the baseline, we see diminishing returns after that. */
   params.max = params.baseline * 4;
-  params.grow_percent = 50;
-  params.reserve_percent = 10;
   return params;
 }
 

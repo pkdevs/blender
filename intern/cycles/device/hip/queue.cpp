@@ -35,9 +35,7 @@ ConcurrentStatesParams HIPDeviceQueue::concurrent_states_params() const
   /* Same as CUDA. */
   ConcurrentStatesParams params;
   params.baseline = max(max_num_threads, 65536) * 16;
-  params.min = params.baseline;
   params.max = params.baseline * 10;
-  params.grow_percent = 50;
   return params;
 }
 
