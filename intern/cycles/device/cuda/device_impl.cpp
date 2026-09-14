@@ -886,8 +886,10 @@ void CUDADevice::image_alloc(device_image &mem)
       return;
     }
 
-    const CUDA_MEMCPY2D param = tex_2d_copy_param(mem, pitch_alignment);
-    cuda_assert(cuMemcpy2DUnaligned(&param));
+    if (!(mem.is_shared(this) && mem.host_pointer == mem.shared_pointer)) {
+      const CUDA_MEMCPY2D param = tex_2d_copy_param(mem, pitch_alignment);
+      cuda_assert(cuMemcpy2DUnaligned(&param));
+    }
   }
   else {
     /* 1D image, using linear memory. */
@@ -896,7 +898,9 @@ void CUDADevice::image_alloc(device_image &mem)
       return;
     }
 
-    cuda_assert(cuMemcpyHtoD(mem.device_pointer, mem.host_pointer, mem.memory_size()));
+    if (!(mem.is_shared(this) && mem.host_pointer == mem.shared_pointer)) {
+      cuda_assert(cuMemcpyHtoD(mem.device_pointer, mem.host_pointer, mem.memory_size()));
+    }
   }
 
   /* Set Mapping and tag that we need to (re-)upload to device */
@@ -978,7 +982,7 @@ void CUDADevice::image_copy_to(device_image &mem)
       image_alloc(mem);
     }
   }
-  else {
+  else if (!(mem.is_shared(this) && mem.host_pointer == mem.shared_pointer)) {
     /* Resident and fully allocated, only copy. */
     if (mem.data_height > 0) {
       CUDAContextScope scope(this);
