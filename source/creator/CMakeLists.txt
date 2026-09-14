@@ -1999,11 +1999,14 @@ add_custom_command(
     --python ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
     -- --output ${_nodes_as_node_groups_blend}
   DEPENDS
-    blender
+    # Avoid building on every relink to speed up rebuild times.
+    bf_nodes_composite
     ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
 )
 add_custom_target(nodes_as_node_groups ALL DEPENDS ${_nodes_as_node_groups_blend})
-
+# Ordering only: Blender must exist to run the script, but the blend must not depend on the
+# binary's timestamp (that would regenerate it on every relink).
+add_dependencies(nodes_as_node_groups blender)
 install(
   FILES ${_nodes_as_node_groups_blend}
   DESTINATION ${TARGETDIR_VER}/datafiles/nodes
