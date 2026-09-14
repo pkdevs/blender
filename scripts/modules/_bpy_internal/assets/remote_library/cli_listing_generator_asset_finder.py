@@ -220,11 +220,11 @@ def _find_dependencies_recursive(
     if data in visited_pointers:
         return set()
 
-    # Set as visited current data pointer, its ID data in their RNA definitions 
+    # Set as visited current data pointer, its ID data in their RNA definitions
     visited_pointers |= {data, data.id_data, data.rna_type, data.bl_rna}
 
     dependencies: set[bpy.types.ID] = set()
-    
+
     if isinstance(data, bpy.types.ID) and data.id_data:
         dependencies.add(data)
 
@@ -276,7 +276,7 @@ def _find_assets(
 ) -> tuple[list[api_models.AssetV1], set[DependencyFile]]:
 
     assets = []
-    dependencies = set()
+    dependencies: set[DependencyFile] = set()
     for datablock in datablocks:
         asset_data: bpy.types.AssetData = datablock.asset_data
         if not asset_data:
