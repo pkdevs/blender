@@ -496,13 +496,13 @@ static const Mesh *mesh_data_from_duplicator_object(Object *ob,
       bke::EditMeshData *emd = mesh_eval ? mesh_eval->runtime->edit_data.get() : nullptr;
 
       /* Only assign the bmesh in the case we can't use `mesh_eval`. */
-      *r_bm = em->bm;
+      *r_bm = BKE_editmesh_bmesh_get_for_write(ob);
       mesh_eval = nullptr;
 
       if ((emd != nullptr) && !emd->vert_positions.is_empty()) {
         *r_vert_coords = emd->vert_positions;
         if (r_vert_normals != nullptr) {
-          *r_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*em, *emd);
+          *r_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*em, **r_bm, *emd);
         }
       }
     }

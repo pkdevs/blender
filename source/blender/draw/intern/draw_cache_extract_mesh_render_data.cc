@@ -395,12 +395,12 @@ static void retrieve_active_attribute_names(MeshRenderData &mr,
   mr.default_color_name = mesh_final.default_color_attribute;
 }
 
-static BMEditMesh *mesh_get_original_edit_mesh(const Object &object)
+static const Mesh *mesh_get_original_mesh(const Object &object)
 {
   BLI_assert(object.type == OB_MESH);
   if (const ID *data_orig = object.runtime->data_orig) {
     if (data_orig->id_type() == ID_ME) {
-      return id_cast<const Mesh *>(data_orig)->runtime->edit_mesh.get();
+      return id_cast<const Mesh *>(data_orig);
     }
   }
   return nullptr;
@@ -421,10 +421,11 @@ MeshRenderData mesh_render_data_create(Object &object,
 
   mr.use_hide = use_hide;
 
-  if (BMEditMesh *edit_mesh = mesh_get_original_edit_mesh(object)) {
+  const Mesh *orig_mesh = mesh_get_original_mesh(object);
+  if (BMEditMesh *edit_mesh = orig_mesh ? orig_mesh->runtime->edit_mesh.get() : nullptr) {
     const Mesh *eval_cage = DRW_object_get_editmesh_cage_for_drawing(object);
 
-    mr.bm = edit_mesh->bm;
+    mr.bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(orig_mesh));
     mr.edit_bmesh = edit_mesh;
     mr.mesh = (do_final) ? &mesh : eval_cage;
     mr.edit_data = is_editmode ? mr.mesh->runtime->edit_data.get() : nullptr;
@@ -443,10 +444,12 @@ MeshRenderData mesh_render_data_create(Object &object,
       if (!emd->vert_positions.is_empty()) {
         mr.bm_vert_coords = mr.edit_data->vert_positions;
         if (mr.bm_free_normal_offset_vert == -1) {
-          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr.edit_bmesh, *emd);
+          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(
+              *mr.edit_bmesh, *mr.bm, *emd);
         }
         if (mr.bm_free_normal_offset_face == -1) {
-          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr.edit_bmesh, *emd);
+          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(
+              *mr.edit_bmesh, *mr.bm, *emd);
         }
       }
     }

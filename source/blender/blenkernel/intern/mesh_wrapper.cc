@@ -152,6 +152,7 @@ Span<float3> BKE_mesh_wrapper_face_normals(Mesh *mesh)
   switch (mesh->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH:
       return BKE_editmesh_cache_ensure_face_normals(*mesh->runtime->edit_mesh,
+                                                    *BKE_editmesh_bmesh_get_for_write(mesh),
                                                     *mesh->runtime->edit_data);
     case ME_WRAPPER_TYPE_MDATA:
     case ME_WRAPPER_TYPE_SUBD:
