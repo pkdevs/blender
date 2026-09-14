@@ -46,8 +46,8 @@ static thread_local uint64_t current_timestamp = 0;
 /* Give each rendering thread a unique owner id. Concurrent renders must not share the same movie
  * reader because it holds a single decode position. Attempt to reuse same reader could lead to
  * forcing seek for each decode yielding poor performance. */
-static std::atomic<uint64_t> next_owner = 0;
-static thread_local uint64_t current_owner = 0;
+static std::atomic<int> next_owner = 0;
+static thread_local int current_owner = 0;
 
 static uint64_t current_owner_get()
 {
