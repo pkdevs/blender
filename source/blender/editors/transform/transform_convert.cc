@@ -1025,8 +1025,8 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     }
     return nullptr;
   }
-  if (ob && (ob->mode & OB_MODE_ALL_PAINT_GPENCIL)) {
-    /* In Grease Pencil all transformations must be canceled if not Object or Edit mode. */
+  if (ob && ob->type == OB_GREASE_PENCIL && ob->mode != OB_MODE_OBJECT) {
+    /* Grease Pencil edit / paint transformations are handled by #TransConvertType_GreasePencil. */
     return nullptr;
   }
   return &TransConvertType_Object;
