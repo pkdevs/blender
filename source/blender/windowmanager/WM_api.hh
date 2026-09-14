@@ -2174,6 +2174,8 @@ ImBuf *WM_clipboard_image_get();
  * Put image data to the clipboard.
  *
  * \param ibuf: the image to set the clipboard to.
+ *
+ * \note The provided ImBuf must be set to output as a PNG (see #ImBuf::ftype).
  */
 bool WM_clipboard_image_set_byte_buffer(ImBuf *ibuf) ATTR_NONNULL(1);
 

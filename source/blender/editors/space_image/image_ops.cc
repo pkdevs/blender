@@ -3111,8 +3111,20 @@ static wmOperatorStatus image_clipboard_copy_exec(bContext *C, wmOperator *op)
     ImBuf *colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(
         ibuf, save_as_render, true, &image_format);
 
-    if (WM_clipboard_image_set_byte_buffer(colormanaged_ibuf)) {
+    /* Ensure the ImBuf is marked as PNG. Make a duplicate and adjust the settings if not. */
+    ImBuf *colormanaged_png_ibuf = colormanaged_ibuf;
+    if (colormanaged_png_ibuf->ftype != IMB_FTYPE_PNG) {
+      colormanaged_png_ibuf = IMB_dupImBuf(colormanaged_ibuf);
+      colormanaged_png_ibuf->ftype = IMB_FTYPE_PNG;
+      colormanaged_png_ibuf->foptions.quality = 15;
+    }
+
+    if (WM_clipboard_image_set_byte_buffer(colormanaged_png_ibuf)) {
       changed = true;
+    }
+
+    if (colormanaged_png_ibuf != colormanaged_ibuf) {
+      IMB_freeImBuf(colormanaged_png_ibuf);
     }
 
     if (colormanaged_ibuf != ibuf) {

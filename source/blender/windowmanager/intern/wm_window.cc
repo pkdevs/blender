@@ -2862,6 +2862,9 @@ ImBuf *WM_clipboard_image_get()
 
 bool WM_clipboard_image_set_byte_buffer(ImBuf *ibuf)
 {
+  /* Only ImBufs prepared for PNG output are currently expected. */
+  BLI_assert(ibuf->ftype == IMB_FTYPE_PNG);
+
   if (G.background) {
     return false;
   }
@@ -2876,7 +2879,6 @@ bool WM_clipboard_image_set_byte_buffer(ImBuf *ibuf)
                                                       .buffer = ibuf->byte_data()}});
 
 #if !defined(__APPLE__)
-  BLI_assert(ibuf->ftype == IMB_FTYPE_PNG);
   Vector<uint8_t> encoded = IMB_save_image_to_buffer(ibuf, ImBufFlags::ByteData);
   images.append({.data = GHOST_ImageData::MemFile{.size = uint32_t(encoded.size()),
                                                   .buffer = encoded.data()}});
