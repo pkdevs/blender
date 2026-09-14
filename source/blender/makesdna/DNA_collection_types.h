@@ -124,7 +124,13 @@ struct CollectionObject {
   struct Object *ob = nullptr;
 
   CollectionLightLinking light_linking;
+  /* The following two indices are only used for custom manual sorting in the Outliner
+   * (#SO_SORT_CUSTOM) */
+  /** Sort index among the other objects listed directly under the collection (i.e. objects
+   * without a parent in this collection). */
   int sort_index = -1;
+  /** Sort index among objects listed under their parented object in the
+   * Outliner. */
   int parented_sort_index = -1;
   char _pad[4] = {};
 };
@@ -134,6 +140,8 @@ struct CollectionChild {
   struct Collection *collection = nullptr;
 
   CollectionLightLinking light_linking;
+  /** Custom manual sort index of this child collection among its siblings in the Outliner
+   * (#SO_SORT_CUSTOM). Only used for that purpose, nothing else reads or relies on it. */
   int sort_index = -1;
 };
 

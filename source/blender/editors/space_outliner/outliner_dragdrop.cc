@@ -1247,14 +1247,13 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
   }
 
   if (ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
-    TreeElement *parent_te = outliner_find_parent_element(
+    const TreeElement *parent_te = outliner_find_parent_element(
         &space_outliner->runtime->tree, nullptr, te);
     if (parent_te != nullptr && parent_te->idcode == ID_OB) {
-      Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
-      for (wmDragID *drag_id = drag->ids.first(); drag_id; drag_id = drag_id->next)
-      {
-        if (GS(drag_id->id->name) == ID_OB) {
-          Object *object = id_cast<Object *>(drag_id->id);
+      const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
+      for (const wmDragID &drag_id : drag->ids) {
+        if (GS(drag_id.id->name) == ID_OB) {
+          const Object *object = id_cast<const Object *>(drag_id.id);
           if (object->parent != parent_ob) {
             return false;
           }
@@ -1491,11 +1490,11 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
     auto get_sort_index = [&](const std::variant<Object *, Collection *> &item) -> int {
       if (std::holds_alternative<Object *>(item)) {
         Object *ob = std::get<Object *>(item);
-        CollectionObject *cob = BKE_collection_object_find_in(data.to, ob);
+        CollectionObject *cob = BKE_collection_object_find_in(*data.to, *ob);
         if (cob == nullptr) {
           Collection *other_col = BKE_collection_object_find(bmain, scene, nullptr, ob);
           if (other_col != nullptr) {
-            cob = BKE_collection_object_find_in(other_col, ob);
+            cob = BKE_collection_object_find_in(*other_col, *ob);
           }
         }
         return cob ? (is_parented_object ? cob->parented_sort_index : cob->sort_index) : 0;
@@ -1609,11 +1608,11 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
           [&](auto &&item) {
             using T = std::decay_t<decltype(item)>;
             if constexpr (std::is_same_v<T, Object *>) {
-              CollectionObject *cob = BKE_collection_object_find_in(data.to, item);
+              CollectionObject *cob = BKE_collection_object_find_in(*data.to, *item);
               if (cob == nullptr) {
                 Collection *other_col = BKE_collection_object_find(bmain, scene, nullptr, item);
                 if (other_col != nullptr) {
-                  cob = BKE_collection_object_find_in(other_col, item);
+                  cob = BKE_collection_object_find_in(*other_col, *item);
                 }
               }
               if (cob != nullptr) {

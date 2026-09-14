@@ -274,12 +274,27 @@ bool BKE_collection_object_replace(Main *bmain,
 void BKE_collection_object_move(
     Main *bmain, Scene *scene, Collection *collection_dst, Collection *collection_src, Object *ob);
 
-/** Find the entry for ob inside collection
- * Returns nullptr if not found. */
-CollectionObject *BKE_collection_object_find_in(Collection *collection, Object *ob);
+/**
+ * Find the entry for \a ob inside \a collection.
+ *
+ * \return nullptr if not found.
+ */
+CollectionObject *BKE_collection_object_find_in(const Collection &collection, const Object &ob);
 
-void BKE_collection_object_parented_sort_index_reset(Main *bmain, Object *ob);
-void BKE_collection_object_parent_clear_sort_index_reset(Main *bmain, Object *ob);
+/**
+ *  Unsets the CollectionObject.sort_index for the given \a object.
+ */
+
+void BKE_collection_object_parented_sort_index_reset(Main &bmain, Object &ob);
+
+/**
+ * Unsets the CollectionObject.parented_sort_index for the given \a object.
+ * Also walks the object's current parent chain to check if the parent is also a member of the same
+ * collection as the given object. If both are in the same collection unset
+ * CollectionObject.sort_index for the given \a object. This should be called when an object is
+ * unparented.
+ */
+void BKE_collection_object_parent_clear_sort_index_reset(Main &bmain, Object &ob);
 
 /**
  * Remove object from all collections of scene

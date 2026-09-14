@@ -1440,48 +1440,37 @@ Collection *BKE_collection_parent_editable_find_recursive(const ViewLayer *view_
   return nullptr;
 }
 
-CollectionObject *BKE_collection_object_find_in(Collection *collection, Object *ob)
+CollectionObject *BKE_collection_object_find_in(const Collection &collection, const Object &ob)
 {
-  if (ELEM(nullptr, collection, ob)) {
-    return nullptr;
-  }
-  for (CollectionObject &cob : collection->gobject) {
-    if (cob.ob == ob) {
-      return &cob;
-    }
-  }
-  return nullptr;
+  /* The object hash is a lazily created cache stored behind `runtime`, so populating it here
+   * does not affect the logical (visible) state of the collection. */
+  collection_gobject_hash_ensure(const_cast<Collection *>(&collection));
+  return collection.runtime->gobject_hash->lookup_default(&ob, nullptr);
 }
 
-void BKE_collection_object_parented_sort_index_reset(Main *bmain, Object *ob)
+void BKE_collection_object_parented_sort_index_reset(Main &bmain, Object &ob)
 {
-  if (ELEM(nullptr, bmain, ob)) {
-    return;
-  }
   Collection *collection = nullptr;
-  while ((collection = BKE_collection_object_find(bmain, nullptr, collection, ob))) {
-    CollectionObject *cob = BKE_collection_object_find_in(collection, ob);
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
     if (cob != nullptr) {
       cob->parented_sort_index = -1;
     }
   }
 }
 
-void BKE_collection_object_parent_clear_sort_index_reset(Main *bmain, Object *ob)
+void BKE_collection_object_parent_clear_sort_index_reset(Main &bmain, Object &ob)
 {
-  if (bmain == nullptr || ob == nullptr) {
-    return;
-  }
   Collection *collection = nullptr;
-  while ((collection = BKE_collection_object_find(bmain, nullptr, collection, ob))) {
-    CollectionObject *cob = BKE_collection_object_find_in(collection, ob);
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
     if (cob != nullptr) {
       cob->parented_sort_index = -1;
-      if (ob->parent != nullptr) {
-        for (Object *parent_iter = ob->parent; parent_iter != nullptr;
+      if (ob.parent != nullptr) {
+        for (Object *parent_iter = ob.parent; parent_iter != nullptr;
              parent_iter = parent_iter->parent)
         {
-          if (BKE_collection_object_find_in(collection, parent_iter) != nullptr) {
+          if (BKE_collection_object_find_in(*collection, *parent_iter) != nullptr) {
             cob->sort_index = -1;
             break;
           }

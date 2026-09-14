@@ -262,7 +262,7 @@ static wmOperatorStatus vertex_parent_set_exec(bContext *C, wmOperator *op)
       else {
         BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
         ob->parent = BKE_view_layer_active_object_get(view_layer);
-        BKE_collection_object_parented_sort_index_reset(bmain, ob);
+        BKE_collection_object_parented_sort_index_reset(*bmain, *ob);
         if (par3 != INDEX_UNSET) {
           ob->partype = PARVERT3;
           ob->par1 = par1;
@@ -391,7 +391,7 @@ void parent_clear(Main *bmain, Object *ob, const int type)
   }
   uint flags = ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION;
   if (type != CLEAR_PARENT_INVERSE) {
-    BKE_collection_object_parent_clear_sort_index_reset(bmain, ob);
+    BKE_collection_object_parent_clear_sort_index_reset(*bmain, *ob);
   }
   switch (type) {
     case CLEAR_PARENT_ALL: {
@@ -546,7 +546,7 @@ static bool parent_set_with_depsgraph(ReportList *reports,
         cu->flag |= CU_PATH | CU_FOLLOW;
         cu_eval->flag |= CU_PATH | CU_FOLLOW;
         /* force creation of path data */
-        BKE_displist_make_curveTypes(depsgraph, scene, parent_eval, false);
+        BKE_displist_make_curveTypes(depsgraph, scene, par, false);
       }
       else {
         cu->flag |= CU_FOLLOW;
@@ -595,7 +595,7 @@ static bool parent_set_with_depsgraph(ReportList *reports,
   /* Set the parent (except for follow-path constraint option). */
   if (partype != PAR_PATH_CONST) {
     ob->parent = par;
-    BKE_collection_object_parented_sort_index_reset(bmain, ob);
+    BKE_collection_object_parented_sort_index_reset(*bmain, *ob);
     /* Always clear parentinv matrix for sake of consistency, see #41950. */
     unit_m4(ob->parentinv);
   }
