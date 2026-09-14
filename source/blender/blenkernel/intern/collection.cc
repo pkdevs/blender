@@ -1442,8 +1442,6 @@ Collection *BKE_collection_parent_editable_find_recursive(const ViewLayer *view_
 
 CollectionObject *BKE_collection_object_find_in(const Collection &collection, const Object &ob)
 {
-  /* The object hash is a lazily created cache stored behind `runtime`, so populating it here
-   * does not affect the logical (visible) state of the collection. */
   collection_gobject_hash_ensure(const_cast<Collection *>(&collection));
   return collection.runtime->gobject_hash->lookup_default(&ob, nullptr);
 }
