@@ -15,13 +15,10 @@
 #include "BKE_type_conversions.hh"
 
 #include "BLI_listbase.hh"
-#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
-
-#include "DNA_material_types.h"
 
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
