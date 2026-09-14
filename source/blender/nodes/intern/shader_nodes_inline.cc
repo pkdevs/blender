@@ -1524,35 +1524,36 @@ class ShaderNodesInliner {
       this->store_socket_value_fallback(socket);
       return;
     }
-    if (node->is_type("FunctionNodeBooleanMath"_ustr)) {
-      if (this->try_short_circuit__boolean_math(socket)) {
-        return;
-      }
-    }
-    else if (node->is_type("ShaderNodeMath"_ustr)) {
-      if (this->try_short_circuit__float_math(socket)) {
-        return;
-      }
-    }
-    else if (node->is_type("FunctionNodeIntegerMath"_ustr)) {
-      if (this->try_short_circuit__integer_math(socket)) {
-        return;
-      }
-    }
-    else if (node->is_type("ShaderNodeVectorMath"_ustr)) {
-      if (this->try_short_circuit__vector_math(socket)) {
-        return;
-      }
+    if (this->try_short_circuit(node)) {
+      return;
     }
     /* The node can't be constant-folded. So copy it to the destination tree instead. */
     this->handle_output_socket__eval_copy_node(*node, node.context, node.context);
   }
 
-  [[nodiscard]] bool try_short_circuit__boolean_math(const SocketInContext &output_socket)
+  [[nodiscard]] bool try_short_circuit(const NodeInContext &node)
   {
-    const NodeInContext node = output_socket.owner_node();
+    if (node->is_type("FunctionNodeBooleanMath"_ustr)) {
+      return this->try_short_circuit__boolean_math(node);
+    }
+    if (node->is_type("ShaderNodeMath"_ustr)) {
+      return this->try_short_circuit__float_math(node);
+    }
+    if (node->is_type("FunctionNodeIntegerMath"_ustr)) {
+      return this->try_short_circuit__integer_math(node);
+    }
+    if (node->is_type("ShaderNodeVectorMath"_ustr)) {
+      return this->try_short_circuit__vector_math(node);
+    }
+    return false;
+  }
+
+  [[nodiscard]] bool try_short_circuit__boolean_math(const NodeInContext &node)
+  {
     const auto op = NodeBooleanMathOperation(node->custom1);
-    const bke::bNodeSocketType &bool_type = *output_socket->typeinfo;
+    static const bke::bNodeSocketType &bool_type = *bke::node_socket_type_find_static(
+        SOCK_BOOLEAN);
+    const SocketInContext output_socket = node.output_socket(0);
 
     auto try_get_primitive_bool = [&](const SocketValue &value) -> std::optional<bool> {
       if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(bool_type)) {
@@ -1684,9 +1685,9 @@ class ShaderNodesInliner {
     return {LinkedSocketValue{not_node, not_node->outputs.first()}};
   }
 
-  [[nodiscard]] bool try_short_circuit__float_math(const SocketInContext &output_socket)
+  [[nodiscard]] bool try_short_circuit__float_math(const NodeInContext &node)
   {
-    const NodeInContext node = output_socket.owner_node();
+    const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeMathOperation(node->custom1);
 
     Vector<SocketValue> values;
@@ -1729,9 +1730,9 @@ class ShaderNodesInliner {
     return false;
   }
 
-  [[nodiscard]] bool try_short_circuit__integer_math(const SocketInContext &output_socket)
+  [[nodiscard]] bool try_short_circuit__integer_math(const NodeInContext &node)
   {
-    const NodeInContext node = output_socket.owner_node();
+    const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeIntegerMathOperation(node->custom1);
 
     Vector<SocketValue> values;
@@ -1774,9 +1775,9 @@ class ShaderNodesInliner {
     return false;
   }
 
-  [[nodiscard]] bool try_short_circuit__vector_math(const SocketInContext &output_socket)
+  [[nodiscard]] bool try_short_circuit__vector_math(const NodeInContext &node)
   {
-    const NodeInContext node = output_socket.owner_node();
+    const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeVectorMathOperation(node->custom1);
 
     Vector<SocketValue> values;
