@@ -2373,10 +2373,6 @@ class VIEW3D_MT_paint_grease_pencil_stroke(Menu):
 
         layout.separator()
 
-        layout.operator("grease_pencil.outline", text="Outline")
-
-        layout.separator()
-
         layout.operator("grease_pencil.set_uniform_thickness")
         layout.operator("grease_pencil.set_uniform_opacity")
         layout.prop(settings, "use_scale_thickness", text="Scale Thickness")
