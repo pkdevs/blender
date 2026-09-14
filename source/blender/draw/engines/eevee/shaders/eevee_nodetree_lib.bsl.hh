@@ -213,7 +213,7 @@ void closure_weights_reset([[resource_table]] KernelGlobals &kg,
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
   if (pipe.use_lighting_nodes) [[static_branch]] {
-    sd.light_accum = {};
+    sd.light_accum = LightAccumulation{};
   }
 #endif
 }
@@ -574,11 +574,8 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 }
 
 #ifndef GPU_METAL
-Closure nodetree_surface(KernelGlobals &kg, ShadingData &sd, float closure_rand);
-Closure nodetree_volume(KernelGlobals &kg, ShadingData &sd);
-float3 nodetree_displacement(KernelGlobals &kg, ShadingData &sd);
-float nodetree_thickness(KernelGlobals &kg, ShadingData &sd);
-float4 closure_to_rgba(KernelGlobals &kg, Closure cl);
+float3 nodetree_displacement([[resource_table]] KernelGlobals &kg, ShadingData &sd);
+float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure cl);
 #endif
 
 /**
@@ -769,7 +766,7 @@ float2 bsdf_lut([[resource_table]] KernelGlobals &kg,
 
 #ifndef GPU_METAL
 /* Prototype. */
-float derivative_scale_get();
+float derivative_scale_get([[resource_table]] KernelGlobals &kg);
 #endif
 
 #ifdef MAT_DISPLACEMENT_BUMP
