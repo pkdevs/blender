@@ -176,6 +176,11 @@ def show_denoise_active(context):
     return True
 
 
+def show_preview_dlss_active(context):
+    cscene = context.scene.cycles
+    return cscene.use_preview_denoising and cscene.preview_denoiser == 'DLSS' and has_dlss_gpu_devices(context)
+
+
 def get_effective_preview_denoiser(context, has_oidn_gpu):
     scene = context.scene
     cscene = scene.cycles
@@ -224,9 +229,7 @@ class CYCLES_RENDER_PT_sampling_viewport(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        layout.active = not (cscene.use_preview_denoising and
-                             cscene.preview_denoiser == 'DLSS' and
-                             has_dlss_gpu_devices(context))
+        layout.active = not show_preview_dlss_active(context)
 
         layout.use_property_split = True
         layout.use_property_decorate = False
@@ -485,8 +488,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
             # Disable preview scrambling if DLSS denoising is used.
             # Preview scrambling and DLSS are generally incompatible with each other,
             # so preview scrambling is internally disabled when using DLSS.
-            preview_scrambling_row.active = not (
-                cscene.use_preview_denoising and cscene.preview_denoiser == 'DLSS' and has_dlss_gpu_devices(context))
+            preview_scrambling_row.active = not show_preview_dlss_active(context)
             heading.prop(cscene, "scrambling_distance", text="Multiplier")
 
             layout.separator()
