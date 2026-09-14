@@ -99,9 +99,14 @@ GPU_TEST(pipeline_independent_state)
 template<GPUBlend blend_type>
 void pipeline_blend_test(float4 source_a, float4 source_b, float4 expected_result)
 {
-  GPUOffScreen *offscreen = GPU_offscreen_create(
-      1, 1, false, TextureFormat::SFLOAT_16_16_16_16,
-      GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_HOST_READ, false, nullptr);
+  GPUOffScreen *offscreen = GPU_offscreen_create(1,
+                                                 1,
+                                                 false,
+                                                 TextureFormat::SFLOAT_16_16_16_16,
+                                                 GPU_TEXTURE_USAGE_ATTACHMENT |
+                                                     GPU_TEXTURE_USAGE_HOST_READ,
+                                                 false,
+                                                 nullptr);
   BLI_assert(offscreen != nullptr);
   GPU_offscreen_bind(offscreen, false);
   gpu::Texture *color_texture = GPU_offscreen_color_texture(offscreen);
@@ -142,22 +147,25 @@ void pipeline_blend_test(float4 source_a, float4 source_b, float4 expected_resul
 
 static void test_pipeline_blend_alpha()
 {
-  pipeline_blend_test<GPU_BLEND_ALPHA>(
-      float4(1.0f, 0.0f, 1.0f, 1.0f), float4(0.0f, 1.0f, 0.0f, 0.5f), float4(0.5f, 0.5f, 0.5f, 1.0f));
+  pipeline_blend_test<GPU_BLEND_ALPHA>(float4(1.0f, 0.0f, 1.0f, 1.0f),
+                                       float4(0.0f, 1.0f, 0.0f, 0.5f),
+                                       float4(0.5f, 0.5f, 0.5f, 1.0f));
 }
 GPU_TEST(pipeline_blend_alpha)
 
 static void test_pipeline_blend_additive()
 {
-  pipeline_blend_test<GPU_BLEND_ADDITIVE>(
-      float4(1.0f, 0.0f, 1.0f, 1.0f), float4(0.0f, 1.0f, 0.0f, 0.5f), float4(1.0f, 0.5f, 1.0f, 1.0f));
+  pipeline_blend_test<GPU_BLEND_ADDITIVE>(float4(1.0f, 0.0f, 1.0f, 1.0f),
+                                          float4(0.0f, 1.0f, 0.0f, 0.5f),
+                                          float4(1.0f, 0.5f, 1.0f, 1.0f));
 }
 GPU_TEST(pipeline_blend_additive)
 
 static void test_pipeline_blend_none()
 {
-  pipeline_blend_test<GPU_BLEND_NONE>(
-      float4(1.0f, 0.0f, 1.0f, 1.0f), float4(0.0f, 1.0f, 0.0f, 0.5f), float4(0.0f, 1.0f, 0.0f, 0.5f));
+  pipeline_blend_test<GPU_BLEND_NONE>(float4(1.0f, 0.0f, 1.0f, 1.0f),
+                                      float4(0.0f, 1.0f, 0.0f, 0.5f),
+                                      float4(0.0f, 1.0f, 0.0f, 0.5f));
 }
 GPU_TEST(pipeline_blend_none)
 

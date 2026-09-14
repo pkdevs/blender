@@ -73,8 +73,7 @@ void MTLPipeline::issue_barrier(GPUBarrier barrier_bits)
   MTLContext *mtl_ctx = MTLContext::get();
   BLI_assert(mtl_ctx);
 
-  mtl_ctx->main_command_buffer.insert_memory_barrier(
-      barrier_bits, before_stages, after_stages);
+  mtl_ctx->main_command_buffer.insert_memory_barrier(barrier_bits, before_stages, after_stages);
 }
 
 }  // namespace blender::gpu

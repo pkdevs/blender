@@ -41,6 +41,9 @@ ENUM_OPERATORS(RenderGraphFlushFlags);
 
 class VKContext : public Context, NonCopyable {
   friend class VKDevice;
+  /* VKPipeline::resolve_draw reads the current specialization-constants state
+   * when it (re)builds the pool key. */
+  friend class VKPipeline;
 
  private:
   VkExtent2D vk_extent_ = {};

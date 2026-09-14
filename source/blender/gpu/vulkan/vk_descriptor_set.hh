@@ -88,27 +88,26 @@ class VKDescriptorSetUpdator {
                                            VKShader &shader,
                                            VkDescriptorSetLayout vk_descriptor_set_layout,
                                            render_graph::VKPipelineData &r_pipeline_data) = 0;
-   void bind_shader_resources(const VKDevice &device,
-                              const VKPipeline &pipeline,
-                              VKShader &shader,
-                              const VKBufferWithOffset &push_constants_buffer);
-   virtual void upload_descriptor_sets() = 0;
+  void bind_shader_resources(const VKDevice &device,
+                             const VKPipeline &pipeline,
+                             VKShader &shader,
+                             const VKBufferWithOffset &push_constants_buffer);
+  virtual void upload_descriptor_sets() = 0;
 
-  private:
-   void bind_image_resource(const VKPipeline &pipeline,
-                            const VKResourceBinding &resource_binding);
-   void bind_texture_resource(const VKDevice &device,
-                              const VKPipeline &pipeline,
-                              const VKResourceBinding &resource_binding);
-   void bind_storage_buffer_resource(const VKPipeline &pipeline,
-                                     const VKResourceBinding &resource_binding);
-   void bind_uniform_buffer_resource(const VKPipeline &pipeline,
-                                     const VKResourceBinding &resource_binding);
-   void bind_acceleration_structure_resource(const VKPipeline &pipeline,
-                                             const VKResourceBinding &resource_binding);
-   void bind_input_attachment_resource(const VKDevice &device,
-                                       const VKPipeline &pipeline,
-                                       const VKResourceBinding &resource_binding);
+ private:
+  void bind_image_resource(const VKPipeline &pipeline, const VKResourceBinding &resource_binding);
+  void bind_texture_resource(const VKDevice &device,
+                             const VKPipeline &pipeline,
+                             const VKResourceBinding &resource_binding);
+  void bind_storage_buffer_resource(const VKPipeline &pipeline,
+                                    const VKResourceBinding &resource_binding);
+  void bind_uniform_buffer_resource(const VKPipeline &pipeline,
+                                    const VKResourceBinding &resource_binding);
+  void bind_acceleration_structure_resource(const VKPipeline &pipeline,
+                                            const VKResourceBinding &resource_binding);
+  void bind_input_attachment_resource(const VKDevice &device,
+                                      const VKPipeline &pipeline,
+                                      const VKResourceBinding &resource_binding);
 
   void bind_push_constants(VKPushConstants &push_constants,
                            const VKBufferWithOffset &push_constants_buffer);
@@ -198,36 +197,36 @@ class VKDescriptorSetTracker {
   /**
    * Add resources of the descriptor set to the resource access info.
    */
-   static void update_resource_access_info(VKContext &context,
-                                           render_graph::VKResourceAccessInfo &resource_access_info,
-                                           const VKBufferWithOffset &push_constants_buffer);
-   static void update_resource_access_info_binding(const VKPipeline &pipeline,
-                                                   const VKResourceBinding &resource_binding,
-                                                   render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_uniform_buffer(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_image(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_sampler(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_storage_buffer(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_input_attachment(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
-   static void update_resource_access_info_binding_acceleration_structure(
-       const VKPipeline &pipeline,
-       const VKResourceBinding &resource_binding,
-       render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info(VKContext &context,
+                                          render_graph::VKResourceAccessInfo &resource_access_info,
+                                          const VKBufferWithOffset &push_constants_buffer);
+  static void update_resource_access_info_binding(const VKPipeline &pipeline,
+                                                  const VKResourceBinding &resource_binding,
+                                                  render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_uniform_buffer(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_image(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_sampler(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_storage_buffer(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_input_attachment(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_acceleration_structure(
+      const VKPipeline &pipeline,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
 };
 
 }  // namespace blender::gpu

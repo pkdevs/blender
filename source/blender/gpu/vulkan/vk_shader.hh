@@ -109,12 +109,12 @@ class VKShader : public Shader {
   VkPipeline ensure_and_get_compute_pipeline(
       const shader::SpecializationConstants &constants_state);
   bool ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_states);
-   VkPipeline ensure_and_get_graphics_pipeline(
-       GPUPrimType primitive,
-       VKVertexInputDescriptionPool::Key vertex_input_description_key,
-       const GPUState &state,
-       const VKFrameBuffer &framebuffer,
-       shader::SpecializationConstants &constants_state);
+  VkPipeline ensure_and_get_graphics_pipeline(
+      GPUPrimType primitive,
+      VKVertexInputDescriptionPool::Key vertex_input_description_key,
+      const GPUState &state,
+      const VKFrameBuffer &framebuffer,
+      shader::SpecializationConstants &constants_state);
 
   const VKShaderInterface &interface_get() const;
 

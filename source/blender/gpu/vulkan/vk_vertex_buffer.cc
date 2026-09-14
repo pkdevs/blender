@@ -12,10 +12,10 @@
 
 #include "render_graph/nodes/vk_copy_buffer_node.hh"
 #include "vk_data_conversion.hh"
+#include "vk_pipeline.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "CLG_log.h"
@@ -33,7 +33,8 @@ VKVertexBuffer::~VKVertexBuffer()
 
 void VKVertexBuffer::bind_as_ssbo(uint binding)
 {
-  vk_pipeline_get()->storage_buffer_bind(BindSpaceStorageBuffers::Type::VertexBuffer, this, binding);
+  vk_pipeline_get()->storage_buffer_bind(
+      BindSpaceStorageBuffers::Type::VertexBuffer, this, binding);
 }
 
 void VKVertexBuffer::bind_as_texture(uint binding)

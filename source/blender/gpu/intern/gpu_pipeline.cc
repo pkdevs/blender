@@ -41,9 +41,7 @@ Pipeline::Pipeline()
   mutable_state_.stencil_reference = 0x00;
 }
 
-Pipeline::~Pipeline()
-{
-}
+Pipeline::~Pipeline() {}
 
 /* ------------------------------------------------------------ */
 /** \name Setters
@@ -56,14 +54,21 @@ void Pipeline::shader_set(Shader *shader)
   }
   shader_ = shader;
   shader_interface_id_ = (shader != nullptr && shader->interface != nullptr) ?
-                                 shader->interface->uid :
-                                 0;
+                             shader->interface->uid :
+                             0;
   mark_dirty(GPU_PIPELINE_DIRTY_PIPELINE | GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
 void Pipeline::specialization_set(const shader::SpecializationConstants *constants)
 {
-  if (specialization_constants_ == constants) {
+  /* Value-compare, not just pointer: catches both a pointer change and an in-place
+   * value update behind a stable pointer (e.g. a context-owned member that's
+   * re-assigned on shader re-bind). */
+  const bool same_ptr = (specialization_constants_ == constants);
+  const bool same_value = (specialization_constants_ != nullptr && constants != nullptr &&
+                           specialization_constants_->values == constants->values &&
+                           specialization_constants_->types == constants->types);
+  if (same_ptr || same_value) {
     return;
   }
   specialization_constants_ = constants;

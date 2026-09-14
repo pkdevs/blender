@@ -5,10 +5,10 @@
 /** \file
  * \ingroup gpu
  */
+#include "vk_pipeline.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "vk_storage_buffer.hh"
@@ -94,7 +94,8 @@ void VKStorageBuffer::allocate()
 
 void VKStorageBuffer::bind(int slot)
 {
-  vk_pipeline_get()->storage_buffer_bind(BindSpaceStorageBuffers::Type::StorageBuffer, this, slot, offset_);
+  vk_pipeline_get()->storage_buffer_bind(
+      BindSpaceStorageBuffers::Type::StorageBuffer, this, slot, offset_);
 }
 
 void VKStorageBuffer::unbind()

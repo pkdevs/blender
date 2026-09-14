@@ -9,10 +9,10 @@
 #include "vk_descriptor_set.hh"
 #include "vk_buffer.hh"
 #include "vk_index_buffer.hh"
+#include "vk_pipeline.hh"
 #include "vk_ray_tracing.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
-#include "vk_pipeline.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_texture.hh"
 #include "vk_vertex_buffer.hh"
@@ -24,8 +24,8 @@ namespace blender::gpu {
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
 void VKDescriptorSetTracker::update_descriptor_set(VKContext &context,
-                                                    render_graph::VKResourceAccessInfo &access_info,
-                                                    render_graph::VKPipelineData &r_pipeline_data)
+                                                   render_graph::VKResourceAccessInfo &access_info,
+                                                   render_graph::VKPipelineData &r_pipeline_data)
 {
   VKShader &shader = *unwrap(context.shader);
   VKPipeline &pipeline = *static_cast<VKPipeline *>(context.pipeline_get());
@@ -224,8 +224,7 @@ void VKDescriptorSetTracker::update_resource_access_info_binding_input_attachmen
     texture = pipeline.images_.get(resource_binding.binding);
   }
   else {
-    texture = static_cast<VKTexture *>(
-        pipeline.textures_.get(resource_binding.binding)->resource);
+    texture = static_cast<VKTexture *>(pipeline.textures_.get(resource_binding.binding)->resource);
   }
 
   BLI_assert(texture);
@@ -255,14 +254,12 @@ void VKDescriptorSetTracker::update_resource_access_info_binding(
 {
   switch (resource_binding.bind_type) {
     case VKBindType::UNIFORM_BUFFER: {
-      update_resource_access_info_binding_uniform_buffer(
-          pipeline, resource_binding, access_info);
+      update_resource_access_info_binding_uniform_buffer(pipeline, resource_binding, access_info);
       break;
     }
 
     case VKBindType::STORAGE_BUFFER: {
-      update_resource_access_info_binding_storage_buffer(
-          pipeline, resource_binding, access_info);
+      update_resource_access_info_binding_storage_buffer(pipeline, resource_binding, access_info);
       break;
     }
 
@@ -384,9 +381,7 @@ void VKDescriptorSetUpdator::bind_texture_resource(const VKDevice &device,
 }
 
 void VKDescriptorSetUpdator::bind_input_attachment_resource(
-    const VKDevice &device,
-    const VKPipeline &pipeline,
-    const VKResourceBinding &resource_binding)
+    const VKDevice &device, const VKPipeline &pipeline, const VKResourceBinding &resource_binding)
 {
   const bool supports_local_read = device.extensions_get().dynamic_rendering_local_read;
   if (supports_local_read) {
@@ -400,8 +395,7 @@ void VKDescriptorSetUpdator::bind_input_attachment_resource(
                resource_binding.location);
   }
   else {
-    const BindSpaceTextures::Elem *elem_ptr = pipeline.textures_.get(
-        resource_binding.binding);
+    const BindSpaceTextures::Elem *elem_ptr = pipeline.textures_.get(resource_binding.binding);
     if (!elem_ptr) {
       /* Unbound resource. */
       BLI_assert_unreachable();

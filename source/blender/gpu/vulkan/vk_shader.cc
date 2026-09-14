@@ -12,9 +12,9 @@
 
 #include "vk_backend.hh"
 #include "vk_framebuffer.hh"
+#include "vk_pipeline.hh"
 #include "vk_shader_interface.hh"
 #include "vk_shader_log.hh"
-#include "vk_pipeline.hh"
 #include "vk_vertex_attribute_object.hh"
 
 #include "BLI_vector.hh"

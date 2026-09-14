@@ -298,18 +298,51 @@ void VKContext::rendering_end()
  * \{ */
 
 void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
-                                      GPUPrimType primitive,
-                                      VKVertexInputDescriptionPool::Key vertex_input_key,
-                                      render_graph::VKPipelineDataGraphics &r_pipeline_data)
+                                     GPUPrimType primitive,
+                                     VKVertexInputDescriptionPool::Key vertex_input_key,
+                                     render_graph::VKPipelineDataGraphics &r_pipeline_data)
 {
   VKShader &vk_shader = unwrap(*shader);
+  VKPipeline &pl = *static_cast<VKPipeline *>(pipeline_get());
 
-  /* Resolve first (for legacy/no-pipeline paths) and read fixed-function state
-   * directly from the pipeline — the single source of truth. */
-  Pipeline *pl = pipeline_get();
-  pl->prepare_draw(primitive, vertex_input_key);
-  GPUState state = pl->state_get();
-  GPUStateMutable mutable_state = pl->mutable_state_get();
+  /* The context is the (legacy) source of the active shader and its
+   * specialization constants. Sync them onto the pipeline — compare-and-tag
+   * dirty — so the pipeline is the single source of truth for the pool key.
+   * State setters (blend, write-mask, depth, ...) already route through the
+   * pipeline and tag it. */
+  if (pl.shader_get() != shader) {
+    pl.shader_set(shader);
+    if (pl.specialization_get() != &constants_state_) {
+      pl.specialization_set(&constants_state_);
+    }
+  }
+  else if (pl.specialization_get() != &constants_state_) {
+    pl.specialization_set(&constants_state_);
+  }
+
+  /* Tag the remaining pool-key inputs. Each setter marks DIRTY_PIPELINE only
+   * when its value changed since the last resolve, so the steady-state draw
+   * path (identical state) does not touch the pipeline pool at all —
+   * `prepare_draw` below early-returns on `!is_dirty()`.
+   *
+   * `framebuffer.rendering_ensure` has already run (in the batch draw path),
+   * so the attachment formats are final. */
+  pl.tag_framebuffer_state(framebuffer.depth_attachment_format_get(),
+                           framebuffer.stencil_attachment_format_get(),
+                           framebuffer.color_attachment_formats_get(),
+                           framebuffer.viewport_size());
+  pl.tag_vertex_input_key(vertex_input_key);
+  pl.set_prim_type(primitive);
+
+  /* Resolve (or reuse). `prepare_draw` is gated on `is_dirty()` and, when
+   * dirty, delegates to `resolve_draw` which populates `resolved_vk_pipeline_`
+   * and clears the flag. The first draw always resolves: a fresh pipeline is
+   * clean, so we force a resolve when no handle is cached yet. */
+  if (pl.resolved_vk_pipeline_ == VK_NULL_HANDLE || pl.is_dirty()) {
+    pl.force_resolve_draw(primitive, vertex_input_key);
+  }
+  GPUState state = pl.state_get();
+  GPUStateMutable mutable_state = pl.mutable_state_get();
 
   /* Disable non-vulkan state flags to reduce unneeded pipeline compilation. */
   state.clip_control = 0;
@@ -334,8 +367,7 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
                                       GPU_PRIM_LINES_ADJ,
                                       GPU_PRIM_LINE_STRIP_ADJ);
   if (is_line_primitive) {
-    r_pipeline_data.line_width = extensions.wide_lines ? mutable_state.line_width :
-                                                         1.0f;
+    r_pipeline_data.line_width = extensions.wide_lines ? mutable_state.line_width : 1.0f;
   }
   else {
     r_pipeline_data.line_width.reset();
@@ -355,20 +387,15 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 
   /* VK_EXT_extended_dynamic_state */
   if (extensions.extended_dynamic_state) {
-    r_pipeline_data.front_face = state.invert_facing ?
-                                     VK_FRONT_FACE_COUNTER_CLOCKWISE :
-                                     VK_FRONT_FACE_CLOCKWISE;
+    r_pipeline_data.front_face = state.invert_facing ? VK_FRONT_FACE_COUNTER_CLOCKWISE :
+                                                       VK_FRONT_FACE_CLOCKWISE;
   }
 
   if (extensions.vertex_input_dynamic_state) {
     r_pipeline_data.vertex_input_description = vertex_input_key;
   }
 
-  update_pipeline_data(
-      vk_shader,
-      vk_shader.ensure_and_get_graphics_pipeline(
-          primitive, vertex_input_key, state, framebuffer, constants_state_),
-      r_pipeline_data.pipeline_data);
+  update_pipeline_data(vk_shader, pl.resolved_vk_pipeline_get(), r_pipeline_data.pipeline_data);
 }
 
 void VKContext::update_pipeline_data(render_graph::VKPipelineData &r_pipeline_data)

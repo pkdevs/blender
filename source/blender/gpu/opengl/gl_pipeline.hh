@@ -12,8 +12,8 @@
 
 #include "epoxy/gl.h"
 
-#include "GPU_pipeline.hh"
 #include "GPU_common_types.hh"
+#include "GPU_pipeline.hh"
 
 // Forward declarations.
 class GLFrameBuffer;
@@ -123,7 +123,7 @@ class GLPipeline : public Pipeline {
   void resolve_compute() override;
   void issue_barrier(GPUBarrier barrier_bits) override;
 
-  private:
+ private:
   /* Ensure static state (line width range, initial `~state` for first diff) is set up.
    * Called before the first fixed-function apply and from the slot accessors. */
   static void ensure_init();

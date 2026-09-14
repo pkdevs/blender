@@ -184,31 +184,40 @@ class Pipeline {
   {
     return prim_type_;
   }
-   const GPUState &state_get() const
-   {
-     return state_;
-   }
-   const GPUStateMutable &mutable_state_get() const
-   {
-     return mutable_state_;
-   }
-   Span<uint8_t> push_constants_data_get() const
-   {
-     return push_constants_data_;
-   }
-   uint32_t push_constants_size_get() const
-   {
-     return (uint32_t)push_constants_data_.size();
-   }
+  const GPUState &state_get() const
+  {
+    return state_;
+  }
+  const GPUStateMutable &mutable_state_get() const
+  {
+    return mutable_state_;
+  }
+  Span<uint8_t> push_constants_data_get() const
+  {
+    return push_constants_data_;
+  }
+  uint32_t push_constants_size_get() const
+  {
+    return (uint32_t)push_constants_data_.size();
+  }
 
   /* Dirty state. */
   GPUPipelineDirtyFlag dirty_flags_get() const
   {
     return dirty_flags_;
   }
-  bool is_dirty() const { return dirty_flags_ != GPU_PIPELINE_DIRTY_NONE; }
-  bool is_pipeline_dirty() const { return (dirty_flags_ & GPU_PIPELINE_DIRTY_PIPELINE) != 0; }
-  bool is_descriptor_dirty() const { return (dirty_flags_ & GPU_PIPELINE_DIRTY_DESCRIPTOR) != 0; }
+  bool is_dirty() const
+  {
+    return dirty_flags_ != GPU_PIPELINE_DIRTY_NONE;
+  }
+  bool is_pipeline_dirty() const
+  {
+    return (dirty_flags_ & GPU_PIPELINE_DIRTY_PIPELINE) != 0;
+  }
+  bool is_descriptor_dirty() const
+  {
+    return (dirty_flags_ & GPU_PIPELINE_DIRTY_DESCRIPTOR) != 0;
+  }
   bool is_depth_stencil_dirty() const
   {
     return (dirty_flags_ & GPU_PIPELINE_DIRTY_DEPTH_STENCIL) != 0;
@@ -218,44 +227,44 @@ class Pipeline {
     return (dirty_flags_ & GPU_PIPELINE_DIRTY_PUSH_CONSTANTS) != 0;
   }
 
-   /* ------------------------------------------------------------
-    * Orchestration (common to all backends)
-    * ---------------------------------------------------------- */
-   /**
-    * Mark this pipeline as the active one on the context and mark it dirty so
-    * the first `prepare_*` after binding re-resolves. Overriding is optional;
-    * backends that want to skip the resolve when state is unchanged can compare
-    * against their own "last applied" cache and only mark dirty when there's
-    * a real diff (see `GLPipeline::bind`).
-    */
-   virtual void bind();
-   virtual void unbind();
-   /**
-    * Called by the draw path. Skips work when the pipeline is not dirty
-    * (nothing has changed since the last resolve on this pipeline). Otherwise
-    * delegates to the backend's `resolve_draw`, which applies the pipeline's
-    * state to the device and clears the dirty flag at the end.
-    */
-   void prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key = 0);
-   void prepare_compute();
-   /** Backend hook: apply/resolve this pipeline's state for a draw call. */
-    virtual void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) = 0;
-    /** Backend hook: apply/resolve this pipeline's state for a compute dispatch. */
-    virtual void resolve_compute() = 0;
-    /** Issue a memory barrier on the active context. Backend-specific. */
-    virtual void issue_barrier(GPUBarrier barrier_bits) = 0;
-    /**
-     * Legacy entrypoint: unconditionally (re)apply this pipeline's state to the
-     * device, regardless of whether a `prepare_draw` already ran. Used by the
-     * legacy (non-pipeline-bound) draw paths to force a resolve.
-     */
-    void apply_state()
-    {
-      mark_dirty(GPU_PIPELINE_DIRTY_ALL);
-      resolve_draw(prim_type_, 0);
-    }
+  /* ------------------------------------------------------------
+   * Orchestration (common to all backends)
+   * ---------------------------------------------------------- */
+  /**
+   * Mark this pipeline as the active one on the context and mark it dirty so
+   * the first `prepare_*` after binding re-resolves. Overriding is optional;
+   * backends that want to skip the resolve when state is unchanged can compare
+   * against their own "last applied" cache and only mark dirty when there's
+   * a real diff (see `GLPipeline::bind`).
+   */
+  virtual void bind();
+  virtual void unbind();
+  /**
+   * Called by the draw path. Skips work when the pipeline is not dirty
+   * (nothing has changed since the last resolve on this pipeline). Otherwise
+   * delegates to the backend's `resolve_draw`, which applies the pipeline's
+   * state to the device and clears the dirty flag at the end.
+   */
+  void prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key = 0);
+  void prepare_compute();
+  /** Backend hook: apply/resolve this pipeline's state for a draw call. */
+  virtual void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) = 0;
+  /** Backend hook: apply/resolve this pipeline's state for a compute dispatch. */
+  virtual void resolve_compute() = 0;
+  /** Issue a memory barrier on the active context. Backend-specific. */
+  virtual void issue_barrier(GPUBarrier barrier_bits) = 0;
+  /**
+   * Legacy entrypoint: unconditionally (re)apply this pipeline's state to the
+   * device, regardless of whether a `prepare_draw` already ran. Used by the
+   * legacy (non-pipeline-bound) draw paths to force a resolve.
+   */
+  void apply_state()
+  {
+    mark_dirty(GPU_PIPELINE_DIRTY_ALL);
+    resolve_draw(prim_type_, 0);
+  }
 
-  protected:
+ protected:
   void mark_dirty(GPUPipelineDirtyFlag flag);
   void clear_dirty();
 
@@ -281,7 +290,7 @@ class Pipeline {
   Vector<uint8_t> push_constants_data_;
 
   GPUPipelineDirtyFlag dirty_flags_ = GPU_PIPELINE_DIRTY_NONE;
-};  /* end of Pipeline */
+}; /* end of Pipeline */
 
 }  // namespace gpu
 

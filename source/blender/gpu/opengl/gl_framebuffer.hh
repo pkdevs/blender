@@ -30,8 +30,8 @@ class GLFrameBuffer : public FrameBuffer {
   GLContext *context_ = nullptr;
   /** WORKAROUND: GLTexture::framebuffer_ can outlive its context.
    * We track the context id to ensure we don't try to use context_ after its been freed. */
-   int context_id_ = -1;
-   /** Copy of the GL state. Contains ONLY color attachments enums for slot binding. */
+  int context_id_ = -1;
+  /** Copy of the GL state. Contains ONLY color attachments enums for slot binding. */
   GLenum gl_attachments_[GPU_FB_MAX_COLOR_ATTACHMENT] = {0};
   /** List of attachment that are associated with this frame-buffer but temporarily detached. */
   GPUAttachment tmp_detached_[GPU_FB_MAX_ATTACHMENT];

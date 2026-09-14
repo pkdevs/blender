@@ -184,7 +184,7 @@ static void gl_set_backface_culling(const GPUFaceCullTest test)
 static void gl_set_provoking_vert(const GPUProvokingVertex vert)
 {
   GLenum value = (vert == GPU_VERTEX_FIRST) ? GL_FIRST_VERTEX_CONVENTION :
-                                             GL_LAST_VERTEX_CONVENTION;
+                                              GL_LAST_VERTEX_CONVENTION;
   glProvokingVertex(value);
 }
 
@@ -618,10 +618,8 @@ void GLPipeline::bind()
 {
   Context *ctx = Context::get();
   ctx->active_pipeline_ = this;
-  if (ctx->state_ever_applied_ &&
-      ctx->applied_state_ == this->state_ &&
-      ctx->applied_mutable_state_ == this->mutable_state_ &&
-      ctx->applied_shader_ == this->shader_)
+  if (ctx->state_ever_applied_ && ctx->applied_state_ == this->state_ &&
+      ctx->applied_mutable_state_ == this->mutable_state_ && ctx->applied_shader_ == this->shader_)
   {
     return;
   }

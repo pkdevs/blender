@@ -295,6 +295,24 @@ class VKPipeline : public Pipeline {
   void issue_barrier(GPUBarrier barrier_bits) override;
 
  public:
+  /* Resolved VkPipeline from the last resolve_draw. Reused by
+   * VKContext::update_pipeline_data on subsequent draws until this pipeline
+   * is tagged dirty again (shader / state / specialization-constants /
+   * framebuffer / prim / vertex-input change). VK_NULL_HANDLE means "not
+   * resolved yet", which forces the first resolve. */
+  VkPipeline resolved_vk_pipeline_ = VK_NULL_HANDLE;
+
+  /* Last framebuffer pool-key state tagged on this pipeline. `tag_framebuffer_state`
+   * compares the incoming (finalized) state against this and marks DIRTY_PIPELINE
+   * on a change, so the steady-state draw path never re-enters the
+   * VKPipelinePool map. */
+  VkFormat tagged_depth_format_ = VK_FORMAT_UNDEFINED;
+  VkFormat tagged_stencil_format_ = VK_FORMAT_UNDEFINED;
+  VkFormat tagged_color_formats_[GPU_FB_MAX_COLOR_ATTACHMENT] = {};
+  uint32_t tagged_color_count_ = 0;
+  uint32_t tagged_viewport_count_ = 1;
+  int64_t tagged_vertex_input_key_ = 0;
+
   /* Bind-space storage (formerly VKStateManager, now owned by the pipeline).
    * Public because the descriptor-set upload reads these directly at draw
    * time — same as the old `VKStateManager` layout. */
@@ -310,43 +328,67 @@ class VKPipeline : public Pipeline {
    */
   bool descriptor_dirty_ = false;
 
-   /* Texture / image binding overrides — now stored directly on this pipeline
-    * in VK's bind spaces above. */
-   void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
-   void texture_unbind(Texture *tex) override;
-   void texture_unbind_all() override;
-   void image_bind(Texture *tex, int unit) override;
-   void image_unbind(Texture *tex) override;
-   void image_unbind_all() override;
-   void uniformbuf_bind(UniformBuf *ubo, int slot) override;
-   void uniformbuf_unbind(UniformBuf *ubo) override;
-   void storagebuf_bind(StorageBuf *ssbo, int slot) override;
-   void storagebuf_unbind(StorageBuf *ssbo) override;
-   void tlas_bind(TopLevelAS *tlas, int slot) override;
-   void tlas_unbind(TopLevelAS *tlas) override;
+  /* Tag the (finalized) framebuffer pool-key state: attachment formats + viewport
+   * count. Compares against the stored state and marks DIRTY_PIPELINE on a change.
+   * Called from update_pipeline_data before the prepare_draw gate. */
+  void tag_framebuffer_state(VkFormat depth_format,
+                             VkFormat stencil_format,
+                             Span<VkFormat> color_formats,
+                             uint32_t viewport_count);
 
-   /* Resource-object bind helpers. These are the VK-specific entrypoints used
-    * by `VKUniformBuffer`, `VKStorageBuffer`, `VKVertexBuffer`,
-    * `VKIndexBuffer`, `VKTopLevelAS` and `VKContext` (back-buffer blit). */
-   void texel_buffer_bind(VKVertexBuffer &vertex_buffer, int binding);
-   void texel_buffer_unbind(VKVertexBuffer &vertex_buffer);
-   void uniform_buffer_bind(VKUniformBuffer *uniform_buffer, int binding);
-   void uniform_buffer_unbind(VKUniformBuffer *uniform_buffer);
-   void uniform_buffer_unbind_all();
-   void storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
-                            void *resource,
-                            int binding)
-   {
-     storage_buffer_bind(resource_type, resource, binding, 0);
-   }
-   void storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
-                            void *resource,
-                            int binding,
-                            VkDeviceSize offset);
-   void storage_buffer_unbind(void *resource);
-   void storage_buffer_unbind_all();
-   void toplevelas_bind(VKTopLevelAS *tlas, int slot);
-   void toplevelas_unbind(void *resource);
+  /* Tag the vertex-input description key; marks DIRTY_PIPELINE on a change. */
+  void tag_vertex_input_key(int64_t key);
+
+  VkPipeline resolved_vk_pipeline_get() const
+  {
+    return resolved_vk_pipeline_;
+  }
+  /* Run `resolve_draw` unconditionally (bypassing the is_dirty gate).
+   * `update_pipeline_data` calls this when `resolved_vk_pipeline_` is
+   * `VK_NULL_HANDLE` or the pipeline is dirty; the steady-state (already
+   * resolved, clean) path skips it. */
+  void force_resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key)
+  {
+    resolve_draw(prim_type, vertex_input_key);
+  }
+
+  /* Texture / image binding overrides — now stored directly on this pipeline
+   * in VK's bind spaces above. */
+  void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
+  void texture_unbind(Texture *tex) override;
+  void texture_unbind_all() override;
+  void image_bind(Texture *tex, int unit) override;
+  void image_unbind(Texture *tex) override;
+  void image_unbind_all() override;
+  void uniformbuf_bind(UniformBuf *ubo, int slot) override;
+  void uniformbuf_unbind(UniformBuf *ubo) override;
+  void storagebuf_bind(StorageBuf *ssbo, int slot) override;
+  void storagebuf_unbind(StorageBuf *ssbo) override;
+  void tlas_bind(TopLevelAS *tlas, int slot) override;
+  void tlas_unbind(TopLevelAS *tlas) override;
+
+  /* Resource-object bind helpers. These are the VK-specific entrypoints used
+   * by `VKUniformBuffer`, `VKStorageBuffer`, `VKVertexBuffer`,
+   * `VKIndexBuffer`, `VKTopLevelAS` and `VKContext` (back-buffer blit). */
+  void texel_buffer_bind(VKVertexBuffer &vertex_buffer, int binding);
+  void texel_buffer_unbind(VKVertexBuffer &vertex_buffer);
+  void uniform_buffer_bind(VKUniformBuffer *uniform_buffer, int binding);
+  void uniform_buffer_unbind(VKUniformBuffer *uniform_buffer);
+  void uniform_buffer_unbind_all();
+  void storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
+                           void *resource,
+                           int binding)
+  {
+    storage_buffer_bind(resource_type, resource, binding, 0);
+  }
+  void storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
+                           void *resource,
+                           int binding,
+                           VkDeviceSize offset);
+  void storage_buffer_unbind(void *resource);
+  void storage_buffer_unbind_all();
+  void toplevelas_bind(VKTopLevelAS *tlas, int slot);
+  void toplevelas_unbind(void *resource);
 };
 
 /**

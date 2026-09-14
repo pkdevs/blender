@@ -9,10 +9,10 @@
 #include "gpu_capabilities_private.hh"
 
 #include "vk_index_buffer.hh"
+#include "vk_pipeline.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_pipeline.hh"
 
 #include "CLG_log.h"
 

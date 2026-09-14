@@ -4,10 +4,14 @@
 
 #include "vk_pipeline.hh"
 
+#include <cstring>
+
 #include "gpu_context_private.hh"
 #include "vk_context.hh"
+#include "vk_framebuffer.hh"
 #include "vk_index_buffer.hh"
 #include "vk_ray_tracing.hh"
+#include "vk_shader.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_texture.hh"
 #include "vk_uniform_buffer.hh"
@@ -20,14 +24,73 @@ VKPipeline *vk_pipeline_get()
   return static_cast<VKPipeline *>(Context::get()->pipeline_get());
 }
 
-void VKPipeline::resolve_draw(GPUPrimType /*prim_type*/, int64_t /*vertex_input_key*/)
+void VKPipeline::resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key)
 {
   sync_context();
-  /* Vulkan bakes fixed-function state into the VkPipeline at render-graph
-   * creation; `update_pipeline_data` / `VKShader::ensure_and_get_graphics_pipeline`
-   * read the state directly from the pipeline (`pipeline_get()->state_get()`).
-   * The old "mirror into VKStateManager then read it back" is gone. */
+  /* Resolve the VkPipeline once into `resolved_vk_pipeline_`; subsequent draws
+   * reuse it (see `update_pipeline_data`) until this pipeline is re-tagged
+   * dirty by a shader / state / specialization-constants / framebuffer / prim /
+   * vertex-input change.
+   *
+   * Defensive: `Pipeline::apply_state` (base, non-virtual) unconditionally
+   * calls `resolve_draw` on legacy / state-only contexts where there is no
+   * active framebuffer, no active shader, and no valid prim type. The actual
+   * steady-state resolve happens in `update_pipeline_data` after the tags are
+   * set and the pipeline is dirty, so we early-return here if any of the
+   * resolve preconditions are missing. */
+  VKContext *context = VKContext::get();
+  if (context == nullptr) {
+    return;
+  }
+  const VKFrameBuffer *framebuffer = context->active_framebuffer_get();
+  Shader *shader = shader_ ? shader_ : context->shader;
+  if (framebuffer == nullptr || shader == nullptr) {
+    /* No real draw is about to happen. `apply_state` / debug / state-only
+     * callers still expect us to clear the flag so future draws can
+     * proceed normally. */
+    clear_dirty();
+    return;
+  }
+  VKShader &vk_shader = unwrap(*shader);
+
+  GPUState state = state_get();
+  state.clip_control = 0; /* not a vulkan flag; avoids needless recompilations. */
+
+  resolved_vk_pipeline_ = vk_shader.ensure_and_get_graphics_pipeline(
+      prim_type, vertex_input_key, state, *framebuffer, context->constants_state_);
   clear_dirty();
+}
+
+void VKPipeline::tag_framebuffer_state(VkFormat depth_format,
+                                       VkFormat stencil_format,
+                                       Span<VkFormat> color_formats,
+                                       uint32_t viewport_count)
+{
+  const bool changed = (tagged_depth_format_ != depth_format) ||
+                       (tagged_stencil_format_ != stencil_format) ||
+                       (tagged_viewport_count_ != viewport_count) ||
+                       (tagged_color_count_ != color_formats.size()) ||
+                       (std::memcmp(tagged_color_formats_,
+                                    color_formats.data(),
+                                    (size_t)color_formats.size() * sizeof(VkFormat)) != 0);
+  if (changed) {
+    tagged_depth_format_ = depth_format;
+    tagged_stencil_format_ = stencil_format;
+    tagged_viewport_count_ = viewport_count;
+    tagged_color_count_ = color_formats.size();
+    std::memcpy(tagged_color_formats_,
+                color_formats.data(),
+                (size_t)color_formats.size() * sizeof(VkFormat));
+    mark_dirty(GPU_PIPELINE_DIRTY_PIPELINE);
+  }
+}
+
+void VKPipeline::tag_vertex_input_key(int64_t key)
+{
+  if (tagged_vertex_input_key_ != key) {
+    tagged_vertex_input_key_ = key;
+    mark_dirty(GPU_PIPELINE_DIRTY_PIPELINE);
+  }
 }
 
 void VKPipeline::resolve_compute()
@@ -158,9 +221,9 @@ void VKPipeline::uniform_buffer_unbind_all()
 }
 
 void VKPipeline::storage_buffer_bind(BindSpaceStorageBuffers::Type resource_type,
-                                      void *resource,
-                                      int binding,
-                                      VkDeviceSize offset)
+                                     void *resource,
+                                     int binding,
+                                     VkDeviceSize offset)
 {
   const BindSpaceStorageBuffers::Elem *elem = storage_buffers_.get_or_null(binding);
   if (elem != nullptr && elem->resource_type == resource_type && elem->resource == resource &&

@@ -339,8 +339,7 @@ void VKFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attac
       if (color_attachment_states[index] == GPU_ATTACHMENT_READ) {
         VKTexture *texture = unwrap(unwrap(color_tex(index)));
         if (texture) {
-          vk_pipeline_get()->texture_bind(
-              texture, GPUSamplerState::default_sampler(), index);
+          vk_pipeline_get()->texture_bind(texture, GPUSamplerState::default_sampler(), index);
         }
       }
     }
