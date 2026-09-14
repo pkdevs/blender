@@ -579,7 +579,7 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   const bool preview_scrambling_distance = get_boolean(cscene, "preview_scrambling_distance");
   if ((preview && !preview_scrambling_distance) ||
       sampling_pattern != SAMPLING_PATTERN_TABULATED_SOBOL ||
-      integrator->get_denoiser_type() == DENOISER_DLSS)
+      (denoise_params.use && denoise_params.type == DENOISER_DLSS))
   {
     scrambling_distance = 1.0f;
   }
