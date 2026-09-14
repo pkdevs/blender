@@ -732,7 +732,7 @@ class NODE_OT_add_empty_group(NodeAddOperator, bpy.types.Operator):
     def execute(self, context):
         from nodeitems_builtins import node_tree_group_type
         tree = context.space_data.edit_tree
-        group = self.create_empty_group(tree.bl_idname)
+        group = self.create_empty_group(context, tree.bl_idname)
         self.deselect_nodes(context)
         node = self.create_node(context, node_tree_group_type[tree.bl_idname])
         self.apply_node_settings(node)
@@ -740,8 +740,9 @@ class NODE_OT_add_empty_group(NodeAddOperator, bpy.types.Operator):
         return {"FINISHED"}
 
     @staticmethod
-    def create_empty_group(idname):
+    def create_empty_group(context, idname):
         group = bpy.data.node_groups.new(name=data_("NodeGroup"), type=idname)
+        context.space_data.group_usage_set_from_context(group)
         input_node = group.nodes.new('NodeGroupInput')
         input_node.select = False
         input_node.location.x = -200 - input_node.width
@@ -768,7 +769,7 @@ class NODE_OT_swap_empty_group(NodeSwapOperator, bpy.types.Operator):
     def execute(self, context):
         from nodeitems_builtins import node_tree_group_type
         tree = context.space_data.edit_tree
-        group = self.create_empty_group(tree.bl_idname)
+        group = self.create_empty_group(context, tree.bl_idname)
 
         bpy.ops.node.swap_node('INVOKE_DEFAULT', type=node_tree_group_type[tree.bl_idname])
 
@@ -778,8 +779,9 @@ class NODE_OT_swap_empty_group(NodeSwapOperator, bpy.types.Operator):
         return {"FINISHED"}
 
     @staticmethod
-    def create_empty_group(idname):
+    def create_empty_group(context, idname):
         group = bpy.data.node_groups.new(name="NodeGroup", type=idname)
+        context.space_data.group_usage_set_from_context(group)
         input_node = group.nodes.new('NodeGroupInput')
         input_node.select = False
         input_node.location.x = -200 - input_node.width

@@ -142,6 +142,37 @@ static bNode *node_group_get_active(bContext *C, const UString node_idname)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Node Group Usage
+ * \{ */
+
+void node_group_set_usage_from_context(bNodeTree &ntree, const SpaceNode &snode)
+{
+  if (ntree.type != NTREE_COMPOSIT) {
+    return;
+  }
+
+  int usage_flag = 0;
+  switch (snode.node_tree_sub_type) {
+    case SNODE_COMPOSITOR_SCENE:
+      usage_flag = COMPOSIT_NODE_ASSET_SCENE_EFFECT;
+      break;
+    case SNODE_COMPOSITOR_SEQUENCER:
+      usage_flag = COMPOSIT_NODE_ASSET_STRIP_MODIFIER;
+      break;
+    default:
+      return;
+  }
+
+  if (!ntree.compositor_node_asset_traits) {
+    ntree.compositor_node_asset_traits = MEM_new<CompositorNodeAssetTraits>(__func__);
+  }
+  ntree.compositor_node_asset_traits->flag |= usage_flag;
+  bke::node_update_asset_metadata(ntree);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Edit Group Operator
  * \{ */
 
@@ -749,6 +780,7 @@ static wmOperatorStatus node_group_make_exec(bContext *C, wmOperator *op)
 
     bke::node_set_active(ntree, *gnode);
     if (ngroup) {
+      node_group_set_usage_from_context(*ngroup, snode);
       ED_node_tree_push(&region, &snode, ngroup, gnode);
     }
   }

@@ -6,6 +6,7 @@
  * \ingroup RNA
  */
 
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
 #include "RNA_define.hh"
@@ -22,6 +23,7 @@
 #  include "BKE_screen.hh"
 
 #  include "ED_fileselect.hh"
+#  include "ED_node.hh"
 #  include "ED_screen.hh"
 #  include "ED_text.hh"
 #  include "ED_view3d.hh"
@@ -97,6 +99,13 @@ static void rna_FileBrowser_deselect_all(SpaceFile *sfile, ReportList *reports)
   ED_fileselect_deselect_all(sfile);
 }
 
+static void rna_SpaceNodeEditor_group_usage_set_from_context(SpaceNode *snode,
+                                                             PointerRNA *node_group)
+{
+  bNodeTree *ntree = static_cast<bNodeTree *>(node_group->data);
+  ed::space_node::node_group_set_usage_from_context(*ntree, *snode);
+}
+
 }  // namespace blender
 
 #else
@@ -125,6 +134,14 @@ void RNA_api_space_node(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_int(func, "y", 0, INT_MIN, INT_MAX, "y", "Region y coordinate", -10000, 10000);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "group_usage_set_from_context", "rna_SpaceNodeEditor_group_usage_set_from_context");
+  RNA_def_function_ui_description(
+      func, "Set the usage of the node group to match the node editor's node tree sub-type");
+  parm = RNA_def_pointer(
+      func, "node_group", "NodeTree", "Node Group", "Node group to set the usage of");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 void RNA_api_space_text(StructRNA *srna)

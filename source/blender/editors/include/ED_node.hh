@@ -178,6 +178,13 @@ std::optional<Bounds<float2>> node_location_bounds(Span<const bNode *> nodes);
 /** Find the top-most parent shared by all the nodes, or null if no parent contains all nodes. */
 bNode *find_common_parent_node(Span<bNode *> nodes);
 
+/**
+ * Set usage flag based on the node editor context it was created in, e.g. a compositor node group
+ * created in the scene compositor can be used as a scene effect, while one created in the
+ * sequencer can be used as a strip modifier.
+ */
+void node_group_set_usage_from_context(bNodeTree &ntree, const SpaceNode &snode);
+
 }  // namespace ed::space_node
 
 }  // namespace blender
