@@ -32,7 +32,7 @@
 #include "BLI_bounds.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 #include "BLI_linear_allocator.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_task.hh"
@@ -113,7 +113,7 @@ static int parallel_build_threads(const int64_t points_num)
  * \{ */
 
 /**
- * Builds the nodes of a #KDTreeNanoflann over the points at a set of indices, reordering a copy
+ * Builds the nodes of a #KDTreeNew over the points at a set of indices, reordering a copy
  * of their coordinates as it goes and leaving the indices in the order the tree visits them.
  */
 template<typename T> class TreeBuilder {
@@ -129,7 +129,7 @@ template<typename T> class TreeBuilder {
    */
   using BuildPoint = VecBase<ValueT, dimensions + 1>;
 
-  using Node = kdtree_nanoflann::Node<ValueT>;
+  using Node = kdtree::Node<ValueT>;
 
   /**
    * Nodes handed out from large batches, so that a walk down the tree stays within a few
@@ -718,10 +718,10 @@ template<typename T> class TreeBuilder {
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name #KDTreeNanoflann
+/** \name #KDTreeNew
  * \{ */
 
-template<typename T> void KDTreeNanoflann<T>::build(const Span<int> indices)
+template<typename T> void KDTreeNew<T>::build(const Span<int> indices)
 {
   indices_.reinitialize(size_);
   if (size_ == 0) {
@@ -732,16 +732,14 @@ template<typename T> void KDTreeNanoflann<T>::build(const Span<int> indices)
 }
 
 template<typename T>
-KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points, const int leaf_size)
+KDTreeNew<T>::KDTreeNew(const Span<T> points, const int leaf_size)
     : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(points.size()))
 {
   this->build(Span<int>());
 }
 
 template<typename T>
-KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
-                                    const IndexMask &mask,
-                                    const int leaf_size)
+KDTreeNew<T>::KDTreeNew(const Span<T> points, const IndexMask &mask, const int leaf_size)
     : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(mask.size()))
 {
   const std::optional<IndexRange> range = mask.to_range();
@@ -757,16 +755,14 @@ KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
 }
 
 template<typename T>
-KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
-                                    const Span<int> indices,
-                                    const int leaf_size)
+KDTreeNew<T>::KDTreeNew(const Span<T> points, const Span<int> indices, const int leaf_size)
     : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(indices.size()))
 {
   this->build(indices);
 }
 
-template class KDTreeNanoflann<float2>;
-template class KDTreeNanoflann<float3>;
+template class KDTreeNew<float2>;
+template class KDTreeNew<float3>;
 
 /** \} */
 

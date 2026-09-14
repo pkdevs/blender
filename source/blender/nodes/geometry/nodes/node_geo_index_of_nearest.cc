@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 #include "BLI_map.hh"
 #include "BLI_task.hh"
 
@@ -27,14 +27,14 @@ static void node_declare(NodeDeclarationBuilder &b)
       .propagate_references();
 }
 
-static int find_nearest_non_self(const KDTreeNanoflann<float3> &tree,
+static int find_nearest_non_self(const KDTreeNew<float3> &tree,
                                  const float3 &position,
                                  const int index)
 {
   return tree.find_nearest_filtered(position, [index](const int other) { return other != index; });
 }
 
-static void find_neighbors(const KDTreeNanoflann<float3> &tree,
+static void find_neighbors(const KDTreeNew<float3> &tree,
                            const Span<float3> positions,
                            const IndexMask &mask,
                            MutableSpan<int> r_indices)
@@ -77,7 +77,7 @@ class IndexOfNearestFieldInput final : public bke::GeometryFieldInput {
 
     if (group_ids.is_single()) {
       result.reinitialize(mask.min_array_size());
-      const KDTreeNanoflann<float3> tree(positions);
+      const KDTreeNew<float3> tree(positions);
       find_neighbors(tree, positions, mask, result);
       return VArray<int>::from_container(std::move(result));
     }
@@ -114,7 +114,7 @@ class IndexOfNearestFieldInput final : public bke::GeometryFieldInput {
       for (const int group_index : range) {
         const IndexMask &tree_mask = all_indices_by_group_id[group_index];
         const IndexMask &lookup_mask = lookup_indices_by_group_id[group_index];
-        const KDTreeNanoflann<float3> tree(positions, tree_mask);
+        const KDTreeNew<float3> tree(positions, tree_mask);
         find_neighbors(tree, positions, lookup_mask, result);
       }
     });

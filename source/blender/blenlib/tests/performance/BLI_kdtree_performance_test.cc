@@ -13,7 +13,7 @@
 #include "BLI_array.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rand.hh"
 #include "BLI_task_c.hh"
@@ -139,14 +139,14 @@ static const Distribution DISTRIBUTIONS[] = {
 /** The two implementations that are compared. */
 enum class Impl {
   BLI,
-  Nanoflann,
+  New,
 };
 
-static const std::array<Impl, 2> IMPLEMENTATIONS = {Impl::BLI, Impl::Nanoflann};
+static const std::array<Impl, 2> IMPLEMENTATIONS = {Impl::BLI, Impl::New};
 
 static const char *impl_name(const Impl impl)
 {
-  return impl == Impl::BLI ? "BLI_kdtree" : "nanoflann";
+  return impl == Impl::BLI ? "BLI_kdtree" : "New";
 }
 
 /**
@@ -311,7 +311,7 @@ static void run_table(const char *title,
 TEST(kdtree_performance, Build)
 {
   run_table("Building the tree",
-            "`kdtree_insert` and `kdtree_balance` vs. the `KDTreeNanoflann` constructor",
+            "`kdtree_insert` and `kdtree_balance` vs. the `KDTreeNew` constructor",
             [](const Impl impl, const Span<float3> positions, const int64_t points_num) {
               if (impl == Impl::BLI) {
                 return run_iterations(points_num, [&]() {
@@ -319,8 +319,7 @@ TEST(kdtree_performance, Build)
                   kdtree_free(tree);
                 });
               }
-              return run_iterations(points_num,
-                                    [&]() { KDTreeNanoflann<float3> tree(positions); });
+              return run_iterations(points_num, [&]() { KDTreeNew<float3> tree(positions); });
             });
 }
 
@@ -341,7 +340,7 @@ TEST(kdtree_performance, FindNearest)
                 kdtree_free(tree);
               }
               else {
-                const KDTreeNanoflann<float3> tree(positions);
+                const KDTreeNew<float3> tree(positions);
                 time = run_queries(
                     queries, [&](const float3 &query) { index_sum += tree.find_nearest(query); });
               }
@@ -383,7 +382,7 @@ TEST(kdtree_performance, FindNearestSkipSelf)
                 kdtree_free(tree);
               }
               else {
-                const KDTreeNanoflann<float3> tree(positions);
+                const KDTreeNew<float3> tree(positions);
                 time = run_queries(queries, [&](const float3 &query) {
                   const int i = query_index(query);
                   index_sum += tree.find_nearest_filtered(
@@ -412,8 +411,8 @@ TEST(kdtree_performance, FindNearestN)
                 kdtree_free(tree);
               }
               else {
-                const KDTreeNanoflann<float3> tree(positions);
-                Array<KDTreeNanoflann<float3>::Nearest> nearest(NEAREST_N);
+                const KDTreeNew<float3> tree(positions);
+                Array<KDTreeNew<float3>::Nearest> nearest(NEAREST_N);
                 time = run_queries(queries, [&](const float3 &query) {
                   found_sum += tree.find_nearest_n(query, nearest);
                 });
@@ -447,7 +446,7 @@ TEST(kdtree_performance, RangeSearch)
                 kdtree_free(tree);
               }
               else {
-                const KDTreeNanoflann<float3> tree(positions);
+                const KDTreeNew<float3> tree(positions);
                 time = run_queries(queries, [&](const float3 &query) {
                   tree.foreach_in_radius(
                       query, radius, [&](const int /*index*/, const float /*distance_sq*/) {
@@ -477,7 +476,7 @@ TEST(kdtree_performance, CalcDuplicates)
                 kdtree_free(tree);
                 return time;
               }
-              const KDTreeNanoflann<float3> tree(positions);
+              const KDTreeNew<float3> tree(positions);
               return run_iterations(points_num, [&]() {
                 duplicates.as_mutable_span().fill(-1);
                 tree.calc_duplicates(radius, duplicates);
@@ -489,18 +488,13 @@ TEST(kdtree_performance, CalcDuplicates)
 /** \name Threaded Build
  * \{ */
 
-/**
- * Nanoflann builds the tree with Blender's task pool, so the number of threads it uses is the
- * number Blender was started with. This sets that limit the same way the `-t` argument does,
- * which checks both that building scales and that the limit is respected.
- */
 TEST(kdtree_performance, ThreadedBuild)
 {
   static const int thread_counts[] = {1, 2, 4, 8, 16, 32};
   static const int64_t point_counts[] = {1000, 10000, 100000, 1000000};
 
   printf(
-      "\n#### Threaded build\n\n(`KDTreeNanoflann` build time by thread count, random. The\n"
+      "\n#### Threaded build\n\n(`KDTreeNew` build time by thread count, random. The\n"
       "tree limits its own thread count by size as well, so the larger counts give the same\n"
       "time once that limit is the lower of the two.)\n\n");
   printf("| points |");
@@ -526,8 +520,7 @@ TEST(kdtree_performance, ThreadedBuild)
       /* Processor time as well as elapsed time, to show how much of the machine the build
        * occupies. Threads spent here are not available for other work. */
       const std::clock_t cpu_before = std::clock();
-      const double time = run_iterations(points_num,
-                                         [&]() { KDTreeNanoflann<float3> tree(positions); });
+      const double time = run_iterations(points_num, [&]() { KDTreeNew<float3> tree(positions); });
       const std::clock_t cpu_after = std::clock();
       cpu_times.append(double(cpu_after - cpu_before) / double(CLOCKS_PER_SEC));
 
@@ -594,7 +587,7 @@ TEST(kdtree_performance, TinyTreesBuild)
         }
         else {
           time = run_batched(points_num, [&]() {
-            const KDTreeNanoflann<float3> tree(positions);
+            const KDTreeNew<float3> tree(positions);
             sum += tree.size();
           });
         }
@@ -629,7 +622,7 @@ TEST(kdtree_performance, TinyTreesFindNearestOther)
         }
         else {
           time = run_batched(points_num, [&]() {
-            const KDTreeNanoflann<float3> tree(positions);
+            const KDTreeNew<float3> tree(positions);
             for (const int64_t i : IndexRange(points_num)) {
               sum += tree.find_nearest_filtered(positions[i],
                                                 [i](const int other) { return other != int(i); });
@@ -659,7 +652,7 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
           });
         }
         return run_batched(points_num, [&]() {
-          const KDTreeNanoflann<float3> tree(positions);
+          const KDTreeNew<float3> tree(positions);
           duplicates.as_mutable_span().fill(-1);
           tree.calc_duplicates(radius, duplicates);
         });
@@ -669,18 +662,13 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
 
 /** \} */
 
-/**
- * The size of nanoflann's leaf nodes is the main tuning knob: larger leaves build faster and use
- * less memory, but queries check more points. The leaf size is only used while building, queries
- * don't read it at all.
- */
-TEST(kdtree_performance, NanoflannLeafSize)
+TEST(kdtree_performance, KDTreeNewLeafSize)
 {
   static const int leaf_sizes[] = {4, 8, 10, 16, 32, 64, 128};
   static const int64_t point_counts[] = {10000, 1000000};
 
   for (const int64_t points_num : point_counts) {
-    printf("\n#### Nanoflann leaf size\n\n(%" PRId64 " points)\n\n", points_num);
+    printf("\n#### KDTreeNew leaf size\n\n(%" PRId64 " points)\n\n", points_num);
     printf("| distribution | leaf size | build | find nearest | 8 nearest | radius |\n");
     printf("|---:|---:|---:|---:|---:|---:|\n");
 
@@ -690,15 +678,15 @@ TEST(kdtree_performance, NanoflannLeafSize)
       const Array<float3> queries = make_query_points(positions);
       for (const int leaf_size : leaf_sizes) {
         printf("| %s | %d |", distribution.name, leaf_size);
-        print_time(run_iterations(points_num,
-                                  [&]() { KDTreeNanoflann<float3> tree(positions, leaf_size); }));
+        print_time(
+            run_iterations(points_num, [&]() { KDTreeNew<float3> tree(positions, leaf_size); }));
 
-        const KDTreeNanoflann<float3> tree(positions, leaf_size);
+        const KDTreeNew<float3> tree(positions, leaf_size);
         int64_t sum = 0;
         print_time(
             run_queries(queries, [&](const float3 &query) { sum += tree.find_nearest(query); }));
 
-        Array<KDTreeNanoflann<float3>::Nearest> nearest(NEAREST_N);
+        Array<KDTreeNew<float3>::Nearest> nearest(NEAREST_N);
         print_time(run_queries(
             queries, [&](const float3 &query) { sum += tree.find_nearest_n(query, nearest); }));
 

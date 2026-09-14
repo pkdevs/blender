@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_math_rotation_c.hh"
@@ -211,7 +211,7 @@ BLI_NOINLINE static void update_elimination_mask_for_close_points(
     return;
   }
 
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
 
   for (const int i : positions.index_range()) {
     if (elimination_mask[i]) {

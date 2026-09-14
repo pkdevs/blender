@@ -5,7 +5,7 @@
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 
 #include "BKE_geometry_fields.hh"
 
@@ -109,7 +109,7 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
     const int groups_num = group_indices.size();
     if (groups_num == 1) {
       index_mask::masked_fill<int>(cluster_ids, NO_CLUSTER_VALUE, mask_to_cluster);
-      const KDTreeNanoflann<float3> tree(positions, mask_to_cluster);
+      const KDTreeNew<float3> tree(positions, mask_to_cluster);
       tree.calc_duplicates(distance_, cluster_ids);
       set_no_cluster_value(cluster_ids, mask_to_cluster);
       return VArray<int>::from_container(std::move(cluster_ids));
@@ -137,7 +137,7 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
             const Span<int> group = indices_by_group[group_i];
             /* Groups don't share indices, so the shared array can be written to directly. */
             cluster_ids.as_mutable_span().fill_indices(group, NO_CLUSTER_VALUE);
-            const KDTreeNanoflann<float3> tree(positions, group);
+            const KDTreeNew<float3> tree(positions, group);
             tree.calc_duplicates(distance_, cluster_ids);
             for (const int i : group) {
               if (cluster_ids[i] == NO_CLUSTER_VALUE) {

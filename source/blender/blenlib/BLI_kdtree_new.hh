@@ -30,10 +30,10 @@
 
 namespace blender {
 
-namespace kdtree_nanoflann {
+namespace kdtree {
 
 /**
- * A node of a #KDTreeNanoflann, which a search walks and the build produces. Only the coordinate
+ * A node of a #KDTreeNew, which a search walks and the build produces. Only the coordinate
  * type matters to it, so trees over points of any dimension share one.
  */
 template<typename ValueT> struct Node {
@@ -212,7 +212,7 @@ template<typename ValueT, typename Fn> class RadiusResult {
 
 /** \} */
 
-}  // namespace kdtree_nanoflann
+}  // namespace kdtree
 
 /**
  * A KD-tree for nearest neighbor search. References a subset of values in a #Span. Results are
@@ -233,7 +233,7 @@ template<typename ValueT, typename Fn> class RadiusResult {
  * - Results don't include coordinates which are instead found in #points with the returned index.
  * - Performance and memory usage are much better.
  */
-template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
+template<typename T> class KDTreeNew : NonMovable, NonCopyable {
  public:
   using ValueT = typename T::base_type;
   static constexpr int dimensions = T::type_length;
@@ -257,7 +257,7 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
   static constexpr int LEAF_SIZE_DEFAULT = 32;
 
  private:
-  using Node = kdtree_nanoflann::Node<ValueT>;
+  using Node = kdtree ::Node<ValueT>;
 
   Span<T> points_;
   /** Indices into #points_, in the order the tree visits them. */
@@ -275,21 +275,21 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    * Build a tree containing every point in \a points.
    * \note \a points must outlive the tree.
    */
-  explicit KDTreeNanoflann(Span<T> points, int leaf_size = LEAF_SIZE_DEFAULT);
+  explicit KDTreeNew(Span<T> points, int leaf_size = LEAF_SIZE_DEFAULT);
 
   /**
    * Build a tree containing the points selected by \a mask. Results are still indices into
    * \a points rather than positions in the mask.
    * \note \a points must outlive the tree, \a mask does not have to.
    */
-  KDTreeNanoflann(Span<T> points, const IndexMask &mask, int leaf_size = LEAF_SIZE_DEFAULT);
+  KDTreeNew(Span<T> points, const IndexMask &mask, int leaf_size = LEAF_SIZE_DEFAULT);
 
   /**
    * Build a tree containing the points at \a indices. Results are indices into \a points, not
    * positions in \a indices.
    * \note \a points must outlive the tree, \a indices does not have to.
    */
-  KDTreeNanoflann(Span<T> points, Span<int> indices, int leaf_size = LEAF_SIZE_DEFAULT);
+  KDTreeNew(Span<T> points, Span<int> indices, int leaf_size = LEAF_SIZE_DEFAULT);
 
   /** The coordinates the tree was built from. Returned indices are indices into this span. */
   Span<T> points() const
@@ -314,7 +314,7 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    */
   KDTREE_SEARCH_OPTIMIZE int find_nearest(const T &position, ValueT *r_distance_sq = nullptr) const
   {
-    kdtree_nanoflann::NearestResult<ValueT> result;
+    kdtree ::NearestResult<ValueT> result;
     this->find_neighbors(result, position);
     if (result.index() != -1 && r_distance_sq) {
       *r_distance_sq = result.distance_sq();
@@ -335,7 +335,7 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
                                                    Filter &&filter,
                                                    ValueT *r_distance_sq = nullptr) const
   {
-    kdtree_nanoflann::FilteredNearestResult<ValueT, std::decay_t<Filter>> result(
+    kdtree ::FilteredNearestResult<ValueT, std::decay_t<Filter>> result(
         std::forward<Filter>(filter));
     this->find_neighbors(result, position);
     if (result.index() != -1 && r_distance_sq) {
@@ -349,12 +349,13 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    * \param r_nearest: Filled with at most `r_nearest.size()` results.
    * \return The number of results written, which is smaller when the tree has fewer points.
    */
-  KDTREE_SEARCH_OPTIMIZE int find_nearest_n(const T &position, MutableSpan<Nearest> r_nearest) const
+  KDTREE_SEARCH_OPTIMIZE int find_nearest_n(const T &position,
+                                            MutableSpan<Nearest> r_nearest) const
   {
     if (r_nearest.is_empty()) {
       return 0;
     }
-    kdtree_nanoflann::NearestNResult<Nearest, ValueT> result(r_nearest);
+    kdtree ::NearestNResult<Nearest, ValueT> result(r_nearest);
     this->find_neighbors(result, position);
     return result.count();
   }
@@ -365,8 +366,7 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
                                                 const ValueT radius,
                                                 Fn &&fn) const
   {
-    kdtree_nanoflann::RadiusResult<ValueT, std::decay_t<Fn>> result(radius * radius,
-                                                                  std::forward<Fn>(fn));
+    kdtree ::RadiusResult<ValueT, std::decay_t<Fn>> result(radius * radius, std::forward<Fn>(fn));
     this->find_neighbors(result, position);
   }
 
@@ -376,14 +376,17 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    * Passing in the same vector for many searches avoids reallocating it every time.
    * \return The number of results.
    */
-  KDTREE_SEARCH_OPTIMIZE int find_in_radius(const T &position, const ValueT radius, Vector<Nearest> &r_nearest) const
+  KDTREE_SEARCH_OPTIMIZE int find_in_radius(const T &position,
+                                            const ValueT radius,
+                                            Vector<Nearest> &r_nearest) const
   {
     r_nearest.clear();
     this->foreach_in_radius(position, radius, [&](const int index, const ValueT distance_sq) {
       r_nearest.append({index, distance_sq});
     });
     std::sort(r_nearest.begin(), r_nearest.end(), [](const Nearest &a, const Nearest &b) {
-      return a.distance_sq < b.distance_sq || (a.distance_sq == b.distance_sq && a.index < b.index);
+      return a.distance_sq < b.distance_sq ||
+             (a.distance_sq == b.distance_sq && a.index < b.index);
     });
     return int(r_nearest.size());
   }
@@ -391,8 +394,7 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
   /** The number of points within \a radius of \a position. */
   KDTREE_SEARCH_OPTIMIZE int count_in_radius(const T &position, const ValueT radius) const
   {
-    kdtree_nanoflann::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius,
-                                                                               {});
+    kdtree ::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius, {});
     this->find_neighbors(result, position);
     return result.count();
   }
@@ -449,7 +451,8 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
   /**
    * Visit the points that could be closer to \a position than the result set has accepted so
    * far, reporting each of them to it. The result set decides what to keep and how far the
-   * search still has to look. See #kdtree_nanoflann::NearestResult and the others beside it.
+   * search still has to look. See #kdtree
+   ::NearestResult and the others beside it.
    */
   template<typename ResultSet>
   KDTREE_SEARCH_OPTIMIZE void find_neighbors(ResultSet &result, const T &position) const
@@ -489,9 +492,9 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
   template<typename ResultSet>
   KDTREE_SEARCH_OPTIMIZE bool search_node(ResultSet &result,
                                           const T &position,
-                   const Node *node,
-                   const ValueT distance_sq,
-                   T &offsets) const
+                                          const Node *node,
+                                          const ValueT distance_sq,
+                                          T &offsets) const
   {
     if (node->children == nullptr) {
       const int *indices = indices_.data();

@@ -10,7 +10,7 @@
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree_nanoflann.hh"
+#include "BLI_kdtree_new.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_rand.hh"
 #include "BLI_task_c.hh"
@@ -19,7 +19,7 @@
 
 namespace blender::tests {
 
-using Nearest = KDTreeNanoflann<float3>::Nearest;
+using Nearest = KDTreeNew<float3>::Nearest;
 
 static Array<float3> random_points(const int points_num, const int seed = 0)
 {
@@ -53,10 +53,10 @@ static Vector<int> all_indices(const int points_num)
   return indices;
 }
 
-TEST(kdtree_nanoflann, Empty)
+TEST(kdtree, Empty)
 {
   const Array<float3> positions(0);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   EXPECT_TRUE(tree.is_empty());
   EXPECT_EQ(tree.size(), 0);
   EXPECT_EQ(tree.find_nearest(float3(0.0f)), -1);
@@ -69,10 +69,10 @@ TEST(kdtree_nanoflann, Empty)
   EXPECT_EQ(tree.find_in_radius(float3(0.0f), 100.0f, in_radius), 0);
 }
 
-TEST(kdtree_nanoflann, SinglePoint)
+TEST(kdtree, SinglePoint)
 {
   const Array<float3> positions = {float3(1.0f, 2.0f, 3.0f)};
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   EXPECT_EQ(tree.size(), 1);
 
   float distance_sq = -1.0f;
@@ -84,10 +84,10 @@ TEST(kdtree_nanoflann, SinglePoint)
             -1);
 }
 
-TEST(kdtree_nanoflann, FindNearest)
+TEST(kdtree, FindNearest)
 {
   const Array<float3> positions = random_points(1000);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   EXPECT_EQ(tree.size(), 1000);
   EXPECT_EQ(tree.points().data(), positions.data());
 
@@ -102,10 +102,10 @@ TEST(kdtree_nanoflann, FindNearest)
   }
 }
 
-TEST(kdtree_nanoflann, FindNearestFiltered)
+TEST(kdtree, FindNearestFiltered)
 {
   const Array<float3> positions = random_points(500);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   const Vector<int> indices = all_indices(positions.size());
 
   /* Skipping the search point itself is the common use of the filter. */
@@ -131,10 +131,10 @@ TEST(kdtree_nanoflann, FindNearestFiltered)
   }
 }
 
-TEST(kdtree_nanoflann, FindNearestN)
+TEST(kdtree, FindNearestN)
 {
   const Array<float3> positions = random_points(400);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   const Vector<int> indices = all_indices(positions.size());
   const Array<float3> queries = random_points(20, 2);
 
@@ -153,18 +153,18 @@ TEST(kdtree_nanoflann, FindNearestN)
   }
 }
 
-TEST(kdtree_nanoflann, FindNearestNMoreThanSize)
+TEST(kdtree, FindNearestNMoreThanSize)
 {
   const Array<float3> positions = random_points(5);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   Array<Nearest> nearest(10);
   EXPECT_EQ(tree.find_nearest_n(float3(0.5f), nearest), 5);
 }
 
-TEST(kdtree_nanoflann, Radius)
+TEST(kdtree, Radius)
 {
   const Array<float3> positions = random_points(600);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   const Vector<int> indices = all_indices(positions.size());
   const Array<float3> queries = random_points(20, 3);
 
@@ -203,13 +203,13 @@ TEST(kdtree_nanoflann, Radius)
   }
 }
 
-TEST(kdtree_nanoflann, MaskedBuild)
+TEST(kdtree, MaskedBuild)
 {
   const Array<float3> positions = random_points(300);
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_predicate(
       positions.index_range(), memory, [](const int64_t i) { return i % 3 == 0; });
-  const KDTreeNanoflann<float3> tree(positions, mask);
+  const KDTreeNew<float3> tree(positions, mask);
   EXPECT_EQ(tree.size(), mask.size());
 
   const Vector<int> indices = mask.to_indices<int>();
@@ -244,30 +244,30 @@ TEST(kdtree_nanoflann, MaskedBuild)
   EXPECT_EQ(filtered % 3, 0);
 }
 
-TEST(kdtree_nanoflann, MaskedBuildFullRange)
+TEST(kdtree, MaskedBuildFullRange)
 {
   const Array<float3> positions = random_points(100);
-  const KDTreeNanoflann<float3> tree(positions, IndexMask(positions.index_range()));
+  const KDTreeNew<float3> tree(positions, IndexMask(positions.index_range()));
   EXPECT_EQ(tree.size(), 100);
   EXPECT_EQ(tree.find_nearest(positions[42]), 42);
 }
 
-TEST(kdtree_nanoflann, EmptyMask)
+TEST(kdtree, EmptyMask)
 {
   const Array<float3> positions = random_points(100);
-  const KDTreeNanoflann<float3> tree(positions, IndexMask(0));
+  const KDTreeNew<float3> tree(positions, IndexMask(0));
   EXPECT_TRUE(tree.is_empty());
   EXPECT_EQ(tree.find_nearest(positions[0]), -1);
 }
 
-TEST(kdtree_nanoflann, DuplicatePoints)
+TEST(kdtree, DuplicatePoints)
 {
   /* Many points at the same position is a common degenerate case. */
   Array<float3> positions(100);
   for (const int i : positions.index_range()) {
     positions[i] = i < 60 ? float3(1.0f, 1.0f, 1.0f) : float3(float(i), 0.0f, 0.0f);
   }
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
 
   EXPECT_LT(tree.find_nearest(float3(1.0f, 1.0f, 1.0f)), 60);
   EXPECT_EQ(tree.count_in_radius(float3(1.0f, 1.0f, 1.0f), 0.001f), 60);
@@ -338,14 +338,14 @@ static void check_duplicates(const Span<float3> positions,
   }
 }
 
-TEST(kdtree_nanoflann, CalcDuplicates)
+TEST(kdtree, CalcDuplicates)
 {
   for (const int points_num : {10, 100, 2000}) {
     const Array<float3> positions = random_points(points_num, 5);
     const Vector<int> indices = all_indices(points_num);
     /* From "no point is close enough" to "everything is one cluster". */
     for (const float range : {0.001f, 0.02f, 0.05f, 0.2f, 5.0f}) {
-      const KDTreeNanoflann<float3> tree(positions);
+      const KDTreeNew<float3> tree(positions);
       Array<int> duplicates(points_num, -1);
       const int found = tree.calc_duplicates(range, duplicates);
       SCOPED_TRACE(std::to_string(points_num) + " points, range " + std::to_string(range));
@@ -354,7 +354,7 @@ TEST(kdtree_nanoflann, CalcDuplicates)
   }
 }
 
-TEST(kdtree_nanoflann, CalcDuplicatesWithDuplicatePoints)
+TEST(kdtree, CalcDuplicatesWithDuplicatePoints)
 {
   /* Exactly equal coordinates are the case this is used for in the first place. Ten groups of
    * twenty points, each group a unit apart, so the clusters are the same whatever the order. */
@@ -364,7 +364,7 @@ TEST(kdtree_nanoflann, CalcDuplicatesWithDuplicatePoints)
   }
   const Vector<int> indices = all_indices(positions.size());
 
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   Array<int> duplicates(positions.size(), -1);
   const int found = tree.calc_duplicates(0.1f, duplicates);
   check_duplicates(positions, indices, 0.1f, duplicates, found);
@@ -381,7 +381,7 @@ TEST(kdtree_nanoflann, CalcDuplicatesWithDuplicatePoints)
   EXPECT_EQ(found, 190);
 }
 
-TEST(kdtree_nanoflann, CalcDuplicatesMasked)
+TEST(kdtree, CalcDuplicatesMasked)
 {
   const Array<float3> positions = random_points(500, 6);
   IndexMaskMemory memory;
@@ -389,7 +389,7 @@ TEST(kdtree_nanoflann, CalcDuplicatesMasked)
       positions.index_range(), memory, [](const int64_t i) { return i % 4 != 0; });
   const Vector<int> indices = mask.to_indices<int>();
 
-  const KDTreeNanoflann<float3> tree(positions, mask);
+  const KDTreeNew<float3> tree(positions, mask);
   Array<int> duplicates(positions.size(), -1);
   const int found = tree.calc_duplicates(0.1f, duplicates);
   check_duplicates(positions, indices, 0.1f, duplicates, found);
@@ -403,14 +403,14 @@ TEST(kdtree_nanoflann, CalcDuplicatesMasked)
 
   /* Building from an index array must give the same tree as building from the mask, and so the
    * same clusters down to which point of each is the target. */
-  const KDTreeNanoflann<float3> tree_from_indices(positions, indices.as_span());
+  const KDTreeNew<float3> tree_from_indices(positions, indices.as_span());
   Array<int> from_indices(positions.size(), -1);
   const int found_from_indices = tree_from_indices.calc_duplicates(0.1f, from_indices);
   EXPECT_EQ(Span<int>(from_indices), Span<int>(duplicates));
   EXPECT_EQ(found_from_indices, found);
 }
 
-TEST(kdtree_nanoflann, CalcDuplicatesPresetTargets)
+TEST(kdtree, CalcDuplicatesPresetTargets)
 {
   const Array<float3> positions = random_points(300, 7);
   const Vector<int> indices = all_indices(positions.size());
@@ -420,7 +420,7 @@ TEST(kdtree_nanoflann, CalcDuplicatesPresetTargets)
   for (const int i : IndexRange(0, 20)) {
     duplicates[i] = i;
   }
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   const int found = tree.calc_duplicates(0.15f, duplicates);
 
   for (const int i : IndexRange(0, 20)) {
@@ -437,11 +437,11 @@ TEST(kdtree_nanoflann, CalcDuplicatesPresetTargets)
  * #calc_duplicates walks the points in the order the tree stores them, so its result is the
  * sharpest check available that the trees are identical rather than merely equivalent.
  */
-TEST(kdtree_nanoflann, ThreadedBuild)
+TEST(kdtree, ThreadedBuild)
 {
   /* Larger than the point count threading threshold. */
   const Array<float3> positions = random_points(50000, 8);
-  const KDTreeNanoflann<float3> tree(positions);
+  const KDTreeNew<float3> tree(positions);
   EXPECT_EQ(tree.size(), 50000);
 
   const Array<float3> queries = random_points(50, 9);
@@ -474,7 +474,7 @@ TEST(kdtree_nanoflann, ThreadedBuild)
     Array<int> other(positions.size(), -1);
     int other_found = 0;
     {
-      const KDTreeNanoflann<float3> other_tree(positions);
+      const KDTreeNew<float3> other_tree(positions);
       other_found = other_tree.calc_duplicates(0.02f, other);
     }
     BLI_system_num_threads_override_set(0);
@@ -485,15 +485,13 @@ TEST(kdtree_nanoflann, ThreadedBuild)
   }
 }
 
-TEST(kdtree_nanoflann, Float2)
+TEST(kdtree, Float2)
 {
   const Array<float2> positions = {
       float2(0.0f, 0.0f), float2(1.0f, 0.0f), float2(0.0f, 5.0f), float2(4.0f, 4.0f)};
-  const KDTreeNanoflann<float2> tree(positions);
+  const KDTreeNew<float2> tree(positions);
   EXPECT_EQ(tree.find_nearest(float2(0.9f, 0.1f)), 1);
   EXPECT_EQ(tree.count_in_radius(float2(0.0f, 0.0f), 1.5f), 2);
 }
 
 }  // namespace blender::tests
-
-
