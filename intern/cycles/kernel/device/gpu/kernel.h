@@ -537,12 +537,12 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
   ccl_global int *key_offsets = (ccl_global int *)
                                     kernel_integrator_state.sort_partition_key_offsets;
 
-#  ifdef __KERNEL_ONEAPI__
+#ifdef __KERNEL_ONEAPI__
   /* There is no difference here between different access decorations, as we are requesting
    * a raw pointer immediately, so the simplest decoration option is used (no decoration). */
   ccl_gpu_shared int *threadgroup_array =
       local_mem.get_multi_ptr<sycl::access::decorated::no>().get();
-#  endif
+#endif
 
   gpu_parallel_sort_bucket_pass(num_states,
                                 partition_size,
@@ -582,12 +582,12 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
   ccl_global int *key_offsets = (ccl_global int *)
                                     kernel_integrator_state.sort_partition_key_offsets;
 
-#  ifdef __KERNEL_ONEAPI__
+#ifdef __KERNEL_ONEAPI__
   /* There is no difference here between different access decorations, as we are requesting
    * a raw pointer immediately, so the simplest decoration option is used (no decoration). */
   ccl_gpu_shared int *threadgroup_array =
       local_mem.get_multi_ptr<sycl::access::decorated::no>().get();
-#  endif
+#endif
 
   gpu_parallel_sort_write_pass(num_states,
                                partition_size,
