@@ -22,7 +22,7 @@ Blender Convenience Targets
    * developer:      Enable faster builds, error checking and tests, recommended for developers.
    * ninja:          Use ninja build tool for faster builds.
    * ccache:         Use ccache for faster rebuilds.
-   * with_gpu_tests: Enable EEVEE, Workbench, Grease Pencil, Overlay, and GPU module tests.
+   * with_gpu_tests: Enable EEVEE, Workbench, Grease Pencil, Compositor, and GPU module tests.
 
    Note: when passing in multiple targets their order is not important.
    For example, for a fast build you can run 'make lite ccache ninja'.
