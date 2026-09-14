@@ -136,7 +136,7 @@ static wmOperatorStatus vertex_parent_set_exec(bContext *C, wmOperator *op)
 
     BMEditMesh *em = mesh->runtime->edit_mesh.get();
 
-    BKE_editmesh_looptris_and_normals_calc(em);
+    BKE_editmesh_looptris_and_normals_calc(em, BKE_editmesh_bmesh_get_for_write(mesh));
 
     /* Make sure the evaluated mesh is updated.
      *

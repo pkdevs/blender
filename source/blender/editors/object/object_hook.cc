@@ -343,7 +343,7 @@ static bool object_hook_index_array(Main *bmain,
 
       BMEditMesh *em = mesh->runtime->edit_mesh.get();
 
-      BKE_editmesh_looptris_and_normals_calc(em);
+      BKE_editmesh_looptris_and_normals_calc(em, BKE_editmesh_bmesh_get_for_write(mesh));
 
       /* check selected vertices first */
       if (return_editmesh_indexar(*mesh, r_indexar_num, r_indexar, r_cent) == 0) {

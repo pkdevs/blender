@@ -1711,7 +1711,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     const bool looptri_is_dirty = em->looptris.size() !=
                                   poly_to_tri_count(bm->totface, bm->totloop);
     if (looptri_is_dirty) {
-      BKE_editmesh_looptris_calc(em);
+      BKE_editmesh_looptris_calc(em, bm);
     }
   }
 }
@@ -1994,14 +1994,14 @@ static void mesh_partial_update(TransInfo *t,
      * While proportional editing can cause all geometry to need updating with a partial
      * selection. It's impractical to calculate this ahead of time. Further, the down side of
      * using partial updates when their not needed is negligible. */
-    BKE_editmesh_looptris_and_normals_calc(em);
+    BKE_editmesh_looptris_and_normals_calc(em, bm);
   }
   else {
     if (partial_for_looptris != PARTIAL_NONE) {
       BMPartialUpdate *bmpinfo = mesh_partial_ensure(t, tc, partial_for_looptris);
       BMeshCalcTessellation_Params params{};
       params.face_normals = true;
-      BKE_editmesh_looptris_calc_with_partial_ex(em, bmpinfo, &params);
+      BKE_editmesh_looptris_calc_with_partial_ex(em, bm, bmpinfo, &params);
     }
 
     if (partial_for_normals != PARTIAL_NONE) {

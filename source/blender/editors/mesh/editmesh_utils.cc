@@ -1802,7 +1802,7 @@ void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params)
 
   if (params->calc_normals && params->calc_looptris) {
     /* Calculating both has some performance gains. */
-    BKE_editmesh_looptris_and_normals_calc(em);
+    BKE_editmesh_looptris_and_normals_calc(em, bm);
   }
   else {
     if (params->calc_normals) {
@@ -1810,7 +1810,7 @@ void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params)
     }
 
     if (params->calc_looptris) {
-      BKE_editmesh_looptris_calc(em);
+      BKE_editmesh_looptris_calc(em, bm);
     }
   }
 

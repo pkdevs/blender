@@ -104,57 +104,59 @@ bool BKE_editmesh_eval_orig_map_available(const Mesh &mesh_eval, const Mesh *mes
   return false;
 }
 
-void BKE_editmesh_looptris_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_Params *params)
+void BKE_editmesh_looptris_calc_ex(BMEditMesh *em,
+                                   BMesh *bm,
+                                   const BMeshCalcTessellation_Params *params)
 {
-  BMesh *bm = em->bm;
   em->looptris.reinitialize(poly_to_tri_count(bm->totface, bm->totloop));
   BM_mesh_calc_tessellation_ex(bm, em->looptris, params);
 }
 
-void BKE_editmesh_looptris_calc(BMEditMesh *em)
+void BKE_editmesh_looptris_calc(BMEditMesh *em, BMesh *bm)
 {
   BMeshCalcTessellation_Params params{};
   params.face_normals = false;
-  BKE_editmesh_looptris_calc_ex(em, &params);
+  BKE_editmesh_looptris_calc_ex(em, bm, &params);
 }
 
-void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em)
+void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em, BMesh *bm)
 {
-  BMesh *bm = em->bm;
   BMeshCalcTessellation_Params looptris_params{};
   looptris_params.face_normals = true;
-  BKE_editmesh_looptris_calc_ex(em, &looptris_params);
+  BKE_editmesh_looptris_calc_ex(em, bm, &looptris_params);
   BMeshNormalsUpdate_Params normals_params{};
   normals_params.face_normals = false;
   BM_mesh_normals_update_ex(bm, &normals_params);
 }
 
 void BKE_editmesh_looptris_calc_with_partial_ex(BMEditMesh *em,
+                                                BMesh *bm,
                                                 BMPartialUpdate *bmpinfo,
                                                 const BMeshCalcTessellation_Params *params)
 {
-  BMesh *bm = em->bm;
   BLI_assert(em->looptris.size() == poly_to_tri_count(bm->totface, bm->totloop));
   BLI_assert(!(bm->totface && em->looptris.is_empty()));
 
   BM_mesh_calc_tessellation_with_partial_ex(bm, em->looptris, bmpinfo, params);
 }
 
-void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo)
+void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMesh *bm, BMPartialUpdate *bmpinfo)
 {
   BMeshCalcTessellation_Params looptris_params{};
   looptris_params.face_normals = false;
-  BKE_editmesh_looptris_calc_with_partial_ex(em, bmpinfo, &looptris_params);
+  BKE_editmesh_looptris_calc_with_partial_ex(em, bm, bmpinfo, &looptris_params);
 }
 
-void BKE_editmesh_looptris_and_normals_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo)
+void BKE_editmesh_looptris_and_normals_calc_with_partial(BMEditMesh *em,
+                                                         BMesh *bm,
+                                                         BMPartialUpdate *bmpinfo)
 {
   BMeshCalcTessellation_Params looptris_params{};
   looptris_params.face_normals = true;
-  BKE_editmesh_looptris_calc_with_partial_ex(em, bmpinfo, &looptris_params);
+  BKE_editmesh_looptris_calc_with_partial_ex(em, bm, bmpinfo, &looptris_params);
   BMeshNormalsUpdate_Params normals_params{};
   normals_params.face_normals = false;
-  BM_mesh_normals_update_with_partial_ex(em->bm, bmpinfo, &normals_params);
+  BM_mesh_normals_update_with_partial_ex(bm, bmpinfo, &normals_params);
 }
 
 void BKE_editmesh_free_data(BMEditMesh *em)

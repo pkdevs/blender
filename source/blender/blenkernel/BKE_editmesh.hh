@@ -68,19 +68,24 @@ struct BMEditMesh {
 
 /* editmesh.cc */
 
-void BKE_editmesh_looptris_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_Params *params);
-void BKE_editmesh_looptris_calc(BMEditMesh *em);
+void BKE_editmesh_looptris_calc_ex(BMEditMesh *em,
+                                   BMesh *bm,
+                                   const BMeshCalcTessellation_Params *params);
+void BKE_editmesh_looptris_calc(BMEditMesh *em, BMesh *bm);
 void BKE_editmesh_looptris_calc_with_partial_ex(BMEditMesh *em,
+                                                BMesh *bm,
                                                 BMPartialUpdate *bmpinfo,
                                                 const BMeshCalcTessellation_Params *params);
-void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
-void BKE_editmesh_looptris_and_normals_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
+void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMesh *bm, BMPartialUpdate *bmpinfo);
+void BKE_editmesh_looptris_and_normals_calc_with_partial(BMEditMesh *em,
+                                                         BMesh *bm,
+                                                         BMPartialUpdate *bmpinfo);
 
 /**
  * Performing the face normal calculation at the same time as tessellation
  * gives a reasonable performance boost (approx ~20% faster).
  */
-void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em);
+void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em, BMesh *bm);
 
 /**
  * \note The caller is responsible for ensuring triangulation data,
