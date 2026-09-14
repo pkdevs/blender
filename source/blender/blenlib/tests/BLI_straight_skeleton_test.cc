@@ -1062,6 +1062,187 @@ TEST(straight_skeleton, Flipper)
   }
 }
 
+TEST(straight_skeleton, OffsetSquarePartial)
+{
+  Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
+  Vector<double2> new_verts;
+  Vector<double> new_verts_offset;
+
+  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
+      verts.as_span(), polygons, 1.0, new_verts, new_verts_offset);
+
+  EXPECT_EQ(out_faces.size(), 5);
+  EXPECT_EQ(new_verts.size(), 4);
+  for (const double off : new_verts_offset) {
+    EXPECT_NEAR(off, 1.0, 1e-8);
+  }
+
+  auto get_pos = [&](int idx) -> double2 {
+    if (idx < int(verts.size())) {
+      return verts[idx];
+    }
+    return new_verts[idx - int(verts.size())];
+  };
+
+  double total_area = 0.0;
+  for (const Vector<int> &face : out_faces) {
+    double area = 0.0;
+    const int m = int(face.size());
+    for (const int i : IndexRange(m)) {
+      const double2 p1 = get_pos(face[i]);
+      const double2 p2 = get_pos(face[(i + 1) % m]);
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total_area += 0.5 * area;
+  }
+  EXPECT_NEAR(total_area, 100.0, 1e-6);
+}
+
+TEST(straight_skeleton, OffsetSquareCollapse)
+{
+  Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
+  Vector<double2> new_verts;
+  Vector<double> new_verts_offset;
+
+  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
+      verts.as_span(), polygons, 5.0, new_verts, new_verts_offset);
+
+  EXPECT_EQ(out_faces.size(), 4);
+  EXPECT_EQ(new_verts.size(), 1);
+  EXPECT_NEAR(new_verts[0].x, 5.0, 1e-6);
+  EXPECT_NEAR(new_verts[0].y, 5.0, 1e-6);
+  EXPECT_NEAR(new_verts_offset[0], 5.0, 1e-6);
+
+  auto get_pos = [&](int idx) -> double2 {
+    if (idx < int(verts.size())) {
+      return verts[idx];
+    }
+    return new_verts[idx - int(verts.size())];
+  };
+
+  double total_area = 0.0;
+  for (const Vector<int> &face : out_faces) {
+    double area = 0.0;
+    const int m = int(face.size());
+    for (const int i : IndexRange(m)) {
+      const double2 p1 = get_pos(face[i]);
+      const double2 p2 = get_pos(face[(i + 1) % m]);
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total_area += 0.5 * area;
+  }
+  EXPECT_NEAR(total_area, 100.0, 1e-6);
+}
+
+TEST(straight_skeleton, OffsetSquareExcess)
+{
+  Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
+  Vector<double2> new_verts;
+  Vector<double> new_verts_offset;
+
+  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
+      verts.as_span(), polygons, 10.0, new_verts, new_verts_offset);
+
+  EXPECT_EQ(out_faces.size(), 4);
+  EXPECT_EQ(new_verts.size(), 1);
+  EXPECT_NEAR(new_verts[0].x, 5.0, 1e-6);
+  EXPECT_NEAR(new_verts[0].y, 5.0, 1e-6);
+  EXPECT_NEAR(new_verts_offset[0], 5.0, 1e-6);
+
+  auto get_pos = [&](int idx) -> double2 {
+    if (idx < int(verts.size())) {
+      return verts[idx];
+    }
+    return new_verts[idx - int(verts.size())];
+  };
+
+  double total_area = 0.0;
+  for (const Vector<int> &face : out_faces) {
+    double area = 0.0;
+    const int m = int(face.size());
+    for (const int i : IndexRange(m)) {
+      const double2 p1 = get_pos(face[i]);
+      const double2 p2 = get_pos(face[(i + 1) % m]);
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total_area += 0.5 * area;
+  }
+  EXPECT_NEAR(total_area, 100.0, 1e-6);
+}
+
+TEST(straight_skeleton, OffsetRectangle)
+{
+  Array<double2> verts = {{0.0, 0.0}, {20.0, 0.0}, {20.0, 10.0}, {0.0, 10.0}};
+  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
+  Vector<double2> new_verts;
+  Vector<double> new_verts_offset;
+
+  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
+      verts.as_span(), polygons, 2.0, new_verts, new_verts_offset);
+
+  EXPECT_EQ(out_faces.size(), 5);
+  EXPECT_EQ(new_verts.size(), 4);
+  for (const double off : new_verts_offset) {
+    EXPECT_NEAR(off, 2.0, 1e-8);
+  }
+
+  auto get_pos = [&](int idx) -> double2 {
+    if (idx < int(verts.size())) {
+      return verts[idx];
+    }
+    return new_verts[idx - int(verts.size())];
+  };
+
+  double total_area = 0.0;
+  for (const Vector<int> &face : out_faces) {
+    double area = 0.0;
+    const int m = int(face.size());
+    for (const int i : IndexRange(m)) {
+      const double2 p1 = get_pos(face[i]);
+      const double2 p2 = get_pos(face[(i + 1) % m]);
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total_area += 0.5 * area;
+  }
+  EXPECT_NEAR(total_area, 200.0, 1e-6);
+}
+
+TEST(straight_skeleton, OffsetLShape)
+{
+  Array<double2> verts = {{0.0, 0.0}, {4.0, 0.0}, {4.0, 2.0}, {2.0, 2.0}, {2.0, 4.0}, {0.0, 4.0}};
+  Vector<Vector<int>> polygons = {{0, 1, 2, 3, 4, 5}};
+  Vector<double2> new_verts;
+  Vector<double> new_verts_offset;
+
+  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
+      verts.as_span(), polygons, 0.5, new_verts, new_verts_offset);
+
+  EXPECT_EQ(out_faces.size(), 7); /* 6 side-strips + 1 inner L-shape */
+
+  auto get_pos = [&](int idx) -> double2 {
+    if (idx < int(verts.size())) {
+      return verts[idx];
+    }
+    return new_verts[idx - int(verts.size())];
+  };
+
+  double total_area = 0.0;
+  for (const Vector<int> &face : out_faces) {
+    double area = 0.0;
+    const int m = int(face.size());
+    for (const int i : IndexRange(m)) {
+      const double2 p1 = get_pos(face[i]);
+      const double2 p2 = get_pos(face[(i + 1) % m]);
+      area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    total_area += 0.5 * area;
+  }
+  EXPECT_NEAR(total_area, 12.0, 1e-6);
+}
+
 /** \} */
 
 } /* namespace blender::straightskeleton::test */

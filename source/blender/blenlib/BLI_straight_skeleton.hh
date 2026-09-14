@@ -244,6 +244,9 @@ class StraightSkeletonOutput {
   /** Concatenated list of vertex indices for all output faces. */
   Array<int> face_vert_indices;
 
+  /** For each output vertex, the straight skeleton collapse time / offset distance. */
+  Array<double> vert_time;
+
   /** For each output vertex, the index of the coincident input vertex, or -1. */
   Array<int> vert_orig;
 
@@ -267,6 +270,32 @@ class StraightSkeletonOutput {
  * together with origin mappings back to the input.
  */
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input);
+
+/**
+ * Compute the inward straight-skeleton offset (inset) of polygons.
+ *
+ * \param vert               2D coordinates of the input vertices.
+ * \param polygons           Vertex indices of the boundary polygons. CCW-oriented
+ *                           polygons are treated as outer boundaries; CW-oriented
+ *                           polygons are treated as interior holes.
+ * \param offset             Inward offset distance (non-negative).
+ * \param r_new_vert         New vertices created by the operation are appended here.
+ *                           Face indices in the return value that are >= `vert.size()`
+ *                           address `r_new_vert[index - vert.size()]`.
+ * \param r_new_vert_offset  For each new vertex in \a r_new_vert, its offset distance
+ *                           (creation time in the straight skeleton advancement) is
+ *                           stored here, parallel to \a r_new_vert.
+ *
+ * \return A list of polygonal faces (each face is a list of vertex indices)
+ *         that together tile the interior of the outer boundaries minus their holes,
+ *         accounting for the offset.  The faces include the side strips
+ *         beside each boundary edge as well as the remaining inner region(s).
+ */
+Vector<Vector<int>> straight_skeleton_offset_calc(Span<double2> vert,
+                                                  const Vector<Vector<int>> &polygons,
+                                                  double offset,
+                                                  Vector<double2> &r_new_vert,
+                                                  Vector<double> &r_new_vert_offset);
 
 /** \} */
 

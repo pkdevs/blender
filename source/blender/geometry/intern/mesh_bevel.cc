@@ -24,10 +24,10 @@
 #include "BLI_math_rotation.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
-#include "BLI_mesh_inset.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_ordered_edge.hh"
 #include "BLI_span.hh"
+#include "BLI_straight_skeleton.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.hh"
@@ -7746,11 +7746,10 @@ static std::optional<Mesh *> build_output_mesh(const BevelState &state,
 /** \name Face Bevel via Straight-Skeleton Inset
  *
  * Implements face beveling by delegating each selected face to
- * #blender::meshinset::mesh_inset_calc.  The inset amount is the average of
- * the four per-edge offset values around the face's boundary edges.
+ * #blender::straightskeleton::straight_skeleton_offset_calc.
  * Original boundary vertices and edges are kept intact; only the original
  * face polygon is replaced by the ring of new side-strip faces plus the
- * new inner face produced by the inset.
+ * new inner face(s) produced by the offset.
  * \{ */
 
 /**
@@ -7770,8 +7769,8 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
 
   state.selection.foreach_index([&](const int f) {
     const IndexRange face_range = src_faces[f];
-    const int n = face_range.size();
-    if (n < 3) {
+    const int corners_num = face_range.size();
+    if (corners_num < 3) {
       return;
     }
 
@@ -7782,53 +7781,99 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
       return;
     }
 
-    Array<double3> mi_verts(n);
-    Vector<int> loop_indices(n);
-    for (const int i : IndexRange(n)) {
-      const int c = face_range[i];
-      mi_verts[i] = double3(positions[corner_verts[c]]);
-      loop_indices[i] = i;
+    /* Verify face normal is non-degenerate. */
+    const float3 fno = emesh.src_face_normals[f];
+    const double normal_sq = math::dot(double3(fno), double3(fno));
+    if (normal_sq < 1e-12) {
+      return;
+    }
+    const double3 normal = double3(fno) * (1.0 / std::sqrt(normal_sq));
+
+    /* Build an orthonormal basis (r0, r1, normal) on the face plane.
+     * With r0 x r1 = normal, the 2D projected coordinates preserve CCW orientation. */
+    const double eps = 1e-12;
+    const double f_xy = normal.x * normal.x + normal.y * normal.y;
+    double3 r0, r1;
+    if (f_xy > eps) {
+      const double d = 1.0 / std::sqrt(f_xy);
+      r0 = double3(normal.y * d, -normal.x * d, 0.0);
+      r1 = double3(-normal.z * r0.y, normal.z * r0.x, normal.x * r0.y - normal.y * r0.x);
+    }
+    else {
+      const double s = (normal.z < 0.0) ? -1.0 : 1.0;
+      r0 = double3(s, 0.0, 0.0);
+      r1 = double3(0.0, 1.0, 0.0);
     }
 
-    /* The face boundary is both the input face and the contour to inset. */
-    Array<Vector<int>> mi_faces(1);
-    mi_faces[0] = loop_indices;
+    /* Project face vertices to 2D relative to the first corner vertex. */
+    const double3 origin = double3(positions[corner_verts[face_range[0]]]);
+    Array<double2> verts_2d(corners_num);
+    for (const int i : IndexRange(corners_num)) {
+      const int c = face_range[i];
+      const double3 diff = double3(positions[corner_verts[c]]) - origin;
+      verts_2d[i] = double2(math::dot(r0, diff), math::dot(r1, diff));
+    }
 
-    blender::meshinset::MeshInset_Input mi_input;
-    mi_input.vert = mi_verts.as_span();
-    mi_input.face = mi_faces.as_span();
-    mi_input.contour = mi_faces.as_span();
-    mi_input.inset_amount = inset_amount;
-    mi_input.slope = params.face_height.is_empty() ? 0.0 : double(params.face_height[f]);
-    mi_input.need_ids = true;
-
-    const blender::meshinset::MeshInset_Result mi_result = blender::meshinset::mesh_inset_calc(
-        mi_input);
-
-    if (mi_result.face.is_empty()) {
+    /* Compute signed area to ensure CCW winding for the outer boundary polygon. */
+    double area2 = 0.0;
+    for (const int i : IndexRange(corners_num)) {
+      const double2 &p = verts_2d[i];
+      const double2 &q = verts_2d[(i + 1) % corners_num];
+      area2 += p.x * q.y - q.x * p.y;
+    }
+    if (std::abs(area2) < 1e-12) {
       return;
     }
 
-    /* Map result vertex indices to mesh vertex indices.
-     * #MeshInset_Result::orig_vert[r] gives the local index (0..n-1) into the
-     * face's corners if result vertex r is an original boundary vertex, or -1 if new. */
-    Array<int> result_to_mesh_vert(mi_result.vert.size());
-    for (const int r : IndexRange(mi_result.vert.size())) {
-      const int orig = mi_result.orig_vert[r];
-      if (orig != -1) {
-        result_to_mesh_vert[r] = corner_verts[face_range[orig]];
-      }
-      else {
-        result_to_mesh_vert[r] = state.emesh.vert_create(float3(mi_result.vert[r]), -1);
+    if (area2 < 0.0) {
+      /* Flip r1 and y-coordinates so that 2D coordinates are CCW without reordering corners. */
+      r1 = -r1;
+      for (const int i : IndexRange(corners_num)) {
+        verts_2d[i].y = -verts_2d[i].y;
       }
     }
 
-    /* Emit new output faces (side-strip quads + inner inset face).
+    Vector<int> loop_indices(corners_num);
+    for (const int i : IndexRange(corners_num)) {
+      loop_indices[i] = i;
+    }
+
+    Vector<Vector<int>> polygons;
+    polygons.append(std::move(loop_indices));
+
+    Vector<double2> new_vert_2d;
+    Vector<double> new_vert_offset;
+    const Vector<Vector<int>> out_faces = blender::straightskeleton::straight_skeleton_offset_calc(
+        verts_2d.as_span(), polygons, inset_amount, new_vert_2d, new_vert_offset);
+
+    if (out_faces.is_empty()) {
+      return;
+    }
+
+    const double face_height = params.face_height.is_empty() ? 0.0 : double(params.face_height[f]);
+
+    /* Map result vertex indices to mesh vertex indices.
+     * Indices < corners_num refer to original boundary vertices (in verts_2d).
+     * Indices >= corners_num refer to newly created vertices in new_vert_2d. */
+    const int new_verts_num = int(new_vert_2d.size());
+    Array<int> result_to_mesh_vert(corners_num + new_verts_num);
+    for (const int i : IndexRange(corners_num)) {
+      result_to_mesh_vert[i] = corner_verts[face_range[i]];
+    }
+
+    for (const int i : IndexRange(new_verts_num)) {
+      const double vo = new_vert_offset[i];
+      const double h = (inset_amount > 0.0) ? (vo / inset_amount) * face_height : 0.0;
+      const double3 p3d = origin + r0 * new_vert_2d[i].x + r1 * new_vert_2d[i].y + normal * h;
+      result_to_mesh_vert[corners_num + i] = state.emesh.vert_create(float3(p3d), -1);
+    }
+
+    /* Emit new output faces (side-strip quads + inner inset face(s)).
      * Use the original face as the attribute representative for all new faces. */
-    for (const Vector<int> &out_face : mi_result.face) {
-      const int m = out_face.size();
-      Array<int> mesh_verts(m);
-      for (const int i : IndexRange(m)) {
+    for (const Vector<int> &out_face : out_faces) {
+      const int face_verts_num = int(out_face.size());
+      Array<int> mesh_verts(face_verts_num);
+      for (const int i : IndexRange(face_verts_num)) {
         mesh_verts[i] = result_to_mesh_vert[out_face[i]];
       }
       state.emesh.face_create(mesh_verts.as_span(), f);
