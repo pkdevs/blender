@@ -41,7 +41,6 @@ namespace blender::ed::transform {
  * \{ */
 
 struct SeqSlideParams {
-  wmOperator *op;
   bool use_restore_handle_selection;
 };
 
@@ -120,7 +119,7 @@ static void applySeqSlide(TransInfo *t)
 static void seq_slide_status(TransInfo *t)
 {
   SeqSlideParams *ssp = static_cast<SeqSlideParams *>(t->custom.mode.data);
-  wmOperator *op = ssp->op;
+  wmOperator *op = t->op;
   if (!op || t->data_container_len == 0) {
     return;
   }
@@ -161,7 +160,6 @@ static void initSeqSlide(TransInfo *t, wmOperator *op)
   SeqSlideParams *ssp = MEM_new_zeroed<SeqSlideParams>(__func__);
   t->custom.mode.data = ssp;
   t->custom.mode.use_free = true;
-  ssp->op = op;
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_restore_handle_selection");
   if (op != nullptr && prop != nullptr) {
     ssp->use_restore_handle_selection = RNA_property_boolean_get(op->ptr, prop);

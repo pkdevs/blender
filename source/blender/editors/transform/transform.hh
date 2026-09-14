@@ -975,6 +975,8 @@ struct TransInfo {
   wmTimer *animtimer;
   /** Needed so we can perform a look up for header text. */
   wmKeyMap *keymap;
+  /** The operator that owns this transform (in its customdata), or null when not run by one. */
+  wmOperator *op;
   /** Assign from the operator, or can be NULL. */
   ReportList *reports;
   /** Current mouse position. */

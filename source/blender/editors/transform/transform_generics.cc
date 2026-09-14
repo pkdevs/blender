@@ -149,6 +149,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   t->area = area;
   t->region = region;
   t->settings = ts;
+  t->op = op;
   t->reports = op ? op->reports : nullptr;
 
   t->helpline = HLP_NONE;

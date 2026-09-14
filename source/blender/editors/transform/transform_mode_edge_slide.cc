@@ -94,7 +94,6 @@ struct EdgeSlideData {
 };
 
 struct EdgeSlideParams {
-  wmOperator *op;
   float perc;
 
   /** When un-clamped - use this index: #TransDataEdgeSlideVert.dir_side. */
@@ -820,7 +819,7 @@ static void applyEdgeSlide(TransInfo *t)
 static void edge_slide_status(TransInfo *t)
 {
   EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
-  wmOperator *op = slp->op;
+  wmOperator *op = t->op;
   if (!op) {
     return;
   }
@@ -888,12 +887,8 @@ static void edge_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
   add_v3_v3(mat_xform[3], delta);
 }
 
-static void initEdgeSlide_ex(TransInfo *t,
-                             wmOperator *op,
-                             bool use_double_side,
-                             bool use_even,
-                             bool flipped,
-                             bool use_clamp)
+static void initEdgeSlide_ex(
+    TransInfo *t, bool use_double_side, bool use_even, bool flipped, bool use_clamp)
 {
   EdgeSlideData *sld;
   bool ok = false;
@@ -908,7 +903,6 @@ static void initEdgeSlide_ex(TransInfo *t,
 
   {
     EdgeSlideParams *slp = MEM_new_zeroed<EdgeSlideParams>(__func__);
-    slp->op = op;
     slp->use_even = use_even;
     slp->flipped = flipped;
     /* Happens to be best for single-sided. */
@@ -974,7 +968,7 @@ static void initEdgeSlide(TransInfo *t, wmOperator *op)
     prop = RNA_struct_find_property(op->ptr, "use_clamp");
     use_clamp = (prop) ? RNA_property_boolean_get(op->ptr, prop) : true;
   }
-  initEdgeSlide_ex(t, op, use_double_side, use_even, flipped, use_clamp);
+  initEdgeSlide_ex(t, use_double_side, use_even, flipped, use_clamp);
 }
 
 /** \} */
