@@ -29,14 +29,15 @@
 #include <memory>
 #include <new>
 #include <numeric>
+#include <optional>
 
 #include "BLI_array.hh"
 #include "BLI_bounds.hh"
+#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree_nanoflann.hh"
 #include "BLI_linear_allocator.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_mutex.hh"
 #include "BLI_task.hh"
 #include "BLI_threads.hh"
 #include "BLI_utildefines.hh"
@@ -148,15 +149,13 @@ template<typename T> class KDTree {
    * most, which for a tree of any size means nodes scattered over many of them.
    */
   struct NodeAllocator {
-    /** Nodes per batch, and so the most that can go unused per subtree built in parallel. */
+    /** Nodes per batch, and so the most that can go unused per thread that built a subtree. */
     static constexpr int batch_size = 256;
 
-    LinearAllocator<> &allocator;
+    LinearAllocator<> allocator;
     MutableSpan<Node> batch;
     /* Equal to the (empty) batch size, so that the first allocation starts a batch. */
     int used = 0;
-
-    explicit NodeAllocator(LinearAllocator<> &allocator) : allocator(allocator) {}
 
     /** A node, or the two children of one, which have to be next to each other. */
     Node *allocate(const int num)
@@ -169,6 +168,15 @@ template<typename T> class KDTree {
       used += num;
       return nodes;
     }
+
+    /**
+     * One node, without starting a batch for it. For a tree that is a single leaf, where a batch
+     * would be orders of magnitude larger than the tree itself.
+     */
+    Node *allocate_single()
+    {
+      return allocator.template allocate<Node>();
+    }
   };
 
   /** What the build needs beyond the tree it produces. */
@@ -176,18 +184,13 @@ template<typename T> class KDTree {
     /** The points being reordered, which #indices_ is taken from once the tree is built. */
     MutableSpan<BuildPoint> points;
     /**
-     * A subtree that may run on another thread allocates its nodes from a pool of its own. One
-     * pool behind a mutex would put every node in the tree through it.
+     * A pool per thread that takes part in the build. One pool behind a mutex would put every node
+     * in the tree through it, while a pool per subtree leaves a partly used batch behind for each
+     * of them and spreads the nodes of a subtree over several pools. Only built when there are
+     * threads to give pools to: reaching into thread local storage costs more than building a tree
+     * of a few points does. The buffers end up owned by the tree, see #build.
      */
-    Mutex allocators_mutex;
-    Vector<std::unique_ptr<LinearAllocator<>>> allocators;
-
-    LinearAllocator<> &new_allocator()
-    {
-      std::lock_guard lock(allocators_mutex);
-      allocators.append(std::make_unique<LinearAllocator<>>());
-      return *allocators.last();
-    }
+    std::optional<threading::EnumerableThreadSpecific<NodeAllocator>> allocators;
   };
 
   Span<T> points_;
@@ -198,9 +201,11 @@ template<typename T> class KDTree {
   Node *root_ = nullptr;
   int leaf_size_;
 
-  /** Nodes built without threads, and those of the subtrees that were built with them. */
-  LinearAllocator<> allocator_;
-  Vector<std::unique_ptr<LinearAllocator<>>> task_allocators_;
+  /**
+   * Every node in the tree. A threaded build fills the per thread pools of #BuildState instead,
+   * and hands their buffers over to this one when it is done with them.
+   */
+  NodeAllocator allocator_;
 
  public:
   /**
@@ -280,7 +285,7 @@ template<typename T> class KDTree {
       math::min_max(points_[index], bounds_.min, bounds_.max);
     }
 
-    root_ = allocator_.allocate<Node>();
+    root_ = allocator_.allocate_single();
     root_->children = nullptr;
     root_->leaf.start = 0;
     root_->leaf.end = int(indices_.size());
@@ -294,9 +299,18 @@ template<typename T> class KDTree {
     BuildState state{build_points.as_mutable_span()};
     const Bounds<BuildPoint> bounds = this->init_points(state, indices, threaded);
 
-    NodeAllocator allocator(allocator_);
+    if (threaded) {
+      state.allocators.emplace();
+    }
+    NodeAllocator &allocator = threaded ? state.allocators->local() : allocator_;
     root_ = allocator.allocate(1);
     this->build_node(state, root_, 0, size, bounds, allocator, threaded);
+
+    if (state.allocators.has_value()) {
+      for (NodeAllocator &pool : *state.allocators) {
+        allocator_.allocator.transfer_ownership_from(pool.allocator);
+      }
+    }
 
     for (const int dim : IndexRange(dimensions)) {
       bounds_.min[dim] = bounds.min[dim];
@@ -306,7 +320,6 @@ template<typename T> class KDTree {
     /* The points are in the order the tree visits them now, so the indices they carry are the
      * order to keep. The coordinates are not, since a search reads #points_. */
     this->collect_indices(state, threaded);
-    task_allocators_ = std::move(state.allocators);
   }
 
   /** Fill \a state with the coordinates and indices of the points, and measure them. */
@@ -429,15 +442,24 @@ template<typename T> class KDTree {
     node->dim = dim;
     node->children = allocator.allocate(2);
     if (threaded && end - start > PARALLEL_SUBTREE_GRAIN) {
-      NodeAllocator other_allocator(state.new_allocator());
       threading::parallel_invoke(
           [&]() {
-            this->build_node(
-                state, &node->children[0], start, middle, left_bounds, allocator, true);
+            this->build_node(state,
+                             &node->children[0],
+                             start,
+                             middle,
+                             left_bounds,
+                             state.allocators->local(),
+                             true);
           },
           [&]() {
-            this->build_node(
-                state, &node->children[1], middle, end, right_bounds, other_allocator, true);
+            this->build_node(state,
+                             &node->children[1],
+                             middle,
+                             end,
+                             right_bounds,
+                             state.allocators->local(),
+                             true);
           });
     }
     else {
