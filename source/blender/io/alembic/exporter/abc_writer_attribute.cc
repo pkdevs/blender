@@ -199,9 +199,7 @@ void AttributeParamMaps::write_empty_samples(const size_t num_geom_samples)
 {
 #define WRITE_EMPTY_SAMPLE(abc_type, map_name) \
   for (auto &iter : this->map_name) { \
-    for (size_t i = iter.second.getNumSamples(); i < num_geom_samples; i++) { \
-      io::alembic::write_empty_samples(iter.second, num_geom_samples); \
-    } \
+    io::alembic::write_empty_samples(iter.second, num_geom_samples); \
   }
   ENUMERATE_EXPORTED_TYPES(WRITE_EMPTY_SAMPLE)
 #undef WRITE_EMPTY_SAMPLE
