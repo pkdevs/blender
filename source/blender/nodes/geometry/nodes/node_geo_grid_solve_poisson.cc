@@ -441,12 +441,13 @@ static void node_geo_exec(GeoNodeExecParams params)
    * the error again here to handle these corner cases. */
   if (solver_state.absoluteError == 0.0) {
     const float absolute_error_or_inf = maximum_norm_or_infinity(*solution_tree);
+    const float norm_b = maximum_norm_or_infinity(source_vdb_grid.tree());
+    const float relative_error_or_inf = (norm_b == 0.0f) ? absolute_error_or_inf :
+                                                           absolute_error_or_inf / norm_b;
     switch (threshold_mode) {
       case ThresholdMode::Relative: {
-        const float norm_b = maximum_norm_or_infinity(source_vdb_grid.tree());
-        const float relative_error_or_inf = (norm_b == 0.0f) ? absolute_error_or_inf :
-                                                               absolute_error_or_inf / norm_b;
         if (!std::isfinite(relative_error_or_inf) || relative_error_or_inf > error_threshold) {
+          solver_state.absoluteError = absolute_error_or_inf;
           solver_state.relativeError = relative_error_or_inf;
           solver_state.success = false;
         }
@@ -457,6 +458,7 @@ static void node_geo_exec(GeoNodeExecParams params)
             absolute_error_or_inf > error_threshold * absolute_error_scale)
         {
           solver_state.absoluteError = absolute_error_or_inf;
+          solver_state.relativeError = relative_error_or_inf;
           solver_state.success = false;
         }
         break;
