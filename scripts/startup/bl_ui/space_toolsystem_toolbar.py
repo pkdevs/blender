@@ -2337,7 +2337,7 @@ class _defs_grease_pencil_paint:
         return dict(
             idname="builtin.carver",
             label="Carver",
-            icon="brush.particle.cut",
+            icon="ops.gpencil.carver",
             cursor='KNIFE',
             keymap=(),
             draw_settings=draw_settings,
