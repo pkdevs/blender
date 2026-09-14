@@ -184,8 +184,7 @@ static int gpu_field_input_component_offset(const GPUFieldIR &ir, const int inpu
 class GPUFieldIRBuilder {
  private:
   GPUFieldIR ir_;
-  FieldHashDeep deep_hashes_;
-  Map<UniqueHash, int> value_by_hash_;
+  Map<GFieldRef, int> value_by_field_;
 
   std::optional<int> add_instruction(const GPUFieldInstruction instruction,
                                      const GPUFieldValueType value_type)
@@ -200,9 +199,12 @@ class GPUFieldIRBuilder {
 
   std::optional<int> add_field(const GFieldRef &field)
   {
-    const UniqueHash hash = deep_hashes_.ensure(field);
-    if (const int *existing = value_by_hash_.lookup_ptr(hash)) {
-      return *existing;
+    /* Keep constant slots independent of their values so runtime edits preserve the program. */
+    const bool is_constant = std::holds_alternative<GFieldRef::Value>(field.variant());
+    if (!is_constant) {
+      if (const int *existing = value_by_field_.lookup_ptr(field)) {
+        return *existing;
+      }
     }
 
     std::optional<int> result;
@@ -246,7 +248,6 @@ class GPUFieldIRBuilder {
             const std::optional<GPUFieldOperation> gpu_operation = gpu_operation_for_function(
                 function, field.cpp_type());
             if (!gpu_operation) {
-
               return;
             }
 
@@ -298,8 +299,8 @@ class GPUFieldIRBuilder {
         },
         field.variant());
 
-    if (result) {
-      value_by_hash_.add_new(hash, *result);
+    if (result && !is_constant) {
+      value_by_field_.add_new(field, *result);
     }
     return result;
   }
@@ -368,11 +369,19 @@ struct GPUFieldBufferSet {
 
   ~GPUFieldBufferSet()
   {
+    this->discard();
+  }
+
+  void discard()
+  {
     if (input_buffer != nullptr) {
       GPU_vertbuf_discard(input_buffer);
+      input_buffer = nullptr;
     }
     GPU_storagebuf_free(constant_buffer);
     GPU_storagebuf_free(output_buffer);
+    constant_buffer = nullptr;
+    output_buffer = nullptr;
   }
 
   bool initialize(const int input_component_count,
@@ -403,11 +412,22 @@ class GPUFieldContextRuntime {
   static constexpr int max_buffer_sets_ = 4;
 
   Map<BufferKey, std::shared_ptr<GPUFieldBufferSet>> buffer_sets_;
+  Vector<std::weak_ptr<GPUFieldBufferSet>> live_buffer_sets_;
   uint64_t use_counter_ = 0;
 
  public:
   GPUFieldContextRuntime() = default;
   GPUFieldContextRuntime(const GPUFieldContextRuntime &) = delete;
+
+  ~GPUFieldContextRuntime()
+  {
+    /* Evicted buffers may still back retained results. Invalidate them before the context dies. */
+    for (const std::weak_ptr<GPUFieldBufferSet> &weak_buffers : live_buffer_sets_) {
+      if (const std::shared_ptr<GPUFieldBufferSet> buffers = weak_buffers.lock()) {
+        buffers->discard();
+      }
+    }
+  }
 
   GPUFieldBufferSet *ensure_buffers(const uint64_t program_key,
                                     const int64_t element_count,
@@ -433,6 +453,9 @@ class GPUFieldContextRuntime {
     if (!buffers->initialize(input_component_count, element_count, output_count, constant_count)) {
       return nullptr;
     }
+    live_buffer_sets_.remove_if(
+        [](const std::weak_ptr<GPUFieldBufferSet> &buffers) { return buffers.expired(); });
+    live_buffer_sets_.append(buffers);
     buffers->last_used = ++use_counter_;
     GPUFieldBufferSet *result = buffers.get();
     if (r_owner != nullptr) {
@@ -630,6 +653,14 @@ struct GPUFieldResult {
   std::shared_ptr<GPUFieldBufferSet> buffers;
 
   explicit GPUFieldResult(const GField &field) : field(field) {}
+
+  bool matches_gpu(const IndexMask &mask, GPUContext *context) const
+  {
+    const std::optional<IndexRange> mask_range = mask.to_range();
+    return buffers->output_buffer != nullptr && gpu_context == context &&
+           element_count == mask.min_array_size() && mask_range &&
+           range.start() == mask_range->start() && range.size() == mask_range->size();
+  }
 };
 
 struct GPUFieldChainScope::Impl {
@@ -656,18 +687,11 @@ struct GPUFieldChainScope::Impl {
   }
 
   std::shared_ptr<GPUFieldResult> lookup(const StringRef name,
-                                         const GPUFieldContextKey &context_key,
-                                         const int64_t element_count,
-                                         const IndexRange range,
-                                         GPUContext *gpu_context) const
+                                         const GPUFieldContextKey &context_key) const
   {
     std::lock_guard lock(mutex);
     for (const std::shared_ptr<GPUFieldResult> &result : results) {
-      if (result->name == name && result->context_key == context_key &&
-          result->element_count == element_count && result->range.start() == range.start() &&
-          result->range.size() == range.size() &&
-          (gpu_context == nullptr || result->gpu_context == gpu_context))
-      {
+      if (result->name == name && result->context_key == context_key) {
         return result;
       }
     }
@@ -685,20 +709,19 @@ GVArray GPUFieldChainScope::get_varray_for_input(const FieldInput &input,
                                                  const FieldContext &fallback_context) const
 {
   GPUContext *context = GPU_context_active_get();
-  if (!input.cpp_type().is<float3>() || !mask.to_range()) {
+  if (!input.cpp_type().is<float3>() || mask.is_empty()) {
     return {};
   }
-  const std::shared_ptr<GPUFieldResult> result = impl_->lookup(
-      input.debug_name(), context_key, mask.min_array_size(), *mask.to_range(), nullptr);
+  const std::shared_ptr<GPUFieldResult> result = impl_->lookup(input.debug_name(), context_key);
   if (result == nullptr) {
     return {};
   }
   Array<float3> values(mask.min_array_size());
-  if (context == result->gpu_context) {
+  if (result->matches_gpu(mask, context)) {
     GPU_storagebuf_read(result->buffers->output_buffer, values.data() + result->range.start());
   }
   else {
-    /* A consumer on another thread cannot read this context's GPU resources. */
+    /* A different context or mask cannot use the retained buffer. Replay its source field. */
     FieldEvaluator evaluator(fallback_context, &mask);
     evaluator.add_with_destination(result->field, values.as_mutable_span());
     evaluator.evaluate();
@@ -714,7 +737,6 @@ bool try_evaluate_field_gpu_impl(const GField &field,
                                  GPUFieldChainScope *chain_scope,
                                  const StringRef transient_result_name)
 {
-
   const bool write_to_cpu = transient_result_name.is_empty();
   if (GPU_context_active_get() == nullptr || mask.is_empty() ||
       (!write_to_cpu && (context_key == nullptr || chain_scope == nullptr)))
@@ -746,9 +768,13 @@ bool try_evaluate_field_gpu_impl(const GField &field,
     for (const int input_index : ir->inputs.index_range()) {
       const FieldInput *input = ir->inputs[input_index];
       const std::shared_ptr<GPUFieldResult> result = chain_scope->impl_->lookup(
-          input->debug_name(), *context_key, mask.min_array_size(), range, active_gpu_context);
+          input->debug_name(), *context_key);
       if (result == nullptr) {
         continue;
+      }
+      if (!result->matches_gpu(mask, active_gpu_context)) {
+        /* Re-evaluate the retained source through the CPU fallback, not its absent attribute. */
+        return false;
       }
       if (input->cpp_type() != CPPType::get<float3>()) {
         return false;

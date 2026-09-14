@@ -45,6 +45,7 @@
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
@@ -148,7 +149,7 @@ static void bake_progress_update(void *bjv, float progress)
 static wmOperatorStatus bake_modal(bContext *C, wmOperator * /*op*/, const wmEvent *event)
 {
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_BAKE)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_BAKE)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 
@@ -185,7 +186,7 @@ static bool bake_break(void *rjv)
 static void bake_update_image(ScrArea *area, Image *image)
 {
   if (area && area->spacetype == SPACE_IMAGE) { /* in case the user changed while baking */
-    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+    SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
     if (sima) {
       sima->image = image;
     }
@@ -494,7 +495,7 @@ static bool bake_object_check(const Main &bmain,
       ED_object_get_active_image(ob, mat_nr, &image, nullptr, &node, &ntree);
 
       /* Don't bake to unselected images. */
-      if (node && !(node->flag & NODE_SELECT)) {
+      if (node && !node->is_selected()) {
         image = nullptr;
       }
 
@@ -742,7 +743,7 @@ static bool bake_targets_init_image_textures(const BakeAPIRender *bkr,
     ED_object_get_active_image(ob, i + 1, &image, nullptr, &node, nullptr);
 
     /* Don't bake to unselected images. */
-    if (node && !(node->flag & NODE_SELECT)) {
+    if (node && !node->is_selected()) {
       image = nullptr;
     }
 
@@ -1544,7 +1545,7 @@ static bool bake(const BakeAPIRender *bkr,
     else if (bkr->is_cage) {
       bool is_changed = false;
 
-      ModifierData *md = static_cast<ModifierData *>(ob_low_eval->modifiers.first);
+      ModifierData *md = ob_low_eval->modifiers.first();
       while (md) {
         ModifierData *md_next = md->next;
 
@@ -2175,7 +2176,7 @@ static wmOperatorStatus bake_invoke(bContext *C, wmOperator *op, const wmEvent *
   bake_set_props(op, scene);
 
   /* only one render job at a time */
-  if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_OBJECT_BAKE)) {
+  if (WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_OBJECT_BAKE)) {
     return OPERATOR_CANCELLED;
   }
 

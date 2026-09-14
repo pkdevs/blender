@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <atomic>
+
 #include "BKE_geometry_fields.hh"
 #include "BKE_node_runtime.hh"
 
@@ -60,8 +62,9 @@ static const bNode *find_gpu_field_consumer(const bNode &producer)
   }
 
   const bNodeLink *geometry_link = geometry_output->directly_linked_links().first();
-  if (geometry_link->is_muted() || geometry_link->tonode == nullptr ||
-      geometry_link->tosock == nullptr ||
+  if (geometry_link->tonode == nullptr || geometry_link->fromsock == nullptr ||
+      geometry_link->tosock == nullptr || !geometry_link->is_used() ||
+      !(geometry_link->flag & NODE_LINK_VALID) ||
       geometry_link->tosock->identifier_ustr() != "Geometry"_ustr)
   {
     return nullptr;
@@ -74,13 +77,15 @@ static const bNode *find_gpu_field_consumer(const bNode &producer)
       return false;
     }
     const bNodeLink *link = output.directly_linked_links().first();
-    if (link->is_muted() || link->tonode == nullptr || link->tosock == nullptr) {
+    if (link->tonode == nullptr || link->fromsock == nullptr || link->tosock == nullptr ||
+        !link->is_used() || !(link->flag & NODE_LINK_VALID))
+    {
       return false;
     }
 
     const bNode &node = *link->tonode;
     if (node.type_legacy == GEO_NODE_VECTOR_FIELD_GPU) {
-      if (link->tosock->identifier_ustr() != "Field"_ustr ||
+      if (node.is_muted() || link->tosock->identifier_ustr() != "Field"_ustr ||
           (consumer != nullptr && consumer != &node) || geometry_link->tonode != &node)
       {
         return false;
@@ -168,7 +173,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   {
     const Vector<GField> fields{field};
-    bool success = true;
+    std::atomic<bool> success = true;
     fn::GPUFieldChainScope *chain_scope = nullptr;
     if (GeoNodesUserData *user_data = params.user_data()) {
       chain_scope = user_data->gpu_field_chain_scope;
@@ -190,16 +195,19 @@ static void node_geo_exec(GeoNodeExecParams params)
         {
           continue;
         }
-        success &= bke::try_capture_fields_on_geometry(component,
-                                                       {*attribute_id},
-                                                       bke::AttrDomain::Point,
-                                                       fields,
-                                                       fn::FieldEvaluationMode::GPU_EXPERIMENTAL,
-                                                       chain_scope);
+        if (!bke::try_capture_fields_on_geometry(component,
+                                                 {*attribute_id},
+                                                 bke::AttrDomain::Point,
+                                                 fields,
+                                                 fn::FieldEvaluationMode::GPU_EXPERIMENTAL,
+                                                 chain_scope))
+        {
+          success.store(false, std::memory_order_relaxed);
+        }
       }
     });
 
-    if (!success) {
+    if (!success.load(std::memory_order_relaxed)) {
       params.error_message_add(NodeWarningType::Warning,
                                "The vector field could not be materialized on every component");
     }

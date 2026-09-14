@@ -296,7 +296,6 @@ static gpu::Shader *gpu_shader_create_from_info_generated(const GPUShaderCreateI
   }
 
 #ifdef __APPLE__
-  /* See usage for more info. */
   info.define("WITH_MATRIX_EQ_OPERATORS");
 #endif
 
@@ -994,14 +993,15 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &orig_info, bool 
 
   /* We merged infos keeping duplicates because of possible different condition per definitions.
    * Deduplicate remaining ones to avoid errors. */
-  auto cleanup_duplicates = [&](Vector<ShaderCreateInfo::Resource, 0> &resources) {
-    Vector<ShaderCreateInfo::Resource, 0> tmp = resources;
+  auto cleanup_duplicates = [&](auto &resources) {
+    auto tmp = resources;
     resources.clear();
     resources.extend_non_duplicates(tmp);
   };
   cleanup_duplicates(specialized_info.pass_resources_);
   cleanup_duplicates(specialized_info.batch_resources_);
   cleanup_duplicates(specialized_info.geometry_resources_);
+  cleanup_duplicates(specialized_info.push_constants_);
 
   const std::string error = specialized_info.check_error();
   if (!error.empty()) {
@@ -1374,7 +1374,7 @@ bool ShaderCompiler::is_compiling()
 
 void ShaderCompiler::wait_for_all()
 {
-  /** NOTE: We can't rely on BLI_thread_queue_wait_finish, since that only waits until the queue is
+  /* NOTE: We can't rely on BLI_thread_queue_wait_finish, since that only waits until the queue is
    * empty, but the works might still being processed. */
   std::unique_lock lock(mutex_);
   BLI_assert(!is_paused_);

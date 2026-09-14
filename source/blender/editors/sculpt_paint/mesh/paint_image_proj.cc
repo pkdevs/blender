@@ -1282,7 +1282,7 @@ static VertSeam *find_adjacent_seam(const ProjPaintState *ps,
                                     VertSeam **r_seam)
 {
   ListBaseT<VertSeam> *vert_seams = &ps->vertSeams[vert_index];
-  VertSeam *seam = static_cast<VertSeam *>(vert_seams->first);
+  VertSeam *seam = vert_seams->first();
   VertSeam *adjacent = nullptr;
 
   while (seam->loop != loop_index) {
@@ -1502,7 +1502,7 @@ static void insert_seam_vert_array(const ProjPaintState *ps,
   for (uint i = 0; i < 2; i++) {
     const int vert = ps->corner_verts_eval[tri[fidx[i]]];
     ListBaseT<VertSeam> *list = &ps->vertSeams[vert];
-    VertSeam *item = static_cast<VertSeam *>(list->first);
+    VertSeam *item = list->first();
 
     while (item && item->angle < vseam[i].angle) {
       item = item->next;
@@ -4441,9 +4441,7 @@ static void project_paint_build_proj_ima(ProjPaintState *ps,
   projIma = ps->projImages = static_cast<ProjPaintImage *>(
       BLI_memarena_alloc(arena, sizeof(ProjPaintImage) * ps->image_tot));
 
-  for (entry = static_cast<PrepareImageEntry *>(used_images->first); entry;
-       entry = entry->next, projIma++)
-  {
+  for (entry = used_images->first(); entry; entry = entry->next, projIma++) {
     projIma->iuser = entry->iuser;
     int size;
     projIma->ima = entry->ima;
@@ -4634,9 +4632,7 @@ static void project_paint_prepare_all_faces(ProjPaintState *ps,
 
       if (tpage_last != tpage || tile_last != tile) {
         image_index = 0;
-        for (PrepareImageEntry *e = static_cast<PrepareImageEntry *>(used_images.first); e;
-             e = e->next, image_index++)
-        {
+        for (PrepareImageEntry *e = used_images.first(); e; e = e->next, image_index++) {
           if (e->ima == tpage && e->iuser.tile == tile) {
             break;
           }
@@ -5649,7 +5645,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
             /* Color texture (alpha used as mask). */
             if (ps->is_texbrush) {
-              const MTex *mtex = BKE_brush_color_texture_get(brush, OB_MODE_TEXTURE_PAINT);
+              const MTex *mtex = BKE_brush_color_texture_get(brush, PaintMode::Texture3D);
               float3 samplecos;
               float4 texrgba;
 
@@ -6559,7 +6555,7 @@ static wmOperatorStatus texture_paint_image_from_view_exec(bContext *C, wmOperat
 
   /* Create a copy of the overlays where they are all turned off, except the
    * texture paint overlay opacity */
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   View3D v3d_copy = dna::shallow_copy(*v3d);
   v3d_copy.gridflag = eView3D_GridFlag{};
   v3d_copy.flag2 = eView3D_Flag2{};
@@ -6643,9 +6639,9 @@ void PAINT_OT_image_from_view(wmOperatorType *ot)
       ot->srna, "filepath", nullptr, FILE_MAX, "File Path", "Name of the file");
 }
 
-/*********************************************
- * Data generation for projective texturing  *
- * *******************************************/
+/* -------------------------------------------------------------------- */
+/** \name Data Generation for Projective Texturing
+ * \{ */
 
 void ED_paint_data_warning(
     ReportList *reports, bool has_uvs, bool has_mat, bool has_tex, bool has_stencil)
@@ -6760,7 +6756,12 @@ bool ED_paint_proj_mesh_data_check(Scene &scene,
   return has_uvs && has_mat && has_tex && has_stencil;
 }
 
-/* Add layer operator */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Texture Paint Slot Operator
+ * \{ */
+
 enum {
   LAYER_BASE_COLOR,
   LAYER_SPECULAR,
@@ -7272,6 +7273,12 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
                "Type of data stored in attribute");
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Simple UVs Operator
+ * \{ */
+
 static wmOperatorStatus add_simple_uvs_exec(bContext *C, wmOperator * /*op*/)
 {
   /* no checks here, poll function does them for us */
@@ -7313,5 +7320,7 @@ void PAINT_OT_add_simple_uvs(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+/** \} */
 
 }  // namespace blender
