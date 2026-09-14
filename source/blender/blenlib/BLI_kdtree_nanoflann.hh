@@ -144,9 +144,9 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    * Group points that are within \a range of each other, favoring speed over quality: each point
    * is merged into the first point that claims it rather than into its closest neighbor.
    *
-   * Points are visited in the order they were added to the tree (increasing index, or the order
-   * of the mask or index array the tree was built from), which is what makes the result
-   * independent of the tree's internal layout.
+   * Which point of a cluster the others merge into is not defined, only the properties described
+   * below: points are visited in the order the tree stores them, which is an internal detail that
+   * can change, though it is deterministic.
    *
    * \param duplicates: Indexed by point index, so it must be large enough for the largest index
    * in the tree. Points with a value of -1 are candidates to be merged into another point.

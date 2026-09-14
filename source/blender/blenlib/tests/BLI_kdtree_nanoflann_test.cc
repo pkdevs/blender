@@ -3,16 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include <algorithm>
+#include <string>
 
 #include "testing/testing.h"
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree.hh"
 #include "BLI_kdtree_nanoflann.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_rand.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 namespace blender::tests {
@@ -286,74 +288,97 @@ TEST(kdtree_nanoflann, DuplicatePoints)
 }
 
 /**
- * The reference implementation, so the new one can be checked to produce exactly the same
- * clusters. Points are inserted in index order and #kdtree_calc_duplicates_fast is told to visit
- * them in index order, which is how the geometry nodes use it.
+ * Which point of a cluster the others merge into depends on the order the tree happens to store
+ * its points in, which is not defined. These are the properties that hold whatever that order is.
+ *
+ * \param indices: The points in the tree.
+ * \param pairwise: Also check that no two points in range were both left unmerged, which is
+ * quadratic and so only worth doing for small point counts.
  */
-static Array<int> bli_calc_duplicates(const Span<float3> positions,
-                                      const Span<int> indices,
-                                      const float range,
-                                      const int array_size)
+static void check_duplicates(const Span<float3> positions,
+                             const Span<int> indices,
+                             const float range,
+                             const Span<int> duplicates,
+                             const int found,
+                             const bool pairwise = true)
 {
-  KDTree<float3> *tree = kdtree_new<float3>(indices.size());
+  const float range_sq = range * range;
+
+  int merged_num = 0;
   for (const int i : indices) {
-    kdtree_insert<float3>(tree, i, positions[i]);
+    const int target = duplicates[i];
+    if (target == -1 || target == i) {
+      continue;
+    }
+    merged_num++;
+    /* A point is only ever merged into a point it is actually within the range of. */
+    EXPECT_LE(math::distance_squared(positions[i], positions[target]), range_sq)
+        << "point " << i << " merged into " << target << " beyond the range";
+    /* Merging is a single step, so what a point merged into is never merged itself. */
+    EXPECT_EQ(duplicates[target], target) << "point " << i << " merged into a merged point";
   }
-  kdtree_balance<float3>(tree);
-  Array<int> duplicates(array_size, -1);
-  kdtree_calc_duplicates_fast<float3>(tree, range, true, duplicates.data());
-  kdtree_free<float3>(tree);
-  return duplicates;
+  EXPECT_EQ(found, merged_num);
+
+  if (!pairwise) {
+    return;
+  }
+  /* Two points within the range of each other can never both be left out of a cluster: whichever
+   * of them the tree visits first claims the other. */
+  for (const int i : indices) {
+    if (duplicates[i] != -1) {
+      continue;
+    }
+    for (const int j : indices) {
+      if (j == i || duplicates[j] != -1) {
+        continue;
+      }
+      EXPECT_GT(math::distance_squared(positions[i], positions[j]), range_sq)
+          << "points " << i << " and " << j << " are in range but neither was merged";
+    }
+  }
 }
 
-TEST(kdtree_nanoflann, CalcDuplicatesMatchesOldTree)
+TEST(kdtree_nanoflann, CalcDuplicates)
 {
   for (const int points_num : {10, 100, 2000}) {
     const Array<float3> positions = random_points(points_num, 5);
     const Vector<int> indices = all_indices(points_num);
     /* From "no point is close enough" to "everything is one cluster". */
     for (const float range : {0.001f, 0.02f, 0.05f, 0.2f, 5.0f}) {
-      const Array<int> expected = bli_calc_duplicates(positions, indices, range, points_num);
-
       const KDTreeNanoflann<float3> tree(positions);
       Array<int> duplicates(points_num, -1);
       const int found = tree.calc_duplicates(range, duplicates);
-
-      EXPECT_EQ(Span<int>(duplicates), Span<int>(expected))
-          << points_num << " points, range " << range;
-      int expected_found = 0;
-      for (const int i : IndexRange(points_num)) {
-        if (expected[i] != -1 && expected[i] != i) {
-          expected_found++;
-        }
-      }
-      EXPECT_EQ(found, expected_found);
+      SCOPED_TRACE(std::to_string(points_num) + " points, range " + std::to_string(range));
+      check_duplicates(positions, indices, range, duplicates, found);
     }
   }
 }
 
 TEST(kdtree_nanoflann, CalcDuplicatesWithDuplicatePoints)
 {
-  /* Exactly equal coordinates are the case this is used for in the first place. */
+  /* Exactly equal coordinates are the case this is used for in the first place. Ten groups of
+   * twenty points, each group a unit apart, so the clusters are the same whatever the order. */
   Array<float3> positions(200);
   for (const int i : positions.index_range()) {
     positions[i] = float3(float(i % 10), 0.0f, 0.0f);
   }
   const Vector<int> indices = all_indices(positions.size());
-  const Array<int> expected = bli_calc_duplicates(positions, indices, 0.1f, positions.size());
 
   const KDTreeNanoflann<float3> tree(positions);
   Array<int> duplicates(positions.size(), -1);
-  tree.calc_duplicates(0.1f, duplicates);
-  EXPECT_EQ(Span<int>(duplicates), Span<int>(expected));
+  const int found = tree.calc_duplicates(0.1f, duplicates);
+  check_duplicates(positions, indices, 0.1f, duplicates, found);
 
-  /* The first 10 points are the targets, everything else merges into them. */
-  for (const int i : IndexRange(10)) {
-    EXPECT_EQ(duplicates[i], i);
+  /* Every point ends up in the cluster of the points that share its coordinates, and each of the
+   * ten clusters has exactly one target that the other nineteen merged into. */
+  int targets_num = 0;
+  for (const int i : positions.index_range()) {
+    ASSERT_NE(duplicates[i], -1) << "point " << i << " was left out of a cluster";
+    EXPECT_EQ(duplicates[i] % 10, i % 10);
+    targets_num += duplicates[i] == i;
   }
-  for (const int i : IndexRange(10, 190)) {
-    EXPECT_EQ(duplicates[i], i % 10);
-  }
+  EXPECT_EQ(targets_num, 10);
+  EXPECT_EQ(found, 190);
 }
 
 TEST(kdtree_nanoflann, CalcDuplicatesMasked)
@@ -364,12 +389,10 @@ TEST(kdtree_nanoflann, CalcDuplicatesMasked)
       positions.index_range(), memory, [](const int64_t i) { return i % 4 != 0; });
   const Vector<int> indices = mask.to_indices<int>();
 
-  const Array<int> expected = bli_calc_duplicates(positions, indices, 0.1f, positions.size());
-
   const KDTreeNanoflann<float3> tree(positions, mask);
   Array<int> duplicates(positions.size(), -1);
-  tree.calc_duplicates(0.1f, duplicates);
-  EXPECT_EQ(Span<int>(duplicates), Span<int>(expected));
+  const int found = tree.calc_duplicates(0.1f, duplicates);
+  check_duplicates(positions, indices, 0.1f, duplicates, found);
 
   /* Points outside the mask are never touched. */
   for (const int i : positions.index_range()) {
@@ -378,11 +401,13 @@ TEST(kdtree_nanoflann, CalcDuplicatesMasked)
     }
   }
 
-  /* Building from an index array must give the same result as building from the mask. */
+  /* Building from an index array must give the same tree as building from the mask, and so the
+   * same clusters down to which point of each is the target. */
   const KDTreeNanoflann<float3> tree_from_indices(positions, indices.as_span());
   Array<int> from_indices(positions.size(), -1);
-  tree_from_indices.calc_duplicates(0.1f, from_indices);
-  EXPECT_EQ(Span<int>(from_indices), Span<int>(expected));
+  const int found_from_indices = tree_from_indices.calc_duplicates(0.1f, from_indices);
+  EXPECT_EQ(Span<int>(from_indices), Span<int>(duplicates));
+  EXPECT_EQ(found_from_indices, found);
 }
 
 TEST(kdtree_nanoflann, CalcDuplicatesPresetTargets)
@@ -395,35 +420,26 @@ TEST(kdtree_nanoflann, CalcDuplicatesPresetTargets)
   for (const int i : IndexRange(0, 20)) {
     duplicates[i] = i;
   }
-  Array<int> expected(positions.size(), -1);
-  for (const int i : IndexRange(0, 20)) {
-    expected[i] = i;
-  }
-  {
-    KDTree<float3> *tree = kdtree_new<float3>(indices.size());
-    for (const int i : indices) {
-      kdtree_insert<float3>(tree, i, positions[i]);
-    }
-    kdtree_balance<float3>(tree);
-    kdtree_calc_duplicates_fast<float3>(tree, 0.15f, true, expected.data());
-    kdtree_free<float3>(tree);
-  }
-
   const KDTreeNanoflann<float3> tree(positions);
-  tree.calc_duplicates(0.15f, duplicates);
-  EXPECT_EQ(Span<int>(duplicates), Span<int>(expected));
+  const int found = tree.calc_duplicates(0.15f, duplicates);
+
   for (const int i : IndexRange(0, 20)) {
-    EXPECT_EQ(duplicates[i], i);
+    EXPECT_EQ(duplicates[i], i) << "preset point " << i << " was merged into another point";
   }
+  check_duplicates(positions, indices, 0.15f, duplicates, found);
 }
 
 /**
  * Trees past a certain size are built with several threads, which has to give exactly the same
- * tree as building it directly. Compares against a brute force search over the same points.
+ * tree as building it on one. Compares against a brute force search over the same points, and
+ * against the same points built with several thread counts.
+ *
+ * #calc_duplicates walks the points in the order the tree stores them, so its result is the
+ * sharpest check available that the trees are identical rather than merely equivalent.
  */
 TEST(kdtree_nanoflann, ThreadedBuild)
 {
-  /* Larger than the point cound threading threshold. */
+  /* Larger than the point count threading threshold. */
   const Array<float3> positions = random_points(50000, 8);
   const KDTreeNanoflann<float3> tree(positions);
   EXPECT_EQ(tree.size(), 50000);
@@ -445,14 +461,28 @@ TEST(kdtree_nanoflann, ThreadedBuild)
     EXPECT_FLOAT_EQ(distance_sq, expected_distance_sq);
   }
 
-  /* The merging results are order dependent, so they would show any difference in the tree. */
   Array<int> duplicates(positions.size(), -1);
   const int found = tree.calc_duplicates(0.02f, duplicates);
   EXPECT_GT(found, 0);
+  check_duplicates(positions, all_indices(positions.size()), 0.02f, duplicates, found, false);
 
-  const Vector<int> indices = all_indices(positions.size());
-  const Array<int> expected = bli_calc_duplicates(positions, indices, 0.02f, positions.size());
-  EXPECT_EQ(Span<int>(duplicates), Span<int>(expected));
+  /* However many threads the build is given, including none, the tree and so the clusters have to
+   * come out the same. */
+  for (const int threads_num : {1, 2, 3, 8}) {
+    BLI_system_num_threads_override_set(threads_num);
+    BLI_task_scheduler_init();
+    Array<int> other(positions.size(), -1);
+    int other_found = 0;
+    {
+      const KDTreeNanoflann<float3> other_tree(positions);
+      other_found = other_tree.calc_duplicates(0.02f, other);
+    }
+    BLI_system_num_threads_override_set(0);
+    BLI_task_scheduler_init();
+
+    EXPECT_EQ(Span<int>(other), Span<int>(duplicates)) << threads_num << " threads";
+    EXPECT_EQ(other_found, found) << threads_num << " threads";
+  }
 }
 
 TEST(kdtree_nanoflann, Float2)
@@ -465,3 +495,5 @@ TEST(kdtree_nanoflann, Float2)
 }
 
 }  // namespace blender::tests
+
+

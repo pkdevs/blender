@@ -71,17 +71,21 @@ static constexpr int PARALLEL_BUILD_POINTS_PER_THREAD = 2500;
 static constexpr int PARALLEL_SUBTREE_GRAIN = 4096;
 
 /** Points that make a block worth giving a thread of its own within a single node. */
-static constexpr int PARALLEL_BLOCK_SIZE = 8192;
+static constexpr int NODE_BLOCK_SIZE = 8192;
 
 /** Upper bound on those blocks, so that the bookkeeping fits on the stack. */
-static constexpr int PARALLEL_MAX_BLOCKS = 64;
+static constexpr int NODE_MAX_BLOCKS = 64;
 
 /**
- * Splitting one node over threads only pays while there are not yet enough subtrees to keep the
- * threads busy on their own, which is the case for as long as a node holds more than this
- * fraction of the tree. Below that the blocks and the fix up they need are only extra work.
+ * Nodes holding more than this fraction of the tree are split a block at a time, which is what a
+ * threaded build spreads over its threads. Below that there are enough subtrees to keep the
+ * threads busy on their own, and the blocks and the fix up they need are only extra work.
+ *
+ * \note A build on a single thread splits the same nodes into the same blocks, which costs it a
+ * little, so that a tree does not depend on the number of threads that built it. See
+ * #partition_points_in_blocks.
  */
-static constexpr int PARALLEL_NODE_FRACTION = 8;
+static constexpr int NODE_BLOCK_FRACTION = 8;
 
 /**
  * Points a partition works on at a time. An offset within a block has to fit in a #uint8_t, and
@@ -231,6 +235,12 @@ template<typename T> class KDTree {
     else {
       this->build(indices, false);
     }
+  }
+
+  /** The points of the tree, in the order it visits them. */
+  Span<int> indices() const
+  {
+    return indices_;
   }
 
   /**
@@ -409,12 +419,16 @@ template<typename T> class KDTree {
     }
     const ValueT split_value = bounds.min[dim] + extent[dim] / 2;
 
-    /* Spreading a node over threads only pays while there are few subtrees to run in parallel. */
-    const bool split_threaded = threaded && int64_t(end - start) * PARALLEL_NODE_FRACTION >
-                                                state.points.size();
+    /* Split the node a block at a time, which a threaded build spreads over its threads. Which
+     * blocks the range is cut into follows from its size alone, so the points end up in the same
+     * order however many threads run it, or none at all. That matters beyond reproducible trees:
+     * #calc_duplicates walks the points in this order, and the blocks leave them in a different
+     * one than a single pass over the whole range does. Below this size there are enough subtrees
+     * to keep the threads busy on their own, and the blocks would only be extra work. */
+    const bool split_blocks = int64_t(end - start) * NODE_BLOCK_FRACTION > state.points.size();
 
-    int middle = split_threaded ?
-                     this->partition_points_parallel(state, start, end, dim, split_value) :
+    int middle = split_blocks ?
+                     this->partition_points_in_blocks(state, start, end, dim, split_value) :
                      partition_points(state.points, start, end, dim, split_value);
     if (middle == start || middle == end) {
       /* Everything ended up on one side, which means the coordinates of the points are within
@@ -424,9 +438,9 @@ template<typename T> class KDTree {
     }
 
     Bounds<BuildPoint> left_bounds, right_bounds;
-    if (split_threaded) {
-      left_bounds = this->compute_bounds_parallel(state, start, middle);
-      right_bounds = this->compute_bounds_parallel(state, middle, end);
+    if (split_blocks) {
+      left_bounds = this->compute_bounds_in_blocks(state, start, middle);
+      right_bounds = this->compute_bounds_in_blocks(state, middle, end);
     }
     else {
       left_bounds = compute_bounds(state.points, start, middle);
@@ -505,8 +519,8 @@ template<typename T> class KDTree {
     return bounds;
   }
 
-  /** #compute_bounds with the range measured a block per thread. */
-  Bounds<BuildPoint> compute_bounds_parallel(BuildState &state, const int start, const int end)
+  /** #compute_bounds with the range measured a block at a time, which threads can share. */
+  Bounds<BuildPoint> compute_bounds_in_blocks(BuildState &state, const int start, const int end)
   {
     const int count = end - start;
     const int blocks = block_num(count);
@@ -643,7 +657,9 @@ template<typename T> class KDTree {
   }
 
   /**
-   * #partition_points with the range split a block per thread.
+   * #partition_points with the range split a block at a time, which can be spread over threads.
+   * Which blocks the range is cut into follows from its size alone, so this leaves the points in
+   * the same order however many threads run it.
    *
    * Each block is partitioned on its own, which leaves every block split but the blocks
    * themselves interleaved: points above the split sit in blocks that belong entirely below it,
@@ -651,7 +667,7 @@ template<typename T> class KDTree {
    * them pairwise, which spreads over threads as well. This is how embree partitions primitives
    * when building a BVH.
    */
-  int partition_points_parallel(
+  int partition_points_in_blocks(
       BuildState &state, const int start, const int end, const int dim, const ValueT split_value)
   {
     const MutableSpan<BuildPoint> points = state.points;
@@ -661,8 +677,8 @@ template<typename T> class KDTree {
       return partition_points(points, start, end, dim, split_value);
     }
 
-    int begin[PARALLEL_MAX_BLOCKS + 1];
-    int middle[PARALLEL_MAX_BLOCKS];
+    int begin[NODE_MAX_BLOCKS + 1];
+    int middle[NODE_MAX_BLOCKS];
     for (const int block : IndexRange(blocks + 1)) {
       begin[block] = start + block_begin(count, blocks, block);
     }
@@ -681,7 +697,7 @@ template<typename T> class KDTree {
 
     /* The points that are on the wrong side of it. A block lies either before or after the
      * split, so it contributes to one of the two lists at most. */
-    IndexRange high[PARALLEL_MAX_BLOCKS], low[PARALLEL_MAX_BLOCKS];
+    IndexRange high[NODE_MAX_BLOCKS], low[NODE_MAX_BLOCKS];
     int high_num = 0, low_num = 0;
     for (const int block : IndexRange(blocks)) {
       if (middle[block] < split) {
@@ -705,7 +721,7 @@ template<typename T> class KDTree {
       int to;
       int num;
     };
-    Swap swaps[2 * PARALLEL_MAX_BLOCKS];
+    Swap swaps[2 * NODE_MAX_BLOCKS];
     int swaps_num = 0;
     for (int h = 0, l = 0, h_done = 0, l_done = 0; h < high_num && l < low_num;) {
       const int num = std::min(int(high[h].size()) - h_done, int(low[l].size()) - l_done);
@@ -736,7 +752,7 @@ template<typename T> class KDTree {
 
   static int block_num(const int count)
   {
-    return std::min(count / PARALLEL_BLOCK_SIZE, PARALLEL_MAX_BLOCKS);
+    return std::min(count / NODE_BLOCK_SIZE, NODE_MAX_BLOCKS);
   }
 
   static int block_begin(const int count, const int blocks, const int block)
@@ -985,30 +1001,12 @@ template<typename ValueT, typename Fn> class RadiusResult {
 /** \name #KDTreeNanoflann
  * \{ */
 
-/** The tree, plus the order the points were added in, which #calc_duplicates visits them in. */
 template<typename T> struct TreeImpl {
-  /** Storage for indices built from an #IndexMask. */
-  Array<int> indices_storage;
-  /** The order the points were added in, empty when the tree covers every point. */
-  Span<int> indices;
   KDTree<T> tree;
 
-  TreeImpl(const Span<T> points, Array<int> indices, const int leaf_size)
-      : indices_storage(std::move(indices)),
-        indices(indices_storage),
-        tree(points, indices_storage, leaf_size)
-  {
-  }
-
   TreeImpl(const Span<T> points, const Span<int> indices, const int leaf_size)
-      : indices(indices), tree(points, indices, leaf_size)
+      : tree(points, indices, leaf_size)
   {
-  }
-
-  /** Translate a position in the order the points were added into an index into the point span. */
-  int point_index(const int i) const
-  {
-    return indices.is_empty() ? i : indices[i];
   }
 };
 
@@ -1039,9 +1037,10 @@ KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
     new (impl_.ptr()) TreeImpl<T>(points, Span<int>(), leaf_size);
     return;
   }
+  /* Only needed to build the tree, which copies the order it ends up visiting the points in. */
   Array<int> indices(mask.size());
   mask.to_indices<int>(indices);
-  new (impl_.ptr()) TreeImpl<T>(points, std::move(indices), leaf_size);
+  new (impl_.ptr()) TreeImpl<T>(points, indices.as_span(), leaf_size);
 }
 
 template<typename T>
@@ -1158,8 +1157,10 @@ int KDTreeNanoflann<T>::calc_duplicates(const ValueT range, MutableSpan<int> dup
   const TreeImpl<T> &impl = get_impl<T>(impl_.ptr());
   const ValueT range_sq = range * range;
   int found = 0;
-  for (const int i : IndexRange(size_)) {
-    const int index = impl.point_index(i);
+  /* The order the tree visits the points in rather than the order they were added. Which point of
+   * a cluster the others merge into depends on the order either way, and this one keeps each
+   * search near the one before it. */
+  for (const int index : impl.tree.indices()) {
     BLI_assert(index < duplicates.size());
     /* Skip points that are already merged into another point. Points that were preset to their
      * own index are not merged themselves, but can still be merged into. */
