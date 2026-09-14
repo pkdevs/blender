@@ -679,6 +679,13 @@ static bool sequencer_add_generic_exec(
   return true;
 }
 
+static bool should_handle_overlap(const wmOperator *op)
+{
+  /* Handle overlap now (on import) if overlapping is not permitted and "move strips" is disabled.
+   * Otherwise, strip move operator will always handle overlap itself. */
+  return RNA_boolean_get(op->ptr, "overlap") == false && !can_move_strips(op);
+}
+
 static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> strips)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
@@ -708,17 +715,13 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
     seq::select_active_set(scene, strip);
   }
 
-  if (RNA_boolean_get(op->ptr, "overlap") == true ||
-      !seq::transform_test_overlap(scene, ed->current_strips(), strip))
-  {
-    /* No overlap should be handled or the strip is not overlapping, exit early. */
-    return;
-  }
-
   /* Use set overlap_mode to fix overlaps. */
-  VectorSet<Strip *> strip_col;
-  strip_col.add(strip);
-  seq_load_handle_overlap(C, op, strip_col);
+  if (should_handle_overlap(op) && seq::transform_test_overlap(scene, ed->current_strips(), strip))
+  {
+    VectorSet<Strip *> strip_col;
+    strip_col.add(strip);
+    seq_load_handle_overlap(C, op, strip_col);
+  }
 }
 
 /* In this alternative version we only check for overlap, but do not do anything about them. */
@@ -1283,7 +1286,7 @@ static void sequencer_add_movie_strips_single_file(bContext *C,
   const Editing *ed = seq::editing_ensure(scene);
 
   const bool load_sound = RNA_boolean_get(op->ptr, "sound");
-  const bool handle_overlap = RNA_boolean_get(op->ptr, "overlap") == false;
+  const bool handle_overlap = should_handle_overlap(op);
 
   char filepath_abs[FILE_MAX];
   STRNCPY(filepath_abs, load_data->path);
@@ -1386,7 +1389,7 @@ static VectorSet<Strip *> sequencer_add_movie_strips(bContext *C,
   Scene *scene = CTX_data_sequencer_scene(C);
   seq::editing_ensure(scene);
 
-  const bool handle_overlap = RNA_boolean_get(op->ptr, "overlap") == false;
+  const bool handle_overlap = should_handle_overlap(op);
 
   /* All strips eventually added by all files. */
   VectorSet<Strip *> strips_added;
@@ -1555,7 +1558,7 @@ static void sequencer_add_sound_multiple_strips(bContext *C,
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_ensure(scene);
 
-  const bool handle_overlap = RNA_boolean_get(op->ptr, "overlap") == false;
+  const bool handle_overlap = should_handle_overlap(op);
   VectorSet<Strip *> strips_added;
   bool has_overlap = false;
 
@@ -1798,7 +1801,7 @@ static bool sequencer_add_images(bContext *C, wmOperator *op, seq::LoadData &loa
   }
 
   const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
-  const bool handle_overlap = RNA_boolean_get(op->ptr, "overlap") == false;
+  const bool handle_overlap = should_handle_overlap(op);
   VectorSet<Strip *> strips_added;
   bool has_overlap = false;
 
