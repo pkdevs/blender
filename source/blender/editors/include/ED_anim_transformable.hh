@@ -132,7 +132,7 @@ class AnimTransformable {
     return fcurve_group_name_;
   }
 
-  const StringRefNull name() const
+  StringRefNull name() const
   {
     return name_;
   }

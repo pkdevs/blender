@@ -3159,9 +3159,9 @@ float4x4 BKE_object_delta_matrix_get(Object &obj)
       axis_angle_to_mat3(rotation_mat, obj.drotAxis, obj.drotAngle);
       break;
     case ROT_MODE_QUAT: {
-      float tquat[4];
-      normalize_qt_qt(tquat, obj.dquat);
-      quat_to_mat3(rotation_mat, tquat);
+      float normalized_dquat[4];
+      normalize_qt_qt(normalized_dquat, obj.dquat);
+      quat_to_mat3(rotation_mat, normalized_dquat);
       break;
     }
     default:
