@@ -109,6 +109,8 @@ struct SnapObjectContext {
     const Object *ob;
     /* Snapped data. */
     const ID *data;
+    /* Holds a shared reference to the snap cache mesh.*/
+    std::shared_ptr<const void> data_ref;
 
     float ray_depth_max;
     float ray_depth_max_in_front;

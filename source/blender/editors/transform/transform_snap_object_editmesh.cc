@@ -42,22 +42,30 @@ static const Mesh *get_mesh_ref(const Object *ob_eval)
 /**
  * Edit mesh snap cache.
  *
- * \note It's important there is only ever one object
- * per #SnapObjectContext that references this snap cache.
+ * \note Linked duplicates share the same original mesh data, but each object receives
+ * its own evaluated data.
+ * When the original object enters edit mode, all linked duplicates are also flagged
+ * as being in edit mode.
  *
- * Otherwise freed memory access may occur:
- * - While the lookup uses the original object data, change-detection uses the evaluated object.
- * - A change causes the previously cached mesh (#SnapCache_EditMesh::mesh) to be freed.
- * - The cached mesh may be referenced by a snap "hit", so freeing it may crash
- *   when that mesh is later accessed.
+ * Because `snap_object_data_editmesh_get` uses the original data pointer as the
+ * key, all linked duplicates map to the same cache slot. However,`has_mesh_updated`
+ * compares the evaluated data pointers, which differ between duplicates. This causes
+ * each object evaluation to invalidate the cache entry written by the previous object,
+ * freeing the cached mesh on every lookup.
  *
- * Furthermore, constantly re-creating cache is inefficient.
+ * This is causes a use-after-free as the snap result may still reference
+ * a mesh that the SnapCache has already freed.
  *
- * Resolve by only using this cache for objects in edit-mode, instead objects with edit-mode data.
- * This works because only one objects-data may be in edit-mode at a time.
+ * To prevent this, the cached mesh is wrapped in a shared pointer. When a snap
+ * hit is registered, a copy of the shared pointer is stored in `sctx->ret.data_ref`,
+ * incrementing the reference count. Even when the SnapCache later frees its own
+ * reference, the mesh is not freed when the cache is invalidated because the reference
+ * count remains above zero.
  * See: #148788.
  */
 struct SnapCache_EditMesh : public SnapObjectContext::SnapCache {
+  /* Owns the snap cache mesh so other references can keep it alive. */
+  std::shared_ptr<Mesh> shared_mesh;
   /* Mesh created from the edited mesh. */
   Mesh *mesh;
 
@@ -79,10 +87,7 @@ struct SnapCache_EditMesh : public SnapObjectContext::SnapCache {
 
   void clear()
   {
-    if (this->mesh) {
-      BKE_id_free(nullptr, this->mesh);
-      this->mesh = nullptr;
-    }
+    this->mesh = nullptr;
   }
 
   ~SnapCache_EditMesh() override
@@ -168,7 +173,6 @@ static SnapCache_EditMesh *snap_object_data_editmesh_get(SnapObjectContext *sctx
                                                          const Object *ob_eval,
                                                          bool create)
 {
-  BLI_assert((ob_eval->mode & OB_MODE_EDIT) || sctx->runtime.params.ignore_editmode_filtering);
   SnapCache_EditMesh *em_cache = nullptr;
 
   bool init = false;
@@ -197,7 +201,11 @@ static SnapCache_EditMesh *snap_object_data_editmesh_get(SnapObjectContext *sctx
   }
 
   if (init) {
-    em_cache->mesh = create_mesh(sctx, ob_eval, sctx->runtime.params.edit_mode_type);
+    Mesh *new_mesh = create_mesh(sctx, ob_eval, sctx->runtime.params.edit_mode_type);
+    auto free_temp_mesh_fn = [](Mesh *m) { BKE_id_free(nullptr, m); };
+
+    em_cache->shared_mesh = std::shared_ptr<Mesh>(new_mesh, free_temp_mesh_fn);
+    em_cache->mesh = em_cache->shared_mesh.get();
     if (mesh_ref) {
       em_cache->mesh_ref = mesh_ref;
       em_cache->runtime_ref = mesh_ref->runtime;
@@ -234,12 +242,6 @@ static SnapCache_EditMesh *editmesh_snapdata_init(SnapObjectContext *sctx,
                                                   const Object *ob_eval,
                                                   eSnapMode snap_to_flag)
 {
-  /* See code-comment on #SnapCache_EditMesh for why this is needed.  */
-  if (!sctx->runtime.params.ignore_editmode_filtering) {
-    if ((ob_eval->mode & OB_MODE_EDIT) == 0) {
-      return nullptr;
-    }
-  }
 
   const BMEditMesh *em = BKE_editmesh_from_object(const_cast<Object *>(DEG_get_original(ob_eval)));
   if (em == nullptr) {
@@ -270,7 +272,12 @@ eSnapMode snap_object_editmesh(SnapObjectContext *sctx,
 {
   SnapCache_EditMesh *em_cache = editmesh_snapdata_init(sctx, ob_eval, snap_to_flag);
   if (em_cache && em_cache->mesh) {
-    return snap_object_mesh(sctx, ob_eval, &em_cache->mesh->id, obmat, snap_to_flag, true, true);
+    eSnapMode ret = snap_object_mesh(
+        sctx, ob_eval, &em_cache->mesh->id, obmat, snap_to_flag, true, true);
+    if (sctx->ret.data == &em_cache->mesh->id) {
+      sctx->ret.data_ref = em_cache->shared_mesh;
+    }
+    return ret;
   }
   return SCE_SNAP_TO_NONE;
 }
