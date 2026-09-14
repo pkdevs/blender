@@ -1768,7 +1768,6 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
     pupdate->cache = nullptr;
   }
 
-  BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
 
   BM_mesh_elem_index_ensure(bm, BM_VERT);

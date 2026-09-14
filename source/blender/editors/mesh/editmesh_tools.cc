@@ -454,7 +454,6 @@ static wmOperatorStatus edbm_delete_exec(bContext *C, wmOperator *op)
   bool changed_multi = false;
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     const int type = RNA_enum_get(op->ptr, "type");
 
@@ -1251,7 +1250,7 @@ static bool edbm_connect_vert_pair(BMEditMesh *em, Mesh *mesh, wmOperator *op)
     }
   }
   if (checks_succeded) {
-    BMBackup em_backup = EDBM_redo_state_store(em);
+    BMBackup em_backup = EDBM_redo_state_store(bm);
 
     BM_custom_loop_normals_to_vector_layer(bm);
 

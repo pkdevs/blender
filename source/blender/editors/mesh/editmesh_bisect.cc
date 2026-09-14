@@ -161,11 +161,10 @@ static wmOperatorStatus mesh_bisect_invoke(bContext *C, wmOperator *op, const wm
     /* Store the mesh backups. */
     for (const int ob_index : objects.index_range()) {
       Object *obedit = objects[ob_index];
-      BMEditMesh *em = BKE_editmesh_from_object(obedit);
-      const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
       if (bm->totedgesel != 0) {
         opdata->backup[ob_index].is_valid = true;
-        opdata->backup[ob_index].mesh_backup = EDBM_redo_state_store(em);
+        opdata->backup[ob_index].mesh_backup = EDBM_redo_state_store(bm);
       }
     }
 

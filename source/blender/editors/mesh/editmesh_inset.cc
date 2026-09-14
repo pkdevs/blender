@@ -172,8 +172,8 @@ static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
 
     for (uint ob_index = 0; ob_index < opdata->ob_store_len; ob_index++) {
       Object *obedit = opdata->ob_store[ob_index].ob;
-      BMEditMesh *em = BKE_editmesh_from_object(obedit);
-      opdata->ob_store[ob_index].mesh_backup = EDBM_redo_state_store(em);
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+      opdata->ob_store[ob_index].mesh_backup = EDBM_redo_state_store(bm);
     }
 
     opdata->draw_handle_pixel = ED_region_draw_cb_activate(region->runtime->type,

@@ -59,7 +59,7 @@ static wmOperatorStatus edbm_screw_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   for (Object *obedit : objects) {
-    BMesh *bm = BKE_editmesh_bmesh_get(obedit);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     if (bm->totvertsel < 2) {
       if (bm->totvertsel == 0) {

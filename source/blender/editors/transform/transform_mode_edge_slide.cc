@@ -267,7 +267,7 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
 
     const Span<float3> vert_positions = BKE_editmesh_vert_coords_when_deformed(
-        t->depsgraph, em, scene_eval, obedit_eval, bmbvh_coord_storage);
+        t->depsgraph, scene_eval, obedit_eval, bmbvh_coord_storage);
 
     bmbvh = BKE_bmbvh_new_from_editmesh(em,
                                         BMBVH_RESPECT_HIDDEN,

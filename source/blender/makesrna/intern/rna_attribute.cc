@@ -819,7 +819,7 @@ static PointerRNA rna_AttributeGroupID_new(
   AttributeOwner owner = AttributeOwner::from_id(id);
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
-    if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+    if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh)) {
       CustomDataLayer *layer = BKE_attribute_new(
           *mesh, *bm, name, eCustomDataType(type), AttrDomain(domain), reports);
       if (!layer) {
@@ -935,7 +935,7 @@ void rna_AttributeGroup_iterator_begin(CollectionPropertyIterator *iter,
   AttributeOwner owner = owner_from_pointer_rna(ptr);
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
-    if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+    if (BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(mesh))) {
       Vector<CustomDataLayer *, 16> layers;
       const auto add_layers = [&](CustomData &data) {
         for (CustomDataLayer &layer : MutableSpan(data.layers, data.totlayer)) {

@@ -540,7 +540,7 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
     case OB_MESH: {
       Mesh *mesh = id_cast<Mesh *>(object.data);
 
-      if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
+      if (mesh->runtime->edit_mesh) {
         BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
         operator_data.active_point_index = BM_mesh_active_vert_index_get(bm);
         operator_data.active_edge_index = BM_mesh_active_edge_index_get(bm);

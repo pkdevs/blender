@@ -635,8 +635,6 @@ static UVGroups *mesh_uv_groups_get(TransDataContainer *tc, BMesh *bm, const BMU
 Array<TransDataVertSlideVert> transform_mesh_uv_vert_slide_data_create(
     const TransInfo *t, TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer)
 {
-
-  BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
