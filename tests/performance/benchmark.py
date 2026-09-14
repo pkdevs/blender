@@ -326,6 +326,10 @@ def cmd_build(env: api.TestEnvironment, argv: list):
 
     configs = env.get_configs(args.config)
     for config in configs:
+        if config.benchmark_type != "comparison":
+            print(f"{config.name}: build not supported, this command can only be used with comparison benchmarks")
+            continue
+
         # Collect revisions that need building: entries without a pre-built executable.
         revisions = {}
         for entry in config.queue.entries:
@@ -338,10 +342,7 @@ def cmd_build(env: api.TestEnvironment, argv: list):
         print(config.name.upper())
         for revision in sorted(revisions.keys()):
             git_hash = revisions[revision]
-            if config.benchmark_type == "comparison":
-                install_dir = config.builds_dir / revision
-            else:
-                install_dir = env.install_dir
+            install_dir = config.builds_dir / revision
 
             logname = revision + '_build'
             env.set_log_file(config.logs_dir / (logname + '.log'), clear=True)

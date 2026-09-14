@@ -268,7 +268,7 @@ class TestEnvironment:
                 if line:
                     line_str = line.decode('utf-8', 'ignore')
                     lines.append(line_str)
-                    if self.echo_output:
+                    if self.echo_output and not silent:
                         print(line_str, end='', flush=True)
                     if f:
                         f.write(line_str)
