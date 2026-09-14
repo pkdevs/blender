@@ -212,7 +212,7 @@ static void calculate_verts(const StrokeData &stroke_data,
       BMEdge *e;
       BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
         BMVert *v2 = BM_edge_other_vert(e, v);
-        if (!BM_elem_flag_test(v2, BM_ELEM_TAG)) {
+        if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
           float3 ray_dir = math::normalize(float3(v2->co) - float3(v->co));
           check_intersection_fn(ray_dir);
         }
@@ -273,8 +273,8 @@ void bmo_to_annotation_exec(BMesh *bm, BMOperator *op)
   Vector<Span<float3>> *stroke_data_in = static_cast<Vector<Span<float3>> *>(
       BMO_slot_ptr_get(op->slots_in, "strokes"));
 
-  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
-  BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
+  BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+  BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_EDGE, BM_ELEM_TAG, false);
 
   Vector<ToAnnotationChain> chains;
   calc_annotation_input_chains_from_bm(bm, chains);
