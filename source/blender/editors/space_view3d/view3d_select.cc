@@ -4878,12 +4878,8 @@ static bool mesh_circle_select(const ViewContext *vc,
   if (ts->selectmode & SCE_SELECT_VERTEX) {
     if (use_zbuf) {
       if (esel->select_bitmap != nullptr) {
-        changed |= edbm_backbuf_check_and_select_verts(esel,
-                                                       vc->depsgraph,
-                                                       vc->obedit,
-                                                       bm,
-                                                       data.uv_selctx,
-                                                       select ? SEL_OP_ADD : SEL_OP_SUB);
+        changed |= edbm_backbuf_check_and_select_verts(
+            esel, vc->depsgraph, vc->obedit, bm, data.uv_selctx, select ? SEL_OP_ADD : SEL_OP_SUB);
       }
     }
     else {
@@ -4894,12 +4890,8 @@ static bool mesh_circle_select(const ViewContext *vc,
   if (ts->selectmode & SCE_SELECT_EDGE) {
     if (use_zbuf) {
       if (esel->select_bitmap != nullptr) {
-        changed |= edbm_backbuf_check_and_select_edges(esel,
-                                                       vc->depsgraph,
-                                                       vc->obedit,
-                                                       bm,
-                                                       data.uv_selctx,
-                                                       select ? SEL_OP_ADD : SEL_OP_SUB);
+        changed |= edbm_backbuf_check_and_select_edges(
+            esel, vc->depsgraph, vc->obedit, bm, data.uv_selctx, select ? SEL_OP_ADD : SEL_OP_SUB);
       }
     }
     else {
@@ -4914,12 +4906,8 @@ static bool mesh_circle_select(const ViewContext *vc,
   if (ts->selectmode & SCE_SELECT_FACE) {
     if (use_zbuf) {
       if (esel->select_bitmap != nullptr) {
-        changed |= edbm_backbuf_check_and_select_faces(esel,
-                                                       vc->depsgraph,
-                                                       vc->obedit,
-                                                       bm,
-                                                       data.uv_selctx,
-                                                       select ? SEL_OP_ADD : SEL_OP_SUB);
+        changed |= edbm_backbuf_check_and_select_faces(
+            esel, vc->depsgraph, vc->obedit, bm, data.uv_selctx, select ? SEL_OP_ADD : SEL_OP_SUB);
       }
     }
     else {

@@ -125,10 +125,7 @@ static Span<float3> get_orco_coords(const Object &ob,
   return {};
 }
 
-static Mesh *create_orco_mesh(const Object &ob,
-                              const Mesh &mesh,
-                              BMesh *bm,
-                              eCustomDataType layer)
+static Mesh *create_orco_mesh(const Object &ob, const Mesh &mesh, BMesh *bm, eCustomDataType layer)
 {
   Mesh *orco_mesh;
   if (bm) {
@@ -159,11 +156,8 @@ static MutableSpan<float3> orco_coord_layer_ensure(Mesh &mesh, const eCustomData
   return MutableSpan(reinterpret_cast<float3 *>(data), mesh.verts_num);
 }
 
-static void add_orco_mesh(Object &ob,
-                          BMesh *bm,
-                          Mesh &mesh,
-                          const Mesh *mesh_orco,
-                          const eCustomDataType layer)
+static void add_orco_mesh(
+    Object &ob, BMesh *bm, Mesh &mesh, const Mesh *mesh_orco, const eCustomDataType layer)
 {
   const int totvert = mesh.verts_num;
 
