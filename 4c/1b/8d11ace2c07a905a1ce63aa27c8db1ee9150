@@ -2,3 +2,4 @@ Referenced by pull request #162139, Fix #162135: Anim: node socket versioning er
 Referenced by issue #162135, Anim: node socket versioning code incorrectly deals with embedded node trees
 Referenced by issue #162025, Blender 5.2 freezes when opening large files created in previous versions
 Referenced by pull request #163649, Fix: Duplicating VSE strip remaps drivers to duplicate
+Referenced by commit 898bfdf8432454c093aff79fbfac2cb373b46cbf, Fix: Duplicating VSE strip remaps drivers to duplicate
