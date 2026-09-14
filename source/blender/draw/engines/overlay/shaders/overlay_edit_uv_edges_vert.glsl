@@ -34,10 +34,11 @@ VertIn input_assembly(uint in_vertex_id)
   vert_in.crease = 0u;
   vert_in.bweight = 0u;
 #else
-  vert_in.flag = gpu_attr_load_uchar4(data, gpu_attr_1, v_i).x;
-  vert_in.e_flag = gpu_attr_load_uchar4(data, gpu_attr_1, v_i).y;
-  vert_in.crease = gpu_attr_load_uchar4(data, gpu_attr_1, v_i).z;
-  vert_in.bweight = gpu_attr_load_uchar4(data, gpu_attr_1, v_i).w;
+  uchar4 attr = gpu_attr_load_uchar4(data, gpu_attr_1, v_i);
+  vert_in.flag    = attr.x;
+  vert_in.e_flag  = attr.y;
+  vert_in.crease  = attr.z;
+  vert_in.bweight = attr.w;
 
 #endif
   return vert_in;
