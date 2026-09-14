@@ -417,13 +417,11 @@ set(SRC
 
   # Without these files listed, they aren't known to CMake.
   ../../../extern/json/include/json.hpp
-  ../../../extern/nanoflann/include/nanoflann.hpp
 )
 
 set(LIB
   PUBLIC bf::dna
   PRIVATE bf::extern::json
-  PRIVATE bf::extern::nanoflann
   PRIVATE bf::extern::xxhash
   bf_intern_eigen
   PRIVATE bf::intern::guardedalloc
@@ -489,6 +487,15 @@ endif()
 # needed for BLI_subprocess.cc when using the mold linker.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND LIB rt)
+endif()
+
+# The kd-tree build is a tight loop over every point, where the default optimization level
+# leaves a good part of its speed on the table.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  set_source_files_properties(
+    intern/kdtree_nanoflann.cc
+    PROPERTIES COMPILE_OPTIONS "-O3"
+  )
 endif()
 
 # no need to compile object files for inline headers.

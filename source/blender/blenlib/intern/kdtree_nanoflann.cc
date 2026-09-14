@@ -1,101 +1,92 @@
-/* SPDX-FileCopyrightText: 2026 Blender Authors
+/* SPDX-FileCopyrightText: 2008-2009 Marius Muja, David G. Lowe.
+ * SPDX-FileCopyrightText: 2011-2026 Jose Luis Blanco-Claraco.
+ * SPDX-FileCopyrightText: 2026 Blender Authors.
  *
- * SPDX-License-Identifier: GPL-2.0-or-later */
+ * SPDX-License-Identifier: BSD-2-Clause */
 
 /** \file
  * \ingroup bli
+ *
+ * A KD-tree for nearest neighbor search, which started from the nanoflann library and has since
+ * been rewritten around Blender's own containers, threading and math. The node layout and the way
+ * a search walks it are still recognizably nanoflann's, which is where the copyright above comes
+ * from.
+ *
+ * The build reorders a copy of the coordinates rather than an array of indices. That makes every
+ * pass over a node sequential, and lets subtrees become cache resident as soon as they are small
+ * enough. Each point carries its index in the element after its coordinates, so reordering the
+ * points reorders the indices with them, in the same cache lines rather than in a second array.
+ *
+ * Splitting a node is the hot part of the build, and the obvious way to write it, a conditional
+ * swap per point, mispredicts on about every other point of an evenly split node. That costs more
+ * than everything else put together, so the split and the bounds it needs are both written
+ * without branching on the comparison. See #partition_points.
  */
 
 #include <algorithm>
+#include <bit>
 #include <limits>
 #include <memory>
 #include <new>
-
-#include "BLI_task.hh"
-
-/* Build subtrees with Blender's task pool rather than the threads nanoflann would create itself.
- * Must be defined before the header is included. */
-#define NANOFLANN_PARALLEL_INVOKE(fn_a, fn_b) blender::threading::parallel_invoke(fn_a, fn_b)
-
-#include "nanoflann.hpp"
+#include <numeric>
 
 #include "BLI_array.hh"
+#include "BLI_bounds.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree_nanoflann.hh"
+#include "BLI_linear_allocator.hh"
+#include "BLI_math_vector.hh"
+#include "BLI_mutex.hh"
+#include "BLI_task.hh"
+#include "BLI_threads.hh"
 #include "BLI_utildefines.hh"
 
 namespace blender {
 
-namespace nf = ::nanoflann;
-
 /* -------------------------------------------------------------------- */
-/** \name Nanoflann Index
+/** \name Build Tuning
  * \{ */
 
-/**
- * The data nanoflann reads coordinates from. There are two versions so that the common case of a
- * tree referencing a contiguous portion of the span doesn't pay for the index indirection.
- */
-template<typename T, bool Masked> struct DatasetAdaptor {
-  using ValueT = typename T::base_type;
-
-  Span<T> points;
-  /** Indices of the points in the tree, used when #Masked is true. */
-  Span<int> indices;
-
-  size_t kdtree_get_point_count() const
-  {
-    return size_t(Masked ? indices.size() : points.size());
-  }
-
-  ValueT kdtree_get_pt(const size_t i, const size_t dim) const
-  {
-    if constexpr (Masked) {
-      return points[indices[int64_t(i)]][int(dim)];
-    }
-    else {
-      return points[int64_t(i)][int(dim)];
-    }
-  }
-
-  /** Let nanoflann compute the bounding box itself. */
-  template<class BBox> bool kdtree_get_bbox(BBox & /*bbox*/) const
-  {
-    return false;
-  }
-};
-
-template<typename T, bool Masked>
-using NanoflannIndex =
-    nf::KDTreeSingleIndexAdaptor<nf::L2_Simple_Adaptor<typename T::base_type,
-                                                       DatasetAdaptor<T, Masked>,
-                                                       typename T::base_type,
-                                                       int>,
-                                 DatasetAdaptor<T, Masked>,
-                                 T::type_length,
-                                 int>;
+/** Tree size that makes building with more than one thread worthwhile. */
+static constexpr int PARALLEL_BUILD_THRESHOLD = 10000;
 
 /**
- * Tree size needed to make building in parallel worthwhile. See the "tiny tree" tests in
- * `BLI_kdtree_performance_test`.
- */
-static constexpr int64_t PARALLEL_BUILD_THRESHOLD = 10000;
-
-/**
- * Building the tree repeatedly partitions the coordinates, so it is bottlenecked by memory
+ * Building the tree repeatedly reorders the coordinates, so it is bottlenecked by memory
  * bandwidth. Past this level, extra threads won't be able to do any useful work.
  *
- * Measured on a Ryzen 7950X, a million point build takes 176 ms on one thread and 44 ms on 8, but
- * 52 ms on 16 while using twice as much CPU time. See `BLI_kdtree_performance_test`.
+ * Measured on a 12 core Apple M3 Max, a million point build takes 33 ms on one thread, 8 ms on
+ * eight and 7 ms on 12, using half again as much CPU time. See `BLI_kdtree_performance_test`.
  */
-static constexpr int PARALLEL_BUILD_MAX_THREADS = 8;
+static constexpr int PARALLEL_BUILD_MAX_THREADS = 16;
 
 /**
  * Experimentally derived value to increase building thread count from 4 to 8 as point count
  * increases from 10'000 to 100'000, balancing threading overhead with increased parallelism
- * opportunity. See `BLI_kdtree_performance_test`.s
+ * opportunity. See `BLI_kdtree_performance_test`.
  */
-static constexpr int64_t PARALLEL_BUILD_POINTS_PER_THREAD = 2500;
+static constexpr int PARALLEL_BUILD_POINTS_PER_THREAD = 2500;
+
+/** Subtrees smaller than this are built in one task, which is cheaper than handing them over. */
+static constexpr int PARALLEL_SUBTREE_GRAIN = 4096;
+
+/** Points that make a block worth giving a thread of its own within a single node. */
+static constexpr int PARALLEL_BLOCK_SIZE = 8192;
+
+/** Upper bound on those blocks, so that the bookkeeping fits on the stack. */
+static constexpr int PARALLEL_MAX_BLOCKS = 64;
+
+/**
+ * Splitting one node over threads only pays while there are not yet enough subtrees to keep the
+ * threads busy on their own, which is the case for as long as a node holds more than this
+ * fraction of the tree. Below that the blocks and the fix up they need are only extra work.
+ */
+static constexpr int PARALLEL_NODE_FRACTION = 8;
+
+/**
+ * Points a partition works on at a time. An offset within a block has to fit in a #uint8_t, and
+ * two blocks have to fit in a range for the block path to be used at all.
+ */
+static constexpr int PARTITION_BLOCK_SIZE = 128;
 
 static int parallel_build_threads(const int64_t points_num)
 {
@@ -103,92 +94,734 @@ static int parallel_build_threads(const int64_t points_num)
       points_num / PARALLEL_BUILD_POINTS_PER_THREAD, 1, PARALLEL_BUILD_MAX_THREADS));
 }
 
-template<typename T, bool Masked> struct TreeImpl {
-  static constexpr bool is_masked = Masked;
+/** \} */
 
-  /** Optional storage for IndexMask construction. */
-  Array<int> indices_storage;
-  DatasetAdaptor<T, Masked> adaptor;
-  NanoflannIndex<T, Masked> index;
+/* -------------------------------------------------------------------- */
+/** \name Tree
+ * \{ */
 
-  TreeImpl(const Span<T> points, Array<int> indices, const int leaf_size)
-      : indices_storage(std::move(indices)),
-        adaptor{points, this->indices_storage},
-        index(T::type_length, adaptor, build_params(adaptor, leaf_size))
+/**
+ * Nodes over the points of a #Span, referenced by index so that data attached to the points can
+ * be looked up sparsely. The points of a node are a contiguous range of #indices_.
+ */
+template<typename T> class KDTree {
+ public:
+  using ValueT = typename T::base_type;
+  static constexpr int dimensions = T::type_length;
+
+ private:
+  /**
+   * A point as the build holds it: its coordinates, and its index in #points_ in the element
+   * after them. For three dimensional points that element is padding that a point would be
+   * rounded up to anyway.
+   */
+  using BuildPoint = VecBase<ValueT, dimensions + 1>;
+
+  struct Node {
+    /**
+     * The two children, which are allocated next to each other so that one pointer reaches both
+     * and they share a cache line. Null for a leaf node.
+     */
+    Node *children;
+    union {
+      /** Leaf: the range of #indices_ the node covers. */
+      struct {
+        int start;
+        int end;
+      } leaf;
+      /**
+       * Interior: the highest coordinate of the left child and the lowest of the right one, in
+       * #dim. Points fall in neither child in between, which lets a search skip that gap.
+       */
+      struct {
+        ValueT low;
+        ValueT high;
+      } split;
+    };
+    /** Dimension an interior node splits. */
+    int dim;
+  };
+
+  /**
+   * Nodes handed out from large batches, so that a walk down the tree stays within a few
+   * allocations. A linear allocator packs small allocations into buffers of a few kilobytes at
+   * most, which for a tree of any size means nodes scattered over many of them.
+   */
+  struct NodeAllocator {
+    /** Nodes per batch, and so the most that can go unused per subtree built in parallel. */
+    static constexpr int batch_size = 256;
+
+    LinearAllocator<> &allocator;
+    MutableSpan<Node> batch;
+    /* Equal to the (empty) batch size, so that the first allocation starts a batch. */
+    int used = 0;
+
+    explicit NodeAllocator(LinearAllocator<> &allocator) : allocator(allocator) {}
+
+    /** A node, or the two children of one, which have to be next to each other. */
+    Node *allocate(const int num)
+    {
+      if (used + num > batch.size()) {
+        batch = allocator.allocate_array<Node>(batch_size);
+        used = 0;
+      }
+      Node *nodes = &batch[used];
+      used += num;
+      return nodes;
+    }
+  };
+
+  /** What the build needs beyond the tree it produces. */
+  struct BuildState {
+    /** The points being reordered, which #indices_ is taken from once the tree is built. */
+    MutableSpan<BuildPoint> points;
+    /**
+     * A subtree that may run on another thread allocates its nodes from a pool of its own. One
+     * pool behind a mutex would put every node in the tree through it.
+     */
+    Mutex allocators_mutex;
+    Vector<std::unique_ptr<LinearAllocator<>>> allocators;
+
+    LinearAllocator<> &new_allocator()
+    {
+      std::lock_guard lock(allocators_mutex);
+      allocators.append(std::make_unique<LinearAllocator<>>());
+      return *allocators.last();
+    }
+  };
+
+  Span<T> points_;
+  /** Indices into #points_, in the order the tree visits them. */
+  Array<int> indices_;
+  /** Bounds of every point in the tree, which a search starts from. */
+  Bounds<T> bounds_ = Bounds<T>(T(0));
+  Node *root_ = nullptr;
+  int leaf_size_;
+
+  /** Nodes built without threads, and those of the subtrees that were built with them. */
+  LinearAllocator<> allocator_;
+  Vector<std::unique_ptr<LinearAllocator<>>> task_allocators_;
+
+ public:
+  /**
+   * Build a tree over the points at \a indices, or over every point when \a indices is empty.
+   * \note \a points must outlive the tree, \a indices does not have to.
+   */
+  KDTree(const Span<T> points, const Span<int> indices, const int leaf_size)
+      : points_(points), leaf_size_(std::max(leaf_size, 1))
   {
-    this->build();
+    const int size = indices.is_empty() ? int(points.size()) : int(indices.size());
+    indices_.reinitialize(size);
+    if (size == 0) {
+      return;
+    }
+
+    /* A tree that is a single leaf has nothing to split, and copying the coordinates aside would
+     * cost more than the rest of its build. */
+    if (size <= leaf_size_) {
+      this->build_single_leaf(indices);
+      return;
+    }
+
+    /* Splitting the build into tasks costs something even when there is no second thread to run
+     * them, so only ask for it when there is one. */
+    const bool threaded = size >= PARALLEL_BUILD_THRESHOLD && BLI_system_thread_count() > 1;
+    if (threaded) {
+      threading::max_threads_task(parallel_build_threads(size),
+                                  [&]() { this->build(indices, true); });
+    }
+    else {
+      this->build(indices, false);
+    }
   }
 
-  TreeImpl(const Span<T> points, const Span<int> indices, const int leaf_size)
-      : adaptor{points, indices}, index(T::type_length, adaptor, build_params(adaptor, leaf_size))
+  /**
+   * Visit the points that could be closer to \a position than the result set has accepted so
+   * far, reporting each of them to it. The result set decides what to keep and how far the
+   * search still has to look. See #NearestResult and the others below.
+   */
+  template<typename ResultSet> void find_neighbors(ResultSet &result, const T &position) const
   {
-    this->build();
+    if (root_ == nullptr) {
+      return;
+    }
+    /* Squared distance to the bounds of the tree, per dimension, which the walk below replaces
+     * one dimension at a time rather than recomputing. */
+    T offsets(ValueT(0));
+    ValueT distance_sq = 0;
+    for (const int dim : IndexRange(dimensions)) {
+      if (position[dim] < bounds_.min[dim]) {
+        offsets[dim] = math::square(bounds_.min[dim] - position[dim]);
+      }
+      else if (position[dim] > bounds_.max[dim]) {
+        offsets[dim] = math::square(position[dim] - bounds_.max[dim]);
+      }
+      distance_sq += offsets[dim];
+    }
+    this->search_node(result, position, root_, distance_sq, offsets);
   }
 
  private:
-  static nf::KDTreeSingleIndexAdaptorParams build_params(const DatasetAdaptor<T, Masked> &adaptor,
-                                                         const int leaf_size)
-  {
-    const int64_t points_num = int64_t(adaptor.kdtree_get_point_count());
-    return nf::KDTreeSingleIndexAdaptorParams(
-        size_t(leaf_size),
-        /* Build separately instead, so that it can be limited to fewer threads. */
-        nf::KDTreeSingleIndexAdaptorFlags::SkipInitialBuildIndex,
-        /* Anything but one makes nanoflann use #NANOFLANN_PARALLEL_INVOKE, which leaves the
-         * number of threads up to the task scheduler. */
-        points_num < PARALLEL_BUILD_THRESHOLD ? 1 : 0);
-  }
+  /* -------------------------------------------------------------------- */
+  /** \name Build
+   * \{ */
 
-  void build()
+  void build_single_leaf(const Span<int> indices)
   {
-    const int64_t points_num = int64_t(adaptor.kdtree_get_point_count());
-    if (points_num < PARALLEL_BUILD_THRESHOLD) {
-      index.buildIndex();
+    if (indices.is_empty()) {
+      std::iota(indices_.begin(), indices_.end(), 0);
     }
     else {
-      threading::max_threads_task(parallel_build_threads(points_num),
-                                  [&]() { index.buildIndex(); });
+      indices_.as_mutable_span().copy_from(indices);
     }
+
+    bounds_ = Bounds<T>(points_[indices_.first()]);
+    for (const int index : indices_) {
+      math::min_max(points_[index], bounds_.min, bounds_.max);
+    }
+
+    root_ = allocator_.allocate<Node>();
+    root_->children = nullptr;
+    root_->leaf.start = 0;
+    root_->leaf.end = int(indices_.size());
   }
+
+  void build(const Span<int> indices, const bool threaded)
+  {
+    const int size = int(indices_.size());
+    Array<BuildPoint> build_points(size);
+
+    BuildState state{build_points.as_mutable_span()};
+    const Bounds<BuildPoint> bounds = this->init_points(state, indices, threaded);
+
+    NodeAllocator allocator(allocator_);
+    root_ = allocator.allocate(1);
+    this->build_node(state, root_, 0, size, bounds, allocator, threaded);
+
+    for (const int dim : IndexRange(dimensions)) {
+      bounds_.min[dim] = bounds.min[dim];
+      bounds_.max[dim] = bounds.max[dim];
+    }
+
+    /* The points are in the order the tree visits them now, so the indices they carry are the
+     * order to keep. The coordinates are not, since a search reads #points_. */
+    this->collect_indices(state, threaded);
+    task_allocators_ = std::move(state.allocators);
+  }
+
+  /** Fill \a state with the coordinates and indices of the points, and measure them. */
+  Bounds<BuildPoint> init_points(BuildState &state, const Span<int> indices, const bool threaded)
+  {
+    const int size = int(indices_.size());
+    const auto fill = [&](const int start, const int end) {
+      Bounds<BuildPoint> bounds(this->build_point(indices, start));
+      for (const int i : IndexRange(start, end - start)) {
+        const BuildPoint point = this->build_point(indices, i);
+        state.points[i] = point;
+        bounds.min = math::min(bounds.min, point);
+        bounds.max = math::max(bounds.max, point);
+      }
+      return bounds;
+    };
+
+    const int blocks = threaded ? block_num(size) : 0;
+    if (blocks < 2) {
+      return fill(0, size);
+    }
+
+    Array<Bounds<BuildPoint>> block_bounds(blocks);
+    threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
+      for (const int block : range) {
+        block_bounds[block] = fill(block_begin(size, blocks, block),
+                                   block_begin(size, blocks, block + 1));
+      }
+    });
+    return merge_bounds(block_bounds);
+  }
+
+  BuildPoint build_point(const Span<int> indices, const int i) const
+  {
+    const int index = indices.is_empty() ? i : indices[i];
+    BuildPoint point;
+    for (const int dim : IndexRange(dimensions)) {
+      point[dim] = points_[index][dim];
+    }
+    point[dimensions] = std::bit_cast<ValueT>(index);
+    return point;
+  }
+
+  /** Take the index each point carries, in the order the build left them in. */
+  void collect_indices(BuildState &state, const bool threaded)
+  {
+    const int size = int(indices_.size());
+    const auto fill = [&](const int start, const int end) {
+      for (const int i : IndexRange(start, end - start)) {
+        indices_[i] = std::bit_cast<int>(state.points[i][dimensions]);
+      }
+    };
+
+    const int blocks = threaded ? block_num(size) : 0;
+    if (blocks < 2) {
+      fill(0, size);
+      return;
+    }
+    threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
+      for (const int block : range) {
+        fill(block_begin(size, blocks, block), block_begin(size, blocks, block + 1));
+      }
+    });
+  }
+
+  /**
+   * Build the node covering [start, end), of whose points \a bounds must be the exact bounds.
+   * Splitting around the middle of those rather than of a cell that can be much larger keeps the
+   * tree shallow where the points are unevenly spread.
+   */
+  void build_node(BuildState &state,
+                  Node *node,
+                  const int start,
+                  const int end,
+                  const Bounds<BuildPoint> &bounds,
+                  NodeAllocator &allocator,
+                  const bool threaded)
+  {
+    if (end - start <= leaf_size_) {
+      node->children = nullptr;
+      node->leaf.start = start;
+      node->leaf.end = end;
+      return;
+    }
+
+    /* Split the widest extent of the points in half. */
+    const BuildPoint extent = bounds.max - bounds.min;
+    int dim = 0;
+    for (const int other : IndexRange(1, dimensions - 1)) {
+      if (extent[other] > extent[dim]) {
+        dim = other;
+      }
+    }
+    const ValueT split_value = bounds.min[dim] + extent[dim] / 2;
+
+    /* Spreading a node over threads only pays while there are few subtrees to run in parallel. */
+    const bool split_threaded = threaded && int64_t(end - start) * PARALLEL_NODE_FRACTION >
+                                                state.points.size();
+
+    int middle = split_threaded ?
+                     this->partition_points_parallel(state, start, end, dim, split_value) :
+                     partition_points(state.points, start, end, dim, split_value);
+    if (middle == start || middle == end) {
+      /* Everything ended up on one side, which means the coordinates of the points are within
+       * rounding distance of each other in every dimension. Split them in the middle so that the
+       * recursion still terminates. */
+      middle = start + (end - start) / 2;
+    }
+
+    Bounds<BuildPoint> left_bounds, right_bounds;
+    if (split_threaded) {
+      left_bounds = this->compute_bounds_parallel(state, start, middle);
+      right_bounds = this->compute_bounds_parallel(state, middle, end);
+    }
+    else {
+      left_bounds = compute_bounds(state.points, start, middle);
+      right_bounds = compute_bounds(state.points, middle, end);
+    }
+
+    node->dim = dim;
+    node->children = allocator.allocate(2);
+    if (threaded && end - start > PARALLEL_SUBTREE_GRAIN) {
+      NodeAllocator other_allocator(state.new_allocator());
+      threading::parallel_invoke(
+          [&]() {
+            this->build_node(
+                state, &node->children[0], start, middle, left_bounds, allocator, true);
+          },
+          [&]() {
+            this->build_node(
+                state, &node->children[1], middle, end, right_bounds, other_allocator, true);
+          });
+    }
+    else {
+      this->build_node(state, &node->children[0], start, middle, left_bounds, allocator, false);
+      this->build_node(state, &node->children[1], middle, end, right_bounds, allocator, false);
+    }
+
+    node->split.low = left_bounds.max[dim];
+    node->split.high = right_bounds.min[dim];
+  }
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Bounds
+   * \{ */
+
+  /** Exact bounds of the points in [start, end), in one sequential pass. */
+  static Bounds<BuildPoint> compute_bounds(const Span<BuildPoint> points,
+                                           const int start,
+                                           const int end)
+  {
+    /* Several accumulators, so that the comparisons of one point do not wait on those of the
+     * point before it. */
+    constexpr int lanes = 4;
+    const int full = start + ((end - start) & ~(lanes - 1));
+
+    BuildPoint lo[lanes], hi[lanes];
+    for (const int lane : IndexRange(lanes)) {
+      lo[lane] = hi[lane] = points[start];
+    }
+    for (int i = start; i < full; i += lanes) {
+      for (const int lane : IndexRange(lanes)) {
+        const BuildPoint point = points[i + lane];
+        lo[lane] = math::min(lo[lane], point);
+        hi[lane] = math::max(hi[lane], point);
+      }
+    }
+
+    Bounds<BuildPoint> bounds(lo[0], hi[0]);
+    for (const int lane : IndexRange(1, lanes - 1)) {
+      bounds.min = math::min(bounds.min, lo[lane]);
+      bounds.max = math::max(bounds.max, hi[lane]);
+    }
+    for (int i = full; i < end; i++) {
+      bounds.min = math::min(bounds.min, points[i]);
+      bounds.max = math::max(bounds.max, points[i]);
+    }
+    return bounds;
+  }
+
+  /** #compute_bounds with the range measured a block per thread. */
+  Bounds<BuildPoint> compute_bounds_parallel(BuildState &state, const int start, const int end)
+  {
+    const int count = end - start;
+    const int blocks = block_num(count);
+    if (blocks < 2) {
+      return compute_bounds(state.points, start, end);
+    }
+
+    Array<Bounds<BuildPoint>> block_bounds(blocks);
+    threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
+      for (const int block : range) {
+        block_bounds[block] = compute_bounds(state.points,
+                                             start + block_begin(count, blocks, block),
+                                             start + block_begin(count, blocks, block + 1));
+      }
+    });
+    return merge_bounds(block_bounds);
+  }
+
+  static Bounds<BuildPoint> merge_bounds(const Span<Bounds<BuildPoint>> block_bounds)
+  {
+    Bounds<BuildPoint> bounds = block_bounds.first();
+    for (const Bounds<BuildPoint> &other : block_bounds.drop_front(1)) {
+      bounds.min = math::min(bounds.min, other.min);
+      bounds.max = math::max(bounds.max, other.max);
+    }
+    return bounds;
+  }
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Partitioning
+   * \{ */
+
+  /**
+   * Reorder the points in [start, end) so that those below \a split_value in \a dim come first,
+   * and return where the rest starts.
+   *
+   * Deciding per point whether to swap it is a branch on the result of the comparison, which for
+   * an evenly split node is unpredictable and so mispredicts on about every other point. This
+   * collects the offsets of the misplaced points of a block without branching on the comparison,
+   * and only then swaps them, which is a loop over exactly as many iterations as there are swaps.
+   * Same approach as the partition in BlockQuicksort.
+   */
+  static int partition_points(const MutableSpan<BuildPoint> points,
+                              const int start,
+                              const int end,
+                              const int dim,
+                              const ValueT split_value)
+  {
+    constexpr int block = PARTITION_BLOCK_SIZE;
+
+    uint8_t offsets_l[block], offsets_r[block];
+    int num_l = 0, num_r = 0, first_l = 0, first_r = 0;
+    int l = start, r = end;
+
+    while (r - l > 2 * block) {
+      /* Offsets of the points of the left block that belong on the right, and the other way
+       * around. The store always happens, only the counter advances conditionally. */
+      if (num_l == 0) {
+        first_l = 0;
+        for (const int i : IndexRange(block)) {
+          offsets_l[num_l] = uint8_t(i);
+          num_l += int(!(points[l + i][dim] < split_value));
+        }
+      }
+      if (num_r == 0) {
+        first_r = 0;
+        for (const int i : IndexRange(block)) {
+          offsets_r[num_r] = uint8_t(i);
+          num_r += int(points[r - 1 - i][dim] < split_value);
+        }
+      }
+
+      const int num = std::min(num_l, num_r);
+      for (const int i : IndexRange(num)) {
+        std::swap(points[l + offsets_l[first_l + i]], points[r - 1 - offsets_r[first_r + i]]);
+      }
+      num_l -= num;
+      num_r -= num;
+      first_l += num;
+      first_r += num;
+
+      /* A block is done once none of its points are misplaced any more. */
+      if (num_l == 0) {
+        l += block;
+      }
+      if (num_r == 0) {
+        r -= block;
+      }
+    }
+
+    return partition_points_small(points, l, r, dim, split_value);
+  }
+
+  /**
+   * #partition_points for a range that fits in a temporary buffer, which is the case for the
+   * last levels of the tree. Copying the points out and back in is cheaper than the swaps that
+   * staying in place needs, and keeps those levels branchless as well.
+   */
+  static int partition_points_small(const MutableSpan<BuildPoint> points,
+                                    const int start,
+                                    const int end,
+                                    const int dim,
+                                    const ValueT split_value)
+  {
+    const int count = end - start;
+    BLI_assert(count <= 2 * PARTITION_BLOCK_SIZE);
+
+    BuildPoint buffer[2 * PARTITION_BLOCK_SIZE];
+    /* Points below the split fill the buffer from the front, the others from the back. Only the
+     * position depends on the comparison, so there is nothing to mispredict. */
+    int l = 0, r = count;
+    for (const int i : IndexRange(start, count)) {
+      /* Read the coordinate from the array rather than from a copy of the point: indexing a
+       * vector by a value only known at runtime means it has to be in memory, and a copy would
+       * have to be spilled there every iteration. */
+      const bool less = points[i][dim] < split_value;
+      const BuildPoint point = points[i];
+      /* Written to both ends, of which only one is kept. Picking the position instead lets a
+       * compiler turn it back into a branch on the comparison, which is the whole thing this
+       * avoids, and both ends are a few cache lines apart at most. */
+      buffer[l] = point;
+      buffer[r - 1] = point;
+      l += int(less);
+      r -= int(!less);
+    }
+
+    MutableSpan<BuildPoint> range = points.slice(start, count);
+    for (const int i : IndexRange(count)) {
+      range[i] = buffer[i];
+    }
+    return start + l;
+  }
+
+  /**
+   * #partition_points with the range split a block per thread.
+   *
+   * Each block is partitioned on its own, which leaves every block split but the blocks
+   * themselves interleaved: points above the split sit in blocks that belong entirely below it,
+   * and the other way around. There are as many of one as of the other, so the fix up is to swap
+   * them pairwise, which spreads over threads as well. This is how embree partitions primitives
+   * when building a BVH.
+   */
+  int partition_points_parallel(
+      BuildState &state, const int start, const int end, const int dim, const ValueT split_value)
+  {
+    const MutableSpan<BuildPoint> points = state.points;
+    const int count = end - start;
+    const int blocks = block_num(count);
+    if (blocks < 2) {
+      return partition_points(points, start, end, dim, split_value);
+    }
+
+    int begin[PARALLEL_MAX_BLOCKS + 1];
+    int middle[PARALLEL_MAX_BLOCKS];
+    for (const int block : IndexRange(blocks + 1)) {
+      begin[block] = start + block_begin(count, blocks, block);
+    }
+
+    threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
+      for (const int block : range) {
+        middle[block] = partition_points(points, begin[block], begin[block + 1], dim, split_value);
+      }
+    });
+
+    /* Where the split ends up once the blocks are put in order. */
+    int split = start;
+    for (const int block : IndexRange(blocks)) {
+      split += middle[block] - begin[block];
+    }
+
+    /* The points that are on the wrong side of it. A block lies either before or after the
+     * split, so it contributes to one of the two lists at most. */
+    IndexRange high[PARALLEL_MAX_BLOCKS], low[PARALLEL_MAX_BLOCKS];
+    int high_num = 0, low_num = 0;
+    for (const int block : IndexRange(blocks)) {
+      if (middle[block] < split) {
+        const int last = std::min(begin[block + 1], split);
+        if (middle[block] < last) {
+          high[high_num++] = IndexRange::from_begin_end(middle[block], last);
+        }
+      }
+      else if (middle[block] > split) {
+        const int first = std::max(begin[block], split);
+        if (first < middle[block]) {
+          low[low_num++] = IndexRange::from_begin_end(first, middle[block]);
+        }
+      }
+    }
+
+    /* Pair the two lists up into chunks that can be swapped independently. Each step finishes a
+     * range on one side or the other, so there are fewer chunks than there are ranges. */
+    struct Swap {
+      int from;
+      int to;
+      int num;
+    };
+    Swap swaps[2 * PARALLEL_MAX_BLOCKS];
+    int swaps_num = 0;
+    for (int h = 0, l = 0, h_done = 0, l_done = 0; h < high_num && l < low_num;) {
+      const int num = std::min(int(high[h].size()) - h_done, int(low[l].size()) - l_done);
+      swaps[swaps_num++] = {int(high[h].start()) + h_done, int(low[l].start()) + l_done, num};
+      h_done += num;
+      l_done += num;
+      if (h_done == int(high[h].size())) {
+        h++;
+        h_done = 0;
+      }
+      if (l_done == int(low[l].size())) {
+        l++;
+        l_done = 0;
+      }
+    }
+
+    threading::parallel_for(IndexRange(swaps_num), 1, [&](const IndexRange range) {
+      for (const int i : range) {
+        const Swap &swap = swaps[i];
+        for (const int offset : IndexRange(swap.num)) {
+          std::swap(points[swap.from + offset], points[swap.to + offset]);
+        }
+      }
+    });
+
+    return split;
+  }
+
+  static int block_num(const int count)
+  {
+    return std::min(count / PARALLEL_BLOCK_SIZE, PARALLEL_MAX_BLOCKS);
+  }
+
+  static int block_begin(const int count, const int blocks, const int block)
+  {
+    return int(int64_t(count) * block / blocks);
+  }
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Search
+   * \{ */
+
+  /**
+   * \param distance_sq: Squared distance from \a position to the part of space \a node covers.
+   * \param offsets: Squared distance to that part per dimension, which this restores before it
+   * returns so that the caller can keep using it.
+   * \return False when the result set has seen enough and the search should stop.
+   */
+  template<typename ResultSet>
+  bool search_node(ResultSet &result,
+                   const T &position,
+                   const Node *node,
+                   const ValueT distance_sq,
+                   T &offsets) const
+  {
+    if (node->children == nullptr) {
+      const int *indices = indices_.data();
+      const T *points = points_.data();
+      for (int i = node->leaf.start; i < node->leaf.end; i++) {
+        const int index = indices[i];
+        const ValueT point_distance_sq = math::distance_squared(position, points[index]);
+        if (point_distance_sq < result.max_distance_sq()) {
+          if (!result.add_point(point_distance_sq, index)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    /* Both children are loaded before it is known which one to visit, so that the loads do not
+     * wait on the comparison below. Picking one first makes the walk down the tree a chain of
+     * dependent loads. */
+    const Node *low_child = &node->children[0];
+    const Node *high_child = &node->children[1];
+
+    /* Visit the side of the split the position is on first, since what it finds there is what
+     * lets the other side be skipped. */
+    const int dim = node->dim;
+    const ValueT value = position[dim];
+    const ValueT to_low = value - node->split.low;
+    const ValueT to_high = value - node->split.high;
+
+    /* Written as a branch rather than as a choice between two pointers, so that the processor
+     * predicts which child comes next and starts loading it before the comparison has resolved.
+     * Selecting the pointer instead makes the walk down the tree wait at every level. */
+    const Node *far_child;
+    ValueT far_offset;
+    if ((to_low + to_high) < 0) {
+      if (!this->search_node(result, position, low_child, distance_sq, offsets)) {
+        return false;
+      }
+      far_child = high_child;
+      far_offset = math::square(to_high);
+    }
+    else {
+      if (!this->search_node(result, position, high_child, distance_sq, offsets)) {
+        return false;
+      }
+      far_child = low_child;
+      far_offset = math::square(to_low);
+    }
+
+    /* Swap in the distance to the far side for this dimension, keeping the others. */
+    const ValueT previous = offsets[dim];
+    const ValueT far_distance_sq = distance_sq + far_offset - previous;
+    if (far_distance_sq > result.max_distance_sq()) {
+      return true;
+    }
+    offsets[dim] = far_offset;
+    const bool keep_searching = this->search_node(
+        result, position, far_child, far_distance_sq, offsets);
+    offsets[dim] = previous;
+    return keep_searching;
+  }
+
+  /** \} */
 };
-
-/** Calls fn with the tree implementation matching the way the tree was built. */
-template<typename T, typename Fn>
-static auto dispatch(const void *impl, const bool is_masked, Fn &&fn)
-{
-  if (is_masked) {
-    return fn(*static_cast<const TreeImpl<T, true> *>(impl));
-  }
-  return fn(*static_cast<const TreeImpl<T, false> *>(impl));
-}
-
-/** Translate an index used by nanoflann into an index into the original coordinate span. */
-template<typename ImplT> static int point_index(const ImplT &impl, const int index)
-{
-  if constexpr (ImplT::is_masked) {
-    return impl.adaptor.indices[index];
-  }
-  else {
-    UNUSED_VARS(impl);
-    return index;
-  }
-}
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Result Sets
  *
- * Nanoflann reports the points it visits to a "result set" which is expected to provide #addPoint,
- * which returns false to stop the search early, and #worstDist, which is the squared distance
- * beyond which the search can prune nodes.
+ * A search reports the points it visits to a result set, which keeps what it wants and tells the
+ * search how far it still has to look through #max_distance_sq. Returning false from #add_point
+ * ends the search.
  * \{ */
 
-template<typename ValueT> class NearestResultSet {
- public:
-  using DistanceType = ValueT;
-  using IndexType = int;
-
+template<typename ValueT> class NearestResult {
  private:
   int index_ = -1;
   ValueT distance_sq_ = std::numeric_limits<ValueT>::max();
@@ -203,7 +836,7 @@ template<typename ValueT> class NearestResultSet {
     return distance_sq_;
   }
 
-  bool addPoint(const ValueT distance_sq, const int index)
+  bool add_point(const ValueT distance_sq, const int index)
   {
     if (distance_sq < distance_sq_) {
       distance_sq_ = distance_sq;
@@ -212,45 +845,22 @@ template<typename ValueT> class NearestResultSet {
     return true;
   }
 
-  ValueT worstDist() const
+  ValueT max_distance_sq() const
   {
     return distance_sq_;
   }
-
-  size_t size() const
-  {
-    return index_ == -1 ? 0 : 1;
-  }
-  bool empty() const
-  {
-    return index_ == -1;
-  }
-  bool full() const
-  {
-    return index_ != -1;
-  }
-  void sort() {}
 };
 
-/** Like #NearestResultSet, but only points accepted by a filter shrink the search radius. */
-template<typename ImplT, typename ValueT> class FilteredNearestResultSet {
- public:
-  using DistanceType = ValueT;
-  using IndexType = int;
-
+/** Like #NearestResult, but only points accepted by a filter shrink the search radius. */
+template<typename ValueT> class FilteredNearestResult {
  private:
-  const ImplT &impl_;
   FunctionRef<bool(int index)> filter_;
   int index_ = -1;
   ValueT distance_sq_ = std::numeric_limits<ValueT>::max();
 
  public:
-  FilteredNearestResultSet(const ImplT &impl, FunctionRef<bool(int index)> filter)
-      : impl_(impl), filter_(filter)
-  {
-  }
+  explicit FilteredNearestResult(FunctionRef<bool(int index)> filter) : filter_(filter) {}
 
-  /** \note Already an index into the original coordinate span. */
   int index() const
   {
     return index_;
@@ -260,57 +870,36 @@ template<typename ImplT, typename ValueT> class FilteredNearestResultSet {
     return distance_sq_;
   }
 
-  bool addPoint(const ValueT distance_sq, const int index)
+  bool add_point(const ValueT distance_sq, const int index)
   {
-    if (distance_sq < distance_sq_) {
-      const int point = point_index(impl_, index);
-      if (filter_(point)) {
-        distance_sq_ = distance_sq;
-        index_ = point;
-      }
+    if (distance_sq < distance_sq_ && filter_(index)) {
+      distance_sq_ = distance_sq;
+      index_ = index;
     }
     return true;
   }
 
-  ValueT worstDist() const
+  ValueT max_distance_sq() const
   {
     return distance_sq_;
   }
-
-  size_t size() const
-  {
-    return index_ == -1 ? 0 : 1;
-  }
-  bool empty() const
-  {
-    return index_ == -1;
-  }
-  bool full() const
-  {
-    return index_ != -1;
-  }
-  void sort() {}
 };
 
-/** Keeps the closest results in the caller's array, sorted by increasing distance. */
-template<typename NearestT, typename ValueT> class NearestNResultSet {
- public:
-  using DistanceType = ValueT;
-  using IndexType = int;
-
+/** Keeps the closest points, in order, up to the size of the span it was given. */
+template<typename NearestT, typename ValueT> class NearestNResult {
  private:
   MutableSpan<NearestT> nearest_;
   int count_ = 0;
 
  public:
-  explicit NearestNResultSet(MutableSpan<NearestT> nearest) : nearest_(nearest) {}
+  explicit NearestNResult(MutableSpan<NearestT> nearest) : nearest_(nearest) {}
 
   int count() const
   {
     return count_;
   }
 
-  bool addPoint(const ValueT distance_sq, const int index)
+  bool add_point(const ValueT distance_sq, const int index)
   {
     const int capacity = int(nearest_.size());
     int i;
@@ -331,83 +920,47 @@ template<typename NearestT, typename ValueT> class NearestNResultSet {
     return true;
   }
 
-  ValueT worstDist() const
+  ValueT max_distance_sq() const
   {
     if (count_ < int(nearest_.size())) {
       return std::numeric_limits<ValueT>::max();
     }
     return nearest_[count_ - 1].distance_sq;
   }
-
-  size_t size() const
-  {
-    return size_t(count_);
-  }
-  bool empty() const
-  {
-    return count_ == 0;
-  }
-  bool full() const
-  {
-    return count_ == int(nearest_.size());
-  }
-  /** Results are inserted in order already. */
-  void sort() {}
 };
 
 /**
  * Passes every point in the radius to a callback.
  * \note The radius is inclusive, matching #blender::kdtree_range_search_cb.
  */
-template<typename ImplT, typename ValueT, typename Fn> class RadiusResultSet {
- public:
-  using DistanceType = ValueT;
-  using IndexType = int;
-
+template<typename ValueT, typename Fn> class RadiusResult {
  private:
-  const ImplT &impl_;
   ValueT radius_sq_;
   Fn fn_;
   int count_ = 0;
 
  public:
-  RadiusResultSet(const ImplT &impl, const ValueT radius_sq, Fn fn)
-      : impl_(impl), radius_sq_(radius_sq), fn_(fn)
-  {
-  }
+  RadiusResult(const ValueT radius_sq, Fn fn) : radius_sq_(radius_sq), fn_(fn) {}
 
   int count() const
   {
     return count_;
   }
 
-  bool addPoint(const ValueT distance_sq, const int index)
+  bool add_point(const ValueT distance_sq, const int index)
   {
     if (distance_sq <= radius_sq_) {
       count_++;
-      fn_(point_index(impl_, index), distance_sq);
+      fn_(index, distance_sq);
     }
     return true;
   }
 
-  ValueT worstDist() const
+  /** The search never narrows, since every point within the radius is wanted. */
+  ValueT max_distance_sq() const
   {
     return radius_sq_;
   }
-
-  size_t size() const
-  {
-    return size_t(count_);
-  }
-  bool empty() const
-  {
-    return count_ == 0;
-  }
-  bool full() const
-  {
-    return true;
-  }
-  void sort() {}
 };
 
 /** \} */
@@ -416,16 +969,46 @@ template<typename ImplT, typename ValueT, typename Fn> class RadiusResultSet {
 /** \name #KDTreeNanoflann
  * \{ */
 
+/** The tree, plus the order the points were added in, which #calc_duplicates visits them in. */
+template<typename T> struct TreeImpl {
+  /** Storage for indices built from an #IndexMask. */
+  Array<int> indices_storage;
+  /** The order the points were added in, empty when the tree covers every point. */
+  Span<int> indices;
+  KDTree<T> tree;
+
+  TreeImpl(const Span<T> points, Array<int> indices, const int leaf_size)
+      : indices_storage(std::move(indices)),
+        indices(indices_storage),
+        tree(points, indices_storage, leaf_size)
+  {
+  }
+
+  TreeImpl(const Span<T> points, const Span<int> indices, const int leaf_size)
+      : indices(indices), tree(points, indices, leaf_size)
+  {
+  }
+
+  /** Translate a position in the order the points were added into an index into the point span. */
+  int point_index(const int i) const
+  {
+    return indices.is_empty() ? i : indices[i];
+  }
+};
+
+template<typename T> static const TreeImpl<T> &get_impl(const void *impl)
+{
+  return *static_cast<const TreeImpl<T> *>(impl);
+}
+
 template<typename T>
 KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points, const int leaf_size)
     : points_(points), size_(int(points.size()))
 {
-  static_assert(sizeof(TreeImpl<T, false>) <= IMPL_SIZE);
-  static_assert(sizeof(TreeImpl<T, true>) <= IMPL_SIZE);
-  static_assert(alignof(TreeImpl<T, false>) <= IMPL_ALIGNMENT);
-  static_assert(alignof(TreeImpl<T, true>) <= IMPL_ALIGNMENT);
+  static_assert(sizeof(TreeImpl<T>) <= IMPL_SIZE);
+  static_assert(alignof(TreeImpl<T>) <= IMPL_ALIGNMENT);
 
-  new (impl_.ptr()) TreeImpl<T, false>(points, Array<int>(), leaf_size);
+  new (impl_.ptr()) TreeImpl<T>(points, Span<int>(), leaf_size);
 }
 
 template<typename T>
@@ -437,32 +1020,26 @@ KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
   const std::optional<IndexRange> range = mask.to_range();
   if (range && *range == points.index_range()) {
     /* Avoid the indirection when the mask contains every point anyway. */
-    new (impl_.ptr()) TreeImpl<T, false>(points, Array<int>(), leaf_size);
+    new (impl_.ptr()) TreeImpl<T>(points, Span<int>(), leaf_size);
     return;
   }
   Array<int> indices(mask.size());
   mask.to_indices<int>(indices);
-  is_masked_ = true;
-  new (impl_.ptr()) TreeImpl<T, true>(points, std::move(indices), leaf_size);
+  new (impl_.ptr()) TreeImpl<T>(points, std::move(indices), leaf_size);
 }
 
 template<typename T>
 KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
                                     const Span<int> indices,
                                     const int leaf_size)
-    : points_(points), size_(int(indices.size())), is_masked_(true)
+    : points_(points), size_(int(indices.size()))
 {
-  new (impl_.ptr()) TreeImpl<T, true>(points, indices, leaf_size);
+  new (impl_.ptr()) TreeImpl<T>(points, indices, leaf_size);
 }
 
 template<typename T> KDTreeNanoflann<T>::~KDTreeNanoflann()
 {
-  if (is_masked_) {
-    std::destroy_at(static_cast<TreeImpl<T, true> *>(impl_.ptr()));
-  }
-  else {
-    std::destroy_at(static_cast<TreeImpl<T, false> *>(impl_.ptr()));
-  }
+  std::destroy_at(static_cast<TreeImpl<T> *>(impl_.ptr()));
 }
 
 template<typename T>
@@ -471,17 +1048,15 @@ int KDTreeNanoflann<T>::find_nearest(const T &position, ValueT *r_distance_sq) c
   if (this->is_empty()) {
     return -1;
   }
-  return dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    NearestResultSet<ValueT> result;
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-    if (result.index() == -1) {
-      return -1;
-    }
-    if (r_distance_sq) {
-      *r_distance_sq = result.distance_sq();
-    }
-    return point_index(impl, result.index());
-  });
+  NearestResult<ValueT> result;
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  if (result.index() == -1) {
+    return -1;
+  }
+  if (r_distance_sq) {
+    *r_distance_sq = result.distance_sq();
+  }
+  return result.index();
 }
 
 template<typename T>
@@ -492,14 +1067,12 @@ int KDTreeNanoflann<T>::find_nearest_filtered(const T &position,
   if (this->is_empty()) {
     return -1;
   }
-  return dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    FilteredNearestResultSet<std::decay_t<decltype(impl)>, ValueT> result(impl, filter);
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-    if (result.index() != -1 && r_distance_sq) {
-      *r_distance_sq = result.distance_sq();
-    }
-    return result.index();
-  });
+  FilteredNearestResult<ValueT> result(filter);
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  if (result.index() != -1 && r_distance_sq) {
+    *r_distance_sq = result.distance_sq();
+  }
+  return result.index();
 }
 
 template<typename T>
@@ -508,33 +1081,23 @@ int KDTreeNanoflann<T>::find_nearest_n(const T &position, MutableSpan<Nearest> r
   if (this->is_empty() || r_nearest.is_empty()) {
     return 0;
   }
-  return dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    NearestNResultSet<Nearest, ValueT> result(r_nearest);
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-    const int count = result.count();
-    if constexpr (std::decay_t<decltype(impl)>::is_masked) {
-      for (Nearest &nearest : r_nearest.take_front(count)) {
-        nearest.index = point_index(impl, nearest.index);
-      }
-    }
-    return count;
-  });
+  NearestNResult<Nearest, ValueT> result(r_nearest);
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  return result.count();
 }
 
 template<typename T>
-void KDTreeNanoflann<T>::foreach_in_radius(const T &position,
-                                           const ValueT radius,
-                                           FunctionRef<void(int, ValueT)> fn) const
+void KDTreeNanoflann<T>::foreach_in_radius(
+    const T &position,
+    const ValueT radius,
+    FunctionRef<void(int index, ValueT distance_sq)> fn) const
 {
   if (this->is_empty()) {
     return;
   }
-  dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    using ImplT = std::decay_t<decltype(impl)>;
-    RadiusResultSet<ImplT, ValueT, FunctionRef<void(int, ValueT)>> result(
-        impl, radius * radius, fn);
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-  });
+  const auto call_fn = [&](const int index, const ValueT distance_sq) { fn(index, distance_sq); };
+  RadiusResult<ValueT, decltype(call_fn)> result(radius * radius, call_fn);
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
 }
 
 template<typename T>
@@ -546,15 +1109,12 @@ int KDTreeNanoflann<T>::find_in_radius(const T &position,
   if (this->is_empty()) {
     return 0;
   }
-  dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    using ImplT = std::decay_t<decltype(impl)>;
-    const auto append_fn = [&](const int index, const ValueT distance_sq) {
-      r_nearest.append({index, distance_sq});
-    };
-    RadiusResultSet<ImplT, ValueT, decltype(append_fn)> result(impl, radius * radius, append_fn);
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-  });
-  /* Sorting by index as well keeps the result deterministic when distances are equal. */
+  const auto collect_fn = [&](const int index, const ValueT distance_sq) {
+    r_nearest.append({index, distance_sq});
+  };
+  RadiusResult<ValueT, decltype(collect_fn)> result(radius * radius, collect_fn);
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+
   std::sort(r_nearest.begin(), r_nearest.end(), [](const Nearest &a, const Nearest &b) {
     return a.distance_sq < b.distance_sq || (a.distance_sq == b.distance_sq && a.index < b.index);
   });
@@ -567,13 +1127,10 @@ int KDTreeNanoflann<T>::count_in_radius(const T &position, const ValueT radius) 
   if (this->is_empty()) {
     return 0;
   }
-  return dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    using ImplT = std::decay_t<decltype(impl)>;
-    const auto count_fn = [](const int /*index*/, const ValueT /*distance_sq*/) {};
-    RadiusResultSet<ImplT, ValueT, decltype(count_fn)> result(impl, radius * radius, count_fn);
-    impl.index.findNeighbors(result, static_cast<const ValueT *>(position));
-    return result.count();
-  });
+  const auto count_fn = [](const int /*index*/, const ValueT /*distance_sq*/) {};
+  RadiusResult<ValueT, decltype(count_fn)> result(radius * radius, count_fn);
+  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  return result.count();
 }
 
 template<typename T>
@@ -582,33 +1139,31 @@ int KDTreeNanoflann<T>::calc_duplicates(const ValueT range, MutableSpan<int> dup
   if (this->is_empty()) {
     return 0;
   }
+  const TreeImpl<T> &impl = get_impl<T>(impl_.ptr());
   const ValueT range_sq = range * range;
   int found = 0;
-  dispatch<T>(impl_.ptr(), is_masked_, [&](auto &impl) {
-    using ImplT = std::decay_t<decltype(impl)>;
-    for (const int i : IndexRange(size_)) {
-      const int index = point_index(impl, i);
-      BLI_assert(index < duplicates.size());
-      /* Skip points that are already merged into another point. Points that were preset to their
-       * own index are not merged themselves, but can still be merged into. */
-      if (duplicates[index] != -1 && duplicates[index] != index) {
-        continue;
-      }
-      const int found_before = found;
-      const auto claim_fn = [&](const int other, const ValueT /*distance_sq*/) {
-        if (other != index && duplicates[other] == -1) {
-          duplicates[other] = index;
-          found++;
-        }
-      };
-      RadiusResultSet<ImplT, ValueT, decltype(claim_fn)> result(impl, range_sq, claim_fn);
-      impl.index.findNeighbors(result, static_cast<const ValueT *>(points_[index]));
-      if (found != found_before) {
-        /* Mark as a target so the merged points don't form chains. */
-        duplicates[index] = index;
-      }
+  for (const int i : IndexRange(size_)) {
+    const int index = impl.point_index(i);
+    BLI_assert(index < duplicates.size());
+    /* Skip points that are already merged into another point. Points that were preset to their
+     * own index are not merged themselves, but can still be merged into. */
+    if (duplicates[index] != -1 && duplicates[index] != index) {
+      continue;
     }
-  });
+    const int found_before = found;
+    const auto claim_fn = [&](const int other, const ValueT /*distance_sq*/) {
+      if (other != index && duplicates[other] == -1) {
+        duplicates[other] = index;
+        found++;
+      }
+    };
+    RadiusResult<ValueT, decltype(claim_fn)> result(range_sq, claim_fn);
+    impl.tree.find_neighbors(result, points_[index]);
+    if (found != found_before) {
+      /* Mark as a target so the merged points don't form chains. */
+      duplicates[index] = index;
+    }
+  }
   return found;
 }
 

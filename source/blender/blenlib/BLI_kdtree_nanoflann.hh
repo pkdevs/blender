@@ -1,6 +1,8 @@
-/* SPDX-FileCopyrightText: 2026 Blender Authors
+/* SPDX-FileCopyrightText: 2008-2009 Marius Muja, David G. Lowe.
+ * SPDX-FileCopyrightText: 2011-2026 Jose Luis Blanco-Claraco.
+ * SPDX-FileCopyrightText: 2026 Blender Authors.
  *
- * SPDX-License-Identifier: GPL-2.0-or-later */
+ * SPDX-License-Identifier: BSD-2-Clause */
 
 #pragma once
 
@@ -15,13 +17,13 @@
 namespace blender {
 
 /**
- * A KD-tree for nearest neighbor search, implemented with the nanoflann library. References a
- * subset of values in a #Span. Results are indices into that span, so data attached to the points
- * can be referenced sparsely with this level of indirection.
+ * A KD-tree for nearest neighbor search. References a subset of values in a #Span. Results are
+ * indices into that span, so data attached to the points can be referenced sparsely with this
+ * level of indirection.
  *
- * The class is a thin wrapper around `nanoflann::KDTreeSingleIndexAdaptor`. To reduce compile time
- * costs, the library's header is only included in the implementation file, and the class is
- * explicitly instantiated for the coordinate types listed at the bottom of this file.
+ * The tree itself lives in the implementation file, which keeps it out of every file that uses
+ * one, so the class is explicitly instantiated for the coordinate types listed at the bottom of
+ * this file.
  *
  * Differences from #blender::KDTree in `BLI_kdtree.hh`:
  * - The tree references the caller's coordinate array instead of storing a copy of it. The array
@@ -48,8 +50,8 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
    * whereas smaller values make queries visit fewer points.
    *
    * 32 was measured to be the best tradeoff between build time and memory usage for float3 point
-   * clouds, building 1.3-2x faster than nanoflann's own default of 10, and halving memory usage of
-   * nodes (6.5 MB vs. 12.6 MB for a million points). See `BLI_kdtree_performance_test`.
+   * clouds, building 1.3-2x faster than a leaf size of 10 and halving the memory the nodes use
+   * (6.5 MB vs. 12.6 MB for a million points). See `BLI_kdtree_performance_test`.
    */
   static constexpr int LEAF_SIZE_DEFAULT = 32;
 
@@ -162,9 +164,9 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
 
  private:
   /**
-   * Storage for the nanoflann index. Its type depends on #is_masked_ and is only known to the
-   * implementation file, which checks that it fits. The size is larger than the index needs so
-   * that it doesn't have to change for every compiler and build configuration.
+   * Storage for the tree, whose type is only known to the implementation file, which checks that
+   * it fits. The size is larger than the tree needs so that it doesn't have to change for every
+   * compiler and build configuration.
    */
   static constexpr size_t IMPL_SIZE = 320;
   static constexpr size_t IMPL_ALIGNMENT = 16;
@@ -172,7 +174,6 @@ template<typename T> class KDTreeNanoflann : NonMovable, NonCopyable {
 
   Span<T> points_;
   int size_ = 0;
-  bool is_masked_ = false;
 };
 
 extern template class KDTreeNanoflann<float2>;
