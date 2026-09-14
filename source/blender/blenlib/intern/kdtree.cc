@@ -250,7 +250,7 @@ template<typename T> class TreeBuilder {
   Node *build_nodes(const Span<int> indices, Bounds<T> &r_bounds, const bool threaded)
   {
     const int size = int(indices_.size());
-    Array<BuildPoint> build_points(size);
+    Array<BuildPoint, 256> build_points(size);
 
     build_points_ = build_points.as_mutable_span();
     const Bounds<BuildPoint> bounds = this->init_points(indices, threaded);
@@ -308,7 +308,7 @@ template<typename T> class TreeBuilder {
       return fill(0, size);
     }
 
-    Array<Bounds<BuildPoint>> block_bounds(blocks);
+    Array<Bounds<BuildPoint>, NODE_MAX_BLOCKS> block_bounds(blocks);
     threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
       for (const int block : range) {
         block_bounds[block] = fill(block_begin(size, blocks, block),
@@ -451,7 +451,7 @@ template<typename T> class TreeBuilder {
       return compute_bounds(build_points_, start, end);
     }
 
-    Array<Bounds<BuildPoint>> block_bounds(blocks);
+    Array<Bounds<BuildPoint>, NODE_MAX_BLOCKS> block_bounds(blocks);
     threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
       for (const int block : range) {
         block_bounds[block] = compute_bounds(build_points_,
