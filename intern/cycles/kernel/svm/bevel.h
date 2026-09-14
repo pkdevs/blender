@@ -50,30 +50,44 @@ ccl_device float svm_bevel_cubic_pdf(const float radius, const float r)
 /* solve 10x^2 - 20x^3 + 15x^4 - 4x^5 - xi == 0 */
 ccl_device_forceinline float svm_bevel_cubic_quintic_root_find(const float xi)
 {
-  /* newton-raphson iteration, usually succeeds in 2-4 iterations, except
-   * outside 0.02 ... 0.98 where it can go up to 10, so overall performance
-   * should not be too bad */
-  const float tolerance = 1e-6f;
-  const int max_iteration_count = 10;
-  float x = 0.25f;
-  int i;
-
-  for (i = 0; i < max_iteration_count; i++) {
-    const float x2 = x * x;
-    const float x3 = x2 * x;
-    const float nx = (1.0f - x);
-
-    const float f = 10.0f * x2 - 20.0f * x3 + 15.0f * x2 * x2 - 4.0f * x2 * x3 - xi;
-    const float f_ = 20.0f * (x * nx) * (nx * nx);
-
-    if (fabsf(f) < tolerance || f_ == 0.0f) {
-      break;
-    }
-
-    x = saturatef(x - f / f_);
+  /*
+    Worst error of around 7.79e-08 for xi around 0.6413.
+  */
+  if (xi < 0.5f)
+  {
+    float v = sqrtf(xi); // Lower boundary square root factor
+    float x = v * (0.31622777f + v * (0.10000000f + v * (0.05533970f + v * 0.02251000f))); // Minimax lower seed
+    float u = 1.0f - x; // Complement distance
+    float u2 = u * u; // Squared complement factor
+    float u4 = u2 * u2; // Fourth power complement factor
+    float x2 = x * x; // Precomputed x squared
+    float cx = 1.0f - 4.0f * x; // Shared linear polynomial term
+    float f = x2 * (10.0f - x * (20.0f - x * (14.0f + cx))) - xi; // Direct residual step 1
+    x -= (2.0f * f * u * x) / (40.0f * u4 * x2 - f * cx + 1e-30f); // Halley step 1
+    u = 1.0f - x; // Recalculated complement distance
+    u2 = u * u; // Recalculated squared complement factor
+    f = x * x * (10.0f - x * (20.0f - x * (15.0f - 4.0f * x))) - xi; // Direct residual step 2
+    float df = 20.0f * u2 * u * x; // First derivative step 2
+    return x - f / (df + 1e-30f); // Final Newton step
   }
-
-  return x;
+  else
+  {
+    float d = 1.0f - xi; // Complement input distance
+    float w = sqrtf(sqrtf(d)); // Upper boundary fourth root factor
+    float u = w * (0.66874031f + w * (0.08944272f + w * (0.04186450f + w * 0.01841000f))); // Minimax upper seed
+    float x = 1.0f - u; // Root seed derived from complement
+    float u2 = u * u; // Squared complement factor
+    float u4 = u2 * u2; // Fourth power complement factor
+    float x2 = x * x; // Precomputed x squared
+    float cx = 1.0f - 4.0f * x; // Shared linear polynomial term
+    float f = d - u4 * (2.0f - cx); // Complement residual step 1
+    x -= (2.0f * f * u * x) / (40.0f * u4 * x2 - f * cx + 1e-30f); // Halley step 1
+    u = 1.0f - x; // Recalculated complement distance
+    u2 = u * u; // Recalculated squared complement factor
+    f = d - (u2 * u2) * (1.0f + 4.0f * x); // Complement residual step 2
+    float df = 20.0f * u2 * u * x; // First derivative step 2
+    return x - f / (df + 1e-30f); // Final Newton step
+  }
 }
 
 ccl_device void svm_bevel_cubic_sample(const float radius,
