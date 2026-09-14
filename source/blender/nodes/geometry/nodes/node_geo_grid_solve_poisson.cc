@@ -269,6 +269,15 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Warning, "Non-uniform grid scale not supported");
   }
   const float voxel_scale = voxel_size.x;
+  /* The solver works in index space, where the voxel size is h=1. The Laplace operator applies two
+   * derivative operators div(grad(X)) which both add a voxel scale factor of 1/h in the
+   * "staggered" 1st order version used here. The solver computes the inverse, so the resulting
+   * solution should have a factor of h^2 applied, which we have to do manually to produce the
+   * correct result in grid space. */
+  const float solution_scale = math::square(voxel_scale);
+  /* The absolute error is given as a solution value in grid space, which is scaled by h^2 compared
+   * to index space. The absolute error in index space must be scaled by 1/h^2. */
+  const float absolute_error_scale = math::rcp(solution_scale);
 
   openvdb::math::pcg::State solver_state;
   solver_state.iterations = max_iterations;
@@ -279,7 +288,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     case ThresholdMode::Absolute:
       solver_state.relativeError = 0.0;
-      solver_state.absoluteError = double(error_threshold);
+      solver_state.absoluteError = double(error_threshold * absolute_error_scale);
       break;
   }
 
@@ -402,12 +411,6 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
   }
 
-  /* The solver works in index space, where the voxel size is h=1. The Laplace operator applies two
-   * derivative operators div(grad(X)) which both add a voxel scale factor of 1/h in the
-   * "staggered" 1st order version used here. The solver computes the inverse, so the resulting
-   * solution should have a factor of h^2 applied, which we have to do manually to produce the
-   * correct result in grid space. */
-  const float solution_scale = math::square(voxel_scale);
   openvdb::tools::foreach(solution_tree->beginValueOn(),
                           [&](const typename openvdb::FloatTree::ValueOnIter &iter) {
                             iter.setValue(iter.getValue() * solution_scale);
