@@ -353,27 +353,29 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
   SceneCompositorEffect &effect = *effect_ptr.data_as<SceneCompositorEffect>();
 
   Vector<nodes::NodeWarning> effect_warnings = get_effect_warnings(effect);
-
-  /* Node group warnings are combined with effects warnings in UI. */
-  Vector<const nodes::NodeWarning *> warnings;
+  Vector<const nodes::NodeWarning *> effect_warning_ptrs;
   for (const nodes::NodeWarning &warning : effect_warnings) {
-    warnings.append(&warning);
+    effect_warning_ptrs.append(&warning);
   }
 
+  Vector<const nodes::NodeWarning *> node_tree_warning_ptrs;
   NodeTreeLog *tree_log = get_root_tree_log(scene, effect);
   if (tree_log) {
     tree_log->ensure_node_warnings(*CTX_data_main(C));
     for (const nodes::NodeWarning &warning : tree_log->all_warnings) {
-      warnings.append(&warning);
+      node_tree_warning_ptrs.append(&warning);
     }
   }
 
-  if (warnings.is_empty()) {
+  if (effect_warning_ptrs.is_empty() && node_tree_warning_ptrs.is_empty()) {
     return;
   }
 
   Map<nodes::NodeWarningType, int> count_by_type;
-  for (const nodes::NodeWarning *warning : warnings) {
+  for (const nodes::NodeWarning *warning : effect_warning_ptrs) {
+    count_by_type.lookup_or_add(warning->type, 0)++;
+  }
+  for (const nodes::NodeWarning *warning : node_tree_warning_ptrs) {
     count_by_type.lookup_or_add(warning->type, 0)++;
   }
   const int num_errors = count_by_type.lookup_default(nodes::NodeWarningType::Error, 0);
@@ -385,21 +387,27 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
     return;
   }
 
-  std::ranges::sort(warnings, [](const nodes::NodeWarning *a, const nodes::NodeWarning *b) {
-    const int severity_a = node_warning_type_severity(a->type);
-    const int severity_b = node_warning_type_severity(b->type);
-    if (severity_a > severity_b) {
-      return true;
-    }
-    if (severity_a < severity_b) {
-      return false;
-    }
-    return BLI_strcasecmp_natural(a->message.c_str(), b->message.c_str()) < 0;
-  });
+  const auto sort_warnings = [](Vector<const nodes::NodeWarning *> &warnings) {
+    std::ranges::sort(warnings, [](const nodes::NodeWarning *a, const nodes::NodeWarning *b) {
+      const int severity_a = node_warning_type_severity(a->type);
+      const int severity_b = node_warning_type_severity(b->type);
+      if (severity_a > severity_b) {
+        return true;
+      }
+      if (severity_a < severity_b) {
+        return false;
+      }
+      return BLI_strcasecmp_natural(a->message.c_str(), b->message.c_str()) < 0;
+    });
+  };
+  /* Effect warnings are always drawn before warnings coming from the node group, regardless of
+   * their severity. */
+  sort_warnings(effect_warning_ptrs);
+  sort_warnings(node_tree_warning_ptrs);
 
   ui::Layout &col = panel->column(false);
   ui::Block *block = col.block();
-  for (const nodes::NodeWarning *warning : warnings) {
+  const auto draw_warning = [&](const nodes::NodeWarning *warning) {
     const int icon = node_warning_type_icon(warning->type);
     const StringRef message = RPT_(warning->message);
     ui::Button *but = uiDefIconTextBut(
@@ -413,6 +421,12 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
         },
         MEM_new<std::string>(__func__, message),
         [](void *arg) { MEM_delete(static_cast<std::string *>(arg)); });
+  };
+  for (const nodes::NodeWarning *warning : effect_warning_ptrs) {
+    draw_warning(warning);
+  }
+  for (const nodes::NodeWarning *warning : node_tree_warning_ptrs) {
+    draw_warning(warning);
   }
 }
 
