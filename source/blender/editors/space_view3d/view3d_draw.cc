@@ -1582,6 +1582,12 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
         Object *ob = BKE_view_layer_active_object_get(view_layer);
         draw_selected_name(*bmain, v3d, scene, view_layer, ob, xoffset, &yoffset);
         BLF_color4fv(font_id, text_color);
+        const std::string debug_view_label = ED_view3d_debug_view_label(*v3d);
+        if (!debug_view_label.empty()) {
+          const std::string text = std::string(IFACE_("Debug View")) + ": " + debug_view_label;
+          yoffset -= VIEW3D_OVERLAY_LINEHEIGHT;
+          BLF_draw_default(xoffset, yoffset, 0.0f, text.c_str(), text.size());
+        }
       }
 
       if (v3d->gridflag & (V3D_SHOW_FLOOR | V3D_SHOW_X | V3D_SHOW_Y | V3D_SHOW_Z) && region_ok) {

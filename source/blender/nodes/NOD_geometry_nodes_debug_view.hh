@@ -58,6 +58,9 @@ struct Candidate {
   ComputeContextHash compute_context_hash;
   int32_t viewer_node_id = 0;
   const eval_log::ViewerNodeLog *viewer_log = nullptr;
+  /** Node identities for resolving current user labels, without caching labels or ID pointers. */
+  Vector<int32_t> group_node_path;
+  uint32_t tree_session_uid = 0;
 };
 
 /**

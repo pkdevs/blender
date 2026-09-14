@@ -11,6 +11,8 @@
 
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "DNA_collection_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -69,8 +71,13 @@
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
+
+#include "BLT_translation.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
 
 #include "BLO_read_write.hh"
 
@@ -200,23 +207,15 @@ void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
   }
 }
 
-bool ED_view3d_debug_view_set_all(View3D &v3d)
+void view3d_debug_view_set_all(View3D &v3d)
 {
   View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
-  const bool changed = debug_view.mode != V3D_DEBUG_VIEW_ALL ||
-                       debug_view.selected_source_hash_v1[0] != 0 ||
-                       debug_view.selected_source_hash_v1[1] != 0 ||
-                       debug_view.selected_source_hash_v2[0] != 0 ||
-                       debug_view.selected_source_hash_v2[1] != 0 ||
-                       debug_view.selected_source_viewer_node_id != 0;
-
   debug_view.mode = V3D_DEBUG_VIEW_ALL;
   debug_view.selected_source_hash_v1[0] = 0;
   debug_view.selected_source_hash_v1[1] = 0;
   debug_view.selected_source_hash_v2[0] = 0;
   debug_view.selected_source_hash_v2[1] = 0;
   debug_view.selected_source_viewer_node_id = 0;
-  return changed;
 }
 
 static uint64_t debug_view_hash_from_runtime(const uint32_t hash[2])
@@ -300,7 +299,7 @@ static void debug_view_context_set(View3D &v3d,
   if (debug_view.context_object != object ||
       debug_view.context_modifier_uid != modifier_persistent_uid)
   {
-    ED_view3d_debug_view_set_all(v3d);
+    view3d_debug_view_set_all(v3d);
   }
 
   debug_view.context_object = const_cast<Object *>(object);
@@ -316,17 +315,6 @@ static void debug_view_select_source(View3D &v3d, const nodes::debug_view::Candi
   debug_view_hash_to_runtime(candidate.compute_context_hash.v2,
                              debug_view.selected_source_hash_v2);
   debug_view.selected_source_viewer_node_id = candidate.viewer_node_id;
-}
-
-static bool debug_view_inspection_state_changed(const View3D_DebugViewRuntime &before,
-                                                const View3D_DebugViewRuntime &after)
-{
-  return before.mode != after.mode ||
-         before.selected_source_hash_v1[0] != after.selected_source_hash_v1[0] ||
-         before.selected_source_hash_v1[1] != after.selected_source_hash_v1[1] ||
-         before.selected_source_hash_v2[0] != after.selected_source_hash_v2[0] ||
-         before.selected_source_hash_v2[1] != after.selected_source_hash_v2[1] ||
-         before.selected_source_viewer_node_id != after.selected_source_viewer_node_id;
 }
 
 bool ED_view3d_debug_view_request(View3D &v3d,
@@ -386,7 +374,7 @@ bool ED_view3d_debug_view_request(View3D &v3d,
   View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
   if (debug_view.mode == V3D_DEBUG_VIEW_SINGLE) {
     if (!debug_view_source_is_present(v3d, r_request)) {
-      ED_view3d_debug_view_set_all(v3d);
+      view3d_debug_view_set_all(v3d);
     }
     else {
       r_request.source = debug_view_source_from_runtime(v3d);
@@ -395,59 +383,208 @@ bool ED_view3d_debug_view_request(View3D &v3d,
   return true;
 }
 
-bool ED_view3d_debug_view_cycle(View3D &v3d, const Object *active_object, const bool next)
+struct DebugViewLabel {
+  std::string name;
+  std::string instance;
+};
+
+static DebugViewLabel debug_view_candidate_label(const bNodeTree &root_tree,
+                                                 const nodes::debug_view::Candidate &candidate)
 {
-  const View3D_DebugViewRuntime before = v3d.runtime.debug_view;
-  const bool was_single = before.mode == V3D_DEBUG_VIEW_SINGLE;
-
-  DEGDebugViewRequest request{};
-  if (!ED_view3d_debug_view_request(v3d, active_object, request)) {
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
-  }
-
-  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
-  if (!eval_log) {
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
-  }
-
-  const auto candidates = eval_log->debug_view_candidates();
-  if (candidates.is_empty()) {
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
-  }
-
-  const View3D_DebugViewRuntime &after_request = v3d.runtime.debug_view;
-  const bool context_changed = before.context_object != after_request.context_object ||
-                               before.context_modifier_uid != after_request.context_modifier_uid;
-  /* A disappeared source has already reset the state to All. Do not immediately select another
-   * source as a side effect of the same operator invocation. */
-  if (was_single && after_request.mode == V3D_DEBUG_VIEW_ALL && !context_changed) {
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
-  }
-
-  if (after_request.mode == V3D_DEBUG_VIEW_ALL) {
-    debug_view_select_source(v3d, next ? candidates.first() : candidates.last());
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
-  }
-
-  const DEGDebugViewSource current_source = debug_view_source_from_runtime(v3d);
-  int current_index = -1;
-  for (int i = 0; i < candidates.size(); i++) {
-    if (debug_view_candidate_matches(candidates[i], current_source)) {
-      current_index = i;
+  DebugViewLabel label;
+  const bNodeTree *tree = &root_tree;
+  Span<int32_t> remaining_path = candidate.group_node_path;
+  while (true) {
+    tree->ensure_topology_cache();
+    const auto *propagation = tree->runtime->debug_view_propagation.get();
+    if (label.name.empty() && propagation) {
+      tree->ensure_interface_cache();
+      /* The outermost explicitly exposed Boolean is the public name of this view. */
+      for (const int input : tree->interface_inputs().index_range()) {
+        for (const nodes::debug_view::PropagatedViewer &viewer :
+             propagation->viewers_by_group_input.lookup(input))
+        {
+          if (viewer.viewer_node_id == candidate.viewer_node_id &&
+              viewer.group_node_path.as_span() == remaining_path)
+          {
+            label.name = tree->interface_inputs()[input]->name;
+            break;
+          }
+        }
+        if (!label.name.empty()) {
+          break;
+        }
+      }
+    }
+    if (remaining_path.is_empty()) {
       break;
     }
+    const bNode *group = tree->node_by_id(remaining_path.first());
+    if (!group || !group->is_group() || !group->id) {
+      return {IFACE_("Debug View"), {}};
+    }
+    if (label.instance.empty()) {
+      label.instance = group->name;
+    }
+    tree = reinterpret_cast<const bNodeTree *>(group->id);
+    remaining_path = remaining_path.drop_front(1);
   }
-
-  if (current_index == -1) {
-    ED_view3d_debug_view_set_all(v3d);
-    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  const bNode *viewer = tree->node_by_id(candidate.viewer_node_id);
+  if (!viewer || tree->id.session_uid != candidate.tree_session_uid) {
+    return {IFACE_("Debug View"), {}};
   }
+  if (label.name.empty()) {
+    label.name = viewer->label[0] ? viewer->label : viewer->name;
+  }
+  if (label.instance.empty()) {
+    label.instance = viewer->name;
+  }
+  return label;
+}
 
-  const int candidate_count = candidates.size();
-  const int next_index = next ? (current_index + 1) % candidate_count :
-                                (current_index + candidate_count - 1) % candidate_count;
-  debug_view_select_source(v3d, candidates[next_index]);
-  return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+std::string ED_view3d_debug_view_label(View3D &v3d)
+{
+  if (!(v3d.flag2 & V3D_SHOW_VIEWER)) {
+    return {};
+  }
+  DEGDebugViewRequest request{};
+  if (!ED_view3d_debug_view_request(v3d, v3d.runtime.debug_view.context_object, request)) {
+    return {};
+  }
+  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+  if (!eval_log) {
+    return {};
+  }
+  const auto candidates = eval_log->debug_view_candidates();
+  if (candidates.is_empty()) {
+    return {};
+  }
+  if (!request.source) {
+    return IFACE_("All");
+  }
+  const auto &nmd = *reinterpret_cast<const NodesModifierData *>(
+      BKE_modifiers_findby_persistent_uid(request.object, request.modifier_persistent_uid));
+  for (const nodes::debug_view::Candidate &candidate : candidates) {
+    if (debug_view_candidate_matches(candidate, *request.source)) {
+      return debug_view_candidate_label(*nmd.node_group, candidate).name;
+    }
+  }
+  return {};
+}
+
+static bool view3d_debug_view_select_poll(bContext *C)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  DEGDebugViewRequest request{};
+  if (!v3d || !(v3d->flag2 & V3D_SHOW_VIEWER) ||
+      !ED_view3d_debug_view_request(*v3d, CTX_data_active_object(C), request))
+  {
+    return false;
+  }
+  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+  return eval_log && !eval_log->debug_view_candidates().is_empty();
+}
+
+static std::string debug_view_source_identifier(const nodes::debug_view::Candidate &candidate)
+{
+  return fmt::format("{}:{}:{}",
+                     candidate.compute_context_hash.v1,
+                     candidate.compute_context_hash.v2,
+                     candidate.viewer_node_id);
+}
+
+static wmOperatorStatus view3d_debug_view_select_exec(bContext *C, wmOperator *op)
+{
+  View3D &v3d = *CTX_wm_view3d(C);
+  DEGDebugViewRequest request{};
+  if (!ED_view3d_debug_view_request(v3d, CTX_data_active_object(C), request)) {
+    return OPERATOR_CANCELLED;
+  }
+  const std::string identifier = RNA_string_get(op->ptr, "source");
+  if (identifier.empty()) {
+    view3d_debug_view_set_all(v3d);
+  }
+  else {
+    nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+    if (!eval_log) {
+      return OPERATOR_CANCELLED;
+    }
+    /* Resolve the identity captured when the menu opened. A changed candidate list must never
+     * silently select a different source at the same list index. */
+    const auto candidates = eval_log->debug_view_candidates();
+    const auto *candidate = std::ranges::find_if(candidates, [&](const auto &candidate) {
+      return debug_view_source_identifier(candidate) == identifier;
+    });
+    if (candidate == candidates.end()) {
+      return OPERATOR_CANCELLED;
+    }
+    debug_view_select_source(v3d, *candidate);
+  }
+  view3d_debug_view_inspection_redraw(C, v3d);
+  return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_debug_view_select(wmOperatorType *ot)
+{
+  ot->name = "Inspect Debug View";
+  ot->description = "Display all participating persistent Debug Views or inspect one source";
+  ot->idname = "VIEW3D_OT_debug_view_select";
+  ot->exec = view3d_debug_view_select_exec;
+  ot->poll = view3d_debug_view_select_poll;
+
+  PropertyRNA *prop = RNA_def_string(
+      ot->srna, "source", nullptr, 0, "Source", "Runtime source identity");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+}
+
+static void debug_view_menu_draw(const bContext *C, Menu *menu)
+{
+  View3D &v3d = *CTX_wm_view3d(C);
+  DEGDebugViewRequest request{};
+  if (!ED_view3d_debug_view_request(v3d, CTX_data_active_object(C), request)) {
+    return;
+  }
+  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+  if (!eval_log) {
+    return;
+  }
+  ui::Layout &layout = *menu->layout;
+  PointerRNA all = layout.op(
+      "VIEW3D_OT_debug_view_select", IFACE_("All"), request.source ? ICON_NONE : ICON_CHECKMARK);
+  RNA_string_set(&all, "source", "");
+  layout.separator();
+
+  const auto &nmd = *reinterpret_cast<const NodesModifierData *>(
+      BKE_modifiers_findby_persistent_uid(request.object, request.modifier_persistent_uid));
+  const auto candidates = eval_log->debug_view_candidates();
+  Vector<DebugViewLabel> labels;
+  Map<std::string, int> name_counts;
+  for (const auto &candidate : candidates) {
+    labels.append(debug_view_candidate_label(*nmd.node_group, candidate));
+    name_counts.lookup_or_add_default(labels.last().name)++;
+  }
+  for (const int i : candidates.index_range()) {
+    const auto &candidate = candidates[i];
+    const DebugViewLabel &label = labels[i];
+    const std::string name = name_counts.lookup(label.name) > 1 ?
+                                 fmt::format("{} ({})", label.name, label.instance) :
+                                 label.name;
+    const bool selected = request.source &&
+                          debug_view_candidate_matches(candidate, *request.source);
+    PointerRNA ptr = layout.op(
+        "VIEW3D_OT_debug_view_select", name, selected ? ICON_CHECKMARK : ICON_NONE);
+    RNA_string_set(&ptr, "source", debug_view_source_identifier(candidate).c_str());
+  }
+}
+
+static void debug_view_menu_register()
+{
+  MenuType *mt = MEM_new<MenuType>(__func__);
+  STRNCPY_UTF8(mt->idname, "VIEW3D_MT_debug_views");
+  STRNCPY_UTF8(mt->label, N_("Debug View"));
+  mt->poll = [](const bContext *C, MenuType * /*mt*/) { return CTX_wm_view3d(C) != nullptr; };
+  mt->draw = debug_view_menu_draw;
+  WM_menutype_add(mt);
 }
 
 /* ******************** default callbacks for view3d space ***************** */
@@ -1818,6 +1955,13 @@ static void view3d_id_remap_v3d(ScrArea *area,
     }
   }
 
+  /* The label getter can run before the next viewport context update. */
+  if (mappings.apply(reinterpret_cast<ID **>(&v3d->runtime.debug_view.context_object),
+                     ID_REMAP_APPLY_DEFAULT) == ID_REMAP_RESULT_SOURCE_UNASSIGNED)
+  {
+    v3d->runtime.debug_view = {};
+  }
+
   if (mappings.apply(reinterpret_cast<ID **>(&v3d->debug_view_pin_object),
                      ID_REMAP_APPLY_DEFAULT) == ID_REMAP_RESULT_SOURCE_UNASSIGNED)
   {
@@ -2042,6 +2186,7 @@ void ED_spacetype_view3d()
   art->regionid = RGN_TYPE_XR;
   BLI_addhead(&st->regiontypes, art);
 
+  debug_view_menu_register();
   WM_menutype_add(MEM_new<MenuType>(__func__, ed::geometry::node_group_operator_assets_menu()));
   WM_menutype_add(
       MEM_new<MenuType>(__func__, ed::geometry::node_group_operator_assets_menu_unassigned()));

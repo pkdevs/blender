@@ -1129,11 +1129,8 @@ bool ED_view3d_debug_view_request(View3D &v3d,
                                   const Object *active_object,
                                   DEGDebugViewRequest &r_request);
 
-/** Set the runtime Debug View inspection state to display all participating sources. */
-bool ED_view3d_debug_view_set_all(View3D &v3d);
-
-/** Cycle the runtime Debug View inspection state through participating sources. */
-bool ED_view3d_debug_view_cycle(View3D &v3d, const Object *active_object, bool next);
+/** Current persistent inspection label, or empty when no source can be displayed. */
+std::string ED_view3d_debug_view_label(View3D &v3d);
 
 bool ED_view3d_context_activate(bContext *C);
 /**

@@ -1156,6 +1156,7 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         const NodeTreeLogger &tree_logger = *item.value;
 
         bool supported_context = true;
+        Vector<int32_t> group_node_path;
         const NodeTreeLogger *context_logger = &tree_logger;
         while (context_logger) {
           if (context_logger->context_type == NodeTreeLogger::ContextType::Zone) {
@@ -1182,6 +1183,7 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
                 supported_context = false;
                 break;
               }
+              group_node_path.prepend(*context_logger->parent_node_id);
             }
             else {
               /* The first non-group tree logger is the root tree. Its parent is the
@@ -1218,7 +1220,11 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
                        candidate.viewer_node_id == viewer_log.node_id;
               });
           if (!is_duplicate) {
-            candidates.append({context_hash, viewer_log.node_id, viewer_log.viewer_log.get()});
+            candidates.append({context_hash,
+                               viewer_log.node_id,
+                               viewer_log.viewer_log.get(),
+                               group_node_path,
+                               tree_logger.tree_orig_session_uid.value_or(0)});
           }
         }
       }

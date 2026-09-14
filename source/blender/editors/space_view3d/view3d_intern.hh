@@ -39,6 +39,11 @@ int view3d_context(const bContext *C, const char *member, bContextDataResult *re
 /* `view3d_ops.cc` */
 
 void view3d_operatortypes();
+void view3d_debug_view_inspection_redraw(bContext *C, View3D &v3d);
+
+/* `space_view3d.cc` */
+void view3d_debug_view_set_all(View3D &v3d);
+void VIEW3D_OT_debug_view_select(wmOperatorType *ot);
 
 /* `view3d_edit.cc` */
 

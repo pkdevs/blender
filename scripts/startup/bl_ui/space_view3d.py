@@ -7272,18 +7272,22 @@ class VIEW3D_PT_overlay_viewer_node(Panel):
         overlay = view.overlay
         display_all = overlay.show_overlays
 
-        layout.operator(
-            "view3d.debug_view_pin",
-            text="Unpin Debug View Context" if view.debug_view_pinned else "Pin Debug View Context",
-            icon='PINNED' if view.debug_view_pinned else 'UNPINNED',
-        )
-
-        layout.separator()
         row = layout.row(align=True)
-        row.label(text="Debug Views")
-        row.operator("view3d.debug_view_all", text="All", depress=view.debug_view_is_all)
-        row.operator("view3d.debug_view_previous", text="", icon='BACK')
-        row.operator("view3d.debug_view_next", text="", icon='FORWARD')
+        row.label(text="Debug View")
+        label = view.debug_view_label
+        selector = row.row(align=True)
+        selector.enabled = bool(label)
+        selector.menu(
+            "VIEW3D_MT_debug_views",
+            text=label or iface_("All"),
+            translate=False,
+        )
+        row.operator(
+            "view3d.debug_view_pin",
+            text="",
+            icon='PINNED' if view.debug_view_pinned else 'UNPINNED',
+            depress=view.debug_view_pinned,
+        )
 
         col = layout.column()
         col.active = display_all
