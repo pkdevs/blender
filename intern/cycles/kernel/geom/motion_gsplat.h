@@ -209,6 +209,19 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
   return mix(scale, next_scale, t);
 }
 
+/* Pre-calculated parameters for faster access to the Gaussian splat attributes for scale, rotation,
+ * and base radiance.
+ *
+ * Naive implementation:
+ *     const float3 scale = motion_gsplat_scale(kg, ...);
+ *     const Quaternion rotation = motion_gsplat_rotation(kg, ...)
+ *     const float opacity = motion_gsplat_radiance_base(kg, ...).w;
+ *
+ * More efficient implementation using pre-calculated information:
+ *     const GSplatMotionInfo motion_info = motion_gsplat_compute_motion_info(kg, object, time);
+ *     const float3 scale = motion_gsplat_scale(kg, motion_info, ...);
+ *     const Quaternion rotation = motion_gsplat_rotation(kg, motion_info, ...);
+ *     const flota opacity = motion_gsplat_opacity(kg, motion_info, ...); */
 struct GSplatMotionInfo {
   int offset_for_step;
   int offset_for_next_step;
