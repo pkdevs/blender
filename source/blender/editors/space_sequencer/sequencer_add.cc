@@ -697,8 +697,13 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
   const eSeqOverlapMode overlap_mode = RNA_boolean_get(op->ptr, "ripple") ?
                                            SEQ_OVERLAP_RIPPLE :
                                            seq::tool_settings_overlap_mode_get(scene);
-  seq::transform_handle_overlap(
-      scene, ed->current_strips(), strips, {}, use_sync_markers, overlap_mode);
+  seq::transform_handle_overlap(scene,
+                                ed->current_strips(),
+                                strips,
+                                {},
+                                use_sync_markers,
+                                overlap_mode,
+                                seq::tool_settings_ripple_flag_get(scene));
 }
 
 static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *strip)

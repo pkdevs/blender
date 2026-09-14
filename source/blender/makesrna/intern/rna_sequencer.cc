@@ -118,6 +118,27 @@ const EnumPropertyItem rna_enum_strip_scale_method_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_strip_overlap_mode_items[] = {
+    {SEQ_OVERLAP_RIPPLE,
+     "RIPPLE",
+     0,
+     "Ripple",
+     "Push the strips that are in the way further along the timeline, keeping the spacing "
+     "between them intact"},
+    {SEQ_OVERLAP_OVERWRITE,
+     "OVERWRITE",
+     0,
+     "Overwrite",
+     "Replace the covered part of the strips that are in the way, trimming or splitting them"},
+    {SEQ_OVERLAP_SHUFFLE,
+     "SHUFFLE",
+     0,
+     "Shuffle",
+     "Move the transformed strips to the nearest free space, leaving every other strip where "
+     "it is"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 const EnumPropertyItem rna_enum_pitch_mode_items[] = {
     {ePitchMode::PITCH_MODE_SEMITONES,
      "SEMITONES",

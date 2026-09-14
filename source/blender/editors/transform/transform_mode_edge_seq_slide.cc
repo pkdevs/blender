@@ -44,6 +44,7 @@ namespace blender::ed::transform {
 
 struct SeqSlideParams {
   bool use_restore_handle_selection;
+  wmOperator *op;
 };
 
 static const char *seq_slide_overlap_mode_name(const eSeqOverlapMode overlap_mode)
@@ -203,6 +204,7 @@ static void initSeqSlide(TransInfo *t, wmOperator *op)
   SeqSlideParams *ssp = MEM_new_zeroed<SeqSlideParams>(__func__);
   t->custom.mode.data = ssp;
   t->custom.mode.use_free = true;
+  ssp->op = op;
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_restore_handle_selection");
   if (op != nullptr && prop != nullptr) {
     ssp->use_restore_handle_selection = RNA_property_boolean_get(op->ptr, prop);
@@ -234,6 +236,18 @@ bool transform_mode_edge_seq_slide_use_restore_handle_selection(const TransInfo 
     return false;
   }
   return ssp->use_restore_handle_selection;
+}
+
+wmOperator *transform_mode_edge_seq_slide_operator_get(const TransInfo *t)
+{
+  if (t->mode != TFM_SEQ_SLIDE) {
+    return nullptr;
+  }
+  SeqSlideParams *ssp = static_cast<SeqSlideParams *>(t->custom.mode.data);
+  if (ssp == nullptr) {
+    return nullptr;
+  }
+  return ssp->op;
 }
 
 /** \} */

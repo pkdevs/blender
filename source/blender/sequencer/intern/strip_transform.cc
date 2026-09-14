@@ -373,13 +373,13 @@ static int sources_end_frame_get(const Scene *scene,
 
 static void strip_transform_handle_ripple(Scene *scene,
                                           ListBaseT<Strip> *seqbasep,
-                                          Span<Strip *> source_strips)
+                                          Span<Strip *> source_strips,
+                                          const eSeqRippleFlag ripple_flag)
 {
   if (source_strips.is_empty()) {
     return;
   }
 
-  const eSeqRippleFlag ripple_flag = tool_settings_ripple_flag_get(scene);
   const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
 
   int start_frame = MAXFRAME;
@@ -614,8 +614,7 @@ void transform_handle_overlap(Scene *scene,
                               Span<Strip *> source_strips,
                               bool use_sync_markers)
 {
-  VectorSet<Strip *> empty_set;
-  transform_handle_overlap(scene, seqbasep, source_strips, empty_set, use_sync_markers);
+  transform_handle_overlap(scene, seqbasep, source_strips, {}, use_sync_markers);
 }
 
 void transform_handle_overlap(Scene *scene,
@@ -629,7 +628,8 @@ void transform_handle_overlap(Scene *scene,
                            source_strips,
                            time_dependent_strips,
                            use_sync_markers,
-                           tool_settings_overlap_mode_get(scene));
+                           tool_settings_overlap_mode_get(scene),
+                           tool_settings_ripple_flag_get(scene));
 }
 
 void transform_handle_overlap(Scene *scene,
@@ -637,11 +637,12 @@ void transform_handle_overlap(Scene *scene,
                               Span<Strip *> source_strips,
                               Span<Strip *> time_dependent_strips,
                               bool use_sync_markers,
-                              const eSeqOverlapMode overlap_mode)
+                              const eSeqOverlapMode overlap_mode,
+                              const eSeqRippleFlag ripple_flag)
 {
   switch (overlap_mode) {
     case SEQ_OVERLAP_RIPPLE:
-      strip_transform_handle_ripple(scene, seqbasep, source_strips);
+      strip_transform_handle_ripple(scene, seqbasep, source_strips, ripple_flag);
       break;
     case SEQ_OVERLAP_OVERWRITE:
       strip_transform_handle_overwrite(scene, seqbasep, source_strips);

@@ -2643,7 +2643,7 @@ void SEQUENCER_OT_delete(wmOperatorType *ot)
 /** \name Ripple Delete Strips Operator
  * \{ */
 
-static void operator_properties_ripple(wmOperatorType *ot)
+void operator_properties_ripple(wmOperatorType *ot)
 {
   PropertyRNA *prop;
 

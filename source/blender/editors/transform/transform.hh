@@ -651,7 +651,9 @@ struct MouseInput {
 
 struct TransCustomData {
   void *data;
+  /** Callback to override automatic freeing done by #use_free. Must null #data.  */
   void (*free_cb)(TransInfo *, TransDataContainer *tc, TransCustomData *custom_data);
+  /** Whether to automatically attempt to `MEM_delete_void` #data if not already null. */
   unsigned int use_free : 1;
 };
 
