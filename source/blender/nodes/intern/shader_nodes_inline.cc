@@ -1690,34 +1690,23 @@ class ShaderNodesInliner {
     const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeMathOperation(node->custom1);
 
-    Vector<SocketValue> values;
-    Vector<std::optional<float>> primitives;
-    for (const bNodeSocket *input_socket : node->input_sockets()) {
-      if (this->socket_is_ignored(*input_socket)) {
-        continue;
-      }
-      const SocketValue &value = value_by_socket_.lookup({node.context, input_socket});
-      values.append(value);
+    auto try_get_float = [&](const UString identifier) -> std::optional<float> {
+      const bNodeSocket *socket = node->input_by_identifier(identifier);
+      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
       if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *input_socket->typeinfo))
+              *socket->typeinfo))
       {
-        primitives.append(std::get<float>(primitive->value));
+        return std::get<float>(primitive->value);
       }
-      else {
-        primitives.append(std::nullopt);
-      }
-    }
+      return std::nullopt;
+    };
 
     switch (op) {
-      case NODE_MATH_MULTIPLY: {
-        if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
-          this->store_socket_value_primitive(output_socket, 0.0f);
-          return true;
-        }
-        break;
-      }
+      case NODE_MATH_MULTIPLY:
       case NODE_MATH_DIVIDE: {
-        if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
+        const std::optional<float> a = try_get_float("Value"_ustr);
+        const std::optional<float> b = try_get_float("Value_001"_ustr);
+        if (a == 0.0f || b == 0.0f) {
           this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
         }
@@ -1735,34 +1724,23 @@ class ShaderNodesInliner {
     const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeIntegerMathOperation(node->custom1);
 
-    Vector<SocketValue> values;
-    Vector<std::optional<int>> primitives;
-    for (const bNodeSocket *input_socket : node->input_sockets()) {
-      if (this->socket_is_ignored(*input_socket)) {
-        continue;
-      }
-      const SocketValue &value = value_by_socket_.lookup({node.context, input_socket});
-      values.append(value);
+    auto try_get_int = [&](const UString identifier) -> std::optional<int> {
+      const bNodeSocket *socket = node->input_by_identifier(identifier);
+      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
       if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
-              *input_socket->typeinfo))
+              *socket->typeinfo))
       {
-        primitives.append(std::get<int>(primitive->value));
+        return std::get<int>(primitive->value);
       }
-      else {
-        primitives.append(std::nullopt);
-      }
-    }
+      return std::nullopt;
+    };
 
     switch (op) {
-      case NODE_INTEGER_MATH_MULTIPLY: {
-        if (primitives[0] == 0 || primitives[1] == 0) {
-          this->store_socket_value_primitive(output_socket, 0);
-          return true;
-        }
-        break;
-      }
+      case NODE_INTEGER_MATH_MULTIPLY:
       case NODE_INTEGER_MATH_DIVIDE: {
-        if (primitives[0] == 0 || primitives[1] == 0) {
+        const std::optional<int> a = try_get_int("Value"_ustr);
+        const std::optional<int> b = try_get_int("Value_001"_ustr);
+        if (a == 0 || b == 0) {
           this->store_socket_value_primitive(output_socket, 0);
           return true;
         }
@@ -1777,78 +1755,58 @@ class ShaderNodesInliner {
 
   [[nodiscard]] bool try_short_circuit__vector_math(const NodeInContext &node)
   {
-    const SocketInContext output_socket = node.output_socket(0);
     const auto op = NodeVectorMathOperation(node->custom1);
 
-    Vector<SocketValue> values;
-    Vector<const bNodeSocket *> sockets;
-    for (const bNodeSocket *input_socket : node->input_sockets()) {
-      if (this->socket_is_ignored(*input_socket)) {
-        continue;
-      }
-      values.append(value_by_socket_.lookup({node.context, input_socket}));
-      sockets.append(input_socket);
-    }
-
-    auto try_get_float3 = [&](const int index) -> std::optional<float3> {
-      if (const std::optional<PrimitiveSocketValue> primitive = values[index].to_primitive(
-              *sockets[index]->typeinfo))
+    auto try_get_float3 = [&](const UString identifier) -> std::optional<float3> {
+      const bNodeSocket *socket = node->input_by_identifier(identifier);
+      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
+      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
+              *socket->typeinfo))
       {
         return std::get<float3>(primitive->value);
       }
       return std::nullopt;
     };
-    auto try_get_float = [&](const int index) -> std::optional<float> {
-      if (const std::optional<PrimitiveSocketValue> primitive = values[index].to_primitive(
-              *sockets[index]->typeinfo))
+    auto try_get_float = [&](const UString identifier) -> std::optional<float> {
+      const bNodeSocket *socket = node->input_by_identifier(identifier);
+      const SocketValue &value = value_by_socket_.lookup({node.context, socket});
+      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
+              *socket->typeinfo))
       {
         return std::get<float>(primitive->value);
       }
       return std::nullopt;
     };
+    auto output_socket = [&](const UString identifier) -> SocketInContext {
+      return {node.context, node->output_by_identifier(identifier)};
+    };
 
     switch (op) {
-      case NODE_VECTOR_MATH_MULTIPLY: {
-        const std::optional<float3> a = try_get_float3(0);
-        const std::optional<float3> b = try_get_float3(1);
-        if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value_primitive(output_socket, float3(0));
-          return true;
-        }
-        break;
-      }
-      case NODE_VECTOR_MATH_DIVIDE: {
-        const std::optional<float3> a = try_get_float3(0);
-        const std::optional<float3> b = try_get_float3(1);
-        if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value_primitive(output_socket, float3(0));
-          return true;
-        }
-        break;
-      }
+      case NODE_VECTOR_MATH_MULTIPLY:
+      case NODE_VECTOR_MATH_DIVIDE:
       case NODE_VECTOR_MATH_CROSS_PRODUCT: {
-        const std::optional<float3> a = try_get_float3(0);
-        const std::optional<float3> b = try_get_float3(1);
-        if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value_primitive(output_socket, float3(0));
+        const std::optional<float3> a = try_get_float3("Vector"_ustr);
+        const std::optional<float3> b = try_get_float3("Vector_001"_ustr);
+        if (a == float3(0.0f) || b == float3(0.0f)) {
+          this->store_socket_value_primitive(output_socket("Vector"_ustr), float3(0.0f));
           return true;
         }
         break;
       }
       case NODE_VECTOR_MATH_DOT_PRODUCT: {
-        const std::optional<float3> a = try_get_float3(0);
-        const std::optional<float3> b = try_get_float3(1);
-        if (math::is_zero(a) || math::is_zero(b)) {
-          this->store_socket_value_primitive(output_socket, 0.0f);
+        const std::optional<float3> a = try_get_float3("Vector"_ustr);
+        const std::optional<float3> b = try_get_float3("Vector_001"_ustr);
+        if (a == float3(0.0f) || b == float3(0.0f)) {
+          this->store_socket_value_primitive(output_socket("Value"_ustr), 0.0f);
           return true;
         }
         break;
       }
       case NODE_VECTOR_MATH_SCALE: {
-        const std::optional<float3> a = try_get_float3(0);
-        const std::optional<float> scale = try_get_float(1);
+        const std::optional<float3> a = try_get_float3("Vector"_ustr);
+        const std::optional<float> scale = try_get_float("Scale"_ustr);
         if (a == float3(0.0f) || scale == 0.0f) {
-          this->store_socket_value_primitive(output_socket, float3(0));
+          this->store_socket_value_primitive(output_socket("Vector"_ustr), float3(0.0f));
           return true;
         }
         break;
