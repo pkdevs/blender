@@ -89,7 +89,6 @@ TEST(kdtree, FindNearest)
   const Array<float3> positions = random_points(1000);
   const KDTreeNew<float3> tree(positions);
   EXPECT_EQ(tree.size(), 1000);
-  EXPECT_EQ(tree.points().data(), positions.data());
 
   const Vector<int> indices = all_indices(positions.size());
   const Array<float3> queries = random_points(50, 1);

@@ -586,8 +586,11 @@ TEST(kdtree_performance, TinyTreesBuild)
           });
         }
         else {
+          AlignedBuffer<8192, 8> buffer;
           time = run_batched(points_num, [&]() {
-            const KDTreeNew<float3> tree(positions);
+            LinearAllocator<> memory;
+            memory.provide_buffer(buffer);
+            const KDTreeNew<float3> tree(positions, memory);
             sum += tree.size();
           });
         }
@@ -621,8 +624,11 @@ TEST(kdtree_performance, TinyTreesFindNearestOther)
           });
         }
         else {
+          AlignedBuffer<8192, 8> buffer;
           time = run_batched(points_num, [&]() {
-            const KDTreeNew<float3> tree(positions);
+            LinearAllocator<> memory;
+            memory.provide_buffer(buffer);
+            const KDTreeNew<float3> tree(positions, memory);
             for (const int64_t i : IndexRange(points_num)) {
               sum += tree.find_nearest_filtered(positions[i],
                                                 [i](const int other) { return other != int(i); });
@@ -651,8 +657,11 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
             kdtree_free(tree);
           });
         }
+        AlignedBuffer<8192, 8> buffer;
         return run_batched(points_num, [&]() {
-          const KDTreeNew<float3> tree(positions);
+          LinearAllocator<> memory;
+          memory.provide_buffer(buffer);
+          const KDTreeNew<float3> tree(positions, memory);
           duplicates.as_mutable_span().fill(-1);
           tree.calc_duplicates(radius, duplicates);
         });

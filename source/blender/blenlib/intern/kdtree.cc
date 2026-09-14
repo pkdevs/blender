@@ -11,16 +11,6 @@
  * been rewritten around Blender's own containers, threading and math. The node layout and the way
  * a search walks it are still recognizably nanoflann's, which is where the copyright above comes
  * from.
- *
- * The build reorders a copy of the coordinates rather than an array of indices. That makes every
- * pass over a node sequential, and lets subtrees become cache resident as soon as they are small
- * enough. Each point carries its index in the element after its coordinates, so reordering the
- * points reorders the indices with them, in the same cache lines rather than in a second array.
- *
- * Splitting a node is the hot part of the build, and the obvious way to write it, a conditional
- * swap per point, mispredicts on about every other point of an evenly split node. That costs more
- * than everything else put together, so the split and the bounds it needs are both written
- * without branching on the comparison. See #partition_points.
  */
 
 #include <algorithm>
@@ -40,10 +30,8 @@
 
 /**
  * The build is a tight loop over every point, where the default optimization level leaves a good
- * part of its speed on the table. Everything below this is part of the build, so the whole file
- * is raised rather than each function of it, which also covers the lambdas they pass to
- * #threading::parallel_for. Clang is left out: it builds a tree just as fast at its own -O2, and
- * measurably slower at -O3. See `BLI_kdtree_performance_test`.
+ * part of its speed on the table. Clang is left out: it builds a tree just as fast at its own -O2,
+ * and measurably slower at -O3. See `BLI_kdtree_performance_test`.
  */
 #if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC optimize("O3")
@@ -87,10 +75,6 @@ static constexpr int NODE_MAX_BLOCKS = 64;
  * Nodes holding more than this fraction of the tree are split a block at a time, which is what a
  * threaded build spreads over its threads. Below that there are enough subtrees to keep the
  * threads busy on their own, and the blocks and the fix up they need are only extra work.
- *
- * \note A build on a single thread splits the same nodes into the same blocks, which costs it a
- * little, so that a tree does not depend on the number of threads that built it. See
- * #partition_points_in_blocks.
  */
 static constexpr int NODE_BLOCK_FRACTION = 8;
 
@@ -112,10 +96,6 @@ static int parallel_build_threads(const int64_t points_num)
 /** \name Tree
  * \{ */
 
-/**
- * Builds the nodes of a #KDTreeNew over the points at a set of indices, reordering a copy
- * of their coordinates as it goes and leaving the indices in the order the tree visits them.
- */
 template<typename T> class TreeBuilder {
  public:
   using ValueT = typename T::base_type;
@@ -124,23 +104,33 @@ template<typename T> class TreeBuilder {
  private:
   /**
    * A point as the build holds it: its coordinates, and its index in #points_ in the element
-   * after them. For three dimensional points that element is padding that a point would be
-   * rounded up to anyway.
+   * after them.
    */
   using BuildPoint = VecBase<ValueT, dimensions + 1>;
 
   using Node = kdtree::Node<ValueT>;
 
   /**
-   * Nodes handed out from large batches, so that a walk down the tree stays within a few
+   * Nodes are handed out from batches, so that a walk down the tree stays within a few
    * allocations. A linear allocator packs small allocations into buffers of a few kilobytes at
    * most, which for a tree of any size means nodes scattered over many of them.
    */
   struct NodeAllocator {
-    /** Nodes per batch, and so the most that can go unused per thread that built a subtree. */
-    static constexpr int batch_size = 256;
+    /**
+     * Most nodes per batch, and so the most that can go unused per thread that built a subtree.
+     * The first batch of a build is sized from the number of points instead, so that a small tree
+     * does not reserve room for a large one. See #node_batch_size.
+     */
+    static constexpr int BATCH_SIZE_MAX = 256;
 
-    LinearAllocator<> buffers;
+    int batch_size = BATCH_SIZE_MAX;
+    /**
+     * Where the batches come from. A pool that a thread of its own fills has to have one to
+     * itself, while the pool of a build that stays on one thread takes them straight from the
+     * tree's allocator, so that its nodes land in the same buffer as its indices.
+     */
+    LinearAllocator<> owned_allocator;
+    LinearAllocator<> *allocator = &owned_allocator;
     MutableSpan<Node> batch;
     /* Equal to the (empty) batch size, so that the first allocation starts a batch. */
     int used = 0;
@@ -149,8 +139,10 @@ template<typename T> class TreeBuilder {
     Node *allocate(const int num)
     {
       if (used + num > batch.size()) {
-        batch = buffers.allocate_array<Node>(batch_size);
+        batch = allocator->allocate_array<Node>(batch_size);
         used = 0;
+        /* Only the first batch is sized for the tree, the rest are full size. */
+        batch_size = BATCH_SIZE_MAX;
       }
       Node *nodes = &batch[used];
       used += num;
@@ -158,28 +150,42 @@ template<typename T> class TreeBuilder {
     }
   };
 
-  /** What the build needs beyond the tree it produces. */
-  struct BuildState {
-    /** The points being reordered, which #indices_ is taken from once the tree is built. */
-    MutableSpan<BuildPoint> points;
-    /** The pool of a build that stays on one thread. */
-    NodeAllocator allocator;
-    /**
-     * A pool per thread that takes part in a threaded build. One pool behind a mutex would put
-     * every node in the tree through it, while a pool per subtree leaves a partly used batch
-     * behind for each of them and spreads the nodes of a subtree over several pools. Only built
-     * when there are threads to give pools to: reaching into thread local storage costs more than
-     * building a tree of a few points does.
-     */
-    std::optional<threading::EnumerableThreadSpecific<NodeAllocator>> thread_allocators;
-  };
+ public:
+  /**
+   * The approximate number of nodes a tree with \a points_num points takes. Leaves hold a bit over
+   * two thirds of #leaf_size_ points on average, and a tree has one interior node fewer than it
+   * has leaves. Measured at 22.6 points per leaf for a leaf size of 32. See
+   * `BLI_kdtree_performance_test`.
+   */
+  static int node_batch_size(const int points_num, const int leaf_size)
+  {
+    const int64_t leaves = std::max<int64_t>(1, points_num * 3 / (int64_t(leaf_size) * 2));
+    return int(std::min<int64_t>(2 * leaves + 1, NodeAllocator::BATCH_SIZE_MAX));
+  }
 
+ private:
   const Span<T> points_;
   /** Filled with the indices of the points, in the order the tree visits them. */
   const MutableSpan<int> indices_;
   const int leaf_size_;
-  /** The buffers the nodes end up in, which the pools of #BuildState hand theirs to. */
+  /** The buffers the nodes end up in, which the pools below hand theirs to. */
   LinearAllocator<> &allocator_;
+
+  /**
+   * The points being reordered, which #indices_ is taken from once the tree is built. Only set
+   * while #build_nodes runs, which is the only thing that needs it.
+   */
+  MutableSpan<BuildPoint> build_points_;
+  /** The pool of a build that stays on one thread. */
+  NodeAllocator pool_;
+  /**
+   * A pool per thread that takes part in a threaded build. One pool behind a mutex would put
+   * every node in the tree through it, while a pool per subtree leaves a partly used batch
+   * behind for each of them and spreads the nodes of a subtree over several pools. Only built
+   * when there are threads to give pools to: reaching into thread local storage costs more than
+   * building a tree of a few points does.
+   */
+  std::optional<threading::EnumerableThreadSpecific<NodeAllocator>> thread_allocators_;
 
  public:
   TreeBuilder(const Span<T> points,
@@ -190,10 +196,6 @@ template<typename T> class TreeBuilder {
   {
   }
 
-  /**
-   * Build over the points at \a indices, or over every point when \a indices is empty.
-   * \return The root node, whose children are in #allocator_.
-   */
   Node *build(const Span<int> indices, Bounds<T> &r_bounds)
   {
     const int size = int(indices_.size());
@@ -229,7 +231,7 @@ template<typename T> class TreeBuilder {
     if (indices.is_empty()) {
       std::iota(indices_.begin(), indices_.end(), 0);
     }
-    else {
+    else if (indices.data() != indices_.data()) {
       indices_.copy_from(indices);
     }
 
@@ -250,20 +252,23 @@ template<typename T> class TreeBuilder {
     const int size = int(indices_.size());
     Array<BuildPoint> build_points(size);
 
-    BuildState state{build_points.as_mutable_span()};
-    const Bounds<BuildPoint> bounds = this->init_points(state, indices, threaded);
+    build_points_ = build_points.as_mutable_span();
+    const Bounds<BuildPoint> bounds = this->init_points(indices, threaded);
 
+    pool_.batch_size = node_batch_size(size, leaf_size_);
+    pool_.allocator = &allocator_;
     if (threaded) {
-      state.thread_allocators.emplace();
+      thread_allocators_.emplace();
     }
-    NodeAllocator &allocator = threaded ? state.thread_allocators->local() : state.allocator;
+    NodeAllocator &allocator = threaded ? thread_allocators_->local() : pool_;
     Node *root = allocator.allocate(1);
-    this->build_node(state, root, 0, size, bounds, allocator, threaded);
+    this->build_node(root, 0, size, bounds, allocator, threaded);
 
-    allocator_.transfer_ownership_from(state.allocator.buffers);
-    if (state.thread_allocators.has_value()) {
-      for (NodeAllocator &allocator : *state.thread_allocators) {
-        allocator_.transfer_ownership_from(allocator.buffers);
+    /* The pool of the build itself took its batches from #allocator_ already, only the ones the
+     * threads filled have buffers of their own to hand over. */
+    if (thread_allocators_.has_value()) {
+      for (NodeAllocator &allocator : *thread_allocators_) {
+        allocator_.transfer_ownership_from(allocator.owned_allocator);
       }
     }
 
@@ -274,19 +279,24 @@ template<typename T> class TreeBuilder {
 
     /* The points are in the order the tree visits them now, so the indices they carry are the
      * order to keep. The coordinates are not, since a search reads #points_. */
-    this->collect_indices(state, threaded);
+    this->collect_indices(threaded);
     return root;
   }
 
-  /** Fill \a state with the coordinates and indices of the points, and measure them. */
-  Bounds<BuildPoint> init_points(BuildState &state, const Span<int> indices, const bool threaded)
+  /**
+   * The build reorders a copy of the coordinates rather than an array of indices. That makes every
+   * pass over a node sequential, and lets subtrees become cache resident as soon as they are small
+   * enough. Each point carries its index in the element after its coordinates, so reordering the
+   * points reorders the indices with them, in the same cache lines rather than in a second array.
+   */
+  Bounds<BuildPoint> init_points(const Span<int> indices, const bool threaded)
   {
     const int size = int(indices_.size());
     const auto fill = [&](const int start, const int end) {
       Bounds<BuildPoint> bounds(this->build_point(indices, start));
       for (const int i : IndexRange(start, end - start)) {
         const BuildPoint point = this->build_point(indices, i);
-        state.points[i] = point;
+        build_points_[i] = point;
         bounds.min = math::min(bounds.min, point);
         bounds.max = math::max(bounds.max, point);
       }
@@ -320,12 +330,12 @@ template<typename T> class TreeBuilder {
   }
 
   /** Take the index each point carries, in the order the build left them in. */
-  void collect_indices(BuildState &state, const bool threaded)
+  void collect_indices(const bool threaded)
   {
     const int size = int(indices_.size());
     const auto fill = [&](const int start, const int end) {
       for (const int i : IndexRange(start, end - start)) {
-        indices_[i] = std::bit_cast<int>(state.points[i][dimensions]);
+        indices_[i] = std::bit_cast<int>(build_points_[i][dimensions]);
       }
     };
 
@@ -346,8 +356,7 @@ template<typename T> class TreeBuilder {
    * Splitting around the middle of those rather than of a cell that can be much larger keeps the
    * tree shallow where the points are unevenly spread.
    */
-  void build_node(BuildState &state,
-                  Node *node,
+  void build_node(Node *node,
                   const int start,
                   const int end,
                   const Bounds<BuildPoint> &bounds,
@@ -371,17 +380,14 @@ template<typename T> class TreeBuilder {
     }
     const ValueT split_value = bounds.min[dim] + extent[dim] / 2;
 
-    /* Split the node a block at a time, which a threaded build spreads over its threads. Which
-     * blocks the range is cut into follows from its size alone, so the points end up in the same
-     * order however many threads run it, or none at all. That matters beyond reproducible trees:
-     * #calc_duplicates walks the points in this order, and the blocks leave them in a different
-     * one than a single pass over the whole range does. Below this size there are enough subtrees
-     * to keep the threads busy on their own, and the blocks would only be extra work. */
-    const bool split_blocks = int64_t(end - start) * NODE_BLOCK_FRACTION > state.points.size();
+    /* Split the node a block at a time, which a threaded build spreads over its threads. For
+     * determinism, only the range size is used to check whether to use the blocked partitioning,
+     * not whether threading happens to be enabled. Below this size there are enough subtrees to
+     * keep the threads busy on their own, and the blocks would only be extra work. */
+    const bool split_blocks = int64_t(end - start) * NODE_BLOCK_FRACTION > build_points_.size();
 
-    int middle = split_blocks ?
-                     this->partition_points_in_blocks(state, start, end, dim, split_value) :
-                     partition_points(state.points, start, end, dim, split_value);
+    int middle = split_blocks ? this->partition_points_in_blocks(start, end, dim, split_value) :
+                                partition_points(build_points_, start, end, dim, split_value);
     if (middle == start || middle == end) {
       /* Everything ended up on one side, which means the coordinates of the points are within
        * rounding distance of each other in every dimension. Split them in the middle so that the
@@ -391,12 +397,12 @@ template<typename T> class TreeBuilder {
 
     Bounds<BuildPoint> left_bounds, right_bounds;
     if (split_blocks) {
-      left_bounds = this->compute_bounds_in_blocks(state, start, middle);
-      right_bounds = this->compute_bounds_in_blocks(state, middle, end);
+      left_bounds = this->compute_bounds_in_blocks(start, middle);
+      right_bounds = this->compute_bounds_in_blocks(middle, end);
     }
     else {
-      left_bounds = compute_bounds(state.points, start, middle);
-      right_bounds = compute_bounds(state.points, middle, end);
+      left_bounds = compute_bounds(build_points_, start, middle);
+      right_bounds = compute_bounds(build_points_, middle, end);
     }
 
     node->dim = dim;
@@ -404,27 +410,17 @@ template<typename T> class TreeBuilder {
     if (threaded && end - start > PARALLEL_SUBTREE_GRAIN) {
       threading::parallel_invoke(
           [&]() {
-            this->build_node(state,
-                             &node->children[0],
-                             start,
-                             middle,
-                             left_bounds,
-                             state.thread_allocators->local(),
-                             true);
+            this->build_node(
+                &node->children[0], start, middle, left_bounds, thread_allocators_->local(), true);
           },
           [&]() {
-            this->build_node(state,
-                             &node->children[1],
-                             middle,
-                             end,
-                             right_bounds,
-                             state.thread_allocators->local(),
-                             true);
+            this->build_node(
+                &node->children[1], middle, end, right_bounds, thread_allocators_->local(), true);
           });
     }
     else {
-      this->build_node(state, &node->children[0], start, middle, left_bounds, allocator, false);
-      this->build_node(state, &node->children[1], middle, end, right_bounds, allocator, false);
+      this->build_node(&node->children[0], start, middle, left_bounds, allocator, false);
+      this->build_node(&node->children[1], middle, end, right_bounds, allocator, false);
     }
 
     node->split.low = left_bounds.max[dim];
@@ -437,53 +433,28 @@ template<typename T> class TreeBuilder {
   /** \name Bounds
    * \{ */
 
-  /** Exact bounds of the points in [start, end), in one sequential pass. */
   static Bounds<BuildPoint> compute_bounds(const Span<BuildPoint> points,
                                            const int start,
                                            const int end)
   {
-    /* Several accumulators, so that the comparisons of one point do not wait on those of the
-     * point before it. */
-    constexpr int lanes = 4;
-    const int full = start + ((end - start) & ~(lanes - 1));
-
-    BuildPoint lo[lanes], hi[lanes];
-    for (const int lane : IndexRange(lanes)) {
-      lo[lane] = hi[lane] = points[start];
-    }
-    for (int i = start; i < full; i += lanes) {
-      for (const int lane : IndexRange(lanes)) {
-        const BuildPoint point = points[i + lane];
-        lo[lane] = math::min(lo[lane], point);
-        hi[lane] = math::max(hi[lane], point);
-      }
-    }
-
-    Bounds<BuildPoint> bounds(lo[0], hi[0]);
-    for (const int lane : IndexRange(1, lanes - 1)) {
-      bounds.min = math::min(bounds.min, lo[lane]);
-      bounds.max = math::max(bounds.max, hi[lane]);
-    }
-    for (int i = full; i < end; i++) {
-      bounds.min = math::min(bounds.min, points[i]);
-      bounds.max = math::max(bounds.max, points[i]);
-    }
-    return bounds;
+    /* Straight to the loop rather than through #bounds::min_max: this runs twice per interior
+     * node, and the profiler scope that one opens costs more than the bounds of a small node. */
+    return bounds::detail::min_max_lanes(points.slice(start, end - start));
   }
 
   /** #compute_bounds with the range measured a block at a time, which threads can share. */
-  Bounds<BuildPoint> compute_bounds_in_blocks(BuildState &state, const int start, const int end)
+  Bounds<BuildPoint> compute_bounds_in_blocks(const int start, const int end)
   {
     const int count = end - start;
     const int blocks = block_num(count);
     if (blocks < 2) {
-      return compute_bounds(state.points, start, end);
+      return compute_bounds(build_points_, start, end);
     }
 
     Array<Bounds<BuildPoint>> block_bounds(blocks);
     threading::parallel_for(IndexRange(blocks), 1, [&](const IndexRange range) {
       for (const int block : range) {
-        block_bounds[block] = compute_bounds(state.points,
+        block_bounds[block] = compute_bounds(build_points_,
                                              start + block_begin(count, blocks, block),
                                              start + block_begin(count, blocks, block + 1));
       }
@@ -619,10 +590,12 @@ template<typename T> class TreeBuilder {
    * them pairwise, which spreads over threads as well. This is how embree partitions primitives
    * when building a BVH.
    */
-  int partition_points_in_blocks(
-      BuildState &state, const int start, const int end, const int dim, const ValueT split_value)
+  int partition_points_in_blocks(const int start,
+                                 const int end,
+                                 const int dim,
+                                 const ValueT split_value)
   {
-    const MutableSpan<BuildPoint> points = state.points;
+    const MutableSpan<BuildPoint> points = build_points_;
     const int count = end - start;
     const int blocks = block_num(count);
     if (blocks < 2) {
@@ -721,44 +694,138 @@ template<typename T> class TreeBuilder {
 /** \name #KDTreeNew
  * \{ */
 
-template<typename T> void KDTreeNew<T>::build(const Span<int> indices)
+template<typename T>
+void KDTreeNew<T>::build(const Span<T> points,
+                         const Span<int> indices,
+                         const IndexMask *mask,
+                         const int size,
+                         const int leaf_size,
+                         LinearAllocator<> &allocator)
 {
-  indices_.reinitialize(size_);
-  if (size_ == 0) {
+  points_ = points.data();
+  if (size == 0) {
     return;
   }
-  TreeBuilder<T> builder(points_, indices_, leaf_size_, allocator_);
-  root_ = builder.build(indices, bounds_);
+  const MutableSpan<int> tree_indices = allocator.allocate_array<int>(size);
+
+  Span<int> source;
+  if (mask) {
+    mask->to_indices<int>(tree_indices);
+    source = tree_indices;
+  }
+  else {
+    source = indices;
+  }
+
+  TreeBuilder<T> builder(points, tree_indices, leaf_size, allocator);
+  root_ = builder.build(source, bounds_);
+  indices_ = tree_indices.data();
+  size_ = size;
+
+#ifndef NDEBUG
+  /* Only the pointer to the points is kept, so nothing can check a search result against their
+   * number later. Everything the tree can return comes from here. */
+  for (const int index : tree_indices) {
+    BLI_assert(index >= 0 && index < points.size());
+  }
+#endif
 }
 
 template<typename T>
-KDTreeNew<T>::KDTreeNew(const Span<T> points, const int leaf_size)
-    : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(points.size()))
+LinearAllocator<> &KDTreeNew<T>::make_allocator(const int points_num,
+                                                const int leaf_size,
+                                                void *&r_owned)
 {
-  this->build(Span<int>());
+  /* Allocate enough for the allocator itself, the indices, and the first set of nodes. */
+  const int64_t indices_size = int64_t(points_num) * sizeof(int);
+  const int64_t nodes_size = int64_t(TreeBuilder<T>::node_batch_size(points_num, leaf_size)) *
+                             sizeof(Node);
+  /* Room for the allocator to align each of the two allocations it hands out of this. */
+  const int64_t alignment_slack = 2 * alignof(std::max_align_t);
+  const int64_t rest = indices_size + nodes_size + alignment_slack;
+  const int64_t size = sizeof(LinearAllocator<>) + rest;
+
+  void *buffer = MEM_new_uninitialized_aligned(size, alignof(LinearAllocator<>), __func__);
+  r_owned = buffer;
+  LinearAllocator<> *allocator = new (buffer) LinearAllocator<>();
+  allocator->provide_buffer(static_cast<char *>(buffer) + sizeof(LinearAllocator<>), rest);
+  return *allocator;
+}
+
+template<typename T> KDTreeNew<T>::~KDTreeNew()
+{
+  /* An allocator the caller passed is only borrowed, and outlives the tree. The tree's own sits
+   * at the start of the buffer it was built in. */
+  if (owned_buffer_ != nullptr) {
+    std::destroy_at(static_cast<LinearAllocator<> *>(owned_buffer_));
+    MEM_delete_void(owned_buffer_);
+  }
+}
+
+template<typename T>
+KDTreeNew<T>::KDTreeNew(const Span<T> points, LinearAllocator<> &allocator, const int leaf_size)
+{
+  this->build(points, Span<int>(), nullptr, int(points.size()), std::max(leaf_size, 1), allocator);
+}
+
+template<typename T>
+KDTreeNew<T>::KDTreeNew(const Span<T> points,
+                        const IndexMask &mask,
+                        LinearAllocator<> &allocator,
+                        const int leaf_size)
+{
+  const std::optional<IndexRange> range = mask.to_range();
+  const bool every_point = range && *range == points.index_range();
+  /* Avoid the indirection when the mask contains every point anyway. */
+  this->build(points,
+              Span<int>(),
+              every_point ? nullptr : &mask,
+              int(mask.size()),
+              std::max(leaf_size, 1),
+              allocator);
+}
+
+template<typename T>
+KDTreeNew<T>::KDTreeNew(const Span<T> points,
+                        const Span<int> indices,
+                        LinearAllocator<> &allocator,
+                        const int leaf_size)
+{
+  this->build(points, indices, nullptr, int(indices.size()), std::max(leaf_size, 1), allocator);
+}
+
+template<typename T> KDTreeNew<T>::KDTreeNew(const Span<T> points, const int leaf_size)
+{
+  this->build(points,
+              Span<int>(),
+              nullptr,
+              int(points.size()),
+              std::max(leaf_size, 1),
+              make_allocator(int(points.size()), std::max(leaf_size, 1), owned_buffer_));
 }
 
 template<typename T>
 KDTreeNew<T>::KDTreeNew(const Span<T> points, const IndexMask &mask, const int leaf_size)
-    : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(mask.size()))
 {
   const std::optional<IndexRange> range = mask.to_range();
-  if (range && *range == points.index_range()) {
-    /* Avoid the indirection when the mask contains every point anyway. */
-    this->build(Span<int>());
-    return;
-  }
-  /* Only needed to build the tree, which copies the order it ends up visiting the points in. */
-  Array<int> indices(mask.size());
-  mask.to_indices<int>(indices);
-  this->build(indices.as_span());
+  const bool every_point = range && *range == points.index_range();
+  this->build(points,
+              Span<int>(),
+              every_point ? nullptr : &mask,
+              int(mask.size()),
+              std::max(leaf_size, 1),
+              make_allocator(int(mask.size()), std::max(leaf_size, 1), owned_buffer_));
 }
 
 template<typename T>
 KDTreeNew<T>::KDTreeNew(const Span<T> points, const Span<int> indices, const int leaf_size)
-    : points_(points), leaf_size_(std::max(leaf_size, 1)), size_(int(indices.size()))
 {
-  this->build(indices);
+  this->build(points,
+              indices,
+              nullptr,
+              int(indices.size()),
+              std::max(leaf_size, 1),
+              make_allocator(int(indices.size()), std::max(leaf_size, 1), owned_buffer_));
 }
 
 template class KDTreeNew<float2>;

@@ -20,11 +20,25 @@
 
 #include "PRF_profile.hh"
 
+/**
+ * Finding the smallest and largest of a span is a tight loop over every value, where the
+ * optimization level the rest of Blender is built with leaves a good part of its speed on the
+ * table. GCC lets a single function ask for more, which is worth it here because this is used
+ * on the hot path of several things. Clang is left out: it is no faster at its own -O3 here,
+ * and measurably slower at some of it.
+ */
+#if defined(__GNUC__) && !defined(__clang__)
+#  define BLI_BOUNDS_OPTIMIZE [[gnu::optimize("O3")]]
+#else
+#  define BLI_BOUNDS_OPTIMIZE
+#endif
+
 namespace blender {
 
 namespace bounds {
 
-template<typename T> [[nodiscard]] inline Bounds<T> merge(const Bounds<T> &a, const Bounds<T> &b)
+template<typename T>
+[[nodiscard]] BLI_BOUNDS_OPTIMIZE inline Bounds<T> merge(const Bounds<T> &a, const Bounds<T> &b)
 {
   return {math::min(a.min, b.min), math::max(a.max, b.max)};
 }
@@ -62,6 +76,81 @@ template<typename T>
   return Bounds<T>{b, b};
 }
 
+namespace detail {
+
+/**
+ * Find the smallest and largest values element-wise in a non-empty span, in one sequential pass.
+ * Several accumulators ("lanes"), so that the comparisons of one point do not wait on those of
+ * the point before it.
+ */
+template<typename T>
+[[nodiscard]] BLI_BOUNDS_OPTIMIZE inline Bounds<T> min_max_lanes(const Span<T> values)
+{
+  constexpr int64_t lanes = 4;
+  const int64_t size = values.size();
+  const int64_t full = size & ~(lanes - 1);
+
+  T lo[lanes];
+  T hi[lanes];
+  for (int64_t lane = 0; lane < lanes; lane++) {
+    lo[lane] = hi[lane] = values[0];
+  }
+  for (int64_t i = 0; i < full; i += lanes) {
+    for (int64_t lane = 0; lane < lanes; lane++) {
+      const T &value = values[i + lane];
+      lo[lane] = math::min(lo[lane], value);
+      hi[lane] = math::max(hi[lane], value);
+    }
+  }
+
+  Bounds<T> result{lo[0], hi[0]};
+  for (int64_t lane = 1; lane < lanes; lane++) {
+    result.min = math::min(result.min, lo[lane]);
+    result.max = math::max(result.max, hi[lane]);
+  }
+  for (int64_t i = full; i < size; i++) {
+    result.min = math::min(result.min, values[i]);
+    result.max = math::max(result.max, values[i]);
+  }
+  return result;
+}
+
+/** #min_max_lanes with a radius added to each value first. */
+template<typename T, typename RadiusT>
+[[nodiscard]] BLI_BOUNDS_OPTIMIZE inline Bounds<T> min_max_lanes_with_radii(
+    const Span<T> values, const Span<RadiusT> radii)
+{
+  constexpr int64_t lanes = 4;
+  const int64_t size = values.size();
+  const int64_t full = size & ~(lanes - 1);
+
+  T lo[lanes];
+  T hi[lanes];
+  for (int64_t lane = 0; lane < lanes; lane++) {
+    lo[lane] = values[0] - radii[0];
+    hi[lane] = values[0] + radii[0];
+  }
+  for (int64_t i = 0; i < full; i += lanes) {
+    for (int64_t lane = 0; lane < lanes; lane++) {
+      lo[lane] = math::min(lo[lane], values[i + lane] - radii[i + lane]);
+      hi[lane] = math::max(hi[lane], values[i + lane] + radii[i + lane]);
+    }
+  }
+
+  Bounds<T> result{lo[0], hi[0]};
+  for (int64_t lane = 1; lane < lanes; lane++) {
+    result.min = math::min(result.min, lo[lane]);
+    result.max = math::max(result.max, hi[lane]);
+  }
+  for (int64_t i = full; i < size; i++) {
+    result.min = math::min(result.min, values[i] - radii[i]);
+    result.max = math::max(result.max, values[i] + radii[i]);
+  }
+  return result;
+}
+
+}  // namespace detail
+
 /**
  * Find the smallest and largest values element-wise in the span.
  */
@@ -77,11 +166,7 @@ template<typename T> [[nodiscard]] inline std::optional<Bounds<T>> min_max(const
       1024,
       init,
       [&](const IndexRange range, const Bounds<T> &init) {
-        Bounds<T> result = init;
-        for (const int i : range) {
-          math::min_max(values[i], result.min, result.max);
-        }
-        return result;
+        return merge(init, detail::min_max_lanes(values.slice(range)));
       },
       [](const Bounds<T> &a, const Bounds<T> &b) { return merge(a, b); });
 }
@@ -130,12 +215,8 @@ template<typename T, typename RadiusT>
       1024,
       init,
       [&](const IndexRange range, const Bounds<T> &init) {
-        Bounds<T> result = init;
-        for (const int i : range) {
-          result.min = math::min(values[i] - radii[i], result.min);
-          result.max = math::max(values[i] + radii[i], result.max);
-        }
-        return result;
+        return merge(init,
+                     detail::min_max_lanes_with_radii(values.slice(range), radii.slice(range)));
       },
       [](const Bounds<T> &a, const Bounds<T> &b) { return merge(a, b); });
 }

@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <limits>
 
-#include "BLI_array.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_linear_allocator.hh"
@@ -18,10 +17,7 @@
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
-/**
- * The searches are the hot part of this file and benefit from a higher optimization level than
- * the rest of Blender is built with.
- */
+/** Searches benefit from a higher optimization level on GCC. */
 #if defined(__GNUC__) && !defined(__clang__)
 #  define KDTREE_SEARCH_OPTIMIZE [[gnu::optimize("O3")]]
 #else
@@ -32,25 +28,21 @@ namespace blender {
 
 namespace kdtree {
 
-/**
- * A node of a #KDTreeNew, which a search walks and the build produces. Only the coordinate
- * type matters to it, so trees over points of any dimension share one.
- */
+/** A node of a #KDTreeNew. */
 template<typename ValueT> struct Node {
   /**
-   * The two children, which are allocated next to each other so that one pointer reaches both
-   * and they share a cache line. Null for a leaf node.
+   * Two children, allocated next to each other for better cache utilization. Null for a leaf node.
    */
   Node *children;
   union {
-    /** Leaf: the range of the tree's indices the node covers. */
+    /** Leaf: the range of the tree's indices the node covers in #KDTreeNew::indices_. */
     struct {
       int start;
       int end;
     } leaf;
     /**
      * Interior: the highest coordinate of the left child and the lowest of the right one, in
-     * #dim. Points fall in neither child in between, which lets a search skip that gap.
+     * #dim. Points do not exist in the gap in between, which lets a search skip that gap.
      */
     struct {
       ValueT low;
@@ -62,12 +54,9 @@ template<typename ValueT> struct Node {
 };
 
 /**
- * A search reports the points it visits to a result set, which keeps what it wants and tells the
- * search how far it still has to look through #max_distance_sq. Returning false from #add_point
- * ends the search.
- * \{
+ * A search reports its visits to a "Result Set", which is responsible for storing results and
+ * telling the search when to continue. Returning false from #add_point ends the search.
  */
-
 template<typename ValueT> class NearestResult {
  private:
   int index_ = -1;
@@ -98,7 +87,7 @@ template<typename ValueT> class NearestResult {
   }
 };
 
-/** Like #NearestResult, but only points accepted by a filter shrink the search radius. */
+/** Like #NearestResult, but only the points accepted by a filter shrink the search radius. */
 template<typename ValueT, typename Filter> class FilteredNearestResult {
  private:
   Filter filter_;
@@ -148,6 +137,7 @@ template<typename NearestT, typename ValueT> class NearestNResult {
 
   bool add_point(const ValueT distance_sq, const int index)
   {
+    /* Insert the new index at the sorted point in the list. */
     const int capacity = int(nearest_.size());
     int i;
     for (i = count_; i > 0; i--) {
@@ -219,12 +209,6 @@ template<typename ValueT, typename Fn> class RadiusResult {
  * indices into that span, so data attached to the points can be referenced sparsely with this
  * level of indirection.
  *
- * Searching is defined here so that the callbacks it takes can be inlined into it, which for a
- * filter as cheap as skipping one index is most of the cost of a search over a small tree.
- * Building is much more code, is not a template on anything the caller chooses, and drags in
- * threading and bounds headers, so it stays in the implementation file, which instantiates the
- * class for #float2 and #float3. Those are the only coordinate types a tree can be built for.
- *
  * Differences from #blender::KDTree in `BLI_kdtree.hh`:
  * - The tree references the caller's coordinate array instead of storing a copy of it. The array
  *   must stay alive and unchanged for as long as the tree is used.
@@ -257,18 +241,37 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   static constexpr int LEAF_SIZE_DEFAULT = 32;
 
  private:
-  using Node = kdtree ::Node<ValueT>;
+  using Node = kdtree::Node<ValueT>;
 
-  Span<T> points_;
-  /** Indices into #points_, in the order the tree visits them. */
-  Array<int> indices_;
+  /**
+   * The coordinates the tree was built from, which outlive it. Only the pointer is kept: the
+   * tree never looks past the indices it built, and #build checks in a debug build that they are
+   * all in range.
+   */
+  const T *points_ = nullptr;
+  /**
+   * Indices into #points_, in the order the tree visits them. Written by the build, read by
+   * every search afterwards, and owned by whichever allocator the build used.
+   */
+  const int *indices_ = nullptr;
   /** Bounds of every point in the tree, which a search starts from. */
   Bounds<T> bounds_ = Bounds<T>(T(0));
   Node *root_ = nullptr;
-  int leaf_size_;
+  /**
+   * The buffer the allocator the tree made for itself lives at the start of, which is all the
+   * destructor needs to give both back. Null when the caller passed an allocator, which the tree
+   * only borrows and does not free. Nothing else is kept: the leaf size and the allocator are
+   * only needed while building.
+   */
+  void *owned_buffer_ = nullptr;
   int size_ = 0;
-  /** The buffers every node in the tree lives in. */
-  LinearAllocator<> allocator_;
+
+  /**
+   * Allocate a buffer, construct a #LinearAllocator at the start of it and give it the rest,
+   * sized so that the indices and the first nodes of a tree over \a points_num points fit. The
+   * buffer is reported through \a r_owned so that the destructor can give it back.
+   */
+  static LinearAllocator<> &make_allocator(int points_num, int leaf_size, void *&r_owned);
 
  public:
   /**
@@ -291,11 +294,22 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    */
   KDTreeNew(Span<T> points, Span<int> indices, int leaf_size = LEAF_SIZE_DEFAULT);
 
-  /** The coordinates the tree was built from. Returned indices are indices into this span. */
-  Span<T> points() const
-  {
-    return points_;
-  }
+  /**
+   * The same constructors reusing an existing #LinearAllocator rather. This can be used to avoid
+   * heap allocations when building a tree for a small number of points.
+   * \note \a allocator must outlive the tree.
+   */
+  KDTreeNew(Span<T> points, LinearAllocator<> &allocator, int leaf_size = LEAF_SIZE_DEFAULT);
+  KDTreeNew(Span<T> points,
+            const IndexMask &mask,
+            LinearAllocator<> &allocator,
+            int leaf_size = LEAF_SIZE_DEFAULT);
+  KDTreeNew(Span<T> points,
+            Span<int> indices,
+            LinearAllocator<> &allocator,
+            int leaf_size = LEAF_SIZE_DEFAULT);
+
+  ~KDTreeNew();
 
   /** The number of points, which may be less than `points().size()` for a masked tree. */
   int size() const
@@ -314,8 +328,11 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    */
   KDTREE_SEARCH_OPTIMIZE int find_nearest(const T &position, ValueT *r_distance_sq = nullptr) const
   {
-    kdtree ::NearestResult<ValueT> result;
-    this->find_neighbors(result, position);
+    if (this->is_empty()) {
+      return -1;
+    }
+    kdtree::NearestResult<ValueT> result;
+    this->search(result, position);
     if (result.index() != -1 && r_distance_sq) {
       *r_distance_sq = result.distance_sq();
     }
@@ -335,9 +352,12 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
                                                    Filter &&filter,
                                                    ValueT *r_distance_sq = nullptr) const
   {
-    kdtree ::FilteredNearestResult<ValueT, std::decay_t<Filter>> result(
+    if (this->is_empty()) {
+      return -1;
+    }
+    kdtree::FilteredNearestResult<ValueT, std::decay_t<Filter>> result(
         std::forward<Filter>(filter));
-    this->find_neighbors(result, position);
+    this->search(result, position);
     if (result.index() != -1 && r_distance_sq) {
       *r_distance_sq = result.distance_sq();
     }
@@ -352,11 +372,11 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   KDTREE_SEARCH_OPTIMIZE int find_nearest_n(const T &position,
                                             MutableSpan<Nearest> r_nearest) const
   {
-    if (r_nearest.is_empty()) {
+    if (this->is_empty() || r_nearest.is_empty()) {
       return 0;
     }
-    kdtree ::NearestNResult<Nearest, ValueT> result(r_nearest);
-    this->find_neighbors(result, position);
+    kdtree::NearestNResult<Nearest, ValueT> result(r_nearest);
+    this->search(result, position);
     return result.count();
   }
 
@@ -366,8 +386,11 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
                                                 const ValueT radius,
                                                 Fn &&fn) const
   {
-    kdtree ::RadiusResult<ValueT, std::decay_t<Fn>> result(radius * radius, std::forward<Fn>(fn));
-    this->find_neighbors(result, position);
+    if (this->is_empty()) {
+      return;
+    }
+    kdtree::RadiusResult<ValueT, std::decay_t<Fn>> result(radius * radius, std::forward<Fn>(fn));
+    this->search(result, position);
   }
 
   /**
@@ -394,8 +417,11 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   /** The number of points within \a radius of \a position. */
   KDTREE_SEARCH_OPTIMIZE int count_in_radius(const T &position, const ValueT radius) const
   {
-    kdtree ::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius, {});
-    this->find_neighbors(result, position);
+    if (this->is_empty()) {
+      return 0;
+    }
+    kdtree::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius, {});
+    this->search(result, position);
     return result.count();
   }
 
@@ -422,10 +448,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   KDTREE_SEARCH_OPTIMIZE int calc_duplicates(const ValueT range, MutableSpan<int> duplicates) const
   {
     int found = 0;
-    /* The order the tree visits the points in rather than the order they were added. Which point
-     * of a cluster the others merge into depends on the order either way, and this one keeps each
-     * search near the one before it. */
-    for (const int index : indices_) {
+    for (const int index : Span<int>(indices_, size_)) {
       BLI_assert(index < duplicates.size());
       /* Skip points that are already merged into another point. Points that were preset to their
        * own index are not merged themselves, but can still be merged into. */
@@ -451,15 +474,12 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   /**
    * Visit the points that could be closer to \a position than the result set has accepted so
    * far, reporting each of them to it. The result set decides what to keep and how far the
-   * search still has to look. See #kdtree
-   ::NearestResult and the others beside it.
+   * search still has to look. See #NearestResult and the others beside it.
    */
   template<typename ResultSet>
-  KDTREE_SEARCH_OPTIMIZE void find_neighbors(ResultSet &result, const T &position) const
+  KDTREE_SEARCH_OPTIMIZE void search(ResultSet &result, const T &position) const
   {
-    if (root_ == nullptr) {
-      return;
-    }
+    BLI_assert(!this->is_empty());
     /* Squared distance to the bounds of the tree, per dimension, which the walk below replaces
      * one dimension at a time rather than recomputing. */
     T offsets(ValueT(0));
@@ -478,15 +498,19 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
 
  private:
   /**
-   * Build the tree over the points at \a indices, or over every point when \a indices is empty.
-   * Defined in the implementation file, see the note on the class.
+   * Build the tree, optionally with a subset of indices. Defined in the implementation file to
+   * avoid transitive includes of heavier headers.
    */
-  void build(Span<int> indices);
+  void build(Span<T> points,
+             Span<int> indices,
+             const IndexMask *mask,
+             int size,
+             int leaf_size,
+             LinearAllocator<> &allocator);
 
   /**
-   * \param distance_sq: Squared distance from \a position to the part of space \a node covers.
-   * \param offsets: Squared distance to that part per dimension, which this restores before it
-   * returns so that the caller can keep using it.
+   * \param distance_sq: Squared distance from \a position to the space covered by \a node.
+   * \param offsets: Squared distance to the node per dimension.
    * \return False when the result set has seen enough and the search should stop.
    */
   template<typename ResultSet>
@@ -497,8 +521,8 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
                                           T &offsets) const
   {
     if (node->children == nullptr) {
-      const int *indices = indices_.data();
-      const T *points = points_.data();
+      const int *indices = indices_;
+      const T *points = points_;
       for (int i = node->leaf.start; i < node->leaf.end; i++) {
         const int index = indices[i];
         const ValueT point_distance_sq = math::distance_squared(position, points[index]);

@@ -43,6 +43,10 @@ static void set_no_cluster_value(MutableSpan<int> r_cluster_ids, const IndexMask
       exec_mode::grain_size(4096));
 }
 
+struct Testssss {
+  KDTreeNew<float3> test;
+};
+
 class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
  private:
   Field<float3> positions_field_;
