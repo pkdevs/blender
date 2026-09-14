@@ -2129,8 +2129,13 @@ static void mouse_mesh_loop_edge(BMEditMesh *em,
         em, BMW_EDGEBOUNDARY, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
   }
   else if (non_manifold) {
-    walker_select(
-        em, BMW_EDGELOOP_NONMANIFOLD, eed, select, BMW_FLAG_TEST_HIDDEN, delimit, nullptr);
+    walker_select(em,
+                  BMW_EDGELOOP_NONMANIFOLD,
+                  eed,
+                  select,
+                  BMW_FLAG_TEST_HIDDEN,
+                  BMW_DELIMIT_NONE,
+                  nullptr);
   }
   else if (full_loop) {
     walker_select(em, BMW_EDGELOOP, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
@@ -2498,8 +2503,12 @@ static wmOperatorStatus edbm_select_loop_invoke(bContext *C, wmOperator *op, con
 
 static wmOperatorStatus edbm_select_ring_exec(bContext *C, wmOperator *op)
 {
+  Object *obedit = CTX_data_edit_object(C);
+  BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  const char *delimit_prop = (em->selectmode & SCE_SELECT_FACE) ? "delimit_face_loop" :
+                                                                  "delimit_edge_ring";
   return edbm_select_loop_or_ring_exec_impl(
-      C, op, true, BMWDelimitFlag(RNA_enum_get(op->ptr, "delimit_edge_ring")));
+      C, op, true, BMWDelimitFlag(RNA_enum_get(op->ptr, delimit_prop)));
 }
 
 static wmOperatorStatus edbm_select_ring_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -2517,6 +2526,27 @@ static bool edbm_select_loop_poll_property(const bContext *C,
 
   if (em->selectmode & SCE_SELECT_FACE) {
     if (STREQ(prop_id, "delimit_edge_loop")) {
+      return false;
+    }
+  }
+  else {
+    if (STREQ(prop_id, "delimit_face_loop")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool edbm_select_ring_poll_property(const bContext *C,
+                                           wmOperator * /*op*/,
+                                           const PropertyRNA *prop)
+{
+  Object *obedit = CTX_data_edit_object(C);
+  BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  const char *prop_id = RNA_property_identifier(prop);
+
+  if (em->selectmode & SCE_SELECT_FACE) {
+    if (STREQ(prop_id, "delimit_edge_ring")) {
       return false;
     }
   }
@@ -2575,6 +2605,7 @@ void MESH_OT_edgering_select(wmOperatorType *ot)
   ot->invoke = edbm_select_ring_invoke;
   ot->exec = edbm_select_ring_exec;
   ot->poll = ED_operator_editmesh_region_view3d;
+  ot->poll_property = edbm_select_ring_poll_property;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
@@ -2586,6 +2617,13 @@ void MESH_OT_edgering_select(wmOperatorType *ot)
                     BMW_DELIMIT_EDGE_RING_NGONS,
                     "Edge Ring Delimit",
                     "Delimit edge ring selection");
+  /* Only shown when face-select mode is enabled. */
+  RNA_def_enum_flag(ot->srna,
+                    "delimit_face_loop",
+                    rna_enum_mesh_walk_delimit_face_loop_items,
+                    0,
+                    "Face Loop Delimit",
+                    "Delimit face loop selection");
 
   edbm_select_loop_or_ring_properties(ot);
 }
@@ -2951,7 +2989,7 @@ static void edbm_strip_selections(BMEditMesh *em)
   BMEditSelection *ese, *nextese;
 
   if (!(em->selectmode & SCE_SELECT_VERTEX)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_VERT) {
@@ -2961,7 +2999,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_EDGE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_EDGE) {
@@ -2971,7 +3009,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_FACE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_FACE) {
