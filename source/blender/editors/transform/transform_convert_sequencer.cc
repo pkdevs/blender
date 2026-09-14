@@ -831,10 +831,10 @@ static void seq_transform_handle_overlap(Scene *scene,
   seq::transform_handle_overlap(scene,
                                 seq::active_seqbase_get(ed),
                                 transformed_strips,
-                                ts->time_dependent_strips,
                                 use_sync_markers,
                                 overlap_mode,
-                                ripple_flag);
+                                ripple_flag,
+                                ts->time_dependent_strips);
 }
 
 static void special_aftertrans_update__sequencer(bContext *C, TransInfo *t)

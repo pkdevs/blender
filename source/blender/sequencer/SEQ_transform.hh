@@ -60,23 +60,19 @@ bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,
                               Span<Strip *> source_strips,
-                              Span<Strip *> time_dependent_strips,
-                              bool use_sync_markers);
-void transform_handle_overlap(Scene *scene,
-                              ListBaseT<Strip> *seqbasep,
-                              Span<Strip *> source_strips,
-                              bool use_sync_markers);
+                              bool use_sync_markers,
+                              Span<Strip *> time_dependent_strips = {});
 /**
  * As above, but resolve the overlap with an overridden \a overlap_mode and \a ripple_flag instead
- * of the tool settings.
+ * of the sequencer scene's tool settings.
  */
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,
                               Span<Strip *> source_strips,
-                              Span<Strip *> time_dependent_strips,
                               bool use_sync_markers,
                               eSeqOverlapMode overlap_mode,
-                              eSeqRippleFlag ripple_flag);
+                              eSeqRippleFlag ripple_flag,
+                              Span<Strip *> time_dependent_strips = {});
 /**
  * Move strips and markers (if not locked) that start after \a timeline_frame by \a delta frames.
  */

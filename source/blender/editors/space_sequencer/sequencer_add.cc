@@ -700,7 +700,6 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
   seq::transform_handle_overlap(scene,
                                 ed->current_strips(),
                                 strips,
-                                {},
                                 use_sync_markers,
                                 overlap_mode,
                                 seq::tool_settings_ripple_flag_get(scene));
