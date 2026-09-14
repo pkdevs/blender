@@ -174,9 +174,10 @@ static bool draw_from_viewer_log_value(CustomSocketDrawParams &params,
   if (!viewer_log) {
     return false;
   }
-  const int socket_index = params.socket.index();
+  const int item_index = params.socket.index() -
+                         GeoViewerItemsAccessor::item_input_index(params.node, 0);
   const auto &storage = *static_cast<NodeGeometryViewer *>(params.node.storage);
-  const NodeGeometryViewerItem &viewer_item = storage.items[socket_index];
+  const NodeGeometryViewerItem &viewer_item = storage.items[item_index];
   const eval_log::ViewerNodeLog::Item *item_log = viewer_log->items.lookup_key_ptr_as(
       viewer_item.identifier);
   if (!item_log) {
@@ -270,6 +271,33 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   bool has_geometry_input = false;
   bool has_potential_attribute_input = false;
+  const bool is_debug_view = storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW;
+  const auto declare_show = [&]() {
+    b.add_input<decl::Bool>("Show"_ustr)
+        .default_value(true)
+        .available(is_debug_view)
+        .description("Include this viewer in persistent Debug Views")
+        .custom_draw([](CustomSocketDrawParams &params) {
+          const SpaceNode *snode = CTX_wm_space_node(&params.C);
+          /* A pinned editor can refer to several modifiers using the same group. */
+          if (snode && !(snode->flag & SNODE_PIN)) {
+            if (const auto context = ed::space_node::get_geometry_nodes_modifier_for_node_editor(
+                    *snode))
+            {
+              const NodesModifierData &nmd = *context->nmd;
+              params.layout.active_set((nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS) &&
+                                       (nmd.modifier.mode & eModifierMode_Realtime));
+            }
+          }
+          params.draw_standard(params.layout);
+        })
+        .usage_inference([](const socket_usage_inference::SocketUsageParams & /*params*/)
+                             -> std::optional<bool> { return true; });
+  };
+  if (is_debug_view) {
+    declare_show();
+  }
+
   for (const int i : IndexRange(storage.items_num)) {
     const NodeGeometryViewerItem &item = storage.items[i];
     const eNodeSocketDatatype socket_type = item.socket_type;
@@ -310,13 +338,9 @@ static void node_declare(NodeDeclarationBuilder &b)
     }
   }
 
-  b.add_input<decl::Bool>("Show"_ustr)
-      .default_value(true)
-      .available(storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW)
-      .usage_inference(
-          [](const socket_usage_inference::SocketUsageParams & /*params*/) -> std::optional<bool> {
-            return true;
-          });
+  if (!is_debug_view) {
+    declare_show();
+  }
 
   b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
 }
@@ -377,7 +401,8 @@ static void log_viewer_attribute(const bNode &node, eval_log::ViewerNodeLog &r_l
   const StringRef viewer_attribute_name = ".viewer";
   std::optional<int> last_geometry_identifier;
   for (const int i : IndexRange(storage.items_num)) {
-    const bNodeSocket &bsocket = node.input_socket(i);
+    const bNodeSocket &bsocket = node.input_socket(
+        GeoViewerItemsAccessor::item_input_index(node, i));
     const NodeGeometryViewerItem &item = storage.items[i];
     const bke::bNodeSocketType &type = *bsocket.typeinfo;
     const bke::SocketValueVariant &value = r_log.items.lookup_key_as(item.identifier).value;

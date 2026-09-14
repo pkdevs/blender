@@ -55,7 +55,7 @@ static TreeDebugViewPropagation build_tree_debug_view_propagation(bNodeTree &tre
     if (!(storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW)) {
       continue;
     }
-    const bNodeSocket &show_socket = node->input_socket(storage.items_num);
+    const bNodeSocket &show_socket = *node->input_by_identifier("Show"_ustr);
     for (const bNodeLink *link : show_socket.directly_linked_links()) {
       if (!link->is_used()) {
         continue;

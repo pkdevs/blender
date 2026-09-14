@@ -81,6 +81,12 @@ struct GeoViewerItemsAccessor : public socket_items::SocketItemsAccessorDefaults
     return bke::node_tree_type_supports_socket_type_static(ntree_type, socket_type);
   }
 
+  static int item_input_index(const bNode &node, const int item_index)
+  {
+    const auto &storage = *static_cast<const NodeGeometryViewer *>(node.storage);
+    return item_index + int(bool(storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW));
+  }
+
   static std::string socket_identifier_for_item(const NodeGeometryViewerItem &item)
   {
     /* These special cases exist for compatibility with older Blender versions when the viewer did

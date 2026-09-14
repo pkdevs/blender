@@ -562,7 +562,9 @@ static bNodeSocket *node_link_viewer_get_socket(bNodeTree &ntree,
       viewer_node, item, name.c_str());
   item.flag |= NODE_GEO_VIEWER_ITEM_FLAG_AUTO_REMOVE;
   nodes::update_node_declaration_and_sockets(ntree, viewer_node);
-  return static_cast<bNodeSocket *>(BLI_findlink(&viewer_node.inputs, item_index));
+  return static_cast<bNodeSocket *>(
+      BLI_findlink(&viewer_node.inputs,
+                   nodes::GeoViewerItemsAccessor::item_input_index(viewer_node, item_index)));
 }
 
 static bool is_viewer_node(const bNode &node)

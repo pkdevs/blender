@@ -927,7 +927,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
     LinearAllocator<> &allocator = *tree_logger->allocator;
     bool show = false;
     if (is_persistent_debug_view_requested) {
-      const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
+      const bNodeSocket &show_socket = *bnode_.input_by_identifier("Show"_ustr);
       const int show_param_index = lf_index_by_bsocket_[show_socket.index_in_tree()];
       auto *show_variant = params.try_get_input_data_ptr_or_request<bke::SocketValueVariant>(
           show_param_index);
@@ -937,13 +937,14 @@ class LazyFunctionForViewerNode : public LazyFunction {
       show = show_variant->get<bool>();
     }
     else if (is_debug_view_) {
-      const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
+      const bNodeSocket &show_socket = *bnode_.input_by_identifier("Show"_ustr);
       params.set_input_unused(lf_index_by_bsocket_[show_socket.index_in_tree()]);
     }
     if (is_debug_view_ && !show && !is_viewer_path_requested) {
       /* Hidden persistent viewers do not request any payload, including upstream group inputs. */
       for (const int i : IndexRange(storage.items_num)) {
-        const bNodeSocket &socket = bnode_.input_socket(i);
+        const bNodeSocket &socket = bnode_.input_socket(
+            GeoViewerItemsAccessor::item_input_index(bnode_, i));
         params.set_input_unused(lf_index_by_bsocket_[socket.index_in_tree()]);
       }
       return;
@@ -952,7 +953,8 @@ class LazyFunctionForViewerNode : public LazyFunction {
     Vector<bke::SocketValueVariant *> values(storage.items_num, nullptr);
 
     for (const int i : IndexRange(storage.items_num)) {
-      const bNodeSocket &bsocket = bnode_.input_socket(i);
+      const bNodeSocket &bsocket = bnode_.input_socket(
+          GeoViewerItemsAccessor::item_input_index(bnode_, i));
       const int param_index = lf_index_by_bsocket_[bsocket.index_in_tree()];
       if (is_debug_view_) {
         values[i] = params.try_get_input_data_ptr_or_request<bke::SocketValueVariant>(param_index);
@@ -3462,11 +3464,12 @@ struct GeometryNodesLazyFunctionBuilder {
       lf::FunctionNode &lf_usage_node = graph_params.lf_graph.add_function(usage_lazy_function);
 
       if (is_debug_view) {
-        const bNodeSocket &show_socket = bnode.input_socket(storage.items_num);
+        const bNodeSocket &show_socket = *bnode.input_by_identifier("Show"_ustr);
         graph_params.lf_inputs_by_bsocket.add(&show_socket, &lf_usage_node.input(0));
         graph_params.usage_by_bsocket.add(&show_socket, &lf_usage_node.output(0));
         for (const int i : IndexRange(storage.items_num)) {
-          const bNodeSocket &bsocket = bnode.input_socket(i);
+          const bNodeSocket &bsocket = bnode.input_socket(
+              GeoViewerItemsAccessor::item_input_index(bnode, i));
           if (bsocket.is_available()) {
             graph_params.usage_by_bsocket.add(&bsocket, &lf_usage_node.output(1));
           }
