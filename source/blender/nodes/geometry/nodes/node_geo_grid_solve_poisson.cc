@@ -233,6 +233,31 @@ static bool is_uniform_scale(const float3 &s, const float epsilon = 1e-5f)
   return math::abs(s.x - s.y) < epsilon && math::abs(s.x - s.z) < epsilon;
 }
 
+/* Computes the maximum norm (maximal absolute value), taking into account non-finite values.
+ * If the tree contains any non-finite value the result is inf. */
+static float maximum_norm_or_infinity(const openvdb::FloatTree &tree)
+{
+  /* Maximum norm function that handles non-finite values too. */
+  auto max_or_inf = [](const float norm, const float value) {
+    return (std::isfinite(norm) && std::isfinite(value)) ? std::max(norm, std::abs(value)) :
+                                                           std::numeric_limits<float>::infinity();
+  };
+
+  threading::EnumerableThreadSpecific<float> norm_tls = 0.0f;
+  openvdb::tools::foreach(tree.cbeginValueOn(),
+                          [&](const typename openvdb::FloatTree::ValueOnCIter &iter) {
+                            const float value = iter.getValue();
+
+                            float &norm = norm_tls.local();
+                            norm = max_or_inf(norm, value);
+                          });
+  float norm = 0.0f;
+  for (float value : norm_tls) {
+    norm = max_or_inf(norm, value);
+  }
+  return norm;
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
@@ -411,6 +436,34 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
   }
 
+  /* Note: OpenVDB infNorm function of the conjugate gradient solver
+   * outputs 0.0 if the solution contains only non-finite values. Compute
+   * the error again here to handle these corner cases. */
+  if (solver_state.absoluteError == 0.0) {
+    const float absolute_error_or_inf = maximum_norm_or_infinity(*solution_tree);
+    switch (threshold_mode) {
+      case ThresholdMode::Relative: {
+        const float norm_b = maximum_norm_or_infinity(source_vdb_grid.tree());
+        const float relative_error_or_inf = (norm_b == 0.0f) ? absolute_error_or_inf :
+                                                               absolute_error_or_inf / norm_b;
+        if (!std::isfinite(relative_error_or_inf) || relative_error_or_inf > error_threshold) {
+          solver_state.relativeError = relative_error_or_inf;
+          solver_state.success = false;
+        }
+        break;
+      }
+      case ThresholdMode::Absolute: {
+        if (!std::isfinite(absolute_error_or_inf) ||
+            absolute_error_or_inf > error_threshold * absolute_error_scale)
+        {
+          solver_state.absoluteError = absolute_error_or_inf;
+          solver_state.success = false;
+        }
+        break;
+      }
+    }
+  }
+
   openvdb::tools::foreach(solution_tree->beginValueOn(),
                           [&](const typename openvdb::FloatTree::ValueOnIter &iter) {
                             iter.setValue(iter.getValue() * solution_scale);
@@ -422,7 +475,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Solution"_ustr, bke::VolumeGrid<float>(std::move(solution_grid)));
   params.set_output("Iterations"_ustr, solver_state.iterations);
   params.set_output("Success"_ustr, solver_state.success);
-  params.set_output("Absolute Error"_ustr, float(solver_state.absoluteError));
+  params.set_output("Absolute Error"_ustr, float(solver_state.absoluteError * solution_scale));
   params.set_output("Relative Error"_ustr, float(solver_state.relativeError));
   if (params.output_is_required("Debug Boundary Value"_ustr)) {
     params.set_output("Debug Boundary Value"_ustr, std::move(debug_boundary_value));
@@ -451,7 +504,8 @@ static void node_register()
   geo_node_type_base(&ntype, "GeometryNodeGridSolvePoisson"_ustr);
   ntype.ui_name = "Grid Solve Poisson";
   ntype.ui_description =
-      "Solve the Poisson equation for a scalar field. Computes a grid whose Laplacian equals the "
+      "Solve the Poisson equation for a scalar field. Computes a grid whose Laplacian equals "
+      "the "
       "input scalar grid.";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.default_width = bke::NodeWidth::_200;
