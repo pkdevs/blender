@@ -699,22 +699,9 @@ static bool path_relative_to_impl(char path[FILE_MAX],
     return false;
   }
 
-#ifdef WIN32
-  if (BLI_strnlen(basepath, 3) > 2 && !BLI_path_is_abs_win32(basepath)) {
-    char *base_path_after_root;
-    /* Fix missing volume name in relative base,
-     * can happen with old `recent-files.txt` files. */
-    BLI_windows_get_default_root_dir(base_path);
-    base_path_after_root = &base_path[2];
-    if (!ELEM(basepath[0], '\\', '/')) {
-      base_path_after_root++;
-    }
-    BLI_strncpy(base_path_after_root, basepath, FILE_MAX - 3);
-  }
-  else {
-    BLI_strncpy(base_path, basepath, FILE_MAX);
-  }
+  STRNCPY(base_path, basepath);
 
+#ifdef WIN32
   if (BLI_strnlen(path, 3) > 2) {
     bool is_unc = BLI_path_is_unc(path);
 
@@ -743,8 +730,6 @@ static bool path_relative_to_impl(char path[FILE_MAX],
       return false;
     }
   }
-#else
-  STRNCPY(base_path, basepath);
 #endif
 
   BLI_string_replace_char(base_path + BLI_path_unc_prefix_len(base_path), '\\', '/');
@@ -820,6 +805,23 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
 {
   const bool walk_up = true;
   const bool blend_relative = true;
+
+#ifdef WIN32
+  if (BLI_strnlen(basepath, 3) > 2 && !BLI_path_is_abs_win32(basepath)) {
+    /* Fix missing volume name in relative base,
+     * can happen with old `recent-files.txt` files. */
+    char base_path[FILE_MAX];
+    BLI_windows_get_default_root_dir(base_path);
+    char *base_path_after_root = &base_path[2];
+    if (!ELEM(basepath[0], '\\', '/')) {
+      base_path_after_root++;
+    }
+    BLI_strncpy(base_path_after_root, basepath, FILE_MAX - 3);
+    path_relative_to_impl(path, base_path, walk_up, blend_relative);
+    return;
+  }
+#endif
+
   path_relative_to_impl(path, basepath, walk_up, blend_relative);
 }
 
