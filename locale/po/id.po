@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'2cef5b8c951a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:38+0000\n"
+"POT-Creation-Date: 2026-09-14 07:47+0000\n"
 "PO-Revision-Date: 2026-06-02 05:12+0000\n"
 "Last-Translator: Fadli Birdie Zeinda <justbirdie00@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
@@ -6857,6 +6857,10 @@ msgid "Set position of selected color stop"
 msgstr "Set posisi stop warna yang terseleksi"
 
 
+msgid "Identifier"
+msgstr "Pengenal"
+
+
 msgid "Console Input"
 msgstr "Input Konsol"
 
@@ -9564,10 +9568,6 @@ msgstr "Angin"
 
 msgid "Wind effector weight"
 msgstr "Beban efektor angin"
-
-
-msgid "Identifier"
-msgstr "Pengenal"
 
 
 msgid "Unique name used in the code and scripting"
@@ -15676,16 +15676,16 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Snap"
-msgstr "Jepret"
-
-
 msgid "Sample"
 msgstr "Sampel"
 
 
 msgid "Gizmo"
 msgstr "Gizmo"
+
+
+msgid "Snap"
+msgstr "Jepret"
 
 
 msgid "Instances"
@@ -15696,16 +15696,8 @@ msgid "Import"
 msgstr "Impor"
 
 
-msgid "Mirror"
-msgstr "Cermin"
-
-
 msgid "Utilities"
 msgstr "Utilitas"
-
-
-msgid "Navigation"
-msgstr "Navigasi"
 
 
 msgid "Math"
@@ -15714,6 +15706,14 @@ msgstr "Matematika"
 
 msgid "UV"
 msgstr "UV"
+
+
+msgid "Mirror"
+msgstr "Cermin"
+
+
+msgid "Navigation"
+msgstr "Navigasi"
 
 
 msgid "Select Linked"
@@ -15736,6 +15736,14 @@ msgid "Light Probe"
 msgstr "Probe Cahaya"
 
 
+msgid "Linked"
+msgstr "Terkoleksi"
+
+
+msgid "Layout"
+msgstr "Tata Letak"
+
+
 msgid "Add Image"
 msgstr "Tambah Gambar"
 
@@ -15748,24 +15756,16 @@ msgid "Track"
 msgstr "Lacak"
 
 
-msgid "Linked"
-msgstr "Terkoleksi"
-
-
-msgid "Layout"
-msgstr "Tata Letak"
-
-
 msgid "Asset"
 msgstr "Aset"
 
 
-msgid "Hooks"
-msgstr "Kait"
-
-
 msgid "Tracking"
 msgstr "Pelacakan"
+
+
+msgid "Hooks"
+msgstr "Kait"
 
 
 msgid "Names"
@@ -19719,8 +19719,8 @@ msgstr "Menu Konteks"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Terima"
+msgid "Select Directory"
+msgstr "Seleksi"
 
 
 msgctxt "Operator"
@@ -20477,11 +20477,6 @@ msgstr "Warna Standar"
 msgctxt "Operator"
 msgid "Reset Recent"
 msgstr "Tampilan 3D"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Seleksi"
 
 
 msgctxt "Operator"
@@ -26311,6 +26306,10 @@ msgid "Translate all labels in menus, buttons and panels (note that this might m
 msgstr "Terjemahkan semua label pada menu, tombol, dan panel (perhatikan bahwa hal ini dapat menyulitkan Anda untuk mengikuti tutorial atau manual)"
 
 
+msgid "Subtype"
+msgstr "Subtipe"
+
+
 msgid "Pointer"
 msgstr "Penunjuk"
 
@@ -27846,6 +27845,10 @@ msgstr "Tampilkan unit berpasangan (e.g 1m 0cm)"
 
 msgid "Settings to define a reusable library for Asset Browsers to use"
 msgstr "Pengaturan mendefinisikan perpusakaan yang dapat didaur ulang untuk Browser Aset digunakan"
+
+
+msgid "UUID"
+msgstr "UUID"
 
 
 msgid "Solid Light"
@@ -29976,10 +29979,6 @@ msgid "Asset Catalog:"
 msgstr "Katalog Aset:"
 
 
-msgid "UUID"
-msgstr "UUID"
-
-
 msgctxt "Operator"
 msgid "Push Pull"
 msgstr "Dorong Tarik"
@@ -30240,16 +30239,16 @@ msgid "Paste Data-Blocks"
 msgstr "Tempel Data-Blok"
 
 
-msgid "Object Contents"
-msgstr "Konten Objek"
+msgid "Empties"
+msgstr "Kosongan"
 
 
 msgid "Object Children"
 msgstr "Anak Objek"
 
 
-msgid "Empties"
-msgstr "Kosongan"
+msgid "Object Contents"
+msgstr "Konten Objek"
 
 
 msgctxt "Operator"
@@ -30296,6 +30295,11 @@ msgstr "Lompat ke Strip Sebelumnya"
 msgctxt "Operator"
 msgid "Jump to Next Strip"
 msgstr "Lompat ke Strip Selanjutnya"
+
+
+msgctxt "Operator"
+msgid "Text"
+msgstr "Teks"
 
 
 msgid "No Items Available"
@@ -30356,23 +30360,8 @@ msgstr "Kedua Sisi"
 
 
 msgctxt "Operator"
-msgid "Clip..."
-msgstr "Klip..."
-
-
-msgctxt "Operator"
-msgid "Mask..."
-msgstr "Masker..."
-
-
-msgctxt "Operator"
 msgid "Color"
 msgstr "Warna"
-
-
-msgctxt "Operator"
-msgid "Text"
-msgstr "Teks"
 
 
 msgctxt "Operator"
@@ -30397,11 +30386,6 @@ msgstr "Regang ke Isi"
 
 msgid "Resolutions"
 msgstr "Resolusi"
-
-
-msgctxt "Operator"
-msgid "Clip"
-msgstr "Klip"
 
 
 msgctxt "Text"
@@ -32387,10 +32371,6 @@ msgstr "Bingkai: %d"
 
 msgid "Matte Objects:"
 msgstr "Objek Matte:"
-
-
-msgid "Subtype"
-msgstr "Subtipe"
 
 
 msgid "Compositing..."
