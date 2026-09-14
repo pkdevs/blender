@@ -515,7 +515,7 @@ void ED_uvedit_get_aspect_from_material(Object *ob,
 void ED_uvedit_get_aspect(Object *ob, float *r_aspx, float *r_aspy)
 {
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
-  BLI_assert(em != nullptr);
+  BLI_assert(bm != nullptr);
   bool sloppy = true;
   bool selected = false;
   BMFace *efa = BM_mesh_active_face_get(bm, sloppy, selected);
