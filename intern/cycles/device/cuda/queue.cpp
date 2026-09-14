@@ -39,9 +39,8 @@ ConcurrentStatesParams CUDADeviceQueue::concurrent_states_params() const
    * states per thread, and only grow within half of free memory. */
   ConcurrentStatesParams params;
   params.baseline = max(max_num_threads, 65536) * 16;
-  params.min = params.baseline;
-  params.max = params.baseline * 10;
-  params.grow_percent = 50;
+  params.min = params.baseline / 2;
+  params.max = params.baseline * 4;
   return params;
 }
 

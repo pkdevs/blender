@@ -93,9 +93,9 @@ struct ConcurrentStatesParams {
   int max = INT_MAX;
 
   /* Percentage of free memory (minus reserve) to use when growing beyond the baseline. */
-  int grow_percent = 100;
+  int grow_percent = 50;
   /* Percentage of total memory to always keep free for later allocations. */
-  int reserve_percent = 0;
+  int reserve_percent = 10;
 };
 
 /* Abstraction of a command queue for a device.

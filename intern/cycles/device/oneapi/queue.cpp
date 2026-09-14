@@ -33,8 +33,9 @@ ConcurrentStatesParams OneapiDeviceQueue::concurrent_states_params() const
   ConcurrentStatesParams params;
   params.baseline = 32768 * oneapi_device_->get_num_multiprocessors();
   /* Only shrink to fit within available memory, keeping 10% free. */
+  params.min = params.baseline / 8;
   params.max = params.baseline;
-  params.reserve_percent = 10;
+  params.reserve_percent = 0;
   return params;
 }
 
