@@ -174,7 +174,7 @@ void SphereProbeModule::end_sync()
 void SphereProbeModule::ensure_cubemap_render_target(int resolution)
 {
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_SHADER_READ;
-  cubemap_tx_.ensure_cube(gpu::TextureFormat::SFLOAT_16_16_16_16, resolution, usage);
+  cubemap_tx_.ensure_cube(gpu::TextureFormat::SFLOAT_32_32_32_32, resolution, usage);
   /* TODO(fclem): deallocate it. */
 }
 
