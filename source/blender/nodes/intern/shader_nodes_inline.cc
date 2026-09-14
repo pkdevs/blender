@@ -1842,6 +1842,7 @@ class ShaderNodesInliner {
           this->store_socket_value_primitive(output_socket, 0.0f);
           return true;
         }
+        break;
       }
       case NODE_VECTOR_MATH_SCALE: {
         const std::optional<float3> a = try_get_float3(0);
