@@ -1001,28 +1001,19 @@ template<typename ValueT, typename Fn> class RadiusResult {
 /** \name #KDTreeNanoflann
  * \{ */
 
-template<typename T> struct TreeImpl {
-  KDTree<T> tree;
-
-  TreeImpl(const Span<T> points, const Span<int> indices, const int leaf_size)
-      : tree(points, indices, leaf_size)
-  {
-  }
-};
-
-template<typename T> static const TreeImpl<T> &get_impl(const void *impl)
+template<typename T> static const KDTree<T> &get_tree(const void *impl)
 {
-  return *static_cast<const TreeImpl<T> *>(impl);
+  return *static_cast<const KDTree<T> *>(impl);
 }
 
 template<typename T>
 KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points, const int leaf_size)
     : points_(points), size_(int(points.size()))
 {
-  static_assert(sizeof(TreeImpl<T>) <= IMPL_SIZE);
-  static_assert(alignof(TreeImpl<T>) <= IMPL_ALIGNMENT);
+  static_assert(sizeof(KDTree<T>) <= IMPL_SIZE);
+  static_assert(alignof(KDTree<T>) <= IMPL_ALIGNMENT);
 
-  new (impl_.ptr()) TreeImpl<T>(points, Span<int>(), leaf_size);
+  new (impl_.ptr()) KDTree<T>(points, Span<int>(), leaf_size);
 }
 
 template<typename T>
@@ -1034,13 +1025,13 @@ KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
   const std::optional<IndexRange> range = mask.to_range();
   if (range && *range == points.index_range()) {
     /* Avoid the indirection when the mask contains every point anyway. */
-    new (impl_.ptr()) TreeImpl<T>(points, Span<int>(), leaf_size);
+    new (impl_.ptr()) KDTree<T>(points, Span<int>(), leaf_size);
     return;
   }
   /* Only needed to build the tree, which copies the order it ends up visiting the points in. */
   Array<int> indices(mask.size());
   mask.to_indices<int>(indices);
-  new (impl_.ptr()) TreeImpl<T>(points, indices.as_span(), leaf_size);
+  new (impl_.ptr()) KDTree<T>(points, indices.as_span(), leaf_size);
 }
 
 template<typename T>
@@ -1049,12 +1040,12 @@ KDTreeNanoflann<T>::KDTreeNanoflann(const Span<T> points,
                                     const int leaf_size)
     : points_(points), size_(int(indices.size()))
 {
-  new (impl_.ptr()) TreeImpl<T>(points, indices, leaf_size);
+  new (impl_.ptr()) KDTree<T>(points, indices, leaf_size);
 }
 
 template<typename T> KDTreeNanoflann<T>::~KDTreeNanoflann()
 {
-  std::destroy_at(static_cast<TreeImpl<T> *>(impl_.ptr()));
+  std::destroy_at(static_cast<KDTree<T> *>(impl_.ptr()));
 }
 
 template<typename T>
@@ -1064,7 +1055,7 @@ int KDTreeNanoflann<T>::find_nearest(const T &position, ValueT *r_distance_sq) c
     return -1;
   }
   NearestResult<ValueT> result;
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
   if (result.index() == -1) {
     return -1;
   }
@@ -1083,7 +1074,7 @@ int KDTreeNanoflann<T>::find_nearest_filtered(const T &position,
     return -1;
   }
   FilteredNearestResult<ValueT> result(filter);
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
   if (result.index() != -1 && r_distance_sq) {
     *r_distance_sq = result.distance_sq();
   }
@@ -1097,7 +1088,7 @@ int KDTreeNanoflann<T>::find_nearest_n(const T &position, MutableSpan<Nearest> r
     return 0;
   }
   NearestNResult<Nearest, ValueT> result(r_nearest);
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
   return result.count();
 }
 
@@ -1112,7 +1103,7 @@ void KDTreeNanoflann<T>::foreach_in_radius(
   }
   const auto call_fn = [&](const int index, const ValueT distance_sq) { fn(index, distance_sq); };
   RadiusResult<ValueT, decltype(call_fn)> result(radius * radius, call_fn);
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
 }
 
 template<typename T>
@@ -1128,7 +1119,7 @@ int KDTreeNanoflann<T>::find_in_radius(const T &position,
     r_nearest.append({index, distance_sq});
   };
   RadiusResult<ValueT, decltype(collect_fn)> result(radius * radius, collect_fn);
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
 
   std::sort(r_nearest.begin(), r_nearest.end(), [](const Nearest &a, const Nearest &b) {
     return a.distance_sq < b.distance_sq || (a.distance_sq == b.distance_sq && a.index < b.index);
@@ -1144,7 +1135,7 @@ int KDTreeNanoflann<T>::count_in_radius(const T &position, const ValueT radius) 
   }
   const auto count_fn = [](const int /*index*/, const ValueT /*distance_sq*/) {};
   RadiusResult<ValueT, decltype(count_fn)> result(radius * radius, count_fn);
-  get_impl<T>(impl_.ptr()).tree.find_neighbors(result, position);
+  get_tree<T>(impl_.ptr()).find_neighbors(result, position);
   return result.count();
 }
 
@@ -1154,13 +1145,13 @@ int KDTreeNanoflann<T>::calc_duplicates(const ValueT range, MutableSpan<int> dup
   if (this->is_empty()) {
     return 0;
   }
-  const TreeImpl<T> &impl = get_impl<T>(impl_.ptr());
+  const KDTree<T> &tree = get_tree<T>(impl_.ptr());
   const ValueT range_sq = range * range;
   int found = 0;
   /* The order the tree visits the points in rather than the order they were added. Which point of
    * a cluster the others merge into depends on the order either way, and this one keeps each
    * search near the one before it. */
-  for (const int index : impl.tree.indices()) {
+  for (const int index : tree.indices()) {
     BLI_assert(index < duplicates.size());
     /* Skip points that are already merged into another point. Points that were preset to their
      * own index are not merged themselves, but can still be merged into. */
@@ -1175,7 +1166,7 @@ int KDTreeNanoflann<T>::calc_duplicates(const ValueT range, MutableSpan<int> dup
       }
     };
     RadiusResult<ValueT, decltype(claim_fn)> result(range_sq, claim_fn);
-    impl.tree.find_neighbors(result, points_[index]);
+    tree.find_neighbors(result, points_[index]);
     if (found != found_before) {
       /* Mark as a target so the merged points don't form chains. */
       duplicates[index] = index;
