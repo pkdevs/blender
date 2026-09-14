@@ -2013,7 +2013,6 @@ install(
 # -----------------------------------------------------------------------------
 # Setup link libraries
 
-add_dependencies(blender makesdna)
 target_link_libraries(blender PRIVATE ${LIB})
 unset(LIB)
 

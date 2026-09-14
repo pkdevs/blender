@@ -74,6 +74,14 @@ svm_node_attr_surface_eval(KernelGlobals kg,
 {
   using FloatType = dual_scalar_t<Float3Type>;
 
+  /* Spherical harmonics attribute can not be currently accessed.
+   * It is stored as PackedSphericalHarmonics that does not have a float or float3 representation.
+   */
+  if (desc.type == NODE_ATTR_SPHERICAL_HARMONICS_REST) {
+    const float value = (type == NODE_ATTR_OUTPUT_FLOAT_ALPHA) ? 1.0f : 0.0f;
+    return make_float3(FloatType(value));
+  }
+
   if (sd->type == PRIMITIVE_LAMP && node.attr == ATTR_STD_UV) {
     Float3Type uv(make_float3(1.0f - sd->u - sd->v, sd->u, 0.0f));
     if constexpr (is_dual_v<Float3Type>) {
@@ -153,7 +161,9 @@ svm_node_attr_surface_eval(KernelGlobals kg,
         return make_float3(average(make_float3(q)));
       }
       if (type == NODE_ATTR_OUTPUT_FLOAT_ALPHA) {
-        return make_float3(dual<float>(q.val.w, q.dx.w, q.dy.w));
+        /* Use make_float4, which is used for the non-dual case and swizzles components. */
+        return make_float3(
+            dual<float>(make_float4(q.val).w, make_float4(q.dx).w, make_float4(q.dy).w));
       }
       return make_float3(q);
     }
