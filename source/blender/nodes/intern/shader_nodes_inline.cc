@@ -1525,7 +1525,22 @@ class ShaderNodesInliner {
       return;
     }
     if (node->is_type("FunctionNodeBooleanMath"_ustr)) {
-      if (this->boolean_math_short_circuit_try(socket)) {
+      if (this->try_short_circuit__boolean_math(socket)) {
+        return;
+      }
+    }
+    else if (node->is_type("ShaderNodeMath"_ustr)) {
+      if (this->try_short_circuit__float_math(socket)) {
+        return;
+      }
+    }
+    else if (node->is_type("FunctionNodeIntegerMath"_ustr)) {
+      if (this->try_short_circuit__integer_math(socket)) {
+        return;
+      }
+    }
+    else if (node->is_type("ShaderNodeVectorMath"_ustr)) {
+      if (this->try_short_circuit__vector_math(socket)) {
         return;
       }
     }
@@ -1533,7 +1548,7 @@ class ShaderNodesInliner {
     this->handle_output_socket__eval_copy_node(*node, node.context, node.context);
   }
 
-  [[nodiscard]] bool boolean_math_short_circuit_try(const SocketInContext &output_socket)
+  [[nodiscard]] bool try_short_circuit__boolean_math(const SocketInContext &output_socket)
   {
     const NodeInContext node = output_socket.owner_node();
     const auto op = NodeBooleanMathOperation(node->custom1);
@@ -1667,6 +1682,180 @@ class ShaderNodesInliner {
     not_node->custom1 = NODE_BOOLEAN_MATH_NOT;
     this->set_input_socket_value(node, *not_node, *not_node->inputs.first(), value);
     return {LinkedSocketValue{not_node, not_node->outputs.first()}};
+  }
+
+  [[nodiscard]] bool try_short_circuit__float_math(const SocketInContext &output_socket)
+  {
+    const NodeInContext node = output_socket.owner_node();
+    const auto op = NodeMathOperation(node->custom1);
+
+    Vector<SocketValue> values;
+    Vector<std::optional<float>> primitives;
+    for (const bNodeSocket *input_socket : node->input_sockets()) {
+      if (this->socket_is_ignored(*input_socket)) {
+        continue;
+      }
+      const SocketValue &value = value_by_socket_.lookup({node.context, input_socket});
+      values.append(value);
+      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
+              *input_socket->typeinfo))
+      {
+        primitives.append(std::get<float>(primitive->value));
+      }
+      else {
+        primitives.append(std::nullopt);
+      }
+    }
+
+    switch (op) {
+      case NODE_MATH_MULTIPLY: {
+        if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          return true;
+        }
+        break;
+      }
+      case NODE_MATH_DIVIDE: {
+        if (primitives[0] == 0.0f || primitives[1] == 0.0f) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          return true;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    return false;
+  }
+
+  [[nodiscard]] bool try_short_circuit__integer_math(const SocketInContext &output_socket)
+  {
+    const NodeInContext node = output_socket.owner_node();
+    const auto op = NodeIntegerMathOperation(node->custom1);
+
+    Vector<SocketValue> values;
+    Vector<std::optional<int>> primitives;
+    for (const bNodeSocket *input_socket : node->input_sockets()) {
+      if (this->socket_is_ignored(*input_socket)) {
+        continue;
+      }
+      const SocketValue &value = value_by_socket_.lookup({node.context, input_socket});
+      values.append(value);
+      if (const std::optional<PrimitiveSocketValue> primitive = value.to_primitive(
+              *input_socket->typeinfo))
+      {
+        primitives.append(std::get<int>(primitive->value));
+      }
+      else {
+        primitives.append(std::nullopt);
+      }
+    }
+
+    switch (op) {
+      case NODE_INTEGER_MATH_MULTIPLY: {
+        if (primitives[0] == 0 || primitives[1] == 0) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{0}});
+          return true;
+        }
+        break;
+      }
+      case NODE_INTEGER_MATH_DIVIDE: {
+        if (primitives[0] == 0 || primitives[1] == 0) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{0}});
+          return true;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    return false;
+  }
+
+  [[nodiscard]] bool try_short_circuit__vector_math(const SocketInContext &output_socket)
+  {
+    const NodeInContext node = output_socket.owner_node();
+    const auto op = NodeVectorMathOperation(node->custom1);
+
+    Vector<SocketValue> values;
+    Vector<const bNodeSocket *> sockets;
+    for (const bNodeSocket *input_socket : node->input_sockets()) {
+      if (this->socket_is_ignored(*input_socket)) {
+        continue;
+      }
+      values.append(value_by_socket_.lookup({node.context, input_socket}));
+      sockets.append(input_socket);
+    }
+
+    auto try_get_float3 = [&](const int index) -> std::optional<float3> {
+      if (const std::optional<PrimitiveSocketValue> primitive = values[index].to_primitive(
+              *sockets[index]->typeinfo))
+      {
+        return std::get<float3>(primitive->value);
+      }
+      return std::nullopt;
+    };
+    auto try_get_float = [&](const int index) -> std::optional<float> {
+      if (const std::optional<PrimitiveSocketValue> primitive = values[index].to_primitive(
+              *sockets[index]->typeinfo))
+      {
+        return std::get<float>(primitive->value);
+      }
+      return std::nullopt;
+    };
+
+    switch (op) {
+      case NODE_VECTOR_MATH_MULTIPLY: {
+        const std::optional<float3> a = try_get_float3(0);
+        const std::optional<float3> b = try_get_float3(1);
+        if (math::is_zero(a) || math::is_zero(b)) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          return true;
+        }
+        break;
+      }
+      case NODE_VECTOR_MATH_DIVIDE: {
+        const std::optional<float3> a = try_get_float3(0);
+        const std::optional<float3> b = try_get_float3(1);
+        if (math::is_zero(a) || math::is_zero(b)) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          return true;
+        }
+        break;
+      }
+      case NODE_VECTOR_MATH_CROSS_PRODUCT: {
+        const std::optional<float3> a = try_get_float3(0);
+        const std::optional<float3> b = try_get_float3(1);
+        if (math::is_zero(a) || math::is_zero(b)) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          return true;
+        }
+        break;
+      }
+      case NODE_VECTOR_MATH_DOT_PRODUCT: {
+        const std::optional<float3> a = try_get_float3(0);
+        const std::optional<float3> b = try_get_float3(1);
+        if (math::is_zero(a) || math::is_zero(b)) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{0.0f}});
+          return true;
+        }
+      }
+      case NODE_VECTOR_MATH_SCALE: {
+        const std::optional<float3> a = try_get_float3(0);
+        const std::optional<float> scale = try_get_float(1);
+        if (a == float3(0.0f) || scale == 0.0f) {
+          this->store_socket_value(output_socket, {PrimitiveSocketValue{float3(0)}});
+          return true;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    return false;
   }
 
   /**
