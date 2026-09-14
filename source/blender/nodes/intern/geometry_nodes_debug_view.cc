@@ -46,6 +46,54 @@ static TreeDebugViewPropagation build_tree_debug_view_propagation(bNodeTree &tre
 
   TreeDebugViewPropagation propagation;
 
+  /* Compute structural availability during tree updates, never during modifier UI redraws.
+   * Mirror the supported contexts of MOD_nodes' persistent side-effect collection. */
+  const bke::bNodeTreeZones *zones = tree.zones();
+  if (zones) {
+    for (const bNode *node : tree.all_nodes()) {
+      if (node->is_muted()) {
+        continue;
+      }
+      const bke::bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier);
+      bool supported = true;
+      for (const bke::bNodeTreeZone *parent = zone; parent; parent = parent->parent_zone) {
+        const bNode *output = parent->output_node();
+        if (!output || output->type_legacy != GEO_NODE_SIMULATION_OUTPUT) {
+          supported = false;
+          break;
+        }
+      }
+      if (!supported) {
+        continue;
+      }
+      if (node->is_type("GeometryNodeViewer"_ustr)) {
+        const auto &storage = *static_cast<const NodeGeometryViewer *>(node->storage);
+        if (storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW) {
+          propagation.has_debug_views = true;
+          propagation.has_nested_debug_views = true;
+          propagation.has_simulation_debug_views |= zone != nullptr;
+        }
+      }
+      else if (node->is_group() && node->id) {
+        const bNodeTree &group = *reinterpret_cast<const bNodeTree *>(node->id);
+        const auto *child = DEG_get_original(&group)->runtime->debug_view_propagation.get();
+        if (!child) {
+          continue;
+        }
+        propagation.has_nested_debug_views |= child->has_nested_debug_views;
+        propagation.has_simulation_debug_views |= child->has_simulation_debug_views ||
+                                                  (zone && child->has_nested_debug_views);
+        for (const int input : child->viewers_by_group_input.keys()) {
+          if (input < node->input_sockets().size() && node->input_socket(input).is_available()) {
+            propagation.has_debug_views = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  propagation.has_debug_views |= propagation.has_simulation_debug_views;
+
   /* A direct Group Input -> Viewer.Show link is the deliberately conservative exposure rule. */
   for (const bNode *node : tree.nodes_by_type("GeometryNodeViewer"_ustr)) {
     if (node->is_muted() || is_inside_zone(tree, *node)) {

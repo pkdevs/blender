@@ -36,6 +36,13 @@ struct PropagatedViewer {
 
 /** Static Debug View exposure information cached on a node tree. */
 struct TreeDebugViewPropagation {
+  /** Supported views when this tree is used as a modifier, independent of Show values. */
+  bool has_debug_views = false;
+  /** Supported simulation views reached even through unexposed groups. */
+  bool has_simulation_debug_views = false;
+  /** Local and nested views that become supported when called inside a simulation. */
+  bool has_nested_debug_views = false;
+
   /** Viewers exposed through the corresponding group input index. */
   MultiValueMap<int, PropagatedViewer> viewers_by_group_input;
 

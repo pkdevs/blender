@@ -929,7 +929,12 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
           draw_property_for_socket(ctx, layout, socket, socket_props_ptr, parent_name);
         });
 
-    layout.prop(modifier_ptr, "show_debug_views", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    const auto *debug_views = nmd.node_group->runtime->debug_view_propagation.get();
+    if (debug_views && debug_views->has_debug_views) {
+      ui::Layout &row = layout.row(false);
+      row.active_set(nmd.modifier.mode & eModifierMode_Realtime);
+      row.prop(modifier_ptr, "show_debug_views", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    }
   }
 
   modifier_error_message_draw(layout, modifier_ptr);

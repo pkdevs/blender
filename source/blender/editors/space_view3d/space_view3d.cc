@@ -41,6 +41,7 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_modifier.hh"
+#include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -251,7 +252,13 @@ static nodes::eval_log::NodesEvalLog *debug_view_eval_log_for_request(
   }
 
   NodesModifierData &nmd = reinterpret_cast<NodesModifierData &>(*modifier);
-  if (!nmd.runtime) {
+  const int required_mode = eModifierMode_Realtime |
+                            (BKE_object_is_in_editmode(request.object) ? eModifierMode_Editmode :
+                                                                         0);
+  if (!nmd.runtime || !nmd.node_group ||
+      !BKE_modifier_is_enabled(nullptr, &nmd.modifier, required_mode) ||
+      !(nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS))
+  {
     return nullptr;
   }
   return nmd.runtime->eval_log.get();
@@ -362,6 +369,14 @@ bool ED_view3d_debug_view_request(View3D &v3d,
 
   debug_view_context_set(v3d, resolved_object, resolved_modifier_persistent_uid);
   if (!resolved_object) {
+    return false;
+  }
+
+  const auto &nmd = *reinterpret_cast<const NodesModifierData *>(
+      BKE_modifiers_findby_persistent_uid(resolved_object, resolved_modifier_persistent_uid));
+  if (!nmd.node_group || !nmd.node_group->runtime->debug_view_propagation ||
+      !nmd.node_group->runtime->debug_view_propagation->has_debug_views)
+  {
     return false;
   }
 
