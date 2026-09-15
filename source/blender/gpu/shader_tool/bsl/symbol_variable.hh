@@ -62,6 +62,11 @@ template<typename T> T value_as(const ConstexprValue &v)
   return std::visit([](auto &&arg) -> T { return static_cast<T>(arg[0]); }, v);
 }
 
+template<typename T> T vector_as(const ConstexprValue &v)
+{
+  return std::visit([](auto &&arg) -> T { return static_cast<T>(arg); }, v);
+}
+
 std::string constexpr_to_string(const ConstexprValue &v);
 
 /**

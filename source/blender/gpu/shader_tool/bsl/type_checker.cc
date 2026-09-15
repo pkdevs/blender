@@ -103,68 +103,261 @@ struct ExpressionTypeParser
         }
         auto sym = scope->lookup_function(*table, call.identifier(), call.parameters(), *scope);
         SymbolFunction *fn = sym.unwrap(err);
-        if (fn->is_builtin) {
+        if (fn->is_constexpr && !fn->is_error) {
           /* Implement builtin type casts. */
-          ast::Expr param = call.parameters().splat_1().arg1;
-          if (!param.is_valid()) {
+          auto [param1, param2, param3, param4] = call.parameters().splat_4();
+          int param_count = call.parameters().child_count();
+          if (param_count <= 0 || param_count > 4) {
             /* Not a constexpr. */
           }
-          else {
-            ExpressionResult res = sub_expression(t, param, 0);
+          else if (param_count == 4) {
+            ExpressionResult res1 = sub_expression(t, param1, 0);
+            ExpressionResult res2 = sub_expression(t, param2, 0);
+            ExpressionResult res3 = sub_expression(t, param3, 0);
+            ExpressionResult res4 = sub_expression(t, param4, 0);
+
+            if (!res1.is_constexpr() || res1.array_dim != 0 || !res2.is_constexpr() ||
+                res2.array_dim != 0 || !res3.is_constexpr() || res3.array_dim != 0 ||
+                !res4.is_constexpr() || res4.array_dim != 0)
+            {
+              /* Not a constexpr. */
+            }
+            else if (fn->identifier == "float4") {
+              return {table->float4_cls,
+                      Vec<float, 4>(value_as<float>(res1.value),
+                                    value_as<float>(res2.value),
+                                    value_as<float>(res3.value),
+                                    value_as<float>(res4.value))};
+            }
+            else if (fn->identifier == "int4") {
+              return {table->int4_cls,
+                      Vec<int, 4>(value_as<int>(res1.value),
+                                  value_as<int>(res2.value),
+                                  value_as<int>(res3.value),
+                                  value_as<int>(res4.value))};
+            }
+            else if (fn->identifier == "uint4") {
+              return {table->uint4_cls,
+                      Vec<uint, 4>(value_as<uint>(res1.value),
+                                   value_as<uint>(res2.value),
+                                   value_as<uint>(res3.value),
+                                   value_as<uint>(res4.value))};
+            }
+            else if (fn->identifier == "bool4") {
+              return {table->bool4_cls,
+                      Vec<bool, 4>(value_as<bool>(res1.value),
+                                   value_as<bool>(res2.value),
+                                   value_as<bool>(res3.value),
+                                   value_as<bool>(res4.value))};
+            }
+          }
+          else if (param_count == 3) {
+            ExpressionResult res1 = sub_expression(t, param1, 0);
+            ExpressionResult res2 = sub_expression(t, param2, 0);
+            ExpressionResult res3 = sub_expression(t, param3, 0);
+
+            if (!res1.is_constexpr() || res1.array_dim != 0 || !res2.is_constexpr() ||
+                res2.array_dim != 0 || !res3.is_constexpr() || res3.array_dim != 0)
+            {
+              /* Not a constexpr. */
+            }
+            else if (fn->identifier == "float3") {
+              return {table->float3_cls,
+                      Vec<float, 3>(value_as<float>(res1.value),
+                                    value_as<float>(res2.value),
+                                    value_as<float>(res3.value))};
+            }
+            else if (fn->identifier == "int3") {
+              return {table->int3_cls,
+                      Vec<int32_t, 3>(value_as<int>(res1.value),
+                                      value_as<int>(res2.value),
+                                      value_as<int>(res3.value))};
+            }
+            else if (fn->identifier == "uint3") {
+              return {table->uint3_cls,
+                      Vec<uint32_t, 3>(value_as<uint>(res1.value),
+                                       value_as<uint>(res2.value),
+                                       value_as<uint>(res3.value))};
+            }
+            else if (fn->identifier == "bool3") {
+              return {table->bool3_cls,
+                      Vec<bool, 3>(value_as<bool>(res1.value),
+                                   value_as<bool>(res2.value),
+                                   value_as<bool>(res3.value))};
+            }
+          }
+          else if (param_count == 2) {
+            ExpressionResult res1 = sub_expression(t, param1, 0);
+            ExpressionResult res2 = sub_expression(t, param2, 0);
+
+            if (!res1.is_constexpr() || res1.array_dim != 0 || !res2.is_constexpr() ||
+                res2.array_dim != 0)
+            {
+              /* Not a constexpr. */
+            }
+            else if (fn->identifier == "float2") {
+              return {table->float2_cls,
+                      Vec<float, 2>(value_as<float>(res1.value), value_as<float>(res2.value))};
+            }
+            else if (fn->identifier == "int2") {
+              return {table->int2_cls,
+                      Vec<int32_t, 2>(value_as<int>(res1.value), value_as<int>(res2.value))};
+            }
+            else if (fn->identifier == "uint2") {
+              return {table->uint2_cls,
+                      Vec<uint32_t, 2>(value_as<uint>(res1.value), value_as<uint>(res2.value))};
+            }
+            else if (fn->identifier == "bool2") {
+              return {table->bool2_cls,
+                      Vec<bool, 2>(value_as<bool>(res1.value), value_as<bool>(res2.value))};
+            }
+            else if (res1.type->comp_len > 1 && res1.type->comp_len == res2.type->comp_len) {
+              if (fn->identifier == "lessThan") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l < r; })};
+              }
+              if (fn->identifier == "lessThanEqual") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l <= r; })};
+              }
+              if (fn->identifier == "greaterThan") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l > r; })};
+              }
+              if (fn->identifier == "greaterThanEqual") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l >= r; })};
+              }
+              if (fn->identifier == "equal") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l == r; })};
+              }
+              if (fn->identifier == "notEqual") {
+                return {table->make_type(table->bool_cls, res1.type->comp_len),
+                        apply_arithmetic(res1, res2, [](auto l, auto r) { return l != r; })};
+              }
+            }
+          }
+          else if (param_count == 1) {
+            ExpressionResult res = sub_expression(t, param1, 0);
             if (!res.is_constexpr() || res.array_dim != 0) {
               /* Not a constexpr. */
             }
-            else if (fn->identifier == "float") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->float_cls, Vec<float>(val)};
-                  },
-                  res.value);
+            else if (res.type == table->float4_cls || res.type == table->int4_cls ||
+                     res.type == table->bool4_cls || res.type == table->uint4_cls)
+            {
+              if (fn->identifier == "float4") {
+                return {table->float4_cls, vector_as<Vec<float, 4>>(res.value)};
+              }
+              if (fn->identifier == "int4") {
+                return {table->int4_cls, vector_as<Vec<int, 4>>(res.value)};
+              }
+              if (fn->identifier == "uint4") {
+                return {table->uint4_cls, vector_as<Vec<uint, 4>>(res.value)};
+              }
+              if (fn->identifier == "bool4") {
+                return {table->bool4_cls, vector_as<Vec<bool, 4>>(res.value)};
+              }
             }
-            else if (fn->identifier == "int") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->int_cls, Vec<int>(val)}; },
-                  res.value);
+            else if (res.type == table->float3_cls || res.type == table->int3_cls ||
+                     res.type == table->bool3_cls || res.type == table->uint3_cls)
+            {
+              if (fn->identifier == "float3") {
+                return {table->float3_cls, vector_as<Vec<float, 3>>(res.value)};
+              }
+              if (fn->identifier == "int3") {
+                return {table->int3_cls, vector_as<Vec<int32_t, 3>>(res.value)};
+              }
+              if (fn->identifier == "uint3") {
+                return {table->uint3_cls, vector_as<Vec<uint32_t, 3>>(res.value)};
+              }
+              if (fn->identifier == "bool3") {
+                return {table->bool3_cls, vector_as<Vec<bool, 3>>(res.value)};
+              }
             }
-            else if (fn->identifier == "uint") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->uint_cls, Vec<uint32_t>(val)};
-                  },
-                  res.value);
+            else if (res.type == table->float2_cls || res.type == table->int2_cls ||
+                     res.type == table->bool2_cls || res.type == table->uint2_cls)
+            {
+              if (fn->identifier == "float2") {
+                return {table->float2_cls, vector_as<Vec<float, 2>>(res.value)};
+              }
+              if (fn->identifier == "int2") {
+                return {table->int2_cls, vector_as<Vec<int32_t, 2>>(res.value)};
+              }
+              if (fn->identifier == "uint2") {
+                return {table->uint2_cls, vector_as<Vec<uint32_t, 2>>(res.value)};
+              }
+              if (fn->identifier == "bool2") {
+                return {table->bool2_cls, vector_as<Vec<bool, 2>>(res.value)};
+              }
             }
-            else if (fn->identifier == "bool") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->bool_cls, Vec<bool>(val)}; },
-                  res.value);
-            }
-            else if (fn->identifier == "floatBitsToUint") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->uint_cls, std::bit_cast<Vec<uint32_t>>(Vec<float>(val))};
-                  },
-                  res.value);
-            }
-            else if (fn->identifier == "floatBitsToInt") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->int_cls, std::bit_cast<Vec<int32_t>>(Vec<float>(val))};
-                  },
-                  res.value);
-            }
-            else if (fn->identifier == "uintBitsToFloat") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->uint_cls, std::bit_cast<Vec<float>>(Vec<uint32_t>(val))};
-                  },
-                  res.value);
-            }
-            else if (fn->identifier == "intBitsToFloat") {
-              return std::visit(
-                  [&](auto val) -> ExpressionResult {
-                    return {table->int_cls, std::bit_cast<Vec<float>>(Vec<int32_t>(val))};
-                  },
-                  res.value);
+            else if (res.type == table->float_cls || res.type == table->int_cls ||
+                     res.type == table->bool_cls || res.type == table->uint_cls)
+            {
+              if (fn->identifier == "float4") {
+                return {table->float4_cls, vector_as<Vec<float, 4>>(res.value)};
+              }
+              if (fn->identifier == "int4") {
+                return {table->int4_cls, vector_as<Vec<int, 4>>(res.value)};
+              }
+              if (fn->identifier == "uint4") {
+                return {table->uint4_cls, vector_as<Vec<uint, 4>>(res.value)};
+              }
+              if (fn->identifier == "bool4") {
+                return {table->bool4_cls, vector_as<Vec<bool, 4>>(res.value)};
+              }
+              if (fn->identifier == "float3") {
+                return {table->float3_cls, vector_as<Vec<float, 3>>(res.value)};
+              }
+              if (fn->identifier == "int3") {
+                return {table->int3_cls, vector_as<Vec<int32_t, 3>>(res.value)};
+              }
+              if (fn->identifier == "uint3") {
+                return {table->uint3_cls, vector_as<Vec<uint32_t, 3>>(res.value)};
+              }
+              if (fn->identifier == "bool3") {
+                return {table->bool3_cls, vector_as<Vec<bool, 3>>(res.value)};
+              }
+              if (fn->identifier == "float2") {
+                return {table->float2_cls, vector_as<Vec<float, 2>>(res.value)};
+              }
+              if (fn->identifier == "int2") {
+                return {table->int2_cls, vector_as<Vec<int32_t, 2>>(res.value)};
+              }
+              if (fn->identifier == "uint2") {
+                return {table->uint2_cls, vector_as<Vec<uint32_t, 2>>(res.value)};
+              }
+              if (fn->identifier == "bool2") {
+                return {table->bool2_cls, vector_as<Vec<bool, 2>>(res.value)};
+              }
+              if (fn->identifier == "float") {
+                return {table->float_cls, vector_as<Vec<float>>(res.value)};
+              }
+              if (fn->identifier == "int") {
+                return {table->int_cls, vector_as<Vec<int>>(res.value)};
+              }
+              if (fn->identifier == "uint") {
+                return {table->uint_cls, vector_as<Vec<uint32_t>>(res.value)};
+              }
+              if (fn->identifier == "bool") {
+                return {table->bool_cls, vector_as<Vec<bool>>(res.value)};
+              }
+              if (fn->identifier == "floatBitsToUint") {
+                return {table->uint_cls,
+                        std::bit_cast<Vec<uint32_t>>(vector_as<Vec<float>>(res.value))};
+              }
+              if (fn->identifier == "floatBitsToInt") {
+                return {table->int_cls,
+                        std::bit_cast<Vec<int32_t>>(vector_as<Vec<float>>(res.value))};
+              }
+              if (fn->identifier == "uintBitsToFloat") {
+                return {table->uint_cls,
+                        std::bit_cast<Vec<float>>(vector_as<Vec<uint32_t>>(res.value))};
+              }
+              if (fn->identifier == "intBitsToFloat") {
+                return {table->float_cls,
+                        std::bit_cast<Vec<float>>(vector_as<Vec<int32_t>>(res.value))};
+              }
             }
           }
         }

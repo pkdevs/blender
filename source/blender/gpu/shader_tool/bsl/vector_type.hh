@@ -57,7 +57,7 @@ template<typename T, int size = 1> struct Vec {
     requires(size != 1)
   {
     for (int v = 0; v < size; ++v) {
-      values[v] = T(other.values[v]);
+      values[v] = T(other.values[0]);
     }
   }
 
@@ -305,12 +305,12 @@ template<typename T, int size = 1> struct Vec {
 
 #define BINARY_OP(op) \
   template<typename T, int N, typename U, int M> \
-  Vec<decltype(T() op U()), std ::min(N, M)> operator op(const Vec<T, N> &lhs, \
+  Vec<decltype(T() op U()), std ::max(N, M)> operator op(const Vec<T, N> &lhs, \
                                                          const Vec<U, M> &rhs) \
   { \
-    Vec<decltype(T() op U()), std ::min(N, M)> r; \
-    for (int i = 0; i < std::min(N, M); ++i) { \
-      r[i] = lhs[i] op rhs[i]; \
+    Vec<decltype(T() op U()), std ::max(N, M)> r; \
+    for (int i = 0; i < std::max(N, M); ++i) { \
+      r[i] = lhs[std::min(N - 1, i)] op rhs[std::min(M - 1, i)]; \
     } \
     return r; \
   }
@@ -335,16 +335,6 @@ BINARY_OP(>)
 BINARY_OP(>=)
 
 #undef BINARY_OP
-
-/* Element-wise Comparison Operators (returns boolean vector) */
-template<typename T, int N> Vec<bool, N> equal(const Vec<T, N> &lhs, const Vec<T, N> &rhs)
-{
-  Vec<bool, N> res;
-  for (int i = 0; i < N; ++i) {
-    res[i] = (lhs[i] == rhs[i]);
-  }
-  return res;
-}
 
 template<typename T, int N> bool contains_zero(const Vec<T, N> &v)
 {
