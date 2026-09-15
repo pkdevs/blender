@@ -732,12 +732,17 @@ static bool path_relative_to_impl(char path[FILE_MAX],
   }
 #endif
 
-  BLI_string_replace_char(base_path + BLI_path_unc_prefix_len(base_path), '\\', '/');
-  BLI_string_replace_char(path + BLI_path_unc_prefix_len(path), '\\', '/');
+  /* #BLI_path_normalize requires native slashes. */
+  BLI_string_replace_char(base_path + BLI_path_unc_prefix_len(base_path), ALTSEP, SEP);
+  BLI_string_replace_char(path + BLI_path_unc_prefix_len(path), ALTSEP, SEP);
 
-  /* Remove `/./` which confuse the following slash counting. */
+  /* Removes `/./` and `/../` which confuse the following slash counting. */
   BLI_path_normalize(path);
   BLI_path_normalize(base_path);
+
+  /* Use forward slashes as assumed by the comparison below. */
+  BLI_path_slash_forward(base_path);
+  BLI_path_slash_forward(path);
 
   /* The last slash in the path indicates where the path part ends. */
   base_dir_end = BLI_path_slash_rfind(base_path);
