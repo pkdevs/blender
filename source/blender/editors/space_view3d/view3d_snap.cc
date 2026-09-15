@@ -1108,16 +1108,16 @@ void VIEW3D_OT_snap_cursor_to_active(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  ot->prop = RNA_def_boolean(ot->srna,
-                             "location",
-                             true,
-                             "Location",
-                             "Whether or not snap the location of the 3D cursor.");
-  ot->prop = RNA_def_boolean(ot->srna,
-                             "rotation",
-                             true,
-                             "Rotation",
-                             "Whether or not snap the rotation of the 3D cursor.");
+  RNA_def_boolean(ot->srna,
+                  "location",
+                  true,
+                  "Location",
+                  "Whether or not snap the location of the 3D cursor.");
+  RNA_def_boolean(ot->srna,
+                  "rotation",
+                  true,
+                  "Rotation",
+                  "Whether or not snap the rotation of the 3D cursor.");
 }
 
 /** \} */
