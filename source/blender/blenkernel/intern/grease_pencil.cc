@@ -305,9 +305,10 @@ static void grease_pencil_blend_write(BlendWriter *writer, ID *id, const void *i
   CustomData_reset(&grease_pencil->layers_data_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, grease_pencil, [](BlendStructWriter &struct_writer) {
-    struct_writer.generated_ptr(offsetof(GreasePencil, attribute_storage.dna_attributes));
-  });
+  writer->write_id_struct(
+      id_address, grease_pencil, [](BlendStructWriter<GreasePencil> &struct_writer) {
+        struct_writer.generated_ptr(offsetof(GreasePencil, attribute_storage.dna_attributes));
+      });
   BKE_id_blend_write(writer, &grease_pencil->id);
 
   grease_pencil->attribute_storage.wrap().blend_write(*writer, attribute_data);
@@ -2909,7 +2910,7 @@ static Material *grease_pencil_object_material_ensure_from_brush_pinned(Main *bm
 {
   Material *ma = (brush->gpencil_settings) ? brush->gpencil_settings->material : nullptr;
 
-  if (ma) {
+  if (ma && BKE_object_material_index_get(ob, ma) < 0) {
     /* Ensure we assign a local datablock if this is an editable asset. */
     ma = reinterpret_cast<Material *>(bke::asset_edit_id_ensure_local(*bmain, ma->id));
   }
@@ -4633,7 +4634,9 @@ static void write_drawing_array(GreasePencil &grease_pencil,
         drawing_copy.runtime = nullptr;
 
         writer->write_struct_at_address_cast<GreasePencilDrawing>(
-            drawing_base, &drawing_copy, [](BlendStructWriter &struct_writer) {
+            drawing_base,
+            &drawing_copy,
+            [](BlendStructWriter<GreasePencilDrawing> &struct_writer) {
               struct_writer.generated_ptr(
                   offsetof(GreasePencilDrawing, geometry.attribute_storage.dna_attributes));
             });
