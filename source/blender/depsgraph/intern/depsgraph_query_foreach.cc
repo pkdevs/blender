@@ -154,7 +154,6 @@ struct ForeachIDComponentData {
 
 struct ForeachNamedComponentData {
   DEGForeachNamedIDComponentCallback callback;
-  Set<ComponentNode *> visited;
 };
 
 bool deg_foreach_dependent_component_callback(OperationNode *op_node, void *user_data_v)
@@ -180,11 +179,6 @@ bool deg_foreach_named_dependent_component_callback(OperationNode *op_node, void
     return true;
   }
   IDNode *id_node = comp_node->owner;
-  if (user_data->visited.contains(comp_node)) {
-    /* Continue iterating this nodes outgoing relations. */
-    return true;
-  }
-  user_data->visited.add_new(comp_node);
   return user_data->callback(
       id_node->id_orig, nodeTypeToObjectComponent(comp_node->type), comp_node->name);
 }
