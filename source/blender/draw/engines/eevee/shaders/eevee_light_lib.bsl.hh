@@ -6,7 +6,7 @@
 
 #include "draw_math_geom_lib.glsl"
 #include "eevee_light_shared.hh"
-#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
 
 /* Attenuation cutoff needs to be the same in the shadow loop and the light eval loop. */
 #define LIGHT_ATTENUATION_THRESHOLD 1e-6f

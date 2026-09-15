@@ -129,7 +129,7 @@ struct LTCData {
 
     LTCData ltc_data;
     ltc_data.Minv = Minv;
-    ltc_data.attenuation_factor = 1.0;
+    ltc_data.attenuation_factor = 1.0f;
     ltc_data.form_factor_type = LTCFormFactorType::OneSidedCosineSphereClipped;
     return ltc_data;
   }
