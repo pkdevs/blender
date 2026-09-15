@@ -1025,8 +1025,13 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     }
     return nullptr;
   }
-  if (ob && ob->type == OB_GREASE_PENCIL && ob->mode != OB_MODE_OBJECT) {
-    /* Grease Pencil edit / paint transformations are handled by #TransConvertType_GreasePencil. */
+  if (ob && ELEM(ob->mode,
+                 OB_MODE_VERTEX_GREASE_PENCIL,
+                 OB_MODE_SCULPT_GREASE_PENCIL,
+                 OB_MODE_WEIGHT_GREASE_PENCIL))
+  {
+    /* Draw and Edit mode handle transformations via #TransConverType_GreasePencil, avoid
+     * transformations otherwise. */
     return nullptr;
   }
   return &TransConvertType_Object;
