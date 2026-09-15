@@ -8,15 +8,16 @@
 #include "testing/testing.h"
 
 #include "BLI_exception_safety_test_utils.hh"
-#include "BLI_ghash.h"
-#include "BLI_rand.h"
+#include "BLI_ghash.hh"
+#include "BLI_rand_c.hh"
 #include "BLI_set.hh"
 #include "BLI_timeit.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
+
 namespace tests {
 
 TEST(set, DefaultConstructor)
@@ -199,7 +200,7 @@ TEST(set, AddMultipleNew)
 TEST(set, Iterator)
 {
   Set<int> set = {1, 3, 2, 5, 4};
-  blender::Vector<int> vec;
+  Vector<int> vec;
   for (int value : set) {
     vec.append(value);
   }
@@ -277,6 +278,22 @@ TEST(set, Remove)
   EXPECT_EQ(set.size(), 4);
 }
 
+TEST(set, AddRemoveSameHash)
+{
+  Set<int> set;
+  set.add(0);
+  set.add(1 << 16);
+  EXPECT_TRUE(set.contains(0));
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.remove(0);
+  EXPECT_FALSE(set.contains(0));
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.add(1 << 16);
+  EXPECT_TRUE(set.contains(1 << 16));
+  set.remove(1 << 16);
+  EXPECT_FALSE(set.contains(1 << 16));
+}
+
 struct Type1 {
   uint32_t value;
 };
@@ -297,13 +314,13 @@ static bool operator==(const Type2 &a, const Type1 &b)
 }  // namespace tests
 
 /* This has to be defined in ::blender namespace. */
-template<> struct DefaultHash<tests::Type1> {
-  uint32_t operator()(const tests::Type1 &value) const
+template<> struct DefaultHash<blender::tests::Type1> {
+  uint32_t operator()(const blender::tests::Type1 &value) const
   {
     return value.value;
   }
 
-  uint32_t operator()(const tests::Type2 &value) const
+  uint32_t operator()(const blender::tests::Type2 &value) const
   {
     return value.value;
   }
@@ -745,12 +762,12 @@ BLI_NOINLINE void benchmark_random_ints(StringRef name, int amount, int factor)
 }
 
 /**
- * A wrapper for std::unordered_set with the API of blender::Set. This can be used for
+ * A wrapper for std::unordered_set with the API of Set. This can be used for
  * benchmarking.
  */
 template<typename Key> class StdUnorderedSetWrapper {
  private:
-  using SetType = std::unordered_set<Key, blender::DefaultHash<Key>>;
+  using SetType = std::unordered_set<Key, DefaultHash<Key>>;
   SetType set_;
 
  public:
@@ -828,13 +845,13 @@ template<typename Key> class StdUnorderedSetWrapper {
 TEST(set, Benchmark)
 {
   for (int i = 0; i < 3; i++) {
-    benchmark_random_ints<Set<int>>("blender::Set      ", 100000, 1);
+    benchmark_random_ints<Set<int>>("Set      ", 100000, 1);
     benchmark_random_ints<StdUnorderedSetWrapper<int>>("std::unordered_set", 100000, 1);
   }
   std::cout << "\n";
   for (int i = 0; i < 3; i++) {
     uint32_t factor = (3 << 10);
-    benchmark_random_ints<Set<int>>("blender::Set      ", 100000, int(factor));
+    benchmark_random_ints<Set<int>>("Set      ", 100000, int(factor));
     benchmark_random_ints<StdUnorderedSetWrapper<int>>("std::unordered_set", 100000, int(factor));
   }
 }
@@ -844,50 +861,50 @@ TEST(set, Benchmark)
  * The difference is more pronounced when `reserve` is used.
  * When using clang 15.0.7 the numbers fairly similar.
  *
- * Timer 'blender::Set       Add' took 2.9 ms
- * Timer 'blender::Set       Contains' took 0.4 ms
- * Timer 'blender::Set       Remove' took 0.5 ms
+ * Timer 'Set       Add' took 2.9 ms
+ * Timer 'Set       Contains' took 0.4 ms
+ * Timer 'Set       Remove' took 0.5 ms
  * Count: 199998
  * Timer 'std::unordered_set Add' took 6.4 ms
  * Timer 'std::unordered_set Contains' took 1.2 ms
  * Timer 'std::unordered_set Remove' took 4.0 ms
  * Count: 199998
- * Timer 'blender::Set       Add' took 2.1 ms
- * Timer 'blender::Set       Contains' took 0.4 ms
- * Timer 'blender::Set       Remove' took 0.4 ms
+ * Timer 'Set       Add' took 2.1 ms
+ * Timer 'Set       Contains' took 0.4 ms
+ * Timer 'Set       Remove' took 0.4 ms
  * Count: 199998
  * Timer 'std::unordered_set Add' took 5.5 ms
  * Timer 'std::unordered_set Contains' took 1.2 ms
  * Timer 'std::unordered_set Remove' took 4.0 ms
  * Count: 199998
- * Timer 'blender::Set       Add' took 2.0 ms
- * Timer 'blender::Set       Contains' took 0.4 ms
- * Timer 'blender::Set       Remove' took 0.5 ms
+ * Timer 'Set       Add' took 2.0 ms
+ * Timer 'Set       Contains' took 0.4 ms
+ * Timer 'Set       Remove' took 0.5 ms
  * Count: 199998
  * Timer 'std::unordered_set Add' took 5.6 ms
  * Timer 'std::unordered_set Contains' took 1.2 ms
  * Timer 'std::unordered_set Remove' took 4.0 ms
  * Count: 199998
  *
- * Timer 'blender::Set       Add' took 2.7 ms
- * Timer 'blender::Set       Contains' took 0.8 ms
- * Timer 'blender::Set       Remove' took 1.1 ms
+ * Timer 'Set       Add' took 2.7 ms
+ * Timer 'Set       Contains' took 0.8 ms
+ * Timer 'Set       Remove' took 1.1 ms
  * Count: 198790
  * Timer 'std::unordered_set Add' took 6.3 ms
  * Timer 'std::unordered_set Contains' took 1.5 ms
  * Timer 'std::unordered_set Remove' took 4.4 ms
  * Count: 198790
- * Timer 'blender::Set       Add' took 2.6 ms
- * Timer 'blender::Set       Contains' took 0.8 ms
- * Timer 'blender::Set       Remove' took 1.1 ms
+ * Timer 'Set       Add' took 2.6 ms
+ * Timer 'Set       Contains' took 0.8 ms
+ * Timer 'Set       Remove' took 1.1 ms
  * Count: 198790
  * Timer 'std::unordered_set Add' took 6.4 ms
  * Timer 'std::unordered_set Contains' took 1.5 ms
  * Timer 'std::unordered_set Remove' took 4.4 ms
  * Count: 198790
- * Timer 'blender::Set       Add' took 2.7 ms
- * Timer 'blender::Set       Contains' took 0.8 ms
- * Timer 'blender::Set       Remove' took 1.1 ms
+ * Timer 'Set       Add' took 2.7 ms
+ * Timer 'Set       Contains' took 0.8 ms
+ * Timer 'Set       Remove' took 1.1 ms
  * Count: 198790
  * Timer 'std::unordered_set Add' took 6.3 ms
  * Timer 'std::unordered_set Contains' took 1.5 ms

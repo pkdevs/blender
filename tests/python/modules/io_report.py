@@ -10,6 +10,7 @@ a HTML report showing the differences, for regression testing.
 import bpy
 import bpy_extras.node_shader_utils
 import difflib
+import html
 import json
 import os
 import pathlib
@@ -168,7 +169,7 @@ class Report:
         div.page_container div {{ text-align: left; }}
         div.page_content {{  display: inline-block; }}
         .text_cell {{
-          max-width: 15em;
+          max-width: 22.5em;
           max-height: 8em;
           overflow: auto;
           font-family: monospace;
@@ -177,7 +178,7 @@ class Report:
           border: 1px solid gray;
         }}
         .text_cell_larger {{ max-height: 14em; }}
-        .text_cell_wider {{ max-width: 40em; }}
+        .text_cell_wider {{ max-width: 44em; }}
         .added {{ background-color: #d4edda; }}
         .removed {{ background-color: #f8d7da; }}
         .place {{ color: #808080; font-style: italic; }}
@@ -242,14 +243,16 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
         table_style = """ class="table-danger" """ if error else ""
         cell_class = "text_cell text_cell_larger" if error else "text_cell"
         diff_text = "&nbsp;"
+        escaped_got_desc = html.escape(got_desc)
+        escaped_ref_desc = html.escape(ref_desc)
         if error:
-            diff_text = Report._colored_diff(ref_desc, got_desc)
+            diff_text = Report._colored_diff(escaped_ref_desc, escaped_got_desc)
 
         test_html = f"""
             <tr>
                 <td{table_style}><b>{testname}</b><br/>{status}</td>
-                <td><div class="{cell_class}">{got_desc}</div></td>
-                <td><div class="{cell_class}">{ref_desc}</div></td>
+                <td><div class="{cell_class}">{escaped_got_desc}</div></td>
+                <td><div class="{cell_class}">{escaped_ref_desc}</div></td>
                 <td><div class="{cell_class} text_cell_wider">{diff_text}</div></td>
             </tr>"""
 
@@ -271,6 +274,15 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])})"
         if isinstance(val, bpy.types.Float2AttributeValue):
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])})"
+        if isinstance(val, bpy.types.Float4AttributeValue):
+            return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])}, {fmtf(val.vector[3])})"
+        if isinstance(val, bpy.types.Float4x4AttributeValue):
+            mat = val.value
+            res = "("
+            for row in range(0, 4):
+                res += f" ({fmtf(mat[row][0])}, {fmtf(mat[row][1])}, {fmtf(mat[row][2])}, {fmtf(mat[row][3])})"
+            res += " )"
+            return res
         if isinstance(val, bpy.types.FloatColorAttributeValue) or isinstance(val, bpy.types.ByteColorAttributeValue):
             return f"({val.color[0]:.3f}, {val.color[1]:.3f}, {val.color[2]:.3f}, {val.color[3]:.3f})"
         if isinstance(val, bpy.types.QuaternionAttributeValue):
@@ -298,12 +310,14 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
             return res
         if isinstance(val, bpy.types.SplinePoint):
             return f"({fmtf(val.co[0])}, {fmtf(val.co[1])}, {fmtf(val.co[2])}) w:{fmtf(val.weight)}"
+        if isinstance(val, bpy.types.UDIMTile):
+            return f"{val.number}"
         return str(val)
 
     # single-line dump of head/tail
     @staticmethod
-    def _write_collection_single(col, desc: StringIO) -> None:
-        desc.write(f"    - ")
+    def _write_collection_single(col, desc: StringIO, line_prefix="    - ") -> None:
+        desc.write(line_prefix)
         side_to_print = Report.side_to_print_single_line
         if len(col) <= side_to_print * 2:
             for val in col:
@@ -449,7 +463,10 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
                 if len(mesh.edges) > 0:
                     Report._write_collection_single(mesh.edges, desc)
                 # attributes
-                for attr in mesh.attributes:
+                attr_names = [attr.name for attr in mesh.attributes]
+                attr_names.sort()
+                for name in attr_names:
+                    attr = mesh.attributes[name]
                     if not attr.is_internal:
                         Report._write_attr(attr, desc)
                 # skinning / vertex groups
@@ -860,6 +877,9 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
             desc.write(f"==== Images: {len(bpy.data.images)}\n")
             for img in bpy.data.images:
                 desc.write(f"- Image '{img.name}' {img.size[0]}x{img.size[1]} {img.depth}bpp\n")
+                if len(img.tiles) > 1:
+                    desc.write(f"  - {len(img.tiles)} tiles: ")
+                    Report._write_collection_single(img.tiles, desc, "")
                 Report._write_custom_props(img, desc)
             desc.write(f"\n")
 
@@ -939,7 +959,7 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
                 generate_func(str(input_file), str(output_filepath), params, params_export)
                 got_desc = self.generate_data_desc(output_filepath)
         except RuntimeError as ex:
-            got_desc = f"Error during import: {ex}"
+            got_desc = f"Error during import: {ex}".replace(str(input_file), input_file.name)
 
         ref_path: pathlib.Path = self.reference_dir / f"{input_basename}.txt"
         if ref_path.exists():

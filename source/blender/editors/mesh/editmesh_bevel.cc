@@ -10,11 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -46,7 +47,7 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
 #define MVAL_PIXEL_MARGIN 5.0f
 
@@ -63,6 +64,8 @@ using blender::Vector;
 
 static const char *value_rna_name[NUM_VALUE_KINDS] = {
     "offset", "offset_pct", "profile", "segments"};
+static const float value_snap_increments[NUM_VALUE_KINDS] = {0.1f, 5.0f, 0.0f, 0.0f};
+static const float value_increments_precision_factors[NUM_VALUE_KINDS] = {0.1f, 0.2f, 0.0f, 0.0f};
 static const float value_clamp_min[NUM_VALUE_KINDS] = {0.0f, 0.0f, PROFILE_HARD_MIN, 1.0f};
 static const float value_clamp_max[NUM_VALUE_KINDS] = {1e6, 100.0f, 1.0f, SEGMENTS_HARD_MAX};
 static const float value_start[NUM_VALUE_KINDS] = {0.0f, 0.0f, 0.5f, 1.0f};
@@ -83,6 +86,8 @@ struct BevelData {
   float max_obj_scale;
   bool is_modal;
 
+  bool use_snap;
+  bool use_precision;
   Vector<BevelObjectStore> ob_store;
 
   /* modal only */
@@ -116,6 +121,10 @@ enum {
   BEV_MODAL_INNER_MITER_CHANGE,
   BEV_MODAL_PROFILE_TYPE_CHANGE,
   BEV_MODAL_VERTEX_MESH_CHANGE,
+  BEV_MODAL_SNAP_ON,
+  BEV_MODAL_SNAP_OFF,
+  BEV_MODAL_PRECISION_ON,
+  BEV_MODAL_PRECISION_OFF
 };
 
 static float get_bevel_offset(wmOperator *op)
@@ -137,8 +146,15 @@ static void edbm_bevel_update_status_text(bContext *C, wmOperator *op)
   }
   else {
     double offset_val = double(RNA_float_get(op->ptr, "offset"));
-    BKE_unit_value_as_string_scaled(
-        offset_str, NUM_STR_REP_LEN, offset_val, -3, B_UNIT_LENGTH, sce->unit, true);
+    const int precision = opdata->shift_value[opdata->value_mode] == -1.0f ? 4 : 7;
+    BKE_unit_value_as_string_scaled(offset_str,
+                                    NUM_STR_REP_LEN,
+                                    offset_val,
+                                    precision * -1,
+                                    B_UNIT_LENGTH,
+                                    sce->unit,
+                                    true,
+                                    true);
   }
 
   PropertyRNA *prop;
@@ -180,6 +196,9 @@ static void edbm_bevel_update_status_text(bContext *C, wmOperator *op)
   WorkspaceStatus status(C);
   status.opmodal(IFACE_("Confirm"), op->type, BEV_MODAL_CONFIRM);
   status.opmodal(IFACE_("Cancel"), op->type, BEV_MODAL_CANCEL);
+  status.opmodal(
+      IFACE_("Precision mode"), op->type, BEV_MODAL_PRECISION_ON, opdata->use_precision);
+  status.opmodal(IFACE_("Snap"), op->type, BEV_MODAL_SNAP_ON, opdata->use_snap);
   status.opmodal(IFACE_("Width Type"), op->type, BEV_MODAL_OFFSET_MODE_CHANGE);
 
   status.opmodal(
@@ -228,6 +247,7 @@ static void edbm_bevel_update_status_text(bContext *C, wmOperator *op)
 
 static bool edbm_bevel_init(bContext *C, wmOperator *op, const bool is_modal)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   View3D *v3d = CTX_wm_view3d(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -250,7 +270,7 @@ static bool edbm_bevel_init(bContext *C, wmOperator *op, const bool is_modal)
 
   {
     const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-        scene, view_layer, v3d);
+        *bmain, scene, view_layer, v3d);
     for (Object *obedit : objects) {
       float scale = mat4_to_scale(obedit->object_to_world().ptr());
       opdata->max_obj_scale = max_ff(opdata->max_obj_scale, scale);
@@ -404,7 +424,7 @@ static bool edbm_bevel_calc(wmOperator *op)
       params.calc_looptris = true;
       params.calc_normals = true;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     }
 
     changed_multi |= changed;
@@ -455,7 +475,7 @@ static void edbm_bevel_cancel(bContext *C, wmOperator *op)
       params.calc_looptris = false;
       params.calc_normals = true;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     }
   }
 
@@ -520,7 +540,7 @@ static wmOperatorStatus edbm_bevel_invoke(bContext *C, wmOperator *op, const wmE
 
   /* initialize mouse values */
   float center_3d[3];
-  if (!blender::ed::transform::calculateTransformCenter(
+  if (!ed::transform::calculateTransformCenter(
           C, V3D_AROUND_CENTER_MEDIAN, center_3d, opdata->mcenter))
   {
     /* in this case the tool will likely do nothing,
@@ -565,7 +585,7 @@ static void edbm_bevel_mouse_set_value(wmOperator *op, const wmEvent *event)
   value = value_start[vmode] + value * opdata->scale[vmode];
 
   /* Fake shift-transform... */
-  if (event->modifier & KM_SHIFT) {
+  if (opdata->use_precision) {
     if (opdata->shift_value[vmode] < 0.0f) {
       opdata->shift_value[vmode] = (vmode == SEGMENTS_VALUE) ?
                                        opdata->segments :
@@ -575,6 +595,16 @@ static void edbm_bevel_mouse_set_value(wmOperator *op, const wmEvent *event)
   }
   else if (opdata->shift_value[vmode] >= 0.0f) {
     opdata->shift_value[vmode] = -1.0f;
+  }
+
+  if (opdata->use_snap) {
+    const float increment_factor = opdata->use_precision ?
+                                       (value_snap_increments[vmode] *
+                                        value_increments_precision_factors[vmode]) :
+                                       value_snap_increments[vmode];
+    if (increment_factor != 0.0f) {
+      value = increment_factor * roundf(value / increment_factor);
+    }
   }
 
   /* Clamp according to value mode, and store value back. */
@@ -662,6 +692,10 @@ wmKeyMap *bevel_modal_keymap(wmKeyConfig *keyconf)
        0,
        "Change Intersection Method",
        "Cycle through intersection methods"},
+      {BEV_MODAL_SNAP_ON, "SNAP_ON", 0, "Snap", ""},
+      {BEV_MODAL_SNAP_OFF, "SNAP_OFF", 0, "Snap (OFF)", ""},
+      {BEV_MODAL_PRECISION_ON, "PRECISION_ON", 0, "Precision", ""},
+      {BEV_MODAL_PRECISION_OFF, "PRECISION_OFF", 0, "Precision (OFF)", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -897,6 +931,34 @@ static wmOperatorStatus edbm_bevel_modal(bContext *C, wmOperator *op, const wmEv
         handled = true;
         break;
       }
+      case BEV_MODAL_PRECISION_ON: {
+        opdata->use_precision = true;
+        edbm_bevel_calc_initial_length(op, event, true);
+        edbm_bevel_update_status_text(C, op);
+        handled = true;
+        break;
+      }
+      case BEV_MODAL_PRECISION_OFF: {
+        opdata->use_precision = false;
+        edbm_bevel_calc_initial_length(op, event, true);
+        edbm_bevel_update_status_text(C, op);
+        handled = true;
+        break;
+      }
+      case BEV_MODAL_SNAP_ON: {
+        opdata->use_snap = true;
+        edbm_bevel_calc_initial_length(op, event, true);
+        edbm_bevel_update_status_text(C, op);
+        handled = true;
+        break;
+      }
+      case BEV_MODAL_SNAP_OFF: {
+        opdata->use_snap = false;
+        edbm_bevel_calc_initial_length(op, event, true);
+        edbm_bevel_update_status_text(C, op);
+        handled = true;
+        break;
+      }
     }
   }
 
@@ -915,7 +977,7 @@ static wmOperatorStatus edbm_bevel_modal(bContext *C, wmOperator *op, const wmEv
 
 static void edbm_bevel_ui(bContext *C, wmOperator *op)
 {
-  blender::ui::Layout &layout = *op->layout;
+  ui::Layout &layout = *op->layout;
 
   int profile_type = RNA_enum_get(op->ptr, "profile_type");
   int offset_type = RNA_enum_get(op->ptr, "offset_type");
@@ -924,8 +986,8 @@ static void edbm_bevel_ui(bContext *C, wmOperator *op)
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
 
-  blender::ui::Layout *row = &layout.row(false);
-  row->prop(op->ptr, "affect", blender::ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  ui::Layout *row = &layout.row(false);
+  row->prop(op->ptr, "affect", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
   layout.separator();
 
@@ -942,14 +1004,14 @@ static void edbm_bevel_ui(bContext *C, wmOperator *op)
   if (ELEM(profile_type, BEVEL_PROFILE_SUPERELLIPSE, BEVEL_PROFILE_CUSTOM)) {
     layout.prop(op->ptr,
                 "profile",
-                blender::ui::ITEM_R_SLIDER,
+                ui::ITEM_R_SLIDER,
                 (profile_type == BEVEL_PROFILE_SUPERELLIPSE) ? IFACE_("Profile Shape") :
                                                                IFACE_("Miter Profile Shape"),
                 ICON_NONE);
   }
   layout.prop(op->ptr, "material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  blender::ui::Layout *col = &layout.column(true);
+  ui::Layout *col = &layout.column(true);
   col->prop(op->ptr, "harden_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col->prop(op->ptr, "clamp_overlap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col->prop(op->ptr, "loop_slide", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -980,12 +1042,12 @@ static void edbm_bevel_ui(bContext *C, wmOperator *op)
   layout.separator();
 
   row = &layout.row(false);
-  row->prop(op->ptr, "profile_type", blender::ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  row->prop(op->ptr, "profile_type", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   if (profile_type == BEVEL_PROFILE_CUSTOM) {
     /* Get an RNA pointer to ToolSettings to give to the curve profile template code. */
     Scene *scene = CTX_data_scene(C);
     PointerRNA toolsettings_ptr = RNA_pointer_create_discrete(
-        &scene->id, &RNA_ToolSettings, scene->toolsettings);
+        &scene->id, RNA_ToolSettings, scene->toolsettings);
     template_curve_profile(&layout, &toolsettings_ptr, "custom_bevel_profile_preset");
   }
 }
@@ -1203,3 +1265,5 @@ void MESH_OT_bevel(wmOperatorType *ot)
   prop = RNA_def_boolean(ot->srna, "release_confirm", false, "Confirm on Release", "");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
+
+}  // namespace blender

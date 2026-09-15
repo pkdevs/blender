@@ -5,9 +5,10 @@
 #define CMP_NODE_SETALPHA_MODE_APPLY 0
 #define CMP_NODE_SETALPHA_MODE_REPLACE_ALPHA 1
 
-void node_composite_set_alpha(float4 color, float alpha, float type, out float4 result)
+[[node]]
+void node_composite_set_alpha(float4 color, float alpha, int type, float4 &result)
 {
-  switch (int(type)) {
+  switch (type) {
     case CMP_NODE_SETALPHA_MODE_APPLY:
       result = color * alpha;
       break;

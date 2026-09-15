@@ -13,8 +13,8 @@
 #  define PIXELSIZE (1.0f)
 #endif
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "GPU_state.hh"
 
@@ -22,6 +22,8 @@
 #include "gpu_context_private.hh"
 
 #include "gpu_state_private.hh"
+
+namespace blender {
 
 using namespace blender::gpu;
 
@@ -52,7 +54,7 @@ void GPU_face_culling(GPUFaceCullTest culling)
 GPUFaceCullTest GPU_face_culling_get()
 {
   GPUState &state = Context::get()->state_manager->state;
-  return (GPUFaceCullTest)state.culling_test;
+  return GPUFaceCullTest(state.culling_test);
 }
 
 void GPU_front_facing(bool invert)
@@ -83,11 +85,6 @@ void GPU_line_smooth(bool enable)
 void GPU_polygon_smooth(bool enable)
 {
   SET_IMMUTABLE_STATE(polygon_smooth, enable);
-}
-
-void GPU_logic_op_xor_set(bool enable)
-{
-  SET_IMMUTABLE_STATE(logic_op_xor, enable);
 }
 
 void GPU_write_mask(GPUWriteMask mask)
@@ -214,13 +211,13 @@ void GPU_stencil_compare_mask_set(uint compare_mask)
 GPUBlend GPU_blend_get()
 {
   GPUState &state = Context::get()->state_manager->state;
-  return (GPUBlend)state.blend;
+  return GPUBlend(state.blend);
 }
 
 GPUWriteMask GPU_write_mask_get()
 {
   GPUState &state = Context::get()->state_manager->state;
-  return (GPUWriteMask)state.write_mask;
+  return GPUWriteMask(state.write_mask);
 }
 
 uint GPU_stencil_mask_get()
@@ -232,13 +229,13 @@ uint GPU_stencil_mask_get()
 GPUDepthTest GPU_depth_test_get()
 {
   GPUState &state = Context::get()->state_manager->state;
-  return (GPUDepthTest)state.depth_test;
+  return GPUDepthTest(state.depth_test);
 }
 
 GPUStencilTest GPU_stencil_test_get()
 {
   GPUState &state = Context::get()->state_manager->state;
-  return (GPUStencilTest)state.stencil_test;
+  return GPUStencilTest(state.stencil_test);
 }
 
 float GPU_line_width_get()
@@ -276,12 +273,6 @@ bool GPU_depth_mask_get()
 {
   const GPUState &state = Context::get()->state_manager->state;
   return (state.write_mask & GPU_WRITE_DEPTH) != 0;
-}
-
-bool GPU_mipmap_enabled()
-{
-  /* TODO(fclem): this used to be a userdef option. */
-  return true;
 }
 
 /** \} */
@@ -353,7 +344,7 @@ StateManager::StateManager()
   state.stencil_test = GPU_STENCIL_NONE;
   state.stencil_op = GPU_STENCIL_OP_NONE;
   state.provoking_vert = GPU_VERTEX_LAST;
-  state.logic_op_xor = false;
+
   state.invert_facing = false;
   state.clip_distances = 0;
   state.clip_control = false;
@@ -370,3 +361,5 @@ StateManager::StateManager()
 }
 
 /** \} */
+
+}  // namespace blender

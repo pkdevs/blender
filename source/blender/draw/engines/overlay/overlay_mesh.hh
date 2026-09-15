@@ -12,6 +12,7 @@
 
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_mask.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_types.hh"
@@ -371,7 +372,7 @@ class Meshes : Overlay {
 
     if (mesh_has_skin_roots(ob)) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_skin_roots(mesh);
-      edit_mesh_skin_roots_ps_.draw_expand(geom, GPU_PRIM_LINES, 32, 1, res_handle);
+      edit_mesh_skin_roots_ps_.draw_expand(geom, GPU_PRIM_LINES, 15, 1, res_handle);
     }
     if (state.show_text && (state.overlay.edit_flag & overlay_edit_text)) {
       DRW_text_edit_mesh_measure_stats(state.region, state.v3d, ob, state.scene->unit, state.dt);
@@ -412,7 +413,7 @@ class Meshes : Overlay {
     GPU_debug_group_end();
   }
 
-  void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) final
+  void draw_line_only(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
@@ -430,7 +431,7 @@ class Meshes : Overlay {
       return;
     }
 
-    GPU_debug_group_begin("Mesh Edit Color Only");
+    GPU_debug_group_begin("Mesh Edit Line Only");
 
     GPU_framebuffer_bind(framebuffer);
     manager.submit(edit_mesh_normals_ps_, view);
@@ -473,7 +474,15 @@ class Meshes : Overlay {
   {
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      return CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius") ==
+          -1)
+      {
+        return false;
+      }
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_BOOL, "skin_modifier_root") == -1) {
+        return false;
+      }
+      return true;
     }
     return false;
   }
@@ -556,7 +565,7 @@ class MeshUVs : Overlay {
 
     const ToolSettings *tool_setting = state.scene->toolsettings;
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
-    ::Image *image = space_image->image;
+    blender::Image *image = space_image->image;
     const bool space_mode_is_paint = space_image->mode == SI_MODE_PAINT;
     const bool space_mode_is_mask = space_image->mode == SI_MODE_MASK;
     const bool space_mode_is_uv = space_image->mode == SI_MODE_UV;
@@ -677,7 +686,7 @@ class MeshUVs : Overlay {
       pass.shader_set(res.shaders->uv_wireframe.get());
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
-      pass.push_constant("alpha", space_image->uv_opacity);
+      pass.push_constant("alpha", space_image->uv_edge_opacity);
       pass.push_constant("do_smooth_wire", do_smooth_wire);
     }
 
@@ -707,9 +716,9 @@ class MeshUVs : Overlay {
     }
 
     if (select_vert_) {
-      const float dot_size = ui::GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC;
+      const float dot_size = ui::theme::get_value_f(TH_VERTEX_SIZE) * UI_SCALE_FAC;
       float4 theme_color;
-      ui::GetThemeColor4fv(TH_VERTEX, theme_color);
+      ui::theme::get_color_4fv(TH_VERTEX, theme_color);
       srgb_to_linearrgb_v4(theme_color, theme_color);
 
       auto &pass = verts_ps_;
@@ -725,7 +734,7 @@ class MeshUVs : Overlay {
     }
 
     if (select_face_dots_) {
-      const float dot_size = ui::GetThemeValuef(TH_FACEDOT_SIZE) * UI_SCALE_FAC;
+      const float dot_size = ui::theme::get_value_f(TH_FACEDOT_SIZE) * UI_SCALE_FAC;
 
       auto &pass = facedots_ps_;
       pass.init();
@@ -784,7 +793,7 @@ class MeshUVs : Overlay {
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
-    const StringRef active_uv_map = mesh.active_uv_map_name();
+    const StringRef active_uv_map = mesh.active_or_default_uv_map_name();
     const bke::AttributeAccessor attributes = mesh.attributes();
     const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(
         active_uv_map);
@@ -815,7 +824,7 @@ class MeshUVs : Overlay {
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(ob);
 
     const Object *ob_orig = DEG_get_original(ob_ref.object);
-    const Mesh &mesh_orig = ob_orig->type == OB_MESH ? *static_cast<Mesh *>(ob_orig->data) : mesh;
+    const Mesh &mesh_orig = ob_orig->type == OB_MESH ? *id_cast<Mesh *>(ob_orig->data) : mesh;
 
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
     const bool is_edit_object = DRW_object_is_in_edit_mode(&ob);
@@ -825,7 +834,7 @@ class MeshUVs : Overlay {
         state.ctx_mode, CTX_MODE_PAINT_TEXTURE, CTX_MODE_PAINT_VERTEX, CTX_MODE_PAINT_WEIGHT);
     const bool use_face_selection = (mesh_orig.editflag & ME_EDIT_PAINT_FACE_SEL);
     const bool is_face_selectable = (is_edit_object || (is_paint_mode && use_face_selection));
-    const StringRef active_uv_map = mesh.active_uv_map_name();
+    const StringRef active_uv_map = mesh.active_or_default_uv_map_name();
     const bke::AttributeAccessor attributes = mesh.attributes();
     const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(
         active_uv_map);
@@ -927,7 +936,7 @@ class MeshUVs : Overlay {
 
     const ToolSettings *tool_setting = state.scene->toolsettings;
     const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(state.space_data);
-    ::Image *image = space_image->image;
+    blender::Image *image = space_image->image;
 
     if (show_tiled_image_border_) {
       float4 theme_color;
@@ -935,9 +944,9 @@ class MeshUVs : Overlay {
       uchar4 text_color;
       /* Color Management: Exception here as texts are drawn in sRGB space directly. No conversion
        * required. */
-      ui::GetThemeColorShade4ubv(TH_BACK, 60, text_color);
-      ui::GetThemeColorShade4fv(TH_BACK, 60, theme_color);
-      ui::GetThemeColor4fv(TH_FACE_SELECT, selected_color);
+      ui::theme::get_color_shade_4ubv(TH_BACK, 60, text_color);
+      ui::theme::get_color_shade_4fv(TH_BACK, 60, theme_color);
+      ui::theme::get_color_4fv(TH_FACE_SELECT, selected_color);
       srgb_to_linearrgb_v4(theme_color, theme_color);
       srgb_to_linearrgb_v4(selected_color, selected_color);
 
@@ -993,9 +1002,11 @@ class MeshUVs : Overlay {
                      DRW_STATE_BLEND_ALPHA_PREMUL);
 
       const ImagePaintSettings &image_paint_settings = tool_setting->imapaint;
-      ::Image *stencil_image = image_paint_settings.clone;
+      blender::Image *stencil_image = image_paint_settings.clone;
+      gpu::Texture *stencil_gpu_texture = BKE_image_acquire_gpu_texture(stencil_image, nullptr);
+      DRW_manager_get()->hold_texture(stencil_gpu_texture);
       TextureRef stencil_texture;
-      stencil_texture.wrap(BKE_image_get_gpu_texture(stencil_image, nullptr));
+      stencil_texture.wrap(stencil_gpu_texture);
 
       if (stencil_texture.is_valid()) {
         float2 size_image;
@@ -1115,7 +1126,7 @@ class MeshUVs : Overlay {
   {
     const int width = resolution.x;
     const int height = floor(float(resolution.y) * (aspect.y / aspect.x));
-    float *buffer = MEM_malloc_arrayN<float>(height * width, __func__);
+    float *buffer = MEM_new_array_uninitialized<float>(height * width, __func__);
 
     MaskRasterHandle *handle = BKE_maskrasterize_handle_new();
     BKE_maskrasterize_handle_init(handle, mask, width, height, true, true, true);
@@ -1126,7 +1137,7 @@ class MeshUVs : Overlay {
     mask_texture_.ensure_2d(
         gpu::TextureFormat::SFLOAT_16, int2(width, height), GPU_TEXTURE_USAGE_SHADER_READ, buffer);
 
-    MEM_freeN(buffer);
+    MEM_delete(buffer);
   }
 };
 

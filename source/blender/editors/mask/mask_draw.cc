@@ -8,11 +8,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_mask.hh"
@@ -38,6 +38,8 @@
 #include "UI_view2d.hh"
 
 #include "DEG_depsgraph_query.hh"
+
+namespace blender {
 
 static void mask_spline_color_get(MaskLayer *mask_layer,
                                   MaskSpline *spline,
@@ -108,7 +110,7 @@ static void draw_single_handle(const MaskLayer *mask_layer,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   const uchar rgb_gray[4] = {0x60, 0x60, 0x60, 0xff};
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -151,11 +153,11 @@ static void draw_single_handle(const MaskLayer *mask_layer,
   float point_color[4] = {1.0f, 1.0f, 1.0f, 1.0f}; /* active color by default */
   if (BKE_mask_point_is_handle_selected(point, which_handle)) {
     if (point != mask_layer->act_point) {
-      blender::ui::GetThemeColor3fv(TH_HANDLE_VERTEX_SELECT, point_color);
+      ui::theme::get_color_3fv(TH_HANDLE_VERTEX_SELECT, point_color);
     }
   }
   else {
-    blender::ui::GetThemeColor3fv(TH_HANDLE_VERTEX, point_color);
+    ui::theme::get_color_3fv(TH_HANDLE_VERTEX, point_color);
   }
 
   immUniform4fv("outlineColor", point_color);
@@ -195,12 +197,12 @@ static void draw_spline_points(const bContext *C,
   }
 
   /* TODO: add this to sequence editor. */
-  float handle_size = 2.0f * blender::ui::GetThemeValuef(TH_HANDLE_VERTEX_SIZE) * U.pixelsize;
+  float handle_size = 2.0f * ui::theme::get_value_f(TH_HANDLE_VERTEX_SIZE) * U.pixelsize;
 
   mask_spline_color_get(mask_layer, spline, is_spline_sel, rgb_spline);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
   immUniform1f("size", 0.7f * handle_size);
@@ -248,7 +250,7 @@ static void draw_spline_points(const bContext *C,
       fp++;
     }
   }
-  MEM_freeN(feather_points);
+  MEM_delete(feather_points);
 
   immUnbindProgram();
 
@@ -356,7 +358,7 @@ static void mask_color_active_tint(uchar r_rgb[4], const uchar rgb[4], const boo
     r_rgb[3] = rgb[3];
   }
   else {
-    *(uint *)r_rgb = *(const uint *)rgb;
+    *reinterpret_cast<uint *>(r_rgb) = *reinterpret_cast<const uint *>(rgb);
   }
 }
 
@@ -392,7 +394,7 @@ static void mask_draw_curve_type(const bContext *C,
     const bool undistort = sc->clip && (sc->user.render_flag & MCLIP_PROXY_RENDER_UNDISTORT);
 
     if (undistort) {
-      points = MEM_calloc_arrayN<float[2]>(tot_point, "undistorthed mask curve");
+      points = MEM_new_array_zeroed<float[2]>(tot_point, "undistorthed mask curve");
 
       for (int i = 0; i < tot_point; i++) {
         mask_point_undistort_pos(sc, points[i], orig_points[i]);
@@ -401,7 +403,7 @@ static void mask_draw_curve_type(const bContext *C,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   switch (draw_type) {
 
@@ -491,7 +493,7 @@ static void mask_draw_curve_type(const bContext *C,
   }
 
   if (points != orig_points) {
-    MEM_freeN(points);
+    MEM_delete(points);
   }
 }
 
@@ -551,13 +553,13 @@ static void draw_spline_curve(const bContext *C,
         C, spline, feather_points, tot_feather_point, true, is_active, rgb_tmp, draw_type);
   }
 
-  MEM_freeN(feather_points);
+  MEM_delete(feather_points);
 
   /* draw main curve */
   mask_spline_color_get(mask_layer, spline, is_spline_sel, rgb_tmp);
   mask_draw_curve_type(
       C, spline, diff_points, tot_diff_point, false, is_active, rgb_tmp, draw_type);
-  MEM_freeN(diff_points);
+  MEM_delete(diff_points);
 
   GPU_line_smooth(false);
 }
@@ -569,23 +571,22 @@ static void draw_layer_splines(const bContext *C,
                                const int height,
                                const bool is_active)
 {
-  LISTBASE_FOREACH (MaskSpline *, spline, &layer->splines) {
+  for (MaskSpline &spline : layer->splines) {
     /* draw curve itself first... */
-    draw_spline_curve(C, layer, spline, draw_type, is_active, width, height);
+    draw_spline_curve(C, layer, &spline, draw_type, is_active, width, height);
 
     if (!(layer->visibility_flag & MASK_HIDE_SELECT)) {
       /* ...and then handles over the curve so they're nicely visible */
-      draw_spline_points(C, layer, spline, draw_type);
+      draw_spline_points(C, layer, &spline, draw_type);
     }
 
     /* show undeform for testing */
     if (false) {
-      MaskSplinePoint *back = spline->points_deform;
+      Array<MaskSplinePoint> deform = std::move(spline.runtime->points_deform);
 
-      spline->points_deform = nullptr;
-      draw_spline_curve(C, layer, spline, draw_type, is_active, width, height);
-      draw_spline_points(C, layer, spline, draw_type);
-      spline->points_deform = back;
+      draw_spline_curve(C, layer, &spline, draw_type, is_active, width, height);
+      draw_spline_points(C, layer, &spline, draw_type);
+      spline.runtime->points_deform = std::move(deform);
     }
   }
 }
@@ -597,20 +598,20 @@ static void draw_mask_layers(
   GPU_program_point_size(true);
 
   MaskLayer *active = nullptr;
-  int i;
-  LISTBASE_FOREACH_INDEX (MaskLayer *, mask_layer, &mask->masklayers, i) {
+
+  for (const auto [i, mask_layer] : mask->masklayers.enumerate()) {
     const bool is_active = (i == mask->masklay_act);
 
-    if (mask_layer->visibility_flag & MASK_HIDE_VIEW) {
+    if (mask_layer.visibility_flag & MASK_HIDE_VIEW) {
       continue;
     }
 
     if (is_active) {
-      active = mask_layer;
+      active = &mask_layer;
       continue;
     }
 
-    draw_layer_splines(C, mask_layer, draw_type, width, height, is_active);
+    draw_layer_splines(C, &mask_layer, draw_type, width, height, is_active);
   }
 
   if (active != nullptr) {
@@ -624,7 +625,7 @@ static void draw_mask_layers(
 static float *mask_rasterize(Mask *mask, const int width, const int height)
 {
   MaskRasterHandle *handle;
-  float *buffer = MEM_calloc_arrayN<float>(height * width, "rasterized mask buffer");
+  float *buffer = MEM_new_array_zeroed<float>(height * width, "rasterized mask buffer");
 
   /* Initialize rasterization handle. */
   handle = BKE_maskrasterize_handle_new();
@@ -674,7 +675,7 @@ void ED_mask_draw_region(
   float xofs, yofs;
 
   /* find window pixel coordinates of origin */
-  blender::ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &x, &y);
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &x, &y);
 
   // w = BLI_rctf_size_x(&v2d->tot);
   // h = BLI_rctf_size_y(&v2d->tot);
@@ -721,37 +722,38 @@ void ED_mask_draw_region(
     if (stabmat) {
       GPU_matrix_mul(stabmat);
     }
-    IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
-    GPU_shader_uniform_float_ex(
-        state.shader, GPU_shader_get_uniform(state.shader, "shuffle"), 4, 1, buf_col);
+    PixelBitmapDrawer drawer(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
+    GPU_shader_uniform_float_ex(drawer.shader_get(),
+                                GPU_shader_get_uniform(drawer.shader_get(), "shuffle"),
+                                4,
+                                1,
+                                buf_col);
 
     if (overlay_mode == MASK_OVERLAY_COMBINED) {
       const float blend_col[4] = {0.0f, 0.0f, 0.0f, blend_factor};
 
-      immDrawPixelsTexTiled(&state,
-                            0.0f,
-                            0.0f,
-                            width,
-                            height,
-                            blender::gpu::TextureFormat::SFLOAT_16,
-                            false,
-                            buffer,
-                            1.0f,
-                            1.0f,
-                            blend_col);
+      drawer.draw(0.0f,
+                  0.0f,
+                  width,
+                  height,
+                  gpu::TextureFormat::SFLOAT_16,
+                  false,
+                  buffer,
+                  1.0f,
+                  1.0f,
+                  blend_col);
     }
     else {
-      immDrawPixelsTexTiled(&state,
-                            0.0f,
-                            0.0f,
-                            width,
-                            height,
-                            blender::gpu::TextureFormat::SFLOAT_16,
-                            false,
-                            buffer,
-                            1.0f,
-                            1.0f,
-                            nullptr);
+      drawer.draw(0.0f,
+                  0.0f,
+                  width,
+                  height,
+                  gpu::TextureFormat::SFLOAT_16,
+                  false,
+                  buffer,
+                  1.0f,
+                  1.0f,
+                  nullptr);
     }
     GPU_matrix_pop();
 
@@ -759,7 +761,7 @@ void ED_mask_draw_region(
       GPU_blend(GPU_BLEND_NONE);
     }
 
-    MEM_freeN(buffer);
+    MEM_delete(buffer);
   }
 
   /* apply transformation so mask editing tools will assume drawing from the
@@ -798,7 +800,7 @@ void ED_mask_draw_frames(
     return;
   }
 
-  uint num_lines = BLI_listbase_count(&mask_layer->splines_shapes);
+  uint num_lines = mask_layer->splines_shapes.count();
   if (num_lines == 0) {
     return;
   }
@@ -807,16 +809,15 @@ void ED_mask_draw_frames(
   const rcti *rect_visible = ED_region_visible_rect(region);
   const int region_bottom = rect_visible->ymin;
 
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4ub(255, 175, 0, 255);
 
   immBegin(GPU_PRIM_LINES, 2 * num_lines);
 
-  LISTBASE_FOREACH (MaskLayerShape *, mask_layer_shape, &mask_layer->splines_shapes) {
-    int frame = mask_layer_shape->frame;
+  for (MaskLayerShape &mask_layer_shape : mask_layer->splines_shapes) {
+    int frame = mask_layer_shape.frame;
 
     // draw_keyframe(i, scene->r.cfra, sfra, framelen, 1);
     int height = (frame == cfra) ? 22 : 10;
@@ -827,3 +828,5 @@ void ED_mask_draw_frames(
   immEnd();
   immUnbindProgram();
 }
+
+}  // namespace blender

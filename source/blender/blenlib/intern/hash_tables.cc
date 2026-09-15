@@ -7,11 +7,13 @@
  */
 
 #include "BLI_hash_tables.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include <iostream>
 
-void blender::HashTableStats::print(const char *name) const
+namespace blender {
+
+void HashTableStats::print(const char *name) const
 {
   std::cout << "Hash Table Stats: " << name << "\n";
   std::cout << "  Address: " << address_ << "\n";
@@ -31,3 +33,5 @@ void blender::HashTableStats::print(const char *name) const
               << " Collisions: " << keys_by_collision_count_[collision_count] << "\n";
   }
 }
+
+}  // namespace blender

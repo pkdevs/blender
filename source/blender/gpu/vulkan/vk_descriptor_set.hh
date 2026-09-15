@@ -35,7 +35,7 @@ class VKVertexBuffer;
  * The resources inside a descriptor set can be updated and bound per set.
  *
  * Currently Blender only supports a single descriptor set per shader, but it is planned to be able
- * to use 2 descriptor sets per shader. One for each #blender::gpu::shader::Frequency.
+ * to use 2 descriptor sets per shader. One for each #gpu::shader::Frequency.
  */
 class VKDescriptorSet : NonCopyable {
 
@@ -91,37 +91,33 @@ class VKDescriptorSetUpdator {
   void bind_shader_resources(const VKDevice &device,
                              const VKStateManager &state_manager,
                              VKShader &shader,
-                             render_graph::VKResourceAccessInfo &access_info);
+                             const VKBufferWithOffset &push_constants_buffer);
   virtual void upload_descriptor_sets() = 0;
 
  private:
   void bind_image_resource(const VKStateManager &state_manager,
-                           const VKResourceBinding &resource_binding,
-                           render_graph::VKResourceAccessInfo &access_info);
+                           const VKResourceBinding &resource_binding);
   void bind_texture_resource(const VKDevice &device,
                              const VKStateManager &state_manager,
-                             const VKResourceBinding &resource_binding,
-                             render_graph::VKResourceAccessInfo &access_info);
+                             const VKResourceBinding &resource_binding);
   void bind_storage_buffer_resource(const VKStateManager &state_manager,
-                                    const VKResourceBinding &resource_binding,
-                                    render_graph::VKResourceAccessInfo &access_info);
+                                    const VKResourceBinding &resource_binding);
   void bind_uniform_buffer_resource(const VKStateManager &state_manager,
-                                    const VKResourceBinding &resource_binding,
-                                    render_graph::VKResourceAccessInfo &access_info);
+                                    const VKResourceBinding &resource_binding);
+  void bind_acceleration_structure_resource(const VKStateManager &state_manager,
+                                            const VKResourceBinding &resource_binding);
   void bind_input_attachment_resource(const VKDevice &device,
                                       const VKStateManager &state_manager,
-                                      const VKResourceBinding &resource_binding,
-                                      render_graph::VKResourceAccessInfo &access_info);
+                                      const VKResourceBinding &resource_binding);
 
   void bind_push_constants(VKPushConstants &push_constants,
-                           render_graph::VKResourceAccessInfo &access_info);
+                           const VKBufferWithOffset &push_constants_buffer);
 
  protected:
   virtual void bind_texel_buffer(VKVertexBuffer &vertex_buffer,
                                  VKDescriptorSet::Location location) = 0;
   virtual void bind_buffer(VkDescriptorType vk_descriptor_type,
                            VkBuffer vk_buffer,
-                           VkDeviceAddress vk_device_address,
                            VkDeviceSize buffer_offset,
                            VkDeviceSize size_in_bytes,
                            VKDescriptorSet::Location location) = 0;
@@ -130,6 +126,9 @@ class VKDescriptorSetUpdator {
                           VkImageView vk_image_view,
                           VkImageLayout vk_image_layout,
                           VKDescriptorSet::Location location) = 0;
+  virtual void bind_acceleration_structure(VkDescriptorType vk_descriptor_type,
+                                           VkAccelerationStructureKHR vk_acceleration_structure,
+                                           VKDescriptorSet::Location location) = 0;
 };
 
 class VKDescriptorSetPoolUpdator : public VKDescriptorSetUpdator {
@@ -149,7 +148,6 @@ class VKDescriptorSetPoolUpdator : public VKDescriptorSetUpdator {
                          VKDescriptorSet::Location location) override;
   void bind_buffer(VkDescriptorType vk_descriptor_type,
                    VkBuffer vk_buffer,
-                   VkDeviceAddress vk_device_address,
                    VkDeviceSize buffer_offset,
                    VkDeviceSize size_in_bytes,
                    VKDescriptorSet::Location location) override;
@@ -158,12 +156,18 @@ class VKDescriptorSetPoolUpdator : public VKDescriptorSetUpdator {
                   VkImageView vk_image_view,
                   VkImageLayout vk_image_layout,
                   VKDescriptorSet::Location location) override;
+  void bind_acceleration_structure(VkDescriptorType vk_descriptor_type,
+                                   VkAccelerationStructureKHR vk_acceleration_structure,
+                                   VKDescriptorSet::Location location) override;
 
  private:
   Vector<VkBufferView> vk_buffer_views_;
   Vector<VkDescriptorBufferInfo> vk_descriptor_buffer_infos_;
   Vector<VkDescriptorImageInfo> vk_descriptor_image_infos_;
   Vector<VkWriteDescriptorSet> vk_write_descriptor_sets_;
+  Vector<VkWriteDescriptorSetAccelerationStructureKHR>
+      vk_write_descrtiptor_sets_acceleration_structures_;
+  Vector<VkAccelerationStructureKHR> vk_acceleration_structures_;
 };
 
 class VKDescriptorSetTracker {
@@ -191,6 +195,39 @@ class VKDescriptorSetTracker {
   void upload_descriptor_sets();
 
  private:
+  /**
+   * Add resources of the descriptor set to the resource access info.
+   */
+  static void update_resource_access_info(VKContext &context,
+                                          render_graph::VKResourceAccessInfo &resource_access_info,
+                                          const VKBufferWithOffset &push_constants_buffer);
+  static void update_resource_access_info_binding(const VKStateManager &state_manager,
+                                                  const VKResourceBinding &resource_binding,
+                                                  render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_uniform_buffer(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_image(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_sampler(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_storage_buffer(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_input_attachment(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
+  static void update_resource_access_info_binding_acceleration_structure(
+      const VKStateManager &state_manager,
+      const VKResourceBinding &resource_binding,
+      render_graph::VKResourceAccessInfo &access_info);
 };
 
 }  // namespace blender::gpu

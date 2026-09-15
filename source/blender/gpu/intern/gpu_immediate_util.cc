@@ -12,14 +12,221 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "GPU_immediate.hh"
 
 #include "UI_resources.hh"
+
+namespace blender {
+
+namespace gpu {
+
+static void imm_draw_circle_partial_aspect(const GPUPrimType prim_type,
+                                           const uint pos,
+                                           const float x,
+                                           const float y,
+                                           const float2 radius,
+                                           const int nsegments,
+                                           const float start,
+                                           const float sweep)
+{
+  /* shift & reverse angle, increase 'nsegments' to match gluPartialDisk */
+  const float angle_start = -DEG2RADF(start) + float(M_PI_2);
+  const float angle_end = -(DEG2RADF(sweep) - angle_start);
+  immBegin(prim_type, nsegments + 1);
+  for (int i = 0; i < nsegments + 1; i++) {
+    const float angle = interpf(angle_start, angle_end, (float(i) / float(nsegments)));
+    const float angle_sin = sinf(angle);
+    const float angle_cos = cosf(angle);
+    immVertex2f(pos, x + radius.x * angle_cos, y + radius.y * angle_sin);
+  }
+  immEnd();
+}
+
+static void imm_draw_circle_partial_aspect_3d(const GPUPrimType prim_type,
+                                              const uint pos,
+                                              const float x,
+                                              const float y,
+                                              const float z,
+                                              const float2 radius,
+                                              const int nsegments,
+                                              const float start,
+                                              const float sweep)
+{
+  /* shift & reverse angle, increase 'nsegments' to match gluPartialDisk */
+  const float angle_start = -DEG2RADF(start) + float(M_PI / 2);
+  const float angle_end = -(DEG2RADF(sweep) - angle_start);
+  immBegin(prim_type, nsegments + 1);
+  for (int i = 0; i < nsegments + 1; i++) {
+    const float angle = interpf(angle_start, angle_end, (float(i) / float(nsegments)));
+    const float angle_sin = sinf(angle);
+    const float angle_cos = cosf(angle);
+    immVertex3f(pos, x + radius.x * angle_cos, y + radius.y * angle_sin, z);
+  }
+  immEnd();
+}
+
+void imm_draw_circle_partial_wire_aspect_2d(const uint pos,
+                                            const float x,
+                                            const float y,
+                                            const float2 radius,
+                                            const int nsegments,
+                                            const float start,
+                                            const float sweep)
+{
+  imm_draw_circle_partial_aspect(GPU_PRIM_LINE_STRIP, pos, x, y, radius, nsegments, start, sweep);
+}
+
+void imm_draw_circle_partial_wire_aspect_3d(const uint pos,
+                                            const float x,
+                                            const float y,
+                                            const float z,
+                                            const float2 radius,
+                                            const int nsegments,
+                                            const float start,
+                                            const float sweep)
+{
+  imm_draw_circle_partial_aspect_3d(
+      GPU_PRIM_LINE_STRIP, pos, x, y, z, radius, nsegments, start, sweep);
+}
+
+void imm_draw_rounded_box_wire_2d(const uint pos,
+                                  const float x,
+                                  const float y,
+                                  const float2 radius,
+                                  const float2 corner_radius,
+                                  const int nsegments)
+{
+  BLI_assert(corner_radius.x >= 0.0f && corner_radius.x <= radius.x);
+  BLI_assert(corner_radius.y >= 0.0f && corner_radius.y <= radius.y);
+
+  const float x_min = x - radius.x;
+  const float x_max = x + radius.x;
+  const float y_min = y - radius.y;
+  const float y_max = y + radius.y;
+  const float x_corner_min = x - radius.x + corner_radius.x;
+  const float x_corner_max = x + radius.x - corner_radius.x;
+  const float y_corner_min = y - radius.y + corner_radius.y;
+  const float y_corner_max = y + radius.y - corner_radius.y;
+
+  if (corner_radius.x == 0.0f && corner_radius.y == 0.0f) {
+    imm_draw_box_wire_2d(pos, x_min, y_min, x_max, y_max);
+    return;
+  }
+
+  if (corner_radius == radius) {
+    imm_draw_circle_wire_aspect_2d(pos, x, y, radius.x, radius.y, nsegments);
+    return;
+  }
+
+  /* Draws four corners. */
+  imm_draw_circle_partial_wire_aspect_2d(
+      pos, x_corner_min, y_corner_min, corner_radius, nsegments, 180.0f, 90.0f);
+  imm_draw_circle_partial_wire_aspect_2d(
+      pos, x_corner_max, y_corner_max, corner_radius, nsegments, 0, 90.0f);
+  imm_draw_circle_partial_wire_aspect_2d(
+      pos, x_corner_max, y_corner_min, corner_radius, nsegments, 90.0f, 90.0f);
+  imm_draw_circle_partial_wire_aspect_2d(
+      pos, x_corner_min, y_corner_max, corner_radius, nsegments, -90.0f, 90.0f);
+
+  /* Draws four edges. */
+  immBegin(GPU_PRIM_LINES, 8);
+  immVertex2f(pos, x_min, y_corner_min);
+  immVertex2f(pos, x_min, y_corner_max);
+
+  immVertex2f(pos, x_max, y_corner_max);
+  immVertex2f(pos, x_max, y_corner_min);
+
+  immVertex2f(pos, x_corner_min, y_min);
+  immVertex2f(pos, x_corner_max, y_min);
+
+  immVertex2f(pos, x_corner_max, y_max);
+  immVertex2f(pos, x_corner_min, y_max);
+  immEnd();
+}
+
+void imm_draw_rounded_box_wire_3d(const uint pos,
+                                  const float x,
+                                  const float y,
+                                  const float2 radius,
+                                  const float2 corner_radius,
+                                  const int nsegments)
+{
+  BLI_assert(corner_radius.x >= 0.0f && corner_radius.x <= radius.x);
+  BLI_assert(corner_radius.y >= 0.0f && corner_radius.y <= radius.y);
+
+  /* Min and max values of x-coordinate of the rounded box. */
+  const float x_min = x - radius.x;
+  const float x_max = x + radius.x;
+  /* Min and max values of the x-coordinate of the center of the rounded corners. */
+  const float x_corner_min = x - radius.x + corner_radius.x;
+  const float x_corner_max = x + radius.x - corner_radius.x;
+
+  if (corner_radius.x == 0.0f && corner_radius.y == 0.0f) {
+    imm_draw_box_wire_3d(pos, x_min, y - radius.y, x_max, y + radius.y);
+    return;
+  }
+
+  if (corner_radius == radius) {
+    imm_draw_circle_wire_aspect_3d(pos, x, y, radius.x, radius.y, nsegments);
+    return;
+  }
+
+  /* Draws four corners. */
+  imm_draw_circle_partial_wire_aspect_3d(pos,
+                                         x_corner_min,
+                                         y - radius.y + corner_radius.y,
+                                         0.0f,
+                                         corner_radius,
+                                         nsegments,
+                                         180.0f,
+                                         90.0f);
+  imm_draw_circle_partial_wire_aspect_3d(pos,
+                                         x_corner_max,
+                                         y + radius.y - corner_radius.y,
+                                         0.0f,
+                                         corner_radius,
+                                         nsegments,
+                                         0.0f,
+                                         90.0f);
+  imm_draw_circle_partial_wire_aspect_3d(pos,
+                                         x_corner_max,
+                                         y - radius.y + corner_radius.y,
+                                         0.0f,
+                                         corner_radius,
+                                         nsegments,
+                                         90.0f,
+                                         90.0f);
+  imm_draw_circle_partial_wire_aspect_3d(pos,
+                                         x_corner_min,
+                                         y + radius.y - corner_radius.y,
+                                         0.0f,
+                                         corner_radius,
+                                         nsegments,
+                                         -90.0f,
+                                         90.0f);
+
+  /* Draws four edges. */
+  immBegin(GPU_PRIM_LINES, 8);
+  immVertex3f(pos, x_min, y - radius.y + corner_radius.y, 0.0f);
+  immVertex3f(pos, x_min, y + radius.y - corner_radius.y, 0.0f);
+
+  immVertex3f(pos, x_max, y + radius.y - corner_radius.y, 0.0f);
+  immVertex3f(pos, x_max, y - radius.y + corner_radius.y, 0.0f);
+
+  immVertex3f(pos, x_corner_min, y - radius.y, 0.0f);
+  immVertex3f(pos, x_corner_max, y - radius.y, 0.0f);
+
+  immVertex3f(pos, x_corner_max, y + radius.y, 0.0f);
+  immVertex3f(pos, x_corner_min, y + radius.y, 0.0f);
+  immEnd();
+}
+
+}  // namespace gpu
 
 static const float cube_coords[8][3] = {
     {-1, -1, -1},
@@ -142,7 +349,7 @@ void immRectf_with_texco(const uint pos, const uint tex_coord, const rctf &p, co
 void immRecti_complete(int x1, int y1, int x2, int y2, const float color[4])
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = add_attr(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = add_attr(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4fv(color);
   immRectf(pos, x1, y1, x2, y2);
@@ -471,8 +678,7 @@ void imm_draw_box_checker_2d_ex(float x1,
                                 const float color_secondary[4],
                                 int checker_size)
 {
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_2D_CHECKER);
 
@@ -488,11 +694,11 @@ void imm_draw_box_checker_2d(float x1, float y1, float x2, float y2, bool clear_
 {
   float checker_primary[4];
   float checker_secondary[4];
-  blender::ui::GetThemeColor4fv(TH_TRANSPARENT_CHECKER_PRIMARY, checker_primary);
-  blender::ui::GetThemeColor4fv(TH_TRANSPARENT_CHECKER_SECONDARY, checker_secondary);
+  ui::theme::get_color_4fv(TH_TRANSPARENT_CHECKER_PRIMARY, checker_primary);
+  ui::theme::get_color_4fv(TH_TRANSPARENT_CHECKER_SECONDARY, checker_secondary);
   checker_primary[3] = clear_alpha ? 0.0 : checker_primary[3];
   checker_secondary[3] = clear_alpha ? 0.0 : checker_secondary[3];
-  int checker_size = blender::ui::GetThemeValue(TH_TRANSPARENT_CHECKER_SIZE) * U.pixelsize;
+  int checker_size = ui::theme::get_value(TH_TRANSPARENT_CHECKER_SIZE) * U.pixelsize;
   imm_draw_box_checker_2d_ex(x1, y1, x2, y2, checker_primary, checker_secondary, checker_size);
 }
 
@@ -747,3 +953,5 @@ void imm_drawcircball(const float cent[3], float radius, const float tmat[4][4],
   }
   immEnd();
 }
+
+}  // namespace blender

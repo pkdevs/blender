@@ -3,54 +3,31 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
-#include "CLG_log.h"
-
 /* Allow using `Scene->nodetree` because it's still relevant for backward compatibility. */
 #define DNA_DEPRECATED_ALLOW
 #include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_appdir.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
 #include "BKE_node.hh"
 #include "BKE_scene.hh"
 
-#include "IMB_imbuf.hh"
-
 #include "ED_node_c.hh"
 
 #include "RNA_define.hh"
 
+#include "NOD_defaults.hh"
+
 namespace blender::nodes::tests {
 
-class NodeTest : public ::testing::Test {
+class NodeTest : public bke::BlenderGTestBase {
 
  protected:
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-    RNA_init();
-    blender::bke::node_system_init();
-    BKE_appdir_init();
-    IMB_init();
-    BKE_materials_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    BKE_materials_exit();
-    bke::node_system_exit();
-    RNA_exit();
-    BKE_appdir_exit();
-    IMB_exit();
-    CLG_exit();
-  }
-
   struct IteratorResult {
     Vector<bNodeTree *> node_trees;
     Vector<ID *> ids;
@@ -118,7 +95,7 @@ TEST_F(NodeTest, tree_iterator_1_mat)
   TestData context;
 
   Material *material = BKE_material_add(context.bmain, "Material");
-  ED_node_shader_default(context.C, context.bmain, &material->id);
+  nodes::node_tree_shader_default(context.C, context.bmain, &material->id);
 
   IteratorResult iter_result = this->get_node_trees(context.bmain);
 
@@ -133,7 +110,7 @@ TEST_F(NodeTest, tree_iterator_scene_no_tree)
   TestData context;
 
   Material *material = BKE_material_add(context.bmain, "Material");
-  ED_node_shader_default(context.C, context.bmain, &material->id);
+  nodes::node_tree_shader_default(context.C, context.bmain, &material->id);
 
   BKE_scene_add(context.bmain, "Scene");
 
@@ -151,7 +128,7 @@ TEST_F(NodeTest, tree_iterator_1mat_1scene)
   const char SCENE_NAME[MAX_ID_NAME] = "Scene for testing";
 
   Material *material = BKE_material_add(context.bmain, "Material");
-  ED_node_shader_default(context.C, context.bmain, &material->id);
+  nodes::node_tree_shader_default(context.C, context.bmain, &material->id);
 
   Scene *scene = BKE_scene_add(context.bmain, SCENE_NAME);
   /* Embedded compositing trees are deprecated, but still relevant for versioning/backward
@@ -171,7 +148,7 @@ TEST_F(NodeTest, tree_iterator_1mat_1scene)
   /* `scene->nodetree` is not managed by the scene anymore, i.e. `scene_free_data()` doesn't free
    * its embedded node-trees, so we need to free it manually here. */
   bke::node_tree_free_embedded_tree(scene->nodetree);
-  MEM_freeN(scene->nodetree);
+  MEM_delete(scene->nodetree);
   scene->nodetree = nullptr;
 }
 
@@ -182,11 +159,11 @@ TEST_F(NodeTest, tree_iterator_1mat_3scenes)
   const char SCENE_NAME_2[MAX_ID_NAME] = "Scene 2";
   const char SCENE_NAME_3[MAX_ID_NAME] = "Scene 3";
   const char NTREE_NAME[MAX_NAME] = "Test Composisiting Nodetree";
-  /* Name is hard-coded in #ED_node_shader_default(). */
+  /* Name is hard-coded in #nodes::node_tree_shader_default(). */
   const char MATERIAL_NTREE_NAME[MAX_NAME] = "Shader Nodetree";
 
   Material *material = BKE_material_add(context.bmain, "Material");
-  ED_node_shader_default(context.C, context.bmain, &material->id);
+  nodes::node_tree_shader_default(context.C, context.bmain, &material->id);
 
   BKE_scene_add(context.bmain, SCENE_NAME_1);
   /* Note: no node tree for scene 1. */
@@ -214,7 +191,7 @@ TEST_F(NodeTest, tree_iterator_1mat_3scenes)
   /* `scene->nodetree` is not managed by the scene anymore, i.e. `scene_free_data()` doesn't free
    * its embedded node-trees, so we need to free it manually here. */
   bke::node_tree_free_embedded_tree(scene2->nodetree);
-  MEM_freeN(scene2->nodetree);
+  MEM_delete(scene2->nodetree);
   scene2->nodetree = nullptr;
 }
 
@@ -227,7 +204,7 @@ TEST_F(NodeTest, tree_iterator_1mat_1scene_2compositing_trees)
   const char MATERIAL_NTREE_NAME[MAX_NAME] = "Shader Nodetree";
 
   Material *material = BKE_material_add(context.bmain, "Material");
-  ED_node_shader_default(context.C, context.bmain, &material->id);
+  nodes::node_tree_shader_default(context.C, context.bmain, &material->id);
 
   BKE_scene_add(context.bmain, SCENE_NAME_1);
 

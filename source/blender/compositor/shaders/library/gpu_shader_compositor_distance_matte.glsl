@@ -2,23 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_common_color_utils.glsl"
-#include "gpu_shader_math_safe_lib.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
+#include "gpu_shader_math_safe.bsl.hh"
 
 #define CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_RGBA 0
 #define CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_YCCA 1
 
+[[node]]
 void node_composite_distance_matte(const float4 color,
                                    const float4 key,
-                                   const float color_space,
+                                   const int color_space,
                                    const float tolerance,
                                    const float falloff,
-                                   out float4 result,
-                                   out float matte)
+                                   float4 &result,
+                                   float &matte)
 {
   float4 color_vector = color;
   float4 key_vector = key;
-  switch (int(color_space)) {
+  switch (color_space) {
     case CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_RGBA:
       color_vector = color;
       key_vector = key;

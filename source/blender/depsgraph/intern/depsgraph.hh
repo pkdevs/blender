@@ -24,7 +24,7 @@
 #include "BLI_linear_allocator.hh"
 #include "BLI_mutex.hh"
 #include "BLI_set.hh"
-#include "BLI_threads.h" /* for SpinLock */
+#include "BLI_threads.hh" /* for SpinLock */
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_physics.hh"
@@ -32,11 +32,13 @@
 #include "intern/debug/deg_debug.h"
 #include "intern/depsgraph_light_linking.hh"
 
+namespace blender {
+
 struct ID;
 struct Scene;
 struct ViewLayer;
 
-namespace blender::deg {
+namespace deg {
 
 struct IDNode;
 struct Node;
@@ -178,7 +180,9 @@ struct Depsgraph {
 
   /* Cached list of colliders/effectors for collections and the scene
    * created along with relations, for fast lookup during evaluation. */
-  Map<const ID *, ListBase *> *physics_relations[DEG_PHYSICS_RELATIONS_NUM];
+  Map<const ID *, ListBaseT<EffectorRelation> *> *physics_relations_effector;
+  Map<const ID *, ListBaseT<CollisionRelation> *>
+      *physics_relations_collision[DEG_PHYSICS_COLLISION_NUM];
 
   light_linking::Cache light_linking_cache;
 
@@ -198,4 +202,5 @@ struct Depsgraph {
   MEM_CXX_CLASS_ALLOC_FUNCS("Depsgraph");
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

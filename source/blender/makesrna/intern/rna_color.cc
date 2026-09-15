@@ -20,6 +20,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
     {0,
      "NONE",
@@ -29,6 +31,8 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
      "already"},
     {0, nullptr, 0, nullptr, nullptr},
 };
+
+}
 
 #ifdef RNA_RUNTIME
 
@@ -47,10 +51,15 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
 
 #  include "MEM_guardedalloc.h"
 
+#  include "BLI_listbase.hh"
+#  include "BLI_string_utf8.hh"
+
 #  include "BKE_colorband.hh"
 #  include "BKE_colortools.hh"
+#  include "BKE_context.hh"
 #  include "BKE_image.hh"
 #  include "BKE_linestyle.h"
+#  include "BKE_main.hh"
 #  include "BKE_main_invariants.hh"
 #  include "BKE_node_legacy_types.hh"
 #  include "BKE_node_tree_update.hh"
@@ -64,6 +73,8 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
 #  include "SEQ_iterator.hh"
 #  include "SEQ_relations.hh"
 
+namespace blender {
+
 struct SeqCurveMappingUpdateData {
   Scene *scene;
   CurveMapping *curve;
@@ -74,11 +85,11 @@ static bool seq_update_modifier_curve(Strip *strip, void *user_data)
   /* Invalidate cache of any strips that have modifiers using this
    * curve mapping. */
   SeqCurveMappingUpdateData *data = static_cast<SeqCurveMappingUpdateData *>(user_data);
-  LISTBASE_FOREACH (StripModifierData *, smd, &strip->modifiers) {
-    if (smd->type == eSeqModifierType_Curves) {
-      CurvesModifierData *cmd = reinterpret_cast<CurvesModifierData *>(smd);
+  for (StripModifierData &smd : strip->modifiers) {
+    if (smd.type == eSeqModifierType_Curves) {
+      CurvesModifierData *cmd = reinterpret_cast<CurvesModifierData *>(&smd);
       if (&cmd->curve_mapping == data->curve) {
-        blender::seq::relations_invalidate_cache(data->scene, strip);
+        seq::relations_invalidate_cache(data->scene, strip);
       }
     }
   }
@@ -88,17 +99,17 @@ static bool seq_update_modifier_curve(Strip *strip, void *user_data)
 static void seq_notify_curve_update(CurveMapping *curve, ID *id)
 {
   if (id && GS(id->name) == ID_SCE) {
-    Scene *scene = (Scene *)id;
+    Scene *scene = id_cast<Scene *>(id);
     if (scene->ed) {
       SeqCurveMappingUpdateData data{scene, curve};
-      blender::seq::foreach_strip(&scene->ed->seqbase, seq_update_modifier_curve, &data);
+      seq::foreach_strip(&scene->ed->seqbase, seq_update_modifier_curve, &data);
     }
   }
 }
 
 static int rna_CurveMapping_curves_length(PointerRNA *ptr)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
   int len;
 
   for (len = 0; len < CM_TOT; len++) {
@@ -112,7 +123,7 @@ static int rna_CurveMapping_curves_length(PointerRNA *ptr)
 
 static void rna_CurveMapping_curves_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   rna_iterator_array_begin(
       iter, ptr, cumap->cm, sizeof(CurveMap), rna_CurveMapping_curves_length(ptr), 0, nullptr);
@@ -120,7 +131,7 @@ static void rna_CurveMapping_curves_begin(CollectionPropertyIterator *iter, Poin
 
 static void rna_CurveMapping_clip_set(PointerRNA *ptr, bool value)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   /* Clipping is always done for wrapped curves, so don't allow user to change it. */
   if (cumap->flag & CUMA_USE_WRAPPING) {
@@ -139,7 +150,7 @@ static void rna_CurveMapping_clip_set(PointerRNA *ptr, bool value)
 
 static void rna_CurveMapping_black_level_set(PointerRNA *ptr, const float *values)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
   cumap->black[0] = values[0];
   cumap->black[1] = values[1];
   cumap->black[2] = values[2];
@@ -148,7 +159,7 @@ static void rna_CurveMapping_black_level_set(PointerRNA *ptr, const float *value
 
 static void rna_CurveMapping_white_level_set(PointerRNA *ptr, const float *values)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
   cumap->white[0] = values[0];
   cumap->white[1] = values[1];
   cumap->white[2] = values[2];
@@ -160,7 +171,7 @@ static void rna_CurveMapping_tone_update(Main * /*bmain*/, Scene * /*scene*/, Po
   /* Film-like tone only works with the combined curve, which is the fourth curve, so if the user
    * changed to film-like make the combined curve current, as we now hide the rest of the curves
    * since they no longer have an effect. */
-  CurveMapping *curve_mapping = (CurveMapping *)ptr->data;
+  CurveMapping *curve_mapping = static_cast<CurveMapping *>(ptr->data);
   if (curve_mapping->tone == CURVE_TONE_FILMLIKE) {
     curve_mapping->cur = 3;
   }
@@ -181,7 +192,7 @@ static void rna_CurveMapping_extend_update(Main * /*bmain*/,
 static void rna_CurveMapping_clipminx_range(
     PointerRNA *ptr, float *min, float *max, float * /*softmin*/, float * /*softmax*/)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   *min = -100.0f;
   *max = cumap->clipr.xmax;
@@ -190,7 +201,7 @@ static void rna_CurveMapping_clipminx_range(
 static void rna_CurveMapping_clipminy_range(
     PointerRNA *ptr, float *min, float *max, float * /*softmin*/, float * /*softmax*/)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   *min = -100.0f;
   *max = cumap->clipr.ymax;
@@ -199,7 +210,7 @@ static void rna_CurveMapping_clipminy_range(
 static void rna_CurveMapping_clipmaxx_range(
     PointerRNA *ptr, float *min, float *max, float * /*softmin*/, float * /*softmax*/)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   *min = cumap->clipr.xmin;
   *max = 100.0f;
@@ -208,7 +219,7 @@ static void rna_CurveMapping_clipmaxx_range(
 static void rna_CurveMapping_clipmaxy_range(
     PointerRNA *ptr, float *min, float *max, float * /*softmin*/, float * /*softmax*/)
 {
-  CurveMapping *cumap = (CurveMapping *)ptr->data;
+  CurveMapping *cumap = static_cast<CurveMapping *>(ptr->data);
 
   *min = cumap->clipr.ymin;
   *max = 100.0f;
@@ -222,16 +233,16 @@ static std::optional<std::string> rna_ColorRamp_path(const PointerRNA *ptr)
 
     switch (GS(id->name)) {
       case ID_NT: {
-        bNodeTree *ntree = (bNodeTree *)id;
+        bNodeTree *ntree = id_cast<bNodeTree *>(id);
         bNode *node;
 
-        for (node = static_cast<bNode *>(ntree->nodes.first); node; node = node->next) {
+        for (node = ntree->nodes.first(); node; node = node->next) {
           if (ELEM(node->type_legacy, SH_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
             if (node->storage == ptr->data) {
               /* all node color ramp properties called 'color_ramp'
                * prepend path from ID to the node
                */
-              PointerRNA node_ptr = RNA_pointer_create_discrete(id, &RNA_Node, node);
+              PointerRNA node_ptr = RNA_pointer_create_discrete(id, RNA_Node, node);
               std::string node_path = RNA_path_from_ID_to_struct(&node_ptr).value_or("");
               return fmt::format("{}.color_ramp", node_path);
             }
@@ -242,7 +253,8 @@ static std::optional<std::string> rna_ColorRamp_path(const PointerRNA *ptr)
 
       case ID_LS: {
         /* may be nullptr */
-        return BKE_linestyle_path_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
+        return BKE_linestyle_path_to_color_ramp(id_cast<FreestyleLineStyle *>(id),
+                                                static_cast<ColorBand *>(ptr->data));
       }
 
       default:
@@ -289,27 +301,27 @@ static std::optional<std::string> rna_ColorRampElement_path(const PointerRNA *pt
 
     switch (GS(id->name)) {
       case ID_NT: {
-        bNodeTree *ntree = (bNodeTree *)id;
+        bNodeTree *ntree = id_cast<bNodeTree *>(id);
         bNode *node;
 
-        for (node = static_cast<bNode *>(ntree->nodes.first); node; node = node->next) {
+        for (node = ntree->nodes.first(); node; node = node->next) {
           if (ELEM(node->type_legacy, SH_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
-            ramp_ptr = RNA_pointer_create_discrete(id, &RNA_ColorRamp, node->storage);
+            ramp_ptr = RNA_pointer_create_discrete(id, RNA_ColorRamp, node->storage);
             COLRAMP_GETPATH;
           }
         }
         break;
       }
       case ID_LS: {
-        ListBase listbase;
+        ListBaseT<LinkData> listbase;
         LinkData *link;
 
-        BKE_linestyle_modifier_list_color_ramps((FreestyleLineStyle *)id, &listbase);
-        for (link = (LinkData *)listbase.first; link; link = link->next) {
-          ramp_ptr = RNA_pointer_create_discrete(id, &RNA_ColorRamp, link->data);
+        BKE_linestyle_modifier_list_color_ramps(id_cast<FreestyleLineStyle *>(id), &listbase);
+        for (link = listbase.first(); link; link = link->next) {
+          ramp_ptr = RNA_pointer_create_discrete(id, RNA_ColorRamp, link->data);
           COLRAMP_GETPATH;
         }
-        BLI_freelistN(&listbase);
+        listbase.free_no_destruct();
         break;
       }
 
@@ -338,17 +350,17 @@ static void rna_ColorRamp_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr
 
     switch (GS(id->name)) {
       case ID_MA: {
-        Material *ma = (Material *)ptr->owner_id;
+        Material *ma = id_cast<Material *>(ptr->owner_id);
 
         DEG_id_tag_update(&ma->id, 0);
         WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
         break;
       }
       case ID_NT: {
-        bNodeTree *ntree = (bNodeTree *)id;
+        bNodeTree *ntree = id_cast<bNodeTree *>(id);
         bNode *node;
 
-        for (node = static_cast<bNode *>(ntree->nodes.first); node; node = node->next) {
+        for (node = ntree->nodes.first(); node; node = node->next) {
           if (ELEM(node->type_legacy, SH_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
             BKE_ntree_update_tag_node_property(ntree, node);
             BKE_main_ensure_invariants(*bmain, ntree->id);
@@ -357,14 +369,14 @@ static void rna_ColorRamp_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr
         break;
       }
       case ID_TE: {
-        Tex *tex = (Tex *)ptr->owner_id;
+        Tex *tex = id_cast<Tex *>(ptr->owner_id);
 
         DEG_id_tag_update(&tex->id, 0);
         WM_main_add_notifier(NC_TEXTURE, tex);
         break;
       }
       case ID_LS: {
-        FreestyleLineStyle *linestyle = (FreestyleLineStyle *)ptr->owner_id;
+        FreestyleLineStyle *linestyle = id_cast<FreestyleLineStyle *>(ptr->owner_id);
 
         WM_main_add_notifier(NC_LINESTYLE, linestyle);
         break;
@@ -372,7 +384,7 @@ static void rna_ColorRamp_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr
       /* Color Ramp for particle display is owned by the object (see #54422) */
       case ID_OB:
       case ID_PA: {
-        ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
+        ParticleSettings *part = id_cast<ParticleSettings *>(ptr->owner_id);
 
         WM_main_add_notifier(NC_OBJECT | ND_PARTICLE | NA_EDITED, part);
       }
@@ -425,7 +437,7 @@ static void rna_CurveMap_remove_point(CurveMap *cuma, ReportList *reports, Point
 
 static void rna_Scopes_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Scopes *s = (Scopes *)ptr->data;
+  Scopes *s = static_cast<Scopes *>(ptr->data);
   s->ok = 0;
 }
 
@@ -434,14 +446,14 @@ static const ColorManagedDisplaySettings *rna_display_settings_from_view_setting
 {
   /* Assumes view_settings and display_settings are stored next to each other. */
   PointerRNA parent_ptr = ptr->parent();
-  if (parent_ptr.data) {
+  if (parent_ptr) {
     PointerRNA display_ptr = RNA_pointer_get(&parent_ptr, "display_settings");
-    if (display_ptr.type == &RNA_ColorManagedDisplaySettings) {
+    if (display_ptr.type == RNA_ColorManagedDisplaySettings) {
       return display_ptr.data_as<const ColorManagedDisplaySettings>();
     }
   }
 
-  if (ptr->owner_id && GS(ptr->owner_id) == ID_SCE) {
+  if (ptr->owner_id && GS(ptr->owner_id->name) == ID_SCE) {
     return &reinterpret_cast<const Scene *>(ptr->owner_id)->display_settings;
   }
 
@@ -457,9 +469,9 @@ static ColorManagedViewSettings *rna_view_settings_from_display_settings(Pointer
 {
   /* Assumes view_settings and display_settings are stored next to each other. */
   PointerRNA parent_ptr = ptr->parent();
-  if (parent_ptr.data) {
+  if (parent_ptr) {
     PointerRNA view_ptr = RNA_pointer_get(&parent_ptr, "view_settings");
-    if (view_ptr.type == &RNA_ColorManagedViewSettings) {
+    if (view_ptr.type == RNA_ColorManagedViewSettings) {
       return view_ptr.data_as<ColorManagedViewSettings>();
     }
   }
@@ -469,14 +481,14 @@ static ColorManagedViewSettings *rna_view_settings_from_display_settings(Pointer
 
 static int rna_ColorManagedDisplaySettings_display_device_get(PointerRNA *ptr)
 {
-  ColorManagedDisplaySettings *display = (ColorManagedDisplaySettings *)ptr->data;
+  ColorManagedDisplaySettings *display = static_cast<ColorManagedDisplaySettings *>(ptr->data);
 
   return IMB_colormanagement_display_get_named_index(display->display_device);
 }
 
 static void rna_ColorManagedDisplaySettings_display_device_set(PointerRNA *ptr, int value)
 {
-  ColorManagedDisplaySettings *display = (ColorManagedDisplaySettings *)ptr->data;
+  ColorManagedDisplaySettings *display = static_cast<ColorManagedDisplaySettings *>(ptr->data);
   const char *name = IMB_colormanagement_display_get_indexed_name(value);
 
   if (name) {
@@ -505,11 +517,11 @@ static void rna_display_and_view_settings_node_update(Main *bmain, PointerRNA *p
   if (id && GS(id->name) == ID_NT) {
     /* Find a node ancestor and tag it. */
     PointerRNA node_ptr = ptr->parent();
-    while (node_ptr.data && !RNA_struct_is_a(node_ptr.type, &RNA_Node)) {
+    while (node_ptr && !RNA_struct_is_a(node_ptr.type, RNA_Node)) {
       node_ptr = node_ptr.parent();
     }
 
-    if (node_ptr.data) {
+    if (node_ptr) {
       bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
       bNode *node = node_ptr.data_as<bNode>();
       BKE_ntree_update_tag_node_property(ntree, node);
@@ -525,7 +537,7 @@ static void rna_ColorManagedDisplaySettings_display_device_update(Main *bmain,
   ID *id = ptr->owner_id;
 
   if (id && GS(id->name) == ID_SCE) {
-    Scene *scene = (Scene *)id;
+    Scene *scene = id_cast<Scene *>(id);
 
     IMB_colormanagement_validate_settings(&scene->display_settings, &scene->view_settings);
 
@@ -533,9 +545,7 @@ static void rna_ColorManagedDisplaySettings_display_device_update(Main *bmain,
     WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
 
     /* Color management can be baked into shaders, need to refresh. */
-    for (Material *ma = static_cast<Material *>(bmain->materials.first); ma;
-         ma = static_cast<Material *>(ma->id.next))
-    {
+    for (Material *ma = bmain->materials.first(); ma; ma = static_cast<Material *>(ma->id.next)) {
       DEG_id_tag_update(&ma->id, ID_RECALC_SYNC_TO_EVAL);
     }
   }
@@ -555,13 +565,13 @@ static void rna_ColorManagedDisplaySettings_display_device_update(Main *bmain,
 
 static int rna_ColorManagedViewSettings_view_transform_get(PointerRNA *ptr)
 {
-  ColorManagedViewSettings *view = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view = static_cast<ColorManagedViewSettings *>(ptr->data);
   return IMB_colormanagement_view_get_id_by_name(view->view_transform);
 }
 
 static void rna_ColorManagedViewSettings_view_transform_set(PointerRNA *ptr, int value)
 {
-  ColorManagedViewSettings *view = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view = static_cast<ColorManagedViewSettings *>(ptr->data);
 
   const char *view_name = IMB_colormanagement_view_get_name_by_id(value);
   if (!view_name) {
@@ -594,14 +604,14 @@ static const EnumPropertyItem *rna_ColorManagedViewSettings_view_transform_itemf
 
 static int rna_ColorManagedViewSettings_look_get(PointerRNA *ptr)
 {
-  ColorManagedViewSettings *view = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view = static_cast<ColorManagedViewSettings *>(ptr->data);
 
   return IMB_colormanagement_look_get_named_index(view->look);
 }
 
 static void rna_ColorManagedViewSettings_look_set(PointerRNA *ptr, int value)
 {
-  ColorManagedViewSettings *view = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view = static_cast<ColorManagedViewSettings *>(ptr->data);
 
   const char *name = IMB_colormanagement_look_get_indexed_name(value);
 
@@ -615,7 +625,7 @@ static const EnumPropertyItem *rna_ColorManagedViewSettings_look_itemf(bContext 
                                                                        PropertyRNA * /*prop*/,
                                                                        bool *r_free)
 {
-  ColorManagedViewSettings *view = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view = static_cast<ColorManagedViewSettings *>(ptr->data);
   EnumPropertyItem *items = nullptr;
   int totitem = 0;
 
@@ -628,7 +638,7 @@ static const EnumPropertyItem *rna_ColorManagedViewSettings_look_itemf(bContext 
 
 static void rna_ColorManagedViewSettings_use_curves_set(PointerRNA *ptr, bool value)
 {
-  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(ptr->data);
 
   if (value) {
     view_settings->flag |= COLORMANAGE_VIEW_USE_CURVES;
@@ -644,19 +654,20 @@ static void rna_ColorManagedViewSettings_use_curves_set(PointerRNA *ptr, bool va
 
 static void rna_ColorManagedViewSettings_whitepoint_get(PointerRNA *ptr, float value[3])
 {
-  const ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  const ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(
+      ptr->data);
   IMB_colormanagement_get_whitepoint(view_settings->temperature, view_settings->tint, value);
 }
 
 static void rna_ColorManagedViewSettings_whitepoint_set(PointerRNA *ptr, const float value[3])
 {
-  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(ptr->data);
   IMB_colormanagement_set_whitepoint(value, view_settings->temperature, view_settings->tint);
 }
 
 static bool rna_ColorManagedViewSettings_is_hdr_get(PointerRNA *ptr)
 {
-  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(ptr->data);
   if (GS(ptr->owner_id->name) != ID_SCE) {
     return false;
   }
@@ -670,7 +681,7 @@ static bool rna_ColorManagedViewSettings_is_hdr_get(PointerRNA *ptr)
 
 static bool rna_ColorManagedViewSettings_support_emulation_get(PointerRNA *ptr)
 {
-  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(ptr->data);
   if (GS(ptr->owner_id->name) != ID_SCE) {
     return false;
   }
@@ -684,7 +695,7 @@ static bool rna_ColorManagedViewSettings_support_emulation_get(PointerRNA *ptr)
 
 static int rna_ViewSettings_only_view_look_editable(const PointerRNA *ptr, const char **r_info)
 {
-  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  ColorManagedViewSettings *view_settings = static_cast<ColorManagedViewSettings *>(ptr->data);
 
   if (view_settings->flag & COLORMANAGE_VIEW_ONLY_VIEW_LOOK) {
     if (r_info) {
@@ -698,14 +709,16 @@ static int rna_ViewSettings_only_view_look_editable(const PointerRNA *ptr, const
 
 static bool rna_ColorManagedColorspaceSettings_is_data_get(PointerRNA *ptr)
 {
-  ColorManagedColorspaceSettings *colorspace = (ColorManagedColorspaceSettings *)ptr->data;
+  ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
+      ptr->data);
   const char *data_name = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA);
   return STREQ(colorspace->name, data_name);
 }
 
 static void rna_ColorManagedColorspaceSettings_is_data_set(PointerRNA *ptr, bool value)
 {
-  ColorManagedColorspaceSettings *colorspace = (ColorManagedColorspaceSettings *)ptr->data;
+  ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
+      ptr->data);
   if (value) {
     const char *data_name = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA);
     STRNCPY_UTF8(colorspace->name, data_name);
@@ -714,14 +727,16 @@ static void rna_ColorManagedColorspaceSettings_is_data_set(PointerRNA *ptr, bool
 
 static int rna_ColorManagedColorspaceSettings_colorspace_get(PointerRNA *ptr)
 {
-  ColorManagedColorspaceSettings *colorspace = (ColorManagedColorspaceSettings *)ptr->data;
+  ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
+      ptr->data);
 
   return IMB_colormanagement_colorspace_get_named_index(colorspace->name);
 }
 
 static void rna_ColorManagedColorspaceSettings_colorspace_set(PointerRNA *ptr, int value)
 {
-  ColorManagedColorspaceSettings *colorspace = (ColorManagedColorspaceSettings *)ptr->data;
+  ColorManagedColorspaceSettings *colorspace = static_cast<ColorManagedColorspaceSettings *>(
+      ptr->data);
   const char *name = IMB_colormanagement_colorspace_get_indexed_name(value);
 
   if (name && name[0]) {
@@ -743,26 +758,6 @@ static const EnumPropertyItem *rna_ColorManagedColorspaceSettings_colorspace_ite
   return items;
 }
 
-struct Seq_colorspace_cb_data {
-  ColorManagedColorspaceSettings *colorspace_settings;
-  Strip *r_seq;
-};
-
-/**
- * Color-space could be changed for scene, but also sequencer-strip.
- * If property pointer matches one of strip, set `r_seq`,
- * so not all cached images have to be invalidated.
- */
-static bool strip_find_colorspace_settings_cb(Strip *strip, void *user_data)
-{
-  Seq_colorspace_cb_data *cd = (Seq_colorspace_cb_data *)user_data;
-  if (strip->data && &strip->data->colorspace_settings == cd->colorspace_settings) {
-    cd->r_seq = strip;
-    return false;
-  }
-  return true;
-}
-
 static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
                                                              Scene * /*scene*/,
                                                              PointerRNA *ptr)
@@ -775,7 +770,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
   }
 
   if (GS(id->name) == ID_IM) {
-    Image *ima = (Image *)id;
+    Image *ima = id_cast<Image *>(id);
 
     DEG_id_tag_update(&ima->id, 0);
     DEG_id_tag_update(&ima->id, ID_RECALC_SOURCE);
@@ -786,42 +781,37 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
     WM_main_add_notifier(NC_IMAGE | NA_EDITED, &ima->id);
   }
   else if (GS(id->name) == ID_MC) {
-    MovieClip *clip = (MovieClip *)id;
+    MovieClip *clip = id_cast<MovieClip *>(id);
 
     DEG_id_tag_update(&clip->id, ID_RECALC_SOURCE);
-    blender::seq::relations_invalidate_movieclip_strips(bmain, clip);
+    seq::relations_invalidate_movieclip_strips(bmain, clip);
 
     WM_main_add_notifier(NC_MOVIECLIP | ND_DISPLAY, &clip->id);
     WM_main_add_notifier(NC_MOVIECLIP | NA_EDITED, &clip->id);
   }
   else if (GS(id->name) == ID_SCE) {
-    Scene *scene = (Scene *)id;
-    blender::seq::relations_invalidate_scene_strips(bmain, scene);
+    Scene *scene = id_cast<Scene *>(id);
+    seq::relations_invalidate_scene_strips(bmain, scene);
 
     if (scene->ed) {
-      ColorManagedColorspaceSettings *colorspace_settings = (ColorManagedColorspaceSettings *)
-                                                                ptr->data;
-      Seq_colorspace_cb_data cb_data = {colorspace_settings, nullptr};
+      ColorManagedColorspaceSettings *colorspace_settings =
+          static_cast<ColorManagedColorspaceSettings *>(ptr->data);
 
       if (&scene->sequencer_colorspace_settings == colorspace_settings) {
         /* Scene colorspace was changed. */
-        blender::seq::cache_cleanup(scene, blender::seq::CacheCleanup::All);
+        seq::cache_cleanup(scene, seq::CacheCleanup::All);
       }
       else {
         /* Strip colorspace was likely changed. */
-        blender::seq::foreach_strip(
-            &scene->ed->seqbase, strip_find_colorspace_settings_cb, &cb_data);
-        Strip *strip = cb_data.r_seq;
+        Strip *strip = rna_strip_find_by_colorspace_settings(scene->ed, colorspace_settings);
 
         if (strip) {
-          blender::seq::strip_free_movie_readers(strip);
-
           if (strip->data->proxy && strip->data->proxy->anim) {
             MOV_close(strip->data->proxy->anim);
             strip->data->proxy->anim = nullptr;
           }
 
-          blender::seq::relations_invalidate_cache_raw(scene, strip);
+          seq::relations_invalidate_cache_raw(scene, strip);
         }
       }
 
@@ -875,7 +865,12 @@ static void rna_CurveMap_initialize(CurveMapping *cumap)
 {
   BKE_curvemapping_init(cumap);
 }
+
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_curvemappoint(BlenderRNA *brna)
 {
@@ -934,6 +929,7 @@ static void rna_def_curvemap_points_api(BlenderRNA *brna, PropertyRNA *cprop)
       func, "value", 0.0f, -FLT_MAX, FLT_MAX, "Value", "Value of point", -FLT_MAX, FLT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "point", "CurveMapPoint", "", "New point");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_CurveMap_remove_point");
@@ -1147,6 +1143,7 @@ static void rna_def_color_ramp_element_api(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "element", "ColorRampElement", "", "New element");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_ColorRampElement_remove");
@@ -1412,6 +1409,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
       "Display name. For viewing, this is the display device that will be emulated by limiting "
       "the gamut and HDR colors. For image and video output, this is the display space used for "
       "writing.");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(
       prop, NC_WINDOW, "rna_ColorManagedDisplaySettings_display_device_update");
 
@@ -1439,6 +1437,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
                               "rna_ColorManagedViewSettings_look_itemf");
   RNA_def_property_ui_text(
       prop, "Look", "Additional transform applied before view transform for artistic needs");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
 
   prop = RNA_def_property(srna, "view_transform", PROP_ENUM, PROP_NONE);
@@ -1448,6 +1447,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
                               "rna_ColorManagedViewSettings_view_transform_set",
                               "rna_ColorManagedViewSettings_view_transform_itemf");
   RNA_def_property_ui_text(prop, "View", "View used when converting image to a display space");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
 
   prop = RNA_def_property(srna, "exposure", PROP_FLOAT, PROP_FACTOR);
@@ -1558,6 +1558,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
       prop,
       "Input Color Space",
       "Color space in the image file, to convert to and from when saving and loading the image");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagedColorspaceSettings_reload_update");
 
   prop = RNA_def_property(srna, "is_data", PROP_BOOLEAN, PROP_NONE);
@@ -1585,6 +1586,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
                               "rna_ColorManagedColorspaceSettings_colorspace_set",
                               "rna_ColorManagedColorspaceSettings_colorspace_itemf");
   RNA_def_property_ui_text(prop, "Color Space", "Color space that the sequencer operates in");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagedColorspaceSettings_reload_update");
 }
 
@@ -1599,5 +1601,7 @@ void RNA_def_color(BlenderRNA *brna)
   rna_def_scopes(brna);
   rna_def_colormanage(brna);
 }
+
+}  // namespace blender
 
 #endif

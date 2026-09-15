@@ -9,6 +9,8 @@
  * \ingroup imbuf
  */
 
+namespace blender {
+
 struct ImageFormatData;
 struct ImBuf;
 struct MovieWriter;
@@ -16,7 +18,12 @@ struct RenderData;
 struct ReportList;
 struct Scene;
 
+namespace bke {
+class BlenderProject;
+}
+
 MovieWriter *MOV_write_begin(const Scene *scene,
+                             const bke::BlenderProject *project,
                              const RenderData *rd,
                              const ImageFormatData *imf,
                              int rectx,
@@ -26,6 +33,7 @@ MovieWriter *MOV_write_begin(const Scene *scene,
                              const char *suffix);
 bool MOV_write_append(MovieWriter *writer,
                       const Scene *scene,
+                      const bke::BlenderProject *project,
                       const RenderData *rd,
                       const ImageFormatData *imf,
                       int start_frame,
@@ -40,7 +48,10 @@ void MOV_write_end(MovieWriter *writer);
  */
 void MOV_filepath_from_settings(char filepath[/*FILE_MAX*/ 1024],
                                 const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
                                 ReportList *reports);
+
+}  // namespace blender

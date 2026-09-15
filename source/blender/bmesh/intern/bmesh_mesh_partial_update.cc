@@ -38,15 +38,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bit_vector.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "bmesh.hh"
 
-using blender::BitSpan;
-using blender::BitVector;
-using blender::MutableBitSpan;
-using blender::Span;
-using blender::Vector;
+namespace blender {
 
 BLI_INLINE bool partial_elem_vert_ensure(BMPartialUpdate *bmpinfo,
                                          MutableBitSpan verts_tag,
@@ -196,7 +192,7 @@ BMPartialUpdate *BM_mesh_partial_create_from_verts_group_single(
       do {
         const int j = BM_elem_index_get(l_iter->v);
         side_flag = Side(side_flag | (verts_mask[j].test() ? SIDE_A : SIDE_B));
-        if (UNLIKELY(side_flag == (SIDE_A | SIDE_B))) {
+        if (side_flag == (SIDE_A | SIDE_B)) [[unlikely]] {
           partial_elem_face_ensure(bmpinfo, faces_tag, f);
           face_tag_loop_len += f->len;
           break;
@@ -271,7 +267,7 @@ BMPartialUpdate *BM_mesh_partial_create_from_verts_group_multi(
 #endif
       do {
         const int group_iter = verts_group[BM_elem_index_get(l_iter->v)];
-        if (UNLIKELY((group_iter != group_test) || (group_iter == -1))) {
+        if ((group_iter != group_test) || (group_iter == -1)) [[unlikely]] {
           partial_elem_face_ensure(bmpinfo, faces_tag, f);
           face_tag_loop_len += f->len;
 #ifdef DEBUG_MATERIAL
@@ -321,3 +317,5 @@ void BM_mesh_partial_destroy(BMPartialUpdate *bmpinfo)
 {
   MEM_delete(bmpinfo);
 }
+
+}  // namespace blender

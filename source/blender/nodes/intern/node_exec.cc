@@ -8,8 +8,8 @@
 
 #include "DNA_node_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 #include "BKE_node_runtime.hh"
@@ -21,10 +21,19 @@
 #include "node_exec.hh"
 #include "node_util.hh"
 
+namespace blender {
+
 static int node_exec_socket_use_stack(bNodeSocket *sock)
 {
   /* NOTE: INT and BOOL supported as FLOAT. Only for EEVEE. */
-  return ELEM(sock->type, SOCK_INT, SOCK_BOOLEAN, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_SHADER);
+  return ELEM(sock->type,
+              SOCK_INT,
+              SOCK_BOOLEAN,
+              SOCK_FLOAT,
+              SOCK_VECTOR,
+              SOCK_RGBA,
+              SOCK_SHADER,
+              SOCK_ROTATION);
 }
 
 bNodeStack *node_get_socket_stack(bNodeStack *stack, bNodeSocket *sock)
@@ -39,14 +48,14 @@ void node_get_stack(bNode *node, bNodeStack *stack, bNodeStack **in, bNodeStack 
 {
   /* build pointer stack */
   if (in) {
-    LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
-      *(in++) = node_get_socket_stack(stack, sock);
+    for (bNodeSocket &sock : node->inputs) {
+      *(in++) = node_get_socket_stack(stack, &sock);
     }
   }
 
   if (out) {
-    LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-      *(out++) = node_get_socket_stack(stack, sock);
+    for (bNodeSocket &sock : node->outputs) {
+      *(out++) = node_get_socket_stack(stack, &sock);
     }
   }
 }
@@ -69,31 +78,19 @@ static void node_init_input_index(bNodeSocket *sock, int *index)
   }
 }
 
-static void node_init_output_index_muted(bNodeSocket *sock,
-                                         int *index,
-                                         const blender::MutableSpan<bNodeLink> internal_links)
+static void node_init_output_index_muted(bNodeSocket *sock, int *index)
 {
-  const bNodeLink *link;
-  /* copy the stack index from internally connected input to skip the node */
-  for (bNodeLink &iter_link : internal_links) {
-    if (iter_link.tosock == sock) {
-      sock->stack_index = iter_link.fromsock->stack_index;
-      /* set the link pointer to indicate that this socket
-       * should not overwrite the stack value!
-       */
-      sock->link = &iter_link;
-      link = &iter_link;
-      break;
-    }
+  /* Copy the stack index from the internally connected input to skip the node. */
+  if (const bNodeSocket *internal_input = sock->runtime->internal_link_input) {
+    sock->stack_index = internal_input->stack_index;
+    return;
   }
-  /* if not internally connected, assign a new stack index anyway to avoid bad stack access */
-  if (!link) {
-    if (node_exec_socket_use_stack(sock)) {
-      sock->stack_index = (*index)++;
-    }
-    else {
-      sock->stack_index = -1;
-    }
+  /* If not internally connected, assign a new stack index anyway to avoid bad stack access. */
+  if (node_exec_socket_use_stack(sock)) {
+    sock->stack_index = (*index)++;
+  }
+  else {
+    sock->stack_index = -1;
   }
 }
 
@@ -119,6 +116,13 @@ static bNodeStack *setup_stack(bNodeStack *stack, bNodeTree *ntree, bNode *node,
   if (sock->link && !(sock->link->flag & NODE_LINK_MUTED)) {
     return ns;
   }
+  /* Outputs of muted nodes forward the internally linked input's stack value. */
+  if (node->is_muted() && sock->runtime->internal_link_input != nullptr) {
+    return ns;
+  }
+  if (sock->is_output() && node->is_reroute()) {
+    return ns;
+  }
 
   ns->sockettype = sock->type;
 
@@ -138,14 +142,18 @@ static bNodeStack *setup_stack(bNodeStack *stack, bNodeTree *ntree, bNode *node,
     case SOCK_RGBA:
       node_socket_get_color(ntree, node, sock, ns->vec);
       break;
+    case SOCK_ROTATION:
+      node_socket_get_rotation(ntree, node, sock, ns->vec);
+      break;
+    default:
+      break;
   }
 
   return ns;
 }
 
-static blender::Vector<bNode *> get_node_code_gen_order(bNodeTree &ntree)
+static Vector<bNode *> get_node_code_gen_order(bNodeTree &ntree)
 {
-  using namespace blender;
   ntree.ensure_topology_cache();
   Vector<bNode *> nodes = ntree.toposort_left_to_right();
   const bke::bNodeTreeZones *zones = ntree.zones();
@@ -184,7 +192,6 @@ bNodeTreeExec *ntree_exec_begin(bNodeExecContext *context,
                                 bNodeTree *ntree,
                                 bNodeInstanceKey parent_key)
 {
-  using namespace blender;
   bNodeTreeExec *exec;
   bNode *node;
   bNodeExec *nodeexec;
@@ -203,7 +210,7 @@ bNodeTreeExec *ntree_exec_begin(bNodeExecContext *context,
   Vector<bNode *> nodelist = get_node_code_gen_order(*ntree);
 
   /* XXX could let callbacks do this for specialized data */
-  exec = MEM_callocN<bNodeTreeExec>("node tree execution data");
+  exec = MEM_new_zeroed<bNodeTreeExec>("node tree execution data");
   /* Back-pointer to node tree. */
   exec->nodetree = ntree;
 
@@ -213,28 +220,28 @@ bNodeTreeExec *ntree_exec_begin(bNodeExecContext *context,
     node = nodelist[n];
 
     /* init node socket stack indexes */
-    LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
-      node_init_input_index(sock, &index);
+    for (bNodeSocket &sock : node->inputs) {
+      node_init_input_index(&sock, &index);
     }
 
     if (node->is_muted() || node->is_reroute()) {
-      LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-        node_init_output_index_muted(sock, &index, node->runtime->internal_links);
+      for (bNodeSocket &sock : node->outputs) {
+        node_init_output_index_muted(&sock, &index);
       }
     }
     else {
-      LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-        node_init_output_index(sock, &index);
+      for (bNodeSocket &sock : node->outputs) {
+        node_init_output_index(&sock, &index);
       }
     }
   }
 
   /* allocated exec data pointers for nodes */
   exec->totnodes = nodelist.size();
-  exec->nodeexec = MEM_calloc_arrayN<bNodeExec>(exec->totnodes, "node execution data");
+  exec->nodeexec = MEM_new_array_zeroed<bNodeExec>(exec->totnodes, "node execution data");
   /* allocate data pointer for node stack */
   exec->stacksize = index;
-  exec->stack = MEM_calloc_arrayN<bNodeStack>(exec->stacksize, "bNodeStack");
+  exec->stack = MEM_new_array<bNodeStack>(exec->stacksize, "bNodeStack");
 
   /* all non-const results are considered inputs */
   int n;
@@ -248,21 +255,21 @@ bNodeTreeExec *ntree_exec_begin(bNodeExecContext *context,
     nodeexec->free_exec_fn = node->typeinfo->free_exec_fn;
 
     /* tag inputs */
-    LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
+    for (bNodeSocket &sock : node->inputs) {
       /* disable the node if an input link is invalid */
-      if (sock->link && !(sock->link->flag & NODE_LINK_VALID)) {
+      if (sock.link && !(sock.link->flag & NODE_LINK_VALID)) {
         node->runtime->need_exec = 0;
       }
 
-      ns = setup_stack(exec->stack, ntree, node, sock);
+      ns = setup_stack(exec->stack, ntree, node, &sock);
       if (ns) {
         ns->hasoutput = 1;
       }
     }
 
     /* tag all outputs */
-    LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-      /* ns = */ setup_stack(exec->stack, ntree, node, sock);
+    for (bNodeSocket &sock : node->outputs) {
+      /* ns = */ setup_stack(exec->stack, ntree, node, &sock);
     }
 
     nodekey = bke::node_instance_key(parent_key, ntree, node);
@@ -280,7 +287,7 @@ void ntree_exec_end(bNodeTreeExec *exec)
   int n;
 
   if (exec->stack) {
-    MEM_freeN(exec->stack);
+    MEM_delete(exec->stack);
   }
 
   for (n = 0, nodeexec = exec->nodeexec; n < exec->totnodes; n++, nodeexec++) {
@@ -290,8 +297,10 @@ void ntree_exec_end(bNodeTreeExec *exec)
   }
 
   if (exec->nodeexec) {
-    MEM_freeN(exec->nodeexec);
+    MEM_delete(exec->nodeexec);
   }
 
-  MEM_freeN(exec);
+  MEM_delete(exec);
 }
+
+}  // namespace blender

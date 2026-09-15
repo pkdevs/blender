@@ -10,9 +10,11 @@
 
 #include "tree_element_id.hh"
 
+namespace blender {
+
 struct bArmature;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementIDArmature final : public TreeElementID {
   bArmature &arm_;
@@ -24,7 +26,8 @@ class TreeElementIDArmature final : public TreeElementID {
 
  private:
   void expand_edit_bones() const;
-  void expand_bones(SpaceOutliner &) const;
+  void expand_bones() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

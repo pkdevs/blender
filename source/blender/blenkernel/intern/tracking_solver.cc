@@ -14,10 +14,10 @@
 
 #include "DNA_movieclip_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -29,6 +29,8 @@
 
 #include "libmv-capi.h"
 #include "tracking_private.hh"
+
+namespace blender {
 
 struct MovieReconstructContext {
   libmv_Tracks *tracks;
@@ -62,16 +64,19 @@ struct ReconstructProgressData {
 };
 
 /* Create new libmv Tracks structure from blender's tracks list. */
-static libmv_Tracks *libmv_tracks_new(MovieClip *clip, ListBase *tracksbase, int width, int height)
+static libmv_Tracks *libmv_tracks_new(MovieClip *clip,
+                                      ListBaseT<MovieTrackingTrack> *tracksbase,
+                                      int width,
+                                      int height)
 {
   int tracknr = 0;
   MovieTrackingTrack *track;
   libmv_Tracks *tracks = libmv_tracksNew();
 
-  track = static_cast<MovieTrackingTrack *>(tracksbase->first);
+  track = tracksbase->first();
   while (track) {
     const FCurve *weight_fcurve = id_data_find_fcurve(
-        &clip->id, track, &RNA_MovieTrackingTrack, "weight", 0, nullptr);
+        &clip->id, track, RNA_MovieTrackingTrack, "weight", 0, nullptr);
 
     for (int a = 0; a < track->markersnr; a++) {
       MovieTrackingMarker *marker = &track->markers[a];
@@ -134,35 +139,35 @@ static bool reconstruct_retrieve_libmv_tracks(MovieReconstructContext *context,
   unit_m4(imat);
 
   {
-    int track_index = 0;
-    LISTBASE_FOREACH_INDEX (MovieTrackingTrack *, track, &tracking_object->tracks, track_index) {
+
+    for (const auto [track_index, track] : tracking_object->tracks.enumerate()) {
       double pos[3];
 
       if (libmv_reprojectionPointForTrack(libmv_reconstruction, track_index, pos)) {
-        track->bundle_pos[0] = pos[0];
-        track->bundle_pos[1] = pos[1];
-        track->bundle_pos[2] = pos[2];
+        track.bundle_pos[0] = pos[0];
+        track.bundle_pos[1] = pos[1];
+        track.bundle_pos[2] = pos[2];
 
-        track->flag |= TRACK_HAS_BUNDLE;
-        track->error = libmv_reprojectionErrorForTrack(libmv_reconstruction, track_index);
+        track.flag |= TRACK_HAS_BUNDLE;
+        track.error = libmv_reprojectionErrorForTrack(libmv_reconstruction, track_index);
       }
       else {
-        track->flag &= ~TRACK_HAS_BUNDLE;
+        track.flag &= ~TRACK_HAS_BUNDLE;
         ok = false;
 
-        printf("Unable to reconstruct position for track #%d '%s'\n", track_index, track->name);
+        printf("Unable to reconstruct position for track #%d '%s'\n", track_index, track.name);
       }
     }
   }
 
   if (reconstruction->cameras) {
-    MEM_freeN(reconstruction->cameras);
+    MEM_delete(reconstruction->cameras);
   }
 
   reconstruction->camnr = 0;
   reconstruction->cameras = nullptr;
 
-  MovieReconstructedCamera *reconstructed_cameras = MEM_calloc_arrayN<MovieReconstructedCamera>(
+  MovieReconstructedCamera *reconstructed_cameras = MEM_new_array<MovieReconstructedCamera>(
       (efra - sfra + 1), "temp reconstructed camera");
 
   for (int a = sfra; a <= efra; a++) {
@@ -213,20 +218,20 @@ static bool reconstruct_retrieve_libmv_tracks(MovieReconstructContext *context,
 
   if (reconstruction->camnr) {
     const size_t size = reconstruction->camnr * sizeof(MovieReconstructedCamera);
-    reconstruction->cameras = MEM_calloc_arrayN<MovieReconstructedCamera>(reconstruction->camnr,
-                                                                          "reconstructed camera");
+    reconstruction->cameras = MEM_new_array<MovieReconstructedCamera>(reconstruction->camnr,
+                                                                      "reconstructed camera");
     memcpy(reconstruction->cameras, reconstructed_cameras, size);
   }
 
   if (origin_set) {
-    LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-      if (track->flag & TRACK_HAS_BUNDLE) {
-        mul_v3_m4v3(track->bundle_pos, imat, track->bundle_pos);
+    for (MovieTrackingTrack &track : tracking_object->tracks) {
+      if (track.flag & TRACK_HAS_BUNDLE) {
+        mul_v3_m4v3(track.bundle_pos, imat, track.bundle_pos);
       }
     }
   }
 
-  MEM_freeN(reconstructed_cameras);
+  MEM_delete(reconstructed_cameras);
 
   return ok;
 }
@@ -277,9 +282,9 @@ static int reconstruct_count_tracks_on_both_keyframes(MovieTrackingObject *track
   const int frame1 = tracking_object->keyframe1, frame2 = tracking_object->keyframe2;
 
   int tot = 0;
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-    if (BKE_tracking_track_has_enabled_marker_at_frame(track, frame1)) {
-      if (BKE_tracking_track_has_enabled_marker_at_frame(track, frame2)) {
+  for (MovieTrackingTrack &track : tracking_object->tracks) {
+    if (BKE_tracking_track_has_enabled_marker_at_frame(&track, frame1)) {
+      if (BKE_tracking_track_has_enabled_marker_at_frame(&track, frame2)) {
         tot++;
       }
     }
@@ -291,7 +296,7 @@ static int reconstruct_count_tracks_on_both_keyframes(MovieTrackingObject *track
 bool BKE_tracking_reconstruction_check(MovieTracking *tracking,
                                        MovieTrackingObject *tracking_object,
                                        char *error_msg,
-                                       int error_size)
+                                       int error_msg_maxncpy)
 {
   if (tracking->settings.motion_flag & TRACKING_MOTION_MODAL) {
     /* TODO: check for number of tracks? */
@@ -303,7 +308,7 @@ bool BKE_tracking_reconstruction_check(MovieTracking *tracking,
       BLI_strncpy_utf8(
           error_msg,
           N_("At least 8 common tracks on both keyframes are needed for reconstruction"),
-          error_size);
+          error_msg_maxncpy);
 
       return false;
     }
@@ -311,7 +316,7 @@ bool BKE_tracking_reconstruction_check(MovieTracking *tracking,
 
 #ifndef WITH_LIBMV
   BLI_strncpy_utf8(
-      error_msg, N_("Blender is compiled without motion tracking library"), error_size);
+      error_msg, N_("Blender is compiled without motion tracking library"), error_msg_maxncpy);
   return false;
 #endif
 
@@ -327,10 +332,10 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(
     int height)
 {
   MovieTracking *tracking = &clip->tracking;
-  MovieReconstructContext *context = MEM_callocN<MovieReconstructContext>(
+  MovieReconstructContext *context = MEM_new_zeroed<MovieReconstructContext>(
       "MovieReconstructContext data");
   const float aspy = 1.0f / tracking->camera.pixel_aspect;
-  const int num_tracks = BLI_listbase_count(&tracking_object->tracks);
+  const int num_tracks = tracking_object->tracks.count();
   int sfra = INT_MAX, efra = INT_MIN;
 
   STRNCPY_UTF8(context->object_name, tracking_object->name);
@@ -344,13 +349,13 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(
 
   context->tracks_map = tracks_map_new(context->object_name, num_tracks);
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-    int first = 0, last = track->markersnr - 1;
-    MovieTrackingMarker *first_marker = &track->markers[0];
-    MovieTrackingMarker *last_marker = &track->markers[track->markersnr - 1];
+  for (MovieTrackingTrack &track : tracking_object->tracks) {
+    int first = 0, last = track.markersnr - 1;
+    MovieTrackingMarker *first_marker = &track.markers[0];
+    MovieTrackingMarker *last_marker = &track.markers[track.markersnr - 1];
 
     /* find first not-disabled marker */
-    while (first <= track->markersnr - 1 && first_marker->flag & MARKER_DISABLED) {
+    while (first <= track.markersnr - 1 && first_marker->flag & MARKER_DISABLED) {
       first++;
       first_marker++;
     }
@@ -361,7 +366,7 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(
       last_marker--;
     }
 
-    if (first <= track->markersnr - 1) {
+    if (first <= track.markersnr - 1) {
       sfra = min_ii(sfra, first_marker->framenr);
     }
 
@@ -369,7 +374,7 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(
       efra = max_ii(efra, last_marker->framenr);
     }
 
-    tracks_map_insert(context->tracks_map, track);
+    tracks_map_insert(context->tracks_map, &track);
   }
 
   context->sfra = sfra;
@@ -410,7 +415,7 @@ void BKE_tracking_reconstruction_context_free(MovieReconstructContext *context)
 
   tracks_map_free(context->tracks_map);
 
-  MEM_freeN(context);
+  MEM_delete(context);
 }
 
 /* Callback which is called from libmv side to update progress in the interface. */
@@ -517,7 +522,7 @@ bool BKE_tracking_reconstruction_finish(MovieReconstructContext *context, MovieT
   return true;
 }
 
-static void tracking_scale_reconstruction(ListBase *tracksbase,
+static void tracking_scale_reconstruction(ListBaseT<MovieTrackingTrack> *tracksbase,
                                           MovieTrackingReconstruction *reconstruction,
                                           const float scale[3])
 {
@@ -533,17 +538,19 @@ static void tracking_scale_reconstruction(ListBase *tracksbase,
     sub_v3_v3(camera->mat[3], first_camera_delta);
   }
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, tracksbase) {
-    if (track->flag & TRACK_HAS_BUNDLE) {
-      mul_v3_v3(track->bundle_pos, scale);
-      sub_v3_v3(track->bundle_pos, first_camera_delta);
+  for (MovieTrackingTrack &track : *tracksbase) {
+    if (track.flag & TRACK_HAS_BUNDLE) {
+      mul_v3_v3(track.bundle_pos, scale);
+      sub_v3_v3(track.bundle_pos, first_camera_delta);
     }
   }
 }
 
 void BKE_tracking_reconstruction_scale(MovieTracking *tracking, float scale[3])
 {
-  LISTBASE_FOREACH (MovieTrackingObject *, object, &tracking->objects) {
-    tracking_scale_reconstruction(&object->tracks, &object->reconstruction, scale);
+  for (MovieTrackingObject &object : tracking->objects) {
+    tracking_scale_reconstruction(&object.tracks, &object.reconstruction, scale);
   }
 }
+
+}  // namespace blender

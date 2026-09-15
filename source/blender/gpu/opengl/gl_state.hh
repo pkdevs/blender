@@ -10,14 +10,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "gpu_state_private.hh"
 
 #include <epoxy/gl.h>
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GLFrameBuffer;
 class GLTexture;
@@ -87,7 +86,7 @@ class GLStateManager : public StateManager {
   static void set_stencil_test(GPUStencilTest test, GPUStencilOp operation);
   static void set_stencil_mask(GPUStencilTest test, const GPUStateMutable &state);
   static void set_clip_distances(int new_dist_len, int old_dist_len);
-  static void set_logic_op(bool enable);
+
   static void set_facing(bool invert);
   static void set_backface_culling(GPUFaceCullTest test);
   static void set_provoking_vert(GPUProvokingVertex vert);
@@ -154,5 +153,4 @@ static inline GLbitfield to_gl(GPUBarrier barrier_bits)
   return barrier;
 }
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu

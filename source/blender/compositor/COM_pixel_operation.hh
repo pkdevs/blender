@@ -4,23 +4,27 @@
 
 #pragma once
 
+#include "BKE_node.hh"
+
 #include "BLI_map.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
-#include "NOD_derived_node_tree.hh"
-
 #include "COM_context.hh"
 #include "COM_operation.hh"
-#include "COM_scheduler.hh"
+
+namespace blender {
+class ComputeContext;
+}
 
 namespace blender::compositor {
 
-using namespace nodes::derived_node_tree_types;
+struct Schedule;
+class NodeTreeEvaluator;
 
 /* A type representing a contiguous subset of the node execution schedule that will be compiled
  * into a Pixel Operation. */
-using PixelCompileUnit = VectorSet<DNode>;
+using PixelCompileUnit = VectorSet<const bNode *>;
 
 /* ------------------------------------------------------------------------------------------------
  * Pixel Operation
@@ -28,19 +32,19 @@ using PixelCompileUnit = VectorSet<DNode>;
  * An operation that is evaluated pixel-wise and is compiled from a contiguous subset of the node
  * execution schedule, whose nodes all represent pixel-wise operations. The subset of the node
  * execution schedule is called a Pixel Compile Unit and contains nodes that are called Pixel
- * nodes, see the discussion in COM_compile_state.hh for more information. Since the nodes inside
- * the compile unit are all pixel wise, they can be combined into a single operation that can be
- * evaluated more efficiently. This is an abstract class that should be implemented to compile and
- * evaluate the compile unit as needed.
+ * nodes, see the discussion in COM_node_tree_evaluator.hh for more information. Since the nodes
+ * inside the compile unit are all pixel wise, they can be combined into a single operation that
+ * can be evaluated more efficiently. This is an abstract class that should be implemented to
+ * compile and evaluate the compile unit as needed.
  *
  * Consider the following node graph with a node execution schedule denoted by the number on each
  * node. The compiler may decide to compile a subset of the execution schedule into a pixel
  * operation if they are all pixel nodes, in this case, the nodes from 3 to 5 were compiled
  * together into a pixel operation. This subset is called the pixel compile unit. See the
- * discussion in COM_evaluator.hh for more information on the compilation process. Links that are
- * internal to the pixel operation are established between the input and outputs of the pixel
- * nodes, for instance, the links between nodes 3 and 4 as well as those between nodes 4 and 5.
- * However, links that cross the boundary of the pixel operation needs special handling.
+ * discussion in COM_node_tree_evaluator.hh for more information on the compilation process. Links
+ * that are internal to the pixel operation are established between the input and outputs of the
+ * pixel nodes, for instance, the links between nodes 3 and 4 as well as those between nodes 4
+ * and 5. However, links that cross the boundary of the pixel operation needs special handling.
  *
  *                                        Pixel Operation
  *                   +------------------------------------------------------+
@@ -67,19 +71,20 @@ using PixelCompileUnit = VectorSet<DNode>;
  * the link from node 5 to node 6 is declared as an output to the operation. */
 class PixelOperation : public Operation {
  protected:
-  /* The compile unit that will be compiled into this pixel operation. */
-  PixelCompileUnit compile_unit_;
-  /* A reference to the node execution schedule that is being compiled. */
-  const Schedule &schedule_;
+  /* The node tree evaluator which currently contains a pixel compile unit that needs to be
+   * compiled into this pixel operation. */
+  NodeTreeEvaluator &node_tree_evaluator_;
+  /* The compute context where this pixel operation is executing. */
+  const ComputeContext &compute_context_;
   /* A map that associates the identifier of each input of the operation with the output socket it
    * is linked to. This is needed to help the compiler establish links between operations. */
-  Map<std::string, DOutputSocket> inputs_to_linked_outputs_map_;
+  Map<std::string, const bNodeSocket *> inputs_to_linked_outputs_map_;
   /* A map that associates the output socket of a node that is not part of the pixel operation to
    * the identifier of the input of the operation that was declared for it. */
-  Map<DOutputSocket, std::string> outputs_to_declared_inputs_map_;
+  Map<const bNodeSocket *, std::string> outputs_to_declared_inputs_map_;
   /* A map that associates each of the needed implicit inputs with the identifiers of the inputs of
    * the operation that were declared for them. */
-  Map<ImplicitInput, std::string> implicit_inputs_to_input_identifiers_map_;
+  Map<ImplicitInputType, std::string> implicit_inputs_to_input_identifiers_map_;
   /* A map that associates the identifier of each input of the operation with the number of node
    * inputs that use it, that is, its reference count. This is needed to correct the reference
    * counts of results linked to the inputs of the operation, since the results that provide the
@@ -93,41 +98,45 @@ class PixelOperation : public Operation {
   /* A map that associates the output socket that provides the result of an output of the operation
    * with the identifier of that output. This is needed to help the compiler establish links
    * between operations. */
-  Map<DOutputSocket, std::string> output_sockets_to_output_identifiers_map_;
+  Map<const bNodeSocket *, std::string> output_sockets_to_output_identifiers_map_;
   /* A vector set that stores all output sockets that are used as previews for nodes inside the
    * pixel operation. */
-  VectorSet<DOutputSocket> preview_outputs_;
+  VectorSet<const bNodeSocket *> preview_outputs_;
+  /* A vector set that stores all output sockets that will be logged to the node evaluator log. */
+  VectorSet<const bNodeSocket *> logged_outputs_;
+  /* True if the operation operates on single values, that is, all of its inputs and outputs are
+   * single values. */
+  const bool is_single_value_;
 
  public:
-  PixelOperation(Context &context, PixelCompileUnit &compile_unit, const Schedule &schedule);
+  PixelOperation(Context &context,
+                 NodeTreeEvaluator &node_tree_evaluator,
+                 const ComputeContext &compute_context,
+                 const bool is_single_value);
 
-  /* Returns the maximum number of outputs that the PixelOperation can have. Pixel compile units
-   * need to be split into smaller units if the numbers of outputs they have is more than the
-   * number returned by this method. */
-  static int maximum_number_of_outputs(Context &context);
-
-  /* Compute a node preview for all nodes in the pixel operations if the node requires a preview.
+  /* Log the values of all inputs and outputs of nodes inside the pixel operation as well as node
+   * previews for all nodes in the pixel operations if the node requires a preview.
    *
    * Previews are computed from results that are populated for outputs that are used to compute
    * previews even if they are internally linked, and those outputs are stored and tracked in the
    * preview_outputs_ vector set, see the populate_results_for_node method for more information. */
-  void compute_preview() override;
+  void log_data() override;
 
   /* Get the identifier of the operation output corresponding to the given output socket. This is
    * called by the compiler to identify the operation output that provides the result for an input
    * by providing the output socket that the input is linked to. See
    * output_sockets_to_output_identifiers_map_ for more information. */
-  StringRef get_output_identifier_from_output_socket(DOutputSocket output_socket);
+  StringRef get_output_identifier_from_output_socket(const bNodeSocket &output_socket);
 
   /* Get a reference to the inputs to linked outputs map of the operation. This is called by the
    * compiler to identify the output that each input of the operation is linked to for correct
    * input mapping. See inputs_to_linked_outputs_map_ for more information. */
-  Map<std::string, DOutputSocket> &get_inputs_to_linked_outputs_map();
+  Map<std::string, const bNodeSocket *> &get_inputs_to_linked_outputs_map();
 
   /* Get a reference to the implicit inputs to input identifiers map of the operation. This is
    * called by the compiler to link the operations inputs with their corresponding implicit input
    * results. See implicit_inputs_to_input_identifiers_map_ for more information. */
-  Map<ImplicitInput, std::string> &get_implicit_inputs_to_input_identifiers_map();
+  Map<ImplicitInputType, std::string> &get_implicit_inputs_to_input_identifiers_map();
 
   /* Returns the internal reference count of the operation input with the given identifier. See the
    * inputs_to_reference_counts_map_ member for more information. */

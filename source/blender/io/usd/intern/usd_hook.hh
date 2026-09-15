@@ -6,19 +6,23 @@
 #include <pxr/usd/usd/common.h>
 #include <pxr/usd/usdShade/material.h>
 
+namespace blender {
+
 struct Depsgraph;
 struct Material;
 struct ReportList;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 struct USDExportParams;
 class USDHierarchyIterator;
 struct USDImportParams;
 class USDStageReader;
 
-/** Ensure classes and type converters necessary for invoking import and export hooks
- * are registered. */
+/**
+ * Ensure classes and type converters necessary for invoking import and export hooks
+ * are registered.
+ */
 void register_hook_converters();
 
 /** Call the 'on_export' chaser function defined in the registered #USDHook classes. */
@@ -28,7 +32,7 @@ void call_export_hooks(Depsgraph *depsgraph,
 
 /** Call the 'on_material_export' hook functions defined in the registered #USDHook classes. */
 void call_material_export_hooks(pxr::UsdStageRefPtr stage,
-                                Material *material,
+                                const Material *material,
                                 const pxr::UsdShadeMaterial &usd_material,
                                 const USDExportParams &export_params,
                                 ReportList *reports);
@@ -42,12 +46,15 @@ bool have_material_import_hook(pxr::UsdStageRefPtr stage,
                                const USDImportParams &import_params,
                                ReportList *reports);
 
-/** Call the 'on_material_import' hook functions defined in the registered #USDHook classes.
- * Returns true if any of the hooks were successful, false otherwise. */
+/**
+ * Call the 'on_material_import' hook functions defined in the registered #USDHook classes.
+ * Returns true if any of the hooks were successful, false otherwise.
+ */
 bool call_material_import_hooks(pxr::UsdStageRefPtr stage,
                                 Material *material,
                                 const pxr::UsdShadeMaterial &usd_material,
                                 const USDImportParams &import_params,
                                 ReportList *reports);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

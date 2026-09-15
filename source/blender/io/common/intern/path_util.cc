@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "IO_path_util.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.common"};
 
-namespace blender::io {
+namespace io {
 
 std::string path_reference(StringRefNull filepath,
                            StringRefNull base_src,
@@ -84,4 +87,5 @@ void path_reference_copy(const Set<std::pair<std::string, std::string>> &copy_se
   }
 }
 
-}  // namespace blender::io
+}  // namespace io
+}  // namespace blender

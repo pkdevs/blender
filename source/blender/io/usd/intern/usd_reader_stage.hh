@@ -8,18 +8,18 @@
 #include "BLI_vector.hh"
 
 #include "usd.hh"
-#include "usd_hash_types.hh"
 #include "usd_reader_domelight.hh"
 #include "usd_reader_prim.hh"
 
 #include <pxr/usd/usdGeom/imageable.h>
+struct ImportSettings;
+namespace blender {
 
 struct Collection;
-struct ImportSettings;
 struct Main;
 struct ReportList;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 class USDPointInstancerReader;
 
@@ -115,10 +115,7 @@ class USDStageReader {
   }
 
   /** Get the wmJobWorkerStatus-provided `reports` list pointer, to use with the BKE_report API. */
-  ReportList *reports() const
-  {
-    return params_.worker_status ? params_.worker_status->reports : nullptr;
-  }
+  ReportList *reports() const;
 
   /** Clear all cached reader collections. */
   void clear_readers();
@@ -213,4 +210,6 @@ class USDStageReader {
   void create_point_instancer_proto_readers(const UsdPathSet &proto_paths);
 };
 
-};  // namespace blender::io::usd
+};  // namespace io::usd
+
+}  // namespace blender

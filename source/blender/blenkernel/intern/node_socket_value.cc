@@ -1,549 +1,617 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup bke
- */
-
-#include <sstream>
-
-#include "BKE_geometry_set.hh"
-#include "BKE_node.hh"
 #include "BKE_node_socket_value.hh"
+#include "BKE_type_conversions.hh"
+
+#include "FN_field.hh"
+#include "FN_field_evaluation.hh"
+
 #include "BKE_volume_grid.hh"
+
+#include "BKE_volume_grid_multi_function_eval.hh"
 
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_menu_value.hh"
 
-#include "BLI_color.hh"
-#include "BLI_math_rotation_types.hh"
+#include "BLI_color_types.hh"
+#include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_memory_counter.hh"
 
-#include "FN_field.hh"
+struct Object;
+struct VFont;
+struct bSound;
+struct Text;
+struct Mask;
 
 namespace blender::bke {
 
-template<typename T, typename U>
-static constexpr bool is_single_or_field_or_grid_v = is_same_any_v<T,
-                                                                   U,
-                                                                   fn::Field<U>
-#ifdef WITH_OPENVDB
-                                                                   ,
-                                                                   VolumeGrid<U>
-#endif
-                                                                   >;
+using fn::Field;
+using fn::GField;
+using nodes::BundlePtr;
+using nodes::ClosurePtr;
+using nodes::GList;
+using nodes::GListPtr;
+using nodes::List;
+using nodes::ListPtr;
+using volume_grid::GVolumeGrid;
+using volume_grid::VolumeGrid;
 
 /**
- * Very fast (compile-time) conversion from a static C++ type to the corresponding socket type.
+ * All types that can be stored as a "single" value in a #SocketValueVariant.
  */
-template<typename T> static std::optional<eNodeSocketDatatype> static_type_to_socket_type()
-{
-  if constexpr (is_single_or_field_or_grid_v<T, int>) {
-    return SOCK_INT;
-  }
-  if constexpr (is_single_or_field_or_grid_v<T, float>) {
-    return SOCK_FLOAT;
-  }
-  if constexpr (is_single_or_field_or_grid_v<T, bool>) {
-    return SOCK_BOOLEAN;
-  }
-  if constexpr (is_single_or_field_or_grid_v<T, float3>) {
-    return SOCK_VECTOR;
-  }
-  if constexpr (is_single_or_field_or_grid_v<T, ColorGeometry4f>) {
-    return SOCK_RGBA;
-  }
-  if constexpr (is_single_or_field_or_grid_v<T, math::Quaternion>) {
-    return SOCK_ROTATION;
-  }
-  if constexpr (is_same_any_v<T, nodes::MenuValue, fn::Field<nodes::MenuValue>>) {
-    return SOCK_MENU;
-  }
-  if constexpr (is_same_any_v<T, float4x4, fn::Field<float4x4>>) {
-    return SOCK_MATRIX;
-  }
-  if constexpr (is_same_any_v<T, std::string>) {
-    return SOCK_STRING;
-  }
-  if constexpr (is_same_any_v<T, nodes::BundlePtr>) {
-    return SOCK_BUNDLE;
-  }
-  if constexpr (is_same_any_v<T, nodes::ClosurePtr>) {
-    return SOCK_CLOSURE;
-  }
-  if constexpr (is_same_any_v<T, Object *>) {
-    return SOCK_OBJECT;
-  }
-  if constexpr (is_same_any_v<T, Collection *>) {
-    return SOCK_COLLECTION;
-  }
-  if constexpr (is_same_any_v<T, Tex *>) {
-    return SOCK_TEXTURE;
-  }
-  if constexpr (is_same_any_v<T, Image *>) {
-    return SOCK_IMAGE;
-  }
-  if constexpr (is_same_any_v<T, Material *>) {
-    return SOCK_MATERIAL;
-  }
-  if constexpr (is_same_any_v<T, bke::GeometrySet>) {
-    return SOCK_GEOMETRY;
-  }
-  return std::nullopt;
-}
+#define SOCKET_VALUE_SINGLE_TYPES \
+  X(float) \
+  X(int) \
+  X(float2) \
+  X(float3) \
+  X(float4) \
+  X(int2) \
+  X(bool) \
+  X(int8_t) \
+  X(short2) \
+  X(ColorGeometry4f) \
+  X(ColorGeometry4b) \
+  X(math::Quaternion) \
+  X(float4x4) \
+  X(nodes::MenuValue) \
+  X(std::string) \
+  X(BundlePtr) \
+  X(ClosurePtr) \
+  X(GeometrySet) \
+  X(Object *) \
+  X(Material *) \
+  X(Image *) \
+  X(VFont *) \
+  X(Scene *) \
+  X(bSound *) \
+  X(Collection *) \
+  X(Tex *) \
+  X(Text *) \
+  X(Mask *)
 
 /**
- * Check if a socket type stores the static C++ type.
+ * The subset of #SOCKET_VALUE_SINGLE_TYPES that also support #Field<T> and #ListPtr<T>.
  */
-template<typename T>
-static bool static_type_is_base_socket_type(const eNodeSocketDatatype socket_type)
+#define SOCKET_VALUE_FIELD_AND_LIST_TYPES \
+  X(float) \
+  X(int) \
+  X(float2) \
+  X(float3) \
+  X(float4) \
+  X(int2) \
+  X(bool) \
+  X(int8_t) \
+  X(short2) \
+  X(ColorGeometry4f) \
+  X(ColorGeometry4b) \
+  X(math::Quaternion) \
+  X(float4x4) \
+  X(nodes::MenuValue) \
+  X(std::string)
+
+namespace detail {
+
+template<typename CurrentT>
+bool SocketValueVariantTypeInfo::try_convert_fn(const CPPType &dst_type,
+                                                SocketValueVariantAny &value)
 {
-  switch (socket_type) {
-    case SOCK_INT:
-      return std::is_same_v<T, int>;
-    case SOCK_FLOAT:
-      return std::is_same_v<T, float>;
-    case SOCK_BOOLEAN:
-      return std::is_same_v<T, bool>;
-    case SOCK_VECTOR:
-      return std::is_same_v<T, float3>;
-    case SOCK_RGBA:
-      return std::is_same_v<T, ColorGeometry4f>;
-    case SOCK_ROTATION:
-      return std::is_same_v<T, math::Quaternion>;
-    case SOCK_MATRIX:
-      return std::is_same_v<T, float4x4>;
-    case SOCK_STRING:
-      return std::is_same_v<T, std::string>;
-    case SOCK_MENU:
-      return std::is_same_v<T, nodes::MenuValue>;
-    case SOCK_BUNDLE:
-      return std::is_same_v<T, nodes::BundlePtr>;
-    case SOCK_CLOSURE:
-      return std::is_same_v<T, nodes::ClosurePtr>;
-    case SOCK_OBJECT:
-      return std::is_same_v<T, Object *>;
-    case SOCK_COLLECTION:
-      return std::is_same_v<T, Collection *>;
-    case SOCK_TEXTURE:
-      return std::is_same_v<T, Tex *>;
-    case SOCK_IMAGE:
-      return std::is_same_v<T, Image *>;
-    case SOCK_MATERIAL:
-      return std::is_same_v<T, Material *>;
-    case SOCK_GEOMETRY:
-      return std::is_same_v<T, bke::GeometrySet>;
-    case SOCK_CUSTOM:
-    case SOCK_SHADER:
+  if (CPPType::get<CurrentT>() == dst_type) {
+    return true;
+  }
+  static const DataTypeConversions &conversions = get_implicit_type_conversions();
+  if constexpr (std::is_same_v<CurrentT, GField>) {
+    const GField &src_field = value.get<GField>();
+    const CPPType &src_base_type = src_field.cpp_type();
+    if (dst_type.generic_type && dst_type.generic_type->is<GField>()) {
+      if (src_base_type == *dst_type.base_type) {
+        /* Nothing to do. */
+        return true;
+      }
+      const ConversionFunctions *fns = conversions.get_conversion_functions(src_base_type,
+                                                                            *dst_type.base_type);
+      if (!fns) {
+        return false;
+      }
+      if (const void *src_single_value = src_field.get_if_constant()) {
+        if (!fns->convert_single_to_initialized) {
+          return false;
+        }
+        BUFFER_FOR_CPP_TYPE_VALUE(*dst_type.base_type, dst_single_value);
+        fns->convert_single_to_initialized(src_single_value, dst_single_value);
+        value.emplace<GField>(GField::from_constant(*dst_type.base_type, dst_single_value));
+        dst_type.base_type->destruct(dst_single_value);
+        return true;
+      }
+      if (!fns->multi_function) {
+        return false;
+      }
+      fn::FieldOperationPtr op = fn::FieldOperation::from(*fns->multi_function, {src_field});
+      value.emplace<GField>(GField(std::move(op), 0));
+      return true;
+    }
+
+    if (src_base_type == dst_type) {
+      BUFFER_FOR_CPP_TYPE_VALUE(dst_type, tmp_buffer);
+      fn::evaluate_constant_field(src_field, tmp_buffer);
+      void *dst_value = SocketValueVariant::allocate(dst_type, value);
+      dst_type.move_construct(tmp_buffer, dst_value);
+      dst_type.destruct(tmp_buffer);
+      return true;
+    }
+    const ConversionFunctions *fns = conversions.get_conversion_functions(src_base_type, dst_type);
+    if (!fns || !fns->convert_single_to_initialized) {
       return false;
+    }
+    BUFFER_FOR_CPP_TYPE_VALUE(src_base_type, src_single_value);
+    fn::evaluate_constant_field(src_field, src_single_value);
+    void *dst_value = SocketValueVariant::allocate(dst_type, value);
+    fns->convert_single_to_uninitialized(src_single_value, dst_value);
+    src_base_type.destruct(src_single_value);
+    return true;
   }
-  BLI_assert_unreachable();
-  return false;
-}
-
-template<typename T> T SocketValueVariant::extract()
-{
-  if constexpr (std::is_same_v<T, fn::GField>) {
-    switch (kind_) {
-      case Kind::Field: {
-        return std::move(value_.get<fn::GField>());
+  else if constexpr (std::is_same_v<CurrentT, GListPtr>) {
+    GListPtr &src_list = value.get<GListPtr>();
+    if (dst_type.generic_type && dst_type.generic_type->is<GListPtr>()) {
+      if (!src_list) {
+        /* Nothing to do. */
+        return true;
       }
-      case Kind::Single: {
-        const GPointer single_value = this->get_single_ptr();
-        return fn::make_constant_field(*single_value.type(), single_value.get());
+      const CPPType &src_base_type = src_list->cpp_type();
+      if (src_base_type == *dst_type.base_type) {
+        /* Nothing to do. */
+        return true;
       }
-      case Kind::List:
-      case Kind::Grid: {
-        const CPPType *cpp_type = socket_type_to_geo_nodes_base_cpp_type(socket_type_);
-        BLI_assert(cpp_type);
-        return fn::make_constant_field(*cpp_type, cpp_type->default_value());
+      const ConversionFunctions *fns = conversions.get_conversion_functions(src_base_type,
+                                                                            *dst_type.base_type);
+      if (!fns || !fns->multi_function || !fns->convert_single_to_uninitialized) {
+        return false;
       }
-      case Kind::None: {
-        BLI_assert_unreachable();
-        break;
+      const int64_t size = src_list->size();
+      const std::variant<GSpan, GPointer> src_values = src_list->values();
+      if (const auto *src_span = std::get_if<GSpan>(&src_values)) {
+        GArray<> dst_values(*dst_type.base_type, size, NoInitialization{});
+        IndexMask mask{size};
+        mf::ParamsBuilder params{*fns->multi_function, &mask};
+        params.add_readonly_single_input(*src_span);
+        params.add_uninitialized_single_output(dst_values);
+        mf::ContextBuilder context;
+        fns->multi_function->call_auto(mask, params, context);
+        src_list = GList::from_garray(std::move(dst_values));
+        return true;
+      }
+      if (const auto *src_single_value = std::get_if<GPointer>(&src_values)) {
+        BUFFER_FOR_CPP_TYPE_VALUE(*dst_type.base_type, dst_single_value);
+        fns->convert_single_to_uninitialized(src_single_value->get(), dst_single_value);
+        src_list = GList::from_single({*dst_type.base_type, dst_single_value}, size);
+        dst_type.base_type->destruct(dst_single_value);
+        return true;
       }
     }
-  }
-  else if constexpr (fn::is_field_v<T>) {
-    BLI_assert(static_type_is_base_socket_type<typename T::base_type>(socket_type_));
-    return T(this->extract<fn::GField>());
-  }
-  else if constexpr (std::is_same_v<T, nodes::ListPtr>) {
-    if (kind_ != Kind::List) {
-      return {};
-    }
-    return std::move(value_.get<nodes::ListPtr>());
+    return false;
   }
 #ifdef WITH_OPENVDB
-  else if constexpr (std::is_same_v<T, GVolumeGrid>) {
-    switch (kind_) {
-      case Kind::Grid: {
-        BLI_assert(value_);
-        return std::move(value_.get<GVolumeGrid>());
+  else if constexpr (std::is_same_v<CurrentT, GVolumeGrid>) {
+    GVolumeGrid &src_grid = value.get<GVolumeGrid>();
+    if (dst_type.generic_type && dst_type.generic_type->is<GVolumeGrid>()) {
+      if (!src_grid) {
+        /* Nothing to do. */
+        return true;
       }
-      case Kind::Single:
-      case Kind::List:
-      case Kind::Field: {
-        const std::optional<VolumeGridType> grid_type = socket_type_to_grid_type(socket_type_);
-        BLI_assert(grid_type);
-        return GVolumeGrid(*grid_type);
+      const CPPType *src_base_type = src_grid->cpp_type();
+      if (!src_base_type) {
+        /* Unknown type. */
+        return false;
       }
-      case Kind::None: {
-        BLI_assert_unreachable();
-        break;
+      if (src_base_type == dst_type.base_type) {
+        /* Nothing to do. */
+        return true;
       }
+      const ConversionFunctions *fns = conversions.get_conversion_functions(*src_base_type,
+                                                                            *dst_type.base_type);
+      if (!fns || !fns->multi_function) {
+        return false;
+      }
+      VolumeTreeAccessToken tree_token;
+      const openvdb::GridBase &src_grid_base = src_grid->grid(tree_token);
+      using namespace volume_grid::multi_function_eval;
+      EvalResult conversion_result = evaluate_multi_function_on_grid(
+          *fns->multi_function, {&src_grid_base}, {true});
+      if (std::holds_alternative<EvalResult::Failure>(conversion_result.result)) {
+        return false;
+      }
+      src_grid = GVolumeGrid(
+          std::move(std::get<EvalResult::Success>(conversion_result.result).output_grids[0]));
+      return true;
     }
-  }
-  else if constexpr (is_VolumeGrid_v<T>) {
-    BLI_assert(static_type_is_base_socket_type<typename T::base_type>(socket_type_));
-    return this->extract<GVolumeGrid>().typed<typename T::base_type>();
+    return false;
   }
 #endif
   else {
-    BLI_assert(static_type_is_base_socket_type<T>(socket_type_));
-    if (kind_ == Kind::Single) {
-      return std::move(value_.get<T>());
+    /* The stored value is a single value. */
+
+    if (dst_type.is<GField>()) {
+      GField field = GField::from_constant(CPPType::get<CurrentT>(), value.get());
+      value.emplace<GField>(std::move(field));
+      return true;
     }
-    if (kind_ == Kind::Field) {
-      T ret_value;
-      std::destroy_at(&ret_value);
-      fn::evaluate_constant_field(value_.get<fn::GField>(), &ret_value);
-      return ret_value;
+    if (dst_type.generic_type && dst_type.generic_type->is<GField>()) {
+      if (dst_type.base_type->is<CurrentT>()) {
+        GField field = GField::from_constant(CPPType::get<CurrentT>(), value.get());
+        value.emplace<GField>(std::move(field));
+        return true;
+      }
+      const ConversionFunctions *fns = conversions.get_conversion_functions(
+          CPPType::get<CurrentT>(), *dst_type.base_type);
+      if (!fns || !fns->convert_single_to_initialized) {
+        return false;
+      }
+      BUFFER_FOR_CPP_TYPE_VALUE(*dst_type.base_type, tmp_buffer);
+      fns->convert_single_to_initialized(value.get(), tmp_buffer);
+      value.emplace<GField>(GField::from_constant(*dst_type.base_type, tmp_buffer));
+      dst_type.base_type->destruct(tmp_buffer);
+      return true;
     }
-    if (kind_ == Kind::List) {
-      return {};
+    const ConversionFunctions *fns = conversions.get_conversion_functions(CPPType::get<CurrentT>(),
+                                                                          dst_type);
+    if (!fns || !fns->convert_single_to_uninitialized) {
+      return false;
     }
+    BUFFER_FOR_CPP_TYPE_VALUE(dst_type, tmp_buffer);
+    fns->convert_single_to_uninitialized(value.get(), tmp_buffer);
+    void *dst_value = SocketValueVariant::allocate(dst_type, value);
+    dst_type.move_construct(tmp_buffer, dst_value);
+    dst_type.destruct(tmp_buffer);
+    return true;
   }
-  BLI_assert_unreachable();
-  return T();
 }
 
-template<typename T> T SocketValueVariant::get() const
+template<typename CurrentT>
+bool SocketValueVariantTypeInfo::is_interpretable_as_fn(const CPPType &dst_type,
+                                                        const SocketValueVariantAny &value)
 {
-  /* Simple implementation in terms of #extract for now. This could potentially use a specialized
-   * implementation at some point, but for now it's unlikely to be a bottleneck. */
-  SocketValueVariant copied_variant = *this;
-  return copied_variant.extract<T>();
+  if constexpr (std::is_same_v<CurrentT, GField>) {
+    if (dst_type.is<GField>()) {
+      return true;
+    }
+    if (!dst_type.generic_type) {
+      return false;
+    }
+    if (dst_type.generic_type->is<GField>()) {
+      const GField &field = value.get<GField>();
+      const CPPType &base_type = field.cpp_type();
+      return base_type == *dst_type.base_type;
+    }
+    return false;
+  }
+  else if constexpr (std::is_same_v<CurrentT, GListPtr>) {
+    if (dst_type.is<GListPtr>()) {
+      return true;
+    }
+    if (!dst_type.generic_type) {
+      return false;
+    }
+    if (dst_type.generic_type->is<GListPtr>()) {
+      const GListPtr &list_ptr = value.get<GListPtr>();
+      if (!list_ptr) {
+        return true;
+      }
+      const CPPType &base_type = list_ptr->cpp_type();
+      return base_type == *dst_type.base_type;
+    }
+    return false;
+  }
+#ifdef WITH_OPENVDB
+  else if constexpr (std::is_same_v<CurrentT, GVolumeGrid>) {
+    if (dst_type.is<GVolumeGrid>()) {
+      return true;
+    }
+    if (!dst_type.generic_type) {
+      return false;
+    }
+    if (dst_type.generic_type->is<GVolumeGrid>()) {
+      const GVolumeGrid &grid = value.get<GVolumeGrid>();
+      if (!grid) {
+        return true;
+      }
+      const CPPType *grid_value_type = grid->cpp_type();
+      return grid_value_type == dst_type.base_type;
+    }
+    return false;
+  }
+#endif
+
+  else {
+    return CPPType::get<CurrentT>() == dst_type;
+  }
 }
 
-template<typename T> void SocketValueVariant::store_impl(T value)
+#define DEFINE_TYPE(TYPE) \
+  template bool SocketValueVariantTypeInfo::try_convert_fn<TYPE>(const CPPType &dst_type, \
+                                                                 SocketValueVariantAny &value); \
+  template bool SocketValueVariantTypeInfo::is_interpretable_as_fn<TYPE>( \
+      const CPPType &dst_type, const SocketValueVariantAny &value);
+
+#define X(TYPE) DEFINE_TYPE(TYPE)
+SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+/**
+ * Even though #Field<T>, #ListPtr<T> and #VolumeGrid<T> are never stored directly (they are
+ * always redirected to their generic storage type, see #to_storage_type), #SocketValueVariant's
+ * templated accessors (#get_if, #try_convert, #ensure_type) still instantiate their function
+ * bodies for these compile-time types.
+ */
+#define X(TYPE) \
+  DEFINE_TYPE(Field<TYPE>) \
+  DEFINE_TYPE(ListPtr<TYPE>)
+SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
+DEFINE_TYPE(GField)
+DEFINE_TYPE(GListPtr)
+
+#ifdef WITH_OPENVDB
+DEFINE_TYPE(volume_grid::GVolumeGrid)
+DEFINE_TYPE(VolumeGrid<float>)
+DEFINE_TYPE(VolumeGrid<int>)
+DEFINE_TYPE(VolumeGrid<float3>)
+DEFINE_TYPE(VolumeGrid<bool>)
+#endif
+
+}  // namespace detail
+
+template<typename T>
+inline T &SocketValueVariant::init_default(detail::SocketValueVariantAny &value)
 {
-  if constexpr (std::is_same_v<T, fn::GField>) {
-    const std::optional<eNodeSocketDatatype> new_socket_type =
-        geo_nodes_base_cpp_type_to_socket_type(value.cpp_type());
-    BLI_assert(new_socket_type);
-    socket_type_ = *new_socket_type;
-    kind_ = Kind::Field;
-    value_.emplace<fn::GField>(std::move(value));
+  if constexpr (requires { typename T::generic_type; }) {
+    using GenericType = typename T::generic_type;
+    using BaseType = typename T::base_type;
+    if constexpr (std::is_same_v<GenericType, GField>) {
+      const CPPType &base_cpp_type = CPPType::get<BaseType>();
+      return value.emplace<GField>(base_cpp_type).typed<BaseType>();
+    }
+    else if constexpr (std::is_same_v<GenericType, GListPtr>) {
+      return value.emplace<GListPtr>().typed<BaseType>();
+    }
+#ifdef WITH_OPENVDB
+    else if constexpr (std::is_same_v<GenericType, GVolumeGrid>) {
+      return value.emplace<GVolumeGrid>().typed<BaseType>();
+    }
+#endif
   }
-  else if constexpr (fn::is_field_v<T>) {
-    /* Always store #Field<T> as #GField. */
-    this->store_impl<fn::GField>(std::move(value));
-  }
-  else if constexpr (std::is_same_v<T, nodes::ListPtr>) {
-    kind_ = Kind::List;
-    const std::optional<eNodeSocketDatatype> new_socket_type =
-        geo_nodes_base_cpp_type_to_socket_type(value->cpp_type());
-    BLI_assert(new_socket_type);
-    socket_type_ = *new_socket_type;
-    value_.emplace<nodes::ListPtr>(std::move(value));
+  else if constexpr (std::is_same_v<T, GField>) {
+    /* Some default fallback type. */
+    return value.emplace<GField>(CPPType::get<float>());
   }
 #ifdef WITH_OPENVDB
   else if constexpr (std::is_same_v<T, GVolumeGrid>) {
-    BLI_assert(value);
-    const VolumeGridType volume_grid_type = value->grid_type();
-    const std::optional<eNodeSocketDatatype> new_socket_type = grid_type_to_socket_type(
-        volume_grid_type);
-    BLI_assert(new_socket_type);
-    socket_type_ = *new_socket_type;
-    kind_ = Kind::Grid;
-    value_.emplace<GVolumeGrid>(std::move(value));
-  }
-  else if constexpr (is_VolumeGrid_v<T>) {
-    BLI_assert(value);
-    this->store_impl<GVolumeGrid>(std::move(value));
+    return value.emplace<GVolumeGrid>();
   }
 #endif
   else {
-    const std::optional<eNodeSocketDatatype> new_socket_type = static_type_to_socket_type<T>();
-    BLI_assert(new_socket_type);
-    socket_type_ = *new_socket_type;
-    kind_ = Kind::Single;
-    value_.emplace<T>(std::move(value));
+    return value.emplace<T>();
   }
 }
 
-void SocketValueVariant::store_single(const eNodeSocketDatatype socket_type, const void *value)
+/** Explicit instantiations. */
+#define DEFINE_INIT_DEFAULT(TYPE) \
+  template TYPE &SocketValueVariant::init_default<TYPE>(detail::SocketValueVariantAny & value);
+
+#define X(TYPE) DEFINE_INIT_DEFAULT(TYPE)
+SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+#define X(TYPE) \
+  DEFINE_INIT_DEFAULT(Field<TYPE>) \
+  DEFINE_INIT_DEFAULT(ListPtr<TYPE>)
+SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
+DEFINE_INIT_DEFAULT(GField)
+DEFINE_INIT_DEFAULT(GListPtr)
+#ifdef WITH_OPENVDB
+DEFINE_INIT_DEFAULT(GVolumeGrid)
+DEFINE_INIT_DEFAULT(VolumeGrid<float>)
+DEFINE_INIT_DEFAULT(VolumeGrid<int>)
+DEFINE_INIT_DEFAULT(VolumeGrid<float3>)
+DEFINE_INIT_DEFAULT(VolumeGrid<bool>)
+#endif
+
+#undef DEFINE_INIT_DEFAULT
+
+void *SocketValueVariant::init_default(const CPPType &type, detail::SocketValueVariantAny &value)
 {
-  kind_ = Kind::Single;
-  socket_type_ = socket_type;
-  switch (socket_type) {
-    case SOCK_FLOAT: {
-      value_.emplace<float>(*static_cast<const float *>(value));
-      break;
-    }
-    case SOCK_INT: {
-      value_.emplace<int>(*static_cast<const int *>(value));
-      break;
-    }
-    case SOCK_VECTOR: {
-      value_.emplace<float3>(*static_cast<const float3 *>(value));
-      break;
-    }
-    case SOCK_BOOLEAN: {
-      value_.emplace<bool>(*static_cast<const bool *>(value));
-      break;
-    }
-    case SOCK_ROTATION: {
-      value_.emplace<math::Quaternion>(*static_cast<const math::Quaternion *>(value));
-      break;
-    }
-    case SOCK_MENU: {
-      value_.emplace<nodes::MenuValue>(*static_cast<const nodes::MenuValue *>(value));
-      break;
-    }
-    case SOCK_MATRIX: {
-      value_.emplace<float4x4>(*static_cast<const float4x4 *>(value));
-      break;
-    }
-    case SOCK_RGBA: {
-      value_.emplace<ColorGeometry4f>(*static_cast<const ColorGeometry4f *>(value));
-      break;
-    }
-    case SOCK_STRING: {
-      value_.emplace<std::string>(*static_cast<const std::string *>(value));
-      break;
-    }
-    case SOCK_BUNDLE: {
-      value_.emplace<nodes::BundlePtr>(*static_cast<const nodes::BundlePtr *>(value));
-      break;
-    }
-    case SOCK_CLOSURE: {
-      value_.emplace<nodes::ClosurePtr>(*static_cast<const nodes::ClosurePtr *>(value));
-      break;
-    }
-    case SOCK_OBJECT: {
-      value_.emplace<Object *>(*static_cast<Object *const *>(value));
-      break;
-    }
-    case SOCK_COLLECTION: {
-      value_.emplace<Collection *>(*static_cast<Collection *const *>(value));
-      break;
-    }
-    case SOCK_TEXTURE: {
-      value_.emplace<Tex *>(*static_cast<Tex *const *>(value));
-      break;
-    }
-    case SOCK_IMAGE: {
-      value_.emplace<Image *>(*static_cast<Image *const *>(value));
-      break;
-    }
-    case SOCK_MATERIAL: {
-      value_.emplace<Material *>(*static_cast<Material *const *>(value));
-      break;
-    }
-    case SOCK_GEOMETRY: {
-      value_.emplace<bke::GeometrySet>(*static_cast<const bke::GeometrySet *>(value));
-      break;
-    }
-    default: {
-      BLI_assert_unreachable();
-      break;
-    }
+#define X(TYPE) \
+  if (type.is<TYPE>()) { \
+    return &SocketValueVariant::init_default<TYPE>(value); \
   }
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+#define X(TYPE) \
+  if (type.is<Field<TYPE>>()) { \
+    return &SocketValueVariant::init_default<Field<TYPE>>(value); \
+  } \
+  if (type.is<ListPtr<TYPE>>()) { \
+    return &SocketValueVariant::init_default<ListPtr<TYPE>>(value); \
+  }
+  SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
+  if (type.is<GField>()) {
+    return &SocketValueVariant::init_default<GField>(value);
+  }
+  if (type.is<GListPtr>()) {
+    return &SocketValueVariant::init_default<GListPtr>(value);
+  }
+#ifdef WITH_OPENVDB
+  if (type.is<GVolumeGrid>()) {
+    return &SocketValueVariant::init_default<GVolumeGrid>(value);
+  }
+  if (type.is<VolumeGrid<float>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<float>>(value);
+  }
+  if (type.is<VolumeGrid<int>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<int>>(value);
+  }
+  if (type.is<VolumeGrid<float3>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<float3>>(value);
+  }
+  if (type.is<VolumeGrid<bool>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<bool>>(value);
+  }
+#endif
+  return nullptr;
 }
 
-bool SocketValueVariant::is_context_dependent_field() const
+void *SocketValueVariant::allocate(const CPPType &type, detail::SocketValueVariantAny &value)
 {
-  if (!value_.is<fn::GField>()) {
-    return false;
+#define X(TYPE) \
+  if (type.is<TYPE>()) { \
+    return value.allocate<TYPE>(); \
   }
-  const fn::GField &field = value_.get<fn::GField>();
-  if (!field) {
-    return false;
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+  if (type.is<GField>()) {
+    return value.allocate<GField>();
   }
-  return field.node().depends_on_input();
+  if (type.is<GListPtr>()) {
+    return value.allocate<GListPtr>();
+  }
+#ifdef WITH_OPENVDB
+  if (type.is<GVolumeGrid>()) {
+    return value.allocate<GVolumeGrid>();
+  }
+#endif
+  BLI_assert_unreachable();
+  return nullptr;
 }
 
-bool SocketValueVariant::is_volume_grid() const
+void *SocketValueVariant::allocate_single(const CPPType &type)
 {
-  return kind_ == Kind::Grid;
+  return SocketValueVariant::allocate(type, value_);
 }
 
 bool SocketValueVariant::is_single() const
 {
-  return kind_ == Kind::Single;
+  const CPPType *type = this->get().type();
+  if (!type) {
+    return false;
+  }
+#define X(TYPE) \
+  if (type->is<TYPE>()) { \
+    return true; \
+  }
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+  return false;
+}
+
+bool SocketValueVariant::is_field() const
+{
+  return this->get().type()->is<fn::GField>();
 }
 
 bool SocketValueVariant::is_list() const
 {
-  return kind_ == Kind::List;
+  return this->get().type()->is<nodes::GListPtr>();
+}
+bool SocketValueVariant::is_volume_grid() const
+{
+#ifdef WITH_OPENVDB
+  return this->get().type()->is<bke::GVolumeGrid>();
+#else
+  return false;
+#endif
 }
 
-void SocketValueVariant::convert_to_single()
+bool SocketValueVariant::is_context_dependent_field() const
 {
-  switch (kind_) {
-    case Kind::Single: {
-      /* Nothing to do. */
-      break;
-    }
-    case Kind::Field: {
-      /* Evaluates the field without inputs to try to get a single value. If the field depends on
-       * context, the default value is used instead. */
-      fn::GField field = std::move(value_.get<fn::GField>());
-      void *buffer = this->allocate_single(socket_type_);
-      fn::evaluate_constant_field(field, buffer);
-      break;
-    }
-    case Kind::List:
-    case Kind::Grid: {
-      /* Can't convert a grid to a single value, so just use the default value of the current
-       * socket type. */
-      const CPPType &cpp_type = *socket_type_to_geo_nodes_base_cpp_type(socket_type_);
-      this->store_single(socket_type_, cpp_type.default_value());
-      break;
-    }
-    case Kind::None: {
-      BLI_assert_unreachable();
-      break;
-    }
-  }
-}
-
-GPointer SocketValueVariant::get_single_ptr() const
-{
-  BLI_assert(kind_ == Kind::Single);
-  const CPPType *type = socket_type_to_geo_nodes_base_cpp_type(socket_type_);
-  BLI_assert(type != nullptr);
-  const void *data = value_.get();
-  return GPointer(*type, data);
-}
-
-GMutablePointer SocketValueVariant::get_single_ptr()
-{
-  const GPointer ptr = const_cast<const SocketValueVariant *>(this)->get_single_ptr();
-  return GMutablePointer(ptr.type(), const_cast<void *>(ptr.get()));
-}
-
-void *SocketValueVariant::allocate_single(const eNodeSocketDatatype socket_type)
-{
-  kind_ = Kind::Single;
-  socket_type_ = socket_type;
-  switch (socket_type) {
-    case SOCK_FLOAT:
-      return value_.allocate<float>();
-    case SOCK_INT:
-      return value_.allocate<int>();
-    case SOCK_VECTOR:
-      return value_.allocate<float3>();
-    case SOCK_BOOLEAN:
-      return value_.allocate<bool>();
-    case SOCK_ROTATION:
-      return value_.allocate<math::Quaternion>();
-    case SOCK_MATRIX:
-      return value_.allocate<float4x4>();
-    case SOCK_RGBA:
-      return value_.allocate<ColorGeometry4f>();
-    case SOCK_STRING:
-      return value_.allocate<std::string>();
-    case SOCK_MENU:
-      return value_.allocate<nodes::MenuValue>();
-    case SOCK_BUNDLE:
-      return value_.allocate<nodes::BundlePtr>();
-    case SOCK_CLOSURE:
-      return value_.allocate<nodes::ClosurePtr>();
-    case SOCK_OBJECT:
-      return value_.allocate<Object *>();
-    case SOCK_COLLECTION:
-      return value_.allocate<Collection *>();
-    case SOCK_TEXTURE:
-      return value_.allocate<Tex *>();
-    case SOCK_IMAGE:
-      return value_.allocate<Image *>();
-    case SOCK_MATERIAL:
-      return value_.allocate<Material *>();
-    case SOCK_GEOMETRY:
-      return value_.allocate<bke::GeometrySet>();
-    default: {
-      BLI_assert_unreachable();
-      return nullptr;
-    }
-  }
-}
-
-std::ostream &operator<<(std::ostream &stream, const SocketValueVariant &value_variant)
-{
-  SocketValueVariant variant_copy = value_variant;
-  variant_copy.convert_to_single();
-  if (value_variant.kind_ == SocketValueVariant::Kind::Single) {
-    const GPointer value = variant_copy.get_single_ptr();
-    const CPPType &cpp_type = *value.type();
-    if (cpp_type.is_printable()) {
-      std::stringstream ss;
-      cpp_type.print(value.get(), ss);
-      stream << ss.str();
-      return stream;
-    }
-  }
-  stream << "SocketValueVariant";
-  return stream;
-}
-
-bool SocketValueVariant::valid_for_socket(eNodeSocketDatatype socket_type) const
-{
-  if (kind_ == Kind::None) {
+  const fn::GField *field = this->get_if<fn::GField>();
+  if (!field) {
     return false;
   }
-  return socket_type_ == socket_type;
+  return field->depends_on_input();
 }
 
-#define INSTANTIATE(TYPE) \
-  template TYPE SocketValueVariant::extract(); \
-  template TYPE SocketValueVariant::get() const; \
-  template void SocketValueVariant::store_impl(TYPE);
+void SocketValueVariant::ensure_owns_direct_data()
+{
+  if (this->owns_direct_data()) {
+    return;
+  }
+  if (this->get().is_type<nodes::BundlePtr>()) {
+    if (nodes::BundlePtr &bundle_ptr = value_.get<nodes::BundlePtr>()) {
+      bundle_ptr.ensure_mutable_inplace();
+      nodes::Bundle &bundle = const_cast<nodes::Bundle &>(*bundle_ptr);
+      bundle.ensure_owns_direct_data();
+    }
+  }
+  if (this->is_list()) {
+    if (nodes::GListPtr &list_ptr = value_.get<nodes::GListPtr>()) {
+      auto &list = list_ptr.get_for_write();
+      list.ensure_owns_direct_data();
+    }
+  }
+  if (this->get().is_type<GeometrySet>()) {
+    GeometrySet &geometry = value_.get<GeometrySet>();
+    geometry.ensure_owns_direct_data();
+  }
+  BLI_assert(this->owns_direct_data());
+}
 
+bool SocketValueVariant::owns_direct_data() const
+{
+  if (this->get().is_type<nodes::BundlePtr>()) {
+    if (const nodes::BundlePtr &bundle_ptr = value_.get<nodes::BundlePtr>()) {
+      return bundle_ptr->owns_direct_data();
+    }
+  }
+  if (this->is_list()) {
+    if (const nodes::GListPtr &list_ptr = value_.get<nodes::GListPtr>()) {
+      return list_ptr->owns_direct_data();
+    }
+  }
+  if (this->get().is_type<GeometrySet>()) {
+    const GeometrySet &geometry = value_.get<GeometrySet>();
+    return geometry.owns_direct_data();
+  }
+  return true;
+}
+
+void SocketValueVariant::count_memory(MemoryCounter &memory) const
+{
+  if (!value_.has_value()) {
+    return;
+  }
+  const GPointer value = this->get();
+  const CPPType &cpp_type = *value.type();
+  memory.add(cpp_type.size);
+  if (cpp_type.is<GeometrySet>()) {
+    value.get<GeometrySet>()->count_memory(memory);
+  }
+  else if (cpp_type.is<nodes::BundlePtr>()) {
+    if (const nodes::BundlePtr &bundle_ptr = *value.get<nodes::BundlePtr>()) {
+      bundle_ptr->count_memory(memory);
+    }
+  }
+  else if (cpp_type.is<nodes::GListPtr>()) {
+    if (const nodes::GListPtr &list = *value.get<nodes::GListPtr>()) {
+      list->count_memory(memory);
+    }
+  }
 #ifdef WITH_OPENVDB
-#  define INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(TYPE) \
-    INSTANTIATE(TYPE) \
-    INSTANTIATE(fn::Field<TYPE>) \
-    INSTANTIATE(VolumeGrid<TYPE>)
-#else
-#  define INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(TYPE) \
-    INSTANTIATE(TYPE) \
-    INSTANTIATE(fn::Field<TYPE>)
+  else if (cpp_type.is<GVolumeGrid>()) {
+    if (const GVolumeGrid &grid = *value.get<GVolumeGrid>()) {
+      grid->count_memory(memory);
+    }
+  }
 #endif
-
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(int)
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(bool)
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(float)
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(blender::float3)
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(blender::ColorGeometry4f)
-INSTANTIATE_SINGLE_AND_FIELD_AND_GRID(blender::math::Quaternion)
-
-INSTANTIATE(std::string)
-INSTANTIATE(fn::GField)
-INSTANTIATE(blender::nodes::BundlePtr)
-INSTANTIATE(blender::nodes::ClosurePtr)
-INSTANTIATE(blender::nodes::ListPtr)
-INSTANTIATE(blender::bke::GeometrySet)
-
-INSTANTIATE(Object *)
-INSTANTIATE(Collection *)
-INSTANTIATE(Tex *)
-INSTANTIATE(Image *)
-INSTANTIATE(Material *)
-
-INSTANTIATE(float4x4)
-INSTANTIATE(fn::Field<float4x4>)
-
-INSTANTIATE(nodes::MenuValue)
-INSTANTIATE(fn::Field<nodes::MenuValue>)
-
-#ifdef WITH_OPENVDB
-INSTANTIATE(GVolumeGrid)
-#endif
+}
 
 }  // namespace blender::bke

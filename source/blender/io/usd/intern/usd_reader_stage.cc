@@ -19,7 +19,6 @@
 #include "usd_reader_skeleton.hh"
 #include "usd_reader_volume.hh"
 #include "usd_reader_xform.hh"
-#include "usd_utils.hh"
 
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usdGeom/camera.h>
@@ -46,27 +45,35 @@
 #include <pxr/usd/usdShade/material.h>
 
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_euler_types.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_sort.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_collection.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_modifier.hh"
+#include "BKE_object.hh"
 #include "BKE_report.hh"
 
 #include "CLG_log.h"
 
 #include "DNA_collection_types.h"
 #include "DNA_material_types.h"
+#include "DNA_object_types.h"
+
+#include "WM_types.hh"
 
 #include <fmt/core.h>
 
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
-namespace blender::io::usd {
+namespace io::usd {
 
 static void decref(USDPrimReader *reader)
 {
@@ -125,12 +132,7 @@ static void convert_to_z_up(pxr::UsdStageRefPtr stage, ImportSettings &settings)
   settings.do_convert_mat = true;
 
   /* Rotate 90 degrees about the X-axis. */
-  float rmat[3][3];
-  float axis[3] = {1.0f, 0.0f, 0.0f};
-  axis_angle_normalized_to_mat3(rmat, axis, M_PI_2);
-
-  unit_m4(settings.conversion_mat);
-  copy_m4_m3(settings.conversion_mat, rmat);
+  settings.conversion_mat = math::from_rotation<float4x4>(math::EulerXYZ(M_PI_2, 0.0f, 0.0f));
 }
 
 /**
@@ -186,7 +188,7 @@ static void determine_blender_compat(pxr::UsdStageRefPtr stage, ImportSettings &
   const std::string doc = stage->GetRootLayer()->GetDocumentation();
 
   /* Was the incoming Stage written by Blender? If so, set some broad compatibility flags. */
-  if (doc.find("Blender v", 0) == 0) {
+  if (doc.starts_with("Blender v")) {
     /* Set flag if the Blender Stage was from before version 4.4. */
     settings.blender_stage_version_prior_44 = doc < "Blender v4.4";
   }
@@ -224,6 +226,11 @@ bool USDStageReader::is_primitive_prim(const pxr::UsdPrim &prim) const
           prim.IsA<pxr::UsdGeomCylinder>() || prim.IsA<pxr::UsdGeomCylinder_1>() ||
           prim.IsA<pxr::UsdGeomCone>() || prim.IsA<pxr::UsdGeomCube>() ||
           prim.IsA<pxr::UsdGeomSphere>() || prim.IsA<pxr::UsdGeomPlane>());
+}
+
+ReportList *USDStageReader::reports() const
+{
+  return params_.worker_status ? params_.worker_status->reports : nullptr;
 }
 
 USDPrimReader *USDStageReader::create_reader_if_allowed(const pxr::UsdPrim &prim)
@@ -602,8 +609,31 @@ void USDStageReader::process_armature_modifiers() const
                   "%s: Couldn't find armature object corresponding to USD skeleton %s",
                   __func__,
                   skel_path.GetAsString().c_str());
+      continue;
     }
     amd->object = object;
+
+    /* Per the UsdSkel spec, a skinned mesh's own and ancestor xformOps below the SkelRoot do not
+     * position the skinned result: the geometry is placed by the bound Skeleton's world transform,
+     * with `primvars:skel:geomBindTransform` aligning it (skinned mesh world =
+     * skeleton world * geomBindTransform). Blender's armature deform reproduces this when the mesh
+     * object is a child of the armature with its local transform equal to the geomBindTransform.
+     * USDMeshReader::get_local_usd_xform already set the mesh local transform to the
+     * geomBindTransform (or the identity when no usable geomBindTransform is authored), so
+     * re-parent the mesh to the armature (with an identity parent-inverse) here. Otherwise the
+     * mesh keeps the transform of its USD-hierarchy parent and ends up mis-scaled/rotated whenever
+     * that differs from the skeleton's transform. */
+    Object *mesh_object = reader->object();
+
+    /* Guard against a parent cycle in the unusual case where the bound Skeleton prim is a USD
+     * descendant of the skinned mesh, in which case the armature is already parented to the mesh.
+     */
+    if (mesh_object == object || BKE_object_parent_loop_check(object, mesh_object)) {
+      continue;
+    }
+
+    mesh_object->parent = object;
+    unit_m4(mesh_object->parentinv);
   }
 }
 
@@ -625,7 +655,7 @@ void USDStageReader::import_all_materials(Main *bmain)
       continue;
     }
 
-    if (blender::io::usd::find_existing_material(
+    if (io::usd::find_existing_material(
             prim.GetPath(), params_, settings_.mat_name_to_mat, settings_.usd_path_to_mat))
     {
       /* The material already exists. */
@@ -642,7 +672,7 @@ void USDStageReader::import_all_materials(Main *bmain)
 
     settings_.mat_name_to_mat.add_new(new_mtl->id.name + 2, new_mtl);
 
-    if (params_.mtl_name_collision_mode == USD_MTL_NAME_COLLISION_MAKE_UNIQUE) {
+    if (params_.mtl_name_collision_mode == MtlNameCollisionMode::MakeUnique) {
       /* Record the Blender material we created for the USD material with the given path.
        * This is to prevent importing the material again when assigning materials to objects
        * elsewhere in the code. */
@@ -696,7 +726,7 @@ void USDStageReader::call_material_import_hooks(Main *bmain) const
       continue;
     }
 
-    bool success = blender::io::usd::call_material_import_hooks(
+    bool success = io::usd::call_material_import_hooks(
         stage_, item.value, usd_mtl, params_, reports());
 
     if (!success) {
@@ -741,9 +771,17 @@ void USDStageReader::clear_readers()
 
 void USDStageReader::sort_readers()
 {
-  blender::parallel_sort(
+  parallel_sort(
       readers_.begin(), readers_.end(), [](const USDPrimReader *a, const USDPrimReader *b) {
-        return BLI_strcasecmp(a->name().c_str(), b->name().c_str()) < 0;
+        int result = BLI_strcasecmp(a->name().c_str(), b->name().c_str());
+
+        /* The sorting should be deterministic and consistent regardless of how the list of readers
+         * was created. Use the original, unique, USD prim path to break ties. */
+        if (result == 0) {
+          return a->prim_path() < b->prim_path();
+        }
+
+        return result < 0;
       });
 }
 
@@ -957,4 +995,5 @@ UsdPathSet USDStageReader::collect_point_instancer_proto_paths() const
   return result;
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

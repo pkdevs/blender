@@ -6,8 +6,8 @@
  * \ingroup bke
  */
 
-#include "BLI_bitmap.h"
-#include "BLI_task.h"
+#include "BLI_bitmap.hh"
+#include "BLI_task_c.hh"
 
 #include "BKE_customdata.hh"
 #include "BKE_subdiv.hh"
@@ -120,7 +120,7 @@ static void *subdiv_foreach_tls_alloc(ForeachTaskContext *ctx)
   const ForeachContext *foreach_context = ctx->foreach_context;
   void *tls = nullptr;
   if (foreach_context->user_data_tls_size != 0) {
-    tls = MEM_mallocN(foreach_context->user_data_tls_size, "tls");
+    tls = MEM_new_uninitialized(foreach_context->user_data_tls_size, "tls");
     memcpy(tls, foreach_context->user_data_tls, foreach_context->user_data_tls_size);
   }
   return tls;
@@ -134,7 +134,7 @@ static void subdiv_foreach_tls_free(ForeachTaskContext *ctx, void *tls)
   if (ctx->foreach_context != nullptr) {
     ctx->foreach_context->user_data_tls_free(tls);
   }
-  MEM_freeN(tls);
+  MEM_delete_void(tls);
 }
 
 /** \} */
@@ -261,8 +261,8 @@ static void subdiv_foreach_ctx_init(Subdiv *subdiv, ForeachTaskContext *ctx)
 
 static void subdiv_foreach_ctx_free(ForeachTaskContext *ctx)
 {
-  MEM_freeN(ctx->coarse_vertices_used_map);
-  MEM_freeN(ctx->coarse_edges_used_map);
+  MEM_delete(ctx->coarse_vertices_used_map);
+  MEM_delete(ctx->coarse_edges_used_map);
 }
 
 /** \} */
@@ -1760,12 +1760,14 @@ bool foreach_subdiv_geometry(Subdiv *subdiv,
   ctx.foreach_context = context;
   subdiv_foreach_ctx_init(subdiv, &ctx);
   if (context->topology_info != nullptr) {
+    /* Skip the last sentinel element so that the callback "sees" offsets of actual faces. */
+    const Span<int> subdiv_face_offset_no_sentinel = ctx.subdiv_face_offset.as_span().drop_back(1);
     if (!context->topology_info(context,
                                 ctx.num_subdiv_vertices,
                                 ctx.num_subdiv_edges,
                                 ctx.num_subdiv_loops,
                                 ctx.num_subdiv_faces,
-                                ctx.subdiv_face_offset.data()))
+                                subdiv_face_offset_no_sentinel))
     {
       subdiv_foreach_ctx_free(&ctx);
       return false;

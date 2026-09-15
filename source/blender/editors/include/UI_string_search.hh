@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editorui
+ */
+
 #pragma once
 
 #include "BLI_string_search.hh"
@@ -23,7 +27,7 @@ void write_recent_searches_file();
 void read_recent_searches_file();
 
 /**
- * Wrapper for the lower level #StringSearch in blenlib that takes recent searches into account
+ * Wrapper for the lower level #StringSearch in `blenlib` that takes recent searches into account
  * automatically.
  */
 template<typename T> class StringSearch : public blender::string_search::StringSearch<T> {

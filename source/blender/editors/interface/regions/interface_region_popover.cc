@@ -29,14 +29,16 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
+
+#include "ED_screen.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -67,6 +69,8 @@ struct Popover {
 
   /* Size in pixels (ui scale applied). */
   int ui_size_x;
+  /** Assign accelerator keys to buttons (#BLOCK_NUMSELECT). */
+  bool use_numselect;
 
 #ifdef USE_UI_POPOVER_ONCE
   bool is_once;
@@ -77,10 +81,10 @@ struct Popover {
  * \param region: Optional, the region the block will be placed in. Must be set if the popover is
  *                supposed to support refreshing.
  */
-static void ui_popover_create_block(bContext *C,
-                                    ARegion *region,
-                                    Popover *pup,
-                                    wm::OpCallContext opcontext)
+static void popover_create_block(bContext *C,
+                                 ARegion *region,
+                                 Popover *pup,
+                                 wm::OpCallContext opcontext)
 {
   BLI_assert(pup->ui_size_x != 0);
 
@@ -113,7 +117,7 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
 
   /* Create UI block and layout now if it wasn't done between begin/end. */
   if (!pup->layout) {
-    ui_popover_create_block(C, handle->region, pup, wm::OpCallContext::InvokeRegionWin);
+    popover_create_block(C, handle->region, pup, wm::OpCallContext::InvokeRegionWin);
 
     if (pup->popover_func) {
       pup->block->handle = handle;
@@ -127,6 +131,10 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
   /* Setup and resolve UI layout for block. */
   Block *block = pup->block;
 
+  if (pup->use_numselect) {
+    block_flag_enable(block, BLOCK_NUMSELECT);
+  }
+
   /* in some cases we create the block before the region,
    * so we set it delayed here if necessary */
   if (BLI_findindex(&handle->region->runtime->uiblocks, block) == -1) {
@@ -134,7 +142,14 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
   }
 
   block_layout_resolve(block);
-  block_direction_set(block, UI_DIR_DOWN | UI_DIR_CENTER_X);
+  const ButtonMenu *popover_button = pup->but && pup->but->type == ButtonType::Popover ?
+                                         static_cast<ButtonMenu *>(pup->but) :
+                                         nullptr;
+  const int direction = (popover_button && (popover_button->popup_attach_direction ==
+                                            PopupAttachDirection::Horizontal)) ?
+                            UI_DIR_LEFT :
+                            UI_DIR_DOWN | UI_DIR_CENTER_X;
+  block_direction_set(block, direction);
 
   const int block_margin = U.widget_unit / 2;
 
@@ -166,7 +181,7 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
     if (!slideout) {
       ARegion *region = CTX_wm_region(C);
 
-      if (region && region->panels.first) {
+      if (region && region->panels.first() && (direction & UI_DIR_DOWN)) {
         /* For regions with panels, prefer to open to top so we can
          * see the values of the buttons below changing. */
         block_direction_set(block, UI_DIR_UP | UI_DIR_CENTER_X);
@@ -208,14 +223,14 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
     block->minbounds = UI_MENU_WIDTH_MIN;
 
     if (!handle->refresh) {
-      Button *but = nullptr;
-      Button *but_first = nullptr;
-      for (const std::unique_ptr<Button> &but_iter : block->buttons) {
-        if ((but_first == nullptr) && button_is_editable(but_iter.get())) {
-          but_first = but_iter.get();
+      const Button *but = nullptr;
+      const Button *but_first = nullptr;
+      for (const Button &but_iter : block->buttons()) {
+        if ((but_first == nullptr) && button_is_editable(&but_iter)) {
+          but_first = &but_iter;
         }
-        if (but_iter->flag & (UI_SELECT | UI_SELECT_DRAW)) {
-          but = but_iter.get();
+        if (but_iter.flag & (UI_SELECT | UI_SELECT_DRAW)) {
+          but = &but_iter;
           break;
         }
       }
@@ -245,7 +260,7 @@ static void block_free_func_POPOVER(void *arg_pup)
   Popover *pup = static_cast<Popover *>(arg_pup);
   if (pup->keymap != nullptr) {
     wmWindow *window = pup->window;
-    WM_event_remove_keymap_handler(&window->modalhandlers, pup->keymap);
+    WM_event_remove_keymap_handler(&window->runtime->modalhandlers, pup->keymap);
   }
   MEM_delete(pup);
 }
@@ -277,7 +292,7 @@ PopupBlockHandle *popover_panel_create(bContext *C,
 #ifdef USE_UI_POPOVER_ONCE
   {
     /* Ideally this would be passed in. */
-    const wmEvent *event = window->eventstate;
+    const wmEvent *event = window->runtime->eventstate;
     pup->is_once = (event->type == LEFTMOUSE) && (event->val == KM_PRESS);
   }
 #endif
@@ -289,11 +304,11 @@ PopupBlockHandle *popover_panel_create(bContext *C,
   /* Add handlers. If attached to a button, the button will already
    * add a modal handler and pass on events. */
   if (!but) {
-    popup_handlers_add(C, &window->modalhandlers, handle, 0);
+    popup_handlers_add(C, &window->runtime->modalhandlers, handle, 0);
     WM_event_add_mousemove(window);
     handle->popup = true;
   }
-
+  handle->srna_owner = panel_type->rna_ext.srna;
   return handle;
 }
 
@@ -303,10 +318,8 @@ PopupBlockHandle *popover_panel_create(bContext *C,
 /** \name Standard Popover Panels
  * \{ */
 
-wmOperatorStatus popover_panel_invoke(bContext *C,
-                                      const char *idname,
-                                      bool keep_open,
-                                      ReportList *reports)
+wmOperatorStatus popover_panel_invoke(
+    bContext *C, const char *idname, bool keep_open, bool use_numselect, ReportList *reports)
 {
   Layout *layout;
   PanelType *pt = WM_paneltype_find(idname, true);
@@ -324,13 +337,23 @@ wmOperatorStatus popover_panel_invoke(bContext *C,
   if (keep_open) {
     PopupBlockHandle *handle = popover_panel_create(C, nullptr, nullptr, item_paneltype_func, pt);
     Popover *pup = static_cast<Popover *>(handle->popup_create_vars.arg);
+    pup->use_numselect = use_numselect;
     block = pup->block;
+
+    /* Refresh so the block is recreated with the region visible
+     * (this also applies `use_numselect`).
+     *
+     * Without this, `block_begin` sets #BLOCK_LOOP before the region is shown,
+     * causing `template_popup_confirm` to skip attaching its close callback
+     * (since it assumes #BLOCK_LOOP menus close via `menuretval`).
+     * With #BLOCK_KEEP_OPEN set this doesn't happen, see #151778. */
+    ED_region_tag_refresh_ui(handle->region);
   }
   else {
-    Popover *pup = popover_begin(C, U.widget_unit * pt->ui_units_x, false);
+    Popover *pup = popover_begin(C, U.widget_unit * pt->ui_units_x, false, use_numselect);
     layout = popover_layout(pup);
-    blender::ui::UI_paneltype_draw(C, pt, layout);
-    blender::ui::popover_end(C, pup, nullptr);
+    ui::UI_paneltype_draw(C, pt, layout);
+    ui::popover_end(C, pup, nullptr);
     block = pup->block;
   }
 
@@ -347,13 +370,14 @@ wmOperatorStatus popover_panel_invoke(bContext *C,
 /** \name Popup Menu API with begin & end
  * \{ */
 
-Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button)
+Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button, bool use_numselect)
 {
   Popover *pup = MEM_new<Popover>(__func__);
   if (ui_menu_width == 0) {
     ui_menu_width = U.widget_unit * UI_POPOVER_WIDTH_UNITS;
   }
   pup->ui_size_x = ui_menu_width;
+  pup->use_numselect = use_numselect;
 
   ARegion *butregion = nullptr;
   Button *but = nullptr;
@@ -370,7 +394,7 @@ Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button)
   pup->butregion = butregion;
 
   /* Operator context default same as menus, change if needed. */
-  ui_popover_create_block(C, nullptr, pup, wm::OpCallContext::ExecRegionWin);
+  popover_create_block(C, nullptr, pup, wm::OpCallContext::ExecRegionWin);
 
   /* Create in advance so we can let buttons point to #PopupBlockHandle::retvalue
    * (and other return values) already. */
@@ -393,7 +417,8 @@ void popover_end(bContext *C, Popover *pup, wmKeyMap *keymap)
     /* Add so we get keymaps shown in the buttons. */
     block_flag_enable(pup->block, BLOCK_SHOW_SHORTCUT_ALWAYS);
     pup->keymap = keymap;
-    pup->keymap_handler = WM_event_add_keymap_handler_priority(&window->modalhandlers, keymap, 0);
+    pup->keymap_handler = WM_event_add_keymap_handler_priority(
+        &window->runtime->modalhandlers, keymap, 0);
     WM_event_set_keymap_handler_post_callback(pup->keymap_handler, popover_keymap_fn, pup);
   }
 
@@ -409,14 +434,14 @@ void popover_end(bContext *C, Popover *pup, wmKeyMap *keymap)
                                                 false);
 
   /* Add handlers. */
-  popup_handlers_add(C, &window->modalhandlers, handle, 0);
+  popup_handlers_add(C, &window->runtime->modalhandlers, handle, 0);
   WM_event_add_mousemove(window);
   handle->popup = true;
 
   /* Re-add so it gets priority. */
   if (keymap) {
-    BLI_remlink(&window->modalhandlers, pup->keymap_handler);
-    BLI_addhead(&window->modalhandlers, pup->keymap_handler);
+    BLI_remlink(&window->runtime->modalhandlers, pup->keymap_handler);
+    BLI_addhead(&window->runtime->modalhandlers, pup->keymap_handler);
   }
 
   pup->window = window;

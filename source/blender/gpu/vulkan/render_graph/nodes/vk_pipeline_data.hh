@@ -8,11 +8,12 @@
 
 #pragma once
 
+#include "GPU_framebuffer.hh"
 #include "vk_vertex_input_description.hh"
 
 namespace blender::gpu::render_graph {
 class VKCommandBufferInterface;
-struct VKRenderGraphNodeLinks;
+struct VKRenderGraphLinks;
 class VKResourceStateTracker;
 
 /**
@@ -45,8 +46,8 @@ struct VKPipelineData {
   VkPipelineLayout vk_pipeline_layout;
   VkDescriptorSet vk_descriptor_set;
 
-  uint32_t push_constants_size;
-  const void *push_constants_data;
+  /** Range where the push constants are stored in the render graph storage */
+  IndexRange push_constants_range;
 };
 
 /**
@@ -54,8 +55,8 @@ struct VKPipelineData {
  * draw nodes.
  */
 struct VKViewportData {
-  Vector<VkViewport> viewports;
-  Vector<VkRect2D> scissors;
+  Vector<VkViewport, GPU_MAX_VIEWPORTS> viewports;
+  Vector<VkRect2D, GPU_MAX_VIEWPORTS> scissors;
 
   bool operator==(const VKViewportData &other) const
   {
@@ -80,6 +81,30 @@ struct VKViewportData {
   {
     return !(*this == other);
   }
+
+  void reset()
+  {
+    viewports.clear();
+    scissors.clear();
+  }
+
+  /**
+   * Assign operator to reuse memory.
+   *
+   * Has been added to improve the performance of larger scenes where the viewport is often
+   * switched. Without a custom assign operator calling `assign_if_different` inside
+   * `vk_pipeline_dynamic_graphics_build_commands` would construct a temp VKViewportData with
+   * unneeded frees/allocs and reallocs.
+   */
+  VKViewportData &operator=(const VKViewportData &other)
+  {
+    viewports.clear();
+    scissors.clear();
+    viewports.extend(other.viewports);
+    scissors.extend(other.scissors);
+
+    return *this;
+  }
 };
 
 struct VKPipelineDataGraphics {
@@ -89,21 +114,33 @@ struct VKPipelineDataGraphics {
   std::optional<float> line_width;
   std::optional<StencilState> stencil_state;
   std::optional<VkFrontFace> front_face;
+
+  void reset()
+  {
+    pipeline_data = {};
+    viewport.reset();
+    vertex_input_description.reset();
+    line_width.reset();
+    stencil_state.reset();
+    front_face.reset();
+  }
 };
 
 /** Resources bound for a compute/graphics pipeline. */
 struct VKBoundPipeline {
   VkPipeline vk_pipeline;
   VkDescriptorSet vk_descriptor_set;
+  VkPipelineLayout vk_pipeline_layout;
 };
 
 struct VKIndexBufferBinding {
-  VkBuffer buffer;
+  VKResourceWithHandle<VkBuffer> buffer;
   VkIndexType index_type;
 
   bool operator==(const VKIndexBufferBinding &other) const
   {
-    return buffer == other.buffer && index_type == other.index_type;
+    return buffer.resource_handle == other.buffer.resource_handle &&
+           index_type == other.index_type;
   }
   bool operator!=(const VKIndexBufferBinding &other) const
   {
@@ -113,6 +150,7 @@ struct VKIndexBufferBinding {
 
 struct VKVertexBufferBindings {
   uint32_t buffer_count;
+  ResourceHandle resource_handles[16];
   VkBuffer buffer[16];
   VkDeviceSize offset[16];
 
@@ -151,20 +189,6 @@ struct VKBoundPipelines {
 };
 
 /**
- * Copy src pipeline data into dst. The push_constant_data will be duplicated and needs to be freed
- * using `vk_pipeline_data_free`.
- *
- * Memory duplication isn't used as push_constant_data in the src doesn't need to be allocated via
- * guardedalloc.
- */
-void vk_pipeline_data_copy(VKPipelineData &dst, const VKPipelineData &src);
-static inline void vk_pipeline_data_copy(VKPipelineDataGraphics &dst,
-                                         const VKPipelineDataGraphics &src)
-{
-  vk_pipeline_data_copy(dst.pipeline_data, src.pipeline_data);
-}
-
-/**
  * Record commands that update the dynamic state.
  *
  * - viewports
@@ -186,33 +210,27 @@ void vk_pipeline_dynamic_graphics_build_commands(VKCommandBufferInterface &comma
  * r_bound_pipelines are checked to identify if they are the last bound. Descriptor set and
  * pipeline are bound at the given pipeline bind point.
  *
- * Any available push constants in the pipeline data always update the shader stages provided by
+ * storage_push_constants contains all the push constants of the render graph. The
+ * pipeline_data.push_constants_range contains the valid range that needs to be bound. Any
+ * available push constants in the pipeline data always update the shader stages provided by
  * `vk_shader_stage_flags`.
  */
 void vk_pipeline_data_build_commands(VKCommandBufferInterface &command_buffer,
                                      const VKPipelineData &pipeline_data,
+                                     Span<uint8_t> storage_push_constants,
                                      VKBoundPipeline &r_bound_pipeline,
                                      VkPipelineBindPoint vk_pipeline_bind_point,
                                      VkShaderStageFlags vk_shader_stage_flags);
 
-/**
- * Free localized data created by `vk_pipeline_data_copy`.
- */
-void vk_pipeline_data_free(VKPipelineData &data);
-static inline void vk_pipeline_data_free(VKPipelineDataGraphics &data)
-{
-  vk_pipeline_data_free(data.pipeline_data);
-}
-
 void vk_index_buffer_binding_build_links(VKResourceStateTracker &resources,
-                                         VKRenderGraphNodeLinks &node_links,
+                                         VKRenderGraphLinks &links,
                                          const VKIndexBufferBinding &index_buffer_binding);
 void vk_index_buffer_binding_build_commands(VKCommandBufferInterface &command_buffer,
                                             const VKIndexBufferBinding &index_buffer_binding,
                                             VKIndexBufferBinding &r_bound_index_buffer);
 void vk_vertex_buffer_bindings_build_links(VKResourceStateTracker &resources,
-                                           VKRenderGraphNodeLinks &node_links,
-                                           const VKVertexBufferBindings &vertex_buffer_bindings);
+                                           VKRenderGraphLinks &links,
+                                           const VKVertexBufferBindings &vertex_buffers);
 void vk_vertex_buffer_bindings_build_commands(VKCommandBufferInterface &command_buffer,
                                               const VKVertexBufferBindings &vertex_buffer_bindings,
                                               VKVertexBufferBindings &r_bound_vertex_buffers);

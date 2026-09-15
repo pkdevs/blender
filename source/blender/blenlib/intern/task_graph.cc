@@ -10,7 +10,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_task.h"
+#include "BLI_task_c.hh"
 
 #include <memory>
 #include <vector>
@@ -18,6 +18,8 @@
 #ifdef WITH_TBB
 #  include <tbb/flow_graph.h>
 #endif
+
+namespace blender {
 
 /* Task Graph */
 struct TaskGraph {
@@ -145,3 +147,5 @@ void BLI_task_graph_edge_create(TaskNode *from_node, TaskNode *to_node)
 
   from_node->successors.push_back(to_node);
 }
+
+}  // namespace blender

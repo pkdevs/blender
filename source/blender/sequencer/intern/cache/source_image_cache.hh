@@ -19,19 +19,24 @@
 
 #pragma once
 
-struct ImBuf;
+#include "render.hh"
+
+namespace blender {
+
 struct Strip;
 struct Scene;
 struct RenderData;
 
-namespace blender::seq {
+namespace seq {
 
 void source_image_cache_put(const RenderData *context,
                             const Strip *strip,
                             float timeline_frame,
-                            ImBuf *image);
+                            const SeqResult &image);
 
-ImBuf *source_image_cache_get(const RenderData *context, const Strip *strip, float timeline_frame);
+SeqResult source_image_cache_get(const RenderData *context,
+                                 const Strip *strip,
+                                 float timeline_frame);
 
 void source_image_cache_invalidate_strip(Scene *scene, const Strip *strip);
 
@@ -42,4 +47,5 @@ bool source_image_cache_evict(Scene *scene);
 
 size_t source_image_cache_get_image_count(const Scene *scene);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

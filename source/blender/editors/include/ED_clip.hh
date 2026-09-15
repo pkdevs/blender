@@ -17,6 +17,8 @@ struct SpaceClip;
 struct bContext;
 struct bScreen;
 
+namespace blender {
+
 /* `clip_editor.cc` */
 
 /**
@@ -34,6 +36,7 @@ bool ED_space_clip_poll(bContext *C);
  * It is not required to have movie clip opened for editing.
  */
 bool ED_space_clip_view_clip_poll(bContext *C);
+bool ED_space_clip_view_clip_with_region_poll(bContext *C);
 
 /**
  * Returns true when the following conditions are met:
@@ -174,3 +177,5 @@ void ED_clip_view_lock_state_restore_no_jump(const bContext *C, const ClipViewLo
 
 /* `clip_ops.cc` */
 void ED_operatormacros_clip();
+
+}  // namespace blender

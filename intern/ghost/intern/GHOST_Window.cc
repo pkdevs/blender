@@ -14,6 +14,8 @@
 
 #include "GHOST_ContextNone.hh"
 
+#include "GHOST_utildefines.hh"
+
 #include <cassert>
 
 GHOST_Window::GHOST_Window(uint32_t width,
@@ -126,6 +128,11 @@ GHOST_Context *GHOST_Window::getContext()
   return context_;
 }
 
+bool GHOST_Window::hasAlpha() const
+{
+  return context_ ? context_->hasAlpha() : false;
+}
+
 uint GHOST_Window::getDefaultFramebuffer()
 {
   return (context_) ? context_->getDefaultFramebuffer() : 0;
@@ -197,7 +204,7 @@ GHOST_TSuccess GHOST_Window::setCursorGrab(GHOST_TGrabCursorMode mode,
 
 GHOST_TSuccess GHOST_Window::getCursorGrabBounds(GHOST_Rect &bounds) const
 {
-  if (!(cursor_grab_ == GHOST_kGrabWrap || cursor_grab_ == GHOST_kGrabHide)) {
+  if (!ELEM(cursor_grab_, GHOST_kGrabWrap, GHOST_kGrabHide)) {
     return GHOST_kFailure;
   }
   bounds = cursor_grab_bounds_;

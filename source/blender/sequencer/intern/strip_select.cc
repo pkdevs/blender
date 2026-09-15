@@ -11,7 +11,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
@@ -52,17 +52,30 @@ bool select_active_get_pair(Scene *scene, Strip **r_strip_act, Strip **r_strip_o
 
   *r_strip_other = nullptr;
 
-  LISTBASE_FOREACH (Strip *, strip, ed->current_strips()) {
-    if (strip->flag & SEQ_SELECT && (strip != (*r_strip_act))) {
+  for (Strip &strip : *ed->current_strips()) {
+    if (strip.flag & SEQ_SELECT && (&strip != (*r_strip_act))) {
       if (*r_strip_other) {
         return false;
       }
 
-      *r_strip_other = strip;
+      *r_strip_other = &strip;
     }
   }
 
   return (*r_strip_other != nullptr);
+}
+
+bool select_has_any(const Scene *scene)
+{
+  Editing *ed = editing_get(scene);
+  if (ed != nullptr) {
+    for (Strip &strip : *ed->current_strips()) {
+      if (strip.flag & SEQ_SELECT) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace blender::seq

@@ -8,20 +8,19 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_hash.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_colorband_types.h"
-#include "DNA_defaults.h"
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -56,8 +55,8 @@
 #  include "BLI_kdtree.hh"
 #  include "BLI_math_vector.hh"
 #  include "BLI_mutex.hh"
-#  include "BLI_threads.h"
-#  include "BLI_voxel.h"
+#  include "BLI_threads.hh"
+#  include "BLI_voxel.hh"
 
 #  include "BKE_bvhutils.hh"
 #  include "BKE_collision.h"
@@ -81,6 +80,8 @@
 
 #endif /* WITH_FLUID */
 
+namespace blender {
+
 /** Time step default value for nice appearance. */
 #define DT_DEFAULT 0.1f
 
@@ -98,7 +99,7 @@ static CLG_LogRef LOG = {"physics.fluid"};
 /** \name Fluid API
  * \{ */
 
-static blender::Mutex object_update_lock;
+static Mutex object_update_lock;
 
 #  define ADD_IF_LOWER_POS(a, b) min_ff((a) + (b), max_ff((a), (b)))
 #  define ADD_IF_LOWER_NEG(a, b) max_ff((a) + (b), min_ff((a), (b)))
@@ -109,7 +110,7 @@ bool BKE_fluid_reallocate_fluid(FluidDomainSettings *fds, int res[3], int free_o
   if (free_old && fds->fluid) {
     manta_free(fds->fluid);
   }
-  if (!min_iii(res[0], res[1], res[2])) {
+  if (!std::min({res[0], res[1], res[2]})) {
     fds->fluid = nullptr;
   }
   else {
@@ -326,7 +327,7 @@ void BKE_fluid_cache_free_all(FluidDomainSettings *fds, Object *ob)
 void BKE_fluid_cache_free(FluidDomainSettings *fds, Object *ob, int cache_map)
 {
   char temp_dir[FILE_MAX];
-  int flags = fds->cache_flag;
+  eFluidDomain_CacheFlag flags = fds->cache_flag;
   const char *relbase = BKE_modifier_path_relbase_from_global(ob);
 
   if (cache_map & FLUID_DOMAIN_OUTDATED_DATA) {
@@ -408,7 +409,7 @@ static void manta_set_domain_from_mesh(FluidDomainSettings *fds,
   float min[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, max[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   float size[3];
 
-  blender::MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
+  MutableSpan<float3> positions = mesh->vert_positions_for_write();
   float scale = 0.0;
   int res;
 
@@ -432,7 +433,11 @@ static void manta_set_domain_from_mesh(FluidDomainSettings *fds,
   }
   /* Apply object scale. */
   for (i = 0; i < 3; i++) {
-    size[i] = fabsf(size[i] * ob->scale[i]);
+    const float scale = ob->scale[i];
+    size[i] = fabsf(size[i] * (isfinite(scale) ? scale : 1.0f));
+    if (!isfinite(size[i])) {
+      size[i] = 1.0f;
+    }
   }
   copy_v3_v3(fds->global_size, size);
   copy_v3_v3(fds->dp0, min);
@@ -549,34 +554,35 @@ static bool fluid_modifier_init(
 }
 
 /* Forward declarations. */
-static void manta_smoke_calc_transparency(FluidDomainSettings *fds,
+static void manta_smoke_calc_transparency(const Main &bmain,
+                                          FluidDomainSettings *fds,
                                           Scene *scene,
                                           ViewLayer *view_layer);
 static float calc_voxel_transp(
     float *result, const float *input, int res[3], int *pixel, float *t_ray, float correct);
 static void update_distances(int index,
                              float *distance_map,
-                             blender::bke::BVHTreeFromMesh *tree_data,
+                             const bke::bvh::Tree &tree,
                              const float ray_start[3],
                              float surface_thickness,
                              bool use_plane_init);
 
-static int get_light(Scene *scene, ViewLayer *view_layer, float *light)
+static int get_light(const Main &bmain, Scene *scene, ViewLayer *view_layer, float *light)
 {
   int found_light = 0;
 
   /* Try to find a lamp, preferably local. */
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base_tmp, BKE_view_layer_object_bases_get(view_layer)) {
-    if (base_tmp->object->type == OB_LAMP) {
-      Light *la = static_cast<Light *>(base_tmp->object->data);
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
+  for (Base &base_tmp : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (base_tmp.object->type == OB_LAMP) {
+      Light *la = id_cast<Light *>(base_tmp.object->data);
 
       if (la->type == LA_LOCAL) {
-        copy_v3_v3(light, base_tmp->object->object_to_world().location());
+        copy_v3_v3(light, base_tmp.object->object_to_world().location());
         return 1;
       }
       if (!found_light) {
-        copy_v3_v3(light, base_tmp->object->object_to_world().location());
+        copy_v3_v3(light, base_tmp.object->object_to_world().location());
         found_light = 1;
       }
     }
@@ -692,16 +698,17 @@ static void bb_allocateData(FluidObjectBB *bb, bool use_velocity, bool use_influ
   bb->total_cells = res[0] * res[1] * res[2];
   copy_v3_v3_int(bb->res, res);
 
-  bb->numobjs = MEM_calloc_arrayN<float>(bb->total_cells, "fluid_bb_numobjs");
+  bb->numobjs = MEM_new_array_zeroed<float>(bb->total_cells, "fluid_bb_numobjs");
   if (use_influence) {
-    bb->influence = MEM_calloc_arrayN<float>(bb->total_cells, "fluid_bb_influence");
+    bb->influence = MEM_new_array_zeroed<float>(bb->total_cells, "fluid_bb_influence");
   }
   if (use_velocity) {
-    bb->velocity = MEM_calloc_arrayN<float>(3 * size_t(bb->total_cells), "fluid_bb_velocity");
+    bb->velocity = MEM_new_array_zeroed<float>(3 * size_t(bb->total_cells), "fluid_bb_velocity");
   }
 
-  bb->distances = MEM_malloc_arrayN<float>(size_t(bb->total_cells), "fluid_bb_distances");
-  copy_vn_fl(bb->distances, bb->total_cells, FLT_MAX);
+  bb->distances = MEM_new_array_uninitialized<float>(size_t(bb->total_cells),
+                                                     "fluid_bb_distances");
+  std::fill_n(bb->distances, bb->total_cells, FLT_MAX);
 
   bb->valid = true;
 }
@@ -709,16 +716,16 @@ static void bb_allocateData(FluidObjectBB *bb, bool use_velocity, bool use_influ
 static void bb_freeData(FluidObjectBB *bb)
 {
   if (bb->numobjs) {
-    MEM_freeN(bb->numobjs);
+    MEM_delete(bb->numobjs);
   }
   if (bb->influence) {
-    MEM_freeN(bb->influence);
+    MEM_delete(bb->influence);
   }
   if (bb->velocity) {
-    MEM_freeN(bb->velocity);
+    MEM_delete(bb->velocity);
   }
   if (bb->distances) {
-    MEM_freeN(bb->distances);
+    MEM_delete(bb->distances);
   }
 }
 
@@ -850,40 +857,34 @@ BLI_INLINE void apply_effector_fields(FluidEffectorSettings * /*fes*/,
 }
 
 static void update_velocities(FluidEffectorSettings *fes,
-                              const blender::Span<blender::float3> vert_positions,
+                              const Span<float3> vert_positions,
                               const int *corner_verts,
-                              const blender::int3 *corner_tris,
+                              const int3 *corner_tris,
                               float *velocity_map,
                               int index,
-                              blender::bke::BVHTreeFromMesh *tree_data,
+                              const bke::bvh::Tree &tree,
                               const float ray_start[3],
                               const float *vert_vel,
                               bool has_velocity)
 {
-  BVHTreeNearest nearest = {0};
-  nearest.index = -1;
-
   /* Distance between two opposing vertices in a unit cube.
    * I.e. the unit cube diagonal or `sqrt(3)`.
    * This value is our nearest neighbor search distance. */
   const float surface_distance = 1.732;
-  /* find_nearest uses squared distance */
-  nearest.dist_sq = surface_distance * surface_distance;
 
   /* Find the nearest point on the mesh. */
-  if (has_velocity &&
-      BLI_bvhtree_find_nearest(
-          tree_data->tree, ray_start, &nearest, tree_data->nearest_callback, tree_data) != -1)
-  {
+  const std::optional<bke::bvh::ClosestPointResult> nearest = tree.closest_point(ray_start,
+                                                                                 surface_distance);
+  if (has_velocity && nearest) {
     float weights[3];
-    int v1, v2, v3, tri_i = nearest.index;
+    int v1, v2, v3, tri_i = nearest->index;
 
     /* Calculate barycentric weights for nearest point. */
     v1 = corner_verts[corner_tris[tri_i][0]];
     v2 = corner_verts[corner_tris[tri_i][1]];
     v3 = corner_verts[corner_tris[tri_i][2]];
     interp_weights_tri_v3(
-        weights, vert_positions[v1], vert_positions[v2], vert_positions[v3], nearest.co);
+        weights, vert_positions[v1], vert_positions[v2], vert_positions[v3], nearest->position);
 
     /* Apply object velocity. */
     float hit_vel[3];
@@ -894,10 +895,10 @@ static void update_velocities(FluidEffectorSettings *fes,
       mul_v3_fl(hit_vel, fes->vel_multi);
 
       /* Absolute representation of new object velocity. */
-      blender::float3 abs_hit_vel = blender::math::abs(blender::float3(hit_vel));
+      float3 abs_hit_vel = math::abs(float3(hit_vel));
 
       /* Absolute representation of current object velocity. */
-      blender::float3 abs_vel = blender::math::abs(blender::float3(&velocity_map[index * 3]));
+      float3 abs_vel = math::abs(float3(&velocity_map[index * 3]));
 
       switch (fes->guide_mode) {
         case FLUID_EFFECTOR_GUIDE_AVERAGED:
@@ -946,11 +947,11 @@ static void update_velocities(FluidEffectorSettings *fes,
 struct ObstaclesFromDMData {
   FluidEffectorSettings *fes;
 
-  blender::Span<blender::float3> vert_positions;
-  blender::Span<int> corner_verts;
-  blender::Span<blender::int3> corner_tris;
+  Span<float3> vert_positions;
+  Span<int> corner_verts;
+  Span<int3> corner_tris;
 
-  blender::bke::BVHTreeFromMesh *tree;
+  const bke::bvh::Tree *tree;
   FluidObjectBB *bb;
 
   bool has_velocity;
@@ -974,7 +975,7 @@ static void obstacles_from_mesh_task_cb(void *__restrict userdata,
       /* Calculate levelset values from meshes. Result in bb->distances. */
       update_distances(index,
                        bb->distances,
-                       data->tree,
+                       *data->tree,
                        ray_start,
                        data->fes->surface_distance,
                        data->fes->flags & FLUID_EFFECTOR_USE_PLANE_INIT);
@@ -986,7 +987,7 @@ static void obstacles_from_mesh_task_cb(void *__restrict userdata,
                         data->corner_tris.data(),
                         bb->velocity,
                         index,
-                        data->tree,
+                        *data->tree,
                         ray_start,
                         data->vert_vel,
                         data->has_velocity);
@@ -1012,24 +1013,24 @@ static void obstacles_from_mesh(Object *coll_ob,
     bool has_velocity = false;
 
     Mesh *mesh = BKE_mesh_copy_for_eval(*fes->mesh);
-    blender::MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
+    MutableSpan<float3> positions = mesh->vert_positions_for_write();
 
     int min[3], max[3], res[3];
 
-    const blender::Span<int> corner_verts = mesh->corner_verts();
-    const blender::Span<blender::int3> corner_tris = mesh->corner_tris();
+    const Span<int> corner_verts = mesh->corner_verts();
+    const Span<int3> corner_tris = mesh->corner_tris();
     numverts = mesh->verts_num;
 
     /* TODO(sebbas): Make initialization of vertex velocities optional? */
     {
-      vert_vel = MEM_calloc_arrayN<float>(3 * size_t(numverts), "manta_obs_velocity");
+      vert_vel = MEM_new_array_zeroed<float>(3 * size_t(numverts), "manta_obs_velocity");
 
       if (fes->numverts != numverts || !fes->verts_old) {
         if (fes->verts_old) {
-          MEM_freeN(fes->verts_old);
+          MEM_delete(fes->verts_old);
         }
 
-        fes->verts_old = MEM_calloc_arrayN<float>(3 * size_t(numverts), "manta_obs_verts_old");
+        fes->verts_old = MEM_new_array_zeroed<float>(3 * size_t(numverts), "manta_obs_verts_old");
         fes->numverts = numverts;
       }
       else {
@@ -1075,8 +1076,8 @@ static void obstacles_from_mesh(Object *coll_ob,
 
     /* Skip effector sampling loop if object has disabled effector. */
     bool use_effector = fes->flags & FLUID_EFFECTOR_USE_EFFEC;
-    blender::bke::BVHTreeFromMesh tree_data = mesh->bvh_corner_tris();
-    if (use_effector && tree_data.tree != nullptr) {
+    if (use_effector && mesh->faces_num > 0) {
+      const bke::bvh::Tree &tree_data = mesh->bvh_tris();
       ObstaclesFromDMData data{};
       data.fes = fes;
       data.vert_positions = positions;
@@ -1097,7 +1098,7 @@ static void obstacles_from_mesh(Object *coll_ob,
     }
 
     if (vert_vel) {
-      MEM_freeN(vert_vel);
+      MEM_delete(vert_vel);
     }
     BKE_id_free(nullptr, mesh);
   }
@@ -1118,11 +1119,12 @@ static void update_obstacleflags(FluidDomainSettings *fds,
                                  Object **coll_ob_array,
                                  int coll_ob_array_len)
 {
-  int active_fields = fds->active_fields;
+  eFluidDomain_ActiveFields active_fields = fds->active_fields;
   uint coll_index;
 
   /* First, remove all flags that we want to update. */
-  int prev_flags = (FLUID_DOMAIN_ACTIVE_OBSTACLE | FLUID_DOMAIN_ACTIVE_GUIDE);
+  const eFluidDomain_ActiveFields prev_flags = (FLUID_DOMAIN_ACTIVE_OBSTACLE |
+                                                FLUID_DOMAIN_ACTIVE_GUIDE);
   active_fields &= ~prev_flags;
 
   /* Monitor active fields based on flow settings */
@@ -1309,7 +1311,7 @@ static void update_obstacles(Depsgraph *depsgraph,
   ensure_obstaclefields(fds);
 
   /* Allocate effector map for each effector object. */
-  bb_maps = MEM_calloc_arrayN<FluidObjectBB>(numeffecobjs, "fluid_effector_bb_maps");
+  bb_maps = MEM_new_array_zeroed<FluidObjectBB>(numeffecobjs, "fluid_effector_bb_maps");
 
   /* Initialize effector map for each effector object. */
   compute_obstaclesemission(scene,
@@ -1461,7 +1463,7 @@ static void update_obstacles(Depsgraph *depsgraph,
 
   BKE_collision_objects_free(effecobjs);
   if (bb_maps) {
-    MEM_freeN(bb_maps);
+    MEM_delete(bb_maps);
   }
 }
 
@@ -1473,7 +1475,7 @@ static void update_obstacles(Depsgraph *depsgraph,
 
 struct EmitFromParticlesData {
   FluidFlowSettings *ffs;
-  blender::KDTree_3d *tree;
+  KDTree<float3> *tree;
 
   FluidObjectBB *bb;
   float *particle_vel;
@@ -1498,9 +1500,9 @@ static void emit_from_particles_task_cb(void *__restrict userdata,
       const float ray_start[3] = {float(x) + 0.5f, float(y) + 0.5f, float(z) + 0.5f};
 
       /* Find particle distance from the kdtree. */
-      blender::KDTreeNearest_3d nearest;
+      KDTreeNearest<float3> nearest;
       const float range = data->solid + data->smooth;
-      blender::kdtree_3d_find_nearest(data->tree, ray_start, &nearest);
+      kdtree_find_nearest<float3>(data->tree, ray_start, &nearest);
 
       if (nearest.dist < range) {
         bb->influence[index] = (nearest.dist < data->solid) ?
@@ -1539,7 +1541,7 @@ static void emit_from_particles(Object *flow_ob,
     /* radius based flow */
     const float solid = ffs->particle_size * 0.5f;
     const float smooth = 0.5f; /* add 0.5 cells of linear falloff to reduce aliasing */
-    blender::KDTree_3d *tree = nullptr;
+    KDTree<float3> *tree = nullptr;
 
     sim.depsgraph = depsgraph;
     sim.scene = scene;
@@ -1557,14 +1559,14 @@ static void emit_from_particles(Object *flow_ob,
       totchild = psys->totchild * psys->part->disp / 100;
     }
 
-    particle_pos = MEM_calloc_arrayN<float>(3 * size_t(totpart + totchild),
-                                            "manta_flow_particles_pos");
-    particle_vel = MEM_calloc_arrayN<float>(3 * size_t(totpart + totchild),
-                                            "manta_flow_particles_vel");
+    particle_pos = MEM_new_array_zeroed<float>(3 * size_t(totpart + totchild),
+                                               "manta_flow_particles_pos");
+    particle_vel = MEM_new_array_zeroed<float>(3 * size_t(totpart + totchild),
+                                               "manta_flow_particles_vel");
 
     /* setup particle radius emission if enabled */
     if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-      tree = blender::kdtree_3d_new(psys->totpart + psys->totchild);
+      tree = kdtree_new<float3>(psys->totpart + psys->totchild);
       bounds_margin = int(ceil(solid + smooth));
     }
 
@@ -1603,7 +1605,7 @@ static void emit_from_particles(Object *flow_ob,
       mul_mat3_m4_v3(fds->imat, &particle_vel[valid_particles * 3]);
 
       if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-        blender::kdtree_3d_insert(tree, valid_particles, pos);
+        kdtree_insert<float3>(tree, valid_particles, pos);
       }
 
       /* calculate emission map bounds */
@@ -1656,7 +1658,7 @@ static void emit_from_particles(Object *flow_ob,
         res[i] = bb->res[i];
       }
 
-      blender::kdtree_3d_balance(tree);
+      kdtree_balance<float3>(tree);
 
       EmitFromParticlesData data{};
       data.ffs = ffs;
@@ -1676,15 +1678,15 @@ static void emit_from_particles(Object *flow_ob,
     }
 
     if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-      blender::kdtree_3d_free(tree);
+      kdtree_free<float3>(tree);
     }
 
     /* free data */
     if (particle_pos) {
-      MEM_freeN(particle_pos);
+      MEM_delete(particle_pos);
     }
     if (particle_vel) {
-      MEM_freeN(particle_vel);
+      MEM_delete(particle_vel);
     }
 
     psys_sim_data_free(&sim);
@@ -1695,7 +1697,7 @@ static void emit_from_particles(Object *flow_ob,
  * positive, inside negative. */
 static void update_distances(int index,
                              float *distance_map,
-                             blender::bke::BVHTreeFromMesh *tree_data,
+                             const bke::bvh::Tree &tree,
                              const float ray_start[3],
                              float surface_thickness,
                              bool use_plane_init)
@@ -1704,25 +1706,21 @@ static void update_distances(int index,
 
   /* Planar initialization: Find nearest cells around mesh. */
   if (use_plane_init) {
-    BVHTreeNearest nearest = {0};
-    nearest.index = -1;
     /* Distance between two opposing vertices in a unit cube.
      * I.e. the unit cube diagonal or `sqrt(3)`.
      * This value is our nearest neighbor search distance. */
-    const float surface_distance = 1.732;
+    float surface_distance = 1.732;
     /* find_nearest uses squared distance. */
-    nearest.dist_sq = surface_distance * surface_distance;
 
     /* Subtract optional surface thickness value and virtually increase the object size. */
     if (surface_thickness) {
-      nearest.dist_sq += surface_thickness;
+      surface_distance = std::sqrt(surface_distance * surface_distance + surface_thickness);
     }
-
-    if (BLI_bvhtree_find_nearest(
-            tree_data->tree, ray_start, &nearest, tree_data->nearest_callback, tree_data) != -1)
+    if (const std::optional<bke::bvh::ClosestPointResult> nearest = tree.closest_point(
+            ray_start, surface_distance))
     {
       float ray[3] = {0};
-      sub_v3_v3v3(ray, ray_start, nearest.co);
+      sub_v3_v3v3(ray, ray_start, nearest->position);
       min_dist = len_v3(ray);
       min_dist = (-1.0f) * fabsf(min_dist);
     }
@@ -1746,33 +1744,23 @@ static void update_distances(int index,
     int miss_count = 0, dir_count = 0;
 
     for (int i = 0; i < ARRAY_SIZE(ray_dirs); i++) {
-      BVHTreeRayHit hit_tree = {0};
-      hit_tree.index = -1;
-      hit_tree.dist = PHI_MAX;
-
       normalize_v3(ray_dirs[i]);
-      BLI_bvhtree_ray_cast(tree_data->tree,
-                           ray_start,
-                           ray_dirs[i],
-                           0.0f,
-                           &hit_tree,
-                           tree_data->raycast_callback,
-                           tree_data);
-
+      const bke::bvh::Ray ray(ray_start, ray_dirs[i], PHI_MAX);
+      const std::optional<bke::bvh::RayHit> hit_tree = tree.ray_intersect(ray);
       /* Ray did not hit mesh.
        * Current point definitely not inside mesh. Inside mesh as all rays have to hit. */
-      if (hit_tree.index == -1) {
+      if (!hit_tree) {
         miss_count++;
         /* Skip this ray since nothing was hit. */
         continue;
       }
 
       /* Ray and normal are pointing in opposite directions. */
-      if (dot_v3v3(ray_dirs[i], hit_tree.no) <= 0) {
+      if (dot_v3v3(ray_dirs[i], math::normalize(hit_tree->normal)) <= 0) {
         dir_count++;
       }
 
-      min_dist = std::min(hit_tree.dist, min_dist);
+      min_dist = std::min(hit_tree->distance, min_dist);
     }
 
     /* Point lies inside mesh. Use negative sign for distance value.
@@ -1795,18 +1783,18 @@ static void update_distances(int index,
 }
 
 static void sample_mesh(FluidFlowSettings *ffs,
-                        blender::Span<blender::float3> vert_positions,
-                        const blender::Span<blender::float3> vert_normals,
+                        Span<float3> vert_positions,
+                        const Span<float3> vert_normals,
                         const int *corner_verts,
-                        const blender::int3 *corner_tris,
-                        blender::Span<blender::float2> uv_map,
+                        const int3 *corner_tris,
+                        Span<float2> uv_map,
                         float *influence_map,
                         float *velocity_map,
                         int index,
                         const int base_res[3],
                         const float global_size[3],
                         const float flow_center[3],
-                        blender::bke::BVHTreeFromMesh *tree_data,
+                        const bke::bvh::Tree &tree,
                         const float ray_start[3],
                         const float *vert_vel,
                         bool has_velocity,
@@ -1817,21 +1805,13 @@ static void sample_mesh(FluidFlowSettings *ffs,
                         float z)
 {
   float ray_dir[3] = {1.0f, 0.0f, 0.0f};
-  BVHTreeRayHit hit = {0};
-  BVHTreeNearest nearest = {0};
 
   float volume_factor = 0.0f;
-
-  hit.index = -1;
-  hit.dist = PHI_MAX;
-  nearest.index = -1;
 
   /* Distance between two opposing vertices in a unit cube.
    * I.e. the unit cube diagonal or `sqrt(3)`.
    * This value is our nearest neighbor search distance. */
   const float surface_distance = 1.732;
-  /* find_nearest uses squared distance. */
-  nearest.dist_sq = surface_distance * surface_distance;
 
   bool is_gas_flow = ELEM(
       ffs->type, FLUID_FLOW_TYPE_SMOKE, FLUID_FLOW_TYPE_FIRE, FLUID_FLOW_TYPE_SMOKEFIRE);
@@ -1843,31 +1823,17 @@ static void sample_mesh(FluidFlowSettings *ffs,
 
   /* Emission inside the flow object. */
   if (is_gas_flow && ffs->volume_density) {
-    if (BLI_bvhtree_ray_cast(tree_data->tree,
-                             ray_start,
-                             ray_dir,
-                             0.0f,
-                             &hit,
-                             tree_data->raycast_callback,
-                             tree_data) != -1)
-    {
-      float dot = ray_dir[0] * hit.no[0] + ray_dir[1] * hit.no[1] + ray_dir[2] * hit.no[2];
+    const bke::bvh::Ray ray(ray_start, ray_dir, PHI_MAX);
+    if (const std::optional<bke::bvh::RayHit> hit = tree.ray_intersect(ray)) {
+      const float dot = math::dot(float3(ray_dir), math::normalize(hit->normal));
       /* If ray and hit face normal are facing same direction hit point is inside a closed mesh. */
       if (dot >= 0) {
         /* Also cast a ray in opposite direction to make sure point is at least surrounded by two
          * faces. */
         negate_v3(ray_dir);
-        hit.index = -1;
-        hit.dist = PHI_MAX;
-
-        BLI_bvhtree_ray_cast(tree_data->tree,
-                             ray_start,
-                             ray_dir,
-                             0.0f,
-                             &hit,
-                             tree_data->raycast_callback,
-                             tree_data);
-        if (hit.index != -1) {
+        const bke::bvh::Ray opposite_ray(ray_start, ray_dir, PHI_MAX);
+        const std::optional<bke::bvh::RayHit> hit_opposite = tree.ray_intersect(opposite_ray);
+        if (hit_opposite) {
           volume_factor = ffs->volume_density;
         }
       }
@@ -1875,11 +1841,11 @@ static void sample_mesh(FluidFlowSettings *ffs,
   }
 
   /* Find the nearest point on the mesh. */
-  if (BLI_bvhtree_find_nearest(
-          tree_data->tree, ray_start, &nearest, tree_data->nearest_callback, tree_data) != -1)
+  if (const std::optional<bke::bvh::ClosestPointResult> nearest = tree.closest_point(
+          ray_start, surface_distance))
   {
     float weights[3];
-    int v1, v2, v3, tri_i = nearest.index;
+    int v1, v2, v3, tri_i = nearest->index;
     float hit_normal[3];
 
     /* Calculate barycentric weights for nearest point. */
@@ -1887,13 +1853,14 @@ static void sample_mesh(FluidFlowSettings *ffs,
     v2 = corner_verts[corner_tris[tri_i][1]];
     v3 = corner_verts[corner_tris[tri_i][2]];
     interp_weights_tri_v3(
-        weights, vert_positions[v1], vert_positions[v2], vert_positions[v3], nearest.co);
+        weights, vert_positions[v1], vert_positions[v2], vert_positions[v3], nearest->position);
 
     /* Compute emission strength for smoke flow. */
     if (is_gas_flow) {
       /* Emission from surface is based on UI configurable distance value. */
       if (ffs->surface_distance) {
-        emission_strength = sqrtf(nearest.dist_sq) / ffs->surface_distance;
+        emission_strength = math::distance(nearest->position, float3(ray_start)) /
+                            ffs->surface_distance;
         CLAMP(emission_strength, 0.0f, 1.0f);
         emission_strength = pow(1.0f - emission_strength, 0.5f);
       }
@@ -1993,15 +1960,15 @@ struct EmitFromDMData {
   FluidDomainSettings *fds;
   FluidFlowSettings *ffs;
 
-  blender::Span<blender::float3> vert_positions;
-  blender::Span<blender::float3> vert_normals;
-  blender::Span<int> corner_verts;
-  blender::Span<blender::int3> corner_tris;
-  blender::Span<blender::float2> uv_map;
+  Span<float3> vert_positions;
+  Span<float3> vert_normals;
+  Span<int> corner_verts;
+  Span<int3> corner_tris;
+  Span<float2> uv_map;
   const MDeformVert *dvert;
   int defgrp_index;
 
-  blender::bke::BVHTreeFromMesh *tree;
+  const bke::bvh::Tree *tree;
   FluidObjectBB *bb;
 
   bool has_velocity;
@@ -2038,7 +2005,7 @@ static void emit_from_mesh_task_cb(void *__restrict userdata,
                     data->fds->base_res,
                     data->fds->global_size,
                     data->flow_center,
-                    data->tree,
+                    *data->tree,
                     ray_start,
                     data->vert_vel,
                     data->has_velocity,
@@ -2052,7 +2019,7 @@ static void emit_from_mesh_task_cb(void *__restrict userdata,
       /* Calculate levelset values from meshes. Result in bb->distances. */
       update_distances(index,
                        bb->distances,
-                       data->tree,
+                       *data->tree,
                        ray_start,
                        data->ffs->surface_distance,
                        data->ffs->flags & FLUID_FLOW_USE_PLANE_INIT);
@@ -2076,24 +2043,24 @@ static void emit_from_mesh(
     /* Copy mesh for thread safety as we modify it.
      * Main issue is its VertArray being modified, then replaced and freed. */
     Mesh *mesh = BKE_mesh_copy_for_eval(*ffs->mesh);
-    blender::MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
+    MutableSpan<float3> positions = mesh->vert_positions_for_write();
 
-    const blender::Span<int> corner_verts = mesh->corner_verts();
-    const blender::Span<blender::int3> corner_tris = mesh->corner_tris();
+    const Span<int> corner_verts = mesh->corner_verts();
+    const Span<int3> corner_tris = mesh->corner_tris();
     const int numverts = mesh->verts_num;
     const MDeformVert *dvert = mesh->deform_verts().data();
-    const blender::bke::AttributeAccessor attributes = mesh->attributes();
-    const blender::VArraySpan uv_map = *attributes.lookup<blender::float2>(
-        ffs->uvlayer_name, blender::bke::AttrDomain::Corner);
+    const bke::AttributeAccessor attributes = mesh->attributes();
+    const VArraySpan uv_map = *attributes.lookup<float2>(ffs->uvlayer_name,
+                                                         bke::AttrDomain::Corner);
 
     if (ffs->flags & FLUID_FLOW_INITVELOCITY) {
-      vert_vel = MEM_calloc_arrayN<float>(3 * size_t(numverts), "manta_flow_velocity");
+      vert_vel = MEM_new_array_zeroed<float>(3 * size_t(numverts), "manta_flow_velocity");
 
       if (ffs->numverts != numverts || !ffs->verts_old) {
         if (ffs->verts_old) {
-          MEM_freeN(ffs->verts_old);
+          MEM_delete(ffs->verts_old);
         }
-        ffs->verts_old = MEM_calloc_arrayN<float>(3 * size_t(numverts), "manta_flow_verts_old");
+        ffs->verts_old = MEM_new_array_zeroed<float>(3 * size_t(numverts), "manta_flow_verts_old");
         ffs->numverts = numverts;
       }
       else {
@@ -2141,8 +2108,8 @@ static void emit_from_mesh(
 
     /* Skip flow sampling loop if object has disabled flow. */
     bool use_flow = ffs->flags & FLUID_FLOW_USE_INFLOW;
-    blender::bke::BVHTreeFromMesh tree_data = mesh->bvh_corner_tris();
-    if (use_flow && tree_data.tree != nullptr) {
+    if (use_flow && mesh->faces_num > 0) {
+      const bke::bvh::Tree &tree_data = mesh->bvh_tris();
 
       EmitFromDMData data{};
       data.fds = fds;
@@ -2170,7 +2137,7 @@ static void emit_from_mesh(
     }
 
     if (vert_vel) {
-      MEM_freeN(vert_vel);
+      MEM_delete(vert_vel);
     }
     BKE_id_free(nullptr, mesh);
   }
@@ -2540,12 +2507,14 @@ static void ensure_flowsfields(FluidDomainSettings *fds)
 
 static void update_flowsflags(FluidDomainSettings *fds, Object **flowobjs, int numflowobj)
 {
-  int active_fields = fds->active_fields;
+  eFluidDomain_ActiveFields active_fields = fds->active_fields;
   uint flow_index;
 
   /* First, remove all flags that we want to update. */
-  int prev_flags = (FLUID_DOMAIN_ACTIVE_INVEL | FLUID_DOMAIN_ACTIVE_OUTFLOW |
-                    FLUID_DOMAIN_ACTIVE_HEAT | FLUID_DOMAIN_ACTIVE_FIRE);
+  const eFluidDomain_ActiveFields prev_flags = (FLUID_DOMAIN_ACTIVE_INVEL |
+                                                FLUID_DOMAIN_ACTIVE_OUTFLOW |
+                                                FLUID_DOMAIN_ACTIVE_HEAT |
+                                                FLUID_DOMAIN_ACTIVE_FIRE);
   active_fields &= ~prev_flags;
 
   /* Monitor active fields based on flow settings. */
@@ -2812,7 +2781,7 @@ static void update_flowsfluids(Depsgraph *depsgraph,
   ensure_flowsfields(fds);
 
   /* Allocate emission map for each flow object. */
-  bb_maps = MEM_calloc_arrayN<FluidObjectBB>(numflowobjs, "fluid_flow_bb_maps");
+  bb_maps = MEM_new_array_zeroed<FluidObjectBB>(numflowobjs, "fluid_flow_bb_maps");
 
   /* Initialize emission map for each flow object. */
   compute_flowsemission(scene,
@@ -3056,14 +3025,14 @@ static void update_flowsfluids(Depsgraph *depsgraph,
 
   BKE_collision_objects_free(flowobjs);
   if (bb_maps) {
-    MEM_freeN(bb_maps);
+    MEM_delete(bb_maps);
   }
 }
 
 struct UpdateEffectorsData {
   Scene *scene;
   FluidDomainSettings *fds;
-  ListBase *effectors;
+  ListBaseT<EffectorCache> *effectors;
 
   float *density;
   float *fuel;
@@ -3148,7 +3117,7 @@ static void update_effectors_task_cb(void *__restrict userdata,
 static void update_effectors(
     Depsgraph *depsgraph, Scene *scene, Object *ob, FluidDomainSettings *fds, float /*dt*/)
 {
-  ListBase *effectors;
+  ListBaseT<EffectorCache> *effectors;
   /* make sure smoke flow influence is 0.0f */
   fds->effector_weights->weight[PFIELD_FLUIDFLOW] = 0.0f;
   effectors = BKE_effectors_create(depsgraph, ob, nullptr, fds->effector_weights, false);
@@ -3184,7 +3153,6 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
                                     Mesh *orgmesh,
                                     Object *ob)
 {
-  using namespace blender;
   using namespace blender::bke;
   Mesh *mesh;
   float min[3];
@@ -3220,7 +3188,7 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
   if (!mesh) {
     return nullptr;
   }
-  MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
+  MutableSpan<float3> positions = mesh->vert_positions_for_write();
   MutableSpan<int> face_offsets = mesh->face_offsets_for_write();
   MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
 
@@ -3344,7 +3312,6 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
 
 static Mesh *create_smoke_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Object *ob)
 {
-  using namespace blender;
   using namespace blender::bke;
   Mesh *result;
   float min[3];
@@ -3363,7 +3330,7 @@ static Mesh *create_smoke_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obje
   }
 
   result = BKE_mesh_new_nomain(num_verts, 0, num_faces, num_faces * 4);
-  MutableSpan<blender::float3> positions = result->vert_positions_for_write();
+  MutableSpan<float3> positions = result->vert_positions_for_write();
   MutableSpan<int> face_offsets = result->face_offsets_for_write();
   MutableSpan<int> corner_verts = result->corner_verts_for_write();
 
@@ -3409,7 +3376,7 @@ static Mesh *create_smoke_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obje
     co[2] = min[2];
 
     face_offsets.fill(4);
-    blender::offset_indices::accumulate_counts_to_offsets(face_offsets);
+    offset_indices::accumulate_counts_to_offsets(face_offsets);
 
     /* Create faces. */
     /* Top side. */
@@ -3548,8 +3515,10 @@ static int manta_step(
 
   /* Compute shadow grid for gas simulations. Make sure to skip if bake job was canceled early. */
   if (fds->type == FLUID_DOMAIN_TYPE_GAS && result) {
-    manta_smoke_calc_transparency(
-        fds, DEG_get_evaluated_scene(depsgraph), DEG_get_evaluated_view_layer(depsgraph));
+    manta_smoke_calc_transparency(*DEG_get_bmain(depsgraph),
+                                  fds,
+                                  DEG_get_evaluated_scene(depsgraph),
+                                  DEG_get_evaluated_view_layer(depsgraph));
   }
 
   return result;
@@ -3697,13 +3666,13 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
       depsgraph, ob, fds->fluid_group, &numobj, eModifierType_Fluid);
   update_flowsflags(fds, objs, numobj);
   if (objs) {
-    MEM_freeN(objs);
+    MEM_delete(objs);
   }
   objs = BKE_collision_objects_create(
       depsgraph, ob, fds->effector_group, &numobj, eModifierType_Fluid);
   update_obstacleflags(fds, objs, numobj);
   if (objs) {
-    MEM_freeN(objs);
+    MEM_delete(objs);
   }
 
   /* Fluid domain init must not fail in order to continue modifier evaluation. */
@@ -3884,15 +3853,20 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
 
   /* Try to read from cache and keep track of read success. */
   if (read_cache) {
-
     /* Read mesh cache. */
     if (with_liquid && with_mesh) {
       if (mesh_frame != scene_framenr) {
         has_config = manta_read_config(fds->fluid, fmd, mesh_frame);
       }
 
-      /* Only load the mesh at the resolution it ways originally simulated at.
-       * The mesh files don't have a header, i.e. the don't store the grid resolution. */
+      /* The liquid mesh cache is read before the regular data-cache allocation. Ensure the Manta
+       * instance matches the cached configuration here instead of reallocating all cache types. */
+      if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
+        BKE_fluid_reallocate_fluid(fds, fds->res, 1);
+      }
+
+      /* Only load the mesh at the resolution it was originally simulated at.
+       * The mesh files don't have a header, i.e. they don't store the grid resolution. */
       if (!manta_needs_realloc(fds->fluid, fmd)) {
         has_mesh = manta_read_mesh(fds->fluid, fmd, mesh_frame);
       }
@@ -3902,6 +3876,11 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
     if (with_liquid && with_particles) {
       if (particles_frame != scene_framenr) {
         has_config = manta_read_config(fds->fluid, fmd, particles_frame);
+      }
+
+      /* The liquid particle cache is also read before the regular data-cache allocation. */
+      if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
+        BKE_fluid_reallocate_fluid(fds, fds->res, 1);
       }
 
       read_partial = !baking_data && !baking_particles && next_particles;
@@ -4249,7 +4228,8 @@ static void bresenham_linie_3D(int x1,
   cb(result, input, res, pixel, t_ray, correct);
 }
 
-static void manta_smoke_calc_transparency(FluidDomainSettings *fds,
+static void manta_smoke_calc_transparency(const Main &bmain,
+                                          FluidDomainSettings *fds,
                                           Scene *scene,
                                           ViewLayer *view_layer)
 {
@@ -4260,7 +4240,7 @@ static void manta_smoke_calc_transparency(FluidDomainSettings *fds,
   float *shadow = manta_smoke_get_shadow(fds->fluid);
   float correct = -7.0f * fds->dx;
 
-  if (!get_light(scene, view_layer, light)) {
+  if (!get_light(bmain, scene, view_layer, light)) {
     return;
   }
 
@@ -4419,7 +4399,7 @@ void BKE_fluid_particle_system_create(Main *bmain,
                                       const char *pset_name,
                                       const char *parts_name,
                                       const char *psys_name,
-                                      const int psys_type)
+                                      eParticleType psys_type)
 {
   ParticleSystem *psys;
   ParticleSettings *part;
@@ -4427,7 +4407,7 @@ void BKE_fluid_particle_system_create(Main *bmain,
 
   /* add particle system */
   part = BKE_particlesettings_add(bmain, pset_name);
-  psys = MEM_callocN<ParticleSystem>(__func__);
+  psys = MEM_new<ParticleSystem>(__func__);
 
   part->type = psys_type;
   part->totpart = 0;
@@ -4462,7 +4442,7 @@ void BKE_fluid_particle_system_destroy(Object *ob, const int particle_type)
   ParticleSystemModifierData *pfmd;
   ParticleSystem *psys, *next_psys;
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first); psys; psys = next_psys) {
+  for (psys = ob->particlesystem.first(); psys; psys = next_psys) {
     next_psys = psys->next;
     if (psys->part->type == particle_type) {
       /* clear modifier */
@@ -4499,7 +4479,8 @@ void BKE_fluid_cache_endframe_set(FluidDomainSettings *settings, int value)
                                                                       value;
 }
 
-void BKE_fluid_cachetype_mesh_set(FluidDomainSettings *settings, int cache_mesh_format)
+void BKE_fluid_cachetype_mesh_set(FluidDomainSettings *settings,
+                                  eFluidDomain_FileFormat cache_mesh_format)
 {
   if (cache_mesh_format == settings->cache_mesh_format) {
     return;
@@ -4508,7 +4489,8 @@ void BKE_fluid_cachetype_mesh_set(FluidDomainSettings *settings, int cache_mesh_
   settings->cache_mesh_format = cache_mesh_format;
 }
 
-void BKE_fluid_cachetype_data_set(FluidDomainSettings *settings, int cache_data_format)
+void BKE_fluid_cachetype_data_set(FluidDomainSettings *settings,
+                                  eFluidDomain_FileFormat cache_data_format)
 {
   if (cache_data_format == settings->cache_data_format) {
     return;
@@ -4517,7 +4499,8 @@ void BKE_fluid_cachetype_data_set(FluidDomainSettings *settings, int cache_data_
   settings->cache_data_format = cache_data_format;
 }
 
-void BKE_fluid_cachetype_particle_set(FluidDomainSettings *settings, int cache_particle_format)
+void BKE_fluid_cachetype_particle_set(FluidDomainSettings *settings,
+                                      eFluidDomain_FileFormat cache_particle_format)
 {
   if (cache_particle_format == settings->cache_particle_format) {
     return;
@@ -4526,7 +4509,8 @@ void BKE_fluid_cachetype_particle_set(FluidDomainSettings *settings, int cache_p
   settings->cache_particle_format = cache_particle_format;
 }
 
-void BKE_fluid_cachetype_noise_set(FluidDomainSettings *settings, int cache_noise_format)
+void BKE_fluid_cachetype_noise_set(FluidDomainSettings *settings,
+                                   eFluidDomain_FileFormat cache_noise_format)
 {
   if (cache_noise_format == settings->cache_noise_format) {
     return;
@@ -4535,17 +4519,21 @@ void BKE_fluid_cachetype_noise_set(FluidDomainSettings *settings, int cache_nois
   settings->cache_noise_format = cache_noise_format;
 }
 
-void BKE_fluid_collisionextents_set(FluidDomainSettings *settings, int value, bool clear)
+void BKE_fluid_collisionextents_set(FluidDomainSettings *settings,
+                                    eFluidDomain_BorderFlags value,
+                                    bool clear)
 {
   if (clear) {
-    settings->border_collisions &= value;
+    settings->border_collisions &= ~value;
   }
   else {
     settings->border_collisions |= value;
   }
 }
 
-void BKE_fluid_particles_set(FluidDomainSettings *settings, int value, bool clear)
+void BKE_fluid_particles_set(FluidDomainSettings *settings,
+                             eFluidDomain_ParticleTypes value,
+                             bool clear)
 {
   if (clear) {
     settings->particle_type &= ~value;
@@ -4555,7 +4543,9 @@ void BKE_fluid_particles_set(FluidDomainSettings *settings, int value, bool clea
   }
 }
 
-void BKE_fluid_domain_type_set(Object *object, FluidDomainSettings *settings, int type)
+void BKE_fluid_domain_type_set(Object *object,
+                               FluidDomainSettings *settings,
+                               eFluidDomain_Type type)
 {
   /* Set values for border collision:
    * Liquids should have a closed domain, smoke domains should be open. */
@@ -4582,12 +4572,14 @@ void BKE_fluid_domain_type_set(Object *object, FluidDomainSettings *settings, in
   settings->type = type;
 }
 
-void BKE_fluid_flow_behavior_set(Object * /*object*/, FluidFlowSettings *settings, int behavior)
+void BKE_fluid_flow_behavior_set(Object * /*object*/,
+                                 FluidFlowSettings *settings,
+                                 eFluidFlow_Behavior behavior)
 {
   settings->behavior = behavior;
 }
 
-void BKE_fluid_flow_type_set(Object *object, FluidFlowSettings *settings, int type)
+void BKE_fluid_flow_type_set(Object *object, FluidFlowSettings *settings, eFluidFlow_Type type)
 {
   /* By default, liquid flow objects should behave like their geometry (geometry behavior),
    * gas flow objects should continuously produce smoke (inflow behavior). */
@@ -4602,7 +4594,9 @@ void BKE_fluid_flow_type_set(Object *object, FluidFlowSettings *settings, int ty
   settings->type = type;
 }
 
-void BKE_fluid_effector_type_set(Object * /*object*/, FluidEffectorSettings *settings, int type)
+void BKE_fluid_effector_type_set(Object * /*object*/,
+                                 FluidEffectorSettings *settings,
+                                 eFluidEffector_Type type)
 {
   settings->type = type;
 }
@@ -4667,7 +4661,7 @@ static void fluid_modifier_freeDomain(FluidModifierData *fmd)
       BLI_rw_mutex_free(static_cast<ThreadRWMutex *>(fmd->domain->fluid_mutex));
     }
 
-    MEM_SAFE_FREE(fmd->domain->effector_weights);
+    MEM_SAFE_DELETE(fmd->domain->effector_weights);
 
     if (!(fmd->modifier.flag & eModifierFlag_SharedCaches)) {
       BKE_ptcache_free_list(&(fmd->domain->ptcaches[0]));
@@ -4675,10 +4669,10 @@ static void fluid_modifier_freeDomain(FluidModifierData *fmd)
     }
 
     if (fmd->domain->coba) {
-      MEM_freeN(fmd->domain->coba);
+      MEM_delete(fmd->domain->coba);
     }
 
-    MEM_freeN(fmd->domain);
+    MEM_delete(fmd->domain);
     fmd->domain = nullptr;
   }
 }
@@ -4691,11 +4685,11 @@ static void fluid_modifier_freeFlow(FluidModifierData *fmd)
     }
     fmd->flow->mesh = nullptr;
 
-    MEM_SAFE_FREE(fmd->flow->verts_old);
+    MEM_SAFE_DELETE(fmd->flow->verts_old);
     fmd->flow->numverts = 0;
     fmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
 
-    MEM_freeN(fmd->flow);
+    MEM_delete(fmd->flow);
     fmd->flow = nullptr;
   }
 }
@@ -4708,11 +4702,11 @@ static void fluid_modifier_freeEffector(FluidModifierData *fmd)
     }
     fmd->effector->mesh = nullptr;
 
-    MEM_SAFE_FREE(fmd->effector->verts_old);
+    MEM_SAFE_DELETE(fmd->effector->verts_old);
     fmd->effector->numverts = 0;
     fmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
 
-    MEM_freeN(fmd->effector);
+    MEM_delete(fmd->effector);
     fmd->effector = nullptr;
   }
 }
@@ -4742,15 +4736,15 @@ static void fluid_modifier_reset_ex(FluidModifierData *fmd, bool need_lock)
 
     fmd->time = -1;
     fmd->domain->total_cells = 0;
-    fmd->domain->active_fields = 0;
+    fmd->domain->active_fields = eFluidDomain_ActiveFields{};
   }
   else if (fmd->flow) {
-    MEM_SAFE_FREE(fmd->flow->verts_old);
+    MEM_SAFE_DELETE(fmd->flow->verts_old);
     fmd->flow->numverts = 0;
     fmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
   }
   else if (fmd->effector) {
-    MEM_SAFE_FREE(fmd->effector->verts_old);
+    MEM_SAFE_DELETE(fmd->effector->verts_old);
     fmd->effector->numverts = 0;
     fmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
   }
@@ -4783,7 +4777,7 @@ void BKE_fluid_modifier_create_type_data(FluidModifierData *fmd)
       fluid_modifier_freeDomain(fmd);
     }
 
-    fmd->domain = DNA_struct_default_alloc(FluidDomainSettings);
+    fmd->domain = MEM_new<FluidDomainSettings>(__func__);
     fmd->domain->fmd = fmd;
 
     /* Turn off incompatible options. */
@@ -4815,7 +4809,7 @@ void BKE_fluid_modifier_create_type_data(FluidModifierData *fmd)
       fluid_modifier_freeFlow(fmd);
     }
 
-    fmd->flow = DNA_struct_default_alloc(FluidFlowSettings);
+    fmd->flow = MEM_new<FluidFlowSettings>(__func__);
     fmd->flow->fmd = fmd;
   }
   else if (fmd->type & MOD_FLUID_TYPE_EFFEC) {
@@ -4823,7 +4817,7 @@ void BKE_fluid_modifier_create_type_data(FluidModifierData *fmd)
       fluid_modifier_freeEffector(fmd);
     }
 
-    fmd->effector = DNA_struct_default_alloc(FluidEffectorSettings);
+    fmd->effector = MEM_new<FluidEffectorSettings>(__func__);
     fmd->effector->fmd = fmd;
   }
 }
@@ -4844,9 +4838,9 @@ void BKE_fluid_modifier_copy(const FluidModifierData *fmd, FluidModifierData *tf
     tfds->force_group = fds->force_group;
     tfds->effector_group = fds->effector_group;
     if (tfds->effector_weights) {
-      MEM_freeN(tfds->effector_weights);
+      MEM_delete(tfds->effector_weights);
     }
-    tfds->effector_weights = static_cast<EffectorWeights *>(MEM_dupallocN(fds->effector_weights));
+    tfds->effector_weights = MEM_dupalloc(fds->effector_weights);
 
     /* adaptive domain options */
     tfds->adapt_margin = fds->adapt_margin;
@@ -4977,7 +4971,7 @@ void BKE_fluid_modifier_copy(const FluidModifierData *fmd, FluidModifierData *tf
     tfds->display_thickness = fds->display_thickness;
     tfds->show_gridlines = fds->show_gridlines;
     if (fds->coba) {
-      tfds->coba = static_cast<ColorBand *>(MEM_dupallocN(fds->coba));
+      tfds->coba = MEM_dupalloc(fds->coba);
     }
     tfds->vector_scale = fds->vector_scale;
     tfds->vector_draw_type = fds->vector_draw_type;
@@ -5079,3 +5073,5 @@ void BKE_fluid_cache_new_name_for_current_session(int maxlen, char *r_name)
 }
 
 /** \} */
+
+}  // namespace blender

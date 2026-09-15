@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Operator
 from bpy.props import EnumProperty
 from bpy_extras.node_utils import connect_sockets
 from bpy.app.translations import contexts as i18n_contexts
+from .. import __package__ as base_package
 
 from ..utils.constants import (
     blend_types,
@@ -18,7 +18,6 @@ from ..utils.nodes import (
     nw_check,
     nw_check_selected,
     nw_check_space_type,
-    get_nodes_links,
     get_first_enabled_output,
 )
 
@@ -72,9 +71,9 @@ class NODE_OT_merge_selected(Operator, NWBase):
             return True
         if not node.outputs:
             return False
-        for output in node.outputs:
-            if output.is_linked:
-                for olink in output.links:
+        for output_socket in node.outputs:
+            if output_socket.is_linked:
+                for olink in output_socket.links:
                     if NODE_OT_merge_selected.link_creates_cycle(olink, selected_nodes, depth + 1):
                         return True
         # None of the outputs found a node in selected_nodes, so there is no cycle.
@@ -118,8 +117,8 @@ class NODE_OT_merge_selected(Operator, NWBase):
                 outputs_for_multi_input.insert(0, node.outputs[0])
         if outputs_for_multi_input != []:
             ind = socket_indices[-1]
-            for output in outputs_for_multi_input:
-                connect_sockets(output, new_node.inputs[ind])
+            for output_socket in outputs_for_multi_input:
+                connect_sockets(output_socket, new_node.inputs[ind])
         if prev_links != []:
             for link in prev_links:
                 connect_sockets(new_node.outputs[0], link.to_node.inputs[0])
@@ -133,7 +132,7 @@ class NODE_OT_merge_selected(Operator, NWBase):
                 and nw_check_selected(cls, context))
 
     def execute(self, context):
-        settings = context.preferences.addons[__package__].preferences
+        settings = context.preferences.addons[base_package].preferences
         merge_hide = settings.merge_hide
         merge_position = settings.merge_position  # 'center' or 'bottom'
 
@@ -154,7 +153,10 @@ class NODE_OT_merge_selected(Operator, NWBase):
             node_type = 'ShaderNode'
         elif tree_type == 'TEXTURE':
             node_type = 'TextureNode'
-        nodes, links = get_nodes_links(context)
+
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
+        links = tree.links
         mode = self.mode
         merge_type = self.merge_type
         # Prevent trying to add Depth Combine in not 'COMPOSITING' node tree.
@@ -180,8 +182,8 @@ class NODE_OT_merge_selected(Operator, NWBase):
 
         for i, node in enumerate(nodes):
             if node.select and node.outputs:
-                output = get_first_enabled_output(node)
-                output_type = output.type
+                output_socket = get_first_enabled_output(node)
+                output_type = output_socket.type
                 if output_type == 'BOOLEAN':
                     if merge_type == 'MATH' and mode != 'ADD':
                         merge_type = 'AUTO'
@@ -196,6 +198,7 @@ class NODE_OT_merge_selected(Operator, NWBase):
                             ('GEOMETRY', [t[0] for t in geo_combine_operations], selected_geometry),
                             ('RGBA', [t[0] for t in blend_types], selected_mix),
                             ('VALUE', [t[0] for t in operations], selected_math),
+                            ('INT', [t[0] for t in operations], selected_math),
                             ('VECTOR', [], selected_vector),
                             ('BOOLEAN', [], selected_boolean),
                             ('STRING', [], selected_string),
@@ -205,7 +208,8 @@ class NODE_OT_merge_selected(Operator, NWBase):
                         # geometry nodes.
                         if tree_type == 'GEOMETRY':
                             if mode == 'MIX':
-                                if output_type == 'VALUE' and type == 'VALUE':
+                                SCALAR_TYPES = ['VALUE', 'INT']
+                                if output_type in SCALAR_TYPES and type in SCALAR_TYPES:
                                     valid_mode = True
                                 elif output_type == 'VECTOR' and type == 'VECTOR':
                                     valid_mode = True
@@ -300,34 +304,20 @@ class NODE_OT_merge_selected(Operator, NWBase):
                     if mode != 'MIX':
                         add.inputs[0].default_value = 1.0
                     add.show_preview = False
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 6
-                    second = 7
                 elif nodes_list == selected_math:
-                    add = nodes.new('ShaderNodeMath')
+                    add_type = 'ShaderNodeMath'
+                    nodes_are_int = all(nodes[item[0]].outputs[0].type == 'INT' for item in selected_math)
+                    is_not_compare = mode not in ('GREATER_THAN', 'LESS_THAN')
+                    needs_integer_math = nodes_are_int and is_not_compare
+                    if needs_integer_math:
+                        add_type = 'FunctionNodeIntegerMath'
+                    add = nodes.new(add_type)
                     add.operation = mode
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 0
-                    second = 1
                 elif nodes_list == selected_shader:
                     if mode == 'MIX':
                         add = nodes.new('ShaderNodeMixShader')
-                        add.hide = do_hide_shader
-                        if do_hide_shader:
-                            loc_y = loc_y - 50
-                        first = 1
-                        second = 2
                     elif mode == 'ADD':
                         add = nodes.new('ShaderNodeAddShader')
-                        add.hide = do_hide_shader
-                        if do_hide_shader:
-                            loc_y = loc_y - 50
-                        first = 0
-                        second = 1
                 elif nodes_list == selected_geometry:
                     if mode in ('JOIN', 'MIX'):
                         add_type = 'GeometryNodeJoinGeometry'
@@ -344,35 +334,15 @@ class NODE_OT_merge_selected(Operator, NWBase):
                 elif nodes_list == selected_vector:
                     add = nodes.new('ShaderNodeVectorMath')
                     add.operation = mode
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 0
-                    second = 1
                 elif nodes_list == selected_z:
                     add = nodes.new('CompositorNodeZcombine')
                     add.show_preview = False
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 0
-                    second = 2
                 elif nodes_list == selected_alphaover:
                     add = nodes.new('CompositorNodeAlphaOver')
                     add.show_preview = False
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 1
-                    second = 2
                 elif nodes_list == selected_boolean:
                     add = nodes.new('FunctionNodeBooleanMath')
                     add.show_preview = False
-                    add.hide = do_hide
-                    if do_hide:
-                        loc_y = loc_y - 50
-                    first = 0
-                    second = 1
                 elif nodes_list == selected_string:
                     add_type = node_type + 'StringJoin'
                     add = self.merge_with_multi_input(
@@ -386,6 +356,27 @@ class NODE_OT_merge_selected(Operator, NWBase):
             # This has already been handled separately
             if was_multi:
                 continue
+
+            # Multi-input nodes don't need socket numbers and the do_hide check.
+
+            socket_dict = {
+                'ShaderNodeMix': [6, 7],
+                'ShaderNodeMath': [0, 1],
+                'ShaderNodeMixShader': [1, 2],
+                'ShaderNodeAddShader': [0, 1],
+                'ShaderNodeVectorMath': [0, 1],
+                'CompositorNodeZcombine': [0, 2],
+                'CompositorNodeAlphaOver': [1, 2],
+                'FunctionNodeBooleanMath': [0, 1],
+            }
+
+            first, second = socket_dict[add.bl_idname]
+
+            if do_hide or do_hide_shader:
+                loc_y = loc_y - 50
+
+            add.hide = do_hide or do_hide_shader
+
             count_adds = i + 1
             count_after = len(nodes)
             index = count_after - 1

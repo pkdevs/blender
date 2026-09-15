@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+/** \file
+ * \ingroup edanimation
+ */
+
+#include "BLI_listbase.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
@@ -14,6 +18,8 @@
 #include "BKE_preferences.h"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
+
+#include "DNA_asset_types.h"
 
 #include "WM_api.hh"
 
@@ -57,8 +63,11 @@ static const EnumPropertyItem *rna_asset_library_reference_itemf(bContext * /*C*
                                                                  PropertyRNA * /*prop*/,
                                                                  bool *r_free)
 {
-  const EnumPropertyItem *items = blender::ed::asset::library_reference_to_rna_enum_itemf(false,
-                                                                                          true);
+  const EnumPropertyItem *items = ed::asset::library_reference_to_rna_enum_itemf(
+      /*include_readonly=*/false,
+      /*include_current_file=*/true,
+      /*include_remote_libraries=*/false,
+      /*include_separate_online_essentials=*/false);
   *r_free = true;
   BLI_assert(items != nullptr);
   return items;
@@ -66,7 +75,7 @@ static const EnumPropertyItem *rna_asset_library_reference_itemf(bContext * /*C*
 
 static Vector<RNAPath> construct_pose_rna_paths(const PointerRNA &bone_pointer)
 {
-  BLI_assert(bone_pointer.type == &RNA_PoseBone);
+  BLI_assert(bone_pointer.type == RNA_PoseBone);
 
   Vector<RNAPath> paths;
   paths.append({"location"});
@@ -112,6 +121,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, const Span<Object *> 
    * slots on the same action. */
 
   using namespace blender::animrig;
+  using blender::animrig::Strip;
   Action &action = action_add(bmain, "pose_create");
   Layer &layer = action.layer_add("pose");
   Strip &strip = layer.strip_add(action, Strip::Type::Keyframe);
@@ -121,7 +131,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, const Span<Object *> 
   for (Object *pose_object : pose_objects) {
     BLI_assert(pose_object->pose);
     Slot &slot = action.slot_add_for_id(pose_object->id);
-    const bArmature *armature = static_cast<bArmature *>(pose_object->data);
+    const bArmature *armature = id_cast<bArmature *>(pose_object->data);
 
     Set<RNAPath> existing_paths;
     if (pose_object->adt && pose_object->adt->action &&
@@ -129,18 +139,21 @@ static blender::animrig::Action &extract_pose(Main &bmain, const Span<Object *> 
     {
       Action &pose_object_action = pose_object->adt->action->wrap();
       const slot_handle_t pose_object_slot = pose_object->adt->slot_handle;
-      foreach_fcurve_in_action_slot(pose_object_action, pose_object_slot, [&](FCurve &fcurve) {
-        RNAPath existing_path = {fcurve.rna_path, std::nullopt, fcurve.array_index};
-        existing_paths.add(existing_path);
-      });
+      foreach_fcurve_in_action_slot(
+          pose_object_action, pose_object_slot, [&](const FCurve &fcurve) {
+            RNAPath existing_path = {fcurve.rna_path(), std::nullopt, fcurve.array_index};
+            existing_paths.add(existing_path);
+          });
     }
 
-    LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object->pose->chanbase) {
-      if (!blender::animrig::bone_is_selected(armature, pose_bone)) {
+    for (bPoseChannel &pose_bone : pose_object->pose->chanbase) {
+      if (!blender::animrig::bone_is_selected(armature,
+                                              {&pose_bone, pose_bone.bone_get(*pose_object)}))
+      {
         continue;
       }
       PointerRNA bone_pointer = RNA_pointer_create_discrete(
-          &pose_object->id, &RNA_PoseBone, pose_bone);
+          &pose_object->id, RNA_PoseBone, &pose_bone);
       Vector<RNAPath> rna_paths = construct_pose_rna_paths(bone_pointer);
       for (const RNAPath &rna_path : rna_paths) {
         PointerRNA resolved_pointer;
@@ -188,18 +201,18 @@ static void ensure_asset_ui_visible(bContext &C)
   }
 
   wmWindowManager *wm = CTX_wm_manager(&C);
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    const bScreen *screen = WM_window_get_active_screen(win);
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      if (area->type->spaceid == SPACE_FILE) {
-        SpaceFile *sfile = reinterpret_cast<SpaceFile *>(area->spacedata.first);
+  for (wmWindow &win : wm->windows) {
+    const bScreen *screen = WM_window_get_active_screen(&win);
+    for (ScrArea &area : screen->areabase) {
+      if (area.type->spaceid == SPACE_FILE) {
+        SpaceFile *sfile = area.spacedata.first_as<SpaceFile>();
         if (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
           /* Asset Browser is open. */
           return;
         }
         continue;
       }
-      const ARegion *shelf_region = BKE_area_find_region_type(area, RGN_TYPE_ASSET_SHELF);
+      const ARegion *shelf_region = BKE_area_find_region_type(&area, RGN_TYPE_ASSET_SHELF);
       if (!shelf_region) {
         continue;
       }
@@ -272,7 +285,8 @@ static wmOperatorStatus create_pose_asset_local(bContext *C,
    * Just being defensive here. */
   BLI_assert(library);
   if (catalog_path_c[0] && library) {
-    const asset_system::AssetCatalogPath catalog_path(catalog_path_c);
+    const asset_system::AssetCatalogPath catalog_path =
+        asset_system::AssetCatalogPath::from_user_input(catalog_path_c);
     asset_system::AssetCatalog &catalog = asset::library_ensure_catalogs_in_path(*library,
                                                                                  catalog_path);
     BKE_asset_metadata_catalog_id_set(&meta_data, catalog.catalog_id, catalog.simple_name.c_str());
@@ -302,6 +316,11 @@ static wmOperatorStatus create_pose_asset_user_library(bContext *C,
   if (!user_library) {
     return OPERATOR_CANCELLED;
   }
+  BLI_assert_msg(!(user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL),
+                 "The passed lib_ref is expected to be an on disk library");
+  if (user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
+    return OPERATOR_CANCELLED;
+  }
 
   asset_system::AssetLibrary *library = AS_asset_library_load(bmain, lib_ref);
   if (!library) {
@@ -328,7 +347,8 @@ static wmOperatorStatus create_pose_asset_user_library(bContext *C,
 
   AssetMetaData &meta_data = *pose_action.id.asset_data;
   if (catalog_path_c[0]) {
-    const asset_system::AssetCatalogPath catalog_path(catalog_path_c);
+    const asset_system::AssetCatalogPath catalog_path =
+        asset_system::AssetCatalogPath::from_user_input(catalog_path_c);
     const asset_system::AssetCatalog &catalog = asset::library_ensure_catalogs_in_path(
         *library, catalog_path);
     BKE_asset_metadata_catalog_id_set(&meta_data, catalog.catalog_id, catalog.simple_name.c_str());
@@ -390,11 +410,16 @@ static wmOperatorStatus pose_asset_create_invoke(bContext *C,
 {
   /* If the library isn't saved from the operator's last execution, use the first library. */
   if (!RNA_struct_property_is_set_ex(op->ptr, "asset_library_reference", false)) {
-    const AssetLibraryReference first_library = asset::user_library_to_library_ref(
-        *static_cast<const bUserAssetLibrary *>(U.asset_libraries.first));
+    std::optional<AssetLibraryReference> dest_library_ref =
+        ed::asset::get_user_library_ref_for_save();
+
+    if (!dest_library_ref) {
+      BKE_report(op->reports, RPT_WARNING, "No editable asset library to save into");
+      return OPERATOR_CANCELLED;
+    }
     RNA_enum_set(op->ptr,
                  "asset_library_reference",
-                 asset::library_reference_to_enum_value(&first_library));
+                 asset::library_reference_to_enum_value(&*dest_library_ref));
   }
 
   return WM_operator_props_dialog_popup(C, op, 400, std::nullopt, IFACE_("Create"));
@@ -438,6 +463,7 @@ void POSELIB_OT_create_pose_asset(wmOperatorType *ot)
 
   PropertyRNA *prop = RNA_def_property(ot->srna, "asset_library_reference", PROP_ENUM, PROP_NONE);
   RNA_def_enum_funcs(prop, rna_asset_library_reference_itemf);
+  RNA_def_property_enum_default(prop, ASSET_LIBRARY_LOCAL);
   RNA_def_property_ui_text(prop, "Library", "Asset library used to store the new pose");
 
   prop = RNA_def_string(
@@ -477,11 +503,19 @@ static const EnumPropertyItem prop_asset_overwrite_modes[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-/* Gets the selected asset from the given `bContext`. If the asset is an action, returns a pointer
- * to that action, else returns a nullptr. */
+/**
+ * Get the selected asset from the given `bContext`. If the asset is an Action, returns a pointer
+ * to that action, else returns a nullptr.
+ *
+ * Note that this may open another .blend file and import the Action, which means it should not be
+ * used in poll functions.
+ *
+ * \see #pose_asset_potentially_editable_poll() for use in poll functions.
+ * \see #is_pose_asset_blend_editable() to check if the asset is from an editable .asset.blend.
+ */
 static bAction *get_action_of_selected_asset(bContext *C)
 {
-  const blender::asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+  const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
   if (!asset) {
     return nullptr;
   }
@@ -496,6 +530,47 @@ static bAction *get_action_of_selected_asset(bContext *C)
       bke::asset_edit_id_from_weak_reference(*bmain, ID_AC, asset_reference));
 }
 
+/**
+ * Check that the .asset.blend file that contains the Action is suitable for modification.
+ *
+ * Editable: return true
+ * Not: report and return false.
+ */
+static bool is_pose_asset_blend_editable(const bAction &action, ReportList *reports)
+{
+  if (!bke::asset_edit_id_is_editable(action.id)) {
+    BKE_reportf(reports, RPT_ERROR, "Action is not editable");
+    return false;
+  }
+  if (!bke::asset_edit_id_is_writable(action.id)) {
+    BKE_reportf(reports, RPT_ERROR, "Asset blend file is not editable");
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Return true when the active asset is a local ID or in an .asset.blend file.
+ *
+ * This does not load the actual asset data-block.
+ */
+static bool pose_asset_potentially_editable_poll(bContext *C)
+{
+  const asset_system::AssetRepresentation *asset_handle = CTX_wm_asset(C);
+  if (!asset_handle || asset_handle->get_id_type() != ID_AC) {
+    CTX_wm_operator_poll_msg_set(C, "No selected pose asset");
+    return false;
+  }
+  if (asset_handle->is_local_id()) {
+    return true;
+  }
+  if (!asset_handle->is_potentially_editable_asset_blend()) {
+    CTX_wm_operator_poll_msg_set(C, "Asset blend file is not editable");
+    return false;
+  }
+  return true;
+}
+
 struct PathValue {
   RNAPath rna_path;
   float value;
@@ -504,13 +579,15 @@ struct PathValue {
 static Vector<PathValue> generate_path_values(Object &pose_object)
 {
   Vector<PathValue> path_values;
-  const bArmature *armature = static_cast<bArmature *>(pose_object.data);
-  LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object.pose->chanbase) {
-    if (!blender::animrig::bone_is_selected(armature, pose_bone)) {
+  const bArmature *armature = id_cast<bArmature *>(pose_object.data);
+  for (bPoseChannel &pose_bone : pose_object.pose->chanbase) {
+    if (!blender::animrig::bone_is_selected(armature,
+                                            {&pose_bone, pose_bone.bone_get(pose_object)}))
+    {
       continue;
     }
     PointerRNA bone_pointer = RNA_pointer_create_discrete(
-        &pose_object.id, &RNA_PoseBone, pose_bone);
+        &pose_object.id, RNA_PoseBone, &pose_bone);
     Vector<RNAPath> rna_paths = construct_pose_rna_paths(bone_pointer);
 
     for (RNAPath &rna_path : rna_paths) {
@@ -551,7 +628,7 @@ static inline void replace_pose_key(Main &bmain,
 
   /* Clearing all keys beforehand in case the pose was not defined on frame defined in
    * `time_value`. */
-  BKE_fcurve_delete_keys_all(&fcurve);
+  BKE_fcurve_delete_keys_all(fcurve);
   const KeyframeSettings key_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO, BEZT_IPO_BEZ};
   insert_vert_fcurve(&fcurve, time_value, key_settings, INSERTKEY_NOFLAGS);
 }
@@ -577,8 +654,8 @@ static void update_pose_action_from_scene(Main *bmain,
   Vector<PathValue> path_values = generate_path_values(pose_object);
 
   Set<RNAPath> existing_paths;
-  foreach_fcurve_in_action_slot(pose_action, slot.handle, [&](FCurve &fcurve) {
-    existing_paths.add({fcurve.rna_path, std::nullopt, fcurve.array_index});
+  foreach_fcurve_in_action_slot(pose_action, slot.handle, [&](const FCurve &fcurve) {
+    existing_paths.add({fcurve.rna_path(), std::nullopt, fcurve.array_index});
   });
 
   switch (mode) {
@@ -630,7 +707,7 @@ static void update_pose_action_from_scene(Main *bmain,
       Map<RNAPath, FCurve *> fcurve_map;
       foreach_fcurve_in_action_slot(
           pose_action, pose_action.slot_array[0]->handle, [&](FCurve &fcurve) {
-            fcurve_map.add({fcurve.rna_path, std::nullopt, fcurve.array_index}, &fcurve);
+            fcurve_map.add({fcurve.rna_path(), std::nullopt, fcurve.array_index}, &fcurve);
           });
       for (const PathValue &path_value : path_values) {
         if (existing_paths.contains(path_value.rna_path)) {
@@ -647,6 +724,11 @@ static wmOperatorStatus pose_asset_modify_exec(bContext *C, wmOperator *op)
 {
   bAction *action = get_action_of_selected_asset(C);
   BLI_assert_msg(action, "Poll should have checked action exists");
+
+  if (ID_IS_LINKED(action) && !is_pose_asset_blend_editable(*action, op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
+
   /* Get asset now. Asset browser might get tagged for refreshing through operations below, and not
    * allow querying items from context until refreshed, see #140781. */
   const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
@@ -659,9 +741,7 @@ static wmOperatorStatus pose_asset_modify_exec(bContext *C, wmOperator *op)
 
   AssetModifyMode mode = AssetModifyMode(RNA_enum_get(op->ptr, "mode"));
   update_pose_action_from_scene(bmain, action->wrap(), *pose_object, mode);
-  if (!G.background) {
-    asset::generate_preview(C, &action->id);
-  }
+
   if (ID_IS_LINKED(action)) {
     /* Not needed for local assets. */
     bke::asset_edit_id_save(*bmain, action->id, *op->reports);
@@ -683,28 +763,7 @@ static bool pose_asset_modify_poll(bContext *C)
     CTX_wm_operator_poll_msg_set(C, "Pose assets can only be modified from Pose Mode");
     return false;
   }
-
-  bAction *action = get_action_of_selected_asset(C);
-
-  if (!action) {
-    return false;
-  }
-
-  if (!ID_IS_LINKED(action)) {
-    return true;
-  }
-
-  if (!bke::asset_edit_id_is_editable(action->id)) {
-    CTX_wm_operator_poll_msg_set(C, "Action is not editable");
-    return false;
-  }
-
-  if (!bke::asset_edit_id_is_writable(action->id)) {
-    CTX_wm_operator_poll_msg_set(C, "Asset blend file is not editable");
-    return false;
-  }
-
-  return true;
+  return pose_asset_potentially_editable_poll(C);
 }
 
 static std::string pose_asset_modify_description(bContext * /* C */,
@@ -736,31 +795,6 @@ void POSELIB_OT_asset_modify(wmOperatorType *ot)
                "Specify which parts of the pose asset are overwritten");
 }
 
-static bool pose_asset_delete_poll(bContext *C)
-{
-  bAction *action = get_action_of_selected_asset(C);
-
-  if (!action) {
-    return false;
-  }
-
-  if (!ID_IS_LINKED(action)) {
-    return true;
-  }
-
-  if (!bke::asset_edit_id_is_editable(action->id)) {
-    CTX_wm_operator_poll_msg_set(C, "Action is not editable");
-    return false;
-  }
-
-  if (!bke::asset_edit_id_is_writable(action->id)) {
-    CTX_wm_operator_poll_msg_set(C, "Asset blend file is not editable");
-    return false;
-  }
-
-  return true;
-}
-
 static wmOperatorStatus pose_asset_delete_exec(bContext *C, wmOperator *op)
 {
   bAction *action = get_action_of_selected_asset(C);
@@ -768,7 +802,11 @@ static wmOperatorStatus pose_asset_delete_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  const blender::asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+  const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+  if (ID_IS_LINKED(action) && !is_pose_asset_blend_editable(*action, op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
+
   std::optional<AssetLibraryReference> library_ref =
       asset->owner_asset_library().library_reference();
 
@@ -792,7 +830,20 @@ static wmOperatorStatus pose_asset_delete_invoke(bContext *C,
                                                  wmOperator *op,
                                                  const wmEvent * /*event*/)
 {
+  /* Perform some checks that the 'exec' function also does, so that when things aren't editable,
+   * the user gets a message about this *before* having to confirm the deletion. */
   bAction *action = get_action_of_selected_asset(C);
+  if (!action) {
+    /* TODO: if this ever happens, figure out how that happened, and see if more
+     * useful information can be included in the report. After all, the poll
+     * function already checks that the active asset exists and is an Action. */
+    BKE_report(op->reports, RPT_ERROR, "Could not load Action for the active asset");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (ID_IS_LINKED(action) && !is_pose_asset_blend_editable(*action, op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
 
   return WM_operator_confirm_ex(
       C,
@@ -812,7 +863,7 @@ void POSELIB_OT_asset_delete(wmOperatorType *ot)
   ot->description = "Delete the selected Pose Asset";
   ot->idname = "POSELIB_OT_asset_delete";
 
-  ot->poll = pose_asset_delete_poll;
+  ot->poll = pose_asset_potentially_editable_poll;
   ot->invoke = pose_asset_delete_invoke;
   ot->exec = pose_asset_delete_exec;
 }

@@ -14,7 +14,7 @@
 #include "ED_asset_list.hh"
 #include "ED_asset_shelf.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_ref.hh"
 
 #include "DNA_userdef_types.h"
@@ -38,8 +38,8 @@ static asset_system::AssetCatalog &library_ensure_catalog(
   return *new_catalog;
 }
 
-blender::asset_system::AssetCatalog &library_ensure_catalogs_in_path(
-    asset_system::AssetLibrary &library, const blender::asset_system::AssetCatalogPath &path)
+asset_system::AssetCatalog &library_ensure_catalogs_in_path(
+    asset_system::AssetLibrary &library, const asset_system::AssetCatalogPath &path)
 {
   /* Adding multiple catalogs in a path at a time with #AssetCatalogService::create_catalog()
    * doesn't work; add each potentially new catalog in the hierarchy manually here. */

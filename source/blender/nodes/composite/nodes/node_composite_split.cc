@@ -2,15 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
-#include "BLI_math_base.hh"
-#include "BLI_math_numbers.hh"
-
-#include "UI_interface_layout.hh"
-#include "UI_resources.hh"
+#include <numbers>
 
 #include "GPU_shader.hh"
 
@@ -19,28 +11,26 @@
 
 #include "node_composite_util.hh"
 
-/* **************** SPLIT NODE ******************** */
-
 namespace blender::nodes::node_composite_split_cc {
 
-static void cmp_node_split_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Position")
+  b.add_input<decl::Vector>("Position"_ustr)
       .dimensions(2)
       .subtype(PROP_FACTOR)
       .default_value({0.5f, 0.5f})
       .min(0.0f)
       .max(1.0f)
       .description("Line position where the image should be split");
-  b.add_input<decl::Float>("Rotation")
-      .default_value(math::numbers::pi_v<float> / 4.0f)
+  b.add_input<decl::Float>("Rotation"_ustr)
+      .default_value(std::numbers::pi_v<float> / 4.0f)
       .subtype(PROP_ANGLE)
       .description("Line angle where the image should be split");
 
-  b.add_input<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_input<decl::Color>("Image", "Image_001").structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr, "Image_001"_ustr).structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -72,9 +62,11 @@ class SplitOperation : public NodeOperation {
     GPU_shader_uniform_2fv(shader, "normal", normal);
 
     const Result &first_image = this->get_input("Image");
-    first_image.bind_as_texture(shader, "first_image_tx");
+    gpu::Texture *first_image_texture = first_image.bind_as_texture_or_single_value(
+        shader, "first_image_tx");
     const Result &second_image = this->get_input("Image_001");
-    second_image.bind_as_texture(shader, "second_image_tx");
+    gpu::Texture *second_image_texture = second_image.bind_as_texture_or_single_value(
+        shader, "second_image_tx");
 
     Result &output_image = this->get_result("Image");
     output_image.allocate_texture(domain);
@@ -82,8 +74,8 @@ class SplitOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first_image.unbind_as_texture();
-    second_image.unbind_as_texture();
+    first_image.unbind_as_texture_or_single_value(first_image_texture);
+    second_image.unbind_as_texture_or_single_value(second_image_texture);
     output_image.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -114,40 +106,38 @@ class SplitOperation : public NodeOperation {
   float2 get_position(const Domain &domain)
   {
     const float2 relative_position =
-        this->get_input("Position").get_single_value_default(float2(0.5f, 0.5f));
+        this->get_input("Position").get_single_value_default<float2>();
     return float2(domain.data_size) * relative_position;
   }
 
   math::AngleRadian get_rotation()
   {
-    return this->get_input("Rotation").get_single_value_default(0.0f);
+    return this->get_input("Rotation").get_single_value_default<float>();
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new SplitOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_split_cc
-
-static void register_node_type_cmp_split()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_split_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeSplit", CMP_NODE_SPLIT);
+  cmp_node_type_base(&ntype, "CompositorNodeSplit"_ustr, CMP_NODE_SPLIT);
   ntype.ui_name = "Split";
   ntype.ui_description =
       "Combine two images for side-by-side display. Typically used in combination with a Viewer "
       "node";
   ntype.enum_name_legacy = "SPLIT";
   ntype.nclass = NODE_CLASS_CONVERTER;
-  ntype.declare = file_ns::cmp_node_split_declare;
+  ntype.declare = node_declare;
   ntype.flag |= NODE_PREVIEW;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_split)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_split_cc

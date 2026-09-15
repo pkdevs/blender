@@ -17,7 +17,7 @@
 #  pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 #include "intern/GHOST_Context.hh"
 #include "intern/GHOST_ContextMTL.hh"
 #include "intern/GHOST_Window.hh"
@@ -50,6 +50,7 @@ class MTLContext;
 class MTLCommandBufferManager;
 class MTLUniformBuf;
 class MTLStorageBuf;
+class MTLTopLevelAS;
 
 /* Caching of resource bindings for active MTLRenderCommandEncoder.
  * In Metal, resource bindings are local to the MTLCommandEncoder,
@@ -216,19 +217,19 @@ struct MTLContextDepthStencilState {
                                   ((this->has_depth_target ? 1 : 0) << 3) |
                                   ((this->has_stencil_target ? 1 : 0) << 4);
 
-    std::size_t stencilop_bitmask = ((std::size_t)this->stencil_op_front_stencil_fail) |
-                                    ((std::size_t)this->stencil_op_front_depth_fail << 3) |
-                                    ((std::size_t)this->stencil_op_front_depthstencil_pass << 6) |
-                                    ((std::size_t)this->stencil_op_back_stencil_fail << 9) |
-                                    ((std::size_t)this->stencil_op_back_depth_fail << 12) |
-                                    ((std::size_t)this->stencil_op_back_depthstencil_pass << 15);
+    std::size_t stencilop_bitmask = (std::size_t(this->stencil_op_front_stencil_fail)) |
+                                    (std::size_t(this->stencil_op_front_depth_fail) << 3) |
+                                    (std::size_t(this->stencil_op_front_depthstencil_pass) << 6) |
+                                    (std::size_t(this->stencil_op_back_stencil_fail) << 9) |
+                                    (std::size_t(this->stencil_op_back_depth_fail) << 12) |
+                                    (std::size_t(this->stencil_op_back_depthstencil_pass) << 15);
 
-    std::size_t main_hash = (std::size_t)this->depth_function;
+    std::size_t main_hash = std::size_t(this->depth_function);
     if (this->has_stencil_target) {
-      main_hash += (std::size_t)(this->stencil_read_mask & 0xFF) << 8;
-      main_hash += (std::size_t)(this->stencil_write_mask & 0xFF) << 16;
+      main_hash += std::size_t(this->stencil_read_mask & 0xFF) << 8;
+      main_hash += std::size_t(this->stencil_write_mask & 0xFF) << 16;
     }
-    main_hash ^= (std::size_t)this->stencil_func << 16;
+    main_hash ^= std::size_t(this->stencil_func) << 16;
     main_hash ^= stencilop_bitmask;
 
     std::size_t final_hash = (main_hash << 8) | boolean_bitmask;
@@ -372,6 +373,11 @@ struct MTLStorageBufferBinding {
   MTLStorageBuf *ssbo = nullptr;
 };
 
+struct MTLAccelerationStructureBinding {
+  bool bound = false;
+  MTLTopLevelAS *tlas = nullptr;
+};
+
 struct MTLContextGlobalShaderPipelineState {
   /* Whether the pipeline state has been modified since application.
    * `dirty_flags` is a bitmask of the types of state which have been updated.
@@ -389,6 +395,8 @@ struct MTLContextGlobalShaderPipelineState {
   std::array<MTLUniformBufferBinding, MTL_MAX_UBO> ubo_bindings = {};
   /* Storage buffer. */
   std::array<MTLStorageBufferBinding, MTL_MAX_SSBO> ssbo_bindings = {};
+  /* Acceleration structure (single slot). */
+  std::array<MTLAccelerationStructureBinding, 1> acceleration_structure_bindings = {};
   /* Context Texture bindings. */
   std::array<MTLTextureBinding, MTL_MAX_SAMPLER_SLOTS> texture_bindings = {};
   std::array<MTLSamplerBinding, MTL_MAX_SAMPLER_SLOTS> sampler_bindings = {};
@@ -474,12 +482,14 @@ class MTLCommandBufferManager {
     MTL_NO_COMMAND_ENCODER = 0,
     MTL_RENDER_COMMAND_ENCODER = 1,
     MTL_BLIT_COMMAND_ENCODER = 2,
-    MTL_COMPUTE_COMMAND_ENCODER = 3
+    MTL_COMPUTE_COMMAND_ENCODER = 3,
+    MTL_ACCELERATION_STRUCTURE_COMMAND_ENCODER = 4
   } active_command_encoder_type_ = MTL_NO_COMMAND_ENCODER;
 
   id<MTLRenderCommandEncoder> active_render_command_encoder_ = nil;
   id<MTLBlitCommandEncoder> active_blit_command_encoder_ = nil;
   id<MTLComputeCommandEncoder> active_compute_command_encoder_ = nil;
+  id<MTLAccelerationStructureCommandEncoder> active_acceleration_structure_command_encoder_ = nil;
 
   /* State associated with active RenderCommandEncoder. */
   MTLRenderPassState render_pass_state_;
@@ -548,6 +558,7 @@ class MTLCommandBufferManager {
                                                                   bool *r_new_pass);
   id<MTLBlitCommandEncoder> ensure_begin_blit_encoder();
   id<MTLComputeCommandEncoder> ensure_begin_compute_encoder();
+  id<MTLAccelerationStructureCommandEncoder> ensure_begin_acceleration_structure_encoder();
 
   /* Workload Synchronization. */
   bool insert_memory_barrier(GPUBarrier barrier_bits,
@@ -706,7 +717,7 @@ class MTLContext : public Context {
 
  public:
   /* GPUContext interface. */
-  MTLContext(void *ghost_window, void *ghost_context);
+  MTLContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context);
   ~MTLContext();
 
   static void check_error(const char *info);
@@ -916,8 +927,8 @@ class MTLContext : public Context {
   }
 
  private:
-  void set_ghost_context(GHOST_ContextHandle ghostCtxHandle);
-  void set_ghost_window(GHOST_WindowHandle ghostWinHandle);
+  void set_ghost_context(GHOST_IContext *ghostCtxHandle);
+  void set_ghost_window(GHOST_IWindow *ghostWinHandle);
 };
 
 /* GHOST Context callbacks. */

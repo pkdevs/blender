@@ -24,17 +24,28 @@
 #include <string>
 #include <vector>
 
+namespace blender {
+
 struct CustomData;
 struct Mesh;
 
 using Alembic::Abc::ICompoundProperty;
 using Alembic::Abc::OCompoundProperty;
+using Alembic::Abc::UInt32ArraySamplePtr;
+using Alembic::Abc::V2fArraySamplePtr;
 using Alembic::Abc::V3fArraySamplePtr;
-namespace blender::io::alembic {
+
+namespace io::alembic {
 
 struct UVSample {
   std::vector<Imath::V2f> uvs;
   std::vector<uint32_t> indices;
+};
+
+enum AbcUvScope {
+  ABC_UV_SCOPE_NONE,
+  ABC_UV_SCOPE_LOOP,
+  ABC_UV_SCOPE_VERTEX,
 };
 
 struct CDStreamConfig {
@@ -73,6 +84,10 @@ struct CDStreamConfig {
   /* Mapping from vertex color layer name to its Alembic color data. */
   std::map<std::string, Alembic::AbcGeom::OC4fGeomParam> abc_vertex_colors;
 
+  AbcUvScope uv_scope;
+  V2fArraySamplePtr uvs;
+  UInt32ArraySamplePtr uvs_indices;
+
   CDStreamConfig() = default;
 };
 
@@ -102,12 +117,6 @@ void read_custom_data(const std::string &iobject_full_name,
                       const CDStreamConfig &config,
                       const Alembic::Abc::ISampleSelector &iss);
 
-enum AbcUvScope {
-  ABC_UV_SCOPE_NONE,
-  ABC_UV_SCOPE_LOOP,
-  ABC_UV_SCOPE_VERTEX,
-};
-
 /**
  * UVs can be defined per-loop (one value per vertex per face), or per-vertex (one value per
  * vertex). The first case is the most common, as this is the standard way of storing this data
@@ -120,4 +129,5 @@ AbcUvScope get_uv_scope(const Alembic::AbcGeom::GeometryScope scope,
                         const CDStreamConfig &config,
                         const Alembic::AbcGeom::UInt32ArraySamplePtr &indices);
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

@@ -24,7 +24,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_undo.hh" /* own include */
@@ -39,6 +39,8 @@
 #include "BLO_writefile.hh"
 
 #include "DEG_depsgraph.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Global Undo
@@ -98,7 +100,7 @@ bool BKE_memfile_undo_decode(MemFileUndoData *mfu,
 
 MemFileUndoData *BKE_memfile_undo_encode(Main *bmain, MemFileUndoData *mfu_prev)
 {
-  MemFileUndoData *mfu = MEM_callocN<MemFileUndoData>(__func__);
+  MemFileUndoData *mfu = MEM_new_zeroed<MemFileUndoData>(__func__);
 
   /* This flag used to be set because the undo step was written as #BLENDER_QUIT_FILE. It's not
    * clear whether there are still good reasons to keep it. Undo can also be thought of as a kind
@@ -141,7 +143,9 @@ MemFileUndoData *BKE_memfile_undo_encode(Main *bmain, MemFileUndoData *mfu_prev)
 void BKE_memfile_undo_free(MemFileUndoData *mfu)
 {
   BLO_memfile_free(&mfu->memfile);
-  MEM_freeN(mfu);
+  MEM_delete(mfu);
 }
 
 /** \} */
+
+}  // namespace blender

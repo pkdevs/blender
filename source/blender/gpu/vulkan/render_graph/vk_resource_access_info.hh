@@ -45,7 +45,7 @@ struct VKImageAccess {
 
 /** Struct describing the access to a buffer. */
 struct VKBufferAccess {
-  VkBuffer vk_buffer;
+  ResourceHandle handle;
   VkAccessFlags vk_access_flags;
 };
 
@@ -57,7 +57,7 @@ struct VKResourceAccessInfo : NonCopyable {
   /**
    * Extract read/write resource dependencies and add them to `node_links`.
    */
-  void build_links(VKResourceStateTracker &resources, VKRenderGraphNodeLinks &node_links) const;
+  void build_links(VKResourceStateTracker &resources, VKRenderGraphLinks &links) const;
 
   /**
    * Reset the instance for reuse.

@@ -19,6 +19,24 @@
 
 #include "multires_reshape.hh"
 
+namespace blender {
+
+/**
+ * Store the original grids, which #multires_reshape_smooth_object_grids_with_details needs to
+ * propagate existing details to the higher levels.
+ *
+ * Storing them duplicates the entire #CD_MDISPS layer, so skip it when the smoothing is going to
+ * be skipped as well, which is the case when displacement is assigned at the top level.
+ */
+static void multiresModifier_reshape_store_original_grids_for_smoothing(
+    MultiresReshapeContext *reshape_context)
+{
+  if (reshape_context->top.level == reshape_context->reshape.level) {
+    return;
+  }
+  multires_reshape_store_original_grids(reshape_context);
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Reshape from object
  * \{ */
@@ -26,14 +44,14 @@
 static bool multiresModifier_reshapeFromVertcos(Depsgraph *depsgraph,
                                                 Object *object,
                                                 MultiresModifierData *mmd,
-                                                blender::Span<blender::float3> positions)
+                                                Span<float3> positions)
 {
   MultiresReshapeContext reshape_context;
   if (!multires_reshape_context_create_from_object(&reshape_context, depsgraph, object, mmd)) {
     return false;
   }
-  multires_reshape_store_original_grids(&reshape_context);
-  multires_reshape_ensure_grids(static_cast<Mesh *>(object->data), reshape_context.top.level);
+  multiresModifier_reshape_store_original_grids_for_smoothing(&reshape_context);
+  multires_reshape_ensure_grids(id_cast<Mesh *>(object->data), reshape_context.top.level);
   if (!multires_reshape_assign_final_coords_from_vertcos(&reshape_context, positions)) {
     multires_reshape_context_free(&reshape_context);
     return false;
@@ -72,8 +90,7 @@ bool multiresModifier_reshapeFromDeformModifier(Depsgraph *depsgraph,
                                                 MultiresModifierData *mmd,
                                                 ModifierData *deform_md)
 {
-  using namespace blender;
-  MultiresModifierData highest_mmd = blender::dna::shallow_copy(*mmd);
+  MultiresModifierData highest_mmd = dna::shallow_copy(*mmd);
   highest_mmd.sculptlvl = highest_mmd.totlvl;
   highest_mmd.lvl = highest_mmd.totlvl;
   highest_mmd.renderlvl = highest_mmd.totlvl;
@@ -120,7 +137,7 @@ bool multiresModifier_reshapeFromCCG(const int tot_level, Mesh *coarse_mesh, Sub
 
   multires_ensure_external_read(coarse_mesh, reshape_context.top.level);
 
-  multires_reshape_store_original_grids(&reshape_context);
+  multiresModifier_reshape_store_original_grids_for_smoothing(&reshape_context);
   multires_reshape_ensure_grids(coarse_mesh, reshape_context.top.level);
   if (!multires_reshape_assign_final_coords_from_ccg(&reshape_context, subdiv_ccg)) {
     multires_reshape_context_free(&reshape_context);
@@ -155,7 +172,7 @@ void multiresModifier_subdivide_to_level(Object *object,
     return;
   }
 
-  Mesh *coarse_mesh = static_cast<Mesh *>(object->data);
+  Mesh *coarse_mesh = id_cast<Mesh *>(object->data);
   if (coarse_mesh->corners_num == 0) {
     /* If there are no loops in the mesh implies there is no CD_MDISPS as well. So can early output
      * from here as there is nothing to subdivide. */
@@ -262,6 +279,7 @@ void multiresModifier_base_apply(Depsgraph *depsgraph,
   if (mode == ApplyBaseMode::ForSubdivision) {
     multires_reshape_apply_base_refit_base_mesh(&reshape_context);
   }
+  multires_reshape_apply_base_update_shape_key(&reshape_context);
 
   /* Reshape to the stored final state.
    * Not that the base changed, so the subdiv is to be refined to the new positions. Unfortunately,
@@ -274,3 +292,5 @@ void multiresModifier_base_apply(Depsgraph *depsgraph,
 }
 
 /** \} */
+
+}  // namespace blender

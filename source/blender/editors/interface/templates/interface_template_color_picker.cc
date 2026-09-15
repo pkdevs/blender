@@ -6,8 +6,8 @@
  * \ingroup edinterface
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -53,19 +53,19 @@ void template_color_picker(Layout *layout,
     case USER_CP_SQUARE_SV:
     case USER_CP_SQUARE_HS:
     case USER_CP_SQUARE_HV:
-      hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                ButtonType::HsvCube,
-                                                "",
-                                                0,
-                                                0,
-                                                WHEEL_SIZE,
-                                                WHEEL_SIZE,
-                                                ptr,
-                                                prop,
-                                                -1,
-                                                0.0,
-                                                0.0,
-                                                "");
+      hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                            ButtonType::HsvCube,
+                                                            "",
+                                                            0,
+                                                            0,
+                                                            WHEEL_SIZE,
+                                                            WHEEL_SIZE,
+                                                            ptr,
+                                                            prop,
+                                                            -1,
+                                                            0.0,
+                                                            0.0,
+                                                            ""));
       switch (U.color_picker_type) {
         case USER_CP_SQUARE_SV:
           hsv_but->gradient_type = GRAD_SV;
@@ -75,6 +75,9 @@ void template_color_picker(Layout *layout,
           break;
         case USER_CP_SQUARE_HV:
           hsv_but->gradient_type = GRAD_HV;
+          break;
+        case USER_CP_CIRCLE_HSV:
+        case USER_CP_CIRCLE_HSL:
           break;
       }
       but = hsv_but;
@@ -116,70 +119,70 @@ void template_color_picker(Layout *layout,
     switch (U.color_picker_type) {
       case USER_CP_CIRCLE_HSL:
         row.separator();
-        hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                  ButtonType::HsvCube,
-                                                  "",
-                                                  WHEEL_SIZE + 6,
-                                                  0,
-                                                  14 * UI_SCALE_FAC,
-                                                  WHEEL_SIZE,
-                                                  ptr,
-                                                  prop,
-                                                  -1,
-                                                  softmin,
-                                                  softmax,
-                                                  "");
+        hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                              ButtonType::HsvCube,
+                                                              "",
+                                                              WHEEL_SIZE + 6,
+                                                              0,
+                                                              14 * UI_SCALE_FAC,
+                                                              WHEEL_SIZE,
+                                                              ptr,
+                                                              prop,
+                                                              -1,
+                                                              softmin,
+                                                              softmax,
+                                                              ""));
         hsv_but->gradient_type = GRAD_L_ALT;
         break;
       case USER_CP_SQUARE_SV:
         col.separator();
-        hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                  ButtonType::HsvCube,
-                                                  "",
-                                                  0,
-                                                  4,
-                                                  WHEEL_SIZE,
-                                                  18 * UI_SCALE_FAC,
-                                                  ptr,
-                                                  prop,
-                                                  -1,
-                                                  softmin,
-                                                  softmax,
-                                                  "");
+        hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                              ButtonType::HsvCube,
+                                                              "",
+                                                              0,
+                                                              4,
+                                                              WHEEL_SIZE,
+                                                              18 * UI_SCALE_FAC,
+                                                              ptr,
+                                                              prop,
+                                                              -1,
+                                                              softmin,
+                                                              softmax,
+                                                              ""));
         hsv_but->gradient_type = eButGradientType(GRAD_SV + 3);
         break;
       case USER_CP_SQUARE_HS:
         col.separator();
-        hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                  ButtonType::HsvCube,
-                                                  "",
-                                                  0,
-                                                  4,
-                                                  WHEEL_SIZE,
-                                                  18 * UI_SCALE_FAC,
-                                                  ptr,
-                                                  prop,
-                                                  -1,
-                                                  softmin,
-                                                  softmax,
-                                                  "");
+        hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                              ButtonType::HsvCube,
+                                                              "",
+                                                              0,
+                                                              4,
+                                                              WHEEL_SIZE,
+                                                              18 * UI_SCALE_FAC,
+                                                              ptr,
+                                                              prop,
+                                                              -1,
+                                                              softmin,
+                                                              softmax,
+                                                              ""));
         hsv_but->gradient_type = eButGradientType(GRAD_HS + 3);
         break;
       case USER_CP_SQUARE_HV:
         col.separator();
-        hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                  ButtonType::HsvCube,
-                                                  "",
-                                                  0,
-                                                  4,
-                                                  WHEEL_SIZE,
-                                                  18 * UI_SCALE_FAC,
-                                                  ptr,
-                                                  prop,
-                                                  -1,
-                                                  softmin,
-                                                  softmax,
-                                                  "");
+        hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                              ButtonType::HsvCube,
+                                                              "",
+                                                              0,
+                                                              4,
+                                                              WHEEL_SIZE,
+                                                              18 * UI_SCALE_FAC,
+                                                              ptr,
+                                                              prop,
+                                                              -1,
+                                                              softmin,
+                                                              softmax,
+                                                              ""));
         hsv_but->gradient_type = eButGradientType(GRAD_HV + 3);
         break;
 
@@ -187,19 +190,19 @@ void template_color_picker(Layout *layout,
       case USER_CP_CIRCLE_HSV:
       default:
         row.separator();
-        hsv_but = (ButtonHSVCube *)uiDefButR_prop(block,
-                                                  ButtonType::HsvCube,
-                                                  "",
-                                                  WHEEL_SIZE + 6,
-                                                  0,
-                                                  14 * UI_SCALE_FAC,
-                                                  WHEEL_SIZE,
-                                                  ptr,
-                                                  prop,
-                                                  -1,
-                                                  softmin,
-                                                  softmax,
-                                                  "");
+        hsv_but = static_cast<ButtonHSVCube *>(uiDefButR_prop(block,
+                                                              ButtonType::HsvCube,
+                                                              "",
+                                                              WHEEL_SIZE + 6,
+                                                              0,
+                                                              14 * UI_SCALE_FAC,
+                                                              WHEEL_SIZE,
+                                                              ptr,
+                                                              prop,
+                                                              -1,
+                                                              softmin,
+                                                              softmax,
+                                                              ""));
         hsv_but->gradient_type = GRAD_V_ALT;
         break;
     }
@@ -208,7 +211,7 @@ void template_color_picker(Layout *layout,
   }
 }
 
-static void ui_template_palette_menu(bContext * /*C*/, Layout *layout, void * /*but_p*/)
+static void template_palette_menu(bContext * /*C*/, Layout *layout, void * /*but_p*/)
 {
 
   layout->label(IFACE_("Sort By:"), ICON_NONE);
@@ -226,10 +229,7 @@ static void ui_template_palette_menu(bContext * /*C*/, Layout *layout, void * /*
   RNA_enum_set(&op_ptr, "type", 4);
 }
 
-void template_palette(Layout *layout,
-                      PointerRNA *ptr,
-                      const StringRefNull propname,
-                      bool /*colors*/)
+void template_palette(Layout *layout, PointerRNA *ptr, const StringRefNull propname)
 {
   PropertyRNA *prop = RNA_struct_find_property(ptr, propname.c_str());
   Button *but = nullptr;
@@ -242,7 +242,7 @@ void template_palette(Layout *layout,
   }
 
   const PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, &RNA_Palette)) {
+  if (!cptr || !RNA_struct_is_a(cptr.type, RNA_Palette)) {
     return;
   }
 
@@ -272,7 +272,7 @@ void template_palette(Layout *layout,
                 UI_UNIT_X,
                 UI_UNIT_Y,
                 std::nullopt);
-  if (palette->colors.first != nullptr) {
+  if (palette->colors.first() != nullptr) {
     but = uiDefIconButO(block,
                         ButtonType::But,
                         "PALETTE_OT_color_move",
@@ -301,33 +301,33 @@ void template_palette(Layout *layout,
 
     /* Menu. */
     uiDefIconMenuBut(
-        block, ui_template_palette_menu, nullptr, ICON_SORTSIZE, 0, 0, UI_UNIT_X, UI_UNIT_Y, "");
+        block, template_palette_menu, nullptr, ICON_SORTSIZE, 0, 0, UI_UNIT_X, UI_UNIT_Y, "");
   }
 
   col = &layout->column(true);
   col->row(true);
 
   int row_cols = 0, col_id = 0;
-  LISTBASE_FOREACH (PaletteColor *, color, &palette->colors) {
+  for (PaletteColor &color : palette->colors) {
     if (row_cols >= cols_per_row) {
       col->row(true);
       row_cols = 0;
     }
 
-    PointerRNA color_ptr = RNA_pointer_create_discrete(&palette->id, &RNA_PaletteColor, color);
-    ButtonColor *color_but = (ButtonColor *)uiDefButR(block,
-                                                      ButtonType::Color,
-                                                      "",
-                                                      0,
-                                                      0,
-                                                      UI_UNIT_X,
-                                                      UI_UNIT_Y,
-                                                      &color_ptr,
-                                                      "color",
-                                                      -1,
-                                                      0.0,
-                                                      1.0,
-                                                      "");
+    PointerRNA color_ptr = RNA_pointer_create_discrete(&palette->id, RNA_PaletteColor, &color);
+    ButtonColor *color_but = static_cast<ButtonColor *>(uiDefButR(block,
+                                                                  ButtonType::Color,
+                                                                  "",
+                                                                  0,
+                                                                  0,
+                                                                  UI_UNIT_X,
+                                                                  UI_UNIT_Y,
+                                                                  &color_ptr,
+                                                                  "color",
+                                                                  -1,
+                                                                  0.0,
+                                                                  1.0,
+                                                                  ""));
     color_but->is_pallete_color = true;
     color_but->palette_color_index = col_id;
     row_cols++;

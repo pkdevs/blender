@@ -10,10 +10,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>  // IWYU pragma: export
 #include <type_traits>
 
-#include "BLI_math_numbers.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender::math {
 
@@ -223,10 +223,10 @@ template<typename T> inline T exp(const T &x)
 
 template<typename T> inline T safe_acos(const T &a)
 {
-  if (UNLIKELY(a <= T(-1))) {
-    return T(numbers::pi);
+  if (a <= T(-1)) [[unlikely]] {
+    return T(std::numbers::pi);
   }
-  if (UNLIKELY(a >= T(1))) {
+  if (a >= T(1)) [[unlikely]] {
     return T(0);
   }
   return math::acos((a));
@@ -247,7 +247,7 @@ inline float safe_acos_approx(float x)
    */
   const float a = std::sqrt(1.0f - m) *
                   (1.5707963267f + m * (-0.213300989f + m * (0.077980478f + m * -0.02164095f)));
-  return x < 0.0f ? float(numbers::pi) - a : a;
+  return x < 0.0f ? float(std::numbers::pi) - a : a;
 }
 
 template<typename T> inline T asin(const T &a)

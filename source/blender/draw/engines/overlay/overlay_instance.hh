@@ -108,13 +108,12 @@ class Instance : public DrawEngine {
   } regular{selection_type_}, infront{selection_type_};
 
   Grid grid;
-
   AntiAliasing anti_aliasing;
   XrayFade xray_fade;
 
   Instance() : selection_type_(select::SelectionType::DISABLED) {};
   Instance(const SelectionType selection_type) : selection_type_(selection_type) {};
-  ~Instance()
+  ~Instance() override
   {
     DRW_text_cache_destroy(state.dt);
   }

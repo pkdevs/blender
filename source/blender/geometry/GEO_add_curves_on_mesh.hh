@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 
 #include "BLI_math_vector_types.hh"
@@ -11,12 +15,12 @@
 
 #include "GEO_reverse_uv_sampler.hh"
 
-struct Mesh;
 namespace blender {
-struct KDTree_3d;
-}  // namespace blender
 
-namespace blender::geometry {
+struct Mesh;
+template<typename CoordT> struct KDTree;
+
+namespace geometry {
 
 struct AddCurvesOnMeshInputs {
   /** UV Coordinates at which the new curves should be added. */
@@ -44,7 +48,7 @@ struct AddCurvesOnMeshInputs {
    * KD-Tree that contains the root points of existing curves. This is only necessary when
    * interpolation is used.
    */
-  KDTree_3d *old_roots_kdtree = nullptr;
+  KDTree<float3> *old_roots_kdtree = nullptr;
 
   bool r_uv_error = false;
 };
@@ -65,4 +69,5 @@ float3 compute_surface_point_normal(const int3 &tri,
                                     const float3 &bary_coord,
                                     Span<float3> corner_normals);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

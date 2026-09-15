@@ -10,21 +10,23 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
+#include "BLI_array.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_stack.h"
 #include "BLI_stack.hh"
-#include "BLI_utildefines_stack.h"
+#include "BLI_stack_c.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "BKE_customdata.hh"
 
 #include "bmesh.hh"
 #include "intern/bmesh_operators_private.hh"
+
+namespace blender {
 
 static void remdoubles_splitface(BMFace *f, BMesh *bm, BMOperator *op, BMOpSlot *slot_targetmap)
 {
@@ -73,11 +75,14 @@ static BMFace *remdoubles_createface(BMesh *bm,
   BMEdge *e_new;
 
   /* New ordered edges. */
-  BMEdge **edges = BLI_array_alloca(edges, f->len);
+  Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edges_buf(f->len);
+  BMEdge **edges = edges_buf.data();
   /* New ordered verts. */
-  BMVert **verts = BLI_array_alloca(verts, f->len);
+  Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> verts_buf(f->len);
+  BMVert **verts = verts_buf.data();
   /* Original ordered loops to copy attributes into the new face. */
-  BMLoop **loops = BLI_array_alloca(loops, f->len);
+  Array<BMLoop *, BM_DEFAULT_NGON_STACK_SIZE> loops_buf(f->len);
+  BMLoop **loops = loops_buf.data();
 
   STACK_DECLARE(edges);
   STACK_DECLARE(loops);
@@ -125,7 +130,7 @@ static BMFace *remdoubles_createface(BMesh *bm,
       }
 
       if (e_new) {
-        if (UNLIKELY(BMO_vert_flag_test(bm, v_curr, VERT_IN_FACE))) {
+        if (BMO_vert_flag_test(bm, v_curr, VERT_IN_FACE)) [[unlikely]] {
           /* We can't make the face, bail out. */
           STACK_CLEAR(edges);
           goto finally;
@@ -189,14 +194,16 @@ void bmo_weld_verts_exec(BMesh *bm, BMOperator *op)
   BMFace *f;
   BMOpSlot *slot_targetmap = BMO_slot_get(op->slots_in, "targetmap");
   const bool use_centroid = BMO_slot_bool_get(op->slots_in, "use_centroid");
+  const bool average_vert_data = BMO_slot_bool_get(op->slots_in, "average_vert_data") ||
+                                 use_centroid;
 
   /* Maintain selection history. */
-  const bool has_selected = !BLI_listbase_is_empty(&bm->selected);
+  const bool has_selected = !bm->selected.is_empty();
   const bool use_targetmap_all = has_selected;
-  blender::Map<void *, void *> targetmap_all;
+  Map<void *, void *> targetmap_all;
 
-  /* Used when use_centroid is true. */
-  blender::MultiValueMap<BMVert *, BMVert *> clusters;
+  /* Used when use_centroid or average_vert_data is true. */
+  MultiValueMap<BMVert *, BMVert *> clusters;
 
   /* Mark merge verts for deletion. */
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
@@ -216,7 +223,7 @@ void bmo_weld_verts_exec(BMesh *bm, BMOperator *op)
     }
 
     /* Group vertices by their survivor. */
-    if (use_centroid && LIKELY(v_dst != v)) {
+    if (average_vert_data && LIKELY(v_dst != v)) {
       clusters.add(v_dst, v);
     }
   }
@@ -225,7 +232,7 @@ void bmo_weld_verts_exec(BMesh *bm, BMOperator *op)
     /* Compute centroid for each survivor. */
     for (const auto &item : clusters.items()) {
       BMVert *v_dst = item.key;
-      blender::Span<BMVert *> cluster = item.value;
+      Span<BMVert *> cluster = item.value;
 
       float centroid[3];
       copy_v3_v3(centroid, v_dst->co);
@@ -238,6 +245,21 @@ void bmo_weld_verts_exec(BMesh *bm, BMOperator *op)
 
       mul_v3_fl(centroid, 1.0f / float(count));
       copy_v3_v3(v_dst->co, centroid);
+    }
+  }
+
+  if (average_vert_data) {
+    for (const auto &item : clusters.items()) {
+      BMVert *v_dst = item.key;
+      Span<BMVert *> merged_verts = item.value;
+
+      Array<const void *> src_blocks(merged_verts.size() + 1);
+      src_blocks[0] = v_dst->head.data;
+      for (const int i : merged_verts.index_range()) {
+        src_blocks[i + 1] = merged_verts[i]->head.data;
+      }
+      CustomData_bmesh_interp(
+          &bm->vdata, src_blocks.data(), nullptr, src_blocks.size(), v_dst->head.data);
     }
   }
 
@@ -309,7 +331,8 @@ void bmo_weld_verts_exec(BMesh *bm, BMOperator *op)
             bmesh_face_swap_data(f_new, f);
 
             if (bm->use_toolflags) {
-              std::swap(((BMFace_OFlag *)f)->oflags, ((BMFace_OFlag *)f_new)->oflags);
+              std::swap((reinterpret_cast<BMFace_OFlag *>(f))->oflags,
+                        (reinterpret_cast<BMFace_OFlag *>(f_new))->oflags);
             }
 
             BMO_face_flag_disable(bm, f, ELE_DEL);
@@ -350,21 +373,21 @@ void bmo_pointmerge_facedata_exec(BMesh *bm, BMOperator *op)
 {
   BMOIter siter;
   BMIter iter;
-  BMVert *v, *vert_snap;
+  BMVert *v, *vert_target;
   BMLoop *l, *l_first = nullptr;
   float fac;
   int i, tot;
 
-  vert_snap = static_cast<BMVert *>(
-      BMO_slot_buffer_get_single(BMO_slot_get(op->slots_in, "vert_snap")));
-  tot = BM_vert_face_count(vert_snap);
+  vert_target = static_cast<BMVert *>(
+      BMO_slot_buffer_get_single(BMO_slot_get(op->slots_in, "vert_target")));
+  tot = BM_vert_face_count(vert_target);
 
   if (!tot) {
     return;
   }
 
   fac = 1.0f / tot;
-  BM_ITER_ELEM (l, &iter, vert_snap, BM_LOOPS_OF_VERT) {
+  BM_ITER_ELEM (l, &iter, vert_target, BM_LOOPS_OF_VERT) {
     if (l_first == nullptr) {
       l_first = l;
     }
@@ -441,7 +464,7 @@ void bmo_pointmerge_exec(BMesh *bm, BMOperator *op)
 {
   BMOperator weldop;
   BMOIter siter;
-  BMVert *v, *vert_snap = nullptr;
+  BMVert *v, *vert_target = nullptr;
   float vec[3];
   BMOpSlot *slot_targetmap;
 
@@ -452,14 +475,23 @@ void bmo_pointmerge_exec(BMesh *bm, BMOperator *op)
 
   slot_targetmap = BMO_slot_get(weldop.slots_in, "targetmap");
 
+  vert_target = static_cast<BMVert *>(
+      BMO_slot_buffer_get_single(BMO_slot_get(op->slots_in, "vert_target")));
+
+  const bool is_explicit_snap = vert_target != nullptr;
+
   BMO_ITER (v, &siter, op->slots_in, "verts", BM_VERT) {
-    if (!vert_snap) {
-      vert_snap = v;
-      copy_v3_v3(vert_snap->co, vec);
+    if (!vert_target) {
+      vert_target = v;
+      copy_v3_v3(vert_target->co, vec);
     }
-    else {
-      BMO_slot_map_elem_insert(&weldop, slot_targetmap, v, vert_snap);
+    else if (v != vert_target) {
+      BMO_slot_map_elem_insert(&weldop, slot_targetmap, v, vert_target);
     }
+  }
+
+  if (!is_explicit_snap) {
+    BMO_slot_bool_set(weldop.slots_in, "average_vert_data", true);
   }
 
   BMO_op_exec(bm, &weldop);
@@ -491,7 +523,8 @@ void bmo_collapse_exec(BMesh *bm, BMOperator *op)
            EDGE_MARK,
            BMW_MASK_NOP,
            BMW_FLAG_NOP, /* No need to use #BMW_FLAG_TEST_HIDDEN, already marked data. */
-           BMW_NIL_LAY);
+           BMW_NIL_LAY,
+           BMW_DELIMIT_NONE);
 
   edge_stack = BLI_stack_new(sizeof(BMEdge *), __func__);
 
@@ -527,7 +560,7 @@ void bmo_collapse_exec(BMesh *bm, BMOperator *op)
       mul_v3_fl(center, 1.0f / count);
 
       /* Snap edges to a point.  for initial testing purposes anyway. */
-      e = *(BMEdge **)BLI_stack_peek(edge_stack);
+      e = *static_cast<BMEdge **>(BLI_stack_peek(edge_stack));
       v_tar = e->v1;
 
       while (!BLI_stack_is_empty(edge_stack)) {
@@ -574,7 +607,8 @@ static void bmo_collapsecon_do_layer(BMesh *bm, const int layer, const short ofl
            oflag,
            BMW_MASK_NOP,
            BMW_FLAG_NOP, /* No need to use #BMW_FLAG_TEST_HIDDEN, already marked data. */
-           layer);
+           layer,
+           BMW_DELIMIT_NONE);
 
   block_stack = BLI_stack_new(sizeof(void *), __func__);
 
@@ -658,13 +692,13 @@ static int *bmesh_find_doubles_by_distance_impl(BMesh *bm,
                                                 const float dist,
                                                 const bool has_keep_vert)
 {
-  int *duplicates = MEM_malloc_arrayN<int>(verts_len, __func__);
+  int *duplicates = MEM_new_array_uninitialized<int>(verts_len, __func__);
   bool found_duplicates = false;
   bool has_self_index = false;
 
-  blender::KDTree_3d *tree = blender::kdtree_3d_new(verts_len);
+  KDTree<float3> *tree = kdtree_new<float3>(verts_len);
   for (int i = 0; i < verts_len; i++) {
-    blender::kdtree_3d_insert(tree, i, verts[i]->co);
+    kdtree_insert<float3>(tree, i, verts[i]->co);
     if (has_keep_vert && BMO_vert_flag_test(bm, verts[i], VERT_KEEP)) {
       duplicates[i] = i;
       has_self_index = true;
@@ -674,7 +708,7 @@ static int *bmesh_find_doubles_by_distance_impl(BMesh *bm,
     }
   }
 
-  blender::kdtree_3d_balance(tree);
+  kdtree_balance<float3>(tree);
 
   /* Given a cluster of duplicates, pick the index to keep. */
   auto deduplicate_target_calc_fn = [&verts](const int *cluster, const int cluster_num) -> int {
@@ -685,9 +719,9 @@ static int *bmesh_find_doubles_by_distance_impl(BMesh *bm,
     }
     BLI_assert(cluster_num > 2);
 
-    blender::float3 centroid{0.0f};
+    float3 centroid{0.0f};
     for (int i = 0; i < cluster_num; i++) {
-      centroid += blender::float3(verts[cluster[i]]->co);
+      centroid += float3(verts[cluster[i]]->co);
     }
     centroid /= float(cluster_num);
 
@@ -714,13 +748,13 @@ static int *bmesh_find_doubles_by_distance_impl(BMesh *bm,
     return i_best;
   };
 
-  found_duplicates = blender::kdtree_3d_calc_duplicates_cb_cpp(
+  found_duplicates = kdtree_calc_duplicates_cb<float3>(
                          tree, dist, duplicates, has_self_index, deduplicate_target_calc_fn) != 0;
 
-  blender::kdtree_3d_free(tree);
+  kdtree_free<float3>(tree);
 
   if (!found_duplicates) {
-    MEM_freeN(duplicates);
+    MEM_delete(duplicates);
     duplicates = nullptr;
   }
   return duplicates;
@@ -733,11 +767,11 @@ static int *bmesh_find_doubles_by_distance_connected_impl(BMesh *bm,
                                                           const float dist,
                                                           const bool has_keep_vert)
 {
-  int *duplicates = MEM_malloc_arrayN<int>(verts_len, __func__);
+  int *duplicates = MEM_new_array_uninitialized<int>(verts_len, __func__);
   bool found_duplicates = false;
 
-  blender::Stack<int> vert_stack;
-  blender::Map<BMVert *, int> vert_to_index_map;
+  Stack<int> vert_stack;
+  Map<BMVert *, int> vert_to_index_map;
 
   for (int i = 0; i < verts_len; i++) {
     if (has_keep_vert && BMO_vert_flag_test(bm, verts[i], VERT_KEEP)) {
@@ -749,7 +783,7 @@ static int *bmesh_find_doubles_by_distance_connected_impl(BMesh *bm,
     vert_to_index_map.add(verts[i], i);
   }
 
-  const float dist_sq = blender::math::square(dist);
+  const float dist_sq = math::square(dist);
 
   for (int i = 0; i < verts_len; i++) {
     if (!ELEM(duplicates[i], -1, i)) {
@@ -813,7 +847,7 @@ static int *bmesh_find_doubles_by_distance_connected_impl(BMesh *bm,
   }
 
   if (!found_duplicates) {
-    MEM_freeN(duplicates);
+    MEM_delete(duplicates);
     duplicates = nullptr;
   }
   return duplicates;
@@ -827,7 +861,7 @@ static void bmesh_find_doubles_common(BMesh *bm,
   const bool use_connected = BMO_slot_bool_get(op->slots_in, "use_connected");
 
   const BMOpSlot *slot_verts = BMO_slot_get(op->slots_in, "verts");
-  BMVert *const *verts = (BMVert **)slot_verts->data.buf;
+  BMVert *const *verts = reinterpret_cast<BMVert **>(slot_verts->data.buf);
   const int verts_len = slot_verts->len;
 
   bool has_keep_vert = false;
@@ -870,7 +904,7 @@ static void bmesh_find_doubles_common(BMesh *bm,
         BMO_slot_map_elem_insert(optarget, optarget_slot, v_check, v_other);
       }
     }
-    MEM_freeN(duplicates);
+    MEM_delete(duplicates);
   }
 }
 
@@ -892,3 +926,5 @@ void bmo_find_doubles_exec(BMesh *bm, BMOperator *op)
   slot_targetmap_out = BMO_slot_get(op->slots_out, "targetmap.out");
   bmesh_find_doubles_common(bm, op, op, slot_targetmap_out);
 }
+
+}  // namespace blender

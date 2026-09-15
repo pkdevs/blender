@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <iostream>
 
 #include "BKE_node.hh"
@@ -11,7 +15,6 @@
 #include "BLI_bit_group_vector.hh"
 #include "BLI_bit_span_ops.hh"
 #include "BLI_set.hh"
-#include "BLI_struct_equality_utils.hh"
 
 namespace blender::bke {
 
@@ -77,7 +80,7 @@ struct ZoneRelation {
     return get_default_hash(this->parent, this->child);
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_2(ZoneRelation, parent, child)
+  friend bool operator==(const ZoneRelation &a, const ZoneRelation &b) = default;
 };
 
 static std::optional<Vector<ZoneRelation>> get_direct_zone_relations(
@@ -128,7 +131,7 @@ static std::optional<Vector<ZoneRelation>> get_direct_zone_relations(
       }
     }
   }
-  std::sort(transitive_relations.begin(), transitive_relations.end(), std::greater<>());
+  std::ranges::sort(transitive_relations, std::greater<>());
 
   Vector<ZoneRelation> zone_relations = all_zone_relations.as_span();
   for (const int i : transitive_relations) {
@@ -341,11 +344,11 @@ static std::unique_ptr<bNodeTreeZones> discover_tree_zones(const bNodeTree &tree
     return {};
   }
 
-  for (const StringRefNull output_idname : {"NodeGroupOutput",
-                                            "ShaderNodeOutputMaterial",
-                                            "ShaderNodeOutputLight",
-                                            "ShaderNodeOutputWorld",
-                                            "ShaderNodeOutputAOV"})
+  for (const UString output_idname : {"NodeGroupOutput"_ustr,
+                                      "ShaderNodeOutputMaterial"_ustr,
+                                      "ShaderNodeOutputLight"_ustr,
+                                      "ShaderNodeOutputWorld"_ustr,
+                                      "ShaderNodeOutputAOV"_ustr})
   {
     for (const bNode *node : tree.nodes_by_type(output_idname)) {
       if (tree_zones->zone_by_node_id.contains(node->identifier)) {

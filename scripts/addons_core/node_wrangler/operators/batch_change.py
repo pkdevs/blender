@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Operator
 from bpy.props import EnumProperty
 from bpy.app.translations import contexts as i18n_contexts
@@ -31,6 +30,7 @@ class NODE_OT_batch_change(Operator, NWBase):
     blend_type: EnumProperty(
         name="Blend Type",
         items=blend_types + navs,
+        translation_context=i18n_contexts.color,
     )
     operation: EnumProperty(
         name="Operation",

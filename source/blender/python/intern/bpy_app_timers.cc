@@ -6,7 +6,7 @@
  * \ingroup pythonintern
  */
 
-#include "BLI_timer.h"
+#include "BLI_timer.hh"
 
 #include <Python.h>
 
@@ -14,15 +14,13 @@
 
 #include "bpy_app_timers.hh"
 
+#include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
+
+namespace blender {
 
 static double handle_returned_value(PyObject *function, PyObject *ret)
 {
-  if (ret == nullptr) {
-    PyErr_PrintEx(0);
-    return -1;
-  }
-
   if (ret == Py_None) {
     return -1;
   }
@@ -47,8 +45,15 @@ static double py_timer_execute(uintptr_t /*uuid*/, void *user_data)
 
   PyObject *function = static_cast<PyObject *>(user_data);
 
-  PyObject *py_ret = PyObject_CallObject(function, nullptr);
-  const double ret = handle_returned_value(function, py_ret);
+  double ret;
+  if (PyObject *py_ret = PyObject_CallObject(function, nullptr)) {
+    ret = handle_returned_value(function, py_ret);
+    Py_DECREF(py_ret);
+  }
+  else {
+    PyErr_PrintEx(0);
+    ret = -1;
+  }
 
   PyGILState_Release(gilstate);
 
@@ -76,11 +81,11 @@ PyDoc_STRVAR(
     "   A returned number specifies the delay until the function is called again.\n"
     "   ``functools.partial`` can be used to assign some parameters.\n"
     "\n"
-    "   :arg function: The function that should called.\n"
+    "   :param function: The function that should called.\n"
     "   :type function: Callable[[], float | None]\n"
-    "   :arg first_interval: Seconds until the callback should be called the first time.\n"
+    "   :param first_interval: Seconds until the callback should be called the first time.\n"
     "   :type first_interval: float\n"
-    "   :arg persistent: Don't remove timer when a new file is loaded.\n"
+    "   :param persistent: Don't remove timer when a new file is loaded.\n"
     "   :type persistent: bool\n");
 static PyObject *bpy_app_timers_register(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
@@ -90,9 +95,8 @@ static PyObject *bpy_app_timers_register(PyObject * /*self*/, PyObject *args, Py
 
   static const char *_keywords[] = {"function", "first_interval", "persistent", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O"  /* `function` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "d"  /* `first_interval` */
       "p"  /* `persistent` */
       ":register",
@@ -123,7 +127,7 @@ PyDoc_STRVAR(
     "\n"
     "   Unregister timer.\n"
     "\n"
-    "   :arg function: Function to unregister.\n"
+    "   :param function: Function to unregister.\n"
     "   :type function: Callable[[], float | None]\n");
 static PyObject *bpy_app_timers_unregister(PyObject * /*self*/, PyObject *function)
 {
@@ -141,7 +145,7 @@ PyDoc_STRVAR(
     "\n"
     "   Check if this function is registered as a timer.\n"
     "\n"
-    "   :arg function: Function to check.\n"
+    "   :param function: Function to check.\n"
     "   :type function: Callable[[], float | None]\n"
     "   :return: True when this function is registered, otherwise False.\n"
     "   :rtype: bool\n");
@@ -163,12 +167,15 @@ static PyObject *bpy_app_timers_is_registered(PyObject * /*self*/, PyObject *fun
 
 static PyMethodDef M_AppTimers_methods[] = {
     {"register",
-     (PyCFunction)bpy_app_timers_register,
+     reinterpret_cast<PyCFunction>(bpy_app_timers_register),
      METH_VARARGS | METH_KEYWORDS,
      bpy_app_timers_register_doc},
-    {"unregister", (PyCFunction)bpy_app_timers_unregister, METH_O, bpy_app_timers_unregister_doc},
+    {"unregister",
+     static_cast<PyCFunction>(bpy_app_timers_unregister),
+     METH_O,
+     bpy_app_timers_unregister_doc},
     {"is_registered",
-     (PyCFunction)bpy_app_timers_is_registered,
+     static_cast<PyCFunction>(bpy_app_timers_is_registered),
      METH_O,
      bpy_app_timers_is_registered_doc},
     {nullptr, nullptr, 0, nullptr},
@@ -198,6 +205,8 @@ PyObject *BPY_app_timers_module()
 {
   PyObject *sys_modules = PyImport_GetModuleDict();
   PyObject *mod = PyModule_Create(&M_AppTimers_module_def);
-  PyDict_SetItem(sys_modules, PyModule_GetNameObject(mod), mod);
+  PyC_Module_AddToSysModules(sys_modules, mod);
   return mod;
 }
+
+}  // namespace blender

@@ -13,12 +13,12 @@
 #include "DNA_anim_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_fcurve_driver.h"
@@ -42,7 +42,7 @@
 
 namespace blender::ui {
 
-static FCurve *ui_but_get_fcurve(
+static FCurve *but_get_fcurve(
     Button *but, AnimData **adt, bAction **action, bool *r_driven, bool *r_special)
 {
   /* for entire array buttons we check the first component, it's not perfect
@@ -73,7 +73,7 @@ void button_anim_flag(Button *but, const AnimationEvalContext *anim_eval_context
   bAction *act;
   bool driven;
   bool special;
-  FCurve *fcu = ui_but_get_fcurve(but, &adt, &act, &driven, &special);
+  FCurve *fcu = but_get_fcurve(but, &adt, &act, &driven, &special);
 
   if (!fcu) {
     return;
@@ -108,8 +108,8 @@ void button_anim_flag(Button *but, const AnimationEvalContext *anim_eval_context
    * non-existent here. Note that this is mostly to play nice with stashed Actions, and doesn't
    * fully look at all the track & strip flags. */
   if (adt) {
-    LISTBASE_FOREACH (NlaTrack *, nla_track, &adt->nla_tracks) {
-      if (!(nla_track->flag & NLATRACK_MUTED)) {
+    for (NlaTrack &nla_track : adt->nla_tracks) {
+      if (!(nla_track.flag & NLATRACK_MUTED)) {
         /* Found a non-muted track, so this NLA is not purely for stashing Actions. */
         return;
       }
@@ -123,27 +123,27 @@ void button_anim_flag(Button *but, const AnimationEvalContext *anim_eval_context
   }
 }
 
-static Button *ui_but_anim_decorate_find_attached_button(ButtonDecorator *but)
+static Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
 {
   Button *but_iter = nullptr;
 
   BLI_assert(button_is_decorator(but));
-  BLI_assert(but->decorated_rnapoin.data && but->decorated_rnaprop);
-  if (but->block->buttons.is_empty()) {
+  BLI_assert(but->decorated_rnapoin && but->decorated_rnaprop);
+  if (but->block->buttons_ptrs.is_empty()) {
     return nullptr;
   }
   int i = but->block->but_index(but);
-  i = i > 0 ? i - 1 : but->block->buttons.size() - 1;
+  i = i > 0 ? i - 1 : but->block->buttons_ptrs.size() - 1;
   const int start = i;
   do {
-    but_iter = but->block->buttons[i].get();
+    but_iter = but->block->buttons_ptrs[i].get();
     if (but_iter != but &&
         button_rna_equals_ex(
             but_iter, &but->decorated_rnapoin, but->decorated_rnaprop, but->decorated_rnaindex))
     {
       return but_iter;
     }
-    i = i > 0 ? i - 1 : but->block->buttons.size() - 1;
+    i = i > 0 ? i - 1 : but->block->buttons_ptrs.size() - 1;
   } while (i != start);
 
   return nullptr;
@@ -151,12 +151,12 @@ static Button *ui_but_anim_decorate_find_attached_button(ButtonDecorator *but)
 
 void button_anim_decorate_update_from_flag(ButtonDecorator *but)
 {
-  if (!but->decorated_rnapoin.data || !but->decorated_rnaprop) {
+  if (!but->decorated_rnapoin || !but->decorated_rnaprop) {
     /* Nothing to do. */
     return;
   }
 
-  const Button *but_anim = ui_but_anim_decorate_find_attached_button(but);
+  const Button *but_anim = but_anim_decorate_find_attached_button(but);
 
   if (!but_anim) {
     printf("Could not find button with matching property to decorate (%s.%s)\n",
@@ -165,7 +165,7 @@ void button_anim_decorate_update_from_flag(ButtonDecorator *but)
     return;
   }
 
-  const int flag = but_anim->flag;
+  const int64_t flag = but_anim->flag;
 
   if (flag & BUT_DRIVEN) {
     but->icon = ICON_DECORATE_DRIVER;
@@ -188,8 +188,17 @@ void button_anim_decorate_update_from_flag(ButtonDecorator *but)
     but->toggle_keyframe_on_click = true;
   }
 
-  const int flag_copy = (BUT_DISABLED | BUT_INACTIVE);
+  const int64_t flag_copy = (BUT_DISABLED | BUT_INACTIVE);
   but->flag = (but->flag & ~flag_copy) | (flag & flag_copy);
+}
+
+bool button_anim_decorate_pushed_state(ButtonDecorator *but)
+{
+  const Button *but_anim = but_anim_decorate_find_attached_button(but);
+  if (but_anim == nullptr) [[unlikely]] {
+    return false;
+  }
+  return (but_anim->flag & BUT_ANIMATED_KEY) != 0;
 }
 
 bool button_anim_expression_get(Button *but, char *str, size_t str_maxncpy)
@@ -198,7 +207,7 @@ bool button_anim_expression_get(Button *but, char *str, size_t str_maxncpy)
   ChannelDriver *driver;
   bool driven, special;
 
-  fcu = ui_but_get_fcurve(but, nullptr, nullptr, &driven, &special);
+  fcu = but_get_fcurve(but, nullptr, nullptr, &driven, &special);
 
   if (fcu && driven) {
     driver = fcu->driver;
@@ -220,7 +229,7 @@ bool button_anim_expression_set(Button *but, const char *str)
   ChannelDriver *driver;
   bool driven, special;
 
-  fcu = ui_but_get_fcurve(but, nullptr, nullptr, &driven, &special);
+  fcu = but_get_fcurve(but, nullptr, nullptr, &driven, &special);
 
   if (fcu && driven) {
     driver = fcu->driver;
@@ -257,7 +266,7 @@ bool button_anim_expression_create(Button *but, const char *str)
   bool ok = false;
 
   /* button must have RNA-pointer to a numeric-capable property */
-  if (ELEM(nullptr, but->rnapoin.data, but->rnaprop)) {
+  if (!but->rnapoin || !but->rnaprop) {
     if (G.debug & G_DEBUG) {
       printf("ERROR: create expression failed - button has no RNA info attached\n");
     }
@@ -342,7 +351,7 @@ void button_anim_decorate_cb(bContext *C, void *arg_but, void * /*arg_dummy*/)
     return;
   }
 
-  Button *but_anim = ui_but_anim_decorate_find_attached_button(but_decorate);
+  Button *but_anim = but_anim_decorate_find_attached_button(but_decorate);
   if (!but_anim) {
     return;
   }
@@ -353,17 +362,15 @@ void button_anim_decorate_cb(bContext *C, void *arg_but, void * /*arg_dummy*/)
   wm->op_undo_depth++;
 
   if (but_anim->flag & BUT_ANIMATED_KEY) {
-    PointerRNA props_ptr;
     wmOperatorType *ot = WM_operatortype_find("ANIM_OT_keyframe_delete_button", false);
-    WM_operator_properties_create_ptr(&props_ptr, ot);
+    PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
     RNA_boolean_set(&props_ptr, "all", but_anim->rnaindex == -1);
     WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
     WM_operator_properties_free(&props_ptr);
   }
   else {
-    PointerRNA props_ptr;
     wmOperatorType *ot = WM_operatortype_find("ANIM_OT_keyframe_insert_button", false);
-    WM_operator_properties_create_ptr(&props_ptr, ot);
+    PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
     RNA_boolean_set(&props_ptr, "all", but_anim->rnaindex == -1);
     WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
     WM_operator_properties_free(&props_ptr);

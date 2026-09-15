@@ -23,7 +23,7 @@ void Instance::init()
   /* TODO(fclem): Remove DRW global usage. */
   const DRWContext *ctx = DRW_context_get();
   /* Was needed by `object_wire_theme_id()` when doing the port. Not sure if needed nowadays. */
-  BKE_view_layer_synced_ensure(ctx->scene, ctx->view_layer);
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(ctx->depsgraph), ctx->scene, ctx->view_layer);
 
   clipping_enabled_ = RV3D_CLIPPING_ENABLED(ctx->v3d, ctx->rv3d);
 
@@ -36,6 +36,7 @@ void Instance::init()
   state.v3d = ctx->v3d;
   state.region = ctx->region;
   state.rv3d = ctx->rv3d;
+  state.active_tool = ctx->active_tool;
   state.object_active = BKE_view_layer_active_object_get(ctx->view_layer);
   state.object_mode = ctx->object_mode;
   state.cfra = DEG_get_ctime(state.depsgraph);
@@ -67,7 +68,7 @@ void Instance::init()
     state.xray_flag_enabled = SHADING_XRAY_FLAG_ENABLED(state.v3d->shading) &&
                               !state.is_depth_only_drawing;
     state.vignette_enabled = ctx->mode == DRWContext::VIEWPORT_XR &&
-                             state.v3d->vignette_aperture < M_SQRT1_2;
+                             state.v3d->xr_vignette_aperture < M_SQRT1_2;
 
     const bool viewport_uses_workbench = state.v3d->shading.type <= OB_SOLID ||
                                          BKE_scene_uses_blender_workbench(state.scene);
@@ -93,7 +94,7 @@ void Instance::init()
                         (ctx->v3d->overlay.flag & V3D_OVERLAY_HIDE_TEXT) == 0;
     }
     else {
-      memset(&state.overlay, 0, sizeof(state.overlay));
+      _DNA_internal_memzero(&state.overlay, sizeof(state.overlay));
       state.v3d_flag = 0;
       state.v3d_gridflag = 0;
       state.overlay.flag = V3D_OVERLAY_HIDE_TEXT | V3D_OVERLAY_HIDE_MOTION_PATHS |
@@ -108,12 +109,14 @@ void Instance::init()
                               ctx->object_pose != nullptr;
   }
   else if (state.is_space_image()) {
-    SpaceImage *space_image = (SpaceImage *)state.space_data;
+    SpaceImage *space_image = reinterpret_cast<SpaceImage *>(
+        const_cast<SpaceLink *>(state.space_data));
 
     state.clear_in_front = false;
     state.use_in_front = false;
     state.is_wireframe_mode = false;
     state.hide_overlays = (space_image->overlay.flag & SI_OVERLAY_SHOW_OVERLAYS) == 0;
+    state.show_text = !state.hide_overlays;
     state.xray_enabled = false;
     /* Avoid triggering the depth prepass. */
     state.is_render_depth_available = true;
@@ -248,51 +251,51 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
     return float4(r, g, b, a) / 255.0f;
   };
 
-  ui::GetThemeColor4fv(TH_WIRE, gb.colors.wire);
-  ui::GetThemeColor4fv(TH_WIRE_EDIT, gb.colors.wire_edit);
-  ui::GetThemeColor4fv(TH_ACTIVE, gb.colors.active_object);
-  ui::GetThemeColor4fv(TH_SELECT, gb.colors.object_select);
+  ui::theme::get_color_4fv(TH_WIRE, gb.colors.wire);
+  ui::theme::get_color_4fv(TH_WIRE_EDIT, gb.colors.wire_edit);
+  ui::theme::get_color_4fv(TH_ACTIVE, gb.colors.active_object);
+  ui::theme::get_color_4fv(TH_SELECT, gb.colors.object_select);
   gb.colors.library_select = rgba_uchar_to_float(0x88, 0xFF, 0xFF, 155);
   gb.colors.library = rgba_uchar_to_float(0x55, 0xCC, 0xCC, 155);
-  ui::GetThemeColor4fv(TH_TRANSFORM, gb.colors.transform);
-  ui::GetThemeColor4fv(TH_LIGHT, gb.colors.light);
-  ui::GetThemeColor4fv(TH_SPEAKER, gb.colors.speaker);
-  ui::GetThemeColor4fv(TH_CAMERA, gb.colors.camera);
-  ui::GetThemeColor4fv(TH_CAMERA_PATH, gb.colors.camera_path);
-  ui::GetThemeColor4fv(TH_EMPTY, gb.colors.empty);
-  ui::GetThemeColor4fv(TH_VERTEX, gb.colors.vert);
-  ui::GetThemeColor4fv(TH_VERTEX_SELECT, gb.colors.vert_select);
-  ui::GetThemeColor4fv(TH_VERTEX_UNREFERENCED, gb.colors.vert_unreferenced);
+  ui::theme::get_color_4fv(TH_TRANSFORM, gb.colors.transform);
+  ui::theme::get_color_4fv(TH_LIGHT, gb.colors.light);
+  ui::theme::get_color_4fv(TH_SPEAKER, gb.colors.speaker);
+  ui::theme::get_color_4fv(TH_CAMERA, gb.colors.camera);
+  ui::theme::get_color_4fv(TH_CAMERA_PATH, gb.colors.camera_path);
+  ui::theme::get_color_4fv(TH_EMPTY, gb.colors.empty);
+  ui::theme::get_color_4fv(TH_VERTEX, gb.colors.vert);
+  ui::theme::get_color_4fv(TH_VERTEX_SELECT, gb.colors.vert_select);
+  ui::theme::get_color_4fv(TH_VERTEX_UNREFERENCED, gb.colors.vert_unreferenced);
   gb.colors.vert_missing_data = rgba_uchar_to_float(0xB0, 0x00, 0xB0, 0xFF);
-  ui::GetThemeColor4fv(TH_EDITMESH_ACTIVE, gb.colors.edit_mesh_active);
-  ui::GetThemeColor4fv(TH_EDGE_SELECT, gb.colors.edge_select);
-  ui::GetThemeColor4fv(TH_EDGE_MODE_SELECT, gb.colors.edge_mode_select);
-  ui::GetThemeColor4fv(TH_GP_WIRE_EDIT, gb.colors.gpencil_wire_edit);
-  ui::GetThemeColor4fv(TH_GP_VERTEX, gb.colors.gpencil_vertex);
-  ui::GetThemeColor4fv(TH_GP_VERTEX_SELECT, gb.colors.gpencil_vertex_select);
+  ui::theme::get_color_4fv(TH_EDITMESH_ACTIVE, gb.colors.edit_mesh_active);
+  ui::theme::get_color_4fv(TH_EDGE_SELECT, gb.colors.edge_select);
+  ui::theme::get_color_4fv(TH_EDGE_MODE_SELECT, gb.colors.edge_mode_select);
+  ui::theme::get_color_4fv(TH_GP_WIRE_EDIT, gb.colors.gpencil_wire_edit);
+  ui::theme::get_color_4fv(TH_GP_VERTEX, gb.colors.gpencil_vertex);
+  ui::theme::get_color_4fv(TH_GP_VERTEX_SELECT, gb.colors.gpencil_vertex_select);
 
-  ui::GetThemeColor4fv(TH_SEAM, gb.colors.edge_seam);
-  ui::GetThemeColor4fv(TH_SHARP, gb.colors.edge_sharp);
-  ui::GetThemeColor4fv(TH_CREASE, gb.colors.edge_crease);
-  ui::GetThemeColor4fv(TH_BEVEL, gb.colors.edge_bweight);
-  ui::GetThemeColor4fv(TH_FACE, gb.colors.face);
-  ui::GetThemeColor4fv(TH_FACE_SELECT, gb.colors.face_select);
-  ui::GetThemeColor4fv(TH_FACE_MODE_SELECT, gb.colors.face_mode_select);
-  ui::GetThemeColor4fv(TH_FACE_RETOPOLOGY, gb.colors.face_retopology);
-  ui::GetThemeColor4fv(TH_FACE_BACK, gb.colors.face_back);
-  ui::GetThemeColor4fv(TH_FACE_FRONT, gb.colors.face_front);
-  ui::GetThemeColor4fv(TH_NORMAL, gb.colors.normal);
-  ui::GetThemeColor4fv(TH_VNORMAL, gb.colors.vnormal);
-  ui::GetThemeColor4fv(TH_LNORMAL, gb.colors.lnormal);
-  ui::GetThemeColor4fv(TH_FACE_SELECT, gb.colors.facedot), gb.colors.facedot[3] = 1.0f;
-  ui::GetThemeColor4fv(TH_SKIN_ROOT, gb.colors.skinroot);
-  ui::GetThemeColor4fv(TH_BACK, gb.colors.background);
-  ui::GetThemeColor4fv(TH_BACK_GRAD, gb.colors.background_gradient);
-  ui::GetThemeColor4fv(TH_TRANSPARENT_CHECKER_PRIMARY, gb.colors.checker_primary);
-  ui::GetThemeColor4fv(TH_TRANSPARENT_CHECKER_SECONDARY, gb.colors.checker_secondary);
-  gb.sizes.checker = ui::GetThemeValuef(TH_TRANSPARENT_CHECKER_SIZE);
+  ui::theme::get_color_4fv(TH_SEAM, gb.colors.edge_seam);
+  ui::theme::get_color_4fv(TH_SHARP, gb.colors.edge_sharp);
+  ui::theme::get_color_4fv(TH_CREASE, gb.colors.edge_crease);
+  ui::theme::get_color_4fv(TH_BEVEL, gb.colors.edge_bweight);
+  ui::theme::get_color_4fv(TH_FACE, gb.colors.face);
+  ui::theme::get_color_4fv(TH_FACE_SELECT, gb.colors.face_select);
+  ui::theme::get_color_4fv(TH_FACE_MODE_SELECT, gb.colors.face_mode_select);
+  ui::theme::get_color_4fv(TH_FACE_RETOPOLOGY, gb.colors.face_retopology);
+  ui::theme::get_color_4fv(TH_FACE_BACK, gb.colors.face_back);
+  ui::theme::get_color_4fv(TH_FACE_FRONT, gb.colors.face_front);
+  ui::theme::get_color_4fv(TH_NORMAL, gb.colors.normal);
+  ui::theme::get_color_4fv(TH_VNORMAL, gb.colors.vnormal);
+  ui::theme::get_color_4fv(TH_LNORMAL, gb.colors.lnormal);
+  ui::theme::get_color_4fv(TH_FACE_SELECT, gb.colors.facedot), gb.colors.facedot[3] = 1.0f;
+  ui::theme::get_color_4fv(TH_SKIN_ROOT, gb.colors.skinroot);
+  ui::theme::get_color_4fv(TH_BACK, gb.colors.background);
+  ui::theme::get_color_4fv(TH_BACK_GRAD, gb.colors.background_gradient);
+  ui::theme::get_color_4fv(TH_TRANSPARENT_CHECKER_PRIMARY, gb.colors.checker_primary);
+  ui::theme::get_color_4fv(TH_TRANSPARENT_CHECKER_SECONDARY, gb.colors.checker_secondary);
+  gb.sizes.checker = ui::theme::get_value_f(TH_TRANSPARENT_CHECKER_SIZE);
   gb.fresnel_mix_edit = ((U.gpu_flag & USER_GPU_FLAG_FRESNEL_EDIT) == 0) ? 0.0f : 1.0f;
-  ui::GetThemeColor4fv(TH_V3D_CLIPPING_BORDER, gb.colors.clipping_border);
+  ui::theme::get_color_4fv(TH_V3D_CLIPPING_BORDER, gb.colors.clipping_border);
 
   /* Custom median color to slightly affect the edit mesh colors. */
   gb.colors.edit_mesh_middle = interpolate(gb.colors.vert_select, gb.colors.wire_edit, 0.35f);
@@ -302,54 +305,55 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
       gb.colors.edit_mesh_middle.w);
 
 #ifdef WITH_FREESTYLE
-  ui::GetThemeColor4fv(TH_FREESTYLE, gb.colors.edge_freestyle), gb.colors.edge_freestyle[3] = 1.0f;
-  ui::GetThemeColor4fv(TH_FREESTYLE, gb.colors.face_freestyle);
+  ui::theme::get_color_4fv(TH_FREESTYLE, gb.colors.edge_freestyle),
+      gb.colors.edge_freestyle[3] = 1.0f;
+  ui::theme::get_color_4fv(TH_FREESTYLE, gb.colors.face_freestyle);
 #else
   gb.colors.edge_freestyle = float4(0.0f);
   gb.colors.face_freestyle = float4(0.0f);
 #endif
 
-  ui::GetThemeColor4fv(TH_TEXT, gb.colors.text);
-  ui::GetThemeColor4fv(TH_TEXT_HI, gb.colors.text_hi);
+  ui::theme::get_color_4fv(TH_TEXT, gb.colors.text);
+  ui::theme::get_color_4fv(TH_TEXT_HI, gb.colors.text_hi);
 
   /* Bone colors */
-  ui::GetThemeColor4fv(TH_BONE_POSE, gb.colors.bone_pose);
-  ui::GetThemeColor4fv(TH_BONE_POSE_ACTIVE, gb.colors.bone_pose_active);
-  ui::GetThemeColorShade4fv(TH_EDGE_SELECT, 60, gb.colors.bone_active);
-  ui::GetThemeColorShade4fv(TH_EDGE_SELECT, -20, gb.colors.bone_select);
-  ui::GetThemeColorBlendShade4fv(
+  ui::theme::get_color_4fv(TH_BONE_POSE, gb.colors.bone_pose);
+  ui::theme::get_color_4fv(TH_BONE_POSE_ACTIVE, gb.colors.bone_pose_active);
+  ui::theme::get_color_shade_4fv(TH_EDGE_SELECT, 60, gb.colors.bone_active);
+  ui::theme::get_color_shade_4fv(TH_EDGE_SELECT, -20, gb.colors.bone_select);
+  ui::theme::get_color_blend_shade_4fv(
       TH_WIRE, TH_BONE_POSE, 0.15f, 0, gb.colors.bone_pose_active_unsel);
-  ui::GetThemeColorBlendShade3fv(
+  ui::theme::get_color_blend_shade_3fv(
       TH_WIRE_EDIT, TH_EDGE_SELECT, 0.15f, 0, gb.colors.bone_active_unsel);
   gb.colors.bone_pose_no_target = rgba_uchar_to_float(255, 150, 0, 80);
   gb.colors.bone_pose_ik = rgba_uchar_to_float(255, 255, 0, 80);
   gb.colors.bone_pose_spline_ik = rgba_uchar_to_float(200, 255, 0, 80);
   gb.colors.bone_pose_constraint = rgba_uchar_to_float(0, 255, 120, 80);
-  ui::GetThemeColor4fv(TH_BONE_SOLID, gb.colors.bone_solid);
-  ui::GetThemeColor4fv(TH_BONE_LOCKED_WEIGHT, gb.colors.bone_locked);
+  ui::theme::get_color_4fv(TH_BONE_SOLID, gb.colors.bone_solid);
+  ui::theme::get_color_4fv(TH_BONE_LOCKED_WEIGHT, gb.colors.bone_locked);
   gb.colors.bone_ik_line = float4(0.8f, 0.8f, 0.0f, 1.0f);
   gb.colors.bone_ik_line_no_target = float4(0.8f, 0.5f, 0.2f, 1.0f);
   gb.colors.bone_ik_line_spline = float4(0.8f, 0.8f, 0.2f, 1.0f);
 
   /* Curve */
-  ui::GetThemeColor4fv(TH_HANDLE_FREE, gb.colors.handle_free);
-  ui::GetThemeColor4fv(TH_HANDLE_AUTO, gb.colors.handle_auto);
-  ui::GetThemeColor4fv(TH_HANDLE_VECT, gb.colors.handle_vect);
-  ui::GetThemeColor4fv(TH_HANDLE_ALIGN, gb.colors.handle_align);
-  ui::GetThemeColor4fv(TH_HANDLE_AUTOCLAMP, gb.colors.handle_autoclamp);
-  ui::GetThemeColor4fv(TH_HANDLE_SEL_FREE, gb.colors.handle_sel_free);
-  ui::GetThemeColor4fv(TH_HANDLE_SEL_AUTO, gb.colors.handle_sel_auto);
-  ui::GetThemeColor4fv(TH_HANDLE_SEL_VECT, gb.colors.handle_sel_vect);
-  ui::GetThemeColor4fv(TH_HANDLE_SEL_ALIGN, gb.colors.handle_sel_align);
-  ui::GetThemeColor4fv(TH_HANDLE_SEL_AUTOCLAMP, gb.colors.handle_sel_autoclamp);
-  ui::GetThemeColor4fv(TH_NURB_ULINE, gb.colors.nurb_uline);
-  ui::GetThemeColor4fv(TH_NURB_VLINE, gb.colors.nurb_vline);
-  ui::GetThemeColor4fv(TH_NURB_SEL_ULINE, gb.colors.nurb_sel_uline);
-  ui::GetThemeColor4fv(TH_NURB_SEL_VLINE, gb.colors.nurb_sel_vline);
+  ui::theme::get_color_4fv(TH_HANDLE_FREE, gb.colors.handle_free);
+  ui::theme::get_color_4fv(TH_HANDLE_AUTO, gb.colors.handle_auto);
+  ui::theme::get_color_4fv(TH_HANDLE_VECT, gb.colors.handle_vect);
+  ui::theme::get_color_4fv(TH_HANDLE_ALIGN, gb.colors.handle_align);
+  ui::theme::get_color_4fv(TH_HANDLE_AUTOCLAMP, gb.colors.handle_autoclamp);
+  ui::theme::get_color_4fv(TH_HANDLE_SEL_FREE, gb.colors.handle_sel_free);
+  ui::theme::get_color_4fv(TH_HANDLE_SEL_AUTO, gb.colors.handle_sel_auto);
+  ui::theme::get_color_4fv(TH_HANDLE_SEL_VECT, gb.colors.handle_sel_vect);
+  ui::theme::get_color_4fv(TH_HANDLE_SEL_ALIGN, gb.colors.handle_sel_align);
+  ui::theme::get_color_4fv(TH_HANDLE_SEL_AUTOCLAMP, gb.colors.handle_sel_autoclamp);
+  ui::theme::get_color_4fv(TH_NURB_ULINE, gb.colors.nurb_uline);
+  ui::theme::get_color_4fv(TH_NURB_VLINE, gb.colors.nurb_vline);
+  ui::theme::get_color_4fv(TH_NURB_SEL_ULINE, gb.colors.nurb_sel_uline);
+  ui::theme::get_color_4fv(TH_NURB_SEL_VLINE, gb.colors.nurb_sel_vline);
 
-  ui::GetThemeColor4fv(TH_CFRAME, gb.colors.current_frame);
-  ui::GetThemeColor4fv(TH_FRAME_BEFORE, gb.colors.before_frame);
-  ui::GetThemeColor4fv(TH_FRAME_AFTER, gb.colors.after_frame);
+  ui::theme::get_color_4fv(TH_CFRAME, gb.colors.current_frame);
+  ui::theme::get_color_4fv(TH_FRAME_BEFORE, gb.colors.before_frame);
+  ui::theme::get_color_4fv(TH_FRAME_AFTER, gb.colors.after_frame);
 
   /* Meta-ball. */
   gb.colors.mball_radius = rgba_uchar_to_float(0xA0, 0x30, 0x30, 0xFF);
@@ -358,22 +362,30 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
   gb.colors.mball_stiffness_select = rgba_uchar_to_float(0xA0, 0xF0, 0xA0, 0xFF);
 
   /* Grid */
-  ui::GetThemeColorShade4fv(TH_GRID, 10, gb.colors.grid);
+  ui::theme::get_color_shade_4fv(TH_GRID, 10, gb.colors.grid);
   /* Emphasize division lines lighter instead of darker, if background is darker than grid. */
   const bool is_bg_darker = reduce_add(gb.colors.grid.xyz()) + 0.12f >
                             reduce_add(gb.colors.background.xyz());
-  ui::GetThemeColorShade4fv(TH_GRID, (is_bg_darker) ? 20 : -10, gb.colors.grid_emphasis);
-  /* Grid Axis */
-  ui::GetThemeColorBlendShade4fv(TH_GRID, TH_AXIS_X, 0.5f, -10, gb.colors.grid_axis_x);
-  ui::GetThemeColorBlendShade4fv(TH_GRID, TH_AXIS_Y, 0.5f, -10, gb.colors.grid_axis_y);
-  ui::GetThemeColorBlendShade4fv(TH_GRID, TH_AXIS_Z, 0.5f, -10, gb.colors.grid_axis_z);
+  ui::theme::get_color_shade_4fv(
+      state.rv3d ? TH_GRID_MAJOR : TH_GRID, is_bg_darker ? 20 : -10, gb.colors.grid_emphasis);
 
-  ui::GetThemeColorShadeAlpha4fv(TH_TRANSFORM, 0, -80, gb.colors.deselect);
-  ui::GetThemeColorShadeAlpha4fv(TH_WIRE, 0, -30, gb.colors.outline);
-  ui::GetThemeColorShadeAlpha4fv(TH_LIGHT, 0, 255, gb.colors.light_no_alpha);
+  /* Grid axes */
+  const bTheme *btheme = ui::theme::theme_get();
+  const float grid_axis_brightness = btheme->space_view3d.grid_axis_brightness;
+  const int grid_axis_offset_i = int((grid_axis_brightness * 2.0f - 1.0f) * 255.0f);
+  ui::theme::get_color_blend_shade_4fv(
+      TH_GRID, TH_AXIS_X, 0.85, grid_axis_offset_i, gb.colors.grid_axis_x);
+  ui::theme::get_color_blend_shade_4fv(
+      TH_GRID, TH_AXIS_Y, 0.85, grid_axis_offset_i, gb.colors.grid_axis_y);
+  ui::theme::get_color_blend_shade_4fv(
+      TH_GRID, TH_AXIS_Z, 0.85, grid_axis_offset_i, gb.colors.grid_axis_z);
+
+  ui::theme::get_color_shade_alpha_4fv(TH_TRANSFORM, 0, -80, gb.colors.deselect);
+  ui::theme::get_color_shade_alpha_4fv(TH_WIRE, 0, -30, gb.colors.outline);
+  ui::theme::get_color_shade_alpha_4fv(TH_LIGHT, 0, 255, gb.colors.light_no_alpha);
 
   /* UV colors */
-  ui::GetThemeColor4fv(TH_UV_SHADOW, gb.colors.uv_shadow);
+  ui::theme::get_color_4fv(TH_UV_SHADOW, gb.colors.uv_shadow);
 
   /* Color management. */
   {
@@ -386,16 +398,16 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
   }
 
   gb.sizes.pixel = 1.0f;
-  gb.sizes.object_center = ui::GetThemeValuef(TH_OBCENTER_DIA) + 1.0f;
-  gb.sizes.light_center = ui::GetThemeValuef(TH_OBCENTER_DIA) + 1.5f;
+  gb.sizes.object_center = ui::theme::get_value_f(TH_OBCENTER_DIA) + 1.0f;
+  gb.sizes.light_center = ui::theme::get_value_f(TH_OBCENTER_DIA) + 1.5f;
   gb.sizes.light_circle = 9.0f;
   gb.sizes.light_circle_shadow = (gb.sizes.light_circle + 3.0f);
 
   /* M_SQRT2 to be at least the same size of the old square */
   gb.sizes.vert = vertex_size_get();
-  gb.sizes.vertex_gpencil = ui::GetThemeValuef(TH_GP_VERTEX_SIZE);
-  gb.sizes.face_dot = ui::GetThemeValuef(TH_FACEDOT_SIZE);
-  gb.sizes.edge = max_ff(1.0f, ui::GetThemeValuef(TH_EDGE_WIDTH)) / 2.0f;
+  gb.sizes.vertex_gpencil = ui::theme::get_value_f(TH_GP_VERTEX_SIZE);
+  gb.sizes.face_dot = ui::theme::get_value_f(TH_FACEDOT_SIZE);
+  gb.sizes.edge = max_ff(1.0f, ui::theme::get_value_f(TH_EDGE_WIDTH)) / 2.0f;
 
   /* Pixel size. */
   {
@@ -406,7 +418,18 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
     } while (++size <= size_end);
   }
 
-  gb.pixel_fac = (state.rv3d) ? state.rv3d->pixsize : 1.0f;
+  /* Pixel fraction. Use orthographic size in 3d, visible region size in 2D. */
+  if (state.rv3d) {
+    gb.pixel_fac = state.rv3d->pixsize;
+  }
+  else if (state.region) {
+    const View2D *v2d = &state.region->v2d;
+    gb.pixel_fac = (v2d->cur.xmax - v2d->cur.xmin) / float(v2d->mask.xmax - v2d->mask.xmin);
+  }
+  else {
+    gb.pixel_fac = 1.0f;
+  }
+
   gb.size_viewport = ctx->viewport_size_get();
   gb.size_viewport_inv = 1.0f / gb.size_viewport;
 
@@ -484,7 +507,6 @@ void Instance::begin_sync()
   begin_sync_layer(infront);
 
   grid.begin_sync(resources, state);
-
   anti_aliasing.begin_sync(resources, state);
   xray_fade.begin_sync(resources, state);
 }
@@ -587,6 +609,8 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
       case OB_GREASE_PENCIL:
         layer.grease_pencil.edit_object_sync(manager, ob_ref, resources, state);
         break;
+      default:
+        break;
     }
   }
 
@@ -629,6 +653,8 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         break;
       case OB_SPEAKER:
         layer.speakers.object_sync(manager, ob_ref, resources, state);
+        break;
+      default:
         break;
     }
     layer.attribute_viewer.object_sync(manager, ob_ref, resources, state);
@@ -803,18 +829,20 @@ void Instance::draw_v2d(Manager &manager, View &view)
   regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
 
   GPU_framebuffer_bind(resources.overlay_output_color_only_fb);
-  GPU_framebuffer_clear_color(resources.overlay_output_color_only_fb, float4(0.0));
+  GPU_framebuffer_clear_color(resources.overlay_output_color_only_fb, double4(0.0));
 
   background.draw_output(resources.overlay_output_color_only_fb, manager, view);
-  grid.draw_color_only(resources.overlay_output_color_only_fb, manager, view);
+  grid.draw_line(resources.overlay_output_fb, manager, view);
   regular.mesh_uvs.draw(resources.overlay_output_fb, manager, view);
+
+  draw_text(resources.overlay_output_color_only_fb);
 
   cursor.draw_output(resources.overlay_output_color_only_fb, manager, view);
 }
 
 void Instance::draw_v3d(Manager &manager, View &view)
 {
-  float4 clear_color(0.0f);
+  double4 clear_color(0.0f);
 
   auto draw = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     /* TODO(fclem): Depth aware outlines (see #130751). */
@@ -851,9 +879,12 @@ void Instance::draw_v3d(Manager &manager, View &view)
     layer.curves.draw_line(framebuffer, manager, view);
   };
 
+  auto draw_line_only = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
+    layer.meshes.draw_line_only(framebuffer, manager, view);
+  };
+
   auto draw_color_only = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     layer.light_probes.draw_color_only(framebuffer, manager, view);
-    layer.meshes.draw_color_only(framebuffer, manager, view);
     layer.curves.draw_color_only(framebuffer, manager, view);
     layer.grease_pencil.draw_color_only(framebuffer, manager, view);
   };
@@ -924,6 +955,11 @@ void Instance::draw_v3d(Manager &manager, View &view)
     draw(regular, resources.overlay_fb);
     draw_line(regular, resources.overlay_line_fb);
 
+    /* Here as it does depth+blending, and should draw after most overlay line passes.. */
+    if (!state.is_depth_only_drawing) {
+      grid.draw_line(resources.overlay_line_fb, manager, view);
+    }
+
     /* Here because of custom order of regular.facing. */
     infront.facing.draw(resources.overlay_fb, manager, view);
 
@@ -934,13 +970,14 @@ void Instance::draw_v3d(Manager &manager, View &view)
     /* Color only pass. */
     motion_paths.draw_color_only(resources.overlay_color_only_fb, manager, view);
     xray_fade.draw_color_only(resources.overlay_color_only_fb, manager, view);
-    grid.draw_color_only(resources.overlay_color_only_fb, manager, view);
 
     regular.meshes.draw_line(resources.overlay_line_fb, manager, view);
     infront.meshes.draw_line(resources.overlay_line_in_front_fb, manager, view);
 
     draw_color_only(regular, resources.overlay_color_only_fb);
     draw_color_only(infront, resources.overlay_color_only_fb);
+    draw_line_only(regular, resources.overlay_line_only_fb);
+    draw_line_only(infront, resources.overlay_line_only_fb);
 
     /* TODO(fclem): Split overlay and rename draw functions. */
     regular.empties.draw_in_front_images(resources.overlay_color_only_fb, manager, view);
@@ -992,7 +1029,7 @@ bool Instance::object_is_selected(const ObjectRef &ob_ref)
 bool Instance::object_is_paint_mode(const Object *object)
 {
   return (object == state.object_active) &&
-         (state.object_mode & (OB_MODE_ALL_PAINT | OB_MODE_ALL_PAINT_GPENCIL));
+         (state.object_mode & (OB_MODE_ALL_PAINT_MESH | OB_MODE_ALL_PAINT_GPENCIL));
 }
 
 bool Instance::object_is_sculpt_mode(const ObjectRef &ob_ref)
@@ -1022,7 +1059,9 @@ bool Instance::object_is_particle_edit_mode(const ObjectRef &ob_ref)
 
 bool Instance::object_is_sculpt_mode(const Object *object)
 {
-  if (object->sculpt && (object->sculpt->mode_type == OB_MODE_SCULPT)) {
+  if (object->runtime->sculpt_session &&
+      (object->runtime->sculpt_session->mode_type == OB_MODE_SCULPT))
+  {
     return object == state.object_active;
   }
   return false;
@@ -1067,6 +1106,8 @@ bool Instance::object_is_edit_mode(const Object *object)
       case OB_VOLUME:
         /* No edit mode yet. */
         return false;
+      default:
+        break;
     }
   }
   return false;

@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup animrig
+ */
+
 #include "ANIM_evaluation.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_fcurve.hh"
 
 #include "BLI_map.hh"
@@ -15,19 +19,21 @@
 
 #include "evaluation_internal.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"anim.evaluation"};
 
-namespace blender::animrig {
+namespace animrig {
 
 using namespace internal;
 
 /**
- * Blend the 'current layer' with the 'last evaluation result', returning the
- * blended result.
+ * Blend the intermediate_result into the final_result based on the layer
+ * weight and mix mode.
  */
-EvaluationResult blend_layer_results(const EvaluationResult &last_result,
-                                     const EvaluationResult &current_result,
-                                     const Layer &current_layer);
+void blend_layer_results(EvaluationResult &final_result,
+                         const EvaluationResult &intermediate_result,
+                         const Layer &current_layer);
 
 /**
  * Apply the result of the animation evaluation to the given data-block.
@@ -44,7 +50,7 @@ EvaluationResult evaluate_action(PointerRNA &animated_id_ptr,
                                  const slot_handle_t slot_handle,
                                  const AnimationEvalContext &anim_eval_context)
 {
-  EvaluationResult last_result;
+  EvaluationResult result;
 
   /* Evaluate each layer in order. */
   for (Layer *layer : action.layers()) {
@@ -59,19 +65,19 @@ EvaluationResult evaluate_action(PointerRNA &animated_id_ptr,
       continue;
     }
 
-    if (!last_result) {
+    if (!result) {
       /* Simple case: no results so far, so just use this layer as-is. There is
        * nothing to blend/combine with, so ignore the influence and combination
        * options. */
-      last_result = std::move(layer_result);
+      result = std::move(layer_result);
       continue;
     }
 
-    /* Complex case: blend this layer's result into the previous layer's result. */
-    last_result = blend_layer_results(last_result, layer_result, *layer);
+    /* Complex case: blend this layer's result into combined result. */
+    blend_layer_results(result, layer_result, *layer);
   }
 
-  return last_result;
+  return result;
 }
 
 void evaluate_and_apply_action(PointerRNA &animated_id_ptr,
@@ -92,7 +98,7 @@ void evaluate_and_apply_action(PointerRNA &animated_id_ptr,
 /* Copy of the same-named function in anim_sys.cc, with the check on action groups removed. */
 static bool is_fcurve_evaluatable(const FCurve *fcu)
 {
-  if (fcu->rna_path == nullptr) {
+  if (fcu->rna_path().is_empty()) {
     return false;
   }
 
@@ -128,7 +134,7 @@ static void animsys_construct_orig_pointer_rna(const PointerRNA *ptr, PointerRNA
 
 /* Copy of the same-named function in anim_sys.cc. */
 static void animsys_write_orig_anim_rna(PointerRNA *ptr,
-                                        const char *rna_path,
+                                        const ParsedRNAPathRef rna_path,
                                         const int array_index,
                                         const float value)
 {
@@ -169,7 +175,7 @@ static EvaluationResult evaluate_keyframe_data(PointerRNA &animated_id_ptr,
        * and store the result for later. */
       PathResolvedRNA &anim_rna = resolved_rna[i];
       if (!BKE_animsys_rna_path_resolve(
-              &animated_id_ptr, fcu->rna_path, fcu->array_index, &anim_rna))
+              &animated_id_ptr, fcu->rna_path_parsed(), fcu->array_index, &anim_rna))
       {
         continue;
       }
@@ -186,10 +192,11 @@ static EvaluationResult evaluate_keyframe_data(PointerRNA &animated_id_ptr,
     if (!valid[i]) {
       continue;
     }
-    FCurve *fcu = fcurves[i];
-    PathResolvedRNA &anim_rna = resolved_rna[i];
     /* This part is not threadsafe. */
-    evaluation_result.store(fcu->rna_path, fcu->array_index, results[i], anim_rna);
+    evaluation_result.store(fcurves[i]->rna_path_parsed(),
+                            fcurves[i]->array_index,
+                            results[i],
+                            std::move(resolved_rna[i]));
   }
 
   return evaluation_result;
@@ -199,7 +206,7 @@ void apply_evaluation_result(const EvaluationResult &evaluation_result,
                              PointerRNA &animated_id_ptr,
                              const bool flush_to_original)
 {
-  for (auto channel_result : evaluation_result.items()) {
+  for (const auto &channel_result : evaluation_result.items()) {
     const PropIdentifier &prop_ident = channel_result.key;
     const AnimatedProperty &anim_prop = channel_result.value;
     const float animated_value = anim_prop.value;
@@ -211,7 +218,7 @@ void apply_evaluation_result(const EvaluationResult &evaluation_result,
       /* Convert the StringRef to a `const char *`, as the rest of the RNA path handling code in
        * BKE still uses `char *` instead of `StringRef`. */
       animsys_write_orig_anim_rna(
-          &animated_id_ptr, prop_ident.rna_path.c_str(), prop_ident.array_index, animated_value);
+          &animated_id_ptr, prop_ident.rna_path, prop_ident.array_index, animated_value);
     }
   }
 }
@@ -237,27 +244,25 @@ static EvaluationResult evaluate_strip(PointerRNA &animated_id_ptr,
   return {};
 }
 
-EvaluationResult blend_layer_results(const EvaluationResult &last_result,
-                                     const EvaluationResult &current_result,
-                                     const Layer &current_layer)
+void blend_layer_results(EvaluationResult &final_result,
+                         const EvaluationResult &intermediate_result,
+                         const Layer &current_layer)
 {
   /* TODO?: store the layer results sequentially, so that we can step through
    * them in parallel, instead of iterating over one and doing map lookups on
    * the other. */
 
-  EvaluationResult blend = last_result;
-
-  for (auto channel_result : current_result.items()) {
+  for (const auto &channel_result : intermediate_result.items()) {
     const PropIdentifier &prop_ident = channel_result.key;
-    AnimatedProperty *last_prop = blend.lookup_ptr(prop_ident);
+    AnimatedProperty *last_prop = final_result.lookup_ptr(prop_ident);
     const AnimatedProperty &anim_prop = channel_result.value;
 
     if (!last_prop) {
       /* Nothing to blend with, so just take (influence * value). */
-      blend.store(prop_ident.rna_path,
-                  prop_ident.array_index,
-                  anim_prop.value * current_layer.influence,
-                  anim_prop.prop_rna);
+      final_result.store(prop_ident.rna_path,
+                         prop_ident.array_index,
+                         anim_prop.value * current_layer.influence,
+                         anim_prop.prop_rna);
       continue;
     }
 
@@ -281,8 +286,6 @@ EvaluationResult blend_layer_results(const EvaluationResult &last_result,
         break;
     };
   }
-
-  return blend;
 }
 
 namespace internal {
@@ -329,4 +332,5 @@ EvaluationResult evaluate_layer(PointerRNA &animated_id_ptr,
 
 }  // namespace internal
 
-}  // namespace blender::animrig
+}  // namespace animrig
+}  // namespace blender

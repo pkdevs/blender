@@ -11,17 +11,18 @@
  * \see mesh_tessellate.cc for the #Mesh equivalent of this file.
  */
 
-#include "BLI_heap.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
-#include "BLI_task.h"
+#include "BLI_heap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
+#include "BLI_task_c.hh"
 
 #include "bmesh.hh"
+#include "bmesh_iterators_parallel.hh"
 
-using blender::MutableSpan;
+namespace blender {
 
 /**
  * On systems with 32+ cores,
@@ -79,8 +80,9 @@ BLI_INLINE void bmesh_calc_tessellation_for_face_impl(std::array<BMLoop *, 3> *l
             efa->no, l_ptr_a[0]->v->co, l_ptr_a[1]->v->co, l_ptr_a[2]->v->co, l_ptr_b[2]->v->co);
       }
 
-      if (UNLIKELY(is_quad_flip_v3_first_third_fast(
-              l_ptr_a[0]->v->co, l_ptr_a[1]->v->co, l_ptr_a[2]->v->co, l_ptr_b[2]->v->co)))
+      if (is_quad_flip_v3_first_third_fast(
+              l_ptr_a[0]->v->co, l_ptr_a[1]->v->co, l_ptr_a[2]->v->co, l_ptr_b[2]->v->co))
+          [[unlikely]]
       {
         /* Flip out of degenerate 0-2 state. */
         l_ptr_a[2] = l_ptr_b[2];
@@ -103,7 +105,7 @@ BLI_INLINE void bmesh_calc_tessellation_for_face_impl(std::array<BMLoop *, 3> *l
       const int tris_len = efa->len - 2;
 
       MemArena *pf_arena = *pf_arena_p;
-      if (UNLIKELY(pf_arena == nullptr)) {
+      if (pf_arena == nullptr) [[unlikely]] {
         pf_arena = *pf_arena_p = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
       }
 
@@ -206,7 +208,7 @@ static void bmesh_calc_tessellation_for_face_fn(void *__restrict userdata,
 {
   TessellationUserTLS *tls_data = static_cast<TessellationUserTLS *>(tls->userdata_chunk);
   std::array<BMLoop *, 3> *looptris = static_cast<std::array<BMLoop *, 3> *>(userdata);
-  BMFace *f = (BMFace *)mp_f;
+  BMFace *f = reinterpret_cast<BMFace *>(mp_f);
   BMLoop *l = BM_FACE_FIRST_LOOP(f);
   const int offset = BM_elem_index_get(l) - (BM_elem_index_get(f) * 2);
   bmesh_calc_tessellation_for_face(looptris + offset, f, &tls_data->pf_arena);
@@ -218,7 +220,7 @@ static void bmesh_calc_tessellation_for_face_with_normals_fn(void *__restrict us
 {
   TessellationUserTLS *tls_data = static_cast<TessellationUserTLS *>(tls->userdata_chunk);
   std::array<BMLoop *, 3> *looptris = static_cast<std::array<BMLoop *, 3> *>(userdata);
-  BMFace *f = (BMFace *)mp_f;
+  BMFace *f = reinterpret_cast<BMFace *>(mp_f);
   BMLoop *l = BM_FACE_FIRST_LOOP(f);
   const int offset = BM_elem_index_get(l) - (BM_elem_index_get(f) * 2);
   bmesh_calc_tessellation_for_face_with_normal(looptris + offset, f, &tls_data->pf_arena);
@@ -389,7 +391,7 @@ void BM_mesh_calc_tessellation_with_partial_ex(BMesh *bm,
 {
   BLI_assert(bmpinfo->params.do_tessellate);
   /* While harmless, exit early if there is nothing to do (avoids ensuring the index). */
-  if (UNLIKELY(bmpinfo->faces.is_empty())) {
+  if (bmpinfo->faces.is_empty()) [[unlikely]] {
     return;
   }
 
@@ -483,7 +485,7 @@ static int bmesh_calc_tessellation_for_face_beauty(std::array<BMLoop *, 3> *loop
     default: {
       MemArena *pf_arena = *pf_arena_p;
       Heap *pf_heap = *pf_heap_p;
-      if (UNLIKELY(pf_arena == nullptr)) {
+      if (pf_arena == nullptr) [[unlikely]] {
         pf_arena = *pf_arena_p = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
         pf_heap = *pf_heap_p = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
       }
@@ -562,3 +564,5 @@ void BM_mesh_calc_tessellation_beauty(BMesh *bm, MutableSpan<std::array<BMLoop *
 }
 
 /** \} */
+
+}  // namespace blender

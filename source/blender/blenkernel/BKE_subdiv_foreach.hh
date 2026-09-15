@@ -9,11 +9,14 @@
 #pragma once
 
 #include "BLI_offset_indices.hh"
-#include "BLI_sys_types.h"
+#include "BLI_span.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct Mesh;
 
-namespace blender::bke::subdiv {
+namespace bke::subdiv {
 
 struct ToMeshSettings;
 struct ForeachContext;
@@ -24,7 +27,7 @@ using ForeachTopologyInformationCb = bool (*)(const ForeachContext *context,
                                               int num_edges,
                                               int num_loops,
                                               int num_faces,
-                                              const int *subdiv_face_offset);
+                                              Span<int> subdiv_face_offset);
 
 using ForeachVertFromCornerCb = void (*)(const ForeachContext *context,
                                          void *tls,
@@ -177,4 +180,5 @@ bool foreach_subdiv_geometry(Subdiv *subdiv,
                              const ToMeshSettings *mesh_settings,
                              const Mesh *coarse_mesh);
 
-}  // namespace blender::bke::subdiv
+}  // namespace bke::subdiv
+}  // namespace blender

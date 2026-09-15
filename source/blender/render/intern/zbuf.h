@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 /** Span fill in method, is also used to localize data for Z-buffering. */
 struct ZSpan {
   int rectx, recty; /* range for clipping */
@@ -25,11 +27,24 @@ void zbuf_free_span(struct ZSpan *zspan);
 
 /**
  * Scan-convert for strand triangles, calls function for each x, y coordinate
- * and gives UV barycentrics and z.
+ * and gives UV barycentrics.
  */
-void zspan_scanconvert(struct ZSpan *zspan,
-                       void *handle,
-                       float *v1,
-                       float *v2,
-                       float *v3,
-                       void (*func)(void *, int, int, float, float));
+void zspan_rasterize_triangle(struct ZSpan *zspan,
+                              void *handle,
+                              const float *v1,
+                              const float *v2,
+                              const float *v3,
+                              void (*func)(void *, int, int, float, float));
+
+/**
+ * Conservatively rasterize triangle wireframe, calls function for each x, y coordinate
+ * and gives UV barycentrics.
+ */
+void zspan_rasterize_conservative_wireframe(ZSpan *zspan,
+                                            void *handle,
+                                            const float *v1,
+                                            const float *v2,
+                                            const float *v3,
+                                            void (*func)(void *, int, int, float, float));
+
+}  // namespace blender

@@ -5,22 +5,22 @@
 #include "usd_hook.hh"
 
 #include "usd.hh"
+#include "usd_api_hook.hh"
 #include "usd_asset_utils.hh"
-#include "usd_hash_types.hh"
 #include "usd_hierarchy_iterator.hh"
 #include "usd_reader_prim.hh"
 #include "usd_reader_stage.hh"
 #include "usd_writer_material.hh"
 
 #include "BLI_map.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
 
 #include "DNA_material_types.h"
-#include "DNA_windowmanager_types.h"
+#include "DNA_object_types.h"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -41,9 +41,11 @@
 #include <pxr/external/boost/python/to_python_converter.hpp>
 #include <pxr/external/boost/python/tuple.hpp>
 
+namespace blender {
+
 using namespace pxr::pxr_boost;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 using USDHookList = std::list<std::unique_ptr<USDHook>>;
 using ImportedPrimMap = Map<pxr::SdfPath, Vector<PointerRNA>>;
@@ -109,7 +111,7 @@ class USDSceneExportContext {
   USDSceneExportContext(const USDHierarchyIterator *iter, Depsgraph *depsgraph)
       : stage_(iter->get_stage()), hierarchy_iterator_(iter)
   {
-    depsgraph_ptr_ = RNA_pointer_create_discrete(nullptr, &RNA_Depsgraph, depsgraph);
+    depsgraph_ptr_ = RNA_pointer_create_discrete(nullptr, RNA_Depsgraph, depsgraph);
   }
 
   pxr::UsdStageRefPtr get_stage() const
@@ -230,7 +232,7 @@ class USDMaterialExportContext {
     std::string asset_path = get_tex_image_asset_filepath(ima, stage_, params_);
 
     if (params_.export_textures) {
-      blender::io::usd::export_texture(ima, stage_, params_.overwrite_textures, reports_);
+      io::usd::export_texture(ima, stage_, params_.overwrite_textures, reports_);
     }
 
     return asset_path;
@@ -272,14 +274,14 @@ class USDMaterialImportContext {
       return python::make_tuple(asset_path, false);
     }
 
-    const char *textures_dir = params_.import_textures_mode == USD_TEX_IMPORT_PACK ?
+    const char *textures_dir = params_.import_textures_mode == TexImportMode::Pack ?
                                    temp_textures_dir() :
                                    params_.import_textures_dir;
 
-    const eUSDTexNameCollisionMode name_collision_mode = params_.import_textures_mode ==
-                                                                 USD_TEX_IMPORT_PACK ?
-                                                             USD_TEX_NAME_COLLISION_OVERWRITE :
-                                                             params_.tex_name_collision_mode;
+    const TexNameCollisionMode name_collision_mode = params_.import_textures_mode ==
+                                                             TexImportMode::Pack ?
+                                                         TexNameCollisionMode::Overwrite :
+                                                         params_.tex_name_collision_mode;
 
     std::string import_path = import_asset(
         asset_path, textures_dir, name_collision_mode, reports_);
@@ -289,7 +291,7 @@ class USDMaterialImportContext {
       return python::make_tuple(asset_path, false);
     }
 
-    const bool is_temporary = params_.import_textures_mode == USD_TEX_IMPORT_PACK;
+    const bool is_temporary = params_.import_textures_mode == TexImportMode::Pack;
     return python::make_tuple(import_path, is_temporary);
   }
 };
@@ -460,7 +462,7 @@ class OnMaterialExportInvoker final : public USDHookInvoker {
 
  public:
   OnMaterialExportInvoker(pxr::UsdStageRefPtr stage,
-                          Material *material,
+                          const Material *material,
                           const pxr::UsdShadeMaterial &usd_material,
                           const USDExportParams &export_params,
                           ReportList *reports)
@@ -468,7 +470,8 @@ class OnMaterialExportInvoker final : public USDHookInvoker {
         hook_context_(stage, export_params, reports),
         usd_material_(usd_material)
   {
-    material_ptr_ = RNA_pointer_create_discrete(nullptr, &RNA_Material, material);
+    material_ptr_ = RNA_pointer_create_discrete(
+        nullptr, RNA_Material, const_cast<Material *>(material));
   }
 
  private:
@@ -567,7 +570,7 @@ class OnMaterialImportInvoker final : public USDHookInvoker {
         hook_context_(stage, import_params, reports),
         usd_material_(usd_material)
   {
-    material_ptr_ = RNA_pointer_create_discrete(nullptr, &RNA_Material, material);
+    material_ptr_ = RNA_pointer_create_discrete(nullptr, RNA_Material, material);
   }
 
   bool result() const
@@ -599,7 +602,7 @@ void call_export_hooks(Depsgraph *depsgraph, const USDHierarchyIterator *iter, R
 }
 
 void call_material_export_hooks(pxr::UsdStageRefPtr stage,
-                                Material *material,
+                                const Material *material,
                                 const pxr::UsdShadeMaterial &usd_material,
                                 const USDExportParams &export_params,
                                 ReportList *reports)
@@ -634,7 +637,7 @@ void call_import_hooks(USDStageReader *archive, ReportList *reports)
         .append(RNA_id_pointer_create(&ob->id));
     if (ob->data) {
       prim_map.lookup_or_add_default(reader->data_prim_path())
-          .append(RNA_id_pointer_create(static_cast<ID *>(ob->data)));
+          .append(RNA_id_pointer_create(ob->data));
     }
   }
 
@@ -677,4 +680,5 @@ bool call_material_import_hooks(pxr::UsdStageRefPtr stage,
   return on_material_import.result();
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

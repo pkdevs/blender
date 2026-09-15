@@ -12,9 +12,9 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -190,7 +190,7 @@ static wmOperatorStatus object_warp_verts_exec(bContext *C, wmOperator *op)
   {
     PropertyRNA *prop_viewmat = RNA_struct_find_property(op->ptr, "viewmat");
     if (RNA_property_is_set(op->ptr, prop_viewmat)) {
-      RNA_property_float_get_array(op->ptr, prop_viewmat, (float *)viewmat);
+      RNA_property_float_get_array(op->ptr, prop_viewmat, reinterpret_cast<float *>(viewmat));
     }
     else {
       RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -202,7 +202,7 @@ static wmOperatorStatus object_warp_verts_exec(bContext *C, wmOperator *op)
         unit_m4(viewmat);
       }
 
-      RNA_property_float_set_array(op->ptr, prop_viewmat, (float *)viewmat);
+      RNA_property_float_set_array(op->ptr, prop_viewmat, reinterpret_cast<float *>(viewmat));
     }
   }
 

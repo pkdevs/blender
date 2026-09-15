@@ -9,8 +9,11 @@
 #pragma once
 
 #include "BKE_camera.h"
+#include "BKE_image_gpu.hh"
 #include "BKE_tracking.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "DEG_depsgraph_query.hh"
 #include "DNA_camera_types.h"
 #include "DRW_render.hh"
@@ -367,7 +370,8 @@ class Cameras : Overlay {
     else {
       /* Stereo cameras, volumes, plane drawing. */
       if (is_stereo3d_display_extra) {
-        sync_stereoscopy_extra(data, select_id, scene, v3d, res, ob);
+        sync_stereoscopy_extra(
+            *DEG_get_bmain(state.depsgraph), data, select_id, scene, v3d, res, ob);
       }
       else {
         call_buffers_.frame_buf.append(data, select_id);
@@ -438,8 +442,8 @@ class Cameras : Overlay {
     float *bundle_color_unselected = res.theme.colors.wire;
     uchar4 text_color_selected, text_color_unselected;
     /* Color Management: Exception here as texts are drawn in sRGB space directly. */
-    ui::GetThemeColor4ubv(TH_SELECT, text_color_selected);
-    ui::GetThemeColor4ubv(TH_TEXT, text_color_unselected);
+    ui::theme::get_color_4ubv(TH_SELECT, text_color_selected);
+    ui::theme::get_color_4ubv(TH_TEXT, text_color_unselected);
 
     float4x4 camera_mat;
     BKE_tracking_get_camera_object_matrix(ob, camera_mat.ptr());
@@ -564,8 +568,7 @@ class Cameras : Overlay {
 
     const bool is_active = ob_ref.object == camera_object;
     const bool is_camera_view = (is_active && (state.rv3d->persp == RV3D_CAMOB));
-    const bool show_image = (cam.flag & CAM_SHOW_BG_IMAGE) &&
-                            !BLI_listbase_is_empty(&cam.bg_images);
+    const bool show_image = (cam.flag & CAM_SHOW_BG_IMAGE) && !cam.bg_images.is_empty();
     const bool show_frame = BKE_object_empty_image_frame_is_visible_in_view3d(ob, state.rv3d);
 
     if (!images_enabled_ || !is_camera_view || !show_image || !show_frame) {
@@ -593,6 +596,16 @@ class Cameras : Overlay {
 
       if (tex) {
         image_camera_background_matrix_get(&cam, bgpic, state, aspect, mat);
+
+        /* Apply roll and flip to image. */
+        if (state.rv3d->camroll != 0.0f || (state.rv3d->rflag & RV3D_FLIP_X) != 0) {
+          transpose_m4(mat.ptr());
+          rotate_m4(mat.ptr(), 'Z', -state.rv3d->camroll);
+          if ((state.rv3d->rflag & RV3D_FLIP_X) != 0) {
+            negate_v4(mat[0]);
+          }
+          transpose_m4(mat.ptr());
+        }
 
         const bool is_foreground = (bgpic->flag & CAM_BGIMG_FLAG_FOREGROUND) != 0;
         /* Alpha is clamped just below 1.0 to fix background images to interfere with foreground
@@ -687,8 +700,8 @@ class Cameras : Overlay {
                                                     bool &r_use_alpha_premult,
                                                     bool &r_use_view_transform)
   {
-    ::Image *image = bgpic->ima;
-    ImageUser *iuser = (ImageUser *)&bgpic->iuser;
+    blender::Image *image = bgpic->ima;
+    ImageUser *iuser = const_cast<ImageUser *>(&bgpic->iuser);
     MovieClip *clip = nullptr;
     gpu::Texture *tex = nullptr;
     float aspect_x, aspect_y;
@@ -713,13 +726,14 @@ class Cameras : Overlay {
 
         Images::stereo_setup(state.scene, state.v3d, image, iuser);
 
-        iuser->scene = (Scene *)state.scene;
-        tex = BKE_image_get_gpu_viewer_texture(image, iuser);
+        iuser->scene = const_cast<Scene *>(state.scene);
+        tex = BKE_image_acquire_gpu_viewer_texture(image, iuser);
         iuser->scene = nullptr;
 
         if (tex == nullptr) {
           return nullptr;
         }
+        DRW_manager_get()->hold_texture(tex);
 
         width = GPU_texture_original_width(tex);
         height = GPU_texture_original_height(tex);
@@ -732,7 +746,8 @@ class Cameras : Overlay {
       case CAM_BGIMG_SOURCE_MOVIE: {
         if (bgpic->flag & CAM_BGIMG_FLAG_CAMERACLIP) {
           if (state.scene->camera) {
-            clip = BKE_object_movieclip_get((Scene *)state.scene, state.scene->camera, true);
+            clip = BKE_object_movieclip_get(
+                const_cast<Scene *>(state.scene), state.scene->camera, true);
           }
         }
         else {
@@ -743,8 +758,8 @@ class Cameras : Overlay {
           return nullptr;
         }
 
-        BKE_movieclip_user_set_frame((MovieClipUser *)&bgpic->cuser, ctime);
-        tex = BKE_movieclip_get_gpu_texture(clip, (MovieClipUser *)&bgpic->cuser);
+        BKE_movieclip_user_set_frame(const_cast<MovieClipUser *>(&bgpic->cuser), ctime);
+        tex = BKE_movieclip_get_gpu_texture(clip, const_cast<MovieClipUser *>(&bgpic->cuser));
         if (tex == nullptr) {
           return nullptr;
         }
@@ -773,7 +788,8 @@ class Cameras : Overlay {
    * Draw the stereo 3d support elements (cameras, plane, volume).
    * They are only visible when not looking through the camera:
    */
-  void sync_stereoscopy_extra(const CameraInstanceData &instdata,
+  void sync_stereoscopy_extra(const Main &bmain,
+                              const CameraInstanceData &instdata,
                               const select::ID cam_select_id,
                               const Scene *scene,
                               const View3D *v3d,
@@ -796,7 +812,7 @@ class Cameras : Overlay {
     }
 
     for (const int eye : IndexRange(2)) {
-      ob = BKE_camera_multiview_render(scene, ob, viewnames[eye]);
+      ob = BKE_camera_multiview_render(bmain, scene, ob, viewnames[eye]);
       BKE_camera_multiview_model_matrix(&scene->r, ob, viewnames[eye], stereodata.matrix.ptr());
 
       stereodata.corner_x = instdata.corner_x;

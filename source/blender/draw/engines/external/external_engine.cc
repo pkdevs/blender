@@ -13,7 +13,7 @@
 #include "DRW_engine.hh"
 #include "DRW_render.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -44,9 +44,11 @@
 
 #include "external_engine.h" /* own include */
 
+namespace blender {
+
 /* Shaders */
 
-namespace blender::draw::external {
+namespace draw::external {
 
 /**
  * A depth pass that write surface depth when it is needed.
@@ -101,12 +103,12 @@ class Prepass {
 
     ResourceHandleRange handle = {};
 
-    LISTBASE_FOREACH (ParticleSystem *, psys, &ob->particlesystem) {
-      if (!DRW_object_is_visible_psys_in_active_context(ob, psys)) {
+    for (ParticleSystem &psys : ob->particlesystem) {
+      if (!DRW_object_is_visible_psys_in_active_context(ob, &psys)) {
         continue;
       }
 
-      const ParticleSettings *part = psys->part;
+      const ParticleSettings *part = psys.part;
       const int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
       if (draw_as == PART_DRAW_PATH && part->draw_as == PART_DRAW_REND) {
         /* Case where the render engine should have rendered it, but we need to draw it for
@@ -115,7 +117,7 @@ class Prepass {
           handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
         }
 
-        gpu::Batch *geom = DRW_cache_particles_get_hair(ob, psys, nullptr);
+        gpu::Batch *geom = DRW_cache_particles_get_hair(ob, &psys, nullptr);
         mesh_ps_->draw(geom, handle);
         break;
       }
@@ -204,10 +206,15 @@ class Instance : public DrawEngine {
     return "External";
   }
 
+  bool uses_render_border() const final
+  {
+    return true;
+  }
+
   void init() final
   {
     draw_ctx = DRW_context_get();
-    do_prepass = DRW_gpencil_engine_needed_viewport(draw_ctx->depsgraph, draw_ctx->v3d);
+    do_prepass = DRW_render_check_grease_pencil(draw_ctx->depsgraph, draw_ctx->v3d);
   }
 
   void begin_sync() final
@@ -217,7 +224,7 @@ class Instance : public DrawEngine {
     }
   }
 
-  void object_sync(blender::draw::ObjectRef &ob_ref, blender::draw::Manager &manager) final
+  void object_sync(draw::ObjectRef &ob_ref, draw::Manager &manager) final
   {
     if (do_prepass) {
       prepass.object_sync(manager, ob_ref, *draw_ctx);
@@ -226,12 +233,12 @@ class Instance : public DrawEngine {
 
   void end_sync() final {}
 
-  void draw_scene_do_v3d(blender::draw::Manager &manager, draw::View &view)
+  void draw_scene_do_v3d(draw::Manager &manager, draw::View &view)
   {
     RegionView3D *rv3d = draw_ctx->rv3d;
     ARegion *region = draw_ctx->region;
 
-    blender::draw::command::StateSet::set(DRW_STATE_WRITE_COLOR);
+    draw::command::StateSet::set(DRW_STATE_WRITE_COLOR);
 
     /* The external engine can use the OpenGL rendering API directly, so make sure the state is
      * already applied. */
@@ -249,6 +256,11 @@ class Instance : public DrawEngine {
 
       rv3d->view_render = RE_NewViewRender(engine_type);
       render_engine = RE_view_engine_get(rv3d->view_render);
+
+      if (ScrArea *area = CTX_wm_area(draw_ctx->evil_C)) {
+        ED_area_tag_redraw_regiontype(area, RGN_TYPE_HEADER);
+      }
+
       engine_type->view_update(render_engine, draw_ctx->evil_C, draw_ctx->depsgraph);
     }
     else {
@@ -289,13 +301,13 @@ class Instance : public DrawEngine {
   {
     BLI_assert(engine != nullptr);
 
-    SpaceImage *space_image = (SpaceImage *)draw_ctx->space_data;
+    SpaceImage *space_image = reinterpret_cast<SpaceImage *>(draw_ctx->space_data);
 
     /* Apply current view as transformation matrix.
      * This will configure drawing for normalized space with current zoom and pan applied. */
 
-    float4x4 view_matrix = blender::draw::View::default_get().viewmat();
-    float4x4 projection_matrix = blender::draw::View::default_get().winmat();
+    float4x4 view_matrix = draw::View::default_get().viewmat();
+    float4x4 projection_matrix = draw::View::default_get().winmat();
 
     GPU_matrix_projection_set(projection_matrix.ptr());
     GPU_matrix_set(view_matrix.ptr());
@@ -337,7 +349,7 @@ class Instance : public DrawEngine {
     BLI_assert(re != nullptr);
     BLI_assert(engine != nullptr);
 
-    blender::draw::command::StateSet::set(DRW_STATE_WRITE_COLOR);
+    draw::command::StateSet::set(DRW_STATE_WRITE_COLOR);
 
     /* The external engine can use the OpenGL rendering API directly, so make sure the state is
      * already applied. */
@@ -370,12 +382,12 @@ class Instance : public DrawEngine {
     GPU_matrix_pop();
     GPU_matrix_pop_projection();
 
-    blender::draw::command::StateSet::set();
+    draw::command::StateSet::set();
 
     RE_engine_draw_release(re);
   }
 
-  void draw_scene_do(blender::draw::Manager &manager, View &view)
+  void draw_scene_do(draw::Manager &manager, View &view)
   {
     if (draw_ctx->v3d != nullptr) {
       draw_scene_do_v3d(manager, view);
@@ -393,7 +405,7 @@ class Instance : public DrawEngine {
     }
   }
 
-  void draw(blender::draw::Manager &manager) final
+  void draw(draw::Manager &manager) final
   {
     /* TODO(fclem): Remove global access. */
     View &view = View::default_get();
@@ -404,11 +416,10 @@ class Instance : public DrawEngine {
      * OpenGL render is used for quick preview (thumbnails or sequencer preview)
      * where using the rendering engine to preview doesn't make so much sense. */
     if (draw_ctx->evil_C) {
-      const float clear_col[4] = {0, 0, 0, 0};
       /* This is to keep compatibility with external engine. */
       /* TODO(fclem): remove it eventually. */
       GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_clear_color(dfbl->default_fb, clear_col);
+      GPU_framebuffer_clear_color(dfbl->default_fb, {0.0, 0.0, 0.0, 0.0});
 
       DRW_submission_start();
       draw_scene_do(manager, view);
@@ -422,7 +433,7 @@ DrawEngine *Engine::create_instance()
   return new Instance();
 }
 
-}  // namespace blender::draw::external
+}  // namespace draw::external
 
 /* Functions */
 
@@ -442,6 +453,8 @@ RenderEngineType DRW_engine_viewport_external_type = {
     /*bake*/ nullptr,
     /*view_update*/ nullptr,
     /*view_draw*/ nullptr,
+    /*view_pause*/ nullptr,
+    /*view_resume*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ nullptr,
     /*update_custom_camera*/ nullptr,
@@ -473,7 +486,7 @@ bool DRW_engine_external_acquire_for_image_editor(const DRWContext *draw_ctx)
     return false;
   }
 
-  SpaceImage *space_image = (SpaceImage *)space_data;
+  SpaceImage *space_image = reinterpret_cast<SpaceImage *>(const_cast<SpaceLink *>(space_data));
   const Image *image = ED_space_image(space_image);
   if (image == nullptr || image->type != IMA_TYPE_R_RESULT) {
     return false;
@@ -509,3 +522,5 @@ void DRW_engine_external_free(RegionView3D *rv3d)
     }
   }
 }
+
+}  // namespace blender

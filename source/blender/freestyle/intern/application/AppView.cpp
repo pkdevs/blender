@@ -6,6 +6,7 @@
  * \ingroup freestyle
  */
 
+#include <algorithm>
 #include <iostream>
 
 #include "AppConfig.h"
@@ -21,7 +22,7 @@
 #include "../view_map/Silhouette.h"
 #include "../view_map/ViewMap.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
@@ -56,12 +57,12 @@ AppView::AppView(const char * /*iName*/)
 
   _RootNode.AddChild(_DebugRootNode);
 
-  _minBBox = std::min(
-      std::min(_ModelRootNode->bbox().getMin()[0], _ModelRootNode->bbox().getMin()[1]),
-      _ModelRootNode->bbox().getMin()[2]);
-  _maxBBox = std::max(
-      std::max(_ModelRootNode->bbox().getMax()[0], _ModelRootNode->bbox().getMax()[1]),
-      _ModelRootNode->bbox().getMax()[2]);
+  _minBBox = std::min({_ModelRootNode->bbox().getMin()[0],
+                       _ModelRootNode->bbox().getMin()[1],
+                       _ModelRootNode->bbox().getMin()[2]});
+  _maxBBox = std::max({_ModelRootNode->bbox().getMax()[0],
+                       _ModelRootNode->bbox().getMax()[1],
+                       _ModelRootNode->bbox().getMax()[2]});
 
   _maxAbs = std::max(rabs(_minBBox), rabs(_maxBBox));
   _minAbs = std::min(rabs(_minBBox), rabs(_maxBBox));
@@ -89,7 +90,7 @@ real AppView::distanceToSceneCenter()
 {
   BBox<Vec3r> bbox = _ModelRootNode->bbox();
 
-  Vec3r v(UNPACK3(g_freestyle.viewpoint));
+  Vec3r v(UNPACK3(blender::g_freestyle.viewpoint));
   v -= 0.5 * (bbox.getMin() + bbox.getMax());
 
   return v.norm();
@@ -100,7 +101,7 @@ real AppView::znear()
   BBox<Vec3r> bbox = _ModelRootNode->bbox();
   Vec3r u = bbox.getMin();
   Vec3r v = bbox.getMax();
-  Vec3r cameraCenter(UNPACK3(g_freestyle.viewpoint));
+  Vec3r cameraCenter(UNPACK3(blender::g_freestyle.viewpoint));
 
   Vec3r w1(u[0], u[1], u[2]);
   Vec3r w2(v[0], u[1], u[2]);
@@ -111,15 +112,14 @@ real AppView::znear()
   Vec3r w7(u[0], v[1], v[2]);
   Vec3r w8(v[0], v[1], v[2]);
 
-  real _znear = std::min(
-      (w1 - cameraCenter).norm(),
-      std::min((w2 - cameraCenter).norm(),
-               std::min((w3 - cameraCenter).norm(),
-                        std::min((w4 - cameraCenter).norm(),
-                                 std::min((w5 - cameraCenter).norm(),
-                                          std::min((w6 - cameraCenter).norm(),
-                                                   std::min((w7 - cameraCenter).norm(),
-                                                            (w8 - cameraCenter).norm())))))));
+  real _znear = std::min({(w1 - cameraCenter).norm(),
+                          (w2 - cameraCenter).norm(),
+                          (w3 - cameraCenter).norm(),
+                          (w4 - cameraCenter).norm(),
+                          (w5 - cameraCenter).norm(),
+                          (w6 - cameraCenter).norm(),
+                          (w7 - cameraCenter).norm(),
+                          (w8 - cameraCenter).norm()});
 
   return std::max(_znear, 0.001);
 }
@@ -129,7 +129,7 @@ real AppView::zfar()
   BBox<Vec3r> bbox = _ModelRootNode->bbox();
   Vec3r u = bbox.getMin();
   Vec3r v = bbox.getMax();
-  Vec3r cameraCenter(UNPACK3(g_freestyle.viewpoint));
+  Vec3r cameraCenter(UNPACK3(blender::g_freestyle.viewpoint));
 
   Vec3r w1(u[0], u[1], u[2]);
   Vec3r w2(v[0], u[1], u[2]);
@@ -140,15 +140,14 @@ real AppView::zfar()
   Vec3r w7(u[0], v[1], v[2]);
   Vec3r w8(v[0], v[1], v[2]);
 
-  real _zfar = std::max(
-      (w1 - cameraCenter).norm(),
-      std::max((w2 - cameraCenter).norm(),
-               std::max((w3 - cameraCenter).norm(),
-                        std::max((w4 - cameraCenter).norm(),
-                                 std::max((w5 - cameraCenter).norm(),
-                                          std::max((w6 - cameraCenter).norm(),
-                                                   std::max((w7 - cameraCenter).norm(),
-                                                            (w8 - cameraCenter).norm())))))));
+  real _zfar = std::max({(w1 - cameraCenter).norm(),
+                         (w2 - cameraCenter).norm(),
+                         (w3 - cameraCenter).norm(),
+                         (w4 - cameraCenter).norm(),
+                         (w5 - cameraCenter).norm(),
+                         (w6 - cameraCenter).norm(),
+                         (w7 - cameraCenter).norm(),
+                         (w8 - cameraCenter).norm()});
 
   return _zfar;
 }

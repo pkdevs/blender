@@ -7,11 +7,13 @@
  */
 
 #include "MEM_guardedalloc.h"
+#include <cstdint>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_map.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_global.hh"
 
@@ -21,16 +23,19 @@
 #include "GPU_capabilities.hh"
 #include "GPU_context.hh"
 #include "GPU_material.hh"
+#include "GPU_shader_shared_utils.hh"
 
 #include "GPU_uniform_buffer.hh"
 #include "gpu_context_private.hh"
 #include "gpu_uniform_buffer_private.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Creation & Deletion
  * \{ */
 
-namespace blender::gpu {
+namespace gpu {
 
 UniformBuf::UniformBuf(size_t size, const char *name)
 {
@@ -44,10 +49,10 @@ UniformBuf::UniformBuf(size_t size, const char *name)
 
 UniformBuf::~UniformBuf()
 {
-  MEM_SAFE_FREE(data_);
+  MEM_SAFE_DELETE_VOID(data_);
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
 /** \} */
 
@@ -56,69 +61,188 @@ UniformBuf::~UniformBuf()
  * \{ */
 
 /**
- * We need to pad some data types (vec3) on the C side
+ * We need to pad some data types (vec3/int3) on the C side
  * To match the GPU expected memory block alignment.
  */
+
+/** std140 storage layout: 4-byte base alignment. */
+static constexpr size_t GPU_UBO_ALIGNMENT = 4;
+
+static bool gpu_type_is_ubo_scalar(const GPUType type)
+{
+  return gpu_type_element_count(type) == 1;
+}
+
 static GPUType get_padded_gpu_type(LinkData *link)
 {
-  GPUInput *input = (GPUInput *)link->data;
+  GPUInput *input = static_cast<GPUInput *>(link->data);
   GPUType gputype = input->type;
-  /* Metal cannot pack floats after vec3. */
+  /* Metal cannot pack scalars after vec3/int3. */
   if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
-    return (gputype == GPU_VEC3) ? GPU_VEC4 : gputype;
+    switch (gputype) {
+      case GPU_VEC3:
+        return GPU_VEC4;
+      case GPU_INT3:
+        return GPU_INT4;
+      default:
+        return gputype;
+    }
   }
-  /* Unless the vec3 is followed by a float we need to treat it as a vec4. */
-  if (gputype == GPU_VEC3 && (link->next != nullptr) &&
-      (((GPUInput *)link->next->data)->type != GPU_FLOAT))
-  {
-    gputype = GPU_VEC4;
+  /* Unless vec3/int3 is followed by a scalar we need to treat it as a vec4/int4. */
+  if (ELEM(gputype, GPU_VEC3, GPU_INT3) && (link->next != nullptr)) {
+    const GPUType next_type = static_cast<GPUInput *>(link->next->data)->type;
+    if (!gpu_type_is_ubo_scalar(next_type)) {
+      return (gputype == GPU_VEC3) ? GPU_VEC4 : GPU_INT4;
+    }
   }
   return gputype;
 }
 
+static void gpu_constant_populate_ubo(void *destination,
+                                      const GPUInputConstantData &data,
+                                      const GPUType type)
+{
+  switch (type) {
+    case GPU_FLOAT:
+    case GPU_VEC2:
+    case GPU_VEC3:
+    case GPU_VEC4:
+    case GPU_MAT4: {
+      const Span<float> span = gpu_constant_to_float_span(data, type);
+      memcpy(destination, span.data(), size_t(span.size_in_bytes()));
+      return;
+    }
+    case GPU_INT:
+    case GPU_INT2:
+    case GPU_INT3:
+    case GPU_INT4: {
+      const Span<int> span = gpu_constant_to_int_span(data, type);
+      memcpy(destination, span.data(), size_t(span.size_in_bytes()));
+      return;
+    }
+    case GPU_BOOL: {
+      /* Pad bool to 4 bytes in UBO. */
+      const bool32_t value = gpu_constant_to_bool(data) ? 1 : 0;
+      memcpy(destination, &value, sizeof(value));
+      return;
+    }
+    default:
+      break;
+  }
+
+  BLI_assert_unreachable();
+}
+
+static void buffer_reorder_scalar_after_size3_vec(ListBaseT<LinkData> *inputs,
+                                                  LinkData *size3_vec_link,
+                                                  Map<GPUType, LinkData *> &first_links)
+{
+  const GPUType size3_vec_type = static_cast<GPUInput *>(size3_vec_link->data)->type;
+  BLI_assert(ELEM(size3_vec_type, GPU_VEC3, GPU_INT3));
+
+  LinkData *link = size3_vec_link;
+  while (link != nullptr && static_cast<GPUInput *>(link->data)->type == size3_vec_type) {
+    LinkData *link_next = link->next;
+
+    /* If followed by nothing or a scalar, no need for alignment. */
+    if ((link_next == nullptr) ||
+        gpu_type_is_ubo_scalar(static_cast<GPUInput *>(link_next->data)->type))
+    {
+      break;
+    }
+
+    for (const GPUType scalar_type : {GPU_FLOAT, GPU_INT, GPU_BOOL}) {
+      LinkData **scalar_link_ptr = first_links.lookup_ptr(scalar_type);
+      if (scalar_link_ptr != nullptr && *scalar_link_ptr != nullptr) {
+        LinkData *scalar_input = *scalar_link_ptr;
+        first_links.add_overwrite(scalar_type, scalar_input->next);
+
+        BLI_remlink(inputs, scalar_input);
+        BLI_insertlinkafter(inputs, link, scalar_input);
+        break;
+      }
+    }
+
+    link = link_next;
+  }
+}
+
 /**
  * Returns 1 if the first item should be after second item.
- * We make sure the vec4 uniforms come first.
+ * Primary key: from larger to smaller element counts.
+ * Secondary key: GPUType, so equal-sized types are grouped together.
+ * Resulting order: mat4, vec4, int4, vec3, int3, vec2, int2, float, int, bool.
  */
 static int inputs_cmp(const void *a, const void *b)
 {
-  const LinkData *link_a = (const LinkData *)a, *link_b = (const LinkData *)b;
-  const GPUInput *input_a = (const GPUInput *)link_a->data;
-  const GPUInput *input_b = (const GPUInput *)link_b->data;
-  return input_a->type < input_b->type ? 1 : 0;
+  const LinkData *link_a = static_cast<const LinkData *>(a),
+                 *link_b = static_cast<const LinkData *>(b);
+  const GPUInput *input_a = static_cast<const GPUInput *>(link_a->data);
+  const GPUInput *input_b = static_cast<const GPUInput *>(link_b->data);
+  const int count_a = gpu_type_element_count(input_a->type);
+  const int count_b = gpu_type_element_count(input_b->type);
+  if (count_a != count_b) {
+    return count_a < count_b ? 1 : 0;
+  }
+  return input_a->type > input_b->type ? 1 : 0;
+}
+
+static inline bool is_ubo_supported_type(const GPUType type)
+{
+  switch (type) {
+    case GPU_FLOAT:
+    case GPU_VEC2:
+    case GPU_VEC3:
+    case GPU_VEC4:
+    case GPU_MAT4:
+    case GPU_INT:
+    case GPU_INT2:
+    case GPU_INT3:
+    case GPU_INT4:
+    case GPU_BOOL:
+      return true;
+    case GPU_NONE:
+    case GPU_MAT3:
+    case GPU_TEX1D_ARRAY:
+    case GPU_TEX2D:
+    case GPU_TEX2D_ARRAY:
+    case GPU_TEX3D:
+    case GPU_CLOSURE:
+    case GPU_ATTR:
+      return false;
+  }
+
+  BLI_assert_unreachable();
+  return false;
 }
 
 /**
  * Make sure we respect the expected alignment of UBOs.
- * mat4, vec4, pad vec3 as vec4, then vec2, then floats.
+ * mat4, vec4, int4, pad vec3 and int3 as vec4 and int4, vec2, int2, float, int, bool.
  */
-static void buffer_from_list_inputs_sort(ListBase *inputs)
+static void buffer_from_list_inputs_sort(ListBaseT<LinkData> *inputs)
 {
-/* Only support up to this type, if you want to extend it, make sure static void
- * inputs_sobuffer_size_compute *inputs) padding logic is correct for the new types. */
-#define MAX_UBO_GPU_TYPE GPU_MAT4
-
-  /* Order them as mat4, vec4, vec3, vec2, float. */
+  /* Order them as mat4, vec4, int4, vec3, int3, vec2, int2, float, int, bool. */
   BLI_listbase_sort(inputs, inputs_cmp);
 
-  /* Metal cannot pack floats after vec3. */
+  /* Metal cannot pack scalars after vec3/int3. */
   if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
     return;
   }
 
-  /* Creates a lookup table for the different types. */
-  LinkData *inputs_lookup[MAX_UBO_GPU_TYPE + 1] = {nullptr};
-  GPUType cur_type = static_cast<GPUType>(MAX_UBO_GPU_TYPE + 1);
+  Map<GPUType, LinkData *> first_links;
+  GPUType cur_type = GPU_NONE;
 
-  LISTBASE_FOREACH (LinkData *, link, inputs) {
-    GPUInput *input = (GPUInput *)link->data;
+  for (LinkData &link : *inputs) {
+    GPUInput *input = static_cast<GPUInput *>(link.data);
 
     if (input->type == GPU_MAT3) {
       /* Alignment for mat3 is not handled currently, so not supported */
       BLI_assert_msg(0, "mat3 not supported in UBO");
       continue;
     }
-    if (input->type > MAX_UBO_GPU_TYPE) {
+
+    if (!is_ubo_supported_type(input->type)) {
       BLI_assert_msg(0, "GPU type not supported in UBO");
       continue;
     }
@@ -127,60 +251,41 @@ static void buffer_from_list_inputs_sort(ListBase *inputs)
       continue;
     }
 
-    inputs_lookup[input->type] = link;
+    first_links.add_new(input->type, &link);
     cur_type = input->type;
   }
 
-  /* If there is no GPU_VEC3 there is no need for alignment. */
-  if (inputs_lookup[GPU_VEC3] == nullptr) {
-    return;
+  if (first_links.contains(GPU_VEC3)) {
+    buffer_reorder_scalar_after_size3_vec(inputs, first_links.lookup(GPU_VEC3), first_links);
   }
-
-  LinkData *link = inputs_lookup[GPU_VEC3];
-  while (link != nullptr && ((GPUInput *)link->data)->type == GPU_VEC3) {
-    LinkData *link_next = link->next;
-
-    /* If GPU_VEC3 is followed by nothing or a GPU_FLOAT, no need for alignment. */
-    if ((link_next == nullptr) || ((GPUInput *)link_next->data)->type == GPU_FLOAT) {
-      break;
-    }
-
-    /* If there is a float, move it next to current vec3. */
-    if (inputs_lookup[GPU_FLOAT] != nullptr) {
-      LinkData *float_input = inputs_lookup[GPU_FLOAT];
-      inputs_lookup[GPU_FLOAT] = float_input->next;
-
-      BLI_remlink(inputs, float_input);
-      BLI_insertlinkafter(inputs, link, float_input);
-    }
-
-    link = link_next;
+  if (first_links.contains(GPU_INT3)) {
+    buffer_reorder_scalar_after_size3_vec(inputs, first_links.lookup(GPU_INT3), first_links);
   }
-#undef MAX_UBO_GPU_TYPE
 }
 
-static inline size_t buffer_size_from_list(ListBase *inputs)
+static inline size_t buffer_size_from_list(ListBaseT<LinkData> *inputs)
 {
   size_t buffer_size = 0;
-  LISTBASE_FOREACH (LinkData *, link, inputs) {
-    const GPUType gputype = get_padded_gpu_type(link);
-    buffer_size += gputype * sizeof(float);
+  for (LinkData &link : *inputs) {
+    const GPUType gputype = get_padded_gpu_type(&link);
+    buffer_size += gpu_type_element_count(gputype) * GPU_UBO_ALIGNMENT;
   }
   /* Round up to size of vec4. (Opengl Requirement) */
-  size_t alignment = sizeof(float[4]);
+  size_t alignment = GPU_UBO_ALIGNMENT * 4;
   buffer_size = divide_ceil_u(buffer_size, alignment) * alignment;
 
   return buffer_size;
 }
 
-static inline void buffer_fill_from_list(void *data, ListBase *inputs)
+static inline void buffer_fill_from_list(void *data, ListBaseT<LinkData> *inputs)
 {
   /* Now that we know the total ubo size we can start populating it. */
-  float *offset = (float *)data;
-  LISTBASE_FOREACH (LinkData *, link, inputs) {
-    GPUInput *input = (GPUInput *)link->data;
-    memcpy(offset, input->vec, input->type * sizeof(float));
-    offset += get_padded_gpu_type(link);
+  char *offset = static_cast<char *>(data);
+  for (LinkData &link : *inputs) {
+    GPUInput *input = static_cast<GPUInput *>(link.data);
+    const GPUType padded_type = get_padded_gpu_type(&link);
+    gpu_constant_populate_ubo(offset, input->constant_data, input->type);
+    offset += gpu_type_element_count(padded_type) * GPU_UBO_ALIGNMENT;
   }
 }
 
@@ -192,7 +297,7 @@ static inline void buffer_fill_from_list(void *data, ListBase *inputs)
 
 using namespace blender::gpu;
 
-blender::gpu::UniformBuf *GPU_uniformbuf_create_ex(size_t size, const void *data, const char *name)
+gpu::UniformBuf *GPU_uniformbuf_create_ex(size_t size, const void *data, const char *name)
 {
   UniformBuf *ubo = GPUBackend::get()->uniformbuf_alloc(size, name);
   /* Direct init. */
@@ -202,22 +307,22 @@ blender::gpu::UniformBuf *GPU_uniformbuf_create_ex(size_t size, const void *data
   else if (G.debug & G_DEBUG_GPU) {
     /* Fill the buffer with poison values.
      * (NaN for floats, -1 for `int` and "max value" for `uint`). */
-    blender::Vector<uchar> uninitialized_data(size, 0xFF);
+    Vector<uchar> uninitialized_data(size, 0xFF);
     ubo->update(uninitialized_data.data());
   }
   return ubo;
 }
 
-blender::gpu::UniformBuf *GPU_uniformbuf_create_from_list(ListBase *inputs, const char *name)
+gpu::UniformBuf *GPU_uniformbuf_create_from_list(ListBaseT<LinkData> *inputs, const char *name)
 {
   /* There is no point on creating an UBO if there is no arguments. */
-  if (BLI_listbase_is_empty(inputs)) {
+  if (inputs->is_empty()) {
     return nullptr;
   }
 
   buffer_from_list_inputs_sort(inputs);
   size_t buffer_size = buffer_size_from_list(inputs);
-  void *data = MEM_mallocN(buffer_size, __func__);
+  void *data = MEM_new_uninitialized(buffer_size, __func__);
   buffer_fill_from_list(data, inputs);
 
   UniformBuf *ubo = nullptr;
@@ -229,27 +334,27 @@ blender::gpu::UniformBuf *GPU_uniformbuf_create_from_list(ListBase *inputs, cons
   return ubo;
 }
 
-void GPU_uniformbuf_free(blender::gpu::UniformBuf *ubo)
+void GPU_uniformbuf_free(gpu::UniformBuf *ubo)
 {
   delete ubo;
 }
 
-void GPU_uniformbuf_update(blender::gpu::UniformBuf *ubo, const void *data)
+void GPU_uniformbuf_update(gpu::UniformBuf *ubo, const void *data)
 {
   ubo->update(data);
 }
 
-void GPU_uniformbuf_bind(blender::gpu::UniformBuf *ubo, int slot)
+void GPU_uniformbuf_bind(gpu::UniformBuf *ubo, int slot)
 {
   ubo->bind(slot);
 }
 
-void GPU_uniformbuf_bind_as_ssbo(blender::gpu::UniformBuf *ubo, int slot)
+void GPU_uniformbuf_bind_as_ssbo(gpu::UniformBuf *ubo, int slot)
 {
   ubo->bind_as_ssbo(slot);
 }
 
-void GPU_uniformbuf_unbind(blender::gpu::UniformBuf *ubo)
+void GPU_uniformbuf_unbind(gpu::UniformBuf *ubo)
 {
   ubo->unbind();
 }
@@ -259,9 +364,11 @@ void GPU_uniformbuf_debug_unbind_all()
   Context::get()->debug_unbind_all_ubo();
 }
 
-void GPU_uniformbuf_clear_to_zero(blender::gpu::UniformBuf *ubo)
+void GPU_uniformbuf_clear_to_zero(gpu::UniformBuf *ubo)
 {
   ubo->clear_to_zero();
 }
 
 /** \} */
+
+}  // namespace blender

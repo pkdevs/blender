@@ -5,6 +5,7 @@
 #include "testing/testing.h"
 
 #include "GPU_batch.hh"
+#include "GPU_batch_utils.hh"
 #include "GPU_context.hh"
 #include "draw_shader.hh"
 #include "draw_testing.hh"
@@ -65,6 +66,7 @@ static void test_eevee_shadow_shift_clear()
 
   PassSimple pass("Test");
   pass.shader_set(sh);
+  pass.push_constant("reset_used_flag", true);
   pass.bind_ssbo("tilemaps_buf", tilemaps_data);
   pass.bind_ssbo("tilemaps_clip_buf", tilemaps_clip);
   pass.bind_ssbo("tiles_buf", tiles_data);
@@ -151,6 +153,7 @@ static void test_eevee_shadow_shift()
 
   PassSimple pass("Test");
   pass.shader_set(sh);
+  pass.push_constant("reset_used_flag", true);
   pass.bind_ssbo("tilemaps_buf", tilemaps_data);
   pass.bind_ssbo("tilemaps_clip_buf", tilemaps_clip);
   pass.bind_ssbo("tiles_buf", tiles_data);
@@ -213,7 +216,7 @@ static void test_eevee_shadow_tag_update()
       ResourceHandle hdl = manager.resource_handle(obmat, float3(0.5f, 0.5f, -1.0f), half_extent);
       manager.resource_handle(obmat2);
       manager.end_sync();
-      past_casters_updated.append(hdl.resource_index());
+      past_casters_updated.append(hdl.index());
       past_casters_updated.push_update();
     }
     {
@@ -221,7 +224,7 @@ static void test_eevee_shadow_tag_update()
       manager.resource_handle(obmat2);
       ResourceHandle hdl = manager.resource_handle(obmat, float3(-1.0f, 0.5f, -1.0f), half_extent);
       manager.end_sync();
-      curr_casters_updated.append(hdl.resource_index());
+      curr_casters_updated.append(hdl.index());
       curr_casters_updated.push_update();
     }
   }
@@ -244,17 +247,32 @@ static void test_eevee_shadow_tag_update()
   tilemaps_data.push_update();
 
   gpu::Shader *sh = GPU_shader_create_from_info_name("eevee_shadow_tag_update");
+  gpu::Shader *sh_propagate = GPU_shader_create_from_info_name(
+      "eevee_shadow_tag_update_propagate");
+
+  gpu::Batch *box_batch = GPU_batch_unit_cube();
+
+  gpu::FrameBuffer *fb = GPU_framebuffer_create("empty_tagging_fb");
+  GPU_framebuffer_default_size(fb, SHADOW_TILEMAP_RES, SHADOW_TILEMAP_RES);
 
   PassSimple pass("Test");
   pass.shader_set(sh);
+  pass.framebuffer_set(&fb);
+  pass.push_constant("tilemap_count", int(tilemaps_data.size()));
   pass.bind_ssbo("tilemaps_buf", tilemaps_data);
   pass.bind_ssbo("tiles_buf", tiles_data);
   pass.bind_ssbo("bounds_buf", &manager.bounds_buf.previous());
   pass.bind_ssbo("resource_ids_buf", past_casters_updated);
-  pass.dispatch(int3(past_casters_updated.size(), 1, tilemaps_data.size()));
+  pass.draw(box_batch, past_casters_updated.size() * tilemaps_data.size());
   pass.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
   pass.bind_ssbo("resource_ids_buf", curr_casters_updated);
-  pass.dispatch(int3(curr_casters_updated.size(), 1, tilemaps_data.size()));
+  pass.draw(box_batch, curr_casters_updated.size() * tilemaps_data.size());
+  pass.barrier(GPU_BARRIER_SHADER_STORAGE);
+
+  pass.shader_set(sh_propagate);
+  pass.bind_ssbo("tilemaps_buf", tilemaps_data);
+  pass.bind_ssbo("tiles_buf", tiles_data);
+  pass.dispatch(int3(1, 1, tilemaps_data.size()));
   pass.barrier(GPU_BARRIER_BUFFER_UPDATE);
 
   draw::View view("Test");
@@ -286,16 +304,16 @@ static void test_eevee_shadow_tag_update()
       "--------------------------------"
       "--------------------------------"
       "--------------------------------"
-      "--------------------------------"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "xxxx----------------xxxxxxxx----"
-      "--------------------------------"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
+      "xxxxx--------------xxxxxxxxxx---"
       "--------------------------------"
       "--------------------------------"
       "--------------------------------";
@@ -309,22 +327,22 @@ static void test_eevee_shadow_tag_update()
       "----------------"
       "----------------"
       "----------------"
-      "----------------"
-      "xx--------xxxx--"
-      "xx--------xxxx--"
-      "xx--------xxxx--"
-      "xx--------xxxx--"
-      "----------------"
+      "xxx------xxxxxx-"
+      "xxx------xxxxxx-"
+      "xxx------xxxxxx-"
+      "xxx------xxxxxx-"
+      "xxx------xxxxxx-"
+      "xxx------xxxxxx-"
       "----------------";
   StringRefNull expected_lod2 =
       "--------"
       "--------"
       "--------"
       "--------"
-      "--------"
-      "x----xx-"
-      "x----xx-"
-      "--------";
+      "xx--xxxx"
+      "xx--xxxx"
+      "xx--xxxx"
+      "xx--xxxx";
   StringRefNull expected_lod3 =
       "----"
       "----"
@@ -360,8 +378,11 @@ static void test_eevee_shadow_tag_update()
   GPU_shader_unbind();
 
   GPU_shader_free(sh);
+  GPU_shader_free(sh_propagate);
   DRW_shaders_free();
   GPU_render_end();
+  GPU_BATCH_DISCARD_SAFE(box_batch);
+  GPU_FRAMEBUFFER_FREE_SAFE(fb);
 }
 DRAW_TEST(eevee_shadow_tag_update)
 
@@ -794,27 +815,27 @@ static void test_eevee_shadow_finalize()
     tile.do_update = true;
     tiles_data[lod2_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(0, 1, 0);
+    tile.page = uint3(4, 0, 0);
     tile.do_update = true;
     tiles_data[lod3_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(1, 1, 0);
+    tile.page = uint3(5, 0, 0);
     tile.do_update = true;
     tiles_data[lod4_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(2, 1, 0);
+    tile.page = uint3(6, 0, 0);
     tile.do_update = true;
     tiles_data[lod5_ofs] = shadow_tile_pack(tile);
 
-    tile.page = uint3(3, 1, 0);
+    tile.page = uint3(7, 0, 0);
     tile.do_update = true;
     tiles_data[lod0_ofs + 31] = shadow_tile_pack(tile);
 
-    tile.page = uint3(0, 2, 0);
+    tile.page = uint3(0, 1, 0);
     tile.do_update = true;
     tiles_data[lod3_ofs + 8] = shadow_tile_pack(tile);
 
-    tile.page = uint3(1, 2, 0);
+    tile.page = uint3(1, 1, 0);
     tile.do_update = true;
     tiles_data[lod0_ofs + 32 * 16 - 8] = shadow_tile_pack(tile);
 
@@ -854,7 +875,7 @@ static void test_eevee_shadow_finalize()
   }
 
   Texture tilemap_tx = {"tilemap_tx"};
-  tilemap_tx.ensure_2d(blender::gpu::TextureFormat::UINT_32,
+  tilemap_tx.ensure_2d(gpu::TextureFormat::UINT_32,
                        int2(SHADOW_TILEMAP_RES),
                        GPU_TEXTURE_USAGE_HOST_READ | GPU_TEXTURE_USAGE_SHADER_READ |
                            GPU_TEXTURE_USAGE_SHADER_WRITE);
@@ -868,7 +889,8 @@ static void test_eevee_shadow_finalize()
   StorageArrayBuffer<uint, SHADOW_RENDER_MAP_SIZE> render_map_buf = {"render_map_buf"};
   StorageArrayBuffer<uint, SHADOW_VIEW_MAX> viewport_index_buf = {"viewport_index_buf"};
 
-  render_map_buf.clear_to_zero();
+  GPU_storagebuf_clear(render_map_buf, 0xFFFFFFFFu);
+  clear_dispatch_buf.clear_to_zero();
 
   gpu::Shader *sh = GPU_shader_create_from_info_name("eevee_shadow_tilemap_finalize");
   PassSimple pass("Test");
@@ -932,7 +954,7 @@ static void test_eevee_shadow_finalize()
       }
     }
 
-    MEM_SAFE_FREE(pixels);
+    MEM_SAFE_DELETE(pixels);
 
     /** The layout of these expected strings is Y down. */
     StringRefNull expected_pages =
@@ -976,7 +998,7 @@ static void test_eevee_shadow_finalize()
     auto stringify_view = [](Span<uint> data) -> std::string {
       std::string result;
       for (auto x : data) {
-        result += (x == 0u) ? '-' : ((x == 0xFFFFFFFFu) ? 'x' : '0' + (x % 10));
+        result += (x == 0u) ? 'x' : ((x == 0xFFFFFFFFu) ? '-' : '0' + (x % 10));
       }
       return result;
     };
@@ -1051,10 +1073,10 @@ static void test_eevee_shadow_finalize()
         "--------------------------------";
 
     StringRefNull expected_view2 =
-        "4xxx----------------------------"
-        "xxxx----------------------------"
-        "8xxx----------------------------"
-        "xxxx----------------------------"
+        "4-------------------------------"
+        "--------------------------------"
+        "8-------------------------------"
+        "--------------------------------"
         "--------------------------------"
         "--------------------------------"
         "--------------------------------"
@@ -1119,22 +1141,22 @@ static void test_eevee_shadow_finalize()
         "--------------------------------";
 
     StringRefNull expected_view4 =
-        "xxxxxxx7xxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "xxxxxxxxxxxxxxxx----------------"
-        "9xxxxxxxxxxxxxxx----------------"
+        "-------7------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "9-------------------------------"
         "--------------------------------"
         "--------------------------------"
         "--------------------------------"
@@ -1250,19 +1272,19 @@ static void test_eevee_shadow_tilemap_amend()
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_HOST_READ | GPU_TEXTURE_USAGE_SHADER_READ |
                            GPU_TEXTURE_USAGE_SHADER_WRITE;
   int2 tilemap_res(SHADOW_TILEMAP_RES * SHADOW_TILEMAP_PER_ROW, SHADOW_TILEMAP_RES);
-  tilemap_tx.ensure_2d(blender::gpu::TextureFormat::UINT_32, tilemap_res, usage);
+  tilemap_tx.ensure_2d(gpu::TextureFormat::UINT_32, tilemap_res, usage);
   GPU_texture_update_sub(
       tilemap_tx, GPU_DATA_UINT, tilemap_data.data(), 0, 0, 0, tilemap_res.x, tilemap_res.y, 0);
 
   /* Setup one directional light with 3 tilemaps. Fill only the needed data. */
   LightData light;
   light.type = LIGHT_SUN;
-  light.sun.clipmap_lod_min = 0;
-  light.sun.clipmap_lod_max = 2;
+  light.sun().clipmap_lod_min = 0;
+  light.sun().clipmap_lod_max = 2;
   /* Shift LOD0 by 1 tile towards bottom. */
-  light.sun.clipmap_base_offset_neg = int2(0, 1 << 0);
+  light.sun().clipmap_base_offset_neg = int2(0, 1 << 0);
   /* Shift LOD1 by 1 tile towards right. */
-  light.sun.clipmap_base_offset_pos = int2(1 << 1, 0);
+  light.sun().clipmap_base_offset_pos = int2(1 << 1, 0);
   light.tilemap_index = 0;
 
   LightDataBuf culling_light_buf = {"Lights_culled"};
@@ -1290,6 +1312,7 @@ static void test_eevee_shadow_tilemap_amend()
   pass.bind_ssbo(LIGHT_BUF_SLOT, culling_light_buf);
   pass.bind_ssbo(LIGHT_ZBIN_BUF_SLOT, culling_zbin_buf);
   pass.bind_ssbo(LIGHT_TILE_BUF_SLOT, culling_tile_buf);
+  pass.bind_ssbo("light_buf_write", culling_light_buf);
   pass.dispatch(int3(1));
   pass.barrier(GPU_BARRIER_TEXTURE_UPDATE);
 
@@ -1551,7 +1574,7 @@ static void test_eevee_shadow_tilemap_amend()
         "0000000000000000 0000000000000000\n";
 
     EXPECT_EQ(expected_offset_lod0, stringify_offset(0));
-    MEM_SAFE_FREE(pixels);
+    MEM_SAFE_DELETE(pixels);
   }
 
   GPU_shader_unbind();

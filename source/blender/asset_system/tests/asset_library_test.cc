@@ -5,32 +5,33 @@
 #include "AS_asset_catalog.hh"
 #include "AS_asset_library.hh"
 
-#include "BKE_callbacks.hh"
+#include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
+#include "BKE_main.hh"
 
 #include "asset_library_service.hh"
-
-#include "CLG_log.h"
 
 #include "testing/testing.h"
 
 namespace blender::asset_system::tests {
 
-class AssetLibraryTest : public testing::Test {
- public:
-  static void SetUpTestSuite()
+class AssetLibraryTest : public bke::BlenderGTestBase {
+ protected:
+  Main *bmain;
+  void SetUp() override
   {
-    CLG_init();
-    BKE_callback_global_init();
-  }
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    BKE_callback_global_finalize();
+    /* G_MAIN is needed for variable expansion in asset library paths.
+     * IE {project_root}, {blend_name}, {blend_dir} etc.
+     */
+    bmain = BKE_main_new();
+    G_MAIN = bmain;
   }
 
   void TearDown() override
   {
     asset_system::AssetLibraryService::destroy();
+    BKE_main_free(bmain);
+    G_MAIN = nullptr;
   }
 };
 
@@ -52,7 +53,7 @@ TEST_F(AssetLibraryTest, AS_asset_library_load_from_directory)
   /* Check that the catalogs defined in the library are actually loaded. This just tests one single
    * catalog, as that indicates the file has been loaded. Testing that loading went OK is for
    * the asset catalog service tests. */
-  const bUUID uuid_poses_ellie("df60e1f6-2259-475b-93d9-69a1b4a8db78");
+  const UUID uuid_poses_ellie("df60e1f6-2259-475b-93d9-69a1b4a8db78");
   AssetCatalog *poses_ellie = service.find_catalog(uuid_poses_ellie);
   ASSERT_NE(nullptr, poses_ellie) << "unable to find POSES_ELLIE catalog";
   EXPECT_EQ("character/Ellie/poselib", poses_ellie->path.str());

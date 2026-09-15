@@ -24,11 +24,12 @@
 
 #include "gpu_shader_compat.hh"
 
+/* `osd_patch_defines.glsl` must be included before `osd_patch_basis.glsl` */
+#include "osd_patch_defines.glsl"
+
 #include "osd_patch_basis.glsl"
 
-/* Runtime create info. */
-GPU_SHADER_CREATE_INFO(osd_eval_stencils_comp)
-GPU_SHADER_CREATE_END()
+#include "infos/osd_eval_infos.hh"
 
 //------------------------------------------------------------------------------
 
@@ -69,7 +70,7 @@ void writeVertex(int index, Vertex v)
   }
 }
 
-void addWithWeight(inout Vertex v, const Vertex src, float weight)
+void addWithWeight(Vertex &v, const Vertex src, float weight)
 {
   for (int i = 0; i < LENGTH; ++i) {
     v.vertexData[i] += weight * src.vertexData[i];

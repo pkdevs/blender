@@ -6,7 +6,7 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_collection.hh"
@@ -21,6 +21,8 @@
 #include "../outliner_intern.hh"
 #include "common.hh"
 #include "tree_display.hh"
+#include "tree_element_id_base.hh"
+#include "tree_element_shapekey.hh"
 
 namespace blender::ed::outliner {
 
@@ -31,9 +33,9 @@ TreeDisplayLibraries::TreeDisplayLibraries(SpaceOutliner &space_outliner)
 {
 }
 
-ListBase TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
+ListBaseT<TreeElement> TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  ListBaseT<TreeElement> tree = {nullptr};
 
   {
     /* current file first - mainvar provides tselem with unique pointer - not used */
@@ -53,23 +55,22 @@ ListBase TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
     TreeElement *ten = add_library_contents(*source_data.bmain, tree, lib);
     /* Null-check matters, due to filtering there may not be a new element. */
     if (ten) {
-      lib->id.newid = (ID *)ten;
+      lib->id.newid = reinterpret_cast<ID *>(ten);
     }
   }
 
   /* Make hierarchy.
    *
-   * Note: `List<T>` template is similar to `LISTBASE_FOREACH`, _not_ `LISTBASE_FOREACH_MUTABLE`,
-   * so we need to iterate over an actual copy of the original list here, to avoid missing some
-   * items. */
+   * Note: `List<T>` template is similar to non-mutable ListBaseT iteration so we need to
+   * iterate over an actual copy of the original list here, to avoid missing some items. */
   for (TreeElement *ten : listbase_to_vector<TreeElement>(tree)) {
-    if (ten == tree.first) {
+    if (ten == tree.first_) {
       /* First item is main, skip. */
       continue;
     }
 
     TreeStoreElem *tselem = TREESTORE(ten);
-    Library *lib = (Library *)tselem->id;
+    Library *lib = id_cast<Library *>(tselem->id);
     BLI_assert(!lib || (GS(lib->id.name) == ID_LI));
     if (!lib || !(lib->runtime->parent || lib->archive_parent_library)) {
       continue;
@@ -91,11 +92,13 @@ ListBase TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
   return tree;
 }
 
-TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase &lb, Library *lib)
+TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
+                                                        ListBaseT<TreeElement> &lb,
+                                                        Library *lib)
 {
   const short filter_id_type = id_filter_get();
 
-  Vector<ListBase *> lbarray;
+  Vector<ListBaseT<ID> *> lbarray;
   if (filter_id_type) {
     lbarray.append(which_libbase(&mainvar, space_outliner_.filter_id_type));
   }
@@ -105,11 +108,11 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
 
   TreeElement *tenlib = nullptr;
   for (int a = 0; a < lbarray.size(); a++) {
-    if (!lbarray[a] || !lbarray[a]->first) {
+    if (!lbarray[a] || !lbarray[a]->first()) {
       continue;
     }
 
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first();
     const bool is_library = (GS(id->name) == ID_LI) && (lib != nullptr);
 
     /* Don't show deprecated types. */
@@ -131,10 +134,10 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
       if (!tenlib) {
         /* Create library tree element on demand, depending if there are any data-blocks. */
         if (lib) {
-          tenlib = add_element(&lb, reinterpret_cast<ID *>(lib), nullptr, nullptr, TSE_SOME_ID, 0);
+          tenlib = add_id_element({.lb = &lb}, reinterpret_cast<ID *>(lib));
         }
         else {
-          tenlib = add_element(&lb, nullptr, &mainvar, nullptr, TSE_ID_BASE, 0);
+          tenlib = add_element<TreeElementIDBase>({.lb = &lb, .persistent_ptr = &mainvar});
           tenlib->name = IFACE_("Current File");
         }
       }
@@ -147,15 +150,20 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
           ten = tenlib;
         }
         else if (id->lib == lib) {
-          ten = add_element(
-              &tenlib->subtree, reinterpret_cast<ID *>(lib), nullptr, nullptr, TSE_ID_BASE, a);
-          ten->directdata = lbarray[a];
+          ten = add_element<TreeElementIDBase>(
+              {.lb = &tenlib->subtree, .index = a, .persistent_ptr = lib});
           ten->name = outliner_idcode_to_plural(GS(id->name));
         }
 
         for (ID *id : List<ID>(lbarray[a])) {
           if (library_id_filter_poll(lib, id)) {
-            add_element(&ten->subtree, id, nullptr, ten, TSE_SOME_ID, 0);
+            /* Shape Key isn't treated as ID in outliner, see #TreeElementShapeKeyBase. */
+            if (GS(id->name) == ID_KE) {
+              add_element<TreeElementShapeKeyBase>({.parent = ten}, *reinterpret_cast<Key *>(id));
+            }
+            else {
+              add_id_element({.parent = ten}, id);
+            }
           }
         }
       }
@@ -182,7 +190,7 @@ bool TreeDisplayLibraries::library_id_filter_poll(const Library *lib, ID *id) co
   if (id_filter_get() == ID_GR) {
     /* Don't show child collections of non-scene master collection,
      * they are already shown as children. */
-    Collection *collection = (Collection *)id;
+    Collection *collection = id_cast<Collection *>(id);
     bool has_non_scene_parent = false;
 
     for (CollectionParent *cparent : List<CollectionParent>(collection->runtime->parents)) {

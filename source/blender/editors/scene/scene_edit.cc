@@ -9,8 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_sequence_types.h"
 
@@ -43,6 +43,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Scene Utilities
  * \{ */
@@ -56,6 +58,7 @@ static Scene *scene_add(Main *bmain, Scene *scene_old, eSceneCopyMethod method)
   else { /* different kinds of copying */
     /* We are going to deep-copy collections, objects and various object data, we need to have
      * up-to-date obdata for that. */
+    BLI_assert(scene_old != nullptr);
     if (method == SCE_COPY_FULL) {
       ED_editors_flush_edits(bmain);
     }
@@ -122,18 +125,18 @@ bool ED_scene_replace_active_for_deletion(bContext &C, Main &bmain, Scene &scene
   }
 
   /* Kill running jobs. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first);
+  wmWindowManager *wm = bmain.wm.first();
   WM_jobs_kill_all_from_owner(wm, &scene);
 
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    if (win->parent != nullptr) { /* We only care about main windows here... */
+  for (wmWindow &win : wm->windows) {
+    if (win.parent != nullptr) { /* We only care about main windows here... */
       continue;
     }
-    if (win->scene == &scene) {
+    if (win.scene == &scene) {
 #ifdef WITH_PYTHON
       BPy_BEGIN_ALLOW_THREADS;
 #endif
-      WM_window_set_active_scene(&bmain, &C, win, scene_new);
+      WM_window_set_active_scene(&bmain, &C, &win, scene_new);
 #ifdef WITH_PYTHON
       BPy_END_ALLOW_THREADS;
 #endif
@@ -141,9 +144,9 @@ bool ED_scene_replace_active_for_deletion(bContext &C, Main &bmain, Scene &scene
   }
 
   /* Update scenes used by the sequencer. */
-  LISTBASE_FOREACH (WorkSpace *, workspace, &bmain.workspaces) {
-    if (workspace->sequencer_scene == &scene) {
-      workspace->sequencer_scene = scene_new;
+  for (WorkSpace &workspace : bmain.workspaces) {
+    if (workspace.sequencer_scene == &scene) {
+      workspace.sequencer_scene = scene_new;
       WM_event_add_notifier(&C, NC_WINDOW, nullptr);
     }
   }
@@ -179,7 +182,7 @@ void ED_scene_change_update(Main *bmain, Scene *scene, ViewLayer *layer)
   Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(bmain, scene, layer);
   /* When switching to a scene for the first time after loading a file, the dependency graph above
    * will not be active. This can cause issues (e.g. #151159) because there might be code running
-   * immediatly after that expects this dependency graph to be active and then silently fail.
+   * immediately after that expects this dependency graph to be active and then silently fail.
    * Similar to #CTX_data_depsgraph_pointer. */
   DEG_make_active(depsgraph);
 
@@ -198,7 +201,8 @@ static bool view_layer_remove_poll(const Scene *scene, const ViewLayer *layer)
   if (act == -1) {
     return false;
   }
-  if ((scene->view_layers.first == scene->view_layers.last) && (scene->view_layers.first == layer))
+  if ((scene->view_layers.first_ == scene->view_layers.last()) &&
+      (scene->view_layers.first_ == layer))
   {
     /* ensure 1 layer is kept */
     return false;
@@ -211,11 +215,12 @@ static void view_layer_remove_unset_nodetrees(const Main *bmain, Scene *scene, V
 {
   int act_layer_index = BLI_findindex(&scene->view_layers, layer);
 
-  for (Scene *sce = static_cast<Scene *>(bmain->scenes.first); sce;
-       sce = static_cast<Scene *>(sce->id.next))
-  {
-    if (sce->compositing_node_group) {
-      blender::bke::node_tree_remove_layer_n(sce->compositing_node_group, scene, act_layer_index);
+  for (Scene *sce = bmain->scenes.first(); sce; sce = static_cast<Scene *>(sce->id.next)) {
+    for (SceneCompositorEffect &effect : sce->compositor_effects) {
+      if (!effect.node_group || ID_MISSING(effect.node_group)) {
+        continue;
+      }
+      bke::node_tree_remove_layer_n(effect.node_group, scene, act_layer_index);
     }
   }
 }
@@ -237,19 +242,32 @@ bool ED_scene_view_layer_delete(Main *bmain, Scene *scene, ViewLayer *layer, Rep
   /* We need to unset node-trees before removing the layer, otherwise its index will be -1. */
   view_layer_remove_unset_nodetrees(bmain, scene, layer);
 
+  /* Return whether the given screen uses the to-be-removed view layer. */
+  const auto is_using_view_layer = [&](const bScreen &screen) -> bool {
+    const ScreenAnimData *sad = static_cast<const ScreenAnimData *>(screen.animtimer->customdata);
+    return (sad && sad->scene == scene && sad->view_layer == layer);
+  };
+
+  /* Stop animation playback of this layer before removing it, as the ScreenAnimData struct
+   * has a pointer to it. */
+  wmWindowManager *wm = bmain->wm.first();
+  ED_screen_animation_stop(bmain, wm, is_using_view_layer);
+
   BLI_remlink(&scene->view_layers, layer);
-  BLI_assert(BLI_listbase_is_empty(&scene->view_layers) == false);
+  BLI_assert(scene->view_layers.is_empty() == false);
 
   /* Remove from windows. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    if (win->scene == scene && STREQ(win->view_layer_name, layer->name)) {
+  for (wmWindow &win : wm->windows) {
+    if (win.scene == scene && STREQ(win.view_layer_name, layer->name)) {
       ViewLayer *first_layer = BKE_view_layer_default_view(scene);
-      STRNCPY_UTF8(win->view_layer_name, first_layer->name);
+      STRNCPY_UTF8(win.view_layer_name, first_layer->name);
     }
   }
 
   BKE_scene_free_view_layer_depsgraph(scene, layer);
+
+  /* Update any sequencer scene strips referencing this view layer by name. */
+  seq::relations_update_view_layer_scene_strips(bmain, scene, layer->name, nullptr);
 
   BKE_view_layer_free(layer);
 
@@ -325,7 +343,7 @@ static wmOperatorStatus scene_new_sequencer_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   int type = RNA_enum_get(op->ptr, "type");
   Scene *sequencer_scene = CTX_data_sequencer_scene(C);
-  Strip *strip = blender::seq::select_active_get(sequencer_scene);
+  Strip *strip = seq::select_active_get(sequencer_scene);
   BLI_assert(strip != nullptr);
 
   if (!strip->scene) {
@@ -338,7 +356,7 @@ static wmOperatorStatus scene_new_sequencer_exec(bContext *C, wmOperator *op)
   }
   strip->scene = scene_new;
   /* Do a refresh of the sequencer data. */
-  blender::seq::relations_invalidate_cache_raw(sequencer_scene, strip);
+  seq::relations_invalidate_cache_raw(sequencer_scene, strip);
   DEG_id_tag_update(&sequencer_scene->id, ID_RECALC_AUDIO | ID_RECALC_SEQUENCER_STRIPS);
   DEG_relations_tag_update(bmain);
   return OPERATOR_FINISHED;
@@ -347,7 +365,7 @@ static wmOperatorStatus scene_new_sequencer_exec(bContext *C, wmOperator *op)
 static bool scene_new_sequencer_poll(bContext *C)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
-  const Strip *strip = blender::seq::select_active_get(scene);
+  const Strip *strip = seq::select_active_get(scene);
   return (strip && (strip->type == STRIP_TYPE_SCENE));
 }
 
@@ -370,7 +388,7 @@ static const EnumPropertyItem *scene_new_sequencer_enum_itemf(bContext *C,
   }
   else {
     Scene *scene = CTX_data_sequencer_scene(C);
-    Strip *strip = blender::seq::select_active_get(scene);
+    Strip *strip = seq::select_active_get(scene);
     if (strip && (strip->type == STRIP_TYPE_SCENE) && (strip->scene != nullptr)) {
       has_scene_or_no_context = true;
     }
@@ -423,12 +441,18 @@ static wmOperatorStatus new_sequencer_scene_exec(bContext *C, wmOperator *op)
   wmWindow *win = CTX_wm_window(C);
   WorkSpace *workspace = CTX_wm_workspace(C);
   Scene *scene_old = CTX_data_sequencer_scene(C);
-  const int type = RNA_enum_get(op->ptr, "type");
-
+  eSceneCopyMethod type = eSceneCopyMethod(RNA_enum_get(op->ptr, "type"));
+  /* When there is no scene to copy from, force new. */
+  if (scene_old == nullptr) {
+    type = SCE_COPY_NEW;
+  }
   Scene *new_scene = scene_add(bmain, scene_old, eSceneCopyMethod(type));
-  blender::seq::editing_ensure(new_scene);
+  seq::editing_ensure(new_scene);
 
-  workspace->sequencer_scene = new_scene;
+  /* Unlikely but not impossible as poll doesn't check for this. */
+  if (workspace != nullptr) [[unlikely]] {
+    workspace->sequencer_scene = new_scene;
+  }
 
   /* Switching the active scene to the newly created sequencer scene should prevent confusion among
    * new users to the VSE. For example, this prevents the case where attempting to change
@@ -466,6 +490,7 @@ static void SCENE_OT_new_sequencer_scene(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = new_sequencer_scene_exec;
   ot->invoke = new_sequencer_scene_invoke;
+  ot->poll = ED_operator_screenactive;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -577,3 +602,5 @@ void ED_operatortypes_scene()
 }
 
 /** \} */
+
+}  // namespace blender

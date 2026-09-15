@@ -12,19 +12,23 @@
 
 #include "DNA_collection_types.h"
 #include "DNA_image_types.h"
+#include "DNA_mask_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
+#include "DNA_sound_types.h"
+#include "DNA_text_types.h"
+#include "DNA_vfont_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_resource_scope.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -59,7 +63,7 @@
 
 #include "BLT_translation.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 
 #include "node_intern.hh" /* own include */
 
@@ -80,14 +84,14 @@ static bool has_workbench_in_texture_color(const wmWindowManager *wm,
                                            const Scene *scene,
                                            const Object *ob)
 {
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    if (win->scene != scene) {
+  for (wmWindow &win : wm->windows) {
+    if (win.scene != scene) {
       continue;
     }
-    const bScreen *screen = BKE_workspace_active_screen_get(win->workspace_hook);
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      if (area->spacetype == SPACE_VIEW3D) {
-        const View3D *v3d = (const View3D *)area->spacedata.first;
+    const bScreen *screen = BKE_workspace_active_screen_get(win.workspace_hook);
+    for (ScrArea &area : screen->areabase) {
+      if (area.spacetype == SPACE_VIEW3D) {
+        const View3D *v3d = area.spacedata.first_as<View3D>();
 
         if (ED_view3d_has_workbench_in_texture_color(scene, ob, v3d)) {
           return true;
@@ -185,37 +189,37 @@ static bool is_event_over_node_or_socket(const bContext &C, const wmEvent &event
 
 void node_socket_select(bNode *node, bNodeSocket &sock)
 {
-  sock.flag |= SELECT;
+  sock.flag |= SOCK_SELECT;
 
   /* select node too */
   if (node) {
-    node->flag |= SELECT;
+    node->flag |= NODE_SELECT;
   }
 }
 
 void node_socket_deselect(bNode *node, bNodeSocket &sock, const bool deselect_node)
 {
-  sock.flag &= ~SELECT;
+  sock.flag &= ~SOCK_SELECT;
 
   if (node && deselect_node) {
     bool sel = false;
 
     /* if no selected sockets remain, also deselect the node */
-    LISTBASE_FOREACH (bNodeSocket *, input, &node->inputs) {
-      if (input->flag & SELECT) {
+    for (bNodeSocket &input : node->inputs) {
+      if (input.flag & SELECT) {
         sel = true;
         break;
       }
     }
-    LISTBASE_FOREACH (bNodeSocket *, output, &node->outputs) {
-      if (output->flag & SELECT) {
+    for (bNodeSocket &output : node->outputs) {
+      if (output.flag & SELECT) {
         sel = true;
         break;
       }
     }
 
     if (!sel) {
-      node->flag &= ~SELECT;
+      node->flag &= ~NODE_SELECT;
     }
   }
 }
@@ -249,21 +253,21 @@ void node_deselect_all_input_sockets(bNodeTree &node_tree, const bool deselect_n
   for (bNode *node : node_tree.all_nodes()) {
     bool sel = false;
 
-    LISTBASE_FOREACH (bNodeSocket *, socket, &node->inputs) {
-      socket->flag &= ~SELECT;
+    for (bNodeSocket &socket : node->inputs) {
+      socket.flag &= ~SOCK_SELECT;
     }
 
     /* If no selected sockets remain, also deselect the node. */
     if (deselect_nodes) {
-      LISTBASE_FOREACH (bNodeSocket *, socket, &node->outputs) {
-        if (socket->flag & SELECT) {
+      for (bNodeSocket &socket : node->outputs) {
+        if (socket.flag & SELECT) {
           sel = true;
           break;
         }
       }
 
       if (!sel) {
-        node->flag &= ~SELECT;
+        node->flag &= ~NODE_SELECT;
       }
     }
   }
@@ -279,21 +283,21 @@ void node_deselect_all_output_sockets(bNodeTree &node_tree, const bool deselect_
   for (bNode *node : node_tree.all_nodes()) {
     bool sel = false;
 
-    LISTBASE_FOREACH (bNodeSocket *, socket, &node->outputs) {
-      socket->flag &= ~SELECT;
+    for (bNodeSocket &socket : node->outputs) {
+      socket.flag &= ~SOCK_SELECT;
     }
 
     /* if no selected sockets remain, also deselect the node */
     if (deselect_nodes) {
-      LISTBASE_FOREACH (bNodeSocket *, socket, &node->inputs) {
-        if (socket->flag & SELECT) {
+      for (bNodeSocket &socket : node->inputs) {
+        if (socket.flag & SELECT) {
           sel = true;
           break;
         }
       }
 
       if (!sel) {
-        node->flag &= ~SELECT;
+        node->flag &= ~NODE_SELECT;
       }
     }
   }
@@ -305,10 +309,10 @@ void node_select_paired(bNodeTree &node_tree)
   for (const bke::bNodeZoneType *zone_type : bke::all_zone_types()) {
     for (bNode *input_node : node_tree.nodes_by_type(zone_type->input_idname)) {
       if (bNode *output_node = zone_type->get_corresponding_output(node_tree, *input_node)) {
-        if (input_node->flag & NODE_SELECT) {
+        if (input_node->is_selected()) {
           output_node->flag |= NODE_SELECT;
         }
-        if (output_node->flag & NODE_SELECT) {
+        if (output_node->is_selected()) {
           input_node->flag |= NODE_SELECT;
         }
       }
@@ -320,7 +324,7 @@ VectorSet<bNode *> get_selected_nodes(bNodeTree &node_tree)
 {
   VectorSet<bNode *> selected_nodes;
   for (bNode *node : node_tree.all_nodes()) {
-    if (node->flag & NODE_SELECT) {
+    if (node->is_selected()) {
       selected_nodes.add(node);
     }
   }
@@ -339,7 +343,7 @@ static bool node_select_grouped_type(bNodeTree &node_tree, bNode &node_act)
 {
   bool changed = false;
   for (bNode *node : node_tree.all_nodes()) {
-    if ((node->flag & SELECT) == 0) {
+    if (!node->is_selected()) {
       if (node->type_legacy == node_act.type_legacy) {
         bke::node_set_selected(*node, true);
         changed = true;
@@ -353,7 +357,7 @@ static bool node_select_grouped_color(bNodeTree &node_tree, bNode &node_act)
 {
   bool changed = false;
   for (bNode *node : node_tree.all_nodes()) {
-    if ((node->flag & SELECT) == 0) {
+    if (!node->is_selected()) {
       if (compare_v3v3(node->color, node_act.color, 0.005f)) {
         bke::node_set_selected(*node, true);
         changed = true;
@@ -380,7 +384,7 @@ static bool node_select_grouped_name(bNodeTree &node_tree, bNode &node_act, cons
   }
 
   for (bNode *node : node_tree.all_nodes()) {
-    if (node->flag & SELECT) {
+    if (node->is_selected()) {
       continue;
     }
     pref_len_curr = BLI_str_partition_ex_utf8(
@@ -553,6 +557,10 @@ static void activate_interface_socket(bNodeTree &tree, bNodeTreeInterfaceSocket 
   else {
     item_to_activate = &io_socket.item;
   }
+  tree.tree_interface.foreach_item([&](bNodeTreeInterfaceItem &item) {
+    item.set_selected(false);
+    return true;
+  });
   tree.tree_interface.active_item_set(item_to_activate);
 }
 
@@ -623,7 +631,7 @@ static bool node_mouse_select(bContext *C,
     if (sock) {
       node = &sock->owner_node();
       found = true;
-      node_was_selected = node->flag & SELECT;
+      node_was_selected = node->is_selected();
 
       /* NOTE: SOCK_IN does not take into account the extend case...
        * This feature is not really used anyway currently? */
@@ -635,7 +643,7 @@ static bool node_mouse_select(bContext *C,
       if (sock) {
         node = &sock->owner_node();
         found = true;
-        node_was_selected = node->flag & SELECT;
+        node_was_selected = node->is_selected();
 
         if (sock->flag & SELECT) {
           if (extend) {
@@ -676,10 +684,10 @@ static bool node_mouse_select(bContext *C,
     /* Find the closest visible node. */
     node = node_under_mouse_get(snode, cursor);
     found = (node != nullptr);
-    node_was_selected = node && (node->flag & SELECT);
+    node_was_selected = node && node->is_selected();
 
     if (params.sel_op == SEL_OP_SET) {
-      if ((found && params.select_passthrough) && (node->flag & SELECT)) {
+      if ((found && params.select_passthrough) && node->is_selected()) {
         found = false;
       }
       else if (found || params.deselect_all) {
@@ -698,7 +706,7 @@ static bool node_mouse_select(bContext *C,
           break;
         case SEL_OP_XOR: {
           /* Check active so clicking on an inactive node activates it. */
-          bool is_selected = (node->flag & NODE_SELECT) && (node->flag & NODE_ACTIVE);
+          bool is_selected = node->is_selected() && (node->flag & NODE_ACTIVE);
           bke::node_set_selected(*node, !is_selected);
           break;
         }
@@ -855,7 +863,7 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
   WM_operator_properties_border_to_rctf(op, &rectf);
   ui::view2d_region_to_view_rctf(&region.v2d, &rectf, &rectf);
 
-  const eSelectOp sel_op = (eSelectOp)RNA_enum_get(op->ptr, "mode");
+  const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
   const bool select = (sel_op != SEL_OP_SUB);
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     node_deselect_all(node_tree);
@@ -867,7 +875,7 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of other nodes inside that frame. */
+         * nodes - would prevent selection of other nodes inside that frame). */
         const rctf frame_inside = node_frame_rect_inside(snode, *node);
         if (BLI_rctf_isect(&rectf, &node->runtime->draw_bounds, nullptr) &&
             !BLI_rctf_inside_rctf(&frame_inside, &rectf))
@@ -954,8 +962,8 @@ static wmOperatorStatus node_circleselect_exec(bContext *C, wmOperator *op)
   float zoom = float(BLI_rcti_size_x(&region->winrct)) / BLI_rctf_size_x(&region->v2d.cur);
 
   const eSelectOp sel_op = ED_select_op_modal(
-      (eSelectOp)RNA_enum_get(op->ptr, "mode"),
-      WM_gesture_is_modal_first((const wmGesture *)op->customdata));
+      eSelectOp(RNA_enum_get(op->ptr, "mode")),
+      WM_gesture_is_modal_first(static_cast<const wmGesture *>(op->customdata)));
   const bool select = (sel_op != SEL_OP_SUB);
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     node_deselect_all(node_tree);
@@ -972,7 +980,7 @@ static wmOperatorStatus node_circleselect_exec(bContext *C, wmOperator *op)
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of _only_ other nodes inside that frame. */
+         * nodes - would prevent selection of _only_ other nodes inside that frame). */
         rctf frame_inside = node_frame_rect_inside(*snode, *node);
         const float radius_adjusted = float(radius) / zoom;
         BLI_rctf_pad(&frame_inside, -2.0f * radius_adjusted, -2.0f * radius_adjusted);
@@ -1057,14 +1065,14 @@ static bool do_lasso_select_node(bContext *C, const Span<int2> mcoords, eSelectO
   BLI_lasso_boundbox(&rect, mcoords);
 
   for (bNode *node : node_tree.all_nodes()) {
-    if (select && (node->flag & NODE_SELECT)) {
+    if (select && node->is_selected()) {
       continue;
     }
 
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of other nodes inside that frame. */
+         * nodes - would prevent selection of other nodes inside that frame). */
         rctf rectf;
         BLI_rctf_rcti_copy(&rectf, &rect);
         ui::view2d_region_to_view_rctf(&region->v2d, &rectf, &rectf);
@@ -1112,7 +1120,7 @@ static wmOperatorStatus node_lasso_select_exec(bContext *C, wmOperator *op)
     return OPERATOR_PASS_THROUGH;
   }
 
-  const eSelectOp sel_op = (eSelectOp)RNA_enum_get(op->ptr, "mode");
+  const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
 
   do_lasso_select_node(C, mcoords, sel_op);
 
@@ -1156,7 +1164,7 @@ void NODE_OT_select_lasso(wmOperatorType *ot)
 static bool any_node_selected(const bNodeTree &node_tree)
 {
   for (const bNode *node : node_tree.all_nodes()) {
-    if (node->flag & NODE_SELECT) {
+    if (node->is_selected()) {
       return true;
     }
   }
@@ -1191,7 +1199,7 @@ static wmOperatorStatus node_select_all_exec(bContext *C, wmOperator *op)
       break;
     case SEL_INVERT:
       for (bNode *node : node_tree.all_nodes()) {
-        bke::node_set_selected(*node, !(node->flag & SELECT));
+        bke::node_set_selected(*node, !node->is_selected());
       }
       break;
   }
@@ -1419,8 +1427,7 @@ static std::string node_find_create_string_value(const bNode &node, const String
   return fmt::format("{}: \"{}\" ({})", TIP_("String"), str, node.name);
 }
 
-static std::string node_find_create_warning(const bNode &node,
-                                            const nodes::geo_eval_log::NodeWarning warning)
+static std::string node_find_create_warning(const bNode &node, const nodes::NodeWarning warning)
 {
   return fmt::format(
       "{}: \"{}\" ({})", nodes::node_warning_type_name(warning.type), warning.message, node.name);
@@ -1446,10 +1453,10 @@ static void node_find_update_fn(const bContext *C,
 {
   Main *bmain = CTX_data_main(C);
   SpaceNode *snode = CTX_wm_space_node(C);
-  nodes::geo_eval_log::ContextualGeoTreeLogs tree_logs =
-      nodes::geo_eval_log::GeoNodesLog::get_contextual_tree_logs(*snode);
+  nodes::eval_log::ContextualNodeTreeLogs tree_logs =
+      nodes::eval_log::NodesEvalLog::get_contextual_tree_logs(*snode);
   tree_logs.foreach_tree_log(
-      [&](nodes::geo_eval_log::GeoTreeLog &log) { log.ensure_node_warnings(*bmain); });
+      [&](nodes::eval_log::NodeTreeLog &log) { log.ensure_node_warnings(*bmain); });
 
   struct Item {
     bNode *node;
@@ -1457,7 +1464,7 @@ static void node_find_update_fn(const bContext *C,
   };
 
   ui::string_search::StringSearch<Item> search;
-  blender::ResourceScope scope;
+  ResourceScope scope;
 
   auto add_data_block_item = [&](bNode &node, const ID *id) {
     if (!id) {
@@ -1473,7 +1480,7 @@ static void node_find_update_fn(const bContext *C,
     const StringRef name = scope.add_value(node_find_create_node_label(ntree, *node));
     search.add(name, &scope.construct<Item>(Item{node, name}));
 
-    if (node->is_type("FunctionNodeInputString")) {
+    if (node->is_type("FunctionNodeInputString"_ustr)) {
       const auto *storage = static_cast<const NodeInputString *>(node->storage);
       const StringRef value_str = storage->string;
       if (!value_str.is_empty()) {
@@ -1502,10 +1509,9 @@ static void node_find_update_fn(const bContext *C,
         add_data_block_item(*node, node->id);
       }
     }
-    if (nodes::geo_eval_log::GeoTreeLog *tree_log = tree_logs.get_main_tree_log(*node)) {
-      if (nodes::geo_eval_log::GeoNodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier))
-      {
-        for (const nodes::geo_eval_log::NodeWarning &warning : node_log->warnings) {
+    if (nodes::eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node)) {
+      if (nodes::eval_log::NodeLog *node_log = tree_log->find_node_log(node->identifier)) {
+        for (const nodes::NodeWarning &warning : node_log->warnings) {
           const StringRef search_str = scope.add_value(node_find_create_warning(*node, warning));
           search.add(search_str, &scope.construct<Item>(Item{node, search_str}));
         }
@@ -1550,6 +1556,33 @@ static void node_find_update_fn(const bContext *C,
               *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueImage>()->value));
           break;
         }
+        case SOCK_FONT: {
+          add_data_block_item(
+              *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueFont>()->value));
+          break;
+        }
+        case SOCK_SCENE: {
+          add_data_block_item(
+              *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueScene>()->value));
+          break;
+        }
+        case SOCK_TEXT_ID: {
+          add_data_block_item(
+              *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueText>()->value));
+          break;
+        }
+        case SOCK_MASK: {
+          add_data_block_item(
+              *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueMask>()->value));
+          break;
+        }
+        case SOCK_SOUND: {
+          add_data_block_item(
+              *node, id_cast<ID *>(socket->default_value_typed<bNodeSocketValueSound>()->value));
+          break;
+        }
+        default:
+          break;
       }
     }
   }
@@ -1565,7 +1598,7 @@ static void node_find_update_fn(const bContext *C,
 static void node_find_exec_fn(bContext *C, void * /*arg1*/, void *arg2)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
-  bNode *active = (bNode *)arg2;
+  bNode *active = static_cast<bNode *>(arg2);
 
   if (active) {
     ARegion *region = CTX_wm_region(C);
@@ -1582,7 +1615,7 @@ static ui::Block *node_find_menu(bContext *C, ARegion *region, void *arg_optype)
   static char search[256] = "";
   ui::Block *block;
   ui::Button *but;
-  wmOperatorType *optype = (wmOperatorType *)arg_optype;
+  wmOperatorType *optype = static_cast<wmOperatorType *>(arg_optype);
 
   block = block_begin(C, region, "_popup", ui::EmbossType::Emboss);
   block_flag_enable(block, ui::BLOCK_LOOP | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_SEARCH_MENU);
