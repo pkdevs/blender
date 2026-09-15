@@ -893,8 +893,13 @@ static void gpu_texture_update_from_ibuf(
     MEM_delete(rect_float);
   }
 
-  GPU_texture_update_mipmap_chain(tex);
-  ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
+  if ((ima->runtime->gpuflag & IMA_GPU_MIPMAP_UPDATE_DISABLED)) {
+    ima->runtime->gpuflag &= ~IMA_GPU_MIPMAP_COMPLETE;
+  }
+  else {
+    GPU_texture_update_mipmap_chain(tex);
+    ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
+  }
 
   GPU_texture_unbind(tex);
 }
@@ -943,6 +948,28 @@ void BKE_image_update_gputexture_delayed(
 void BKE_image_paint_set_mipmap(Main *bmain, bool mipmap)
 {
   for (Image &ima : bmain->images) {
+    if (mipmap) {
+      if (BKE_image_has_gpu_texture(&ima) &&
+          (ima.runtime->gpuflag & IMA_GPU_MIPMAP_UPDATE_DISABLED) &&
+          (ima.runtime->gpuflag & IMA_GPU_MIPMAP_COMPLETE) == 0)
+      {
+        for (int a = 0; a < TEXTARGET_COUNT; a++) {
+          if (ELEM(a, TEXTARGET_2D, TEXTARGET_2D_ARRAY)) {
+            for (int eye = 0; eye < 2; eye++) {
+              gpu::Texture *tex = ima.runtime->gputexture[a][eye];
+              if (tex != nullptr) {
+                GPU_texture_update_mipmap_chain(tex);
+              }
+            }
+          }
+        }
+        ima.runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
+      }
+      ima.runtime->gpuflag &= ~IMA_GPU_MIPMAP_UPDATE_DISABLED;
+    }
+    else {
+      ima.runtime->gpuflag |= IMA_GPU_MIPMAP_UPDATE_DISABLED;
+    }
     if (BKE_image_has_gpu_texture(&ima)) {
       if (ima.runtime->gpuflag & IMA_GPU_MIPMAP_COMPLETE) {
         for (int a = 0; a < TEXTARGET_COUNT; a++) {
