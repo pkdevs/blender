@@ -31,11 +31,8 @@ struct BMBVHTree {
   int flag = 0;
 };
 
-BMBVHTree *BKE_bmbvh_new_from_editmesh(BMEditMesh *em,
-                                       BMesh *bm,
-                                       int flag,
-                                       const float3 *cos_cage,
-                                       const bool cos_cage_free)
+BMBVHTree *BKE_bmbvh_new_from_editmesh(
+    BMEditMesh *em, BMesh *bm, int flag, const float3 *cos_cage, const bool cos_cage_free)
 {
   return BKE_bmbvh_new(bm, em->looptris, flag, cos_cage, cos_cage_free);
 }
