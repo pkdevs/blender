@@ -20,7 +20,10 @@ set(FFMPEG_CFLAGS "\
 -I${temp_LIBDIR}/vpx/include \
 -I${temp_LIBDIR}/x264/include \
 -I${temp_LIBDIR}/zlib/include \
--I${temp_LIBDIR}/aom/include"
+-I${temp_LIBDIR}/aom/include \
+-I${temp_LIBDIR}/x265/include \
+-I${temp_LIBDIR}/vulkan_headers/include \
+-I${temp_LIBDIR}/ffnvcodec/include"
 )
 set(FFMPEG_LDFLAGS "\
 ${LIBDIR_FLAG}${temp_LIBDIR}/lame/lib \
@@ -31,6 +34,7 @@ ${LIBDIR_FLAG}${temp_LIBDIR}/theora/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/opus/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/vpx/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/x264/lib \
+${LIBDIR_FLAG}${temp_LIBDIR}/x265/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/zlib/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/aom/lib"
 )
@@ -42,6 +46,7 @@ if(WIN32)
 ${FFMPEG_CFLAGS} \
 -I${temp_LIBDIR}/openjpeg_msvc/include/openjpeg-2.5 \
 -I${temp_LIBDIR}/opus/include/opus \
+-I${temp_LIBDIR}/amf/include \
 -DOPJ_STATIC \
 -MD \
 -UHAVE_UNISTD_H"
@@ -82,7 +87,8 @@ ${temp_LIBDIR}/theora/lib/pkgconfig:\
 ${temp_LIBDIR}/openjpeg/lib/pkgconfig:\
 ${temp_LIBDIR}/opus/lib/pkgconfig:\
 ${temp_LIBDIR}/aom/lib/pkgconfig:\
-${temp_LIBDIR}/x265/lib/pkgconfig:"
+${temp_LIBDIR}/x265/lib/pkgconfig:\
+${temp_LIBDIR}/ffnvcodec/lib/pkgconfig:"
   )
 endif()
 
@@ -145,11 +151,43 @@ if(APPLE)
     ${FFMPEG_EXTRA_FLAGS}
     --target-os=darwin
     --enable-videotoolbox
+    --disable-vulkan
+    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+    --disable-nvenc
+    --disable-nvdec
+    --disable-amf
   )
-else()
+elseif(WIN32)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
+    --enable-d3d11va
     --disable-videotoolbox
+    --enable-vulkan
+  )
+  if(BLENDER_PLATFORM_WINDOWS_ARM)
+    set(FFMPEG_EXTRA_FLAGS
+      ${FFMPEG_EXTRA_FLAGS}
+      --disable-nvenc
+      --disable-nvdec
+      --disable-amf
+    )
+  else()
+    set(FFMPEG_EXTRA_FLAGS
+      ${FFMPEG_EXTRA_FLAGS}
+      --enable-nvenc
+      --enable-nvdec
+      --enable-amf
+    )
+  endif()
+elseif(UNIX)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+    --disable-videotoolbox
+    --enable-nvdec
+    --enable-nvenc
+    --enable-vulkan
+    --disable-amf
   )
 endif()
 
@@ -186,6 +224,7 @@ ExternalProject_Add(external_ffmpeg
       --enable-libmp3lame
       --disable-librtmp
       --enable-libx264
+      --enable-libx265
       --enable-libaom
       --disable-libopencore-amrnb
       --disable-libopencore-amrwb
@@ -204,7 +243,6 @@ ExternalProject_Add(external_ffmpeg
       --disable-xlib
       --disable-audiotoolbox
       --disable-cuvid
-      --disable-nvenc
       --disable-indev=jack
       --disable-indev=alsa
       --disable-outdev=alsa
@@ -234,6 +272,7 @@ add_dependencies(
   external_ffmpeg
   external_zlib
   external_x264
+  external_x265
   external_opus
   external_vpx
   external_theora
@@ -243,6 +282,7 @@ add_dependencies(
   external_aom
   external_sndfile
   external_flac
+  external_vulkan_headers
 )
 if(WIN32)
   add_dependencies(
@@ -263,6 +303,18 @@ if(UNIX)
     external_ffmpeg
     external_nasm
     external_openjpeg
+  )
+endif()
+if(NOT APPLE AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
+  add_dependencies(
+    external_ffmpeg
+    external_ffnvcodec
+  )
+endif()
+if(WIN32 AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
+  add_dependencies(
+    external_ffmpeg
+    external_amf
   )
 endif()
 
