@@ -460,7 +460,7 @@ void build_asset_view(ui::Layout &layout,
     }
     else if (grid_view->get_item_count_filtered() == 0) {
       empty_list_hint = has_active_catalog ? RPT_("No search results in this catalog.") :
-                                             RPT_("No search results.");
+                                             RPT_("No results found.");
     }
 
     if (empty_list_hint) {
@@ -469,11 +469,21 @@ void build_asset_view(ui::Layout &layout,
       row.separator();
 
       ui::Layout &column = row.column(false);
-      /* Draw grayed out, to stay subtle visually. */
-      column.enabled_set(false);
 
       column.separator();
-      column.label(*empty_list_hint, ICON_INFO);
+      column.label(*empty_list_hint, ICON_STATUS_INFO);
+
+      std::optional<StringRef> access_filter_hint;
+      if (U.asset_access == AssetAccess::OnlyOnline) {
+        access_filter_hint = RPT_("\"Online Only\" filter is enabled.");
+      }
+      else if (U.asset_access == AssetAccess::OnlyOffline) {
+        access_filter_hint = RPT_("\"Offline Only\" filter is enabled.");
+      }
+
+      if (access_filter_hint) {
+        column.label(*access_filter_hint, ICON_BLANK1);
+      }
     }
   }
 }
