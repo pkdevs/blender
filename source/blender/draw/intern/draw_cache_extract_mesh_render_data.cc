@@ -444,12 +444,10 @@ MeshRenderData mesh_render_data_create(Object &object,
       if (!emd->vert_positions.is_empty()) {
         mr.bm_vert_coords = mr.edit_data->vert_positions;
         if (mr.bm_free_normal_offset_vert == -1) {
-          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(
-              *mr.edit_bmesh, *mr.bm, *emd);
+          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr.bm, *emd);
         }
         if (mr.bm_free_normal_offset_face == -1) {
-          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(
-              *mr.edit_bmesh, *mr.bm, *emd);
+          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr.bm, *emd);
         }
       }
     }

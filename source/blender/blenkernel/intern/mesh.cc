@@ -1945,9 +1945,7 @@ std::optional<Bounds<float3>> Mesh::bounds_min_max() const
     switch (this->runtime->wrapper_type) {
       case ME_WRAPPER_TYPE_BMESH:
         r_bounds = *BKE_editmesh_cache_calc_minmax(
-            *this->runtime->edit_mesh,
-            *const_cast<BMesh *>(BKE_editmesh_bmesh_get(this)),
-            *this->runtime->edit_data);
+            *const_cast<BMesh *>(BKE_editmesh_bmesh_get(this)), *this->runtime->edit_data);
         break;
       case ME_WRAPPER_TYPE_MDATA:
       case ME_WRAPPER_TYPE_SUBD:

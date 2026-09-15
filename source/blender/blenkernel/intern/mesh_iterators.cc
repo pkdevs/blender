@@ -38,7 +38,6 @@ void BKE_mesh_foreach_mapped_vert(
     MeshForeachFlag flag)
 {
   if (mesh->runtime->edit_mesh != nullptr && mesh->runtime->edit_data != nullptr) {
-    BMEditMesh *em = mesh->runtime->edit_mesh.get();
     const BMesh *bm = BKE_editmesh_bmesh_get(mesh);
     BMIter iter;
     BMVert *eve;
@@ -47,8 +46,8 @@ void BKE_mesh_foreach_mapped_vert(
       const Span<float3> positions = mesh->runtime->edit_data->vert_positions;
       Span<float3> vert_normals;
       if (flag & MESH_FOREACH_USE_NORMAL) {
-        vert_normals = BKE_editmesh_cache_ensure_vert_normals(
-            *em, *const_cast<BMesh *>(bm), *mesh->runtime->edit_data);
+        vert_normals = BKE_editmesh_cache_ensure_vert_normals(*const_cast<BMesh *>(bm),
+                                                              *mesh->runtime->edit_data);
       }
       BM_ITER_MESH_INDEX (eve, &iter, const_cast<BMesh *>(bm), BM_VERTS_OF_MESH, i) {
         const float *no = (flag & MESH_FOREACH_USE_NORMAL) ? &vert_normals[i].x : nullptr;
@@ -233,18 +232,17 @@ void BKE_mesh_foreach_mapped_face_center(
     MeshForeachFlag flag)
 {
   if (mesh->runtime->edit_mesh != nullptr && mesh->runtime->edit_data != nullptr) {
-    BMEditMesh *em = mesh->runtime->edit_mesh.get();
     BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(mesh));
     BMFace *efa;
     BMIter iter;
     int i;
 
     const Span<float3> face_centers = BKE_editmesh_cache_ensure_face_centers(
-        *em, *bm, *mesh->runtime->edit_data);
+        *bm, *mesh->runtime->edit_data);
 
     Span<float3> face_normals;
     if (flag & MESH_FOREACH_USE_NORMAL) {
-      face_normals = BKE_editmesh_cache_ensure_face_normals(*em, *bm, *mesh->runtime->edit_data);
+      face_normals = BKE_editmesh_cache_ensure_face_normals(*bm, *mesh->runtime->edit_data);
     }
 
     if (!face_normals.is_empty()) {

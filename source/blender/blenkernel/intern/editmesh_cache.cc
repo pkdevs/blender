@@ -21,9 +21,7 @@ namespace blender {
 /** \name Ensure Data (derived from coords)
  * \{ */
 
-Span<float3> BKE_editmesh_cache_ensure_face_normals(BMEditMesh & /*em*/,
-                                                    BMesh &bm,
-                                                    bke::EditMeshData &emd)
+Span<float3> BKE_editmesh_cache_ensure_face_normals(BMesh &bm, bke::EditMeshData &emd)
 {
   if (emd.vert_positions.is_empty() || !emd.face_normals.is_empty()) {
     return emd.face_normals;
@@ -43,16 +41,14 @@ Span<float3> BKE_editmesh_cache_ensure_face_normals(BMEditMesh & /*em*/,
   return emd.face_normals;
 }
 
-Span<float3> BKE_editmesh_cache_ensure_vert_normals(BMEditMesh &em,
-                                                    BMesh &bm,
-                                                    bke::EditMeshData &emd)
+Span<float3> BKE_editmesh_cache_ensure_vert_normals(BMesh &bm, bke::EditMeshData &emd)
 {
   if (emd.vert_positions.is_empty() || !emd.vert_normals.is_empty()) {
     return emd.vert_normals;
   }
 
   /* Calculate vertex normals from face normals. */
-  const Span<float3> face_normals = BKE_editmesh_cache_ensure_face_normals(em, bm, emd);
+  const Span<float3> face_normals = BKE_editmesh_cache_ensure_face_normals(bm, emd);
 
   emd.vert_normals.reinitialize(bm.totvert);
 
@@ -61,9 +57,7 @@ Span<float3> BKE_editmesh_cache_ensure_vert_normals(BMEditMesh &em,
   return emd.vert_normals;
 }
 
-Span<float3> BKE_editmesh_cache_ensure_face_centers(BMEditMesh & /*em*/,
-                                                    BMesh &bm,
-                                                    bke::EditMeshData &emd)
+Span<float3> BKE_editmesh_cache_ensure_face_centers(BMesh &bm, bke::EditMeshData &emd)
 {
   if (!emd.face_centers.is_empty()) {
     return emd.face_centers;
@@ -94,8 +88,7 @@ Span<float3> BKE_editmesh_cache_ensure_face_centers(BMEditMesh & /*em*/,
 /** \name Calculate Min/Max
  * \{ */
 
-std::optional<Bounds<float3>> BKE_editmesh_cache_calc_minmax(const BMEditMesh & /*em*/,
-                                                             BMesh &bm,
+std::optional<Bounds<float3>> BKE_editmesh_cache_calc_minmax(BMesh &bm,
                                                              const bke::EditMeshData &emd)
 {
   if (bm.totvert == 0) {
