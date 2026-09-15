@@ -94,6 +94,10 @@ class QuickFur(ObjectModeOperator, Operator):
         if not super().poll(context):
             return False
 
+        # For the redo panel to work.
+        if context.active_operator and context.active_operator.bl_idname == "OBJECT_OT_quick_fur":
+            return True
+
         if context.active_object is None or context.active_object.type != 'MESH':
             cls.poll_message_set("No active mesh object.")
             return False
