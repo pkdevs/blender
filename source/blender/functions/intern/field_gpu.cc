@@ -66,6 +66,8 @@ enum class GPUFieldOperation : uint32_t {
   Fraction = 18,
   Round = 19,
   Sign = 20,
+  Faceforward = 21,
+  Modulo = 22,
 };
 
 enum class GPUFieldValueType : uint32_t {
@@ -153,6 +155,21 @@ static std::optional<GPUFieldOperation> gpu_operation_for_function(
     }
     if (name == "sign(float3)") {
       return GPUFieldOperation::Sign;
+    }
+    if (name == "faceforward(float3, float3, float3)" && function.param_amount() == 4 &&
+        function.param_type(0) == mf::ParamType::ForSingleInput(CPPType::get<float3>()) &&
+        function.param_type(1) == mf::ParamType::ForSingleInput(CPPType::get<float3>()) &&
+        function.param_type(2) == mf::ParamType::ForSingleInput(CPPType::get<float3>()) &&
+        function.param_type(3) == mf::ParamType::ForSingleOutput(CPPType::get<float3>()))
+    {
+      return GPUFieldOperation::Faceforward;
+    }
+    if (name == "float3 % float3" && function.param_amount() == 3 &&
+        function.param_type(0) == mf::ParamType::ForSingleInput(CPPType::get<float3>()) &&
+        function.param_type(1) == mf::ParamType::ForSingleInput(CPPType::get<float3>()) &&
+        function.param_type(2) == mf::ParamType::ForSingleOutput(CPPType::get<float3>()))
+    {
+      return GPUFieldOperation::Modulo;
     }
   }
   else if (output_type.is<float>()) {
@@ -305,8 +322,10 @@ class GPUFieldIRBuilder {
                 case GPUFieldOperation::Distance:
                 case GPUFieldOperation::Minimum:
                 case GPUFieldOperation::Maximum:
+                case GPUFieldOperation::Modulo:
                   return 2;
                 case GPUFieldOperation::MultiplyAdd:
+                case GPUFieldOperation::Faceforward:
                   return 3;
                 case GPUFieldOperation::Input:
                 case GPUFieldOperation::Constant:
@@ -572,7 +591,64 @@ static std::string gpu_field_value_name(const int instruction_index)
 
 static std::string gpu_field_generated_source(const GPUFieldIR &ir)
 {
-  std::string source = R"GLSL(
+  std::string source;
+  if (std::any_of(ir.instructions.begin(),
+                  ir.instructions.end(),
+                  [](const GPUFieldInstruction &instruction) {
+                    return GPUFieldOperation(instruction.operation) == GPUFieldOperation::Modulo;
+                  }))
+  {
+    /* Compute the fmod remainder with integer significands, avoiding quotient rounding.
+     * A significand has at most 24 bits, so each eight-bit shift fits in uint32_t.
+     * The exponent difference needs at most 32 such steps. */
+    source += R"GLSL(
+float gpu_field_modulo(float a, float b)
+{
+  const uint a_bits = floatBitsToUint(a);
+  const uint sign_bit = a_bits & 0x80000000u;
+  const uint x = a_bits & 0x7fffffffu;
+  const uint y = floatBitsToUint(b) & 0x7fffffffu;
+  /* Use the native comparison, including its denormal mode, like math::safe_mod. */
+  if (b == 0.0f) {
+    return 0.0f;
+  }
+  if (x >= 0x7f800000u || y > 0x7f800000u) {
+    return uintBitsToFloat(0x7fc00000u);
+  }
+  if (x < y) {
+    return a;
+  }
+  if (x == y) {
+    return uintBitsToFloat(sign_bit);
+  }
+  int x_exp = int(x >> 23u);
+  int y_exp = int(y >> 23u);
+  const uint x_sig = (x & 0x7fffffu) | (x_exp != 0 ? 0x800000u : 0u);
+  const uint y_sig = (y & 0x7fffffu) | (y_exp != 0 ? 0x800000u : 0u);
+  x_exp = max(x_exp, 1);
+  y_exp = max(y_exp, 1);
+  uint remainder = x_sig % y_sig;
+  int shift = x_exp - y_exp;
+  while (shift > 0 && remainder != 0u) {
+    const int step = min(shift, 8);
+    remainder = (remainder << uint(step)) % y_sig;
+    shift -= step;
+  }
+  if (remainder == 0u) {
+    return uintBitsToFloat(sign_bit);
+  }
+  while (remainder < 0x800000u && y_exp > 1) {
+    remainder <<= 1u;
+    y_exp--;
+  }
+  const uint exponent = remainder >= 0x800000u ? uint(y_exp) << 23u : 0u;
+  const float result = uintBitsToFloat(sign_bit | exponent | (remainder & 0x7fffffu));
+  /* Apply the native arithmetic denormal mode to computed remainders, preserving signed zero. */
+  return fma(result, 1.0f, uintBitsToFloat(sign_bit));
+}
+)GLSL";
+  }
+  source += R"GLSL(
 void main()
 {
   const uint local_index = gl_GlobalInvocationID.x;
@@ -722,6 +798,21 @@ void main()
       case GPUFieldOperation::Round:
         /* Vector Math rounds halfway values toward positive infinity. */
         source += "  " + result + " = float4(floor(" + input_a + ".xyz + 0.5f), 0.0f);\n";
+        break;
+      case GPUFieldOperation::Faceforward:
+        /* Match the separate product and left-to-right sum rounding of math::dot. */
+        source += "  { const float3 products = float3(fma(" + input_c + ".x, " + input_b +
+                  ".x, 0.0f), fma(" + input_c + ".y, " + input_b + ".y, 0.0f), fma(" + input_c +
+                  ".z, " + input_b + ".z, 0.0f)); " +
+                  "const float d = fma(1.0f, fma(1.0f, products.x, products.y), products.z); " +
+                  "const uint flip = d < 0.0f ? 0u : 0x80000000u; " + result +
+                  " = float4(uintBitsToFloat(floatBitsToUint(" + input_a +
+                  ".xyz) ^ uint3(flip)), 0.0f); }\n";
+        break;
+      case GPUFieldOperation::Modulo:
+        source += "  " + result + " = float4(gpu_field_modulo(" + input_a + ".x, " + input_b +
+                  ".x), gpu_field_modulo(" + input_a + ".y, " + input_b +
+                  ".y), gpu_field_modulo(" + input_a + ".z, " + input_b + ".z), 0.0f);\n";
         break;
       case GPUFieldOperation::MultiplyAdd:
         source += "  " + result + " = float4(" + input_a + ".xyz * " + input_b + ".xyz + " +
