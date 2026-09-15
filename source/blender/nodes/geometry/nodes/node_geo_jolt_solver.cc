@@ -2,16 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <Jolt/Jolt.h>
+#ifdef WITH_JOLT
 
-#include <Jolt/Core/JobSystemSingleThreaded.h>
-#include <Jolt/Physics/Body/BodyActivationListener.h>
-#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
-#include <Jolt/Physics/Collision/ContactListener.h>
-#include <Jolt/Physics/Collision/ObjectLayer.h>
-#include <Jolt/Physics/PhysicsSystem.h>
+#  include <Jolt/Jolt.h>
+
+#  include <Jolt/Core/JobSystemSingleThreaded.h>
+#  include <Jolt/Physics/Body/BodyActivationListener.h>
+#  include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#  include <Jolt/Physics/Collision/ContactListener.h>
+#  include <Jolt/Physics/Collision/ObjectLayer.h>
+#  include <Jolt/Physics/PhysicsSystem.h>
+
+#endif
 
 #include "NOD_geo_tag_filter.hh"
+#include "NOD_geometry_nodes_bundle.hh"
 
 #include "node_geometry_util.hh"
 
@@ -49,6 +54,8 @@ static void node_declare(NodeDeclarationBuilder &b)
     p.add_input<decl::Float>("End"_ustr).default_value(1.0).min(0.0);
   }
 }
+
+#ifdef WITH_JOLT
 
 static JPH::Vec3 convert_vec3(const float3 &v)
 {
@@ -160,13 +167,8 @@ class BodyActivationListenerImpl : public JPH::BodyActivationListener {
   void OnBodyDeactivated(const JPH::BodyID & /*body_id*/, uint64_t /*body_user_data*/) override {}
 };
 
-static void node_geo_exec(GeoNodeExecParams params)
-{
-  geometry::jolt::ensure_initialization();
-
-  const float delta_time = params.extract_input<float>("Delta Time"_ustr);
-  const int substeps = params.extract_input<int>("Substeps"_ustr);
-  const std::string geometry_tag_filter = params.extract_input<std::string>("Filter"_ustr);
+struct JoltState {
+  bool is_initialized = false;
 
   BroadPhaseLayerInterfaceImpl broad_phase_layer_interface;
   ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter;
@@ -175,26 +177,130 @@ static void node_geo_exec(GeoNodeExecParams params)
   ContactListenerImpl contact_listener;
   JPH::PhysicsSystem system;
 
-  /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
-   * time.*/
-  const int max_bodies = 65536;
-  const int num_body_mutexes = 0;
-  const int max_body_pairs = 65536;
-  const int max_contact_constraints = 10240;
+  // Map<std::string, JoltRigidBodies> rigid_bodies_by_path;
+  // CollisionShapeCache collision_shape_cache;
+};
 
-  system.Init(max_bodies,
-              num_body_mutexes,
-              max_body_pairs,
-              max_contact_constraints,
-              broad_phase_layer_interface,
-              object_vs_broad_phase_layer_filter,
-              object_layer_pair_filter);
+class JoltStateOwner : public BundleItemInternalValueMixin {
+ public:
+  mutable Mutex mutex;
+  mutable JoltState state;
 
-  JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
-  JPH::JobSystemSingleThreaded job_system;
-  system.Update(delta_time, substeps, &temp_allocator, &job_system);
+  void delete_self() override
+  {
+    MEM_delete(this);
+  }
 
+  StringRefNull type_name() const override
+  {
+    return TIP_("Jolt Physics State");
+  }
+};
+using JoltStateOwnerPtr = ImplicitSharingPtr<JoltStateOwner>;
+
+// class JoltSolverDataBundle {
+//  public:
+//   static constexpr StringRefNull name = "Blender.JoltSolverData";
+//   static const FlatBundleTypePtr &get_bundle_type();
+// };
+
+// const FlatBundleTypePtr &JoltSolverDataBundle::get_bundle_type()
+// {
+//   static const FlatBundleTypePtr bundle_type = []() {
+//     FlatBundleTypeBuilder b(JoltSolverDataBundle::name);
+//     const FlatBundleTypePtr bundle_type = b.build();
+//     BundleTypeRegistry::register_type(bundle_type);
+//     return bundle_type;
+//   }();
+//   return bundle_type;
+// }
+
+#endif
+
+static void node_geo_exec(GeoNodeExecParams params)
+{
+#ifdef WITH_JOLT
+  BundlePtr world_ptr = params.get_input<BundlePtr>("World"_ustr);
+  if (!world_ptr) {
+    params.set_default_remaining_outputs();
+    return;
+  }
+  Bundle &world = world_ptr.ensure_mutable_inplace();
+
+  geometry::jolt::ensure_initialization();
+
+  const float delta_time = params.extract_input<float>("Delta Time"_ustr);
+  const int substeps = params.extract_input<int>("Substeps"_ustr);
+  const std::string geometry_tag_filter = params.extract_input<std::string>("Filter"_ustr);
+  const std::string solver_path = params.extract_input<std::string>("Solver Path"_ustr);
+
+  BundlePtr solver_data_ptr;
+  if (!solver_path.empty()) {
+    if (std::optional<BundlePtr> item = world.lookup_path<BundlePtr>(solver_path)) {
+      solver_data_ptr = *item;
+    }
+  }
+  else {
+    params.error_message_add(NodeWarningType::Error, "Jolt solver requires valid data path");
+  }
+  if (!solver_data_ptr) {
+    solver_data_ptr = Bundle::create();
+  }
+  Bundle &solver_data = solver_data_ptr.ensure_mutable_inplace();
+
+  JoltStateOwnerPtr jolt_state_owner;
+  if (std::optional item = solver_data.lookup_path<JoltStateOwnerPtr>("_state")) {
+    jolt_state_owner = *item;
+  }
+  if (!jolt_state_owner) {
+    jolt_state_owner = JoltStateOwnerPtr{MEM_new<JoltStateOwner>(__func__)};
+  }
+
+  // if (!jolt_state_owner->mutex.try_lock()) {
+  //   params.error_message_add(NodeWarningType::Error,
+  //                            TIP_("Jolt physics state cannot be used by multiple nodes"));
+  //   params.set_default_remaining_outputs();
+  //   return;
+  // }
+  // BLI_SCOPED_DEFER([&]() { jolt_state_owner->mutex.unlock(); });
+
+  // BroadPhaseLayerInterfaceImpl broad_phase_layer_interface;
+  // ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter;
+  // ObjectLayerPairFilterImpl object_layer_pair_filter;
+  // BodyActivationListenerImpl body_activation_listener;
+  // ContactListenerImpl contact_listener;
+  // JPH::PhysicsSystem system;
+
+  // /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
+  //  * time.*/
+  // const int max_bodies = 65536;
+  // const int num_body_mutexes = 0;
+  // const int max_body_pairs = 65536;
+  // const int max_contact_constraints = 10240;
+
+  // system.Init(max_bodies,
+  //             num_body_mutexes,
+  //             max_body_pairs,
+  //             max_contact_constraints,
+  //             broad_phase_layer_interface,
+  //             object_vs_broad_phase_layer_filter,
+  //             object_layer_pair_filter);
+
+  // JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+  // JPH::JobSystemSingleThreaded job_system;
+  // system.Update(delta_time, substeps, &temp_allocator, &job_system);
+
+  if (!solver_path.empty()) {
+    // solver_data.add(Bundle::type_item_name, std::string(XPBDSolverDataBundle::name));
+    // solver_data.add_path("residual_error", step.result().total_residual_error);
+    solver_data.add_path("_state", jolt_state_owner);
+    world.add_path_override(solver_path, std::move(solver_data_ptr));
+  }
+
+  params.set_output("World"_ustr, std::move(world_ptr));
+#else
   params.set_default_remaining_outputs();
+#endif
 }
 
 static void node_register()

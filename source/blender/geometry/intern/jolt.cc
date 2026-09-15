@@ -2,15 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#ifdef WITH_JOLT
+
 /* Has to be included before the other Jolt headers.*/
-#include <Jolt/Jolt.h>
+#  include <Jolt/Jolt.h>
 
-#include <Jolt/Core/Factory.h>
-#include <Jolt/RegisterTypes.h>
+#  include <Jolt/Core/Factory.h>
+#  include <Jolt/RegisterTypes.h>
 
-#include "MEM_guardedalloc.h"
+#  include "MEM_guardedalloc.h"
 
-#include "GEO_jolt.hh"
+#  include "GEO_jolt.hh"
 
 namespace blender::geometry::jolt {
 
@@ -56,3 +58,13 @@ void ensure_initialization()
 }
 
 }  // namespace blender::geometry::jolt
+
+#else
+
+namespace blender::geometry::jolt {
+
+void ensure_initialization() {}
+
+}  // namespace blender::geometry::jolt
+
+#endif
