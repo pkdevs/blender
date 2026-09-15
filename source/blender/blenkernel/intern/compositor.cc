@@ -49,6 +49,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_scene_runtime.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -58,6 +59,7 @@
 #include "IMB_imbuf.hh"
 
 #include "NOD_dependencies.hh"
+#include "NOD_warning.hh"
 
 namespace blender::bke::compositor {
 
@@ -583,6 +585,45 @@ Set<std::string> get_used_passes(const Scene &scene,
     is_first_effect = false;
   }
   return used_passes;
+}
+
+void update_effect_warnings(const Scene &scene,
+                            const ExecutionMode mode,
+                            EffectWarnings &r_warnings)
+{
+  r_warnings.clear();
+
+  Vector<const SceneCompositorEffect *> enabled_effects;
+  for (const SceneCompositorEffect &effect : scene.compositor_effects) {
+    if (is_effect_enabled(effect, mode)) {
+      enabled_effects.append(&effect);
+    }
+  }
+
+  for (const int i : enabled_effects.index_range()) {
+
+    const SceneCompositorEffect &effect = *enabled_effects[i];
+    effect.node_group->ensure_interface_cache();
+
+    /* The last enabled effect doesn't need to produce an output, so it is excluded. */
+    if (i < enabled_effects.size() - 1 && effect.node_group->interface_outputs().is_empty()) {
+      Vector<EffectWarning> &warnings = r_warnings.lookup_or_add(std::string(effect.name),
+                                                                 Vector<EffectWarning>());
+      warnings.append(
+          EffectWarning{nodes::NodeWarningType::Warning,
+                        RPT_("Effect has no output but is followed by other effects")});
+    }
+  }
+}
+
+Span<const EffectWarning> get_effect_warnings(const Scene &scene, const StringRef effect_name)
+{
+  const Vector<EffectWarning> *warnings = scene.runtime->compositor.effect_warnings.lookup_ptr(
+      std::string(effect_name));
+  if (!warnings) {
+    return {};
+  }
+  return Span<const EffectWarning>(warnings->data(), warnings->size());
 }
 
 bool is_viewport_compositor_enabled(const View3D &view_3d, const RegionView3D &region_view_3d)

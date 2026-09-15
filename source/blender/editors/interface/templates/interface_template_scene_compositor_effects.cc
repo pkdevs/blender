@@ -22,6 +22,7 @@
 
 #include "WM_api.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
 #include "BKE_scene_runtime.hh"
@@ -85,27 +86,6 @@ static void draw_effect_extra_menu(bContext *C, ui::Layout *layout, void *effect
   layout->prop(&effect_ptr, "show_node_group_selector", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
-static Vector<nodes::NodeWarning> get_effect_warnings(const SceneCompositorEffect &effect)
-{
-  Vector<nodes::NodeWarning> warnings;
-
-  if (!effect.node_group || ID_MISSING(effect.node_group)) {
-    return warnings;
-  }
-
-  effect.node_group->ensure_interface_cache();
-
-  if (effect.node_group->interface_inputs().is_empty() &&
-      effect.node_group->interface_outputs().is_empty())
-  {
-    // todo(habib): placeholder warning, criteria to be defined.
-    warnings.append(nodes::NodeWarning(nodes::NodeWarningType::Warning,
-                                       RPT_("Node group has no inputs and no outputs")));
-  }
-
-  return warnings;
-}
-
 static void draw_effect_panel_header(const bContext * /*C*/, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
@@ -116,8 +96,9 @@ static void draw_effect_panel_header(const bContext * /*C*/, Panel *panel)
 
   ui::Layout &icon_row = layout.row(true);
   icon_row.emboss_set(ui::EmbossType::None);
+  Scene &scene = *id_cast<Scene *>(effect_ptr->owner_id);
   if (!effect->node_group || ID_MISSING(effect->node_group) ||
-      !get_effect_warnings(*effect).is_empty())
+      !bke::compositor::get_effect_warnings(scene, effect->name).is_empty())
   {
     icon_row.red_alert_set(true);
   }
@@ -352,7 +333,12 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
   Scene &scene = *id_cast<Scene *>(effect_ptr.owner_id);
   SceneCompositorEffect &effect = *effect_ptr.data_as<SceneCompositorEffect>();
 
-  Vector<nodes::NodeWarning> effect_warnings = get_effect_warnings(effect);
+  Vector<nodes::NodeWarning> effect_warnings;
+  for (const bke::compositor::EffectWarning &warning :
+       bke::compositor::get_effect_warnings(scene, effect.name))
+  {
+    effect_warnings.append(nodes::NodeWarning(warning.type, warning.message));
+  }
   Vector<const nodes::NodeWarning *> effect_warning_ptrs;
   for (const nodes::NodeWarning &warning : effect_warnings) {
     effect_warning_ptrs.append(&warning);

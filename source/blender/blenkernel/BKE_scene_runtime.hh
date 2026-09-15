@@ -31,6 +31,8 @@ class CompositorRuntime {
  public:
   /* A nodes log of the last compositor evaluation. */
   std::unique_ptr<nodes::eval_log::NodesEvalLog> nodes_evaluation_log;
+  /* Warnings of the scene compositor effects of the last evaluation, keyed by effect name. */
+  bke::compositor::EffectWarnings effect_warnings;
   /* Cached data for the interactive compositor. */
   bke::compositor::Cache cache;
   /* A dependency graph used for interactive compositing. This is initialized the first time it is

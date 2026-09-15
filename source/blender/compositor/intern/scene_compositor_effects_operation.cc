@@ -16,6 +16,7 @@
 #include "BKE_compute_contexts.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_scene_runtime.hh"
 
 #include "COM_node_group_operation.hh"
 #include "COM_scene_compositor_effects_operation.hh"
@@ -261,6 +262,11 @@ void SceneCompositorEffectsOperation::execute()
       break;
     }
   }
+
+  /* Compute the warnings of all effects. This is done independently of how much of the stack was
+   * evaluated above, since warnings can depend on effects further down the stack. */
+  bke::compositor::update_effect_warnings(
+      scene, execution_mode, scene.runtime->compositor.effect_warnings);
 
   /* If no last operation exist or if it has no outputs, then there is nothing to do. The last
    * operation can be nullptr because execution may have been canceled before any operation was

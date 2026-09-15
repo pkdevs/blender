@@ -147,6 +147,8 @@ static void compositor_job_complete(void *compositor_job_data)
   Scene *evaluated_scene = DEG_get_evaluated_scene(scene->runtime->compositor.preview_depsgraph);
   scene->runtime->compositor.nodes_evaluation_log = std::move(
       evaluated_scene->runtime->compositor.nodes_evaluation_log);
+  scene->runtime->compositor.effect_warnings = std::move(
+      evaluated_scene->runtime->compositor.effect_warnings);
 
   WM_main_add_notifier(NC_SCENE | ND_COMPO_RESULT, nullptr);
 
@@ -271,6 +273,7 @@ void ED_node_compositor_job(Main *bmain,
 {
   /* Avoid displaying stale warnings/errors of the previously assigned node group. */
   scene->runtime->compositor.nodes_evaluation_log.reset();
+  scene->runtime->compositor.effect_warnings.clear();
 
   if (!is_compositing_possible(scene)) {
     return;
