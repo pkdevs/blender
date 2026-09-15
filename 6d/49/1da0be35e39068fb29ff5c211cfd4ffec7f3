@@ -2,3 +2,4 @@ Referenced by commit 3031146097b, Fix #119957: Crash when using 'angle constrain
 Referenced by commit a292dc3117c, Cleanup: update code comments to match refactor
 Referenced by issue #119957, with the knife tool active it closes by pressing double A
 Referenced by pull request #163200, Fix #158954: Knife breaks under certain conditions
+Referenced by commit 5d13eb6adbde33ac85c4b12f4e74a555466dbf7a, Fix #158954: Knife breaks under certain conditions
