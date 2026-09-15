@@ -17,13 +17,6 @@
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
-/** Searches benefit from a higher optimization level on GCC. */
-#if defined(__GNUC__) && !defined(__clang__)
-#  define KDTREE_SEARCH_OPTIMIZE [[gnu::optimize("O3")]]
-#else
-#  define KDTREE_SEARCH_OPTIMIZE
-#endif
-
 namespace blender {
 
 namespace kdtree {
@@ -171,8 +164,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * Find the point closest to \a position.
    * \return Its index, or -1 if the tree is empty.
    */
-  KDTREE_SEARCH_OPTIMIZE int find_nearest(const T &position,
-                                          ValueT *r_distance_sq = nullptr) const;
+  int find_nearest(const T &position, ValueT *r_distance_sq = nullptr) const;
 
   /**
    * Find the point closest to \a position for which \a filter returns true. Useful to skip the
@@ -183,23 +175,20 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * \return The index of the closest accepted point, or -1 if there is none.
    */
   template<typename Filter>
-  KDTREE_SEARCH_OPTIMIZE int find_nearest_filtered(const T &position,
-                                                   Filter &&filter,
-                                                   ValueT *r_distance_sq = nullptr) const;
+  int find_nearest_filtered(const T &position,
+                            Filter &&filter,
+                            ValueT *r_distance_sq = nullptr) const;
 
   /**
    * Find the closest points to \a position, in order of increasing distance.
    * \param r_nearest: Filled with at most `r_nearest.size()` results.
    * \return The number of results written, which is smaller when the tree has fewer points.
    */
-  KDTREE_SEARCH_OPTIMIZE int find_nearest_n(const T &position,
-                                            MutableSpan<Nearest> r_nearest) const;
+  int find_nearest_n(const T &position, MutableSpan<Nearest> r_nearest) const;
 
   /** Call \a fn for every point within \a radius of \a position, in an unspecified order. */
   template<typename Fn>
-  KDTREE_SEARCH_OPTIMIZE void foreach_in_radius(const T &position,
-                                                const ValueT radius,
-                                                Fn &&fn) const;
+  void foreach_in_radius(const T &position, const ValueT radius, Fn &&fn) const;
 
   /**
    * Find every point within \a radius of \a position.
@@ -207,12 +196,10 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * Passing in the same vector for many searches avoids reallocating it every time.
    * \return The number of results.
    */
-  KDTREE_SEARCH_OPTIMIZE int find_in_radius(const T &position,
-                                            const ValueT radius,
-                                            Vector<Nearest> &r_nearest) const;
+  int find_in_radius(const T &position, const ValueT radius, Vector<Nearest> &r_nearest) const;
 
   /** The number of points within \a radius of \a position. */
-  KDTREE_SEARCH_OPTIMIZE int count_in_radius(const T &position, const ValueT radius) const;
+  int count_in_radius(const T &position, const ValueT radius) const;
 
   /**
    * Group points that are within \a range of each other, favoring speed over quality: each point
@@ -234,16 +221,14 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * \note Merging is a single step: a point is never merged into a point that is itself merged
    * into a third point.
    */
-  KDTREE_SEARCH_OPTIMIZE int calc_duplicates(const ValueT range,
-                                             MutableSpan<int> duplicates) const;
+  int calc_duplicates(const ValueT range, MutableSpan<int> duplicates) const;
 
   /**
    * Visit the points that could be closer to \a position than the result set has accepted so
    * far, reporting each of them to it. The result set decides what to keep and how far the
    * search still has to look. See #NearestResult and the others beside it.
    */
-  template<typename ResultSet>
-  KDTREE_SEARCH_OPTIMIZE void search(ResultSet &result, const T &position) const;
+  template<typename ResultSet> void search(ResultSet &result, const T &position) const;
 
  private:
   /**
@@ -263,11 +248,11 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * \return False when the result set has seen enough and the search should stop.
    */
   template<typename ResultSet>
-  KDTREE_SEARCH_OPTIMIZE bool search_node(ResultSet &result,
-                                          const T &position,
-                                          const Node *node,
-                                          const ValueT distance_sq,
-                                          T &offsets) const;
+  bool search_node(ResultSet &result,
+                   const T &position,
+                   const Node *node,
+                   const ValueT distance_sq,
+                   T &offsets) const;
 };
 
 namespace kdtree {
@@ -431,9 +416,7 @@ template<typename T> bool KDTreeNew<T>::is_empty() const
   return size_ == 0;
 }
 
-template<typename T>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest(const T &position,
-                                                      ValueT *r_distance_sq) const
+template<typename T> int KDTreeNew<T>::find_nearest(const T &position, ValueT *r_distance_sq) const
 {
   if (this->is_empty()) {
     return -1;
@@ -448,9 +431,9 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest(const T &position,
 
 template<typename T>
 template<typename Filter>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest_filtered(const T &position,
-                                                               Filter &&filter,
-                                                               ValueT *r_distance_sq) const
+int KDTreeNew<T>::find_nearest_filtered(const T &position,
+                                        Filter &&filter,
+                                        ValueT *r_distance_sq) const
 {
   if (this->is_empty()) {
     return -1;
@@ -464,8 +447,7 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest_filtered(const T &position
 }
 
 template<typename T>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest_n(const T &position,
-                                                        MutableSpan<Nearest> r_nearest) const
+int KDTreeNew<T>::find_nearest_n(const T &position, MutableSpan<Nearest> r_nearest) const
 {
   if (this->is_empty() || r_nearest.is_empty()) {
     return 0;
@@ -477,9 +459,7 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_nearest_n(const T &position,
 
 template<typename T>
 template<typename Fn>
-KDTREE_SEARCH_OPTIMIZE void KDTreeNew<T>::foreach_in_radius(const T &position,
-                                                            const ValueT radius,
-                                                            Fn &&fn) const
+void KDTreeNew<T>::foreach_in_radius(const T &position, const ValueT radius, Fn &&fn) const
 {
   if (this->is_empty()) {
     return;
@@ -489,9 +469,9 @@ KDTREE_SEARCH_OPTIMIZE void KDTreeNew<T>::foreach_in_radius(const T &position,
 }
 
 template<typename T>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_in_radius(const T &position,
-                                                        const ValueT radius,
-                                                        Vector<Nearest> &r_nearest) const
+int KDTreeNew<T>::find_in_radius(const T &position,
+                                 const ValueT radius,
+                                 Vector<Nearest> &r_nearest) const
 {
   r_nearest.clear();
   this->foreach_in_radius(position, radius, [&](const int index, const ValueT distance_sq) {
@@ -504,8 +484,7 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::find_in_radius(const T &position,
 }
 
 template<typename T>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::count_in_radius(const T &position,
-                                                         const ValueT radius) const
+int KDTreeNew<T>::count_in_radius(const T &position, const ValueT radius) const
 {
   if (this->is_empty()) {
     return 0;
@@ -516,8 +495,7 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::count_in_radius(const T &position,
 }
 
 template<typename T>
-KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::calc_duplicates(const ValueT range,
-                                                         MutableSpan<int> duplicates) const
+int KDTreeNew<T>::calc_duplicates(const ValueT range, MutableSpan<int> duplicates) const
 {
   int found = 0;
   for (const int index : Span<int>(indices_, size_)) {
@@ -545,7 +523,7 @@ KDTREE_SEARCH_OPTIMIZE int KDTreeNew<T>::calc_duplicates(const ValueT range,
 
 template<typename T>
 template<typename ResultSet>
-KDTREE_SEARCH_OPTIMIZE void KDTreeNew<T>::search(ResultSet &result, const T &position) const
+void KDTreeNew<T>::search(ResultSet &result, const T &position) const
 {
   BLI_assert(!this->is_empty());
   /* Squared distance to the bounds of the tree, per dimension, which the walk below replaces
@@ -566,11 +544,11 @@ KDTREE_SEARCH_OPTIMIZE void KDTreeNew<T>::search(ResultSet &result, const T &pos
 
 template<typename T>
 template<typename ResultSet>
-KDTREE_SEARCH_OPTIMIZE bool KDTreeNew<T>::search_node(ResultSet &result,
-                                                      const T &position,
-                                                      const Node *node,
-                                                      const ValueT distance_sq,
-                                                      T &offsets) const
+bool KDTreeNew<T>::search_node(ResultSet &result,
+                               const T &position,
+                               const Node *node,
+                               const ValueT distance_sq,
+                               T &offsets) const
 {
   if (node->children == nullptr) {
     const int *indices = indices_;

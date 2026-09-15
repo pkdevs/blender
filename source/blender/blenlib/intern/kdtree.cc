@@ -28,15 +28,6 @@
 #include "BLI_task.hh"
 #include "BLI_threads.hh"
 
-/**
- * The build is a tight loop over every point, where the default optimization level leaves a good
- * part of its speed on the table. Clang is left out: it builds a tree just as fast at its own -O2,
- * and measurably slower at -O3. See `BLI_kdtree_performance_test`.
- */
-#if defined(__GNUC__) && !defined(__clang__)
-#  pragma GCC optimize("O3")
-#endif
-
 namespace blender {
 
 /* -------------------------------------------------------------------- */
