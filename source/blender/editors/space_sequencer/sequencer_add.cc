@@ -681,15 +681,23 @@ static bool sequencer_add_generic_exec(
 
 static bool should_handle_overlap(const wmOperator *op)
 {
-  /* Handle overlap now (on import) if overlapping is not permitted and "move strips" is disabled.
-   * Otherwise, strip move operator will always handle overlap itself. */
-  return RNA_boolean_get(op->ptr, "overlap") == false && !can_move_strips(op);
+  return RNA_boolean_get(op->ptr, "overlap") == false;
 }
 
 static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> strips)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
+
+  /* Do some minimal shuffling now (on add) if there will be a move afterwards; this parks the
+   * strip in a free channel so that there will be no overlap on undo of the add. Otherwise, this
+   * is the final placement, so resolve overlap properly instead of hardcoding to shuffle. */
+  if (can_move_strips(op)) {
+    for (Strip *strip : strips) {
+      seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
+    }
+    return;
+  }
 
   ScrArea *area = CTX_wm_area(C);
   const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
