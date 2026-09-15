@@ -1025,8 +1025,6 @@ static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
         bbox = bounds::merge(bbox, *bounds::min_max(screen_space_positions.slice(src_points)));
       }
 
-      BLI_assert(bbox);
-
       /* Add some padding, otherwise we could just miss intersections. */
       bbox->pad(BBOX_PADDING);
 
