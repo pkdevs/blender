@@ -36,8 +36,6 @@ struct bNodeTree;
 struct PointerRNA;
 
 namespace nodes {
-/* Defined in NOD_warning.hh. Only forward declared here to avoid a dependency on the nodes
- * module from this header. */
 enum class NodeWarningType : int;
 }  // namespace nodes
 
