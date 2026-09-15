@@ -2673,41 +2673,6 @@ static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
   RNA_boolean_set(op->ptr, "markers", (ripple_flag & SEQ_RIPPLE_MARKERS) != 0);
 }
 
-/* Break up strips which will be ripple deleted into "ranges" (rather than calculate an entire
- * bounding box from all the strips under consideration). This lets us simultaneously ripple
- * separated parts of the timeline if the user ripple deletes strips that are far apart. */
-static Vector<rcti> ripple_ranges_get(const Scene *scene, const VectorSet<Strip *> &selected)
-{
-  Vector<rcti> bounds;
-  for (Strip *strip : selected) {
-    bounds.append(strip_int_bounds_get(scene, strip));
-  }
-  std::ranges::sort(bounds, [](const rcti &a, const rcti &b) { return a.xmin < b.xmin; });
-
-  Vector<rcti> ranges;
-  for (const rcti &strip_bounds : bounds) {
-    if (!ranges.is_empty() && strip_bounds.xmin <= ranges.last().xmax) {
-      BLI_rcti_union(&ranges.last(), &strip_bounds);
-    }
-    else {
-      ranges.append(strip_bounds);
-    }
-  }
-  return ranges;
-}
-
-static bool should_ripple_strip(const Scene *scene,
-                                const rcti &range,
-                                const Strip *strip,
-                                const bool all_channels)
-{
-  if (all_channels) {
-    return true;
-  }
-  const rcti strip_bounds = strip_int_bounds_get(scene, strip);
-  return BLI_rcti_isect_rect_y(&range, &strip_bounds, nullptr);
-}
-
 /* In the destructive case, we delete or trim all strip contents that occupy the same time
  * ranges as any ripple deleted strips before doing any rippling. */
 static void ripple_range_clear(Scene *scene,
@@ -2724,7 +2689,7 @@ static void ripple_range_clear(Scene *scene,
     if (strip.left_handle() >= range.xmax || strip.right_handle(scene) <= range.xmin) {
       continue;
     }
-    if (!should_ripple_strip(scene, range, &strip, all_channels)) {
+    if (!seq::transform_should_ripple_strip(scene, range, &strip, all_channels)) {
       continue;
     }
     to_edit.append(&strip);
@@ -2773,7 +2738,7 @@ static int ripple_offset_get(const Scene *scene,
   Vector<Strip *> blocking;
   for (Strip &strip : *seqbasep) {
     if (!seq::transform_is_locked(channels, &strip) && strip.left_handle() >= range.xmax &&
-        should_ripple_strip(scene, range, &strip, all_channels))
+        seq::transform_should_ripple_strip(scene, range, &strip, all_channels))
     {
       r_rippled.append(&strip);
     }
@@ -2848,7 +2813,7 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
 
   seq::prefetch_stop(scene);
 
-  const Vector<rcti> ranges = ripple_ranges_get(scene, selected);
+  const Vector<rcti> ranges = seq::transform_ripple_ranges_get(scene, selected);
 
   for (Strip *strip : selected) {
     seq::edit_flag_for_removal(scene, strip);
@@ -2967,7 +2932,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
   rcti selection_bounds;
   BLI_rcti_init_minmax(&selection_bounds);
   for (Strip *strip : to_trim) {
-    const rcti strip_bounds = strip_int_bounds_get(scene, strip);
+    const rcti strip_bounds = seq::strip_int_bounds_get(scene, strip);
     BLI_rcti_union(&selection_bounds, &strip_bounds);
     if (trim_left) {
       offset = max_ii(offset, timeline_frame - strip->left_handle());
@@ -3016,11 +2981,8 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     if (!trim_left && to_trim.contains(&strip)) {
       continue;
     }
-    if (!all_channels) {
-      const rcti strip_bounds = strip_int_bounds_get(scene, &strip);
-      if (!BLI_rcti_isect_rect_y(&selection_bounds, &strip_bounds, nullptr)) {
-        continue;
-      }
+    if (!seq::transform_should_ripple_strip(scene, selection_bounds, &strip, all_channels)) {
+      continue;
     }
     if (strip.left_handle() < ripple_frame) {
       continue;

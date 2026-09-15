@@ -8,6 +8,7 @@
  * \ingroup sequencer
  */
 
+#include <algorithm>
 #include <optional>
 
 #include "DNA_movieclip_types.h"
@@ -276,19 +277,46 @@ static VectorSet<Strip *> extract_standalone_strips(Span<Strip *> transformed_st
   return standalone_strips;
 }
 
-static bool should_ripple_strip(Span<Strip *> source_strips,
-                                const Strip *strip,
-                                const bool all_channels)
+rcti strip_int_bounds_get(const Scene *scene, const Strip *strip)
+{
+  rcti bounds;
+  bounds.xmin = strip->left_handle();
+  bounds.xmax = strip->right_handle(scene);
+  bounds.ymin = strip->channel;
+  bounds.ymax = strip->channel;
+  return bounds;
+}
+
+Vector<rcti> transform_ripple_ranges_get(const Scene *scene, Span<Strip *> strips)
+{
+  Vector<rcti> bounds;
+  for (Strip *strip : strips) {
+    bounds.append(strip_int_bounds_get(scene, strip));
+  }
+  std::ranges::sort(bounds, [](const rcti &a, const rcti &b) { return a.xmin < b.xmin; });
+
+  Vector<rcti> ranges;
+  for (const rcti &strip_bounds : bounds) {
+    if (!ranges.is_empty() && strip_bounds.xmin <= ranges.last().xmax) {
+      BLI_rcti_union(&ranges.last(), &strip_bounds);
+    }
+    else {
+      ranges.append(strip_bounds);
+    }
+  }
+  return ranges;
+}
+
+bool transform_should_ripple_strip(const Scene *scene,
+                                   const rcti &range,
+                                   const Strip *strip,
+                                   const bool all_channels)
 {
   if (all_channels) {
     return true;
   }
-  for (const Strip *source : source_strips) {
-    if (strip->channel == source->channel) {
-      return true;
-    }
-  }
-  return false;
+  const rcti strip_bounds = strip_int_bounds_get(scene, strip);
+  return BLI_rcti_isect_rect_y(&range, &strip_bounds, nullptr);
 }
 
 /* Determine whether we insert #source_strips into others, splitting them at #insert_frame.
@@ -354,54 +382,38 @@ static bool sources_overlap_target(const Scene *scene, Span<Strip *> source_stri
   return false;
 }
 
-/* Right edge of the strip group, as seen by `other`. Only sources sharing its channel count,
- * unless we ripple all channels, where the group is treated as one block. */
-static int sources_end_frame_get(const Scene *scene,
-                                 Span<Strip *> source_strips,
-                                 const Strip *target,
-                                 const bool all_channels)
+static Vector<Strip *> range_sources_get(const Scene *scene,
+                                         Span<Strip *> source_strips,
+                                         const rcti &range)
 {
-  int end_frame = -MAXFRAME;
+  Vector<Strip *> range_sources;
   for (Strip *source : source_strips) {
-    if (!all_channels && source->channel != target->channel) {
-      continue;
+    if (source->left_handle() < range.xmax && source->right_handle(scene) > range.xmin) {
+      range_sources.append(source);
     }
-    end_frame = math::max(end_frame, source->right_handle(scene));
   }
-  return end_frame;
+  return range_sources;
 }
 
-static void strip_transform_handle_ripple(Scene *scene,
-                                          ListBaseT<Strip> *seqbasep,
-                                          Span<Strip *> source_strips,
-                                          const eSeqRippleFlag ripple_flag)
+static void strip_transform_ripple_range(Scene *scene,
+                                         ListBaseT<Strip> *seqbasep,
+                                         Span<Strip *> source_strips,
+                                         const rcti &range,
+                                         const eSeqRippleFlag ripple_flag)
 {
-  if (source_strips.is_empty()) {
-    return;
-  }
-
   const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
+  const Vector<Strip *> range_sources = range_sources_get(scene, source_strips, range);
 
-  int start_frame = MAXFRAME;
-  int end_frame = -MAXFRAME;
-  for (Strip *source : source_strips) {
-    /* When many strips on several channels are selected, we can conceptualize their union in
-     * space as one huge strip, and ripple or insert the strip unit as a whole.
-     *
-     * There are downsides; e.g. when two source strips completely surround rippled strips,
-     * they will push them farther than needed. In the future we can evaluate if this should treat
-     * source strips on a case-by-case basis. */
-    start_frame = math::min(start_frame, source->left_handle());
-    end_frame = math::max(end_frame, source->right_handle(scene));
-  }
+  int start_frame = range.xmin;
+  int end_frame = range.xmax;
 
   std::optional<int> shuffle_delta;
   const bool do_insert = should_ripple_insert(
-      scene, seqbasep, source_strips, start_frame, ripple_flag, shuffle_delta);
+      scene, seqbasep, range_sources, start_frame, ripple_flag, shuffle_delta);
 
   /* Source strips need to be shuffled out of the way before rippling anything else. */
   if (shuffle_delta.has_value()) {
-    for (Strip *source : extract_standalone_strips(source_strips)) {
+    for (Strip *source : extract_standalone_strips(range_sources)) {
       transform_translate_strip(scene, source, *shuffle_delta);
     }
     start_frame += *shuffle_delta;
@@ -423,7 +435,7 @@ static void strip_transform_handle_ripple(Scene *scene,
       if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
         continue;
       }
-      if (!should_ripple_strip(source_strips, &target, all_channels)) {
+      if (!transform_should_ripple_strip(scene, range, &target, all_channels)) {
         continue;
       }
       strips_to_split.append(&target);
@@ -440,12 +452,11 @@ static void strip_transform_handle_ripple(Scene *scene,
     /* Ripple just enough to resolve overlaps, keeping strip group directly adjacent. */
     for (Strip &target : *seqbasep) {
       if (source_strips.contains(&target) ||
-          !sources_overlap_target(scene, source_strips, &target))
+          !sources_overlap_target(scene, range_sources, &target))
       {
         continue;
       }
-      const int source_end = sources_end_frame_get(scene, source_strips, &target, all_channels);
-      delta = math::max(delta, source_end - target.left_handle());
+      delta = math::max(delta, end_frame - target.left_handle());
       ripple_frame = math::min(ripple_frame, target.left_handle());
     }
   }
@@ -462,7 +473,7 @@ static void strip_transform_handle_ripple(Scene *scene,
     if (target.left_handle() < ripple_frame) {
       continue;
     }
-    if (!should_ripple_strip(source_strips, &target, all_channels)) {
+    if (!transform_should_ripple_strip(scene, range, &target, all_channels)) {
       continue;
     }
     transform_translate_strip(scene, &target, delta);
@@ -474,6 +485,16 @@ static void strip_transform_handle_ripple(Scene *scene,
         marker.frame += delta;
       }
     }
+  }
+}
+
+static void strip_transform_handle_ripple(Scene *scene,
+                                          ListBaseT<Strip> *seqbasep,
+                                          Span<Strip *> source_strips,
+                                          const eSeqRippleFlag ripple_flag)
+{
+  for (const rcti &range : transform_ripple_ranges_get(scene, source_strips)) {
+    strip_transform_ripple_range(scene, seqbasep, source_strips, range, ripple_flag);
   }
 }
 

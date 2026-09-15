@@ -9,11 +9,13 @@
  */
 
 #include "DNA_listBase.h"
+#include "DNA_vec_types.h"
 
 #include "BLI_array.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_span.hh"
+#include "BLI_vector.hh"
 
 namespace blender {
 
@@ -86,6 +88,24 @@ void transform_strips_after_frame(Scene *scene,
  * This function also checks `SeqTimelineChannel` flag.
  */
 bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const Strip *strip);
+
+/**
+ *  Returns the extents of the strip along channels and frames.
+ */
+rcti strip_int_bounds_get(const Scene *scene, const Strip *strip);
+/**
+ * Break up `strips` into "ranges" (rather than calculate an entire bounding box from all the
+ * strips under consideration). This lets us simultaneously ripple separated parts of the timeline
+ * if the user edits strips that are far apart. Returned ranges are sorted by start frame.
+ */
+Vector<rcti> transform_ripple_ranges_get(const Scene *scene, Span<Strip *> strips);
+/**
+ * Whether `strip` should be rippled by an edit spanning the channels of `range`.
+ */
+bool transform_should_ripple_strip(const Scene *scene,
+                                   const rcti &range,
+                                   const Strip *strip,
+                                   bool all_channels);
 
 /* Image transformation. */
 
