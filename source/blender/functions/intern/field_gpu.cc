@@ -58,6 +58,14 @@ enum class GPUFieldOperation : uint32_t {
   Scale = 10,
   Normalize = 11,
   MultiplyAdd = 12,
+  Absolute = 13,
+  Minimum = 14,
+  Maximum = 15,
+  Floor = 16,
+  Ceil = 17,
+  Fraction = 18,
+  Round = 19,
+  Sign = 20,
 };
 
 enum class GPUFieldValueType : uint32_t {
@@ -121,6 +129,30 @@ static std::optional<GPUFieldOperation> gpu_operation_for_function(
     }
     if (name == "normalize(float3)") {
       return GPUFieldOperation::Normalize;
+    }
+    if (name == "abs(float3)") {
+      return GPUFieldOperation::Absolute;
+    }
+    if (name == "min(float3, float3)") {
+      return GPUFieldOperation::Minimum;
+    }
+    if (name == "max(float3, float3)") {
+      return GPUFieldOperation::Maximum;
+    }
+    if (name == "floor(float3)") {
+      return GPUFieldOperation::Floor;
+    }
+    if (name == "ceil(float3)") {
+      return GPUFieldOperation::Ceil;
+    }
+    if (name == "frac(float3)") {
+      return GPUFieldOperation::Fraction;
+    }
+    if (name == "round(float3)") {
+      return GPUFieldOperation::Round;
+    }
+    if (name == "sign(float3)") {
+      return GPUFieldOperation::Sign;
     }
   }
   else if (output_type.is<float>()) {
@@ -256,6 +288,12 @@ class GPUFieldIRBuilder {
               switch (*gpu_operation) {
                 case GPUFieldOperation::Normalize:
                 case GPUFieldOperation::Length:
+                case GPUFieldOperation::Absolute:
+                case GPUFieldOperation::Floor:
+                case GPUFieldOperation::Ceil:
+                case GPUFieldOperation::Fraction:
+                case GPUFieldOperation::Round:
+                case GPUFieldOperation::Sign:
                   return 1;
                 case GPUFieldOperation::Scale:
                 case GPUFieldOperation::Add:
@@ -265,6 +303,8 @@ class GPUFieldIRBuilder {
                 case GPUFieldOperation::Cross:
                 case GPUFieldOperation::Dot:
                 case GPUFieldOperation::Distance:
+                case GPUFieldOperation::Minimum:
+                case GPUFieldOperation::Maximum:
                   return 2;
                 case GPUFieldOperation::MultiplyAdd:
                   return 3;
@@ -625,6 +665,63 @@ void main()
                   ".xyz; const float length_squared = dot(value, value); " + result +
                   " = length_squared > 1.0e-35f ? float4(value / sqrt(length_squared), 0.0f) : " +
                   "float4(0.0f); }\n";
+        break;
+      case GPUFieldOperation::Absolute:
+        /* Keep the sign operation in integer space to preserve math::abs's signed zero. */
+        source += "  " + result + " = float4(";
+        for (const char *component : {".x", ".y", ".z"}) {
+          const std::string a = input_a + component;
+          source += "uintBitsToFloat(" + a + " >= 0.0f ? floatBitsToUint(" + a +
+                    ") : (floatBitsToUint(" + a + ") ^ 0x80000000u)), ";
+        }
+        source += "0.0f);\n";
+        break;
+      case GPUFieldOperation::Minimum:
+        /* Preserve first-operand NaNs even when the backend optimizes comparisons to min/max. */
+        source += "  " + result + " = float4(";
+        for (const char *component : {".x", ".y", ".z"}) {
+          const std::string a = input_a + component;
+          const std::string b = input_b + component;
+          source += "((floatBitsToUint(" + a + ") & 0x7fffffffu) > 0x7f800000u || " +
+                    "(floatBitsToUint(" + b + ") & 0x7fffffffu) > 0x7f800000u) ? " + a + " : (" +
+                    b + " < " + a + " ? " + b + " : " + a + "), ";
+        }
+        source += "0.0f);\n";
+        break;
+      case GPUFieldOperation::Maximum:
+        /* Like std::min, std::max keeps the first operand for equal or unordered values. */
+        source += "  " + result + " = float4(";
+        for (const char *component : {".x", ".y", ".z"}) {
+          const std::string a = input_a + component;
+          const std::string b = input_b + component;
+          source += "((floatBitsToUint(" + a + ") & 0x7fffffffu) > 0x7f800000u || " +
+                    "(floatBitsToUint(" + b + ") & 0x7fffffffu) > 0x7f800000u) ? " + a + " : (" +
+                    a + " < " + b + " ? " + b + " : " + a + "), ";
+        }
+        source += "0.0f);\n";
+        break;
+      case GPUFieldOperation::Sign:
+        /* Ordered comparisons return zero for both signed zeros and NaN. */
+        source += "  " + result + " = float4(";
+        for (const char *component : {".x", ".y", ".z"}) {
+          const std::string a = input_a + component;
+          source += a + " > 0.0f ? 1.0f : (" + a + " < 0.0f ? -1.0f : 0.0f), ";
+        }
+        source += "0.0f);\n";
+        break;
+      case GPUFieldOperation::Floor:
+        source += "  " + result + " = float4(floor(" + input_a + ".xyz), 0.0f);\n";
+        break;
+      case GPUFieldOperation::Ceil:
+        source += "  " + result + " = float4(ceil(" + input_a + ".xyz), 0.0f);\n";
+        break;
+      case GPUFieldOperation::Fraction:
+        source += "  " + result + " = float4(" + input_a + ".xyz - floor(" + input_a +
+                  ".xyz), 0.0f);\n";
+        break;
+      case GPUFieldOperation::Round:
+        /* Vector Math rounds halfway values toward positive infinity. */
+        source += "  " + result + " = float4(floor(" + input_a + ".xyz + 0.5f), 0.0f);\n";
         break;
       case GPUFieldOperation::MultiplyAdd:
         source += "  " + result + " = float4(" + input_a + ".xyz * " + input_b + ".xyz + " +
