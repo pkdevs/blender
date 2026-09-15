@@ -801,7 +801,7 @@ def node_name_from_type(node_type, tree_type):
     return name
 
 
-class SCENE_OT_add_compositor_effect_node(Operator):
+class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Operator):
     """Add a node as a scene compositor effect"""
     bl_idname = "scene.add_compositor_effect_node"
     bl_label = "Add Compositor Effect Node"
@@ -841,6 +841,15 @@ class SCENE_OT_add_compositor_effect_node(Operator):
         if group is None:
             self.report({'ERROR'}, f"Failed to load node group {self.type}")
             return {'CANCELLED'}
+
+        # The group contains a single node, which is the one the menu entry configures.
+        node = next(iter(group.nodes), None)
+        if node is not None:
+            # Note: Applying node settings has no effect if the node group is
+            # linked/packed. This limitation comes from the fact that node options are
+            # not exposed as sockets and can therefore not be exposed in the group
+            # interface.
+            self.apply_node_settings(node)
 
         effect_name = node_name_from_type(group.name, "CompositorNodeTree")
         effect = context.scene.compositor_effects.new(name=effect_name)
