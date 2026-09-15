@@ -2033,14 +2033,14 @@ static float4 transform_plane(const float4x4 &mat, const float4 &plane)
 
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
-                                  const ProjectionFunc project,
+                                  const ProjectionFunc project_fn,
                                   const GroupedSpan<int> shapes,
                                   const IndexMask &clipping_shapes)
 {
   Array<float2> src_positions_2d(curves.points_num());
   const Span<float3> positions = curves.positions();
   for (const int i : curves.points_range()) {
-    src_positions_2d[i] = project(positions[i]);
+    src_positions_2d[i] = project_fn(positions[i]);
   }
 
   const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
@@ -2080,7 +2080,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves, result.unchanged_curves, project);
+    separate_fill_islands(dst_curves, result.unchanged_curves, project_fn);
   }
 
   return dst_curves;
@@ -2088,7 +2088,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
 
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
-                                              const ProjectionFunc project,
+                                              const ProjectionFunc project_fn,
                                               const GroupedSpan<int> shapes,
                                               const Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,
@@ -2098,7 +2098,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   Array<float2> src_positions_2d(curves.points_num());
   const Span<float3> src_positions = curves.positions();
   for (const int i : curves.points_range()) {
-    src_positions_2d[i] = project(src_positions[i]);
+    src_positions_2d[i] = project_fn(src_positions[i]);
   }
 
   const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
@@ -2139,7 +2139,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
 
     for (const int point_i : points) {
       if (is_point_clipping[point_i]) {
-        const float2 positions_2d = project(positions[point_i]);
+        const float2 positions_2d = project_fn(positions[point_i]);
         ED_view3d_win_to_3d_on_plane(&region, plane, positions_2d, false, positions[point_i]);
         positions[point_i] = math::transform_point(world_to_layer, positions[point_i]);
       }
@@ -2155,7 +2155,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves, result.unchanged_curves, project);
+    separate_fill_islands(dst_curves, result.unchanged_curves, project_fn);
   }
 
   return dst_curves;

@@ -358,7 +358,7 @@ void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
  */
 void separate_fill_islands(bke::CurvesGeometry &dst,
                            const Span<bool> unchanged_curves,
-                           const ProjectionFunc project)
+                           const ProjectionFunc project_fn)
 {
   const OffsetIndices<int> points_by_curve = dst.points_by_curve();
   bke::MutableAttributeAccessor attributes = dst.attributes_for_write();
@@ -367,7 +367,7 @@ void separate_fill_islands(bke::CurvesGeometry &dst,
   Array<float2> dst_positions_2d(dst.points_num());
   const Span<float3> positions = dst.positions();
   for (const int i : dst.points_range()) {
-    dst_positions_2d[i] = project(positions[i]);
+    dst_positions_2d[i] = project_fn(positions[i]);
   }
 
   /* Returns if #curve_i in inside of #curve_j, only valid if the curves do not intersect. */

@@ -263,7 +263,7 @@ static void draw_divider_end()
   f << "</div>\n";
 }
 
-static float2 project(const float3 position)
+static float2 project_fn(const float3 position)
 {
   return float2(position.x, position.y);
 };
@@ -296,13 +296,13 @@ static void draw_results(const std::string &label,
   Array<float2> src_positions_2d(src_curves.points_num());
   const Span<float3> src_positions = src_curves.positions();
   for (const int i : src_curves.points_range()) {
-    src_positions_2d[i] = project(src_positions[i]);
+    src_positions_2d[i] = project_fn(src_positions[i]);
   }
 
   Array<float2> dst_positions_2d(dst_curves.points_num());
   const Span<float3> dst_positions = dst_curves.positions();
   for (const int i : dst_curves.points_range()) {
-    dst_positions_2d[i] = project(dst_positions[i]);
+    dst_positions_2d[i] = project_fn(dst_positions[i]);
   }
 
   const VArray<int> src_fill_ids = *src_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
@@ -393,7 +393,7 @@ static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
   Array<float2> dst_positions_2d(dst_curves.points_num());
   const Span<float3> dst_positions = dst_curves.positions();
   for (const int i : dst_curves.points_range()) {
-    dst_positions_2d[i] = project(dst_positions[i]);
+    dst_positions_2d[i] = project_fn(dst_positions[i]);
   }
 
   const OffsetIndices<int> points_by_curve = dst_curves.points_by_curve();
@@ -449,7 +449,7 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
                                                          src_curves.curves_num());
   const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
 
-  return curve_boolean(op_params, src_curves, project, shapes, clipping_shapes);
+  return curve_boolean(op_params, src_curves, project_fn, shapes, clipping_shapes);
 }
 
 class GreasePencilBooleanTest : public bke::BlenderGTestBase {};

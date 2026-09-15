@@ -1076,17 +1076,17 @@ using ProjectionFunc = FunctionRef<float2(const float3)>;
 
 void separate_fill_islands(bke::CurvesGeometry &dst,
                            const Span<bool> unchanged_curves,
-                           ProjectionFunc project);
+                           ProjectionFunc project_fn);
 
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
-                                  ProjectionFunc project,
+                                  ProjectionFunc project_fn,
                                   GroupedSpan<int> shapes,
                                   const IndexMask &clipping_shapes);
 
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
-                                              ProjectionFunc project,
+                                              ProjectionFunc project_fn,
                                               GroupedSpan<int> shapes,
                                               Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,

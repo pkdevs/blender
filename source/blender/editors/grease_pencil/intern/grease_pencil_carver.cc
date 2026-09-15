@@ -101,7 +101,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
       bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
       clipping_curves);
 
-  auto project = [&](const float3 &position) {
+  auto project_fn = [&](const float3 &position) {
     return ED_view3d_project_float_v2_m4(&region, position, projection);
   };
 
@@ -112,7 +112,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
     Array<float2> src_positions_2d(input_curves.points_num());
     const Span<float3> positions = input_curves.positions();
     for (const int i : input_curves.points_range()) {
-      src_positions_2d[i] = project(positions[i]);
+      src_positions_2d[i] = project_fn(positions[i]);
     }
 
     Array<Bounds<float2>> screen_space_bbox(input_curves.curves_num());
@@ -162,7 +162,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
 
   bke::CurvesGeometry carved_strokes = segment::carver::curve_boolean_with_planes(op_params,
                                                                                   input_curves,
-                                                                                  project,
+                                                                                  project_fn,
                                                                                   shapes,
                                                                                   curve_planes,
                                                                                   clipping_shapes,
