@@ -103,14 +103,20 @@ class WindingState {
 
     if (orders_per_curve_.contains(curve_i)) {
       orders_per_curve_.lookup(curve_i) += winding_i;
-
-      /* Remove unneeded ids. */
-      if (orders_per_curve_.lookup(curve_i) == 0) {
-        orders_per_curve_.remove(curve_i);
-      }
     }
     else {
       orders_per_curve_.add(curve_i, winding_i);
+    }
+  }
+
+  void remove_unneeded_ids()
+  {
+    auto it_begin = orders_per_curve_.items().begin();
+    auto it_end = orders_per_curve_.items().end();
+    for (auto it = it_begin; it != it_end; it++) {
+      if ((*it).value == 0) {
+        orders_per_curve_.remove(it);
+      }
     }
   }
 
@@ -288,6 +294,9 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
     state_L.add_to_curve(curve_i, l_winding_i);
     state_R.add_to_curve(curve_i, r_winding_i);
   }
+
+  state_L.remove_unneeded_ids();
+  state_R.remove_unneeded_ids();
 
   return {state_L, state_R};
 }
