@@ -169,7 +169,7 @@ void EDBM_select_mirrored(
     }
   }
 
-  EDBM_verts_mirror_cache_begin(em, axis, true, true, false, use_topology);
+  EDBM_verts_mirror_cache_begin(em, bm, axis, true, true, false, use_topology);
 
   if (!extend) {
     EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
@@ -183,7 +183,7 @@ void EDBM_select_mirrored(
       }
 
       if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
-        BMVert *v_mirr = EDBM_verts_mirror_get(em, v);
+        BMVert *v_mirr = EDBM_verts_mirror_get(em, bm, v);
         if (v_mirr && !BM_elem_flag_test(v_mirr, BM_ELEM_HIDDEN)) {
           BM_vert_select_set(bm, v_mirr, true);
           totmirr++;
@@ -202,7 +202,7 @@ void EDBM_select_mirrored(
       }
 
       if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
-        BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em, e);
+        BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em, bm, e);
         if (e_mirr && !BM_elem_flag_test(e_mirr, BM_ELEM_HIDDEN)) {
           BM_edge_select_set(bm, e_mirr, true);
           totmirr++;
@@ -221,7 +221,7 @@ void EDBM_select_mirrored(
       }
 
       if (BM_elem_flag_test(f, BM_ELEM_TAG)) {
-        BMFace *f_mirr = EDBM_verts_mirror_get_face(em, f);
+        BMFace *f_mirr = EDBM_verts_mirror_get_face(em, bm, f);
         if (f_mirr && !BM_elem_flag_test(f_mirr, BM_ELEM_HIDDEN)) {
           BM_face_select_set(bm, f_mirr, true);
           totmirr++;

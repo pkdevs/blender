@@ -1329,6 +1329,7 @@ static BMVert *cache_mirr_intptr_as_bmvert(const intptr_t *index_lookup, int ind
 #define BM_CD_LAYER_ID "__mirror_index"
 
 void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
+                                      BMesh *bm,
                                       const int axis,
                                       const bool use_self,
                                       const bool use_select,
@@ -1338,7 +1339,6 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
                                       float maxdist,
                                       int *r_index)
 {
-  BMesh *bm = em->bm;
   BMIter iter;
   BMVert *v;
   int cd_vmirr_offset = 0;
@@ -1446,6 +1446,7 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
 }
 
 void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
+                                   BMesh *bm,
                                    const int axis,
                                    const bool use_self,
                                    const bool use_select,
@@ -1453,6 +1454,7 @@ void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
                                    const bool use_topology)
 {
   EDBM_verts_mirror_cache_begin_ex(em,
+                                   bm,
                                    axis,
                                    use_self,
                                    use_select,
@@ -1463,9 +1465,8 @@ void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
                                    nullptr);
 }
 
-BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMVert *v)
+BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMesh *bm, BMVert *v)
 {
-  BMesh *bm = em->bm;
   const int *mirr = static_cast<const int *>(
       CustomData_bmesh_get_layer_n(&bm->vdata, v->head.data, em->mirror_cdlayer));
 
@@ -1485,11 +1486,11 @@ BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMVert *v)
   return nullptr;
 }
 
-BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMEdge *e)
+BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMesh *bm, BMEdge *e)
 {
   BMVert *v1_mirr, *v2_mirr;
-  if ((v1_mirr = EDBM_verts_mirror_get(em, e->v1)) &&
-      (v2_mirr = EDBM_verts_mirror_get(em, e->v2)) &&
+  if ((v1_mirr = EDBM_verts_mirror_get(em, bm, e->v1)) &&
+      (v2_mirr = EDBM_verts_mirror_get(em, bm, e->v2)) &&
       /* While highly unlikely, a zero length central edges vertices can match, see #89342. */
       LIKELY(v1_mirr != v2_mirr))
   {
@@ -1499,7 +1500,7 @@ BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMEdge *e)
   return nullptr;
 }
 
-BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f)
+BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMesh *bm, BMFace *f)
 {
   Array<BMVert *, BM_DEFAULT_NGON_STACK_SIZE> v_mirr_arr(f->len);
 
@@ -1508,7 +1509,7 @@ BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f)
 
   l_iter = l_first = BM_FACE_FIRST_LOOP(f);
   do {
-    if ((v_mirr_arr[i++] = EDBM_verts_mirror_get(em, l_iter->v)) == nullptr) {
+    if ((v_mirr_arr[i++] = EDBM_verts_mirror_get(em, bm, l_iter->v)) == nullptr) {
       return nullptr;
     }
   } while ((l_iter = l_iter->next) != l_first);
@@ -1516,9 +1517,8 @@ BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f)
   return BM_face_exists(v_mirr_arr.data(), v_mirr_arr.size());
 }
 
-void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMVert *v)
+void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMesh *bm, BMVert *v)
 {
-  BMesh *bm = em->bm;
   int *mirr = static_cast<int *>(
       CustomData_bmesh_get_layer_n(&bm->vdata, v->head.data, em->mirror_cdlayer));
 
@@ -1534,9 +1534,8 @@ void EDBM_verts_mirror_cache_end(BMEditMesh *em)
   em->mirror_cdlayer = -1;
 }
 
-void EDBM_verts_mirror_apply(BMEditMesh *em, const int sel_from, const int sel_to)
+void EDBM_verts_mirror_apply(BMEditMesh *em, BMesh *bm, const int sel_from, const int sel_to)
 {
-  BMesh *bm = em->bm;
   BMIter iter;
   BMVert *v;
 
@@ -1544,7 +1543,7 @@ void EDBM_verts_mirror_apply(BMEditMesh *em, const int sel_from, const int sel_t
 
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
     if (BM_elem_flag_test(v, BM_ELEM_SELECT) == sel_from) {
-      BMVert *mirr = EDBM_verts_mirror_get(em, v);
+      BMVert *mirr = EDBM_verts_mirror_get(em, bm, v);
       if (mirr) {
         if (BM_elem_flag_test(mirr, BM_ELEM_SELECT) == sel_to) {
           copy_v3_v3(mirr->co, v->co);

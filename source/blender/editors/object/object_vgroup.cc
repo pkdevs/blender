@@ -2192,7 +2192,7 @@ void vgroup_mirror(Object *ob,
         goto cleanup;
       }
 
-      EDBM_verts_mirror_cache_begin(em, 0, true, false, false, use_topology);
+      EDBM_verts_mirror_cache_begin(em, bm, 0, true, false, false, use_topology);
 
       BM_mesh_elem_hflag_disable_all(bm, BM_VERT, BM_ELEM_TAG, false);
 
@@ -2200,7 +2200,7 @@ void vgroup_mirror(Object *ob,
       BMVert *eve, *eve_mirr;
       BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
         if (!BM_elem_flag_test(eve, BM_ELEM_TAG)) {
-          if ((eve_mirr = EDBM_verts_mirror_get(em, eve))) {
+          if ((eve_mirr = EDBM_verts_mirror_get(em, bm, eve))) {
             if (eve_mirr != eve) {
               if (!BM_elem_flag_test(eve_mirr, BM_ELEM_TAG)) {
                 const bool sel = BM_elem_flag_test(eve, BM_ELEM_SELECT);

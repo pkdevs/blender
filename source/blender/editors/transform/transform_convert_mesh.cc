@@ -1241,8 +1241,15 @@ void transform_convert_mesh_mirrordata_calc(BMEditMesh *em,
     }
 
     index[a] = MEM_new_array_uninitialized<int>(totvert, __func__);
-    EDBM_verts_mirror_cache_begin_ex(
-        em, a, false, test_selected_only, true, use_topology, TRANSFORM_MAXDIST_MIRROR, index[a]);
+    EDBM_verts_mirror_cache_begin_ex(em,
+                                     bm,
+                                     a,
+                                     false,
+                                     test_selected_only,
+                                     true,
+                                     use_topology,
+                                     TRANSFORM_MAXDIST_MIRROR,
+                                     index[a]);
 
     flag = TD_MIRROR_X << a;
     BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {

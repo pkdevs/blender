@@ -2751,7 +2751,7 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
 
     /* mirror before smooth */
     if ((id_cast<Mesh *>(obedit->data))->symmetry & ME_SYMMETRY_X) {
-      EDBM_verts_mirror_cache_begin(em, 0, false, true, false, use_topology);
+      EDBM_verts_mirror_cache_begin(em, bm, 0, false, true, false, use_topology);
     }
 
     /* if there is a mirror modifier with clipping, flag the verts that
@@ -2802,7 +2802,7 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
 
     /* apply mirror */
     if ((id_cast<Mesh *>(obedit->data))->symmetry & ME_SYMMETRY_X) {
-      EDBM_verts_mirror_apply(em, BM_ELEM_SELECT, 0);
+      EDBM_verts_mirror_apply(em, bm, BM_ELEM_SELECT, 0);
       EDBM_verts_mirror_cache_end(em);
       calc_normals = true;
     }
@@ -2896,7 +2896,7 @@ static wmOperatorStatus edbm_do_smooth_laplacian_vertex_exec(bContext *C, wmOper
 
     /* Mirror before smooth. */
     if ((id_cast<Mesh *>(obedit->data))->symmetry & ME_SYMMETRY_X) {
-      EDBM_verts_mirror_cache_begin(em, 0, false, true, false, use_topology);
+      EDBM_verts_mirror_cache_begin(em, bm, 0, false, true, false, use_topology);
     }
 
     bool failed_repeat_loop = false;
@@ -2926,7 +2926,7 @@ static wmOperatorStatus edbm_do_smooth_laplacian_vertex_exec(bContext *C, wmOper
 
     /* Apply mirror. */
     if ((id_cast<Mesh *>(obedit->data))->symmetry & ME_SYMMETRY_X) {
-      EDBM_verts_mirror_apply(em, BM_ELEM_SELECT, 0);
+      EDBM_verts_mirror_apply(em, bm, BM_ELEM_SELECT, 0);
       EDBM_verts_mirror_cache_end(em);
       calc_normals = true;
     }
@@ -3776,7 +3776,7 @@ static bool shape_propagate(BMEditMesh *em, BMesh *bm, bool use_symmetry)
 
   BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
     if (!BM_elem_flag_test(eve, BM_ELEM_SELECT) || BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
-      BMVert *mirr = use_symmetry ? EDBM_verts_mirror_get(em, eve) : nullptr;
+      BMVert *mirr = use_symmetry ? EDBM_verts_mirror_get(em, bm, eve) : nullptr;
 
       if (!mirr || !BM_elem_flag_test(mirr, BM_ELEM_SELECT) ||
           BM_elem_flag_test(mirr, BM_ELEM_HIDDEN))
@@ -3827,7 +3827,7 @@ static wmOperatorStatus edbm_shape_propagate_to_all_exec(bContext *C, wmOperator
     if (use_symmetry) {
       const bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
-      EDBM_verts_mirror_cache_begin(em, 0, false, false, false, use_topology);
+      EDBM_verts_mirror_cache_begin(em, bm, 0, false, false, false, use_topology);
     }
 
     if (shape_propagate(em, bm, use_symmetry)) {
@@ -3951,7 +3951,7 @@ static wmOperatorStatus edbm_blend_from_shape_exec(bContext *C, wmOperator *op)
       if (use_symmetry) {
         const bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
-        EDBM_verts_mirror_cache_begin(em, 0, false, true, false, use_topology);
+        EDBM_verts_mirror_cache_begin(em, bm, 0, false, true, false, use_topology);
       }
 
       /* Perform blending on selected vertices. */
@@ -3980,7 +3980,7 @@ static wmOperatorStatus edbm_blend_from_shape_exec(bContext *C, wmOperator *op)
       }
 
       if (use_symmetry) {
-        EDBM_verts_mirror_apply(em, BM_ELEM_SELECT, 0);
+        EDBM_verts_mirror_apply(em, bm, BM_ELEM_SELECT, 0);
         EDBM_verts_mirror_cache_end(em);
       }
 
@@ -8108,7 +8108,7 @@ static wmOperatorStatus mesh_symmetry_snap_exec(bContext *C, wmOperator *op)
     BMVert *v;
     int i;
 
-    EDBM_verts_mirror_cache_begin_ex(em, axis, true, true, false, use_topology, thresh, index);
+    EDBM_verts_mirror_cache_begin_ex(em, bm, axis, true, true, false, use_topology, thresh, index);
 
     BM_mesh_elem_table_ensure(bm, BM_VERT);
 

@@ -92,6 +92,7 @@ class EditMeshSymmetryHelper {
  * (length of total verts).
  */
 void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
+                                      BMesh *bm,
                                       int axis,
                                       bool use_self,
                                       bool use_select,
@@ -99,13 +100,18 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
                                       bool use_topology,
                                       float maxdist,
                                       int *r_index);
-void EDBM_verts_mirror_cache_begin(
-    BMEditMesh *em, int axis, bool use_self, bool use_select, bool respecthide, bool use_topology);
-void EDBM_verts_mirror_apply(BMEditMesh *em, int sel_from, int sel_to);
-BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMVert *v);
-BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMEdge *e);
-BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f);
-void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMVert *v);
+void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
+                                   BMesh *bm,
+                                   int axis,
+                                   bool use_self,
+                                   bool use_select,
+                                   bool respecthide,
+                                   bool use_topology);
+void EDBM_verts_mirror_apply(BMEditMesh *em, BMesh *bm, int sel_from, int sel_to);
+BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMesh *bm, BMVert *v);
+BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMesh *bm, BMEdge *e);
+BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMesh *bm, BMFace *f);
+void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMesh *bm, BMVert *v);
 void EDBM_verts_mirror_cache_end(BMEditMesh *em);
 
 void EDBM_mesh_normals_update_ex(BMesh *bm, const BMeshNormalsUpdate_Params *params);
