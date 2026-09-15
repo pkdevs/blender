@@ -801,7 +801,7 @@ def node_name_from_type(node_type, tree_type):
     return name
 
 
-class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Operator):
+class SCENE_OT_add_compositor_effect_node(Operator):
     """Add a node as a scene compositor effect"""
     bl_idname = "scene.add_compositor_effect_node"
     bl_label = "Add Compositor Effect Node"
@@ -839,6 +839,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
 
         group = self.create_packed_effect_group(self.type)
         if group is None:
+            self.report({'ERROR'}, f"Failed to load node group {self.type}")
             return {'CANCELLED'}
 
         effect_name = node_name_from_type(group.name, "CompositorNodeTree")

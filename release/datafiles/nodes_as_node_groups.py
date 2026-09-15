@@ -11,9 +11,6 @@ This is intended to be run by Blender in background mode at build time::
    blender --background --factory-startup \
        --python release/datafiles/nodes_as_node_groups.py -- \
        --output /path/to/nodes_as_node_groups.blend
-
-For now the exact contents are a placeholder; the file is produced so it can be
-shipped with Blender and populated with real node-group assets later.
 """
 __all__ = (
     "main",
@@ -66,16 +63,16 @@ def create_compositor_node_groups():
             new_node = compositor_node_group.nodes.new(type=node_type_name)
             new_node.location = (x, y)
             x += new_node.width + 20
-        except Exception as e:
+        except Exception:
+            # Failing to add a new node means the compositor doesn't support it. This is not an error.
             pass
 
     for node in compositor_node_group.nodes:
-        if node.bl_idname == "CompositorNodeGroup":
-            continue
         group = node.group_make()
 
-        # Using node names is more prune to conflicts, for example when a
-        # deprecated node has the same name as its replacement.
+        # Using node names is more prone to conflicts, for example when a
+        # deprecated node has the same name as its replacement, so use #bl_idname
+        # as a unique identifier for the node group.
         group.name = node.bl_idname
 
         group.use_fake_user = True
