@@ -822,7 +822,8 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
     if (!ELEM(basepath[0], '\\', '/')) {
       base_path_after_root++;
     }
-    BLI_strncpy(base_path_after_root, basepath, FILE_MAX - 3);
+    BLI_strncpy(
+        base_path_after_root, basepath, sizeof(base_path) - (base_path_after_root - base_path));
     path_relative_to_impl(path, FILE_MAX, base_path, walk_up, blend_relative);
     return;
   }
