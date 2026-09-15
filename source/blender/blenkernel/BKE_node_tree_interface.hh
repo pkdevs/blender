@@ -51,6 +51,15 @@ class bNodeTreeInterfaceRuntime {
   /* Socket-only lists for input/output access by index. */
   CustomIDVectorSet<bNodeTreeInterfaceSocket *, SocketIdentifierGetter> inputs_;
   CustomIDVectorSet<bNodeTreeInterfaceSocket *, SocketIdentifierGetter> outputs_;
+
+  struct PanelIdentifierGetter {
+    int operator()(const bNodeTreeInterfacePanel *panel) const
+    {
+      return panel->identifier;
+    }
+  };
+
+  CustomIDVectorSet<bNodeTreeInterfacePanel *, PanelIdentifierGetter> panels_;
 };
 
 namespace node_interface {

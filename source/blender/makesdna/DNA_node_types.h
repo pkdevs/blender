@@ -2067,15 +2067,19 @@ struct bNodeTree {
   Span<const bNodeTreeInterfaceSocket *> interface_inputs() const;
   Span<bNodeTreeInterfaceSocket *> interface_outputs();
   Span<const bNodeTreeInterfaceSocket *> interface_outputs() const;
+  Span<bNodeTreeInterfacePanel *> interface_panels();
+  Span<const bNodeTreeInterfacePanel *> interface_panels() const;
   Span<bNodeTreeInterfaceItem *> interface_items();
   Span<const bNodeTreeInterfaceItem *> interface_items() const;
 
   int interface_input_index(const bNodeTreeInterfaceSocket &io_socket) const;
   int interface_output_index(const bNodeTreeInterfaceSocket &io_socket) const;
+  int interface_panel_index(const bNodeTreeInterfacePanel &io_panel) const;
   int interface_item_index(const bNodeTreeInterfaceItem &io_item) const;
 
   int interface_input_index_by_identifier(StringRef identifier) const;
   int interface_output_index_by_identifier(StringRef identifier) const;
+  int interface_panel_index_by_identifier(int identifier) const;
 #endif
 };
 

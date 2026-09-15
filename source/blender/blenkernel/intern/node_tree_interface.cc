@@ -2053,6 +2053,7 @@ void bNodeTreeInterface::ensure_items_cache() const
     runtime.items_.clear();
     runtime.inputs_.clear();
     runtime.outputs_.clear();
+    runtime.panels_.clear();
 
     /* Items in the cache are mutable pointers, but node tree update considers ID data to be
      * immutable when caching. DNA ListBaseT pointers can be mutable even if their container is
@@ -2069,6 +2070,9 @@ void bNodeTreeInterface::ensure_items_cache() const
           runtime.outputs_.add_new(socket);
         }
       }
+      else if (bNodeTreeInterfacePanel *panel = get_item_as<bNodeTreeInterfacePanel>(&item)) {
+        runtime.panels_.add_new(panel);
+      }
       return true;
     });
   });
@@ -2084,6 +2088,12 @@ int bNodeTreeInterface::output_index_by_identifier(const StringRef identifier) c
 {
   BLI_assert(this->items_cache_is_available());
   return this->runtime->outputs_.index_of_try_as(identifier);
+}
+
+int bNodeTreeInterface::panel_index_by_identifier(const int identifier) const
+{
+  BLI_assert(this->items_cache_is_available());
+  return this->runtime->panels_.index_of_try_as(identifier);
 }
 
 void bNodeTreeInterface::tag_interface_changed()
