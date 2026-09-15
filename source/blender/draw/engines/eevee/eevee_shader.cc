@@ -705,6 +705,10 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
 
   info.compilation_constant(
       gpu::shader::Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
+  if (pipeline_type == MAT_PIPE_SHADOW) {
+    info.compilation_constant(
+        gpu::shader::Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
+  }
   info.compilation_constant(
       gpu::shader::Type::bool_t, "use_clip_plane", pipeline_type == MAT_PIPE_PREPASS_PLANAR);
 
@@ -1340,6 +1344,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   generated_resource_header += "\n";
 
   info.generated_sources.append({"eevee_nodetree_type_lib.glsl", {}, generated_resource_header});
+  info.generated_sources.append({"gpu_shader_material_interface.bsl.hh", {}, ""});
 
   {
     const bool use_vertex_displacement = !codegen.displacement.empty() &&

@@ -136,9 +136,10 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud, [](BlendStructWriter &struct_writer) {
-    struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
-  });
+  writer->write_id_struct(
+      id_address, pointcloud, [](BlendStructWriter<PointCloud> &struct_writer) {
+        struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+      });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
@@ -181,6 +182,7 @@ IDTypeInfo IDType_ID_PT = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = pointcloud_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = pointcloud_blend_write,
