@@ -18,8 +18,8 @@ namespace blender::bke::greasepencil {
 std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids);
 
 /**
- * Calculate all of the shapes from the "fill_id" attribute. Each shape is either a group multiple
- * curves that share the same "fill_id", or a single curve when the "fill_id" is zero.
+ * Calculate all of the shapes from the "fill_id" attribute. Each shape is either a group of
+ * multiple curves that share the same "fill_id", or a single curve when the "fill_id" is zero.
  *
  * For example:
  *
