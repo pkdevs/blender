@@ -1,2 +1,3 @@
 Referenced by pull request #162921, Fix #162355: Installing lights does not update filter when changing type
 Referenced by commit 6fe5f2ea080029d6b868ebc02bb81fb25a24afb3, Fix #162355: Installing lights does not update filter when changing type
+Referenced by issue #163916, High GPU usage when opening the Lights tab in the Preferences
