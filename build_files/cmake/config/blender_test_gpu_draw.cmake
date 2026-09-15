@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# Configuration for building with EEVEE, Workbench, Compositor, and GPU module tests.
+# Configuration for building with EEVEE, Workbench, Grease Pencil, Compositor, GPU module and UI tests.
 #
 # Example usage:
 #   cmake -C../blender/build_files/cmake/config/blender_test_gpu_draw.cmake  ../blender
