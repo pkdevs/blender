@@ -209,8 +209,8 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
   return mix(scale, next_scale, t);
 }
 
-/* Pre-calculated parameters for faster access to the Gaussian splat attributes for scale, rotation,
- * and base radiance.
+/* Pre-calculated parameters for faster access to the Gaussian splat attributes for scale,
+ * rotation, and base radiance.
  *
  * Naive implementation:
  *     const float3 scale = motion_gsplat_scale(kg, ...);
