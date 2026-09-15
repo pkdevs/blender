@@ -2554,7 +2554,7 @@ static wmOperatorStatus edbm_hide_exec(bContext *C, wmOperator *op)
     EDBM_select_mirrored_extend_all(obedit, em);
 #endif
 
-    if (EDBM_mesh_hide(em, unselected)) {
+    if (EDBM_mesh_hide(bm, em->selectmode, unselected)) {
       EDBMUpdate_Params params{};
       params.calc_looptris = true;
       params.calc_normals = false;
@@ -2607,8 +2607,8 @@ static wmOperatorStatus edbm_reveal_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (EDBM_mesh_reveal(em, select)) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    if (EDBM_mesh_reveal(bm, em->selectmode, select)) {
       EDBMUpdate_Params params{};
       params.calc_looptris = true;
       params.calc_normals = false;

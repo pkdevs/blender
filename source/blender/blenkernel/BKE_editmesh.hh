@@ -40,7 +40,10 @@ struct Scene;
  * #Mesh.runtime.edit_mesh stores a pointer to this structure.
  */
 struct BMEditMesh {
-  /* Always owned by an original mesh in edit mode. */
+  /**
+   * Always owned by an original mesh in edit mode. Access via #BKE_editmesh_bmesh_get_for_write or
+   * BKE_editmesh_bmesh_get.
+   */
   BMesh *bm;
 
   /**

@@ -321,7 +321,7 @@ void EDBM_mesh_make_from_mesh(Object *ob,
   mesh->runtime->edit_mesh = std::make_shared<BMEditMesh>();
   mesh->runtime->edit_mesh->bm = bm;
 
-  mesh->runtime->edit_mesh->selectmode = mesh->runtime->edit_mesh->bm->selectmode = select_mode;
+  mesh->runtime->edit_mesh->selectmode = bm->selectmode = select_mode;
   mesh->runtime->edit_mesh->mat_nr = (ob->actcol > 0) ? ob->actcol - 1 : 0;
 
   /* we need to flush selection because the mode may have changed from when last in editmode */
@@ -342,7 +342,7 @@ void EDBM_mesh_make_from_mesh(Object *ob,
 void EDBM_mesh_load_ex(Main *bmain, Object *ob, bool free_data)
 {
   Mesh *mesh = id_cast<Mesh *>(ob->data);
-  BMesh *bm = mesh->runtime->edit_mesh->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
 
   /* Workaround for #42360, 'ob->shapenr' should be 1 in this case.
    * however this isn't synchronized between objects at the moment. */
@@ -1560,19 +1560,18 @@ void EDBM_verts_mirror_apply(BMEditMesh *em, BMesh *bm, const int sel_from, cons
 /** \name Hide/Reveal API
  * \{ */
 
-bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
+bool EDBM_mesh_hide(BMesh *bm, const short selectmode, bool swap)
 {
-  BMesh *bm = em->bm;
   BMIter iter;
   BMElem *ele;
   int itermode;
   char hflag_swap = swap ? BM_ELEM_SELECT : 0;
   bool changed = false;
 
-  if (em->selectmode & SCE_SELECT_VERTEX) {
+  if (selectmode & SCE_SELECT_VERTEX) {
     itermode = BM_VERTS_OF_MESH;
   }
-  else if (em->selectmode & SCE_SELECT_EDGE) {
+  else if (selectmode & SCE_SELECT_EDGE) {
     itermode = BM_EDGES_OF_MESH;
   }
   else {
@@ -1619,7 +1618,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
   }
 
   if (changed) {
-    EDBM_selectmode_flush(bm, em->selectmode);
+    EDBM_selectmode_flush(bm, selectmode);
     EDBM_uvselect_clear(bm);
   }
   return changed;
@@ -1634,9 +1633,8 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
    */
 }
 
-bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
+bool EDBM_mesh_reveal(BMesh *bm, const short selectmode, bool select)
 {
-  BMesh *bm = em->bm;
   const char iter_types[3] = {
       BM_VERTS_OF_MESH,
       BM_EDGES_OF_MESH,
@@ -1644,9 +1642,9 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
   };
 
   const bool sels[3] = {
-      (em->selectmode & SCE_SELECT_VERTEX) != 0,
-      (em->selectmode & SCE_SELECT_EDGE) != 0,
-      (em->selectmode & SCE_SELECT_FACE) != 0,
+      (selectmode & SCE_SELECT_VERTEX) != 0,
+      (selectmode & SCE_SELECT_EDGE) != 0,
+      (selectmode & SCE_SELECT_FACE) != 0,
   };
   int i;
   bool changed = false;
@@ -1703,7 +1701,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
       BMIter iter;
       BMFace *f;
 
-      if (em->selectmode & SCE_SELECT_VERTEX) {
+      if (selectmode & SCE_SELECT_VERTEX) {
         BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
           BMLoop *l_iter, *l_first;
           l_iter = l_first = BM_FACE_FIRST_LOOP(f);
@@ -1714,7 +1712,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
           } while ((l_iter = l_iter->next) != l_first);
         }
       }
-      else if (em->selectmode & SCE_SELECT_EDGE) {
+      else if (selectmode & SCE_SELECT_EDGE) {
         BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
           BMLoop *l_iter, *l_first;
           l_iter = l_first = BM_FACE_FIRST_LOOP(f);
@@ -1737,7 +1735,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
     }
   }
 
-  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_selectmode_flush(bm, selectmode);
 
   /* hidden faces can have invalid normals */
   EDBM_mesh_normals_update(bm);

@@ -1877,7 +1877,7 @@ static bool uv_mesh_hide_select_sync(const ToolSettings *ts, Object *ob, BMEditM
 
   if (bm->uv_select_sync_valid == false || ED_uvedit_sync_uvselect_ignore(ts)) {
     /* Simple case, no need to synchronize UV's, forward to mesh hide. */
-    changed = EDBM_mesh_hide(em, swap);
+    changed = EDBM_mesh_hide(bm, em->selectmode, swap);
   }
   else {
     /* For vertices & edges hiding faces immediately causes a feedback loop,
@@ -2309,7 +2309,7 @@ static wmOperatorStatus uv_reveal_exec(bContext *C, wmOperator *op)
 
     /* call the mesh function if we are in mesh sync sel */
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-      if (EDBM_mesh_reveal(em, select)) {
+      if (EDBM_mesh_reveal(bm, em->selectmode, select)) {
         Mesh *mesh = id_cast<Mesh *>(ob->data);
         EDBMUpdate_Params params = {0};
         params.calc_looptris = true;

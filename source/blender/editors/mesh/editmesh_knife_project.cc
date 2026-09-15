@@ -136,7 +136,7 @@ static wmOperatorStatus knifeproject_exec(bContext *C, wmOperator *op)
     /* select only tagged faces */
     BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
-    EDBM_selectmode_disable(scene, em, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
+    EDBM_selectmode_disable(scene, em, bm, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
 
     BM_mesh_elem_hflag_enable_test(bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
 

@@ -2708,9 +2708,8 @@ static wmOperatorStatus edbm_faces_select_interior_exec(bContext *C, wmOperator 
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (!EDBM_select_interior_faces(em)) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    if (!EDBM_select_interior_faces(bm)) {
       continue;
     }
 
@@ -2984,12 +2983,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
 /** \name Select Mode Utilities
  * \{ */
 
-static void edbm_strip_selections(BMEditMesh *em)
+static void edbm_strip_selections(BMesh *bm, const short selectmode)
 {
   BMEditSelection *ese, *nextese;
-  BMesh *bm = em->bm;
 
-  if (!(em->selectmode & SCE_SELECT_VERTEX)) {
+  if (!(selectmode & SCE_SELECT_VERTEX)) {
     ese = bm->selected.first();
     while (ese) {
       nextese = ese->next;
@@ -2999,7 +2997,7 @@ static void edbm_strip_selections(BMEditMesh *em)
       ese = nextese;
     }
   }
-  if (!(em->selectmode & SCE_SELECT_EDGE)) {
+  if (!(selectmode & SCE_SELECT_EDGE)) {
     ese = bm->selected.first();
     while (ese) {
       nextese = ese->next;
@@ -3009,7 +3007,7 @@ static void edbm_strip_selections(BMEditMesh *em)
       ese = nextese;
     }
   }
-  if (!(em->selectmode & SCE_SELECT_FACE)) {
+  if (!(selectmode & SCE_SELECT_FACE)) {
     ese = bm->selected.first();
     while (ese) {
       nextese = ese->next;
@@ -3021,20 +3019,19 @@ static void edbm_strip_selections(BMEditMesh *em)
   }
 }
 
-void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
+void EDBM_selectmode_set(BMEditMesh *em, BMesh *bm, const short selectmode)
 {
   BMVert *eve;
   BMEdge *eed;
   BMFace *efa;
   BMIter iter;
-  BMesh *bm = em->bm;
 
   const short selectmode_prev = em->selectmode;
   em->selectmode = selectmode;
   bm->selectmode = selectmode;
 
   /* Strip stored selection isn't relevant to the new mode. */
-  edbm_strip_selections(em);
+  edbm_strip_selections(bm, selectmode);
 
   if (bm->totvertsel == 0 && bm->totedgesel == 0 && bm->totfacesel == 0) {
     return;
@@ -3093,15 +3090,11 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
   }
 }
 
-void EDBM_selectmode_convert(BMEditMesh *em,
-                             const short selectmode_old,
-                             const short selectmode_new)
+void EDBM_selectmode_convert(BMesh *bm, const short selectmode_old, const short selectmode_new)
 {
   /* NOTE: it's important only the selection modes passed in a re used,
    * not the meshes current selection mode because this is called when the
    * selection mode is being manipulated (see: #EDBM_selectmode_toggle_multi). */
-
-  BMesh *bm = em->bm;
 
   BMVert *eve;
   BMEdge *eed;
@@ -3314,9 +3307,8 @@ bool EDBM_selectmode_toggle_multi(bContext *C,
     if (use_expand) {
       const short selectmode_max = highest_order_bit_s(selectmode_old);
       for (Object *ob_iter : objects) {
-        BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
         BMesh *bm_iter = BKE_editmesh_bmesh_get_for_write(ob_iter);
-        EDBM_selectmode_convert(em_iter, selectmode_max, selectmode_toggle);
+        EDBM_selectmode_convert(bm_iter, selectmode_max, selectmode_toggle);
         /* NOTE: This could be supported, but converting UV's too is reasonably complicated.
          * This can be considered a low priority TODO. */
         EDBM_uvselect_clear(bm_iter);
@@ -3364,7 +3356,7 @@ bool EDBM_selectmode_toggle_multi(bContext *C,
         }
       }
 
-      EDBM_selectmode_set(em_iter, selectmode_new);
+      EDBM_selectmode_set(em_iter, bm_iter, selectmode_new);
       DEG_id_tag_update(ob_iter->data, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
       WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob_iter->data);
     }
@@ -3390,10 +3382,11 @@ bool EDBM_selectmode_set_multi_ex(Scene *scene, Span<Object *> objects, const sh
 
   for (Object *ob_iter : objects) {
     BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
+    BMesh *bm_iter = BKE_editmesh_bmesh_get_for_write(ob_iter);
     if (em_iter->selectmode == selectmode) {
       continue;
     }
-    EDBM_selectmode_set(em_iter, selectmode);
+    EDBM_selectmode_set(em_iter, bm_iter, selectmode);
     DEG_id_tag_update(ob_iter->data, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
     WM_main_add_notifier(NC_GEOM | ND_SELECT, ob_iter->data);
     changed = true;
@@ -3449,10 +3442,11 @@ static bool edbm_selectmode_sync_multi_ex(Span<Object *> objects)
   BMEditMesh *em_active = BKE_editmesh_from_object(objects[0]);
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     if (em_active->selectmode == em->selectmode) {
       continue;
     }
-    EDBM_selectmode_set(em, em_active->selectmode);
+    EDBM_selectmode_set(em, bm, em_active->selectmode);
     changed = true;
 
     DEG_id_tag_update(obedit->data, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
@@ -3464,6 +3458,7 @@ static bool edbm_selectmode_sync_multi_ex(Span<Object *> objects)
 
 bool EDBM_selectmode_disable(Scene *scene,
                              BMEditMesh *em,
+                             BMesh *bm,
                              const short selectmode_disable,
                              const short selectmode_fallback)
 {
@@ -3474,7 +3469,7 @@ bool EDBM_selectmode_disable(Scene *scene,
                                  selectmode_fallback :
                                  (em->selectmode & ~selectmode_disable);
     scene->toolsettings->selectmode = selectmode;
-    EDBM_selectmode_set(em, selectmode);
+    EDBM_selectmode_set(em, bm, selectmode);
 
     WM_main_add_notifier(NC_SCENE | ND_TOOLSETTINGS, scene);
 
@@ -3591,8 +3586,8 @@ bool EDBM_selectmode_disable_multi_ex(Scene *scene,
   for (Base *base_iter : bases) {
     Object *ob_iter = base_iter->object;
     BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
-
-    if (EDBM_selectmode_disable(scene, em_iter, selectmode_disable, selectmode_fallback)) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_iter);
+    if (EDBM_selectmode_disable(scene, em_iter, bm, selectmode_disable, selectmode_fallback)) {
       changed_multi = true;
     }
   }
@@ -3712,9 +3707,8 @@ static float bm_interior_face_group_calc_cost(ListBaseT<BMFaceLink> *ls, const f
   return found ? cost / area : FLT_MAX;
 }
 
-bool EDBM_select_interior_faces(BMEditMesh *em)
+bool EDBM_select_interior_faces(BMesh *bm)
 {
-  BMesh *bm = em->bm;
   BMIter iter;
   bool changed = false;
 
@@ -4319,9 +4313,9 @@ void MESH_OT_select_linked(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op);
 
-static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, int delimit)
+static void edbm_select_linked_pick_ex(
+    BMesh *bm, const short selectmode, BMElem *ele, bool sel, int delimit)
 {
-  BMesh *bm = em->bm;
   BMWalker walker;
 
   select_linked_delimit_validate(bm, &delimit);
@@ -4368,7 +4362,7 @@ static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, in
 
     BMW_end(&walker);
 
-    EDBM_selectmode_flush(bm, em->selectmode);
+    EDBM_selectmode_flush(bm, selectmode);
   }
   else if (ele->head.htype == BM_EDGE) {
     BMEdge *eed = reinterpret_cast<BMEdge *>(ele);
@@ -4406,7 +4400,7 @@ static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, in
 
     BMW_end(&walker);
 
-    EDBM_selectmode_flush(bm, em->selectmode);
+    EDBM_selectmode_flush(bm, selectmode);
   }
   else if (ele->head.htype == BM_FACE) {
     BMFace *efa = reinterpret_cast<BMFace *>(ele);
@@ -4503,7 +4497,7 @@ static wmOperatorStatus edbm_select_linked_pick_invoke(bContext *C,
 
   BMElem *ele = EDBM_elem_from_selectmode(em, eve, eed, efa);
 
-  edbm_select_linked_pick_ex(em, ele, sel, delimit);
+  edbm_select_linked_pick_ex(bm, em->selectmode, ele, sel, delimit);
 
   /* To support redo. */
   {
@@ -4544,6 +4538,7 @@ static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op
   }
 
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   const bool sel = !RNA_boolean_get(op->ptr, "deselect");
 
 #ifdef USE_LINKED_SELECT_DEFAULT_HACK
@@ -4552,7 +4547,7 @@ static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op
   int delimit = RNA_enum_get(op->ptr, "delimit");
 #endif
 
-  edbm_select_linked_pick_ex(em, ele, sel, delimit);
+  edbm_select_linked_pick_ex(bm, em->selectmode, ele, sel, delimit);
 
   DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
@@ -5366,12 +5361,9 @@ static void walker_deselect_nth_face_chain(BMesh *bm,
 /* Walk all reachable elements of the same type as h_act in breadth-first
  * order, starting from h_act. Deselects elements if the depth when they
  * are reached is not a multiple of "nth". */
-static void walker_deselect_nth(BMEditMesh *em,
-                                const CheckerIntervalParams *op_params,
-                                BMHeader *h_act)
+static void walker_deselect_nth(BMesh *bm, const CheckerIntervalParams *op_params, BMHeader *h_act)
 {
   BMElem *ele;
-  BMesh *bm = em->bm;
   BMWalker walker;
   BMIter iter;
   int walktype = 0, itertype = 0, flushtype = 0;
@@ -5491,9 +5483,9 @@ static void walker_deselect_nth(BMEditMesh *em,
   EDBM_selectmode_flush_ex(bm, flushtype);
 }
 
-static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, BMFace **r_efa)
+static void deselect_nth_active(
+    BMesh *bm, const short selectmode, BMVert **r_eve, BMEdge **r_eed, BMFace **r_efa)
 {
-  BMesh *bm = em->bm;
   BMIter iter;
   BMElem *ele;
 
@@ -5501,7 +5493,7 @@ static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, 
   *r_eed = nullptr;
   *r_efa = nullptr;
 
-  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_selectmode_flush(bm, selectmode);
   ele = BM_mesh_active_elem_get(bm);
 
   if (ele && BM_elem_flag_test(ele, BM_ELEM_SELECT)) {
@@ -5518,7 +5510,7 @@ static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, 
     }
   }
 
-  if (em->selectmode & SCE_SELECT_VERTEX) {
+  if (selectmode & SCE_SELECT_VERTEX) {
     BMVert *v;
     BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
       if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
@@ -5527,7 +5519,7 @@ static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, 
       }
     }
   }
-  else if (em->selectmode & SCE_SELECT_EDGE) {
+  else if (selectmode & SCE_SELECT_EDGE) {
     BMEdge *e;
     BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
       if (BM_elem_flag_test(e, BM_ELEM_SELECT)) {
@@ -5536,7 +5528,7 @@ static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, 
       }
     }
   }
-  else if (em->selectmode & SCE_SELECT_FACE) {
+  else if (selectmode & SCE_SELECT_FACE) {
     BMFace *f = BM_mesh_active_face_get(bm, true, false);
     if (f && BM_elem_flag_test(f, BM_ELEM_SELECT)) {
       *r_efa = f;
@@ -5545,24 +5537,26 @@ static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, 
   }
 }
 
-static bool edbm_deselect_nth(BMEditMesh *em, const CheckerIntervalParams *op_params)
+static bool edbm_deselect_nth(BMesh *bm,
+                              const short selectmode,
+                              const CheckerIntervalParams *op_params)
 {
   BMVert *v;
   BMEdge *e;
   BMFace *f;
 
-  deselect_nth_active(em, &v, &e, &f);
+  deselect_nth_active(bm, selectmode, &v, &e, &f);
 
   if (v) {
-    walker_deselect_nth(em, op_params, &v->head);
+    walker_deselect_nth(bm, op_params, &v->head);
     return true;
   }
   if (e) {
-    walker_deselect_nth(em, op_params, &e->head);
+    walker_deselect_nth(bm, op_params, &e->head);
     return true;
   }
   if (f) {
-    walker_deselect_nth(em, op_params, &f->head);
+    walker_deselect_nth(bm, op_params, &f->head);
     return true;
   }
 
@@ -5588,7 +5582,7 @@ static wmOperatorStatus edbm_select_nth_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    if (edbm_deselect_nth(em, &op_params) == true) {
+    if (edbm_deselect_nth(bm, em->selectmode, &op_params) == true) {
       EDBM_uvselect_clear(bm);
 
       found_active_elt = true;
@@ -5679,7 +5673,7 @@ static wmOperatorStatus edbm_select_sharp_edges_exec(bContext *C, wmOperator *op
 
     if ((bm->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) == 0) {
       /* Since we can't select individual edges, select faces connected to them. */
-      EDBM_selectmode_convert(em, SCE_SELECT_EDGE, SCE_SELECT_FACE);
+      EDBM_selectmode_convert(bm, SCE_SELECT_EDGE, SCE_SELECT_FACE);
     }
     else {
       EDBM_selectmode_flush(bm, em->selectmode);

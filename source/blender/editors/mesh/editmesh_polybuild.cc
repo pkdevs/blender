@@ -49,11 +49,11 @@ namespace blender {
 /** \name Local Utilities
  * \{ */
 
-static void edbm_selectmode_ensure(Scene *scene, BMEditMesh *em, short selectmode)
+static void edbm_selectmode_ensure(Scene *scene, BMEditMesh *em, BMesh *bm, short selectmode)
 {
   if ((scene->toolsettings->selectmode & selectmode) == 0) {
     scene->toolsettings->selectmode |= selectmode;
-    EDBM_selectmode_set(em, scene->toolsettings->selectmode);
+    EDBM_selectmode_set(em, bm, scene->toolsettings->selectmode);
   }
 }
 
@@ -146,7 +146,7 @@ static wmOperatorStatus edbm_polybuild_transform_at_cursor_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
+  edbm_selectmode_ensure(vc.scene, vc.em, bm, SCE_SELECT_VERTEX);
 
   edbm_flag_disable_all_multi(*vc.bmain, vc.scene, vc.view_layer, vc.v3d, BM_ELEM_SELECT);
 
@@ -210,7 +210,7 @@ static wmOperatorStatus edbm_polybuild_delete_at_cursor_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
+  edbm_selectmode_ensure(vc.scene, vc.em, bm, SCE_SELECT_VERTEX);
 
   if (ele_act->head.htype == BM_FACE) {
     BMFace *f_act = reinterpret_cast<BMFace *>(ele_act);
@@ -300,7 +300,7 @@ static wmOperatorStatus edbm_polybuild_face_at_cursor_invoke(bContext *C,
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
   ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
 
-  edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
+  edbm_selectmode_ensure(vc.scene, vc.em, bm, SCE_SELECT_VERTEX);
 
   if (ele_act == nullptr || ele_act->head.htype == BM_FACE) {
     /* Just add vert */
@@ -476,7 +476,7 @@ static wmOperatorStatus edbm_polybuild_split_at_cursor_invoke(bContext *C,
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
   ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
 
-  edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
+  edbm_selectmode_ensure(vc.scene, vc.em, bm, SCE_SELECT_VERTEX);
 
   if (ele_act == nullptr || ele_act->head.hflag == BM_FACE) {
     return OPERATOR_PASS_THROUGH;

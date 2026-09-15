@@ -156,8 +156,8 @@ void EDBM_select_flush_from_verts(BMesh *bm, short selectmode, bool select);
 /**
  * Swap is 0 or 1, if 1 it hides not selected.
  */
-bool EDBM_mesh_hide(BMEditMesh *em, bool swap);
-bool EDBM_mesh_reveal(BMEditMesh *em, bool select);
+bool EDBM_mesh_hide(BMesh *bm, const short selectmode, bool swap);
+bool EDBM_mesh_reveal(BMesh *bm, const short selectmode, bool select);
 
 struct EDBMUpdate_Params {
   uint calc_looptris : 1;
@@ -333,7 +333,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
  * When switching select mode, makes sure selection is consistent for editing
  * also for paranoia checks to make sure edge or face mode works.
  */
-void EDBM_selectmode_set(BMEditMesh *em, short selectmode);
+void EDBM_selectmode_set(BMEditMesh *em, BMesh *bm, short selectmode);
 /**
  * Expand & Contract the Selection
  * (used when changing modes and Ctrl key held)
@@ -348,7 +348,7 @@ void EDBM_selectmode_set(BMEditMesh *em, short selectmode);
  * - face -> vert
  * - edge -> vert
  */
-void EDBM_selectmode_convert(BMEditMesh *em, short selectmode_old, short selectmode_new);
+void EDBM_selectmode_convert(BMesh *bm, short selectmode_old, short selectmode_new);
 
 /**
  * Select-mode setting utility.
@@ -374,17 +374,15 @@ bool EDBM_selectmode_toggle_multi(
  *
  * \return true if the mode is changed.
  */
-bool EDBM_selectmode_disable(Scene *scene,
-                             BMEditMesh *em,
-                             short selectmode_disable,
-                             short selectmode_fallback);
+bool EDBM_selectmode_disable(
+    Scene *scene, BMEditMesh *em, BMesh *bm, short selectmode_disable, short selectmode_fallback);
 
 bool EDBM_deselect_by_material(BMesh *bm, short index, bool select);
 
 void EDBM_select_toggle_all(BMesh *bm);
 
 void EDBM_select_swap(BMEditMesh *em, BMesh *bm); /* exported for UV */
-bool EDBM_select_interior_faces(BMEditMesh *em);
+bool EDBM_select_interior_faces(BMesh *bm);
 ViewContext em_setup_viewcontext(bContext *C); /* rename? */
 
 bool EDBM_mesh_deselect_all_multi_ex(Span<Base *> bases);
@@ -579,8 +577,10 @@ void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, BMesh *bm, bool r
 /**
  * Delete the backup, flushing it to an edit-mesh.
  */
-void EDBM_redo_state_restore_and_free(
-    BMBackup *backup, BMEditMesh *em, BMesh *bm, bool recalc_looptris) ATTR_NONNULL(1, 2, 3);
+void EDBM_redo_state_restore_and_free(BMBackup *backup,
+                                      BMEditMesh *em,
+                                      BMesh *bm,
+                                      bool recalc_looptris) ATTR_NONNULL(1, 2, 3);
 void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);
 
 namespace ed::mesh {
