@@ -138,10 +138,10 @@ struct ExpressionTypeParser
             }
             else if (fn->identifier == "uint4") {
               return {table->uint4_cls,
-                      Vec<uint, 4>(value_as<uint>(res1.value),
-                                   value_as<uint>(res2.value),
-                                   value_as<uint>(res3.value),
-                                   value_as<uint>(res4.value))};
+                      Vec<uint32_t, 4>(value_as<uint32_t>(res1.value),
+                                       value_as<uint32_t>(res2.value),
+                                       value_as<uint32_t>(res3.value),
+                                       value_as<uint32_t>(res4.value))};
             }
             else if (fn->identifier == "bool4") {
               return {table->bool4_cls,
@@ -175,9 +175,9 @@ struct ExpressionTypeParser
             }
             else if (fn->identifier == "uint3") {
               return {table->uint3_cls,
-                      Vec<uint32_t, 3>(value_as<uint>(res1.value),
-                                       value_as<uint>(res2.value),
-                                       value_as<uint>(res3.value))};
+                      Vec<uint32_t, 3>(value_as<uint32_t>(res1.value),
+                                       value_as<uint32_t>(res2.value),
+                                       value_as<uint32_t>(res3.value))};
             }
             else if (fn->identifier == "bool3") {
               return {table->bool3_cls,
@@ -205,7 +205,8 @@ struct ExpressionTypeParser
             }
             else if (fn->identifier == "uint2") {
               return {table->uint2_cls,
-                      Vec<uint32_t, 2>(value_as<uint>(res1.value), value_as<uint>(res2.value))};
+                      Vec<uint32_t, 2>(value_as<uint32_t>(res1.value),
+                                       value_as<uint32_t>(res2.value))};
             }
             else if (fn->identifier == "bool2") {
               return {table->bool2_cls,
@@ -253,7 +254,7 @@ struct ExpressionTypeParser
                 return {table->int4_cls, vector_as<Vec<int, 4>>(res.value)};
               }
               if (fn->identifier == "uint4") {
-                return {table->uint4_cls, vector_as<Vec<uint, 4>>(res.value)};
+                return {table->uint4_cls, vector_as<Vec<uint32_t, 4>>(res.value)};
               }
               if (fn->identifier == "bool4") {
                 return {table->bool4_cls, vector_as<Vec<bool, 4>>(res.value)};
@@ -301,7 +302,7 @@ struct ExpressionTypeParser
                 return {table->int4_cls, vector_as<Vec<int, 4>>(res.value)};
               }
               if (fn->identifier == "uint4") {
-                return {table->uint4_cls, vector_as<Vec<uint, 4>>(res.value)};
+                return {table->uint4_cls, vector_as<Vec<uint32_t, 4>>(res.value)};
               }
               if (fn->identifier == "bool4") {
                 return {table->bool4_cls, vector_as<Vec<bool, 4>>(res.value)};
@@ -393,7 +394,7 @@ struct ExpressionTypeParser
         value = Vec<int, 1>(std::stoi(str_val, nullptr, 0));
       }
       else if (type == table->uint_cls) {
-        value = Vec<uint, 1>(uint32_t(std::stoull(str_val, nullptr, 0)));
+        value = Vec<uint32_t, 1>(uint32_t(std::stoull(str_val, nullptr, 0)));
       }
       else if (type == table->bool_cls) {
         value = Vec<bool, 1>(str_val == "true");
