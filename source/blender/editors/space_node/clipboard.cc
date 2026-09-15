@@ -52,6 +52,12 @@ static void node_copybuffer_filepath_get(char filepath[FILE_MAX], size_t filepat
   BLI_path_join(filepath, filepath_maxncpy, BKE_tempdir_base(), "copybuffer_nodes.blend");
 }
 
+/**
+ * TODO:
+ * copy necessary panels
+ * fix wrong socket copying
+ */
+
 /** Returns the number of nodes copied. */
 static int node_copy_local(bNodeTree &from_tree,
                            bNodeTree &to_tree,
@@ -59,7 +65,9 @@ static int node_copy_local(bNodeTree &from_tree,
                            const bool do_user_count,
                            const float2 offset,
                            const bool snap_to_grid,
-                           ReportList *reports)
+                           ReportList *reports,
+                           bContext *C,
+                           const Map<const UString, UString> *io_map = nullptr)
 {
   node_select_paired(from_tree);
 
@@ -123,6 +131,8 @@ static int node_copy_local(bNodeTree &from_tree,
 
   remap_node_pairing(to_tree, node_map);
 
+  BKE_main_ensure_invariants(*CTX_data_main(C), to_tree.id);
+
   /* Copy links between selected nodes. */
   for (bNodeLink &link : from_tree.links) {
     BLI_assert(link.tonode);
@@ -135,9 +145,26 @@ static int node_copy_local(bNodeTree &from_tree,
       bNode *from_node = node_map.lookup(link.fromnode);
       bNode *to_node = node_map.lookup(link.tonode);
 
-      bNodeSocket *from = bke::node_find_socket(
-          *from_node, SOCK_OUT, link.fromsock->identifier_ustr());
-      bNodeSocket *to = bke::node_find_socket(*to_node, SOCK_IN, link.tosock->identifier_ustr());
+      bNodeSocket *from = nullptr;
+      bNodeSocket *to = nullptr;
+
+      if (io_map) {
+        if (io_map->contains(link.fromsock->identifier_ustr())) {
+          UString from_socket_identifier{io_map->lookup(link.fromsock->identifier_ustr())};
+          from = bke::node_find_socket(*from_node, SOCK_OUT, from_socket_identifier);
+        }
+        if (io_map->contains(link.tosock->identifier_ustr())) {
+          UString to_socket_identifier{io_map->lookup(link.tosock->identifier_ustr())};
+          to = bke::node_find_socket(*to_node, SOCK_IN, to_socket_identifier);
+        }
+      }
+
+      if (!from) {
+        from = bke::node_find_socket(*from_node, SOCK_OUT, link.fromsock->identifier_ustr());
+      }
+      if (!to) {
+        to = bke::node_find_socket(*to_node, SOCK_IN, link.tosock->identifier_ustr());
+      }
       if (!from || !to) {
         continue;
       }
@@ -181,6 +208,14 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
   STRNCPY_UTF8(copy_tree->idname, node_tree->typeinfo->idname.c_str());
   bke::node_tree_set_type(*copy_tree);
 
+  if (copy_tree->id.properties == nullptr) {
+    copy_tree->id.properties = IDP_New(IDP_GROUP, nullptr, "ID_Properties");
+  }
+
+  /* Store the original tree's unique session_uid as an INT property */
+  IDProperty *id_name_prop = IDP_NewString(node_tree->id.name, "clipboard_source_id_name");
+  IDP_AddToGroup(copy_tree->id.properties, id_name_prop);
+
   /* Copy node interface to avoid losing links to Group Input and Group Output nodes.
    * Note: this doesn't create new interface items if they don't exist. */
   /* #bNodeTreeInterface::copy_data() allocates runtime memory, so we need to free it to avoid
@@ -189,7 +224,7 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
   copy_tree->tree_interface.copy_data(node_tree->tree_interface, LIB_ID_COPY_DEFAULT);
 
   const int num_copied = node_copy_local(
-      *node_tree, *copy_tree, true, false, float2(0), false, op->reports);
+      *node_tree, *copy_tree, true, false, float2(0), false, op->reports, C);
   if (num_copied == 0) {
     return OPERATOR_CANCELLED;
   }
@@ -273,6 +308,45 @@ static StringRef scene_lib_filepath(const Scene &scene)
   return "";
 }
 
+/**
+ * @brief
+ * Adds interface item to #tree and all the panels the item may be nested in.
+ *
+ * @param tree bNodeTree to add the #item to.
+ * @param item Item to be added.
+ * @param panel_map Map of an item to its parent panel.
+ * @param added_panels Map of a panel to the copy that was already added to the tree.
+ */
+static bNodeTreeInterfaceItem *add_item_and_panels_recursive(
+    bNodeTree &tree,
+    const bNodeTreeInterfaceItem *item,
+    const Map<const bNodeTreeInterfaceItem *, const bNodeTreeInterfaceItem *> &panel_map,
+    Map<const bNodeTreeInterfaceItem *, bNodeTreeInterfaceItem *> &added_panels)
+{
+  if (added_panels.contains(item)) {
+    return added_panels.lookup(item);
+  }
+
+  bNodeTreeInterfacePanel *parent_panel{nullptr};
+
+  if (panel_map.contains(item)) {
+    const bNodeTreeInterfaceItem *parent{panel_map.lookup(item)};
+    parent_panel = reinterpret_cast<bNodeTreeInterfacePanel *>(
+        add_item_and_panels_recursive(tree, parent, panel_map, added_panels));
+  }
+
+  if (bke::node_interface::detail::item_is_type<bNodeTreeInterfacePanel>(*item)) {
+    const auto *panel{reinterpret_cast<const bNodeTreeInterfacePanel *>(item)};
+    bNodeTreeInterfacePanel *added_panel{tree.tree_interface.add_panel(
+        panel->name(), panel->description(), panel->flag, parent_panel)};
+    added_panels.add(item, &added_panel->item);
+    return &added_panel->item;
+  }
+  else if (bke::node_interface::detail::item_is_type<bNodeTreeInterfaceSocket>(*item)) {
+    return tree.tree_interface.add_item_copy(*item, parent_panel);
+  }
+}
+
 static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
@@ -335,6 +409,71 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
   bNodeTree *to_tree = snode->edittree;
   node_deselect_all(*to_tree);
 
+  from_tree->ensure_topology_cache();
+
+  /* Adds used interface sockets in order. */
+  VectorSet<const bNodeTreeInterfaceItem *> used_io_items{};
+  for (const bNodeTreeInterfaceSocket *iface_socket : from_tree->interface_inputs()) {
+    for (const bNode *input_node : from_tree->group_input_nodes()) {
+      const bNodeSocket *input{
+          input_node->output_by_identifier(UString(iface_socket->identifier))};
+      if (input->is_directly_linked()) {
+        used_io_items.add(&iface_socket->item);
+      }
+    }
+  }
+  const bNode *output_node{from_tree->group_output_node()};
+  for (const bNodeSocket *output : output_node->input_sockets()) {
+    if (output->is_directly_linked()) {
+      int output_idx{from_tree->interface_output_index_by_identifier(output->identifier)};
+      bNodeTreeInterfaceSocket *iface_socket{from_tree->interface_outputs()[output_idx]};
+      used_io_items.add(&iface_socket->item);
+    }
+  }
+
+  BLI_assert(from_tree->id.properties);
+  const std::optional<StringRef> &source_id_name = IDP_group_lookup_string(
+      *from_tree->id.properties, "clipboard_source_id_name");
+  BLI_assert(source_id_name);
+  bool is_same_tree{STREQ(source_id_name.value().data(), to_tree->id.name)};
+
+  /* Adds io sockets and panels to tree and maps old sockets to new ones. */
+
+  /* Maps all interface items to the panel they belong to */
+  Map<const bNodeTreeInterfaceItem *, const bNodeTreeInterfaceItem *> panel_map;
+  for (const bNodeTreeInterfacePanel *panel : from_tree->interface_panels()) {
+    for (const bNodeTreeInterfaceItem *item : panel->items()) {
+      panel_map.add(item, &panel->item);
+    }
+  }
+  Map<const bNodeTreeInterfaceItem *, bNodeTreeInterfaceItem *> added_panels;
+
+  Map<const UString, UString> iface_socket_map;
+  for (const bNodeTreeInterfaceItem *src_io_item : used_io_items) {
+    auto *src_io_socket{reinterpret_cast<const bNodeTreeInterfaceSocket *>(src_io_item)};
+    /* Ensures default behaviour of copying and pasting within one node tree stays the same. */
+    if (is_same_tree) {
+      if (bke::node_find_interface_input_by_identifier(*to_tree, src_io_socket->identifier) ||
+          bke::node_find_interface_output_by_identifier(*to_tree, src_io_socket->identifier))
+      {
+        continue;
+      }
+      /* If the socket is not found, the interface has changed and the socket needs to be readded.
+       */
+    }
+
+    auto *dst_io_socket{reinterpret_cast<bNodeTreeInterfaceSocket *>(
+        add_item_and_panels_recursive(*to_tree, src_io_item, panel_map, added_panels))};
+    iface_socket_map.add_new(UString(src_io_socket->identifier),
+                             UString(dst_io_socket->identifier));
+
+    /* Also adds item to #from_tree to ensure we don't need to update the pasted group input node
+     * does not need to be updated with #BKE_main_ensure_invariants within #node_copy_local. */
+    // from_tree->tree_interface.add_item_copy(src_io_socket->item, nullptr);
+  }
+
+  BKE_main_ensure_invariants(*CTX_data_main(C), to_tree->id);
+
   float2 offset(0);
   PropertyRNA *offset_prop = RNA_struct_find_property(op->ptr, "offset");
   if (RNA_property_is_set(op->ptr, offset_prop)) {
@@ -358,7 +497,7 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 
   const bool snap_to_grid = CTX_data_scene(C)->toolsettings->snap_flag_node & SCE_SNAP;
   const int num_copied = node_copy_local(
-      *from_tree, *snode->edittree, false, true, offset, snap_to_grid, op->reports);
+      *from_tree, *to_tree, false, true, offset, snap_to_grid, op->reports, C, &iface_socket_map);
   if (num_copied == 0) {
     /* Note: we don't return OPERATOR_CANCELLED here although the copy fails to avoid corrupting
      * the undo stack after merging two bmains. */
