@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "BLI_compiler_attrs.hh"
