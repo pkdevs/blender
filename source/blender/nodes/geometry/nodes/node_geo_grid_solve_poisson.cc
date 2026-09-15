@@ -226,8 +226,6 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
   return boundary_mask;
 }
 
-#endif
-
 static bool is_uniform_scale(const float3 &s, const float epsilon = 1e-5f)
 {
   return math::abs(s.x - s.y) < epsilon && math::abs(s.x - s.z) < epsilon;
@@ -245,6 +243,8 @@ static bool all_values_finite(const openvdb::FloatTree &tree)
   return std::all_of(
       all_finite_tls.begin(), all_finite_tls.end(), [](const bool value) { return value; });
 }
+
+#endif
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
