@@ -17,6 +17,7 @@
 
 #include "NOD_geo_tag_filter.hh"
 #include "NOD_geometry_nodes_bundle.hh"
+#include "NOD_geometry_nodes_simulation.hh"
 
 #include "node_geometry_util.hh"
 
