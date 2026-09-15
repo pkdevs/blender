@@ -276,9 +276,9 @@ static VectorSet<Strip *> extract_standalone_strips(Span<Strip *> transformed_st
   return standalone_strips;
 }
 
-static bool do_ripple_strip(Span<Strip *> source_strips,
-                            const Strip *strip,
-                            const bool all_channels)
+static bool should_ripple_strip(Span<Strip *> source_strips,
+                                const Strip *strip,
+                                const bool all_channels)
 {
   if (all_channels) {
     return true;
@@ -304,12 +304,12 @@ static bool do_ripple_strip(Span<Strip *> source_strips,
  *
  * We assert that we never insert into other strips and shuffle ourselves at the same time!
  */
-static bool do_ripple_insert(const Scene *scene,
-                             ListBaseT<Strip> *seqbasep,
-                             Span<Strip *> source_strips,
-                             const int insert_frame,
-                             const eSeqRippleFlag ripple_flag,
-                             std::optional<int> &r_shuffle_delta)
+static bool should_ripple_insert(const Scene *scene,
+                                 ListBaseT<Strip> *seqbasep,
+                                 Span<Strip *> source_strips,
+                                 const int insert_frame,
+                                 const eSeqRippleFlag ripple_flag,
+                                 std::optional<int> &r_shuffle_delta)
 {
   bool do_insert = false;
   int shuffle_delta = 0;
@@ -396,7 +396,7 @@ static void strip_transform_handle_ripple(Scene *scene,
   }
 
   std::optional<int> shuffle_delta;
-  const bool do_insert = do_ripple_insert(
+  const bool do_insert = should_ripple_insert(
       scene, seqbasep, source_strips, start_frame, ripple_flag, shuffle_delta);
 
   /* Source strips need to be shuffled out of the way before rippling anything else. */
@@ -423,7 +423,7 @@ static void strip_transform_handle_ripple(Scene *scene,
       if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
         continue;
       }
-      if (!do_ripple_strip(source_strips, &target, all_channels)) {
+      if (!should_ripple_strip(source_strips, &target, all_channels)) {
         continue;
       }
       strips_to_split.append(&target);
@@ -462,7 +462,7 @@ static void strip_transform_handle_ripple(Scene *scene,
     if (target.left_handle() < ripple_frame) {
       continue;
     }
-    if (!do_ripple_strip(source_strips, &target, all_channels)) {
+    if (!should_ripple_strip(source_strips, &target, all_channels)) {
       continue;
     }
     transform_translate_strip(scene, &target, delta);
