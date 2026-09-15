@@ -14,6 +14,7 @@
 
 #include "BLI_assert.hh"
 #include "BLI_fileops.hh"
+#include "BLI_heap_simple.hh"
 #include "BLI_kdtree.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_color_c.hh"
@@ -4782,17 +4783,30 @@ static void dynamic_paint_prepare_adjacency_cb(void *__restrict userdata,
   Vec3f *realCoord = bData->realCoord;
 
   const int num_neighs = adj_data->n_num[index];
+  const float *nor = bData->bNormal[index].invNorm;
 
   for (int i = 0; i < num_neighs; i++) {
     const int n_index = adj_data->n_index[index] + i;
     const int t_index = adj_data->n_target[n_index];
 
     /* dir vec */
-    sub_v3_v3v3(bNeighs[n_index].dir,
-                realCoord[bData->s_pos[t_index]].v,
-                realCoord[bData->s_pos[index]].v);
-    /* dist */
-    bNeighs[n_index].dist = normalize_v3(bNeighs[n_index].dir);
+    float dir[3];
+    sub_v3_v3v3(
+        dir, realCoord[bData->s_pos[t_index]].v, realCoord[bData->s_pos[index]].v);
+    /* dist -- kept as the true 3D chord length, unaffected by the tangent projection below. */
+    bNeighs[n_index].dist = len_v3(dir);
+
+    /* Project the neighbor chord onto this point's own smoothed-normal tangent plane.
+     * surface_determineForceTargetPoints() builds its downhill reference frame
+     * directly from these chords */
+    float tangent_dir[3];
+    madd_v3_v3v3fl(tangent_dir, dir, nor, -dot_v3v3(dir, nor));
+    if (normalize_v3(tangent_dir) > 1e-5f) {
+      copy_v3_v3(bNeighs[n_index].dir, tangent_dir);
+    }
+    else {
+      normalize_v3_v3(bNeighs[n_index].dir, dir);
+    }
   }
 }
 
@@ -4838,87 +4852,36 @@ static void dynamicPaint_prepareAdjacencyData(DynamicPaintSurface *surface, cons
   bData->average_dist /= adj_data->total_targets;
 }
 
-/* Find two adjacency points (closest_id) and influence (closest_d)
- * to move paint towards when affected by a force. */
-static void surface_determineForceTargetPoints(const PaintSurfaceData *sData,
-                                               const int index,
-                                               const float force[3],
-                                               float closest_d[2],
-                                               int closest_id[2])
+/* Max number of adjacency-graph neighbors handled per point */
+#define MAX_DPAINT_ADJ_NEIGHS 32
+
+/* Distributes the influence of force continuously across every neighbor whose direction
+ * aligns with it, instead of the old approach of snapping to the two closest neighbors
+ * and interpolating only between those. */
+static int surface_determineForceTargetPoints(const PaintSurfaceData *sData,
+                                              const int index,
+                                              const float force[3],
+                                              float out_weights[MAX_DPAINT_ADJ_NEIGHS])
 {
   BakeAdjPoint *bNeighs = sData->bData->bNeighs;
-  const int numOfNeighs = sData->adj_data->n_num[index];
+  const int numOfNeighs = min_ii(sData->adj_data->n_num[index], MAX_DPAINT_ADJ_NEIGHS);
 
-  closest_id[0] = closest_id[1] = -1;
-  closest_d[0] = closest_d[1] = -1.0f;
-
-  /* find closest neigh */
+  float total = 0.0f;
   for (int i = 0; i < numOfNeighs; i++) {
     const int n_index = sData->adj_data->n_index[index] + i;
-    const float dir_dot = dot_v3v3(bNeighs[n_index].dir, force);
+    const float dir_dot = max_ff(dot_v3v3(bNeighs[n_index].dir, force), 0.0f);
+    out_weights[i] = dir_dot;
+    total += dir_dot;
+  }
 
-    if (dir_dot > closest_d[0] && dir_dot > 0.0f) {
-      closest_d[0] = dir_dot;
-      closest_id[0] = n_index;
+  if (total > 1e-8f) {
+    const float inv_total = 1.0f / total;
+    for (int i = 0; i < numOfNeighs; i++) {
+      out_weights[i] *= inv_total;
     }
   }
 
-  if (closest_d[0] < 0.0f) {
-    return;
-  }
-
-  /* find second closest neigh */
-  for (int i = 0; i < numOfNeighs; i++) {
-    const int n_index = sData->adj_data->n_index[index] + i;
-
-    if (n_index == closest_id[0]) {
-      continue;
-    }
-
-    const float dir_dot = dot_v3v3(bNeighs[n_index].dir, force);
-    const float closest_dot = dot_v3v3(bNeighs[n_index].dir, bNeighs[closest_id[0]].dir);
-
-    /* only accept neighbor at "other side" of the first one in relation to force dir
-     * so make sure angle between this and closest neigh is greater than first angle. */
-    if (dir_dot > closest_d[1] && closest_dot < closest_d[0] && dir_dot > 0.0f) {
-      closest_d[1] = dir_dot;
-      closest_id[1] = n_index;
-    }
-  }
-
-  /* if two valid neighs found, calculate how force effect is divided evenly between them
-   * (so that d[0] + d[1] = 1.0) */
-  if (closest_id[1] != -1) {
-    float force_proj[3];
-    float tangent[3];
-    const float neigh_diff = acosf(
-        dot_v3v3(bNeighs[closest_id[0]].dir, bNeighs[closest_id[1]].dir));
-    float force_intersect;
-    float temp;
-
-    /* project force vector on the plane determined by these two neighbor points
-     * and calculate relative force angle from it. */
-    cross_v3_v3v3(tangent, bNeighs[closest_id[0]].dir, bNeighs[closest_id[1]].dir);
-    normalize_v3(tangent);
-    force_intersect = dot_v3v3(force, tangent);
-    madd_v3_v3v3fl(force_proj, force, tangent, (-1.0f) * force_intersect);
-    normalize_v3(force_proj);
-
-    /* get drip factor based on force dir in relation to angle between those neighbors */
-    temp = dot_v3v3(bNeighs[closest_id[0]].dir, force_proj);
-    CLAMP(temp, -1.0f, 1.0f); /* float precision might cause values > 1.0f that return infinite */
-    closest_d[1] = acosf(temp) / neigh_diff;
-    closest_d[0] = 1.0f - closest_d[1];
-
-    /* and multiply depending on how deeply force intersects surface */
-    temp = fabsf(force_intersect);
-    CLAMP(temp, 0.0f, 1.0f);
-    mul_v2_fl(closest_d, acosf(temp) / float(M_PI_2));
-  }
-  else {
-    /* if only single neighbor, still linearize force intersection effect */
-    closest_d[0] = 1.0f - acosf(closest_d[0]) / float(M_PI_2);
-  }
+  return numOfNeighs;
 }
 
 static void dynamicPaint_doSmudge(DynamicPaintSurface *surface,
@@ -4955,30 +4918,35 @@ static void dynamicPaint_doSmudge(DynamicPaintSurface *surface,
       float smudge_str = bData->brush_velocity[index * 4 + 3];
 
       /* force targets */
-      int closest_id[2];
-      float closest_d[2];
+      float weights[MAX_DPAINT_ADJ_NEIGHS];
 
       if (!smudge_str) {
         continue;
       }
 
       /* get force affect points */
-      surface_determineForceTargetPoints(
-          sData, index, &bData->brush_velocity[index * 4], closest_d, closest_id);
+      const int numOfNeighs = surface_determineForceTargetPoints(
+          sData, index, &bData->brush_velocity[index * 4], weights);
 
-      /* Apply movement towards those two points */
-      for (int i = 0; i < 2; i++) {
-        int n_index = closest_id[i];
-        if (n_index != -1 && closest_d[i] > 0.0f) {
-          float dir_dot = closest_d[i], dir_factor;
-          float speed_scale = eff_scale * smudge_str / bNeighs[n_index].dist;
+      /* A single representative distance for this point (see the matching comment in
+       * dynamic_paint_effect_drip_cb() for why this must not vary per target). */
+      float local_dist = 0.0f;
+      for (int i = 0; i < numOfNeighs; i++) {
+        if (weights[i] > 0.0f) {
+          const int n_index = sData->adj_data->n_index[index] + i;
+          local_dist += weights[i] * bNeighs[n_index].dist;
+        }
+      }
+      const float speed_scale = (local_dist > 1e-8f) ? eff_scale * smudge_str / local_dist : 0.0f;
+
+      /* Apply movement towards every neighbor with a non-zero weight */
+      for (int i = 0; i < numOfNeighs; i++) {
+        const float dir_dot = weights[i];
+        if (dir_dot > 0.0f) {
+          float dir_factor;
+          const int n_index = sData->adj_data->n_index[index] + i;
           PaintPoint *ePoint = &(
               static_cast<PaintPoint *>(sData->type_data))[sData->adj_data->n_target[n_index]];
-
-          /* just skip if angle is too extreme */
-          if (dir_dot <= 0.0f) {
-            continue;
-          }
 
           dir_factor = dir_dot * speed_scale;
           CLAMP_MAX(dir_factor, brush->smudge_strength);
@@ -5008,6 +4976,8 @@ struct DynamicPaintEffectData {
   Scene *scene;
 
   float *force;
+  const float *arrival_time; /* Drip only: geodesic arrival-time field, see
+                              * dynamic_paint_drip_compute_arrival_times(). */
   ListBaseT<EffectorCache> *effectors;
   const void *prevPoint;
   float eff_scale;
@@ -5080,6 +5050,11 @@ static void dynamic_paint_prepare_effect_cb(void *__restrict userdata,
       madd_v3_v3fl(forc, acc, surface->drip_acc * (-1.0f));
     }
   }
+
+  /* Project the accumulated force onto the local surface tangent plane, using the
+   + smoothed normal rather than the mesh's raw per-facet geometry. */
+  const float n_dot = dot_v3v3(forc, bData->bNormal[index].invNorm);
+  madd_v3_v3fl(forc, bData->bNormal[index].invNorm, -n_dot);
 
   /* force strength, and normalize force vec */
   force[index * 4 + 3] = normalize_v3_v3(&force[index * 4], forc);
@@ -5270,6 +5245,61 @@ static void dynamic_paint_effect_shrink_cb(void *__restrict userdata,
   }
 }
 
+/* Computes a geodesic "arrival time" field over the adjacency graph via Dijkstra, starting from
+ * every currently-wet point (time 0) and following only "downhill" edges, ones whose direction
+ * has a positive alignment with the force at their source point. */
+static void dynamic_paint_drip_compute_arrival_times(const PaintSurfaceData *sData,
+                                                     const float *force,
+                                                     float *r_arrival_time)
+{
+  const int total_points = sData->total_points;
+  BakeAdjPoint *bNeighs = sData->bData->bNeighs;
+  const PaintAdjData *adj_data = sData->adj_data;
+  const PaintPoint *points = static_cast<const PaintPoint *>(sData->type_data);
+
+  for (int i = 0; i < total_points; i++) {
+    r_arrival_time[i] = FLT_MAX;
+  }
+
+  blender::HeapSimple *heap = blender::BLI_heapsimple_new();
+
+  for (int i = 0; i < total_points; i++) {
+    if (points[i].wetness > 0.025f) {
+      r_arrival_time[i] = 0.0f;
+      blender::BLI_heapsimple_insert(heap, 0.0f, reinterpret_cast<void *>(intptr_t(i)));
+    }
+  }
+
+  while (!blender::BLI_heapsimple_is_empty(heap)) {
+    const float t = blender::BLI_heapsimple_top_value(heap);
+    const int index = int(intptr_t(blender::BLI_heapsimple_pop_min(heap)));
+
+    /* Lazy deletion: this entry is stale, a cheaper path to `index` was already processed. */
+    if (t > r_arrival_time[index]) {
+      continue;
+    }
+
+    const int numOfNeighs = adj_data->n_num[index];
+    for (int i = 0; i < numOfNeighs; i++) {
+      const int n_idx = adj_data->n_index[index] + i;
+      const int target = adj_data->n_target[n_idx];
+
+      const float align = dot_v3v3(bNeighs[n_idx].dir, &force[index * 4]);
+      if (align <= 1e-5f) {
+        continue; /* uphill or perpendicular: not a valid flow direction. */
+      }
+
+      const float new_time = t + bNeighs[n_idx].dist / align;
+      if (new_time < r_arrival_time[target]) {
+        r_arrival_time[target] = new_time;
+        blender::BLI_heapsimple_insert(heap, new_time, reinterpret_cast<void *>(intptr_t(target)));
+      }
+    }
+  }
+
+  blender::BLI_heapsimple_free(heap, nullptr);
+}
+
 static void dynamic_paint_effect_drip_cb(void *__restrict userdata,
                                          const int index,
                                          const TaskParallelTLS *__restrict /*tls*/)
@@ -5289,13 +5319,11 @@ static void dynamic_paint_effect_drip_cb(void *__restrict userdata,
   const PaintPoint *pPoint_prev = &prevPoint[index];
   const float *force = data->force;
   const float eff_scale = data->eff_scale;
+  const float *arrival_time = data->arrival_time;
 
   const int *n_target = sData->adj_data->n_target;
 
   uint8_t *point_locks = data->point_locks;
-
-  int closest_id[2];
-  float closest_d[2];
 
   /* adjust drip speed depending on wetness */
   float w_factor = pPoint_prev->wetness - 0.025f;
@@ -5306,22 +5334,59 @@ static void dynamic_paint_effect_drip_cb(void *__restrict userdata,
 
   float ppoint_wetness_diff = 0.0f;
 
-  /* get force affect points */
-  surface_determineForceTargetPoints(sData, index, &force[index * 4], closest_d, closest_id);
+  const int numOfNeighs = min_ii(sData->adj_data->n_num[index], MAX_DPAINT_ADJ_NEIGHS);
+  const float t_here = arrival_time[index];
 
-  /* Apply movement towards those two points */
-  for (int i = 0; i < 2; i++) {
-    const int n_idx = closest_id[i];
-    if (n_idx != -1 && closest_d[i] > 0.0f) {
-      const float dir_dot = closest_d[i];
+  /* Identify the point downhill successors in the Dijkstra shortest-path tree.
+   * This is what replaces the old local "closest neighbor(s)" heuristic. */
+  float edge_weight[MAX_DPAINT_ADJ_NEIGHS];
+  float total_weight = 0.0f;
+  for (int i = 0; i < numOfNeighs; i++) {
+    edge_weight[i] = 0.0f;
+    const int n_idx = sData->adj_data->n_index[index] + i;
+    const int target = n_target[n_idx];
 
-      /* just skip if angle is too extreme */
-      if (dir_dot <= 0.0f) {
-        continue;
-      }
+    if (arrival_time[target] == FLT_MAX) {
+      continue;
+    }
+
+    const float align = dot_v3v3(bNeighs[n_idx].dir, &force[index * 4]);
+    if (align <= 1e-5f) {
+      continue;
+    }
+
+    const float cost = bNeighs[n_idx].dist / align;
+    const float slack = max_ff((t_here + cost) - arrival_time[target], 0.0f);
+    edge_weight[i] = 1.0f / max_ff(cost + 10.0f * slack, 1e-6f);
+    total_weight += edge_weight[i];
+  }
+
+  if (total_weight <= 0.0f) {
+    return;
+  }
+
+  /* Concentrate the transfer entirely on the single dominant successor (the neighbor with the
+   * highest edge weight, i.e. the true or near-true tree-parent edge) instead of splitting it
+   * across every downhill-valid neighbor. */
+  int best_i = -1;
+  float best_weight = 0.0f;
+  for (int i = 0; i < numOfNeighs; i++) {
+    if (edge_weight[i] > best_weight) {
+      best_weight = edge_weight[i];
+      best_i = i;
+    }
+  }
+
+  const float speed_scale = eff_scale * force[index * 4 + 3] /
+                            max_ff(float(sData->bData->average_dist), 1e-6f);
+
+  /* Apply movement towards this point's dominant tree successor only. */
+  for (int i = 0; i < numOfNeighs; i++) {
+    const float dir_dot = (i == best_i) ? 1.0f : 0.0f;
+    if (dir_dot > 0.0f) {
+      const int n_idx = sData->adj_data->n_index[index] + i;
 
       float dir_factor, a_factor;
-      const float speed_scale = eff_scale * force[index * 4 + 3] / bNeighs[n_idx].dist;
 
       const uint n_trgt = uint(n_target[n_idx]);
 
@@ -5473,11 +5538,19 @@ static void dynamicPaint_doEffectStep(
     /* Copy current surface to the previous points array to read unmodified values */
     memcpy(prevPoint, sData->type_data, sData->total_points * sizeof(PaintPoint));
 
+    /* Recomputed every sub-step, since the set of wet source points grows
+     * as the front advances (see dynamic_paint_drip_compute_arrival_times() for why
+     * this replaces the old local "closest neighbor" direction heuristic entirely). */
+    float *arrival_time = MEM_new_array_uninitialized<float>(size_t(sData->total_points),
+                                                              "PaintEffectArrivalTime");
+    dynamic_paint_drip_compute_arrival_times(sData, force, arrival_time);
+
     DynamicPaintEffectData data{};
     data.surface = surface;
     data.prevPoint = prevPoint;
     data.eff_scale = eff_scale;
     data.force = force;
+    data.arrival_time = arrival_time;
     data.point_locks = point_locks;
 
     TaskParallelSettings settings;
@@ -5487,6 +5560,7 @@ static void dynamicPaint_doEffectStep(
         0, sData->total_points, &data, dynamic_paint_effect_drip_cb, &settings);
 
     MEM_delete(point_locks);
+    MEM_delete(arrival_time);
   }
 }
 
