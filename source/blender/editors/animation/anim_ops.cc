@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <optional>
 
+#include "BLI_assert.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_utildefines.hh"
@@ -1645,6 +1646,117 @@ static void ANIM_OT_replace_action_new(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
+static bool unassign_action_poll(bContext *C)
+{
+  const Main *bmain = CTX_data_main(C);
+  int num_uneditable = 0;
+
+  Vector<PointerRNA> pointers;
+  CTX_data_selected_objects(C, &pointers);
+
+  if (pointers.is_empty()) {
+    CTX_wm_operator_poll_msg_set(C, "No objects selected");
+    return false;
+  }
+
+  for (PointerRNA &ptr : pointers) {
+    if (!BKE_id_is_editable(bmain, ptr.owner_id)) {
+      num_uneditable++;
+      continue;
+    }
+
+    AnimData *adt = id_cast<Object *>(ptr.owner_id)->adt;
+    if (adt && adt->action) {
+      return true;
+    }
+  }
+
+  if (num_uneditable == pointers.size()) {
+    CTX_wm_operator_poll_msg_set(C, "None of the selected objects are editable");
+  }
+  else if (num_uneditable == 0) {
+    CTX_wm_operator_poll_msg_set(C, "None of the selected objects have an Action assigned");
+  }
+  else {
+    CTX_wm_operator_poll_msg_set(C,
+                                 "None of the editable selected objects have an Action assigned");
+  }
+
+  return false;
+}
+
+static wmOperatorStatus unassign_action_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  int num_ok = 0;
+  int num_failed = 0;
+
+  Vector<PointerRNA> pointers;
+  CTX_data_selected_objects(C, &pointers);
+  const int num_selected_objects = pointers.size();
+
+  for (PointerRNA &ptr : pointers) {
+    if (!BKE_id_is_editable(bmain, ptr.owner_id)) {
+      num_failed++;
+      continue;
+    }
+    if (animrig::unassign_action(*ptr.owner_id)) {
+      num_ok++;
+    }
+    else {
+      num_failed++;
+    }
+  }
+  BLI_assert(num_ok + num_failed == num_selected_objects);
+
+  if (num_ok == 0) {
+    /* Handle failure cases where nothing was un-assigned. */
+    if (num_failed == num_selected_objects) {
+      BKE_reportf(op->reports,
+                  RPT_ERROR,
+                  "Could not un-assign from any of %d objects",
+                  num_selected_objects);
+    }
+
+    BKE_reportf(op->reports,
+                RPT_WARNING,
+                "Could not un-assign from %d of %d objects",
+                num_failed,
+                num_selected_objects);
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Handle cases where at least _some_ actions were un-assigned. */
+  if (num_ok == num_selected_objects) {
+    BKE_reportf(
+        op->reports, RPT_INFO, "Un-assigned Actions from all %d objects", num_selected_objects);
+  }
+  else {
+    BKE_reportf(op->reports,
+                RPT_INFO,
+                "Un-assigned Actions from %d of %d objects",
+                num_ok,
+                num_selected_objects);
+  }
+
+  DEG_relations_tag_update(bmain);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static void ANIM_OT_unassign_action(wmOperatorType *ot)
+{
+  ot->name = "Unassign Action from Objects";
+  ot->idname = "ANIM_OT_unassign_action";
+  ot->description = "Remove the assigned Actions from selected Objects";
+
+  ot->exec = unassign_action_exec;
+  ot->poll = unassign_action_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 /** \} */
 /* -------------------------------------------------------------------- */
 /** \name Convert
@@ -1904,6 +2016,7 @@ void ED_operatortypes_anim()
   WM_operatortype_append(ANIM_OT_replace_action);
   WM_operatortype_append(ANIM_OT_replace_action_new);
   WM_operatortype_append(ANIM_OT_replace_action_duplicate);
+  WM_operatortype_append(ANIM_OT_unassign_action);
 
   WM_operatortype_append(ANIM_OT_rotation_mode_convert);
 
