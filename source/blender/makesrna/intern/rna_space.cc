@@ -4546,6 +4546,13 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   static const EnumPropertyItem rna_enum_space_outliner_sort_method_items[] = {
       {SO_SORT_ALPHA, "ALPHA", 0, "Alphabetical", "Order items alphabetically"},
       {SO_SORT_CUSTOM, "CUSTOM", 0, "Custom", "Order items manually"},
+      {SO_SORT_NONE,
+       "NONE",
+       0,
+       "No Sorting",
+       "Order items according to the actual internal data (matches the order in which "
+       "operators will typically process them when working on collections/objects "
+       "hierarchies)"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

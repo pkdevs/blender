@@ -1269,6 +1269,9 @@ void outliner_build_tree(Main *mainvar,
       outliner_sort_custom(mainvar, scene, &space_outliner->runtime->tree);
       break;
 
+    case SO_SORT_NONE:
+      break;
+
     default:
       BLI_assert_unreachable();
       break;

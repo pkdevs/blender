@@ -284,7 +284,6 @@ CollectionObject *BKE_collection_object_find_in(const Collection &collection, co
 /**
  *  Unsets the CollectionObject.sort_index for the given \a object.
  */
-
 void BKE_collection_object_parented_sort_index_reset(Main &bmain, Object &ob);
 
 /**
