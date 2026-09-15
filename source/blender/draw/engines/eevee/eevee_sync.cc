@@ -348,7 +348,7 @@ void SyncModule::sync_pointcloud(const ObjectRef &ob_ref)
   ObjectHandle ob_handle = sync_object(ob_ref, inst_.manager->unique_handle(ob_ref));
 
   bool has_motion = inst_.velocity.step_object_sync(ob_handle);
-  auto mat_geom_type = to_pointcloud_material_geometry(ob_ref.object);
+  eMaterialGeometry mat_geom_type = to_pointcloud_material_geometry(ob_ref.object);
 
   Material material = inst_.materials.material_get(
       ob_handle, has_motion, material_slot - 1, mat_geom_type);

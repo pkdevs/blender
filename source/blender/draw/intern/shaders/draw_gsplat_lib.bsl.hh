@@ -40,30 +40,18 @@
 #include "draw_shader_shared.hh"
 
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_matrix_construct_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_math_quaternion_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_reduce_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_math_quaternion.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace draw::gsplat {
 
 namespace detail {
-
-/* Simple bounds helper. Most data is quantized by bounding values. */
-template<typename T> struct Bounds {
-  T minv;
-  T maxv;
-
-  T unpack(T bounded_value) const
-  {
-    return mix(minv, maxv, bounded_value);
-  }
-};
-template struct Bounds<float3>;
 
 /* TODO(not_mark): Move to a `gpu_shader_*` header? */
 template<typename T> void swap(T &a, T &b)
@@ -115,86 +103,96 @@ float4 unpack_quaternion_3_to_4(float3 v)
 }
 
 /**
- * Unpack gaussian mean from quantized representation [gspt2026].
+ * Unpack Gaussian mean from quantized representation [gspt2026].
  *
  * \note Keep in sync with `pack_gaussian()` in `draw_cache_impl_gsplat.cc`.
  */
-float3 unpack_gaussian_mean(uint4 pack, Bounds<float3> mean_bounds)
+float3 unpack_gaussian_mean(uint4 pack, ScalingRange data_range)
 {
   uint3 pu;
-  pu.x = /* 23 bits */ pack.x & 0x7FFFFFu;
-  pu.y = /* 9  bits */ ((pack.x >> 23) & 0x1FFu) |
-         /* 13 bits */ ((pack.y & 0x1FFFu) << 9);
-  pu.z = /* 19 bits */ (pack.y >> 13) |
-         /* 4  bits */ ((pack.z & 0xFu) << 19);
-  float3 p = float3(pu) / float3((1u << 23) - 1u, (1u << 22) - 1u, (1u << 23) - 1u);
-  return mean_bounds.unpack(p);
+  pu.x = /* 22b */ pack.x & 0x3FFFFFu;
+  pu.y = /* 10b */ ((pack.x >> 22) & 0x0003FFu) |
+         /* 12b */ ((pack.y & 0x000FFFu) << 10);
+  pu.z = /* 20b */ ((pack.y >> 12) & 0x0FFFFFu) |
+         /* 02b */ ((pack.z & 0x000003u) << 20);
+  float3 p = float3(pu) / float((1 << 22) - 1u);
+  return data_range.scale_from_unit(p);
 }
 
 /**
- * Unpack gaussian rotational component from quantized representation [gspt2026].
+ * Unpack Gaussian rotational component from quantized representation [gspt2026].
  *
  * \note Keep in sync with `pack_gaussian()` in `draw_cache_impl_gsplat.cc`.
  */
 Quaternion unpack_gaussian_rotation(uint4 pack)
 {
   uint3 ru;
-  ru.x = /* 10 bits */ (pack.z >> 4u) & 0x3FFu;
-  ru.y = /* 10 bits */ (pack.z >> 14u) & 0x3FFu;
-  ru.z = /* 8  bits */ ((pack.z >> 24u) & 0xFFu) |
-         /* 2  bits */ ((pack.w & 0x3u) << 8u);
-  float3 r = float3(ru) / 1023.0f;
+  ru.x = /* 9b */ (pack.z >> 2) & 0x0001FFu;
+  ru.y = /* 9b */ (pack.z >> 11u) & 0x0001FFu;
+  ru.z = /* 9b */ (pack.z >> 20u) & 0x0001FFu;
+  float3 r = float3(ru) / 511.0f;
   return Quaternion::from_float4(unpack_quaternion_3_to_4(r * 2.0f - 1.0f));
 }
 
 /**
- * Unpack gaussian scaling component from quantized representation [gspt2026].
+ * Unpack Gaussian scaling component from quantized representation [gspt2026].
  *
  * \note Keep in sync with `pack_gaussian()` in `draw_cache_impl_gsplat.cc`.
  */
-float3 unpack_gaussian_scale(uint4 pack, Bounds<float3> log_scale_bounds)
+float3 unpack_gaussian_scale(uint4 pack, ScalingRange data_range)
 {
   uint3 su;
-  su.x = /* 10 bits */ (pack.w >> 2) & 0x3FFu;
-  su.y = /* 10 bits */ (pack.w >> 12) & 0x3FFu;
-  su.z = /* 10 bits */ (pack.w >> 22) & 0x3FFu;
-  float3 s = float3(su) / 1023.0f;
-  return exp(log_scale_bounds.unpack(s));
+  su.x = /* 3b */ ((pack.z >> 29) & 0x000007u) |
+         /* 6b */ ((pack.w & 0x00003Fu) << 3);
+  su.y = /* 9b */ (pack.w >> 6) & 0x0001FFu;
+  su.z = /* 9b */ (pack.w >> 15) & 0x0001FFu;
+  float3 s = float3(su) / 511.0f;
+  return exp(data_range.scale_from_unit(s));
 }
 
 /**
- * Template helper to slice 3-tuples (xyz) of 8b values from a uint4 packed
- * as: [xyzx][yzxy][zxyz][xyz_]. Index slices and returns the N'th 3-tuple.
+ * Unpack Gaussian opacity from quantized representation.
+ *
+ * \note Keep in sync with `pack_gaussian()` in `draw_cache_impl_gsplat.cc`.
  */
-template<uint Index> uint3 slice_tuple(uint4 /* t */)
+float unpack_gaussian_opacity(uint4 pack)
 {
-  return uint3(0);
+  uint au = (pack.w >> 24) & 0x0000FFu;
+  float a = float(au) / 255.0f;
+  return a;
 }
-template<> uint3 slice_tuple<0>(uint4 t)
+
+/**
+ * Helper methhods to slice 3-tuples (xyz) of 8b values from uint4
+ * packed data ([xyzx][yzxy][zxyz][xyzx][yzxy]...).
+ */
+uint3 slice_tuple_xyzn(uint t)
 {
-  return uint3(t.x, t.x >> 8, t.x >> 16) & 0xFFu;
+  return uint3(t, t >> 8, t >> 16) & 0xFFu;
 }
-template<> uint3 slice_tuple<1>(uint4 t)
+uint3 slice_tuple_nxyz(uint t)
 {
-  return uint3(t.x >> 24, t.y, t.y >> 8) & 0xFFu;
+  return uint3(t >> 8, t >> 16, t >> 24) & 0xFFu;
 }
-template<> uint3 slice_tuple<2>(uint4 t)
+uint3 slice_tuple_xnyz(uint t1, uint t2)
 {
-  return uint3(t.y >> 16, t.y >> 24, t.z) & 0xFFu;
+  return uint3(t1 >> 24, t2, t2 >> 8) & 0xFFu;
 }
-template<> uint3 slice_tuple<3>(uint4 t)
+uint3 slice_tuple_xynz(uint t1, uint t2)
 {
-  return uint3(t.z >> 8, t.z >> 16, t.z >> 24) & 0xFFu;
-}
-template<> uint3 slice_tuple<4>(uint4 t)
-{
-  return uint3(t.w, t.w >> 8, t.w >> 16) & 0xFFu;
+  return uint3(t1 >> 16, t1 >> 24, t2) & 0xFFu;
 }
 
 /** Get the index of the current gsplat, given the vertex index. */
 uint get_shape_id(uint vert_id)
 {
   return int(vert_id / uint(DRW_GSPLAT_STRIP_TILE_SIZE));
+}
+
+/** Given a vertex index, determine if the expected winding order of the strip is cw/ccw. */
+bool get_shape_winding_ccw(uint vert_id)
+{
+  return bool((vert_id / DRW_GSPLAT_STRIP_TILE_SIZE) % 2u);
 }
 
 /** Get a local vertex offset of the current gsplat, given the vertex index. */
@@ -206,13 +204,9 @@ float2 get_shape_offset(uint vert_id)
     case 1:
       return float2(1.0, -1.0);
     case 2:
-      return float2(1.0, 1.0);
-    case 3:
-      return float2(-1.0, -1.0);
-    case 4:
-      return float2(1.0, 1.0);
-    case 5:
       return float2(-1.0, 1.0);
+    case 3:
+      return float2(1.0, 1.0);
     default:
       return float2(NAN_FLT);
   };
@@ -297,7 +291,7 @@ float3x3 get_covmat(Quaternion rotation, float3 scale)
 }
 
 /**
- * Compute perspective-projected 2D covariance matrix for a gaussian ellipse, from the
+ * Compute perspective-projected 2D covariance matrix for a Gaussian ellipse, from the
  * covariance matrix of the 3D ellipsoid.
  *
  * \note Reproduces eq. 29 and eq. 31 in [evas2002], with aspect/scaling tweaks from the
@@ -317,8 +311,8 @@ float3 project_covmat(float3 lP,
 
   float tan_fov_x = 1.0f / winmat[0][0];
   float tan_fov_y = 1.0f / (winmat[1][1] * aspect);
-  float lim_x = 1.3 * tan_fov_x;
-  float lim_y = 1.3 * tan_fov_y;
+  float lim_x = 1.3f * tan_fov_x;
+  float lim_y = 1.3f * tan_fov_y;
 
   /* Parameter `t` in [ewas2023], effectively projected point. */
   float3 vP = transform_point(viewmat, lP);
@@ -333,7 +327,7 @@ float3 project_covmat(float3 lP,
                  float3(0.0f, 0.0f, 0.0f));
   }
   else {
-    /* NOTE(not_mark): orthographic if not perspective. May break for other types? */
+    /* For orthographic matrices, the Jacobian is slightly different. */
     J = float3x3(float3(focal, 0.0f, 0.0f), float3(0.0f, focal, 0.0f), float3(0.0f));
   }
 
@@ -345,7 +339,8 @@ float3 project_covmat(float3 lP,
   float3x3 T = transpose(W) * J;
   float3x3 covmat_2d = transpose(T) * V * T;
 
-  /* Because reasons. [3dgs2023] does low-pass regularization this way. */
+  /* Applied in [3dgs2023], either as a low-pass regularization, or to enforce some minimum pixel
+   * size. Reason unclear, but I guess we should match the reference here. */
   covmat_2d[0][0] += 0.3f;
   covmat_2d[1][1] += 0.3f;
 
@@ -381,7 +376,7 @@ AxisTuple covmat_to_axes(float3 covmat_2d)
  */
 float3 get_planar_normal(Quaternion rotation, float3 scale)
 {
-#if 1
+#if 0
   /* Reference implementation. */
   float3x3 R = quaternion_to_float3x3(rotation);
   if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
@@ -392,14 +387,13 @@ float3 get_planar_normal(Quaternion rotation, float3 scale)
   }
   return R * float3(0.0f, 0.0f, 1.0f);
 #else
-  /* Cycles implementation. */
   const float norm = 1.0f / (rotation.x * rotation.x + rotation.y * rotation.y +
                              rotation.z * rotation.z + rotation.w * rotation.w);
 
-  const float a = rotation.x;  // x
-  const float b = rotation.y;  // y
-  const float c = rotation.z;  // z
-  const float d = rotation.w;  // w
+  const float a = rotation.w;
+  const float b = rotation.x;
+  const float c = rotation.y;
+  const float d = rotation.z;
 
   if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
     return float3(a * a + b * b - c * c - d * d, 2.0f * (a * d + b * c), 2.0f * (b * d - a * c)) *
@@ -424,6 +418,20 @@ struct Gaussian {
   float3 mean;
   float3 scale;
   Quaternion rotation;
+  /* Gaussian opacity, applied in alpha resolve. */
+  float opacity;
+
+  /** Unpack Gaussian from quantized data representation. */
+  static Gaussian unpack(uint gs_id, uint4 data, ScalingRange mean_range, ScalingRange scale_range)
+  {
+    Gaussian gs;
+    gs.id = gs_id;
+    gs.mean = detail::unpack_gaussian_mean(data, mean_range);
+    gs.rotation = detail::unpack_gaussian_rotation(data);
+    gs.scale = detail::unpack_gaussian_scale(data, scale_range);
+    gs.opacity = detail::unpack_gaussian_opacity(data);
+    return gs;
+  }
 };
 
 /**
@@ -476,91 +484,54 @@ struct PointShape {
 };
 
 /**
- * Shader resource table for gsplat bounds data. Used for unpacking
- * from quantizated representations.
- */
-template<uint UBO_BINDING_SLOT> struct BoundsResources {
-  [[uniform(UBO_BINDING_SLOT)]] const GSplatBoundsInfos &bounds;
-
-  detail::Bounds<float3> mean() const
-  {
-    return detail::Bounds<float3>{.minv = bounds.mean[0].xyz, .maxv = bounds.mean[1].xyz};
-  }
-
-  detail::Bounds<float3> log_scale() const
-  {
-    return detail::Bounds<float3>{.minv = bounds.log_scale[0].xyz,
-                                  .maxv = bounds.log_scale[1].xyz};
-  }
-
-  detail::Bounds<float3> sh_rest() const
-  {
-    return detail::Bounds<float3>{.minv = bounds.radiance_sh[0].xyz,
-                                  .maxv = bounds.radiance_sh[1].xyz};
-  }
-};
-template struct BoundsResources<0>;
-template struct BoundsResources<8>;
-
-/**
  * Shader resource table for gsplat data. Used by an entry point for
  * geometry output from precomputed ellipse data.
  */
 struct ShapeResource {
-  [[resource_table]] srt_t<BoundsResources<8>> bounds;
+  [[uniform(DRW_OBJ_DATA_INFO_UBO_SLOT)]] const GSplatInfos &infos;
 
-  [[sampler(DRW_GSPLAT_SHAPE_DATA_SLOT)]] const usamplerBuffer shape_data_tx;
-  [[sampler(DRW_GSPLAT_RADIANCE_DATA_SLOT)]] const usamplerBuffer radiance_data_tx;
-  [[sampler(DRW_GSPLAT_ELLIPSE_COMP_SLOT)]] const usamplerBuffer ellipses_comp_tx;
-  [[sampler(DRW_GSPLAT_RADIANCE_COMP_SLOT)]] const samplerBuffer radiance_comp_tx;
+  [[sampler(DRW_GSPLAT_SHAPE_DATA_TEX_SLOT)]] const usamplerBuffer shape_data_tx;
+  [[sampler(DRW_GSPLAT_ELLIPSE_COMP_TEX_SLOT)]] const usamplerBuffer ellipses_comp_tx;
+  [[sampler(DRW_GSPLAT_RADIANCE_COMP_TEX_SLOT)]] const samplerBuffer radiance_comp_tx;
 
   [[push_constant]] const float2 viewport_size;
 
  private:
   Gaussian get_gaussian(uint gs_id) const
   {
-
-    [[resource_table]] const BoundsResources<8> &srt_bounds = bounds;
     const uint4 data = texelFetch(shape_data_tx, int(gs_id));
-
-    Gaussian gs;
-    gs.id = gs_id;
-    gs.mean = detail::unpack_gaussian_mean(data, srt_bounds.mean());
-    gs.scale = detail::unpack_gaussian_scale(data, srt_bounds.log_scale());
-    gs.rotation = detail::unpack_gaussian_rotation(data);
-    return gs;
+    return Gaussian::unpack(gs_id, data, infos.splat_mean_range, infos.splat_scale_range);
   }
 
   SplatShape get_splat_implementation(uint vert_id,
                                       float3 lP,
-                                      float3 lN,
+                                      float3 wN,
                                       ObjectMatrices object,
                                       ViewMatrices view,
                                       AxisTuple axes) const
   {
+    float2 shape_offset = detail::get_shape_offset(vert_id);
+    if (any(isnan(shape_offset))) {
+      return SplatShape::culled();
+    }
+
     SplatShape shape;
     shape.id = detail::get_shape_id(vert_id);
     shape.mean = lP;
-    shape.shape_offset = detail::get_shape_offset(vert_id);
-
-    float3 wP = object.point_object_to_world(lP);
+    shape.shape_offset = 2.0f * shape_offset;
 
     /* Screen-space offset determined by ellipse axis tuple. */
     float2 ss_delta = (shape.shape_offset.x * axes.axis_0 + shape.shape_offset.y * axes.axis_1) *
-                      4.0f / viewport_size;
+                      2.0f / viewport_size;
 
     /* Add screen-space offset to homogeneous position. */
+    float3 wP = object.point_object_to_world(lP);
     shape.hP = view.point_world_to_homogenous(wP);
     shape.hP.xy += ss_delta * shape.hP.w;
-    /* TODO(not_mark): this is dumb. Rework. */
     shape.wP = view.point_homogeneous_to_world(shape.hP);
 
-    /* Store centroid normal as oriented toward viewer's direction. */
-    float3 wV = view.world_incident_vector(wP);
-    shape.wN = object.normal_object_to_world(lN);
-    if (dot(shape.wN, wV) < 0.0f) {
-      shape.wN = -shape.wN;
-    }
+    /* Store centroid normal, accounting for winding order. */
+    shape.wN = detail::get_shape_winding_ccw(vert_id) ? -wN : wN;
 
     return shape;
   }
@@ -571,10 +542,10 @@ struct ShapeResource {
    *
    * \note Available when a compute prepass has run.
    */
-  float4 get_radiance(uint gs_id) const
+  float3 get_radiance(uint gs_id) const
   {
     uint2 data = floatBitsToUint(texelFetch(radiance_comp_tx, int(gs_id)).xy);
-    return float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y));
+    return float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y)).rgb;
   }
 
   /**
@@ -585,7 +556,8 @@ struct ShapeResource {
    */
   float get_opacity(uint gs_id) const
   {
-    return uintBitsToFloat(texelFetch(radiance_data_tx, int(gs_id * 4)).a);
+    const uint4 shape_data = texelFetch(shape_data_tx, int(gs_id));
+    return detail::unpack_gaussian_opacity(shape_data);
   }
 
   /**
@@ -593,13 +565,11 @@ struct ShapeResource {
    */
   PointShape get_point(uint vert_id, ObjectMatrices object, ViewMatrices view) const
   {
-    [[resource_table]] const BoundsResources<8> &srt_bounds = bounds;
-
     PointShape gs;
     gs.id = vert_id;
 
     const uint4 shape_data = texelFetch(shape_data_tx, int(vert_id));
-    gs.mean = detail::unpack_gaussian_mean(shape_data, srt_bounds.mean());
+    gs.mean = detail::unpack_gaussian_mean(shape_data, infos.splat_mean_range);
     gs.wP = object.point_object_to_world(gs.mean);
     gs.hP = view.point_world_to_homogenous(gs.wP);
     return gs;
@@ -612,27 +582,31 @@ struct ShapeResource {
    */
   SplatShape get_splat(uint vert_id, ObjectMatrices object, ViewMatrices view) const
   {
-    const uint gs_id = detail::get_shape_id(vert_id);
+    /* TODO(not_mark): Load of precompute data is disabled until we can address incompatibility
+     * of a compute prepass with instancing and other factors. For now, compute splat data on
+     * the fly using `get_splat_fallback`. */
+    return get_splat_fallback(vert_id, object, view);
 
-    const uint2 prepass_data = texelFetch(ellipses_comp_tx, int(gs_id)).xy;
-    if (prepass_data.x == 0u) {
-      return SplatShape::culled();
-    }
+    // const uint gs_id = detail::get_shape_id(vert_id);
 
-    /* Unpack ellipse axes, normal from compute prepass data. */
-    AxisTuple axes = AxisTuple::unpack(prepass_data.x);
-    float3 lN = detail::unpack_normal_octahedral(unpackSnorm2x16(prepass_data.y));
+    // const uint2 prepass_data = texelFetch(ellipses_comp_tx, int(gs_id)).xy;
+    // if (prepass_data.x == 0u) {
+    //   return SplatShape::culled();
+    // }
 
-    /* Unpack ellipse centroid as gaussian mean. */
-    [[resource_table]] const BoundsResources<8> &srt_bounds = bounds;
-    const uint4 shape_data = texelFetch(shape_data_tx, int(gs_id));
-    float3 lP = detail::unpack_gaussian_mean(shape_data, srt_bounds.mean());
+    // /* Unpack ellipse axes, normal from compute prepass data. */
+    // AxisTuple axes = AxisTuple::unpack(prepass_data.x);
+    // float3 wN = detail::unpack_normal_octahedral(unpackSnorm2x16(prepass_data.y));
 
-    return get_splat_implementation(vert_id, lP, lN, object, view, axes);
+    // /* Unpack ellipse centroid as Gaussian mean. */
+    // const uint4 shape_data = texelFetch(shape_data_tx, int(gs_id));
+    // float3 lP = detail::unpack_gaussian_mean(shape_data, infos.splat_mean_range);
+
+    // return get_splat_implementation(vert_id, lP, wN, object, view, axes);
   }
 
   /**
-   * Recover billboard splat draw data for a specific vertexc.
+   * Recover billboard splat draw data for a specific vertex.
    *
    * \note Available when a compute prepass has not run. More expensive. Used for e.g. shadows.
    */
@@ -641,7 +615,7 @@ struct ShapeResource {
     const uint gs_id = detail::get_shape_id(vert_id);
     const Gaussian gs = get_gaussian(gs_id);
 
-    /* Project gaussian to screen-space, recovering 2D axes for a splatted ellipse. */
+    /* Project Gaussian to screen-space, recovering 2D axes for a splatted ellipse. */
     float4x4 viewmat = view.viewmat * object.model;
     float3x3 covmat = get_covmat(gs.rotation, gs.scale);
     float3 covmat_proj = project_covmat(
@@ -649,44 +623,26 @@ struct ShapeResource {
     AxisTuple axes = covmat_to_axes(covmat_proj);
 
     float3 lP = gs.mean;
+    float3 wP = object.point_object_to_world(gs.mean);
+
+    /* Compute world normal. Normal is oriented towards view, never back-facing. */
     float3 lN = normalize(get_planar_normal(gs.rotation, gs.scale));
-    return get_splat_implementation(vert_id, lP, lN, object, view, axes);
+    float3 wN = object.normal_object_to_world(lN);
+    float3 wV = view.world_incident_vector(wP);
+    if (dot(wN, wV) < 0.0f) {
+      wN = -wN;
+    }
+
+    return get_splat_implementation(vert_id, lP, wN, object, view, axes);
   }
 };
 
 /**
- * Gaussian alpha, following eq. 2 in [3dgs2023]. Note that I moved
- * an accumulated 2*2 multiplier from vertex encoding to here.
+ * Gaussian alpha, following eq. 2 in [3dgs2023] it is multipled by data opacity.
  */
 float evaluate_gaussian(float2 x_min_mu, float opacity)
 {
-  return saturate(opacity * exp(4.0f * -dot(x_min_mu, x_min_mu)));
-}
-
-float get_customdata_float(const int point_id, const samplerBuffer cd_buf)
-{
-  return texelFetch(cd_buf, point_id).r;
-}
-
-float2 get_customdata_vec2(const int point_id, const samplerBuffer cd_buf)
-{
-  return texelFetch(cd_buf, point_id).rg;
-}
-
-float3 get_customdata_vec3(const int point_id, const samplerBuffer cd_buf)
-{
-  return texelFetch(cd_buf, point_id).rgb;
-}
-
-float4 get_customdata_vec4(const int point_id, const samplerBuffer cd_buf)
-{
-  return texelFetch(cd_buf, point_id).rgba;
-}
-
-float2 get_barycentric()
-{
-  /* TODO: To be implemented. */
-  return float2(0.0f);
+  return saturate(exp(-dot(x_min_mu, x_min_mu)) * opacity);
 }
 
 }  // namespace draw::gsplat

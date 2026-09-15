@@ -109,10 +109,8 @@ class ShaderCache {
   gpu::StaticShader curves_evaluate_length_intercept = {"draw_curves_evaluate_length_intercept"};
 
   gpu::StaticShader gsplat_compute_ellipses = {"draw_gsplat_compute_ellipses"};
-  gpu::StaticShader gsplat_compute_ellipses_radiance_base = {
-      "draw_gsplat_compute_ellipses_radiance_base"};
-  gpu::StaticShader gsplat_compute_ellipses_radiance_full = {
-      "draw_gsplat_compute_ellipses_radiance_full"};
+  gpu::StaticShader gsplat_compute_radiance = {"draw_gsplat_compute_radiance"};
+  gpu::StaticShader gsplat_compute_ellipses_radiance = {"draw_gsplat_compute_ellipses_radiance"};
 
   gpu::StaticShader debug_draw_display = {"draw_debug_draw_display"};
   gpu::StaticShader draw_visibility_compute = {"draw_visibility_compute"};
@@ -194,10 +192,10 @@ gpu::Shader *DRW_shader_gsplat_compute_get(draw::GSplatEvalShader type)
   switch (type) {
     case draw::GSplatEvalShader::Ellipses:
       return ShaderCache::get().gsplat_compute_ellipses.get();
-    case draw::GSplatEvalShader::EllipsesRadianceBase:
-      return ShaderCache::get().gsplat_compute_ellipses_radiance_base.get();
-    case draw::GSplatEvalShader::EllipsesRadianceFull:
-      return ShaderCache::get().gsplat_compute_ellipses_radiance_full.get();
+    case draw::GSplatEvalShader::Radiance:
+      return ShaderCache::get().gsplat_compute_radiance.get();
+    case draw::GSplatEvalShader::EllipsesRadiance:
+      return ShaderCache::get().gsplat_compute_ellipses_radiance.get();
   }
   BLI_assert_unreachable();
   return nullptr;

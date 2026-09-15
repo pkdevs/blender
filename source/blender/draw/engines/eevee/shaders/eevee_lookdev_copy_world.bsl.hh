@@ -6,7 +6,7 @@
 
 #include "eevee_light_shared.hh"
 #include "eevee_lightprobe_sphere.bsl.hh"
-#include "gpu_shader_math_spherical_harmonics_lib.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
 
 namespace eevee::lookdev {
 

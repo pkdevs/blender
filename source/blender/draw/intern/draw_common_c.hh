@@ -57,8 +57,8 @@ void DRW_gsplat_init(DRWData *drw_data = nullptr);
 void DRW_gsplat_begin_sync();
 void DRW_gsplat_module_free(draw::GSplatModule *module);
 void DRW_gsplat_ensure_ellipses(draw::Manager &manager, draw::View &view);
-void DRW_gsplat_ensure_ellipses_radiance_base(draw::Manager &manager, draw::View &view);
-void DRW_gsplat_ensure_ellipses_radiance_full(draw::Manager &manager, draw::View &view);
+void DRW_gsplat_ensure_radiance(draw::Manager &manager, draw::View &view);
+void DRW_gsplat_ensure_ellipses_radiance(draw::Manager &manager, draw::View &view);
 bool pointcloud_is_gsplat(Object *ob);
 
 /* draw_volume.cc */

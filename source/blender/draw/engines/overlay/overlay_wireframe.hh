@@ -228,8 +228,8 @@ class Wireframe : Overlay {
             coloring.gsplat_ps_->draw(
                 geom_gsplat, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
           }
-          break;
         }
+        break;
       }
       case OB_VOLUME: {
         if (show_surface_wire) {

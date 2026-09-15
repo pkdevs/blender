@@ -357,13 +357,11 @@ gpu::Batch *pointcloud_surface_get(PointCloud *pointcloud)
 gpu::Batch *DRW_pointcloud_batch_cache_get_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  if (pointcloud.render_as == PT_RENDER_AS_POINTS) {
+  if (pointcloud.type == PointCloudType::Points) {
     PointCloudBatchCache *cache = pointcloud_batch_cache_get(pointcloud);
     return DRW_batch_request(&cache->eval_cache.dots);
   }
-  else {
-    return nullptr;
-  }
+  return nullptr;
 }
 
 gpu::VertBuf *DRW_pointcloud_position_and_radius_buffer_get(Object *ob)
@@ -460,13 +458,11 @@ void DRW_pointcloud_batch_cache_create_requested(Object *ob)
 gpu::Batch *DRW_pointcloud_batch_cache_get_edit_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  if (pointcloud.render_as == PT_RENDER_AS_POINTS) {
+  if (pointcloud.type == PointCloudType::Points) {
     PointCloudBatchCache *cache = pointcloud_batch_cache_get(pointcloud);
     return DRW_batch_request(&cache->edit_selection);
   }
-  else {
-    return nullptr;
-  }
+  return nullptr;
 }
 
 /** \} */

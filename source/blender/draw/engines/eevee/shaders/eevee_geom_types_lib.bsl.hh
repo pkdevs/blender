@@ -23,13 +23,6 @@ struct PointCloudPoint {
   float3 orco_default;
 };
 
-struct GSplatPoint {
-  float3 lP;
-  int splat_id;
-  /* Default derived from local position. */
-  float3 orco_default;
-};
-
 struct CurvesPoint {
   int curve_id;
   int point_id;

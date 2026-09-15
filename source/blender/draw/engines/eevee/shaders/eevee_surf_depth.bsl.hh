@@ -72,28 +72,20 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
 
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(0);
-
     init_globals(uni, view, front_face);
 
     nodetree_surface(0.0f);
+    gsplat_transmittance();
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float threshold = hashed_transparency::alpha_threshold(
         uni.pipeline_buf.alpha_hash_scale, noise_offset, g_data.P);
-
-#ifdef MAT_GEOM_GSPLAT
-    float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.lP, gsplat_interp_flat.opacity);
-    if (alpha <= max(threshold, 1.0f / 255.0f)) {
-      gpu_discard_fragment();
-      return;
-    }
-#else
     float transparency = average(g_transmittance);
+
     if (transparency > threshold) {
       gpu_discard_fragment();
       return;
     }
-#endif
   }
 
   if (pipe.use_clip_plane) [[static_branch]] {

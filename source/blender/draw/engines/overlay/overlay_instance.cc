@@ -604,7 +604,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         break;
       case OB_POINTCLOUD: {
         PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob_ref.object);
-        if (pointcloud.render_as == PT_RENDER_AS_SPLATS) {
+        if (pointcloud.type == PointCloudType::GSplat) {
           layer.gsplats.edit_object_sync(manager, ob_ref, resources, state);
         }
         else {
@@ -764,7 +764,8 @@ void Instance::draw(Manager &manager)
   GreasePencil::compute_depth_planes(manager, view, resources, state);
 
   /* Hand off gsplat compute workload before draws. */
-  DRW_gsplat_ensure_ellipses(manager, view);
+  /* TODO(not_mark): Disabled compute pass for now, due to incompatibility with instancing. */
+  /* DRW_gsplat_ensure_ellipses(manager, view); */
 
   /* Pre-Draw: Run the compute steps of all passes up-front
    * to avoid constant GPU compute/raster context switching. */

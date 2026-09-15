@@ -35,10 +35,10 @@ struct GSplatBatchCache;
 enum class GSplatEvalShader {
   /* Ellipse computation only. */
   Ellipses,
-  /* Ellipses, and degree 0 spherical harmonics. */
-  EllipsesRadianceBase,
+  /* Degree 0-3 spherical harmonics. */
+  Radiance,
   /* Ellipses, and degree 0-3 spherical harmonics. */
-  EllipsesRadianceFull
+  EllipsesRadiance,
 };
 
 /**
@@ -67,8 +67,8 @@ struct GSplatEvalCache {
   gpu::VertBuf *shape_data_buf;
   /* Packed opacity and spherical harmonics per unit: 16x32ui. */
   gpu::VertBuf *radiance_data_buf;
-  /* Data for shader-side unpacking. */
-  gpu::UniformBuf *bounds_buf;
+  /* Miscellaneous data, mostly for shader-side unpacking. */
+  gpu::UniformBuf *infos_buf;
 
   /* --- Intermediate compute buffers. --- */
 
@@ -125,16 +125,13 @@ struct GSplatEvalCache {
   gpu::VertBuf *radiance_data_buf_get();
   gpu::VertBuf *ellipses_comp_buf_get();
   gpu::VertBuf *radiance_comp_buf_get();
-  gpu::UniformBuf *bounds_buf_get();
+  gpu::UniformBuf *infos_buf_get();
   gpu::VertBuf **attributes_get(uint request_i);
 
   /* Request pointers to batches that may not be filled yet, see `ensure_requested()`. */
   gpu::Batch *dots_get();
   gpu::Batch *edit_dots_get();
   gpu::Batch *surface_get(const PointCloud &pointcloud);
-  gpu::Batch **surface_shaded_get(const PointCloud &pointcloud,
-                                  GPUMaterial **gpu_materials,
-                                  int mat_len);
 
   /* Fill and build all requestedf buffers/batches. */
   void ensure_requested(PointCloud &pointcloud);
@@ -164,18 +161,18 @@ struct GSplatModule {
 
   /* Passes matching `GSplatEvalShader` selection. */
   PassSimple compute_ellipses_ps_ = {"GSplatPassEllipses"};
-  PassSimple compute_ellipses_radiance_base_ps_ = {"GSplatPassEllipsesRadianceBase"};
-  PassSimple compute_ellipses_radiance_full_ps_ = {"GSplatPassEllipsesRadianceFull"};
+  PassSimple compute_radiance_ps_ = {"GSplatPassRadiance"};
+  PassSimple compute_ellipses_radiance_ps_ = {"GSplatPassEllipsesRadiance"};
 
   PassSimple &get_ps(GSplatEvalShader type)
   {
     switch (type) {
       case GSplatEvalShader::Ellipses:
         return compute_ellipses_ps_;
-      case GSplatEvalShader::EllipsesRadianceBase:
-        return compute_ellipses_radiance_base_ps_;
-      case GSplatEvalShader::EllipsesRadianceFull:
-        return compute_ellipses_radiance_full_ps_;
+      case GSplatEvalShader::Radiance:
+        return compute_radiance_ps_;
+      case GSplatEvalShader::EllipsesRadiance:
+        return compute_ellipses_radiance_ps_;
     }
   }
 

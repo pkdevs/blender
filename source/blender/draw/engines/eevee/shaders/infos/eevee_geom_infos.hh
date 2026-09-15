@@ -73,7 +73,7 @@ FLAT(int, id)
 GPU_SHADER_NAMED_INTERFACE_END(pointcloud_interp_flat)
 
 GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_gsplat_iface, gsplat_interp)
-SMOOTH(float2, lP)
+SMOOTH(float2, billboard_co)
 GPU_SHADER_NAMED_INTERFACE_END(gsplat_interp)
 
 GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_gsplat_flat_iface, gsplat_interp_flat)

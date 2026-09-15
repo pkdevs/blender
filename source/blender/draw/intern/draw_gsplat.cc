@@ -50,11 +50,13 @@ void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandle
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob_ref.object);
   GSplatEvalCache &cache = GSplatEvalCache::get(pointcloud);
 
+  /* TODO(not_mark): account for instancing in compute pass, otherwise int(res_handle.index()). */
+  const int resource_id = res_handle.id_range().first();
   const float2 viewport_size = DRW_context_get()->viewport_size_get();
 
   auto &sub_ps = ps.sub("GSplatSubPass");
 
-  sub_ps.bind_ubo("bounds", cache.bounds_buf_get());
+  sub_ps.bind_ubo("infos", cache.infos_buf_get());
 
   sub_ps.bind_ssbo("shape_data", cache.shape_data_buf_get());
   sub_ps.bind_ssbo("radiance_data", cache.radiance_data_buf_get());
@@ -63,7 +65,7 @@ void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandle
 
   sub_ps.push_constant("viewport_size", viewport_size);
   sub_ps.push_constant("num_points", pointcloud.totpoint);
-  sub_ps.push_constant("resource_id", int(res_handle.index()));
+  sub_ps.push_constant("resource_id", resource_id);
 
   sub_ps.dispatch(divide_ceil_u(pointcloud.totpoint, DRW_GSPLAT_GROUP_SIZE));
 }
@@ -71,14 +73,14 @@ void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandle
 template<typename PassT>
 gpu::Batch *draw_subpass_setup(PassT &sub_ps,
                                const ObjectRef &ob_ref,
-                               const ResourceHandle &res_handle,
+                               const ResourceHandleRange &res_handle,
                                GPUMaterial *gpu_material)
 {
   const Object *object = ob_ref.object;
   BLI_assert(ob_ref.object->type == OB_POINTCLOUD);
 
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*object);
-  if (pointcloud.render_as != PT_RENDER_AS_SPLATS) {
+  if (pointcloud.type != PointCloudType::GSplat) {
     return nullptr;
   }
 
@@ -102,16 +104,13 @@ gpu::Batch *draw_subpass_setup(PassT &sub_ps,
   sub_ps.bind_texture("ac", module.dummy_vbo);
 
   GSplatEvalCache &cache = GSplatEvalCache::get(pointcloud);
-  sub_ps.bind_ubo("bounds", is_empty ? module.dummy_ubo : cache.bounds_buf_get());
+  sub_ps.bind_ubo("infos", is_empty ? module.dummy_ubo : cache.infos_buf_get());
   sub_ps.bind_texture("shape_data_tx", is_empty ? module.dummy_vbo : cache.shape_data_buf_get());
-  sub_ps.bind_texture("radiance_data_tx",
-                      is_empty ? module.dummy_vbo : cache.radiance_data_buf_get());
   sub_ps.bind_texture("ellipses_comp_tx",
                       is_empty ? module.dummy_vbo : cache.ellipses_comp_buf_get());
   sub_ps.bind_texture("radiance_comp_tx",
                       is_empty ? module.dummy_vbo : cache.radiance_comp_buf_get());
 
-  /* TODO(not_mark): surely a better way to do this somehow */
   float2 viewport_size = DRW_context_get()->viewport_size_get();
   sub_ps.push_constant("viewport_size", viewport_size);
 
@@ -148,22 +147,22 @@ void GSplatModule::begin_sync()
   compute_ellipses_ps_.state_set(DRW_STATE_NO_DRAW);
   compute_ellipses_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Ellipses));
 
-  compute_ellipses_radiance_base_ps_.init();
-  compute_ellipses_radiance_base_ps_.state_set(DRW_STATE_NO_DRAW);
-  compute_ellipses_radiance_base_ps_.shader_set(
-      DRW_shader_gsplat_compute_get(GSplatEvalShader::EllipsesRadianceBase));
+  compute_radiance_ps_.init();
+  compute_radiance_ps_.state_set(DRW_STATE_NO_DRAW);
+  compute_radiance_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Radiance));
 
-  compute_ellipses_radiance_full_ps_.init();
-  compute_ellipses_radiance_full_ps_.state_set(DRW_STATE_NO_DRAW);
-  compute_ellipses_radiance_full_ps_.shader_set(
-      DRW_shader_gsplat_compute_get(GSplatEvalShader::EllipsesRadianceFull));
+  compute_ellipses_radiance_ps_.init();
+  compute_ellipses_radiance_ps_.state_set(DRW_STATE_NO_DRAW);
+  compute_ellipses_radiance_ps_.shader_set(
+      DRW_shader_gsplat_compute_get(GSplatEvalShader::EllipsesRadiance));
 }
 
 void GSplatModule::sync_object(const ObjectRef &ob_ref, const ResourceHandleRange &res_handle)
 {
   /* Do not create subpasses if these are already created for this object
    * in an earlier object_sync. Passes can be reused across submissions. */
-  ObjectKey ob_key = ob_ref;
+  /* TODO(not_mark): account for instancing in sync. For now, take first object. */
+  ObjectKey ob_key = ob_ref.is_range() ? ObjectKey(ob_ref, 0) : ObjectKey(ob_ref);
   if (compute_objects_.contains(ob_key)) {
     return;
   }
@@ -171,8 +170,8 @@ void GSplatModule::sync_object(const ObjectRef &ob_ref, const ResourceHandleRang
 
   /* Synchronize compute passes. */
   detail::compute_pass_setup(compute_ellipses_ps_, ob_ref, res_handle);
-  detail::compute_pass_setup(compute_ellipses_radiance_base_ps_, ob_ref, res_handle);
-  detail::compute_pass_setup(compute_ellipses_radiance_full_ps_, ob_ref, res_handle);
+  detail::compute_pass_setup(compute_radiance_ps_, ob_ref, res_handle);
+  detail::compute_pass_setup(compute_ellipses_radiance_ps_, ob_ref, res_handle);
 }
 
 void GSplatModule::update(draw::Manager &manager, draw::View &view, GSplatEvalShader type)
@@ -184,8 +183,6 @@ void GSplatModule::update(draw::Manager &manager, draw::View &view, GSplatEvalSh
   manager.submit(get_ps(type), view);
 }
 
-/* WATCHME(not_mark): this does not begin a draw submission, and is intended to be called from
- * inside one. */
 void DRW_gsplat_begin_sync()
 {
   GSplatModule &module = *drw_get().data->gsplat_module;
@@ -198,16 +195,16 @@ void DRW_gsplat_ensure_ellipses(draw::Manager &manager, draw::View &view)
   module.update(manager, view, GSplatEvalShader::Ellipses);
 }
 
-void DRW_gsplat_ensure_ellipses_radiance_base(draw::Manager &manager, draw::View &view)
+void DRW_gsplat_ensure_radiance(draw::Manager &manager, draw::View &view)
 {
   GSplatModule &module = *drw_get().data->gsplat_module;
-  module.update(manager, view, GSplatEvalShader::EllipsesRadianceBase);
+  module.update(manager, view, GSplatEvalShader::Radiance);
 }
 
-void DRW_gsplat_ensure_ellipses_radiance_full(draw::Manager &manager, draw::View &view)
+void DRW_gsplat_ensure_ellipses_radiance(draw::Manager &manager, draw::View &view)
 {
   GSplatModule &module = *drw_get().data->gsplat_module;
-  module.update(manager, view, GSplatEvalShader::EllipsesRadianceFull);
+  module.update(manager, view, GSplatEvalShader::EllipsesRadiance);
 }
 
 bool pointcloud_is_gsplat(Object *object)
@@ -217,14 +214,14 @@ bool pointcloud_is_gsplat(Object *object)
    * done often, so it is kept as a helper function for now. */
   if (object->type == OB_POINTCLOUD) {
     PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*object);
-    return pointcloud.render_as == PT_RENDER_AS_SPLATS;
+    return pointcloud.type == PointCloudType::GSplat;
   }
   return false;
 }
 
 gpu::Batch *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
                                   const ObjectRef &ob_ref,
-                                  const ResourceHandle &res_handle,
+                                  const ResourceHandleRange &res_handle,
                                   GPUMaterial *gpu_material)
 {
   return detail::draw_subpass_setup(sub_ps, ob_ref, res_handle, gpu_material);
@@ -232,7 +229,7 @@ gpu::Batch *gsplat_sub_pass_setup(PassMain::Sub &sub_ps,
 
 gpu::Batch *gsplat_sub_pass_setup(PassSimple::Sub &sub_ps,
                                   const ObjectRef &ob_ref,
-                                  const ResourceHandle &res_handle,
+                                  const ResourceHandleRange &res_handle,
                                   GPUMaterial *gpu_material)
 {
   return detail::draw_subpass_setup(sub_ps, ob_ref, res_handle, gpu_material);

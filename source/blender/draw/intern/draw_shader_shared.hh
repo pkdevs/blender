@@ -30,6 +30,7 @@ struct ObjectMatrices;
 struct ObjectInfos;
 struct ObjectBounds;
 struct VolumeInfos;
+struct GSplatInfos;
 struct CurvesInfos;
 struct ObjectAttribute;
 struct LayerAttribute;
@@ -535,8 +536,49 @@ inline bool drw_bounds_are_valid(ObjectBounds bounds)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Data quantization and packing
+ * \{ */
+
+/* Struct to scale a value from [0, 1] to a range [M, N]. Can be used for
+ * quantized packing if the value's boundaries are known. */
+struct [[host_shared]] ScalingRange {
+  packed_float3 range_add;
+  float _pad0;
+  packed_float3 range_mul;
+  float _pad1;
+
+  /** Scale from a value in [0, 1] to a value in the scaling range. */
+  float3 scale_from_unit(float3 value) const
+  {
+    return value * range_mul + range_add;
+  }
+
+#if !defined(GPU_SHADER)
+  /** Scale from a value in the scaling range to a value in[0, 1]. */
+  float3 scale_to_unit(float3 value) const
+  {
+    float3 reciprocal_denom;
+    for (int i = 0; i < 3; ++i) {
+      reciprocal_denom[i] = range_mul[i] == 0.0f ? 1.0f : (1.0f / range_mul[i]);
+    }
+    return math::clamp((value - range_add) * reciprocal_denom, float3(0.0f), float3(1.0f));
+  }
+#endif
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Object attributes
  * \{ */
+
+struct [[host_shared]] GSplatInfos {
+  /* Data ranges for unpacking. */
+  struct ScalingRange splat_mean_range;
+  struct ScalingRange splat_scale_range;
+  struct ScalingRange radiance_base_range;
+  struct ScalingRange radiance_sh_range;
+};
 
 struct [[host_shared]] VolumeInfos {
   /** Object to grid-space. */
@@ -726,18 +768,6 @@ struct [[host_shared]] DRWDebugDrawBuffer {
  * This is needed because we bind the whole buffer as a `DRWDebugVertPair` array.
  */
 #define drw_debug_draw_offset 1
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name GSplat shared types.
- * \{ */
-
-struct [[host_shared]] GSplatBoundsInfos {
-  float4 mean[2];
-  float4 log_scale[2];
-  float4 radiance_sh[2];
-};
 
 /** \} */
 

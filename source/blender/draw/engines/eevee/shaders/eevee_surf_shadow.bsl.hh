@@ -68,23 +68,16 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
     init_globals(uni, view, front_face);
 
     nodetree_surface(0.0f);
+    gsplat_transmittance();
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
-    float random_threshold = pcg4d(float4(g_data.P, noise_offset)).x;
-
-#ifdef MAT_GEOM_GSPLAT
-    float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.lP, gsplat_interp_flat.opacity);
-    if (alpha <= max(random_threshold, 1.0f / 255.0f)) {
-      gpu_discard_fragment();
-      return;
-    }
-#else
+    float threshold = pcg4d(float4(g_data.P, noise_offset)).x;
     float transparency = average(g_transmittance);
-    if (transparency > random_threshold) {
+
+    if (transparency > threshold) {
       gpu_discard_fragment();
       return;
     }
-#endif
   }
 
   int2 texel_co = int2(frag_co.xy);

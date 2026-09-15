@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,7 +10,7 @@
 #include "draw_gsplat_lib.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
-#include "eevee_attributes_gsplat_lib.glsl"
+#include "eevee_attributes_pointcloud_lib.glsl"
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
@@ -24,8 +24,6 @@ struct GeomGSplat {
   /* WORKAROUND: Until we get condition support for interfaces. */
   [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
   [[legacy_info]] ShaderCreateInfo eevee_geom_gsplat_iface_info;
-
-  [[push_constant]] const bool ptcloud_backface;
 };
 
 [[vertex]] [[clip_control]] void geom_gsplat(
@@ -71,25 +69,31 @@ struct GeomGSplat {
 
   init_interface(id.raw_id);
 
-  draw::gsplat::SplatShape gs;
+  /* TODO(not_mark): Disabled compute pass for now, due to incompatibility with instancing. */
+  /* draw::gsplat::SplatShape gs;
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    /* For now, shadow pipelines generate a splat billboard on the fly. This is
-     * quite expensive. */
     gs = shape.get_splat_fallback(uint(vert_id), obj, view);
   }
   else {
-    /* Other pipelines use view data from a compute pass, avoiding redundant work. */
     gs = shape.get_splat(uint(vert_id), obj, view);
-  }
-
+  } */
+  draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
   if (gs.is_culled()) {
     out_position = float4(NAN_FLT);
     return;
   }
 
+  /* Gaussian splats typically do an alpha cut off. The original paper used 1/255
+   * as a threshold, which persists in te fitted data. */
+  float opacity = shape.get_opacity(gs.id);
+  if (opacity < (1.0f / 255.0f)) {
+    out_position = float4(NAN_FLT);
+    return;
+  }
+
   /* Output interface data. */
-  gsplat_interp.lP = gs.shape_offset;
-  gsplat_interp_flat.opacity = shape.get_opacity(gs.id);
+  gsplat_interp.billboard_co = gs.shape_offset;
+  gsplat_interp_flat.opacity = opacity;
   interp.P = gs.wP;
   interp.N = gs.wN;
 
@@ -108,12 +112,9 @@ struct GeomGSplat {
     float3 lP = gs.mean;
     float3 prv, nxt;
     geo_vel.local_position_deltas(lP, int(gs.id), prv, nxt, resource_id);
-    /* FIXME(fclem): Evaluating before displacement avoid displacement being treated as motion
-    but
-     * ignores motion from animated displacement. Supporting animated displacement motion
-     vectors
-     * would require evaluating the nodetree multiple time with different nodetree UBOs
-     evaluated
+    /* FIXME(fclem): Evaluating before displacement avoid displacement being treated as motion but
+     * ignores motion from animated displacement. Supporting animated displacement motion vectors
+     * would require evaluating the nodetree multiple time with different nodetree UBOs evaluated
      * at different times, but also with different attributes (maybe we could assume static
      * attribute at least). */
     geo_vel.vertex_velocity(prv, lP, nxt, motion.prev, motion.next, resource_id, obj.model);
@@ -123,7 +124,7 @@ struct GeomGSplat {
   float3 lP_orco = gs.mean * ob_infos.orco_mul + ob_infos.orco_add;
 
   init_globals(uni, view, true);
-  attrib_load(GSplatPoint{gs.mean, int(gs.id), lP_orco});
+  attrib_load(PointCloudPoint{gs.mean, int(gs.id), lP_orco});
 
   /* NOTE(not_mark) What does displacement even mean on a gsplat :S */
   /* interp.P += nodetree_displacement(); */

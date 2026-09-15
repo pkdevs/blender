@@ -403,7 +403,7 @@ class Instance : public DrawEngine {
     int material_index = resources_.material_buf.size() - 1;
 
     const bool is_gsplat = pointcloud_is_gsplat(ob_ref.object);
-    const bool has_transparency = mat.is_transparent() || is_gsplat;
+    const bool has_transparency = mat.is_transparent();
 
     this->draw_to_mesh_pass(ob_ref, has_transparency, [&](MeshPass &mesh_pass) {
       PassMain::Sub &pass =
@@ -491,7 +491,7 @@ class Instance : public DrawEngine {
     }
 
     /* Hand off gsplat compute workload before draws. */
-    DRW_gsplat_ensure_ellipses_radiance_base(manager, view_);
+    DRW_gsplat_ensure_radiance(manager, view_);
 
     anti_aliasing_ps_.setup_view(view_, scene_state_);
 

@@ -218,7 +218,7 @@ static inline eMaterialGeometry to_pointcloud_material_geometry(const Object *ob
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  return pointcloud.render_as == PT_RENDER_AS_SPLATS ? MAT_GEOM_GSPLAT : MAT_GEOM_POINTCLOUD;
+  return pointcloud.type == PointCloudType::GSplat ? MAT_GEOM_GSPLAT : MAT_GEOM_POINTCLOUD;
 }
 
 static inline eMaterialGeometry to_material_geometry(const Object *ob)

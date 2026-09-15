@@ -23,21 +23,25 @@
 #include "draw_shader_shared.hh"
 #include "draw_view.bsl.hh"
 
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_math_spherical_harmonics_lib.bsl.hh"
-#include "gpu_shader_math_vector_reduce_lib.glsl"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
 
 namespace draw::gsplat {
 
 namespace detail {
 
-/* TODO(not_mark): probably duplicate of some header in the gpu shaders */
-float3 inverse_srgb_transfer(float3 srgb)
+float3 scene_linear_from_bt709(float3 rgb_color)
 {
-  float3 c = max(srgb, float3(0.0f));
-  float3 c1 = c * (1.0f / 12.92f);
-  float3 c2 = pow((c + 0.055f) * (1.0f / 1.055f), float3(2.4f));
-  return mix(c1, c2, step(float3(0.04045f), c));
+  float3 c1 = rgb_color * (1.0f / 12.92f);
+  float3 c2 = pow((rgb_color + 0.055f) * (1.0f / 1.055f), float3(2.4f));
+  return mix(c1, c2, step(float3(0.04045f), rgb_color));
+}
+
+/** Helper to unpack 3x8b quantized sh coefficients to a float3 representation. */
+float3 unpack_sh(uint3 data, ScalingRange range)
+{
+  return range.scale_from_unit(float3(data) / float3(255.0f));
 }
 
 /**
@@ -57,26 +61,16 @@ bool is_inside_viewport(AxisTuple axes, float3 hP, float2 viewport_size)
   return !(clip_bl || clip_ur);
 }
 
-/**
- * Quickly test if a splat's projection is entirely contained in a 3x3 pixel patch.
- */
-bool is_3x3_footprint(AxisTuple axes)
-{
-  float2 corner = 2.0f * max(abs(axes.axis_0), abs(axes.axis_1)) * 2.0f;
-  return reduce_max(corner) >= 3.0f;
-}
-
 }  // namespace detail
 
 /* Shader can skip ellipses (e.g. for point primitives) or radiance parts (e.g. for overlay). */
 struct Pipeline {
   [[compilation_constant]] bool do_ellipses;
-  [[compilation_constant]] bool do_radiance_base;
-  [[compilation_constant]] bool do_radiance_full;
+  [[compilation_constant]] bool do_radiance;
 };
 
 struct Resources {
-  [[resource_table]] srt_t<BoundsResources<0>> bounds_data;
+  [[uniform(DRW_OBJ_DATA_INFO_UBO_SLOT)]] const GSplatInfos &infos;
 
   [[storage(0, read)]] const uint4 (&shape_data)[];
   [[storage(1, read)]] const uint4 (&radiance_data)[];
@@ -91,190 +85,201 @@ struct Resources {
 
   Gaussian get(uint gs_id) const
   {
-    [[resource_table]] const BoundsResources<0> &bounds_srt = bounds_data;
     const uint4 data = shape_data[gs_id];
+    return Gaussian::unpack(gs_id, data, infos.splat_mean_range, infos.splat_scale_range);
+  }
+};
 
-    Gaussian gs;
-    gs.id = gs_id;
-    gs.mean = detail::unpack_gaussian_mean(data, bounds_srt.mean());
-    gs.scale = detail::unpack_gaussian_scale(data, bounds_srt.log_scale());
-    gs.rotation = detail::unpack_gaussian_rotation(data);
-    return gs;
+/* Return value for `eval_splat()` below.
+ * Can indicate that a splat should not be drawn. */
+struct SplatData {
+  AxisTuple axes;
+  float3 N;
+  float opacity;
+
+  static SplatData culled()
+  {
+    return {.opacity = 0.0f};
+  }
+
+  bool is_culled() const
+  {
+    return opacity == 0.0f;
+  }
+
+  uint2 pack() const
+  {
+    return uint2(axes.pack(), packSnorm2x16(detail::pack_normal_octahedral(N)));
   }
 };
 
 /**
  * Evaluate projected gsplat data, perform early culling of simple features, and return
- * a packed format for geometry draws.
+ * the required data for later geometry draws.
  */
-uint2 eval_ellipse_packed(Gaussian gs,
-                          ObjectMatrices obj,
-                          ViewMatrices view,
-                          [[resource_table]] const Resources &srt)
+SplatData eval_splat(Gaussian gs,
+                     ObjectMatrices obj,
+                     ViewMatrices view,
+                     [[resource_table]] const Resources &srt)
 {
   /* Is the splat behind the viewer? */
   float3 wP = obj.point_object_to_world(gs.mean);
   float3 hP = view.point_world_to_ndc(wP);
   if (view.is_perspective() && hP.z < 0.0f) {
-    return uint2(0);
+    return SplatData::culled();
+  }
+
+  /* Discard splat if alpha undercuts 1/255. */
+  if (gs.opacity < (1.0f / 255.0f)) {
+    return SplatData::culled();
+  }
+
+  /* Discard splat if scale is invalid along any axis. */
+  if (any(equal(gs.scale, float3(0.0f))) || any(isnan(gs.scale))) {
+    return SplatData::culled();
   }
 
   float4x4 viewmat = view.viewmat * obj.model;
   float3x3 covmat = get_covmat(gs.rotation, gs.scale);
 
-  /* Project gaussian to screen-space, recovering 2D axes for a splat billboard. */
+  /* Project Gaussian to screen-space, recovering 2D axes for a splat billboard. */
   float3 covmat_proj = project_covmat(
       gs.mean, viewmat, view.winmat, covmat, srt.viewport_size, view.is_perspective());
   AxisTuple axes = covmat_to_axes(covmat_proj);
 
-  if (
-      /* Is the splat partially/entirely inside/overlapping the viewport? */
-      !detail::is_inside_viewport(axes, hP, srt.viewport_size) ||
-      /* Is the splat footprint enclosed in a 3x3 patch? */
-      !detail::is_3x3_footprint(axes))
-  {
-    return uint2(0);
+  /* Discard splat if it is not partially/entirely inside/enclosing the viewport. */
+  if (!detail::is_inside_viewport(axes, hP, srt.viewport_size)) {
+    return SplatData::culled();
   }
 
-  /* Compute and pack normal. */
-  float3 N = get_planar_normal(gs.rotation, gs.scale);
-  float2 oct = detail::pack_normal_octahedral(N);
+  /* Compute and pack normal. Normal is oriented towards view, never back-facing. */
+  float3 lN = get_planar_normal(gs.rotation, gs.scale);
+  float3 wN = obj.normal_object_to_world(lN);
+  float3 wV = view.world_incident_vector(wP);
+  if (dot(wN, wV) < 0.0f) {
+    wN = -wN;
+  }
 
-  /* Pack output to a single uint. */
-  return uint2(axes.pack(), packSnorm2x16(oct));
+  return SplatData{.axes = axes, .N = wN, .opacity = gs.opacity};
 }
 
 /**
- * Evaluate radiance base (spherical harmonics degree 0), plus gsplat alpha.
+ * Evaluate radiance (spherical harmonics degrees 0-3). Templated s.a. to only
+ * evaluate required degrees in different draws.
  *
  * \note Keep in sync with `pack_radiance` in `draw_cache_impl_gsplat.cc`.
  */
-float4 eval_radiance_base(Gaussian gs, [[resource_table]] const Resources &srt)
-{
-  float4 sh_base = uintBitsToFloat(srt.radiance_data[4 * gs.id]);
-
-  spherical_harmonics::BandL0<float3> L0 = {.M0 = sh_base.rgb};
-  float3 radiance = L0.evaluate(float3(0) /* L0 is view indirectional */);
-
-  /* Resolve as (sh + 0.5) [3dgs2023]. */
-  return float4(radiance, sh_base.a);
-}
-
-/**
- * Evaluate radiance rest (spherical harmonics degree 1-3).
- *
- * \note Keep in sync with `pack_radiance` in `draw_cache_impl_gsplat.cc`.
- */
-float3 eval_radiance_rest(Gaussian gs,
-                          ObjectMatrices obj,
-                          ViewMatrices view,
-                          [[resource_table]] const Resources &srt)
+template<uint Degrees>
+float3 eval_radiance(Gaussian gs,
+                     ObjectMatrices obj,
+                     ViewMatrices view,
+                     [[resource_table]] const Resources &srt)
 {
   /* Object-space incident view vector. */
   float3 wP = obj.point_object_to_world(gs.mean);
   float3 wV = view.world_incident_vector(wP);
-  float3 lV = transform_direction(obj.model_inverse, wV);
-  lV = -lV;
+  float3 lV = -normalize(transform_direction(obj.model_inverse, wV));
 
-  /* Unpack spherical harmonic degrees 1, 2, 3.
+  /* Unpack spherical harmonic degrees 0, 1, 2, 3.
    *
-   * The fun part! These require 3*15 coefficients, which are packed in three
+   * The fun part! These require 3*16 coefficients, which are packed over
    * uint4s (i.e. 48by) using 8b per coefficient. Layout is as follows:
    *
-   *  pack_0 : [rgbr][gbrg][brgb][rgb_]
-   *  pack_1 : [rgbr][gbrg][brgb][rgb_]
-   *  pack_2 : [rgbr][gbrg][brgb][rgb_]
+   *  pack_0 : [xyzx][yzxy][zxyz][xyzx]
+   *  pack_1 : [yzxy][zxyz][xyzx][yzxy]
+   *  pack_2 : [zxyz][xyzx][yzxy][zxyz]
    *
-   * Each uint4 packs 3x5 values. `slice_tuple<>()` reads disjointed colors
-   * across the uint4, unpacking the 5 sets of 3 bytes left to right. */
-  [[resource_table]] const BoundsResources<0> &srt_bounds = srt.bounds_data;
-  const detail::Bounds<float3> bounds = srt_bounds.sh_rest();
-  const uint4 sh_rest_0 = srt.radiance_data[4 * gs.id + 1];
-  const uint4 sh_rest_1 = srt.radiance_data[4 * gs.id + 2];
-  const uint4 sh_rest_2 = srt.radiance_data[4 * gs.id + 3];
+   * The functions `detail::slice_tuple_*()` read disjointed color sets
+   * across the uint4, unpacking the 6 sets of 3 bytes left to right. */
+  const ScalingRange radiance_base_range = srt.infos.radiance_base_range;
+  const ScalingRange radiance_sh_range = srt.infos.radiance_sh_range;
+  const uint4 sh0 = srt.radiance_data[3 * gs.id];
+  const uint4 sh1 = srt.radiance_data[3 * gs.id + 1];
+  const uint4 sh2 = srt.radiance_data[3 * gs.id + 2];
 
   float3 radiance = float3(0.0f);
+  if (Degrees > 0) {
+    spherical_harmonics::BandL0<float3> L0 = {
+        .M0 = detail::unpack_sh(detail::slice_tuple_xyzn(sh0.x), radiance_base_range)};
+    radiance += L0.evaluate(lV);
+  }
+  if (Degrees > 1) {
+    spherical_harmonics::BandL1<float3> L1 = {
+        .Mn1 = detail::unpack_sh(detail::slice_tuple_xnyz(sh0.x, sh0.y), radiance_sh_range),
+        .M0 = detail::unpack_sh(detail::slice_tuple_xynz(sh0.y, sh0.z), radiance_sh_range),
+        .Mp1 = detail::unpack_sh(detail::slice_tuple_nxyz(sh0.z), radiance_sh_range)};
+    radiance += L1.evaluate(lV);
+  }
+  if (Degrees > 2) {
+    spherical_harmonics::BandL2<float3> L2 = {
+        .Mn2 = detail::unpack_sh(detail::slice_tuple_xyzn(sh0.w), radiance_sh_range),
+        .Mn1 = detail::unpack_sh(detail::slice_tuple_xnyz(sh0.w, sh1.x), radiance_sh_range),
+        .M0 = detail::unpack_sh(detail::slice_tuple_xynz(sh1.x, sh1.y), radiance_sh_range),
+        .Mp1 = detail::unpack_sh(detail::slice_tuple_nxyz(sh1.y), radiance_sh_range),
+        .Mp2 = detail::unpack_sh(detail::slice_tuple_xyzn(sh1.z), radiance_sh_range)};
+    radiance += L2.evaluate(lV);
+  }
+  if (Degrees > 3) {
+    spherical_harmonics::BandL3<float3> L3 = {
+        .Mn3 = detail::unpack_sh(detail::slice_tuple_xnyz(sh1.z, sh1.w), radiance_sh_range),
+        .Mn2 = detail::unpack_sh(detail::slice_tuple_xynz(sh1.w, sh2.x), radiance_sh_range),
+        .Mn1 = detail::unpack_sh(detail::slice_tuple_nxyz(sh2.x), radiance_sh_range),
+        .M0 = detail::unpack_sh(detail::slice_tuple_xyzn(sh2.y), radiance_sh_range),
+        .Mp1 = detail::unpack_sh(detail::slice_tuple_xnyz(sh2.y, sh2.z), radiance_sh_range),
+        .Mp2 = detail::unpack_sh(detail::slice_tuple_xynz(sh2.z, sh2.w), radiance_sh_range),
+        .Mp3 = detail::unpack_sh(detail::slice_tuple_nxyz(sh2.w), radiance_sh_range)};
+    radiance += L3.evaluate(lV);
+  }
 
-  /* Degree 1. */
-  spherical_harmonics::BandL1<float3> L1 = {
-      .Mn1 = bounds.unpack(float3(detail::slice_tuple<0>(sh_rest_0)) / 255.0f),
-      .M0 = bounds.unpack(float3(detail::slice_tuple<1>(sh_rest_0)) / 255.0f),
-      .Mp1 = bounds.unpack(float3(detail::slice_tuple<2>(sh_rest_0)) / 255.0f)};
-  radiance.rgb += L1.evaluate(lV);
-
-  /* Degree 2. */
-  spherical_harmonics::BandL2<float3> L2 = {
-      .Mn2 = bounds.unpack(float3(detail::slice_tuple<3>(sh_rest_0)) / 255.0f),
-      .Mn1 = bounds.unpack(float3(detail::slice_tuple<4>(sh_rest_0)) / 255.0f),
-      .M0 = bounds.unpack(float3(detail::slice_tuple<0>(sh_rest_1)) / 255.0f),
-      .Mp1 = bounds.unpack(float3(detail::slice_tuple<1>(sh_rest_1)) / 255.0f),
-      .Mp2 = bounds.unpack(float3(detail::slice_tuple<2>(sh_rest_1)) / 255.0f)};
-  radiance.rgb += L2.evaluate(lV);
-
-  /* Degree 3. */
-  spherical_harmonics::BandL3<float3> L3 = {
-      .Mn3 = bounds.unpack(float3(detail::slice_tuple<3>(sh_rest_1)) / 255.0f),
-      .Mn2 = bounds.unpack(float3(detail::slice_tuple<4>(sh_rest_1)) / 255.0f),
-      .Mn1 = bounds.unpack(float3(detail::slice_tuple<0>(sh_rest_2)) / 255.0f),
-      .M0 = bounds.unpack(float3(detail::slice_tuple<1>(sh_rest_2)) / 255.0f),
-      .Mp1 = bounds.unpack(float3(detail::slice_tuple<2>(sh_rest_2)) / 255.0f),
-      .Mp2 = bounds.unpack(float3(detail::slice_tuple<3>(sh_rest_2)) / 255.0f),
-      .Mp3 = bounds.unpack(float3(detail::slice_tuple<4>(sh_rest_2)) / 255.0f)};
-  radiance.rgb += L3.evaluate(lV);
-
-  return radiance;
+  /* Resolve radiance as sh + 0.5, matching the implementation of [3dgs2023]. Note that our
+   * conversion to linear rgb is erroneous; splat data is fitted for sRGB data. */
+  float3 resolved_radiance = detail::scene_linear_from_bt709(max(radiance + 0.5f, 0.0f));
+  return resolved_radiance;
 }
+template float3 eval_radiance<1>(Gaussian,
+                                 ObjectMatrices,
+                                 ViewMatrices,
+                                 [[resource_table]] const Resources &);
+template float3 eval_radiance<4>(Gaussian,
+                                 ObjectMatrices,
+                                 ViewMatrices,
+                                 [[resource_table]] const Resources &);
 
-[[compute]] [[local_size(DRW_GSPLAT_GROUP_SIZE)]]
-void compute_entry([[resource_table]] Resources &srt,
-                   [[resource_table]] const Pipeline &pipeline,
-                   [[resource_table]] const draw::View &views,
-                   [[resource_table]] const draw::Model &models,
-                   [[global_invocation_id]] const uint3 global_id)
+[[compute]] [[local_size(DRW_GSPLAT_GROUP_SIZE)]] void compute_entry(
+    [[resource_table]] Resources &srt,
+    [[resource_table]] const Pipeline &pipeline,
+    [[resource_table]] const draw::View &views,
+    [[resource_table]] const draw::Model &models,
+    [[global_invocation_id]] const uint3 global_id)
 {
   if (global_id.x >= srt.num_points) {
     return;
   }
 
-  /* TODO(not_mark): instances :( */
-  /* TODO(not_mark): multiview :( */
-  /* TODO(not_mark): coffee :D */
+  /* TODO(not_mark): This does not account for instancing. */
   const ObjectMatrices obj = models.get(srt.resource_id);
   const ViewMatrices view = views.get(0);
   const Gaussian gs = srt.get(global_id.x);
 
-  /* Ellipse computation and output. */
-  uint2 ellipse_pack = uint2(0u);
-  bool is_ellipse_culled = false;
+  /* Splat computation and output. */
+  SplatData splat = SplatData::culled();
   if (pipeline.do_ellipses) [[static_branch]] {
-    ellipse_pack = eval_ellipse_packed(gs, obj, view, srt);
-    is_ellipse_culled = (ellipse_pack.x == 0u);
-    srt.ellipses_comp[global_id.x] = ellipse_pack;
+    splat = eval_splat(gs, obj, view, srt);
+    srt.ellipses_comp[global_id.x] = splat.is_culled() ? uint2(0) : splat.pack();
   }
 
   /* Base/full radiance computation and output. */
-  if (pipeline.do_radiance_base) [[static_branch]] {
-    float4 radiance = float4(0.0f);
-    if (!is_ellipse_culled) {
-      radiance += eval_radiance_base(gs, srt);
+  if (pipeline.do_radiance) [[static_branch]] {
+    float4 radiance = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-      /* Splat data is generally encoded as (sRGB - 0.5) [3dgs2023]. */
-      radiance.rgb = detail::inverse_srgb_transfer(radiance.rgb + 0.5f);
+    /* Only compute radiance if necessary. */
+    if (pipeline.do_ellipses) [[static_branch]] {
+      if (!splat.is_culled()) {
+        radiance.rgb = eval_radiance<4>(gs, obj, view, srt);
+      }
     }
-
-    /* Radiance is packed to fp16. */
-    srt.radiance_comp[global_id.x] = uintBitsToFloat(
-        uint2(packHalf2x16(radiance.xy), packHalf2x16(radiance.zw)));
-  }
-
-  if (pipeline.do_radiance_full) [[static_branch]] {
-    float4 radiance = float4(0.0f);
-    if (!is_ellipse_culled) {
-      radiance += eval_radiance_base(gs, srt);
-      radiance.rgb += eval_radiance_rest(gs, obj, view, srt);
-
-      /* Splat data is generally encoded as (sRGB - 0.5) [3dgs2023]. */
-      radiance.rgb = detail::inverse_srgb_transfer(radiance.rgb + 0.5f);
+    else {
+      radiance.rgb = eval_radiance<4>(gs, obj, view, srt);
     }
 
     /* Radiance is packed to fp16. */
@@ -285,13 +290,9 @@ void compute_entry([[resource_table]] Resources &srt,
 
 /* clang-format off */
 
-PipelineCompute compute_ellipses(compute_entry, Pipeline{.do_ellipses = true, .do_radiance_base = false, .do_radiance_full = false});
-PipelineCompute compute_ellipses_radiance_base(compute_entry, Pipeline{.do_ellipses = true, .do_radiance_base = true, .do_radiance_full = false});
-PipelineCompute compute_ellipses_radiance_full(compute_entry, Pipeline{.do_ellipses = true, .do_radiance_base = false, .do_radiance_full = true});
-
-/* Radiance only is unused. */
-/* PipelineCompute compute_radiance_base(compute_entry, Pipeline{.do_ellipses = false, .do_radiance_base = true, .do_radiance_full = false}); */
-/* PipelineCompute compute_radiance_full(compute_entry, Pipeline{.do_ellipses = false, .do_radiance_base = false, .do_radiance_full = true}); */
+PipelineCompute compute_ellipses(compute_entry, Pipeline{.do_ellipses = true, .do_radiance = false});
+PipelineCompute compute_radiance(compute_entry, Pipeline{.do_ellipses = false, .do_radiance = true});
+PipelineCompute compute_ellipses_radiance(compute_entry, Pipeline{.do_ellipses = true, .do_radiance = true});
 
 /* clang-format on */
 

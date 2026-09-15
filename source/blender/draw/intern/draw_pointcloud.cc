@@ -69,14 +69,14 @@ void DRW_pointcloud_module_free(PointCloudModule *pointcloud_module)
 template<typename PassT>
 gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
                                                      const ObjectRef &ob_ref,
-                                                     const ResourceHandle &res_handle,
+                                                     const ResourceHandleRange &res_handle,
                                                      GPUMaterial *gpu_material)
 {
   const Object *object = ob_ref.object;
   BLI_assert(object->type == OB_POINTCLOUD);
 
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*object);
-  if (pointcloud.render_as == PT_RENDER_AS_SPLATS) {
+  if (pointcloud.type == PointCloudType::GSplat) {
     /* GSplats are a subtype of pointclouds, so we forward to their implementation. */
     return gsplat_sub_pass_setup(sub_ps, ob_ref, res_handle, gpu_material);
   }
@@ -84,8 +84,7 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
   PointCloudModule &module = *drw_get().data->pointcloud_module;
 
   /* An empty pointcloud should never result in a draw-call. However, the buffer binding commands
-   * will still be executed. In this case, in order to avsub_psoid assertion, we bind dummy VBOs.
-   */
+   * will still be executed. In this case, in order to avoid assertion, we bind dummy VBOs. */
   const bool is_empty = pointcloud.totpoint == 0;
 
   /* Ensure we have no unbound resources, required for Vulkan.
@@ -119,7 +118,7 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
 
 gpu::Batch *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
                                       const ObjectRef &ob_ref,
-                                      const ResourceHandle &res_handle,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material)
 {
   return pointcloud_sub_pass_setup_implementation(sub_ps, ob_ref, res_handle, gpu_material);
@@ -127,7 +126,7 @@ gpu::Batch *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
 
 gpu::Batch *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
                                       const ObjectRef &ob_ref,
-                                      const ResourceHandle &res_handle,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material)
 {
   return pointcloud_sub_pass_setup_implementation(sub_ps, ob_ref, res_handle, gpu_material);

@@ -25,6 +25,8 @@
 
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
@@ -54,12 +56,16 @@
 
 namespace blender::draw {
 
-/* Draw module and real-time engines (EEVEE, Overlay, Workbench) restrict max
+/* Draw module and real-time engines (EEVEE, Overlay, Workbench) use max
  * 3 spherical harmonics degrees for performance and memory reasons. */
 constexpr uint32_t radiance_degs_max = 3;
 
-/* Nr. of coefficients matching 3 degree spherical harmonics, minus degree 0. */
-constexpr uint32_t radiance_coeffs_max = (radiance_degs_max + 1u) * (radiance_degs_max + 1u) - 1u;
+/* Nr. of coefficients matching 3 degree spherical harmonics. */
+constexpr uint32_t radiance_coeffs_max = (radiance_degs_max + 1u) * (radiance_degs_max + 1u);
+
+/* Sane defaults for missing but non-zero attribute data. */
+constexpr float value_scale_default = 1e-3f;
+constexpr float value_opacity_default = 0.5f;
 
 namespace detail {
 
@@ -77,19 +83,11 @@ static void index_mask_to_ibo(const IndexMask &mask, gpu::IndexBuf &ibo)
 }
 
 /**
- * Given a boundary, normalize and clamp a value to lie within a [0,1] range.
- */
-template<typename T> T normalize_to_bounds(const Bounds<T> bounds, const T &value_to_pack)
-{
-  return math::clamp((value_to_pack - bounds.min) / bounds.size(), T(0), T(1));
-}
-
-/**
  * Expmap packing [quat2017] of quaternion data.
  *
  * \note Keep in sync with `unpack_quaternion_3_to_4` in `draw_gsplat_lib.bsl.hh`.
  */
-float3 pack_quaternion_4_to_3(float4 q)
+BLI_INLINE float3 pack_quaternion_4_to_3(const float4 &q)
 {
   float w = q.w;
   float a = 1.0f - w * w;
@@ -100,102 +98,108 @@ float3 pack_quaternion_4_to_3(float4 q)
 }
 
 /**
- * Tightly pack gaussian shape data to a uint4.
+ * Tightly pack Gaussian shape data to a uint4.
  *
- * This currently follows the quantization in [gspt2026], which relies on separately stored
- * boundaries in a UBO. The quantization reduces gaussian mean to 23+22+23b, scale to 3x10b,
- * and rotation to 3x10b. Across 4 words, data is distributed as follows:
+ * This is an adapted version of the quantization in [gspt2026], which relies on separately
+ * stored boundaries in a UBO. Our variant reduces Gaussian mean to 3x22b, scale to 3x9b, and
+ * rotation to 3x9b. We additionally pack Gaussian opacity in 8b. Across 4 uints, data is then
+ * distributed as follows:
  *
- * - word 0: [ meanx, 23 ] [ meany,   9 ]
- * - word 1: [ meany, 13 ] [ meanz,  19 ]
- * - word 2: [ meanz,  4 ] [ quatx,  10 ] [ quaty,  10 ] [ quatz,   8 ]
- * - word 3: [ quatz,  2 ] [ scalex, 10 ] [ scalew, 10 ] [ scalez, 10 ]
+ * - word 0: [ meanx, 22 ] [ meany, 10 ]
+ * - word 1: [ meany, 12 ] [ meanz, 20 ]
+ * - word 2: [ meanz,  2 ] [ quatx,  9 ] [ quaty, 9 ] [ quatz, 9 ] [ scalx, 3 ]
+ * - word 3: [ scalx,  6 ] [ scaly,  9 ] [ scalz, 9 ] [ opaci, 8 ]
  *
  * \note Keep in sync with `unpack_gaussian_*` in `draw_gsplat_lib.bsl.hh`.
  */
-uint4 pack_gaussian(float3 mean,
-                    float3 log_scale,
-                    math::Quaternion rotation,
-                    const Bounds<float3> mean_bounds,
-                    const Bounds<float3> log_scale_bounds)
+BLI_INLINE uint4 pack_gaussian(const float3 &bounded_mean,
+                               const float3 &bounded_log_scale,
+                               const math::Quaternion &rotation,
+                               float opacity)
 {
-  /* Quantize mean to `pu`: 23+22+23b. */
-  float3 p = normalize_to_bounds(mean_bounds, mean);
-  uint3 pu = uint3(static_cast<uint32_t>(p.x * ((1u << 23) - 1u)),
-                   static_cast<uint32_t>(p.y * ((1u << 22) - 1u)),
-                   static_cast<uint32_t>(p.z * ((1u << 23) - 1u)));
-
-  /* Quantize rotation to `ru`: 3x10b. Note that we shuffle quaternion wxyz to xyzw for consistency
-   * inside the draw module shaders. */
+  /* Quantize mean to `pu`: 3x22b. */
+  uint3 pu = static_cast<uint3>(bounded_mean * ((1 << 22) - 1u));
+  /* Quantize scaling to `su`: 3x9b. */
+  uint3 su = static_cast<uint3>(bounded_log_scale * 511.0f);
+  /* Quantize opacity to `au`, 1x8b. */
+  uint au = static_cast<uint>(clamp(opacity, 0.0f, 1.0f) * 255.0f);
+  /* Quantize rotation to `ru`: 3x9b.
+   * Note that we shuffle quaternion wxyz to xyzw for consistency inside draw module shaders. */
   float4 q = math::normalize(float4(rotation.x, rotation.y, rotation.z, rotation.w));
   if (q.w < 0.0f) {
     q = -q;
   }
   float3 vr = math::clamp((pack_quaternion_4_to_3(q) + 1.0f) * 0.5f, 0.0f, 1.0f);
-  uint3 ru = static_cast<uint3>(vr * 1023.0f);
-
-  /* Quantize scaling to `su`: 3x10b. */
-  float3 s = normalize_to_bounds(log_scale_bounds, log_scale);
-  uint3 su = static_cast<uint3>(s * 1023.0f);
+  uint3 ru = static_cast<uint3>(vr * 511.0f);
 
   /* Now for the fun part: pack quantized data to 4 words. */
   uint4 w;
-  w.x = /* 23 bits */ (pu.x & 0x7FFFFFu) |
-        /* 9  bits */ ((pu.y & 0x1FFu) << 23);
-  w.y = /* 13 bits */ ((pu.y >> 9) & 0x1FFFu) |
-        /* 19 bits */ (pu.z << 13);
-  w.z = /* 4  bits */ ((pu.z >> 19) & 0xFu) |
-        /* 10 bits */ ((ru.x & 0x3FFu) << 4u) |
-        /* 10 bits */ ((ru.y & 0x3FFu) << 14u) |
-        /* 8  bits */ ((ru.z & 0xFFu) << 24u);
-  w.w = /* 2  bits */ ((ru.z >> 8u) & 0x3u) |
-        /* 10 bits */ ((su.x & 0x3FFu) << 2) |
-        /* 10 bits */ ((su.y & 0x3FFu) << 12) |
-        /* 10 bits */ ((su.z & 0x3FFu) << 22);
+  w.x = /* 22b */ (pu.x & 0x3FFFFFu) |
+        /* 10b */ ((pu.y & 0x0003FFu) << 22);
+  w.y = /* 12b */ ((pu.y >> 10) & 0x000FFFu) |
+        /* 20b */ ((pu.z & 0x0FFFFFu) << 12);
+  w.z = /* 02b */ ((pu.z >> 20) & 0x000003u) |
+        /* 09b */ ((ru.x & 0x0001FFu) << 2) |
+        /* 09b */ ((ru.y & 0x0001FFu) << 11) |
+        /* 09b */ ((ru.z & 0x0001FFu) << 20) |
+        /* 03b */ ((su.x & 0x000007u) << 29);
+  w.w = /* 06b */ ((su.x >> 3) & 0x00003Fu) |
+        /* 09b */ ((su.y & 0x0001FFu) << 6) |
+        /* 09b */ ((su.z & 0x0001FFu) << 15) |
+        /* 08b */ ((au & 0x0000FFu) << 24);
   return w;
 }
 
 struct RadiancePack {
-  float4 radiance_base;
   uint8_t radiance_sh[48];
 };
-static_assert(sizeof(RadiancePack) == 64ul);
+static_assert(sizeof(RadiancePack) == 48ul);
 
 /**
  * Tightly pack radiance and opacity data to 4x uint4.
  *
- * This quantizes 3 channels of spherical harmonics degrees 1-3 using 8b per coefficient, so
- * 3x15 coefficients. Note that the draw module restricts spherical harmonics to 3 degrees; packing
- * a 4th would greatly increase memory and packing complexity for little gain. Further note that
- * currently degree 0 and opacity are stored at full precision.
+ * This quantizes 3 channels of spherical harmonics degrees 0-3 using 8b per coefficient, so
+ * 3x16 coefficients. Note that the draw module restricts spherical harmonics to 3 degrees;
+ * packing a 4th would greatly increase memory and packing complexity for little gain.
  *
- * The 4x1 (deg 0 + alpha) and 3x15 (deg 1-3) values are distributed over 16 words as follows:
+ * The coefficients are distributed over 12 words as follows:
  *
- *  [ 0,  1,  2,  3] : [rrrr][gggg][bbbb][aaaa]
- *  [ 4,  5,  6,  7] : [rgbr][gbrg][brgb][rgb_]
- *  [ 8,  9, 10, 11] : [rgbr][gbrg][brgb][rgb_]
- *  [12, 13, 14, 15] : [rgbr][gbrg][brgb][rgb_]
+ *  [0, 1,  2,  3] : [xyzx][yzxy][zxyz][xyzx]
+ *  [4, 5,  6,  7] : [yzxy][zxyz][xyzx][yzxy]
+ *  [8, 9, 10, 11] : [zxyz][xyzx][yzxy][zxyz]
  *
- * \note Keep in sync with `eval_radiance_*` in `draw_gsplat.bsl.hh`.
+ * \note Keep in sync with `eval_radiance` in `draw_gsplat.bsl.hh`.
  */
-RadiancePack pack_radiance(float4 radiance_base,
-                           const Array<float3, radiance_coeffs_max> radiance_sh,
-                           const Bounds<float3> &radiance_sh_bounds)
+BLI_INLINE RadiancePack pack_radiance(const Array<float3, radiance_coeffs_max> &radiance_sh)
 {
-  RadiancePack pack = {.radiance_base = radiance_base};
-
+  RadiancePack pack;
   for (uint32_t i = 0u; i < radiance_coeffs_max; ++i) {
     /* Quantize float3 coefficients to 3x8b. */
-    float3 shf = normalize_to_bounds(radiance_sh_bounds, radiance_sh[i]);
-    uchar3 shu = static_cast<uchar3>(math::clamp(shf * 255.0f, 0.0f, 255.0f));
-
+    uchar3 shu = static_cast<uchar3>(math::clamp(radiance_sh[i] * 255.0f, 0.0f, 255.0f));
     /* Coefficients are stored in packs with a padding byte every 15 bytes.
      * This simplifies unpacking shader-side, until we find more data to pack in. */
-    uchar3 *shu_data = reinterpret_cast<uchar3 *>(pack.radiance_sh + (3 * i) + (i / 5));
+    uchar3 *shu_data = reinterpret_cast<uchar3 *>(pack.radiance_sh + (3 * i));
     *shu_data = shu;
   }
-
   return pack;
+}
+
+/**
+ * Collect virtual arrays for existing pointcloud attributes that store the various
+ * spherical harmonics coefficients, up to the maximum supported number.
+ */
+Vector<VArraySpan<float3>> read_radiance_sh_attributes(const bke::AttributeAccessor &attributes)
+{
+  Vector<VArraySpan<float3>> arrays;
+  for (uint i = 0; i < (radiance_coeffs_max - 1); ++i) {
+    VArraySpan<float3> array_i = *attributes.lookup<float3>(fmt::format("radiance:sh_{}", i));
+    if (array_i.is_empty()) {
+      /* If a coefficient does not exist, we can stop reading. */
+      break;
+    }
+    arrays.append(std::move(array_i));
+  }
+  return arrays;
 }
 
 }  // namespace detail
@@ -206,74 +210,91 @@ RadiancePack pack_radiance(float4 radiance_base,
 
 void GSplatEvalCache::ensure_builtin_buffers(PointCloud &pointcloud)
 {
-  /* Accessors over built-ins. */
-  const Span mean = pointcloud.positions();
-  const Span exp_scale = pointcloud.gsplat_scale();
-  const Span quaternion = pointcloud.gsplat_rotation();
-  const Span radiance_base = pointcloud.radiance_base();
-  const Vector<VArraySpan<float3>> radiance_sh = pointcloud.radiance_sh();
+  /* Accessors over attributes. Arrays are default-initialized to values s.t. missing or invalid
+   * scale/rotation/radiance do not cause rendering to fail, instead falling back to defaults.*/
+  const bke::AttributeAccessor attributes = pointcloud.attributes();
+  const Span<float3> mean = pointcloud.positions();
+  const VArray<float3> exp_scale = *attributes.lookup_or_default<float3>(
+      "scale", bke::AttrDomain::Point, float3(value_scale_default));
+  const VArray<math::Quaternion> quaternion = *attributes.lookup_or_default<math::Quaternion>(
+      "rotation", bke::AttrDomain::Point, math::Quaternion(0.0f, 0.0f, 0.0f, 1.0f));
+  const VArray<float4> radiance_base = *attributes.lookup_or_default<float4>(
+      "radiance:base", bke::AttrDomain::Point, float4(0.0f, 0.0f, 0.0f, value_opacity_default));
+  const Vector<VArraySpan<float3>> radiance_sh = detail::read_radiance_sh_attributes(attributes);
 
   /* An activation function `exp(x)` is typically applied to scaling coefficients before rendering,
    * as the scale data comes directly from the fitting process. We strip this function for packing
-   * purposes, and re-apply it when unpacking shader-side. */
-  Vector<float3> scale(exp_scale.size());
+   * and re-apply it when unpacking shader-side. Note that 0 is a valid input through attributes,
+   * but as ln(0) is undefined we instead pack an epsilon. */
+  Array<float3> scale(exp_scale.size());
   threading::parallel_for(exp_scale.index_range(), 4096, [&](IndexRange range) {
     for (const int i : range) {
-      scale[i] = math::log(exp_scale[i]);
+      scale[i] = math::is_any_zero(exp_scale[i]) ? float3(-1e6f) :
+                                                   math::log(math::abs(exp_scale[i]));
     }
   });
 
-  /* For packing purposes, we compute data boundaries. The packing functions below quantize the
-   * data such that it within [0, 1], as defined over the data range. */
-  Bounds<float3> bounds_mean = Bounds(float3(0.0f));
-  Bounds<float3> bounds_scale = Bounds(float3(0.0f));
-  Bounds<float3> bounds_radiance_sh = Bounds(float3(0.0f));
-  if (auto bounds_opt = bounds::min_max(mean); bounds_opt.has_value()) {
-    bounds_mean = bounds_opt.value();
-  }
-  if (auto bounds_opt = bounds::min_max(scale.as_span()); bounds_opt.has_value()) {
-    bounds_scale = bounds_opt.value();
-  }
-  for (const VArraySpan<float3> &span : radiance_sh) {
-    if (auto bounds_opt = bounds::min_max(span); bounds_opt.has_value()) {
-      bounds_radiance_sh = bounds::merge(bounds_radiance_sh, bounds_opt.value());
+  /* Obtain data boundaries; we quantize uploaded data such that it lies within [0, 1]. */
+  Bounds<float3> splat_mean_bounds = pointcloud.bounds_min_max(false).value_or(Bounds<float3>());
+  Bounds<float3> splat_scale_bounds = bounds::min_max(scale.as_span()).value_or(Bounds<float3>());
+  auto radiance_rgba_bounds = bounds::min_max(radiance_base).value_or(Bounds<float4>());
+  /* Omit opacity, which is packed with Gaussian data and clamped to lie in [0, 1]. */
+  Bounds<float3> radiance_base_bounds = Bounds(radiance_rgba_bounds.min.xyz(),
+                                               radiance_rgba_bounds.max.xyz());
+  Bounds<float3> radiance_sh_bounds = Bounds<float3>(float3(0.0f));
+  for (const VArraySpan<float3> &radiance_sh_i : radiance_sh) {
+    if (auto bounds = bounds::min_max(radiance_sh_i); bounds.has_value()) {
+      /* Accumulate sh degrees 1-3 into bounds. */
+      radiance_sh_bounds = bounds::merge(radiance_sh_bounds, *bounds);
     }
   }
 
-  /* Push data boundaries to a UBO for unpacking shader-side. */
-  GSplatBoundsInfos bounds_buf_data = {
-      .mean = {float4(bounds_mean.min, 0.0f), float4(bounds_mean.max, 0.0f)},
-      .log_scale = {float4(bounds_scale.min, 0.0f), float4(bounds_scale.max, 0.0f)},
-      .radiance_sh = {float4(bounds_radiance_sh.min, 0.0f), float4(bounds_radiance_sh.max, 0.0f)},
-  };
-  GPU_uniformbuf_update(bounds_buf, &bounds_buf_data);
+  /* Scaling range helpers to quantize values inside the data boundaries to [0, 1].  */
+  ScalingRange splat_mean_range = {.range_add = splat_mean_bounds.min,
+                                   .range_mul = splat_mean_bounds.size()};
+  ScalingRange splat_scale_range = {.range_add = splat_scale_bounds.min,
+                                    .range_mul = splat_scale_bounds.size()};
+  ScalingRange radiance_base_range = {.range_add = radiance_base_bounds.min,
+                                      .range_mul = radiance_base_bounds.size()};
+  ScalingRange radiance_sh_range = {.range_add = radiance_sh_bounds.min,
+                                    .range_mul = radiance_sh_bounds.size()};
 
-  /* Gaussian shape and radiance data is packed into uint4 and uint4x4 buffers respectively. */
+  /* Place range helpers in a UBO for unpacking quantized data shader-side. */
+  GSplatInfos ubo_data = {.splat_mean_range = splat_mean_range,
+                          .splat_scale_range = splat_scale_range,
+                          .radiance_base_range = radiance_base_range,
+                          .radiance_sh_range = radiance_sh_range};
+  GPU_uniformbuf_update(infos_buf, &ubo_data);
+
+  /* Gaussian shape and radiance data is packed into uint4 and uint4x3 buffers respectively. */
   static constexpr GPUUsageType usage_flag = GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
   shape_data_buf->init(gpu::GenericVertexFormat<uint4>::format(), usage_flag);
   shape_data_buf->allocate(mean.size());
   radiance_data_buf->init(gpu::GenericVertexFormat<uint4>::format(), usage_flag);
-  radiance_data_buf->allocate(mean.size() * 4); /* Each splat uses uint4x4. */
+  radiance_data_buf->allocate(mean.size() * 3);
 
-  /* Pack gaussian shape data to uint4 span. */
+  /* Pack Gaussian shape data to a uint4 span. */
   MutableSpan shape_span = shape_data_buf->data<uint4>();
   threading::parallel_for(shape_span.index_range(), 4096, [&](IndexRange range) {
     for (const int i : range) {
+      float3 value_mean = splat_mean_range.scale_to_unit(mean[i]);
+      float3 value_scale = splat_scale_range.scale_to_unit(scale[i]);
       shape_span[i] = detail::pack_gaussian(
-          mean[i], scale[i], quaternion[i], bounds_mean, bounds_scale);
+          value_mean, value_scale, quaternion[i], radiance_base[i].w);
     }
   });
 
-  /* Pack radiance and opacity data to 4x uint4 span. */
+  /* Pack SH coefficients to 3x uint4 span. Missing coefficients are default-initialized. */
   MutableSpan radiance_span = radiance_data_buf->data<detail::RadiancePack>();
+  const float3 radiance_sh_default = radiance_sh_range.scale_to_unit(float3(0.0f));
   threading::parallel_for(radiance_span.index_range(), 4096, [&](IndexRange range) {
     for (const int i : range) {
-      float4 radiance_base_i = radiance_base[i];
-      Array<float3, radiance_coeffs_max> radiance_sh_i(radiance_coeffs_max, float3(0.0f));
-      for (uint32_t j = 0; j < radiance_coeffs_max; ++j) {
-        radiance_sh_i[j] = radiance_sh[j][i];
+      Array<float3, radiance_coeffs_max> value_radiance(radiance_coeffs_max, radiance_sh_default);
+      value_radiance[0] = radiance_base_range.scale_to_unit(radiance_base[i].xyz());
+      for (uint j = 0; j < radiance_sh.size(); ++j) {
+        value_radiance[j + 1] = radiance_sh_range.scale_to_unit(radiance_sh[j][i]);
       }
-      radiance_span[i] = detail::pack_radiance(radiance_base_i, radiance_sh_i, bounds_radiance_sh);
+      radiance_span[i] = detail::pack_radiance(value_radiance);
     }
   });
 }
@@ -369,7 +390,7 @@ void GSplatEvalCache::discard_buffers()
   GPU_VERTBUF_DISCARD_SAFE(radiance_comp_buf);
   GPU_VERTBUF_DISCARD_SAFE(attr_viewer);
 
-  GPU_UBO_FREE_SAFE(bounds_buf);
+  GPU_UBO_FREE_SAFE(infos_buf);
   GPU_INDEXBUF_DISCARD_SAFE(edit_dots_indices);
 
   if (surface_per_mat) {
@@ -419,12 +440,12 @@ gpu::VertBuf *GSplatEvalCache::radiance_comp_buf_get()
   return radiance_comp_buf;
 }
 
-gpu::UniformBuf *GSplatEvalCache::bounds_buf_get()
+gpu::UniformBuf *GSplatEvalCache::infos_buf_get()
 {
-  if (bounds_buf == nullptr) {
-    bounds_buf = GPU_uniformbuf_create_ex(sizeof(GSplatBoundsInfos), nullptr, "GSplatBoundsInfos");
+  if (infos_buf == nullptr) {
+    infos_buf = GPU_uniformbuf_create_ex(sizeof(GSplatInfos), nullptr, "GSplatInfos");
   }
-  return bounds_buf;
+  return infos_buf;
 }
 
 gpu::Batch *GSplatEvalCache::dots_get()
@@ -440,51 +461,17 @@ gpu::Batch *GSplatEvalCache::edit_dots_get()
 gpu::Batch *GSplatEvalCache::surface_get(const PointCloud &pointcloud)
 {
   if (surface == nullptr) {
-    const int32_t strip_tile_size = DRW_GSPLAT_STRIP_TILE_SIZE;
-    surface = GPU_batch_create_procedural(GPU_PRIM_TRIS /*  GPU_PRIM_TRI_STRIP */,
-                                          strip_tile_size * pointcloud.totpoint);
+    surface = GPU_batch_create_procedural(GPU_PRIM_TRI_STRIP,
+                                          DRW_GSPLAT_STRIP_TILE_SIZE * pointcloud.totpoint);
 
     DRW_vbo_request(nullptr, &shape_data_buf);
     DRW_vbo_request(nullptr, &radiance_data_buf);
 
-    if (!bounds_buf) {
-      bounds_buf = GPU_uniformbuf_create_ex(
-          sizeof(GSplatBoundsInfos), nullptr, "GSplatBoundsInfos");
+    if (!infos_buf) {
+      infos_buf = GPU_uniformbuf_create_ex(sizeof(GSplatInfos), nullptr, "GSplatInfos");
     }
   }
   return surface;
-}
-
-gpu::Batch **GSplatEvalCache::surface_shaded_get(const PointCloud &pointcloud,
-                                                 GPUMaterial **gpu_materials,
-                                                 int mat_len)
-{
-  const bke::AttributeAccessor attributes = pointcloud.attributes();
-  VectorSet<std::string> attrs_needed;
-
-  /* Add material requested attributes. */
-  for (GPUMaterial *gpu_material : Span<GPUMaterial *>(gpu_materials, mat_len)) {
-    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
-    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
-      const StringRef name = gpu_attr.name;
-      if (!attributes.contains(name)) {
-        continue;
-      }
-      drw_attributes_add_request(&attrs_needed, name);
-    }
-  }
-
-  if (!drw_attributes_overlap(&attr_used, &attrs_needed)) {
-    /* Some new attributes have been added, free all and start over. */
-    for (const int i : IndexRange(GPU_MAX_ATTR)) {
-      GPU_VERTBUF_DISCARD_SAFE(attributes_buf[i]);
-    }
-    drw_attributes_merge(&attr_used, &attrs_needed);
-  }
-  drw_attributes_merge(&attr_used_over_time, &attrs_needed);
-
-  DRW_batch_request(&surface_per_mat[0]);
-  return surface_per_mat;
 }
 
 /** \} */
@@ -562,7 +549,7 @@ GSplatEvalCache &GSplatEvalCache::get(PointCloud &pointcloud)
 
 gpu::VertBuf **DRW_gsplat_evaluated_attribute(PointCloud *pointcloud, const StringRef name)
 {
-  if (pointcloud->render_as != PT_RENDER_AS_SPLATS) {
+  if (pointcloud->type != PointCloudType::GSplat) {
     return nullptr;
   }
 
@@ -573,7 +560,7 @@ gpu::VertBuf **DRW_gsplat_evaluated_attribute(PointCloud *pointcloud, const Stri
     return nullptr;
   }
   {
-    VectorSet<std::string> requests{};
+    VectorSet<std::string> requests;
     drw_attributes_add_request(&requests, name);
     drw_attributes_merge(&cache.attr_used, &requests);
   }
@@ -589,15 +576,14 @@ gpu::VertBuf **DRW_gsplat_evaluated_attribute(PointCloud *pointcloud, const Stri
 gpu::Batch *DRW_gsplat_batch_cache_get_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  return pointcloud.render_as == PT_RENDER_AS_SPLATS ?
-             GSplatEvalCache::get(pointcloud).dots_get() :
-             nullptr;
+  return pointcloud.type == PointCloudType::GSplat ? GSplatEvalCache::get(pointcloud).dots_get() :
+                                                     nullptr;
 }
 
 gpu::Batch *DRW_gsplat_batch_cache_get_edit_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  return pointcloud.render_as == PT_RENDER_AS_SPLATS ?
+  return pointcloud.type == PointCloudType::GSplat ?
              GSplatEvalCache::get(pointcloud).edit_dots_get() :
              nullptr;
 }
@@ -605,7 +591,7 @@ gpu::Batch *DRW_gsplat_batch_cache_get_edit_dots(Object *ob)
 void DRW_gsplat_batch_cache_create_requested(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  if (pointcloud.render_as != PT_RENDER_AS_SPLATS) {
+  if (pointcloud.type != PointCloudType::GSplat) {
     return;
   }
   GSplatEvalCache::get(pointcloud).ensure_requested(pointcloud);
@@ -629,7 +615,7 @@ void DRW_gsplat_batch_cache_dirty_tag(PointCloud *pointcloud, int mode)
 
 void DRW_gsplat_batch_cache_validate(PointCloud *pointcloud)
 {
-  if (pointcloud->render_as != PT_RENDER_AS_SPLATS) {
+  if (pointcloud->type != PointCloudType::GSplat) {
     return;
   }
 

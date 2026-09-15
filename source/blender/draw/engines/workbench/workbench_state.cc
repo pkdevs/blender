@@ -308,11 +308,10 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
 {
   const bool is_active = (ob == draw_ctx->obact);
 
-  /* GSplats break with convention and ignore some workbench features for now. */
   const auto is_gsplat = [&]() {
     if (ob->type == OB_POINTCLOUD) {
-      const PointCloud &ptcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-      return ptcloud.render_as == PT_RENDER_AS_SPLATS;
+      const PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
+      return pointcloud.type == PointCloudType::GSplat;
     }
     return false;
   };

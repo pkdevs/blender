@@ -13,7 +13,7 @@
 #include "eevee_uniform.bsl.hh"
 #include "gpu_shader_math_base.bsl.hh"
 #include "gpu_shader_math_matrix_construct.bsl.hh"
-#include "gpu_shader_math_spherical_harmonics_lib.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
 #include "gpu_shader_math_vector_safe.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 

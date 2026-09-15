@@ -13,7 +13,6 @@
 /* Loading of the attributes into GlobalData. */
 void attrib_load(MeshVertex /*domain*/) {}
 void attrib_load(PointCloudPoint /*domain*/) {}
-void attrib_load(GSplatPoint /*domain*/) {}
 void attrib_load(CurvesPoint /*domain*/) {}
 
 #ifndef NODETREE_FUNCTIONS /* Needed for linting. */

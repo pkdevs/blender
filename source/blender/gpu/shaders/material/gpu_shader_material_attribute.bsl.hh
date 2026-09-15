@@ -26,8 +26,7 @@ void node_attribute_temperature(float4 attr, float4 &out_attr)
 [[node]]
 void node_attribute_radiance(float4 attr, float4 &out_attr)
 {
-  uint2 data = floatBitsToUint(attr.xy);
-  out_attr = float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y));
+  out_attr = attr_load_radiance_post(attr);
 }
 
 [[node]]

@@ -20,8 +20,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_memory_counter_fwd.hh"
 #include "BLI_span.hh"
-#include "BLI_vector.hh"
-#include "BLI_virtual_array.hh"
+#include "BLI_virtual_array_fwd.hh"
 
 namespace blender {
 
@@ -88,14 +87,6 @@ struct PointCloud {
 
   VArray<float> radius() const;
   MutableSpan<float> radius_for_write();
-
-  /** Gaussian splat shape builtin attributes. */
-  Span<float3> gsplat_scale() const;
-  Span<math::Quaternion> gsplat_rotation() const;
-  /** Gsplat `radiance:base` attribute, encoding sh degree 0 and opacity. */
-  Span<float4> radiance_base() const;
-  /** GSplat `radiance:sh_*` attribute, encoding sh degrees 1-4. Returned degrees can be less. */
-  Vector<VArraySpan<float3>> radiance_sh() const;
 
   bke::AttributeAccessor attributes() const;
   bke::MutableAttributeAccessor attributes_for_write();
