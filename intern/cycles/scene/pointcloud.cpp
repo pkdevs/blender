@@ -329,7 +329,7 @@ void PointCloud::update_gsplat_radii()
   float *radius_data = get_radius_for_write();
 
   auto estimate_gsplat_radius = [](const float opacity, const float3 scale) -> float {
-    /* Minimum response of the Gaussian splat which must be captures.
+    /* Minimum response of the Gaussian splat which must be captured.
      * The value comes from the paper. */
     constexpr float ALPHA_MIN = 0.01f;
 
