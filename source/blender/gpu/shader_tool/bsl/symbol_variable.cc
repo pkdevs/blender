@@ -90,29 +90,67 @@ static std::string to_string_exact(float val)
   return str + "f";
 }
 
+template<typename T, int size> static std::string to_string(const Vec<T, size> &v)
+{
+  std::string s;
+  if constexpr (size > 1) {
+    if constexpr (std::is_same_v<T, bool>) {
+      s += "bool";
+    }
+    else if constexpr (std::is_unsigned_v<T>) {
+      s += "uint";
+    }
+    else if constexpr (std::is_same_v<T, float>) {
+      s += "float";
+    }
+    else {
+      s += "int";
+    }
+    s += std::to_string(size) + "(";
+  }
+
+  for (int i = 0; i < size; ++i) {
+    if constexpr (std::is_same_v<T, bool>) {
+      s += v[i] ? "true" : "false";
+    }
+    else if constexpr (std::is_unsigned_v<T>) {
+      s += std::to_string(v[i]) + "u";
+    }
+    else if constexpr (std::is_same_v<T, float>) {
+      if (std::isnan(v[i])) {
+        s += "uintBitsToFloat(0x7FC00000u)";
+      }
+      else {
+        s += to_string_exact(v[i]);
+      }
+    }
+    else {
+      s += std::to_string(v[i]);
+    }
+
+    if constexpr (size > 1) {
+      if (i < size - 1) {
+        s += ", ";
+      }
+    }
+  }
+
+  if constexpr (size > 1) {
+    s += ")";
+  }
+
+  return s;
+}
+
+std::string constexpr_to_string(const ConstexprValue &v)
+{
+  return visit([](auto &&v) -> string { return to_string(v); }, v);
+}
+
 string SymbolVariable::value_str() const
 {
   assert(is_constexpr);
-  return visit(
-      [](auto &&v) -> string {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, bool>) {
-          return v ? "true" : "false";
-        }
-        else if constexpr (std::is_unsigned_v<T>) {
-          return to_string(v) + "u";
-        }
-        else if constexpr (std::is_same_v<T, float>) {
-          if (std::isnan(v)) {
-            return "uintBitsToFloat(0x7FC00000u)";
-          }
-          return to_string_exact(v);
-        }
-        else {
-          return to_string(v);
-        }
-      },
-      value);
+  return constexpr_to_string(value);
 }
 
 }  // namespace bsl

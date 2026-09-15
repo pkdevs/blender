@@ -935,16 +935,22 @@ struct CodegenContext : NodeErrorHandler {
       if (local_var.is_valid()) {
         if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
-          return 0;
+          return ConstexprError();
         }
         /* Assign with the correct type cast. */
         switch (op_type) {
           case Decrement:
-            return visit([](auto &&v) -> ConstexprValue { return decay_t<decltype(v)>(v - 1); },
-                         var->value);
+            return visit(
+                [](auto &&v) -> ConstexprValue {
+                  return decay_t<decltype(v)>(v - decay_t<decltype(v)>(1));
+                },
+                var->value);
           case Increment:
-            return visit([](auto &&v) -> ConstexprValue { return decay_t<decltype(v)>(v + 1); },
-                         var->value);
+            return visit(
+                [](auto &&v) -> ConstexprValue {
+                  return decay_t<decltype(v)>(v + decay_t<decltype(v)>(1));
+                },
+                var->value);
           default:
             break;
         }
@@ -957,7 +963,7 @@ struct CodegenContext : NodeErrorHandler {
       if (local_var.is_valid()) {
         if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
-          return 0;
+          return ConstexprError();
         }
         Node op = local_var.next();
         if (op.type() == NodeType::Op) {
@@ -966,7 +972,7 @@ struct CodegenContext : NodeErrorHandler {
           auto result = table.expr_type_analysis(scope, node).unwrap(this);
           if (!result.is_constexpr()) {
             error(expr, Diag::UnrolledLoopNotConstexpr, var->identifier);
-            return 0;
+            return ConstexprError();
           }
 
 #ifdef _MSC_VER
@@ -999,9 +1005,9 @@ struct CodegenContext : NodeErrorHandler {
                   var->value,
                   result.value);
             case AssignDiv:
-              if (visit([](auto &&a) -> bool { return a == 0; }, result.value)) {
+              if (visit([](auto &&a) -> bool { return contains_zero(a); }, result.value)) {
                 error(expr, Diag::ConstexprDivisionByZero);
-                return 0;
+                return ConstexprError();
               }
               return visit(
                   [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(a / b); },
@@ -1017,7 +1023,7 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
     error(expr, Diag::UnrolledLoopInvalidExpression, var->identifier);
-    return 0;
+    return ConstexprError();
   }
 
   void for_loop(ForLoop stmt, SymbolScope &scope)

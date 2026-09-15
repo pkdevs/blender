@@ -78,7 +78,7 @@ struct ExpressionTypeParser
             return scope->lookup_class(*table, var.identifier()).unwrap(err);
           }
           error(call.parameters(), Diag::ExpectedOneTypename);
-          return {table->err_cls, 1, false};
+          return {table->err_cls, ConstexprError(), false};
         }
         if (call.identifier().str() == "interface_get" ||
             call.identifier().str() == "sampler_get" || call.identifier().str() == "buffer_get")
@@ -95,7 +95,7 @@ struct ExpressionTypeParser
             return v;
           }
           error(call.parameters(), Diag::ExpectedOneTypename);
-          return {table->err_cls, 1, false};
+          return {table->err_cls, ConstexprError(), false};
         }
 
         if (is_reference) {
@@ -116,49 +116,53 @@ struct ExpressionTypeParser
             }
             else if (fn->identifier == "float") {
               return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->float_cls, float(val)}; },
+                  [&](auto val) -> ExpressionResult {
+                    return {table->float_cls, Vec<float>(val)};
+                  },
                   res.value);
             }
             else if (fn->identifier == "int") {
               return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->int_cls, int(val)}; },
+                  [&](auto val) -> ExpressionResult { return {table->int_cls, Vec<int>(val)}; },
                   res.value);
             }
             else if (fn->identifier == "uint") {
               return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->uint_cls, uint32_t(val)}; },
+                  [&](auto val) -> ExpressionResult {
+                    return {table->uint_cls, Vec<uint32_t>(val)};
+                  },
                   res.value);
             }
             else if (fn->identifier == "bool") {
               return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->bool_cls, bool(val)}; },
+                  [&](auto val) -> ExpressionResult { return {table->bool_cls, Vec<bool>(val)}; },
                   res.value);
             }
             else if (fn->identifier == "floatBitsToUint") {
               return std::visit(
                   [&](auto val) -> ExpressionResult {
-                    return {table->uint_cls, std::bit_cast<uint32_t>(float(val))};
+                    return {table->uint_cls, std::bit_cast<Vec<uint32_t>>(Vec<float>(val))};
                   },
                   res.value);
             }
             else if (fn->identifier == "floatBitsToInt") {
               return std::visit(
                   [&](auto val) -> ExpressionResult {
-                    return {table->int_cls, std::bit_cast<int>(float(val))};
+                    return {table->int_cls, std::bit_cast<Vec<int32_t>>(Vec<float>(val))};
                   },
                   res.value);
             }
             else if (fn->identifier == "uintBitsToFloat") {
               return std::visit(
                   [&](auto val) -> ExpressionResult {
-                    return {table->uint_cls, std::bit_cast<float>(uint32_t(val))};
+                    return {table->uint_cls, std::bit_cast<Vec<float>>(Vec<uint32_t>(val))};
                   },
                   res.value);
             }
             else if (fn->identifier == "intBitsToFloat") {
               return std::visit(
                   [&](auto val) -> ExpressionResult {
-                    return {table->int_cls, std::bit_cast<float>(int(val))};
+                    return {table->int_cls, std::bit_cast<Vec<float>>(Vec<int32_t>(val))};
                   },
                   res.value);
             }
@@ -190,16 +194,16 @@ struct ExpressionTypeParser
       std::string str_val(t.str());
 
       if (type == table->float_cls) {
-        value = std::stof(str_val);
+        value = Vec<float, 1>(std::stof(str_val));
       }
       else if (type == table->int_cls) {
-        value = std::stoi(str_val, nullptr, 0);
+        value = Vec<int, 1>(std::stoi(str_val, nullptr, 0));
       }
       else if (type == table->uint_cls) {
-        value = uint32_t(std::stoull(str_val, nullptr, 0));
+        value = Vec<uint, 1>(uint32_t(std::stoull(str_val, nullptr, 0)));
       }
       else if (type == table->bool_cls) {
-        value = str_val == "true";
+        value = Vec<bool, 1>(str_val == "true");
       }
       else {
         throw std::runtime_error("Invalid Type");
@@ -459,7 +463,7 @@ struct ExpressionTypeParser
           return {type, apply_arithmetic(lhs, rhs, [](auto l, auto r) { return l * r; })};
         case Divide:
           return {type, apply_arithmetic(lhs, rhs, [&](auto l, auto r) {
-                    if (r == 0) {
+                    if (contains_zero(r)) {
                       error(t, Diag::ConstexprDivisionByZero);
                       return l * r;
                     }
@@ -467,32 +471,32 @@ struct ExpressionTypeParser
                   })};
         case Modulo:
           return {type, apply_integral(lhs, rhs, [&](auto l, auto r) {
-                    if (r == 0) {
-                      error(t, Diag::ConstexprDivisionByZero, to_string(r));
+                    if (contains_zero(r)) {
+                      error(t, Diag::ConstexprDivisionByZero, constexpr_to_string(r));
                       return decltype(l % r)(0);
                     }
                     return l % r;
                   })};
         case LShift:
           return {type, apply_integral(lhs, rhs, [&](auto l, auto r) {
-                    if (int(r) < 0) {
-                      error(t, Diag::ConstexprShiftNegative, to_string(r));
+                    if (anyLessThan(r, 0)) {
+                      error(t, Diag::ConstexprShiftNegative, constexpr_to_string(r));
                       return decltype(l << r)(0);
                     }
-                    if (int(r) >= 32) {
-                      error(t, Diag::ConstexprShiftTooLarge, to_string(r));
+                    if (anyGreaterThanEqual(r, 32)) {
+                      error(t, Diag::ConstexprShiftTooLarge, constexpr_to_string(r));
                       return decltype(l << r)(0);
                     }
                     return l << r;
                   })};
         case RShift:
           return {type, apply_integral(lhs, rhs, [&](auto l, auto r) {
-                    if (int(r) < 0) {
-                      error(t, Diag::ConstexprShiftNegative, to_string(r));
+                    if (anyLessThan(r, 0)) {
+                      error(t, Diag::ConstexprShiftNegative, constexpr_to_string(r));
                       return decltype(l >> r)(0);
                     }
-                    if (int(r) >= 32) {
-                      error(t, Diag::ConstexprShiftTooLarge, to_string(r));
+                    if (anyGreaterThanEqual(r, 32)) {
+                      error(t, Diag::ConstexprShiftTooLarge, constexpr_to_string(r));
                       return decltype(l >> r)(0);
                     }
                     return l >> r;
@@ -557,10 +561,10 @@ struct ExpressionTypeParser
     }
 
     if (left.flags & ExprFlag::IsConstexpr) {
-      return {tval.type, std::get<bool>(left.value) ? tval.value : fval.value};
+      return {tval.type, std::get<Vec<bool>>(left.value)[0] ? tval.value : fval.value};
     }
     /* Operand types match. We can return either. */
-    return {tval.type, tval.flags & fval.flags};
+    return {tval.type, ExprFlag(tval.flags & fval.flags)};
   }
 
   ExpressionResult error(ErrorType err, lexit::TokenType type)
@@ -644,8 +648,8 @@ struct ExpressionTypeParser
   {
     return std::visit(
         [func](auto &&a, auto &&b) -> ConstexprValue {
-          using T = std::decay_t<decltype(a)>;
-          using U = std::decay_t<decltype(b)>;
+          using T = std::decay_t<decltype(a[0])>;
+          using U = std::decay_t<decltype(b[0])>;
 
           if constexpr (std::is_integral_v<T> && std::is_integral_v<U>) {
             return func(a, b);
@@ -653,7 +657,7 @@ struct ExpressionTypeParser
           else {
             /* Invalid operands: operation require integral types. */
             assert(0);
-            return 0;
+            return ConstexprError();
           }
         },
         lhs.value,
@@ -664,7 +668,7 @@ struct ExpressionTypeParser
   {
     return std::visit(
         [func](auto &&b) -> ConstexprValue {
-          using T = std::decay_t<decltype(b)>;
+          using T = std::decay_t<decltype(b[0])>;
 
           if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
             return func(b);
@@ -672,7 +676,7 @@ struct ExpressionTypeParser
           else {
             /* Invalid operands: operation require integral types. */
             assert(0);
-            return 0;
+            return ConstexprError();
           }
         },
         rhs.value);
@@ -683,7 +687,7 @@ struct ExpressionTypeParser
   {
     return std::visit(
         [func](auto &&b) -> ConstexprValue {
-          using T = std::decay_t<decltype(b)>;
+          using T = std::decay_t<decltype(b[0])>;
 
           if constexpr (!std::is_same_v<T, bool>) {
             return func(b);
@@ -691,7 +695,7 @@ struct ExpressionTypeParser
           else {
             /* Invalid operands: operation require float of integral types. */
             assert(0);
-            return 0;
+            return ConstexprError();
           }
         },
         rhs.value);

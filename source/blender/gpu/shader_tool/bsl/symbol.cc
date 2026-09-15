@@ -50,7 +50,7 @@ struct SymbolParser : NodeErrorHandler {
     SymbolVariable *bitfield_base = nullptr;
 
     /* For enums, the value of the last declaration. */
-    ConstexprValue enum_last_val = -1;
+    ConstexprValue enum_last_val = Vec<int32_t>(-1);
 
     if (node.type() == NodeType::FuncDecl || node.type() == NodeType::ClassDecl ||
         node.type() == NodeType::LocalScope)
@@ -511,7 +511,8 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; }, enum_last_val);
+      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + Vec<int32_t>(1); },
+                              enum_last_val);
     }
 
     if (scope.variable_emplace(sym)) {
