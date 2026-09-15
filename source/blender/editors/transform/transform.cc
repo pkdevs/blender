@@ -2271,7 +2271,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
 
   if ((t->flag & T_MODAL) && t->mode_info && t->mode_info->status_fn) {
-    t->mode_info->status_fn(t);
+    t->mode_info->status_fn(t, t->keymap);
   }
 
   t->context = nullptr;
@@ -2288,7 +2288,7 @@ void transformApply(bContext *C, TransInfo *t)
     if (t->mode_info) {
       t->mode_info->transform_fn(t); /* Calls #recalc_data(). */
       if ((t->flag & T_MODAL) && t->mode_info->status_fn) {
-        t->mode_info->status_fn(t);
+        t->mode_info->status_fn(t, t->keymap);
       }
     }
   }
