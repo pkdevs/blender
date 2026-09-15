@@ -55,9 +55,10 @@ ccl_device_forceinline int gsplat_attr_scale_has_motion(KernelGlobals kg, const 
 
 /* Motion Gaussian Splat Primitive
  *
- * These are stored as regular Gaussian splats, plus extra positions and radii at times other than
- * the frame center. Computing the point at a given ray time is a matter of interpolation of the
- * two steps between which the ray time lies.
+ * These are stored as regular Gaussian splats, plus extra positions, radii (packed into
+ * positions), radiances, and opacities (packed into radiance) at times other than the frame
+ * center. Computing the point at a given ray time is a matter of interpolation of the two steps
+ * between which the ray time lies.
  *
  * The extra points are stored as additional motion steps in ATTR_STD_POSITION. */
 
