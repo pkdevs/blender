@@ -1934,7 +1934,7 @@ bool BLI_path_relative_to(const char *path,
     r_path_relative[0] = '\0';
   }
 
-  /* Add a trailing slash, other path_relative_to_impl assumes it's a file. */
+  /* Add a trailing slash, otherwise path_relative_to_impl assumes it's a file. */
   char base_dir_slash[FILE_MAX];
   STRNCPY(base_dir_slash, base_dir);
   BLI_path_slash_ensure(base_dir_slash, sizeof(base_dir_slash));
