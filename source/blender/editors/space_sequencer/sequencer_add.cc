@@ -172,7 +172,7 @@ static bool sequencer_add_draw_check_fn(PointerRNA *ptr, PropertyRNA *prop, void
                    "frame_start",
                    "channel",
                    "length",
-                   "move_strips",
+                   "move_strips_after_add",
                    "replace_sel",
                    "skip_locked_or_muted_channels",
                    "use_sequence_detection");
@@ -187,9 +187,9 @@ static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
   bool is_redo_panel = sad == nullptr;
 
   if (!is_redo_panel) {
-    layout.prop(op->ptr, "move_strips", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "move_strips_after_add", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
-  if (!RNA_boolean_get(op->ptr, "move_strips") || is_redo_panel) {
+  if (!RNA_boolean_get(op->ptr, "move_strips_after_add") || is_redo_panel) {
     ui::Layout &col = layout.column(true);
     col.prop(op->ptr, "frame_start", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     layout.prop(op->ptr, "channel", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -233,9 +233,9 @@ static void sequencer_generic_props__internal(wmOperatorType *ot, int flag)
   if (flag & SEQPROP_MOVE) {
     prop = RNA_def_boolean(
         ot->srna,
-        "move_strips",
+        "move_strips_after_add",
         true,
-        "Move Strips",
+        "Move Strips After Add",
         "Automatically begin translating strips with the mouse after adding them to the timeline");
     RNA_def_property_flag(prop, PROP_HIDDEN);
   }
@@ -462,9 +462,9 @@ static bool op_invoked_by_drop_event(const wmOperator *op)
   return sad->is_drop_event;
 }
 
-static bool can_move_strips(const wmOperator *op)
+static bool should_move_strips_after_add(const wmOperator *op)
 {
-  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "move_strips");
+  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "move_strips_after_add");
 
   return prop != nullptr && RNA_property_boolean_get(op->ptr, prop) &&
          (op->flag & OP_IS_REPEAT) == 0 && !op_invoked_by_drop_event(op);
@@ -508,7 +508,7 @@ static void sequencer_generic_invoke_xy__internal(
 
 static void move_strips(bContext *C, wmOperator *op)
 {
-  if (!can_move_strips(op)) {
+  if (!should_move_strips_after_add(op)) {
     return;
   }
 
@@ -623,11 +623,11 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
   }
 
   if (region == nullptr) {
-    RNA_boolean_set(op->ptr, "move_strips", false);
+    RNA_boolean_set(op->ptr, "move_strips_after_add", false);
   }
 
   /* Override strip position by current mouse position. */
-  if (can_move_strips(op) && region != nullptr) {
+  if (should_move_strips_after_add(op) && region != nullptr) {
     const wmWindow *win = CTX_wm_window(C);
     int2 mouse_region(win->runtime->eventstate->xy[0] - region->winrct.xmin,
                       win->runtime->eventstate->xy[1] - region->winrct.ymin);
@@ -666,8 +666,9 @@ static bool sequencer_add_generic_exec(
   }
 
   /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
-   * so we deselect when `move_strips` is set too. */
-  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
+   * so we deselect when `move_strips_after_add` is set too. */
+  if (RNA_boolean_get(op->ptr, "move_strips_after_add") || RNA_boolean_get(op->ptr, "replace_sel"))
+  {
     deselect_all_strips(scene);
     seq::retiming_selection_clear(ed);
   }
@@ -691,8 +692,8 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
 
   /* Do some minimal shuffling now (on add) if there will be a move afterwards; this parks the
    * strip in a free channel so that there will be no overlap on undo of the add. Otherwise, this
-   * is the final placement, so resolve overlap properly instead of hardcoding to shuffle. */
-  if (can_move_strips(op)) {
+   * is the final placement, so resolve overlap more properly instead of hardcoding to shuffle. */
+  if (should_move_strips_after_add(op)) {
     for (Strip *strip : strips) {
       seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
     }
