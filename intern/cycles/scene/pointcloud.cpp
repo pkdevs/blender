@@ -310,7 +310,7 @@ void PointCloud::update_gsplat_radii()
    *     ACM Transactions on Graphics and SIGGRAPH Asia
    *     https://gaussiantracer.github.io/
    *
-   * Using Formula (7) from the paper with some tweaks.
+   * Using Formula (7) from the paper with some tweaks to work with bounding spheres.
    * Since spheres are rotation-agnostic we only consider scale. */
 
   if ((primitive_type() & PRIMITIVE_GSPLAT) == 0) {
