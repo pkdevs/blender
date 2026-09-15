@@ -534,7 +534,7 @@ class NODE_MT_compositor_node_all_base(node_add_menu.NodeMenu):
 
 class CompositorEffectMenu(node_add_menu.NodeMenu):
     """Used by the "Add Effect" menu of the scene compositor in the properties editor."""
-    draw_assets = False
+    draw_assets = True
 
     main_operator_id = "scene.add_compositor_effect_node"
 

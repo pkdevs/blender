@@ -86,7 +86,8 @@ class NodeMenu(Menu):
     zone_operator_id: str
     new_empty_group_operator_id: str
 
-    root_asset_menu: str
+    # Menu listing the root asset catalogs, or None if it is drawn elsewhere.
+    root_asset_menu = None
     pathing_dict: dict[str, str]
 
     @classmethod
@@ -458,7 +459,8 @@ class NodeMenu(Menu):
 
     @classmethod
     def draw_root_assets(cls, layout):
-        if cls.draw_assets:
+        """Draw the menu listing the root asset catalogs, if the class defines one."""
+        if cls.root_asset_menu is not None:
             layout.menu_contents(cls.root_asset_menu)
 
 
