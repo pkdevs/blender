@@ -806,7 +806,7 @@ static float *get_weights_array(Object *ob, const char *vgroup, WeightsArrayCach
     totvert = mesh->verts_num;
 
     const BMesh *bm_test = BKE_editmesh_bmesh_get(mesh);
-    if (bm_test->totvert == totvert) {
+    if (bm_test && bm_test->totvert == totvert) {
       bm = bm_test;
     }
   }
