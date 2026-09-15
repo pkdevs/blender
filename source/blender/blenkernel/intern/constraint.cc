@@ -6431,12 +6431,23 @@ void BKE_constraints_active_set(ListBaseT<bConstraint> *list, bConstraint *con)
 
 bool BKE_constraint_has_influence(const bConstraint *con)
 {
-  if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
+  if (con->flag & CONSTRAINT_OFF) {
     return false;
   }
   if (con->enforce == 0.0f) {
     return false;
   }
+  if (con->flag & CONSTRAINT_DISABLE) {
+    if (con->type != CONSTRAINT_TYPE_KINEMATIC) {
+      return false;
+    }
+    /* Targetless/Auto IK constraints still need to be considered "active". */
+    bKinematicConstraint *data = static_cast<bKinematicConstraint *>(con->data);
+    if ((data->flag & (CONSTRAINT_IK_AUTO | CONSTRAINT_IK_TEMP)) == 0) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -6912,6 +6923,10 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader,
         bSplineIKConstraint *data = static_cast<bSplineIKConstraint *>(con.data);
 
         BLO_read_array_and_validate_size(reader, &data->points, &data->numpoints);
+
+        /* Clamp spline IK chain lengths to a value that will not crash Blender versions older than
+         * 5.3, which may be encountered when opening future versions' .blend files. */
+        CLAMP(data->chainlen, 0, 255);
         break;
       }
       case CONSTRAINT_TYPE_KINEMATIC: {
