@@ -20,6 +20,7 @@ struct PipelineConstants {
   [[compilation_constant]] bool is_shadow_pipe;
   [[compilation_constant]] bool is_occupancy_pipe;
   [[compilation_constant]] bool use_forward_lighting;
+  [[compilation_constant]] bool use_multi_viewport;
   [[compilation_constant]] int closure_bin_count;
 };
 

@@ -706,6 +706,10 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
 
   info.compilation_constant(
       gpu::shader::Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
+  if (pipeline_type == MAT_PIPE_SHADOW) {
+    info.compilation_constant(
+        gpu::shader::Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
+  }
   info.compilation_constant(
       gpu::shader::Type::bool_t, "is_occupancy_pipe", pipeline_type == MAT_PIPE_VOLUME_OCCUPANCY);
   info.compilation_constant(
