@@ -472,6 +472,12 @@ bContext *WM_xr_session_context_ensure(wmXrData *xr, const wmWindowManager *wm)
   wmWindow *xr_win = wm_xr_session_root_window_or_fallback_get(wm, xr->runtime);
   CTX_wm_window_set(xr->runtime->b_context, xr_win);
 
+  /* `Main` may have been replaced while the session is running (global undo or opening a file). */
+  CTX_data_main_set(xr->runtime->b_context, G_MAIN);
+  if (xr_win != nullptr) {
+    CTX_data_scene_set(xr->runtime->b_context, WM_window_get_active_scene(xr_win));
+  }
+
   /* Unique offscreen XR area. */
   CTX_wm_area_set(xr->runtime->b_context, xr->runtime->offscreen_area);
 
