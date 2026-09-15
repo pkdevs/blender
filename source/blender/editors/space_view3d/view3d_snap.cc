@@ -1063,7 +1063,7 @@ static bool snap_calc_active_transform(bContext *C,
   if (ob == nullptr) {
     return false;
   }
-  return blender::ed::object::calc_active_transform(ob, select_only, r_center, r_orientation);
+  return ed::object::calc_active_transform(ob, select_only, r_center, r_orientation);
 }
 
 static wmOperatorStatus snap_curs_to_active_exec(bContext *C, wmOperator *op)

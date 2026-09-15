@@ -75,8 +75,20 @@ bool calc_active_transform_for_editmode(Object *obedit,
       BMEditSelection ese;
 
       if (BM_select_history_active_get(bm, &ese)) {
-        BM_editselection_center(&ese, r_center);
-        return true;
+        if (r_center) {
+          BM_editselection_center(&ese, r_center);
+          result = true;
+        }
+        if (r_orientation) {
+          float rot[3][3];
+          BM_editselection_normal(&ese, rot[2]);
+          BM_editselection_plane(&ese, rot[0]);
+          cross_v3_v3v3(rot[1], rot[2], rot[0]);
+          mul_m3_m4m3(rot, obedit->object_to_world().ptr(), rot);
+          orthogonalize_m3_stable(rot, 2, true);
+          copy_m3_m3(r_orientation, rot);
+          result = true;
+        }
       }
       break;
     }

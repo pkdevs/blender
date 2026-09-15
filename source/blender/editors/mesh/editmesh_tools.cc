@@ -4445,7 +4445,7 @@ static bool mesh_separate_loose(
   Array<BMEdge *> edge_groups(bm_old->totedge);
   Array<BMFace *> face_groups(bm_old->totface);
 
-  int(*groups)[3] = nullptr;
+  int (*groups)[3] = nullptr;
   int groups_len = BM_mesh_calc_edge_groups_as_arrays(
       bm_old, vert_groups.data(), edge_groups.data(), face_groups.data(), &groups);
   if (groups_len <= 1) {
@@ -8738,7 +8738,7 @@ static wmOperatorStatus edbm_point_normals_modal(bContext *C, wmOperator *op, co
         params.sel_op = SEL_OP_SET;
         if (EDBM_select_pick(C, event->mval, params)) {
           /* Point to newly selected active. */
-          blender::ed::object::calc_active_transform_for_editmode(obedit, false, target, nullptr);
+          ed::object::calc_active_transform_for_editmode(obedit, false, target, nullptr);
           ret = OPERATOR_RUNNING_MODAL;
         }
         break;
@@ -8781,9 +8781,7 @@ static wmOperatorStatus edbm_point_normals_modal(bContext *C, wmOperator *op, co
             break;
 
           case V3D_AROUND_ACTIVE:
-            if (!blender::ed::object::calc_active_transform_for_editmode(
-                    obedit, false, target, nullptr))
-            {
+            if (!ed::object::calc_active_transform_for_editmode(obedit, false, target, nullptr)) {
               copy_v3_v3(target, obedit->loc);
             }
             break;
@@ -8884,7 +8882,6 @@ static wmOperatorStatus edbm_point_normals_exec(bContext *C, wmOperator *op)
 
   float target[3];
   RNA_float_get_array(op->ptr, "target_location", target);
-
   point_normals_apply(C, op, target, false);
 
   EDBMUpdate_Params params{};
@@ -9743,7 +9740,7 @@ static wmOperatorStatus edbm_set_normals_from_faces_exec(bContext *C, wmOperator
 
     BKE_editmesh_lnorspace_update(bm);
 
-    float(*vert_normals)[3] = MEM_new_array_uninitialized<float[3]>(bm->totvert, __func__);
+    float (*vert_normals)[3] = MEM_new_array_uninitialized<float[3]>(bm->totvert, __func__);
     {
       int v_index;
       BM_ITER_MESH_INDEX (v, &viter, bm, BM_VERTS_OF_MESH, v_index) {
@@ -9854,7 +9851,7 @@ static wmOperatorStatus edbm_smooth_normals_exec(bContext *C, wmOperator *op)
     BKE_editmesh_lnorspace_update(bm);
     BMLoopNorEditDataArray *lnors_ed_arr = BM_loop_normal_editdata_array_init(bm, false);
 
-    float(*smooth_normal)[3] = MEM_new_array_zeroed<float[3]>(lnors_ed_arr->totloop, __func__);
+    float (*smooth_normal)[3] = MEM_new_array_zeroed<float[3]>(lnors_ed_arr->totloop, __func__);
 
     /* NOTE(@mont29): This is weird choice of operation, taking all loops of faces of current
      * vertex. Could lead to some rather far away loops weighting as much as very close ones
