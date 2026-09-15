@@ -2940,21 +2940,22 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  VectorSet<Strip *> selected = selected_strips_from_context(C);
-  if (selected.is_empty()) {
+  VectorSet<Strip *> to_trim = selected_strips_from_context(C);
+  if (to_trim.is_empty()) {
     /* Fall back to active strip. */
     Strip *active_strip = seq::select_active_get(scene);
     if (active_strip == nullptr) {
       return OPERATOR_CANCELLED;
     }
-    selected.add(active_strip);
+    to_trim.add(active_strip);
   }
-  /* Only consider editable strips that the playhead cuts through. */
-  selected.remove_if([&](Strip *strip) {
+  /* If strips are not editable or exist entirely on the side we keep, ignore them. */
+  to_trim.remove_if([&](Strip *strip) {
     return seq::transform_is_locked(channels, strip) || strip->is_effect_with_inputs() ||
-           strip->left_handle() >= timeline_frame || strip->right_handle(scene) <= timeline_frame;
+           (trim_left ? strip->left_handle() >= timeline_frame :
+                        strip->right_handle(scene) <= timeline_frame);
   });
-  if (selected.is_empty()) {
+  if (to_trim.is_empty()) {
     return OPERATOR_CANCELLED;
   }
 
@@ -2965,7 +2966,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
   int ripple_frame = timeline_frame;
   rcti selection_bounds;
   BLI_rcti_init_minmax(&selection_bounds);
-  for (Strip *strip : selected) {
+  for (Strip *strip : to_trim) {
     const rcti strip_bounds = strip_int_bounds_get(scene, strip);
     BLI_rcti_union(&selection_bounds, &strip_bounds);
     if (trim_left) {
@@ -2978,7 +2979,15 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
   }
 
   /* Step 2: Trim strips. */
-  for (Strip *strip : selected) {
+  Vector<Strip *> strips_to_remove;
+  for (Strip *strip : to_trim) {
+    const bool trimmed_away = trim_left ? strip->right_handle(scene) <= timeline_frame :
+                                          strip->left_handle() >= timeline_frame;
+    if (trimmed_away) {
+      strips_to_remove.append(strip);
+      seq::edit_flag_for_removal(scene, strip);
+      continue;
+    }
     if (trim_left) {
       strip->left_handle_set(scene, timeline_frame);
     }
@@ -2986,6 +2995,14 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
       strip->right_handle_set(scene, timeline_frame);
     }
     seq::relations_invalidate_cache(scene, strip);
+  }
+  if (!strips_to_remove.is_empty()) {
+    for (Strip *strip : strips_to_remove) {
+      to_trim.remove(strip);
+    }
+    seq::edit_remove_flagged_strips(scene, seqbasep);
+    DEG_relations_tag_update(CTX_data_main(C));
+    WM_event_add_notifier(C, NC_SCENE | ND_ANIMCHAN, scene);
   }
 
   /* Step 3: Offset strips. */
@@ -2995,7 +3012,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
       continue;
     }
     /* Strips trimmed on the right do not ripple, but the ones trimmed on the left do. */
-    if (!trim_left && selected.contains(&strip)) {
+    if (!trim_left && to_trim.contains(&strip)) {
       continue;
     }
     if (!all_channels) {
