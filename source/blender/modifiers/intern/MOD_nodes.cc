@@ -147,7 +147,10 @@ static void add_object_relation(const ModifierUpdateDepsgraphContext *ctx,
     return;
   }
   if (info.geometry) {
-    if (object.type == OB_EMPTY && object.instance_collection != nullptr) {
+    const bool is_just_collection_instance = object.type == OB_EMPTY &&
+                                             object.instance_collection != nullptr &&
+                                             object.modifiers.is_empty();
+    if (is_just_collection_instance) {
       add_collection_relation(ctx, *object.instance_collection);
     }
     else if (DEG_object_has_geometry_component(&object)) {
@@ -1017,7 +1020,7 @@ static void find_side_effect_nodes(const NodesModifierData &nmd,
   }
 
   Main *bmain = DEG_get_bmain(ctx.depsgraph);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   if (wm == nullptr) {
     return;
   }
@@ -1026,7 +1029,7 @@ static void find_side_effect_nodes(const NodesModifierData &nmd,
     const WorkSpace *workspace = BKE_workspace_active_get(window.workspace_hook);
     find_side_effect_nodes_for_viewer_path(workspace->viewer_path, nmd, ctx, r_side_effect_nodes);
     for (const ScrArea &area : screen->areabase) {
-      const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      const SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       if (sl == nullptr) {
         continue;
       }
@@ -1052,7 +1055,7 @@ static void find_verbose_log_contexts(const NodesModifierData &nmd,
                                       Set<ComputeContextHash> &r_socket_log_contexts)
 {
   Main *bmain = DEG_get_bmain(ctx.depsgraph);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   if (wm == nullptr) {
     return;
   }
@@ -1060,7 +1063,7 @@ static void find_verbose_log_contexts(const NodesModifierData &nmd,
   for (const wmWindow &window : wm->windows) {
     const bScreen *screen = BKE_workspace_active_screen_get(window.workspace_hook);
     for (const ScrArea &area : screen->areabase) {
-      const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      const SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       if (sl == nullptr) [[unlikely]] {
         continue;
       }
