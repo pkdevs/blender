@@ -121,7 +121,7 @@ static void createTransMeshVertCData(bContext * /*C*/, TransInfo *t)
       const bool calc_island_axismtx = false;
 
       transform_convert_mesh_islands_calc(
-          em, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
+          em, bm, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
     }
 
     copy_m3_m4(mtx, tc->obedit->object_to_world().ptr());

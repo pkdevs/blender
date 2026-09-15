@@ -128,7 +128,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
       const bool calc_island_axismtx = false;
 
       transform_convert_mesh_islands_calc(
-          em, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
+          em, bm, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
     }
 
     copy_m3_m4(mtx, tc->obedit->object_to_world().ptr());
@@ -155,7 +155,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
       const bool mirror_axis[3] = {
           bool(tc->use_mirror_axis_x), bool(tc->use_mirror_axis_y), bool(tc->use_mirror_axis_z)};
       transform_convert_mesh_mirrordata_calc(
-          em, use_select, use_topology, mirror_axis, &mirror_data);
+          em, bm, use_select, use_topology, mirror_axis, &mirror_data);
 
       if (mirror_data.vert_map) {
         tc->data_mirror_len = mirror_data.mirror_elem_len;

@@ -735,6 +735,7 @@ static void mesh_customdatacorrect_restore(TransInfo *t)
  * \{ */
 
 void transform_convert_mesh_islands_calc(BMEditMesh *em,
+                                         BMesh *bm,
                                          const bool calc_single_islands,
                                          const bool calc_island_center,
                                          const bool calc_island_axismtx,
@@ -742,7 +743,6 @@ void transform_convert_mesh_islands_calc(BMEditMesh *em,
 {
   TransIslandData data = {nullptr};
 
-  BMesh *bm = em->bm;
   char htype;
   char itype;
   int i;
@@ -1195,6 +1195,7 @@ static bool is_in_quadrant_v3(const float co[3], const int quadrant[3], const fl
 }
 
 void transform_convert_mesh_mirrordata_calc(BMEditMesh *em,
+                                            BMesh *bm,
                                             const bool use_select,
                                             const bool use_topology,
                                             const bool mirror_axis[3],
@@ -1202,7 +1203,6 @@ void transform_convert_mesh_mirrordata_calc(BMEditMesh *em,
 {
   MirrorDataVert *vert_map;
 
-  BMesh *bm = em->bm;
   BMVert *eve;
   BMIter iter;
   int i, flag, totvert = bm->totvert;
@@ -1563,7 +1563,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       const bool calc_island_axismtx = !ELEM(t->mode, TFM_SHRINKFATTEN);
 
       transform_convert_mesh_islands_calc(
-          em, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
+          em, bm, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
     }
 
     copy_m3_m4(mtx, tc->obedit->object_to_world().ptr());
@@ -1590,7 +1590,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       const bool mirror_axis[3] = {
           bool(tc->use_mirror_axis_x), bool(tc->use_mirror_axis_y), bool(tc->use_mirror_axis_z)};
       transform_convert_mesh_mirrordata_calc(
-          em, use_select, use_topology, mirror_axis, &mirror_data);
+          em, bm, use_select, use_topology, mirror_axis, &mirror_data);
 
       if (mirror_data.vert_map) {
         tc->data_mirror_len = mirror_data.mirror_elem_len;
