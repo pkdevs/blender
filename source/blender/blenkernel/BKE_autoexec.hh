@@ -25,11 +25,10 @@ bool BKE_autoexec_match_unchecked(const char *path, bool canonicalize, bool stri
 
 struct AutoExec_Params {
   /**
-   * Check the command line override & the preference before the excluded paths,
-   * giving the default for "Trusted Source" when opening the path.
-   * Otherwise only the excluded paths are checked.
+   * Only check the excluded paths, skipping the command line override & the preference.
+   * Otherwise the result is the default for "Trusted Source" when opening the path.
    */
-  bool runtime_environment = false;
+  bool skip_overrides = false;
   /** Resolve the path first, unless the caller knows it's resolved. */
   bool canonicalize = false;
   /** Strip the file name from the path, otherwise it's a directory already. */

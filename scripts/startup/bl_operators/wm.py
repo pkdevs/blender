@@ -3718,14 +3718,15 @@ class WM_OT_drop_blend_file(Operator):
     )
 
     @classmethod
-    def _is_autoexec(cls, filepath, *, runtime_environment=False):
+    def _is_autoexec(cls, filepath, *, skip_overrides):
         """
         Return true when the directory of ``filepath`` isn't excluded,
-        ``runtime_environment`` returns the default for "Trusted Source" instead.
+        ``skip_overrides`` ignores the preference & command line override
+        which otherwise give the default for "Trusted Source".
         """
         return bpy.path.is_autoexec(
             filepath,
-            runtime_environment=runtime_environment,
+            skip_overrides=skip_overrides,
             canonicalize=True,
             strip_filename=True,
         )
@@ -3749,7 +3750,7 @@ class WM_OT_drop_blend_file(Operator):
         is_untrusted = (
             context.preferences.filepaths.use_scripts_auto_execute and
             not bpy.app.autoexec_override and
-            not self._is_autoexec(filepath)
+            not self._is_autoexec(filepath, skip_overrides=True)
         )
 
         col = layout.column()
@@ -3778,7 +3779,7 @@ class WM_OT_drop_blend_file(Operator):
 
     def invoke(self, context, _event):
         # Match the file selector.
-        self.use_scripts = self._is_autoexec(self.filepath, runtime_environment=True)
+        self.use_scripts = self._is_autoexec(self.filepath, skip_overrides=False)
         # The popup shows this operators own UI, keeping it alive while it's open.
         return context.window_manager.invoke_popup(self, auto_keymap=True)
 

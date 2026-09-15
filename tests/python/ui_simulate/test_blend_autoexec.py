@@ -237,7 +237,7 @@ def _assert_blend_file_dropped(t, filepath, *, is_trusted, message=None):
     """
     import bpy
     t.assertEqual(
-        bpy.path.is_autoexec(filepath, runtime_environment=True, canonicalize=True, strip_filename=True),
+        bpy.path.is_autoexec(filepath, skip_overrides=False, canonicalize=True, strip_filename=True),
         is_trusted, message)
 
 

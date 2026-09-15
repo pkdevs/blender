@@ -185,9 +185,7 @@ def blender_state_print():
         "autoexec_fail_message": bpy.app.autoexec_fail_message,
         "scene_name": bpy.data.scenes[0].name,
         # The default for "Trusted Source" when opening this file interactively.
-        "trust_source": bpy.path.is_autoexec(
-            filepath, runtime_environment=True, canonicalize=True, strip_filename=True,
-        ),
+        "trust_source": bpy.path.is_autoexec(filepath, skip_overrides=False, canonicalize=True, strip_filename=True),
     })))
     # Flush so the line isn't held in the buffer while Blender's own output is written.
     sys.stdout.flush()

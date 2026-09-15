@@ -616,9 +616,9 @@ void WM_file_autoexec_init(const char *filepath)
   if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
     return;
   }
-
   if (G.f & G_FLAG_SCRIPT_AUTOEXEC) {
-    if (BKE_autoexec_match(filepath, false, true)) {
+    /* Recovering a session that was never saved has no path to check. */
+    if ((filepath[0] != '\0') && BKE_autoexec_match(filepath, false, true)) {
       G.f &= ~G_FLAG_SCRIPT_AUTOEXEC;
     }
   }
@@ -2483,16 +2483,32 @@ bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
   if (!RNA_property_is_set(op->ptr, prop)) {
     bool value;
     if (use_prefs) {
+      PropertyRNA *prop_filepath = RNA_struct_find_property(op->ptr, "filepath");
       char filepath[FILE_MAX] = "";
-      if (PropertyRNA *prop_filepath = RNA_struct_find_property(op->ptr, "filepath")) {
+      if (prop_filepath) {
         RNA_property_string_get(op->ptr, prop_filepath, filepath);
       }
-      value = BKE_autoexec_default_trust_source(filepath,
-                                                {
-                                                    .runtime_environment = true,
-                                                    .canonicalize = true,
-                                                    .strip_filename = true,
-                                                });
+
+      if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
+        value = (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
+      }
+      else if (prop_filepath == nullptr) {
+        /* Recovering the last session doesn't provide the path being recovered,
+         * it may be in an excluded path so disable auto-execution, the user may still opt-in. */
+        value = false;
+      }
+      else if (filepath[0] == '\0') {
+        /* The file selector before a file is chosen, excluded paths are checked once it's set. */
+        value = (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0;
+      }
+      else {
+        value = BKE_autoexec_default_trust_source(filepath,
+                                                  {
+                                                      .skip_overrides = false,
+                                                      .canonicalize = true,
+                                                      .strip_filename = true,
+                                                  });
+      }
     }
     else {
       /* Keep the trust of the current session rather than the preference. */

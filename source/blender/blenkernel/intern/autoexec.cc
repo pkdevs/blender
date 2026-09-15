@@ -60,6 +60,9 @@ bool BKE_autoexec_match_unchecked(const char *path,
                                   const bool canonicalize,
                                   const bool strip_filename)
 {
+  /* The caller must never pass in an empty path. */
+  BLI_assert(path[0] != '\0');
+
   bPathCompare *path_cmp;
 
   char dirpath_buf[FILE_MAX];
@@ -99,7 +102,7 @@ bool BKE_autoexec_match(const char *path, const bool canonicalize, const bool st
 
 bool BKE_autoexec_default_trust_source(const char *path, const AutoExec_Params &params)
 {
-  if (params.runtime_environment) {
+  if (!params.skip_overrides) {
     if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
       /* The command line forced auto-execution on or off, excluded paths don't apply. */
       return (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
