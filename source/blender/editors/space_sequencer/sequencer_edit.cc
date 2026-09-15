@@ -3007,6 +3007,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
 
   /* Step 3: Offset strips. */
   Vector<Strip *> offset_strips;
+  Vector<Strip *> flush_strips;
   for (Strip &strip : *seqbasep) {
     if (seq::transform_is_locked(channels, &strip)) {
       continue;
@@ -3023,6 +3024,9 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     }
     if (strip.left_handle() < ripple_frame) {
       continue;
+    }
+    if (strip.left_handle() == ripple_frame) {
+      flush_strips.append(&strip);
     }
     seq::transform_translate_strip(scene, &strip, -offset);
     seq::relations_invalidate_cache(scene, &strip);
@@ -3049,7 +3053,11 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
   }
 
   if (trim_left) {
-    scene->r.cfra -= offset;
+    int new_frame = timeline_frame - offset;
+    for (Strip *strip : flush_strips) {
+      new_frame = max_ii(new_frame, strip->left_handle());
+    }
+    scene->r.cfra = new_frame;
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
     WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
   }
