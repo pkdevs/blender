@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
@@ -26,13 +28,13 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_timecode.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_timecode.hh"
 
 #include "BLT_translation.hh"
 
@@ -543,7 +545,7 @@ void ED_info_stats_clear(wmWindowManager *wm, ViewLayer *view_layer)
     const bScreen *screen = WM_window_get_active_screen(&win);
     for (ScrArea &area : screen->areabase) {
       if (area.spacetype == SPACE_VIEW3D) {
-        View3D *v3d = static_cast<View3D *>(area.spacedata.first);
+        View3D *v3d = area.spacedata.first_as<View3D>();
         if (v3d->localvd) {
           ED_view3d_local_stats_free(v3d);
         }
@@ -564,7 +566,7 @@ static bool format_stats(
   SceneStats **stats_p = (v3d_local) ? &v3d_local->runtime.local_stats : &view_layer->stats;
   if (*stats_p == nullptr) {
     /* Don't access dependency graph if interface is marked as locked. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+    wmWindowManager *wm = bmain->wm.first();
     if (wm->runtime->is_interface_locked) {
       return false;
     }
@@ -781,13 +783,12 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
                                   FRA2TIME(frame_count),
                                   scene->frames_per_second(),
                                   U.timecode_style);
-    ofs += BLI_snprintf_utf8_rlen(info + ofs,
-                                  len - ofs,
-
-                                  IFACE_("Duration: %s (Frame %i/%i)"),
-                                  timecode,
-                                  relative_current_frame,
-                                  frame_count);
+    const std::string scene_duration = fmt::format(
+        fmt::runtime(IFACE_("Duration: {} (Frame {}/{})")),
+        timecode,
+        relative_current_frame,
+        frame_count);
+    ofs += BLI_strncpy_utf8_rlen(info + ofs, scene_duration.c_str(), len - ofs);
   }
 
   /* Memory status. */

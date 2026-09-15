@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include <iostream>
 
 #include "BKE_attribute.hh"
@@ -14,10 +18,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_mesh_boolean.hh"
 #include "BLI_mesh_intersect.hh"
 #include "BLI_span.hh"
@@ -34,7 +38,7 @@
 
 // #define BENCHMARK_TIME
 #ifdef BENCHMARK_TIME
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #  include "BLI_timeit.hh"
 #  include <filesystem>
 #  include <fstream>
@@ -348,13 +352,13 @@ static float4x4 clean_transform(const float4x4 &mat)
 static float3 clean_float3(const float3 &co)
 {
   float3 cleaned = co;
-  if (UNLIKELY(!isfinite(co[0]))) {
+  if (!isfinite(co[0])) [[unlikely]] {
     cleaned[0] = 0.0f;
   }
-  if (UNLIKELY(!isfinite(co[1]))) {
+  if (!isfinite(co[1])) [[unlikely]] {
     cleaned[1] = 0.0f;
   }
-  if (UNLIKELY(!isfinite(co[2]))) {
+  if (!isfinite(co[2])) [[unlikely]] {
     cleaned[2] = 0.0f;
   }
   return cleaned;

@@ -7,6 +7,8 @@ set(INC
   PUBLIC xpbd
   ../makesrna
   ../../../intern/eigen
+  ../draw/intern
+  ../gpu
 )
 
 set(INC_SYS
@@ -25,6 +27,7 @@ set(SRC
   intern/join_geometries.cc
   intern/merge_curves.cc
   intern/merge_layers.cc
+  intern/mesh_bevel.cc
   intern/mesh_boolean.cc
   intern/mesh_boolean_manifold.cc
   intern/mesh_copy_selection.cc
@@ -68,10 +71,12 @@ set(SRC
   GEO_fillet_curves.hh
   GEO_fit_curves.hh
   GEO_foreach_geometry.hh
+  GEO_grid_samplers.hh
   GEO_interpolate_curves.hh
   GEO_join_geometries.hh
   GEO_merge_curves.hh
   GEO_merge_layers.hh
+  GEO_mesh_bevel.hh
   GEO_mesh_boolean.hh
   GEO_mesh_copy_selection.hh
   GEO_mesh_merge_verts.hh
@@ -108,6 +113,7 @@ set(SRC
   xpbd/GEO_xpbd_constraint_collision_edge.hh
   xpbd/GEO_xpbd_constraint_collision_face.hh
   xpbd/GEO_xpbd_constraint_coloring.hh
+  xpbd/GEO_xpbd_constraint_coloring_utils.hh
   xpbd/GEO_xpbd_constraint_damping_angular.hh
   xpbd/GEO_xpbd_constraint_damping_linear.hh
   xpbd/GEO_xpbd_constraint_distance.hh
@@ -139,6 +145,7 @@ set(LIB
   PRIVATE bf::nodes
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::profile
   PRIVATE bf::extern::curve_fit_nd
   PRIVATE bf::dependencies::optional::manifold
   PRIVATE bf::dependencies::optional::gmp

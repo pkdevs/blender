@@ -6,7 +6,7 @@
 /** \file
  * \ingroup bke
  */
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_matrix_types.hh"
@@ -70,7 +70,8 @@ enum class ModifierTypeType {
   /**
    * Like Nonconstructive, but does not affect the geometry
    * of the object, rather some of its CustomData layers.
-   * E.g. UVProject and WeightVG modifiers. */
+   * E.g. UVProject and WeightVG modifiers.
+   */
   NonGeometrical,
 };
 

@@ -12,10 +12,10 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_spherical_harmonics.bsl.hh"
 #include "eevee_uniform.bsl.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_matrix_construct_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee::lightprobe::sphere {
 
@@ -115,9 +115,10 @@ void remap_cubemap_to_octahedral([[resource_table]] Remap &srt,
                                  [[resource_table]] const Uniform &uni,
                                  [[global_invocation_id]] const uint3 global_id,
                                  [[work_group_id]] const uint3 group_id,
+                                 [[num_work_groups]] const uint3 num_groups,
                                  [[local_invocation_index]] const uint local_index)
 {
-  uint work_group_index = SPHERE_PROBE_REMAP_GROUP_SIZE * group_id.y + group_id.x;
+  const uint work_group_index = num_groups.x * group_id.y + group_id.x;
   constexpr uint group_size = SPHERE_PROBE_REMAP_GROUP_SIZE * SPHERE_PROBE_REMAP_GROUP_SIZE;
 
   SphereProbeUvArea world_coord = reinterpret_as_atlas_coord(srt.world_coord_packed);
@@ -529,10 +530,12 @@ void sun_extraction([[resource_table]] SunExtraction &srt,
     float shape_power = M_1_PI * (1.0f + 1.0f / square(sun_radius));
     float point_power = 1.0f;
 
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_DIFFUSE] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_SPECULAR] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_TRANSMISSION] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_VOLUME] = point_power;
+    srt.sunlight_buf[srt.sun_id].shape_power = shape_power;
+    srt.sunlight_buf[srt.sun_id].point_power = point_power;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_DIFFUSE] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_SPECULAR] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_TRANSMISSION] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_VOLUME] = 1.0f;
 
     /* NOTE: Use the radius from UI instead of auto sun size for now. */
   }

@@ -8,7 +8,6 @@
 #include "usd_reader_mesh.hh"
 #include "usd.hh"
 #include "usd_attribute_utils.hh"
-#include "usd_hash_types.hh"
 #include "usd_mesh_utils.hh"
 #include "usd_reader_material.hh"
 #include "usd_skel_convert.hh"
@@ -433,7 +432,7 @@ void USDMeshReader::read_uv_data_primvar(Mesh *mesh,
 
 void USDMeshReader::read_subdiv()
 {
-  ModifierData *md = static_cast<ModifierData *>(object_->modifiers.last);
+  ModifierData *md = object_->modifiers.last();
   SubsurfModifierData *subdiv_data = reinterpret_cast<SubsurfModifierData *>(md);
 
   pxr::TfToken uv_smooth;
@@ -1080,7 +1079,27 @@ std::optional<XformResult> USDMeshReader::get_local_usd_xform(const pxr::UsdTime
     }
   }
 
+  if (!get_skeleton_path().IsEmpty()) {
+    /* The mesh is bound to a skeleton but has no usable geomBindTransform. Per the UsdSkel
+     * spec the skinned mesh's own xformOps must be ignored (the skinned result is positioned by
+     * the bound Skeleton), so use the identity rather than the prim's own transform. The mesh is
+     * re-parented to the armature in USDStageReader::process_armature_modifiers(), giving a final
+     * world transform of (skeleton world * identity). */
+    return XformResult(pxr::GfMatrix4f(1.0), true);
+  }
+
   return USDXformReader::get_local_usd_xform(time);
+}
+
+bool USDMeshReader::is_root_xform_prim() const
+{
+  if (import_params_.import_skeletons && !get_skeleton_path().IsEmpty()) {
+    /* Skinned meshes are re-parented to the bound armature during import, so they are never
+     * the root of the transform hierarchy. */
+    return false;
+  }
+
+  return USDXformReader::is_root_xform_prim();
 }
 
 }  // namespace io::usd

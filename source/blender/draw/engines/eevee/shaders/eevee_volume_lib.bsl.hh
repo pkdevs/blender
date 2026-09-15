@@ -4,11 +4,13 @@
 
 #pragma once
 
-#include "draw_view_lib.glsl"
+#include "draw_shader_shared.hh"
+#include "draw_view.bsl.hh"
+#include "eevee_camera_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_spherical_harmonics.bsl.hh"
 #include "eevee_uniform.bsl.hh"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
 
 /* Based on Frosbite Unified Volumetric.
  * https://www.ea.com/frostbite/news/physically-based-unified-volumetric-rendering-in-frostbite */
@@ -30,12 +32,14 @@ float volume_froxel_jitter(int2 froxel, float offset)
 
 /* Volume froxel texture normalized linear Z to view space Z.
  * Not dependent on projection matrix (as long as drw_view_is_perspective is consistent). */
-float volume_z_to_view_z([[resource_table]] const eevee::Uniform &uni, float z)
+float volume_z_to_view_z([[resource_table]] const eevee::Uniform &uni,
+                         const ViewMatrices view,
+                         float z)
 {
   float near = uni.uniform_buf.volumes.depth_near;
   float far = uni.uniform_buf.volumes.depth_far;
   float distribution = uni.uniform_buf.volumes.depth_distribution;
-  if (drw_view_is_perspective()) {
+  if (view.is_perspective()) {
     /* Exponential distribution. */
     return (exp2(z / distribution) - near) / far;
   }
@@ -47,9 +51,10 @@ float volume_z_to_view_z([[resource_table]] const eevee::Uniform &uni, float z)
 
 /* View space Z to volume froxel texture normalized linear Z.
  * Not dependent on projection matrix (as long as drw_view_is_perspective is consistent). */
-float view_z_to_volume_z(float depth, float near, float far, float distribution)
+float view_z_to_volume_z(
+    const ViewMatrices view, float depth, float near, float far, float distribution)
 {
-  if (drw_view_is_perspective()) {
+  if (view.is_perspective()) {
     /* Exponential distribution. */
     return distribution * log2(max(1e-8, depth * far + near));
   }
@@ -58,93 +63,154 @@ float view_z_to_volume_z(float depth, float near, float far, float distribution)
     return (depth - near) / (far - near);
   }
 }
-float view_z_to_volume_z([[resource_table]] const eevee::Uniform &uni, float depth)
+float view_z_to_volume_z([[resource_table]] const eevee::Uniform &uni,
+                         const ViewMatrices view,
+                         float depth)
 {
-  return view_z_to_volume_z(depth,
+  return view_z_to_volume_z(view,
+                            depth,
                             uni.uniform_buf.volumes.depth_near,
                             uni.uniform_buf.volumes.depth_far,
                             uni.uniform_buf.volumes.depth_distribution);
 }
 
-/* Jittered volume texture normalized coordinates to view space position. */
-float3 volume_jitter_to_view([[resource_table]] const eevee::Uniform &uni, float3 coord)
+/* Perspective volumes slice the froxel grid by planar slices, which under-integrates fog density
+ * away from screen center. Each panoramic face covers ~90 degrees FOV, wide enough for that error
+ * to visibly thin the fog toward the face corners. Panoramic cameras slice by signed camera
+ * distance instead (radial slices, equal thickness at any angle), shared by all 6 faces. */
+bool volume_uses_radial_depth([[resource_table]] const eevee::Uniform &uni)
+{
+  return is_panoramic(uni.uniform_buf.camera.type);
+}
+
+/* Reconstruct a view-space point at a known view-space Z. */
+float3 volume_screen_to_view([[resource_table]] const eevee::Uniform &uni,
+                             const ViewMatrices view,
+                             float2 screen_uv,
+                             float view_z)
 {
   /* Since we use an infinite projection matrix for rendering inside the jittered volumes,
    * we need to use a different matrix to reconstruct positions as the infinite matrix is not
    * always invertible. */
   float4x4 winmat = uni.uniform_buf.volumes.winmat_finite;
   float4x4 wininv = uni.uniform_buf.volumes.wininv_finite;
-  /* Input coordinates are in jittered volume texture space. */
-  float view_z = volume_z_to_view_z(uni, coord.z);
   /* We need to recover the NDC position for correct perspective divide. */
-  float ndc_z = drw_perspective_divide(winmat * float4(0.0f, 0.0f, view_z, 1.0f)).z;
-  float2 ndc_xy = drw_screen_to_ndc(coord.xy);
+  float ndc_z = view.perspective_divide(winmat * float4(0.0f, 0.0f, view_z, 1.0f)).z;
+  float2 ndc_xy = view.screen_to_ndc(screen_uv);
   /* NDC to view. */
-  return drw_perspective_divide(wininv * float4(ndc_xy, ndc_z, 1.0f)).xyz;
+  return view.perspective_divide(wininv * float4(ndc_xy, ndc_z, 1.0f)).xyz;
+}
+
+/* Return the signed depth that is used to address a volume Z slice. */
+float volume_view_depth_get([[resource_table]] const eevee::Uniform &uni, float3 vP)
+{
+  return volume_uses_radial_depth(uni) ? -length(vP) : vP.z;
+}
+
+/* Jittered volume texture normalized coordinates to view space position. */
+float3 volume_jitter_to_view([[resource_table]] const eevee::Uniform &uni,
+                             const ViewMatrices view,
+                             float3 coord)
+{
+  /* Input coordinates are in jittered volume texture space. */
+  float view_z = volume_z_to_view_z(uni, view, coord.z);
+  float3 vP = volume_screen_to_view(uni, view, coord.xy(), view_z);
+  if (volume_uses_radial_depth(uni)) {
+    return normalize(vP) * -view_z;
+  }
+  return vP;
 }
 
 /* View space position to jittered volume texture normalized coordinates. */
-float3 volume_view_to_jitter([[resource_table]] const eevee::Uniform &uni, float3 vP)
+float3 volume_view_to_jitter([[resource_table]] const eevee::Uniform &uni,
+                             const ViewMatrices view,
+                             float3 vP)
 {
   /* Since we use an infinite projection matrix for rendering inside the jittered volumes,
    * we need to use a different matrix to reconstruct positions as the infinite matrix is not
    * always invertible. */
   float4x4 winmat = uni.uniform_buf.volumes.winmat_finite;
   /* View to ndc. */
-  float3 ndc_P = drw_perspective_divide(winmat * float4(vP, 1.0f));
+  float3 ndc_P = view.perspective_divide(winmat * float4(vP, 1.0f));
   /* Here, screen is the same as volume texture UVW space. */
-  return float3(drw_ndc_to_screen(ndc_P.xy), view_z_to_volume_z(uni, vP.z));
+  return float3(view.ndc_to_screen(ndc_P.xy()),
+                view_z_to_volume_z(uni, view, volume_view_depth_get(uni, vP)));
 }
 
 /* Volume texture normalized coordinates (UVW) to render screen (UV).
  * Expect active view to be the main view. */
-float3 volume_resolve_to_screen([[resource_table]] const eevee::Uniform &uni, float3 coord)
+float3 volume_resolve_to_screen([[resource_table]] const eevee::Uniform &uni,
+                                const ViewMatrices view,
+                                float3 coord)
 {
-  coord.z = volume_z_to_view_z(uni, coord.z);
-  coord.z = drw_depth_view_to_screen(coord.z);
+  if (volume_uses_radial_depth(uni)) {
+    float3 vP = volume_jitter_to_view(uni, view, coord);
+    coord.z = view.depth_view_to_screen(vP.z);
+  }
+  else {
+    coord.z = volume_z_to_view_z(uni, view, coord.z);
+    coord.z = view.depth_view_to_screen(coord.z);
+  }
   coord.xy /= uni.uniform_buf.volumes.coord_scale;
   return coord;
 }
 /* Render screen (UV) to volume texture normalized coordinates (UVW).
  * Expect active view to be the main view. */
-float3 volume_screen_to_resolve([[resource_table]] const eevee::Uniform &uni, float3 coord)
+float3 volume_screen_to_resolve([[resource_table]] const eevee::Uniform &uni,
+                                const ViewMatrices view,
+                                float3 coord)
 {
   coord.xy *= uni.uniform_buf.volumes.coord_scale;
-  coord.z = drw_depth_screen_to_view(coord.z);
-  coord.z = view_z_to_volume_z(uni, coord.z);
+  float view_z = view.depth_screen_to_view(coord.z);
+  if (volume_uses_radial_depth(uni)) {
+    float3 vP = volume_screen_to_view(uni, view, coord.xy(), view_z);
+    coord.z = view_z_to_volume_z(uni, view, volume_view_depth_get(uni, vP));
+  }
+  else {
+    coord.z = view_z_to_volume_z(uni, view, view_z);
+  }
   return coord;
 }
 
 /* Returns the uvw (normalized coordinate) of a froxel in the previous frame.
  * Returns float3(-1) if history is unavailable. */
-float3 volume_history_uvw_get([[resource_table]] const eevee::Uniform &uni, int3 froxel)
+float3 volume_history_uvw_get([[resource_table]] const eevee::Uniform &uni,
+                              const ViewMatrices view,
+                              int3 froxel)
 {
-  float4x4 wininv = uni.uniform_buf.volumes.wininv_stable;
-  float4x4 winmat = uni.uniform_buf.volumes.winmat_stable;
   /* We can't re-project by a simple matrix multiplication. We first need to remap to the view Z,
    * then transform, then remap back to Volume range. */
   float3 uvw = (float3(froxel) + 0.5f) * uni.uniform_buf.volumes.inv_tex_size;
-  float3 ndc_P = drw_screen_to_ndc(uvw);
-  /* We need to recover the NDC position for correct perspective divide. */
-  float view_z = volume_z_to_view_z(uni, uvw.z);
-  ndc_P.z = drw_perspective_divide(winmat * float4(0.0f, 0.0f, view_z, 1.0f)).z;
-  /* NDC to view. */
-  float3 vs_P = project_point(wininv, ndc_P);
+  float3 vs_P;
+  if (volume_uses_radial_depth(uni)) {
+    vs_P = volume_jitter_to_view(uni, view, uvw);
+  }
+  else {
+    float4x4 wininv = uni.uniform_buf.volumes.wininv_stable;
+    float4x4 winmat = uni.uniform_buf.volumes.winmat_stable;
+    float3 ndc_P = view.screen_to_ndc(uvw);
+    /* We need to recover the NDC position for correct perspective divide. */
+    float view_z = volume_z_to_view_z(uni, view, uvw.z);
+    ndc_P.z = view.perspective_divide(winmat * float4(0.0f, 0.0f, view_z, 1.0f)).z;
+    /* NDC to view. */
+    vs_P = project_point(wininv, ndc_P);
+  }
 
   /* Transform to previous camera view space. */
   float3 vs_P_history = transform_point(uni.uniform_buf.volumes.curr_view_to_past_view, vs_P);
 
   /* View to NDC. */
   float4 hs_P_history = uni.uniform_buf.volumes.history_winmat_stable * float4(vs_P_history, 1.0f);
-  float3 ndc_P_history = drw_perspective_divide(hs_P_history);
+  float3 ndc_P_history = view.perspective_divide(hs_P_history);
 
   if (hs_P_history.w < 0.0f || any(greaterThan(abs(ndc_P_history.xy), float2(1.0f)))) {
     return float3(-1.0f);
   }
 
   float3 uvw_history;
-  uvw_history.xy = drw_ndc_to_screen(ndc_P_history.xy);
-  uvw_history.z = view_z_to_volume_z(vs_P_history.z,
+  uvw_history.xy = view.ndc_to_screen(ndc_P_history.xy());
+  uvw_history.z = view_z_to_volume_z(view,
+                                     volume_view_depth_get(uni, vs_P_history),
                                      uni.uniform_buf.volumes.history_depth_near,
                                      uni.uniform_buf.volumes.history_depth_far,
                                      uni.uniform_buf.volumes.history_depth_distribution);
@@ -191,9 +257,8 @@ struct VolumeResolveSample {
 };
 
 struct UnifiedVolumeData {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[resource_table]] srt_t<eevee::Uniform> uniforms;
+  [[resource_table]] srt_t<draw::View> views_;
 
   [[sampler(VOLUME_TRANSMITTANCE_TEX_SLOT)]] sampler3D volume_transmittance_tx;
   [[sampler(VOLUME_SCATTERING_TEX_SLOT)]] sampler3D volume_scattering_tx;
@@ -201,8 +266,9 @@ struct UnifiedVolumeData {
   VolumeResolveSample resolve(float3 ndc_P) const
   {
     [[resource_table]] const eevee::Uniform &uni = uniforms;
+    [[resource_table]] const draw::View &views = views_;
 
-    float3 coord = volume_screen_to_resolve(uni, ndc_P);
+    float3 coord = volume_screen_to_resolve(uni, views.get(0), ndc_P);
 
     /* Volumes objects have the same aliasing problems has shadow maps.
      * To fix this we need a quantization bias (the size of a step in Z) and a slope bias

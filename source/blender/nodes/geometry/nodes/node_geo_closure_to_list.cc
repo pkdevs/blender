@@ -31,11 +31,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Int>("Count"_ustr)
-      .default_value(1)
-      .min(0)
-      .description("The number of elements in the list");
-
+  const bNodeTree *tree = b.tree_or_null();
   const bNode *node = b.node_or_null();
   if (!node) {
     return;
@@ -50,6 +46,7 @@ static void node_declare(NodeDeclarationBuilder &b)
     const eNodeSocketDatatype type = item.socket_type;
     b.add_output(type, name, output_identifier)
         .structure_type(StructureType::List)
+        .socket_name_ptr(&tree->id, *ItemsAccessor::item_srna, &item, "name")
         .propagate_all()
         .references_other_outputs();
   }
@@ -58,6 +55,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::List)
       .custom_draw(socket_items::ui::draw_extend_socket_fn<ItemsAccessor>());
 
+  b.add_input<decl::Int>("Count"_ustr)
+      .default_value(1)
+      .min(0)
+      .description("The number of elements in the list");
   b.add_input<decl::Closure>("Closure"_ustr).create_signature([](const bNode &node) {
     return ClosureSignature::from_closure_to_list_node(node);
   });
@@ -173,7 +174,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     for (const int64_t list_i : range) {
       /* Create input value. */
       BLI_assert(list_i < std::numeric_limits<int>::max());
-      closure_params.inputs[0].value = bke::SocketValueVariant::From(int(list_i));
+      closure_params.inputs[0].value = bke::SocketValueVariant::from(int(list_i));
 
       /* Set output locations. */
       for (const int required_i : required_items.index_range()) {
@@ -206,7 +207,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       GArray<> array(type, count, NoInitialization());
       threading::parallel_for(IndexRange(count), 128, [&](const IndexRange range) {
         for (const int list_i : range) {
-          void *closure_result = const_cast<void *>(values[list_i].get_single_ptr_raw());
+          void *closure_result = values[list_i].get_if(type);
           type.move_construct(closure_result, array[list_i]);
         }
       });

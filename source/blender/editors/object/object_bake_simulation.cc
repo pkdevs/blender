@@ -2,12 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edobj
+ */
+
 #include <sstream>
 
 #include "BLI_fileops.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -56,7 +60,7 @@ namespace ed::object::bake_simulation {
 
 static bool simulate_to_frame_poll(bContext *C)
 {
-  if (!ED_operator_object_active(C)) {
+  if (!ED_operator_object_active_editable(C)) {
     return false;
   }
   return true;
@@ -191,7 +195,8 @@ static wmOperatorStatus simulate_to_frame_modal(bContext *C,
                                                 wmOperator * /*op*/,
                                                 const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CALCULATE_SIMULATION_NODES))
+  if (!WM_jobs_has_running(
+          CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CALCULATE_SIMULATION_NODES))
   {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
@@ -200,7 +205,7 @@ static wmOperatorStatus simulate_to_frame_modal(bContext *C,
 
 static bool bake_simulation_poll(bContext *C)
 {
-  if (!ED_operator_object_active(C)) {
+  if (!ED_operator_object_active_editable(C)) {
     return false;
   }
   Object *ob = context_active_object(C);
@@ -831,8 +836,9 @@ static PathUsersMap bake_simulation_get_path_users(bContext *C, const Span<Objec
       }
 
       /* If all bakes have a custom directory, we're done. */
-      if (all_bakes_have_custom_dir)
+      if (all_bakes_have_custom_dir) {
         continue;
+      }
 
       if (StringRef(nmd->bake_directory).is_empty()) {
         continue;
@@ -910,7 +916,8 @@ static wmOperatorStatus bake_simulation_modal(bContext *C,
                                               wmOperator * /*op*/,
                                               const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES))
+  {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
   return OPERATOR_PASS_THROUGH;
@@ -1059,7 +1066,8 @@ static wmOperatorStatus bake_single_node_modal(bContext *C,
                                                wmOperator * /*op*/,
                                                const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES))
+  {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
   return OPERATOR_PASS_THROUGH;
@@ -1213,7 +1221,7 @@ void OBJECT_OT_simulation_nodes_cache_delete(wmOperatorType *ot)
   ot->idname = __func__;
 
   ot->exec = delete_baked_simulation_exec;
-  ot->poll = ED_operator_object_active;
+  ot->poll = ED_operator_object_active_editable;
 
   RNA_def_boolean(ot->srna, "selected", false, "Selected", "Delete cache on all selected objects");
 }
@@ -1241,6 +1249,7 @@ void OBJECT_OT_geometry_node_bake_single(wmOperatorType *ot)
   ot->invoke = bake_single_node_invoke;
   ot->exec = bake_single_node_exec;
   ot->modal = bake_single_node_modal;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1252,6 +1261,7 @@ void OBJECT_OT_geometry_node_bake_delete_single(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_node_bake_delete_single";
 
   ot->exec = delete_single_bake_exec;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1263,6 +1273,7 @@ void OBJECT_OT_geometry_node_bake_pack_single(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_node_bake_pack_single";
 
   ot->exec = pack_single_bake_exec;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1275,6 +1286,7 @@ void OBJECT_OT_geometry_node_bake_unpack_single(wmOperatorType *ot)
 
   ot->exec = unpack_single_bake_exec;
   ot->invoke = unpack_single_bake_invoke;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 

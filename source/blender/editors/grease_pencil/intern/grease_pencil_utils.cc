@@ -14,6 +14,7 @@
 #include "BKE_deform.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
@@ -21,11 +22,12 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_vector_set.hh"
 
+#include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_material_types.h"
 #include "DNA_object_types.h"
@@ -520,11 +522,15 @@ static int get_active_frame_for_falloff(const bke::greasepencil::Layer &layer,
                                         const std::optional<Bounds<int>> frame_bounds,
                                         const int current_frame)
 {
-  std::optional<int> current_start_frame = layer.start_frame_at(current_frame);
-  if (!current_start_frame && frame_bounds) {
+  const std::optional<int> current_start_frame = layer.start_frame_at(current_frame);
+  if (current_start_frame) {
+    return *current_start_frame;
+  }
+  if (frame_bounds) {
     return math::clamp(current_frame, frame_bounds->min, frame_bounds->max);
   }
-  return *current_start_frame;
+  /* Unused by get_frame_falloff() when there are no frame bounds. */
+  return current_frame;
 }
 
 static std::optional<int> get_frame_id(const bke::greasepencil::Layer &layer,
@@ -1195,9 +1201,14 @@ IndexMask retrieve_visible_bezier_points(Object &object,
   return IndexMask::from_ranges(curves.points_by_curve(), visible_bezier_strokes, memory);
 }
 
+eHandleDisplay view3d_handle_type_or_default(const View3D *v3d)
+{
+  return v3d ? v3d->overlay.handle_display : CURVE_HANDLE_SELECTED;
+}
+
 IndexMask retrieve_visible_bezier_handle_strokes(Object &object,
                                                  const bke::greasepencil::Drawing &drawing,
-                                                 const int handle_display,
+                                                 const eHandleDisplay handle_display,
                                                  IndexMaskMemory &memory)
 {
   if (handle_display == CURVE_HANDLE_NONE) {
@@ -1254,7 +1265,7 @@ IndexMask retrieve_visible_fills(Object &object,
 IndexMask retrieve_visible_bezier_handle_points(Object &object,
                                                 const bke::greasepencil::Drawing &drawing,
                                                 const int layer_index,
-                                                const int handle_display,
+                                                const eHandleDisplay handle_display,
                                                 IndexMaskMemory &memory)
 {
   if (handle_display == CURVE_HANDLE_NONE) {
@@ -1299,7 +1310,7 @@ IndexMask retrieve_visible_bezier_handle_elements(Object &object,
                                                   const bke::greasepencil::Drawing &drawing,
                                                   const int layer_index,
                                                   const bke::AttrDomain selection_domain,
-                                                  const int handle_display,
+                                                  const eHandleDisplay handle_display,
                                                   IndexMaskMemory &memory)
 {
   if (selection_domain == bke::AttrDomain::Curve) {
@@ -1373,8 +1384,8 @@ IndexMask retrieve_editable_and_selected_elements(Object &object,
 
 IndexMask retrieve_editable_and_all_selected_points(Object &object,
                                                     const bke::greasepencil::Drawing &drawing,
-                                                    int layer_index,
-                                                    int handle_display,
+                                                    const int layer_index,
+                                                    const eHandleDisplay handle_display,
                                                     IndexMaskMemory &memory)
 {
   const bke::CurvesGeometry &curves = drawing.strokes();
@@ -1718,6 +1729,13 @@ wmOperatorStatus grease_pencil_draw_operator_invoke(bContext *C,
 
   if (!active_layer.is_editable()) {
     BKE_report(op->reports, RPT_ERROR, "Active layer is locked or hidden");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (ed::greasepencil::check_brush_needs_new_material(object, brush) &&
+      (!ID_IS_EDITABLE(&object->id) || ID_IS_OVERRIDE_LIBRARY(&object->id)))
+  {
+    BKE_report(op->reports, RPT_ERROR, "Cannot create new material on linked object");
     return OPERATOR_CANCELLED;
   }
 
@@ -2122,12 +2140,26 @@ void apply_eval_grease_pencil_data(const GreasePencil &eval_grease_pencil,
     }
   }
 
-  bke::gather_attributes(merged_layers_grease_pencil.attributes(),
-                         AttrDomain::Layer,
-                         AttrDomain::Layer,
-                         {},
-                         eval_to_orig_layer_indices_map,
-                         orig_grease_pencil.attributes_for_write());
+  IndexMaskMemory memory;
+  const IndexMask mapped_orig_layers = array_utils::indices_non_negative(
+      eval_to_orig_layer_indices_map.index_range(), eval_to_orig_layer_indices_map, memory);
+
+  AttributeAccessor src_attributes = merged_layers_grease_pencil.attributes();
+  MutableAttributeAccessor dst_attributes = orig_grease_pencil.attributes_for_write();
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.domain != AttrDomain::Layer || iter.data_type == bke::AttrType::String) {
+      return;
+    }
+    const GAttributeReader src = iter.get(AttrDomain::Layer);
+    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
+        iter.name, AttrDomain::Layer, iter.data_type);
+    if (!dst) {
+      return;
+    }
+    attribute_math::gather(
+        src.varray, eval_to_orig_layer_indices_map, mapped_orig_layers, dst.span);
+    dst.finish();
+  });
 
   /* Free temporary grease pencil struct. */
   BKE_id_free(nullptr, &merged_layers_grease_pencil);

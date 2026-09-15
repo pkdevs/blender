@@ -20,10 +20,10 @@
 #include "BKE_object_types.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "WM_types.hh"
 
@@ -102,7 +102,7 @@ static bool edbm_preselect_or_active(bContext *C, const View3D *v3d, Base **r_ba
   }
 
   if (gzgroup != nullptr) {
-    wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+    wmGizmo *gz = gzgroup->gizmos.first();
     ED_view3d_gizmo_mesh_preselect_get_active(C, gz, r_base, r_ele);
   }
   else {

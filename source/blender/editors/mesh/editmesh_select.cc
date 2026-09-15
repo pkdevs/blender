@@ -13,15 +13,15 @@
 
 #include "BLI_array.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_heap.h"
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_heap.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_utildefines_stack.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.h"
@@ -628,7 +628,7 @@ static void find_nearest_edge__doClosest(void *user_data,
     dist_test_bias += FIND_NEAR_SELECT_BIAS;
   }
 
-  if (data->vc.rv3d->rflag & RV3D_CLIPPING) {
+  if ((data->vc.rv3d->rflag & RV3D_CLIPPING) && (data->vc.rv3d->clipbb != nullptr)) {
     float vec[3];
 
     interp_v3_v3v3(vec, eed->v1->co, eed->v2->co, fac);
@@ -1772,8 +1772,14 @@ static wmOperatorStatus edbm_edge_loop_multiselect_exec(bContext *C, wmOperator 
       eed = edarray[edindex];
       const bool non_manifold = BM_edge_face_count_is_over(eed, 2);
       if (non_manifold) {
-        changed |= walker_select(
-            em, BMW_EDGELOOP_NONMANIFOLD, eed, true, BMW_FLAG_TEST_HIDDEN, delimit, nullptr);
+        changed |= walker_select(em,
+                                 BMW_EDGELOOP_NONMANIFOLD,
+                                 eed,
+                                 true,
+                                 BMW_FLAG_TEST_HIDDEN,
+                                 /* No support for delimiters, see #BMW_init. */
+                                 BMW_DELIMIT_NONE,
+                                 nullptr);
       }
       else {
         changed |= walker_select(
@@ -2123,8 +2129,13 @@ static void mouse_mesh_loop_edge(BMEditMesh *em,
         em, BMW_EDGEBOUNDARY, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
   }
   else if (non_manifold) {
-    walker_select(
-        em, BMW_EDGELOOP_NONMANIFOLD, eed, select, BMW_FLAG_TEST_HIDDEN, delimit, nullptr);
+    walker_select(em,
+                  BMW_EDGELOOP_NONMANIFOLD,
+                  eed,
+                  select,
+                  BMW_FLAG_TEST_HIDDEN,
+                  BMW_DELIMIT_NONE,
+                  nullptr);
   }
   else if (full_loop) {
     walker_select(em, BMW_EDGELOOP, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
@@ -2492,8 +2503,12 @@ static wmOperatorStatus edbm_select_loop_invoke(bContext *C, wmOperator *op, con
 
 static wmOperatorStatus edbm_select_ring_exec(bContext *C, wmOperator *op)
 {
+  Object *obedit = CTX_data_edit_object(C);
+  BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  const char *delimit_prop = (em->selectmode & SCE_SELECT_FACE) ? "delimit_face_loop" :
+                                                                  "delimit_edge_ring";
   return edbm_select_loop_or_ring_exec_impl(
-      C, op, true, BMWDelimitFlag(RNA_enum_get(op->ptr, "delimit_edge_ring")));
+      C, op, true, BMWDelimitFlag(RNA_enum_get(op->ptr, delimit_prop)));
 }
 
 static wmOperatorStatus edbm_select_ring_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -2522,6 +2537,27 @@ static bool edbm_select_loop_poll_property(const bContext *C,
   return true;
 }
 
+static bool edbm_select_ring_poll_property(const bContext *C,
+                                           wmOperator * /*op*/,
+                                           const PropertyRNA *prop)
+{
+  Object *obedit = CTX_data_edit_object(C);
+  BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  const char *prop_id = RNA_property_identifier(prop);
+
+  if (em->selectmode & SCE_SELECT_FACE) {
+    if (STREQ(prop_id, "delimit_edge_ring")) {
+      return false;
+    }
+  }
+  else {
+    if (STREQ(prop_id, "delimit_face_loop")) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void MESH_OT_loop_select(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -2536,7 +2572,7 @@ void MESH_OT_loop_select(wmOperatorType *ot)
   ot->poll_property = edbm_select_loop_poll_property;
 
   /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* Properties. */
 
@@ -2569,9 +2605,10 @@ void MESH_OT_edgering_select(wmOperatorType *ot)
   ot->invoke = edbm_select_ring_invoke;
   ot->exec = edbm_select_ring_exec;
   ot->poll = ED_operator_editmesh_region_view3d;
+  ot->poll_property = edbm_select_ring_poll_property;
 
   /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* Properties. */
   RNA_def_enum_flag(ot->srna,
@@ -2580,6 +2617,13 @@ void MESH_OT_edgering_select(wmOperatorType *ot)
                     BMW_DELIMIT_EDGE_RING_NGONS,
                     "Edge Ring Delimit",
                     "Delimit edge ring selection");
+  /* Only shown when face-select mode is enabled. */
+  RNA_def_enum_flag(ot->srna,
+                    "delimit_face_loop",
+                    rna_enum_mesh_walk_delimit_face_loop_items,
+                    0,
+                    "Face Loop Delimit",
+                    "Delimit face loop selection");
 
   edbm_select_loop_or_ring_properties(ot);
 }
@@ -2945,7 +2989,7 @@ static void edbm_strip_selections(BMEditMesh *em)
   BMEditSelection *ese, *nextese;
 
   if (!(em->selectmode & SCE_SELECT_VERTEX)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_VERT) {
@@ -2955,7 +2999,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_EDGE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_EDGE) {
@@ -2965,7 +3009,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_FACE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_FACE) {
@@ -3032,10 +3076,18 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
   }
 
   if (em->bm->uv_select_sync_valid) {
-    /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
-     * Although in practice it's OK to assume "connected" sticky in this case. */
-    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
-    BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    if (em->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
+      /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
+       * Although in practice it's OK to assume "connected" sticky in this case. */
+      const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
+      BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    }
+    else {
+      /* Always clear for face-only selection, because any discrepancy
+       * between UV/Viewport selection caused by de-selecting verts/edges
+       * can't be represented in face-only selection mode. */
+      BM_mesh_uvselect_clear(em->bm);
+    }
   }
 }
 
@@ -3193,6 +3245,11 @@ bool EDBM_selectmode_toggle_multi(bContext *C,
         only_update = true;
         break;
       }
+      /* Can't disable this flag if its the only one set. */
+      if (selectmode_old == selectmode_toggle) {
+        only_update = true;
+        break;
+      }
       selectmode_new &= ~selectmode_toggle;
       break;
     case 1: /* Enable. */
@@ -3215,6 +3272,7 @@ bool EDBM_selectmode_toggle_multi(bContext *C,
       BLI_assert(0);
       break;
   }
+  BLI_assert(selectmode_new != 0);
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
       *bmain, scene, view_layer, CTX_wm_view3d(C));

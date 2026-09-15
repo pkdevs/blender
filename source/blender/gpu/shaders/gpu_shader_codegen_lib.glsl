@@ -5,6 +5,8 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
 
 float3 calc_barycentric_distances(float3 pos0, float3 pos1, float3 pos2)
 {
@@ -37,18 +39,40 @@ float2 calc_barycentric_co(int vertid)
 #define float_from_float4(v, luminance_coefficients) dot(v.rgb, luminance_coefficients)
 #define float_from_float3(v) ((v.r + v.g + v.b) * (1.0f / 3.0f))
 #define float_from_float2(v) ((v.x + v.y) * (1.0f / 2.0f))
+#define float_from_int(v) float(v)
+#define float_from_bool(v) float(v)
 
 #define float2_from_float4(v) v.xy
 #define float2_from_float3(v) v.xy
 #define float2_from_float(v) float2(v)
+#define float2_from_int(v) float2(float(v))
+#define float2_from_bool(v) float2(float(v))
 
 #define float3_from_float4(v) v.rgb
 #define float3_from_float2(v) float3(v.xy, 0.0f)
 #define float3_from_float(v) float3(v)
+#define float3_from_int(v) float3(float(v))
+#define float3_from_bool(v) float3(float(v))
 
 #define float4_from_float3(v) float4(v, 1.0f)
 #define float4_from_float2(v) float4(v.xy, 0.0f, 1.0f)
 #define float4_from_float(v) float4(float3(v), 1.0f)
+#define float4_from_int(v) float4(float3(float(v)), 1.0f)
+#define float4_from_bool(v) float4(float3(float(v)), 1.0f)
+
+#define int_from_float(v) int(v)
+#define int_from_bool(v) int(v)
+#define int_from_float2(v) int(float_from_float2(v))
+#define int_from_float3(v) int_from_float(float_from_float3(v))
+/* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
+#define int_from_float4(v, luminance_coefficients) int(dot(v.rgb, luminance_coefficients))
+
+#define bool_from_float(v) ((v) > 0.0f)
+#define bool_from_int(v) ((v) > 0)
+#define bool_from_float2(v) (!is_zero(v))
+#define bool_from_float3(v) (!is_zero(v))
+/* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
+#define bool_from_float4(v, luminance_coefficients) (dot(v.rgb, luminance_coefficients) > 0.0f)
 
 #ifdef GPU_FRAGMENT_SHADER
 #  define FrontFacing gl_FrontFacing
@@ -85,11 +109,15 @@ enum ClosureType : uchar {
 
 struct ClosureUndetermined {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   ClosureType type;
   /* Additional data different for each closure type. */
   packed_float4 data;
+
+  float weight() const
+  {
+    return reduce_add(abs(color));
+  }
 };
 
 bool closure_has_transmission(const ClosureType closure)
@@ -112,33 +140,28 @@ struct ClosureOcclusion {
 
 struct ClosureDiffuse {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureSubsurface {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   packed_float3 sss_radius;
 };
 
 struct ClosureTranslucent {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureReflection {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
 };
 
 struct ClosureRefraction {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
   float ior;
@@ -146,7 +169,6 @@ struct ClosureRefraction {
 
 struct ClosureHair {
   packed_float3 color;
-  float weight;
   packed_float3 T;
   float offset;
   packed_float2 roughness;
@@ -154,29 +176,24 @@ struct ClosureHair {
 
 struct ClosureVolumeScatter {
   packed_float3 scattering;
-  float weight;
   float anisotropy;
 };
 
 struct ClosureVolumeAbsorption {
   packed_float3 absorption;
-  float weight;
 };
 
 struct ClosureEmission {
   packed_float3 emission;
-  float weight;
 };
 
 struct ClosureTransparency {
   packed_float3 transmittance;
-  float weight;
   float holdout;
 };
 
 struct ClosureThinRefraction {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
 };
@@ -324,6 +341,3 @@ float3 dF_impl(float3 v)
       g_derivative_flag = 0; \
     }
 #endif
-
-/* TODO(fclem): Remove. */
-#define CODEGEN_LIB

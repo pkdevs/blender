@@ -12,20 +12,19 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
-
-#include "draw_view_lib.glsl"
 #include "eevee_attributes_world_lib.glsl"
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_pipeline.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
 float4 closure_to_rgba_world(Closure /*cl*/)
 {
-  return float4(0.0f);
+  float3 transmittance = g_transmittance;
+  closure_weights_reset(0.0f);
+  return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
 namespace eevee {
@@ -43,18 +42,23 @@ struct SurfWorldFragOut {
 };
 
 [[fragment]] [[early_fragment_tests]]
-void surf_world([[resource_table]] SurfWorld &srt,
+void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
+                [[resource_table]] SurfWorld &srt,
                 [[resource_table]] const LightprobeRenderData &lightprobes,
                 [[resource_table]] RenderPassOutput &render_passes,
                 [[resource_table]] const Uniform &uni,
                 [[resource_table]] const UtilityTexture & /*util_tx*/,
+                [[resource_table]] const draw::View &views,
                 [[frag_coord]] const float4 frag_co,
                 [[out]] SurfWorldFragOut &frag_out,
                 [[front_facing]] const bool front_face)
 {
-  init_globals(uni, front_face);
+  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
+
+  const ViewMatrices view = views.get(0);
+  init_globals(uni, view, front_face);
   /* View position is passed to keep accuracy. */
-  g_data.N = drw_normal_view_to_world(drw_view_incident_vector(interp.P));
+  g_data.N = view.normal_view_to_world(view.view_incident_vector(interp.P));
   g_data.Ng = g_data.N;
   g_data.P = -g_data.N;
   attrib_load(WorldPoint{g_data.P});

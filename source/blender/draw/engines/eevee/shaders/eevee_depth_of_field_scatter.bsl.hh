@@ -11,8 +11,8 @@
 #pragma once
 
 #include "eevee_depth_of_field_lib.bsl.hh"
-#include "gpu_shader_math_vector_reduce_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 #define linearstep(p0, p1, v) (clamp(((v) - (p0)) / abs((p1) - (p0)), 0.0f, 1.0f))
 
@@ -34,8 +34,6 @@ struct VertOut {
 };
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[storage(0, read)]] const ScatterRect (&scatter_list_buf)[];
 
   [[push_constant]] const bool use_bokeh_lut;

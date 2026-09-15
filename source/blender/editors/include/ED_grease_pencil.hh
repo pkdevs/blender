@@ -334,6 +334,8 @@ bool grease_pencil_sculpting_poll(bContext *C);
 bool grease_pencil_weight_painting_poll(bContext *C);
 bool grease_pencil_vertex_painting_poll(bContext *C);
 
+bool check_brush_needs_new_material(Object *object, const Brush *brush);
+
 float opacity_from_input_sample(const float pressure,
                                 const Brush *brush,
                                 const BrushGpencilSettings *settings);
@@ -422,20 +424,26 @@ IndexMask retrieve_visible_bezier_points(Object &object,
                                          const bke::greasepencil::Drawing &drawing,
                                          IndexMaskMemory &memory);
 
+/**
+ * \return The handle display setting for the given view,
+ * or the default (handle-selected) when `v3d == nullptr`.
+ */
+eHandleDisplay view3d_handle_type_or_default(const View3D *v3d);
+
 IndexMask retrieve_visible_bezier_handle_strokes(Object &object,
                                                  const bke::greasepencil::Drawing &drawing,
-                                                 int handle_display,
+                                                 eHandleDisplay handle_display,
                                                  IndexMaskMemory &memory);
 IndexMask retrieve_visible_bezier_handle_points(Object &object,
                                                 const bke::greasepencil::Drawing &drawing,
                                                 int layer_index,
-                                                int handle_display,
+                                                eHandleDisplay handle_display,
                                                 IndexMaskMemory &memory);
 IndexMask retrieve_visible_bezier_handle_elements(Object &object,
                                                   const bke::greasepencil::Drawing &drawing,
                                                   int layer_index,
                                                   bke::AttrDomain selection_domain,
-                                                  int handle_display,
+                                                  eHandleDisplay handle_display,
                                                   IndexMaskMemory &memory);
 
 IndexMask retrieve_editable_and_selected_strokes(Object &grease_pencil_object,
@@ -458,7 +466,7 @@ IndexMask retrieve_editable_and_selected_elements(Object &object,
 IndexMask retrieve_editable_and_all_selected_points(Object &object,
                                                     const bke::greasepencil::Drawing &drawing,
                                                     int layer_index,
-                                                    int handle_display,
+                                                    eHandleDisplay handle_display,
                                                     IndexMaskMemory &memory);
 bool has_editable_layer(const GreasePencil &grease_pencil);
 

@@ -10,7 +10,7 @@
 
 #include "BKE_attribute.hh"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 #include "BLI_virtual_array.hh"
@@ -145,8 +145,6 @@ void EDBM_selectmode_flush(BMEditMesh *em);
  * otherwise perform the opposite, flushing de-selection.
  */
 void EDBM_select_flush_from_verts(BMEditMesh *em, bool select);
-
-bool EDBM_vert_color_check(BMEditMesh *em);
 
 /**
  * Swap is 0 or 1, if 1 it hides not selected.

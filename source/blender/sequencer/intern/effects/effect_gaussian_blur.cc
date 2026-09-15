@@ -7,12 +7,13 @@
  */
 
 #include "BLI_math_base.hh"
-#include "BLI_profile.hh"
 #include "BLI_task.hh"
 
 #include "DNA_sequence_types.h"
 
 #include "IMB_imbuf.hh"
+
+#include "PRF_profile.hh"
 
 #include "SEQ_render.hh"
 
@@ -137,7 +138,7 @@ static SeqResult do_gaussian_blur_effect(const RenderData *context,
                                          const SeqResult &ibuf1,
                                          const SeqResult & /*ibuf2*/)
 {
-  BLI_profile_scope_with_name("SeqFxBlur", ProfileCategory::Draw);
+  PRF_scope_with_name("SeqFxBlur", ProfileCategory::Draw);
   /* Create blur kernel weights. */
   const GaussianBlurVars *data = static_cast<const GaussianBlurVars *>(strip->effectdata);
 
@@ -156,59 +157,65 @@ static SeqResult do_gaussian_blur_effect(const RenderData *context,
 
   /* Horizontal blur: create output, blur ibuf1 into it. */
   SeqResult out = prepare_effect_imbufs(context, ibuf1, {});
-  threading::parallel_for(IndexRange(context->recty), 32, [&](const IndexRange y_range) {
-    const int y_first = y_range.first();
-    const int y_size = y_range.size();
-    if (is_float) {
-      gaussian_blur_x(gaussian_x,
-                      half_size_x,
-                      y_first,
-                      width,
-                      y_size,
-                      height,
-                      ibuf1.image->float_data(),
-                      out.image->float_data_for_write());
-    }
-    else {
-      gaussian_blur_x(gaussian_x,
-                      half_size_x,
-                      y_first,
-                      width,
-                      y_size,
-                      height,
-                      ibuf1.image->byte_data(),
-                      out.image->byte_data_for_write());
-    }
-  });
-
+  {
+    float *out_float = out.image->float_data_for_write();
+    uint8_t *out_byte = out.image->byte_data_for_write();
+    threading::parallel_for(IndexRange(context->recty), 32, [&](const IndexRange y_range) {
+      const int y_first = y_range.first();
+      const int y_size = y_range.size();
+      if (is_float) {
+        gaussian_blur_x(gaussian_x,
+                        half_size_x,
+                        y_first,
+                        width,
+                        y_size,
+                        height,
+                        ibuf1.image->float_data(),
+                        out_float);
+      }
+      else {
+        gaussian_blur_x(gaussian_x,
+                        half_size_x,
+                        y_first,
+                        width,
+                        y_size,
+                        height,
+                        ibuf1.image->byte_data(),
+                        out_byte);
+      }
+    });
+  }
   /* Vertical blur: create output, blur previous output into it. */
   SeqResult vin = out;
   out = prepare_effect_imbufs(context, vin, {});
-  threading::parallel_for(IndexRange(context->recty), 32, [&](const IndexRange y_range) {
-    const int y_first = y_range.first();
-    const int y_size = y_range.size();
-    if (is_float) {
-      gaussian_blur_y(gaussian_y,
-                      half_size_y,
-                      y_first,
-                      width,
-                      y_size,
-                      height,
-                      vin.image->float_data(),
-                      out.image->float_data_for_write());
-    }
-    else {
-      gaussian_blur_y(gaussian_y,
-                      half_size_y,
-                      y_first,
-                      width,
-                      y_size,
-                      height,
-                      vin.image->byte_data(),
-                      out.image->byte_data_for_write());
-    }
-  });
-
+  {
+    float *out_float = out.image->float_data_for_write();
+    uint8_t *out_byte = out.image->byte_data_for_write();
+    threading::parallel_for(IndexRange(context->recty), 32, [&](const IndexRange y_range) {
+      const int y_first = y_range.first();
+      const int y_size = y_range.size();
+      if (is_float) {
+        gaussian_blur_y(gaussian_y,
+                        half_size_y,
+                        y_first,
+                        width,
+                        y_size,
+                        height,
+                        vin.image->float_data(),
+                        out_float);
+      }
+      else {
+        gaussian_blur_y(gaussian_y,
+                        half_size_y,
+                        y_first,
+                        width,
+                        y_size,
+                        height,
+                        vin.image->byte_data(),
+                        out_byte);
+      }
+    });
+  }
   /* Free the first output. */
   IMB_freeImBuf(vin.image);
 

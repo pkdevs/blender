@@ -12,11 +12,11 @@
 #include <optional>
 
 #include "BLI_bounds_types.hh"
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_object_enums.h"
@@ -507,6 +507,7 @@ void BKE_object_handle_update_ex(Depsgraph *depsgraph,
                                  Object *ob,
                                  RigidBodyWorld *rbw);
 
+bool BKE_object_use_sculptsession(eObjectMode mode);
 void BKE_object_sculpt_data_create(Object *ob);
 
 bool BKE_object_obdata_texspace_get(Object *ob,
@@ -708,7 +709,8 @@ bool BKE_object_empty_image_data_is_visible_in_view3d(const Object *ob, const Re
  * preserves all possible custom data layers.
  *
  * NOTE: Dependency graph argument is required when preserve_all_data_layers is truth, and is
- * ignored otherwise. */
+ * ignored otherwise.
+ */
 Mesh *BKE_object_to_mesh(Depsgraph *depsgraph, Object *object, bool preserve_all_data_layers);
 
 void BKE_object_to_mesh_clear(Object *object);

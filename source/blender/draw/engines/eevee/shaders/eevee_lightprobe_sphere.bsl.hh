@@ -9,9 +9,9 @@
 #include "eevee_lightprobe_shared.hh"
 #include "eevee_octahedron_lib.bsl.hh"
 #include "eevee_spherical_harmonics.bsl.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_fast_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_fast.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee {
 
@@ -142,7 +142,7 @@ float3 parallax_eval(SphereProbeData probe, float3 P, float3 L)
   }
   /* Correct reflection ray using parallax volume intersection. */
   float3 lP = float4(P, 1.0f) * probe.world_to_probe_transposed;
-  float3 lL = (to_float3x3(probe.world_to_probe_transposed) * L) / probe.parallax_distance;
+  float3 lL = (L * to_float3x3(probe.world_to_probe_transposed)) / probe.parallax_distance;
 
   float dist = (probe.parallax_shape == SHAPE_ELIPSOID) ? line_unit_sphere_intersect_dist(lP, lL) :
                                                           line_unit_box_intersect_dist(lP, lL);

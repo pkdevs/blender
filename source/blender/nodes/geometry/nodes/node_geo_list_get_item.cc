@@ -2,8 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_array_utils.hh"
-
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_geometry_nodes_values.hh"
 #include "NOD_rna_define.hh"
@@ -15,6 +13,7 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+#include "list_function_eval.hh"
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_list_get_item_cc {
@@ -49,6 +48,7 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
+  layout.prop(ptr, "socket_type", UI_ITEM_NONE, "", ICON_NONE);
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
   layout.prop(ptr, "structure_type", UI_ITEM_NONE, IFACE_("Shape"), ICON_NONE);
@@ -85,54 +85,6 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(IFACE_("Value"), SocketSearchOp{"Value"_ustr, socket_type});
   }
 }
-
-class SampleIndexFunction : public mf::MultiFunction {
-  GListPtr list_;
-  mf::Signature signature_;
-
- public:
-  SampleIndexFunction(GListPtr list) : list_(std::move(list))
-  {
-    mf::SignatureBuilder builder{"Sample Index", signature_};
-    builder.single_input<int>("Index");
-    builder.single_output("Value", list_->cpp_type());
-    this->set_signature(&signature_);
-  }
-
-  void call(const IndexMask &mask, mf::Params params, mf::Context /*context*/) const override
-  {
-    const VArraySpan<int> indices = params.readonly_single_input<int>(0, "Index");
-    GMutableSpan dst = params.uninitialized_single_output(1, "Value");
-
-    IndexMaskMemory memory;
-    const IndexMask valid_indices = array_utils::indices_in_range(
-        mask, indices, IndexRange(list_->size()), memory);
-
-    if (valid_indices.size() != mask.size()) {
-      const IndexMask invalid_indices = valid_indices.complement(mask, memory);
-      list_->cpp_type().fill_construct_indices(
-          list_->cpp_type().default_value(), dst.data(), invalid_indices);
-    }
-
-    const GList::DataVariant &data = list_->data();
-    if (const auto *array_data = std::get_if<nodes::GList::ArrayData>(&data)) {
-      const GSpan src(list_->cpp_type(), array_data->data, list_->size());
-      valid_indices.foreach_index([&](const int i, const int mask) {
-        list_->cpp_type().copy_construct(src[indices[i]], dst[mask]);
-      });
-    }
-    else if (const auto *single_data = std::get_if<nodes::GList::SingleData>(&data)) {
-      list_->cpp_type().fill_construct_indices(single_data->value, dst.data(), valid_indices);
-    }
-  }
-
-  void hash_unique(UniqueHashBytes &hash) const override
-  {
-    static constexpr int8_t id = 0;
-    hash.add(&id);
-    hash.add(list_.get());
-  }
-};
 
 static void node_rna(StructRNA *srna)
 {
@@ -171,7 +123,8 @@ static bke::SocketValueVariant get_single_item(GListPtr &list,
                                                const int64_t index)
 {
   bke::SocketValueVariant value;
-  void *value_ptr = value.allocate_single(socket_type);
+  const CPPType &cpp_type = *bke::socket_type_to_geo_nodes_base_cpp_type(socket_type);
+  void *value_ptr = value.allocate_single(cpp_type);
   if (const auto *data = std::get_if<GList::ArrayData>(&list->data())) {
     if (list->is_mutable() && data->sharing_info->is_mutable()) {
       GMutableSpan data_span(list->cpp_type(), const_cast<void *>(data->data), list->size());
@@ -234,8 +187,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       params.set_default_remaining_outputs();
       return;
     }
-    index.convert_to_single();
-    const int index_int = index.get<int>();
+    const int index_int = index.ensure_type<int>();
     if (!IndexRange(list->size()).contains(index_int)) {
       params.error_message_add(NodeWarningType::Error, "Index out of range");
       params.set_default_remaining_outputs();

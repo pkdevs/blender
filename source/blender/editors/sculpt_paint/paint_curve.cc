@@ -17,7 +17,7 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -51,7 +51,7 @@ bool paint_curve_poll(bContext *C)
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   SpaceImage *sima;
 
-  if (rv3d && !(ob && ((ob->mode & (OB_MODE_ALL_PAINT | OB_MODE_SCULPT_CURVES |
+  if (rv3d && !(ob && ((ob->mode & (OB_MODE_ALL_PAINT_MESH | OB_MODE_SCULPT_CURVES |
                                     OB_MODE_SCULPT_GREASE_PENCIL)) != 0)))
   {
     return false;

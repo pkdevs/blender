@@ -21,13 +21,13 @@
 #  include "DNA_userdef_types.h"
 #  include "DNA_windowmanager_enums.h"
 
-#  include "BLI_fileops.h"
-#  include "BLI_listbase.h"
+#  include "BLI_fileops.hh"
+#  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
 #  include "BLI_set.hh"
-#  include "BLI_string.h"
+#  include "BLI_string.hh"
 #  include "BLI_task.hh"
-#  include "BLI_utildefines.h"
+#  include "BLI_utildefines.hh"
 #  include "BLI_vector.hh"
 
 #  include "BKE_bpath.hh"
@@ -345,10 +345,16 @@ static void generate_texture_cache_ui(bContext * /*C*/, wmOperator *op)
   ui::Layout &layout = *op->layout;
   const GenerateTextureCacheUI *data = static_cast<GenerateTextureCacheUI *>(op->customdata);
 
-  if (data->sequence_generate_num > 0) {
-    const std::string label = fmt::format(
-        fmt::runtime(IFACE_("Include {} image sequence tx files")), data->sequence_generate_num);
-    layout.prop(op->ptr, "generate_sequences", UI_ITEM_NONE, label, ICON_NONE);
+  if (data) {
+    if (data->sequence_generate_num > 0) {
+      const std::string label = fmt::format(
+          fmt::runtime(IFACE_("Include {} image sequence tx files")), data->sequence_generate_num);
+      layout.prop(op->ptr, "generate_sequences", UI_ITEM_NONE, label, ICON_NONE);
+    }
+  }
+  else {
+    /* Show unconditionally outside the confirmation dialog, like a redo panel. */
+    layout.prop(op->ptr, "generate_sequences", UI_ITEM_NONE, nullptr, ICON_NONE);
   }
 }
 
