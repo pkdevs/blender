@@ -1422,7 +1422,7 @@ void RNA_api_ui_layout(StructRNA *srna)
       {int(ui::NodeAssetMenuOperatorType::CompositorEffect),
        "EFFECT",
        0,
-       "Compositor Effect",
+       "Scene Effect",
        "Add a node group as a scene compositor effect."},
       {0, nullptr, 0, nullptr, nullptr},
   };
