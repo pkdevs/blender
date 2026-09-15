@@ -1091,8 +1091,6 @@ static void buttons_space_blend_write(BlendWriter *writer, SpaceLink *sl)
       sl, [](BlendStructWriter<SpaceProperties> &struct_writer) {
         SpaceProperties &shallow_sbuts = struct_writer.shallow_data;
         shallow_sbuts.path = nullptr;
-        shallow_sbuts.pathflag = 0;
-        shallow_sbuts.dataicon = 0;
         shallow_sbuts.texuser = nullptr;
         shallow_sbuts.runtime = nullptr;
       });

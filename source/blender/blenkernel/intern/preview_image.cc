@@ -590,10 +590,12 @@ void BKE_previewimg_blend_write(BlendWriter *writer, const PreviewImage *prv)
     return;
   }
 
-  writer->write_struct(prv, [](BlendStructWriter<PreviewImage> &struct_writer) {
+  writer->write_struct(prv, [writer](BlendStructWriter<PreviewImage> &struct_writer) {
     struct_writer.shallow_data.runtime = nullptr;
-    struct_writer.shallow_data.changed_timestamp[0] = 0;
-    struct_writer.shallow_data.changed_timestamp[1] = 0;
+    if (!writer->is_undo()) {
+      struct_writer.shallow_data.changed_timestamp[0] = 0;
+      struct_writer.shallow_data.changed_timestamp[1] = 0;
+    }
   });
   if (prv->rect[0]) {
     writer->write_uint32_array(prv->w[0] * prv->h[0], prv->rect[0]);

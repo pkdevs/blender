@@ -85,8 +85,10 @@ CurveProfile *BKE_curveprofile_copy(const CurveProfile *profile)
 
 void BKE_curveprofile_blend_write(BlendWriter *writer, const CurveProfile *profile)
 {
-  writer->write_struct(profile, [](BlendStructWriter<CurveProfile> &struct_writer) {
-    struct_writer.shallow_data.changed_timestamp = 0;
+  writer->write_struct(profile, [writer](BlendStructWriter<CurveProfile> &struct_writer) {
+    if (!writer->is_undo()) {
+      struct_writer.shallow_data.changed_timestamp = 0;
+    }
   });
   writer->write_struct_array(profile->path_len, profile->path);
 }

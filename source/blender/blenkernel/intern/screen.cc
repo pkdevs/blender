@@ -1357,17 +1357,13 @@ void BKE_screen_view3d_shading_blend_read_data(BlendDataReader *reader, View3DSh
 
 static void zero_regionview3d_runtime_fields(RegionView3D &rv3d)
 {
-  zero_m4(rv3d.winmat);
-  zero_m4(rv3d.viewmat);
-  zero_m4(rv3d.viewinv);
-  zero_m4(rv3d.persmat);
-  zero_m4(rv3d.persinv);
+  /* Some values like winmat/viewmat/viewinv/persmat/persinv/is_persp/pixsize are derived but are
+   * not zeroed. They can be read before they are recomputed when a file is newly loaded,
+   * especially when running Blender in background mode. */
   zero_v4(rv3d.viewcamtexcofac);
   zero_m4(rv3d.viewmatob);
   zero_m4(rv3d.persmatob);
   memset(rv3d.clip_local, 0, sizeof(rv3d.clip_local));
-  rv3d.pixsize = 0;
-  rv3d.is_persp = 0;
   zero_m4(rv3d.twmat);
   zero_v3(rv3d.tw_axis_min);
   zero_v3(rv3d.tw_axis_max);
