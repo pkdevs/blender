@@ -215,7 +215,8 @@ bool wm_file_or_session_data_has_unsaved_changes(const Main *bmain, const wmWind
 /**
  * Clear several WM/UI runtime data that would make later complex WM handling impossible.
  *
- * Return data should be cleared by #wm_file_read_setup_wm_finalize. */
+ * Return data should be cleared by #wm_file_read_setup_wm_finalize.
+ */
 static BlendFileReadWMSetupData *wm_file_read_setup_wm_init(bContext *C,
                                                             Main *bmain,
                                                             const bool is_read_homefile)
@@ -617,9 +618,7 @@ void WM_file_autoexec_init(const char *filepath)
   }
 
   if (G.f & G_FLAG_SCRIPT_AUTOEXEC) {
-    char dirpath[FILE_MAX];
-    BLI_path_split_dir_part(filepath, dirpath, sizeof(dirpath));
-    if (BKE_autoexec_match(dirpath)) {
+    if (BKE_autoexec_match(filepath, false, true)) {
       G.f &= ~G_FLAG_SCRIPT_AUTOEXEC;
     }
   }
@@ -3341,18 +3340,11 @@ static bool wm_open_mainfile_check(bContext * /*C*/, wmOperator *op)
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_scripts");
   bool is_untrusted = false;
   char filepath[FILE_MAX];
-  char *lslash;
 
   RNA_string_get(op->ptr, "filepath", filepath);
 
-  /* Get the directory. */
-  lslash = const_cast<char *>(BLI_path_slash_rfind(filepath));
-  if (lslash) {
-    *(lslash + 1) = '\0';
-  }
-
   if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
-    if (BKE_autoexec_match(filepath) == true) {
+    if (BKE_autoexec_match(filepath, true, true) == true) {
       RNA_property_boolean_set(op->ptr, prop, false);
       is_untrusted = true;
     }

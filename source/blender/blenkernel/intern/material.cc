@@ -267,6 +267,7 @@ IDTypeInfo IDType_ID_MA = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = material_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = material_blend_write,
@@ -1752,23 +1753,13 @@ static void fill_texpaint_slots_recursive(bNodeTree *nodetree,
   ntree_foreach_texnode_recursive(nodetree, fill_texpaint_slots_cb, &fill_data, slot_filter);
 }
 
-/** Check which type of paint slots should be filled for the given object. */
-static ePaintSlotFilter material_paint_slot_filter(const Object *ob)
-{
-  ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
-  if (ob->mode == OB_MODE_SCULPT && USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
-    slot_filter |= PAINT_SLOT_COLOR_ATTRIBUTE;
-  }
-  return slot_filter;
-}
-
 void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const Object *ob)
 {
   if (!ma) {
     return;
   }
 
-  const ePaintSlotFilter slot_filter = material_paint_slot_filter(ob);
+  const ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
 
   const TexPaintSlot *prev_texpaintslot = ma->texpaintslot;
   const int prev_paint_active_slot = ma->paint_active_slot;

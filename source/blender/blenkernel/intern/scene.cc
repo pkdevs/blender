@@ -80,6 +80,7 @@
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_pointcache.h"
 #include "BKE_preview_image.hh"
 #include "BKE_rigidbody.h"
@@ -191,6 +192,10 @@ static void scene_init_data(ID *id)
                      CurveMapSlopeType::PositiveNegative);
 
   scene->toolsettings = MEM_new<ToolSettings>(__func__);
+  /* Unlike other Paint structs, the `ImagePaintSettings` is default allocated, so it needs to be
+   * explicitly initialized when a new scene is created to ensure runtime data is in a consistent
+   * state. */
+  BKE_paint_init(nullptr, scene, PaintMode::Texture2D, false);
 
   scene->toolsettings->autokey_mode = U.autokey_mode;
 
@@ -1048,9 +1053,18 @@ static void scene_foreach_working_space_color(ID *id, const IDTypeForeachColorFu
 {
   Scene *scene = id_cast<Scene *>(id);
 
-  BKE_paint_settings_foreach_mode(scene->toolsettings, [&fn](Paint *paint) {
-    fn.single(paint->unified_paint_settings.color);
-    fn.single(paint->unified_paint_settings.secondary_color);
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&fn](Paint &paint) {
+    fn.single(paint.unified_paint_settings.color);
+    fn.single(paint.unified_paint_settings.secondary_color);
+  });
+}
+
+static void scene_foreach_asset_weak_reference(ID *id, FunctionRef<void(AssetWeakReference &)> fn)
+{
+  Scene *scene = id_cast<Scene *>(id);
+
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&fn](Paint &paint) {
+    BKE_paint_foreach_asset_weak_reference(paint, fn);
   });
 }
 
@@ -1668,6 +1682,7 @@ IDTypeInfo IDType_ID_SCE = {
     .foreach_cache = scene_foreach_cache,
     .foreach_path = scene_foreach_path,
     .foreach_working_space_color = scene_foreach_working_space_color,
+    .foreach_asset_weak_reference = scene_foreach_asset_weak_reference,
     .owner_pointer_get = nullptr,
 
     .blend_write = scene_blend_write,
