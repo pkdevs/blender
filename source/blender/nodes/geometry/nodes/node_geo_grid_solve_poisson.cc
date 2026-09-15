@@ -233,29 +233,17 @@ static bool is_uniform_scale(const float3 &s, const float epsilon = 1e-5f)
   return math::abs(s.x - s.y) < epsilon && math::abs(s.x - s.z) < epsilon;
 }
 
-/* Computes the maximum norm (maximal absolute value), taking into account non-finite values.
- * If the tree contains any non-finite value the result is inf. */
-static float maximum_norm_or_infinity(const openvdb::FloatTree &tree)
+/* Returns true if all values in the tree are finite. */
+static bool all_values_finite(const openvdb::FloatTree &tree)
 {
-  /* Maximum norm function that handles non-finite values too. */
-  auto max_or_inf = [](const float norm, const float value) {
-    return (std::isfinite(norm) && std::isfinite(value)) ? std::max(norm, std::abs(value)) :
-                                                           std::numeric_limits<float>::infinity();
-  };
-
-  threading::EnumerableThreadSpecific<float> norm_tls = 0.0f;
-  openvdb::tools::foreach(tree.cbeginValueOn(),
-                          [&](const typename openvdb::FloatTree::ValueOnCIter &iter) {
-                            const float value = iter.getValue();
-
-                            float &norm = norm_tls.local();
-                            norm = max_or_inf(norm, value);
-                          });
-  float norm = 0.0f;
-  for (float value : norm_tls) {
-    norm = max_or_inf(norm, value);
-  }
-  return norm;
+  threading::EnumerableThreadSpecific<bool> all_finite_tls = true;
+  openvdb::tools::foreach(
+      tree.cbeginValueOn(), [&](const typename openvdb::FloatTree::ValueOnCIter &iter) {
+        const float value = iter.getValue();
+        all_finite_tls.local() = all_finite_tls.local() && std::isfinite(value);
+      });
+  return std::all_of(
+      all_finite_tls.begin(), all_finite_tls.end(), [](const bool value) { return value; });
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -437,32 +425,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   /* Note: OpenVDB infNorm function of the conjugate gradient solver
-   * outputs 0.0 if the solution contains only non-finite values. Compute
-   * the error again here to handle these corner cases. */
+   * outputs 0.0 if the solution contains only non-finite values.
+   * Handle the case of a non-finite solution explicitly here: If the solution contains any
+   * non-finite value it has diverged and should be considered invalid. */
   if (solver_state.absoluteError == 0.0) {
-    const float absolute_error_or_inf = maximum_norm_or_infinity(*solution_tree);
-    const float norm_b = maximum_norm_or_infinity(source_vdb_grid.tree());
-    const float relative_error_or_inf = (norm_b == 0.0f) ? absolute_error_or_inf :
-                                                           absolute_error_or_inf / norm_b;
-    switch (threshold_mode) {
-      case ThresholdMode::Relative: {
-        if (!std::isfinite(relative_error_or_inf) || relative_error_or_inf > error_threshold) {
-          solver_state.absoluteError = absolute_error_or_inf;
-          solver_state.relativeError = relative_error_or_inf;
-          solver_state.success = false;
-        }
-        break;
-      }
-      case ThresholdMode::Absolute: {
-        if (!std::isfinite(absolute_error_or_inf) ||
-            absolute_error_or_inf > error_threshold * absolute_error_scale)
-        {
-          solver_state.absoluteError = absolute_error_or_inf;
-          solver_state.relativeError = relative_error_or_inf;
-          solver_state.success = false;
-        }
-        break;
-      }
+    const bool all_finite = all_values_finite(*solution_tree);
+    if (!all_finite) {
+      solver_state.absoluteError = std::numeric_limits<float>::infinity();
+      solver_state.relativeError = std::numeric_limits<float>::infinity();
+      solver_state.success = false;
     }
   }
 
