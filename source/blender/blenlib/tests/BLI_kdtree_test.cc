@@ -476,8 +476,8 @@ TEST(kdtree, ThreadedBuild)
       const KDTreeNew<float3> other_tree(positions);
       other_found = other_tree.calc_duplicates(0.02f, other);
     }
+    BLI_task_scheduler_exit();
     BLI_system_num_threads_override_set(0);
-    BLI_task_scheduler_init();
 
     EXPECT_EQ(Span<int>(other), Span<int>(duplicates)) << threads_num << " threads";
     EXPECT_EQ(other_found, found) << threads_num << " threads";
