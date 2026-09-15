@@ -1424,7 +1424,7 @@ static int /*eContextResult*/ node_context(const bContext *C,
   if (CTX_data_equals(member, "selected_nodes")) {
     if (snode->edittree) {
       for (bNode *node : snode->edittree->all_nodes()) {
-        if (node->flag & NODE_SELECT) {
+        if (node->is_selected()) {
           PointerRNA ptr = RNA_pointer_create_id_subdata(snode->edittree->id, RNA_Node, node);
           CTX_data_list_add_ptr(result, &ptr);
         }
@@ -1751,7 +1751,9 @@ static void node_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
-  writer->write_struct_cast<SpaceNode>(snode);
+  writer->write_struct_cast<SpaceNode>(snode, [](BlendStructWriter<SpaceNode> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
+  });
 
   for (bNodeTreePath &path : snode->treepath) {
     writer->write_struct(&path);
