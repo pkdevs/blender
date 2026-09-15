@@ -1763,10 +1763,7 @@ static void rna_NodeTree_debug_zone_lazy_function_graph(
   *r_len = dot_str->size();
 }
 
-static bNodeTree *rna_NodeTree_group_make(ID *tree_id,
-                                          bNode *node,
-                                          bContext *C,
-                                          ReportList *reports)
+static bNodeTree *rna_Node_group_make(ID *tree_id, bNode *node, bContext *C, ReportList *reports)
 {
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(tree_id);
 
@@ -10102,11 +10099,11 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
 
-  func = RNA_def_function(srna, "group_make", "rna_NodeTree_group_make");
-  RNA_def_function_ui_description(func,
-                                  "Create a new node group containing a copy of the given node, "
-                                  "with the sockets of the node exposed as the interface of the "
-                                  "group. Same as the Make Group operator for a single node.");
+  func = RNA_def_function(srna, "group_make", "rna_Node_group_make");
+  RNA_def_function_ui_description(
+      func,
+      "Create a new node group containing a copy of the given node, with the sockets of the node "
+      "exposed as the interface of the group.");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "group", "NodeTree", "Group", "The newly created node group");
   RNA_def_function_return(func, parm);

@@ -679,10 +679,14 @@ static WrapperGroup make_wrapper_group(const bContext &C, bNodeTree &ntree, bNod
   /* Expose all sockets even if unconnected. */
   params.skip_unconnected = false;
 
-  /* Group interface remains empty for nodes without a declaration, e.g. Frame node. */
+  /* Nodes with a declaration recreate the socket layout of the node exactly. */
   NodeTreeInterfaceMapping io_mapping;
   if (src_node.declaration() != nullptr) {
     io_mapping = build_node_declaration_interface(params, src_node, *wrapper_group);
+  }
+  else {
+    /* Needed for sockets without an interface like Frame and Reroute nodes. */
+    io_mapping = build_node_set_interface(params, ntree, {&src_node}, *wrapper_group);
   }
 
   const NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(
@@ -704,6 +708,8 @@ static bNode *node_group_make_from_node_declaration(bContext &C,
                                                     bNode &src_node,
                                                     const UString node_idname)
 {
+  BLI_assert(src_node.declaration() != nullptr);
+
   Main &bmain = *CTX_data_main(&C);
 
   const WrapperGroup wrapper = make_wrapper_group(C, ntree, src_node);

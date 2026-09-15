@@ -18,7 +18,7 @@ EFFECT_MENU_BLOCKLIST = (
     # Filter
     "CompositorNodeMaskToSDF",
 
-    # Distort
+    # Transform
     "CompositorNodeMovieDistortion",
 )
 

@@ -180,8 +180,9 @@ std::optional<Bounds<float2>> node_location_bounds(Span<const bNode *> nodes);
 bNode *find_common_parent_node(Span<bNode *> nodes);
 
 /**
- * Create a node group which contains a copy of the given node of the given tree. This is the same
- * node group the Make Group operator creates for a single node.
+ * Create a node group containing a copy of the given node, with the node's sockets exposed as the
+ * interface of the group. The interface is generated the same way as for the Make Group operator,
+ * but unlike the operator the node is left in place and no group node is created.
  */
 bNodeTree *node_wrapper_group_create(const bContext &C, bNodeTree &ntree, bNode &src_node);
 
