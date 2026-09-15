@@ -71,12 +71,9 @@ void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
   frag_out.background.a = saturate(average(g_transmittance)) * g_holdout;
 
   if (g_data.ray_type == RAY_TYPE_CAMERA) {
-    /* The film stores radiance as 16 bit floats, whose largest finite value is 65504. A world
-     * can be brighter than that - the Sky Texture's Sun disc is - and conversion of an
-     * out-of-range value is not consistent between backends. Clamp here so every backend
-     * records the same thing. The light probe path is deliberately left alone: it is captured
-     * with a different ray type and feeds the sun light extraction, which needs the real value.
-     */
+    /* The film stores radiance as 16-bit floats, which top out at 65504, and out of range
+     * conversion is not consistent between backends. Probe capture runs under a different ray
+     * type and is left unclamped, since sunlight extraction needs the real value. */
     frag_out.background.rgb = colorspace::brightness_clamp_max(frag_out.background.rgb, 65504.0f);
   }
 

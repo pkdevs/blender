@@ -22,6 +22,13 @@ float sky_angle_between(float thetav, float phiv, float theta, float phi)
   return acos(cospsi);
 }
 
+/* Angle between two unit vectors. Stable at the small angles the Sun disc needs, where
+ * acos(dot()) loses most of its precision. Matches precise_angle() in the Cycles kernel. */
+float sky_precise_angle(float3 a, float3 b)
+{
+  return 2.0f * atan(length(a - b), length(a + b));
+}
+
 float3 sky_spherical_coordinates(float3 dir)
 {
   return float3(M_PI_2 - atan(dir.z, length(dir.xy)), atan(dir.x, dir.y), 0.0f);
@@ -193,8 +200,10 @@ void node_tex_sky_nishita(float3 co,
   float sun_intensity = sun_params.z;
   float earth_intersection_angle = sun_params.w;
   if (angular_diameter > 0.0f && dir_elevation > earth_intersection_angle) {
-    float sun_angle = sky_angle_between(
-        spherical.x, spherical.y, M_PI_2 - sun_elevation, -sun_rotation);
+    float cos_elevation = cos(sun_elevation);
+    float3 sun_dir = float3(
+        -cos_elevation * sin(sun_rotation), cos_elevation * cos(sun_rotation), sin(sun_elevation));
+    float sun_angle = sky_precise_angle(normalize(co), sun_dir);
     float half_angular = angular_diameter * 0.5f;
     if (sun_angle < half_angular) {
       /* Limb darkening, coefficient is 0.6. */

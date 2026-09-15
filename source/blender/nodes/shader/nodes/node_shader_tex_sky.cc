@@ -150,7 +150,7 @@ static void sky_precompute_old(SkyModelPreetham *sunsky, const float sun_angles[
   sunsky->radiance[2] /= sky_perez_function(sunsky->config_y, 0, theta);
 }
 
-static void sky_simplify_multiscatter_elevation_rotation(float &sun_elevation, float &sun_rotation)
+static void sky_simplify_elevation_rotation(float &sun_elevation, float &sun_rotation)
 {
   /* Patch Sun position so users are able to animate the daylight cycle while keeping the shading
    * code simple. */
@@ -265,36 +265,31 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
 
   float sun_rotation = tex->sun_rotation;
   float sun_elevation = tex->sun_elevation;
+  /* Clamped for numerical precision, as Cycles' get_sun_size() does. The disc's radiance is
+   * divided by its solid angle, which is zero at a size of zero. */
+  const float sun_size = fmaxf(tex->sun_size, 0.0005f);
   float pixel_bottom[3];
   float pixel_top[3];
+  sky_simplify_elevation_rotation(sun_elevation, sun_rotation);
   if (tex->sky_model == SHD_SKY_SINGLE_SCATTERING) {
     SKY_single_scattering_precompute_texture(pixels.data(),
                                              4,
                                              GPU_SKY_WIDTH,
                                              GPU_SKY_HEIGHT,
-                                             tex->sun_elevation,
+                                             sun_elevation,
                                              tex->altitude,
                                              tex->air_density,
                                              tex->aerosol_density,
                                              tex->ozone_density);
-    SKY_single_scattering_precompute_sun(tex->sun_elevation,
-                                         tex->sun_size,
+    SKY_single_scattering_precompute_sun(sun_elevation,
+                                         sun_size,
                                          tex->altitude,
                                          tex->air_density,
                                          tex->aerosol_density,
                                          pixel_bottom,
                                          pixel_top);
-
-    /* The multi-scatter case takes care of rotation wrapping in the
-     * sky_simplify_multiscatter_elevation_rotation(). */
-    sun_rotation = fmodf(sun_rotation, 2.0f * M_PI);
-    if (sun_rotation < 0.0f) {
-      sun_rotation += 2.0f * M_PI;
-    }
-    sun_rotation = 2.0f * M_PI - sun_rotation;
   }
   else {
-    sky_simplify_multiscatter_elevation_rotation(sun_elevation, sun_rotation);
     SKY_multiple_scattering_precompute_texture(pixels.data(),
                                                4,
                                                GPU_SKY_WIDTH,
@@ -305,7 +300,7 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                                tex->aerosol_density,
                                                tex->ozone_density);
     SKY_multiple_scattering_precompute_sun(sun_elevation,
-                                           tex->sun_size,
+                                           sun_size,
                                            tex->altitude,
                                            tex->air_density,
                                            tex->aerosol_density,
@@ -323,13 +318,11 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                              GPU_SAMPLER_EXTEND_MODE_EXTEND};
   float layer;
   float sky_type = (tex->sky_model == SHD_SKY_SINGLE_SCATTERING) ? 0.0f : 1.0f;
-  /* A negative angular diameter tells the shader that the disc is turned off.
-   *
-   * SKY_earth_intersection_angle() returns a positive angle: how far the true horizon dips below
-   * the local horizontal for an observer standing above sea level. Negated here, since the
-   * visible sky extends down to that small *negative* elevation, not stops short of it. */
+  /* A negative angular diameter tells the shader the disc is off.
+   * SKY_earth_intersection_angle() returns how far the true horizon dips below the local
+   * horizontal at altitude, so the visible sky reaches that negative elevation. */
   const float sun_params[4] = {sun_elevation,
-                               tex->sun_disc ? tex->sun_size : -1.0f,
+                               tex->sun_disc ? sun_size : -1.0f,
                                tex->sun_intensity,
                                -SKY_earth_intersection_angle(tex->altitude)};
   GPUNodeLink *sky_texture = GPU_image_sky(
