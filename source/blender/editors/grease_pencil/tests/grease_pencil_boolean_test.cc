@@ -308,15 +308,11 @@ static void draw_results(const std::string &label,
   const VArray<int> src_fill_ids = *src_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
   const VArray<int> dst_fill_ids = *dst_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
 
-  auto [src_shape_map, src_shape_offsets] = shapes_from_fill_ids(src_fill_ids,
-                                                                 src_curves.curves_num());
-  auto [dst_shape_map, dst_shape_offsets] = shapes_from_fill_ids(dst_fill_ids,
-                                                                 dst_curves.curves_num());
+  const ShapeData src_shape_data = shapes_from_fill_ids(src_fill_ids, src_curves.curves_num());
+  const ShapeData dst_shape_data = shapes_from_fill_ids(dst_fill_ids, dst_curves.curves_num());
 
-  const GroupedSpan<int> src_shapes = GroupedSpan<int>(src_shape_offsets.as_span(),
-                                                       src_shape_map.as_span());
-  const GroupedSpan<int> dst_shapes = GroupedSpan<int>(dst_shape_offsets.as_span(),
-                                                       dst_shape_map.as_span());
+  const GroupedSpan<int> src_shapes = src_shape_data.shapes();
+  const GroupedSpan<int> dst_shapes = dst_shape_data.shapes();
 
   IndexMaskMemory memory;
   const IndexMask subject_shapes = clipping_shapes.complement(src_shapes.index_range(), memory);
@@ -445,9 +441,9 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
   op_params.skip_clipping_attributes = false;
   op_params.separate_islands = false;
 
-  auto [shape_map, shape_offsets] = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
-                                                         src_curves.curves_num());
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+  const ShapeData shapes_data = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
+                                                     src_curves.curves_num());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
 
   return curve_boolean(op_params, src_curves, project_fn, shapes, clipping_shapes);
 }

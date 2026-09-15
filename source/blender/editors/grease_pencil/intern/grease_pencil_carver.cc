@@ -79,7 +79,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
       "fill_id", bke::AttrDomain::Curve);
   fill_ids.span.last() = bke::greasepencil::get_next_available_fill_id(fill_ids.span.varray());
 
-  auto [shape_map, shape_offsets] = blender::bke::greasepencil::shapes_from_fill_ids(
+  const bke::greasepencil::ShapeData shapes_data = bke::greasepencil::shapes_from_fill_ids(
       fill_ids.span.varray(), input_curves.curves_num());
 
   fill_ids.finish();
@@ -157,7 +157,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   op_params.skip_clipping_attributes = true;
   op_params.separate_islands = true;
 
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
   bke::CurvesGeometry carved_strokes = segment::carver::curve_boolean_with_planes(op_params,

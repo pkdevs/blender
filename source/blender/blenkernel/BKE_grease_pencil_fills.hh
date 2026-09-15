@@ -17,6 +17,17 @@ namespace blender::bke::greasepencil {
 
 std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids);
 
+struct ShapeData {
+  Vector<int> shape_map;
+  Vector<int> shape_offsets;
+
+  const GroupedSpan<int> shapes() const
+  {
+    return GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+    ;
+  };
+};
+
 /**
  * Calculate all of the shapes from the "fill_id" attribute. Each shape is either a group of
  * multiple curves that share the same "fill_id", or a single curve when the "fill_id" is zero.
@@ -33,8 +44,7 @@ std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids);
  *
  * Returns a pair with #shape_map and #shape_offsets to be used in a #GroupedSpan
  */
-std::pair<Vector<int>, Vector<int>> shapes_from_fill_ids(const VArray<int> &fill_ids,
-                                                         int curves_num);
+ShapeData shapes_from_fill_ids(const VArray<int> &fill_ids, int curves_num);
 
 /* Get the next available fill ID. */
 int get_next_available_fill_id(Span<int> fill_ids);
