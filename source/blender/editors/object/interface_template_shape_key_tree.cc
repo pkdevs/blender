@@ -29,8 +29,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ED_undo.hh"
 #include "ED_object.hh"
+#include "ED_undo.hh"
 
 namespace blender::ed::object::shapekey {
 
