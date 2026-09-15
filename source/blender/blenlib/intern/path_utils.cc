@@ -677,12 +677,13 @@ void BLI_path_normalize_unc_16(wchar_t *path_16)
  * \param blend_relative: Prefix the result with the `//`.
  * \return True when #path was made relative.
  */
-static bool path_relative_to_impl(char path[FILE_MAX],
+static bool path_relative_to_impl(char *path,
+                                  const size_t path_maxncpy,
                                   const char *basepath,
                                   const bool walk_up,
                                   const bool blend_relative)
 {
-  BLI_string_debug_size_after_nil(path, FILE_MAX);
+  BLI_string_debug_size_after_nil(path, path_maxncpy);
   /* A `basepath` starting with `//` will be made relative multiple times. */
   BLI_assert_msg(!BLI_path_is_rel(basepath), "The 'basepath' cannot start with '//'!");
 
@@ -799,7 +800,7 @@ static bool path_relative_to_impl(char path[FILE_MAX],
 #ifdef WIN32
     BLI_string_replace_char(result + (blend_relative ? 2 : 0), '/', '\\');
 #endif
-    BLI_strncpy(path, result, FILE_MAX);
+    BLI_strncpy(path, result, path_maxncpy);
     return true;
   }
 
@@ -822,12 +823,12 @@ void BLI_path_rel(char path[FILE_MAX], const char *basepath)
       base_path_after_root++;
     }
     BLI_strncpy(base_path_after_root, basepath, FILE_MAX - 3);
-    path_relative_to_impl(path, base_path, walk_up, blend_relative);
+    path_relative_to_impl(path, FILE_MAX, base_path, walk_up, blend_relative);
     return;
   }
 #endif
 
-  path_relative_to_impl(path, basepath, walk_up, blend_relative);
+  path_relative_to_impl(path, FILE_MAX, basepath, walk_up, blend_relative);
 }
 
 bool BLI_path_suffix(char *path, size_t path_maxncpy, const char *suffix, const char *sep)
@@ -1941,7 +1942,8 @@ bool BLI_path_relative_to(const char *path,
   STRNCPY(path_rel, path);
 
   const bool blend_relative = false;
-  if (!path_relative_to_impl(path_rel, base_dir_slash, walk_up, blend_relative)) {
+  if (!path_relative_to_impl(path_rel, sizeof(path_rel), base_dir_slash, walk_up, blend_relative))
+  {
     return false;
   }
 
