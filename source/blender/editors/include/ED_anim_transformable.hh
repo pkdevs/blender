@@ -152,7 +152,7 @@ class AnimTransformable {
    * up to the caller to pass the correct string for that.
    */
   std::string rna_path_to_property(const StringRef property_name) const;
-  std::string rna_path_to_rotation(const eRotationModes rotation_mode) const;
+  std::string rna_path_to_rotation(eRotationModes rotation_mode) const;
   std::string rna_path_to_rotation_mode() const;
 
   /**

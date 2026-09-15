@@ -3150,7 +3150,7 @@ void BKE_object_matrix_local_get(Object *ob, float r_mat[4][4])
   }
 }
 
-float4x4 BKE_object_delta_matrix_get(Object &obj)
+float4x4 BKE_object_delta_matrix_get(const Object &obj)
 {
   float delta_matrix[4][4];
   float scale_mat[3][3];

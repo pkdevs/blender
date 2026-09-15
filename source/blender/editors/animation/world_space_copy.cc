@@ -57,10 +57,6 @@ struct TransformableRelations {
 
   bool all_ancestors_done()
   {
-    if (done) {
-      /* Already applied. Don't apply twice. */
-      return false;
-    }
     for (TransformableRelations *ancestor : ancestors) {
       if (!ancestor->done) {
         /* All ancestors must be applied before this transformable. */
@@ -253,7 +249,7 @@ static Vector<AnimTransformable *> depsgraph_sorted_transformables(
   while (true) {
     bool inserted_any = false;
     for (TransformableRelations &relations : transformable_relations) {
-      if (!relations.all_ancestors_done()) {
+      if (relations.done || !relations.all_ancestors_done()) {
         continue;
       }
       sorted_transformables.append(relations.transformable);
