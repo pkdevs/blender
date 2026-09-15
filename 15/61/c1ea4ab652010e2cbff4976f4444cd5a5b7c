@@ -36,3 +36,4 @@ Referenced by issue #162455, Linked geometry nodes modifiers ignore "Default Att
 Referenced by pull request #163467, Fix #162455: Geometry nodes bool attribute needs correct default input type
 Referenced by commit 5c951f2efee3569dc55fea32146452c9ca299c1d, Fix #162455: Geometry nodes bool attribute needs correct default input type
 Referenced by issue #163740, Geometry Nodes modifier name missing for animated properties in the Graph Editor
+Referenced by issue #163878, 3 Dimension default values not respected when calling a Geometry nodes Tool.
