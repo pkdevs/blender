@@ -263,7 +263,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
     verttag_set_cb(v_dst, is_act, &user_data); /* switch the face option */
   }
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
   EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {
@@ -475,7 +475,7 @@ static void mouse_mesh_shortest_path_edge(
     }
   }
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
   EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {
@@ -614,7 +614,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
     facetag_set_cb(f_dst, is_act, &user_data); /* switch the face option */
   }
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
   EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {

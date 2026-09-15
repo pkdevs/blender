@@ -3181,10 +3181,10 @@ static wmOperatorStatus uv_select_more_less(bContext *C, const bool select)
     if ((ts->uv_flag & UV_FLAG_SELECT_SYNC) && (bm->uv_select_sync_valid == false)) {
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
       if (select) {
-        EDBM_select_more(em, true);
+        EDBM_select_more(bm, em->selectmode, true);
       }
       else {
-        EDBM_select_less(em, true);
+        EDBM_select_less(bm, em->selectmode, true);
       }
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -3438,7 +3438,7 @@ static void uv_select_invert(const Scene *scene, BMEditMesh *em, BMesh *bm)
     /* If selection wasn't synced, there is no need to sync. */
     if (bm->uv_select_sync_valid == false) {
       EDBM_select_swap(em, bm);
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
       return;
     }
 

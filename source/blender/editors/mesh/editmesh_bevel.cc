@@ -447,7 +447,7 @@ static void edbm_bevel_exit(bContext *C, wmOperator *op)
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_store.ob);
     /* Without this, faces surrounded by selected edges/verts will be unselected. */
     if ((em->selectmode & SCE_SELECT_FACE) == 0) {
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
     }
     EDBM_uvselect_clear(bm);
   }

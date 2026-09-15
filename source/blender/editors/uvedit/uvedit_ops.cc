@@ -1967,7 +1967,7 @@ static bool uv_mesh_hide_select_sync(const ToolSettings *ts, Object *ob, BMEditM
 
     if (changed) {
       if (swap) {
-        EDBM_selectmode_flush(em);
+        EDBM_selectmode_flush(bm, em->selectmode);
       }
       else {
         EDBM_flag_disable_all(bm, BM_ELEM_SELECT);

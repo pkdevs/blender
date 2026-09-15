@@ -325,7 +325,7 @@ void EDBM_mesh_make_from_mesh(Object *ob,
   mesh->runtime->edit_mesh->mat_nr = (ob->actcol > 0) ? ob->actcol - 1 : 0;
 
   /* we need to flush selection because the mode may have changed from when last in editmode */
-  EDBM_selectmode_flush(mesh->runtime->edit_mesh.get());
+  EDBM_selectmode_flush(bm, select_mode);
 
   /* Conversion to edit-mesh may have modified the attribute layers.
    * Re-resolve the active attribute by name to keep it stable. */
@@ -394,28 +394,27 @@ void EDBM_selectmode_to_scene(bContext *C)
   WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
 }
 
-void EDBM_selectmode_flush_ex(BMEditMesh *em, const short selectmode)
+void EDBM_selectmode_flush_ex(BMesh *bm, const short selectmode)
 {
-  BM_mesh_select_mode_flush_ex(em->bm, selectmode, BMSelectFlushFlag_All);
+  BM_mesh_select_mode_flush_ex(bm, selectmode, BMSelectFlushFlag_All);
 }
 
-void EDBM_selectmode_flush(BMEditMesh *em)
+void EDBM_selectmode_flush(BMesh *bm, const short selectmode)
 {
-  EDBM_selectmode_flush_ex(em, em->selectmode);
+  EDBM_selectmode_flush_ex(bm, selectmode);
 }
 
-void EDBM_select_flush_from_verts(BMEditMesh *em, const bool select)
+void EDBM_select_flush_from_verts(BMesh *bm, const short selectmode, const bool select)
 {
   /* Function below doesn't use. just do this to keep the values in sync. */
-  em->bm->selectmode = em->selectmode;
-  BM_mesh_select_flush_from_verts(em->bm, select);
+  bm->selectmode = selectmode;
+  BM_mesh_select_flush_from_verts(bm, select);
 }
 
-void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
+void EDBM_select_more(BMesh *bm, const short selectmode, const bool use_face_step)
 {
-  BMesh *bm = em->bm;
   BMOperator bmop;
-  const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
+  const bool use_faces = (selectmode == SCE_SELECT_FACE);
 
   BMO_op_initf(bm,
                &bmop,
@@ -431,15 +430,14 @@ void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
       bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
   BMO_op_finish(bm, &bmop);
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, selectmode);
   EDBM_uvselect_clear(bm);
 }
 
-void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
+void EDBM_select_less(BMesh *bm, const short selectmode, const bool use_face_step)
 {
-  BMesh *bm = em->bm;
   BMOperator bmop;
-  const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
+  const bool use_faces = (selectmode == SCE_SELECT_FACE);
 
   BMO_op_initf(bm,
                &bmop,
@@ -455,7 +453,7 @@ void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
       bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
   BMO_op_finish(bm, &bmop);
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, selectmode);
   EDBM_uvselect_clear(bm);
 
   /* only needed for select less, ensure we don't have isolated elements remaining */
@@ -1622,7 +1620,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
   }
 
   if (changed) {
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
     EDBM_uvselect_clear(bm);
   }
   return changed;
@@ -1740,7 +1738,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
     }
   }
 
-  EDBM_selectmode_flush(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
 
   /* hidden faces can have invalid normals */
   EDBM_mesh_normals_update(bm);

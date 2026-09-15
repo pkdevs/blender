@@ -133,11 +133,11 @@ void EDBM_mesh_load(Main *bmain, Object *ob);
  * edges select/deselect faces and vertices, and in face select mode faces select/deselect
  * edges and vertices.
  */
-void EDBM_select_more(BMEditMesh *em, bool use_face_step);
-void EDBM_select_less(BMEditMesh *em, bool use_face_step);
+void EDBM_select_more(BMesh *bm, short selectmode, bool use_face_step);
+void EDBM_select_less(BMesh *bm, short selectmode, bool use_face_step);
 
-void EDBM_selectmode_flush_ex(BMEditMesh *em, short selectmode);
-void EDBM_selectmode_flush(BMEditMesh *em);
+void EDBM_selectmode_flush_ex(BMesh *bm, short selectmode);
+void EDBM_selectmode_flush(BMesh *bm, short selectmode);
 
 /**
  * Mode independent selection/de-selection flush from vertices.
@@ -145,7 +145,7 @@ void EDBM_selectmode_flush(BMEditMesh *em);
  * \param select: When true, flush the selection state to de-selected elements,
  * otherwise perform the opposite, flushing de-selection.
  */
-void EDBM_select_flush_from_verts(BMEditMesh *em, bool select);
+void EDBM_select_flush_from_verts(BMesh *bm, short selectmode, bool select);
 
 /**
  * Swap is 0 or 1, if 1 it hides not selected.

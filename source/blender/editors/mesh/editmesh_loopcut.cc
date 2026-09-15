@@ -213,7 +213,7 @@ static void ringsel_finish(bContext *C, wmOperator *op)
         BM_vert_select_set(bm, v_eed_orig[0], false);
         BM_vert_select_set(bm, v_eed_orig[1], false);
 
-        EDBM_selectmode_flush_ex(lcd->em, SCE_SELECT_VERTEX);
+        EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX);
       }
       /* We can't slide multiple edges in vertex select mode, force edge select mode. Do this for
        * all meshes in multi-object editmode so their selectmode is in sync for following
@@ -228,7 +228,7 @@ static void ringsel_finish(bContext *C, wmOperator *op)
       }
       else {
         /* else flush explicitly */
-        EDBM_selectmode_flush(lcd->em);
+        EDBM_selectmode_flush(bm, em->selectmode);
       }
     }
     else {
@@ -243,7 +243,7 @@ static void ringsel_finish(bContext *C, wmOperator *op)
         BM_select_history_store(bm, lcd->eed);
       }
 
-      EDBM_selectmode_flush(lcd->em);
+      EDBM_selectmode_flush(bm, em->selectmode);
 
       DEG_id_tag_update(lcd->ob->data, ID_RECALC_SELECT);
       WM_event_add_notifier(C, NC_GEOM | ND_SELECT, lcd->ob->data);

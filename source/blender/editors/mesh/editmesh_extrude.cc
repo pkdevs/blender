@@ -186,15 +186,14 @@ static bool edbm_extrude_verts_indiv(BMesh *bm, wmOperator *op, const char hflag
   return true;
 }
 
-static char edbm_extrude_htype_from_em_select(BMEditMesh *em)
+static char edbm_extrude_htype_from_em_select(BMesh *bm, const short selectmode)
 {
-  BMesh *bm = em->bm;
   char htype = BM_ALL_NOLOOP;
 
-  if (em->selectmode & SCE_SELECT_VERTEX) {
+  if (selectmode & SCE_SELECT_VERTEX) {
     /* pass */
   }
-  else if (em->selectmode & SCE_SELECT_EDGE) {
+  else if (selectmode & SCE_SELECT_EDGE) {
     htype &= ~BM_VERT;
   }
   else {
@@ -362,7 +361,7 @@ static bool edbm_extrude_mesh(Object *obedit, BMEditMesh *em, wmOperator *op)
 
   const bool use_normal_flip = RNA_boolean_get(op->ptr, "use_normal_flip");
   const bool use_dissolve_ortho_edges = RNA_boolean_get(op->ptr, "use_dissolve_ortho_edges");
-  const char htype = edbm_extrude_htype_from_em_select(em);
+  const char htype = edbm_extrude_htype_from_em_select(bm, em->selectmode);
   enum { NONE = 0, ELEM_FLAG, VERT_ONLY, EDGE_ONLY } nr;
   bool changed = false;
 
@@ -764,7 +763,7 @@ static wmOperatorStatus edbm_dupli_extrude_cursor_invoke(bContext *C,
 
     /* call extrude? */
     if (verts_len != 0) {
-      const char extrude_htype = edbm_extrude_htype_from_em_select(vc.em);
+      const char extrude_htype = edbm_extrude_htype_from_em_select(bm, vc.em->selectmode);
       BMEdge *eed;
       float mat[3][3];
       float vec[3], ofs[3];

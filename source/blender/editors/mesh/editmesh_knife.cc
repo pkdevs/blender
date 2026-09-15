@@ -4116,8 +4116,9 @@ static void knifetool_finish_single_pre(KnifeTool_OpData *kcd, int ob_index)
 static void knifetool_finish_single_post(KnifeTool_OpData * /*kcd*/, Object *ob)
 {
   BMEditMesh *em = BKE_editmesh_from_object(ob);
-  EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(BKE_editmesh_bmesh_get_for_write(ob));
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_uvselect_clear(bm);
 
   EDBMUpdate_Params params{};
   params.calc_looptris = true;

@@ -105,7 +105,7 @@ static void edbm_intersect_select(Mesh *mesh, bool do_select)
         }
       }
 
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
       EDBM_uvselect_clear(bm);
     }
   }

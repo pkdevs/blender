@@ -158,15 +158,14 @@ static void make_prim_finish(bContext *C,
                              const MakePrimitiveData *creation_data,
                              int enter_editmode)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
   if (creation_data->original_mode == CTX_MODE_SCULPT) {
     ed::sculpt_paint::undo::geometry_end(*obedit);
   }
   else {
-    EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX);
     /* TODO(@ideasman42): maintain UV sync for newly created data. */
-    EDBM_uvselect_clear(BKE_editmesh_bmesh_get_for_write(obedit));
+    EDBM_uvselect_clear(bm);
 
     /* Only recalculate edit-mode tessellation if we are staying in edit-mode. */
     EDBMUpdate_Params params{};

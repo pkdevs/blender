@@ -388,7 +388,7 @@ static wmOperatorStatus mesh_bisect_exec(bContext *C, wmOperator *op)
       params.is_destructive = true;
       EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
       EDBM_uvselect_clear(bm);
 
       ret = OPERATOR_FINISHED;

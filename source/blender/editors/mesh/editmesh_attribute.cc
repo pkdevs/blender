@@ -100,15 +100,15 @@ static void bmesh_vert_edge_face_layer_selected_values_set(BMesh &bm,
  * For face select mode, set face corner values of any selected face. For edge and vertex
  * select mode, set face corner values of loops connected to selected vertices.
  */
-static void bmesh_loop_layer_selected_values_set(BMEditMesh &em,
+static void bmesh_loop_layer_selected_values_set(BMesh &bm,
+                                                 const short selectmode,
                                                  const GPointer value,
                                                  const int offset)
 {
   /* In the separate select modes we may set the same loop values more than once.
    * This is okay because we're always setting the same value. */
-  BMesh &bm = *em.bm;
   const CPPType &type = *value.type();
-  if (em.selectmode & SCE_SELECT_FACE) {
+  if (selectmode & SCE_SELECT_FACE) {
     BMIter face_iter;
     BMFace *face;
     BM_ITER_MESH (face, &face_iter, &bm, BM_FACES_OF_MESH) {
@@ -121,7 +121,7 @@ static void bmesh_loop_layer_selected_values_set(BMEditMesh &em,
       }
     }
   }
-  if (em.selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
+  if (selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
     BMIter vert_iter;
     BMVert *vert;
     BM_ITER_MESH (vert, &vert_iter, &bm, BM_VERTS_OF_MESH) {
@@ -193,7 +193,7 @@ static wmOperatorStatus mesh_set_attribute_exec(bContext *C, wmOperator *op)
             *bm, BM_FACES_OF_MESH, dst_value, attr.offset);
         break;
       case bke::AttrDomain::Corner:
-        bmesh_loop_layer_selected_values_set(*em, dst_value, attr.offset);
+        bmesh_loop_layer_selected_values_set(*bm, em->selectmode, dst_value, attr.offset);
         break;
       default:
         BLI_assert_unreachable();

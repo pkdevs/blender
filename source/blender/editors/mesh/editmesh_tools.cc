@@ -383,9 +383,9 @@ static wmOperatorStatus edbm_unsubdivide_exec(bContext *C, wmOperator *op)
     }
 
     if ((em->selectmode & SCE_SELECT_VERTEX) == 0) {
-      EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX); /* need to flush vert->face first */
+      EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX); /* need to flush vert->face first */
     }
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
 
     EDBMUpdate_Params params{};
     params.calc_looptris = true;
@@ -1274,7 +1274,7 @@ static bool edbm_connect_vert_pair(BMEditMesh *em, Mesh *mesh, wmOperator *op)
     }
     else {
       /* so newly created edges get the selection state from the vertex */
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
 
       BM_custom_loop_normals_from_vector_layer(bm, false);
 
@@ -1637,7 +1637,7 @@ static wmOperatorStatus edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
     BM_custom_loop_normals_to_vector_layer(bm);
 
     if (bm_vert_connect_select_history(bm)) {
-      EDBM_selectmode_flush(em);
+      EDBM_selectmode_flush(bm, em->selectmode);
 
       BM_custom_loop_normals_from_vector_layer(bm, false);
 
@@ -1905,7 +1905,7 @@ static bool edbm_edge_split_selected_edges(wmOperator *op, Object *obedit, BMEdi
 
   BM_custom_loop_normals_from_vector_layer(bm, false);
 
-  EDBM_select_flush_from_verts(em, true);
+  EDBM_select_flush_from_verts(bm, em->selectmode, true);
   EDBMUpdate_Params params{};
   params.calc_looptris = true;
   params.calc_normals = false;
@@ -1980,7 +1980,7 @@ static bool edbm_edge_split_selected_verts(wmOperator *op, Object *obedit, BMEdi
 
   BM_custom_loop_normals_from_vector_layer(bm, false);
 
-  EDBM_select_flush_from_verts(em, true);
+  EDBM_select_flush_from_verts(bm, em->selectmode, true);
   EDBMUpdate_Params params{};
   params.calc_looptris = true;
   params.calc_normals = false;
@@ -2452,7 +2452,7 @@ static wmOperatorStatus edbm_edge_rotate_selected_exec(bContext *C, wmOperator *
       BM_mesh_elem_hflag_enable_test(bm, BM_EDGE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
     }
 
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
 
     if (!EDBM_op_finish(bm, &bmop, op, true)) {
       continue;
@@ -3691,7 +3691,7 @@ static wmOperatorStatus edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 
     /* restore selection from tags */
     BM_mesh_elem_hflag_enable_test(bm, htype_select, BM_ELEM_SELECT, true, true, BM_ELEM_TAG);
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
 
     BM_custom_loop_normals_from_vector_layer(bm, use_sharp_edge_from_normals);
 
@@ -5518,7 +5518,7 @@ static wmOperatorStatus edbm_quads_convert_to_tris_exec(bContext *C, wmOperator 
       BM_face_kill(bm, f);
     }
 
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
 
     if (!EDBM_op_finish(bm, &bmop, op, true)) {
       continue;
@@ -5676,7 +5676,7 @@ static wmOperatorStatus edbm_tris_convert_to_quads_exec(bContext *C, wmOperator 
       /* When de-selecting faces outside of face mode:
        * failing to flush would leave an invalid selection. */
       if (em->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
-        EDBM_selectmode_flush_ex(em, em->selectmode);
+        EDBM_selectmode_flush_ex(bm, em->selectmode);
       }
     }
     EDBM_uvselect_clear(bm);
@@ -5910,7 +5910,7 @@ static wmOperatorStatus edbm_decimate_exec(bContext *C, wmOperator *op)
         /* ensure we flush edges -> faces */
         selectmode |= SCE_SELECT_EDGE;
       }
-      EDBM_selectmode_flush_ex(em, selectmode);
+      EDBM_selectmode_flush_ex(bm, selectmode);
       EDBM_uvselect_clear(bm);
     }
     EDBMUpdate_Params params{};
@@ -6508,7 +6508,7 @@ static wmOperatorStatus edbm_dissolve_degenerate_exec(bContext *C, wmOperator *o
     }
 
     /* tricky to maintain correct selection here, so just flush up from verts */
-    EDBM_select_flush_from_verts(em, true);
+    EDBM_select_flush_from_verts(bm, em->selectmode, true);
 
     changed_multi = true;
     EDBMUpdate_Params params{};
@@ -6577,7 +6577,6 @@ static wmOperatorStatus edbm_delete_edgeloop_exec(bContext *C, wmOperator *op)
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
       *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
     BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     if (bm->totedgesel == 0) {
       continue;
@@ -6614,7 +6613,7 @@ static wmOperatorStatus edbm_delete_edgeloop_exec(bContext *C, wmOperator *op)
 
     BM_mesh_elem_hflag_enable_test(bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
 
-    EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
+    EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX);
     EDBM_uvselect_clear(bm);
 
     EDBMUpdate_Params params{};
@@ -7919,7 +7918,7 @@ static wmOperatorStatus edbm_convex_hull_exec(bContext *C, wmOperator *op)
     params.is_destructive = true;
     EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
     EDBM_uvselect_clear(bm);
   }
 
@@ -8020,7 +8019,7 @@ static wmOperatorStatus mesh_symmetrize_exec(bContext *C, wmOperator *op)
     params.is_destructive = true;
     EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 
-    EDBM_selectmode_flush(em);
+    EDBM_selectmode_flush(bm, em->selectmode);
     EDBM_uvselect_clear(bm);
   }
 

@@ -2168,7 +2168,7 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
       /* Special case, this is needed or faces won't re-select.
        * Flush selected edges to faces. */
       if (has_face_sel && (em->selectmode == SCE_SELECT_FACE)) {
-        EDBM_selectmode_flush_ex(em, SCE_SELECT_EDGE);
+        EDBM_selectmode_flush_ex(bm, SCE_SELECT_EDGE);
       }
     }
   }

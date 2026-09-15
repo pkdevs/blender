@@ -1143,7 +1143,7 @@ static void vgroup_select_verts(const ToolSettings &tool_settings,
 
         /* This has to be called, because this function operates on vertices only.
          * Vertices to edges/faces. */
-        EDBM_select_flush_from_verts(mesh->runtime->edit_mesh.get(), select);
+        EDBM_select_flush_from_verts(bm, mesh->runtime->edit_mesh->selectmode, select);
 
         EDBM_uvselect_clear(bm);
       }

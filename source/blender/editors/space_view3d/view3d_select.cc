@@ -915,7 +915,7 @@ static bool do_lasso_select_mesh(const ViewContext *vc,
   }
 
   if (data.is_changed) {
-    EDBM_selectmode_flush(vc->em);
+    EDBM_selectmode_flush(bm, vc->em->selectmode);
   }
 
   if (data.uv_selctx) {
@@ -4174,7 +4174,7 @@ static bool do_mesh_box_select(const ViewContext *vc,
   }
 
   if (data.is_changed) {
-    EDBM_selectmode_flush(vc->em);
+    EDBM_selectmode_flush(bm, vc->em->selectmode);
   }
 
   if (data.uv_selctx) {
