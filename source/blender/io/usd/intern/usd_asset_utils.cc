@@ -563,7 +563,7 @@ std::string get_relative_path(const std::string &path, const std::string &anchor
     if (!BLI_path_relative_to(path.c_str(), anchor_dir, walk_up, rel_path, sizeof(rel_path))) {
       return path;
     }
-    BLI_path_slash_forward(rel_path);
+    BLI_path_slash_forward_from_native(rel_path);
     return rel_path;
   }
 
@@ -622,7 +622,7 @@ std::string get_relative_path(const std::string &path, const std::string &anchor
   }
 
   /* Set paths to Unix-style. */
-  BLI_path_slash_forward(result_path);
+  BLI_path_slash_forward_from_native(result_path);
   return std::string(result_path);
 }
 

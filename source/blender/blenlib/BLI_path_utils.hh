@@ -283,9 +283,10 @@ const char *BLI_path_slash_skip(const char *path) ATTR_NONNULL(1) ATTR_WARN_UNUS
  */
 void BLI_path_slash_native(char *path) ATTR_NONNULL(1);
 /**
- * Changes the path separators to forward slashes, that work on all platforms.
+ * Changes the native path separators to forward slashes, that work on all platforms.
+ * Does nothing when the forward slash is native.
  */
-void BLI_path_slash_forward(char *path) ATTR_NONNULL(1);
+void BLI_path_slash_forward_from_native(char *path) ATTR_NONNULL(1);
 
 /** \} */
 

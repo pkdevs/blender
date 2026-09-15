@@ -741,8 +741,8 @@ static bool path_relative_to_impl(char path[FILE_MAX],
   BLI_path_normalize(base_path);
 
   /* Use forward slashes as assumed by the comparison below. */
-  BLI_path_slash_forward(base_path);
-  BLI_path_slash_forward(path);
+  BLI_path_slash_forward_from_native(base_path);
+  BLI_path_slash_forward_from_native(path);
 
   /* The last slash in the path indicates where the path part ends. */
   base_dir_end = BLI_path_slash_rfind(base_path);
@@ -2035,7 +2035,7 @@ void BLI_path_slash_native(char *path)
 #endif
 }
 
-void BLI_path_slash_forward(char *path)
+void BLI_path_slash_forward_from_native(char *path)
 {
   BLI_string_replace_char(path, SEP, '/');
 }
