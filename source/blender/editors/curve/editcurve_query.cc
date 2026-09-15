@@ -244,7 +244,7 @@ bool ED_curve_active_rot(Curve *cu, float rot[3][3])
     return false;
   }
   if (nu->type == CU_BEZIER) {
-    BezTriple *bezt = (BezTriple *)vert;
+    BezTriple *bezt = static_cast<BezTriple *>(vert);
     BKE_nurb_bezt_calc_normal(nu, bezt, rot[1]);
     BKE_nurb_bezt_calc_plane(nu, bezt, rot[0]);
     cross_v3_v3v3(rot[2], rot[0], rot[1]);
