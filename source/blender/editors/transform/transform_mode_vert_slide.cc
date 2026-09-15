@@ -154,6 +154,7 @@ struct VertSlideData {
 
 struct VertSlideParams {
   float perc;
+  wmOperator *op;
   bool use_even;
   bool flipped;
   bool update_status_bar;
@@ -296,9 +297,9 @@ static eRedrawFlag handleEventVertSlide(TransInfo *t, const wmEvent *event)
                 sld->update_active_edges(t, tc, dir_unit);
               }
             }
-            if (t->op) {
-              if (PropertyRNA *prop = RNA_struct_find_property(t->op->ptr, "direction")) {
-                RNA_property_float_set_array(t->op->ptr, prop, &dir_unit.x);
+            if (slp->op) {
+              if (PropertyRNA *prop = RNA_struct_find_property(slp->op->ptr, "direction")) {
+                RNA_property_float_set_array(slp->op->ptr, prop, &dir_unit.x);
               }
             }
             slp->dir_3d = dir_unit;
@@ -651,6 +652,7 @@ static void initVertSlide_ex(
     slp->use_even = use_even;
     slp->flipped = flipped;
     slp->perc = 0.0f;
+    slp->op = op;
     slp->update_status_bar = true;
 
     if (!use_clamp) {
