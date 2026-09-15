@@ -39,6 +39,8 @@ class bNodeTreeRuntime;
 class bNodeRuntime;
 class bNodeSocketRuntime;
 }  // namespace bke
+
+struct bNodeInternalLink;
 namespace bke {
 class bNodeTreeZones;
 class bNodeTreeZone;
@@ -1748,6 +1750,7 @@ struct bNode {
   int index() const;
   StringRefNull label_or_name() const;
   bool is_muted() const;
+  bool is_selected() const;
   bool is_reroute() const;
   bool is_frame() const;
   bool is_group() const;
@@ -1767,7 +1770,7 @@ struct bNode {
 
   const nodes::NodeDeclaration *declaration() const;
   /** A span containing all internal links when the node is muted. */
-  Span<bNodeLink> internal_links() const;
+  Span<bNodeInternalLink> internal_links() const;
 
   /* This node is reroute which is not logically connected to any source of value. */
   bool is_dangling_reroute() const;
