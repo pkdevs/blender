@@ -29,9 +29,12 @@ class CommandBufferLog : public VKCommandBufferInterface {
   bool is_recording_ = false;
 
  public:
-  CommandBufferLog(Vector<std::string> &log, bool use_dynamic_rendering_local_read_ = true)
+  CommandBufferLog(Vector<std::string> &log,
+                   bool use_dynamic_rendering_ = true,
+                   bool use_dynamic_rendering_local_read_ = true)
       : log_(log)
   {
+    use_dynamic_rendering = use_dynamic_rendering_;
     use_dynamic_rendering_local_read = use_dynamic_rendering_local_read_;
   }
   virtual ~CommandBufferLog() {}
@@ -133,6 +136,19 @@ class CommandBufferLog : public VKCommandBufferInterface {
     ss << ", first_instance=" << first_instance;
     ss << ")";
     log_.append(ss.str());
+  }
+
+  void begin_render_pass(const VkRenderPassBeginInfo *render_pass_begin_info) override
+  {
+    UNUSED_VARS(render_pass_begin_info);
+    EXPECT_TRUE(is_recording_);
+    log_.append("begin_render_pass()");
+  }
+
+  void end_render_pass() override
+  {
+    EXPECT_TRUE(is_recording_);
+    log_.append("end_render_pass()");
   }
 
   void draw_indirect(VkBuffer buffer,
@@ -521,7 +537,8 @@ class VKRenderGraphTest : public ::testing::Test {
   {
     resources.use_dynamic_rendering_local_read = use_dynamic_rendering_local_read;
     render_graph = std::make_unique<VKRenderGraph>(resources);
-    command_buffer = std::make_unique<CommandBufferLog>(log, use_dynamic_rendering_local_read);
+    command_buffer = std::make_unique<CommandBufferLog>(
+        log, use_dynamic_rendering, use_dynamic_rendering_local_read);
   }
 
  protected:
@@ -529,17 +546,21 @@ class VKRenderGraphTest : public ::testing::Test {
   VKResourceStateTracker resources;
   std::unique_ptr<VKRenderGraph> render_graph;
   std::unique_ptr<CommandBufferLog> command_buffer;
+  bool use_dynamic_rendering = true;
   bool use_dynamic_rendering_local_read = true;
 };
 
-class VKRenderGraphTest_P : public ::testing::TestWithParam<std::tuple<bool>> {
+class VKRenderGraphTest_P : public ::testing::TestWithParam<std::tuple<bool, bool>> {
+ protected:
  public:
   VKRenderGraphTest_P()
   {
-    use_dynamic_rendering_local_read = std::get<0>(GetParam());
+    use_dynamic_rendering = std::get<0>(GetParam());
+    use_dynamic_rendering_local_read = std::get<1>(GetParam());
     resources.use_dynamic_rendering_local_read = use_dynamic_rendering_local_read;
     render_graph = std::make_unique<VKRenderGraph>(resources);
-    command_buffer = std::make_unique<CommandBufferLog>(log, use_dynamic_rendering_local_read);
+    command_buffer = std::make_unique<CommandBufferLog>(
+        log, use_dynamic_rendering, use_dynamic_rendering_local_read);
   }
 
  protected:
@@ -558,6 +579,7 @@ class VKRenderGraphTest_P : public ::testing::TestWithParam<std::tuple<bool>> {
   VKResourceStateTracker resources;
   std::unique_ptr<VKRenderGraph> render_graph;
   std::unique_ptr<CommandBufferLog> command_buffer;
+  bool use_dynamic_rendering = true;
   bool use_dynamic_rendering_local_read = true;
 };
 

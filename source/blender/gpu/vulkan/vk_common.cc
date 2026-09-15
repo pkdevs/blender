@@ -915,8 +915,12 @@ VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
       }
       else {
         result |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        result |= extensions.dynamic_rendering_local_read ? VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT :
-                                                            VK_IMAGE_USAGE_SAMPLED_BIT;
+        if (extensions.dynamic_rendering_local_read || !extensions.dynamic_rendering) {
+          result |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+        }
+        else {
+          result |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        }
       }
     }
   }

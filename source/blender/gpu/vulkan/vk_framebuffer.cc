@@ -617,8 +617,11 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     }
 
     VkFormat vk_format = to_vk_format(color_texture.device_format_get());
-    if (srgb_) {
-      if (!enabled_srgb_) {
+    if (srgb_ && !enabled_srgb_) {
+      if (vk_format == VK_FORMAT_R8G8B8A8_SRGB) {
+        vk_format = VK_FORMAT_R8G8B8A8_UNORM;
+      }
+      if (vk_format == VK_FORMAT_R8G8B8_SRGB) {
         vk_format = VK_FORMAT_R8G8B8_UNORM;
       }
     }
@@ -707,15 +710,15 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkImageView depth_image_view = VK_NULL_HANDLE;
     uint32_t layer_base = max_ii(attachment.layer, 0);
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
-      VKImageViewInfo image_view_info = {eImageViewUsage::Attachment,
-                                         IndexRange(layer_base, 1),
-                                         IndexRange(attachment.mip, 1),
-                                         {{'r', 'g', 'b', 'a'}},
-                                         VKImageViewArrayed::DONT_CARE,
-                                         to_vk_format(depth_texture.device_format_get()),
-                                         is_stencil_attachment ?
-                                             static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT) :
-                                             static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT)};
+      VKImageViewInfo image_view_info = {
+          eImageViewUsage::Attachment,
+          IndexRange(layer_base, 1),
+          IndexRange(attachment.mip, 1),
+          {{'r', 'g', 'b', 'a'}},
+          VKImageViewArrayed::DONT_CARE,
+          to_vk_format(depth_texture.device_format_get()),
+          is_stencil_attachment ? static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_STENCIL_BIT) :
+                                  static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT)};
       depth_image_view = depth_texture.image_view_get(image_view_info).vk_handle();
     }
     VkAttachmentDescription vk_attachment_description = {};
@@ -761,7 +764,8 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   vk_render_pass_create_info.pSubpasses = &vk_subpass_description;
   vk_render_pass_create_info.attachmentCount = vk_attachment_descriptions.size();
   vk_render_pass_create_info.pAttachments = vk_attachment_descriptions.data();
-  VkResult res = device.functions.vkCreateRenderPass(device.vk_handle(), &vk_render_pass_create_info, nullptr, &vk_render_pass);
+  VkResult res = device.functions.vkCreateRenderPass(
+      device.vk_handle(), &vk_render_pass_create_info, nullptr, &vk_render_pass);
   (void)res;
   BLI_assert_msg(res == VK_SUCCESS, "Cannot create render-pass");
   debug::object_label(vk_render_pass, name_);
@@ -775,7 +779,8 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   vk_framebuffer_create_info.width = width_;
   vk_framebuffer_create_info.height = height_;
   vk_framebuffer_create_info.layers = max_layer_count;
-  device.functions.vkCreateFramebuffer(device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
+  device.functions.vkCreateFramebuffer(
+      device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
   debug::object_label(vk_framebuffer, name_);
 
   /* Begin rendering */
@@ -811,7 +816,10 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
             GPU_DEPTH_BIT, load_store.clear_value[0], 0, clear_attachments);
       }
       else {
-        build_clear_attachments_color(Span<double4>(reinterpret_cast<double4 *>(&load_store.clear_value), 1), false, clear_attachments);
+        build_clear_attachments_color(
+            Span<double4>(reinterpret_cast<double4 *>(&load_store.clear_value), 1),
+            false,
+            clear_attachments);
       }
     }
 
@@ -1002,7 +1010,8 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     access_info.images.append(
         {depth_texture.vk_image_handle(),
          attachment_state == GPU_ATTACHMENT_WRITE ?
-             (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) :
+             (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) :
              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
          is_depth_stencil_attachment ?
              static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |

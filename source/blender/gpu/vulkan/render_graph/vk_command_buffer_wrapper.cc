@@ -17,6 +17,7 @@ VKCommandBufferWrapper::VKCommandBufferWrapper(VkCommandBuffer vk_command_buffer
                                                const VKWorkarounds &workarounds)
     : vk_command_buffer_(vk_command_buffer), functions(&functions)
 {
+  use_dynamic_rendering = extensions.dynamic_rendering;
   use_dynamic_rendering_local_read = extensions.dynamic_rendering_local_read;
   use_multi_draw_indirect = extensions.multi_draw_indirect;
   use_dynamic_state_viewport_scissor = !workarounds.static_viewport_scissor;
@@ -278,6 +279,18 @@ void VKCommandBufferWrapper::set_scissor(const Vector<VkRect2D> scissors)
   }
   functions->vkCmdSetScissor(vk_command_buffer_, 0, scissors.size(), scissors.data());
 }
+
+void VKCommandBufferWrapper::begin_render_pass(const VkRenderPassBeginInfo *render_pass_begin_info)
+{
+  functions->vkCmdBeginRenderPass(
+      vk_command_buffer_, render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void VKCommandBufferWrapper::end_render_pass()
+{
+  functions->vkCmdEndRenderPass(vk_command_buffer_);
+}
+
 void VKCommandBufferWrapper::set_line_width(const float line_width)
 {
   functions->vkCmdSetLineWidth(vk_command_buffer_, line_width);

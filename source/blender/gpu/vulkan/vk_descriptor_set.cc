@@ -400,6 +400,7 @@ void VKDescriptorSetUpdator::bind_input_attachment_resource(
                resource_binding.location);
   }
   else {
+    bool supports_dynamic_rendering = device.extensions_get().dynamic_rendering;
     const BindSpaceTextures::Elem *elem_ptr = state_manager.textures_.get(
         resource_binding.binding);
     if (!elem_ptr) {
@@ -411,13 +412,24 @@ void VKDescriptorSetUpdator::bind_input_attachment_resource(
     VKTexture *texture = static_cast<VKTexture *>(elem.resource);
     BLI_assert(texture);
     BLI_assert(elem.resource_type == BindSpaceTextures::Type::Texture);
-    const VKSampler &sampler = device.samplers().get(elem.sampler);
-    bind_image(
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        sampler.vk_handle(),
-        texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::DEFAULT).vk_handle(),
-        VK_IMAGE_LAYOUT_GENERAL,
-        resource_binding.location);
+    if (supports_dynamic_rendering) {
+      const VKSampler &sampler = device.samplers().get(elem.sampler);
+      bind_image(
+          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          sampler.vk_handle(),
+          texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::DEFAULT).vk_handle(),
+          VK_IMAGE_LAYOUT_GENERAL,
+          resource_binding.location);
+    }
+    else {
+      /* Fall back to render-passes / sub-passes. */
+      bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                 VK_NULL_HANDLE,
+                 texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::NO_SWIZZLING)
+                     .vk_handle(),
+                 VK_IMAGE_LAYOUT_GENERAL,
+                 resource_binding.location);
+    }
   }
 }
 

@@ -272,6 +272,15 @@ void SceneState::init(const DRWContext *context,
     sample++;
   }
   render_finished = sample >= samples_len && samples_len > 1;
+
+  /* Legacy Vulkan devices don't support gaps between color attachments. We disable outline
+   * drawing on these devices. There are situations outline drawing can just work, but we need to
+   * be sure transparency depth drawing isn't used. */
+  /* TODO(jbakker): Add support on legacy Vulkan devices by introducing specific depth shaders. */
+  if ((shading.type < OB_SOLID || xray_mode) && GPU_vulkan_render_pass_workaround()) {
+    draw_object_id = false;
+    draw_outline = false;
+  }
 };
 
 static bool mesh_has_color_attribute(const Mesh &mesh)

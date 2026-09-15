@@ -16,7 +16,7 @@
 namespace blender::gpu {
 
 VKImageView::VKImageView(VKTexture &texture, const VKImageViewInfo &info, StringRefNull name)
-    : info(info)
+    : vk_format_(info.vk_format), info(info)
 {
   VkImageViewCreateInfo image_view_info = {};
   image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

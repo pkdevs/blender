@@ -1982,6 +1982,9 @@ TEST_P(VKRenderGraphTestScheduler, begin_draw_storage_end_begin_draw_restart_dep
          "DEPTH_ATTACHMENT_OPTIMAL before begin_rendering.";
 }
 
-INSTANTIATE_TEST_SUITE_P(, VKRenderGraphTestScheduler, ::testing::Values(true, false));
+INSTANTIATE_TEST_SUITE_P(,
+                         VKRenderGraphTestScheduler,
+                         ::testing::Values(std::make_tuple(true, true),
+                                           std::make_tuple(true, false)));
 
 }  // namespace blender::gpu::render_graph

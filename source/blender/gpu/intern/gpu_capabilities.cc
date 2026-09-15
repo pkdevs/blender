@@ -154,6 +154,11 @@ bool GPU_stencil_classify_buffer_workaround()
   return GCaps.stencil_classify_buffer_workaround;
 }
 
+bool GPU_vulkan_render_pass_workaround()
+{
+  return GCaps.render_pass_workaround;
+}
+
 bool GPU_geometry_shader_support()
 {
   return GCaps.geometry_shader_support;

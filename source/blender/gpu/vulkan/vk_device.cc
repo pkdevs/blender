@@ -42,6 +42,7 @@ void VKExtensions::log() const
              " - [%c] multi draw indirect\n"
              " - [%c] shader clip distance\n"
              "Device extensions\n"
+             " - [%c] dynamic rendering\n"
              " - [%c] dynamic rendering local read\n"
              " - [%c] dynamic rendering unused attachments\n"
              " - [%c] extended dynamic state\n"
@@ -63,6 +64,7 @@ void VKExtensions::log() const
              wide_lines ? 'X' : ' ',
              multi_draw_indirect ? 'X' : ' ',
              shader_clip_distance ? 'X' : ' ',
+             dynamic_rendering ? 'X' : ' ',
              dynamic_rendering_local_read ? 'X' : ' ',
              dynamic_rendering_unused_attachments ? 'X' : ' ',
              extended_dynamic_state ? 'X' : ' ',

@@ -118,7 +118,7 @@ struct VKGraphicsPipelineCreateInfoBuilder {
     build_graphics_pipeline_library(
         VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT |
         VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT);
-    build_graphics_pipeline_shaders_lib(shaders_info, vk_pipeline_base);
+    build_graphics_pipeline_shaders_lib(extensions, shaders_info, vk_pipeline_base);
 
     build_shader_stages(shaders_info);
     const bool do_specialization_constants = !shaders_info.specialization_constants.is_empty();
@@ -137,12 +137,14 @@ struct VKGraphicsPipelineCreateInfoBuilder {
    * Initialize graphics pipeline create info and related structs for a fragment output library
    * build.
    */
-  void build_fragment_output_lib(const VKGraphicsInfo::FragmentOut &fragment_output_info,
+  void build_fragment_output_lib(const VKExtensions &extensions,
+                                 const VKGraphicsInfo::FragmentOut &fragment_output_info,
                                  VkPipeline vk_pipeline_base)
   {
     build_graphics_pipeline_library(
         VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT);
-    build_graphics_pipeline_fragment_output_lib(vk_pipeline_base);
+    build_graphics_pipeline_fragment_output_lib(
+        extensions, fragment_output_info, vk_pipeline_base);
     build_multisample_state();
     build_color_blend_attachment_states(fragment_output_info);
     build_color_blend_state();
@@ -156,7 +158,13 @@ struct VKGraphicsPipelineCreateInfoBuilder {
   {
     vk_graphics_pipeline_create_info = {};
     vk_graphics_pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    vk_graphics_pipeline_create_info.pNext = &vk_pipeline_rendering_create_info;
+    if (extensions.dynamic_rendering) {
+      vk_graphics_pipeline_create_info.pNext = &vk_pipeline_rendering_create_info;
+    }
+    else {
+      vk_graphics_pipeline_create_info.pNext = nullptr;
+      vk_graphics_pipeline_create_info.renderPass = graphics_info.fragment_out.vk_render_pass;
+    }
     vk_graphics_pipeline_create_info.stageCount = graphics_info.shaders.vk_geometry_module ==
                                                           VK_NULL_HANDLE ?
                                                       2 :
@@ -207,7 +215,8 @@ struct VKGraphicsPipelineCreateInfoBuilder {
         0};
   }
 
-  void build_graphics_pipeline_shaders_lib(const VKGraphicsInfo::Shaders &shaders_info,
+  void build_graphics_pipeline_shaders_lib(const VKExtensions &extensions,
+                                           const VKGraphicsInfo::Shaders &shaders_info,
                                            VkPipeline vk_pipeline_base)
   {
     vk_graphics_pipeline_create_info = {
@@ -227,14 +236,19 @@ struct VKGraphicsPipelineCreateInfoBuilder {
         nullptr,
         &vk_pipeline_dynamic_state_create_info,
         shaders_info.vk_pipeline_layout,
-        VK_NULL_HANDLE,
+        extensions.dynamic_rendering ? VK_NULL_HANDLE : shaders_info.vk_render_pass,
         0,
         vk_pipeline_base,
         0};
-    vk_graphics_pipeline_library_create_info.pNext = &vk_pipeline_rendering_create_info;
+    if (extensions.dynamic_rendering) {
+      vk_graphics_pipeline_library_create_info.pNext = &vk_pipeline_rendering_create_info;
+    }
   }
 
-  void build_graphics_pipeline_fragment_output_lib(VkPipeline vk_pipeline_base)
+  void build_graphics_pipeline_fragment_output_lib(
+      const VKExtensions &extensions,
+      const VKGraphicsInfo::FragmentOut &fragment_output_info,
+      VkPipeline vk_pipeline_base)
   {
     vk_graphics_pipeline_create_info = {
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -253,11 +267,13 @@ struct VKGraphicsPipelineCreateInfoBuilder {
         &vk_pipeline_color_blend_state_create_info,
         nullptr,
         VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
+        extensions.dynamic_rendering ? VK_NULL_HANDLE : fragment_output_info.vk_render_pass,
         0,
         vk_pipeline_base,
         0};
-    vk_graphics_pipeline_library_create_info.pNext = &vk_pipeline_rendering_create_info;
+    if (extensions.dynamic_rendering) {
+      vk_graphics_pipeline_library_create_info.pNext = &vk_pipeline_rendering_create_info;
+    }
   }
 
   void build_graphics_pipeline_library(VkGraphicsPipelineLibraryFlagsEXT flags)
