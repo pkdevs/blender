@@ -215,6 +215,32 @@ using JoltStateOwnerPtr = ImplicitSharingPtr<JoltStateOwner>;
 //   return bundle_type;
 // }
 
+static void execute_jolt_step(JoltState &state, const float delta_time, const int substeps)
+{
+  if (!state.is_initialized) {
+    /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
+     * time.*/
+    const int max_bodies = 65536;
+    const int num_body_mutexes = 0;
+    const int max_body_pairs = 65536;
+    const int max_contact_constraints = 10240;
+    state.system.Init(max_bodies,
+                      num_body_mutexes,
+                      max_body_pairs,
+                      max_contact_constraints,
+                      state.broad_phase_layer_interface,
+                      state.object_vs_broad_phase_layer_filter,
+                      state.object_layer_pair_filter);
+    state.system.SetBodyActivationListener(&state.body_activation_listener);
+    state.system.SetContactListener(&state.contact_listener);
+    state.is_initialized = true;
+  }
+
+  JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+  JPH::JobSystemSingleThreaded job_system;
+  state.system.Update(delta_time, substeps, &temp_allocator, &job_system);
+}
+
 #endif
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -256,39 +282,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     jolt_state_owner = JoltStateOwnerPtr{MEM_new<JoltStateOwner>(__func__)};
   }
 
-  // if (!jolt_state_owner->mutex.try_lock()) {
-  //   params.error_message_add(NodeWarningType::Error,
-  //                            TIP_("Jolt physics state cannot be used by multiple nodes"));
-  //   params.set_default_remaining_outputs();
-  //   return;
-  // }
-  // BLI_SCOPED_DEFER([&]() { jolt_state_owner->mutex.unlock(); });
-
-  // BroadPhaseLayerInterfaceImpl broad_phase_layer_interface;
-  // ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter;
-  // ObjectLayerPairFilterImpl object_layer_pair_filter;
-  // BodyActivationListenerImpl body_activation_listener;
-  // ContactListenerImpl contact_listener;
-  // JPH::PhysicsSystem system;
-
-  // /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
-  //  * time.*/
-  // const int max_bodies = 65536;
-  // const int num_body_mutexes = 0;
-  // const int max_body_pairs = 65536;
-  // const int max_contact_constraints = 10240;
-
-  // system.Init(max_bodies,
-  //             num_body_mutexes,
-  //             max_body_pairs,
-  //             max_contact_constraints,
-  //             broad_phase_layer_interface,
-  //             object_vs_broad_phase_layer_filter,
-  //             object_layer_pair_filter);
-
-  // JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
-  // JPH::JobSystemSingleThreaded job_system;
-  // system.Update(delta_time, substeps, &temp_allocator, &job_system);
+  if (jolt_state_owner->mutex.try_lock()) {
+    execute_jolt_step(jolt_state_owner->state, delta_time, substeps);
+    jolt_state_owner->mutex.unlock();
+  }
+  else {
+    params.error_message_add(NodeWarningType::Error,
+                             TIP_("Jolt physics state cannot be used by multiple nodes"));
+  }
 
   if (!solver_path.empty()) {
     // solver_data.add(Bundle::type_item_name, std::string(XPBDSolverDataBundle::name));
