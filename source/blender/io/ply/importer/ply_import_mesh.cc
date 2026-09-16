@@ -6,24 +6,42 @@
  * \ingroup ply
  */
 
+#include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 
-#include "GEO_mesh_merge_by_distance.hh"
+#include "GEO_mesh_merge_verts.hh"
 
-#include "BLI_color.hh"
-#include "BLI_math_vector.h"
+#include "BLI_color_types.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
+
+#include "IO_validate.hh"
 
 #include "ply_import_mesh.hh"
 
 #include "CLG_log.h"
+
+#include <cinttypes>
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.ply"};
 
-namespace blender::io::ply {
+namespace io::ply {
 Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
 {
+  if (!validate::size_fits_in_int(data.vertices.size()) ||
+      !validate::size_fits_in_int(data.edges.size()) ||
+      !validate::size_fits_in_int(data.face_sizes.size()) ||
+      !validate::size_fits_in_int(data.face_vertices.size()))
+  {
+    CLOG_WARN(&LOG, "PLY mesh too large to import, exceeds max int size");
+    return BKE_mesh_new_nomain(0, 0, 0, 0);
+  }
+
   Mesh *mesh = BKE_mesh_new_nomain(
       data.vertices.size(), data.edges.size(), data.face_sizes.size(), data.face_vertices.size());
 
@@ -36,11 +54,11 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
     for (const int i : data.edges.index_range()) {
       int32_t v1 = data.edges[i].first;
       int32_t v2 = data.edges[i].second;
-      if (v1 >= mesh->verts_num) {
+      if (!validate::index_in_range(v1, mesh->verts_num)) {
         CLOG_WARN(&LOG, "Invalid PLY vertex index in edge %i/1: %d", i, v1);
         v1 = 0;
       }
-      if (v2 >= mesh->verts_num) {
+      if (!validate::index_in_range(v2, mesh->verts_num)) {
         CLOG_WARN(&LOG, "Invalid PLY vertex index in edge %i/2: %d", i, v2);
         v2 = 0;
       }
@@ -54,17 +72,18 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
     MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
 
     /* Fill in face data. */
-    uint32_t offset = 0;
-    for (const int i : data.face_sizes.index_range()) {
-      uint32_t size = data.face_sizes[i];
+    int64_t offset = 0;
+    for (const int64_t i : data.face_sizes.index_range()) {
+      const int64_t size = data.face_sizes[i];
       face_offsets[i] = offset;
-      for (int j = 0; j < size; j++) {
+      for (int64_t j = 0; j < size; j++) {
         uint32_t v = data.face_vertices[offset + j];
-        if (v >= mesh->verts_num) {
-          CLOG_WARN(&LOG, "Invalid PLY vertex index in face %i loop %i: %u", i, j, v);
+        if (!validate::index_in_range(v, mesh->verts_num)) {
+          CLOG_WARN(
+              &LOG, "Invalid PLY vertex index in face %" PRId64 " loop %" PRId64 ": %u", i, j, v);
           v = 0;
         }
-        corner_verts[offset + j] = data.face_vertices[offset + j];
+        corner_verts[offset + j] = v;
       }
       offset += size;
     }
@@ -96,9 +115,14 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
     bke::SpanAttributeWriter<float2> uv_map = attributes.lookup_or_add_for_write_only_span<float2>(
         "UVMap", bke::AttrDomain::Corner);
     for (const int i : data.face_vertices.index_range()) {
-      uv_map.span[i] = data.uv_coordinates[data.face_vertices[i]];
+      uint32_t v = data.face_vertices[i];
+      uv_map.span[i] = validate::index_in_range(v, data.uv_coordinates.size()) ?
+                           data.uv_coordinates[v] :
+                           float2(0.0f);
     }
     uv_map.finish();
+    mesh->uv_maps_active_set("UVMap");
+    mesh->uv_maps_default_set("UVMap");
   }
 
   /* If we have custom vertex normals, set them
@@ -115,7 +139,7 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
       attributes.add<float3>(
           "normal",
           bke::AttrDomain::Point,
-          bke::AttributeInitVArray(VArray<float3>::ForSpan(data.vertex_normals)));
+          bke::AttributeInitVArray(VArray<float3>::from_span(data.vertex_normals)));
     }
   }
   else {
@@ -128,20 +152,19 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
     for (const PlyCustomAttribute &attr : data.vertex_custom_attr) {
       attributes.add<float>(attr.name,
                             bke::AttrDomain::Point,
-                            bke::AttributeInitVArray(VArray<float>::ForSpan(attr.data)));
+                            bke::AttributeInitVArray(VArray<float>::from_span(attr.data)));
     }
   }
 
   /* It's important to validate the mesh before using it's geometry to calculate derived data. */
   {
-    /* Calculate edges from the rest of the mesh (this could be merged with validate). */
-    bke::mesh_calc_edges(*mesh, true, false);
-
-    bool verbose_validate = false;
+    const bool allow_missing_edges = true;
 #ifndef NDEBUG
-    verbose_validate = true;
+    const bool verbose_validate = true;
+#else
+    const bool verbose_validate = false;
 #endif
-    BKE_mesh_validate(mesh, verbose_validate, false);
+    bke::mesh_validate(*mesh, verbose_validate, allow_missing_edges);
   }
 
   if (set_custom_normals_for_verts) {
@@ -150,7 +173,7 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
 
   /* Merge all vertices on the same location. */
   if (params.merge_verts) {
-    std::optional<Mesh *> merged_mesh = blender::geometry::mesh_merge_by_distance_all(
+    std::optional<Mesh *> merged_mesh = geometry::mesh_merge_by_distance_all(
         *mesh, IndexMask(mesh->verts_num), 0.0001f);
     if (merged_mesh) {
       BKE_id_free(nullptr, &mesh->id);
@@ -160,4 +183,5 @@ Mesh *convert_ply_to_mesh(PlyData &data, const PLYImportParams &params)
 
   return mesh;
 }
-}  // namespace blender::io::ply
+}  // namespace io::ply
+}  // namespace blender

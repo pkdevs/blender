@@ -18,10 +18,10 @@ void USDSkeletonReader::create_object(Main *bmain)
   bArmature *arm = BKE_armature_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_ARMATURE, name_.c_str());
-  object_->data = arm;
+  object_->data = id_cast<ID *>(arm);
 }
 
-void USDSkeletonReader::read_object_data(Main *bmain, const double motionSampleTime)
+void USDSkeletonReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
 {
   if (!object_ || !object_->data) {
     return;
@@ -29,7 +29,7 @@ void USDSkeletonReader::read_object_data(Main *bmain, const double motionSampleT
 
   import_skeleton(bmain, object_, skel_, reports());
 
-  USDXformReader::read_object_data(bmain, motionSampleTime);
+  USDXformReader::read_object_data(bmain, time);
 }
 
 }  // namespace blender::io::usd

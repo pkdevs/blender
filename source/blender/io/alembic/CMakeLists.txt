@@ -11,13 +11,12 @@ set(INC
 )
 
 set(INC_SYS
-  ${ALEMBIC_INCLUDE_DIRS}
-  ${OPENEXR_INCLUDE_DIRS}
 )
 
 set(SRC
   intern/abc_axis_conversion.cc
   intern/abc_customdata.cc
+  intern/abc_keyframing.cc
   intern/abc_reader_archive.cc
   intern/abc_reader_camera.cc
   intern/abc_reader_curves.cc
@@ -30,6 +29,7 @@ set(SRC
   intern/alembic_capi.cc
 
   exporter/abc_archive.cc
+  exporter/abc_writer_attribute.cc
   exporter/abc_custom_props.cc
   exporter/abc_export_capi.cc
   exporter/abc_hierarchy_iterator.cc
@@ -47,6 +47,7 @@ set(SRC
   ABC_alembic.h
   intern/abc_axis_conversion.h
   intern/abc_customdata.h
+  intern/abc_keyframing.h
   intern/abc_reader_archive.h
   intern/abc_reader_camera.h
   intern/abc_reader_curves.h
@@ -61,6 +62,7 @@ set(SRC
   exporter/abc_custom_props.h
   exporter/abc_hierarchy_iterator.h
   exporter/abc_writer_abstract.h
+  exporter/abc_writer_attribute.h
   exporter/abc_writer_camera.h
   exporter/abc_writer_curves.h
   exporter/abc_writer_hair.h
@@ -73,6 +75,7 @@ set(SRC
 )
 
 set(LIB
+  PRIVATE bf::animrig
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::blenloader
@@ -83,10 +86,10 @@ set(LIB
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_io_common
-
-  ${ALEMBIC_LIBRARIES}
-  ${OPENEXR_LIBRARIES}
   PRIVATE bf::windowmanager
+
+  PRIVATE bf::dependencies::optional::alembic
+  PRIVATE bf::dependencies::openexr
 )
 
 blender_add_lib(bf_io_alembic "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

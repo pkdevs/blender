@@ -12,17 +12,18 @@
 #include "ED_transform.hh"
 
 #include "transform.hh"
-
-struct BMVert;
-struct LinkNode;
 struct TransData;
 struct TransDataContainer;
 struct TransInfo;
+namespace blender {
+
+struct BMVert;
+struct LinkNode;
 struct bContext;
 struct wmOperator;
 struct wmEvent;
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 struct TransModeInfo {
   int flags; /* #eTFlag. */
@@ -53,6 +54,9 @@ struct TransModeInfo {
 
   /** Custom drawing. */
   void (*draw_fn)(TransInfo *);
+
+  /** Optional callback to override the status bar. Requires `t->context` to be set. */
+  void (*status_fn)(TransInfo *);
 };
 
 /* Header of #TransDataEdgeSlideVert, #TransDataEdgeSlideEdge. */
@@ -74,11 +78,11 @@ bool transform_mode_affect_only_locations(const TransInfo *t);
 void protectedTransBits(short protectflag, float vec[3]);
 void protectedScaleBits(short protectflag, float scale[3]);
 void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransData *td);
-void constraintScaleLim(const TransInfo *t, const TransDataContainer *tc, TransData *td);
+void constraintScaleLim(const TransInfo *t, const TransDataContainer *tc, int td_index);
 /**
  * Used by Transform Rotation and Transform Normal Rotation.
  */
-void headerRotation(TransInfo *t, char *str, int str_size, float final);
+void headerRotation(TransInfo *t, char *str, int str_maxncpy, float final);
 /**
  * Applies values of rotation to `td->loc` and `td->ext->quat`
  * based on a rotation matrix (mat) and a pivot (center).
@@ -88,23 +92,28 @@ void headerRotation(TransInfo *t, char *str, int str_size, float final);
 void ElementRotation_ex(const TransInfo *t,
                         const TransDataContainer *tc,
                         TransData *td,
+                        TransDataExtension *td_ext,
                         const float mat[3][3],
                         const float *center);
 void ElementRotation(const TransInfo *t,
                      const TransDataContainer *tc,
                      TransData *td,
+                     TransDataExtension *td_ext,
                      const float mat[3][3],
                      short around);
-void headerResize(TransInfo *t, const float vec[3], char *str, int str_size);
+void headerResize(TransInfo *t, const float vec[3], char *str, int str_maxncpy);
 void ElementResize(const TransInfo *t,
                    const TransDataContainer *tc,
-                   TransData *td,
+                   int td_index,
                    const float mat[3][3]);
 void transform_mode_init(TransInfo *t, wmOperator *op, int mode);
 /**
  * When in modal and not set, initializes a default orientation for the mode.
  */
 void transform_mode_default_modal_orientation_set(TransInfo *t, int type);
+
+void transform_mode_rotation_axis_get(const TransInfo *t, float3 &r_axis);
+bool transform_mode_is_axis_pointing_to_screen(const TransInfo *t, const float3 &axis);
 
 /* `transform_mode_align.cc` */
 
@@ -228,4 +237,5 @@ extern TransModeInfo TransMode_translate;
 extern TransModeInfo TransMode_vertslide;
 void transform_mode_vert_slide_reproject_input(TransInfo *t);
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

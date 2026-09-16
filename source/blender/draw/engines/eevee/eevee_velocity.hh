@@ -17,9 +17,13 @@
 
 #include "BLI_map.hh"
 
+#include "DRW_gpu_wrapper.hh"
+
 #include "GPU_batch.hh"
-#include "eevee_shader_shared.hh"
+
+#include "eevee_camera_shared.hh"
 #include "eevee_sync.hh"
+#include "eevee_velocity_shared.hh"
 
 namespace blender::eevee {
 
@@ -27,6 +31,11 @@ namespace blender::eevee {
 /** \name VelocityModule
  *
  * \{ */
+
+using CameraDataBuf = draw::UniformBuffer<CameraData>;
+using VelocityGeometryBuf = draw::StorageArrayBuffer<float4, 16, true>;
+using VelocityIndexBuf = draw::StorageArrayBuffer<VelocityIndex, 16>;
+using VelocityObjectBuf = draw::StorageArrayBuffer<float4x4, 16>;
 
 /** Container for scene velocity data. */
 class VelocityModule {
@@ -57,6 +66,18 @@ class VelocityModule {
         return buf;
       }
       return nullptr;
+    }
+
+    /* Returns true if the data is or **will** be available after the end of sync. */
+    bool has_data() const
+    {
+      if (std::holds_alternative<gpu::VertBuf *>(this->pos_buf)) {
+        return true;
+      }
+      if (std::holds_alternative<gpu::Batch *>(this->pos_buf)) {
+        return true;
+      }
+      return false;
     }
   };
   /**
@@ -124,12 +145,8 @@ class VelocityModule {
   void step_sync(eVelocityStep step, float time);
 
   /* Gather motion data. Returns true if the object **can** have motion. */
-  bool step_object_sync(ObjectKey &object_key,
-                        const ObjectRef &object_ref,
-                        int recalc,
-                        ResourceHandle resource_handle,
-                        ModifierData *modifier_data = nullptr,
-                        ParticleSystem *particle_sys = nullptr);
+  bool step_object_sync(const ObjectHandle &ob_handle,
+                        HairParticleInfo const *hair_particle = nullptr);
 
   /**
    * In Render, moves the next frame data to previous frame data. Nullify next frame data.

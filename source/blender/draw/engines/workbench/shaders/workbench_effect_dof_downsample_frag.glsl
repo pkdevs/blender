@@ -8,10 +8,11 @@
  * Converted and adapted from HLSL to GLSL by Clément Foucault
  */
 
-#include "infos/workbench_effect_dof_info.hh"
+#include "infos/workbench_effect_dof_infos.hh"
 
-#include "draw_view_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_safe.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 #include "workbench_effect_dof_lib.glsl"
 
 FRAGMENT_SHADER_CREATE_INFO(workbench_effect_dof_downsample)

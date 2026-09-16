@@ -9,12 +9,15 @@
 #include "abc_writer_instance.h"
 #include "abc_hierarchy_iterator.h"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 using Alembic::Abc::OObject;
 
@@ -31,7 +34,7 @@ void ABCInstanceWriter::create_alembic_objects(const HierarchyContext *context)
     CLOG_WARN(&LOG, "unable to export %s as instance", args_.abc_path.c_str());
     return;
   }
-  CLOG_INFO(&LOG, 2, "exporting instance %s", args_.abc_path.c_str());
+  CLOG_DEBUG(&LOG, "exporting instance %s", args_.abc_path.c_str());
 }
 
 void ABCInstanceWriter::ensure_custom_properties_exporter(const HierarchyContext & /*context*/)
@@ -61,4 +64,5 @@ void ABCInstanceWriter::do_write(HierarchyContext & /*context*/)
   /* Instances don't have data to be written. Just creating them is enough. */
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

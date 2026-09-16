@@ -8,9 +8,10 @@
 # For anyone making their own library build, matching these exactly is not
 # needed but it can be a useful reference.
 
-set(RELEASE_GCC_VERSION 11.2)
+set(RELEASE_GCC_VERSION 14.2)
 set(RELEASE_CUDA_VERSION 12.8)
-set(RELEASE_HIP_VERSION 6.3)
+set(RELEASE_HIP_WINDOWS_VERSION 7.1)
+set(RELEASE_HIP_UNIX_VERSION 7.2)
 
 # Libraries
 #
@@ -61,18 +62,18 @@ Copyright (c) 2015, Archontis Politis.
 Copyright (c) 2019, Christopher Robinson.
 ]=])
 
-set(PNG_VERSION 1.6.43)
+set(PNG_VERSION 1.6.58)
 set(PNG_NAME libpng)
 set(PNG_URI http://prdownloads.sourceforge.net/libpng/libpng-${PNG_VERSION}.tar.xz)
-set(PNG_HASH 6a5ca0652392a2d7c9db2ae5b40210843c0bbc081cbd410825ab00cc59f14a6c)
+set(PNG_HASH 28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775)
 set(PNG_HASH_TYPE SHA256)
 set(PNG_FILE libpng-${PNG_VERSION}.tar.xz)
 set(PNG_CPE "cpe:2.3:a:libpng:libpng:${PNG_VERSION}:*:*:*:*:*:*:*")
 set(PNG_HOMEPAGE http://www.libpng.org/pub/png/libpng.html)
 set(PNG_LICENSE SPDX:libpng-2.0)
 set(PNG_COPYRIGHT [=[
-Copyright (c) 1995-2019 The PNG Reference Library Authors.
-Copyright (c) 2018-2019 Cosmin Truta.
+Copyright (c) 1995-2026 The PNG Reference Library Authors.
+Copyright (c) 2018-2026 Cosmin Truta.
 Copyright (c) 2000-2002, 2004, 2006-2018 Glenn Randers-Pehrson.
 Copyright (c) 1996-1997 Andreas Dilger.
 Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.
@@ -111,11 +112,38 @@ set(PTHREADS_URI http://prdownloads.sourceforge.net/pthreads4w/pthreads4w-code-v
 set(PTHREADS_HASH f3bf81bb395840b3446197bcf4ecd653)
 set(PTHREADS_HASH_TYPE MD5)
 set(PTHREADS_FILE pthreads4w-code-${PTHREADS_VERSION}.zip)
+set(PTHREADS_CPE "cpe:2.3:a:pthread-win32_project:pthreads-win32:${PTHREADS_VERSION}:-:*:*:*:*:*:*")
 set(PTHREADS_HOMEPAGE https://github.com/fwbuilder/pthreads4w)
 set(PTHREADS_LICENSE SPDX:Apache-2.0)
 set(PTHREADS_COPYRIGHT [=[
-Copyright 1998 John E. Bossom.
-Copyright 1999-2018, Pthreads4w contributors.
+Copyright 1998 John E. Bossom
+Copyright 1999-2018, Pthreads4w contributors
+
+This product includes software developed through the collaborative
+effort of several individuals, each of whom is listed in the file
+CONTRIBUTORS included with this software.
+
+The following files are not covered under the Copyrights
+listed above:
+
+    [1] tests/rwlock7.c
+    [1] tests/rwlock7_1.c
+    [1] tests/rwlock8.c
+    [1] tests/rwlock8_1.c
+    [2] tests/threestage.c
+
+[1] The file tests/rwlock7.c and those similarly named are derived from
+code written by Dave Butenhof for his book 'Programming With POSIX(R)
+Threads'. The original code was obtained by free download from his
+website http://home.earthlink.net/~anneart/family/Threads/source.html
+
+[2] The file tests/threestage.c is taken directly from examples in the
+book "Windows System Programming, Edition 4" by Johnson (John) Hart
+Session 6, Chapter 10. ThreeStage.c
+Several required additional header and source files from the
+book examples have been included inline to simplify compilation.
+The only modification to the code has been to provide default
+values when run without arguments.
 ]=])
 
 set(DEFLATE_VERSION 1.18)
@@ -127,9 +155,9 @@ set(DEFLATE_HOMEPAGE https://github.com/ebiggers/libdeflate)
 set(DEFLATE_LICENSE SPDX:MIT)
 set(DEFLATE_COPYRIGHT "Copyright 2016 Eric Biggers")
 
-set(OPENEXR_VERSION 3.3.2)
+set(OPENEXR_VERSION 3.4.10)
 set(OPENEXR_URI https://github.com/AcademySoftwareFoundation/openexr/archive/v${OPENEXR_VERSION}.tar.gz)
-set(OPENEXR_HASH 0ca7b46575537ff495d9914166aafa65)
+set(OPENEXR_HASH 8926ba09c4e4cd21c7a0fa2d2b39fa82)
 set(OPENEXR_HASH_TYPE MD5)
 set(OPENEXR_FILE openexr-${OPENEXR_VERSION}.tar.gz)
 set(OPENEXR_CPE "cpe:2.3:a:openexr:openexr:${OPENEXR_VERSION}:*:*:*:*:*:*:*")
@@ -137,9 +165,9 @@ set(OPENEXR_HOMEPAGE https://github.com/AcademySoftwareFoundation/openexr)
 set(OPENEXR_LICENSE SPDX:BSD-3-Clause)
 set(OPENEXR_COPYRIGHT "Copyright Contributors to the OpenEXR Project. All rights reserved.")
 
-set(IMATH_VERSION 3.1.7)
+set(IMATH_VERSION 3.2.2)
 set(IMATH_URI https://github.com/AcademySoftwareFoundation/Imath/archive/v${IMATH_VERSION}.tar.gz)
-set(IMATH_HASH 5cedab446ab296c080957c3037c6d097)
+set(IMATH_HASH e29f25ce926ac53d8e0a52197299f61b)
 set(IMATH_HASH_TYPE MD5)
 set(IMATH_FILE imath-${IMATH_VERSION}.tar.gz)
 set(IMATH_HOMEPAGE https://github.com/AcademySoftwareFoundation/Imath)
@@ -152,20 +180,20 @@ if(WIN32)
   # we need to tell the build the postfix is _s while
   # telling all other deps the postfix is _s_d
   if(BUILD_MODE STREQUAL Release)
-    set(OPENEXR_VERSION_POSTFIX )
-    set(OPENEXR_VERSION_BUILD_POSTFIX )
+    set(OPENEXR_VERSION_POSTFIX "")
+    set(OPENEXR_VERSION_BUILD_POSTFIX "")
   else()
     set(OPENEXR_VERSION_POSTFIX _d)
-    set(OPENEXR_VERSION_BUILD_POSTFIX )
+    set(OPENEXR_VERSION_BUILD_POSTFIX "")
   endif()
 else()
-  set(OPENEXR_VERSION_BUILD_POSTFIX)
-  set(OPENEXR_VERSION_POSTFIX)
+  set(OPENEXR_VERSION_BUILD_POSTFIX "")
+  set(OPENEXR_VERSION_POSTFIX "")
 endif()
 
-set(FREETYPE_VERSION 2.13.0)
+set(FREETYPE_VERSION 2.13.3)
 set(FREETYPE_URI http://prdownloads.sourceforge.net/freetype/freetype-${FREETYPE_VERSION}.tar.gz)
-set(FREETYPE_HASH 98bc3cf234fe88ef3cf24569251fe0a4)
+set(FREETYPE_HASH ac1f0b517f62bd40d50bc995faa5741d)
 set(FREETYPE_HASH_TYPE MD5)
 set(FREETYPE_FILE freetype-${FREETYPE_VERSION}.tar.gz)
 set(FREETYPE_CPE "cpe:2.3:a:freetype:freetype:${FREETYPE_VERSION}:*:*:*:*:*:*:*")
@@ -201,9 +229,9 @@ registered trademarks or service marks of Lucasfilm Ltd.
 © 2009-2015 Sony Pictures Imageworks Inc.  All rights reserved.
 ]=])
 
-set(OPENSUBDIV_VERSION v3_6_0)
+set(OPENSUBDIV_VERSION v3_7_0)
 set(OPENSUBDIV_URI https://github.com/PixarAnimationStudios/OpenSubdiv/archive/${OPENSUBDIV_VERSION}.tar.gz)
-set(OPENSUBDIV_HASH cd03aaf8890bc0b8550eef62029cabe7)
+set(OPENSUBDIV_HASH 470d53c4d4335a601c33a052ce7c33b4)
 set(OPENSUBDIV_HASH_TYPE MD5)
 set(OPENSUBDIV_FILE opensubdiv-${OPENSUBDIV_VERSION}.tar.gz)
 set(OPENSUBDIV_NAME OpenSubdiv)
@@ -221,20 +249,20 @@ Google, Inc. (http://www.google.com/).
 DigitalFish (http://digitalfish.com/).
 ]=])
 
-set(SDL_VERSION 2.28.2)
-set(SDL_URI https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz)
-set(SDL_HASH 06ff379c406cd8318d18f0de81ee2709)
+set(SDL_VERSION 3.4.2)
+set(SDL_URI https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz)
+set(SDL_HASH b488ea1ede947c06855588314effe905)
 set(SDL_HASH_TYPE MD5)
-set(SDL_FILE SDL2-${SDL_VERSION}.tar.gz)
+set(SDL_FILE SDL3-${SDL_VERSION}.tar.gz)
 set(SDL_CPE "cpe:2.3:a:libsdl:sdl:${SDL_VERSION}:*:*:*:*:*:*:*")
 set(SDL_NAME SDL)
 set(SDL_HOMEPAGE https://www.libsdl.org)
 set(SDL_LICENSE SPDX:Zlib)
 set(SDL_COPYRIGHT "Copyright (C) 1997-2020 Sam Lantinga <slouken@libsdl.org>")
 
-set(OPENCOLORIO_VERSION 2.4.1)
+set(OPENCOLORIO_VERSION 2.5.0)
 set(OPENCOLORIO_URI https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/v${OPENCOLORIO_VERSION}.tar.gz)
-set(OPENCOLORIO_HASH a11368ef8f001837f29b7dd18dbd2290)
+set(OPENCOLORIO_HASH 41d6b62ac672ed333ebfdcc1108407e0)
 set(OPENCOLORIO_HASH_TYPE MD5)
 set(OPENCOLORIO_FILE OpenColorIO-${OPENCOLORIO_VERSION}.tar.gz)
 set(OPENCOLORIO_NAME OpenColorIO)
@@ -242,12 +270,13 @@ set(OPENCOLORIO_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenColorI
 set(OPENCOLORIO_LICENSE SPDX:BSD-3-Clause)
 set(OPENCOLORIO_COPYRIGHT "Copyright Contributors to the OpenColorIO Project.")
 
-set(MINIZIPNG_VERSION 3.0.7)
+set(MINIZIPNG_VERSION 4.0.10)
 set(MINIZIPNG_NAME minizip-ng)
 set(MINIZIPNG_URI https://github.com/zlib-ng/minizip-ng/archive/${MINIZIPNG_VERSION}.tar.gz)
-set(MINIZIPNG_HASH 09dcc8a9def348e1be9659e384c2cd55)
+set(MINIZIPNG_HASH 9b4de14db78016419598d0f292fde244)
 set(MINIZIPNG_HASH_TYPE MD5)
 set(MINIZIPNG_FILE minizip-ng-${MINIZIPNG_VERSION}.tar.gz)
+set(MINIZIPNG_CPE "cpe:2.3:a:zlib-ng:minizip-ng:${MINIZIPNG_VERSION}:*:*:*:*:*:*:*")
 set(MINIZIPNG_HOMEPAGE https://github.com/zlib-ng/minizip-ng)
 set(MINIZIPNG_LICENSE SPDX:Zlib)
 set(MINIZIPNG_COPYRIGHT [=[
@@ -255,10 +284,10 @@ Copyright (C) Nathan Moinvaziri https://github.com/zlib-ng/minizip-ng.
 Copyright (C) 1998-2010 Gilles Vollant https://www.winimage.com/zLibDll/minizip.html.
 ]=])
 
-set(LLVM_VERSION 17.0.6)
+set(LLVM_VERSION 20.1.8)
 set(LLVM_NAME LLVM)
 set(LLVM_URI https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz)
-set(LLVM_HASH 62a09d65240a5133f001ace48269dbfc)
+set(LLVM_HASH 915e251a657450a2ba8e4c106e4f9555)
 set(LLVM_HASH_TYPE MD5)
 set(LLVM_FILE llvm-project-${LLVM_VERSION}.src.tar.xz)
 set(LLVM_CPE "cpe:2.3:a:llvm:compiler:${LLVM_VERSION}:*:*:*:*:*:*:*")
@@ -266,21 +295,20 @@ set(LLVM_HOMEPAGE https://github.com/llvm/llvm-project/)
 set(LLVM_LICENSE SPDX:Apache-2.0 WITH LLVM-exception)
 set(LLVM_COPYRIGHT "Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign. All rights reserved.")
 
-set(OPENIMAGEIO_VERSION v3.0.6.1)
+set(OPENIMAGEIO_VERSION v3.1.13.1)
 set(OPENIMAGEIO_NAME OpenImageIO)
 set(OPENIMAGEIO_URI https://github.com/AcademySoftwareFoundation/OpenImageIO/archive/refs/tags/${OPENIMAGEIO_VERSION}.tar.gz)
-set(OPENIMAGEIO_HASH 935f926a7457ffd49fa4774449e99325)
+set(OPENIMAGEIO_HASH 9f6f083900680b79ca4a136270103844)
 set(OPENIMAGEIO_HASH_TYPE MD5)
 set(OPENIMAGEIO_FILE OpenImageIO-${OPENIMAGEIO_VERSION}.tar.gz)
+set(OPENIMAGEIO_CPE "cpe:2.3:a:openimageio:openimageio:${OPENIMAGEIO_VERSION}:*:*:*:*:*:*:*")
 set(OPENIMAGEIO_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenImageIO)
 set(OPENIMAGEIO_LICENSE SPDX:Apache-2.0)
 set(OPENIMAGEIO_COPYRIGHT "Copyright Contributors to the OpenImageIO project.")
 
-# 9.1.0 is currently oiio's preferred version although never versions may be available.
-# the preferred version can be found in oiio's externalpackages.cmake
-set(FMT_VERSION 9.1.0)
+set(FMT_VERSION 12.1.0)
 set(FMT_URI https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz)
-set(FMT_HASH 5dea48d1fcddc3ec571ce2058e13910a0d4a6bab4cc09a809d8b1dd1c88ae6f2)
+set(FMT_HASH ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea)
 set(FMT_HASH_TYPE SHA256)
 set(FMT_FILE fmt-${FMT_VERSION}.tar.gz)
 set(FMT_CPE "cpe:2.3:a:fmt:fmt:${FMT_VERSION}:*:*:*:*:*:*:*")
@@ -299,9 +327,9 @@ set(ROBINMAP_HOMEPAGE https://github.com/Tessil/robin-map)
 set(ROBINMAP_LICENSE SPDX:MIT)
 set(ROBINMAP_COPYRIGHT "Copyright (c) 2017 Thibaut Goetghebuer-Planchon <tessil@gmx.com>")
 
-set(TIFF_VERSION 4.7.0)
+set(TIFF_VERSION 4.7.1)
 set(TIFF_URI http://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz)
-set(TIFF_HASH 3a0fa4a270a4a192b08913f88d0cfbdd)
+set(TIFF_HASH f1044dd3b4466cc53464210148e08146)
 set(TIFF_HASH_TYPE MD5)
 set(TIFF_FILE tiff-${TIFF_VERSION}.tar.gz)
 set(TIFF_CPE "cpe:2.3:a:libtiff:libtiff:${TIFF_VERSION}:*:*:*:*:*:*:*")
@@ -313,47 +341,60 @@ Copyright © 1988-1997 Sam Leffler.
 Copyright © 1991-1997 Silicon Graphics, Inc.
 ]=])
 
-# Latest 1.14 (beta) main, that is compatible with OIIO 3.0
-set(OSL_VERSION 1.14.3.0-beta)
-set(OSL_COMMIT "b795e3e92ae1f2c5da5024b61295b0eb41486a65")
+set(OSL_VERSION 1.15.3.0)
 set(OSL_NAME "Open Shading Language")
-set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/${OSL_COMMIT}.tar.gz)
-set(OSL_HASH dbfe1a34249959f2d66296bf04317c1c)
-set(OSL_HASH_TYPE MD5)
+set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/releases/download/v${OSL_VERSION}/OSL-${OSL_VERSION}.tar.gz)
+set(OSL_HASH 560232b3298e33f3bf45c6f21f20b484f5acc260f6d4035db0f76f22994d679a)
+set(OSL_HASH_TYPE SHA256)
 set(OSL_FILE OpenShadingLanguage-${OSL_VERSION}.tar.gz)
 set(OSL_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/)
 set(OSL_LICENSE SPDX:BSD-3-Clause)
-set(OSL_COPYRIGHT "Copyright Contributors to the Open Shading Language project.")
+set(OSL_COPYRIGHT "Copyright (c) 2009-present Contributors to the Open Shading Language project.")
 
-set(MANIFOLD_VERSION v3.1.0)
+set(MANIFOLD_VERSION v3.5.2)
 set(MANIFOLD_NAME "Manifold")
 set(MANIFOLD_URI https://github.com/elalish/manifold/archive/refs/tags/${MANIFOLD_VERSION}.tar.gz)
-set(MANIFOLD_HASH ddbc6b342d57b3a1a6c53cd60c63c867)
+set(MANIFOLD_HASH 4fc28c8318bd052f54e66b86b5947601)
 set(MANIFOLD_HASH_TYPE MD5)
 set(MANIFOLD_FILE Manifold-${MANIFOLD_VERSION}.tar.gz)
 set(MANIFOLD_HOMEPAGE https://github.com/elalish/manifold)
 set(MANIFOLD_LICENSE SPDX:Apache-2.0)
-set(MANIFOLD_COPYRIGHT "Copyright 2021 The Manifold Authors.")
+set(MANIFOLD_COPYRIGHT "Copyright 2021-2026 The Manifold Authors.")
+
+set(RUBBERBAND_VERSION 4.0.0)
+set(RUBBERBAND_NAME "Rubber Band Library")
+set(RUBBERBAND_URI https://breakfastquay.com/files/releases/rubberband-${RUBBERBAND_VERSION}.tar.bz2)
+set(RUBBERBAND_HASH 93bf3159eb91048e76eba35cf1bf766f)
+set(RUBBERBAND_HASH_TYPE MD5)
+set(RUBBERBAND_FILE rubberband-${RUBBERBAND_VERSION}.tar.bz2)
+set(RUBBERBAND_HOMEPAGE https://breakfastquay.com/rubberband/)
+set(RUBBERBAND_LICENSE SPDX:GPL-2.0-or-later)
+set(RUBBERBAND_COPYRIGHT "Copyright (c) 2025 Particular Programs Ltd")
 
 # NOTE: When updating the python version, it's required to check the versions of
 # it wants to use in PCbuild/get_externals.bat for the following dependencies:
-# BZIP2, FFI, SQLITE and change the versions in this file as well. For compliance
+# BZIP2 and change the versions in this file as well. For compliance
 # reasons there can be no exceptions to this.
 # Additionally, keep the PYTHON_PIP_VERSION in sync with the pip version bundled
 # into Python.
 
-set(PYTHON_VERSION 3.11.11)
-set(PYTHON_SHORT_VERSION 3.11)
-set(PYTHON_SHORT_VERSION_NO_DOTS 311)
+set(PYTHON_VERSION 3.13.13)
+set(PYTHON_SHORT_VERSION 3.13)
+set(PYTHON_SHORT_VERSION_NO_DOTS 313)
 set(PYTHON_URI https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz)
-set(PYTHON_HASH 3e497037b170fe4be5f462c4964596f2)
+set(PYTHON_HASH 3a19dd420883dd599728c9dd07c141e7)
 set(PYTHON_HASH_TYPE MD5)
 set(PYTHON_FILE Python-${PYTHON_VERSION}.tar.xz)
 set(PYTHON_CPE "cpe:2.3:a:python:python:${PYTHON_VERSION}:-:*:*:*:*:*:*")
 set(PYTHON_HOMEPAGE https://www.python.org/)
 set(PYTHON_NAME Python)
 set(PYTHON_LICENSE SPDX:Python-2.0)
-set(PYTHON_COPYRIGHT "Copyright (c) 2001-2023 Python Software Foundation. All rights reserved.")
+set(PYTHON_COPYRIGHT [=[
+Copyright © 2001 Python Software Foundation. All rights reserved.
+Copyright © 2000 BeOpen.com. All rights reserved.
+Copyright © 1995-2000 Corporation for National Research Initiatives. All rights reserved.
+Copyright © 1991-1995 Stichting Mathematisch Centrum. All rights reserved.
+]=])
 
 # Python bundles pip wheel, and does not track CVEs from it. Add an explicit CPE
 # identifier for pip, so that cve_check can detect vulnerabilities in it.
@@ -361,14 +402,14 @@ set(PYTHON_COPYRIGHT "Copyright (c) 2001-2023 Python Software Foundation. All ri
 # Currently it is done manually by tracking _PIP_VERSION variable in the
 # `Lib/ensurepip/__init__.py`. For example,
 #   https://github.com/python/cpython/tree/v3.11.9/Lib/ensurepip/__init__.py
-set(PYTHON_PIP_VERSION 24.0)
+set(PYTHON_PIP_VERSION 25.2)
 set(PYTHON_PIP_CPE "cpe:2.3:a:pypa:pip:${PYTHON_PIP_VERSION}:*:*:*:*:*:*:*")
 
-set(TBB_YEAR 2021)
+set(TBB_YEAR 2022)
 set(TBB_NAME oneTBB)
-set(TBB_VERSION v2021.13.0)
+set(TBB_VERSION v2022.3.0)
 set(TBB_URI https://github.com/uxlfoundation/oneTBB/archive/refs/tags/${TBB_VERSION}.tar.gz)
-set(TBB_HASH f287cd007240a838286ff13e7deaee12)
+set(TBB_HASH 2b242c465b194ac8e1451ea1354873ae)
 set(TBB_HASH_TYPE MD5)
 set(TBB_FILE oneTBB-${TBB_VERSION}.tar.gz)
 set(TBB_CPE "cpe:2.3:a:intel:threading_building_blocks:${TBB_YEAR}:*:*:*:*:*:*:*")
@@ -386,10 +427,10 @@ set(NANOBIND_HOMEPAGE https://github.com/wjakob/nanobind)
 set(NANOBIND_LICENSE SPDX:BSD-3-Clause)
 set(NANOBIND_COPYRIGHT "2023, Wenzel Jakob")
 
-set(OPENVDB_VERSION 12.0.0)
+set(OPENVDB_VERSION 13.0.0)
 set(OPENVDB_NAME OpenVDB)
 set(OPENVDB_URI https://github.com/AcademySoftwareFoundation/openvdb/archive/v${OPENVDB_VERSION}.tar.gz)
-set(OPENVDB_HASH c5cd16784b6b42aaa956b574042f374d)
+set(OPENVDB_HASH 7a10f529ed12d9e3ed6d3fd50f157378)
 set(OPENVDB_HASH_TYPE MD5)
 set(OPENVDB_FILE openvdb-${OPENVDB_VERSION}.tar.gz)
 set(OPENVDB_HOMEPAGE http://www.openvdb.org/)
@@ -398,6 +439,11 @@ set(OPENVDB_COPYRIGHT "Copyright Contributors to the OpenVDB Project")
 
 # ------------------------------------------------------------------------------
 # Python Modules
+# cattrs + fastjson schema + deps as requested by #141945
+set(ATTRS_VERSION 25.3.0)
+set(CATTRS_VERSION 25.1.1)
+set(FASTJSONSCHEMA_VERSION 2.21.1)
+set(TYPING_EXTENSIONS_VERSION 4.14.1)
 
 # Needed by: `requests` module (so the version doesn't change on rebuild).
 set(IDNA_VERSION 3.10)
@@ -419,30 +465,39 @@ set(CYTHON_HASH_TYPE MD5)
 set(CYTHON_FILE cython-${CYTHON_VERSION}.tar.gz)
 set(CYTHON_HOMEPAGE https://cython.org/)
 set(CYTHON_LICENSE SPDX:Apache-2.0)
+set(CYTHON_COPYRIGHT "Copyright Contributors to the Cython Project")
 # Needed by: Python scripts that read `.blend` files, as files may use Z-standard compression. (Once we move to Python 3.14, this could be replaced with inbuilt Zstandard support, see https://peps.python.org/pep-0784/)
-set(ZSTANDARD_VERSION 0.23.0)
-set(ZSTANDARD_URI
-# NOTE: the release is not yet on GITHUB.
-# https://github.com/indygreg/python-zstandard/releases/download/${ZSTANDARD_VERSION}/zstandard-${ZSTANDARD_VERSION}.tar.gz)
-https://files.pythonhosted.org/packages/ed/f6/2ac0287b442160a89d726b17a9184a4c615bb5237db763791a7fd16d9df1/zstandard-0.23.0.tar.gz)
-set(ZSTANDARD_HASH b2d8c62d08e7255f68f7a740bae85b3c9b8e5466baa9cbf7f57f1cde0ac6bc09)
+set(ZSTANDARD_VERSION 0.25.0)
+set(ZSTANDARD_URI https://github.com/indygreg/python-zstandard/releases/download/${ZSTANDARD_VERSION}/zstandard-${ZSTANDARD_VERSION}.tar.gz)
+set(ZSTANDARD_HASH 7713e1179d162cf5c7906da876ec2ccb9c3a9dcbdffef0cc7f70c3667a205f0b)
 set(ZSTANDARD_HASH_TYPE SHA256)
 set(ZSTANDARD_FILE zstandard-${ZSTANDARD_VERSION}.tar.gz)
 set(ZSTANDARD_HOMEPAGE https://github.com/indygreg/python-zstandard/)
 set(ZSTANDARD_LICENSE SPDX:BSD-3-Clause)
+set(ZSTANDARD_COPYRIGHT "Copyright (c) 2016, Gregory Szorc. All rights reserved.")
 # Auto-format Python source (developer tool, not used by Blender at run-time).
 set(AUTOPEP8_VERSION 2.3.1)
 # Needed by: `autopep8` (so the version doesn't change on rebuild).
 set(PYCODESTYLE_VERSION 2.13)
+# DocUtils Python source (to validate generated docs, not used by Blender at run-time).
+set(DOCUTILS_VERSION 0.22.4)
 # Build system for other packages (not used by Blender at run-time).
-set(MESON_VERSION 0.63.0)
+set(MESON_VERSION 1.9.0)
+# Build time requirements for numpy and cython
+set(SETUPTOOLS_VERSION 80.9.0)
+set(SETUPTOOLS_SCM_VERSION 9.2.2)
+set(MESON_PYTHON_VERSION 0.18.0)
+set(PACKAGING_VERSION 25.0) # meson-python dep
+set(PYPROJECT_METADATA_VERSION 0.9.1) # meson-python dep
+# tomli-w - A lil' TOML writer (see dependency request issue #155758)
+set(TOMLI_W_VERSION 1.2.0)
+
 
 # When this numpy version is bumped, please also change the limit value set for variable `install_requires`
 # in build_files/utils/make_bpy_wheel.py
-set(NUMPY_VERSION 1.26.4)
-set(NUMPY_SHORT_VERSION 1.26)
+set(NUMPY_VERSION 2.3.4)
 set(NUMPY_URI https://github.com/numpy/numpy/releases/download/v${NUMPY_VERSION}/numpy-${NUMPY_VERSION}.tar.gz)
-set(NUMPY_HASH 19550cbe7bedd96a928da9d4ad69509d)
+set(NUMPY_HASH 8717ed1828a8a390c454c6636e91c46a)
 set(NUMPY_HASH_TYPE MD5)
 set(NUMPY_FILE numpy-${NUMPY_VERSION}.tar.gz)
 set(NUMPY_CPE "cpe:2.3:a:numpy:numpy:${NUMPY_VERSION}:*:*:*:*:*:*:*")
@@ -490,6 +545,7 @@ set(THEORA_URI http://downloads.xiph.org/releases/theora/libtheora-${THEORA_VERS
 set(THEORA_HASH b6ae1ee2fa3d42ac489287d3ec34c5885730b1296f0801ae577a35193d3affbc)
 set(THEORA_HASH_TYPE SHA256)
 set(THEORA_FILE libtheora-${THEORA_VERSION}.tar.bz2)
+set(THEORA_CPE "cpe:2.3:a:xiph:theora:${THEORA_VERSION}:-:*:*:*:*:*:*")
 set(THEORA_HOMEPAGE https://xiph.org/theora/)
 set(THEORA_LICENSE SPDX:BSD-3-Clause)
 set(THEORA_COPYRIGHT "Copyright (C) 2002-2009 Xiph.org Foundation")
@@ -507,9 +563,9 @@ Copyright (C) 2001-2009  Josh Coalson.
 Copyright (C) 2011-2016  Xiph.Org Foundation.
 ]=])
 
-set(VPX_VERSION 1.14.0)
+set(VPX_VERSION 1.15.2)
 set(VPX_URI https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}/libvpx-v${VPX_VERSION}.tar.gz)
-set(VPX_HASH 5f21d2db27071c8a46f1725928a10227ae45c5cd1cad3727e4aafbe476e321fa)
+set(VPX_HASH 26fcd3db88045dee380e581862a6ef106f49b74b6396ee95c2993a260b4636aa)
 set(VPX_HASH_TYPE SHA256)
 set(VPX_FILE libvpx-v${VPX_VERSION}.tar.gz)
 set(VPX_CPE "cpe:2.3:a:webmproject:libvpx:${VPX_VERSION}:*:*:*:*:*:*:*")
@@ -541,19 +597,19 @@ set(X264_HOMEPAGE https://www.videolan.org/developers/x264.html)
 set(X264_LICENSE SPDX:GPL-2.0-or-later)
 set(X264_COPYRIGHT "Copyright (C) 2003-2021 x264 project")
 
-set(X265_VERSION 3cf6c1e53037eb9e198860365712e1bafb22f7c6)
-set(X265_URI https://bitbucket.org/multicoreware/x265_git/get/${X265_VERSION}.tar.gz)
-set(X265_HASH 40d12016192cdc740132cb00dd6cc80ead094ff91a1a897181256def2011342e)
+set(X265_VERSION 4.1)
+set(X265_URI https://bitbucket.org/multicoreware/x265_git/downloads/x265_${X265_VERSION}.tar.gz)
+set(X265_HASH a31699c6a89806b74b0151e5e6a7df65de4b49050482fe5ebf8a4379d7af8f29)
 set(X265_HASH_TYPE SHA256)
 set(X265_FILE x265-${X265_VERSION}.tar.gz)
 set(X265_HOMEPAGE https://www.videolan.org/developers/x265.html)
 set(X265_LICENSE SPDX:GPL-2.0-or-later)
 set(X265_COPYRIGHT "Copyright (C) 2013-2020 MulticoreWare, Inc")
 
-set(OPENJPEG_VERSION 2.5.0)
+set(OPENJPEG_VERSION 2.5.3)
 set(OPENJPEG_SHORT_VERSION 2.5)
 set(OPENJPEG_URI https://github.com/uclouvain/openjpeg/archive/v${OPENJPEG_VERSION}.tar.gz)
-set(OPENJPEG_HASH 0333806d6adecc6f7a91243b2b839ff4d2053823634d4f6ed7a59bc87409122a)
+set(OPENJPEG_HASH 368fe0468228e767433c9ebdea82ad9d801a3ad1e4234421f352c8b06e7aa707)
 set(OPENJPEG_HASH_TYPE SHA256)
 set(OPENJPEG_NAME OpenJPEG)
 set(OPENJPEG_HOMEPAGE https://github.com/uclouvain/openjpeg)
@@ -572,16 +628,30 @@ Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France.
 Copyright (c) 2012, CS Systemes d'Information, France.
 ]=])
 
-set(FFMPEG_VERSION 7.1.1)
+set(OPENJPH_VERSION 0.25.2)
+set(OPENJPH_URI https://github.com/aous72/OpenJPH/archive/refs/tags/${OPENJPH_VERSION}.tar.gz)
+set(OPENJPH_HASH ae5f09562cb811cb2fb881c5eb74583e18db941848cfa3c35787e2580f3defc6)
+set(OPENJPH_HASH_TYPE SHA256)
+set(OPENJPH_NAME OpenJPH)
+set(OPENJPH_HOMEPAGE https://github.com/aous72/OpenJPH)
+set(OPENJPH_FILE openjph-v${OPENJPH_VERSION}.tar.gz)
+set(OPENJPH_LICENSE SPDX:BSD-2-Clause)
+set(OPENJPH_COPYRIGHT [=[
+Copyright (c) 2019, Aous Naman
+Copyright (c) 2019, Kakadu Software Pty Ltd, Australia
+Copyright (c) 2019, The University of New South Wales, Australia
+]=])
+
+set(FFMPEG_VERSION 8.1)
 set(FFMPEG_URI http://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2)
-set(FFMPEG_HASH 0c8da2f11579a01e014fc007cbacf5bb4da1d06afd0b43c7f8097ec7c0f143ba)
+set(FFMPEG_HASH c07039598df7d64d3c8b42c4e25b1959fc908621c6f6c2946881133f3b27eda2)
 set(FFMPEG_HASH_TYPE SHA256)
 set(FFMPEG_FILE ffmpeg-${FFMPEG_VERSION}.tar.bz2)
 set(FFMPEG_CPE "cpe:2.3:a:ffmpeg:ffmpeg:${FFMPEG_VERSION}:*:*:*:*:*:*:*")
 set(FFMPEG_NAME FFmpeg)
 set(FFMPEG_HOMEPAGE https://ffmpeg.org/)
 set(FFMPEG_LICENSE SPDX:LGPL-2.1-or-later)
-set(FFMPEG_COPYRIGHT "The FFmpeg contributors https://github.com/FFmpeg/FFmpeg/blob/master/CREDITS")
+set(FFMPEG_COPYRIGHT "Copyright (c) 2000-2017 the FFMPEG developers")
 
 set(FFTW_VERSION 3.3.10)
 set(FFTW_NAME FFTW)
@@ -596,15 +666,6 @@ Copyright (c) 2003, 2007-14 Matteo Frigo.
 Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology
 ]=])
 
-set(ICONV_VERSION 1.16)
-set(ICONV_URI http://ftp.gnu.org/pub/gnu/libiconv/libiconv-${ICONV_VERSION}.tar.gz)
-set(ICONV_HASH 7d2a800b952942bb2880efb00cfd524c)
-set(ICONV_HASH_TYPE MD5)
-set(ICONV_FILE libiconv-${ICONV_VERSION}.tar.gz)
-set(ICONV_HOMEPAGE https://www.gnu.org/software/libiconv/)
-set(ICONV_LICENSE SPDX:LGPL-2.1-or-later)
-set(ICONV_COPYRIGHT "Copyright (C) 1998, 2022 Free Software Foundation, Inc.")
-
 set(SNDFILE_VERSION 1.2.2)
 set(SNDFILE_NAME libsndfile)
 set(SNDFILE_URI https://github.com/libsndfile/libsndfile/releases/download/1.2.2/libsndfile-${SNDFILE_VERSION}.tar.xz)
@@ -616,9 +677,9 @@ set(SNDFILE_HOMEPAGE http://libsndfile.github.io/libsndfile/)
 set(SNDFILE_LICENSE SPDX:LGPL-2.1-or-later)
 set(SNDFILE_COPYRIGHT "Copyright (C) 2011-2016 Erik de Castro Lopo <erikd@mega-nerd.com>")
 
-set(WEBP_VERSION 1.3.2)
+set(WEBP_VERSION 1.6.0)
 set(WEBP_URI https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-${WEBP_VERSION}.tar.gz)
-set(WEBP_HASH 34869086761c0e2da6361035f7b64771)
+set(WEBP_HASH cceb6447180f961473b181c9ef38b630)
 set(WEBP_HASH_TYPE MD5)
 set(WEBP_FILE libwebp-${WEBP_VERSION}.tar.gz)
 set(WEBP_CPE "cpe:2.3:a:webmproject:libwebp:${WEBP_VERSION}:*:*:*:*:*:*:*")
@@ -636,24 +697,9 @@ set(SPNAV_HOMEPAGE https://github.com/FreeSpacenav/libspnav)
 set(SPNAV_LICENSE SPDX:BSD-3-Clause)
 set(SPNAV_COPYRIGHT "Copyright (C) 2007-2022 John Tsiombikas nuclear@member.fsf.org")
 
-set(JEMALLOC_VERSION 5.2.1)
-set(JEMALLOC_URI https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2)
-set(JEMALLOC_HASH 3d41fbf006e6ebffd489bdb304d009ae)
-set(JEMALLOC_HASH_TYPE MD5)
-set(JEMALLOC_FILE jemalloc-${JEMALLOC_VERSION}.tar.bz2)
-set(JEMALLOC_HOMEPAGE https://jemalloc.net/)
-set(JEMALLOC_NAME jemalloc)
-set(JEMALLOC_LICENSE SPDX:BSD-2-Clause)
-set(JEMALLOC_COPYRIGHT [=[
-Copyright (C) 2002-2013 Jason Evans <jasone@canonware.com>. All rights reserved.
-Copyright (C) 2007-2012 Mozilla Foundation.  All rights reserved.
-Copyright (C) 2009-2013 Facebook, Inc.  All rights reserved.
-Copyright (C) 2013 Jason Evans <jasone@canonware.com>.
-]=])
-
-set(XML2_VERSION 2.13.5)
-set(XML2_URI https://download.gnome.org/sources/libxml2/2.13/libxml2-${XML2_VERSION}.tar.xz)
-set(XML2_HASH 0b919be8edff97ade9c946e1a83bdecd)
+set(XML2_VERSION 2.14.6)
+set(XML2_URI https://download.gnome.org/sources/libxml2/2.14/libxml2-${XML2_VERSION}.tar.xz)
+set(XML2_HASH a2bb2b6cb8fc7be1fafa14f500e4f7c5)
 set(XML2_HASH_TYPE MD5)
 set(XML2_FILE libxml2-${XML2_VERSION}.tar.xz)
 set(XML2_CPE "cpe:2.3:a:xmlsoft:libxml2:${XML2_VERSION}:*:*:*:*:*:*:*")
@@ -662,9 +708,9 @@ set(XML2_HOMEPAGE https://gitlab.gnome.org/GNOME/libxml2)
 set(XML2_LICENSE SPDX:MIT)
 set(XML2_COPYRIGHT "Copyright (C) 1998-2012 Daniel Veillard. All Rights Reserved.")
 
-set(YAMLCPP_VERSION 0.7.0)
-set(YAMLCPP_URI https://codeload.github.com/jbeder/yaml-cpp/tar.gz/yaml-cpp-${YAMLCPP_VERSION})
-set(YAMLCPP_HASH 74d646a3cc1b5d519829441db96744f0)
+set(YAMLCPP_VERSION 0.8.0)
+set(YAMLCPP_URI https://github.com/jbeder/yaml-cpp/archive/refs/tags/${YAMLCPP_VERSION}.tar.gz)
+set(YAMLCPP_HASH 1d2c7975edba60e995abe3c4af6480e5)
 set(YAMLCPP_HASH_TYPE MD5)
 set(YAMLCPP_FILE yaml-cpp-${YAMLCPP_VERSION}.tar.gz)
 set(YAMLCPP "cpe:2.3:a:yaml-cpp_project:yaml-cpp:${YAMLCPP_VERSION}:*:*:*:*:*:*:*")
@@ -680,10 +726,10 @@ set(PYSTRING_HOMEPAGE https://github.com/imageworks/pystring)
 set(PYSTRING_LICENSE SPDX:BSD-3-Clause)
 set(PYSTRING_COPYRIGHT "Copyright (c) 2008-2010, Sony Pictures Imageworks Inc; All rights reserved.")
 
-set(EXPAT_VERSION 2_6_4)
-set(EXPAT_VERSION_DOTS 2.6.4)
+set(EXPAT_VERSION 2_7_5)
+set(EXPAT_VERSION_DOTS 2.7.5)
 set(EXPAT_URI https://github.com/libexpat/libexpat/archive/R_${EXPAT_VERSION}.tar.gz)
-set(EXPAT_HASH f2f8d61e2bd71d1118e1258ed9f4c0b7)
+set(EXPAT_HASH aecc4366ab1a5189d8f027c369305c9a)
 set(EXPAT_HASH_TYPE MD5)
 set(EXPAT_FILE libexpat-${EXPAT_VERSION}.tar.gz)
 set(EXPAT_HOMEPAGE https://github.com/libexpat/libexpat/)
@@ -691,7 +737,7 @@ set(EXPAT_CPE "cpe:2.3:a:libexpat_project:libexpat:${EXPAT_VERSION_DOTS}:*:*:*:*
 set(EXPAT_LICENSE SPDX:MIT)
 set(EXPAT_COPYRIGHT [=[
 Copyright (c) 1998-2000 Thai Open Source Software Center Ltd and Clark Cooper.
-Copyright (c) 2001-2019 Expat maintainers.
+Copyright (c) 2001-2025 Expat maintainers.
 ]=])
 
 set(PUGIXML_VERSION 1.10)
@@ -710,14 +756,14 @@ set(FLEXBISON_HASH 6b549d43e34ece0e8ed05af92daa31c4)
 set(FLEXBISON_HASH_TYPE MD5)
 set(FLEXBISON_FILE win_flex_bison-${FLEXBISON_VERSION}.zip)
 set(FLEXBISON_HOMEPAGE https://github.com/lexxmark/winflexbison)
-set(FLEXBISON_DEPSBUILDTIMEONLY "Blender ships the produced artifact, but doesn't ship/link with any binary")
+set(FLEXBISON_DEPSBUILDTIMEONLY "This utility is used at dependency build time, but isn't shipped nor used by Blender itself")
 
 set(FLEX_VERSION 2.6.4)
 set(FLEX_URI https://github.com/westes/flex/releases/download/v${FLEX_VERSION}/flex-${FLEX_VERSION}.tar.gz)
 set(FLEX_HASH 2882e3179748cc9f9c23ec593d6adc8d)
 set(FLEX_HASH_TYPE MD5)
 set(FLEX_FILE flex-${FLEX_VERSION}.tar.gz)
-set(FLEX_DEPSBUILDTIMEONLY "Blender ships the produced artifact, but doesn't ship/link with any binary")
+set(FLEX_DEPSBUILDTIMEONLY "This utility is used at dependency build time, but isn't shipped nor used by Blender itself")
 
 # Libraries to keep Python modules static on Linux.
 
@@ -737,34 +783,31 @@ set(BZIP2_HOMEPAGE https://sourceware.org/bzip2/)
 set(BZIP2_LICENSE SPDX:bzip2-1.0.6)
 set(BZIP2_COPYRIGHT "Copyright (C) 1996-2019 Julian R Seward. All rights reserved.")
 
-# NOTE: This will *HAVE* to match the version python ships on windows which
-# is hardcoded in pythons PCbuild/get_externals.bat. For compliance reasons there
-# can be no exceptions to this.
-set(FFI_VERSION 3.4.4)
+set(FFI_VERSION 3.5.2)
 set(FFI_NAME libffi)
 set(FFI_URI https://github.com/libffi/libffi/releases/download/v${FFI_VERSION}/libffi-${FFI_VERSION}.tar.gz)
-set(FFI_HASH d66c56ad259a82cf2a9dfc408b32bf5da52371500b84745f7fb8b645712df676)
+set(FFI_HASH f3a3082a23b37c293a4fcd1053147b371f2ff91fa7ea1b2a52e335676bac82dc)
 set(FFI_HASH_TYPE SHA256)
 set(FFI_FILE libffi-${FFI_VERSION}.tar.gz)
 set(FFI_CPE "cpe:2.3:a:libffi_project:libffi:${FFI_VERSION}:*:*:*:*:*:*:*")
 set(FFI_HOMEPAGE https://github.com/libffi/libffi/)
 set(FFI_LICENSE SPDX:MIT)
-set(FFI_COPYRIGHT "Copyright (c) 1996-2024  Anthony Green, Red Hat, Inc and others.")
+set(FFI_COPYRIGHT "Copyright (c) 1996-2025  Anthony Green, Red Hat, Inc and others.")
 
 set(LZMA_VERSION 5.2.5)
 set(LZMA_URI https://tukaani.org/xz/xz-${LZMA_VERSION}.tar.bz2)
 set(LZMA_HASH 5117f930900b341493827d63aa910ff5e011e0b994197c3b71c08a20228a42df)
 set(LZMA_HASH_TYPE SHA256)
 set(LZMA_FILE xz-${LZMA_VERSION}.tar.bz2)
-set(LZMA_NAME LZMA)
-set(LZMA_HOMEPAGE https://tukaani.org/lzma/)
-set(LZMA_LICENSE SPDX:GPL-3.0-or-later)
-set(LZMA_COPYRIGHT "Igor Pavlov, Ville Koskinen, Lasse Collin")
+set(LZMA_NAME "XZ (LZMA)")
+set(LZMA_HOMEPAGE https://tukaani.org/xz/)
+set(LZMA_LICENSE SPDX:0BSD)
+set(LZMA_COPYRIGHT "Copyright (C) The XZ Utils authors and contributors")
 
 # NOTE: Python's build has been modified to use our ssl version.
-set(SSL_VERSION 3.1.5)
+set(SSL_VERSION 3.5.6)
 set(SSL_URI https://www.openssl.org/source/openssl-${SSL_VERSION}.tar.gz)
-set(SSL_HASH 6ae015467dabf0469b139ada93319327be24b98251ffaeceda0221848dc09262)
+set(SSL_HASH deae7c80cba99c4b4f940ecadb3c3338b13cb77418409238e57d7f31f2a3b736)
 set(SSL_HASH_TYPE SHA256)
 set(SSL_FILE openssl-${SSL_VERSION}.tar.gz)
 set(SSL_CPE "cpe:2.3:a:openssl:openssl:${SSL_VERSION}:*:*:*:*:*:*:*")
@@ -772,38 +815,36 @@ set(SSL_HOMEPAGE https://www.openssl.org)
 set(SSL_NAME OpenSSL)
 set(SSL_LICENSE SPDX:Apache-2.0)
 set(SSL_COPYRIGHT [=[
-Copyright (c) 1998-2024 The OpenSSL Project Authors.
+Copyright (c) 1998-2026 The OpenSSL Project Authors.
 Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson; All rights reserved.
 ]=])
 
-# Note: This will *HAVE* to match the version python ships on windows which
-# is hardcoded in pythons PCbuild/get_externals.bat for compliance reasons there
-# can be no exceptions to this.
-set(SQLITE_VERSION 3.45.1)
-set(SQLLITE_LONG_VERSION 3450100)
-set(SQLITE_URI https://www.sqlite.org/2024/sqlite-autoconf-${SQLLITE_LONG_VERSION}.tar.gz)
-set(SQLITE_HASH 650305e234add12fc1e6bef0b365d86a087b3d38)
+set(SQLITE_VERSION 3.51.3)
+set(SQLLITE_LONG_VERSION 3510300)
+set(SQLITE_URI https://www.sqlite.org/2026/sqlite-autoconf-${SQLLITE_LONG_VERSION}.tar.gz)
+set(SQLITE_HASH d917ad1cde07987643571f0f5b55dd954fa8dee3)
 set(SQLITE_HASH_TYPE SHA1)
 set(SQLITE_FILE sqlite-autoconf-${SQLLITE_LONG_VERSION}.tar.gz)
 set(SQLITE_CPE "cpe:2.3:a:sqlite:sqlite:${SQLITE_VERSION}:*:*:*:*:*:*:*")
 set(SQLITE_HOMEPAGE https://www.sqlite.org)
 set(SQLITE_LICENSE Public Domain)
 
-set(EMBREE_VERSION 4.4.0)
+set(EMBREE_VERSION 4.4.1)
 set(EMBREE_URI https://github.com/RenderKit/embree/archive/v${EMBREE_VERSION}.zip)
-set(EMBREE_HASH 56e5f414b9ae441b366be79867b8fb07)
+set(EMBREE_HASH 6e2eecafb312d8cf1f1ff555702637cf)
 set(EMBREE_HASH_TYPE MD5)
 set(EMBREE_FILE embree-v${EMBREE_VERSION}.zip)
 set(EMBREE_HOMEPAGE https://github.com/RenderKit/embree)
 set(EMBREE_LICENSE SPDX:Apache-2.0)
 set(EMBREE_COPYRIGHT "Copyright 2009-2024 Intel Corporation")
 
-set(USD_VERSION 25.02)
+set(USD_VERSION 26.03)
 set(USD_NAME USD)
 set(USD_URI https://github.com/PixarAnimationStudios/OpenUSD/archive/v${USD_VERSION}.tar.gz)
-set(USD_HASH 76ee61270e67002ddb2fc76dda6a498d)
+set(USD_HASH cc6d6bffdcdd038f60e2fe4726b08673)
 set(USD_HASH_TYPE MD5)
 set(USD_FILE usd-v${USD_VERSION}.tar.gz)
+set(USD_CPE "cpe:2.3:a:pixar:openusd:${USD_VERSION}:*:*:*:*:*:*:*")
 set(USD_HOMEPAGE https://openusd.org/)
 set(USD_LICENSE TOST-1.0)
 set(USD_COPYRIGHT [=[
@@ -814,63 +855,46 @@ This product includes software developed at:
 Pixar (http://www.pixar.com/).
 ]=])
 
-set(MATERIALX_VERSION 1.39.2)
+set(MATERIALX_VERSION 1.39.4)
 set(MATERIALX_NAME MaterialX)
 set(MATERIALX_URI https://github.com/AcademySoftwareFoundation/MaterialX/archive/refs/tags/v${MATERIALX_VERSION}.tar.gz)
-set(MATERIALX_HASH e3e413755f525aec96c60af631753044)
+set(MATERIALX_HASH 4704716b93e4c2d6b3693aa56a13b71b)
 set(MATERIALX_HASH_TYPE MD5)
 set(MATERIALX_FILE materialx-v${MATERIALX_VERSION}.tar.gz)
+set(MATERIALX_CPE "cpe:2.3:a:linuxfoundation:materialx:${MATERIALX_VERSION}:-:*:*:*:*:*:*")
 set(MATERIALX_HOMEPAGE https://github.com/AcademySoftwareFoundation/MaterialX)
 set(MATERIALX_LICENSE SPDX:Apache-2.0)
 set(MATERIALX_COPYRIGHT "Copyright Contributors to the MaterialX Project")
 
-set(OIDN_VERSION 2.3.3)
+set(OIDN_VERSION 2.5.0)
 set(OIDN_NAME OpenImageDenoise)
 set(OIDN_URI https://github.com/RenderKit/oidn/releases/download/v${OIDN_VERSION}/oidn-${OIDN_VERSION}.src.tar.gz)
-set(OIDN_HASH f7756731235b51dfb788787e2f7c9ee0)
+set(OIDN_HASH ae984ce4cc4c81ec152ab81b241a8738)
 set(OIDN_HASH_TYPE MD5)
 set(OIDN_FILE oidn-${OIDN_VERSION}.src.tar.gz)
+set(OIDN_CPE "cpe:2.3:a:intel:open_image_denoise:${OIDN_VERSION}:*:*:*:*:*:*:*")
 set(OIDN_HOMEPAGE https://www.openimagedenoise.org/)
 set(OIDN_LICENSE SPDX:Apache-2.0)
-set(OIDN_COPYRIGHT "Copyright 2009-2025 Intel Corporation")
-
-set(LIBGLU_VERSION 9.0.1)
-set(LIBGLU_URI https://archive.mesa3d.org/glu/glu-${LIBGLU_VERSION}.tar.xz)
-set(LIBGLU_HASH 151aef599b8259efe9acd599c96ea2a3)
-set(LIBGLU_HASH_TYPE MD5)
-set(LIBGLU_FILE glu-${LIBGLU_VERSION}.tar.xz)
-set(LIBGLU_HOMEPAGE https://gitlab.freedesktop.org/mesa/glu)
-set(LIBGLU_LICENSE SPDX:SGI-B-2.0)
-set(LIBGLU_COPYRIGHT "Copyright (C) 1991-2000 Silicon Graphics, Inc. All Rights Reserved.")
-
-set(MESA_VERSION 23.3.0)
-set(MESA_URI https://archive.mesa3d.org/mesa-${MESA_VERSION}.tar.xz)
-set(MESA_HASH 50f729dd60ed6335b989095baad81ef5edf7cfdd4b4b48b9b955917cb07d69c5)
-set(MESA_HASH_TYPE SHA256)
-set(MESA_FILE mesa-${MESA_VERSION}.tar.xz)
-set(MESA_CPE "cpe:2.3:a:mesa3d:mesa:${MESA_VERSION}:*:*:*:*:*:*:*")
-set(MESA_HOMEPAGE https://www.mesa3d.org/)
-set(MESA_LICENSE SPDX:MIT)
-set(MESA_COPYRIGHT "Copyright (C) 1999-2007  Brian Paul   All Rights Reserved.")
+set(OIDN_COPYRIGHT "Copyright 2018-2026 Intel Corporation")
 
 set(NASM_VERSION 2.15.02)
 set(NASM_URI https://github.com/netwide-assembler/nasm/archive/nasm-${NASM_VERSION}.tar.gz)
 set(NASM_HASH aded8b796c996a486a56e0515c83e414116decc3b184d88043480b32eb0a8589)
 set(NASM_HASH_TYPE SHA256)
 set(NASM_FILE nasm-${NASM_VERSION}.tar.gz)
-set(NASM_PCE "cpe:2.3:a:nasm:nasm:${NASM_VERSION}:*:*:*:*:*:*:*")
-set(NASM_DEPSBUILDTIMEONLY "Blender ships the produced artifact, but doesn't ship/link with any binary")
+set(NASM_CPE "cpe:2.3:a:nasm:nasm:${NASM_VERSION}:*:*:*:*:*:*:*")
+set(NASM_DEPSBUILDTIMEONLY "This assembler is used at dependency build time, but isn't shipped nor used by Blender itself")
 
-set(XR_OPENXR_SDK_VERSION 1.0.22)
+set(XR_OPENXR_SDK_VERSION 1.1.53)
 set(XR_OPENXR_SDK_URI https://github.com/KhronosGroup/OpenXR-SDK/archive/release-${XR_OPENXR_SDK_VERSION}.tar.gz)
-set(XR_OPENXR_SDK_HASH a2623ebab3d0b340bc16311b14f02075)
+set(XR_OPENXR_SDK_HASH e2e1b25fd480947ddc2f2c68423d47e5)
 set(XR_OPENXR_SDK_HASH_TYPE MD5)
 set(XR_OPENXR_SDK_FILE OpenXR-SDK-${XR_OPENXR_SDK_VERSION}.tar.gz)
 set(XR_OPENXR_SDK_NAME OpenXR)
 set(XR_OPENXR_SDK_HOMEPAGE https://khronos.org/openxr/)
 set(XR_OPENXR_SDK_LICENSE SPDX:Apache-2.0)
 set(XR_OPENXR_SDK_COPYRIGHT [=[
-Copyright (c) 2017-2020 The Khronos Group Inc.
+Copyright (c) 2017-2025 The Khronos Group Inc.
 Copyright (c) 2017-2019 Valve Corporation.
 Copyright (c) 2017-2019 LunarG, Inc.
 Copyright (c) 2019 Collabora, Ltd.
@@ -895,11 +919,12 @@ Copyright © 2014-2015 Collabora, Ltd.
 Copyright © 2015 Red Hat Inc.
 ]=])
 
-set(WAYLAND_VERSION 1.23.1)
+set(WAYLAND_VERSION 1.24.0)
 set(WAYLAND_FILE wayland-${WAYLAND_VERSION}.tar.xz)
 set(WAYLAND_URI https://gitlab.freedesktop.org/wayland/wayland/-/releases/${WAYLAND_VERSION}/downloads/wayland-${WAYLAND_VERSION}.tar.xz)
-set(WAYLAND_HASH 5d27c7d3658fa90f40111b47cdb4a8fb)
+set(WAYLAND_HASH fda0b2a73ea2716f61d75767e02008e1)
 set(WAYLAND_HASH_TYPE MD5)
+set(WAYLAND_CPE "cpe:2.3:a:wayland:wayland:${WAYLAND_VERSION}:*:*:*:*:*:*:*")
 set(WAYLAND_HOMEPAGE https://gitlab.freedesktop.org/wayland/wayland)
 set(WAYLAND_LICENSE SPDX:MIT)
 set(WAYLAND_COPYRIGHT [=[
@@ -923,29 +948,12 @@ Copyright (c) 2020 Simon Ser.
 Copyright (c) 2006, 2008 Junio C Hamano.
 ]=])
 
-set(WAYLAND_LIBDECOR_VERSION 0.2.2)
-set(WAYLAND_LIBDECOR_FILE libdecor-${WAYLAND_LIBDECOR_VERSION}.tar.xz)
-set(WAYLAND_LIBDECOR_URI https://gitlab.freedesktop.org/libdecor/libdecor/-/releases/${WAYLAND_LIBDECOR_VERSION}/downloads/libdecor-${WAYLAND_LIBDECOR_VERSION}.tar.xz)
-set(WAYLAND_LIBDECOR_HASH 5b7f4a10a9335b62101bccc220e2d13a)
-set(WAYLAND_LIBDECOR_HASH_TYPE MD5)
-set(WAYLAND_LIBDECOR_HOMEPAGE https://gitlab.freedesktop.org/libdecor/libdecor)
-set(WAYLAND_LIBDECOR_LICENSE SPDX:MIT)
-set(WAYLAND_LIBDECOR_COPYRIGHT [=[
-Copyright © 2010 Intel Corporation.
-Copyright © 2011 Benjamin Franzke.
-Copyright © 2018-2021 Jonas Ådahl.
-Copyright © 2019 Christian Rauch.
-Copyright (c) 2006, 2008 Junio C Hamano.
-Copyright © 2017-2018 Red Hat Inc.
-Copyright © 2012 Collabora, Ltd.
-Copyright © 2008 Kristian Høgsberg.
-]=])
-
 set(WAYLAND_WESTON_VERSION 14.0.2)
 set(WAYLAND_WESTON_FILE weston-${WAYLAND_WESTON_VERSION}.tar.xz)
 set(WAYLAND_WESTON_URI https://gitlab.freedesktop.org/wayland/weston/-/releases/${WAYLAND_WESTON_VERSION}/downloads/weston-${WAYLAND_WESTON_VERSION}.tar.xz)
 set(WAYLAND_WESTON_HASH 4575a052e2ff3ea7819cfbf33868f8f5)
 set(WAYLAND_WESTON_HASH_TYPE MD5)
+set(WAYLAND_WESTON_CPE "cpe:2.3:a:wayland:weston:${WAYLAND_WESTON_VERSION}:*:*:*:*:*:*:*")
 set(WAYLAND_WESTON_HOMEPAGE https://gitlab.freedesktop.org/wayland/weston)
 set(WAYLAND_WESTON_LICENSE SPDX:MIT)
 set(WAYLAND_WESTON_COPYRIGHT [=[
@@ -956,12 +964,12 @@ Copyright © 2011-2012 Collabora, Ltd.
 Copyright © 2010 Red Hat <mjg@redhat.com>.
 ]=])
 
-set(ISPC_VERSION v1.21.1)
+set(ISPC_VERSION v1.30.0)
 set(ISPC_URI https://github.com/ispc/ispc/archive/${ISPC_VERSION}.tar.gz)
-set(ISPC_HASH edd16b016aabc07819d14fd86a1fb5d0)
+set(ISPC_HASH 97efadfb848ef585b8f02cebd9da93e7)
 set(ISPC_HASH_TYPE MD5)
 set(ISPC_FILE ispc-${ISPC_VERSION}.tar.gz)
-set(ISPC_DEPSBUILDTIMEONLY "Blender ships the produced artifact, but doesn't ship/link with any binary")
+set(ISPC_DEPSBUILDTIMEONLY "This compiler is used at dependency build time, but isn't shipped nor used by Blender itself")
 
 set(GMP_VERSION 6.3.0)
 set(GMP_URI https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz)
@@ -985,9 +993,9 @@ set(POTRACE_LICENSE SPDX:GPL-2.0-or-later)
 set(POTRACE_COPYRIGHT "Copyright © 2001-2019 Peter Selinger.")
 
 
-set(HARU_VERSION 2_3_0)
-set(HARU_URI https://github.com/libharu/libharu/archive/RELEASE_${HARU_VERSION}.tar.gz)
-set(HARU_HASH 4f916aa49c3069b3a10850013c507460)
+set(HARU_VERSION 2.4.5)
+set(HARU_URI https://github.com/libharu/libharu/archive/refs/tags/v${HARU_VERSION}.tar.gz)
+set(HARU_HASH d5633fb741079a7675bb3e9e8e8a58ce)
 set(HARU_HASH_TYPE MD5)
 set(HARU_FILE libharu-${HARU_VERSION}.tar.gz)
 set(HARU_HOMEPAGE http://libharu.org/)
@@ -997,9 +1005,9 @@ Copyright (C) 1999-2006 Takeshi Kanno.
 Copyright (C) 2007-2009 Antony Dovgal.
 ]=])
 
-set(ZSTD_VERSION 1.5.6)
+set(ZSTD_VERSION 1.5.7)
 set(ZSTD_URI https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz)
-set(ZSTD_HASH 8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1)
+set(ZSTD_HASH eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3)
 set(ZSTD_HASH_TYPE SHA256)
 set(ZSTD_FILE zstd-${ZSTD_VERSION}.tar.gz)
 set(ZSTD_CPE "cpe:2.3:a:facebook:zstandard:${ZSTD_VERSION}:*:*:*:*:*:*:*")
@@ -1027,10 +1035,10 @@ set(BROTLI_HOMEPAGE https://github.com/google/brotli)
 set(BROTLI_LICENSE SPDX:MIT)
 set(BROTLI_COPYRIGHT "Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.")
 
-set(OPENPGL_VERSION v0.6.0)
-set(OPENPGL_SHORT_VERSION 0.6.0)
+set(OPENPGL_VERSION v0.7.1)
+set(OPENPGL_SHORT_VERSION 0.7.1)
 set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
-set(OPENPGL_HASH 4192a4096ee3e3d31878cd013f8de23418c8037c576537551f946c4811931c5e)
+set(OPENPGL_HASH d62d24241232a526491328f341df9add274fc84ae9818470d3edb5ae6141ac63)
 set(OPENPGL_HASH_TYPE SHA256)
 set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
 set(OPENPGL_NAME Open PGL)
@@ -1038,26 +1046,15 @@ set(OPENPGL_HOMEPAGE http://www.openpgl.org/)
 set(OPENPGL_LICENSE SPDX:Apache-2.0)
 set(OPENPGL_COPYRIGHT "Copyright 2020 Intel Corporation.")
 
-# Default version used by DPCPP: unified-runtime/cmake/FetchLevelZero.cmake
-set(LEVEL_ZERO_VERSION 1.19.2)
-set(LEVEL_ZERO_NAME "oneAPI Level Zero")
-set(LEVEL_ZERO_URI https://codeload.github.com/oneapi-src/level-zero/tar.gz/refs/tags/v${LEVEL_ZERO_VERSION})
-set(LEVEL_ZERO_HASH b0bea0a09d1a68f68ecf8694e58a60e199fa5785f91c2fd59f026133bc1c4f28)
-set(LEVEL_ZERO_HASH_TYPE SHA256)
-set(LEVEL_ZERO_FILE level-zero-${LEVEL_ZERO_VERSION}.tar.gz)
-set(LEVEL_ZERO_HOMEPAGE https://github.com/oneapi-src/level-zero)
-set(LEVEL_ZERO_LICENSE SPDX:MIT)
-set(LEVEL_ZERO_COPYRIGHT "Copyright (C) 2019-2024 Intel Corporation")
-
-set(DPCPP_VERSION v6.1.0)
+set(DPCPP_VERSION v6.3.0)
 set(DPCPP_URI https://github.com/intel/llvm/archive/${DPCPP_VERSION}.tar.gz)
-set(DPCPP_HASH a698b953527edeaca0495134cd2655ecaf4826128f85177c20a8749b18df49cd)
+set(DPCPP_HASH 63fb431da91f29e1c4387b06707d3d9b2af2120e733d1a96357f043aa37591e8)
 set(DPCPP_HASH_TYPE SHA256)
 set(DPCPP_FILE DPCPP-${DPCPP_VERSION}.tar.gz)
 set(DPCPP_NAME DPC++)
 set(DPCPP_HOMEPAGE "https://github.com/intel/llvm#oneapi-dpc-compiler")
 set(DPCPP_LICENSE SPDX:Apache-2.0)
-set(DPCPP_COPYRIGHT "Copyright (C) 2021-2025 Intel Corporation")
+set(DPCPP_COPYRIGHT "Copyright (C) 2021-2026 Intel Corporation")
 
 ########################
 ### DPCPP DEPS BEGIN ###
@@ -1067,10 +1064,21 @@ set(DPCPP_COPYRIGHT "Copyright (C) 2021-2025 Intel Corporation")
 # by each dep, these will only have to be downloaded and unpacked, dpcpp
 # will take care of building them, unpack is being done in dpcpp_deps.cmake
 
+# Default version used by DPCPP: unified-runtime/cmake/FetchLevelZero.cmake
+set(LEVEL_ZERO_VERSION 35c037cdf4aa9a2e6df34b6f1ce1bdc86ac5422f)
+set(LEVEL_ZERO_NAME "oneAPI Level Zero")
+set(LEVEL_ZERO_URI https://github.com/oneapi-src/level-zero/archive/${LEVEL_ZERO_VERSION}.tar.gz)
+set(LEVEL_ZERO_HASH be1536362c5382b197febd06ac9093250e7f7028dcb4547972b1e08c2ace9b68)
+set(LEVEL_ZERO_HASH_TYPE SHA256)
+set(LEVEL_ZERO_FILE level-zero-${LEVEL_ZERO_VERSION}.tar.gz)
+set(LEVEL_ZERO_HOMEPAGE https://github.com/oneapi-src/level-zero)
+set(LEVEL_ZERO_LICENSE SPDX:MIT)
+set(LEVEL_ZERO_COPYRIGHT "Copyright (C) 2019-2024 Intel Corporation")
+
 # Source llvm/lib/SYCLLowerIR/CMakeLists.txt
-set(VCINTRINSICS_VERSION 2d78d5805670d83b3cc6dc488acbd7f0251340c1)
+set(VCINTRINSICS_VERSION 60cea7590bd022d95f5cf336ee765033bd114d69)
 set(VCINTRINSICS_URI https://github.com/intel/vc-intrinsics/archive/${VCINTRINSICS_VERSION}.tar.gz)
-set(VCINTRINSICS_HASH 4acac1df6f0ddbfc32ab560f369e6de307a63560cd4843a5c2b02164a8a3caf2)
+set(VCINTRINSICS_HASH 1cfd91a9178f1f8f01abca5815831ca7aa91d6b5e88cb77b6c7c71d1ff6982f4)
 set(VCINTRINSICS_HASH_TYPE SHA256)
 set(VCINTRINSICS_FILE vc-intrinsics-${VCINTRINSICS_VERSION}.tar.gz)
 set(VCINTRINSICS_HOMEPAGE https://github.com/intel/vc-intrinsics)
@@ -1078,9 +1086,9 @@ set(VCINTRINSICS_LICENSE SPDX:MIT)
 set(VCINTRINSICS_COPYRIGHT "Copyright (c) 2019-2024 Intel Corporation")
 
 # Source opencl/CMakeLists.txt
-set(OPENCLHEADERS_VERSION 542d7a8f65ecfd88b38de35d8b10aa67b36b33b2)
+set(OPENCLHEADERS_VERSION 6eabe90aa7b6cff9c67800a2fe25a0cd88d8b749)
 set(OPENCLHEADERS_URI https://github.com/KhronosGroup/OpenCL-Headers/archive/${OPENCLHEADERS_VERSION}.tar.gz)
-set(OPENCLHEADERS_HASH 026e2d39930fc9383f5472d45157254569ef712d11b644fbe4d317175250f409)
+set(OPENCLHEADERS_HASH 80fed3033366fc136e99da82b6d873511a6e68add58183cdccdcee61229276b2)
 set(OPENCLHEADERS_HASH_TYPE SHA256)
 set(OPENCLHEADERS_FILE opencl_headers-${OPENCLHEADERS_VERSION}.tar.gz)
 set(OPENCLHEADERS_NAME OpenCL-Headers)
@@ -1089,56 +1097,55 @@ set(OPENCLHEADERS_LICENSE SPDX:Apache-2.0)
 set(OPENCLHEADERS_COPYRIGHT "Copyright (c) 2023 The Khronos Group Inc.")
 
 # Source opencl/CMakeLists.txt
-set(ICDLOADER_VERSION 804b6f040503c47148bee535230070da6b857ae4)
+set(ICDLOADER_VERSION ddf6c70230a79cdb8fcccfd3c775b09e6820f42e)
 set(ICDLOADER_URI https://github.com/KhronosGroup/OpenCL-ICD-Loader/archive/${ICDLOADER_VERSION}.tar.gz)
-set(ICDLOADER_HASH 4a4b790fb67c0c37e63c9193c776b102b13f3fbb40e35ee383cfcd992552edfe)
+set(ICDLOADER_HASH 4949458d59abc2b1940e4492b4e844e3f03a8cc95a444d0825a6cc7cd656698a)
 set(ICDLOADER_HASH_TYPE SHA256)
 set(ICDLOADER_FILE icdloader-${ICDLOADER_VERSION}.tar.gz)
 set(ICDLOADER_HOMEPAGE https://github.com/KhronosGroup/OpenCL-ICD-Loader)
 set(ICDLOADER_LICENSE SPDX:Apache-2.0)
 set(ICDLOADER_COPYRIGHT " Copyright (c) 2020 The Khronos Group Inc.")
 
-# Source sycl/cmake/modules/AddBoostMp11Headers.cmake
-# Using external MP11 here so we don't have to pull in all of Boost.
-set(MP11_VERSION 863d8b8d2b20f2acd0b5870f23e553df9ce90e6c)
-set(MP11_URI https://github.com/boostorg/mp11/archive/${MP11_VERSION}.tar.gz)
-set(MP11_HASH 525692267abb8086bb9cc2fe81fb96d73ac645dfa6825cb5114686aafe244e9f)
-set(MP11_HASH_TYPE SHA256)
-set(MP11_FILE mp11-${MP11_VERSION}.tar.gz)
-set(MP11_HOMEPAGE https://github.com/boostorg/mp11)
-set(MP11_LICENSE SPDX:BSL-1.0)
+# Source sycl/cmake/modules/FetchEmhash.cmake
+set(EMHASH_VERSION 3ba9abdfdc2e0430fcc2fd8993cad31945b6a02b)
+set(EMHASH_URI https://github.com/ktprime/emhash/archive/${EMHASH_VERSION}.tar.gz)
+set(EMHASH_HASH f0feaa687b5d288317526a6b0c331b51eba2e2b13528d79e015d75abef5d4dfa)
+set(EMHASH_HASH_TYPE SHA256)
+set(EMHASH_FILE emhash-${EMHASH_VERSION}.tar.gz)
+set(EMHASH_HOMEPAGE https://github.com/ktprime/emhash)
+set(EMHASH_LICENSE SPDX:MIT)
+set(EMHASH_COPYRIGHT "Copyright (c) 2019 hyb")
 
 # Source llvm-spirv/CMakeLists.txt (repo)
 # Source llvm-spirv/spirv-headers-tag.conf (hash)
-set(DPCPP_SPIRV_HEADERS_VERSION efb6b4099ddb8fa60f62956dee592c4b94ec6a49)
+set(DPCPP_SPIRV_HEADERS_VERSION c9aad99f9276817f18f72a4696239237c83cb775)
 set(DPCPP_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/${DPCPP_SPIRV_HEADERS_VERSION}.tar.gz)
-set(DPCPP_SPIRV_HEADERS_HASH cb1f5b929f95169493f924f5aacf50ff9ce91e9470c28c5830a5ff4fca47062c)
+set(DPCPP_SPIRV_HEADERS_HASH 733993f563ab36b3f3f6ef155caf792e37c4768290fcc23456126241b2b53829)
 set(DPCPP_SPIRV_HEADERS_HASH_TYPE SHA256)
 set(DPCPP_SPIRV_HEADERS_FILE DPCPP-SPIR-V-Headers-${DPCPP_SPIRV_HEADERS_VERSION}.tar.gz)
 set(DPCPP_SPIRV_HEADERS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Headers)
 set(DPCPP_SPIRV_HEADERS_LICENSE SPDX:MIT-Khronos-old)
 set(DPCPP_SPIRV_HEADERS_COPYRIGHT "Copyright (c) 2015-2024 The Khronos Group Inc.")
 
-# Source sycl/cmake/modules/FetchUnifiedRuntime.cmake (repo)
-# Source sycl/cmake/modules/UnifiedRuntimeTag.cmake (commit/version)
-set(UNIFIED_RUNTIME_VERSION v0.11.8)
-set(UNIFIED_RUNTIME_URI https://github.com/oneapi-src/unified-runtime/archive/${UNIFIED_RUNTIME_VERSION}.tar.gz)
-set(UNIFIED_RUNTIME_HASH bb2d5d753ba23f8984431696b00b838cf6ff9eb5b1610bf262357b623bd6a4b6)
-set(UNIFIED_RUNTIME_HASH_TYPE SHA256)
-set(UNIFIED_RUNTIME_FILE unified-runtime-${UNIFIED_RUNTIME_VERSION}.tar.gz)
-set(UNIFIED_RUNTIME_HOMEPAGE https://github.com/oneapi-src/unified-runtime)
-set(UNIFIED_RUNTIME_LICENSE SPDX:Apache-2.0 WITH LLVM-exception)
-set(UNIFIED_RUNTIME_COPYRIGHT "Copyright (C) 2019-2024 Intel Corporation")
-
-# Source unified-runtime/source/common/CMakeList.txt
-set(UNIFIED_MEMORY_FRAMEWORK_VERSION v0.10.0)
+# Source unified-runtime/source/common/CMakeLists.txt
+set(UNIFIED_MEMORY_FRAMEWORK_VERSION v1.0.0-rc2)
 set(UNIFIED_MEMORY_FRAMEWORK_URI https://github.com/oneapi-src/unified-memory-framework/archive/${UNIFIED_MEMORY_FRAMEWORK_VERSION}.tar.gz)
-set(UNIFIED_MEMORY_FRAMEWORK_HASH fd8b1094fe471d08aebb84d3756bf410810a03e23e1c887b078c6ea73ac21258)
+set(UNIFIED_MEMORY_FRAMEWORK_HASH b8d683b117d9bd9fdf77b8ed5466f395ac85a03ef76b5cb38b1b529bffbd5620)
 set(UNIFIED_MEMORY_FRAMEWORK_HASH_TYPE SHA256)
 set(UNIFIED_MEMORY_FRAMEWORK_FILE unified-memory-framework-${UNIFIED_MEMORY_FRAMEWORK_VERSION}.tar.gz)
 set(UNIFIED_MEMORY_FRAMEWORK_HOMEPAGE https://github.com/oneapi-src/unified-memory-framework)
 set(UNIFIED_MEMORY_FRAMEWORK_LICENSE SPDX:Apache-2.0 WITH LLVM-exception)
 set(UNIFIED_MEMORY_FRAMEWORK_COPYRIGHT "Copyright (C) 2023-2024 Intel Corporation")
+
+# Source xptifw/src/CMakeLists.txt
+set(PARALLEL_HASHMAP_VERSION 8a889d3699b3c09ade435641fb034427f3fd12b6)
+set(PARALLEL_HASHMAP_URI https://github.com/greg7mdp/parallel-hashmap/archive/${PARALLEL_HASHMAP_VERSION}.tar.gz)
+set(PARALLEL_HASHMAP_HASH da853a4a2cee32b1563391a3661cff3cf48af5e76e320c004d5520835eb9e5f6)
+set(PARALLEL_HASHMAP_HASH_TYPE SHA256)
+set(PARALLEL_HASHMAP_FILE parallel-hashmap-${PARALLEL_HASHMAP_VERSION}.tar.gz)
+set(PARALLEL_HASHMAP_HOMEPAGE https://github.com/greg7mdp/parallel-hashmap)
+set(PARALLEL_HASHMAP_LICENSE SPDX:Apache-2.0)
+set(PARALLEL_HASHMAP_COPYRIGHT "Copyright (c) 2019, Gregory Popovitch - greg7mdp@gmail.com")
 
 ######################
 ### DPCPP DEPS END ###
@@ -1151,19 +1158,22 @@ set(UNIFIED_MEMORY_FRAMEWORK_COPYRIGHT "Copyright (C) 2023-2024 Intel Corporatio
 # compiler, the versions used are taken from the following location
 # https://github.com/intel/intel-graphics-compiler/releases
 
-set(IGC_VERSION 2.1.14)
+# Note: After every upgrade of the IGC version, the minimal Intel Linux driver version must be increased,
+# see the comment around lowest_supported_driver_version_neo constant in
+# intern\cycles\device\oneapi\device_impl.cpp
+set(IGC_VERSION 2.30.1)
 set(IGC_URI https://github.com/intel/intel-graphics-compiler/archive/refs/tags/v${IGC_VERSION}.tar.gz)
-set(IGC_HASH ebc39f8238dec2983c227d9db204db333b439ba5cd100e0a819a0208ac8066ca)
+set(IGC_HASH 4e5f46b20ec5c055f3cbfed16cfa9739b67f0d05786d736f3d10b09b11b171a3)
 set(IGC_HASH_TYPE SHA256)
 set(IGC_FILE intel-graphics-compiler-${IGC_VERSION}.tar.gz)
 set(IGC_NAME IGC)
 set(IGC_HOMEPAGE https://github.com/intel/intel-graphics-compiler)
 set(IGC_LICENSE SPDX:MIT)
-set(IGC_COPYRIGHT "Copyright (C) 2019-2024 Intel Corporation")
+set(IGC_COPYRIGHT "Copyright (C) 2019-2026 Intel Corporation")
 
-set(IGC_LLVM_VERSION llvmorg-14.0.5)
+set(IGC_LLVM_VERSION llvmorg-16.0.6)
 set(IGC_LLVM_URI https://github.com/llvm/llvm-project/archive/refs/tags/${IGC_LLVM_VERSION}.tar.gz)
-set(IGC_LLVM_HASH a4a57f029cb81f04618e05853f05fc2d21b64353c760977d8e7799bf7218a23a)
+set(IGC_LLVM_HASH 56b2f75fdaa95ad5e477a246d3f0d164964ab066b4619a01836ef08e475ec9d5)
 set(IGC_LLVM_HASH_TYPE SHA256)
 set(IGC_LLVM_FILE ${IGC_LLVM_VERSION}.tar.gz)
 set(IGC_LLVM_HOMEPAGE https://github.com/llvm/llvm-project/)
@@ -1180,18 +1190,18 @@ set(IGC_LLVM_COPYRIGHT "Copyright (c) 2003-2019 University of Illinois at Urbana
 #
 # ******* WARNING *******
 
-set(IGC_OPENCL_CLANG_VERSION v14.0.1)
+set(IGC_OPENCL_CLANG_VERSION v16.0.10)
 set(IGC_OPENCL_CLANG_URI https://github.com/intel/opencl-clang/archive/${IGC_OPENCL_CLANG_VERSION}.tar.gz)
-set(IGC_OPENCL_CLANG_HASH 77a023e311f825bbdc242fe9b397bd68bac23a88e68142b4919fa322c6c70392)
+set(IGC_OPENCL_CLANG_HASH 24946cb5031d4a5fb8838d913d40724690b0fc455e0d21d00e6ada00824a4167)
 set(IGC_OPENCL_CLANG_HASH_TYPE SHA256)
 set(IGC_OPENCL_CLANG_FILE opencl-clang-${IGC_OPENCL_CLANG_VERSION}.tar.gz)
 set(IGC_OPENCL_CLANG_HOMEPAGE https://github.com/intel/opencl-clang/)
 set(IGC_OPENCL_CLANG_LICENSE SPDX:Apache-2.0 WITH LLVM-exception)
 set(IGC_OPENCL_CLANG_COPYRIGHT "Copyright (c) Intel Corporation (2009-2017).")
 
-set(IGC_VCINTRINSICS_VERSION 0.20.1)
+set(IGC_VCINTRINSICS_VERSION 0.25.0)
 set(IGC_VCINTRINSICS_URI https://github.com/intel/vc-intrinsics/archive/refs/tags/v${IGC_VCINTRINSICS_VERSION}.tar.gz)
-set(IGC_VCINTRINSICS_HASH 01a68a3c8299075ad2b094264bef5109d660f1d53faf614f4f95745ad05f4e3e)
+set(IGC_VCINTRINSICS_HASH 83d6e0528feb6a47f7818e7c1dd3305dd8a48fb1103d279571dad517a93a8d39)
 set(IGC_VCINTRINSICS_HASH_TYPE SHA256)
 set(IGC_VCINTRINSICS_FILE vc-intrinsics-${IGC_VCINTRINSICS_VERSION}.tar.gz)
 set(IGC_VCINTRINSICS_NAME "VC Intrinsics")
@@ -1199,9 +1209,9 @@ set(IGC_VCINTRINSICS_HOMEPAGE https://github.com/intel/vc-intrinsics)
 set(IGC_VCINTRINSICS_LICENSE SPDX:MIT)
 set(IGC_VCINTRINSICS_COPYRIGHT "Copyright (C) 2020-2021 Intel Corporation")
 
-set(IGC_SPIRV_HEADERS_VERSION vulkan-sdk-1.3.275.0)
-set(IGC_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/${IGC_SPIRV_HEADERS_VERSION}.tar.gz)
-set(IGC_SPIRV_HEADERS_HASH d46b261f1fbc5e85022cb2fada9a6facb5b0c9932b45007a77fe05639a605bd1)
+set(IGC_SPIRV_HEADERS_VERSION 9268f3057354a2cb65991ba5f38b16d81e803692)
+set(IGC_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/${IGC_SPIRV_HEADERS_VERSION}.tar.gz)
+set(IGC_SPIRV_HEADERS_HASH 045027dfcc738b6d970c49b92bae30cdb22c30a9f3e8419c3d81921355004b94)
 set(IGC_SPIRV_HEADERS_HASH_TYPE SHA256)
 set(IGC_SPIRV_HEADERS_FILE SPIR-V-Headers-${IGC_SPIRV_HEADERS_VERSION}.tar.gz)
 set(IGC_SPIRV_HEADERS_NAME "SPIR-V Headers")
@@ -1209,9 +1219,9 @@ set(IGC_SPIRV_HEADERS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Headers)
 set(IGC_SPIRV_HEADERS_LICENSE SPDX:MIT-Khronos-old)
 set(IGC_SPIRV_HEADERS_COPYRIGHT "Copyright (c) 2015-2024 The Khronos Group Inc.")
 
-set(IGC_SPIRV_TOOLS_VERSION v2023.6.rc1)
-set(IGC_SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/${IGC_SPIRV_TOOLS_VERSION}.tar.gz)
-set(IGC_SPIRV_TOOLS_HASH 750e4bfcaccd636fb04dd912b668a8a6d29940f8f83b7d9a266170b1023a1a89)
+set(IGC_SPIRV_TOOLS_VERSION 28a883ba4c67f58a9540fb0651c647bb02883622)
+set(IGC_SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/${IGC_SPIRV_TOOLS_VERSION}.tar.gz)
+set(IGC_SPIRV_TOOLS_HASH 27c81a2f90dffdb18026bb62f455284c364ab25431df117816d55b9d944f880b)
 set(IGC_SPIRV_TOOLS_HASH_TYPE SHA256)
 set(IGC_SPIRV_TOOLS_FILE SPIR-V-Tools-${IGC_SPIRV_TOOLS_VERSION}.tar.gz)
 set(IGC_SPIRV_TOOLS_NAME "SPIR-V Tools")
@@ -1219,9 +1229,9 @@ set(IGC_SPIRV_TOOLS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Tools/)
 set(IGC_SPIRV_TOOLS_LICENSE SPDX:Apache-2.0)
 set(IGC_SPIRV_TOOLS_COPYRIGHT "Copyright (c) 2015-2016 The Khronos Group Inc.")
 
-set(IGC_SPIRV_TRANSLATOR_VERSION 1cfcf1b5ec2ec9c52fd56dc7cb47dcf12125e8db)
+set(IGC_SPIRV_TRANSLATOR_VERSION v16.0.10)
 set(IGC_SPIRV_TRANSLATOR_URI https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/${IGC_SPIRV_TRANSLATOR_VERSION}.tar.gz)
-set(IGC_SPIRV_TRANSLATOR_HASH 5384344b47b67e3811419599c138284de5490304030096f3bc10271915a8ad76)
+set(IGC_SPIRV_TRANSLATOR_HASH 6fd18c8aca59ccbc6809a0e4d159d8f2af82f6a6a46e85988737c6b2aaf459a6)
 set(IGC_SPIRV_TRANSLATOR_HASH_TYPE SHA256)
 set(IGC_SPIRV_TRANSLATOR_FILE SPIR-V-Translator-${IGC_SPIRV_TRANSLATOR_VERSION}.tar.gz)
 set(IGC_SPIRV_TRANSLATOR_NAME "LLVM/SPIR-V Bi-Directional Translator")
@@ -1242,9 +1252,9 @@ http://llvm.org
 ### Intel Graphics Compiler DEPS END ###
 ########################################
 
-set(GMMLIB_VERSION intel-gmmlib-22.5.3)
+set(GMMLIB_VERSION intel-gmmlib-22.8.1)
 set(GMMLIB_URI https://github.com/intel/gmmlib/archive/refs/tags/${GMMLIB_VERSION}.tar.gz)
-set(GMMLIB_HASH a8ccba4a71319b66a901df016998a76745ce9624032b6555517607c5bbb2b4e8)
+set(GMMLIB_HASH 9b8eac1891650021ded26b72585e7a2c702a3ba47565c968feabd14ab38d18f7)
 set(GMMLIB_HASH_TYPE SHA256)
 set(GMMLIB_NAME "Intel(R) Graphics Memory Management Library")
 set(GMMLIB_FILE ${GMMLIB_VERSION}.tar.gz)
@@ -1256,20 +1266,21 @@ Copyright (c) 2016 Gabi Melman.
 Copyright 2008, Google Inc. All rights reserved.
 ]=])
 
-set(OCLOC_VERSION 24.45.31740.15)
+set(OCLOC_VERSION 25.31.34666.3)
 set(OCLOC_URI https://github.com/intel/compute-runtime/archive/refs/tags/${OCLOC_VERSION}.tar.gz)
-set(OCLOC_HASH f0e3b3b038b585753530a8f1b00a8e71b045ee007b8392aaa986ccad92cf5123)
+set(OCLOC_HASH c307ec9d0296bcfa0bc4f93a9f0955d9a8ca479a00a731fda5a61eee3ed76489)
 set(OCLOC_HASH_TYPE SHA256)
 set(OCLOC_FILE ocloc-${OCLOC_VERSION}.tar.gz)
 set(OCLOC_HOMEPAGE https://github.com/intel/compute-runtime)
 set(OCLOC_LICENSE SPDX:MIT)
 set(OCLOC_COPYRIGHT "Copyright (C) 2018-2023 Intel Corporation")
 
-set(AOM_VERSION 3.4.0)
+set(AOM_VERSION 3.13.1)
 set(AOM_URI https://storage.googleapis.com/aom-releases/libaom-${AOM_VERSION}.tar.gz)
-set(AOM_HASH bd754b58c3fa69f3ffd29da77de591bd9c26970e3b18537951336d6c0252e354)
+set(AOM_HASH 19e45a5a7192d690565229983dad900e76b513a02306c12053fb9a262cbeca7d)
 set(AOM_HASH_TYPE SHA256)
 set(AOM_FILE libaom-${AOM_VERSION}.tar.gz)
+set(AOM_CPE "cpe:2.3:a:aomedia:aomedia:${AOM_VERSION}:*:*:*:*:*:*:*")
 set(AOM_HOMEPAGE https://aomedia.googlesource.com/aom/)
 set(AOM_LICENSE SPDX:BSD-2-Clause)
 set(AOM_COPYRIGHT "Copyright (c) 2016, Alliance for Open Media. All rights reserved.")
@@ -1279,26 +1290,23 @@ set(FRIBIDI_URI https://github.com/fribidi/fribidi/archive/refs/tags/${FRIBIDI_V
 set(FRIBIDI_HASH 2e9e859876571f03567ac91e5ed3b5308791f31cda083408c2b60fa1fe00a39d)
 set(FRIBIDI_HASH_TYPE SHA256)
 set(FRIBIDI_FILE fribidi-${FRIBIDI_VERSION}.tar.gz)
+set(FRIBIDI_CPE "cpe:2.3:a:gnu:fribidi:${FRIBIDI_VERSION}:*:*:*:*:*:*:*")
 set(FRIBIDI_HOMEPAGE https://github.com/fribidi/fribidi)
 set(FRIBIDI_LICENSE SPDX:LGPL-2.1-or-later)
-set(FRIBIDI_COPYRIGHT [=[
-Behdad Esfahbod <behdad@gnu.org>,
-Dov Grobgeld <dov.grobgeld@gmail.com>,
-Roozbeh Pournader <roozbeh@gnu.org>,
-Khaled Hosny <khaledhosny@eglug.org>
-]=])
+set(FRIBIDI_COPYRIGHT "Copyright (c) 2004-2012 Behdad Esfahbod, Dov Grobgeld, Roozbeh Pournader")
 
 set(HARFBUZZ_VERSION 10.0.1)
 set(HARFBUZZ_URI https://github.com/harfbuzz/harfbuzz/archive/refs/tags/${HARFBUZZ_VERSION}.tar.gz)
 set(HARFBUZZ_HASH e7358ea86fe10fb9261931af6f010d4358dac64f7074420ca9bc94aae2bdd542)
 set(HARFBUZZ_HASH_TYPE SHA256)
 set(HARFBUZZ_FILE harfbuzz-${HARFBUZZ_VERSION}.tar.gz)
+set(HARFBUZZ_CPE "cpe:2.3:a:harfbuzz_project:harfbuzz:${HARFBUZZ_VERSION}:*:*:*:*:*:*:*")
 set(HARFBUZZ_DEPSBUILDTIMEONLY "UI module asked for preliminary libs so they could work on integrating it")
 set(HARFBUZZ_HOMEPAGE https://github.com/harfbuzz/harfbuzz)
 
-set(SHADERC_VERSION v2024.3)
+set(SHADERC_VERSION v2025.4)
 set(SHADERC_URI https://github.com/google/shaderc/archive/${SHADERC_VERSION}.tar.gz)
-set(SHADERC_HASH e8d45a77fe8bc954c3ca79aeba8476bd)
+set(SHADERC_HASH 02208e374e610808c4ca3b1e7627b82d)
 set(SHADERC_HASH_TYPE MD5)
 set(SHADERC_FILE shaderc-${SHADERC_VERSION}.tar.gz)
 set(SHADERC_NAME ShaderC)
@@ -1309,28 +1317,9 @@ set(SHADERC_COPYRIGHT "Copyright 2015 The Shaderc Authors. All rights reserved."
 # The versions of shaderc's dependencies can be found in the root of shaderc's
 # source in a file called DEPS.
 
-set(SHADERC_SPIRV_TOOLS_VERSION 01c8438ee4ac52c248119b7e03e0b021f853b51a)
-set(SHADERC_SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
-set(SHADERC_SPIRV_TOOLS_HASH 8924fd30abc3ee17b77cba5a924f3666)
-set(SHADERC_SPIRV_TOOLS_HASH_TYPE MD5)
-set(SHADERC_SPIRV_TOOLS_FILE SPIRV-Tools-${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
-set(SHADERC_SPIRV_TOOLS_NAME SPIR-V Tools)
-set(SHADERC_SPIRV_TOOLS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Tools/)
-set(SHADERC_SPIRV_TOOLS_LICENSE SPDX:Apache-2.0)
-set(SHADERC_SPIRV_TOOLS_COPYRIGHT "Copyright (c) 2015-2016 The Khronos Group Inc.")
-
-set(SHADERC_SPIRV_HEADERS_VERSION 2a9b6f951c7d6b04b6c21fe1bf3f475b68b84801)
-set(SHADERC_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
-set(SHADERC_SPIRV_HEADERS_HASH f5fc63cd74f5b3deae18e2a1606b8241)
-set(SHADERC_SPIRV_HEADERS_HASH_TYPE MD5)
-set(SHADERC_SPIRV_HEADERS_FILE SPIRV-Headers-${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
-set(SHADERC_SPIRV_HEADERS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Headers)
-set(SHADERC_SPIRV_HEADERS_LICENSE SPDX:MIT-Khronos-old)
-set(SHADERC_SPIRV_HEADERS_COPYRIGHT "Copyright (c) 2015-2024 The Khronos Group Inc.")
-
-set(SHADERC_GLSLANG_VERSION 467ce01c71e38cf01814c48987a5c0dadd914df4)
+set(SHADERC_GLSLANG_VERSION d213562e35573012b6348b2d584457c3704ac09b)
 set(SHADERC_GLSLANG_URI https://github.com/KhronosGroup/glslang/archive/${SHADERC_GLSLANG_VERSION}.tar.gz)
-set(SHADERC_GLSLANG_HASH 48baea8b66b0bfdc96a9d95a13b0b908)
+set(SHADERC_GLSLANG_HASH ac98b61f77ffade6bf819e342dc40c4c)
 set(SHADERC_GLSLANG_HASH_TYPE MD5)
 set(SHADERC_GLSLANG_FILE glslang-${SHADERC_GLSLANG_VERSION}.tar.gz)
 set(SHADERC_GLSLANG_HOMEPAGE https://github.com/KhronosGroup/glslang)
@@ -1340,12 +1329,14 @@ Copyright 2020 The Khronos Group Inc.
 Copyright (C) 2015-2018 Google, Inc.
 ]=])
 
-set(VULKAN_VERSION 1.3.296)
+
+set(VULKAN_VERSION 1.4.341)
+set(VULKAN_CPE "cpe:2.3:a:khronos:vulkan:${VULKAN_VERSION}:*:*:*:*:*:*:*")
 
 set(VULKAN_HEADERS_VERSION ${VULKAN_VERSION})
 set(VULKAN_HEADERS_NAME Vulkan-Headers)
 set(VULKAN_HEADERS_URI https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v${VULKAN_HEADERS_VERSION}.tar.gz)
-set(VULKAN_HEADERS_HASH 3f4cd229d8f7c24c9b5a6ead3d674803)
+set(VULKAN_HEADERS_HASH 57f17871ef2c43fc9ac01708a4bd3c82)
 set(VULKAN_HEADERS_HASH_TYPE MD5)
 set(VULKAN_HEADERS_FILE Vulkan-Headers-${VULKAN_HEADERS_VERSION}.tar.gz)
 set(VULKAN_HEADERS_HOMEPAGE https://github.com/KhronosGroup/Vulkan-Headers)
@@ -1355,7 +1346,7 @@ set(VULKAN_HEADERS_COPYRIGHT "Copyright 2015-2023 The Khronos Group Inc.")
 set(VULKAN_LOADER_VERSION ${VULKAN_VERSION})
 set(VULKAN_LOADER_NAME Vulkan-Loader)
 set(VULKAN_LOADER_URI https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/v${VULKAN_LOADER_VERSION}.tar.gz)
-set(VULKAN_LOADER_HASH bca05ec4914888990c92fa9c3e2738ff)
+set(VULKAN_LOADER_HASH 30c6850af7ed0e4af5c57002253c0138)
 set(VULKAN_LOADER_HASH_TYPE MD5)
 set(VULKAN_LOADER_FILE Vulkan-Loader-${VULKAN_LOADER_VERSION}.tar.gz)
 set(VULKAN_LOADER_HOMEPAGE https://github.com/KhronosGroup/Vulkan-Loader)
@@ -1369,7 +1360,7 @@ Copyright (c) 2019 Google Inc.
 
 set(VULKAN_UTILITY_LIBRARIES_VERSION ${VULKAN_VERSION})
 set(VULKAN_UTILITY_LIBRARIES_URI https://github.com/KhronosGroup/Vulkan-Utility-Libraries/archive/refs/tags/v${VULKAN_UTILITY_LIBRARIES_VERSION}.tar.gz)
-set(VULKAN_UTILITY_LIBRARIES_HASH 02091bdc2b5862685da83b37a6c48821)
+set(VULKAN_UTILITY_LIBRARIES_HASH 7b0980463b271b6e78269b3828841bb6)
 set(VULKAN_UTILITY_LIBRARIES_HASH_TYPE MD5)
 set(VULKAN_UTILITY_LIBRARIES_FILE Vulkan-Utility-Libraries-${VULKAN_UTILITY_LIBRARIES_VERSION}.tar.gz)
 set(VULKAN_UTILITY_LIBRARIES_HOMEPAGE https://github.com/KhronosGroup/Vulkan-Utility-Libraries)
@@ -1385,10 +1376,11 @@ set(VULKAN_MEMORY_ALLOCATOR_HASH_TYPE MD5)
 set(VULKAN_MEMORY_ALLOCATOR_FILE Vulkan-Memory-Allocator-${VULKAN_MEMORY_ALLOCATOR_VERSION}.tar.gz)
 set(VULKAN_MEMORY_ALLOCATOR_HOMEPAGE https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
 set(VULKAN_MEMORY_ALLOCATOR_LICENSE SPDX:MIT)
+set(VULKAN_MEMORY_ALLOCATOR_COPYRIGHT "Copyright (c) 2017-2025 Advanced Micro Devices, Inc. All rights reserved.")
 
 set(SPIRV_HEADERS_VERSION ${VULKAN_VERSION})
 set(SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-${SPIRV_HEADERS_VERSION}.0.tar.gz)
-set(SPIRV_HEADERS_HASH adee3d432b63f345c8ee6d625d0c8e6c)
+set(SPIRV_HEADERS_HASH 38bcd69036ec1443ac19b417bef8685e)
 set(SPIRV_HEADERS_HASH_TYPE MD5)
 set(SPIRV_HEADERS_FILE SPIRV-Headers-${SPIRV_HEADERS_VERSION}.tar.gz)
 set(SPIRV_HEADERS_NAME SPIR-V Headers)
@@ -1396,31 +1388,122 @@ set(SPIRV_HEADERS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Headers/)
 set(SPIRV_HEADERS_LICENSE SPDX:Apache-2.0)
 set(SPIRV_HEADERS_COPYRIGHT "Copyright (c) 2015-2014 The Khronos Group Inc.")
 
-set(SPIRV_REFLECT_VERSION 1.4.309.0)
+set(SPIRV_REFLECT_VERSION ${VULKAN_VERSION})
 set(SPIRV_REFLECT_NAME SPIRV-Reflect)
 set(SPIRV_REFLECT_URI
-https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/vulkan-sdk-${SPIRV_REFLECT_VERSION}.tar.gz)
-set(SPIRV_REFLECT_HASH 11234b7d7895f69c3955e458c7b98914)
+https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/vulkan-sdk-${SPIRV_REFLECT_VERSION}.0.tar.gz)
+set(SPIRV_REFLECT_HASH a604577ed56b6687a3bbfa88ab3a6712)
 set(SPIRV_REFLECT_HASH_TYPE MD5)
 set(SPIRV_REFLECT_FILE SPIRV-Reflect-${SPIRV_REFLECT_VERSION}.tar.gz)
 set(SPIRV_REFLECT_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Reflect)
 set(SPIRV_REFLECT_LICENSE SPDX:Apache-2.0)
+set(SPIRV_REFLECT_COPYRIGHT "Copyright 2017-2018 Google Inc.")
 
-set(PYBIND11_VERSION 2.10.1)
+set(SPIRV_TOOLS_VERSION v2026.1)
+set(SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/${SPIRV_TOOLS_VERSION}.tar.gz)
+set(SPIRV_TOOLS_HASH 35dc16cf2dc64be5b6bbbe86d210e6f4a82b070cffd751605a3365cd8bce2d7e)
+set(SPIRV_TOOLS_HASH_TYPE SHA256)
+set(SPIRV_TOOLS_FILE SPIR-V-Tools-${SPIRV_TOOLS_VERSION}.tar.gz)
+set(SPIRV_TOOLS_NAME "SPIR-V Tools")
+set(SPIRV_TOOLS_HOMEPAGE https://github.com/KhronosGroup/SPIRV-Tools/)
+set(SPIRV_TOOLS_LICENSE SPDX:Apache-2.0)
+set(SPIRV_TOOLS_COPYRIGHT "Copyright (c) 2015-2016 The Khronos Group Inc.")
+
+set(PYBIND11_VERSION 3.0.1)
 set(PYBIND11_URI https://github.com/pybind/pybind11/archive/refs/tags/v${PYBIND11_VERSION}.tar.gz)
-set(PYBIND11_HASH ce07bfd5089245da7807b3faf6cbc878)
+set(PYBIND11_HASH 81399a5277559163b3ee912b41de1b76)
 set(PYBIND11_HASH_TYPE MD5)
 set(PYBIND11_FILE pybind-v${PYBIND11_VERSION}.tar.gz)
 set(PYBIND11_HOMEPAGE https://github.com/pybind/pybind11)
 set(PYBIND11_LICENSE SPDX:BSD-2-Clause)
 set(PYBIND11_COPYRIGHT "Copyright (c) 2016 Wenzel Jakob <wenzel.jakob@epfl.ch>, All rights reserved.")
 
-set(HIPRT_VERSION c4298933fe046e3f915977b5a69537a59aac8f47)
+set(HIPRT_VERSION 606b4886efabce918dd0634ef71c06615a47c83b)
 set(HIPRT_LIBRARY_VERSION 02005)
 set(HIPRT_URI https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT/archive/${HIPRT_VERSION}.tar.gz)
-set(HIPRT_HASH 65b8a975d23db04d908c758f3fb7bae3)
+set(HIPRT_HASH 4bb933c2cf284257625b782d571c02a0)
 set(HIPRT_HASH_TYPE MD5)
 set(HIPRT_FILE hiprt-${HIPRT_VERSION}.tar.gz)
 set(HIPRT_HOMEPAGE https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT)
 set(HIPRT_LICENSE SPDX:MIT)
 set(HIPRT_COPYRIGHT "Copyright (C) 2024 Advanced Micro Devices, Inc. All Rights Reserved. ")
+
+set(THORVG_VERSION v1.0.3)
+set(THORVG_SHORT_VERSION 1.0.3)
+set(THORVG_URI https://github.com/thorvg/thorvg/releases/download/${THORVG_VERSION}/thorvg-${THORVG_SHORT_VERSION}.tar.xz)
+set(THORVG_HASH 6cc2f5ce0225a71265a86f0b88a52c75)
+set(THORVG_HASH_TYPE MD5)
+set(THORVG_FILE thorvg-${THORVG_VERSION}.tar.gz)
+set(THORVG_HOMEPAGE https://www.thorvg.org/)
+set(THORVG_LICENSE SPDX:MIT)
+set(THORVG_COPYRIGHT "Copyright (c) 2020 - 2026 ThorVG Project")
+
+set(LIBHEIF_VERSION 1.20.2)
+set(LIBHEIF_URI https://github.com/strukturag/libheif/releases/download/v${LIBHEIF_VERSION}/libheif-${LIBHEIF_VERSION}.tar.gz)
+set(LIBHEIF_HASH 68ac9084243004e0ef3633f184eeae85d615fe7e4444373a0a21cebccae9d12a)
+set(LIBHEIF_HASH_TYPE SHA256)
+set(LIBHEIF_FILE libheif-${LIBHEIF_VERSION}.tar.gz)
+set(LIBHEIF_CPE "cpe:2.3:a:struktur:libheif:${LIBHEIF_VERSION}:*:*:*:*:*:*:*")
+set(LIBHEIF_HOMEPAGE https://github.com/strukturag/libheif)
+set(LIBHEIF_LICENSE SPDX:LGPL-3.0-or-later)
+set(LIBHEIF_COPYRIGHT [=[
+Copyright (c) 2017-2020 Struktur AG
+Copyright (c) 2017-2025 Dirk Farin
+]=])
+
+set(ABSEIL_VERSION 20250814.1)
+set(ABSEIL_URI https://github.com/abseil/abseil-cpp/releases/download/${ABSEIL_VERSION}/abseil-cpp-${ABSEIL_VERSION}.tar.gz)
+set(ABSEIL_HASH 1692f77d1739bacf3f94337188b78583cf09bab7e420d2dc6c5605a4f86785a1)
+set(ABSEIL_HASH_TYPE SHA256)
+set(ABSEIL_FILE abseil-cpp-${ABSEIL_VERSION}.tar.gz)
+set(ABSEIL_CPE "cpe:2.3:a:abseil:common_libraries:${ABSEIL_VERSION}:-:*:*:*:*:*:*")
+set(ABSEIL_HOMEPAGE https://abseil.io/)
+set(ABSEIL_LICENSE SPDX:Apache-2.0)
+set(ABSEIL_COPYRIGHT "Copyright 2023 The Abseil Authors.")
+
+set(EIGEN_VERSION 8a1083e9bf41b91fdea6546681f806154efdc25a) # latest on 2025-12-05 didn't build, picked a slightly older commit.
+set(EIGEN_URI https://gitlab.com/libeigen/eigen/-/archive/${EIGEN_VERSION}/eigen-${EIGEN_VERSION}.tar.gz)
+set(EIGEN_HASH cc28a84fdec496c6777596350ea805519bf10f717d21044ae6ba3dd562183a26)
+set(EIGEN_HASH_TYPE SHA256)
+set(EIGEN_FILE eigen-${EIGEN_VERSION}.tar.gz)
+set(EIGEN_HOMEPAGE http://eigen.tuxfamily.org)
+set(EIGEN_LICENSE SPDX:MPL-2.0)
+set(EIGEN_COPYRIGHT "Copyright (C) 2008-2010 Gael Guennebaud <gael.guennebaud@inria.fr>. Copyright (C) 2006-2008 Benoit Jacob <jacob.benoit.1@gmail.com")
+
+set(CERES_VERSION 0c70ed3a1a2d6ba47c06c7e8b3b040880bc474db) # Latest main on 2025-12-05
+set(CERES_URI https://github.com/ceres-solver/ceres-solver/archive/${CERES_VERSION}.tar.gz)
+set(CERES_HASH bf0bcc78fae884e59dd893693e52510da7cc6866a7444fdae9ba8f19eae266cd)
+set(CERES_HASH_TYPE SHA256)
+set(CERES_FILE ceres-${CERES_VERSION}.tar.gz)
+set(CERES_HOMEPAGE http://ceres-solver.org/)
+set(CERES_LICENSE SPDX:BSD-3-Clause)
+set(CERES_COPYRIGHT "Copyright 2023 Google Inc. All rights reserved.")
+
+set(DRACO_VERSION 1.5.7)
+set(DRACO_URI https://github.com/google/draco/archive/refs/tags/${DRACO_VERSION}.zip)
+set(DRACO_HASH 27b72ba2d5ff3d0a9814ad40d4cb88f8dc89a35491c0866d952473f8f9416b77)
+set(DRACO_HASH_TYPE SHA256)
+set(DRACO_FILE draco-v${DRACO_VERSION}.zip)
+set(DRACO_HOMEPAGE https://google.github.io/draco/)
+set(DRACO_LICENSE SPDX:Apache-2.0)
+set(DRACO_COPYRIGHT "Copyright 2022 The Draco Authors.")
+
+set(MESHOPTIMIZER_VERSION 1.1)
+set(MESHOPTIMIZER_URI https://github.com/zeux/meshoptimizer/archive/refs/tags/v${MESHOPTIMIZER_VERSION}.zip)
+set(MESHOPTIMIZER_HASH 6aecc2d3b4328f1f5f4127fb16a144de80cc9eb35c32387807c8c04b0b6dbbf3)
+set(MESHOPTIMIZER_HASH_TYPE SHA256)
+set(MESHOPTIMIZER_FILE meshoptimizer-v${MESHOPTIMIZER_VERSION}.zip)
+set(MESHOPTIMIZER_HOMEPAGE https://meshoptimizer.org)
+set(MESHOPTIMIZER_LICENSE SPDX:MIT)
+set(MESHOPTIMIZER_COPYRIGHT "Copyright (c) 2016-2026 Arseny Kapoulkine")
+
+# Using a latest main hash as Tracy WoA support (commit feb07e4) hasn't made it to a stable release yet.
+# NOTE: Keep version in sync with the tracy_profiler GUI frontend in `extern/tracy_profiler/CMakeLists.txt`
+set(TRACY_VERSION a64b9a20294d59421a2f57aeca3c6383d8c48169) # Latest main on 2026-04-11
+set(TRACY_URI https://github.com/wolfpld/tracy/archive/${TRACY_VERSION}.tar.gz)
+set(TRACY_HASH d316eea1b4bdc265725661c9d5ff67da)
+set(TRACY_HASH_TYPE MD5)
+set(TRACY_FILE tracy-${TRACY_VERSION}.tar.gz)
+set(TRACY_HOMEPAGE https://github.com/wolfpld/tracy)
+set(TRACY_LICENSE SPDX:BSD-3-Clause)
+set(TRACY_COPYRIGHT "Copyright (c) 2017-2026, Bartosz Taudul <wolf@nereid.pl>")

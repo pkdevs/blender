@@ -4,7 +4,9 @@
 
 #pragma once
 
-#include "gpu_glsl_cpp_stubs.hh"
+#include "gpu_shader_compat.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
 
 float3 calc_barycentric_distances(float3 pos0, float3 pos1, float3 pos2)
 {
@@ -33,101 +35,44 @@ float2 calc_barycentric_co(int vertid)
   return bary;
 }
 
-#ifdef HAIR_SHADER
-
-/* Hairs uv and col attributes are passed by bufferTextures. */
-#  define DEFINE_ATTR(type, attr) uniform samplerBuffer attr
-#  define GET_ATTR(type, attr) hair_get_customdata_##type(attr)
-
-#  define barycentric_get() hair_get_barycentric()
-#  define barycentric_resolve(bary) hair_resolve_barycentric(bary)
-
-float3 orco_get(float3 local_pos,
-                float4x4 modelmatinv,
-                float4 orco_madd[2],
-                const samplerBuffer orco_samp)
-{
-  /* TODO: fix ORCO with modifiers. */
-  float3 orco = (modelmatinv * float4(local_pos, 1.0f)).xyz;
-  return orco_madd[0].xyz + orco * orco_madd[1].xyz;
-}
-
-float hair_len_get(int id, const samplerBuffer len)
-{
-  return texelFetch(len, id).x;
-}
-
-float4 tangent_get(const samplerBuffer attr, float3x3 normalmat)
-{
-  /* Unsupported */
-  return float4(0.0f);
-}
-
-#else /* MESH_SHADER */
-
-#  define DEFINE_ATTR(type, attr) in type attr
-#  define GET_ATTR(type, attr) attr
-
-/* Calculated in geom shader later with calc_barycentric_co. */
-#  define barycentric_get() float2(0)
-#  define barycentric_resolve(bary) bary
-
-float3 orco_get(float3 local_pos, float4x4 modelmatinv, float4 orco_madd[2], float4 orco)
-{
-  /* If the object does not have any deformation, the orco layer calculation is done on the fly
-   * using the orco_madd factors.
-   * We know when there is no orco layer when orco.w is 1.0 because it uses the generic vertex
-   * attribute (which is [0,0,0,1]). */
-  if (orco.w == 0.0f) {
-    return orco.xyz * 0.5f + 0.5f;
-  }
-  else {
-    return orco_madd[0].xyz + local_pos * orco_madd[1].xyz;
-  }
-}
-
-float hair_len_get(int id, const float len)
-{
-  return len;
-}
-
-float4 tangent_get(float4 attr, float3x3 normalmat)
-{
-  float4 tangent;
-  tangent.xyz = normalmat * attr.xyz;
-  tangent.w = attr.w;
-  float len_sqr = dot(tangent.xyz, tangent.xyz);
-  /* Normalize only if vector is not null. */
-  if (len_sqr > 0.0f) {
-    tangent.xyz *= inversesqrt(len_sqr);
-  }
-  return tangent;
-}
-
-#endif
-
 /* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
-#define float_from_vec4(v, luminance_coefficients) dot(v.rgb, luminance_coefficients)
-#define float_from_vec3(v) ((v.r + v.g + v.b) * (1.0f / 3.0f))
-#define float_from_vec2(v) v.r
+#define float_from_float4(v, luminance_coefficients) dot(v.rgb, luminance_coefficients)
+#define float_from_float3(v) ((v.r + v.g + v.b) * (1.0f / 3.0f))
+#define float_from_float2(v) ((v.x + v.y) * (1.0f / 2.0f))
+#define float_from_int(v) float(v)
+#define float_from_bool(v) float(v)
 
-#define vec2_from_vec4(v) float2(((v.r + v.g + v.b) * (1.0f / 3.0f)), v.a)
-#define vec2_from_vec3(v) float2(((v.r + v.g + v.b) * (1.0f / 3.0f)), 1.0f)
-#define vec2_from_float(v) float2(v)
+#define float2_from_float4(v) v.xy
+#define float2_from_float3(v) v.xy
+#define float2_from_float(v) float2(v)
+#define float2_from_int(v) float2(float(v))
+#define float2_from_bool(v) float2(float(v))
 
-#define vec3_from_vec4(v) v.rgb
-#define vec3_from_vec2(v) v.rrr
-#define vec3_from_float(v) float3(v)
+#define float3_from_float4(v) v.rgb
+#define float3_from_float2(v) float3(v.xy, 0.0f)
+#define float3_from_float(v) float3(v)
+#define float3_from_int(v) float3(float(v))
+#define float3_from_bool(v) float3(float(v))
 
-#define vec4_from_vec3(v) float4(v, 1.0f)
-#define vec4_from_vec2(v) v.rrrg
-#define vec4_from_float(v) float4(float3(v), 1.0f)
+#define float4_from_float3(v) float4(v, 1.0f)
+#define float4_from_float2(v) float4(v.xy, 0.0f, 1.0f)
+#define float4_from_float(v) float4(float3(v), 1.0f)
+#define float4_from_int(v) float4(float3(float(v)), 1.0f)
+#define float4_from_bool(v) float4(float3(float(v)), 1.0f)
 
-/* TODO: Move to shader_shared. */
-#define RAY_TYPE_CAMERA 0
-#define RAY_TYPE_SHADOW 1
-#define RAY_TYPE_DIFFUSE 2
-#define RAY_TYPE_GLOSSY 3
+#define int_from_float(v) int(v)
+#define int_from_bool(v) int(v)
+#define int_from_float2(v) int(float_from_float2(v))
+#define int_from_float3(v) int_from_float(float_from_float3(v))
+/* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
+#define int_from_float4(v, luminance_coefficients) int(dot(v.rgb, luminance_coefficients))
+
+#define bool_from_float(v) ((v) > 0.0f)
+#define bool_from_int(v) ((v) > 0)
+#define bool_from_float2(v) (!is_zero(v))
+#define bool_from_float3(v) (!is_zero(v))
+/* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
+#define bool_from_float4(v, luminance_coefficients) (dot(v.rgb, luminance_coefficients) > 0.0f)
 
 #ifdef GPU_FRAGMENT_SHADER
 #  define FrontFacing gl_FrontFacing
@@ -135,7 +80,6 @@ float4 tangent_get(float4 attr, float3x3 normalmat)
 #  define FrontFacing true
 #endif
 
-/* Can't use enum here because not a header file. But would be great to do. */
 enum ClosureType : uchar {
   CLOSURE_NONE_ID = 0u,
   /* Diffuse */
@@ -154,22 +98,34 @@ enum ClosureType : uchar {
 
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID = 12u,
+  CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID = 13u,
 
   /* Glass */
-  // CLOSURE_BSDF_HAIR_HUANG_ID = 13u, /* TODO */
+  // CLOSURE_BSDF_HAIR_HUANG_ID = 14u, /* TODO */
 
   /* BSSRDF */
-  CLOSURE_BSSRDF_BURLEY_ID = 14u,
+  CLOSURE_BSSRDF_BURLEY_ID = 15u,
 };
 
 struct ClosureUndetermined {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   ClosureType type;
   /* Additional data different for each closure type. */
   packed_float4 data;
+
+  float weight() const
+  {
+    return reduce_add(abs(color));
+  }
 };
+
+bool closure_has_transmission(const ClosureType closure)
+{
+  return closure == CLOSURE_BSDF_TRANSLUCENT_ID ||
+         closure == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID ||
+         closure == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
+}
 
 ClosureUndetermined closure_new(ClosureType type)
 {
@@ -184,33 +140,28 @@ struct ClosureOcclusion {
 
 struct ClosureDiffuse {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureSubsurface {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   packed_float3 sss_radius;
 };
 
 struct ClosureTranslucent {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureReflection {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
 };
 
 struct ClosureRefraction {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
   float ior;
@@ -218,7 +169,6 @@ struct ClosureRefraction {
 
 struct ClosureHair {
   packed_float3 color;
-  float weight;
   packed_float3 T;
   float offset;
   packed_float2 roughness;
@@ -226,24 +176,26 @@ struct ClosureHair {
 
 struct ClosureVolumeScatter {
   packed_float3 scattering;
-  float weight;
   float anisotropy;
 };
 
 struct ClosureVolumeAbsorption {
   packed_float3 absorption;
-  float weight;
 };
 
 struct ClosureEmission {
   packed_float3 emission;
-  float weight;
 };
 
 struct ClosureTransparency {
   packed_float3 transmittance;
-  float weight;
   float holdout;
+};
+
+struct ClosureThinRefraction {
+  packed_float3 color;
+  packed_float3 N;
+  float roughness;
 };
 
 ClosureDiffuse to_closure_diffuse(ClosureUndetermined cl)
@@ -290,6 +242,15 @@ ClosureRefraction to_closure_refraction(ClosureUndetermined cl)
   return closure;
 }
 
+ClosureThinRefraction to_closure_thin_refraction(ClosureUndetermined cl)
+{
+  ClosureThinRefraction closure;
+  closure.N = cl.N;
+  closure.color = cl.color;
+  closure.roughness = cl.data.x;
+  return closure;
+}
+
 struct GlobalData {
   /** World position. */
   packed_float3 P;
@@ -304,12 +265,8 @@ struct GlobalData {
   /** Barycentric coordinates. */
   packed_float2 barycentric_coords;
   packed_float3 barycentric_dists;
-  /** Hair time along hair length. 0 at base 1 at tip. */
-  float hair_time;
-  /** Hair time along width of the hair. */
-  float hair_time_width;
   /** Hair thickness in world space. */
-  float hair_thickness;
+  float hair_diameter;
   /** Index of the strand for per strand effects. */
   int hair_strand_id;
   /** Ray properties (approximation). */
@@ -336,12 +293,12 @@ float3 dF_impl(float3 v)
   return float3(0.0f);
 }
 
-void dF_branch(float fn, out float2 result)
+void dF_branch(float fn, float2 &result)
 {
   /* NOTE: this function is currently unused, once it is used we need to check if
    * `g_derivative_filter_width` needs to be applied. */
-  result.x = gpu_dfdx(fn);
-  result.y = gpu_dfdy(fn);
+  result.x = gpu_dfdx(fn) * derivative_scale_get();
+  result.y = gpu_dfdy(fn) * derivative_scale_get();
 }
 
 #else
@@ -364,7 +321,7 @@ float3 dF_impl(float3 v)
 
 #  define dF_branch(fn, filter_width, result) \
     if (true) { \
-      g_derivative_filter_width = filter_width; \
+      g_derivative_filter_width = filter_width * derivative_scale_get(); \
       g_derivative_flag = 1; \
       result.x = (fn); \
       g_derivative_flag = -1; \
@@ -376,7 +333,7 @@ float3 dF_impl(float3 v)
 /* Used when the non-offset value is already computed elsewhere */
 #  define dF_branch_incomplete(fn, filter_width, result) \
     if (true) { \
-      g_derivative_filter_width = filter_width; \
+      g_derivative_filter_width = filter_width * derivative_scale_get(); \
       g_derivative_flag = 1; \
       result.x = (fn); \
       g_derivative_flag = -1; \
@@ -384,6 +341,3 @@ float3 dF_impl(float3 v)
       g_derivative_flag = 0; \
     }
 #endif
-
-/* TODO(fclem): Remove. */
-#define CODEGEN_LIB

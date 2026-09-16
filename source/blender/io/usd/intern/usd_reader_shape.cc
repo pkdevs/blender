@@ -2,6 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_attribute.h"
 #include "BKE_geometry_set.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
@@ -10,7 +11,6 @@
 
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
-#include "DNA_windowmanager_types.h"
 
 #include "usd_attribute_utils.hh"
 #include "usd_mesh_utils.hh"
@@ -44,14 +44,14 @@ void USDShapeReader::create_object(Main *bmain)
 {
   Mesh *mesh = BKE_mesh_add(bmain, name_.c_str());
   object_ = BKE_object_add_only_object(bmain, OB_MESH, name_.c_str());
-  object_->data = mesh;
+  object_->data = id_cast<ID *>(mesh);
 }
 
-void USDShapeReader::read_object_data(Main *bmain, double motionSampleTime)
+void USDShapeReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
 {
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
+  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
                                                            import_params_.mesh_read_flag);
-  Mesh *mesh = (Mesh *)object_->data;
+  Mesh *mesh = id_cast<Mesh *>(object_->data);
   Mesh *read_mesh = this->read_mesh(mesh, params, nullptr);
 
   if (read_mesh != mesh) {
@@ -61,69 +61,63 @@ void USDShapeReader::read_object_data(Main *bmain, double motionSampleTime)
     }
   }
 
-  USDXformReader::read_object_data(bmain, motionSampleTime);
+  USDXformReader::read_object_data(bmain, time);
 }
 
 template<typename Adapter>
-void USDShapeReader::read_values(const double motionSampleTime,
+void USDShapeReader::read_values(const pxr::UsdTimeCode time,
                                  pxr::VtVec3fArray &positions,
                                  pxr::VtIntArray &face_indices,
                                  pxr::VtIntArray &face_counts) const
 {
   Adapter adapter;
-  pxr::VtValue points_val = adapter.GetPoints(prim_, motionSampleTime);
+  pxr::VtValue points_val = adapter.GetPoints(prim_, time);
 
   if (points_val.IsHolding<pxr::VtVec3fArray>()) {
-    positions = points_val.Get<pxr::VtVec3fArray>();
+    positions = points_val.UncheckedGet<pxr::VtVec3fArray>();
   }
 
-  pxr::VtValue topology_val = adapter.GetTopology(prim_, pxr::SdfPath(), motionSampleTime);
+  pxr::VtValue topology_val = adapter.GetTopology(prim_, pxr::SdfPath(), time);
 
   if (topology_val.IsHolding<pxr::HdMeshTopology>()) {
-    const pxr::HdMeshTopology &topology = topology_val.Get<pxr::HdMeshTopology>();
+    const pxr::HdMeshTopology &topology = topology_val.UncheckedGet<pxr::HdMeshTopology>();
     face_counts = topology.GetFaceVertexCounts();
     face_indices = topology.GetFaceVertexIndices();
   }
 }
 
-bool USDShapeReader::read_mesh_values(double motionSampleTime,
+bool USDShapeReader::read_mesh_values(pxr::UsdTimeCode time,
                                       pxr::VtVec3fArray &positions,
                                       pxr::VtIntArray &face_indices,
                                       pxr::VtIntArray &face_counts) const
 {
   if (prim_.IsA<pxr::UsdGeomCapsule>() || prim_.IsA<pxr::UsdGeomCapsule_1>()) {
-    read_values<pxr::UsdImagingCapsuleAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingCapsuleAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
   if (prim_.IsA<pxr::UsdGeomCylinder>() || prim_.IsA<pxr::UsdGeomCylinder_1>()) {
-    read_values<pxr::UsdImagingCylinderAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingCylinderAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
   if (prim_.IsA<pxr::UsdGeomCone>()) {
-    read_values<pxr::UsdImagingConeAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingConeAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
   if (prim_.IsA<pxr::UsdGeomCube>()) {
-    read_values<pxr::UsdImagingCubeAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingCubeAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
   if (prim_.IsA<pxr::UsdGeomSphere>()) {
-    read_values<pxr::UsdImagingSphereAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingSphereAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
   if (prim_.IsA<pxr::UsdGeomPlane>()) {
-    read_values<pxr::UsdImagingPlaneAdapter>(
-        motionSampleTime, positions, face_indices, face_counts);
+    read_values<pxr::UsdImagingPlaneAdapter>(time, positions, face_indices, face_counts);
     return true;
   }
 
@@ -143,34 +137,19 @@ Mesh *USDShapeReader::read_mesh(Mesh *existing_mesh,
     return existing_mesh;
   }
 
+  pxr::VtVec3fArray usd_positions;
   pxr::VtIntArray usd_face_indices;
   pxr::VtIntArray usd_face_counts;
-
-  /* Should have a good set of data by this point-- copy over. */
-  Mesh *active_mesh = mesh_from_prim(existing_mesh, params, usd_face_indices, usd_face_counts);
-
-  if (active_mesh == existing_mesh) {
+  if (!read_mesh_values(
+          params.motion_sample_time, usd_positions, usd_face_indices, usd_face_counts))
+  {
     return existing_mesh;
   }
 
-  Span<int> face_indices = Span(usd_face_indices.cdata(), usd_face_indices.size());
-  Span<int> face_counts = Span(usd_face_counts.cdata(), usd_face_counts.size());
+  /* Build or update the existing mesh. */
+  Mesh *active_mesh = mesh_from_prim(
+      existing_mesh, params, usd_positions, usd_face_indices, usd_face_counts);
 
-  MutableSpan<int> face_offsets = active_mesh->face_offsets_for_write();
-  for (const int i : IndexRange(active_mesh->faces_num)) {
-    face_offsets[i] = face_counts[i];
-  }
-  offset_indices::accumulate_counts_to_offsets(face_offsets);
-
-  /* Don't smooth-shade cubes; we're not worrying about sharpness for Gprims. */
-  bke::mesh_smooth_set(*active_mesh, !prim_.IsA<pxr::UsdGeomCube>());
-
-  MutableSpan<int> corner_verts = active_mesh->corner_verts_for_write();
-  for (const int i : corner_verts.index_range()) {
-    corner_verts[i] = face_indices[i];
-  }
-
-  bke::mesh_calc_edges(*active_mesh, false, false);
   return active_mesh;
 }
 
@@ -186,7 +165,7 @@ void USDShapeReader::read_geometry(bke::GeometrySet &geometry_set,
   }
 }
 
-void USDShapeReader::apply_primvars_to_mesh(Mesh *mesh, const double motionSampleTime) const
+void USDShapeReader::apply_primvars_to_mesh(Mesh *mesh, const pxr::UsdTimeCode time) const
 {
   /* TODO: also handle the displayOpacity primvar. */
   if (!mesh || !prim_) {
@@ -211,8 +190,8 @@ void USDShapeReader::apply_primvars_to_mesh(Mesh *mesh, const double motionSampl
       continue;
     }
 
-    const std::optional<eCustomDataType> type = convert_usd_type_to_blender(pv_type);
-    if (type == CD_PROP_COLOR) {
+    const std::optional<bke::AttrType> type = convert_usd_type_to_blender(pv_type);
+    if (type == bke::AttrType::ColorFloat) {
       /* Set the active color name to 'displayColor', if a color primvar
        * with this name exists.  Otherwise, use the name of the first
        * color primvar we find for the active color. */
@@ -221,7 +200,7 @@ void USDShapeReader::apply_primvars_to_mesh(Mesh *mesh, const double motionSampl
       }
     }
 
-    read_generic_mesh_primvar(mesh, pv, motionSampleTime, false);
+    read_generic_mesh_primvar(mesh, pv, time, false);
 
     /* Record whether the primvar attribute might be time varying. */
     if (!primvar_time_varying_map_.contains(name)) {
@@ -237,14 +216,13 @@ void USDShapeReader::apply_primvars_to_mesh(Mesh *mesh, const double motionSampl
 
 Mesh *USDShapeReader::mesh_from_prim(Mesh *existing_mesh,
                                      const USDMeshReadParams params,
-                                     pxr::VtIntArray &face_indices,
-                                     pxr::VtIntArray &face_counts) const
+                                     pxr::VtVec3fArray &usd_positions,
+                                     pxr::VtIntArray &usd_face_indices,
+                                     pxr::VtIntArray &usd_face_counts) const
 {
-  pxr::VtVec3fArray positions;
-
-  if (!read_mesh_values(params.motion_sample_time, positions, face_indices, face_counts)) {
-    return existing_mesh;
-  }
+  Span<int> face_indices = Span(usd_face_indices.cdata(), usd_face_indices.size());
+  Span<int> face_counts = Span(usd_face_counts.cdata(), usd_face_counts.size());
+  Span<float3> positions = Span(usd_positions.cdata(), usd_positions.size()).cast<float3>();
 
   const bool poly_counts_match = existing_mesh ? face_counts.size() == existing_mesh->faces_num :
                                                  false;
@@ -261,13 +239,25 @@ Mesh *USDShapeReader::mesh_from_prim(Mesh *existing_mesh,
   }
 
   MutableSpan<float3> vert_positions = active_mesh->vert_positions_for_write();
-  vert_positions.copy_from(Span(positions.cdata(), positions.size()).cast<float3>());
+  vert_positions.copy_from(positions);
+
+  MutableSpan<int> face_offsets = active_mesh->face_offsets_for_write();
+  for (const int i : IndexRange(active_mesh->faces_num)) {
+    face_offsets[i] = face_counts[i];
+  }
+  offset_indices::accumulate_counts_to_offsets(face_offsets);
+
+  MutableSpan<int> corner_verts = active_mesh->corner_verts_for_write();
+  for (const int i : corner_verts.index_range()) {
+    corner_verts[i] = face_indices[i];
+  }
+
+  bke::mesh_calc_edges(*active_mesh, false, false);
+
+  /* Don't smooth-shade cubes; we're not worrying about sharpness for Gprims. */
+  bke::mesh_smooth_set(*active_mesh, !prim_.IsA<pxr::UsdGeomCube>());
 
   if (params.read_flags & MOD_MESHSEQ_READ_COLOR) {
-    if (active_mesh != existing_mesh) {
-      /* Clear the primvar map to force attributes to be reloaded. */
-      this->primvar_time_varying_map_.clear();
-    }
     apply_primvars_to_mesh(active_mesh, params.motion_sample_time);
   }
 

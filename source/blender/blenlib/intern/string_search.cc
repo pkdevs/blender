@@ -10,11 +10,11 @@
 #include "BLI_linear_allocator.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_string_search.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_task.hh"
 
 /* Right arrow, keep in sync with #UI_MENU_ARROW_SEP in `UI_interface_c.hh`. */
@@ -125,7 +125,7 @@ int get_fuzzy_match_errors(StringRef query, StringRef full)
   const char *window_begin = full_begin;
   const char *window_end = window_begin;
   const int window_size = std::min(query_size + max_errors, full_size);
-  const int extra_chars = window_size - query_size;
+  const int extra_chars = std::max(window_size - query_size, 0);
   const int max_acceptable_distance = max_errors + extra_chars;
 
   for (int i = 0; i < window_size; i++) {
@@ -270,7 +270,7 @@ static int get_best_word_index_that_startswith(StringRef query,
    * itself anymore.
    *
    * E.g. the full query `T > Test` wouldn't match itself anymore if `Test` has a higher weight.
-   * That's because the `T` would be matched with the `Test`, but then `Test` can't match `Test
+   * That's because the `T` would be matched with the `Test`, but then `Test` can't match `Test`
    * anymore because that's taken up already.
    *
    * If we don't have to pick the shortest match for correctness, pick the one with the largest
@@ -562,7 +562,7 @@ Vector<void *> StringSearchBase::query_impl(const StringRef query) const
   for (const float score : result_indices_by_score.keys()) {
     found_scores.append(score);
   }
-  std::sort(found_scores.begin(), found_scores.end(), std::greater<>());
+  std::ranges::sort(found_scores, std::greater<>());
 
   /* Add results to output vector in correct order. First come the results with the best match
    * score. Results with the same score are in the order they have been added to the search. */
@@ -574,7 +574,7 @@ Vector<void *> StringSearchBase::query_impl(const StringRef query) const
         /* Sort items with best score by length. Shorter items are more likely the ones you are
          * looking for. This also ensures that exact matches will be at the top, even if the query
          * is a sub-string of another item. */
-        std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+        std::ranges::sort(indices, [&](int a, int b) {
           const SearchItem &item_a = items_[a];
           const SearchItem &item_b = items_[b];
           /* The length of the main group has priority over the total length. */

@@ -318,7 +318,6 @@ SECTIONS = (
             ("haru", "PDF generation library."),
             ("hiprt", "Ray-tracing for AMD GPU's. Used by Cycles."),
             ("imath", "Library used by OpenEXR image-format."),
-            ("jemalloc", "An improved memory allocator."),
             ("jpeg", "JPEG image-format support."),
             ("level-zero", "OneAPI loader & validation. Used by Cycles oneAPI."),
             ("llvm", "Low level virtual machine. Used by OSL."),
@@ -934,8 +933,11 @@ def render_output(scene, bounds, filepath):
     scene.render.filepath = filepath
 
     world = bpy.data.worlds.new(name_gen)
-    world.color = 1.0, 1.0, 1.0
-    world.use_nodes = False
+    world.node_tree.nodes.clear()
+    output = world.node_tree.nodes.new("ShaderNodeOutputWorld")
+    background = world.node_tree.nodes.new("ShaderNodeBackground")
+    world.node_tree.links.new(output.outputs["Surface"], background.outputs["Surface"])
+    background.inputs["Color"].default_value = 1.0, 1.0, 1.0, 1.0
     scene.world = world
 
     # Some space around the edges.
@@ -953,6 +955,7 @@ def render_output(scene, bounds, filepath):
     scene.collection.objects.link(camera)
 
     render = scene.render
+    render.image_settings.media_type = 'IMAGE'
     render.image_settings.file_format = 'JPEG'
     render.image_settings.color_depth = '8'
     render.image_settings.color_mode = 'RGB'
@@ -1077,15 +1080,14 @@ def main():
 
     # Setup materials.
     material = bpy.data.materials.new("Flat Black")
-    material.use_nodes = False
-    material.specular_intensity = 0.0
-    material.diffuse_color = (0.0, 0.0, 0.0, 1.0)
     MATERIAL_FROM_COLOR["black"] = material
     del material
     material = bpy.data.materials.new("Flat Grey")
-    material.use_nodes = False
-    material.specular_intensity = 0.0
-    material.diffuse_color = (0.4, 0.4, 0.4, 1.0)
+    nodes = material.node_tree.nodes
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    output = nodes.new("ShaderNodeOutputMaterial")
+    material.node_tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+    bsdf.inputs['Base Color'].default_value = (0.4, 0.4, 0.4, 1.0)
     MATERIAL_FROM_COLOR["grey"] = material
     del material
 

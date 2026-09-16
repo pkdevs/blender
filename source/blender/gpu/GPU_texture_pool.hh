@@ -11,54 +11,71 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
-
 #include "GPU_texture.hh"
 
 namespace blender::gpu {
 
 class TexturePool {
- private:
-  /* Defer deallocation enough cycles to avoid interleaved calls to different viewport render
-   * functions (selection / display) causing constant allocation / deallocation (See #113024). */
-  static constexpr int max_unused_cycles_ = 8;
-
-  struct TextureHandle {
-    GPUTexture *texture;
-    /* Counts the number of `reset()` call since the last use.
-     * The texture memory is deallocated after a certain number of cycles. */
-    int unused_cycles;
-  };
-
-  /* Pool of texture ready to be reused. */
-  blender::Vector<TextureHandle> pool_;
-  /* List of textures that are currently being used. Tracked to check memory leak. */
-  blender::Vector<GPUTexture *> acquired_;
-
  public:
-  ~TexturePool();
+  virtual ~TexturePool() = default;
 
   /* Return the texture pool from the active GPUContext.
    * Only valid if a context is active. */
   static TexturePool &get();
 
-  /* Acquire a texture from the pool with the given characteristics. */
-  GPUTexture *acquire_texture(int width,
-                              int height,
-                              eGPUTextureFormat format,
-                              eGPUTextureUsage usage);
-  /* Release the texture so that its memory can be reused at some other point. */
-  void release_texture(GPUTexture *tmp_tex);
+  /* Acquire a texture of a particular type from the pool. */
+  virtual Texture *acquire_texture_1d(int extent,
+                                      int mip_len,
+                                      TextureFormat format,
+                                      eGPUTextureUsage usage,
+                                      const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_1d_array(int extent,
+                                            int layer_len,
+                                            int mip_len,
+                                            TextureFormat format,
+                                            eGPUTextureUsage usage,
+                                            const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_2d(int2 extent,
+                                      int mip_len,
+                                      TextureFormat format,
+                                      eGPUTextureUsage usage,
+                                      const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_2d_array(int2 extent,
+                                            int layer_len,
+                                            int mip_len,
+                                            TextureFormat format,
+                                            eGPUTextureUsage usage,
+                                            const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_3d(int3 extent,
+                                      int mip_len,
+                                      TextureFormat format,
+                                      eGPUTextureUsage usage,
+                                      const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_cube(int extent,
+                                        int mip_len,
+                                        TextureFormat format,
+                                        eGPUTextureUsage usage,
+                                        const char *name = nullptr) = 0;
+  virtual Texture *acquire_texture_cube_array(int extent,
+                                              int layer_len,
+                                              int mip_len,
+                                              TextureFormat format,
+                                              eGPUTextureUsage usage,
+                                              const char *name = nullptr) = 0;
 
-  /* Transfer ownership of a texture from the pool to the caller. */
-  void take_texture_ownership(GPUTexture *tex);
-  /* Transfer back ownership to the pool. The texture will become part of the pool. */
-  void give_texture_ownership(GPUTexture *tex);
+  /* Release the texture back into the pool so it can be reused. */
+  virtual void release_texture(Texture *tex) = 0;
 
-  /* Ensure no texture is still acquired and release unused textures.
-   * If `force_free` is true, free all the texture memory inside the pool.
-   * Otherwise, only unused textures will be freed. */
-  void reset(bool force_free = false);
+  /* Validate acquired texture counters and release unused textures.
+   * If `force_free` is true, free unused texture memory inside the pool. */
+  virtual void reset(bool force_free = false) = 0;
+
+  /* Modify the internal counter of an acquired texture.
+   * Used by `TextureFromPool::retain()` in `DRW_gpu_wrapper.hh`. */
+  virtual void offset_users_count(Texture *tex, int offset) = 0;
 };
 
 }  // namespace blender::gpu

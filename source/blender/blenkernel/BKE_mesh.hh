@@ -19,7 +19,11 @@
 namespace blender::bke {
 
 enum class AttrDomain : int8_t;
+enum class AttrType : int16_t;
+struct AttributeMetaData;
 struct AttributeAccessorFunctions;
+
+struct AttributeFilter;
 
 namespace mesh {
 /* -------------------------------------------------------------------- */
@@ -56,7 +60,7 @@ void vert_tris_from_corner_tris(Span<int> corner_verts,
                                 Span<int3> corner_tris,
                                 MutableSpan<int3> vert_tris);
 
-/** Return the triangle's three edge indices they are real edges, otherwise -1. */
+/** Return the triangle's three edge indices if they are real edges, otherwise -1. */
 int3 corner_tri_get_real_edges(Span<int2> edges,
                                Span<int> corner_verts,
                                Span<int> corner_edges,
@@ -128,7 +132,7 @@ struct CornerNormalSpace {
   /** Third vector, orthogonal to #vec_lnor and #vec_ref. */
   float3 vec_ortho;
   /**
-   * Reference angle around #vec_ortho, in ]0, pi] range, between #vec_lnor and the reference edge.
+   * Reference angle around #vec_ortho, in (0, pi] range, between #vec_lnor and the reference edge.
    *
    * A 0.0 value marks that space as invalid, as it can only happen in extremely degenerate
    * geometry cases (it would mean that the default normal is perfectly aligned with the reference
@@ -136,7 +140,7 @@ struct CornerNormalSpace {
    */
   float ref_alpha;
   /**
-   * Reference angle around #vec_lnor, in ]0, 2pi] range, between the reference edge and the other
+   * Reference angle around #vec_lnor, in (0, 2pi] range, between the reference edge and the other
    * border edge of the fan.
    *
    * A 0.0 value marks that space as invalid, as it can only happen in degenerate geometry cases
@@ -148,15 +152,10 @@ struct CornerNormalSpace {
 
 /**
  * Storage for corner fan coordinate spaces for an entire mesh.
+ * For performance reason the distribution of #spaces and index mapping of them in
+ * #corner_space_indices are non-deterministic.
  */
 struct CornerNormalSpaceArray {
-  /**
-   * Results are added from multiple threads. The lock is an easy way to parallelize adding results
-   * for each corner fan. This method means the order of spaces in the `spaces` vector and
-   * `corners_by_face` is non-deterministic. That shouldn't affect the final output for the user
-   * though.
-   */
-  Mutex build_mutex;
   /**
    * The normal coordinate spaces, potentially shared between multiple face corners in a smooth fan
    * connected to a vertex (and not per face corner). Depending on the mesh (the amount of sharing
@@ -184,7 +183,7 @@ short2 corner_space_custom_normal_to_data(const CornerNormalSpace &lnor_space,
                                           const float3 &custom_lnor);
 
 /**
- * Compute split normals, i.e. vertex normals associated with each face. Used to visualize sharp
+ * Compute custom normals, i.e. vertex normals associated with each face. Used to visualize sharp
  * edges (or non-smooth faces) without actually modifying the geometry (splitting edges).
  *
  * \param sharp_edges: Optional array of sharp edge tags, used to split the evaluated normals on
@@ -252,6 +251,23 @@ void edges_sharp_from_angle_set(OffsetIndices<int> faces,
                                 Span<bool> sharp_faces,
                                 const float split_angle,
                                 MutableSpan<bool> sharp_edges);
+
+/** Return true if the type and domain represent the tangent-space custom normals storage. */
+bool is_corner_fan_normals(const AttributeMetaData &meta_data);
+
+/** Tracks the storage format for a resulting mesh based on a combination of input meshes. */
+class NormalJoinInfo {
+ public:
+  enum class Output : int8_t { None, CornerFan, Free };
+  Output result_type = Output::None;
+  std::optional<bke::AttrDomain> result_domain;
+
+  void add_no_custom_normals(bke::MeshNormalDomain domain);
+  void add_corner_fan_normals();
+  void add_domain(bke::AttrDomain domain);
+  void add_free_normals(bke::AttrDomain domain);
+  void add_mesh(const Mesh &mesh);
+};
 
 }  // namespace mesh
 
@@ -362,6 +378,14 @@ inline int edge_other_vert(const int2 edge, const int vert)
 
 /** \} */
 
+/** Whether the meta-data refers to a float2 type on the face corner domain. */
+bool is_uv_map(const AttributeMetaData &meta_data);
+bool is_uv_map(const std::optional<AttributeMetaData> &meta_data);
+
+/** Whether the meta-data refers to a color type on the point or corner domain. */
+bool is_color_attribute(const AttributeMetaData &meta_data);
+bool is_color_attribute(const std::optional<AttributeMetaData> &meta_data);
+
 }  // namespace mesh
 
 /** Create a mesh with no built-in attributes. */
@@ -369,6 +393,11 @@ Mesh *mesh_new_no_attributes(int verts_num, int edges_num, int faces_num, int co
 
 /** Calculate edges from faces. */
 void mesh_calc_edges(Mesh &mesh, bool keep_existing_edges, bool select_new_edges);
+
+void mesh_calc_edges(Mesh &mesh,
+                     bool keep_existing_edges,
+                     bool select_new_edges,
+                     const AttributeFilter &attribute_filter);
 
 void mesh_translate(Mesh &mesh, const float3 &translation, bool do_shape_keys);
 
@@ -389,7 +418,8 @@ void mesh_sharp_edges_set_from_angle(Mesh &mesh, float angle, bool keep_sharp_ed
 
 /**
  * Calculate edge visibility based on vertex visibility, hides an edge when either of its
- * vertices are hidden. */
+ * vertices are hidden.
+ */
 void mesh_edge_hide_from_vert(Span<int2> edges, Span<bool> hide_vert, MutableSpan<bool> hide_edge);
 
 /* Hide faces when any of their vertices are hidden. */
@@ -412,9 +442,18 @@ void mesh_select_face_flush(Mesh &mesh);
 
 /** Set the default name when adding a color attribute if there is no default yet. */
 void mesh_ensure_default_color_attribute_on_add(Mesh &mesh,
-                                                StringRef id,
+                                                StringRef name,
                                                 AttrDomain domain,
-                                                eCustomDataType data_type);
+                                                bke::AttrType data_type);
+void mesh_ensure_default_uv_attribute_on_add(Mesh &mesh,
+                                             StringRef name,
+                                             AttrDomain domain,
+                                             bke::AttrType data_type);
+
+/** Make sure that if there are any uv maps, the active one is set. */
+void mesh_ensure_active_uv_map(Mesh &mesh);
+/** Make sure that if there are any uv maps, the default one is set. */
+void mesh_ensure_default_uv_map(Mesh &mesh);
 
 void mesh_data_update(Depsgraph &depsgraph,
                       const Scene &scene,
@@ -424,6 +463,37 @@ void mesh_data_update(Depsgraph &depsgraph,
 /** Remove strings referring to attributes if they no longer exist. */
 void mesh_remove_invalid_attribute_strings(Mesh &mesh);
 
+/**
+ * Check whether the mesh upholds required invariants and fix errors by removing invalid elements
+ * or correcting attribute values.
+ *
+ * \param allow_missing_edges: When true, faces with missing edges are not treated as errors.
+ * Missing edges are still computed, but no error is printed and the return value is not affected.
+ * Useful for importers that produce faces without edges.
+ *
+ * \return True if the mesh was valid (fixes were not applied).
+ */
+bool mesh_validate(Mesh &mesh, bool verbose = false, bool allow_missing_edges = false);
+
+/**
+ * Check whether the mesh upholds required invariants.
+ * \return True if the mesh is valid.
+ */
+bool mesh_is_valid(const Mesh &mesh, bool verbose = true);
+
+/**
+ * Check whether face material indices are valid, and correct them if not.
+ * \return True if the indices were valid.
+ */
+bool mesh_validate_material_indices(Mesh &mesh);
+
+/**
+ * Check whether faces contain duplicate vertex indices.
+ * \return a mask of all invalid faces.
+ */
+IndexMask mesh_find_faces_duplicate_verts(const Mesh &mesh, IndexMaskMemory &memory);
+
+void mesh_apply_spatial_organization(Mesh &mesh);
 const AttributeAccessorFunctions &mesh_attribute_accessor_functions();
 
 }  // namespace blender::bke

@@ -134,28 +134,23 @@ class PARTICLE_UL_particle_systems(UIList):
         ob = data
         psys = item
 
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            md = find_modifier(ob, psys)
-            row = layout.row(align=True)
+        md = find_modifier(ob, psys)
+        row = layout.row(align=True)
 
-            row.prop(psys, "name", text="", emboss=False, icon_value=icon)
-            if md:
-                row.prop(
-                    md,
-                    "show_viewport",
-                    emboss=False,
-                    icon_only=True,
-                )
-                row.prop(
-                    md,
-                    "show_render",
-                    emboss=False,
-                    icon_only=True,
-                )
-
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon)
+        row.prop(psys, "name", text="", emboss=False, icon_value=icon)
+        if md:
+            row.prop(
+                md,
+                "show_viewport",
+                emboss=False,
+                icon_only=True,
+            )
+            row.prop(
+                md,
+                "show_render",
+                emboss=False,
+                icon_only=True,
+            )
 
 
 class PARTICLE_PT_context_particles(ParticleButtonsPanel, Panel):
@@ -1290,8 +1285,10 @@ class PARTICLE_PT_boidbrain(ParticleButtonsPanel, Panel):
 
         # Currently boids can only use the first state so these are commented out for now.
         # row = layout.row()
-        # row.template_list("UI_UL_list", "particle_boids", boids, "states",
-        #                   boids, "active_boid_state_index", compact="True")
+        # row.template_list(
+        #     "UI_UL_list", "particle_boids", boids, "states",
+        #     boids, "active_boid_state_index", compact="True",
+        # )
         # col = row.row()
         # sub = col.row(align=True)
         # sub.operator("boid.state_add", icon='ADD', text="")
@@ -1391,8 +1388,10 @@ class PARTICLE_PT_render(ParticleButtonsPanel, Panel):
 
         if (
                 part.type == 'EMITTER' or
-                part.type in {'FLIP', 'SPRAY', 'BUBBLE', 'FOAM', 'TRACER',
-                              'SPRAYFOAM', 'SPRAYBUBBLE', 'FOAMBUBBLE', 'SPRAYFOAMBUBBLE'} or
+                part.type in {
+                    'FLIP', 'SPRAY', 'BUBBLE', 'FOAM', 'TRACER',
+                    'SPRAYFOAM', 'SPRAYBUBBLE', 'FOAMBUBBLE', 'SPRAYFOAMBUBBLE',
+                } or
                 (part.render_type in {'OBJECT', 'COLLECTION'} and part.type == 'HAIR')
         ):
             if part.render_type != 'NONE':
@@ -1658,7 +1657,7 @@ class PARTICLE_PT_draw(ParticleButtonsPanel, Panel):
 
         if path:
             col.prop(part, "display_step", text="Strand Steps")
-        col.prop(part, "display_percentage", slider=True, text="Amount")
+        col.prop(part, "display_percentage", slider=True, text="Amount", text_ctxt=i18n_contexts.countable)
         if part.display_method != 'RENDER' or part.render_type == 'HALO':
             col.prop(part, "display_size", text="Size")
 

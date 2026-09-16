@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_index_range.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_task.hh"
 
@@ -11,6 +11,8 @@
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
+
+#include "BKE_type_conversions.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_state.hh"
@@ -26,42 +28,47 @@
 
 namespace blender::compositor {
 
-static void compute_preview_cpu(Context &context,
-                                const Result &input_result,
-                                bke::bNodePreview *preview)
+static void compute_preview_cpu(Context &context, const Result &input, ImBuf *output)
 {
-  const int2 input_size = input_result.domain().size;
-  const int2 preview_size = int2(preview->ibuf->x, preview->ibuf->y);
+  const int2 input_size = input.domain().data_size;
+  const int2 preview_size = int2(output->x, output->y);
 
-  ColormanageProcessor *color_processor = IMB_colormanagement_display_processor_new(
+  Result input_as_color = context.create_result(ResultType::Color);
+  if (input.type() == ResultType::Color) {
+    input_as_color.share_data(input);
+  }
+  else {
+    input_as_color.allocate_texture(input.domain());
+    const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+    conversions.convert_to_initialized_n(input.cpu_data(), input_as_color.cpu_data_for_write());
+  }
+
+  ColormanageProcessor color_processor = ColormanageProcessor::display_processor_new(
       &context.get_scene().view_settings, &context.get_scene().display_settings);
 
+  uchar *data_dst = output->byte_data_for_write();
   threading::parallel_for(IndexRange(preview_size.y), 1, [&](const IndexRange sub_y_range) {
     for (const int64_t y : sub_y_range) {
       for (const int64_t x : IndexRange(preview_size.x)) {
         const int2 coordinates = int2((float2(x, y) / float2(preview_size)) * float2(input_size));
-        float4 color = input_result.load_pixel_generic_type(coordinates);
-        if (input_result.type() == ResultType::Float) {
-          color = float4(float3(color.x), 1.0f);
-        }
-        IMB_colormanagement_processor_apply_v4(color_processor, color);
+
+        Color color = input_as_color.load_pixel<Color>(coordinates);
+        color_processor.apply_v4(color);
 
         const int64_t index = (y * preview_size.x + x) * 4;
-        rgba_float_to_uchar(preview->ibuf->byte_buffer.data + index, color);
+        rgba_float_to_uchar(data_dst + index, color);
       }
     }
   });
 
-  IMB_colormanagement_processor_free(color_processor);
+  input_as_color.release();
 }
 
-static void compute_preview_gpu(Context &context,
-                                const Result &input_result,
-                                bke::bNodePreview *preview)
+static void compute_preview_gpu(Context &context, const Result &input_result, ImBuf *output)
 {
-  const int2 preview_size = int2(preview->ibuf->x, preview->ibuf->y);
+  const int2 preview_size = int2(output->x, output->y);
 
-  GPUShader *shader = context.get_shader("compositor_compute_preview");
+  gpu::Shader *shader = context.get_shader("compositor_compute_preview");
   GPU_shader_bind(shader);
 
   if (input_result.type() == ResultType::Float) {
@@ -90,21 +97,21 @@ static void compute_preview_gpu(Context &context,
       GPU_texture_read(preview_result, GPU_DATA_FLOAT, 0));
   preview_result.release();
 
-  ColormanageProcessor *color_processor = IMB_colormanagement_display_processor_new(
+  ColormanageProcessor color_processor = ColormanageProcessor::display_processor_new(
       &context.get_scene().view_settings, &context.get_scene().display_settings);
 
+  uchar *data_dst = output->byte_data_for_write();
   threading::parallel_for(IndexRange(preview_size.y), 1, [&](const IndexRange sub_y_range) {
     for (const int64_t y : sub_y_range) {
       for (const int64_t x : IndexRange(preview_size.x)) {
         const int64_t index = (y * preview_size.x + x) * 4;
-        IMB_colormanagement_processor_apply_v4(color_processor, preview_pixels + index);
-        rgba_float_to_uchar(preview->ibuf->byte_buffer.data + index, preview_pixels + index);
+        color_processor.apply_v4(preview_pixels + index);
+        rgba_float_to_uchar(data_dst + index, preview_pixels + index);
       }
     }
   });
 
-  MEM_freeN(preview_pixels);
-  IMB_colormanagement_processor_free(color_processor);
+  MEM_delete(preview_pixels);
 }
 
 /* Given the size of a result, compute a lower resolution size for a preview. The greater dimension
@@ -119,23 +126,18 @@ static int2 compute_preview_size(int2 size)
   return int2(int(greater_dimension_size * (float(size.x) / size.y)), greater_dimension_size);
 }
 
-void compute_preview(Context &context, const DNode &node, const Result &input_result)
+ImBuf *compute_preview(Context &context, const Result &input)
 {
-  /* Initialize node tree previews if not already initialized. */
-  bNodeTree *root_tree = const_cast<bNodeTree *>(
-      &node.context()->derived_tree().root_context().btree());
-
-  const int2 preview_size = compute_preview_size(input_result.domain().size);
-
-  bke::bNodePreview *preview = bke::node_preview_verify(
-      root_tree->runtime->previews, node.instance_key(), preview_size.x, preview_size.y, true);
-
+  const int2 preview_size = compute_preview_size(input.domain().data_size);
+  ImBuf *image_buffer = IMB_allocImBuf(UNPACK2(preview_size), ImBufFlags::ByteData);
   if (context.use_gpu()) {
-    compute_preview_gpu(context, input_result, preview);
+    compute_preview_gpu(context, input, image_buffer);
   }
   else {
-    compute_preview_cpu(context, input_result, preview);
+    compute_preview_cpu(context, input, image_buffer);
   }
+
+  return image_buffer;
 }
 
 }  // namespace blender::compositor

@@ -11,11 +11,7 @@
 #  include "device/hip/queue.h"
 #  include "device/hiprt/queue.h"
 
-#  ifdef WITH_HIP_DYNLOAD
-#    include <hiprtew.h>
-#  else
-#    include <hiprt/hiprt_types.h>
-#  endif
+#  include <hiprt/hiprt_types.h>
 
 CCL_NAMESPACE_BEGIN
 
@@ -29,22 +25,24 @@ class BVHHIPRT;
 class HIPRTDevice : public HIPDevice {
 
  public:
-  BVHLayoutMask get_bvh_layout_mask(const uint kernel_features) const override;
+  static bool is_supported();
+
+  BVHLayoutMask get_bvh_layout_mask(uint64_t kernel_features) const override;
 
   HIPRTDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
 
   ~HIPRTDevice() override;
   unique_ptr<DeviceQueue> gpu_queue_create() override;
-  string compile_kernel_get_common_cflags(const uint kernel_features) override;
-  string compile_kernel(const uint kernel_features,
-                        const char *name,
-                        const char *base = "hiprt") override;
+  string compile_kernel_get_common_cflags(uint64_t kernel_features);
+  string compile_kernel(uint64_t kernel_features, const char *name, const char *base = "hiprt");
 
-  bool load_kernels(const uint kernel_features) override;
+  bool load_kernels(uint64_t kernel_features) override;
 
   void const_copy_to(const char *name, void *host, const size_t size) override;
 
   void build_bvh(BVH *bvh, Progress &progress, bool refit) override;
+
+  void release_bvh(BVH *bvh) override;
 
   hiprtContext get_hiprt_context()
   {
@@ -60,19 +58,26 @@ class HIPRTDevice : public HIPDevice {
   hiprtGeometryBuildInput prepare_triangle_blas(BVHHIPRT *bvh, Mesh *mesh);
   hiprtGeometryBuildInput prepare_curve_blas(BVHHIPRT *bvh, Hair *hair);
   hiprtGeometryBuildInput prepare_point_blas(BVHHIPRT *bvh, PointCloud *pointcloud);
-  void build_blas(BVHHIPRT *bvh, Geometry *geom, hiprtBuildOptions options);
-  hiprtScene build_tlas(BVHHIPRT *bvh,
-                        const vector<Object *> &objects,
-                        hiprtBuildOptions options,
-                        bool refit);
+  void build_blas(BVHHIPRT *bvh, Geometry *geom);
+  hiprtScene build_tlas(BVHHIPRT *bvh, const vector<Object *> &objects, bool refit);
+  void free_bvh_memory_delayed();
 
   hiprtContext hiprt_context;
+  hipModule_t hiprt_module_;
+
   hiprtScene scene;
   hiprtFuncTable functions_table;
 
   thread_mutex hiprt_mutex;
   size_t scratch_buffer_size;
   device_vector<char> scratch_buffer;
+
+  /* This vector tracks the hiprt_geom members of BVHRT so that device memory
+   * can be managed/released in HIPRTDevice.
+   * Even if synchronization occurs before memory release, a GPU job may still
+   * launch between synchronization and release, potentially causing the GPU
+   * to access unmapped memory. */
+  vector<hiprtGeometry> stale_bvh;
 
   /* Is this scene using motion blur? Note there might exist motion data even if
    * motion blur is disabled, for render passes. */
@@ -115,18 +120,6 @@ class HIPRTDevice : public HIPDevice {
   device_vector<int> user_instance_id;
   device_vector<hiprtInstance> hiprt_blas_ptr;
   device_vector<uint64_t> blas_ptr;
-
-  /* custom_prim_info stores custom information for custom primitives for all the primitives in a
-   * scene. Primitive id that HIP RT returns is local to the geometry that was hit.
-   * custom_prim_info_offset returns the offset required to add to the primitive id to retrieve
-   * primitive info from custom_prim_info. */
-  device_vector<int2> custom_prim_info;
-  device_vector<int2> custom_prim_info_offset;
-
-  /* prims_time stores primitive time for geometries with motion blur.
-   * prim_time_offset returns the offset to add to primitive id to retrieve primitive time. */
-  device_vector<float2> prims_time;
-  device_vector<int> prim_time_offset;
 };
 CCL_NAMESPACE_END
 

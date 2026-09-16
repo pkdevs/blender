@@ -11,7 +11,7 @@
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_task.hh"
 #include "BLI_virtual_array.hh"
 
@@ -21,6 +21,7 @@
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "ED_mesh.hh"
 
@@ -34,98 +35,24 @@
 
 namespace blender::draw {
 
-static void extract_set_bits(const BitSpan bits, MutableSpan<int> indices)
-{
-  int count = 0;
-  for (const int64_t i : bits.index_range()) {
-    if (bits[i]) {
-      indices[count] = int(i);
-      count++;
-    }
-  }
-  BLI_assert(count == indices.size());
-}
-
-static void mesh_render_data_loose_geom_mesh(const MeshRenderData &mr, MeshBufferCache &cache)
-{
-  const Mesh &mesh = *mr.mesh;
-  const bool no_loose_vert_hint = mesh.runtime->loose_verts_cache.is_cached() &&
-                                  mesh.runtime->loose_verts_cache.data().count == 0;
-  const bool no_loose_edge_hint = mesh.runtime->loose_edges_cache.is_cached() &&
-                                  mesh.runtime->loose_edges_cache.data().count == 0;
-  threading::parallel_invoke(
-      mesh.edges_num > 4096 && !no_loose_vert_hint && !no_loose_edge_hint,
-      [&]() {
-        const bke::LooseEdgeCache &loose_edges = mesh.loose_edges();
-        if (loose_edges.count > 0) {
-          cache.loose_geom.edges.reinitialize(loose_edges.count);
-          extract_set_bits(loose_edges.is_loose_bits, cache.loose_geom.edges);
-        }
-      },
-      [&]() {
-        const bke::LooseVertCache &loose_verts = mesh.loose_verts();
-        if (loose_verts.count > 0) {
-          cache.loose_geom.verts.reinitialize(loose_verts.count);
-          extract_set_bits(loose_verts.is_loose_bits, cache.loose_geom.verts);
-        }
-      });
-}
-
-static void mesh_render_data_loose_verts_bm(const MeshRenderData &mr,
-                                            MeshBufferCache &cache,
-                                            BMesh &bm)
-{
-  int i;
-  BMIter iter;
-  BMVert *vert;
-  int count = 0;
-  Array<int> loose_verts(mr.verts_num);
-  BM_ITER_MESH_INDEX (vert, &iter, &bm, BM_VERTS_OF_MESH, i) {
-    if (vert->e == nullptr) {
-      loose_verts[count] = i;
-      count++;
-    }
-  }
-  if (count < mr.verts_num) {
-    cache.loose_geom.verts = loose_verts.as_span().take_front(count);
-  }
-  else {
-    cache.loose_geom.verts = std::move(loose_verts);
-  }
-}
-
-static void mesh_render_data_loose_edges_bm(const MeshRenderData &mr,
-                                            MeshBufferCache &cache,
-                                            BMesh &bm)
-{
-  int i;
-  BMIter iter;
-  BMEdge *edge;
-  int count = 0;
-  Array<int> loose_edges(mr.edges_num);
-  BM_ITER_MESH_INDEX (edge, &iter, &bm, BM_EDGES_OF_MESH, i) {
-    if (edge->l == nullptr) {
-      loose_edges[count] = i;
-      count++;
-    }
-  }
-  if (count < mr.edges_num) {
-    cache.loose_geom.edges = loose_edges.as_span().take_front(count);
-  }
-  else {
-    cache.loose_geom.edges = std::move(loose_edges);
-  }
-}
-
 static void mesh_render_data_loose_geom_build(const MeshRenderData &mr, MeshBufferCache &cache)
 {
   if (mr.extract_type == MeshExtractType::Mesh) {
-    mesh_render_data_loose_geom_mesh(mr, cache);
+    cache.loose_geom.verts = mr.mesh->loose_verts();
+    cache.loose_geom.edges = mr.mesh->loose_edges();
   }
   else {
     BMesh &bm = *mr.bm;
-    mesh_render_data_loose_verts_bm(mr, cache, bm);
-    mesh_render_data_loose_edges_bm(mr, cache, bm);
+    /* Use LinearAllocator instead of IndexMaskMemory to avoid over-allocation. */
+    cache.loose_geom.allocator = std::make_unique<LinearAllocator<>>();
+    cache.loose_geom.verts = IndexMask::from_predicate(
+        IndexRange(bm.totvert), *cache.loose_geom.allocator, [&](const int i) {
+          return BM_vert_at_index(&bm, i)->e == nullptr;
+        });
+    cache.loose_geom.edges = IndexMask::from_predicate(
+        IndexRange(bm.totedge), *cache.loose_geom.allocator, [&](const int i) {
+          return BM_edge_at_index(&bm, i)->l == nullptr;
+        });
   }
 }
 
@@ -358,81 +285,6 @@ const SortedFaceData &mesh_render_data_faces_sorted_ensure(const MeshRenderData 
 /** \name Mesh/BMesh Interface (indirect, partially cached access to complex data).
  * \{ */
 
-const Mesh &editmesh_final_or_this(const Object &object, const Mesh &mesh)
-{
-  if (mesh.runtime->edit_mesh != nullptr) {
-    if (const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&object)) {
-      return *editmesh_eval_final;
-    }
-  }
-
-  return mesh;
-}
-
-const CustomData &mesh_cd_ldata_get_from_mesh(const Mesh &mesh)
-{
-  switch (mesh.runtime->wrapper_type) {
-    case ME_WRAPPER_TYPE_SUBD:
-    case ME_WRAPPER_TYPE_MDATA:
-      return mesh.corner_data;
-      break;
-    case ME_WRAPPER_TYPE_BMESH:
-      return mesh.runtime->edit_mesh->bm->ldata;
-      break;
-  }
-
-  BLI_assert(0);
-  return mesh.corner_data;
-}
-
-const CustomData &mesh_cd_pdata_get_from_mesh(const Mesh &mesh)
-{
-  switch (mesh.runtime->wrapper_type) {
-    case ME_WRAPPER_TYPE_SUBD:
-    case ME_WRAPPER_TYPE_MDATA:
-      return mesh.face_data;
-      break;
-    case ME_WRAPPER_TYPE_BMESH:
-      return mesh.runtime->edit_mesh->bm->pdata;
-      break;
-  }
-
-  BLI_assert(0);
-  return mesh.face_data;
-}
-
-const CustomData &mesh_cd_edata_get_from_mesh(const Mesh &mesh)
-{
-  switch (mesh.runtime->wrapper_type) {
-    case ME_WRAPPER_TYPE_SUBD:
-    case ME_WRAPPER_TYPE_MDATA:
-      return mesh.edge_data;
-      break;
-    case ME_WRAPPER_TYPE_BMESH:
-      return mesh.runtime->edit_mesh->bm->edata;
-      break;
-  }
-
-  BLI_assert(0);
-  return mesh.edge_data;
-}
-
-const CustomData &mesh_cd_vdata_get_from_mesh(const Mesh &mesh)
-{
-  switch (mesh.runtime->wrapper_type) {
-    case ME_WRAPPER_TYPE_SUBD:
-    case ME_WRAPPER_TYPE_MDATA:
-      return mesh.vert_data;
-      break;
-    case ME_WRAPPER_TYPE_BMESH:
-      return mesh.runtime->edit_mesh->bm->vdata;
-      break;
-  }
-
-  BLI_assert(0);
-  return mesh.vert_data;
-}
-
 static bool bm_edge_is_sharp(const BMEdge *const &edge)
 {
   return !BM_elem_flag_test(edge, BM_ELEM_SMOOTH);
@@ -467,16 +319,18 @@ static bke::MeshNormalDomain bmesh_normals_domain(BMesh *bm)
   }
 
   BM_mesh_elem_table_ensure(bm, BM_FACE);
-  const VArray<bool> sharp_faces = VArray<bool>::ForDerivedSpan<const BMFace *, bm_face_is_sharp>(
-      Span(bm->ftable, bm->totface));
+  const VArray<bool> sharp_faces =
+      VArray<bool>::from_derived_span<const BMFace *, bm_face_is_sharp>(
+          Span(bm->ftable, bm->totface));
   const array_utils::BooleanMix face_mix = array_utils::booleans_mix_calc(sharp_faces);
   if (face_mix == array_utils::BooleanMix::AllTrue) {
     return bke::MeshNormalDomain::Face;
   }
 
   BM_mesh_elem_table_ensure(bm, BM_EDGE);
-  const VArray<bool> sharp_edges = VArray<bool>::ForDerivedSpan<const BMEdge *, bm_edge_is_sharp>(
-      Span(bm->etable, bm->totedge));
+  const VArray<bool> sharp_edges =
+      VArray<bool>::from_derived_span<const BMEdge *, bm_edge_is_sharp>(
+          Span(bm->etable, bm->totedge));
   const array_utils::BooleanMix edge_mix = array_utils::booleans_mix_calc(sharp_edges);
   if (edge_mix == array_utils::BooleanMix::AllTrue) {
     return bke::MeshNormalDomain::Face;
@@ -536,8 +390,20 @@ static void retrieve_active_attribute_names(MeshRenderData &mr,
                                             const Mesh &mesh)
 {
   const Mesh &mesh_final = editmesh_final_or_this(object, mesh);
-  mr.active_color_name = mesh_final.active_color_attribute;
+  mr.active_color_name = mesh_final.active_color_attribute ? mesh_final.active_color_attribute :
+                                                             mesh_final.default_color_attribute;
   mr.default_color_name = mesh_final.default_color_attribute;
+}
+
+static const Mesh *mesh_get_original_mesh(const Object &object)
+{
+  BLI_assert(object.type == OB_MESH);
+  if (const ID *data_orig = object.runtime->data_orig) {
+    if (data_orig->id_type() == ID_ME) {
+      return id_cast<const Mesh *>(data_orig);
+    }
+  }
+  return nullptr;
 }
 
 MeshRenderData mesh_render_data_create(Object &object,
@@ -555,12 +421,12 @@ MeshRenderData mesh_render_data_create(Object &object,
 
   mr.use_hide = use_hide;
 
-  const Mesh *editmesh_orig = BKE_object_get_pre_modified_mesh(&object);
-  if (editmesh_orig && editmesh_orig->runtime->edit_mesh) {
+  const Mesh *orig_mesh = mesh_get_original_mesh(object);
+  if (BMEditMesh *edit_mesh = orig_mesh ? orig_mesh->runtime->edit_mesh.get() : nullptr) {
     const Mesh *eval_cage = DRW_object_get_editmesh_cage_for_drawing(object);
 
-    mr.bm = editmesh_orig->runtime->edit_mesh->bm;
-    mr.edit_bmesh = editmesh_orig->runtime->edit_mesh.get();
+    mr.bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(orig_mesh));
+    mr.edit_bmesh = edit_mesh;
     mr.mesh = (do_final) ? &mesh : eval_cage;
     mr.edit_data = is_editmode ? mr.mesh->runtime->edit_data.get() : nullptr;
 
@@ -578,10 +444,10 @@ MeshRenderData mesh_render_data_create(Object &object,
       if (!emd->vert_positions.is_empty()) {
         mr.bm_vert_coords = mr.edit_data->vert_positions;
         if (mr.bm_free_normal_offset_vert == -1) {
-          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr.edit_bmesh, *emd);
+          mr.bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr.bm, *emd);
         }
         if (mr.bm_free_normal_offset_face == -1) {
-          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr.edit_bmesh, *emd);
+          mr.bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr.bm, *emd);
         }
       }
     }
@@ -591,7 +457,7 @@ MeshRenderData mesh_render_data_create(Object &object,
     BM_mesh_elem_index_ensure(mr.bm, bm_ensure_types);
     BM_mesh_elem_table_ensure(mr.bm, bm_ensure_types & ~BM_LOOP);
 
-    mr.efa_act_uv = EDBM_uv_active_face_get(mr.edit_bmesh, false, false);
+    mr.efa_act_uv = EDBM_uv_active_face_get(const_cast<Mesh *>(mr.mesh), false, false);
     mr.efa_act = BM_mesh_active_face_get(mr.bm, false, true);
     mr.eed_act = BM_mesh_active_edge_get(mr.bm);
     mr.eve_act = BM_mesh_active_vert_get(mr.bm);
@@ -601,8 +467,10 @@ MeshRenderData mesh_render_data_create(Object &object,
     mr.bweight_ofs = CustomData_get_offset_named(
         &mr.bm->edata, CD_PROP_FLOAT, "bevel_weight_edge");
 #ifdef WITH_FREESTYLE
-    mr.freestyle_edge_ofs = CustomData_get_offset(&mr.bm->edata, CD_FREESTYLE_EDGE);
-    mr.freestyle_face_ofs = CustomData_get_offset(&mr.bm->pdata, CD_FREESTYLE_FACE);
+    mr.freestyle_edge_ofs = CustomData_get_offset_named(
+        &mr.bm->edata, CD_PROP_BOOL, "freestyle_edge");
+    mr.freestyle_face_ofs = CustomData_get_offset_named(
+        &mr.bm->pdata, CD_PROP_BOOL, "freestyle_face");
 #endif
 
     /* Use bmesh directly when the object is unchanged by any modifiers. For non-final UVs, always

@@ -22,26 +22,56 @@
 
 #include "NOD_geometry_nodes_closure_location.hh"
 
+namespace blender {
+
 struct bNode;
 struct bNodeTree;
 struct NodesModifierData;
+struct SceneCompositorEffect;
+struct ID;
 
-namespace blender::nodes {
+namespace nodes {
 class Closure;
 }
 
-namespace blender::bke {
+namespace bke {
 
-class ModifierComputeContext : public ComputeContext {
+class DataBlockComputeContext : public ComputeContext {
+ private:
+  uint32_t orig_session_uid_;
+  const ID *id_ = nullptr;
+
+ public:
+  DataBlockComputeContext(const ComputeContext *parent, const ID &id);
+  DataBlockComputeContext(const ComputeContext *parent,
+                          uint32_t orig_session_uid,
+                          const ID *id = nullptr);
+
+  uint32_t orig_session_uid() const
+  {
+    return orig_session_uid_;
+  }
+
+  const ID *id() const
+  {
+    return id_;
+  }
+
+ private:
+  ComputeContextHash compute_hash() const override;
+  void print_current_in_line(std::ostream &stream) const override;
+};
+
+class GeometryNodesModifierComputeContext : public ComputeContext {
  private:
   /** #ModifierData.persistent_uid. */
   int modifier_uid_;
-  /** The modifier data that this context is for. This may be null. */
+  /** The geometry nodes modifier data that this context is for. This may be null. */
   const NodesModifierData *nmd_ = nullptr;
 
  public:
-  ModifierComputeContext(const ComputeContext *parent, const NodesModifierData &nmd);
-  ModifierComputeContext(const ComputeContext *parent, int modifier_uid);
+  GeometryNodesModifierComputeContext(const ComputeContext *parent, const NodesModifierData &nmd);
+  GeometryNodesModifierComputeContext(const ComputeContext *parent, int modifier_uid);
 
   int modifier_uid() const
   {
@@ -51,6 +81,25 @@ class ModifierComputeContext : public ComputeContext {
   const NodesModifierData *nmd() const
   {
     return nmd_;
+  }
+
+ private:
+  ComputeContextHash compute_hash() const override;
+  void print_current_in_line(std::ostream &stream) const override;
+};
+
+class SceneCompositorEffectComputeContext : public ComputeContext {
+ private:
+  /** The effect data that this context is for. */
+  const SceneCompositorEffect &effect_;
+
+ public:
+  SceneCompositorEffectComputeContext(const ComputeContext *parent,
+                                      const SceneCompositorEffect &effect);
+
+  const SceneCompositorEffect &effect() const
+  {
+    return effect_;
   }
 
  private:
@@ -177,6 +226,25 @@ class EvaluateClosureComputeContext : public NodeComputeContext {
   {
     return closure_source_location_;
   }
+
+  /**
+   * True if there is a parent context that evaluates the same closure already. This can only be
+   * used when the #ClosureSourceLocation is available.
+   */
+  bool is_recursive() const;
+};
+
+class ClosureToListComputeContext : public NodeComputeContext {
+ private:
+  int32_t node_id_;
+  int list_index_;
+
+ public:
+  ClosureToListComputeContext(const ComputeContext *parent, int32_t node_id, int list_index);
+
+ private:
+  ComputeContextHash compute_hash() const override;
+  void print_current_in_line(std::ostream &stream) const override;
 };
 
 class OperatorComputeContext : public ComputeContext {
@@ -199,4 +267,17 @@ class OperatorComputeContext : public ComputeContext {
   void print_current_in_line(std::ostream &stream) const override;
 };
 
-}  // namespace blender::bke
+class ShaderComputeContext : public ComputeContext {
+ private:
+  const bNodeTree *tree_ = nullptr;
+
+ public:
+  ShaderComputeContext(const ComputeContext *parent = nullptr, const bNodeTree *tree = nullptr);
+
+ private:
+  ComputeContextHash compute_hash() const override;
+  void print_current_in_line(std::ostream &stream) const override;
+};
+
+}  // namespace bke
+}  // namespace blender

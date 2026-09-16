@@ -152,6 +152,11 @@ class AddPresetBase:
                 self.report({'WARNING'}, "Failed to create presets path")
                 return {'CANCELLED'}
 
+            preset_filepath = bpy.utils.preset_find(filename, self.preset_subdir, ext=ext)
+            if _is_path_readonly(target_path) or preset_filepath:
+                self.report({'WARNING'}, "Cannot create preset \"{:s}\", as the name already exists".format(name))
+                return {'CANCELLED'}
+
             filepath = os.path.join(target_path, filename) + ext
 
             if hasattr(self, "add"):
@@ -160,7 +165,7 @@ class AddPresetBase:
                 print("Writing Preset: {!r}".format(filepath))
 
                 if is_xml:
-                    import rna_xml
+                    import _rna_xml as rna_xml
                     rna_xml.xml_file_write(context, filepath, preset_menu_class.preset_xml_map)
                 else:
 
@@ -297,10 +302,10 @@ class ExecutePreset(Operator):
             try:
                 bpy.utils.execfile(filepath)
             except Exception as ex:
-                self.report({'ERROR'}, "Failed to execute the preset: " + repr(ex))
+                self.report({'ERROR'}, rpt_("Failed to execute the preset: {:s}").format(repr(ex)))
 
         elif ext == ".xml":
-            import rna_xml
+            import _rna_xml as rna_xml
             preset_xml_map = preset_class.preset_xml_map
             preset_xml_secure_types = getattr(preset_class, "preset_xml_secure_types", None)
 
@@ -309,6 +314,50 @@ class ExecutePreset(Operator):
         _call_preset_cb(getattr(preset_class, "post_cb", None), context, filepath)
 
         return {'FINISHED'}
+
+
+class AddPresetTextStripStyle(AddPresetBase, Operator):
+    """Add or remove a text strip style and layout preset"""
+    bl_idname = "sequencer.text_strip_style_preset_add"
+    bl_label = "Add Text Strip Style Preset"
+    preset_menu = "STRIP_PT_effect_text_style_presets"
+
+    preset_defines = [
+        "strip = bpy.context.active_strip",
+    ]
+
+    preset_subdir = "sequencer/text_style"
+
+    @property
+    def preset_values(self):
+        preset_values = [
+            "strip.wrap_width",
+            "strip.use_bold",
+            "strip.use_italic",
+            "strip.font_size",
+            "strip.color",
+            "strip.use_outline",
+            "strip.outline_color",
+            "strip.outline_width",
+            "strip.use_shadow",
+            "strip.shadow_color",
+            "strip.shadow_angle",
+            "strip.shadow_offset",
+            "strip.shadow_blur",
+            "strip.use_box",
+            "strip.box_color",
+            "strip.box_margin",
+            "strip.box_roundness",
+            "strip.alignment_x",
+            "strip.anchor_x",
+            "strip.anchor_y",
+            "strip.location",
+        ]
+
+        strip = bpy.context.active_strip
+        if strip is not None and strip.font is not None:
+            preset_values.append("strip.font")
+        return preset_values
 
 
 class AddPresetRender(AddPresetBase, Operator):
@@ -408,6 +457,20 @@ class AddPresetCloth(AddPresetBase, Operator):
         "cloth.settings.compression_damping",
         "cloth.settings.shear_damping",
         "cloth.settings.bending_damping",
+        "cloth.settings.use_internal_springs",
+        "cloth.settings.internal_spring_max_length",
+        "cloth.settings.internal_spring_max_diversion",
+        "cloth.settings.internal_spring_normal_check",
+        "cloth.settings.internal_tension_stiffness",
+        "cloth.settings.internal_compression_stiffness",
+        "cloth.settings.internal_tension_stiffness_max",
+        "cloth.settings.internal_compression_stiffness_max",
+        "cloth.settings.use_pressure",
+        "cloth.settings.uniform_pressure_force",
+        "cloth.settings.use_pressure_volume",
+        "cloth.settings.target_volume",
+        "cloth.settings.pressure_factor",
+        "cloth.settings.fluid_density",
     ]
 
     preset_subdir = "cloth"
@@ -589,7 +652,6 @@ class AddPresetEEVEERaytracing(AddPresetBase, Operator):
         "eevee.fast_gi_quality",
         "eevee.fast_gi_distance",
         "eevee.fast_gi_thickness_near",
-        "eevee.fast_gi_thickness_far",
         "eevee.fast_gi_bias",
     ]
 
@@ -690,7 +752,7 @@ class SavePresetInterfaceTheme(AddPresetBase, Operator):
     # while redrawing as it may involve remote file-system access.
 
     def execute(self, context):
-        import rna_xml
+        import _rna_xml as rna_xml
         filepath = context.preferences.themes[0].filepath
         if (not filepath) or _is_path_readonly(filepath):
             self.report({'ERROR'}, "Built-in themes cannot be overwritten")
@@ -700,7 +762,7 @@ class SavePresetInterfaceTheme(AddPresetBase, Operator):
         try:
             rna_xml.xml_file_write(context, filepath, preset_menu_class.preset_xml_map)
         except Exception as ex:
-            self.report({'ERROR'}, "Unable to overwrite preset: {:s}".format(str(ex)))
+            self.report({'ERROR'}, rpt_("Unable to overwrite preset: {:s}").format(str(ex)))
             import traceback
             traceback.print_exc()
             return {'CANCELLED'}
@@ -937,7 +999,7 @@ class WM_OT_operator_presets_cleanup(Operator):
 
 
 class AddPresetGpencilBrush(AddPresetBase, Operator):
-    """Add or remove grease pencil brush preset"""
+    """Add or remove Grease Pencil brush preset"""
     bl_idname = "scene.gpencil_brush_preset_add"
     bl_label = "Add Grease Pencil Brush Preset"
     preset_menu = "VIEW3D_PT_gpencil_brush_presets"
@@ -1021,6 +1083,7 @@ classes = (
     RemovePresetKeyconfig,
     AddPresetNodeColor,
     AddPresetOperator,
+    AddPresetTextStripStyle,
     AddPresetRender,
     AddPresetCameraSafeAreas,
     AddPresetTextEditor,

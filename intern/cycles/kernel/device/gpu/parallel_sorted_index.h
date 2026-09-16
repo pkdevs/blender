@@ -12,42 +12,47 @@ CCL_NAMESPACE_BEGIN
  *
  * TODO: there may be ways to optimize this to avoid this many atomic ops? */
 
+#include "kernel/device/gpu/block_sizes.h"
 #include "util/atomic.h"
 
-#ifdef __HIP__
-#  define GPU_PARALLEL_SORTED_INDEX_DEFAULT_BLOCK_SIZE 1024
-#else
-#  define GPU_PARALLEL_SORTED_INDEX_DEFAULT_BLOCK_SIZE 512
+ccl_device_inline void gpu_parallel_sort_bucket_pass_impl(const uint num_states,
+                                                          const uint partition_size,
+                                                          const uint max_shaders,
+                                                          const uint queued_kernel,
+#if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                                                          ccl_gpu_shared int *buckets,
 #endif
-#define GPU_PARALLEL_SORTED_INDEX_INACTIVE_KEY (~0)
-#define GPU_PARALLEL_SORT_BLOCK_SIZE 1024
-
-#if defined(__KERNEL_LOCAL_ATOMIC_SORT__)
-
-ccl_device_inline void gpu_parallel_sort_bucket_pass(const uint num_states,
-                                                     const uint partition_size,
-                                                     const uint max_shaders,
-                                                     const uint queued_kernel,
-                                                     ccl_global ushort *d_queued_kernel,
-                                                     ccl_global uint *d_shader_sort_key,
-                                                     ccl_global int *partition_key_offsets,
-                                                     ccl_gpu_shared int *buckets,
-                                                     const ushort local_id,
-                                                     const ushort local_size,
-                                                     const uint grid_id)
+#ifdef __KERNEL_METAL__
+                                                          const ushort local_id,
+                                                          const ushort local_size,
+                                                          const uint grid_id,
+#endif
+                                                          ccl_global ushort *d_queued_kernel,
+                                                          ccl_global uint *d_shader_sort_key,
+                                                          ccl_global int *partition_key_offsets)
 {
+#ifndef __KERNEL_METAL__
+#  ifndef __KERNEL_ONEAPI__
+  extern ccl_gpu_shared int buckets[];
+#  endif
+
+  const ushort local_id = ccl_gpu_thread_idx_x;
+  const ushort local_size = ccl_gpu_block_dim_x;
+  const uint grid_id = ccl_gpu_block_idx_x;
+#endif
+
   /* Zero the bucket sizes. */
-  if (local_id < max_shaders) {
-    atomic_store_local(&buckets[local_id], 0);
+  for (uint i = local_id; i < max_shaders; i += local_size) {
+    atomic_store_local(&buckets[i], 0);
   }
 
-#  ifdef __KERNEL_ONEAPI__
+#ifdef __KERNEL_ONEAPI__
   /* NOTE(@nsirgien): For us here only local memory writing (buckets) is important,
    * so faster local barriers can be used. */
   ccl_gpu_local_syncthreads();
-#  else
+#else
   ccl_gpu_syncthreads();
-#  endif
+#endif
 
   /* Determine bucket sizes within the partitions. */
 
@@ -64,13 +69,13 @@ ccl_device_inline void gpu_parallel_sort_bucket_pass(const uint num_states,
     }
   }
 
-#  ifdef __KERNEL_ONEAPI__
+#ifdef __KERNEL_ONEAPI__
   /* NOTE(@nsirgien): For us here only local memory writing (buckets) is important,
    * so faster local barriers can be used. */
   ccl_gpu_local_syncthreads();
-#  else
+#else
   ccl_gpu_syncthreads();
-#  endif
+#endif
 
   /* Calculate the partition's local offsets from the prefix sum of bucket sizes. */
 
@@ -86,48 +91,104 @@ ccl_device_inline void gpu_parallel_sort_bucket_pass(const uint num_states,
   }
 }
 
-ccl_device_inline void gpu_parallel_sort_write_pass(const uint num_states,
-                                                    const uint partition_size,
-                                                    const uint max_shaders,
-                                                    const uint queued_kernel,
-                                                    const int num_states_limit,
-                                                    ccl_global int *indices,
-                                                    ccl_global ushort *d_queued_kernel,
-                                                    ccl_global uint *d_shader_sort_key,
-                                                    ccl_global int *partition_key_offsets,
-                                                    ccl_gpu_shared int *local_offset,
-                                                    const ushort local_id,
-                                                    const ushort local_size,
-                                                    const uint grid_id)
+#ifdef __KERNEL_METAL__
+
+#  define gpu_parallel_sort_bucket_pass(num_states, \
+                                        partition_size, \
+                                        max_shaders, \
+                                        queued_kernel, \
+                                        d_queued_kernel, \
+                                        d_shader_sort_key, \
+                                        partition_key_offsets) \
+    gpu_parallel_sort_bucket_pass_impl(num_states, \
+                                       partition_size, \
+                                       max_shaders, \
+                                       queued_kernel, \
+                                       (ccl_gpu_shared int *)threadgroup_array, \
+                                       metal_local_id, \
+                                       metal_local_size, \
+                                       metal_grid_id, \
+                                       d_queued_kernel, \
+                                       d_shader_sort_key, \
+                                       partition_key_offsets)
+
+#elif defined(__KERNEL_ONEAPI__)
+
+#  define gpu_parallel_sort_bucket_pass(num_states, \
+                                        partition_size, \
+                                        max_shaders, \
+                                        queued_kernel, \
+                                        d_queued_kernel, \
+                                        d_shader_sort_key, \
+                                        partition_key_offsets) \
+    gpu_parallel_sort_bucket_pass_impl(num_states, \
+                                       partition_size, \
+                                       max_shaders, \
+                                       queued_kernel, \
+                                       (ccl_gpu_shared int *)threadgroup_array, \
+                                       d_queued_kernel, \
+                                       d_shader_sort_key, \
+                                       partition_key_offsets)
+
+#else
+
+#  define gpu_parallel_sort_bucket_pass gpu_parallel_sort_bucket_pass_impl
+
+#endif
+
+ccl_device_inline void gpu_parallel_sort_write_pass_impl(const uint num_states,
+                                                         const uint partition_size,
+                                                         const int num_states_limit,
+                                                         ccl_global int *indices,
+                                                         const uint max_shaders,
+                                                         const uint queued_kernel,
+#if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                                                         ccl_gpu_shared int *local_offset,
+#endif
+#ifdef __KERNEL_METAL__
+                                                         const ushort local_id,
+                                                         const ushort local_size,
+                                                         const uint grid_id,
+#endif
+                                                         ccl_global ushort *d_queued_kernel,
+                                                         ccl_global uint *d_shader_sort_key,
+                                                         ccl_global int *partition_key_offsets)
 {
+#ifndef __KERNEL_METAL__
+#  ifndef __KERNEL_ONEAPI__
+  extern ccl_gpu_shared int local_offset[];
+#  endif
+
+  const ushort local_id = ccl_gpu_thread_idx_x;
+  const ushort local_size = ccl_gpu_block_dim_x;
+  const uint grid_id = ccl_gpu_block_idx_x;
+#endif
+
   /* Calculate each partition's global offset from the prefix sum of the active state counts per
    * partition. */
 
-  if (local_id < max_shaders) {
-    int partition_offset = 0;
-    for (int i = 0; i < uint(grid_id); i++) {
-      int partition_key_count = partition_key_offsets[max_shaders + uint(i) * (max_shaders + 1)];
-      partition_offset += partition_key_count;
-    }
-
-    ccl_global int *key_offsets = partition_key_offsets + (uint(grid_id) * (max_shaders + 1));
-    atomic_store_local(&local_offset[local_id], key_offsets[local_id] + partition_offset);
+  int partition_offset = 0;
+  for (uint i = 0; i < grid_id; i++) {
+    partition_offset += partition_key_offsets[max_shaders + i * (max_shaders + 1)];
   }
 
-#  ifdef __KERNEL_ONEAPI__
+  ccl_global int *key_offsets = partition_key_offsets + grid_id * (max_shaders + 1);
+  for (uint i = local_id; i < max_shaders; i += local_size) {
+    atomic_store_local(&local_offset[i], key_offsets[i] + partition_offset);
+  }
+
+#ifdef __KERNEL_ONEAPI__
   /* NOTE(@nsirgien): For us here only local memory writing (local_offset) is important,
    * so faster local barriers can be used. */
   ccl_gpu_local_syncthreads();
-#  else
+#else
   ccl_gpu_syncthreads();
-#  endif
+#endif
 
   /* Write the sorted active indices. */
 
   const uint partition_start = partition_size * uint(grid_id);
   const uint partition_end = min(num_states, partition_start + partition_size);
-
-  ccl_global int *key_offsets = partition_key_offsets + (uint(grid_id) * max_shaders);
 
   for (int state_index = partition_start + uint(local_id); state_index < partition_end;
        state_index += uint(local_size))
@@ -143,7 +204,58 @@ ccl_device_inline void gpu_parallel_sort_write_pass(const uint num_states,
   }
 }
 
-#endif /* __KERNEL_LOCAL_ATOMIC_SORT__ */
+#ifdef __KERNEL_METAL__
+
+#  define gpu_parallel_sort_write_pass(num_states, \
+                                       partition_size, \
+                                       num_states_limit, \
+                                       indices, \
+                                       max_shaders, \
+                                       queued_kernel, \
+                                       d_queued_kernel, \
+                                       d_shader_sort_key, \
+                                       partition_key_offsets) \
+    gpu_parallel_sort_write_pass_impl(num_states, \
+                                      partition_size, \
+                                      num_states_limit, \
+                                      indices, \
+                                      max_shaders, \
+                                      queued_kernel, \
+                                      (ccl_gpu_shared int *)threadgroup_array, \
+                                      metal_local_id, \
+                                      metal_local_size, \
+                                      metal_grid_id, \
+                                      d_queued_kernel, \
+                                      d_shader_sort_key, \
+                                      partition_key_offsets)
+
+#elif defined(__KERNEL_ONEAPI__)
+
+#  define gpu_parallel_sort_write_pass(num_states, \
+                                       partition_size, \
+                                       num_states_limit, \
+                                       indices, \
+                                       max_shaders, \
+                                       queued_kernel, \
+                                       d_queued_kernel, \
+                                       d_shader_sort_key, \
+                                       partition_key_offsets) \
+    gpu_parallel_sort_write_pass_impl(num_states, \
+                                      partition_size, \
+                                      num_states_limit, \
+                                      indices, \
+                                      max_shaders, \
+                                      queued_kernel, \
+                                      (ccl_gpu_shared int *)threadgroup_array, \
+                                      d_queued_kernel, \
+                                      d_shader_sort_key, \
+                                      partition_key_offsets)
+
+#else
+
+#  define gpu_parallel_sort_write_pass gpu_parallel_sort_write_pass_impl
+
+#endif
 
 template<typename GetKeyOp>
 __device__ void gpu_parallel_sorted_index_array(const uint state_index,
@@ -165,8 +277,8 @@ __device__ void gpu_parallel_sorted_index_array(const uint state_index,
       indices[index] = state_index;
     }
     else {
-      /* Can't process this state now, increase the counter again so that
-       * it will be handled in another iteration. */
+      /* Can't process this state now, increase the counter again
+       * so that it will be handled in another iteration. */
       atomic_fetch_and_add_uint32(&key_counter[key], 1);
     }
   }

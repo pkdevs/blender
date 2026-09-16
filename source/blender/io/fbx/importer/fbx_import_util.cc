@@ -10,7 +10,8 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_object_types.h"
 
@@ -103,7 +104,7 @@ void node_matrix_to_obj(const ufbx_node *node, Object *obj, const FbxElementMapp
 
       obj->parent = arm;
       obj->partype = PARBONE;
-      STRNCPY(obj->parsubstr, mapping.node_to_name.lookup_default(parbone, "").c_str());
+      STRNCPY_UTF8(obj->parsubstr, mapping.node_to_name.lookup_default(parbone, "").c_str());
 
 #ifdef FBX_DEBUG_PRINT
       fprintf(g_debug_file,
@@ -264,8 +265,7 @@ void read_custom_properties(const ufbx_props &props, ID &id, bool enums_as_strin
 static IDProperty *pchan_EnsureProperties(bPoseChannel &pchan)
 {
   if (pchan.prop == nullptr) {
-    pchan.prop = MEM_callocN<IDProperty>("IDProperty");
-    pchan.prop->type = IDP_GROUP;
+    pchan.prop = bke::idprop::create_group("").release();
   }
   return pchan.prop;
 }

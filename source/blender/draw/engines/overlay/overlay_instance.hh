@@ -27,6 +27,7 @@
 #include "overlay_force_field.hh"
 #include "overlay_grease_pencil.hh"
 #include "overlay_grid.hh"
+#include "overlay_gsplat.hh"
 #include "overlay_lattice.hh"
 #include "overlay_light.hh"
 #include "overlay_lightprobe.hh"
@@ -99,6 +100,7 @@ class Instance : public DrawEngine {
     Names names;
     Paints paints;
     Particles particles;
+    GSplats gsplats;
     PointClouds pointclouds;
     Prepass prepass;
     Relations relations = {selection_type_};
@@ -108,14 +110,17 @@ class Instance : public DrawEngine {
   } regular{selection_type_}, infront{selection_type_};
 
   Grid grid;
-
   AntiAliasing anti_aliasing;
   XrayFade xray_fade;
 
-  Instance() : selection_type_(select::SelectionType::DISABLED){};
-  Instance(const SelectionType selection_type) : selection_type_(selection_type){};
+  Instance() : selection_type_(select::SelectionType::DISABLED) {};
+  Instance(const SelectionType selection_type) : selection_type_(selection_type) {};
+  ~Instance() override
+  {
+    DRW_text_cache_destroy(state.dt);
+  }
 
-  blender::StringRefNull name_get() final
+  StringRefNull name_get() final
   {
     return "Overlay";
   }
@@ -150,6 +155,8 @@ class Instance : public DrawEngine {
   void draw_node(Manager &manager, View &view);
   void draw_v2d(Manager &manager, View &view);
   void draw_v3d(Manager &manager, View &view);
+
+  void draw_text(Framebuffer &framebuffer);
 
   void ensure_weight_ramp_texture();
 };

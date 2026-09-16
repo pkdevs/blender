@@ -9,11 +9,16 @@
 
 #include "movie_write.hh"
 
+#include "BLI_string_ref.hh"
+
+#include "DNA_camera_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "MOV_write.hh"
 
 #include "BKE_report.hh"
+#include "BKE_scene.hh"
 
 #ifdef WITH_FFMPEG
 #  include <cstdio>
@@ -21,15 +26,16 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BLI_fileops.h"
-#  include "BLI_math_base.h"
-#  include "BLI_math_color.h"
+#  include "BLI_fileops.hh"
+#  include "BLI_math_base.hh"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_math_color_c.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_threads.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_utildefines.hh"
 
-#  include "BKE_global.hh"
+#  include "BKE_blender_project.hh"
 #  include "BKE_image.hh"
 #  include "BKE_main.hh"
 #  include "BKE_path_templates.hh"
@@ -39,14 +45,19 @@
 #  include "MOV_enums.hh"
 #  include "MOV_util.hh"
 
+#  include "IMB_colormanagement.hh"
+
+#  include "CLG_log.h"
+
 #  include "ffmpeg_swscale.hh"
 #  include "movie_util.hh"
+#endif
 
+namespace blender {
+
+#ifdef WITH_FFMPEG
+static CLG_LogRef LOG = {"video.write"};
 static constexpr int64_t ffmpeg_autosplit_size = 2'000'000'000;
-
-#  define FF_DEBUG_PRINT \
-    if (G.debug & G_DEBUG_FFMPEG) \
-    printf
 
 static void ffmpeg_dict_set_int(AVDictionary **dict, const char *key, int value)
 {
@@ -56,6 +67,8 @@ static void ffmpeg_dict_set_int(AVDictionary **dict, const char *key, int value)
 static void ffmpeg_movie_close(MovieWriter *context);
 static bool ffmpeg_filepath_get(MovieWriter *context,
                                 char filepath[FILE_MAX],
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
@@ -143,6 +156,182 @@ static const char **get_file_extensions(int format)
   }
 }
 
+static void add_hdr_mastering_display_metadata(AVCodecParameters *codecpar,
+                                               AVCodecContext *c,
+                                               const ImageFormatData *imf)
+{
+  if (c->color_primaries != AVCOL_PRI_BT2020) {
+    return;
+  }
+
+  /* Get max nits from the view transform. */
+  int max_luminance = IMB_colormanagement_view_max_nits(imf->display_settings.display_device,
+                                                        imf->view_settings.view_transform);
+  if (c->color_trc == AVCOL_TRC_ARIB_STD_B67) {
+    /* HLG is max 1000 nits, and also a good guess if not found. */
+    max_luminance = (max_luminance == 0) ? 1000 : std::min(max_luminance, 1000);
+  }
+  else if (c->color_trc == AVCOL_TRC_SMPTEST2084) {
+    /* PQ is max 10000 nits. */
+    max_luminance = std::min(max_luminance, 10000);
+  }
+
+  /* If we don't know anything, don't write metadata. The video player will make some
+   * default assumption, often 1000 nits. */
+  if (max_luminance == 0) {
+    return;
+  }
+
+  AVPacketSideData *side_data = av_packet_side_data_new(&codecpar->coded_side_data,
+                                                        &codecpar->nb_coded_side_data,
+                                                        AV_PKT_DATA_MASTERING_DISPLAY_METADATA,
+                                                        sizeof(AVMasteringDisplayMetadata),
+                                                        0);
+  if (side_data == nullptr) {
+    CLOG_ERROR(&LOG, "Failed to attached mastering display metadata to stream");
+    return;
+  }
+
+  AVMasteringDisplayMetadata *mastering_metadata = reinterpret_cast<AVMasteringDisplayMetadata *>(
+      side_data->data);
+
+  /* Rec.2020 primaries and D65 white point. */
+  mastering_metadata->has_primaries = 1;
+  mastering_metadata->display_primaries[0][0] = av_make_q(34000, 50000);
+  mastering_metadata->display_primaries[0][1] = av_make_q(16000, 50000);
+  mastering_metadata->display_primaries[1][0] = av_make_q(13250, 50000);
+  mastering_metadata->display_primaries[1][1] = av_make_q(34500, 50000);
+  mastering_metadata->display_primaries[2][0] = av_make_q(7500, 50000);
+  mastering_metadata->display_primaries[2][1] = av_make_q(3000, 50000);
+
+  mastering_metadata->white_point[0] = av_make_q(15635, 50000);
+  mastering_metadata->white_point[1] = av_make_q(16450, 50000);
+
+  mastering_metadata->has_luminance = 1;
+  mastering_metadata->min_luminance = av_make_q(1, 10000);
+  mastering_metadata->max_luminance = av_make_q(max_luminance, 1);
+}
+
+/**
+ * \brief Add stereoscopic side data metadata if the output is side-by-side or top-bottom.
+ *
+ * The side data is only added when the scene uses stereoscopic with stereo views and the image
+ * format also contains stereo views.
+ */
+static void add_stereo3d_metadata(AVCodecParameters *codecpar,
+                                  const RenderData &render_data,
+                                  const ImageFormatData &imf)
+{
+  if (!BKE_scene_multiview_is_stereo3d(&render_data)) {
+    return;
+  }
+  if (imf.views_format != R_IMF_VIEWS_STEREO_3D) {
+    return;
+  }
+  if (imf.stereo3d_format.display_mode == S3D_DISPLAY_ANAGLYPH) {
+    return;
+  }
+  if (imf.stereo3d_format.display_mode == S3D_DISPLAY_PAGEFLIP) {
+    /* Could be supported, but requires metadata to be set for each frame. */
+    return;
+  }
+  AVPacketSideData *side_data = av_packet_side_data_new(&codecpar->coded_side_data,
+                                                        &codecpar->nb_coded_side_data,
+                                                        AV_PKT_DATA_STEREO3D,
+                                                        sizeof(AVStereo3D),
+                                                        0);
+  if (side_data == nullptr) {
+    CLOG_ERROR(&LOG, "Failed to attach stereo3d metadata to stream");
+    return;
+  }
+  AVStereo3D *stereo_3d = reinterpret_cast<AVStereo3D *>(side_data->data);
+  AVStereo3DType interlace_type = AV_STEREO3D_UNSPEC;
+  switch (imf.stereo3d_format.interlace_type) {
+    case S3D_INTERLACE_ROW:
+      interlace_type = AV_STEREO3D_LINES;
+      break;
+    case S3D_INTERLACE_COLUMN:
+      interlace_type = AV_STEREO3D_COLUMNS;
+      break;
+    case S3D_INTERLACE_CHECKERBOARD:
+      interlace_type = AV_STEREO3D_CHECKERBOARD;
+      break;
+    default:
+      break;
+  }
+
+  switch (imf.stereo3d_format.display_mode) {
+    case S3D_DISPLAY_SIDEBYSIDE: {
+      stereo_3d->type = AV_STEREO3D_SIDEBYSIDE;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      const bool is_swapped = bool(imf.stereo3d_format.flag & S3D_SIDEBYSIDE_CROSSEYED);
+      if (is_swapped) {
+        stereo_3d->flags |= AV_STEREO3D_FLAG_INVERT;
+      }
+      break;
+    }
+
+    case S3D_DISPLAY_TOPBOTTOM: {
+      stereo_3d->type = AV_STEREO3D_TOPBOTTOM;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      break;
+    }
+
+    case S3D_DISPLAY_INTERLACE: {
+      stereo_3d->type = interlace_type;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      const bool is_swapped = bool(imf.stereo3d_format.flag & S3D_INTERLACE_SWAP);
+      if (is_swapped) {
+        stereo_3d->flags |= AV_STEREO3D_FLAG_INVERT;
+      }
+      break;
+    }
+
+    case S3D_DISPLAY_ANAGLYPH:
+    case S3D_DISPLAY_PAGEFLIP: {
+      BLI_assert_unreachable();
+    }
+  }
+}
+
+static void add_spherical_mapping_metadata(AVCodecParameters *codecpar, const Scene &scene)
+{
+  if (scene.camera == nullptr) {
+    return;
+  }
+  if (scene.camera->type != OB_CAMERA) {
+    return;
+  }
+  const Camera &camera = *reinterpret_cast<const Camera *>(scene.camera->data);
+
+  /* Only create the side data for full equirectangular cameras. */
+  if (camera.type != CAM_PANO) {
+    return;
+  }
+  if (camera.panorama_type != CAM_PANORAMA_EQUIRECTANGULAR) {
+    return;
+  }
+  if (!compare_ff(camera.latitude_min, -M_PI_2, 1e-6) ||
+      !compare_ff(camera.latitude_max, M_PI_2, 1e-6) ||
+      !compare_ff(camera.longitude_min, -M_PI, 1e-6) ||
+      !compare_ff(camera.longitude_max, M_PI, 1e-6))
+  {
+    return;
+  }
+
+  AVPacketSideData *side_data = av_packet_side_data_new(&codecpar->coded_side_data,
+                                                        &codecpar->nb_coded_side_data,
+                                                        AV_PKT_DATA_SPHERICAL,
+                                                        sizeof(AVSphericalMapping),
+                                                        0);
+  if (side_data == nullptr) {
+    CLOG_ERROR(&LOG, "Failed to attach spherical mapping metadata to stream");
+    return;
+  }
+  AVSphericalMapping &spherical = *reinterpret_cast<AVSphericalMapping *>(side_data->data);
+  spherical.projection = AV_SPHERICAL_EQUIRECTANGULAR;
+}
+
 /* Write a frame to the output file */
 static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *reports)
 {
@@ -159,7 +348,7 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
   if (ret < 0) {
     /* Can't send frame to encoder. This shouldn't happen. */
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-    fprintf(stderr, "Can't send video frame: %s\n", error_str);
+    CLOG_ERROR(&LOG, "Can't send video frame: %s", error_str);
     success = -1;
   }
 
@@ -172,7 +361,7 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
     }
     if (ret < 0) {
       av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-      fprintf(stderr, "Error encoding frame: %s\n", error_str);
+      CLOG_ERROR(&LOG, "Error encoding frame: %s", error_str);
       break;
     }
 
@@ -191,7 +380,7 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
   if (!success) {
     BKE_report(reports, RPT_ERROR, "Error writing frame");
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-    FF_DEBUG_PRINT("ffmpeg: error writing video frame: %s\n", error_str);
+    CLOG_INFO(&LOG, "ffmpeg: error writing video frame: %s", error_str);
   }
 
   av_packet_free(&packet);
@@ -199,15 +388,78 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
   return success;
 }
 
-/* read and encode a frame of video from the buffer */
-static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *image)
+/* Allocate new ImBuf of the size of the given input which only contains float buffer with pixels
+ * from the input.
+ *
+ * For the float image buffers it is similar to IMB_dupImBuf() but it ensures that the byte buffer
+ * is not allocated.
+ *
+ * For the byte image buffers it is similar to IMB_dupImBuf() followed by IMB_float_from_byte(),
+ * but without temporary allocation, and result containing only single float buffer.
+ *
+ * No color space conversion is performed. The result float buffer might be in a non-linear space
+ * denoted by the float_buffer.colorspace. */
+static ImBuf *alloc_imbuf_for_colorspace_transform(const ImBuf *input_ibuf)
 {
-  const uint8_t *pixels = image->byte_buffer.data;
-  const float *pixels_fl = image->float_buffer.data;
+  if (!input_ibuf) {
+    return nullptr;
+  }
+
+  /* Allocate new image buffer without float buffer just yet.
+   * This allows to properly initialize the number of channels used in the buffer. */
+  /* TODO(sergey): Make it a reusable function.
+   * This is a common pattern used in few areas with the goal to bypass the hardcoded number of
+   * channels used by IMB_allocImBuf(). */
+  ImBuf *result_ibuf = IMB_allocImBuf(input_ibuf->x, input_ibuf->y, ImBufFlags::Zero);
+  result_ibuf->color_mode = input_ibuf->color_mode;
+  result_ibuf->channels = input_ibuf->float_data() ? input_ibuf->channels : 4;
+
+  /* Transfer flags related to color space conversion from the original image buffer. */
+  result_ibuf->flags |= (input_ibuf->flags & ImBufFlags::AlphaChannelPacked);
+
+  if (input_ibuf->float_data()) {
+    /* Simple case: copy pixels from the source image as-is, without any conversion.
+     * The result has the same colorspace as the input. */
+    result_ibuf->float_buffer = input_ibuf->float_buffer;
+  }
+  else {
+    /* Convert byte buffer to float buffer. */
+    /* Allocate float buffer with the proper number of channels. */
+    const size_t num_pixels = IMB_get_pixel_count(input_ibuf);
+    float *buffer = MEM_new_array_uninitialized<float>(num_pixels * result_ibuf->channels,
+                                                       "movie hdr image");
+    result_ibuf->assign_float_data(buffer);
+    IMB_buffer_float_from_byte(result_ibuf->float_data_for_write(),
+                               input_ibuf->byte_data(),
+                               input_ibuf->x,
+                               input_ibuf->y,
+                               result_ibuf->x,
+                               input_ibuf->x);
+  }
+
+  return result_ibuf;
+}
+
+/* read and encode a frame of video from the buffer */
+static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ibuf)
+{
   /* Use float input if needed. */
-  const bool use_float = context->img_convert_frame != nullptr &&
-                         context->img_convert_frame->format != AV_PIX_FMT_RGBA;
+  const bool use_float =
+      context->img_convert_frame != nullptr &&
+      !(context->img_convert_frame->format == AV_PIX_FMT_RGBA &&
+        ELEM(context->img_convert_frame->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED));
+
+  const ImBuf *image = (use_float && input_ibuf->float_data() == nullptr) ?
+                           alloc_imbuf_for_colorspace_transform(input_ibuf) :
+                           input_ibuf;
+
+  const uint8_t *pixels = image->byte_data();
+  const float *pixels_fl = image->float_data();
+
   if ((!use_float && (pixels == nullptr)) || (use_float && (pixels_fl == nullptr))) {
+    if (image != input_ibuf) {
+      IMB_freeImBuf(const_cast<ImBuf *>(image));
+    }
     return nullptr;
   }
 
@@ -290,10 +542,14 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *image)
     ffmpeg_sws_scale_frame(context->img_convert_ctx, context->current_frame, rgb_frame);
   }
 
+  if (image != input_ibuf) {
+    IMB_freeImBuf(const_cast<ImBuf *>(image));
+  }
+
   return context->current_frame;
 }
 
-static AVRational calc_time_base(uint den, double num, int codec_id)
+static AVRational calc_time_base(uint den, double num, AVCodecID codec_id)
 {
   /* Convert the input 'num' to an integer. Simply shift the decimal places until we get an integer
    * (within a floating point error range).
@@ -336,7 +592,7 @@ static AVRational calc_time_base(uint den, double num, int codec_id)
 }
 
 static const AVCodec *get_av1_encoder(
-    MovieWriter *context, RenderData *rd, AVDictionary **opts, int rectx, int recty)
+    MovieWriter *context, const RenderData *rd, AVDictionary **opts, int rectx, int recty)
 {
   /* There are three possible encoders for AV1: `libaom-av1`, librav1e, and `libsvtav1`. librav1e
    * tends to give the best compression quality while `libsvtav1` tends to be the fastest encoder.
@@ -395,7 +651,7 @@ static const AVCodec *get_av1_encoder(
       }
       /* Set gop_size as rav1e's "--keyint". */
       char buffer[64];
-      SNPRINTF(buffer, "keyint=%d", context->ffmpeg_gop_size);
+      SNPRINTF_UTF8(buffer, "keyint=%d", context->ffmpeg_gop_size);
       av_dict_set(opts, "rav1e-params", buffer, 0);
     }
     else if (STREQ(codec->name, "libsvtav1")) {
@@ -435,7 +691,7 @@ static const AVCodec *get_av1_encoder(
           }
           /* A char array need only an alignment of 1. */
           char *tiles_string_mut = (char *)calloc(digits * 2 + 2, 1);
-          BLI_snprintf(tiles_string_mut, digits * 2 + 2, "%dx%d", threads_sqrt, threads_sqrt);
+          BLI_snprintf_utf8(tiles_string_mut, digits * 2 + 2, "%dx%d", threads_sqrt, threads_sqrt);
           tiles_string_is_dynamic = true;
           tiles_string = tiles_string_mut;
         }
@@ -467,13 +723,15 @@ static const AVCodec *get_av1_encoder(
           /* A char array need only an alignment of 1. */
           char *tiles_string_mut = (char *)calloc(combined_digits + 2, 1);
           if (rectx > recty) {
-            BLI_snprintf(tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2_next, sqrt_p2);
+            BLI_snprintf_utf8(
+                tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2_next, sqrt_p2);
           }
           else if (rectx < recty) {
-            BLI_snprintf(tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2_next);
+            BLI_snprintf_utf8(
+                tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2_next);
           }
           else {
-            BLI_snprintf(tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2);
+            BLI_snprintf_utf8(tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2);
           }
           tiles_string_is_dynamic = true;
           tiles_string = tiles_string_mut;
@@ -540,12 +798,12 @@ static int remap_crf_to_h265_crf(int crf, bool is_10_or_12_bpp)
   return crf;
 }
 
-static const AVCodec *get_prores_encoder(RenderData *rd, int rectx, int recty)
+static const AVCodec *get_prores_encoder(const ImageFormatData *imf, int rectx, int recty)
 {
   /* The prores_aw encoder currently (April 2025) has issues when encoding alpha with high
    * resolution but is faster in most cases for similar quality. Use it instead of prores_ks
    * if possible. (Upstream issue https://trac.ffmpeg.org/ticket/11536) */
-  if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+  if (imf->color_mode == ImColorMode::RGBA) {
     if ((size_t(rectx) * size_t(recty)) > (3840 * 2160)) {
       return avcodec_find_encoder_by_name("prores_ks");
     }
@@ -564,7 +822,8 @@ static int remap_crf_to_h264_10bpp_crf(int crf)
 
 static void set_quality_rate_options(const MovieWriter *context,
                                      const AVCodecID codec_id,
-                                     const RenderData *rd,
+                                     const FFMpegCodecData *ffcodecdata,
+                                     const ImageFormatData *imf,
                                      AVDictionary **opts)
 {
   AVCodecContext *c = context->video_codec;
@@ -572,9 +831,9 @@ static void set_quality_rate_options(const MovieWriter *context,
   /* Handle constant bit rate (CBR) case. */
   if (!MOV_codec_supports_crf(codec_id) || context->ffmpeg_crf < 0) {
     c->bit_rate = context->ffmpeg_video_bitrate * 1000;
-    c->rc_max_rate = rd->ffcodecdata.rc_max_rate * 1000;
-    c->rc_min_rate = rd->ffcodecdata.rc_min_rate * 1000;
-    c->rc_buffer_size = rd->ffcodecdata.rc_buffer_size * 1024;
+    c->rc_max_rate = ffcodecdata->rc_max_rate * 1000;
+    c->rc_min_rate = ffcodecdata->rc_min_rate * 1000;
+    c->rc_buffer_size = ffcodecdata->rc_buffer_size * 1024;
     return;
   }
 
@@ -582,8 +841,8 @@ static void set_quality_rate_options(const MovieWriter *context,
    * https://trac.ffmpeg.org/wiki/Encode/VP9 */
   c->bit_rate = 0;
 
-  const bool is_10_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_10;
-  const bool is_12_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_12;
+  const bool is_10_bpp = imf->depth == R_IMF_CHAN_DEPTH_10;
+  const bool is_12_bpp = imf->depth == R_IMF_CHAN_DEPTH_12;
   const bool av1_librav1e = codec_id == AV_CODEC_ID_AV1 && STREQ(c->codec->name, "librav1e");
   const bool av1_libsvtav1 = codec_id == AV_CODEC_ID_AV1 && STREQ(c->codec->name, "libsvtav1");
 
@@ -619,7 +878,9 @@ static void set_quality_rate_options(const MovieWriter *context,
     crf = remap_crf_to_h264_10bpp_crf(crf);
   }
   else if (codec_id == AV_CODEC_ID_H265) {
-    crf = remap_crf_to_h265_crf(crf, is_10_bpp || is_12_bpp);
+    if (!context->custom_crf) {
+      crf = remap_crf_to_h265_crf(crf, is_10_bpp || is_12_bpp);
+    }
     /* Make H.265 much less verbose. */
     av_dict_set(opts, "x265-params", "log-level=1", 0);
   }
@@ -639,18 +900,51 @@ static void set_quality_rate_options(const MovieWriter *context,
   }
 }
 
+static void set_colorspace_options(AVCodecContext *c, const ColorSpace *colorspace)
+{
+  const AVPixFmtDescriptor *pix_fmt_desc = av_pix_fmt_desc_get(c->pix_fmt);
+  const bool is_rgb_format = (pix_fmt_desc->flags & AV_PIX_FMT_FLAG_RGB);
+  const bool rgb_matrix = false;
+
+  int cicp[4];
+  if (colorspace && IMB_colormanagement_space_to_cicp(
+                        colorspace, ColorManagedFileOutput::Video, rgb_matrix, cicp))
+  {
+    /* Note ffmpeg enums are documented to match CICP. */
+    c->color_primaries = AVColorPrimaries(cicp[0]);
+    c->color_trc = AVColorTransferCharacteristic(cicp[1]);
+    c->colorspace = (is_rgb_format) ? AVCOL_SPC_RGB : AVColorSpace(cicp[2]);
+    c->color_range = AVCOL_RANGE_JPEG;
+  }
+  else if (!is_rgb_format) {
+    /* Note BT.709 is wrong for sRGB.
+     * But we have been writing sRGB like this forever, and there is the so called
+     * "Quicktime gamma shift bug" that complicates things. */
+    c->color_primaries = AVCOL_PRI_BT709;
+    c->color_trc = AVCOL_TRC_BT709;
+    c->colorspace = AVCOL_SPC_BT709;
+    /* TODO(sergey): Consider making the range an option to cover more use-cases. */
+    c->color_range = AVCOL_RANGE_MPEG;
+  }
+  else {
+    /* We don't set anything for pure sRGB writing, for backwards compatibility. */
+  }
+}
+
 static AVStream *alloc_video_stream(MovieWriter *context,
-                                    RenderData *rd,
+                                    const Scene &scene,
+                                    const ImageFormatData *imf,
                                     AVCodecID codec_id,
                                     AVFormatContext *of,
                                     int rectx,
                                     int recty,
                                     char *error,
-                                    int error_size)
+                                    int error_maxncpy)
 {
   AVStream *st;
   const AVCodec *codec;
   AVDictionary *opts = nullptr;
+  const RenderData *rd = &scene.r;
 
   error[0] = '\0';
 
@@ -668,13 +962,13 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     codec = get_av1_encoder(context, rd, &opts, rectx, recty);
   }
   else if (codec_id == AV_CODEC_ID_PRORES) {
-    codec = get_prores_encoder(rd, rectx, recty);
+    codec = get_prores_encoder(imf, rectx, recty);
   }
   else {
     codec = avcodec_find_encoder(codec_id);
   }
   if (!codec) {
-    fprintf(stderr, "Couldn't find valid video codec\n");
+    CLOG_ERROR(&LOG, "Couldn't find valid video codec");
     context->video_codec = nullptr;
     return nullptr;
   }
@@ -721,7 +1015,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   c->gop_size = context->ffmpeg_gop_size;
   c->max_b_frames = context->ffmpeg_max_b_frames;
 
-  set_quality_rate_options(context, codec_id, rd, &opts);
+  set_quality_rate_options(context, codec_id, &rd->ffcodecdata, imf, &opts);
 
   if (context->ffmpeg_preset) {
     /* 'preset' is used by h.264, 'deadline' is used by WEBM/VP9. I'm not
@@ -743,7 +1037,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
         deadline_name = "realtime";
         break;
       default:
-        printf("Unknown preset number %i, ignoring.\n", context->ffmpeg_preset);
+        CLOG_WARN(&LOG, "Unknown preset number %i, ignoring.", context->ffmpeg_preset);
     }
     /* "codec_id != AV_CODEC_ID_AV1" is required due to "preset" already being set by an AV1 codec.
      */
@@ -757,17 +1051,19 @@ static AVStream *alloc_video_stream(MovieWriter *context,
 
   /* Be sure to use the correct pixel format(e.g. RGB, YUV) */
 
-  if (codec->pix_fmts) {
-    c->pix_fmt = codec->pix_fmts[0];
+  const enum AVPixelFormat *pix_fmts = ffmpeg_get_pix_fmts(c, codec);
+  if (pix_fmts) {
+    c->pix_fmt = pix_fmts[0];
   }
   else {
     /* makes HuffYUV happy ... */
     c->pix_fmt = AV_PIX_FMT_YUV422P;
   }
 
-  const bool is_10_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_10;
-  const bool is_12_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_12;
-  const bool is_16_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_16;
+  const bool is_10_bpp = imf->depth == R_IMF_CHAN_DEPTH_10;
+  const bool is_12_bpp = imf->depth == R_IMF_CHAN_DEPTH_12;
+  const bool is_16_bpp = imf->depth == R_IMF_CHAN_DEPTH_16;
+
   if (is_10_bpp) {
     c->pix_fmt = AV_PIX_FMT_YUV420P10LE;
   }
@@ -791,7 +1087,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
 
   /* Keep lossless encodes in the RGB domain. */
   if (codec_id == AV_CODEC_ID_HUFFYUV) {
-    if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    if (imf->color_mode == ImColorMode::RGBA) {
       c->pix_fmt = AV_PIX_FMT_BGRA;
     }
     else {
@@ -807,7 +1103,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
 
   if (codec_id == AV_CODEC_ID_FFV1) {
-    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+    if (imf->color_mode == ImColorMode::BW) {
       c->pix_fmt = AV_PIX_FMT_GRAY8;
       if (is_10_bpp) {
         c->pix_fmt = AV_PIX_FMT_GRAY10;
@@ -819,7 +1115,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
         c->pix_fmt = AV_PIX_FMT_GRAY16;
       }
     }
-    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    else if (imf->color_mode == ImColorMode::RGBA) {
       c->pix_fmt = AV_PIX_FMT_RGB32;
       if (is_10_bpp) {
         c->pix_fmt = AV_PIX_FMT_GBRAP10;
@@ -846,10 +1142,10 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
 
   if (codec_id == AV_CODEC_ID_QTRLE) {
-    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+    if (imf->color_mode == ImColorMode::BW) {
       c->pix_fmt = AV_PIX_FMT_GRAY8;
     }
-    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    else if (imf->color_mode == ImColorMode::RGBA) {
       c->pix_fmt = AV_PIX_FMT_ARGB;
     }
     else { /* RGB */
@@ -857,7 +1153,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     }
   }
 
-  if (codec_id == AV_CODEC_ID_VP9 && rd->im_format.planes == R_IMF_PLANES_RGBA) {
+  if (codec_id == AV_CODEC_ID_VP9 && imf->color_mode == ImColorMode::RGBA) {
     c->pix_fmt = AV_PIX_FMT_YUVA420P;
   }
   else if (ELEM(codec_id, AV_CODEC_ID_H264, AV_CODEC_ID_H265, AV_CODEC_ID_VP9, AV_CODEC_ID_AV1) &&
@@ -874,10 +1170,10 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
 
   if (codec_id == AV_CODEC_ID_PNG) {
-    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+    if (imf->color_mode == ImColorMode::BW) {
       c->pix_fmt = AV_PIX_FMT_GRAY8;
     }
-    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    else if (imf->color_mode == ImColorMode::RGBA) {
       c->pix_fmt = AV_PIX_FMT_RGBA;
     }
     else { /* RGB */
@@ -897,29 +1193,24 @@ static AVStream *alloc_video_stream(MovieWriter *context,
       c->profile = context->ffmpeg_profile;
       c->pix_fmt = AV_PIX_FMT_YUV444P10LE;
 
-      if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+      if (imf->color_mode == ImColorMode::RGBA) {
         c->pix_fmt = AV_PIX_FMT_YUVA444P10LE;
       }
     }
     else {
-      fprintf(stderr, "ffmpeg: invalid profile %d\n", context->ffmpeg_profile);
+      CLOG_ERROR(&LOG, "ffmpeg: invalid profile %d", context->ffmpeg_profile);
     }
   }
 
   if (of->oformat->flags & AVFMT_GLOBALHEADER) {
-    FF_DEBUG_PRINT("ffmpeg: using global video header\n");
+    CLOG_STR_INFO(&LOG, "ffmpeg: using global video header");
     c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   }
 
-  /* If output pixel format is not RGB(A), setup colorspace metadata. */
-  const AVPixFmtDescriptor *pix_fmt_desc = av_pix_fmt_desc_get(c->pix_fmt);
-  const bool set_bt709 = (pix_fmt_desc->flags & AV_PIX_FMT_FLAG_RGB) == 0;
-  if (set_bt709) {
-    c->color_range = AVCOL_RANGE_MPEG;
-    c->color_primaries = AVCOL_PRI_BT709;
-    c->color_trc = AVCOL_TRC_BT709;
-    c->colorspace = AVCOL_SPC_BT709;
-  }
+  /* Set colorspace based on display space of image. */
+  const ColorSpace *display_colorspace = IMB_colormangement_display_get_color_space(
+      &imf->view_settings, &imf->display_settings);
+  set_colorspace_options(c, display_colorspace);
 
   /* xasp & yasp got float lately... */
 
@@ -931,7 +1222,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     c->thread_count = 0;
   }
   else {
-    c->thread_count = BLI_system_thread_count();
+    c->thread_count = MOV_thread_count();
   }
 
   if (codec->capabilities & AV_CODEC_CAP_FRAME_THREADS) {
@@ -946,8 +1237,8 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   if (ret < 0) {
     char error_str[AV_ERROR_MAX_STRING_SIZE];
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-    fprintf(stderr, "Couldn't initialize video codec: %s\n", error_str);
-    BLI_strncpy(error, ffmpeg_last_error(), error_size);
+    CLOG_ERROR(&LOG, "Couldn't initialize video codec: %s\n", error_str);
+    BLI_strncpy(error, ffmpeg_last_error(), error_maxncpy);
     av_dict_free(&opts);
     avcodec_free_context(&c);
     context->video_codec = nullptr;
@@ -958,44 +1249,36 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   /* FFMPEG expects its data in the output pixel format. */
   context->current_frame = alloc_frame(c->pix_fmt, c->width, c->height);
 
-  if (c->pix_fmt == AV_PIX_FMT_RGBA) {
-    /* Output pixel format is the same we use internally, no conversion necessary. */
+  if (c->pix_fmt == AV_PIX_FMT_RGBA && ELEM(c->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED)) {
+    /* Output pixel format and colorspace is the same we use internally, no conversion needed. */
     context->img_convert_frame = nullptr;
     context->img_convert_ctx = nullptr;
   }
   else {
-    /* Output pixel format is different, allocate frame for conversion. */
-    AVPixelFormat src_format = is_10_bpp || is_12_bpp || is_16_bpp ? AV_PIX_FMT_GBRAPF32LE :
-                                                                     AV_PIX_FMT_RGBA;
+    /* Output pixel format is different, allocate frame for conversion.
+     * Setup RGB->YUV conversion with proper coefficients, depending on range and colorspace. */
+    const AVPixelFormat src_format = is_10_bpp || is_12_bpp || is_16_bpp ? AV_PIX_FMT_GBRAPF32LE :
+                                                                           AV_PIX_FMT_RGBA;
     context->img_convert_frame = alloc_frame(src_format, c->width, c->height);
     context->img_convert_ctx = ffmpeg_sws_get_context(
-        c->width, c->height, src_format, c->width, c->height, c->pix_fmt, SWS_BICUBIC);
-
-    /* Setup BT.709 coefficients for RGB->YUV conversion, if needed. */
-    if (set_bt709) {
-      int *inv_table = nullptr, *table = nullptr;
-      int src_range = 0, dst_range = 0, brightness = 0, contrast = 0, saturation = 0;
-      sws_getColorspaceDetails(context->img_convert_ctx,
-                               &inv_table,
-                               &src_range,
-                               &table,
-                               &dst_range,
-                               &brightness,
-                               &contrast,
-                               &saturation);
-      const int *new_table = sws_getCoefficients(AVCOL_SPC_BT709);
-      sws_setColorspaceDetails(context->img_convert_ctx,
-                               inv_table,
-                               src_range,
-                               new_table,
-                               dst_range,
-                               brightness,
-                               contrast,
-                               saturation);
-    }
+        c->width,
+        c->height,
+        src_format,
+        true,
+        -1,
+        c->width,
+        c->height,
+        c->pix_fmt,
+        c->color_range == AVCOL_RANGE_JPEG,
+        c->colorspace != AVCOL_SPC_RGB ? c->colorspace : -1,
+        SWS_BICUBIC);
   }
 
   avcodec_parameters_from_context(st->codecpar, c);
+
+  add_hdr_mastering_display_metadata(st->codecpar, c, imf);
+  add_stereo3d_metadata(st->codecpar, *rd, *imf);
+  add_spherical_mapping_metadata(st->codecpar, scene);
 
   context->video_time = 0.0f;
 
@@ -1012,7 +1295,10 @@ static void ffmpeg_add_metadata_callback(void *data,
 }
 
 static bool start_ffmpeg_impl(MovieWriter *context,
-                              RenderData *rd,
+                              const Scene *scene,
+                              const bke::BlenderProject *project,
+                              const RenderData *rd,
+                              const ImageFormatData *imf,
                               int rectx,
                               int recty,
                               const char *suffix,
@@ -1026,13 +1312,17 @@ static bool start_ffmpeg_impl(MovieWriter *context,
   int ret = 0;
 
   context->ffmpeg_type = rd->ffcodecdata.type;
-  context->ffmpeg_codec = AVCodecID(rd->ffcodecdata.codec);
-  context->ffmpeg_audio_codec = AVCodecID(rd->ffcodecdata.audio_codec);
+  context->ffmpeg_codec = mov_av_codec_id_get(rd->ffcodecdata.codec_id_get());
+  context->ffmpeg_audio_codec = mov_av_codec_id_get(rd->ffcodecdata.audio_codec_id_get());
   context->ffmpeg_video_bitrate = rd->ffcodecdata.video_bitrate;
   context->ffmpeg_audio_bitrate = rd->ffcodecdata.audio_bitrate;
   context->ffmpeg_gop_size = rd->ffcodecdata.gop_size;
   context->ffmpeg_autosplit = (rd->ffcodecdata.flags & FFMPEG_AUTOSPLIT_OUTPUT) != 0;
   context->ffmpeg_crf = rd->ffcodecdata.constant_rate_factor;
+  context->custom_crf = rd->ffcodecdata.constant_rate_factor == FFM_CRF_CUSTOM;
+  if (context->custom_crf) {
+    context->ffmpeg_crf = rd->ffcodecdata.custom_constant_rate_factor;
+  }
   context->ffmpeg_preset = rd->ffcodecdata.ffmpeg_preset;
   context->ffmpeg_profile = 0;
 
@@ -1041,25 +1331,27 @@ static bool start_ffmpeg_impl(MovieWriter *context,
   }
 
   /* Determine the correct filename */
-  if (!ffmpeg_filepath_get(context, filepath, rd, context->ffmpeg_preview, suffix, reports)) {
+  if (!ffmpeg_filepath_get(
+          context, filepath, scene, project, rd, context->ffmpeg_preview, suffix, reports))
+  {
     return false;
   }
-  FF_DEBUG_PRINT(
-      "ffmpeg: starting output to %s:\n"
-      "  type=%d, codec=%d, audio_codec=%d,\n"
-      "  video_bitrate=%d, audio_bitrate=%d,\n"
-      "  gop_size=%d, autosplit=%d\n"
-      "  width=%d, height=%d\n",
-      filepath,
-      context->ffmpeg_type,
-      context->ffmpeg_codec,
-      context->ffmpeg_audio_codec,
-      context->ffmpeg_video_bitrate,
-      context->ffmpeg_audio_bitrate,
-      context->ffmpeg_gop_size,
-      context->ffmpeg_autosplit,
-      rectx,
-      recty);
+  CLOG_INFO(&LOG,
+            "ffmpeg: starting output to %s:\n"
+            "  type=%d, codec=%d, audio_codec=%d,\n"
+            "  video_bitrate=%d, audio_bitrate=%d,\n"
+            "  gop_size=%d, autosplit=%d\n"
+            "  width=%d, height=%d",
+            filepath,
+            context->ffmpeg_type,
+            context->ffmpeg_codec,
+            context->ffmpeg_audio_codec,
+            context->ffmpeg_video_bitrate,
+            context->ffmpeg_audio_bitrate,
+            context->ffmpeg_gop_size,
+            context->ffmpeg_autosplit,
+            rectx,
+            recty);
 
   /* Sanity checks for the output file extensions. */
   exts = get_file_extensions(context->ffmpeg_type);
@@ -1076,7 +1368,7 @@ static bool start_ffmpeg_impl(MovieWriter *context,
 
   of = avformat_alloc_context();
   if (!of) {
-    BKE_report(reports, RPT_ERROR, "Can't allocate FFmpeg format context");
+    BKE_report(reports, RPT_ERROR, "Cannot allocate FFmpeg format context");
     return false;
   }
 
@@ -1117,7 +1409,21 @@ static bool start_ffmpeg_impl(MovieWriter *context,
       break;
   }
 
-    /* Returns after this must 'goto fail;' */
+  if (context->custom_crf) {
+    if ((video_codec == AV_CODEC_ID_AV1) || (video_codec == AV_CODEC_ID_H264) ||
+        (video_codec == AV_CODEC_ID_H265))
+    {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 0, 51);
+    }
+    else if (video_codec == AV_CODEC_ID_VP9) {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 0, 63);
+    }
+    else if (video_codec == AV_CODEC_ID_MPEG4) {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 1, 31);
+    }
+  }
+
+  /* Returns after this must 'goto fail;' */
 
 #  if LIBAVFORMAT_VERSION_MAJOR >= 59
   of->oformat = fmt;
@@ -1157,16 +1463,16 @@ static bool start_ffmpeg_impl(MovieWriter *context,
 
   if (video_codec != AV_CODEC_ID_NONE) {
     context->video_stream = alloc_video_stream(
-        context, rd, video_codec, of, rectx, recty, error, sizeof(error));
-    FF_DEBUG_PRINT("ffmpeg: alloc video stream %p\n", context->video_stream);
+        context, *scene, imf, video_codec, of, rectx, recty, error, sizeof(error));
+    CLOG_INFO(&LOG, "ffmpeg: alloc video stream %p", context->video_stream);
     if (!context->video_stream) {
       if (error[0]) {
         BKE_report(reports, RPT_ERROR, error);
-        FF_DEBUG_PRINT("ffmpeg: video stream error: %s\n", error);
+        CLOG_INFO(&LOG, "ffmpeg: video stream error: %s", error);
       }
       else {
         BKE_report(reports, RPT_ERROR, "Error initializing video stream");
-        FF_DEBUG_PRINT("ffmpeg: error initializing video stream\n");
+        CLOG_STR_INFO(&LOG, "ffmpeg: error initializing video stream");
       }
       goto fail;
     }
@@ -1179,15 +1485,16 @@ static bool start_ffmpeg_impl(MovieWriter *context,
                                                audio_codec,
                                                of,
                                                error,
-                                               sizeof(error));
+                                               sizeof(error),
+                                               reports);
     if (!context->audio_stream) {
       if (error[0]) {
         BKE_report(reports, RPT_ERROR, error);
-        FF_DEBUG_PRINT("ffmpeg: audio stream error: %s\n", error);
+        CLOG_INFO(&LOG, "ffmpeg: audio stream error: %s", error);
       }
       else {
         BKE_report(reports, RPT_ERROR, "Error initializing audio stream");
-        FF_DEBUG_PRINT("ffmpeg: error initializing audio stream\n");
+        CLOG_STR_INFO(&LOG, "ffmpeg: error initializing audio stream");
       }
       goto fail;
     }
@@ -1195,7 +1502,7 @@ static bool start_ffmpeg_impl(MovieWriter *context,
   if (!(fmt->flags & AVFMT_NOFILE)) {
     if (avio_open(&of->pb, filepath, AVIO_FLAG_WRITE) < 0) {
       BKE_report(reports, RPT_ERROR, "Could not open file for writing");
-      FF_DEBUG_PRINT("ffmpeg: could not open file %s for writing\n", filepath);
+      CLOG_INFO(&LOG, "ffmpeg: could not open file %s for writing", filepath);
       goto fail;
     }
   }
@@ -1212,7 +1519,7 @@ static bool start_ffmpeg_impl(MovieWriter *context,
                "Could not initialize streams, probably unsupported codec combination");
     char error_str[AV_ERROR_MAX_STRING_SIZE];
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-    FF_DEBUG_PRINT("ffmpeg: could not write media header: %s\n", error_str);
+    CLOG_INFO(&LOG, "ffmpeg: could not write media header: %s", error_str);
     goto fail;
   }
 
@@ -1255,7 +1562,7 @@ static void flush_delayed_frames(AVCodecContext *c, AVStream *stream, AVFormatCo
     }
     if (ret < 0) {
       av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-      fprintf(stderr, "Error encoding delayed frame: %s\n", error_str);
+      CLOG_ERROR(&LOG, "Error encoding delayed frame: %s", error_str);
       break;
     }
 
@@ -1268,7 +1575,7 @@ static void flush_delayed_frames(AVCodecContext *c, AVStream *stream, AVFormatCo
     int write_ret = av_interleaved_write_frame(outfile, packet);
     if (write_ret != 0) {
       av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
-      fprintf(stderr, "Error writing delayed frame: %s\n", error_str);
+      CLOG_ERROR(&LOG, "Error writing delayed frame: %s", error_str);
       break;
     }
   }
@@ -1279,12 +1586,14 @@ static void flush_delayed_frames(AVCodecContext *c, AVStream *stream, AVFormatCo
 /**
  * Get the output filename-- similar to the other output formats.
  *
- * \param reports If non-null, will report errors with `RPT_ERROR` level reports.
+ * \param reports: If non-null, will report errors with `RPT_ERROR` level reports.
  *
  * \return true on success, false on failure due to errors.
  */
 static bool ffmpeg_filepath_get(MovieWriter *context,
                                 char filepath[FILE_MAX],
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
@@ -1311,10 +1620,12 @@ static bool ffmpeg_filepath_get(MovieWriter *context,
 
   BLI_strncpy(filepath, rd->pic, FILE_MAX);
 
-  const blender::Vector<blender::bke::path_templates::Error> errors = BKE_path_apply_template(
-      filepath,
-      FILE_MAX,
-      BKE_build_template_variables_for_render_path(BKE_main_blendfile_path_from_global(), rd));
+  bke::path_templates::VariableMap template_variables;
+  BKE_add_template_variables_general(template_variables, &scene->id, project);
+  BKE_add_template_variables_for_render_path(template_variables, *scene);
+
+  const Vector<bke::path_templates::Error> errors = BKE_path_apply_template(
+      filepath, FILE_MAX, template_variables);
   if (!errors.is_empty()) {
     BKE_report_path_template_errors(reports, RPT_ERROR, filepath, errors);
     return false;
@@ -1322,7 +1633,10 @@ static bool ffmpeg_filepath_get(MovieWriter *context,
 
   BLI_path_abs(filepath, BKE_main_blendfile_path_from_global());
 
-  BLI_file_ensure_parent_dir_exists(filepath);
+  if (!BLI_file_ensure_parent_dir_exists(filepath)) {
+    CLOG_ERROR(&LOG, "Couldn't create directory for file %s: %s", filepath, std::strerror(errno));
+    return false;
+  }
 
   autosplit[0] = '\0';
 
@@ -1366,16 +1680,20 @@ static bool ffmpeg_filepath_get(MovieWriter *context,
 }
 
 static void ffmpeg_get_filepath(char filepath[/*FILE_MAX*/ 1024],
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
                                 ReportList *reports)
 {
-  ffmpeg_filepath_get(nullptr, filepath, rd, preview, suffix, reports);
+  ffmpeg_filepath_get(nullptr, filepath, scene, project, rd, preview, suffix, reports);
 }
 
 static MovieWriter *ffmpeg_movie_open(const Scene *scene,
-                                      RenderData *rd,
+                                      const bke::BlenderProject *project,
+                                      const RenderData *rd,
+                                      const ImageFormatData *imf,
                                       int rectx,
                                       int recty,
                                       ReportList *reports,
@@ -1397,7 +1715,8 @@ static MovieWriter *ffmpeg_movie_open(const Scene *scene,
   context->ffmpeg_preview = preview;
   context->stamp_data = BKE_stamp_info_from_scene_static(scene);
 
-  bool success = start_ffmpeg_impl(context, rd, rectx, recty, suffix, reports);
+  bool success = start_ffmpeg_impl(
+      context, scene, project, rd, imf, rectx, recty, suffix, reports);
 
   if (success) {
     success = movie_audio_open(context,
@@ -1418,7 +1737,10 @@ static MovieWriter *ffmpeg_movie_open(const Scene *scene,
 static void end_ffmpeg_impl(MovieWriter *context, bool is_autosplit);
 
 static bool ffmpeg_movie_append(MovieWriter *context,
-                                RenderData *rd,
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
+                                const RenderData *rd,
+                                const ImageFormatData *imf,
                                 int start_frame,
                                 int frame,
                                 const ImBuf *image,
@@ -1428,7 +1750,7 @@ static bool ffmpeg_movie_append(MovieWriter *context,
   AVFrame *avframe;
   bool success = true;
 
-  FF_DEBUG_PRINT("ffmpeg: writing frame #%i (%ix%i)\n", frame, image->x, image->y);
+  CLOG_INFO(&LOG, "ffmpeg: writing frame #%i (%ix%i)", frame, image->x, image->y);
 
   if (context->video_stream) {
     avframe = generate_video_frame(context, image);
@@ -1446,7 +1768,8 @@ static bool ffmpeg_movie_append(MovieWriter *context,
       end_ffmpeg_impl(context, true);
       context->ffmpeg_autosplit_count++;
 
-      success &= start_ffmpeg_impl(context, rd, image->x, image->y, suffix, reports);
+      success &= start_ffmpeg_impl(
+          context, scene, project, rd, imf, image->x, image->y, suffix, reports);
     }
   }
 
@@ -1455,17 +1778,17 @@ static bool ffmpeg_movie_append(MovieWriter *context,
 
 static void end_ffmpeg_impl(MovieWriter *context, bool is_autosplit)
 {
-  FF_DEBUG_PRINT("ffmpeg: closing\n");
+  CLOG_STR_INFO(&LOG, "ffmpeg: closing");
 
   movie_audio_close(context, is_autosplit);
 
   if (context->video_stream) {
-    FF_DEBUG_PRINT("ffmpeg: flush delayed video frames\n");
+    CLOG_STR_INFO(&LOG, "ffmpeg: flush delayed video frames");
     flush_delayed_frames(context->video_codec, context->video_stream, context->outfile);
   }
 
   if (context->audio_stream) {
-    FF_DEBUG_PRINT("ffmpeg: flush delayed audio frames\n");
+    CLOG_STR_INFO(&LOG, "ffmpeg: flush delayed audio frames");
     flush_delayed_frames(context->audio_codec, context->audio_stream, context->outfile);
   }
 
@@ -1530,43 +1853,35 @@ static void ffmpeg_movie_close(MovieWriter *context)
 
 #endif /* WITH_FFMPEG */
 
-static bool is_imtype_ffmpeg(const char imtype)
-{
-  return ELEM(imtype,
-              R_IMF_IMTYPE_AVIRAW,
-              R_IMF_IMTYPE_AVIJPEG,
-              R_IMF_IMTYPE_FFMPEG,
-              R_IMF_IMTYPE_H264,
-              R_IMF_IMTYPE_XVID,
-              R_IMF_IMTYPE_THEORA,
-              R_IMF_IMTYPE_AV1);
-}
-
-MovieWriter *MOV_write_begin(const char imtype,
-                             const Scene *scene,
-                             RenderData *rd,
+MovieWriter *MOV_write_begin(const Scene *scene,
+                             const bke::BlenderProject *project,
+                             const RenderData *rd,
+                             const ImageFormatData *imf,
                              int rectx,
                              int recty,
                              ReportList *reports,
                              bool preview,
                              const char *suffix)
 {
-  if (!is_imtype_ffmpeg(imtype)) {
+  if (imf->imtype != R_IMF_IMTYPE_FFMPEG) {
     BKE_report(reports, RPT_ERROR, "Image format is not a movie format");
     return nullptr;
   }
 
   MovieWriter *writer = nullptr;
 #ifdef WITH_FFMPEG
-  writer = ffmpeg_movie_open(scene, rd, rectx, recty, reports, preview, suffix);
+  writer = ffmpeg_movie_open(scene, project, rd, imf, rectx, recty, reports, preview, suffix);
 #else
-  UNUSED_VARS(scene, rd, rectx, recty, reports, preview, suffix);
+  UNUSED_VARS(scene, project, rd, imf, rectx, recty, reports, preview, suffix);
 #endif
   return writer;
 }
 
 bool MOV_write_append(MovieWriter *writer,
-                      RenderData *rd,
+                      const Scene *scene,
+                      const bke::BlenderProject *project,
+                      const RenderData *rd,
+                      const ImageFormatData *imf,
                       int start_frame,
                       int frame,
                       const ImBuf *image,
@@ -1578,10 +1893,11 @@ bool MOV_write_append(MovieWriter *writer,
   }
 
 #ifdef WITH_FFMPEG
-  bool ok = ffmpeg_movie_append(writer, rd, start_frame, frame, image, suffix, reports);
+  bool ok = ffmpeg_movie_append(
+      writer, scene, project, rd, imf, start_frame, frame, image, suffix, reports);
   return ok;
 #else
-  UNUSED_VARS(rd, start_frame, frame, image, suffix, reports);
+  UNUSED_VARS(scene, project, rd, imf, start_frame, frame, image, suffix, reports);
   return false;
 #endif
 }
@@ -1598,18 +1914,22 @@ void MOV_write_end(MovieWriter *writer)
 }
 
 void MOV_filepath_from_settings(char filepath[/*FILE_MAX*/ 1024],
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
                                 ReportList *reports)
 {
 #ifdef WITH_FFMPEG
-  if (is_imtype_ffmpeg(rd->im_format.imtype)) {
-    ffmpeg_get_filepath(filepath, rd, preview, suffix, reports);
+  if (rd->im_format.imtype == R_IMF_IMTYPE_FFMPEG) {
+    ffmpeg_get_filepath(filepath, scene, project, rd, preview, suffix, reports);
     return;
   }
 #else
-  UNUSED_VARS(rd, preview, suffix, reports);
+  UNUSED_VARS(scene, project, rd, preview, suffix, reports);
 #endif
   filepath[0] = '\0';
 }
+
+}  // namespace blender

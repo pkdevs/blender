@@ -6,11 +6,13 @@
  * \ingroup bli
  */
 
-#include "BLI_dial_2d.h"
+#include "BLI_dial_2d.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
+
+namespace blender {
 
 struct Dial {
   /* center of the dial */
@@ -36,7 +38,7 @@ struct Dial {
 
 Dial *BLI_dial_init(const float start_position[2], float threshold)
 {
-  Dial *dial = MEM_callocN<Dial>("dial");
+  Dial *dial = MEM_new_zeroed<Dial>("dial");
 
   copy_v2_v2(dial->center, start_position);
   dial->threshold_squared = threshold * threshold;
@@ -46,7 +48,7 @@ Dial *BLI_dial_init(const float start_position[2], float threshold)
 
 void BLI_dial_free(Dial *dial)
 {
-  MEM_freeN(dial);
+  MEM_delete(dial);
 }
 
 float BLI_dial_angle(Dial *dial, const float current_position[2])
@@ -93,3 +95,5 @@ float BLI_dial_angle(Dial *dial, const float current_position[2])
 
   return dial->last_angle;
 }
+
+}  // namespace blender

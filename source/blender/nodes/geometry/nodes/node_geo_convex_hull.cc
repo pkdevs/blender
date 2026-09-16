@@ -10,6 +10,8 @@
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
 
+#include "GEO_foreach_geometry.hh"
+#include "GEO_join_geometries.hh"
 #include "GEO_randomize.hh"
 
 #include "node_geometry_util.hh"
@@ -22,15 +24,15 @@ namespace blender::nodes::node_geo_convex_hull_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry");
-  b.add_output<decl::Geometry>("Convex Hull").propagate_all_instance_attributes();
+  b.add_input<decl::Geometry>("Geometry"_ustr).description("Points to compute the convex hull of");
+  b.add_output<decl::Geometry>("Convex Hull"_ustr).propagate_all_geometry();
 }
 
 #ifdef WITH_BULLET
 
 static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
 {
-  plConvexHull hull = plConvexHullCompute((float(*)[3])coords.data(), coords.size());
+  plConvexHull hull = plConvexHullCompute((float (*)[3])coords.data(), coords.size());
 
   const int verts_num = plConvexHullNumVertices(hull);
   const int faces_num = verts_num <= 2 ? 0 : plConvexHullNumFaces(hull);
@@ -55,7 +57,7 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
     float3 dummy_co;
     int original_index;
     plConvexHullGetVertex(hull, i, dummy_co, &original_index);
-    if (UNLIKELY(!coords.index_range().contains(original_index))) {
+    if (!coords.index_range().contains(original_index)) [[unlikely]] {
       BLI_assert_unreachable();
       dst_positions[i] = float3(0);
       continue;
@@ -226,26 +228,27 @@ static void convex_hull_grease_pencil(GeometrySet &geometry_set)
     return;
   }
 
-  InstancesComponent &instances_component =
-      geometry_set.get_component_for_write<InstancesComponent>();
-  bke::Instances *instances = instances_component.get_for_write();
-  if (instances == nullptr) {
-    instances = new bke::Instances();
-    instances_component.replace(instances);
-  }
-  for (Mesh *mesh : mesh_by_layer) {
+  auto instances = std::make_unique<bke::Instances>(mesh_by_layer.size());
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+  instances->transforms_for_write().fill(float4x4::identity());
+  for (const int i : mesh_by_layer.index_range()) {
+    Mesh *mesh = mesh_by_layer[i];
     if (!mesh) {
       /* Add an empty reference so the number of layers and instances match.
        * This makes it easy to reconstruct the layers afterwards and keep their attributes.
        * Although in this particular case we don't propagate the attributes. */
-      const int handle = instances->add_reference(bke::InstanceReference());
-      instances->add_instance(handle, float4x4::identity());
+      handles[i] = instances->add_reference(bke::InstanceReference());
       continue;
     }
     GeometrySet temp_set = GeometrySet::from_mesh(mesh);
-    const int handle = instances->add_reference(bke::InstanceReference{temp_set});
-    instances->add_instance(handle, float4x4::identity());
+    handles[i] = instances->add_reference(bke::InstanceReference{temp_set});
   }
+  auto &dst_component = geometry_set.get_component_for_write<InstancesComponent>();
+  GeometrySet new_instances = geometry::join_geometries(
+      {GeometrySet::from_instances(dst_component.release()),
+       GeometrySet::from_instances(std::move(instances))},
+      {});
+  dst_component.replace(new_instances.get_component_for_write<InstancesComponent>().release());
   geometry_set.replace_grease_pencil(nullptr);
 }
 
@@ -253,11 +256,11 @@ static void convex_hull_grease_pencil(GeometrySet &geometry_set)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
 
 #ifdef WITH_BULLET
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     Mesh *mesh = compute_hull(geometry_set);
     if (mesh) {
       geometry::debug_randomize_mesh_order(mesh);
@@ -266,10 +269,12 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (geometry_set.has_grease_pencil()) {
       convex_hull_grease_pencil(geometry_set);
     }
-    geometry_set.keep_only_during_modify({GeometryComponent::Type::Mesh});
+    geometry_set.keep_only({GeometryComponent::Type::Mesh,
+                            GeometryComponent::Type::Instance,
+                            GeometryComponent::Type::Edit});
   });
 
-  params.set_output("Convex Hull", std::move(geometry_set));
+  params.set_output("Convex Hull"_ustr, std::move(geometry_set));
 #else
   params.error_message_add(NodeWarningType::Error,
                            TIP_("Disabled, Blender was compiled without Bullet"));
@@ -279,8 +284,8 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeConvexHull", GEO_NODE_CONVEX_HULL);
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype, "GeometryNodeConvexHull"_ustr, GEO_NODE_CONVEX_HULL);
   ntype.ui_name = "Convex Hull";
   ntype.ui_description =
       "Create a mesh that encloses all points in the input geometry with the smallest number of "
@@ -289,7 +294,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

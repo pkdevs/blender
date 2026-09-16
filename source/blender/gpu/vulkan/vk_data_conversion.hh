@@ -18,6 +18,17 @@ namespace blender::gpu {
 struct VKWorkarounds;
 
 /**
+ * \brief Check if data conversion is needed when uploading host_format to a device_format.
+ *
+ * \param host_format:         format of the host buffer.
+ * \param host_texture_format: texture format of the host buffer.
+ * \param device_format:       format of the device buffer.
+ */
+bool needs_conversion(eGPUDataFormat host_format,
+                      TextureFormat host_texture_format,
+                      TextureFormat device_format);
+
+/**
  * Convert host buffer to device buffer.
  *
  * \param dst_buffer: device buffer.
@@ -35,8 +46,8 @@ void convert_host_to_device(void *dst_buffer,
                             const void *src_buffer,
                             size_t buffer_size,
                             eGPUDataFormat host_format,
-                            eGPUTextureFormat host_texture_format,
-                            eGPUTextureFormat device_format);
+                            TextureFormat host_texture_format,
+                            TextureFormat device_format);
 
 /**
  * Convert device buffer to host buffer.
@@ -56,8 +67,8 @@ void convert_device_to_host(void *dst_buffer,
                             const void *src_buffer,
                             size_t buffer_size,
                             eGPUDataFormat host_format,
-                            eGPUTextureFormat host_texture_format,
-                            eGPUTextureFormat device_format);
+                            TextureFormat host_texture_format,
+                            TextureFormat device_format);
 
 /* -------------------------------------------------------------------- */
 /** \name Floating point conversions
@@ -224,6 +235,6 @@ uint32_t convert_float_formats(uint32_t value)
   return result;
 }
 
-/* \} */
+/** \} */
 
 };  // namespace blender::gpu

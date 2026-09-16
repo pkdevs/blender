@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_armature_info.hh"
+#include "infos/overlay_armature_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_armature_sphere_solid)
 
@@ -16,14 +16,18 @@ VERTEX_SHADER_CREATE_INFO(overlay_armature_sphere_solid)
 
 void main()
 {
-  select_id_set(in_select_buf[gl_InstanceID]);
+  select_id_set(in_select_buf[gpu_InstanceIndex]);
 
   float4 bone_color, state_color;
-  float4x4 inst_obmat = data_buf[gl_InstanceID];
+  float4x4 inst_obmat = data_buf[gpu_InstanceIndex];
   float4x4 model_mat = extract_matrix_packed_data(inst_obmat, state_color, bone_color);
 
   float4x4 model_view_matrix = drw_view().viewmat * model_mat;
-  sphere_matrix = inverse(model_view_matrix);
+  const float4x4 sphere_matrix = inverse(model_view_matrix);
+  sphere_matrix0 = sphere_matrix[0];
+  sphere_matrix1 = sphere_matrix[1];
+  sphere_matrix2 = sphere_matrix[2];
+  sphere_matrix3 = sphere_matrix[3];
 
   bool is_persp = (drw_view().winmat[3][3] == 0.0f);
 

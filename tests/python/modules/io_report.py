@@ -10,6 +10,7 @@ a HTML report showing the differences, for regression testing.
 import bpy
 import bpy_extras.node_shader_utils
 import difflib
+import html
 import json
 import os
 import pathlib
@@ -17,7 +18,10 @@ import pathlib
 from . import global_report
 from io import StringIO
 from mathutils import Matrix
-from typing import Callable
+
+from collections.abc import (
+    Callable,
+)
 
 
 def fmtf(f: float) -> str:
@@ -50,6 +54,7 @@ class Report:
         'global_dir',
         'input_dir',
         'reference_dir',
+        'generate_data_desc',
         'tested_count',
         'failed_list',
         'passed_list',
@@ -59,12 +64,24 @@ class Report:
         'update_templates',
     )
 
-    def __init__(self, title: str, output_dir: pathlib.Path, input_dir: pathlib.Path, reference_dir: pathlib.Path):
+    context_lines = 3
+    side_to_print_single_line = 5
+    side_to_print_multi_line = 3
+
+    def __init__(
+        self,
+        title: str,
+        output_dir: pathlib.Path,
+        input_dir: pathlib.Path,
+        reference_dir: pathlib.Path,
+        comparison_func: Callable[[str, dict], None] | None = None,
+    ):
         self.title = title
         self.output_dir = output_dir
         self.global_dir = os.path.dirname(output_dir)
         self.input_dir = input_dir
         self.reference_dir = reference_dir
+        self.generate_data_desc = comparison_func if comparison_func else self.generate_generic_data_desc
 
         self.tested_count = 0
         self.failed_list = []
@@ -108,7 +125,10 @@ class Report:
         """
         print(f"\n============")
         if self.update_templates:
-            print(f"{self.tested_count} input files tested, {len(self.updated_list)} references updated to new results")
+            print(
+                f"{self.tested_count} input files tested, "
+                f"{len(self.updated_list)} references updated to new results"
+            )
             for test in self.updated_list:
                 print(f"UPDATED {test}")
         else:
@@ -149,7 +169,7 @@ class Report:
         div.page_container div {{ text-align: left; }}
         div.page_content {{  display: inline-block; }}
         .text_cell {{
-          max-width: 15em;
+          max-width: 22.5em;
           max-height: 8em;
           overflow: auto;
           font-family: monospace;
@@ -158,13 +178,15 @@ class Report:
           border: 1px solid gray;
         }}
         .text_cell_larger {{ max-height: 14em; }}
-        .text_cell_wider {{ max-width: 40em; }}
+        .text_cell_wider {{ max-width: 44em; }}
         .added {{ background-color: #d4edda; }}
         .removed {{ background-color: #f8d7da; }}
         .place {{ color: #808080; font-style: italic; }}
         p {{ margin-bottom: 0.5rem; }}
     </style>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" \
+href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" \
+integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 </head>
 <body>
     <div class="page_container"><div class="page_content">
@@ -200,7 +222,7 @@ class Report:
     def _colored_diff(a: str, b: str):
         a_lines = a.splitlines()
         b_lines = b.splitlines()
-        diff = difflib.unified_diff(a_lines, b_lines, lineterm='')
+        diff = difflib.unified_diff(a_lines, b_lines, lineterm='', n=Report.context_lines)
         html = []
         for line in diff:
             if line.startswith('+++') or line.startswith('---'):
@@ -221,14 +243,16 @@ class Report:
         table_style = """ class="table-danger" """ if error else ""
         cell_class = "text_cell text_cell_larger" if error else "text_cell"
         diff_text = "&nbsp;"
+        escaped_got_desc = html.escape(got_desc)
+        escaped_ref_desc = html.escape(ref_desc)
         if error:
-            diff_text = Report._colored_diff(ref_desc, got_desc)
+            diff_text = Report._colored_diff(escaped_ref_desc, escaped_got_desc)
 
         test_html = f"""
             <tr>
                 <td{table_style}><b>{testname}</b><br/>{status}</td>
-                <td><div class="{cell_class}">{got_desc}</div></td>
-                <td><div class="{cell_class}">{ref_desc}</div></td>
+                <td><div class="{cell_class}">{escaped_got_desc}</div></td>
+                <td><div class="{cell_class}">{escaped_ref_desc}</div></td>
                 <td><div class="{cell_class} text_cell_wider">{diff_text}</div></td>
             </tr>"""
 
@@ -236,12 +260,13 @@ class Report:
             self.failed_html += test_html
         else:
             self.passed_html += test_html
+        return not error
 
     @staticmethod
     def _val_to_str(val) -> str:
         if isinstance(val, bpy.types.BoolAttributeValue):
             return f"{1 if val.value else 0}"
-        if isinstance(val, bpy.types.IntAttributeValue):
+        if isinstance(val, (bpy.types.IntAttributeValue, bpy.types.ByteIntAttributeValue)):
             return f"{val.value}"
         if isinstance(val, bpy.types.FloatAttributeValue):
             return f"{fmtf(val.value)}"
@@ -249,8 +274,19 @@ class Report:
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])})"
         if isinstance(val, bpy.types.Float2AttributeValue):
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])})"
+        if isinstance(val, bpy.types.Float4AttributeValue):
+            return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])}, {fmtf(val.vector[3])})"
+        if isinstance(val, bpy.types.Float4x4AttributeValue):
+            mat = val.value
+            res = "("
+            for row in range(0, 4):
+                res += f" ({fmtf(mat[row][0])}, {fmtf(mat[row][1])}, {fmtf(mat[row][2])}, {fmtf(mat[row][3])})"
+            res += " )"
+            return res
         if isinstance(val, bpy.types.FloatColorAttributeValue) or isinstance(val, bpy.types.ByteColorAttributeValue):
             return f"({val.color[0]:.3f}, {val.color[1]:.3f}, {val.color[2]:.3f}, {val.color[3]:.3f})"
+        if isinstance(val, bpy.types.QuaternionAttributeValue):
+            return f"({val.value[0]:.3f}, {val.value[1]:.3f}, {val.value[2]:.3f}, {val.value[3]:.3f})"
         if isinstance(val, bpy.types.Int2AttributeValue) or isinstance(val, bpy.types.Short2AttributeValue):
             return f"({val.value[0]}, {val.value[1]})"
         if isinstance(val, bpy.types.ID):
@@ -274,13 +310,15 @@ class Report:
             return res
         if isinstance(val, bpy.types.SplinePoint):
             return f"({fmtf(val.co[0])}, {fmtf(val.co[1])}, {fmtf(val.co[2])}) w:{fmtf(val.weight)}"
+        if isinstance(val, bpy.types.UDIMTile):
+            return f"{val.number}"
         return str(val)
 
     # single-line dump of head/tail
     @staticmethod
-    def _write_collection_single(col, desc: StringIO) -> None:
-        desc.write(f"    - ")
-        side_to_print = 5
+    def _write_collection_single(col, desc: StringIO, line_prefix="    - ") -> None:
+        desc.write(line_prefix)
+        side_to_print = Report.side_to_print_single_line
         if len(col) <= side_to_print * 2:
             for val in col:
                 desc.write(f"{Report._val_to_str(val)} ")
@@ -295,7 +333,7 @@ class Report:
     # multi-line dump of head/tail
     @staticmethod
     def _write_collection_multi(col, desc: StringIO) -> None:
-        side_to_print = 3
+        side_to_print = Report.side_to_print_multi_line
         if len(col) <= side_to_print * 2:
             for val in col:
                 desc.write(f"    - {Report._val_to_str(val)}\n")
@@ -312,12 +350,11 @@ class Report:
             return
         desc.write(f"  - attr '{attr.name}' {attr.data_type} {attr.domain}\n")
         if isinstance(
-                attr,
-                bpy.types.BoolAttribute) or isinstance(
-                attr,
-                bpy.types.IntAttribute) or isinstance(
-                attr,
-                bpy.types.FloatAttribute):
+            attr,
+            (bpy.types.BoolAttribute,
+             bpy.types.IntAttribute,
+             bpy.types.ByteIntAttribute,
+             bpy.types.FloatAttribute)):
             Report._write_collection_single(attr.data, desc)
         else:
             Report._write_collection_multi(attr.data, desc)
@@ -403,7 +440,7 @@ class Report:
                     desc.write(f" slot:{adt.action_slot.identifier}")
                 desc.write(f" blend:{adt.action_blend_type} drivers:{len(adt.drivers)}\n")
 
-    def generate_main_data_desc(self) -> str:
+    def generate_generic_data_desc(self) -> str:
         """Generates textual description of the current state of the
         Blender main data."""
 
@@ -415,13 +452,21 @@ class Report:
             for mesh in bpy.data.meshes:
                 # mesh overview
                 desc.write(
-                    f"- Mesh '{mesh.name}' vtx:{len(mesh.vertices)} face:{len(mesh.polygons)} loop:{len(mesh.loops)} edge:{len(mesh.edges)}\n")
+                    f"- Mesh '{mesh.name}' "
+                    f"vtx:{len(mesh.vertices)} "
+                    f"face:{len(mesh.polygons)} "
+                    f"loop:{len(mesh.loops)} "
+                    f"edge:{len(mesh.edges)}\n"
+                )
                 if len(mesh.loops) > 0:
                     Report._write_collection_single(mesh.loops, desc)
                 if len(mesh.edges) > 0:
                     Report._write_collection_single(mesh.edges, desc)
                 # attributes
-                for attr in mesh.attributes:
+                attr_names = [attr.name for attr in mesh.attributes]
+                attr_names.sort()
+                for name in attr_names:
+                    attr = mesh.attributes[name]
                     if not attr.is_internal:
                         Report._write_attr(attr, desc)
                 # skinning / vertex groups
@@ -465,10 +510,20 @@ class Report:
             for curve in bpy.data.curves:
                 # overview
                 desc.write(
-                    f"- Curve '{curve.name}' dim:{curve.dimensions} resu:{curve.resolution_u} resv:{curve.resolution_v} splines:{len(curve.splines)}\n")
+                    f"- Curve '{curve.name}' "
+                    f"dim:{curve.dimensions} "
+                    f"resu:{curve.resolution_u} "
+                    f"resv:{curve.resolution_v} "
+                    f"splines:{len(curve.splines)}\n"
+                )
                 for spline in curve.splines[:5]:
                     desc.write(
-                        f"  - spline type:{spline.type} pts:{spline.point_count_u}x{spline.point_count_v} order:{spline.order_u}x{spline.order_v} cyclic:{spline.use_cyclic_u},{spline.use_cyclic_v} endp:{spline.use_endpoint_u},{spline.use_endpoint_v}\n")
+                        f"  - spline type:{spline.type} "
+                        f"pts:{spline.point_count_u}x{spline.point_count_v} "
+                        f"order:{spline.order_u}x{spline.order_v} "
+                        f"cyclic:{spline.use_cyclic_u},{spline.use_cyclic_v} "
+                        f"endp:{spline.use_endpoint_u},{spline.use_endpoint_v}\n"
+                    )
                     Report._write_collection_multi(spline.points, desc)
                 # materials
                 if curve.materials:
@@ -476,6 +531,49 @@ class Report:
                     Report._write_collection_single(curve.materials, desc)
                 Report._write_animdata_desc(curve.animation_data, desc)
                 Report._write_custom_props(curve, desc)
+                desc.write(f"\n")
+
+        # curves(new) / hair
+        if len(bpy.data.hair_curves):
+            desc.write(f"==== Curves(new): {len(bpy.data.hair_curves)}\n")
+            for curve in bpy.data.hair_curves:
+                # overview
+                desc.write(
+                    f"- Curve '{curve.name}' "
+                    f"splines:{len(curve.curves)} "
+                    f"control-points:{len(curve.points)}\n"
+                )
+                # attributes
+                for attr in sorted(curve.attributes, key=lambda x: x.name):
+                    if not attr.is_internal:
+                        Report._write_attr(attr, desc)
+                # materials
+                if curve.materials:
+                    desc.write(f"  - {len(curve.materials)} materials\n")
+                    Report._write_collection_single(curve.materials, desc)
+                Report._write_animdata_desc(curve.animation_data, desc)
+                Report._write_custom_props(curve, desc)
+                desc.write(f"\n")
+
+        # pointclouds
+        if len(bpy.data.pointclouds):
+            desc.write(f"==== Point Clouds: {len(bpy.data.pointclouds)}\n")
+            for pointcloud in bpy.data.pointclouds:
+                # overview
+                desc.write(
+                    f"- PointCloud '{pointcloud.name}' "
+                    f"points:{len(pointcloud.points)}\n"
+                )
+                # attributes
+                for attr in sorted(pointcloud.attributes, key=lambda x: x.name):
+                    if not attr.is_internal:
+                        Report._write_attr(attr, desc)
+                # materials
+                if pointcloud.materials:
+                    desc.write(f"  - {len(pointcloud.materials)} materials\n")
+                    Report._write_collection_single(pointcloud.materials, desc)
+                Report._write_animdata_desc(pointcloud.animation_data, desc)
+                Report._write_custom_props(pointcloud, desc)
                 desc.write(f"\n")
 
         # objects
@@ -501,7 +599,11 @@ class Report:
 
                 desc.write(f"  - pos {fmtf(obj.location[0])}, {fmtf(obj.location[1])}, {fmtf(obj.location[2])}\n")
                 desc.write(
-                    f"  - rot {fmtrot(obj.rotation_euler[0])}, {fmtrot(obj.rotation_euler[1])}, {fmtrot(obj.rotation_euler[2])} ({obj.rotation_mode})\n")
+                    f"  - rot {fmtrot(obj.rotation_euler[0])}, "
+                    f"{fmtrot(obj.rotation_euler[1])}, "
+                    f"{fmtrot(obj.rotation_euler[2])} "
+                    f"({obj.rotation_mode})\n"
+                )
                 desc.write(f"  - scl {obj.scale[0]:.3f}, {obj.scale[1]:.3f}, {obj.scale[2]:.3f}\n")
                 if obj.vertex_groups:
                     desc.write(f"  - {len(obj.vertex_groups)} vertex groups\n")
@@ -517,7 +619,10 @@ class Report:
                         desc.write(f"    - {mod.type} '{mod.name}'")
                         if isinstance(mod, bpy.types.SubsurfModifier):
                             desc.write(
-                                f" levels:{mod.levels}/{mod.render_levels} type:{mod.subdivision_type} crease:{mod.use_creases}")
+                                f" levels:{mod.levels}/{mod.render_levels} "
+                                f"type:{mod.subdivision_type} "
+                                f"crease:{mod.use_creases}"
+                            )
                         desc.write(f"\n")
                 # for a pose, only print bones that either have non-identity pose matrix, or custom properties
                 if obj.pose:
@@ -532,11 +637,14 @@ class Report:
                             desc.write(f"  - posed bone '{bone.name}'\n")
                             if not mtx_identity:
                                 desc.write(
-                                    f"      {fmtf(mtx[0][0])} {fmtf(mtx[0][1])} {fmtf(mtx[0][2])} {fmtf(mtx[0][3])}\n")
+                                    f"      {fmtf(mtx[0][0])} {fmtf(mtx[0][1])} {fmtf(mtx[0][2])} {fmtf(mtx[0][3])}\n"
+                                )
                                 desc.write(
-                                    f"      {fmtf(mtx[1][0])} {fmtf(mtx[1][1])} {fmtf(mtx[1][2])} {fmtf(mtx[1][3])}\n")
+                                    f"      {fmtf(mtx[1][0])} {fmtf(mtx[1][1])} {fmtf(mtx[1][2])} {fmtf(mtx[1][3])}\n"
+                                )
                                 desc.write(
-                                    f"      {fmtf(mtx[2][0])} {fmtf(mtx[2][1])} {fmtf(mtx[2][2])} {fmtf(mtx[2][3])}\n")
+                                    f"      {fmtf(mtx[2][0])} {fmtf(mtx[2][1])} {fmtf(mtx[2][2])} {fmtf(mtx[2][3])}\n"
+                                )
                             if len(props_str) > 0:
                                 desc.write(props_str)
 
@@ -549,13 +657,28 @@ class Report:
             desc.write(f"==== Cameras: {len(bpy.data.cameras)}\n")
             for cam in bpy.data.cameras:
                 desc.write(
-                    f"- Cam '{cam.name}' {cam.type} lens:{cam.lens:.1f} {cam.lens_unit} near:{cam.clip_start:.3f} far:{cam.clip_end:.1f} orthosize:{cam.ortho_scale:.1f}\n")
-                desc.write(f"  - fov {cam.angle:.3f} (h {cam.angle_x:.3f} v {cam.angle_y:.3f})\n")
+                    f"- Cam '{cam.name}' "
+                    f"{cam.type} "
+                    f"lens:{cam.lens:.1f} "
+                    f"{cam.lens_unit} "
+                    f"near:{cam.clip_start:.3f} "
+                    f"far:{cam.clip_end:.1f} "
+                    f"orthosize:{cam.ortho_scale:.1f}\n"
+                )
                 desc.write(
-                    f"  - sensor {cam.sensor_width:.1f}x{cam.sensor_height:.1f} shift {cam.shift_x:.3f},{cam.shift_y:.3f}\n")
+                    f"  - fov {cam.angle:.3f} "
+                    f"(h {cam.angle_x:.3f} v {cam.angle_y:.3f})\n"
+                )
+                desc.write(
+                    f"  - sensor {cam.sensor_width:.1f}x{cam.sensor_height:.1f} "
+                    f"shift {cam.shift_x:.3f},{cam.shift_y:.3f}\n"
+                )
                 if cam.dof.use_dof:
                     desc.write(
-                        f"  - dof dist:{cam.dof.focus_distance:.3f} fstop:{cam.dof.aperture_fstop:.1f} blades:{cam.dof.aperture_blades}\n")
+                        f"  - dof dist:{cam.dof.focus_distance:.3f} "
+                        f"fstop:{cam.dof.aperture_fstop:.1f} "
+                        f"blades:{cam.dof.aperture_blades}\n"
+                    )
                 Report._write_animdata_desc(cam.animation_data, desc)
                 Report._write_custom_props(cam, desc)
             desc.write(f"\n")
@@ -565,7 +688,11 @@ class Report:
             desc.write(f"==== Lights: {len(bpy.data.lights)}\n")
             for light in bpy.data.lights:
                 desc.write(
-                    f"- Light '{light.name}' {light.type} col:({light.color[0]:.3f}, {light.color[1]:.3f}, {light.color[2]:.3f}) energy:{light.energy:.3f}")
+                    f"- Light '{light.name}' "
+                    f"{light.type} "
+                    f"col:({light.color[0]:.3f}, {light.color[1]:.3f}, {light.color[2]:.3f}) "
+                    f"energy:{light.energy:.3f}"
+                )
                 if light.exposure != 0:
                     desc.write(f" exposure:{fmtf(light.exposure)}")
                 if light.use_temperature:
@@ -587,11 +714,21 @@ class Report:
                 desc.write(f"- Mat '{mat.name}'\n")
                 wrap = bpy_extras.node_shader_utils.PrincipledBSDFWrapper(mat)
                 desc.write(
-                    f"  - base color ({wrap.base_color[0]:.3f}, {wrap.base_color[1]:.3f}, {wrap.base_color[2]:.3f}){self._node_shader_image_desc(wrap.base_color_texture)}\n")
+                    f"  - base color ("
+                    f"{wrap.base_color[0]:.3f}, "
+                    f"{wrap.base_color[1]:.3f}, "
+                    f"{wrap.base_color[2]:.3f})"
+                    f"{self._node_shader_image_desc(wrap.base_color_texture)}\n"
+                )
                 desc.write(
                     f"  - specular ior {wrap.specular:.3f}{self._node_shader_image_desc(wrap.specular_texture)}\n")
                 desc.write(
-                    f"  - specular tint ({wrap.specular_tint[0]:.3f}, {wrap.specular_tint[1]:.3f}, {wrap.specular_tint[2]:.3f}){self._node_shader_image_desc(wrap.specular_tint_texture)}\n")
+                    f"  - specular tint ("
+                    f"{wrap.specular_tint[0]:.3f}, "
+                    f"{wrap.specular_tint[1]:.3f}, "
+                    f"{wrap.specular_tint[2]:.3f})"
+                    f"{self._node_shader_image_desc(wrap.specular_tint_texture)}\n"
+                )
                 desc.write(
                     f"  - roughness {wrap.roughness:.3f}{self._node_shader_image_desc(wrap.roughness_texture)}\n")
                 desc.write(
@@ -599,19 +736,37 @@ class Report:
                 desc.write(f"  - ior {wrap.ior:.3f}{self._node_shader_image_desc(wrap.ior_texture)}\n")
                 if wrap.transmission > 0.0 or (wrap.transmission_texture and wrap.transmission_texture.image):
                     desc.write(
-                        f"  - transmission {wrap.transmission:.3f}{self._node_shader_image_desc(wrap.transmission_texture)}\n")
+                        f"  - transmission {wrap.transmission:.3f}"
+                        f"{self._node_shader_image_desc(wrap.transmission_texture)}\n"
+                    )
                 if wrap.alpha < 1.0 or (wrap.alpha_texture and wrap.alpha_texture.image):
                     desc.write(
                         f"  - alpha {wrap.alpha:.3f}{self._node_shader_image_desc(wrap.alpha_texture)}\n")
-                if (wrap.emission_strength > 0.0 and wrap.emission_color[0] > 0.0 and wrap.emission_color[1] > 0.0 and wrap.emission_color[2] > 0.0) or (
-                        wrap.emission_strength_texture and wrap.emission_strength_texture.image):
+                if (
+                        wrap.emission_strength > 0.0 and
+                        wrap.emission_color[0] > 0.0 and
+                        wrap.emission_color[1] > 0.0 and
+                        wrap.emission_color[2] > 0.0
+                ) or (
+                        wrap.emission_strength_texture and
+                        wrap.emission_strength_texture.image
+                ):
                     desc.write(
-                        f"  - emission color ({wrap.emission_color[0]:.3f}, {wrap.emission_color[1]:.3f}, {wrap.emission_color[2]:.3f}){self._node_shader_image_desc(wrap.emission_color_texture)}\n")
+                        f"  - emission color "
+                        f"({wrap.emission_color[0]:.3f}, "
+                        f"{wrap.emission_color[1]:.3f}, "
+                        f"{wrap.emission_color[2]:.3f})"
+                        f"{self._node_shader_image_desc(wrap.emission_color_texture)}\n"
+                    )
                     desc.write(
-                        f"  - emission strength {wrap.emission_strength:.3f}{self._node_shader_image_desc(wrap.emission_strength_texture)}\n")
+                        f"  - emission strength {wrap.emission_strength:.3f}"
+                        f"{self._node_shader_image_desc(wrap.emission_strength_texture)}\n"
+                    )
                 if (wrap.normalmap_texture and wrap.normalmap_texture.image):
                     desc.write(
-                        f"  - normalmap {wrap.normalmap_strength:.3f}{self._node_shader_image_desc(wrap.normalmap_texture)}\n")
+                        f"  - normalmap {wrap.normalmap_strength:.3f}"
+                        f"{self._node_shader_image_desc(wrap.normalmap_texture)}\n"
+                    )
                 if mat.alpha_threshold != 0.5:
                     desc.write(f"  - alpha_threshold {fmtf(mat.alpha_threshold)}\n")
                 if mat.surface_render_method != 'DITHERED':
@@ -619,12 +774,29 @@ class Report:
                 if mat.displacement_method != 'BUMP':
                     desc.write(f"  - displacement {mat.displacement_method}\n")
                 desc.write(
-                    f"  - viewport diffuse ({fmtf(mat.diffuse_color[0])}, {fmtf(mat.diffuse_color[1])}, {fmtf(mat.diffuse_color[2])}, {fmtf(mat.diffuse_color[3])})\n")
+                    "  - viewport diffuse ("
+                    f"{fmtf(mat.diffuse_color[0])}, "
+                    f"{fmtf(mat.diffuse_color[1])}, "
+                    f"{fmtf(mat.diffuse_color[2])}, "
+                    f"{fmtf(mat.diffuse_color[3])})\n"
+                )
                 desc.write(
-                    f"  - viewport specular ({fmtf(mat.specular_color[0])}, {fmtf(mat.specular_color[1])}, {fmtf(mat.specular_color[2])}), intensity {fmtf(mat.specular_intensity)}\n")
-                desc.write(f"  - viewport metallic {fmtf(mat.metallic)}, roughness {fmtf(mat.roughness)}\n")
+                    "  - viewport specular ("
+                    f"{fmtf(mat.specular_color[0])}, "
+                    f"{fmtf(mat.specular_color[1])}, "
+                    f"{fmtf(mat.specular_color[2])}), "
+                    f"intensity {fmtf(mat.specular_intensity)}\n"
+                )
                 desc.write(
-                    f"  - backface {mat.use_backface_culling} probe {mat.use_backface_culling_lightprobe_volume} shadow {mat.use_backface_culling_shadow}\n")
+                    "  - viewport "
+                    f"metallic {fmtf(mat.metallic)}, "
+                    f"roughness {fmtf(mat.roughness)}\n"
+                )
+                desc.write(
+                    f"  - backface {mat.use_backface_culling} "
+                    f"probe {mat.use_backface_culling_lightprobe_volume} "
+                    f"shadow {mat.use_backface_culling_shadow}\n"
+                )
                 Report._write_animdata_desc(mat.animation_data, desc)
                 Report._write_custom_props(mat, desc)
                 desc.write(f"\n")
@@ -635,7 +807,10 @@ class Report:
             for act in sorted(bpy.data.actions, key=lambda a: a.name):
                 layers = sorted(act.layers, key=lambda l: l.name)
                 desc.write(
-                    f"- Action '{act.name}' curverange:({act.curve_frame_range[0]:.1f} .. {act.curve_frame_range[1]:.1f}) layers:{len(layers)}\n")
+                    f"- Action '{act.name}' "
+                    f"curverange:({act.curve_frame_range[0]:.1f} .. {act.curve_frame_range[1]:.1f}) "
+                    f"layers:{len(layers)}\n"
+                )
                 for layer in layers:
                     desc.write(f"- ActionLayer {layer.name} strips:{len(layer.strips)}\n")
                     for strip in layer.strips:
@@ -652,7 +827,11 @@ class Report:
                                     if fcu.group:
                                         grp = f" grp:'{fcu.group.name}'"
                                     desc.write(
-                                        f"  - fcu '{fcu.data_path}[{fcu.array_index}]' smooth:{fcu.auto_smoothing} extra:{fcu.extrapolation} keyframes:{len(fcu.keyframe_points)}{grp}\n")
+                                        f"  - fcu '{fcu.data_path}[{fcu.array_index}]' "
+                                        f"smooth:{fcu.auto_smoothing} "
+                                        f"extra:{fcu.extrapolation} "
+                                        f"keyframes:{len(fcu.keyframe_points)}{grp}\n"
+                                    )
                                     Report._write_collection_multi(fcu.keyframe_points, desc)
                 Report._write_custom_props(act, desc)
                 desc.write(f"\n")
@@ -671,7 +850,9 @@ class Report:
                     if bone.parent:
                         desc.write(f" parent:'{bone.parent.name}'")
                     desc.write(
-                        f" h:({fmtf(bone.head[0])}, {fmtf(bone.head[1])}, {fmtf(bone.head[2])}) t:({fmtf(bone.tail[0])}, {fmtf(bone.tail[1])}, {fmtf(bone.tail[2])})")
+                        f" h:({fmtf(bone.head[0])}, {fmtf(bone.head[1])}, {fmtf(bone.head[2])}) "
+                        f"t:({fmtf(bone.tail[0])}, {fmtf(bone.tail[1])}, {fmtf(bone.tail[2])})"
+                    )
                     if bone.use_connect:
                         desc.write(f" connect")
                     if not bone.use_deform:
@@ -696,6 +877,9 @@ class Report:
             desc.write(f"==== Images: {len(bpy.data.images)}\n")
             for img in bpy.data.images:
                 desc.write(f"- Image '{img.name}' {img.size[0]}x{img.size[1]} {img.depth}bpp\n")
+                if len(img.tiles) > 1:
+                    desc.write(f"  - {len(img.tiles)} tiles: ")
+                    Report._write_collection_single(img.tiles, desc, "")
                 Report._write_custom_props(img, desc)
             desc.write(f"\n")
 
@@ -703,24 +887,48 @@ class Report:
         desc.close()
         return text
 
-    def import_and_check(self, input_file: pathlib.Path, import_func: Callable[[str, dict], None]) -> bool:
+    def import_and_check(
+            self,
+            input_file: pathlib.Path,
+            import_func: Callable[[str, dict], None],
+    ) -> bool:
+        return self.generate_and_check(input_file=input_file, generate_func=import_func)
+
+    def generate_and_check(
+            self,
+            input_file: pathlib.Path,
+            generate_func: Callable[[str, dict], None],
+            output_filepath: pathlib.Path | None = None,
+    ) -> bool:
         """
         Imports a single file using the provided import function, and
         checks whether it matches with expected template, returns
         comparison result.
 
         If there is a .json file next to the input file, the parameters from
-        that one file will be passed as extra parameters to the import function.
+        that one file will be passed as extra parameters to the generate function.
+        If there is a .export.json file next to the input file, it is assumed
+        that this is an export or round-trip test, and the parameters from that
+        file will be passed as extra export parameters to the generate function.
+        In this case, output_filepath is expected to be provided as well.
 
         When working in template update mode (environment variable
         BLENDER_TEST_UPDATE=1), updates the template with new result
         and always returns true.
+
+        This function also supports import/export tests (called round-trips),
+        and exports, where the export parameters are read from a .export.json
+        file next to the input file, and passed to the generate function as well.
+        In this case, the output file is expected to be written to a temporary folder.
+        Here, output_filepath is the name of the output file to read the result from
+        (absolute name is used here, as it is inside a temporary folder).
+
         """
         self.tested_count += 1
         input_basename = pathlib.Path(input_file).stem
         print(f"Importing {input_file}...", flush=True)
 
-        # load json parameters if they exist
+        # load json parameters if they exist, for import
         params = {}
         input_params_file = input_file.with_suffix(".json")
         if input_params_file.exists():
@@ -730,12 +938,28 @@ class Report:
             except:
                 pass
 
-        # import
+        # load json parameters if they exist, for export
+        params_export = {}
+        output_params_file = input_file.with_suffix(".export.json")
+        if output_params_file.exists():
+            try:
+                with output_params_file.open('r', encoding='utf-8') as file:
+                    params_export = json.load(file)
+            except:
+                pass
+
+        # Generate (import, export or round-trip)
         try:
-            import_func(str(input_file), params)
-            got_desc = self.generate_main_data_desc()
+            if not output_filepath:
+                # Import (check Blender data, so no output file)
+                generate_func(str(input_file), params)
+                got_desc = self.generate_data_desc()
+            else:
+                # Export or round-trip (check output file)
+                generate_func(str(input_file), str(output_filepath), params, params_export)
+                got_desc = self.generate_data_desc(output_filepath)
         except RuntimeError as ex:
-            got_desc = f"Error during import: {ex}"
+            got_desc = f"Error during import: {ex}".replace(str(input_file), input_file.name)
 
         ref_path: pathlib.Path = self.reference_dir / f"{input_basename}.txt"
         if ref_path.exists():
@@ -751,8 +975,8 @@ class Report:
                 self.updated_list.append(input_basename)
         else:
             # compare result with expected reference
-            self._add_test_result(input_basename, got_desc, ref_desc)
-            if ref_desc == got_desc:
+            result = self._add_test_result(input_basename, got_desc, ref_desc)
+            if result:
                 self.passed_list.append(input_basename)
             else:
                 self.failed_list.append(input_basename)

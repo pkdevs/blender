@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender::gpu {
 
@@ -22,12 +22,9 @@ namespace blender::gpu {
 struct GPUCapabilities {
   int max_texture_size = 0;
   int max_texture_3d_size = 0;
+  uint32_t max_buffer_texture_size = 0;
   int max_texture_layers = 0;
   int max_textures = 0;
-  int max_textures_vert = 0;
-  int max_textures_geom = 0;
-  int max_textures_frag = 0;
-  int max_samplers = 0;
   int max_images = 0;
   int max_work_group_count[3] = {0, 0, 0};
   int max_work_group_size[3] = {0, 0, 0};
@@ -39,6 +36,7 @@ struct GPUCapabilities {
   int max_varying_floats = 0;
   int max_shader_storage_buffer_bindings = 0;
   int max_compute_shader_storage_blocks = 0;
+  size_t max_uniform_buffer_size = 0;
   size_t max_storage_buffer_size = 0;
   size_t storage_buffer_alignment = 256;
   int extensions_len = 0;
@@ -46,27 +44,27 @@ struct GPUCapabilities {
 
   bool mem_stats_support = false;
   bool geometry_shader_support = false;
-  bool shader_draw_parameters_support = false;
   bool hdr_viewport_support = false;
+  bool multi_viewport_support = false;
   bool stencil_export_support = false;
-  bool clip_control_support = false;
+  bool ray_query_support = false;
+  bool vertex_pipeline_stores_and_atomics_support = false;
+
+  /** Can an sRGB texture be written, with the hardware performing conversion to sRGB? */
+  bool srgb_write_direct_support = false;
+  /* Can an sRGB texture be bound as writable with a non-sRGB (UNORM) view? */
+  bool srgb_write_view_support = false;
 
   int max_parallel_compilations = -1;
 
   /* OpenGL related workarounds. */
-  bool mip_render_workaround = false;
   bool depth_blitting_workaround = false;
   bool use_main_context_workaround = false;
-  bool broken_amd_driver = false;
   bool use_hq_normals_workaround = false;
   bool stencil_clasify_buffer_workaround = false;
-  bool node_link_instancing_workaround = false;
-  bool line_directive_workaround = false;
+  bool texture_pool_workaround = false;
 
   bool use_subprocess_shader_compilations = false;
-
-  /* Vulkan related workarounds. */
-  bool render_pass_workaround = false;
 
   /* Metal related workarounds. */
   /* Minimum per-vertex stride in bytes (For a vertex buffer). */

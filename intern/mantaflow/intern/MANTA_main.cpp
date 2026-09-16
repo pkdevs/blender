@@ -21,9 +21,9 @@
 #include "liquid_script.h"
 #include "smoke_script.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
@@ -37,12 +37,15 @@ using std::ofstream;
 using std::ostringstream;
 using std::to_string;
 
+namespace blender {
+
 atomic<int> MANTA::solverID(0);
 int MANTA::with_debug(0);
 
 MANTA::MANTA(int *res, FluidModifierData *fmd)
     : mCurrentID(++solverID), mMaxRes(fmd->domain->maxres)
 {
+  using namespace blender;
   if (with_debug) {
     cout << "FLUID: " << mCurrentID << " with res(" << res[0] << ", " << res[1] << ", " << res[2]
          << ")" << endl;
@@ -1143,8 +1146,7 @@ string MANTA::getRealValue(const string &varName)
   it = mRNAMap.find(varName);
 
   if (it == mRNAMap.end()) {
-    cerr << "Fluid Error -- variable " << varName << " not found in RNA map " << it->second
-         << endl;
+    cerr << "Fluid Error -- variable " << varName << " not found in RNA map" << endl;
     return "";
   }
 
@@ -1438,6 +1440,20 @@ bool MANTA::readMesh(FluidModifierData *fmd, int framenr)
     cout << "MANTA::readMesh()" << endl;
   }
 
+  /* Clear mesh data from a previously loaded frame when the requested cache cannot be loaded. */
+  const auto clear_mesh = [this]() {
+    if (mMeshNodes) {
+      mMeshNodes->clear();
+    }
+    if (mMeshTriangles) {
+      mMeshTriangles->clear();
+    }
+    if (mMeshVelocities) {
+      mMeshVelocities->clear();
+    }
+    mMeshFromFile = false;
+  };
+
   if (!mUsingLiquid || !mUsingMesh) {
     return false;
   }
@@ -1452,6 +1468,7 @@ bool MANTA::readMesh(FluidModifierData *fmd, int framenr)
 
   /* Sanity check: Are cache files present? */
   if (!hasMesh(fmd, framenr)) {
+    clear_mesh();
     return false;
   }
 
@@ -1467,7 +1484,11 @@ bool MANTA::readMesh(FluidModifierData *fmd, int framenr)
     pythonCommands.push_back(ss.str());
   }
 
-  return (mMeshFromFile = runPythonString(pythonCommands));
+  mMeshFromFile = runPythonString(pythonCommands);
+  if (!mMeshFromFile) {
+    clear_mesh();
+  }
+  return mMeshFromFile;
 }
 
 bool MANTA::readParticles(FluidModifierData *fmd, int framenr, bool resumable)
@@ -2029,6 +2050,7 @@ static PyObject *callPythonFunction(string varName, string functionName, bool is
 
   var = PyObject_GetAttrString(manta_main_module, varName.c_str());
   if (!var) {
+    PyErr_Clear();
     PyGILState_Release(gilstate);
     return nullptr;
   }
@@ -2037,12 +2059,17 @@ static PyObject *callPythonFunction(string varName, string functionName, bool is
 
   Py_DECREF(var);
   if (!func) {
+    PyErr_Clear();
     PyGILState_Release(gilstate);
     return nullptr;
   }
 
   if (!isAttribute) {
     returnedValue = PyObject_CallObject(func, nullptr);
+    if (returnedValue == nullptr) {
+      /* Print any unexpected errors, also clear them. */
+      PyErr_Print();
+    }
     Py_DECREF(func);
   }
 
@@ -2442,3 +2469,5 @@ string MANTA::getFile(
   BLI_path_frame(targetFile, sizeof(targetFile), framenr, 0);
   return targetFile;
 }
+
+}  // namespace blender

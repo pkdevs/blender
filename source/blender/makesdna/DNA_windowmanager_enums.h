@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
+#include "BLI_enum_flags.hh"
+
+namespace blender {
 
 /**
  * Operator type return flags: exec(), invoke() modal(), return values.
@@ -27,6 +29,8 @@ enum wmOperatorStatus {
    */
   OPERATOR_INTERFACE = (1 << 5),
 };
+ENUM_OPERATORS(wmOperatorStatus);
+
 #define OPERATOR_FLAGS_ALL \
   (OPERATOR_RUNNING_MODAL | OPERATOR_CANCELLED | OPERATOR_FINISHED | OPERATOR_PASS_THROUGH | \
    OPERATOR_HANDLED | OPERATOR_INTERFACE | 0)
@@ -39,10 +43,8 @@ enum wmOperatorStatus {
   } \
   ((void)0)
 
-ENUM_OPERATORS(wmOperatorStatus, OPERATOR_INTERFACE);
-
 /** #wmOperator.flag */
-enum {
+enum eOperator_Flag : short {
   /**
    * Low level flag so exec() operators can tell if they were invoked, use with care.
    * Typically this shouldn't make any difference, but it rare cases its needed (see smooth-view).
@@ -69,3 +71,6 @@ enum {
    */
   OP_IS_MODAL_CURSOR_REGION = (1 << 4),
 };
+ENUM_OPERATORS(eOperator_Flag)
+
+}  // namespace blender

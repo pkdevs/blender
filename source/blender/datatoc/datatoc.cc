@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <iostream>
 
 // #define VERBOSE
 
@@ -38,8 +40,8 @@ int main(int argc, char **argv)
   int i;
   int argv_len;
 
-  if (argc != 3) {
-    printf("Usage: datatoc <data_file_from> <data_file_to>\n");
+  if (argc < 3 || argc > 4) {
+    printf("Usage: datatoc <data_file_from> <data_file_to> [<symbol_name_override>]\n");
     exit(1);
   }
 
@@ -49,7 +51,8 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  argv[1] = arg_basename(argv[1]);
+  /* Use the optional symbol name override, otherwise derive from the input filename. */
+  argv[1] = (argc >= 4) ? argv[3] : arg_basename(argv[1]);
 
   fseek(fpin, 0L, SEEK_END);
   size = ftell(fpin);
@@ -62,6 +65,19 @@ int main(int argc, char **argv)
 #ifdef VERBOSE
   printf("Making C file <%s>\n", argv[2]);
 #endif
+
+  /* We make the required directories here rather than having the build system
+   * do the work for us, as having cmake do it leads to several thousand cmake
+   * instances being launched, leading to significant overhead, see pr #141404
+   * for details. */
+  std::filesystem::path parent_dir = std::filesystem::path(argv[2]).parent_path();
+  std::error_code ec;
+  if (!std::filesystem::create_directories(parent_dir, ec)) {
+    if (ec) {
+      std::cerr << "Unable to create " << parent_dir << " : " << ec.message() << std::endl;
+      exit(1);
+    }
+  }
 
   argv_len = int(strlen(argv[1]));
   for (i = 0; i < argv_len; i++) {

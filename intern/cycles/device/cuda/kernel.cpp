@@ -16,8 +16,7 @@ void CUDADeviceKernels::load(CUDADevice *device)
   for (int i = 0; i < (int)DEVICE_KERNEL_NUM; i++) {
     CUDADeviceKernel &kernel = kernels_[i];
 
-    /* No mega-kernel used for GPU. */
-    if (i == DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL) {
+    if (!device_kernel_has_gpu_function((DeviceKernel)i)) {
       continue;
     }
 
@@ -35,7 +34,7 @@ void CUDADeviceKernels::load(CUDADevice *device)
               &kernel.min_blocks, &kernel.num_threads_per_block, kernel.function, nullptr, 0, 0));
     }
     else {
-      LOG(ERROR) << "Unable to load kernel " << function_name;
+      LOG_ERROR << "Unable to load kernel " << function_name;
     }
   }
 

@@ -29,7 +29,7 @@ Tests:
   Test the command line program, "blender_ext.py" Blender is not used.
 
 - test_blender
-  Test blender (currenlty only some limited tests).
+  Test blender (currently only some limited tests).
 
 - test_cli_blender
   Runs tests that access & manipulate extensions via the command line.
@@ -135,6 +135,7 @@ test: FORCE
 	@$(MAKE) -C "$(BASE_DIR)" test_cli;
 	@$(MAKE) -C "$(BASE_DIR)" test_blender;
 	@$(MAKE) -C "$(BASE_DIR)" test_cli_blender;
+	@$(MAKE) -C "$(BASE_DIR)" test_path_pattern_match;
 watch_test: FORCE
 	@cd "$(BASE_DIR)" && \
 	while true; do \

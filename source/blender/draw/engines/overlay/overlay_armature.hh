@@ -18,8 +18,6 @@
 #include "overlay_shader_shared.hh"
 
 namespace blender::draw::overlay {
-using namespace blender;
-
 enum eArmatureDrawMode {
   ARM_DRAW_MODE_OBJECT,
   ARM_DRAW_MODE_POSE,
@@ -135,14 +133,14 @@ class Armatures : Overlay {
       });
     }
 
-    BoneBuffers(const SelectionType selection_type) : selection_type_(selection_type){};
+    BoneBuffers(const SelectionType selection_type) : selection_type_(selection_type) {};
   };
 
   BoneBuffers opaque_ = {selection_type_};
   BoneBuffers transparent_ = {selection_type_};
 
  public:
-  Armatures(const SelectionType selection_type) : selection_type_(selection_type){};
+  Armatures(const SelectionType selection_type) : selection_type_(selection_type) {};
 
   void begin_sync(Resources &res, const State &state) final
   {
@@ -163,7 +161,7 @@ class Armatures : Overlay {
     /* Draw bone outlines and custom shape wire with a specific alpha. */
     const bool use_wire_alpha = (wire_alpha < 1.0f);
 
-    GPUTexture **depth_tex = (state.xray_enabled) ? &res.depth_tx : &res.dummy_depth_tx;
+    gpu::Texture **depth_tex = (state.xray_enabled) ? &res.depth_tx : &res.dummy_depth_tx;
 
     armature_ps_.init();
     armature_ps_.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
@@ -477,6 +475,7 @@ class Armatures : Overlay {
     /* Current armature object */
     Object *ob = nullptr;
     const ObjectRef *ob_ref = nullptr;
+    bArmature *armature = nullptr;
 
     /* Note: can be mutated inside `draw_armature_pose()`. */
     eArmatureDrawMode draw_mode = ARM_DRAW_MODE_OBJECT;
@@ -515,6 +514,7 @@ class Armatures : Overlay {
     DrawContext ctx;
     ctx.ob = ob_ref.object;
     ctx.ob_ref = &ob_ref;
+    ctx.armature = &arm;
     ctx.res = &res;
     ctx.dt = state.dt;
     ctx.draw_mode = draw_mode;

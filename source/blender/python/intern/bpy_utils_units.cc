@@ -15,15 +15,17 @@
 #include <Python.h>
 #include <structmember.h>
 
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "bpy_utils_units.hh"
 
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "BKE_unit.hh"
+
+namespace blender {
 
 /***** C-defined systems and types *****/
 
@@ -99,7 +101,7 @@ static PyObject *py_structseq_from_strings(PyTypeObject *py_type,
   /* Initialize array. */
   /* We really populate the contexts' fields here! */
   for (str_iter = str_items, desc = py_sseq_desc->fields; *str_iter; str_iter++, desc++) {
-    desc->name = (char *)*str_iter;
+    desc->name = const_cast<char *>(*str_iter);
     desc->doc = nullptr;
   }
   /* end sentinel */
@@ -146,19 +148,19 @@ static bool bpyunits_validate(const char *usys_str, const char *ucat_str, int *r
 PyDoc_STRVAR(
     /* Wrap. */
     bpyunits_to_value_doc,
-    ".. method:: to_value(unit_system, unit_category, str_input, str_ref_unit=None)\n"
+    ".. function:: to_value(unit_system, unit_category, str_input, *, str_ref_unit=None)\n"
     "\n"
     "   Convert a given input string into a float value.\n"
     "\n"
-    "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
+    "   :param unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
     "   :type unit_system: str\n"
-    "   :arg unit_category: The category of data we are converting (length, area, rotation, "
+    "   :param unit_category: The category of data we are converting (length, area, rotation, "
     "etc.),\n"
     "      from :attr:`bpy.utils.units.categories`.\n"
     "   :type unit_category: str\n"
-    "   :arg str_input: The string to convert to a float value.\n"
+    "   :param str_input: The string to convert to a float value.\n"
     "   :type str_input: str\n"
-    "   :arg str_ref_unit: A reference string from which to extract a default unit, if none is "
+    "   :param str_ref_unit: A reference string from which to extract a default unit, if none is "
     "found in ``str_input``.\n"
     "   :type str_ref_unit: str | None\n"
     "   :return: The converted/interpreted value.\n"
@@ -183,11 +185,10 @@ static PyObject *bpyunits_to_value(PyObject * /*self*/, PyObject *args, PyObject
       nullptr,
   };
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "s"  /* `unit_system` */
       "s"  /* `unit_category` */
       "s#" /* `str_input` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "z"  /* `str_ref_unit` */
       ":to_value",
       _keywords,
@@ -203,16 +204,15 @@ static PyObject *bpyunits_to_value(PyObject * /*self*/, PyObject *args, PyObject
     return nullptr;
   }
 
-  str_len = str_len * 2 + 64;
-  str = static_cast<char *>(PyMem_MALLOC(sizeof(*str) * size_t(str_len)));
-  BLI_strncpy(str, inpt, size_t(str_len));
+  const size_t str_maxncpy = str_len * 2 + 64;
+  str = static_cast<char *>(PyMem_MALLOC(sizeof(*str) * str_maxncpy));
+  BLI_strncpy(str, inpt, str_maxncpy);
 
-  BKE_unit_replace_string(str, int(str_len), uref, scale, usys, ucat);
+  BKE_unit_replace_string(str, int(str_maxncpy), uref, scale, usys, ucat);
 
   if (!PyC_RunString_AsNumber(nullptr, str, "<bpy_units_api>", &result)) {
     if (PyErr_Occurred()) {
       PyErr_Print();
-      PyErr_Clear();
     }
 
     PyErr_Format(
@@ -230,25 +230,25 @@ static PyObject *bpyunits_to_value(PyObject * /*self*/, PyObject *args, PyObject
 PyDoc_STRVAR(
     /* Wrap. */
     bpyunits_to_string_doc,
-    ".. method:: to_string(unit_system, unit_category, value, precision=3, "
+    ".. function:: to_string(unit_system, unit_category, value, *, precision=3, "
     "split_unit=False, compatible_unit=False)\n"
     "\n"
     "   Convert a given input float value into a string with units.\n"
     "\n"
-    "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
+    "   :param unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
     "   :type unit_system: str\n"
-    "   :arg unit_category: The category of data we are converting (length, area, "
+    "   :param unit_category: The category of data we are converting (length, area, "
     "rotation, etc.),\n"
     "      from :attr:`bpy.utils.units.categories`.\n"
     "   :type unit_category: str\n"
-    "   :arg value: The value to convert to a string.\n"
+    "   :param value: The value to convert to a string.\n"
     "   :type value: float\n"
-    "   :arg precision: Number of digits after the comma.\n"
+    "   :param precision: Number of digits after the decimal point.\n"
     "   :type precision: int\n"
-    "   :arg split_unit: Whether to use several units if needed (1m1cm), or always only "
+    "   :param split_unit: Whether to use several units if needed (1m1cm), or always only "
     "one (1.01m).\n"
     "   :type split_unit: bool\n"
-    "   :arg compatible_unit: Whether to use keyboard-friendly units (1m2) or nicer "
+    "   :param compatible_unit: Whether to use keyboard-friendly units (1m2) or nicer "
     "UTF8 ones (1m²).\n"
     "   :type compatible_unit: bool\n"
     "   :return: The converted string.\n"
@@ -273,11 +273,10 @@ static PyObject *bpyunits_to_string(PyObject * /*self*/, PyObject *args, PyObjec
       nullptr,
   };
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "s"  /* `unit_system` */
       "s"  /* `unit_category` */
       "d"  /* `value` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "i"  /* `precision` */
       "O&" /* `split_unit` */
       "O&" /* `compatible_unit` */
@@ -318,7 +317,7 @@ static PyObject *bpyunits_to_string(PyObject * /*self*/, PyObject *args, PyObjec
     PyObject *result;
 
     BKE_unit_value_as_string_adaptive(
-        buf1, sizeof(buf1), value, precision, usys, ucat, split_unit, false);
+        buf1, sizeof(buf1), value, precision, usys, ucat, split_unit, false, true);
 
     if (compatible_unit) {
       BKE_unit_name_to_alt(buf2, sizeof(buf2), buf1, usys, ucat);
@@ -346,11 +345,11 @@ static PyObject *bpyunits_to_string(PyObject * /*self*/, PyObject *args, PyObjec
 
 static PyMethodDef bpyunits_methods[] = {
     {"to_value",
-     (PyCFunction)bpyunits_to_value,
+     reinterpret_cast<PyCFunction>(bpyunits_to_value),
      METH_VARARGS | METH_KEYWORDS,
      bpyunits_to_value_doc},
     {"to_string",
-     (PyCFunction)bpyunits_to_string,
+     reinterpret_cast<PyCFunction>(bpyunits_to_string),
      METH_VARARGS | METH_KEYWORDS,
      bpyunits_to_string_doc},
     {nullptr, nullptr, 0, nullptr},
@@ -367,8 +366,7 @@ static PyMethodDef bpyunits_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     bpyunits_doc,
-    "This module contains some data/methods regarding units handling.");
-
+    "This module contains some data/methods regarding units handling.\n");
 static PyModuleDef bpyunits_module = {
     /*m_base*/ PyModuleDef_HEAD_INIT,
     /*m_name*/ "bpy.utils.units",
@@ -402,3 +400,5 @@ PyObject *BPY_utils_units()
 
   return submodule;
 }
+
+}  // namespace blender

@@ -75,14 +75,14 @@ class Facing : Overlay {
                                  !state.is_image_render;
 
     if (use_sculpt_pbvh) {
-      ResourceHandle handle = manager.unique_handle_for_sculpt(ob_ref);
+      ResourceHandleRange handle = manager.unique_handle_for_sculpt(ob_ref);
 
       for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_DEFAULT)) {
         ps_.draw(batch.batch, handle);
       }
     }
     else {
-      blender::gpu::Batch *geom = DRW_cache_object_surface_get(ob_ref.object);
+      gpu::Batch *geom = DRW_cache_object_surface_get(ob_ref.object);
       if (geom) {
         ps_.draw(geom, manager.unique_handle(ob_ref));
       }

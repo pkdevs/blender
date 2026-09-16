@@ -8,7 +8,7 @@
 
 #include "GPU_viewport.hh"
 
-#include "BLI_string.h"
+#include "BLI_string_utf8.hh"
 
 #include "DRW_render.hh"
 
@@ -63,7 +63,7 @@ static eDRWColorManagementType drw_color_management_type_for_v3d(const Scene &sc
 
 static eDRWColorManagementType drw_color_management_type_for_space_image(const SpaceImage &sima)
 {
-  const Image *image = sima.image;
+  const blender::Image *image = sima.image;
 
   /* Use inverse logic as there isn't a setting for `Color & Alpha`. */
   const eSpaceImage_Flag display_channels_mode = static_cast<eSpaceImage_Flag>(sima.flag);
@@ -81,7 +81,8 @@ static eDRWColorManagementType drw_color_management_type_for_space_node(Main &bm
                                                                         const SpaceNode &snode)
 {
   if ((snode.flag & SNODE_BACKDRAW) && ED_node_is_compositor(&snode)) {
-    const Image *image = BKE_image_ensure_viewer(&bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+    const blender::Image *image = BKE_image_ensure_viewer(
+        &bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
     if ((image->flag & IMA_VIEW_AS_RENDER) == 0) {
       return eDRWColorManagementType::ViewTransform;
     }
@@ -129,15 +130,15 @@ static void viewport_settings_apply(GPUViewport &viewport,
     case eDRWColorManagementType::ViewTransform: {
       /* For workbench use only default view transform in configuration,
        * using no scene settings. */
-      BKE_color_managed_view_settings_init_render(&view_settings, display_settings, nullptr);
+      BKE_color_managed_view_settings_init(&view_settings, display_settings, nullptr);
       break;
     }
     case eDRWColorManagementType::ViewTransformAndLook: {
       /* Use only view transform + look and nothing else for lookdev without
        * scene lighting, as exposure depends on scene light intensity. */
-      BKE_color_managed_view_settings_init_render(&view_settings, display_settings, nullptr);
-      STRNCPY(view_settings.view_transform, scene.view_settings.view_transform);
-      STRNCPY(view_settings.look, scene.view_settings.look);
+      BKE_color_managed_view_settings_init(&view_settings, display_settings, nullptr);
+      STRNCPY_UTF8(view_settings.view_transform, scene.view_settings.view_transform);
+      STRNCPY_UTF8(view_settings.look, scene.view_settings.look);
       break;
     }
     case eDRWColorManagementType::UseRenderSettings: {

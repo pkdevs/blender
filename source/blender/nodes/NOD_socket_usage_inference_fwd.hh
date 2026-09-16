@@ -2,9 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 namespace blender::nodes::socket_usage_inference {
+
+class SocketUsageParams;
 
 struct SocketUsage {
   bool is_used = true;

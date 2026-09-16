@@ -11,11 +11,14 @@
 #include <cstdlib> /* malloc */
 #include <cstring>
 
-#include "BLI_dynstr.h"
-#include "BLI_memarena.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_dynstr.hh"
+#include "BLI_memarena.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
+
 #include "MEM_guardedalloc.h"
+
+namespace blender {
 
 /***/
 
@@ -35,12 +38,12 @@ struct DynStr {
 
 DynStr *BLI_dynstr_new()
 {
-  return MEM_callocN<DynStr>("DynStr");
+  return MEM_new_zeroed<DynStr>("DynStr");
 }
 
 DynStr *BLI_dynstr_new_memarena()
 {
-  DynStr *ds = MEM_callocN<DynStr>("DynStr");
+  DynStr *ds = MEM_new_zeroed<DynStr>("DynStr");
   ds->memarena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 
   return ds;
@@ -98,7 +101,7 @@ void BLI_dynstr_vappendf(DynStr *__restrict ds, const char *__restrict format, v
   str = BLI_vsprintfN_with_buffer(fixed_buf, sizeof(fixed_buf), &str_len, format, args);
   BLI_dynstr_append(ds, str);
   if (str != fixed_buf) {
-    MEM_freeN(str);
+    MEM_delete(str);
   }
 }
 
@@ -110,10 +113,10 @@ void BLI_dynstr_appendf(DynStr *__restrict ds, const char *__restrict format, ..
   va_start(args, format);
   str = BLI_vsprintfN_with_buffer(fixed_buf, sizeof(fixed_buf), &str_len, format, args);
   va_end(args);
-  if (LIKELY(str)) {
+  if (str) [[likely]] {
     BLI_dynstr_append(ds, str);
     if (str != fixed_buf) {
-      MEM_freeN(str);
+      MEM_delete(str);
     }
   }
 }
@@ -141,7 +144,7 @@ void BLI_dynstr_get_cstring_ex(const DynStr *__restrict ds, char *__restrict ret
 
 char *BLI_dynstr_get_cstring(const DynStr *ds)
 {
-  char *rets = MEM_malloc_arrayN<char>(size_t(ds->curlen) + 1, "dynstr_cstring");
+  char *rets = MEM_new_array_uninitialized<char>(size_t(ds->curlen) + 1, "dynstr_cstring");
   BLI_dynstr_get_cstring_ex(ds, rets);
   return rets;
 }
@@ -173,5 +176,7 @@ void BLI_dynstr_free(DynStr *ds)
     BLI_dynstr_clear(ds);
   }
 
-  MEM_freeN(ds);
+  MEM_delete(ds);
 }
+
+}  // namespace blender

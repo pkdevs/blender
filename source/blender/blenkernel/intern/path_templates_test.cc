@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include "BKE_gtest_base.hh"
 #include "BKE_path_templates.hh"
 
 #include "testing/testing.h"
@@ -60,7 +61,9 @@ static std::string errors_to_string(Span<Error> errors)
   return s;
 }
 
-TEST(path_templates, VariableMap)
+class PathTemplatesTest : public BlenderGTestBase {};
+
+TEST_F(PathTemplatesTest, VariableMap)
 {
   VariableMap map;
 
@@ -68,61 +71,151 @@ TEST(path_templates, VariableMap)
   EXPECT_FALSE(map.contains("hello"));
   EXPECT_FALSE(map.remove("hello"));
   EXPECT_EQ(std::nullopt, map.get_string("hello"));
+  EXPECT_EQ(std::nullopt, map.get_filepath("hello"));
   EXPECT_EQ(std::nullopt, map.get_integer("hello"));
   EXPECT_EQ(std::nullopt, map.get_float("hello"));
 
   /* Populate the map. */
   EXPECT_TRUE(map.add_string("hello", "What a wonderful world."));
+  EXPECT_TRUE(map.add_filepath("where", "/my/path"));
   EXPECT_TRUE(map.add_integer("bye", 42));
   EXPECT_TRUE(map.add_float("what", 3.14159));
 
   /* Attempting to add variables with those names again should fail, since they
    * already exist now. */
   EXPECT_FALSE(map.add_string("hello", "Sup."));
+  EXPECT_FALSE(map.add_string("where", "Sup."));
   EXPECT_FALSE(map.add_string("bye", "Sup."));
   EXPECT_FALSE(map.add_string("what", "Sup."));
+  EXPECT_FALSE(map.add_filepath("hello", "/place"));
+  EXPECT_FALSE(map.add_filepath("where", "/place"));
+  EXPECT_FALSE(map.add_filepath("bye", "/place"));
+  EXPECT_FALSE(map.add_filepath("what", "/place"));
   EXPECT_FALSE(map.add_integer("hello", 2));
+  EXPECT_FALSE(map.add_integer("where", 2));
   EXPECT_FALSE(map.add_integer("bye", 2));
   EXPECT_FALSE(map.add_integer("what", 2));
   EXPECT_FALSE(map.add_float("hello", 2.71828));
+  EXPECT_FALSE(map.add_float("where", 2.71828));
   EXPECT_FALSE(map.add_float("bye", 2.71828));
   EXPECT_FALSE(map.add_float("what", 2.71828));
 
   /* Confirm that the right variables exist. */
   EXPECT_TRUE(map.contains("hello"));
+  EXPECT_TRUE(map.contains("where"));
   EXPECT_TRUE(map.contains("bye"));
   EXPECT_TRUE(map.contains("what"));
   EXPECT_FALSE(map.contains("not here"));
 
   /* Fetch the variables we added. */
   EXPECT_EQ("What a wonderful world.", map.get_string("hello"));
+  EXPECT_EQ("/my/path", map.get_filepath("where"));
   EXPECT_EQ(42, map.get_integer("bye"));
   EXPECT_EQ(3.14159, map.get_float("what"));
 
   /* The same variables shouldn't exist for the other types, despite our attempt
    * to add them earlier. */
+  EXPECT_EQ(std::nullopt, map.get_filepath("hello"));
   EXPECT_EQ(std::nullopt, map.get_integer("hello"));
   EXPECT_EQ(std::nullopt, map.get_float("hello"));
+  EXPECT_EQ(std::nullopt, map.get_string("where"));
+  EXPECT_EQ(std::nullopt, map.get_integer("where"));
+  EXPECT_EQ(std::nullopt, map.get_float("where"));
   EXPECT_EQ(std::nullopt, map.get_string("bye"));
+  EXPECT_EQ(std::nullopt, map.get_filepath("bye"));
   EXPECT_EQ(std::nullopt, map.get_float("bye"));
   EXPECT_EQ(std::nullopt, map.get_string("what"));
+  EXPECT_EQ(std::nullopt, map.get_filepath("what"));
   EXPECT_EQ(std::nullopt, map.get_integer("what"));
 
   /* Remove the variables. */
   EXPECT_TRUE(map.remove("hello"));
+  EXPECT_TRUE(map.remove("where"));
   EXPECT_TRUE(map.remove("bye"));
   EXPECT_TRUE(map.remove("what"));
 
   /* The variables shouldn't exist anymore. */
   EXPECT_FALSE(map.contains("hello"));
+  EXPECT_FALSE(map.contains("where"));
   EXPECT_FALSE(map.contains("bye"));
   EXPECT_FALSE(map.contains("what"));
   EXPECT_EQ(std::nullopt, map.get_string("hello"));
+  EXPECT_EQ(std::nullopt, map.get_filepath("where"));
   EXPECT_EQ(std::nullopt, map.get_integer("bye"));
   EXPECT_EQ(std::nullopt, map.get_float("what"));
   EXPECT_FALSE(map.remove("hello"));
+  EXPECT_FALSE(map.remove("where"));
   EXPECT_FALSE(map.remove("bye"));
   EXPECT_FALSE(map.remove("what"));
+}
+
+TEST_F(PathTemplatesTest, VariableMap_add_filename_only)
+{
+  VariableMap map;
+
+  EXPECT_TRUE(map.add_filename_only("a", "/home/bob/project_joe/scene_3.blend", "fallback"));
+  EXPECT_EQ("scene_3", map.get_filepath("a"));
+
+  EXPECT_TRUE(map.add_filename_only("b", "/home/bob/project_joe/scene_3", "fallback"));
+  EXPECT_EQ("scene_3", map.get_filepath("b"));
+
+  EXPECT_TRUE(map.add_filename_only("c", "/home/bob/project_joe/scene.03.blend", "fallback"));
+  EXPECT_EQ("scene.03", map.get_filepath("c"));
+
+  EXPECT_TRUE(map.add_filename_only("d", "/home/bob/project_joe/.scene_3.blend", "fallback"));
+  EXPECT_EQ(".scene_3", map.get_filepath("d"));
+
+  EXPECT_TRUE(map.add_filename_only("e", "/home/bob/project_joe/.scene_3", "fallback"));
+  EXPECT_EQ(".scene_3", map.get_filepath("e"));
+
+  EXPECT_TRUE(map.add_filename_only("f", "scene_3.blend", "fallback"));
+  EXPECT_EQ("scene_3", map.get_filepath("f"));
+
+  EXPECT_TRUE(map.add_filename_only("g", "scene_3", "fallback"));
+  EXPECT_EQ("scene_3", map.get_filepath("g"));
+
+  /* No filename in path (ending slash means it's a directory). */
+  EXPECT_TRUE(map.add_filename_only("h", "/home/bob/project_joe/", "fallback"));
+  EXPECT_EQ("fallback", map.get_filepath("h"));
+
+  /* Empty path. */
+  EXPECT_TRUE(map.add_filename_only("i", "", "fallback"));
+  EXPECT_EQ("fallback", map.get_filepath("i"));
+
+  /* Attempt to add already-added variable. */
+  EXPECT_FALSE(map.add_filename_only("i", "", "fallback"));
+}
+
+TEST_F(PathTemplatesTest, VariableMap_add_path_up_to_file)
+{
+  VariableMap map;
+
+  EXPECT_TRUE(map.add_path_up_to_file("a", "/home/bob/project_joe/scene_3.blend", "fallback"));
+  EXPECT_EQ("/home/bob/project_joe/", map.get_filepath("a"));
+
+  EXPECT_TRUE(map.add_path_up_to_file("b", "project_joe/scene_3.blend", "fallback"));
+  EXPECT_EQ("project_joe/", map.get_filepath("b"));
+
+  EXPECT_TRUE(map.add_path_up_to_file("c", "/scene_3.blend", "fallback"));
+  EXPECT_EQ("/", map.get_filepath("c"));
+
+  /* No filename in path (ending slash means it's a directory). */
+  EXPECT_TRUE(map.add_path_up_to_file("e", "/home/bob/project_joe/", "fallback"));
+  EXPECT_EQ("/home/bob/project_joe/", map.get_filepath("e"));
+
+  EXPECT_TRUE(map.add_path_up_to_file("f", "/", "fallback"));
+  EXPECT_EQ("/", map.get_filepath("f"));
+
+  /* No leading path. */
+  EXPECT_TRUE(map.add_path_up_to_file("d", "scene_3.blend", "fallback"));
+  EXPECT_EQ("fallback", map.get_filepath("d"));
+
+  /* Empty path. */
+  EXPECT_TRUE(map.add_path_up_to_file("g", "", "fallback"));
+  EXPECT_EQ("fallback", map.get_filepath("g"));
+
+  /* Attempt to add already-added variable. */
+  EXPECT_FALSE(map.add_filename_only("g", "", "fallback"));
 }
 
 struct PathTemplateTestCase {
@@ -131,13 +224,16 @@ struct PathTemplateTestCase {
   Vector<Error> expected_errors;
 };
 
-TEST(path_templates, validate_and_apply_template)
+TEST_F(PathTemplatesTest, validate_and_apply_template)
 {
   VariableMap variables;
   {
     variables.add_string("hi", "hello");
     variables.add_string("bye", "goodbye");
-    variables.add_string("long", "This string is exactly 32 bytes.");
+    variables.add_string("empty", "");
+    variables.add_string("sanitize", "./\\?*:|\"<>");
+    variables.add_string("long", "This string is exactly 32 bytes_");
+    variables.add_filepath("path", "C:\\and/or/../nor/");
     variables.add_integer("the_answer", 42);
     variables.add_integer("prime", 7);
     variables.add_integer("i_negative", -7);
@@ -153,10 +249,12 @@ TEST(path_templates, validate_and_apply_template)
   const Vector<PathTemplateTestCase> test_cases = {
       /* Simple case, testing all variables. */
       {
-          "{hi}_{bye}_{the_answer}_{prime}_{i_negative}_{pi}_{e}_{ntsc}_{two}_{f_negative}_{huge}_"
-          "{tiny}",
-          "hello_goodbye_42_7_-7_3.141592653589793_2.718281828459045_29.970029970029973_2.0_-3."
-          "141592653589793_2e+32_2e-33",
+          "{hi}_{bye}_{empty}_{sanitize}_{path}"
+          "_{the_answer}_{prime}_{i_negative}_{pi}_{e}_{ntsc}_{two}"
+          "_{f_negative}_{huge}_{tiny}",
+          "hello_goodbye__.__________C:\\and/or/../nor/"
+          "_42_7_-7_3.141592653589793_2.718281828459045_29.970029970029973_2.0"
+          "_-3.141592653589793_2e+32_2e-33",
           {},
       },
 
@@ -310,18 +408,18 @@ TEST(path_templates, validate_and_apply_template)
           "long}{long}{long}{long}{long}{long}{long}{long}{long}{long}{long}{long}{long}{long}{"
           "long}{long}",
 
-          "___This string is exactly 32 bytes.This string is exactly 32 bytes.This string is "
-          "exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This "
-          "string is exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 "
-          "bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This string is "
-          "exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This "
-          "string is exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 "
-          "bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This string is "
-          "exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This "
-          "string is exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 "
-          "bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This string is "
-          "exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 bytes.This "
-          "string is exactly 32 bytes.This string is exactly 32 bytes.This string is exactly 32 "
+          "___This string is exactly 32 bytes_This string is exactly 32 bytes_This string is "
+          "exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This "
+          "string is exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 "
+          "bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This string is "
+          "exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This "
+          "string is exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 "
+          "bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This string is "
+          "exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This "
+          "string is exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 "
+          "bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This string is "
+          "exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 bytes_This "
+          "string is exactly 32 bytes_This string is exactly 32 bytes_This string is exactly 32 "
           "by",
 
           {},
@@ -330,7 +428,7 @@ TEST(path_templates, validate_and_apply_template)
 
   for (const PathTemplateTestCase &test_case : test_cases) {
     char path[FILE_MAX];
-    BLI_strncpy(path, test_case.path_in, FILE_MAX);
+    STRNCPY(path, test_case.path_in);
 
     /* Do validation first, which shouldn't modify the path. */
     const Vector<Error> validation_errors = BKE_path_validate_template(path, variables);
@@ -338,7 +436,7 @@ TEST(path_templates, validate_and_apply_template)
         << "  Template errors: " << errors_to_string(validation_errors) << std::endl
         << "  Expected errors: " << errors_to_string(test_case.expected_errors) << std::endl
         << "  Note: test_case.path_in = " << test_case.path_in << std::endl;
-    EXPECT_EQ(blender::StringRef(path), test_case.path_in)
+    EXPECT_STREQ(path, test_case.path_in)
         << "  Note: test_case.path_in = " << test_case.path_in << std::endl;
 
     /* Then do application, which should modify the path. */
@@ -347,8 +445,117 @@ TEST(path_templates, validate_and_apply_template)
         << "  Template errors: " << errors_to_string(application_errors) << std::endl
         << "  Expected errors: " << errors_to_string(test_case.expected_errors) << std::endl
         << "  Note: test_case.path_in = " << test_case.path_in << std::endl;
-    EXPECT_EQ(blender::StringRef(path), test_case.path_result)
+    EXPECT_STREQ(path, test_case.path_result)
         << "  Note: test_case.path_in = " << test_case.path_in << std::endl;
+  }
+}
+
+TEST_F(PathTemplatesTest, apply_template_alloc)
+{
+  VariableMap variables;
+  {
+    variables.add_string("long", "This string is exactly 32 bytes_");
+    variables.add_string("short", "hi");
+    variables.add_string("empty", "");
+    variables.add_integer("number", 42);
+  }
+
+  const int max_output_alloc_size = 40;
+  const Vector<PathTemplateTestCase> test_cases = {
+      {
+          "{long}{short}{empty}{number}",
+          "This string is exactly 32 bytes_hi42",
+          {},
+      },
+      {
+          "foo{long}bar",
+          "fooThis string is exactly 32 bytes_bar",
+          {},
+      },
+      {
+          "foo{short}bar",
+          "foohibar",
+          {},
+      },
+      {
+          "foo{empty}bar",
+          "foobar",
+          {},
+      },
+      {
+          "foo{number}bar",
+          "foo42bar",
+          {},
+      },
+      {
+          "foo{number:####}bar",
+          "foo0042bar",
+          {},
+      },
+      {
+          "{empty}",
+          "",
+          {},
+      },
+
+      /* No template expressions. */
+      {
+          "",
+          "",
+          {},
+      },
+      {
+          "No template expressions here.",
+          "No template expressions here.",
+          {},
+      },
+
+      /* Truncated due to exceeding max specified length. */
+      {
+          "foo{long}{long}{long}{long}bar",
+          "fooThis string is exactly 32 bytes_This",
+          {},
+      },
+
+      /* Errors. */
+      {
+          "foo{non_existant_variable}bar",
+          "foo{non_existant_variable}bar",
+          {
+              {ErrorType::UNKNOWN_VARIABLE, IndexRange(3, 23)},
+          },
+      },
+      {
+          "foo{bar",
+          "foo{bar",
+          {{ErrorType::VARIABLE_SYNTAX, IndexRange(3, 4)}},
+      },
+
+      /* Error where the error isn't until after the truncation point. Should
+       * still be flagged as an error. */
+      {
+          "foo{long}{long}{long}{long}{long}{long}{long}{bar",
+          "foo{long}{long}{long}{long}{long}{long}{long}{bar",
+          {{ErrorType::VARIABLE_SYNTAX, IndexRange(45, 4)}},
+      },
+  };
+
+  for (const PathTemplateTestCase &test_case : test_cases) {
+    const int in_size = strlen(test_case.path_in) + 1;
+    char *buffer = MEM_new_array_uninitialized<char>(in_size, __func__);
+    BLI_strncpy(buffer, test_case.path_in, in_size);
+
+    const Vector<Error> application_errors = BKE_path_apply_template_alloc(
+        &buffer, max_output_alloc_size, variables);
+    EXPECT_EQ(application_errors, test_case.expected_errors)
+        << "  Template errors: " << errors_to_string(application_errors) << std::endl
+        << "  Expected errors: " << errors_to_string(test_case.expected_errors) << std::endl
+        << "  Note: test_case.path_in = " << test_case.path_in << std::endl;
+    EXPECT_STREQ(buffer, test_case.path_result)
+        << "  Note: test_case.path_in = " << test_case.path_in << std::endl
+        << "  Note: test_case.path_result = " << test_case.path_result << std::endl;
+
+    MEM_delete(buffer);
   }
 }
 

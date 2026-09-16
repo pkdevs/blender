@@ -25,9 +25,10 @@
  * see if the increased compile time and binary size is worth it.
  */
 
+#include <functional>
 #include <optional>
 
-#include "BLI_any.hh"
+#include "BLI_any_derived.hh"
 #include "BLI_array.hh"
 #include "BLI_devirtualize_parameters.hh"
 #include "BLI_index_mask.hh"
@@ -109,17 +110,19 @@ template<typename T> class VArrayImpl {
    * Copy values from the virtual array into the provided span. The index of the value in the
    * virtual array is the same as the index in the span.
    */
-  virtual void materialize(const IndexMask &mask, T *dst) const
+  virtual void materialize(const IndexMask &mask, T *dst, const bool dst_is_uninitialized) const
   {
-    mask.foreach_index([&](const int64_t i) { dst[i] = this->get(i); });
-  }
-
-  /**
-   * Same as #materialize but #r_span is expected to be uninitialized.
-   */
-  virtual void materialize_to_uninitialized(const IndexMask &mask, T *dst) const
-  {
-    mask.foreach_index([&](const int64_t i) { new (dst + i) T(this->get(i)); });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      mask.foreach_index([&](const int64_t i) { dst[i] = this->get(i); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index([&](const int64_t i) { new (dst + i) T(this->get(i)); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i) { dst[i] = this->get(i); });
+      }
+    }
   }
 
   /**
@@ -127,18 +130,22 @@ template<typename T> class VArrayImpl {
    * in virtual array is not the same as the index in the output span. Instead, the span is filled
    * without gaps.
    */
-  virtual void materialize_compressed(const IndexMask &mask, T *dst) const
+  virtual void materialize_compressed(const IndexMask &mask,
+                                      T *dst,
+                                      const bool dst_is_uninitialized) const
   {
-    mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = this->get(i); });
-  }
-
-  /**
-   * Same as #materialize_compressed but #r_span is expected to be uninitialized.
-   */
-  virtual void materialize_compressed_to_uninitialized(const IndexMask &mask, T *dst) const
-  {
-    mask.foreach_index(
-        [&](const int64_t i, const int64_t pos) { new (dst + pos) T(this->get(i)); });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = this->get(i); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index(
+            [&](const int64_t i, const int64_t pos) { new (dst + pos) T(this->get(i)); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = this->get(i); });
+      }
+    }
   }
 
   /**
@@ -222,26 +229,37 @@ template<typename T> class VArrayImpl_For_Span : public VMutableArrayImpl<T> {
     return CommonVArrayInfo(CommonVArrayInfo::Type::Span, true, data_);
   }
 
-  void materialize(const IndexMask &mask, T *dst) const override
+  void materialize(const IndexMask &mask, T *dst, const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = data_[i]; });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      index_mask::detail::copy_assign(data_, mask, dst);
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index([&](const int64_t i) { new (dst + i) T(data_[i]); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i) { dst[i] = data_[i]; });
+      }
+    }
   }
 
-  void materialize_to_uninitialized(const IndexMask &mask, T *dst) const override
+  void materialize_compressed(const IndexMask &mask,
+                              T *dst,
+                              const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index_optimized<int64_t>([&](const int64_t i) { new (dst + i) T(data_[i]); });
-  }
-
-  void materialize_compressed(const IndexMask &mask, T *dst) const override
-  {
-    mask.foreach_index_optimized<int64_t>(
-        [&](const int64_t i, const int64_t pos) { dst[pos] = data_[i]; });
-  }
-
-  void materialize_compressed_to_uninitialized(const IndexMask &mask, T *dst) const override
-  {
-    mask.foreach_index_optimized<int64_t>(
-        [&](const int64_t i, const int64_t pos) { new (dst + pos) T(data_[i]); });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      index_mask::detail::gather_assign(data_, mask, dst);
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index(
+            [&](const int64_t i, const int64_t pos) { new (dst + pos) T(data_[i]); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = data_[i]; });
+      }
+    }
   }
 };
 
@@ -314,24 +332,36 @@ template<typename T> class VArrayImpl_For_Single final : public VArrayImpl<T> {
     return CommonVArrayInfo(CommonVArrayInfo::Type::Single, true, &value_);
   }
 
-  void materialize(const IndexMask &mask, T *dst) const override
+  void materialize(const IndexMask &mask, T *dst, const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index([&](const int64_t i) { dst[i] = value_; });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      index_mask::detail::fill(dst, value_, mask);
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index([&](const int64_t i) { new (dst + i) T(value_); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i) { dst[i] = value_; });
+      }
+    }
   }
 
-  void materialize_to_uninitialized(const IndexMask &mask, T *dst) const override
+  void materialize_compressed(const IndexMask &mask,
+                              T *dst,
+                              const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index([&](const int64_t i) { new (dst + i) T(value_); });
-  }
-
-  void materialize_compressed(const IndexMask &mask, T *dst) const override
-  {
-    initialized_fill_n(dst, mask.size(), value_);
-  }
-
-  void materialize_compressed_to_uninitialized(const IndexMask &mask, T *dst) const override
-  {
-    uninitialized_fill_n(dst, mask.size(), value_);
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      initialized_fill_n(dst, mask.size(), value_);
+    }
+    else {
+      if (dst_is_uninitialized) {
+        uninitialized_fill_n(dst, mask.size(), value_);
+      }
+      else {
+        initialized_fill_n(dst, mask.size(), value_);
+      }
+    }
   }
 };
 
@@ -358,25 +388,37 @@ template<typename T, typename GetFunc> class VArrayImpl_For_Func final : public 
     return get_func_(index);
   }
 
-  void materialize(const IndexMask &mask, T *dst) const override
+  void materialize(const IndexMask &mask, T *dst, const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index([&](const int64_t i) { dst[i] = get_func_(i); });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      mask.foreach_index([&](const int64_t i) { dst[i] = get_func_(i); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index([&](const int64_t i) { new (dst + i) T(get_func_(i)); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i) { dst[i] = get_func_(i); });
+      }
+    }
   }
 
-  void materialize_to_uninitialized(const IndexMask &mask, T *dst) const override
+  void materialize_compressed(const IndexMask &mask,
+                              T *dst,
+                              const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index([&](const int64_t i) { new (dst + i) T(get_func_(i)); });
-  }
-
-  void materialize_compressed(const IndexMask &mask, T *dst) const override
-  {
-    mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = get_func_(i); });
-  }
-
-  void materialize_compressed_to_uninitialized(const IndexMask &mask, T *dst) const override
-  {
-    mask.foreach_index(
-        [&](const int64_t i, const int64_t pos) { new (dst + pos) T(get_func_(i)); });
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = get_func_(i); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index(
+            [&](const int64_t i, const int64_t pos) { new (dst + pos) T(get_func_(i)); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i, const int64_t pos) { dst[pos] = get_func_(i); });
+      }
+    }
   }
 };
 
@@ -414,27 +456,41 @@ class VArrayImpl_For_DerivedSpan final : public VMutableArrayImpl<ElemT> {
     SetFunc(data_[index], std::move(value));
   }
 
-  void materialize(const IndexMask &mask, ElemT *dst) const override
+  void materialize(const IndexMask &mask,
+                   ElemT *dst,
+                   const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = GetFunc(data_[i]); });
+    if constexpr (std::is_trivially_copyable_v<ElemT>) {
+      mask.foreach_index([&](const int64_t i) { dst[i] = GetFunc(data_[i]); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index([&](const int64_t i) { new (dst + i) ElemT(GetFunc(data_[i])); });
+      }
+      else {
+        mask.foreach_index([&](const int64_t i) { dst[i] = GetFunc(data_[i]); });
+      }
+    }
   }
 
-  void materialize_to_uninitialized(const IndexMask &mask, ElemT *dst) const override
+  void materialize_compressed(const IndexMask &mask,
+                              ElemT *dst,
+                              const bool dst_is_uninitialized) const override
   {
-    mask.foreach_index_optimized<int64_t>(
-        [&](const int64_t i) { new (dst + i) ElemT(GetFunc(data_[i])); });
-  }
-
-  void materialize_compressed(const IndexMask &mask, ElemT *dst) const override
-  {
-    mask.foreach_index_optimized<int64_t>(
-        [&](const int64_t i, const int64_t pos) { dst[pos] = GetFunc(data_[i]); });
-  }
-
-  void materialize_compressed_to_uninitialized(const IndexMask &mask, ElemT *dst) const override
-  {
-    mask.foreach_index_optimized<int64_t>(
-        [&](const int64_t i, const int64_t pos) { new (dst + pos) ElemT(GetFunc(data_[i])); });
+    if constexpr (std::is_trivially_copyable_v<ElemT>) {
+      mask.foreach_index(
+          [&](const int64_t i, const int64_t pos) { dst[pos] = GetFunc(data_[i]); });
+    }
+    else {
+      if (dst_is_uninitialized) {
+        mask.foreach_index(
+            [&](const int64_t i, const int64_t pos) { new (dst + pos) ElemT(GetFunc(data_[i])); });
+      }
+      else {
+        mask.foreach_index(
+            [&](const int64_t i, const int64_t pos) { dst[pos] = GetFunc(data_[i]); });
+      }
+    }
   }
 };
 
@@ -445,47 +501,6 @@ template<typename StructT,
 inline constexpr bool
     is_trivial_extended_v<VArrayImpl_For_DerivedSpan<StructT, ElemT, GetFunc, SetFunc>> = true;
 
-namespace detail {
-
-/**
- * Struct that can be passed as `ExtraInfo` into an #Any.
- * This struct is only intended to be used by #VArrayCommon.
- */
-template<typename T> struct VArrayAnyExtraInfo {
-  /**
-   * Gets the virtual array that is stored at the given pointer.
-   */
-  const VArrayImpl<T> *(*get_varray)(const void *buffer);
-
-  template<typename StorageT> static constexpr VArrayAnyExtraInfo get()
-  {
-    /* These are the only allowed types in the #Any. */
-    static_assert(
-        std::is_base_of_v<VArrayImpl<T>, StorageT> ||
-        is_same_any_v<StorageT, const VArrayImpl<T> *, std::shared_ptr<const VArrayImpl<T>>>);
-
-    /* Depending on how the virtual array implementation is stored in the #Any, a different
-     * #get_varray function is required. */
-    if constexpr (std::is_base_of_v<VArrayImpl<T>, StorageT>) {
-      return {[](const void *buffer) {
-        return static_cast<const VArrayImpl<T> *>((const StorageT *)buffer);
-      }};
-    }
-    else if constexpr (std::is_same_v<StorageT, const VArrayImpl<T> *>) {
-      return {[](const void *buffer) { return *(const StorageT *)buffer; }};
-    }
-    else if constexpr (std::is_same_v<StorageT, std::shared_ptr<const VArrayImpl<T>>>) {
-      return {[](const void *buffer) { return ((const StorageT *)buffer)->get(); }};
-    }
-    else {
-      BLI_assert_unreachable();
-      return {};
-    }
-  }
-};
-
-}  // namespace detail
-
 /**
  * Utility class to reduce code duplication for methods available on #VArray and #VMutableArray.
  * Deriving #VMutableArray from #VArray would have some issues:
@@ -495,122 +510,34 @@ template<typename T> struct VArrayAnyExtraInfo {
  */
 template<typename T> class VArrayCommon {
  protected:
-  /**
-   * Store the virtual array implementation in an #Any. This makes it easy to avoid a memory
-   * allocation if the implementation is small enough and is copyable. This is the case for the
-   * most common virtual arrays.
-   * Other virtual array implementations are typically stored as #std::shared_ptr. That works even
-   * when the implementation itself is not copyable and makes copying #VArrayCommon cheaper.
-   */
-  using Storage = Any<blender::detail::VArrayAnyExtraInfo<T>, 24, 8>;
-
-  /**
-   * Pointer to the currently contained virtual array implementation. This is allowed to be null.
-   */
-  const VArrayImpl<T> *impl_ = nullptr;
-  /**
-   * Does the memory management for the virtual array implementation. It contains one of the
-   * following:
-   * - Inlined subclass of #VArrayImpl.
-   * - Non-owning pointer to a #VArrayImpl.
-   * - Shared pointer to a #VArrayImpl.
-   */
-  Storage storage_;
+  AnyDerived<const VArrayImpl<T>> impl_;
 
   VArrayCommon() = default;
-
-  /** Copy constructor. */
-  VArrayCommon(const VArrayCommon &other) : storage_(other.storage_)
-  {
-    impl_ = this->impl_from_storage();
-  }
-
-  /** Move constructor. */
-  VArrayCommon(VArrayCommon &&other) noexcept : storage_(std::move(other.storage_))
-  {
-    impl_ = this->impl_from_storage();
-    other.storage_.reset();
-    other.impl_ = nullptr;
-  }
 
   /**
    * Wrap an existing #VArrayImpl and don't take ownership of it. This should rarely be used in
    * practice.
    */
-  VArrayCommon(const VArrayImpl<T> *impl) : impl_(impl)
-  {
-    storage_ = impl_;
-  }
+  VArrayCommon(const VArrayImpl<T> *impl) : impl_(impl) {}
 
   /**
    * Wrap an existing #VArrayImpl that is contained in a #std::shared_ptr. This takes ownership.
    */
-  VArrayCommon(std::shared_ptr<const VArrayImpl<T>> impl) : impl_(impl.get())
-  {
-    if (impl) {
-      storage_ = std::move(impl);
-    }
-  }
+  VArrayCommon(std::shared_ptr<const VArrayImpl<T>> impl) : impl_(std::move(impl)) {}
 
   /**
    * Replace the contained #VArrayImpl.
    */
   template<typename ImplT, typename... Args> void emplace(Args &&...args)
   {
-    /* Make sure we are actually constructing a #VArrayImpl. */
-    static_assert(std::is_base_of_v<VArrayImpl<T>, ImplT>);
-    if constexpr (std::is_copy_constructible_v<ImplT> && Storage::template is_inline_v<ImplT>) {
-      /* Only inline the implementation when it is copyable and when it fits into the inline
-       * buffer of the storage. */
-      impl_ = &storage_.template emplace<ImplT>(std::forward<Args>(args)...);
-    }
-    else {
-      /* If it can't be inlined, create a new #std::shared_ptr instead and store that in the
-       * storage. */
-      std::shared_ptr<const VArrayImpl<T>> ptr = std::make_shared<ImplT>(
-          std::forward<Args>(args)...);
-      impl_ = &*ptr;
-      storage_ = std::move(ptr);
-    }
-  }
-
-  /** Utility to implement a copy assignment operator in a subclass. */
-  void copy_from(const VArrayCommon &other)
-  {
-    if (this == &other) {
-      return;
-    }
-    storage_ = other.storage_;
-    impl_ = this->impl_from_storage();
-  }
-
-  /** Utility to implement a move assignment operator in a subclass. */
-  void move_from(VArrayCommon &&other) noexcept
-  {
-    if (this == &other) {
-      return;
-    }
-    storage_ = std::move(other.storage_);
-    impl_ = this->impl_from_storage();
-    other.storage_.reset();
-    other.impl_ = nullptr;
-  }
-
-  /** Get a pointer to the virtual array implementation that is currently stored in #storage_, or
-   * null. */
-  const VArrayImpl<T> *impl_from_storage() const
-  {
-    if (!storage_.has_value()) {
-      return nullptr;
-    }
-    return storage_.extra_info().get_varray(storage_.get());
+    impl_.template emplace<ImplT>(std::forward<Args>(args)...);
   }
 
  public:
   /** Return false when there is no virtual array implementation currently. */
   operator bool() const
   {
-    return impl_ != nullptr;
+    return impl_;
   }
 
   /**
@@ -641,7 +568,7 @@ template<typename T> class VArrayCommon {
    */
   int64_t size() const
   {
-    if (impl_ == nullptr) {
+    if (!impl_) {
       return 0;
     }
     return impl_->size();
@@ -738,7 +665,7 @@ template<typename T> class VArrayCommon {
   void materialize(const IndexMask &mask, MutableSpan<T> r_span) const
   {
     BLI_assert(mask.min_array_size() <= this->size());
-    impl_->materialize(mask, r_span.data());
+    impl_->materialize(mask, r_span.data(), false);
   }
 
   void materialize_to_uninitialized(MutableSpan<T> r_span) const
@@ -749,18 +676,18 @@ template<typename T> class VArrayCommon {
   void materialize_to_uninitialized(const IndexMask &mask, MutableSpan<T> r_span) const
   {
     BLI_assert(mask.min_array_size() <= this->size());
-    impl_->materialize_to_uninitialized(mask, r_span.data());
+    impl_->materialize(mask, r_span.data(), true);
   }
 
   /** Copy some elements of the virtual array into a span. */
   void materialize_compressed(const IndexMask &mask, MutableSpan<T> r_span) const
   {
-    impl_->materialize_compressed(mask, r_span.data());
+    impl_->materialize_compressed(mask, r_span.data(), false);
   }
 
   void materialize_compressed_to_uninitialized(const IndexMask &mask, MutableSpan<T> r_span) const
   {
-    impl_->materialize_compressed_to_uninitialized(mask, r_span.data());
+    impl_->materialize_compressed(mask, r_span.data(), true);
   }
 
   /** See #GVArrayImpl::try_assign_GVArray. */
@@ -771,7 +698,7 @@ template<typename T> class VArrayCommon {
 
   const VArrayImpl<T> *get_implementation() const
   {
-    return impl_;
+    return impl_.get();
   }
 };
 
@@ -779,8 +706,8 @@ template<typename T> class VMutableArray;
 
 /**
  * Various tags to disambiguate constructors of virtual arrays.
- * Generally it is easier to use `VArray::For*` functions to construct virtual arrays, but
- * sometimes being able to use the constructor can result in better performance For example, when
+ * Generally it is easier to use `VArray::from_*` functions to construct virtual arrays, but
+ * sometimes being able to use the constructor can result in better performance. For example, when
  * constructing the virtual array directly in a vector. Without the constructor one would have to
  * construct the virtual array first and then move it into the vector.
  */
@@ -800,8 +727,6 @@ template<typename T> class VArray : public VArrayCommon<T> {
 
  public:
   VArray() = default;
-  VArray(const VArray &other) = default;
-  VArray(VArray &&other) noexcept = default;
 
   VArray(const VArrayImpl<T> *impl) : VArrayCommon<T>(impl) {}
 
@@ -820,7 +745,7 @@ template<typename T> class VArray : public VArrayCommon<T> {
   /**
    * Construct a new virtual array for a custom #VArrayImpl.
    */
-  template<typename ImplT, typename... Args> static VArray For(Args &&...args)
+  template<typename ImplT, typename... Args> static VArray from(Args &&...args)
   {
     static_assert(std::is_base_of_v<VArrayImpl<T>, ImplT>);
     VArray varray;
@@ -831,7 +756,7 @@ template<typename T> class VArray : public VArrayCommon<T> {
   /**
    * Construct a new virtual array that has the same value at every index.
    */
-  static VArray ForSingle(T value, const int64_t size)
+  static VArray from_single(T value, const int64_t size)
   {
     return VArray(varray_tag::single{}, std::move(value), size);
   }
@@ -840,7 +765,7 @@ template<typename T> class VArray : public VArrayCommon<T> {
    * Construct a new virtual array for an existing span. This does not take ownership of the
    * underlying memory.
    */
-  static VArray ForSpan(Span<T> values)
+  static VArray from_span(Span<T> values)
   {
     return VArray(varray_tag::span{}, values);
   }
@@ -849,9 +774,18 @@ template<typename T> class VArray : public VArrayCommon<T> {
    * Construct a new virtual that will invoke the provided function whenever an element is
    * accessed.
    */
-  template<typename GetFunc> static VArray ForFunc(const int64_t size, GetFunc get_func)
+  template<typename GetFunc> static VArray from_func(const int64_t size, GetFunc get_func)
   {
-    return VArray::For<VArrayImpl_For_Func<T, decltype(get_func)>>(size, std::move(get_func));
+    return VArray::from<VArrayImpl_For_Func<T, decltype(get_func)>>(size, std::move(get_func));
+  }
+
+  /**
+   * Same as #from_func, but uses a std::function instead of a template. This is slower, but
+   * requires less code generation. Therefore this should be used in non-performance critical code.
+   */
+  static VArray from_std_func(const int64_t size, std::function<T(int64_t index)> get_func)
+  {
+    return VArray::from_func(size, get_func);
   }
 
   /**
@@ -859,34 +793,22 @@ template<typename T> class VArray : public VArrayCommon<T> {
    * ownership of the span.
    */
   template<typename StructT, T (*GetFunc)(const StructT &)>
-  static VArray ForDerivedSpan(Span<StructT> values)
+  static VArray from_derived_span(Span<StructT> values)
   {
     /* Cast const away, because the virtual array implementation for const and non const derived
      * spans is shared. */
     MutableSpan<StructT> span{const_cast<StructT *>(values.data()), values.size()};
-    return VArray::For<VArrayImpl_For_DerivedSpan<StructT, T, GetFunc>>(span);
+    return VArray::from<VArrayImpl_For_DerivedSpan<StructT, T, GetFunc>>(span);
   }
 
   /**
    * Construct a new virtual array for an existing container. Every container that lays out the
    * elements in a plain array works. This takes ownership of the passed in container. If that is
-   * not desired, use #ForSpan instead.
+   * not desired, use #from_span instead.
    */
-  template<typename ContainerT> static VArray ForContainer(ContainerT container)
+  template<typename ContainerT> static VArray from_container(ContainerT container)
   {
-    return VArray::For<VArrayImpl_For_ArrayContainer<ContainerT>>(std::move(container));
-  }
-
-  VArray &operator=(const VArray &other)
-  {
-    this->copy_from(other);
-    return *this;
-  }
-
-  VArray &operator=(VArray &&other) noexcept
-  {
-    this->move_from(std::move(other));
-    return *this;
+    return VArray::from<VArrayImpl_For_ArrayContainer<ContainerT>>(std::move(container));
   }
 };
 
@@ -896,8 +818,6 @@ template<typename T> class VArray : public VArrayCommon<T> {
 template<typename T> class VMutableArray : public VArrayCommon<T> {
  public:
   VMutableArray() = default;
-  VMutableArray(const VMutableArray &other) = default;
-  VMutableArray(VMutableArray &&other) noexcept = default;
 
   VMutableArray(const VMutableArrayImpl<T> *impl) : VArrayCommon<T>(impl) {}
 
@@ -909,7 +829,7 @@ template<typename T> class VMutableArray : public VArrayCommon<T> {
   /**
    * Construct a new virtual array for a custom #VMutableArrayImpl.
    */
-  template<typename ImplT, typename... Args> static VMutableArray For(Args &&...args)
+  template<typename ImplT, typename... Args> static VMutableArray from(Args &&...args)
   {
     static_assert(std::is_base_of_v<VMutableArrayImpl<T>, ImplT>);
     VMutableArray varray;
@@ -920,9 +840,9 @@ template<typename T> class VMutableArray : public VArrayCommon<T> {
   /**
    * Construct a new virtual array for an existing span. This does not take ownership of the span.
    */
-  static VMutableArray ForSpan(MutableSpan<T> values)
+  static VMutableArray from_span(MutableSpan<T> values)
   {
-    return VMutableArray::For<VArrayImpl_For_Span_final<T>>(values);
+    return VMutableArray::from<VArrayImpl_For_Span_final<T>>(values);
   }
 
   /**
@@ -930,26 +850,26 @@ template<typename T> class VMutableArray : public VArrayCommon<T> {
    * ownership of the span.
    */
   template<typename StructT, T (*GetFunc)(const StructT &), void (*SetFunc)(StructT &, T)>
-  static VMutableArray ForDerivedSpan(MutableSpan<StructT> values)
+  static VMutableArray from_derived_span(MutableSpan<StructT> values)
   {
-    return VMutableArray::For<VArrayImpl_For_DerivedSpan<StructT, T, GetFunc, SetFunc>>(values);
+    return VMutableArray::from<VArrayImpl_For_DerivedSpan<StructT, T, GetFunc, SetFunc>>(values);
   }
 
   /**
    * Construct a new virtual array for an existing container. Every container that lays out the
    * elements in a plain array works. This takes ownership of the passed in container. If that is
-   * not desired, use #ForSpan instead.
+   * not desired, use #from_span instead.
    */
-  template<typename ContainerT> static VMutableArray ForContainer(ContainerT container)
+  template<typename ContainerT> static VMutableArray from_container(ContainerT container)
   {
-    return VMutableArray::For<VArrayImpl_For_ArrayContainer<ContainerT>>(std::move(container));
+    return VMutableArray::from<VArrayImpl_For_ArrayContainer<ContainerT>>(std::move(container));
   }
 
   /** Convert to a #VArray by copying. */
   operator VArray<T>() const &
   {
     VArray<T> varray;
-    varray.copy_from(*this);
+    *static_cast<VArrayCommon<T> *>(&varray) = *this;
     return varray;
   }
 
@@ -957,20 +877,8 @@ template<typename T> class VMutableArray : public VArrayCommon<T> {
   operator VArray<T>() && noexcept
   {
     VArray<T> varray;
-    varray.move_from(std::move(*this));
+    *static_cast<VArrayCommon<T> *>(&varray) = std::move(*this);
     return varray;
-  }
-
-  VMutableArray &operator=(const VMutableArray &other)
-  {
-    this->copy_from(other);
-    return *this;
-  }
-
-  VMutableArray &operator=(VMutableArray &&other) noexcept
-  {
-    this->move_from(std::move(other));
-    return *this;
   }
 
   /**
@@ -1015,7 +923,8 @@ template<typename T> class VMutableArray : public VArrayCommon<T> {
   {
     /* This cast is valid by the invariant that a #VMutableArray->impl_ is always a
      * #VMutableArrayImpl. */
-    return (VMutableArrayImpl<T> *)this->impl_;
+    return reinterpret_cast<VMutableArrayImpl<T> *>(
+        const_cast<VArrayImpl<T> *>((this->impl_.get())));
   }
 };
 

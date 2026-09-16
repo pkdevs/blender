@@ -8,41 +8,63 @@
  * Functions for mapping data between meshes.
  */
 
+#include <algorithm>
+
 #include "CLG_log.h"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_astar.h"
+#include "BLI_astar.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_solvers.h"
-#include "BLI_math_statistics.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_rand.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_solvers.hh"
+#include "BLI_math_statistics.hh"
+#include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_modifier_enums.h"
 
+#include "BKE_attribute.hh"
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_mesh_remap.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
-static CLG_LogRef LOG = {"bke.mesh"};
+namespace blender {
+
+static CLG_LogRef LOG = {"geom.mesh"};
 
 /* -------------------------------------------------------------------- */
 /** \name Some Generic Helpers
  * \{ */
 
-static bool mesh_remap_bvhtree_query_nearest(blender::bke::BVHTreeFromMesh *treedata,
+static bool mesh_remap_bvh_query_nearest(const bke::bvh::Tree &tree,
+                                         const float3 &co,
+                                         const float max_dist,
+                                         int *r_index,
+                                         float *r_hit_dist)
+{
+  const std::optional<bke::bvh::ClosestPointResult> nearest = tree.closest_point(co, max_dist);
+  if (!nearest) {
+    return false;
+  }
+  *r_index = int(nearest->index);
+  *r_hit_dist = math::distance(co, nearest->position);
+  return true;
+}
+
+static bool mesh_remap_bvhtree_query_nearest(bke::BVHTreeFromMesh *treedata,
                                              BVHTreeNearest *nearest,
                                              const float co[3],
                                              const float max_dist_sq,
@@ -71,7 +93,7 @@ static bool mesh_remap_bvhtree_query_nearest(blender::bke::BVHTreeFromMesh *tree
   return false;
 }
 
-static bool mesh_remap_bvhtree_query_raycast(blender::bke::BVHTreeFromMesh *treedata,
+static bool mesh_remap_bvhtree_query_raycast(bke::BVHTreeFromMesh *treedata,
                                              BVHTreeRayHit *rayhit,
                                              const float co[3],
                                              const float no[3],
@@ -113,30 +135,26 @@ static bool mesh_remap_bvhtree_query_raycast(blender::bke::BVHTreeFromMesh *tree
  * \{ */
 
 float BKE_mesh_remap_calc_difference_from_mesh(const SpaceTransform *space_transform,
-                                               const float (*vert_positions_dst)[3],
-                                               const int numverts_dst,
+                                               const Span<float3> vert_positions_dst,
                                                const Mesh *me_src)
 {
-  BVHTreeNearest nearest = {0};
   float hit_dist;
 
   float result = 0.0f;
   int i;
 
-  blender::bke::BVHTreeFromMesh treedata = me_src->bvh_verts();
-  nearest.index = -1;
+  const bke::bvh::Tree &tree = me_src->bvh_verts();
 
-  for (i = 0; i < numverts_dst; i++) {
-    float tmp_co[3];
-
-    copy_v3_v3(tmp_co, vert_positions_dst[i]);
+  for (i = 0; i < vert_positions_dst.size(); i++) {
+    float3 tmp_co = vert_positions_dst[i];
 
     /* Convert the vertex to tree coordinates, if needed. */
     if (space_transform) {
       BLI_space_transform_apply(space_transform, tmp_co);
     }
 
-    if (mesh_remap_bvhtree_query_nearest(&treedata, &nearest, tmp_co, FLT_MAX, &hit_dist)) {
+    int index;
+    if (mesh_remap_bvh_query_nearest(tree, tmp_co, FLT_MAX, &index, &hit_dist)) {
       result += 1.0f / (hit_dist + 1.0f);
     }
     else {
@@ -145,7 +163,7 @@ float BKE_mesh_remap_calc_difference_from_mesh(const SpaceTransform *space_trans
     }
   }
 
-  result = (float(numverts_dst) / result) - 1.0f;
+  result = (float(vert_positions_dst.size()) / result) - 1.0f;
 
 #if 0
   printf("%s: Computed difference between meshes (the lower the better): %f\n", __func__, result);
@@ -166,38 +184,26 @@ float BKE_mesh_remap_calc_difference_from_mesh(const SpaceTransform *space_trans
  * axes in those cases. We default to dummy generated orthogonal vectors in this case,
  * instead of using eigen vectors.
  */
-static void mesh_calc_eigen_matrix(const float (*positions)[3],
-                                   const float (*vcos)[3],
-                                   const int numverts,
-                                   float r_mat[4][4])
+static void mesh_calc_eigen_matrix(const Span<float3> positions, float r_mat[4][4])
 {
   float center[3], covmat[3][3];
   float eigen_val[3], eigen_vec[3][3];
-  float(*cos)[3] = nullptr;
 
   bool eigen_success;
   int i;
 
-  if (positions) {
-    cos = MEM_malloc_arrayN<float[3]>(size_t(numverts), __func__);
-    memcpy(cos, positions, sizeof(float[3]) * size_t(numverts));
-    /* TODO(sergey): For until we officially drop all compilers which
-     * doesn't handle casting correct we use workaround to avoid explicit
-     * cast here.
-     */
-    vcos = static_cast<const float(*)[3]>((void *)cos);
-  }
   unit_m4(r_mat);
 
   /* NOTE: here we apply sample correction to covariance matrix, since we consider the vertices
    *       as a sample of the whole 'surface' population of our mesh. */
-  BLI_covariance_m3_v3n(vcos, numverts, true, covmat, center);
+  BLI_covariance_m3_v3n(reinterpret_cast<const float (*)[3]>(positions.data()),
+                        int(positions.size()),
+                        true,
+                        covmat,
+                        center);
 
-  if (cos) {
-    MEM_freeN(cos);
-  }
-
-  eigen_success = BLI_eigen_solve_selfadjoint_m3((const float(*)[3])covmat, eigen_val, eigen_vec);
+  eigen_success = BLI_eigen_solve_selfadjoint_m3(
+      const_cast<const float (*)[3]>(covmat), eigen_val, eigen_vec);
   BLI_assert(eigen_success);
   UNUSED_VARS_NDEBUG(eigen_success);
 
@@ -241,8 +247,7 @@ static void mesh_calc_eigen_matrix(const float (*positions)[3],
   copy_v3_v3(r_mat[3], center);
 }
 
-void BKE_mesh_remap_find_best_match_from_mesh(const float (*vert_positions_dst)[3],
-                                              const int numverts_dst,
+void BKE_mesh_remap_find_best_match_from_mesh(const Span<float3> vert_positions_dst,
                                               const Mesh *me_src,
                                               SpaceTransform *r_space_transform)
 {
@@ -258,20 +263,17 @@ void BKE_mesh_remap_find_best_match_from_mesh(const float (*vert_positions_dst)[
       {1.0f, 1.0f, -1.0f}, /* ->  1, -1,  1 */
       {0.0f, 0.0f, 0.0f},
   };
-  const float(*mirr)[3];
+  const float (*mirr)[3];
 
   float mat_src[4][4], mat_dst[4][4], best_mat_dst[4][4];
   float best_match = FLT_MAX, match;
 
-  const int numverts_src = me_src->verts_num;
-  const blender::Span<blender::float3> positions_src = me_src->vert_positions();
-  mesh_calc_eigen_matrix(
-      nullptr, reinterpret_cast<const float(*)[3]>(positions_src.data()), numverts_src, mat_src);
-  mesh_calc_eigen_matrix(vert_positions_dst, nullptr, numverts_dst, mat_dst);
+  const Span<float3> positions_src = me_src->vert_positions();
+  mesh_calc_eigen_matrix(positions_src, mat_src);
+  mesh_calc_eigen_matrix(vert_positions_dst, mat_dst);
 
   BLI_space_transform_global_from_matrices(r_space_transform, mat_dst, mat_src);
-  match = BKE_mesh_remap_calc_difference_from_mesh(
-      r_space_transform, vert_positions_dst, numverts_dst, me_src);
+  match = BKE_mesh_remap_calc_difference_from_mesh(r_space_transform, vert_positions_dst, me_src);
   best_match = match;
   copy_m4_m4(best_mat_dst, mat_dst);
 
@@ -283,7 +285,7 @@ void BKE_mesh_remap_find_best_match_from_mesh(const float (*vert_positions_dst)[
 
     BLI_space_transform_global_from_matrices(r_space_transform, mat_dst, mat_src);
     match = BKE_mesh_remap_calc_difference_from_mesh(
-        r_space_transform, vert_positions_dst, numverts_dst, me_src);
+        r_space_transform, vert_positions_dst, me_src);
     if (match < best_match) {
       best_match = match;
       copy_m4_m4(best_mat_dst, mat_dst);
@@ -357,9 +359,9 @@ void BKE_mesh_remap_item_define_invalid(MeshPairRemap *map, const int index)
   mesh_remap_item_define(map, index, FLT_MAX, 0, 0, nullptr, nullptr);
 }
 
-static int mesh_remap_interp_face_data_get(const blender::IndexRange face,
-                                           const blender::Span<int> corner_verts,
-                                           const blender::Span<blender::float3> positions_src,
+static int mesh_remap_interp_face_data_get(const IndexRange face,
+                                           const Span<int> corner_verts,
+                                           const Span<float3> positions_src,
                                            const float point[3],
                                            size_t *buff_size,
                                            float (**vcos)[3],
@@ -369,7 +371,7 @@ static int mesh_remap_interp_face_data_get(const blender::IndexRange face,
                                            const bool do_weights,
                                            int *r_closest_index)
 {
-  float(*vco)[3];
+  float (*vco)[3];
   float ref_dist_sq = FLT_MAX;
   int *index;
   const int sources_num = int(face.size());
@@ -377,10 +379,13 @@ static int mesh_remap_interp_face_data_get(const blender::IndexRange face,
 
   if (size_t(sources_num) > *buff_size) {
     *buff_size = size_t(sources_num);
-    *vcos = static_cast<float(*)[3]>(MEM_reallocN(*vcos, sizeof(**vcos) * *buff_size));
-    *indices = static_cast<int *>(MEM_reallocN(*indices, sizeof(**indices) * *buff_size));
+    *vcos = static_cast<float (*)[3]>(
+        MEM_realloc_uninitialized(*vcos, sizeof(**vcos) * *buff_size));
+    *indices = static_cast<int *>(
+        MEM_realloc_uninitialized(*indices, sizeof(**indices) * *buff_size));
     if (do_weights) {
-      *weights = static_cast<float *>(MEM_reallocN(*weights, sizeof(**weights) * *buff_size));
+      *weights = static_cast<float *>(
+          MEM_realloc_uninitialized(*weights, sizeof(**weights) * *buff_size));
     }
   }
 
@@ -449,8 +454,7 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
                                          const SpaceTransform *space_transform,
                                          const float max_dist,
                                          const float ray_radius,
-                                         const float (*vert_positions_dst)[3],
-                                         const int numverts_dst,
+                                         const Span<float3> vert_positions_dst,
                                          const Mesh *me_src,
                                          Mesh *me_dst,
                                          MeshPairRemap *r_map)
@@ -461,36 +465,35 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
 
   BLI_assert(mode & MREMAP_MODE_VERT);
 
-  BKE_mesh_remap_init(r_map, numverts_dst);
+  BKE_mesh_remap_init(r_map, int(vert_positions_dst.size()));
 
   if (mode == MREMAP_MODE_TOPOLOGY) {
-    BLI_assert(numverts_dst == me_src->verts_num);
-    for (i = 0; i < numverts_dst; i++) {
+    BLI_assert(vert_positions_dst.size() == me_src->verts_num);
+    for (i = 0; i < vert_positions_dst.size(); i++) {
       mesh_remap_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
     }
   }
   else {
-    blender::bke::BVHTreeFromMesh treedata{};
+    bke::BVHTreeFromMesh treedata{};
     BVHTreeNearest nearest = {0};
     BVHTreeRayHit rayhit = {0};
     float hit_dist;
     float tmp_co[3], tmp_no[3];
 
     if (mode == MREMAP_MODE_VERT_NEAREST) {
-      treedata = me_src->bvh_verts();
-      nearest.index = -1;
+      const bke::bvh::Tree &tree = me_src->bvh_verts();
 
-      for (i = 0; i < numverts_dst; i++) {
-        copy_v3_v3(tmp_co, vert_positions_dst[i]);
+      for (i = 0; i < vert_positions_dst.size(); i++) {
+        float3 co = vert_positions_dst[i];
 
         /* Convert the vertex to tree coordinates, if needed. */
         if (space_transform) {
-          BLI_space_transform_apply(space_transform, tmp_co);
+          BLI_space_transform_apply(space_transform, co);
         }
 
-        if (mesh_remap_bvhtree_query_nearest(&treedata, &nearest, tmp_co, max_dist_sq, &hit_dist))
-        {
-          mesh_remap_item_define(r_map, i, hit_dist, 0, 1, &nearest.index, &full_weight);
+        int index;
+        if (mesh_remap_bvh_query_nearest(tree, co, max_dist, &index, &hit_dist)) {
+          mesh_remap_item_define(r_map, i, hit_dist, 0, 1, &index, &full_weight);
         }
         else {
           /* No source for this dest vertex! */
@@ -499,29 +502,28 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
       }
     }
     else if (ELEM(mode, MREMAP_MODE_VERT_EDGE_NEAREST, MREMAP_MODE_VERT_EDGEINTERP_NEAREST)) {
-      const blender::Span<blender::int2> edges_src = me_src->edges();
-      const blender::Span<blender::float3> positions_src = me_src->vert_positions();
+      const Span<int2> edges_src = me_src->edges();
+      const Span<float3> positions_src = me_src->vert_positions();
 
-      treedata = me_src->bvh_edges();
-      nearest.index = -1;
+      const bke::bvh::Tree &tree = me_src->bvh_edges();
 
-      for (i = 0; i < numverts_dst; i++) {
-        copy_v3_v3(tmp_co, vert_positions_dst[i]);
+      for (i = 0; i < vert_positions_dst.size(); i++) {
+        float3 co = vert_positions_dst[i];
 
         /* Convert the vertex to tree coordinates, if needed. */
         if (space_transform) {
-          BLI_space_transform_apply(space_transform, tmp_co);
+          BLI_space_transform_apply(space_transform, co);
         }
 
-        if (mesh_remap_bvhtree_query_nearest(&treedata, &nearest, tmp_co, max_dist_sq, &hit_dist))
-        {
-          const blender::int2 &edge = edges_src[nearest.index];
+        int edge_index;
+        if (mesh_remap_bvh_query_nearest(tree, co, max_dist, &edge_index, &hit_dist)) {
+          const int2 &edge = edges_src[edge_index];
           const float *v1cos = positions_src[edge[0]];
           const float *v2cos = positions_src[edge[1]];
 
           if (mode == MREMAP_MODE_VERT_EDGE_NEAREST) {
-            const float dist_v1 = len_squared_v3v3(tmp_co, v1cos);
-            const float dist_v2 = len_squared_v3v3(tmp_co, v2cos);
+            const float dist_v1 = len_squared_v3v3(co, v1cos);
+            const float dist_v2 = len_squared_v3v3(co, v2cos);
             const int index = (dist_v1 > dist_v2) ? edge[1] : edge[0];
             mesh_remap_item_define(r_map, i, hit_dist, 0, 1, &index, &full_weight);
           }
@@ -533,7 +535,7 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
             indices[1] = edge[1];
 
             /* Weight is inverse of point factor here... */
-            weights[0] = line_point_factor_v3(tmp_co, v2cos, v1cos);
+            weights[0] = line_point_factor_v3(co, v2cos, v1cos);
             CLAMP(weights[0], 0.0f, 1.0f);
             weights[1] = 1.0f - weights[0];
 
@@ -551,21 +553,21 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
                   MREMAP_MODE_VERT_POLYINTERP_NEAREST,
                   MREMAP_MODE_VERT_POLYINTERP_VNORPROJ))
     {
-      const blender::OffsetIndices faces_src = me_src->faces();
-      const blender::Span<int> corner_verts_src = me_src->corner_verts();
-      const blender::Span<blender::float3> positions_src = me_src->vert_positions();
-      const blender::Span<blender::float3> vert_normals_dst = me_dst->vert_normals();
-      const blender::Span<int> tri_faces = me_src->corner_tri_faces();
+      const OffsetIndices faces_src = me_src->faces();
+      const Span<int> corner_verts_src = me_src->corner_verts();
+      const Span<float3> positions_src = me_src->vert_positions();
+      const Span<float3> vert_normals_dst = me_dst->vert_normals();
+      const Span<int> tri_faces = me_src->corner_tri_faces();
 
       size_t tmp_buff_size = MREMAP_DEFAULT_BUFSIZE;
-      float(*vcos)[3] = MEM_malloc_arrayN<float[3]>(tmp_buff_size, __func__);
-      int *indices = MEM_malloc_arrayN<int>(tmp_buff_size, __func__);
-      float *weights = MEM_malloc_arrayN<float>(tmp_buff_size, __func__);
+      float (*vcos)[3] = MEM_new_array_uninitialized<float[3]>(tmp_buff_size, __func__);
+      int *indices = MEM_new_array_uninitialized<int>(tmp_buff_size, __func__);
+      float *weights = MEM_new_array_uninitialized<float>(tmp_buff_size, __func__);
 
       treedata = me_src->bvh_corner_tris();
 
       if (mode == MREMAP_MODE_VERT_POLYINTERP_VNORPROJ) {
-        for (i = 0; i < numverts_dst; i++) {
+        for (i = 0; i < vert_positions_dst.size(); i++) {
           copy_v3_v3(tmp_co, vert_positions_dst[i]);
           copy_v3_v3(tmp_no, vert_normals_dst[i]);
 
@@ -602,7 +604,7 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
       else {
         nearest.index = -1;
 
-        for (i = 0; i < numverts_dst; i++) {
+        for (i = 0; i < vert_positions_dst.size(); i++) {
           copy_v3_v3(tmp_co, vert_positions_dst[i]);
 
           /* Convert the vertex to tree coordinates, if needed. */
@@ -654,13 +656,13 @@ void BKE_mesh_remap_calc_verts_from_mesh(const int mode,
         }
       }
 
-      MEM_freeN(vcos);
-      MEM_freeN(indices);
-      MEM_freeN(weights);
+      MEM_delete(vcos);
+      MEM_delete(indices);
+      MEM_delete(weights);
     }
     else {
       CLOG_WARN(&LOG, "Unsupported mesh-to-mesh vertex mapping mode (%d)!", mode);
-      memset(r_map->items, 0, sizeof(*r_map->items) * size_t(numverts_dst));
+      memset(r_map->items, 0, sizeof(*r_map->items) * size_t(vert_positions_dst.size()));
     }
   }
 }
@@ -669,31 +671,28 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
                                          const SpaceTransform *space_transform,
                                          const float max_dist,
                                          const float ray_radius,
-                                         const float (*vert_positions_dst)[3],
-                                         const int numverts_dst,
-                                         const blender::int2 *edges_dst,
-                                         const int numedges_dst,
+                                         const Span<float3> vert_positions_dst,
+                                         const Span<int2> edges_dst,
                                          const Mesh *me_src,
                                          Mesh *me_dst,
                                          MeshPairRemap *r_map)
 {
-  using namespace blender;
   const float full_weight = 1.0f;
   const float max_dist_sq = max_dist * max_dist;
   int i;
 
   BLI_assert(mode & MREMAP_MODE_EDGE);
 
-  BKE_mesh_remap_init(r_map, numedges_dst);
+  BKE_mesh_remap_init(r_map, int(edges_dst.size()));
 
   if (mode == MREMAP_MODE_TOPOLOGY) {
-    BLI_assert(numedges_dst == me_src->edges_num);
-    for (i = 0; i < numedges_dst; i++) {
+    BLI_assert(edges_dst.size() == me_src->edges_num);
+    for (i = 0; i < edges_dst.size(); i++) {
       mesh_remap_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
     }
   }
   else {
-    blender::bke::BVHTreeFromMesh treedata{};
+    bke::BVHTreeFromMesh treedata{};
     BVHTreeNearest nearest = {0};
     BVHTreeRayHit rayhit = {0};
     float hit_dist;
@@ -701,16 +700,17 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
 
     if (mode == MREMAP_MODE_EDGE_VERT_NEAREST) {
       const int num_verts_src = me_src->verts_num;
-      const blender::Span<blender::int2> edges_src = me_src->edges();
-      const blender::Span<blender::float3> positions_src = me_src->vert_positions();
+      const Span<int2> edges_src = me_src->edges();
+      const Span<float3> positions_src = me_src->vert_positions();
 
       struct HitData {
         float hit_dist;
         int index;
       };
-      HitData *v_dst_to_src_map = MEM_malloc_arrayN<HitData>(size_t(numverts_dst), __func__);
+      HitData *v_dst_to_src_map = MEM_new_array_uninitialized<HitData>(
+          size_t(vert_positions_dst.size()), __func__);
 
-      for (i = 0; i < numverts_dst; i++) {
+      for (i = 0; i < vert_positions_dst.size(); i++) {
         v_dst_to_src_map[i].hit_dist = -1.0f;
       }
 
@@ -719,11 +719,10 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
       const GroupedSpan<int> vert_to_edge_src_map = bke::mesh::build_vert_to_edge_map(
           edges_src, num_verts_src, vert_to_edge_src_offsets, vert_to_edge_src_indices);
 
-      treedata = me_src->bvh_verts();
-      nearest.index = -1;
+      const bke::bvh::Tree &tree = me_src->bvh_verts();
 
-      for (i = 0; i < numedges_dst; i++) {
-        const blender::int2 &e_dst = edges_dst[i];
+      for (i = 0; i < edges_dst.size(); i++) {
+        const int2 &e_dst = edges_dst[i];
         float best_totdist = FLT_MAX;
         int best_eidx_src = -1;
         int j = 2;
@@ -733,18 +732,17 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
 
           /* Compute closest verts only once! */
           if (v_dst_to_src_map[vidx_dst].hit_dist == -1.0f) {
-            copy_v3_v3(tmp_co, vert_positions_dst[vidx_dst]);
+            float3 co = vert_positions_dst[vidx_dst];
 
             /* Convert the vertex to tree coordinates, if needed. */
             if (space_transform) {
-              BLI_space_transform_apply(space_transform, tmp_co);
+              BLI_space_transform_apply(space_transform, co);
             }
 
-            if (mesh_remap_bvhtree_query_nearest(
-                    &treedata, &nearest, tmp_co, max_dist_sq, &hit_dist))
-            {
+            int index;
+            if (mesh_remap_bvh_query_nearest(tree, co, max_dist, &index, &hit_dist)) {
               v_dst_to_src_map[vidx_dst].hit_dist = hit_dist;
-              v_dst_to_src_map[vidx_dst].index = nearest.index;
+              v_dst_to_src_map[vidx_dst].index = index;
             }
             else {
               /* No source for this dest vert! */
@@ -770,11 +768,11 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
           k = int(vert_to_edge_src_map[vidx_src].size());
 
           for (; k--; eidx_src++) {
-            const blender::int2 &edge_src = edges_src[*eidx_src];
+            const int2 &edge_src = edges_src[*eidx_src];
             const float *other_co_src =
-                positions_src[blender::bke::mesh::edge_other_vert(edge_src, vidx_src)];
+                positions_src[bke::mesh::edge_other_vert(edge_src, vidx_src)];
             const float *other_co_dst =
-                vert_positions_dst[blender::bke::mesh::edge_other_vert(e_dst, int(vidx_dst))];
+                vert_positions_dst[bke::mesh::edge_other_vert(e_dst, int(vidx_dst))];
             const float totdist = first_dist + len_v3v3(other_co_src, other_co_dst);
 
             if (totdist < best_totdist) {
@@ -819,26 +817,23 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
         }
       }
 
-      MEM_freeN(v_dst_to_src_map);
+      MEM_delete(v_dst_to_src_map);
     }
     else if (mode == MREMAP_MODE_EDGE_NEAREST) {
-      treedata = me_src->bvh_edges();
-      nearest.index = -1;
+      const bke::bvh::Tree &tree = me_src->bvh_edges();
 
-      for (i = 0; i < numedges_dst; i++) {
-        interp_v3_v3v3(tmp_co,
-                       vert_positions_dst[edges_dst[i][0]],
-                       vert_positions_dst[edges_dst[i][1]],
-                       0.5f);
+      for (i = 0; i < edges_dst.size(); i++) {
+        float3 co = math::midpoint(vert_positions_dst[edges_dst[i][0]],
+                                   vert_positions_dst[edges_dst[i][1]]);
 
         /* Convert the vertex to tree coordinates, if needed. */
         if (space_transform) {
-          BLI_space_transform_apply(space_transform, tmp_co);
+          BLI_space_transform_apply(space_transform, co);
         }
 
-        if (mesh_remap_bvhtree_query_nearest(&treedata, &nearest, tmp_co, max_dist_sq, &hit_dist))
-        {
-          mesh_remap_item_define(r_map, i, hit_dist, 0, 1, &nearest.index, &full_weight);
+        int index;
+        if (mesh_remap_bvh_query_nearest(tree, co, max_dist, &index, &hit_dist)) {
+          mesh_remap_item_define(r_map, i, hit_dist, 0, 1, &index, &full_weight);
         }
         else {
           /* No source for this dest edge! */
@@ -847,15 +842,15 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
       }
     }
     else if (mode == MREMAP_MODE_EDGE_POLY_NEAREST) {
-      const blender::Span<blender::int2> edges_src = me_src->edges();
-      const blender::OffsetIndices faces_src = me_src->faces();
-      const blender::Span<int> corner_edges_src = me_src->corner_edges();
-      const blender::Span<blender::float3> positions_src = me_src->vert_positions();
-      const blender::Span<int> tri_faces = me_src->corner_tri_faces();
+      const Span<int2> edges_src = me_src->edges();
+      const OffsetIndices faces_src = me_src->faces();
+      const Span<int> corner_edges_src = me_src->corner_edges();
+      const Span<float3> positions_src = me_src->vert_positions();
+      const Span<int> tri_faces = me_src->corner_tri_faces();
 
       treedata = me_src->bvh_corner_tris();
 
-      for (i = 0; i < numedges_dst; i++) {
+      for (i = 0; i < edges_dst.size(); i++) {
         interp_v3_v3v3(tmp_co,
                        vert_positions_dst[edges_dst[i][0]],
                        vert_positions_dst[edges_dst[i][1]],
@@ -869,14 +864,14 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
         if (mesh_remap_bvhtree_query_nearest(&treedata, &nearest, tmp_co, max_dist_sq, &hit_dist))
         {
           const int face_index = tri_faces[nearest.index];
-          const blender::IndexRange face_src = faces_src[face_index];
+          const IndexRange face_src = faces_src[face_index];
           const int *corner_edge_src = &corner_edges_src[face_src.start()];
           int nloops = int(face_src.size());
           float best_dist_sq = FLT_MAX;
           int best_eidx_src = -1;
 
           for (; nloops--; corner_edge_src++) {
-            const blender::int2 &edge_src = edges_src[*corner_edge_src];
+            const int2 &edge_src = edges_src[*corner_edge_src];
             const float *co1_src = positions_src[edge_src[0]];
             const float *co2_src = positions_src[edge_src[1]];
             float co_src[3];
@@ -904,18 +899,20 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
       const int numedges_src = me_src->edges_num;
 
       /* Subtleness - this one we can allocate only max number of cast rays per edges! */
-      int *indices = MEM_malloc_arrayN<int>(size_t(min_ii(numedges_src, num_rays_max)), __func__);
+      int *indices = MEM_new_array_uninitialized<int>(size_t(min_ii(numedges_src, num_rays_max)),
+                                                      __func__);
       /* Here it's simpler to just allocate for all edges :/ */
-      float *weights = MEM_malloc_arrayN<float>(size_t(numedges_src), __func__);
+      float *weights = MEM_new_array_uninitialized<float>(size_t(numedges_src), __func__);
 
-      treedata = me_src->bvh_edges();
+      /* This mode casts rays against the edges, which #Mesh::bvh_edges() doesn't yet support. */
+      treedata = me_src->bvh_edges_legacy();
 
-      const blender::Span<blender::float3> vert_normals_dst = me_dst->vert_normals();
+      const Span<float3> vert_normals_dst = me_dst->vert_normals();
 
-      for (i = 0; i < numedges_dst; i++) {
+      for (i = 0; i < edges_dst.size(); i++) {
         /* For each dst edge, we sample some rays from it (interpolated from its vertices)
          * and use their hits to interpolate from source edges. */
-        const blender::int2 &edge = edges_dst[i];
+        const int2 &edge = edges_dst[i];
         float v1_co[3], v2_co[3];
         float v1_no[3], v2_no[3];
 
@@ -942,7 +939,7 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
           BLI_space_transform_apply_normal(space_transform, v2_no);
         }
 
-        copy_vn_fl(weights, int(numedges_src), 0.0f);
+        std::fill_n(weights, int(numedges_src), 0.0f);
 
         /* We adjust our ray-casting grid to ray_radius (the smaller, the more rays are cast),
          * with lower/upper bounds. */
@@ -998,12 +995,12 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
         }
       }
 
-      MEM_freeN(indices);
-      MEM_freeN(weights);
+      MEM_delete(indices);
+      MEM_delete(weights);
     }
     else {
       CLOG_WARN(&LOG, "Unsupported mesh-to-mesh edge mapping mode (%d)!", mode);
-      memset(r_map->items, 0, sizeof(*r_map->items) * size_t(numedges_dst));
+      memset(r_map->items, 0, sizeof(*r_map->items) * size_t(edges_dst.size()));
     }
   }
 }
@@ -1012,31 +1009,30 @@ void BKE_mesh_remap_calc_edges_from_mesh(const int mode,
 #define POLY_CENTER_INIT 1
 #define POLY_COMPLETE 2
 
-static void mesh_island_to_astar_graph_edge_process(
-    MeshIslandStore *islands,
-    const int island_index,
-    BLI_AStarGraph *as_graph,
-    const blender::Span<blender::float3> positions,
-    const blender::OffsetIndices<int> faces,
-    const blender::Span<int> corner_verts,
-    const int edge_idx,
-    BLI_bitmap *done_edges,
-    const blender::GroupedSpan<int> edge_to_face_map,
-    const bool is_edge_innercut,
-    const int *face_island_index_map,
-    float (*face_centers)[3],
-    uchar *face_status)
+static void mesh_island_to_astar_graph_edge_process(MeshIslandStore *islands,
+                                                    const int island_index,
+                                                    BLI_AStarGraph *as_graph,
+                                                    const Span<float3> positions,
+                                                    const OffsetIndices<int> faces,
+                                                    const Span<int> corner_verts,
+                                                    const int edge_idx,
+                                                    BLI_bitmap *done_edges,
+                                                    const GroupedSpan<int> edge_to_face_map,
+                                                    const bool is_edge_innercut,
+                                                    const int *face_island_index_map,
+                                                    float (*face_centers)[3],
+                                                    uchar *face_status)
 {
-  blender::Array<int, 16> face_island_indices(edge_to_face_map[edge_idx].size());
+  Array<int, 16> face_island_indices(edge_to_face_map[edge_idx].size());
   int i, j;
 
   for (i = 0; i < edge_to_face_map[edge_idx].size(); i++) {
     const int pidx = edge_to_face_map[edge_idx][i];
-    const blender::IndexRange face = faces[pidx];
+    const IndexRange face = faces[pidx];
     const int pidx_isld = islands ? face_island_index_map[pidx] : pidx;
     void *custom_data = is_edge_innercut ? POINTER_FROM_INT(edge_idx) : POINTER_FROM_INT(-1);
 
-    if (UNLIKELY(islands && (islands->items_to_islands[face.start()] != island_index))) {
+    if (islands && (islands->items_to_islands[face.start()] != island_index)) [[unlikely]] {
       /* face not in current island, happens with border edges... */
       face_island_indices[i] = -1;
       continue;
@@ -1049,7 +1045,7 @@ static void mesh_island_to_astar_graph_edge_process(
 
     if (face_status[pidx_isld] == POLY_UNSET) {
       copy_v3_v3(face_centers[pidx_isld],
-                 blender::bke::mesh::face_center_calc(positions, corner_verts.slice(face)));
+                 bke::mesh::face_center_calc(positions, corner_verts.slice(face)));
       BLI_astar_node_init(as_graph, pidx_isld, face_centers[pidx_isld]);
       face_status[pidx_isld] = POLY_CENTER_INIT;
     }
@@ -1074,12 +1070,12 @@ static void mesh_island_to_astar_graph_edge_process(
 
 static void mesh_island_to_astar_graph(MeshIslandStore *islands,
                                        const int island_index,
-                                       const blender::Span<blender::float3> positions,
-                                       const blender::GroupedSpan<int> edge_to_face_map,
+                                       const Span<float3> positions,
+                                       const GroupedSpan<int> edge_to_face_map,
                                        const int numedges,
-                                       const blender::OffsetIndices<int> faces,
-                                       const blender::Span<int> corner_verts,
-                                       const blender::Span<int> corner_edges,
+                                       const OffsetIndices<int> faces,
+                                       const Span<int> corner_verts,
+                                       const Span<int> corner_edges,
                                        BLI_AStarGraph *r_as_graph)
 {
   MeshElemMap *island_face_map = islands ? islands->islands[island_index] : nullptr;
@@ -1089,15 +1085,15 @@ static void mesh_island_to_astar_graph(MeshIslandStore *islands,
   BLI_bitmap *done_edges = BLI_BITMAP_NEW(numedges, __func__);
 
   const int node_num = islands ? island_face_map->count : int(faces.size());
-  uchar *face_status = MEM_calloc_arrayN<uchar>(size_t(node_num), __func__);
-  float(*face_centers)[3];
+  uchar *face_status = MEM_new_array_zeroed<uchar>(size_t(node_num), __func__);
+  float (*face_centers)[3];
 
   int pidx_isld;
   int i;
 
   BLI_astar_graph_init(r_as_graph, node_num, nullptr);
   /* face_centers is owned by graph memarena. */
-  face_centers = static_cast<float(*)[3]>(
+  face_centers = static_cast<float (*)[3]>(
       BLI_memarena_calloc(r_as_graph->mem, sizeof(*face_centers) * size_t(node_num)));
 
   if (islands) {
@@ -1156,8 +1152,8 @@ static void mesh_island_to_astar_graph(MeshIslandStore *islands,
     face_status[pidx_isld] = POLY_COMPLETE;
   }
 
-  MEM_freeN(done_edges);
-  MEM_freeN(face_status);
+  MEM_delete(done_edges);
+  MEM_delete(face_status);
 }
 
 #undef POLY_UNSET
@@ -1188,8 +1184,8 @@ static float mesh_remap_calc_loops_astar_f_cost(BLI_AStarGraph *as_graph,
   /* Our heuristic part of current f_cost is distance from next node to destination one.
    * It is guaranteed to be less than (or equal to)
    * actual shortest face-path between next node and destination one. */
-  co_next = (float *)as_graph->nodes[node_idx_next].custom_data;
-  co_dest = (float *)as_graph->nodes[node_idx_dst].custom_data;
+  co_next = static_cast<float *>(as_graph->nodes[node_idx_next].custom_data);
+  co_dest = static_cast<float *>(as_graph->nodes[node_idx_dst].custom_data);
   return (link ? (as_solution->g_costs[node_idx_curr] + link->cost) : 0.0f) +
          len_v3v3(co_next, co_dest);
 }
@@ -1201,34 +1197,34 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                                          const float max_dist,
                                          const float ray_radius,
                                          const Mesh *mesh_dst,
-                                         const float (*vert_positions_dst)[3],
-                                         const int numverts_dst,
-                                         const int *corner_verts_dst,
-                                         const int numloops_dst,
-                                         const blender::OffsetIndices<int> faces_dst,
+                                         const Span<float3> vert_positions_dst,
+                                         const Span<int> corner_verts_dst,
+                                         const OffsetIndices<int> faces_dst,
                                          const Mesh *me_src,
                                          MeshRemapIslandsCalc gen_islands_src,
                                          const float islands_precision_src,
                                          MeshPairRemap *r_map)
 {
-  using namespace blender;
   const float full_weight = 1.0f;
   const float max_dist_sq = max_dist * max_dist;
 
   BLI_assert(mode & MREMAP_MODE_LOOP);
   BLI_assert((islands_precision_src >= 0.0f) && (islands_precision_src <= 1.0f));
 
-  BKE_mesh_remap_init(r_map, numloops_dst);
+  BKE_mesh_remap_init(r_map, int(corner_verts_dst.size()));
 
   if (mode == MREMAP_MODE_TOPOLOGY) {
     /* In topology mapping, we assume meshes are identical, islands included! */
-    BLI_assert(numloops_dst == me_src->corners_num);
-    for (int i = 0; i < numloops_dst; i++) {
+    BLI_assert(corner_verts_dst.size() == me_src->corners_num);
+    for (int i = 0; i < corner_verts_dst.size(); i++) {
       mesh_remap_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
     }
   }
   else {
-    Array<blender::bke::BVHTreeFromMesh> treedata;
+    Array<bke::BVHTreeFromMesh> treedata;
+    /** Trees owned for each island, referenced by #vert_trees. */
+    Array<bke::bvh::Tree> island_vert_trees;
+    Array<const bke::bvh::Tree *> vert_trees;
     BVHTreeNearest nearest = {0};
     BVHTreeRayHit rayhit = {0};
     int num_trees = 0;
@@ -1247,13 +1243,13 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                                            1) :
                                     0);
 
-    blender::Span<blender::float3> face_normals_src;
-    blender::Span<blender::float3> loop_normals_src;
+    Span<float3> face_normals_src;
+    Span<float3> loop_normals_src;
 
-    blender::Span<blender::float3> face_normals_dst;
-    blender::Span<blender::float3> loop_normals_dst;
+    Span<float3> face_normals_dst;
+    Span<float3> loop_normals_dst;
 
-    blender::Array<blender::float3> face_cents_src;
+    Array<float3> face_cents_src;
 
     GroupedSpan<int> vert_to_corner_map_src;
     GroupedSpan<int> vert_to_face_map_src;
@@ -1266,19 +1262,19 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     int *face_to_corner_tri_map_src_buff = nullptr;
 
     /* Unlike above, those are one-to-one mappings, simpler! */
-    blender::Span<int> loop_to_face_map_src;
+    Span<int> loop_to_face_map_src;
 
-    const blender::Span<blender::float3> positions_src = me_src->vert_positions();
+    const Span<float3> positions_src = me_src->vert_positions();
     const int num_verts_src = me_src->verts_num;
-    const blender::Span<blender::int2> edges_src = me_src->edges();
-    const blender::OffsetIndices faces_src = me_src->faces();
-    const blender::Span<int> corner_verts_src = me_src->corner_verts();
-    const blender::Span<int> corner_edges_src = me_src->corner_edges();
-    blender::Span<blender::int3> corner_tris_src;
-    blender::Span<int> tri_faces_src;
+    const Span<int2> edges_src = me_src->edges();
+    const OffsetIndices faces_src = me_src->faces();
+    const Span<int> corner_verts_src = me_src->corner_verts();
+    const Span<int> corner_edges_src = me_src->corner_edges();
+    Span<int3> corner_tris_src;
+    Span<int> tri_faces_src;
 
     size_t buff_size_interp = MREMAP_DEFAULT_BUFSIZE;
-    float(*vcos_interp)[3] = nullptr;
+    float (*vcos_interp)[3] = nullptr;
     int *indices_interp = nullptr;
     float *weights_interp = nullptr;
 
@@ -1288,9 +1284,9 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     size_t islands_res_buff_size = MREMAP_DEFAULT_BUFSIZE;
 
     if (!use_from_vert) {
-      vcos_interp = MEM_malloc_arrayN<float[3]>(buff_size_interp, __func__);
-      indices_interp = MEM_malloc_arrayN<int>(buff_size_interp, __func__);
-      weights_interp = MEM_malloc_arrayN<float>(buff_size_interp, __func__);
+      vcos_interp = MEM_new_array_uninitialized<float[3]>(buff_size_interp, __func__);
+      indices_interp = MEM_new_array_uninitialized<int>(buff_size_interp, __func__);
+      weights_interp = MEM_new_array_uninitialized<float>(buff_size_interp, __func__);
     }
 
     {
@@ -1332,8 +1328,8 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
       loop_to_face_map_src = me_src->corner_to_face_map();
       face_cents_src.reinitialize(faces_src.size());
       for (const int64_t i : faces_src.index_range()) {
-        face_cents_src[i] = blender::bke::mesh::face_center_calc(
-            positions_src, corner_verts_src.slice(faces_src[i]));
+        face_cents_src[i] = bke::mesh::face_center_calc(positions_src,
+                                                        corner_verts_src.slice(faces_src[i]));
       }
     }
 
@@ -1346,23 +1342,20 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
 
     /* First, generate the islands, if possible. */
     if (gen_islands_src) {
-      const bool *uv_seams = static_cast<const bool *>(
-          CustomData_get_layer_named(&me_src->edge_data, CD_PROP_BOOL, "uv_seam"));
-      use_islands = gen_islands_src(reinterpret_cast<const float(*)[3]>(positions_src.data()),
-                                    num_verts_src,
-                                    edges_src.data(),
-                                    int(edges_src.size()),
+      const bke::AttributeAccessor attributes = me_src->attributes();
+      const VArraySpan uv_seams = *attributes.lookup<bool>("uv_seam", bke::AttrDomain::Edge);
+      use_islands = gen_islands_src(positions_src,
+                                    edges_src,
                                     uv_seams,
                                     faces_src,
-                                    corner_verts_src.data(),
-                                    corner_edges_src.data(),
-                                    int(corner_verts_src.size()),
+                                    corner_verts_src,
+                                    corner_edges_src,
                                     &island_store);
 
       num_trees = use_islands ? island_store.islands_num : 1;
       treedata.reinitialize(num_trees);
       if (isld_steps_src) {
-        as_graphdata = MEM_calloc_arrayN<BLI_AStarGraph>(size_t(num_trees), __func__);
+        as_graphdata = MEM_new_array_zeroed<BLI_AStarGraph>(size_t(num_trees), __func__);
       }
 
       if (use_islands) {
@@ -1378,7 +1371,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
       num_trees = 1;
       treedata.reinitialize(1);
       if (isld_steps_src) {
-        as_graphdata = MEM_callocN<BLI_AStarGraph>(__func__);
+        as_graphdata = MEM_new_zeroed<BLI_AStarGraph>(__func__);
       }
     }
 
@@ -1399,8 +1392,10 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
 
     /* Build our BVHtrees, either from verts or tessfaces. */
     if (use_from_vert) {
+      vert_trees.reinitialize(num_trees);
       if (use_islands) {
-        blender::BitVector<> verts_active(num_verts_src);
+        island_vert_trees.reinitialize(num_trees);
+        BitVector<> verts_active(num_verts_src);
 
         for (tindex = 0; tindex < num_trees; tindex++) {
           MeshElemMap *isld = island_store.islands[tindex];
@@ -1413,31 +1408,32 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
             }
           }
           IndexMaskMemory memory;
-          treedata[tindex] = blender::bke::bvhtree_from_mesh_verts_ex(
+          island_vert_trees[tindex] = bke::bvh::Tree::from_points(
               positions_src, IndexMask::from_bits(verts_active, memory));
+          vert_trees[tindex] = &island_vert_trees[tindex];
         }
       }
       else {
         BLI_assert(num_trees == 1);
-        treedata[0] = me_src->bvh_verts();
+        vert_trees[0] = &me_src->bvh_verts();
       }
     }
     else { /* We use faces. */
       if (use_islands) {
         corner_tris_src = me_src->corner_tris();
         tri_faces_src = me_src->corner_tri_faces();
-        blender::BitVector<> faces_active(corner_tris_src.size());
+        BitVector<> faces_active(corner_tris_src.size());
 
         for (tindex = 0; tindex < num_trees; tindex++) {
           faces_active.fill(false);
           for (const int64_t i : faces_src.index_range()) {
-            const blender::IndexRange face = faces_src[i];
+            const IndexRange face = faces_src[i];
             if (island_store.items_to_islands[face.start()] == tindex) {
               faces_active[i].set();
             }
           }
           IndexMaskMemory memory;
-          treedata[tindex] = blender::bke::bvhtree_from_mesh_corner_tris_ex(
+          treedata[tindex] = bke::bvhtree_from_mesh_corner_tris_ex(
               positions_src,
               faces_src,
               corner_verts_src,
@@ -1452,19 +1448,20 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     }
 
     /* And check each dest face! */
-    islands_res = MEM_malloc_arrayN<IslandResult *>(size_t(num_trees), __func__);
+    islands_res = MEM_new_array_uninitialized<IslandResult *>(size_t(num_trees), __func__);
     for (tindex = 0; tindex < num_trees; tindex++) {
-      islands_res[tindex] = MEM_malloc_arrayN<IslandResult>(islands_res_buff_size, __func__);
+      islands_res[tindex] = MEM_new_array_uninitialized<IslandResult>(islands_res_buff_size,
+                                                                      __func__);
     }
-    const blender::Span<int> tri_faces = me_src->corner_tri_faces();
+    const Span<int> tri_faces = me_src->corner_tri_faces();
 
     for (pidx_dst = 0; pidx_dst < faces_dst.size(); pidx_dst++) {
-      const blender::IndexRange face_dst = faces_dst[pidx_dst];
+      const IndexRange face_dst = faces_dst[pidx_dst];
       float pnor_dst[3];
 
       /* Only in use_from_vert case, we may need faces' centers as fallback
        * in case we cannot decide which corner to use from normals only. */
-      blender::float3 pcent_dst;
+      float3 pcent_dst;
       bool pcent_dst_valid = false;
 
       if (mode == MREMAP_MODE_LOOP_NEAREST_POLYNOR) {
@@ -1477,31 +1474,32 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
       if (size_t(face_dst.size()) > islands_res_buff_size) {
         islands_res_buff_size = size_t(face_dst.size()) + MREMAP_DEFAULT_BUFSIZE;
         for (tindex = 0; tindex < num_trees; tindex++) {
-          islands_res[tindex] = static_cast<IslandResult *>(
-              MEM_reallocN(islands_res[tindex], sizeof(**islands_res) * islands_res_buff_size));
+          islands_res[tindex] = static_cast<IslandResult *>(MEM_realloc_uninitialized(
+              islands_res[tindex], sizeof(**islands_res) * islands_res_buff_size));
         }
       }
 
       for (tindex = 0; tindex < num_trees; tindex++) {
-        blender::bke::BVHTreeFromMesh *tdata = &treedata[tindex];
+        bke::BVHTreeFromMesh *tdata = &treedata[tindex];
 
         for (plidx_dst = 0; plidx_dst < face_dst.size(); plidx_dst++) {
           const int vert_dst = corner_verts_dst[face_dst.start() + plidx_dst];
           if (use_from_vert) {
-            blender::Span<int> vert_to_refelem_map_src;
+            Span<int> vert_to_refelem_map_src;
 
-            copy_v3_v3(tmp_co, vert_positions_dst[vert_dst]);
-            nearest.index = -1;
+            float3 co = vert_positions_dst[vert_dst];
 
             /* Convert the vertex to tree coordinates, if needed. */
             if (space_transform) {
-              BLI_space_transform_apply(space_transform, tmp_co);
+              BLI_space_transform_apply(space_transform, co);
             }
 
-            if (mesh_remap_bvhtree_query_nearest(tdata, &nearest, tmp_co, max_dist_sq, &hit_dist))
+            int nearest_vert_src;
+            if (mesh_remap_bvh_query_nearest(
+                    *vert_trees[tindex], co, max_dist, &nearest_vert_src, &hit_dist))
             {
-              float(*nor_dst)[3];
-              blender::Span<blender::float3> nors_src;
+              float (*nor_dst)[3];
+              Span<float3> nors_src;
               float best_nor_dot = -2.0f;
               float best_sqdist_fallback = FLT_MAX;
               int best_index_src = -1;
@@ -1513,12 +1511,12 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                 }
                 nor_dst = &tmp_no;
                 nors_src = loop_normals_src;
-                vert_to_refelem_map_src = vert_to_corner_map_src[nearest.index];
+                vert_to_refelem_map_src = vert_to_corner_map_src[nearest_vert_src];
               }
-              else { /* if (mode == MREMAP_MODE_LOOP_NEAREST_POLYNOR) { */
+              else { /* `mode == MREMAP_MODE_LOOP_NEAREST_POLYNOR` */
                 nor_dst = &pnor_dst;
                 nors_src = face_normals_src;
-                vert_to_refelem_map_src = vert_to_face_map_src[nearest.index];
+                vert_to_refelem_map_src = vert_to_face_map_src[nearest_vert_src];
               }
 
               for (const int index_src : vert_to_refelem_map_src) {
@@ -1548,10 +1546,8 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                   float sqdist;
 
                   if (!pcent_dst_valid) {
-                    pcent_dst = blender::bke::mesh::face_center_calc(
-                        {reinterpret_cast<const blender::float3 *>(vert_positions_dst),
-                         numverts_dst},
-                        blender::Span(corner_verts_dst, numloops_dst).slice(face_dst));
+                    pcent_dst = bke::mesh::face_center_calc(vert_positions_dst,
+                                                            corner_verts_dst.slice(face_dst));
                     pcent_dst_valid = true;
                   }
                   pcent_src = face_cents_src[pidx_src];
@@ -1572,10 +1568,10 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
               else if (mode == MREMAP_MODE_LOOP_NEAREST_POLYNOR) {
                 /* Our best_index_src is a face one for now!
                  * Have to find its loop matching our closest vertex. */
-                const blender::IndexRange face_src = faces_src[best_index_src];
+                const IndexRange face_src = faces_src[best_index_src];
                 for (plidx_src = 0; plidx_src < face_src.size(); plidx_src++) {
                   const int vert_src = corner_verts_src[face_src.start() + plidx_src];
-                  if (vert_src == nearest.index) {
+                  if (vert_src == nearest_vert_src) {
                     best_index_src = plidx_src + int(face_src.start());
                     break;
                   }
@@ -1716,7 +1712,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
         if (best_island_index != -1 && isld_steps_src) {
           best_island = use_islands ? island_store.islands[best_island_index] : nullptr;
           as_graph = &as_graphdata[best_island_index];
-          face_island_index_map = (int *)as_graph->custom_data;
+          face_island_index_map = static_cast<int *>(as_graph->custom_data);
           BLI_astar_solution_init(as_graph, &as_solution, nullptr);
         }
 
@@ -1791,7 +1787,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
 
                     pidx_src = (use_islands ? best_island->indices[last_valid_pidx_isld_src] :
                                               last_valid_pidx_isld_src);
-                    const blender::IndexRange face_src = faces_src[pidx_src];
+                    const IndexRange face_src = faces_src[pidx_src];
                     for (const int64_t corner : face_src) {
                       const int vert_src = corner_verts_src[corner];
                       const float dist_sq = len_squared_v3v3(positions_src[vert_src], tmp_co);
@@ -1827,7 +1823,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
               float *hit_co = isld_res->hit_point;
               int best_loop_index_src;
 
-              const blender::IndexRange face_src = faces_src[pidx_src];
+              const IndexRange face_src = faces_src[pidx_src];
               /* If prev and curr face are the same, no need to do anything more!!! */
               if (!ELEM(pidx_src_prev, -1, pidx_src) && isld_steps_src) {
                 int pidx_isld_src, pidx_isld_src_prev;
@@ -1896,7 +1892,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
 
                     for (j = face_to_corner_tri_map_src[pidx_src].count; j--;) {
                       float h[3];
-                      const blender::int3 &tri =
+                      const int3 &tri =
                           corner_tris_src[face_to_corner_tri_map_src[pidx_src].indices[j]];
                       float dist_sq;
 
@@ -1975,32 +1971,32 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     }
 
     for (tindex = 0; tindex < num_trees; tindex++) {
-      MEM_freeN(islands_res[tindex]);
+      MEM_delete(islands_res[tindex]);
       if (isld_steps_src) {
         BLI_astar_graph_free(&as_graphdata[tindex]);
       }
     }
-    MEM_freeN(islands_res);
+    MEM_delete(islands_res);
     BKE_mesh_loop_islands_free(&island_store);
     if (isld_steps_src) {
-      MEM_freeN(as_graphdata);
+      MEM_delete(as_graphdata);
       BLI_astar_solution_free(&as_solution);
     }
 
     if (face_to_corner_tri_map_src) {
-      MEM_freeN(face_to_corner_tri_map_src);
+      MEM_delete(face_to_corner_tri_map_src);
     }
     if (face_to_corner_tri_map_src_buff) {
-      MEM_freeN(face_to_corner_tri_map_src_buff);
+      MEM_delete(face_to_corner_tri_map_src_buff);
     }
     if (vcos_interp) {
-      MEM_freeN(vcos_interp);
+      MEM_delete(vcos_interp);
     }
     if (indices_interp) {
-      MEM_freeN(indices_interp);
+      MEM_delete(indices_interp);
     }
     if (weights_interp) {
-      MEM_freeN(weights_interp);
+      MEM_delete(weights_interp);
     }
   }
 }
@@ -2010,17 +2006,16 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
                                          const float max_dist,
                                          const float ray_radius,
                                          const Mesh *mesh_dst,
-                                         const float (*vert_positions_dst)[3],
-                                         const int numverts_dst,
-                                         const int *corner_verts_dst,
-                                         const blender::OffsetIndices<int> faces_dst,
+                                         const Span<float3> vert_positions_dst,
+                                         const Span<int> corner_verts_dst,
+                                         const OffsetIndices<int> faces_dst,
                                          const Mesh *me_src,
                                          MeshPairRemap *r_map)
 {
   const float full_weight = 1.0f;
   const float max_dist_sq = max_dist * max_dist;
-  blender::Span<blender::float3> face_normals_dst;
-  blender::float3 tmp_co, tmp_no;
+  Span<float3> face_normals_dst;
+  float3 tmp_co, tmp_no;
 
   BLI_assert(mode & MREMAP_MODE_POLY);
 
@@ -2041,18 +2036,16 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
     BVHTreeNearest nearest = {0};
     BVHTreeRayHit rayhit = {0};
     float hit_dist;
-    const blender::Span<int> tri_faces = me_src->corner_tri_faces();
+    const Span<int> tri_faces = me_src->corner_tri_faces();
 
-    blender::bke::BVHTreeFromMesh treedata = me_src->bvh_corner_tris();
+    bke::BVHTreeFromMesh treedata = me_src->bvh_corner_tris();
 
     if (mode == MREMAP_MODE_POLY_NEAREST) {
       nearest.index = -1;
 
       for (const int64_t i : faces_dst.index_range()) {
-        const blender::IndexRange face = faces_dst[i];
-        tmp_co = blender::bke::mesh::face_center_calc(
-            {reinterpret_cast<const blender::float3 *>(vert_positions_dst), numverts_dst},
-            {&corner_verts_dst[face.start()], face.size()});
+        const IndexRange face = faces_dst[i];
+        tmp_co = bke::mesh::face_center_calc(vert_positions_dst, corner_verts_dst.slice(face));
 
         /* Convert the vertex to tree coordinates, if needed. */
         if (space_transform) {
@@ -2072,11 +2065,9 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
     }
     else if (mode == MREMAP_MODE_POLY_NOR) {
       for (const int64_t i : faces_dst.index_range()) {
-        const blender::IndexRange face = faces_dst[i];
+        const IndexRange face = faces_dst[i];
 
-        tmp_co = blender::bke::mesh::face_center_calc(
-            {reinterpret_cast<const blender::float3 *>(vert_positions_dst), numverts_dst},
-            {&corner_verts_dst[face.start()], face.size()});
+        tmp_co = bke::mesh::face_center_calc(vert_positions_dst, corner_verts_dst.slice(face));
         copy_v3_v3(tmp_no, face_normals_dst[i]);
 
         /* Convert the vertex to tree coordinates, if needed. */
@@ -2106,24 +2097,24 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
       const size_t numfaces_src = size_t(me_src->faces_num);
 
       /* Here it's simpler to just allocate for all faces :/ */
-      int *indices = MEM_malloc_arrayN<int>(numfaces_src, __func__);
-      float *weights = MEM_malloc_arrayN<float>(numfaces_src, __func__);
+      int *indices = MEM_new_array_uninitialized<int>(numfaces_src, __func__);
+      float *weights = MEM_new_array_uninitialized<float>(numfaces_src, __func__);
 
       size_t tmp_face_size = MREMAP_DEFAULT_BUFSIZE;
-      float(*face_vcos_2d)[2] = MEM_malloc_arrayN<float[2]>(tmp_face_size, __func__);
+      float (*face_vcos_2d)[2] = MEM_new_array_uninitialized<float[2]>(tmp_face_size, __func__);
       /* Tessellated 2D face, always (num_loops - 2) triangles. */
-      int(*tri_vidx_2d)[3] = MEM_malloc_arrayN<int[3]>(tmp_face_size - 2, __func__);
+      int (*tri_vidx_2d)[3] = MEM_new_array_uninitialized<int[3]>(tmp_face_size - 2, __func__);
 
       for (const int64_t i : faces_dst.index_range()) {
         /* For each dst face, we sample some rays from it (2D grid in pnor space)
          * and use their hits to interpolate from source faces. */
         /* NOTE: dst face is early-converted into src space! */
-        const blender::IndexRange face = faces_dst[i];
+        const IndexRange face = faces_dst[i];
 
         int tot_rays, done_rays = 0;
         float face_area_2d_inv, done_area = 0.0f;
 
-        blender::float3 pcent_dst;
+        float3 pcent_dst;
         float to_pnor_2d_mat[3][3], from_pnor_2d_mat[3][3];
         float faces_dst_2d_min[2], faces_dst_2d_max[2], faces_dst_2d_z;
         float faces_dst_2d_size[2];
@@ -2134,9 +2125,7 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
         const int tris_num = int(face.size()) - 2;
         int j;
 
-        pcent_dst = blender::bke::mesh::face_center_calc(
-            {reinterpret_cast<const blender::float3 *>(vert_positions_dst), numverts_dst},
-            {&corner_verts_dst[face.start()], face.size()});
+        pcent_dst = bke::mesh::face_center_calc(vert_positions_dst, corner_verts_dst.slice(face));
 
         copy_v3_v3(tmp_no, face_normals_dst[i]);
 
@@ -2146,14 +2135,14 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
           BLI_space_transform_apply_normal(space_transform, tmp_no);
         }
 
-        copy_vn_fl(weights, int(numfaces_src), 0.0f);
+        std::fill_n(weights, int(numfaces_src), 0.0f);
 
-        if (UNLIKELY(size_t(face.size()) > tmp_face_size)) {
+        if (size_t(face.size()) > tmp_face_size) [[unlikely]] {
           tmp_face_size = size_t(face.size());
-          face_vcos_2d = static_cast<float(*)[2]>(
-              MEM_reallocN(face_vcos_2d, sizeof(*face_vcos_2d) * tmp_face_size));
-          tri_vidx_2d = static_cast<int(*)[3]>(
-              MEM_reallocN(tri_vidx_2d, sizeof(*tri_vidx_2d) * (tmp_face_size - 2)));
+          face_vcos_2d = static_cast<float (*)[2]>(
+              MEM_realloc_uninitialized(face_vcos_2d, sizeof(*face_vcos_2d) * tmp_face_size));
+          tri_vidx_2d = static_cast<int (*)[3]>(
+              MEM_realloc_uninitialized(tri_vidx_2d, sizeof(*tri_vidx_2d) * (tmp_face_size - 2)));
         }
 
         axis_dominant_v3_to_m3(to_pnor_2d_mat, tmp_no);
@@ -2208,7 +2197,8 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
           tri_vidx_2d[1][2] = 3;
         }
         else {
-          BLI_polyfill_calc(face_vcos_2d, uint(face.size()), -1, (uint(*)[3])tri_vidx_2d);
+          BLI_polyfill_calc(
+              face_vcos_2d, uint(face.size()), -1, reinterpret_cast<uint(*)[3]>(tri_vidx_2d));
         }
 
         for (j = 0; j < tris_num; j++) {
@@ -2269,10 +2259,10 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
         }
       }
 
-      MEM_freeN(tri_vidx_2d);
-      MEM_freeN(face_vcos_2d);
-      MEM_freeN(indices);
-      MEM_freeN(weights);
+      MEM_delete(tri_vidx_2d);
+      MEM_delete(face_vcos_2d);
+      MEM_delete(indices);
+      MEM_delete(weights);
       BLI_rng_free(rng);
     }
     else {
@@ -2289,3 +2279,5 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
 #undef MREMAP_DEFAULT_BUFSIZE
 
 /** \} */
+
+}  // namespace blender

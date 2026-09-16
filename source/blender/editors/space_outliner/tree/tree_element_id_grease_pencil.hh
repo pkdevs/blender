@@ -10,9 +10,11 @@
 
 #include "tree_element_id.hh"
 
+namespace blender {
+
 struct GreasePencil;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementIDGreasePencil final : public TreeElementID {
   GreasePencil &grease_pencil_;
@@ -24,6 +26,8 @@ class TreeElementIDGreasePencil final : public TreeElementID {
 
  private:
   void expand_layer_tree() const;
+  void expand_materials() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

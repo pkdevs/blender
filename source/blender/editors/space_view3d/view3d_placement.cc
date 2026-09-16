@@ -13,12 +13,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_modifier.hh"
+#include "BKE_paint.hh"
 #include "BKE_screen.hh"
+
+#include "BLT_translation.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -37,6 +42,8 @@
 #include "GPU_state.hh"
 
 #include "view3d_intern.hh"
+
+namespace blender {
 
 static const char *view3d_gzgt_placement_id = "VIEW3D_GGT_placement";
 
@@ -57,6 +64,7 @@ enum ePlace_PrimType {
   PLACE_PRIMITIVE_TYPE_CONE = 3,
   PLACE_PRIMITIVE_TYPE_SPHERE_UV = 4,
   PLACE_PRIMITIVE_TYPE_SPHERE_ICO = 5,
+  PLACE_PRIMITIVE_TYPE_SPHERE_QUAD = 6,
 };
 
 enum ePlace_Origin {
@@ -159,7 +167,7 @@ struct InteractivePlaceData {
   bool wait_for_input;
 
   /* WORKAROUND: We need to remove #SCE_SNAP_TO_GRID temporarily. */
-  short *snap_to_ptr;
+  eSnapMode *snap_to_ptr;
   eSnapMode snap_to_restore;
 };
 
@@ -226,7 +234,7 @@ static bool idp_snap_calc_incremental(
     Scene *scene, View3D *v3d, ARegion *region, const float co_relative[3], float co[3])
 {
   const float grid_size = ED_view3d_grid_view_scale(scene, v3d, region, nullptr);
-  if (UNLIKELY(grid_size == 0.0f)) {
+  if (grid_size == 0.0f) [[unlikely]] {
     return false;
   }
 
@@ -258,9 +266,9 @@ static bool idp_snap_calc_incremental(
 static void draw_line_loop(const float coords[][3], int coords_len, const float color[4])
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
-  blender::gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
+  gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
   GPU_vertbuf_data_alloc(*vert, coords_len);
 
   for (int i = 0; i < coords_len; i++) {
@@ -268,8 +276,7 @@ static void draw_line_loop(const float coords[][3], int coords_len, const float 
   }
 
   GPU_blend(GPU_BLEND_ALPHA);
-  blender::gpu::Batch *batch = GPU_batch_create_ex(
-      GPU_PRIM_LINE_LOOP, vert, nullptr, GPU_BATCH_OWNS_VBO);
+  gpu::Batch *batch = GPU_batch_create_ex(GPU_PRIM_LINE_LOOP, vert, nullptr, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
   GPU_batch_uniform_4fv(batch, "color", color);
@@ -291,9 +298,9 @@ static void draw_line_pairs(const float coords_a[][3],
                             const float color[4])
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
-  blender::gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
+  gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
   GPU_vertbuf_data_alloc(*vert, coords_len * 2);
 
   for (int i = 0; i < coords_len; i++) {
@@ -302,8 +309,7 @@ static void draw_line_pairs(const float coords_a[][3],
   }
 
   GPU_blend(GPU_BLEND_ALPHA);
-  blender::gpu::Batch *batch = GPU_batch_create_ex(
-      GPU_PRIM_LINES, vert, nullptr, GPU_BATCH_OWNS_VBO);
+  gpu::Batch *batch = GPU_batch_create_ex(GPU_PRIM_LINES, vert, nullptr, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
   GPU_batch_uniform_4fv(batch, "color", color);
@@ -322,7 +328,7 @@ static void draw_line_pairs(const float coords_a[][3],
 static void draw_line_bounds(const BoundBox *bounds, const float color[4])
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   const int edges[12][2] = {
       /* First side. */
@@ -340,7 +346,7 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
       {3, 7},
   };
 
-  blender::gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
+  gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
   GPU_vertbuf_data_alloc(*vert, ARRAY_SIZE(edges) * 2);
 
   for (int i = 0, j = 0; i < ARRAY_SIZE(edges); i++) {
@@ -349,8 +355,7 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
   }
 
   GPU_blend(GPU_BLEND_ALPHA);
-  blender::gpu::Batch *batch = GPU_batch_create_ex(
-      GPU_PRIM_LINES, vert, nullptr, GPU_BATCH_OWNS_VBO);
+  gpu::Batch *batch = GPU_batch_create_ex(GPU_PRIM_LINES, vert, nullptr, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
   GPU_batch_uniform_4fv(batch, "color", color);
@@ -510,8 +515,7 @@ static void draw_circle_in_quad(const float v1[3],
       {-1, +1},
   };
 
-  float(*coords)[3] = static_cast<float(*)[3]>(
-      MEM_mallocN(sizeof(float[3]) * (resolution + 1), __func__));
+  float (*coords)[3] = MEM_new_array_uninitialized<float[3]>(resolution + 1, __func__);
   for (int i = 0; i <= resolution; i++) {
     float theta = ((2.0f * M_PI) * (float(i) / float(resolution))) + 0.01f;
     float x = cosf(theta);
@@ -528,7 +532,7 @@ static void draw_circle_in_quad(const float v1[3],
     madd_v3_v3fl(co, v4, w[3]);
   }
   draw_line_loop(coords, resolution + 1, color);
-  MEM_freeN(coords);
+  MEM_delete(coords);
 }
 
 /** \} */
@@ -610,7 +614,8 @@ static void draw_primitive_view_impl(const bContext *C,
   }
   else if (ELEM(ipd->primitive_type,
                 PLACE_PRIMITIVE_TYPE_SPHERE_UV,
-                PLACE_PRIMITIVE_TYPE_SPHERE_ICO))
+                PLACE_PRIMITIVE_TYPE_SPHERE_ICO,
+                PLACE_PRIMITIVE_TYPE_SPHERE_QUAD))
   {
     /* See bound-box diagram for reference. */
 
@@ -643,10 +648,10 @@ static void draw_primitive_view(const bContext *C, ARegion * /*region*/, void *a
 {
   InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(arg);
   float color[4];
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, color);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, color);
 
   const bool use_depth = !XRAY_ENABLED(ipd->v3d);
-  const eGPUDepthTest depth_test_enabled = GPU_depth_test_get();
+  const GPUDepthTest depth_test_enabled = GPU_depth_test_get();
 
   if (use_depth) {
     GPU_depth_test(GPU_DEPTH_NONE);
@@ -737,7 +742,7 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
     /* For drag events, update the location since it will be set from the drag-start.
      * This is needed as cursor-drawing doesn't deal with drag events and will use
      * the current cursor location instead of the drag-start. */
-    if (event->val == KM_CLICK_DRAG) {
+    if (event->val == KM_PRESS_DRAG) {
       /* Set this flag so snapping always updated. */
       int mval[2];
       WM_event_drag_start_mval(event, ipd->region, mval);
@@ -770,10 +775,10 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
   ipd->step_index = STEP_BASE;
 
   ipd->snap_to_ptr = &tool_settings->snap_mode_tools;
-  if (eSnapMode(*ipd->snap_to_ptr) == SCE_SNAP_TO_NONE) {
+  if (*ipd->snap_to_ptr == SCE_SNAP_TO_NONE) {
     ipd->snap_to_ptr = &tool_settings->snap_mode;
   }
-  ipd->snap_to_restore = eSnapMode(*ipd->snap_to_ptr);
+  ipd->snap_to_restore = *ipd->snap_to_ptr;
 
   plane_from_point_normal_v3(ipd->step[0].plane, ipd->co_src, ipd->matrix_orient[plane_axis]);
 
@@ -873,6 +878,9 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
       else if (tref && STREQ(tref->idname, "builtin.primitive_ico_sphere_add")) {
         ipd->primitive_type = PLACE_PRIMITIVE_TYPE_SPHERE_ICO;
       }
+      else if (tref && STREQ(tref->idname, "builtin.primitive_quad_sphere_add")) {
+        ipd->primitive_type = PLACE_PRIMITIVE_TYPE_SPHERE_QUAD;
+      }
       else {
         /* If the user runs this as an operator they should set the 'primitive_type',
          * however running from operator search will end up at this point. */
@@ -883,14 +891,40 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
   }
 }
 
+enum {
+  PLACE_MODAL_SNAP_ON,
+  PLACE_MODAL_SNAP_OFF,
+  PLACE_MODAL_FIXED_ASPECT_ON,
+  PLACE_MODAL_FIXED_ASPECT_OFF,
+  PLACE_MODAL_PIVOT_CENTER_ON,
+  PLACE_MODAL_PIVOT_CENTER_OFF,
+};
+
+static void view3d_interactive_add_status(wmOperator *op, bContext *C)
+{
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
+  WorkspaceStatus status(C);
+  status.item(ipd->step_index == STEP_BASE ? IFACE_("Define Base") : IFACE_("Define Depth"),
+              ICON_MOUSE_MOVE);
+  status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
+  status.opmodal(IFACE_("Fixed Aspect"),
+                 op->type,
+                 PLACE_MODAL_FIXED_ASPECT_ON,
+                 ipd->step[ipd->step_index].is_fixed_aspect);
+  status.opmodal(IFACE_("Center Pivot"),
+                 op->type,
+                 PLACE_MODAL_PIVOT_CENTER_ON,
+                 ipd->step[ipd->step_index].is_centered);
+  status.opmodal(IFACE_("Snap"), op->type, PLACE_MODAL_SNAP_ON, ipd->use_snap);
+}
+
 static wmOperatorStatus view3d_interactive_add_invoke(bContext *C,
                                                       wmOperator *op,
                                                       const wmEvent *event)
 {
   const bool wait_for_input = RNA_boolean_get(op->ptr, "wait_for_input");
 
-  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(
-      MEM_callocN(sizeof(*ipd), __func__));
+  InteractivePlaceData *ipd = MEM_new_zeroed<InteractivePlaceData>(__func__);
   op->customdata = ipd;
 
   ipd->scene = CTX_data_scene(C);
@@ -911,6 +945,8 @@ static wmOperatorStatus view3d_interactive_add_invoke(bContext *C,
 
   WM_event_add_modal_handler(C, op);
 
+  view3d_interactive_add_status(op, C);
+
   return OPERATOR_RUNNING_MODAL;
 }
 
@@ -928,22 +964,15 @@ static void view3d_interactive_add_exit(bContext *C, wmOperator *op)
     ED_region_tag_redraw(ipd->region);
   }
 
-  MEM_freeN(ipd);
+  ED_workspace_status_text(C, "");
+
+  MEM_delete(ipd);
 }
 
 static void view3d_interactive_add_cancel(bContext *C, wmOperator *op)
 {
   view3d_interactive_add_exit(C, op);
 }
-
-enum {
-  PLACE_MODAL_SNAP_ON,
-  PLACE_MODAL_SNAP_OFF,
-  PLACE_MODAL_FIXED_ASPECT_ON,
-  PLACE_MODAL_FIXED_ASPECT_OFF,
-  PLACE_MODAL_PIVOT_CENTER_ON,
-  PLACE_MODAL_PIVOT_CENTER_OFF,
-};
 
 void viewplace_modal_keymap(wmKeyConfig *keyconf)
 {
@@ -1134,7 +1163,6 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
         }
 
         wmOperatorType *ot = nullptr;
-        PointerRNA op_props;
         if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_CUBE) {
           ot = WM_operatortype_find("MESH_OT_primitive_cube_add", false);
         }
@@ -1150,9 +1178,11 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
         else if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_SPHERE_ICO) {
           ot = WM_operatortype_find("MESH_OT_primitive_ico_sphere_add", false);
         }
-
+        else if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_SPHERE_QUAD) {
+          ot = WM_operatortype_find("MESH_OT_primitive_quad_sphere_add", false);
+        }
         if (ot != nullptr) {
-          WM_operator_properties_create_ptr(&op_props, ot);
+          PointerRNA op_props = WM_operator_properties_create_ptr(ot);
 
           if (ipd->use_tool) {
             bToolRef *tref = ipd->area->runtime.tool;
@@ -1174,7 +1204,8 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
           if (ELEM(ipd->primitive_type,
                    PLACE_PRIMITIVE_TYPE_CYLINDER,
                    PLACE_PRIMITIVE_TYPE_SPHERE_UV,
-                   PLACE_PRIMITIVE_TYPE_SPHERE_ICO))
+                   PLACE_PRIMITIVE_TYPE_SPHERE_ICO,
+                   PLACE_PRIMITIVE_TYPE_SPHERE_QUAD))
           {
             RNA_float_set(&op_props, "radius", 1.0f);
           }
@@ -1187,7 +1218,7 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
             RNA_float_set(&op_props, "radius2", 0.0f);
           }
 
-          WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, &op_props, nullptr);
+          WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &op_props, nullptr);
           WM_operator_properties_free(&op_props);
         }
         else {
@@ -1274,6 +1305,7 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
 
   if (do_redraw) {
     ED_region_tag_redraw(region);
+    view3d_interactive_add_status(op, C);
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -1282,6 +1314,13 @@ static wmOperatorStatus view3d_interactive_add_modal(bContext *C,
 static bool view3d_interactive_add_poll(bContext *C)
 {
   const enum eContextObjectMode mode = CTX_data_mode_enum(C);
+
+  if (mode == CTX_MODE_SCULPT) {
+    Object *ob = CTX_data_active_object(C);
+    return !BKE_sculpt_multires_active(CTX_data_scene(C), ob) &&
+           !BKE_object_sculpt_use_dyntopo(ob);
+  }
+
   return ELEM(mode, CTX_MODE_OBJECT, CTX_MODE_EDIT_MESH);
 }
 
@@ -1312,6 +1351,7 @@ void VIEW3D_OT_interactive_add(wmOperatorType *ot)
       {PLACE_PRIMITIVE_TYPE_CONE, "CONE", 0, "Cone", ""},
       {PLACE_PRIMITIVE_TYPE_SPHERE_UV, "SPHERE_UV", 0, "UV Sphere", ""},
       {PLACE_PRIMITIVE_TYPE_SPHERE_ICO, "SPHERE_ICO", 0, "ICO Sphere", ""},
+      {PLACE_PRIMITIVE_TYPE_SPHERE_QUAD, "SPHERE_QUAD", 0, "Quad Sphere", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1374,7 +1414,8 @@ static void preview_plane_free_fn(void *customdata)
 
 static bool snap_cursor_poll(ARegion *region, void *data)
 {
-  if (WM_gizmomap_group_find_ptr(region->runtime->gizmo_map, (wmGizmoGroupType *)data) == nullptr)
+  if (WM_gizmomap_group_find_ptr(region->runtime->gizmo_map,
+                                 static_cast<wmGizmoGroupType *>(data)) == nullptr)
   {
     /* Wrong viewport. */
     return false;
@@ -1395,6 +1436,17 @@ static void WIDGETGROUP_placement_setup(const bContext * /*C*/, wmGizmoGroup *gz
   }
 }
 
+static bool WIDGETGROUP_placement_poll(const bContext *C, wmGizmoGroupType *gzgt)
+{
+  if (ED_gizmo_poll_or_unlink_delayed_from_tool(C, gzgt)) {
+    const Scene *scene = CTX_data_scene(C);
+    if (BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void VIEW3D_GGT_placement(wmGizmoGroupType *gzgt)
 {
   gzgt->name = "Placement Widget";
@@ -1405,8 +1457,10 @@ void VIEW3D_GGT_placement(wmGizmoGroupType *gzgt)
   gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
   gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
 
-  gzgt->poll = ED_gizmo_poll_or_unlink_delayed_from_tool;
+  gzgt->poll = WIDGETGROUP_placement_poll;
   gzgt->setup = WIDGETGROUP_placement_setup;
 }
 
 /** \} */
+
+}  // namespace blender

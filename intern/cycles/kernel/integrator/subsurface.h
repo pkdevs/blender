@@ -79,9 +79,6 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
                                  ccl_private ShaderData *sd,
                                  const ccl_private ShaderClosure *sc)
 {
-  /* We should never have two consecutive BSSRDF bounces, the second one should
-   * be converted to a diffuse BSDF to avoid this. */
-  kernel_assert(!(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_DIFFUSE_ANCESTOR));
 
   /* Setup path state for intersect_subsurface kernel. */
   const ccl_private Bssrdf *bssrdf = (const ccl_private Bssrdf *)sc;
@@ -100,8 +97,14 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   const Spectrum weight = surface_shader_bssrdf_sample_weight(sd, sc);
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight;
 
-  uint32_t path_flag = (INTEGRATOR_STATE(state, path, flag) & ~PATH_RAY_CAMERA);
+  const PathRayVisibility path_visibility = (INTEGRATOR_STATE(state, path, visibility) &
+                                             ~PATH_RAY_VISIBILITY_CAMERA);
+  uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   if (sc->type == CLOSURE_BSSRDF_BURLEY_ID) {
+    /* We should never have two consecutive BSSRDF bounces, the second one should
+     * be converted to a diffuse BSDF to avoid this. */
+    kernel_assert(!(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_DIFFUSE_ANCESTOR));
+
     path_flag |= PATH_RAY_SUBSURFACE_DISK;
     INTEGRATOR_STATE_WRITE(state, subsurface, N) = sd->Ng;
   }
@@ -120,10 +123,11 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, subsurface, N) = sd->N;
   }
 
-  if (sd->flag & SD_BACKFACING) {
+  if (sd->runtime_flag & SR_BACKFACING) {
     path_flag |= PATH_RAY_SUBSURFACE_BACKFACING;
   }
 
+  INTEGRATOR_STATE_WRITE(state, path, visibility) = path_visibility;
   INTEGRATOR_STATE_WRITE(state, path, flag) = path_flag;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
@@ -136,7 +140,11 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   /* Pass BSSRDF parameters. */
   INTEGRATOR_STATE_WRITE(state, subsurface, albedo) = bssrdf->albedo;
   INTEGRATOR_STATE_WRITE(state, subsurface, radius) = bssrdf->radius;
-  INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = bssrdf->anisotropy;
+  /* Encode the bssrdf type in anisotropy. */
+  INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = (bssrdf->type ==
+                                                           CLOSURE_BSSRDF_RANDOM_WALK_ID) ?
+                                                              bssrdf->anisotropy :
+                                                              bssrdf->anisotropy + 2.0f;
 
   /* Path guiding. */
   guiding_record_bssrdf_weight(kg, state, weight, bssrdf->albedo);
@@ -148,24 +156,17 @@ ccl_device void subsurface_shader_data_setup(KernelGlobals kg, ccl_private Shade
 {
   /* Get bump mapped normal from shader evaluation at exit point. */
   float3 N = sd->N;
-  if (sd->flag & SD_HAS_BSSRDF_BUMP) {
+  if (sd->shader_flag & SD_HAS_BSSRDF_BUMP) {
     N = surface_shader_bssrdf_normal(sd);
   }
 
   /* Setup diffuse BSDF at the exit point. This replaces shader_eval_surface. */
-  sd->flag &= ~SD_CLOSURE_FLAGS;
+  sd->runtime_flag &= ~SR_CLOSURE_FLAG;
   sd->num_closure = 0;
   sd->num_closure_left = kernel_data.max_closures;
 
   const Spectrum weight = one_spectrum();
-
-  ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
-      sd, sizeof(DiffuseBsdf), weight);
-
-  if (bsdf) {
-    bsdf->N = N;
-    sd->flag |= bsdf_diffuse_setup(bsdf);
-  }
+  bsdf_diffuse_setup(sd, N, weight);
 }
 
 ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState state)
@@ -191,7 +192,7 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
   /* Update volume stack if needed. */
   if (kernel_data.integrator.use_volumes) {
     const int object = ss_isect.hits[0].object;
-    const int object_flag = kernel_data_fetch(object_flag, object);
+    const uint object_flag = kernel_data_fetch(object_flag, object);
 
     if (object_flag & SD_OBJECT_INTERSECTS_VOLUME) {
       const float3 P = INTEGRATOR_STATE(state, ray, P);
@@ -215,17 +216,15 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
 
   const int shader = intersection_get_shader(kg, &ss_isect.hits[0]);
   const int shader_flags = kernel_data_fetch(shaders, shader).flags;
-  const int object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
+  const uint object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
   const bool use_caustics = kernel_data.integrator.use_caustics &&
-                            (object_flags & SD_OBJECT_CAUSTICS);
+                            (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
   const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
   if (use_caustics) {
-    integrator_path_next_sorted(kg,
-                                state,
-                                DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE,
-                                DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE,
-                                shader);
+    integrator_path_next(state,
+                         DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE,
+                         DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE);
   }
   else if (use_raytrace_kernel) {
     integrator_path_next_sorted(kg,

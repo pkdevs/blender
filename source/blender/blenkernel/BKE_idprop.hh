@@ -9,14 +9,19 @@
  */
 
 #include <memory>
+#include <optional>
 
+#include "DNA_ID.h"
 #include "DNA_ID_enums.h"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+#include "BLI_vector_set.hh"
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendWriter;
@@ -24,10 +29,10 @@ struct ID;
 struct IDProperty;
 struct IDPropertyUIData;
 struct IDPropertyUIDataEnumItem;
-namespace blender::io::serialize {
+namespace io::serialize {
 class ArrayValue;
 class Value;
-}  // namespace blender::io::serialize
+}  // namespace io::serialize
 
 union IDPropertyTemplate {
   int i;
@@ -54,9 +59,9 @@ union IDPropertyTemplate {
  * \note as a start to move away from the stupid #IDP_New function,
  * this type has its own allocation function.
  */
-IDProperty *IDP_NewIDPArray(blender::StringRef name) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+IDProperty *IDP_NewIDPArray(StringRef name) ATTR_WARN_UNUSED_RESULT;
 /**
- * \param flag the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
+ * \param flag: the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
  * #BKE_id_copy_ex.
  */
 IDProperty *IDP_CopyIDPArray(const IDProperty *array, int flag) ATTR_WARN_UNUSED_RESULT
@@ -76,28 +81,30 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen);
  * This function works for strings too!
  */
 void IDP_ResizeArray(IDProperty *prop, int newlen);
-void IDP_FreeArray(IDProperty *prop);
 
 /* ---------- String Type ------------ */
 /**
  * \param st: The string to assign.
  * Doesn't need to be null terminated when clamped by `maxncpy`.
- * \param name: The property name.
- * \param maxncpy: The maximum size of the string (including the `\0` terminator).
+ * \param st_maxncpy: The maximum size of the string (including the `\0` terminator).
  * When zero, this is the equivalent of passing in `strlen(st) + 1`
+ * \param name: The property name.
  * \return The new string property.
  */
 IDProperty *IDP_NewStringMaxSize(const char *st,
                                  size_t st_maxncpy,
-                                 blender::StringRef name,
+                                 StringRef name,
                                  eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT;
 IDProperty *IDP_NewString(const char *st,
+                          StringRef name,
+                          eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT;
+IDProperty *IDP_NewString(blender::StringRef value,
                           blender::StringRef name,
                           eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT;
 /**
  * \param st: The string to assign.
  * Doesn't need to be null terminated when clamped by `maxncpy`.
- * \param maxncpy: The maximum size of the string (including the `\0` terminator).
+ * \param st_maxncpy: The maximum size of the string (including the `\0` terminator).
  * When zero, this is the equivalent of passing in `strlen(st) + 1`
  */
 void IDP_AssignStringMaxSize(IDProperty *prop, const char *st, size_t st_maxncpy) ATTR_NONNULL();
@@ -112,12 +119,15 @@ bool IDP_EnumItemsValidate(const IDPropertyUIDataEnumItem *items,
                            int items_num,
                            void (*error_fn)(const char *));
 
+/** Free the items and their allocated strings. */
+void IDP_EnumItemsFree(IDPropertyUIDataEnumItem *items, int items_num);
+
 /*-------- ID Type -------*/
 
 using IDPWalkFunc = void (*)(void *user_data, IDProperty *idp);
 
 /**
- * \param flag the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
+ * \param flag: the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
  * #BKE_id_copy_ex.
  */
 void IDP_AssignID(IDProperty *prop, ID *id, int flag);
@@ -141,7 +151,7 @@ void IDP_ReplaceInGroup(IDProperty *group, IDProperty *prop) ATTR_NONNULL();
  * Checks if a property with the same name as prop exists, and if so replaces it.
  * Use this to preserve order!
  *
- * \param flag the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
+ * \param flag: the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
  * #BKE_id_copy_ex.
  */
 void IDP_ReplaceInGroup_ex(IDProperty *group, IDProperty *prop, IDProperty *prop_exist, int flag);
@@ -154,7 +164,7 @@ void IDP_MergeGroup(IDProperty *dest, const IDProperty *src, bool do_overwrite) 
  * If a property is missing in \a dest, add it.
  * Do it recursively.
  *
- * \param flag the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
+ * \param flag: the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
  * #BKE_id_copy_ex.
  */
 void IDP_MergeGroup_ex(IDProperty *dest, const IDProperty *src, bool do_overwrite, int flag)
@@ -171,12 +181,6 @@ void IDP_MergeGroup_ex(IDProperty *dest, const IDProperty *src, bool do_overwrit
  */
 bool IDP_AddToGroup(IDProperty *group, IDProperty *prop) ATTR_NONNULL();
 /**
- * This is the same as IDP_AddToGroup, only you pass an item
- * in the group list to be inserted after.
- */
-bool IDP_InsertToGroup(IDProperty *group, IDProperty *previous, IDProperty *pnew)
-    ATTR_NONNULL(1 /*group*/, 3 /*pnew*/);
-/**
  * \note this does not free the property!
  *
  * To free the property, you have to do:
@@ -189,27 +193,41 @@ void IDP_RemoveFromGroup(IDProperty *group, IDProperty *prop) ATTR_NONNULL();
 void IDP_FreeFromGroup(IDProperty *group, IDProperty *prop) ATTR_NONNULL();
 
 IDProperty *IDP_GetPropertyFromGroup(const IDProperty *prop,
-                                     blender::StringRef name) ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL();
+                                     StringRef name) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+/** Same as above, but allows the property to be null, in which case null is returned. */
+IDProperty *IDP_GetPropertyFromGroup_null(const IDProperty *prop,
+                                          StringRef name) ATTR_WARN_UNUSED_RESULT;
+
 /**
  * Same as #IDP_GetPropertyFromGroup but ensure the `type` matches.
  */
 IDProperty *IDP_GetPropertyTypeFromGroup(const IDProperty *prop,
-                                         blender::StringRef name,
+                                         StringRef name,
                                          char type) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /*-------- Main Functions --------*/
 /**
- * Get the Group property that contains the id properties for ID `id`.
+ * Get the Group property that contains the user-defined id properties for ID `id`.
  */
 IDProperty *IDP_GetProperties(ID *id) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 /**
- * Ensure the Group property that contains the id properties for ID `id` exists & return it.
+ * Ensure the Group property that contains the user-defined id properties for ID `id` exists &
+ * return it.
  */
 IDProperty *IDP_EnsureProperties(ID *id) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
+/**
+ * Get the Group property that contains the system-defined id properties for ID `id`.
+ */
+IDProperty *IDP_ID_system_properties_get(ID *id) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
+/**
+ * Ensure the Group property that contains the system-defined id properties for ID `id` exists &
+ * return it.
+ */
+IDProperty *IDP_ID_system_properties_ensure(ID *id) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
+
 IDProperty *IDP_CopyProperty(const IDProperty *prop) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 /**
- * \param flag the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
+ * \param flag: the ID creation/copying flags (`LIB_ID_CREATE_...`), same as passed to
  * #BKE_id_copy_ex.
  */
 IDProperty *IDP_CopyProperty_ex(const IDProperty *prop, int flag) ATTR_WARN_UNUSED_RESULT
@@ -254,20 +272,24 @@ bool IDP_EqualsProperties(const IDProperty *prop1,
  * \endcode
  *
  * Note that you MUST either attach the id property to an id property group with
- * IDP_AddToGroup or MEM_freeN the property, doing anything else might result in
+ * IDP_AddToGroup or MEM_delete the property, doing anything else might result in
  * a memory leak.
  */
 IDProperty *IDP_New(char type,
                     const IDPropertyTemplate *val,
-                    blender::StringRef name,
+                    StringRef name,
                     eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+
+/* ----------- Allocators for simple types ----------- */
+
+[[nodiscard]] IDProperty *IDP_NewInt(int value,
+                                     blender::StringRef name,
+                                     eIDPropertyFlag flags = {});
 
 /**
  * \note This will free allocated data, all child properties of arrays and groups, and unlink IDs!
  * But it does not free the actual #IDProperty struct itself.
  */
-void IDP_FreePropertyContent_ex(IDProperty *prop, bool do_id_user);
-void IDP_FreePropertyContent(IDProperty *prop);
 void IDP_FreeProperty_ex(IDProperty *prop, bool do_id_user);
 void IDP_FreeProperty(IDProperty *prop);
 
@@ -275,38 +297,93 @@ void IDP_ClearProperty(IDProperty *prop);
 
 void IDP_Reset(IDProperty *prop, const IDProperty *reference);
 
-#define IDP_Int(prop) ((prop)->data.val)
-#define IDP_Bool(prop) ((prop)->data.val)
-#define IDP_Array(prop) ((prop)->data.pointer)
-/* C11 const correctness for casts */
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-#  define IDP_Float(prop) \
-    _Generic((prop), \
-        IDProperty *: (*(float *)&(prop)->data.val), \
-        const IDProperty *: (*(const float *)&(prop)->data.val))
-#  define IDP_Double(prop) \
-    _Generic((prop), \
-        IDProperty *: (*(double *)&(prop)->data.val), \
-        const IDProperty *: (*(const double *)&(prop)->data.val))
-#  define IDP_String(prop) \
-    _Generic((prop), \
-        IDProperty *: ((char *)(prop)->data.pointer), \
-        const IDProperty *: ((const char *)(prop)->data.pointer))
-#  define IDP_IDPArray(prop) \
-    _Generic((prop), \
-        IDProperty *: ((IDProperty *)(prop)->data.pointer), \
-        const IDProperty *: ((const IDProperty *)(prop)->data.pointer))
-#  define IDP_Id(prop) \
-    _Generic((prop), \
-        IDProperty *: ((ID *)(prop)->data.pointer), \
-        const IDProperty *: ((const ID *)(prop)->data.pointer))
+#ifndef NDEBUG
+const IDProperty *_IDP_assert_type(const IDProperty *prop, char ty);
+const IDProperty *_IDP_assert_type_and_subtype(const IDProperty *prop, char ty, char sub_ty);
+const IDProperty *_IDP_assert_type_mask(const IDProperty *prop, int ty_mask);
+
 #else
-#  define IDP_Float(prop) (*(float *)&(prop)->data.val)
-#  define IDP_Double(prop) (*(double *)&(prop)->data.val)
-#  define IDP_String(prop) ((char *)(prop)->data.pointer)
-#  define IDP_IDPArray(prop) ((IDProperty *)(prop)->data.pointer)
-#  define IDP_Id(prop) ((ID *)(prop)->data.pointer)
+#  define _IDP_assert_type(prop, ty) (prop)
+#  define _IDP_assert_type_and_subtype(prop, ty, sub_ty) (prop)
+#  define _IDP_assert_type_mask(prop, ty_mask) (prop)
 #endif
+
+#define IDP_int_get(prop) (_IDP_assert_type(prop, IDP_INT)->data.val)
+#define IDP_int_set(prop, value) \
+  { \
+    IDProperty *prop_ = (prop); \
+    BLI_assert(prop_->type == IDP_INT); \
+    prop_->data.val = value; \
+  } \
+  ((void)0)
+
+#define IDP_bool_get(prop) ((_IDP_assert_type(prop, IDP_BOOLEAN))->data.val)
+#define IDP_bool_set(prop, value) \
+  { \
+    IDProperty *prop_ = (prop); \
+    BLI_assert(prop_->type == IDP_BOOLEAN); \
+    prop_->data.val = value; \
+  } \
+  ((void)0)
+
+#define IDP_int_or_bool_get(prop) \
+  (_IDP_assert_type_mask(prop, (1 << IDP_INT) | (1 << IDP_BOOLEAN))->data.val)
+#define IDP_int_or_bool_set(prop, value) \
+  { \
+    IDProperty *prop_ = (prop); \
+    BLI_assert(ELEM(prop_->type, IDP_INT, IDP_BOOLEAN)); \
+    prop_->data.val = value; \
+  } \
+  ((void)0)
+
+#define IDP_float_get(prop) (*(const float *)&(_IDP_assert_type(prop, IDP_FLOAT)->data.val))
+#define IDP_float_set(prop, value) \
+  { \
+    IDProperty *prop_ = (prop); \
+    BLI_assert(prop_->type == IDP_FLOAT); \
+    (*(float *)&(prop_)->data.val) = value; \
+  } \
+  ((void)0)
+
+#define IDP_double_get(prop) (*(const double *)&(_IDP_assert_type(prop, IDP_DOUBLE)->data.val))
+#define IDP_double_set(prop, value) \
+  { \
+    IDProperty *prop_ = (prop); \
+    BLI_assert(prop_->type == IDP_DOUBLE); \
+    (*(double *)&(prop_)->data.val) = value; \
+  } \
+  ((void)0)
+
+/**
+ * Use when the type of the array is not known.
+ *
+ * Avoid using this where possible.
+ */
+#define IDP_array_voidp_get(prop) (_IDP_assert_type(prop, IDP_ARRAY)->data.pointer)
+
+#define IDP_array_int_get(prop) \
+  static_cast<int *>(_IDP_assert_type_and_subtype(prop, IDP_ARRAY, IDP_INT)->data.pointer)
+#define IDP_array_bool_get(prop) \
+  static_cast<int8_t *>(_IDP_assert_type_and_subtype(prop, IDP_ARRAY, IDP_BOOLEAN)->data.pointer)
+#define IDP_array_float_get(prop) \
+  static_cast<float *>(_IDP_assert_type_and_subtype(prop, IDP_ARRAY, IDP_FLOAT)->data.pointer)
+#define IDP_array_double_get(prop) \
+  static_cast<double *>(_IDP_assert_type_and_subtype(prop, IDP_ARRAY, IDP_DOUBLE)->data.pointer)
+#define IDP_property_array_get(prop) \
+  static_cast<IDProperty *>(_IDP_assert_type(prop, IDP_IDPARRAY)->data.pointer)
+
+#define IDP_string_get(prop) ((char *)_IDP_assert_type(prop, IDP_STRING)->data.pointer)
+/* No `IDP_string_set` needed. */
+#define IDP_ID_get(prop) ((void)0, ((ID *)_IDP_assert_type(prop, IDP_ID)->data.pointer))
+/* No `IDP_ID_set` needed. */
+
+std::optional<StringRefNull> IDP_group_lookup_string(const IDProperty &group, StringRef name);
+std::optional<float> IDP_group_lookup_float(const IDProperty &group, StringRef name);
+std::optional<int> IDP_group_lookup_int(const IDProperty &group, StringRef name);
+std::optional<bool> IDP_group_lookup_bool(const IDProperty &group, StringRef name);
+std::optional<Span<float>> IDP_group_lookup_float_array(const IDProperty &group,
+                                                        StringRef name,
+                                                        int required_size);
 
 /**
  * Return an int from an #IDProperty with a compatible type. This should be avoided, but
@@ -334,7 +411,7 @@ double IDP_coerce_to_double_or_zero(const IDProperty *prop);
  */
 void IDP_foreach_property(IDProperty *id_property_root,
                           int type_filter,
-                          blender::FunctionRef<void(IDProperty *id_property)> callback);
+                          FunctionRef<void(IDProperty *id_property)> callback);
 
 /* Format IDProperty as strings */
 char *IDP_reprN(const IDProperty *prop, uint *r_len);
@@ -388,7 +465,7 @@ IDPropertyUIData *IDP_TryConvertUIData(IDPropertyUIData *src,
                                        eIDPropertyUIDataType src_type,
                                        eIDPropertyUIDataType dst_type);
 
-namespace blender::bke::idprop {
+namespace bke::idprop {
 
 /**
  * \brief Convert the given `properties` to `Value` objects for serialization.
@@ -397,13 +474,15 @@ namespace blender::bke::idprop {
  *
  * UI data such as max/min will not be serialized.
  */
-std::unique_ptr<blender::io::serialize::ArrayValue> convert_to_serialize_values(
+std::unique_ptr<io::serialize::ArrayValue> convert_to_serialize_values(
     const IDProperty *properties);
 
 /**
- * \brief Convert the given `value` to an `IDProperty`.
+ * \brief Convert the given `value` (which must be an array) to an `IDProperty`.
+ * \return The first successfully converted property with further array elements in the
+ *    `IDProperty.next` chain, or null if none could be converted or \a value is not an array.
  */
-IDProperty *convert_from_serialize_value(const blender::io::serialize::Value &value);
+IDProperty *convert_from_serialize_value(const io::serialize::Value &value);
 
 class IDPropertyDeleter {
  public:
@@ -411,6 +490,17 @@ class IDPropertyDeleter {
   {
     IDP_FreeProperty(id_prop);
   }
+};
+
+struct IDPropertyGroupChildrenSet {
+  struct IDPropNameGetter {
+    StringRef operator()(const IDProperty *value) const
+    {
+      return StringRef(value->name);
+    }
+  };
+
+  CustomIDVectorSet<IDProperty *, IDPropNameGetter, 8> children;
 };
 
 /** \brief Allocate a new IDProperty of type IDP_BOOLEAN, set its name and value. */
@@ -479,4 +569,5 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRef prop_name,
 std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(StringRef prop_name,
                                                             eIDPropertyFlag flags = {});
 
-}  // namespace blender::bke::idprop
+}  // namespace bke::idprop
+}  // namespace blender

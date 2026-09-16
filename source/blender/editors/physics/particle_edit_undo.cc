@@ -16,8 +16,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -34,8 +34,10 @@
 
 #include "particle_edit_utildefines.h"
 
+namespace blender {
+
 /** Only needed this locally. */
-static CLG_LogRef LOG = {"ed.undo.particle_edit"};
+static CLG_LogRef LOG = {"undo.particle"};
 
 /* -------------------------------------------------------------------- */
 /** \name Undo Conversion
@@ -52,10 +54,10 @@ static void undoptcache_from_editcache(PTCacheUndo *undo, PTCacheEdit *edit)
   if (edit->psys) {
     ParticleData *pa;
 
-    pa = undo->particles = static_cast<ParticleData *>(MEM_dupallocN(edit->psys->particles));
+    pa = undo->particles = MEM_dupalloc(edit->psys->particles);
 
     for (int i = 0; i < edit->totpoint; i++, pa++) {
-      pa->hair = static_cast<HairKey *>(MEM_dupallocN(pa->hair));
+      pa->hair = MEM_dupalloc(pa->hair);
     }
 
     undo->psys_flag = edit->psys->flag;
@@ -64,20 +66,20 @@ static void undoptcache_from_editcache(PTCacheUndo *undo, PTCacheEdit *edit)
     PTCacheMem *pm;
 
     BLI_duplicatelist(&undo->mem_cache, &edit->pid.cache->mem_cache);
-    pm = static_cast<PTCacheMem *>(undo->mem_cache.first);
+    pm = undo->mem_cache.first();
 
     for (; pm; pm = pm->next) {
       for (int i = 0; i < BPHYS_TOT_DATA; i++) {
-        pm->data[i] = MEM_dupallocN(pm->data[i]);
+        pm->data[i] = MEM_dupalloc_void(pm->data[i]);
       }
     }
   }
 
-  point = undo->points = static_cast<PTCacheEditPoint *>(MEM_dupallocN(edit->points));
+  point = undo->points = MEM_dupalloc(edit->points);
   undo->totpoint = edit->totpoint;
 
   for (int i = 0; i < edit->totpoint; i++, point++) {
-    point->keys = static_cast<PTCacheEditKey *>(MEM_dupallocN(point->keys));
+    point->keys = MEM_dupalloc(point->keys);
     /* no need to update edit key->co & key->time pointers here */
   }
 
@@ -97,36 +99,36 @@ static void undoptcache_to_editcache(PTCacheUndo *undo, PTCacheEdit *edit)
 
   LOOP_POINTS {
     if (psys && psys->particles[p].hair) {
-      MEM_freeN(psys->particles[p].hair);
+      MEM_delete(psys->particles[p].hair);
     }
 
     if (point->keys) {
-      MEM_freeN(point->keys);
+      MEM_delete(point->keys);
     }
   }
   if (psys && psys->particles) {
-    MEM_freeN(psys->particles);
+    MEM_delete(psys->particles);
   }
   if (edit->points) {
-    MEM_freeN(edit->points);
+    MEM_delete(edit->points);
   }
-  MEM_SAFE_FREE(edit->mirror_cache);
+  MEM_SAFE_DELETE(edit->mirror_cache);
 
-  edit->points = static_cast<PTCacheEditPoint *>(MEM_dupallocN(undo->points));
+  edit->points = MEM_dupalloc(undo->points);
   edit->totpoint = undo->totpoint;
 
   LOOP_POINTS {
-    point->keys = static_cast<PTCacheEditKey *>(MEM_dupallocN(point->keys));
+    point->keys = MEM_dupalloc(point->keys);
   }
 
   if (psys) {
-    psys->particles = static_cast<ParticleData *>(MEM_dupallocN(undo->particles));
+    psys->particles = MEM_dupalloc(undo->particles);
 
     psys->totpart = undo->totpoint;
 
     LOOP_POINTS {
       pa = psys->particles + p;
-      hkey = pa->hair = static_cast<HairKey *>(MEM_dupallocN(pa->hair));
+      hkey = pa->hair = MEM_dupalloc(pa->hair);
 
       LOOP_KEYS {
         key->co = hkey->co;
@@ -145,11 +147,11 @@ static void undoptcache_to_editcache(PTCacheUndo *undo, PTCacheEdit *edit)
 
     BLI_duplicatelist(&edit->pid.cache->mem_cache, &undo->mem_cache);
 
-    pm = static_cast<PTCacheMem *>(edit->pid.cache->mem_cache.first);
+    pm = edit->pid.cache->mem_cache.first();
 
     for (; pm; pm = pm->next) {
       for (i = 0; i < BPHYS_TOT_DATA; i++) {
-        pm->data[i] = MEM_dupallocN(pm->data[i]);
+        pm->data[i] = MEM_dupalloc_void(pm->data[i]);
       }
       void *cur[BPHYS_TOT_DATA];
       BKE_ptcache_mem_pointers_init(pm, cur);
@@ -176,17 +178,17 @@ static void undoptcache_free_data(PTCacheUndo *undo)
 
   for (i = 0, point = undo->points; i < undo->totpoint; i++, point++) {
     if (undo->particles && (undo->particles + i)->hair) {
-      MEM_freeN((undo->particles + i)->hair);
+      MEM_delete((undo->particles + i)->hair);
     }
     if (point->keys) {
-      MEM_freeN(point->keys);
+      MEM_delete(point->keys);
     }
   }
   if (undo->points) {
-    MEM_freeN(undo->points);
+    MEM_delete(undo->points);
   }
   if (undo->particles) {
-    MEM_freeN(undo->particles);
+    MEM_delete(undo->particles);
   }
   BKE_ptcache_free_mem(&undo->mem_cache);
 }
@@ -208,22 +210,23 @@ struct ParticleUndoStep {
 static bool particle_undosys_poll(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
 
   return (edit != nullptr);
 }
 
-static bool particle_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *us_p)
+static bool particle_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  ParticleUndoStep *us = (ParticleUndoStep *)us_p;
+  ParticleUndoStep *us = reinterpret_cast<ParticleUndoStep *>(us_p);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   us->scene_ref.ptr = CTX_data_scene(C);
-  BKE_view_layer_synced_ensure(us->scene_ref.ptr, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, us->scene_ref.ptr, view_layer);
   us->object_ref.ptr = BKE_view_layer_active_object_get(view_layer);
   PTCacheEdit *edit = PE_get_current(depsgraph, us->scene_ref.ptr, us->object_ref.ptr);
   undoptcache_from_editcache(&us->data, edit);
@@ -231,11 +234,11 @@ static bool particle_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep
 }
 
 static void particle_undosys_step_decode(
-    bContext *C, Main * /*bmain*/, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
+    bContext *C, Main *bmain, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
 
-  ParticleUndoStep *us = (ParticleUndoStep *)us_p;
+  ParticleUndoStep *us = reinterpret_cast<ParticleUndoStep *>(us_p);
   Scene *scene = us->scene_ref.ptr;
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -245,13 +248,18 @@ static void particle_undosys_step_decode(
       CTX_wm_manager(C), us->scene_ref.ptr, &scene, &view_layer);
 
   Object *ob = us->object_ref.ptr;
+  if (ob->mode != OB_MODE_PARTICLE_EDIT) {
+    /* Exit the current mode before restoring Particle Edit to clean up its runtime data and avoid
+     * combining incompatible mode bits. */
+    ed::object::mode_generic_exit(bmain, depsgraph, scene, ob);
+  }
   ED_object_particle_edit_mode_enter_ex(depsgraph, scene, ob);
 
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
 
   /* While this shouldn't happen, entering particle edit-mode uses a more complex
    * setup compared to most other modes which we can't ensure succeeds. */
-  if (UNLIKELY(edit == nullptr)) {
+  if (edit == nullptr) [[unlikely]] {
     BLI_assert(0);
     return;
   }
@@ -264,7 +272,7 @@ static void particle_undosys_step_decode(
   }
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
 
-  ED_undo_object_set_active_or_warn(scene, view_layer, ob, us_p->name, &LOG);
+  ED_undo_object_set_active_or_warn(*bmain, scene, view_layer, ob, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(particle_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -272,7 +280,7 @@ static void particle_undosys_step_decode(
 
 static void particle_undosys_step_free(UndoStep *us_p)
 {
-  ParticleUndoStep *us = (ParticleUndoStep *)us_p;
+  ParticleUndoStep *us = reinterpret_cast<ParticleUndoStep *>(us_p);
   undoptcache_free_data(&us->data);
 }
 
@@ -280,14 +288,14 @@ static void particle_undosys_foreach_ID_ref(UndoStep *us_p,
                                             UndoTypeForEachIDRefFn foreach_ID_ref_fn,
                                             void *user_data)
 {
-  ParticleUndoStep *us = (ParticleUndoStep *)us_p;
-  foreach_ID_ref_fn(user_data, ((UndoRefID *)&us->scene_ref));
-  foreach_ID_ref_fn(user_data, ((UndoRefID *)&us->object_ref));
+  ParticleUndoStep *us = reinterpret_cast<ParticleUndoStep *>(us_p);
+  foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&us->scene_ref)));
+  foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&us->object_ref)));
 }
 
 void ED_particle_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Particle";
+  ut->identifier = "EDIT_PARTICLE";
   ut->poll = particle_undosys_poll;
   ut->step_encode = particle_undosys_step_encode;
   ut->step_decode = particle_undosys_step_decode;
@@ -295,9 +303,11 @@ void ED_particle_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = particle_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(ParticleUndoStep);
 }
 
 /** \} */
+
+}  // namespace blender

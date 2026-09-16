@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 
+#include "BLI_path_utils.hh"
 #include "BLT_translation.hh"
 
 #include "RNA_define.hh"
@@ -17,6 +18,8 @@
 #include "DNA_defs.h"
 
 #include "rna_internal.hh"
+
+namespace blender {
 
 const EnumPropertyItem rna_enum_asset_library_type_items[] = {
     {ASSET_LIBRARY_ALL,
@@ -33,7 +36,12 @@ const EnumPropertyItem rna_enum_asset_library_type_items[] = {
      "ESSENTIALS",
      0,
      "Essentials",
-     "Show the basic building blocks and utilities coming with Blender"},
+     "Show basic building blocks and utilities coming with Blender"},
+    {ASSET_LIBRARY_ONLINE_ESSENTIALS,
+     "ONLINE_ESSENTIALS",
+     0,
+     "Online Essentials",
+     "Show additional building blocks and utilities available online"},
     {ASSET_LIBRARY_CUSTOM,
      "CUSTOM",
      0,
@@ -42,6 +50,33 @@ const EnumPropertyItem rna_enum_asset_library_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+/* Note that these identifiers are written to the asset index, see #asset_indexer.cc. */
+const EnumPropertyItem rna_enum_asset_import_method_items[] = {
+    {ASSET_IMPORT_LINK, "LINK", ICON_LINK_BLEND, "Link", "Import the assets as linked data-block"},
+    {ASSET_IMPORT_APPEND,
+     "APPEND",
+     ICON_APPEND_BLEND,
+     "Append",
+     "Import the assets as copied data-block, with no link to the original asset data-block"},
+    {ASSET_IMPORT_APPEND_REUSE,
+     "APPEND_REUSE",
+     ICON_APPEND_BLEND,
+     "Append (Reuse Data)",
+     "Import the assets as copied data-block while avoiding multiple copies of nested, "
+     "typically heavy data. For example the textures of a material asset, or the mesh of an "
+     "object asset, don't have to be copied every time this asset is imported. The instances of "
+     "the asset share the data instead."},
+    {ASSET_IMPORT_PACK,
+     "PACK",
+     ICON_PACKAGE,
+     "Pack",
+     "Import the asset as linked data-block, and pack it in the current file (ensures that it "
+     "remains unchanged in case the library data is modified, is not available anymore, etc.)"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 
 #  include <algorithm>
@@ -49,21 +84,24 @@ const EnumPropertyItem rna_enum_asset_library_type_items[] = {
 
 #  include "AS_asset_library.hh"
 #  include "AS_asset_representation.hh"
+#  include "AS_essentials_library.hh"
 
 #  include "BKE_asset.hh"
 #  include "BKE_context.hh"
 #  include "BKE_report.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_uuid.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_uuid.hh"
 
 #  include "ED_asset.hh"
 #  include "ED_fileselect.hh"
 
 #  include "RNA_access.hh"
 
-using namespace blender::asset_system;
+namespace blender {
+
+using namespace asset_system;
 
 static std::optional<std::string> rna_AssetMetaData_path(const PointerRNA * /*ptr*/)
 {
@@ -80,8 +118,8 @@ static bool rna_AssetMetaData_editable_from_owner_id(const ID *owner_id,
 
   if (r_info) {
     *r_info = N_(
-        "Asset metadata from external asset libraries can't be edited, only assets stored in the "
-        "current file can");
+        "Asset metadata from external libraries cannot be edited. Only assets stored in the "
+        "current file can be edited.");
   }
   return false;
 }
@@ -197,7 +235,7 @@ static void rna_AssetMetaData_author_set(PointerRNA *ptr, const char *value)
   AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
 
   if (asset_data->author) {
-    MEM_freeN(asset_data->author);
+    MEM_delete(asset_data->author);
   }
 
   if (value[0]) {
@@ -231,7 +269,7 @@ static void rna_AssetMetaData_description_set(PointerRNA *ptr, const char *value
   AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
 
   if (asset_data->description) {
-    MEM_freeN(asset_data->description);
+    MEM_delete(asset_data->description);
   }
 
   if (value[0]) {
@@ -265,7 +303,7 @@ static void rna_AssetMetaData_copyright_set(PointerRNA *ptr, const char *value)
   AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
 
   if (asset_data->copyright) {
-    MEM_freeN(asset_data->copyright);
+    MEM_delete(asset_data->copyright);
   }
 
   if (value[0]) {
@@ -299,7 +337,7 @@ static void rna_AssetMetaData_license_set(PointerRNA *ptr, const char *value)
   AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
 
   if (asset_data->license) {
-    MEM_freeN(asset_data->license);
+    MEM_delete(asset_data->license);
   }
 
   if (value[0]) {
@@ -307,6 +345,38 @@ static void rna_AssetMetaData_license_set(PointerRNA *ptr, const char *value)
   }
   else {
     asset_data->license = nullptr;
+  }
+}
+
+static void rna_AssetMetaData_webpage_get(PointerRNA *ptr, char *value)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+
+  if (asset_data->webpage) {
+    strcpy(value, asset_data->webpage);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_AssetMetaData_webpage_length(PointerRNA *ptr)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+  return asset_data->webpage ? strlen(asset_data->webpage) : 0;
+}
+
+static void rna_AssetMetaData_webpage_set(PointerRNA *ptr, const char *value)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+
+  MEM_delete(asset_data->webpage);
+
+  if (value[0]) {
+    asset_data->webpage = BLI_strdup(value);
+  }
+  else {
+    asset_data->webpage = nullptr;
   }
 }
 
@@ -361,8 +431,7 @@ void rna_AssetMetaData_catalog_id_update(bContext *C, PointerRNA *ptr)
     return;
   }
 
-  blender::asset_system::AssetLibrary *asset_library = ED_fileselect_active_asset_library_get(
-      sfile);
+  asset_system::AssetLibrary *asset_library = ED_fileselect_active_asset_library_get(sfile);
   if (asset_library == nullptr) {
     /* The SpaceFile may not be an asset browser but a regular file browser. */
     return;
@@ -372,18 +441,82 @@ void rna_AssetMetaData_catalog_id_update(bContext *C, PointerRNA *ptr)
   asset_library->refresh_catalog_simplename(asset_data);
 }
 
+static const EnumPropertyItem *rna_AssetMetaData_preferred_import_method_itemf(
+    bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free)
+{
+  EnumPropertyItem *items = nullptr;
+  int items_num = 0;
+  for (const EnumPropertyItem *item = rna_enum_asset_import_method_items; item->identifier; item++)
+  {
+    switch (eAssetImportMethod(item->value)) {
+      case ASSET_IMPORT_APPEND_REUSE: {
+        if (U.experimental.no_data_block_packing) {
+          RNA_enum_item_add(&items, &items_num, item);
+        }
+        break;
+      }
+      case ASSET_IMPORT_PACK: {
+        if (!U.experimental.no_data_block_packing) {
+          RNA_enum_item_add(&items, &items_num, item);
+        }
+        break;
+      }
+      default: {
+        RNA_enum_item_add(&items, &items_num, item);
+        break;
+      }
+    }
+  }
+  RNA_enum_item_end(&items, &items_num);
+  *r_free = true;
+  return items;
+}
+
+int rna_AssetMetaData_preferred_import_method_default(PointerRNA * /*ptr*/, PropertyRNA * /*prop*/)
+{
+  return U.experimental.no_data_block_packing ? ASSET_IMPORT_APPEND_REUSE : ASSET_IMPORT_PACK;
+}
+
+static int rna_AssetLibrary_type_get(PointerRNA *ptr)
+{
+  asset_system::AssetLibrary *asset_library = static_cast<asset_system::AssetLibrary *>(ptr->data);
+  return asset_library->library_type();
+}
+
+static bool rna_AssetLibrary_is_editable_get(PointerRNA *ptr)
+{
+  asset_system::AssetLibrary *asset_library = static_cast<asset_system::AssetLibrary *>(ptr->data);
+  return !asset_library->is_read_only();
+}
+
+static const char *rna_AssetLibrary_online_assets_url()
+{
+  return asset_system::online_essentials_url().c_str();
+}
+
+static const char *rna_AssetLibrary_online_assets_cache_path()
+{
+  return asset_system::online_essentials_cache_directory_path().c_str();
+}
+
 static void rna_AssetRepresentation_name_get(PointerRNA *ptr, char *value)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const blender::StringRefNull name = asset->get_name();
+  const StringRefNull name = asset->get_name();
   BLI_strncpy(value, name.c_str(), name.size() + 1);
 }
 
 static int rna_AssetRepresentation_name_length(PointerRNA *ptr)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const blender::StringRefNull name = asset->get_name();
+  const StringRefNull name = asset->get_name();
   return name.size();
+}
+
+static PointerRNA rna_AssetRepresentation_owner_asset_library_get(PointerRNA *ptr)
+{
+  AssetRepresentation *asset = static_cast<AssetRepresentation *>(ptr->data);
+  return RNA_pointer_create_discrete(nullptr, RNA_AssetLibrary, &asset->owner_asset_library());
 }
 
 static PointerRNA rna_AssetRepresentation_metadata_get(PointerRNA *ptr)
@@ -398,10 +531,10 @@ static PointerRNA rna_AssetRepresentation_metadata_get(PointerRNA *ptr)
 
   if (asset->is_local_id()) {
     PointerRNA id_ptr = RNA_id_pointer_create(asset->local_id());
-    return RNA_pointer_create_with_parent(id_ptr, &RNA_AssetMetaData, &asset_data);
+    return RNA_pointer_create_with_parent(id_ptr, RNA_AssetMetaData, &asset_data);
   }
 
-  return RNA_pointer_create_with_parent(*ptr, &RNA_AssetMetaData, &asset_data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_AssetMetaData, &asset_data);
 }
 
 static int rna_AssetRepresentation_id_type_get(PointerRNA *ptr)
@@ -444,15 +577,23 @@ static int rna_AssetRepresentation_full_path_length(PointerRNA *ptr)
   return full_path.size();
 }
 
-const EnumPropertyItem *rna_asset_library_reference_itemf(bContext * /*C*/,
-                                                          PointerRNA * /*ptr*/,
-                                                          PropertyRNA * /*prop*/,
-                                                          bool *r_free)
+static bool rna_AssetRepresentation_is_online_get(PointerRNA *ptr)
 {
-  const EnumPropertyItem *items = blender::ed::asset::library_reference_to_rna_enum_itemf(
+  const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
+  return asset->is_online_only();
+}
+
+const EnumPropertyItem *rna_asset_library_ui_reference_itemf(bContext * /*C*/,
+                                                             PointerRNA * /*ptr*/,
+                                                             PropertyRNA * /*prop*/,
+                                                             bool *r_free)
+{
+  const EnumPropertyItem *items = ed::asset::library_reference_to_rna_enum_itemf(
       /* Include all valid libraries for the user to choose from. */
       /*include_readonly=*/true,
-      /*include_current_file=*/true);
+      /*include_current_file=*/true,
+      /*include_remote_libraries=*/true,
+      /*include_separate_online_essentials=*/false);
   if (!items) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;
@@ -461,7 +602,11 @@ const EnumPropertyItem *rna_asset_library_reference_itemf(bContext * /*C*/,
   return items;
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_asset_tag(BlenderRNA *brna)
 {
@@ -525,6 +670,12 @@ static void rna_def_asset_data(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Asset Data", "Additional data stored for an asset data-block");
   //  RNA_def_struct_ui_icon(srna, ICON_ASSET); /* TODO: Icon doesn't exist! */
   /* The struct has custom properties, but no pointer properties to other IDs! */
+  /* FIXME: These need to remain 'user-defined' properties for now, as they are _not_ accessible
+   * through RNA system.
+   * Current situation is not great, as these idprops are technically system-defined (users have no
+   * access/control over them), yet they behave as user-defined ones.
+   * Ultimately it's a similar issue as with the 'Node Modifier' - though not sure the same
+   * solution (actually using RNA access to them) would be desired here?. */
   RNA_def_struct_idprops_func(srna, "rna_AssetMetaData_idprops");
   RNA_def_struct_flag(srna, STRUCT_NO_DATABLOCK_IDPROPERTIES); /* Mandatory! */
 
@@ -569,6 +720,17 @@ static void rna_def_asset_data(BlenderRNA *brna)
                            "name does not necessarily indicate that this is free of licensing "
                            "terms. Contact the author if any clarification is needed.");
 
+  prop = RNA_def_property(srna, "webpage", PROP_STRING, PROP_NONE);
+  RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
+  RNA_def_property_string_funcs(prop,
+                                "rna_AssetMetaData_webpage_get",
+                                "rna_AssetMetaData_webpage_length",
+                                "rna_AssetMetaData_webpage_set");
+  RNA_def_property_ui_text(prop,
+                           "Webpage",
+                           "Webpage"
+                           "Web-address to a page with more information about this asset");
+
   prop = RNA_def_property(srna, "tags", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "AssetTag");
   RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
@@ -600,6 +762,26 @@ static void rna_def_asset_data(BlenderRNA *brna)
                            "Catalog Simple Name",
                            "Simple name of the asset's catalog, for debugging and "
                            "data recovery purposes");
+
+  prop = RNA_def_property(srna, "use_preferred_import_method", PROP_BOOLEAN, PROP_BOOLEAN);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSETDATA_USE_OWN_IMPORT_METHOD);
+  RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
+  RNA_def_property_ui_text(
+      prop,
+      "Use Preferred Import Method",
+      "When \"Follow Asset or Preferences\" is selected for the import "
+      "method in the Asset Browser, use the preferred import method of this asset");
+
+  prop = RNA_def_property(srna, "preferred_import_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_asset_import_method_items);
+  RNA_def_property_enum_funcs(
+      prop, nullptr, nullptr, "rna_AssetMetaData_preferred_import_method_itemf");
+  RNA_def_property_enum_default_func(prop, "rna_AssetMetaData_preferred_import_method_default");
+  RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
+  RNA_def_property_ui_text(prop,
+                           "Default Import Method",
+                           /* TODO */
+                           "");
 }
 
 static void rna_def_asset_representation(BlenderRNA *brna)
@@ -619,6 +801,12 @@ static void rna_def_asset_representation(BlenderRNA *brna)
       prop, "rna_AssetRepresentation_name_get", "rna_AssetRepresentation_name_length", nullptr);
   RNA_def_property_ui_text(prop, "Name", "");
   RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "owner_asset_library", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "AssetLibrary");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_AssetRepresentation_owner_asset_library_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Owner Asset Library", "The asset library containing this asset");
 
   prop = RNA_def_property(srna, "metadata", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "AssetMetaData");
@@ -669,12 +857,12 @@ static void rna_def_asset_representation(BlenderRNA *brna)
       "Full Path",
       "Absolute path to the .blend file containing this asset extended with the path "
       "of the asset inside the file");
-}
 
-static void rna_def_asset_catalog_path(BlenderRNA *brna)
-{
-  StructRNA *srna = RNA_def_struct(brna, "AssetCatalogPath", nullptr);
-  RNA_def_struct_ui_text(srna, "Catalog Path", "");
+  prop = RNA_def_property(srna, "is_online", PROP_BOOLEAN, PROP_BOOLEAN);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_funcs(prop, "rna_AssetRepresentation_is_online_get", nullptr);
+  RNA_def_property_ui_text(
+      prop, "Is Online", "True if this asset is accessed via internet, not stored on disk");
 }
 
 static void rna_def_asset_library_reference(BlenderRNA *brna)
@@ -684,13 +872,55 @@ static void rna_def_asset_library_reference(BlenderRNA *brna)
       srna, "Asset Library Reference", "Identifier to refer to the asset library");
 }
 
-PropertyRNA *rna_def_asset_library_reference_common(StructRNA *srna,
-                                                    const char *get,
-                                                    const char *set)
+static void rna_def_asset_library(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "AssetLibrary", nullptr);
+  RNA_def_struct_ui_text(srna, "Asset Library", "Container for asset catalogs and assets");
+
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_asset_library_type_items);
+  RNA_def_property_enum_funcs(prop, "rna_AssetLibrary_type_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Library Type", "");
+
+  prop = RNA_def_property(srna, "is_editable", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_AssetLibrary_is_editable_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Is Editable",
+      "Assets and catalogs in this library can be edited from the current Blender instance");
+
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  func = RNA_def_function(srna, "online_assets_url", "rna_AssetLibrary_online_assets_url");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(
+      func, "url", nullptr, 0, "URL", "Remote location of the Online Essentials library");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(
+      srna, "online_assets_cache_path", "rna_AssetLibrary_online_assets_cache_path");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "path",
+                        nullptr,
+                        0,
+                        "Path",
+                        "Local location of the Online Essentials library's disk cache");
+  RNA_def_function_return(func, parm);
+}
+
+PropertyRNA *rna_def_asset_library_ui_reference_common(StructRNA *srna,
+                                                       const char *get,
+                                                       const char *set)
 {
   PropertyRNA *prop = RNA_def_property(srna, "asset_library_reference", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_asset_library_type_items);
-  RNA_def_property_enum_funcs(prop, get, set, "rna_asset_library_reference_itemf");
+  RNA_def_property_enum_funcs(prop, get, set, "rna_asset_library_ui_reference_itemf");
 
   return prop;
 }
@@ -721,11 +951,13 @@ void RNA_def_asset(BlenderRNA *brna)
   rna_def_asset_tag(brna);
   rna_def_asset_data(brna);
   rna_def_asset_library_reference(brna);
+  rna_def_asset_library(brna);
   rna_def_asset_representation(brna);
-  rna_def_asset_catalog_path(brna);
   rna_def_asset_weak_reference(brna);
 
   RNA_define_animate_sdna(true);
 }
+
+}  // namespace blender
 
 #endif

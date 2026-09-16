@@ -73,6 +73,15 @@ ccl_device_inline float4 operator*(float f, const float4 a)
   return a * f;
 }
 
+ccl_device_inline float4 operator/(const float f, const float4 a)
+{
+#  ifdef __KERNEL_SSE__
+  return float4(_mm_div_ps(_mm_set1_ps(f), a.m128));
+#  else
+  return make_float4(f / a.x, f / a.y, f / a.z, f / a.w);
+#  endif
+}
+
 ccl_device_inline float4 operator/(const float4 a, const float f)
 {
   return a * (1.0f / f);
@@ -163,6 +172,15 @@ ccl_device_inline int4 operator>=(const float4 a, const float4 b)
 #  endif
 }
 
+ccl_device_inline int4 operator>(const float4 a, const float4 b)
+{
+#  ifdef __KERNEL_SSE__
+  return int4(_mm_castps_si128(_mm_cmpgt_ps(a.m128, b.m128)));
+#  else
+  return make_int4(a.x > b.x, a.y > b.y, a.z > b.z, a.w > b.w);
+#  endif
+}
+
 ccl_device_inline int4 operator<=(const float4 a, const float4 b)
 {
 #  ifdef __KERNEL_SSE__
@@ -215,7 +233,7 @@ ccl_device_inline float4 clamp(const float4 a, const float4 mn, const float4 mx)
 {
   return min(max(a, mn), mx);
 }
-#endif /* !__KERNEL_METAL__*/
+#endif /* !__KERNEL_METAL__ */
 
 ccl_device_inline float4 madd(const float4 a, const float4 b, const float4 c)
 {
@@ -463,10 +481,10 @@ ccl_device_inline float4 fabs(const float4 a)
 #  endif
 }
 
-/* The floating-point remainder of the division operation a / b calculated by this function is
- * exactly the value a - iquot * b, where iquot is a / b with its fractional part truncated.
+/* The floating-point remainder of the division operation `a / b` calculated by this function is
+ * exactly the value `a - iquot * b`, where `iquot` is `a / b with` its fractional part truncated.
  *
- * The returned value has the same sign as a and is less than b in magnitude. */
+ * The returned value has the same sign as `a` and is less than `b` in magnitude. */
 ccl_device_inline float4 fmod(const float4 a, const float b)
 {
 #  if defined(__KERNEL_NEON__)
@@ -512,16 +530,6 @@ ccl_device_inline float4 floorfrac(const float4 x, ccl_private int4 *i)
 #  endif
 }
 
-ccl_device_inline float4 mix(const float4 a, const float4 b, const float t)
-{
-  return a + t * (b - a);
-}
-
-ccl_device_inline float4 mix(const float4 a, const float4 b, const float4 t)
-{
-  return a + t * (b - a);
-}
-
 ccl_device_inline float4 saturate(const float4 a)
 {
   return make_float4(saturatef(a.x), saturatef(a.y), saturatef(a.z), saturatef(a.w));
@@ -537,7 +545,7 @@ ccl_device_inline float4 log(const float4 v)
   return make_float4(logf(v.x), logf(v.y), logf(v.z), logf(v.z));
 }
 
-#endif /* !__KERNEL_METAL__*/
+#endif /* !__KERNEL_METAL__ */
 
 ccl_device_inline bool isequal(const float4 a, const float4 b)
 {
@@ -654,5 +662,13 @@ ccl_device_inline float4 __int4_as_float4(const int4 i)
 #  endif
 }
 #endif /* !defined(__KERNEL_METAL__) && !defined(__KERNEL_ONEAPI__) */
+
+ccl_device_inline void copy_v4_v4(ccl_private float *r, const float4 val)
+{
+  r[0] = val.x;
+  r[1] = val.y;
+  r[2] = val.z;
+  r[3] = val.w;
+}
 
 CCL_NAMESPACE_END

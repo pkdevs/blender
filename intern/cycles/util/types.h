@@ -26,4 +26,15 @@
 #include "util/types_float4.h"  // IWYU pragma: export
 #include "util/types_float8.h"  // IWYU pragma: export
 
+#include "util/types_normal.h"  // IWYU pragma: export
+
+#include "util/types_rgbe.h"      // IWYU pragma: export
 #include "util/types_spectrum.h"  // IWYU pragma: export
+
+#include "util/types_dual.h"  // IWYU pragma: export
+
+#include "util/types_quaternion.h"  // IWYU pragma: export
+
+#include "util/types_float3x3.h"  // IWYU pragma: export
+
+#include "util/types_spherical_harmonics.h"  // IWYU pragma: export

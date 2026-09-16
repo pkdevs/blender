@@ -8,19 +8,35 @@
  * \ingroup bke
  */
 
+#include "BKE_attribute_storage.hh"
+
+#include "BLI_vector.hh"
+
+namespace blender {
+
 struct CustomData;
 struct Main;
 struct Mesh;
 struct MFace;
 struct CustomDataLayer;
 
-namespace blender::bke {
+namespace bke {
+
+void mesh_uv_select_to_single_attribute(Mesh &mesh);
 
 void mesh_custom_normals_to_generic(Mesh &mesh);
 
 void mesh_sculpt_mask_to_generic(Mesh &mesh);
 
-}  // namespace blender::bke
+void mesh_freestyle_marks_to_generic(Mesh &mesh);
+
+void mesh_skin_to_generic(Mesh &mesh);
+void mesh_skin_to_legacy(AttributeStorage::BlendWriteData &attr_write_data,
+                         CustomData &vert_data,
+                         Vector<CustomDataLayer, 16> &vert_layers,
+                         int verts_num);
+
+}  // namespace bke
 
 void BKE_mesh_legacy_convert_uvs_to_generic(Mesh *mesh);
 
@@ -57,7 +73,7 @@ void BKE_mesh_legacy_convert_flags_to_hide_layers(Mesh *mesh);
 void BKE_mesh_legacy_convert_flags_to_selection_layers(Mesh *mesh);
 
 /**
- * Move material indices from the #MPoly  to a generic attributes.
+ * Move material indices from the #MPoly to a generic attributes.
  * Only add the attribute when the indices are not all zero.
  */
 void BKE_mesh_legacy_convert_mpoly_to_material_indices(Mesh *mesh);
@@ -89,9 +105,9 @@ void BKE_mesh_tessface_ensure(Mesh *mesh);
 
 /**
  * Rotates the vertices of a face in case v[2] or v[3] (vertex index) is = 0.
- * this is necessary to make the if #MFace.v4 check for quads work.
+ * this is necessary to make the `if #MFace.v4` check for quads work.
  */
-int BKE_mesh_mface_index_validate(MFace *mface, CustomData *mfdata, int mfindex, int nr);
+int BKE_mesh_mface_index_validate(MFace *mface, CustomData *fdata_legacy, int mfindex, int nr);
 
 void BKE_mesh_convert_mfaces_to_mpolys(Mesh *mesh);
 
@@ -132,3 +148,7 @@ inline int BKE_mesh_origindex_mface_mpoly(const int *index_mf_to_mpoly,
   const int j = index_mf_to_mpoly[i];
   return (j != -1) ? (index_mp_to_orig ? index_mp_to_orig[j] : j) : -1;
 }
+
+void BKE_mesh_strip_loose_faces(Mesh *mesh);
+
+}  // namespace blender

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_vector.hh"
@@ -15,9 +19,12 @@ struct NodeExtraInfoRow {
   int icon = 0;
   StringRef tooltip;
 
-  uiButToolTipFunc tooltip_fn = nullptr;
+  ui::ButtonToolTipFunc tooltip_fn = nullptr;
   void *tooltip_fn_arg = nullptr;
   void (*tooltip_fn_free_arg)(void *) = nullptr;
+  void *(*tooltip_fn_copy_arg)(void *) = nullptr;
+
+  std::function<void(ui::Button &)> set_execute_fn;
 };
 
 struct NodeExtraInfoParams {

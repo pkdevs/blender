@@ -13,11 +13,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_linklist.h"
+#include "BLI_ghash.hh"
+#include "BLI_linklist.hh"
 #include "BLI_path_utils.hh" /* Only for assertions. */
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_set.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_genfile.h"
 
@@ -30,10 +31,12 @@
 
 #include "readfile.hh"
 
-#include "BLI_sys_types.h" /* Needed for `intptr_t`. */
+#include "BLI_sys_types.hh" /* Needed for `intptr_t`. */
+
+namespace blender {
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 /* Access routines used by file-selector. */
@@ -51,7 +54,7 @@ void BLO_datablock_info_linklist_free(LinkNode *datablock_infos)
   BLI_linklist_free(datablock_infos, [](void *link) {
     BLODataBlockInfo *datablock_info = static_cast<BLODataBlockInfo *>(link);
     BLO_datablock_info_free(datablock_info);
-    MEM_freeN(datablock_info);
+    MEM_delete(datablock_info);
   });
 }
 
@@ -59,7 +62,7 @@ BlendHandle *BLO_blendhandle_from_file(const char *filepath, BlendFileReadReport
 {
   BlendHandle *bh;
 
-  bh = (BlendHandle *)blo_filedata_from_file(filepath, reports);
+  bh = reinterpret_cast<BlendHandle *>(blo_filedata_from_file(filepath, reports));
 
   return bh;
 }
@@ -70,9 +73,48 @@ BlendHandle *BLO_blendhandle_from_memory(const void *mem,
 {
   BlendHandle *bh;
 
-  bh = (BlendHandle *)blo_filedata_from_memory(mem, memsize, reports);
+  bh = reinterpret_cast<BlendHandle *>(blo_filedata_from_memory(mem, memsize, reports));
 
   return bh;
+}
+
+int3 BLO_blendhandle_get_version(const BlendHandle *bh)
+{
+  const FileData *fd = reinterpret_cast<const FileData *>(bh);
+  return int3(fd->fileversion / 100, fd->fileversion % 100, fd->filesubversion);
+}
+
+/* Return `false` if the block should be skipped because it is either an invalid block, or it does
+ * not meet to required conditions. */
+static bool blendhandle_load_id_data_and_validate(FileData *fd,
+                                                  BHead *bhead,
+                                                  bool use_assets_only,
+                                                  const char *&r_idname,
+                                                  short &r_idflag,
+                                                  AssetMetaData *&r_asset_meta_data,
+                                                  BLODataBlockInfo::Library *r_library_data)
+{
+  r_idname = blo_bhead_id_name(fd, bhead);
+  if (!r_idname || r_idname[0] == '\0') {
+    return false;
+  }
+  r_idflag = blo_bhead_id_flag(fd, bhead);
+  if (r_library_data) {
+    r_library_data->filepath = blo_bhead_library_filepath(fd, bhead);
+    r_library_data->flag = blo_bhead_library_flag(fd, bhead);
+  }
+  /* Do not list (and therefore allow direct linking of) packed data.
+   * While supporting this is conceptually possible, it would require significant changes in
+   * the UI (file browser) and UX (link operation) to convey this concept and handle it
+   * correctly. */
+  if (r_idflag & ID_FLAG_LINKED_AND_PACKED) {
+    return false;
+  }
+  r_asset_meta_data = blo_bhead_id_asset_data_address(fd, bhead);
+  if (use_assets_only && r_asset_meta_data == nullptr) {
+    return false;
+  }
+  return true;
 }
 
 LinkNode *BLO_blendhandle_get_datablock_names(BlendHandle *bh,
@@ -80,18 +122,19 @@ LinkNode *BLO_blendhandle_get_datablock_names(BlendHandle *bh,
                                               const bool use_assets_only,
                                               int *r_tot_names)
 {
-  FileData *fd = (FileData *)bh;
+  FileData *fd = reinterpret_cast<FileData *>(bh);
   LinkNode *names = nullptr;
   BHead *bhead;
   int tot = 0;
 
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == ofblocktype) {
-      const char *idname = blo_bhead_id_name(fd, bhead);
-      if (!idname) {
-        continue;
-      }
-      if (use_assets_only && blo_bhead_id_asset_data_address(fd, bhead) == nullptr) {
+      const char *idname;
+      short idflag;
+      AssetMetaData *asset_meta_data;
+      if (!blendhandle_load_id_data_and_validate(
+              fd, bhead, use_assets_only, idname, idflag, asset_meta_data, nullptr))
+      {
         continue;
       }
 
@@ -112,12 +155,14 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
                                              const bool use_assets_only,
                                              int *r_tot_info_items)
 {
-  FileData *fd = (FileData *)bh;
+  FileData *fd = reinterpret_cast<FileData *>(bh);
   LinkNode *infos = nullptr;
   BHead *bhead;
   int tot = 0;
 
-  const int sdna_nr_preview_image = DNA_struct_find_with_alias(fd->filesdna, "PreviewImage");
+  const bool is_library = (ofblocktype == ID_LI);
+
+  const int sdna_nr_preview_image = DNA_struct_find_with_alias(fd->filesdna.get(), "PreviewImage");
 
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == BLO_CODE_ENDB) {
@@ -126,19 +171,27 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
     if (bhead->code == ofblocktype) {
       BHead *id_bhead = bhead;
 
-      const char *idname = blo_bhead_id_name(fd, bhead);
-      if (!idname) {
+      const char *idname;
+      short idflag;
+      AssetMetaData *asset_meta_data;
+      BLODataBlockInfo::Library library_data;
+      if (!blendhandle_load_id_data_and_validate(fd,
+                                                 id_bhead,
+                                                 use_assets_only,
+                                                 idname,
+                                                 idflag,
+                                                 asset_meta_data,
+                                                 is_library ? &library_data : nullptr))
+      {
         continue;
       }
-      const char *name = idname + 2;
-      AssetMetaData *asset_meta_data = blo_bhead_id_asset_data_address(fd, bhead);
 
-      const bool is_asset = asset_meta_data != nullptr;
-      const bool skip_datablock = use_assets_only && !is_asset;
-      if (skip_datablock) {
-        continue;
+      const char *name = idname + 2;
+      BLODataBlockInfo *info = MEM_new<BLODataBlockInfo>(__func__);
+
+      if (is_library) {
+        info->library_data = library_data;
       }
-      BLODataBlockInfo *info = MEM_mallocN<BLODataBlockInfo>(__func__);
 
       /* Lastly, read asset data from the following blocks. */
       if (asset_meta_data) {
@@ -211,7 +264,7 @@ static BHead *blo_blendhandle_read_preview_rects(FileData *fd,
       result->rect[preview_index] = nullptr;
       result->w[preview_index] = result->h[preview_index] = 0;
     }
-    BKE_previewimg_finish(result, preview_index);
+    result->flag[preview_index] &= ~PRV_RENDERING;
   }
 
   return bhead;
@@ -221,9 +274,9 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
                                                  int ofblocktype,
                                                  const char *name)
 {
-  FileData *fd = (FileData *)bh;
+  FileData *fd = reinterpret_cast<FileData *>(bh);
   bool looking = false;
-  const int sdna_preview_image = DNA_struct_find_with_alias(fd->filesdna, "PreviewImage");
+  const int sdna_preview_image = DNA_struct_find_with_alias(fd->filesdna.get(), "PreviewImage");
 
   for (BHead *bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == BLO_CODE_DATA) {
@@ -235,10 +288,10 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
           break;
         }
 
-        PreviewImage *result = static_cast<PreviewImage *>(MEM_dupallocN(preview_from_file));
-        result->runtime = MEM_new<blender::bke::PreviewImageRuntime>(__func__);
+        PreviewImage *result = MEM_dupalloc(preview_from_file);
+        result->runtime = MEM_new<bke::PreviewImageRuntime>(__func__);
         bhead = blo_blendhandle_read_preview_rects(fd, bhead, result, preview_from_file);
-        MEM_freeN(preview_from_file);
+        MEM_delete(preview_from_file);
         return result;
       }
     }
@@ -260,8 +313,8 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
 
 LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
 {
-  FileData *fd = (FileData *)bh;
-  GSet *gathered = BLI_gset_ptr_new("linkable_groups gh");
+  FileData *fd = reinterpret_cast<FileData *>(bh);
+  Set<const char *> gathered;
   LinkNode *names = nullptr;
   BHead *bhead;
 
@@ -273,21 +326,19 @@ LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
       if (BKE_idtype_idcode_is_linkable(bhead->code)) {
         const char *str = BKE_idtype_idcode_to_name(bhead->code);
 
-        if (BLI_gset_add(gathered, (void *)str)) {
+        if (gathered.add(str)) {
           BLI_linklist_prepend(&names, BLI_strdup(str));
         }
       }
     }
   }
 
-  BLI_gset_free(gathered, nullptr);
-
   return names;
 }
 
 void BLO_blendhandle_close(BlendHandle *bh)
 {
-  FileData *fd = (FileData *)bh;
+  FileData *fd = reinterpret_cast<FileData *>(bh);
 
   blo_filedata_free(fd);
 }
@@ -349,7 +400,6 @@ BlendFileData *BLO_read_from_memfile(Main *oldmain,
 {
   BlendFileData *bfd = nullptr;
   FileData *fd;
-  ListBase old_mainlist;
   BlendFileReadReport bf_reports{};
   bf_reports.reports = reports;
 
@@ -361,9 +411,11 @@ BlendFileData *BLO_read_from_memfile(Main *oldmain,
     /* Build old ID map for all old IDs. */
     blo_make_old_idmap_from_main(fd, oldmain);
 
-    /* Separate linked data from old main. */
-    blo_split_main(&old_mainlist, oldmain);
-    fd->old_mainlist = &old_mainlist;
+    /* Separate linked data from old main.
+     * WARNING: Do not split out packed IDs here, as these are handled similarly as local IDs in
+     * undo context. */
+    blo_split_main(oldmain, false);
+    fd->old_bmain = oldmain;
 
     /* Removed packed data from this trick - it's internal data that needs saves. */
 
@@ -379,13 +431,15 @@ BlendFileData *BLO_read_from_memfile(Main *oldmain,
     /* Ensure relinked caches are not freed together with their old IDs. */
     blo_cache_storage_old_bmain_clear(fd, oldmain);
 
-    /* Still in-use libraries have already been moved from oldmain to new mainlist,
-     * but oldmain itself shall *never* be 'transferred' to new mainlist! */
-    BLI_assert(old_mainlist.first == oldmain);
+    /* Still in-use libraries have already been moved from oldmain to new main
+     * (fd->bmain->split_mains), but oldmain itself shall *never* be 'transferred' to the new
+     * split_mains!
+     */
+    BLI_assert(oldmain->split_mains && (*oldmain->split_mains)[0] == oldmain);
 
     /* That way, libraries (aka mains) we did not reuse in new undone/redone state
      * will be cleared together with `oldmain`. */
-    blo_join_main(&old_mainlist);
+    blo_join_main(oldmain);
 
     blo_filedata_free(fd);
   }
@@ -400,7 +454,7 @@ void BLO_blendfiledata_free(BlendFileData *bfd)
   }
 
   if (bfd->user) {
-    MEM_freeN(bfd->user);
+    MEM_delete(bfd->user);
   }
 
   MEM_delete(bfd);
@@ -412,3 +466,5 @@ void BLO_read_do_version_after_setup(Main *new_bmain,
 {
   do_versions_after_setup(new_bmain, lapp_context, reports);
 }
+
+}  // namespace blender

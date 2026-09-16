@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Panel
+from bpy.app.translations import contexts as i18n_contexts
 from bl_ui.properties_grease_pencil_common import GreasePencilSimplifyPanel
 from bl_ui.space_view3d import (
     VIEW3D_PT_shading_lighting,
@@ -58,6 +59,7 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
     }
 
     def draw(self, context):
+        import gpu
 
         layout = self.layout
         layout.use_property_split = True
@@ -76,17 +78,22 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
         col.prop(view, "view_transform")
         col.prop(view, "look")
 
+        if view.is_hdr and not context.window.support_hdr_color:
+            row = col.split(factor=col.property_split_factor)
+            row.label()
+
+            if gpu.platform.backend_type_get() == 'OPENGL':
+                row.label(text="HDR not supported with OpenGL backend", icon='STATUS_INFO')
+            else:
+                row.label(text="HDR display not supported", icon='STATUS_INFO')
+
         col = flow.column()
         col.prop(view, "exposure")
         col.prop(view, "gamma")
 
-        col.separator()
 
-        col.prop(scene.sequencer_colorspace_settings, "name", text="Sequencer")
-
-
-class RENDER_PT_color_management_display_settings(RenderButtonsPanel, Panel):
-    bl_label = "Display"
+class RENDER_PT_color_management_working_space(RenderButtonsPanel, Panel):
+    bl_label = "Working Space"
     bl_parent_id = "RENDER_PT_color_management"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
@@ -101,19 +108,50 @@ class RENDER_PT_color_management_display_settings(RenderButtonsPanel, Panel):
         layout.use_property_decorate = False  # No animation.
 
         scene = context.scene
-        view = scene.view_settings
+        blend_colorspace = context.blend_data.colorspace
 
-        # Only enable display sub-section if HDR support is available.
-        import gpu
-        layout.enabled = gpu.capabilities.hdr_support_get()
+        flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
 
-        # Only display HDR toggle for non-Filmic display transforms.
-        col = layout.column(align=True)
-        sub = col.row()
-        sub.active = (not view.view_transform.startswith("Filmic") and not view.view_transform.startswith("AgX") and not
-                      view.view_transform.startswith("False Color") and not
-                      view.view_transform.startswith("Khronos PBR Neutral"))
-        sub.prop(view, "use_hdr_view")
+        col = flow.column()
+
+        split = col.split(factor=col.property_split_factor)
+        row = split.row()
+        row.label(text="File")
+        row.alignment = 'RIGHT'
+        split.operator_menu_enum(
+            "wm.set_working_color_space",
+            "working_space",
+            text=blend_colorspace.working_space,
+            text_ctxt=i18n_contexts.color_management,
+        )
+
+        col.prop_with_menu(
+            scene.sequencer_colorspace_settings,
+            "name",
+            text="Sequencer",
+            menu="UI_MT_color_space_select")
+
+
+class RENDER_PT_color_management_advanced(RenderButtonsPanel, Panel):
+    bl_label = "Advanced"
+    bl_parent_id = "RENDER_PT_color_management"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        scene = context.scene
+
+        col = layout.column()
+        col.active = scene.view_settings.support_emulation
+        col.prop(scene.display_settings, "emulation")
 
 
 class RENDER_PT_color_management_curves(RenderButtonsPanel, Panel):
@@ -387,8 +425,7 @@ class RENDER_PT_eevee_screen_trace(RenderButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
-        use_screen_trace = (context.scene.eevee.ray_tracing_method == 'SCREEN')
-        return (context.engine in cls.COMPAT_ENGINES) and use_screen_trace
+        return (context.engine in cls.COMPAT_ENGINES)
 
     def draw(self, context):
         scene = context.scene
@@ -401,9 +438,22 @@ class RENDER_PT_eevee_screen_trace(RenderButtonsPanel, Panel):
 
         props = context.scene.eevee.ray_tracing_options
 
+        use_screen_trace = (context.scene.eevee.ray_tracing_method == 'SCREEN')
+
         col = layout.column()
-        col.prop(props, "screen_trace_quality", text="Precision")
-        col.prop(props, "screen_trace_thickness", text="Thickness")
+        sub = col.column(align=False)
+        sub.active = use_screen_trace
+        sub.prop(props, "screen_trace_quality", text="Precision")
+        sub.prop(props, "screen_trace_thickness", text="Thickness")
+
+        col = col.column(align=False, heading="Backface")
+        row = col.row(align=True)
+        sub = row.row(align=True)
+        sub.active = use_screen_trace or context.scene.eevee.use_fast_gi
+        sub.prop(props, "use_backface_hit", text="")
+        sub = sub.row(align=True)
+        sub.active = props.use_backface_hit
+        sub.prop(props, "backface_radiance_scale", text="")
 
 
 class RENDER_PT_eevee_gi_approximation(RenderButtonsPanel, Panel):
@@ -448,8 +498,7 @@ class RENDER_PT_eevee_gi_approximation(RenderButtonsPanel, Panel):
 
         sub = col.column(align=True)
         sub.prop(props, "fast_gi_distance")
-        sub.prop(props, "fast_gi_thickness_near", text="Thickness Near")
-        sub.prop(props, "fast_gi_thickness_far", text="Far")
+        sub.prop(props, "fast_gi_thickness_near")
 
         col.prop(props, "fast_gi_bias", text="Bias")
 
@@ -479,22 +528,37 @@ class RENDER_PT_eevee_denoise(RenderButtonsPanel, Panel):
         layout.use_property_decorate = False
         props = context.scene.eevee.ray_tracing_options
 
-        col = layout.column()
-        col.active = props.use_denoise
-        col.prop(props, "denoise_spatial")
+        col = layout.column(align=True)
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial
-        col.prop(props, "denoise_temporal")
+        row = col.row()
+        row.active = props.use_denoise
+        row.prop(props, "denoise_spatial")
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
-        col.prop(props, "denoise_bilateral")
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial
+        row.prop(props, "denoise_temporal")
+
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
+        row.prop(props, "denoise_bilateral")
+
+
+class RENDER_PT_eevee_light_paths(RenderButtonsPanel, Panel):
+    bl_label = "Light Paths"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        pass
 
 
 class RENDER_PT_eevee_clamping(RenderButtonsPanel, Panel):
     bl_label = "Clamping"
-    bl_options = {'DEFAULT_CLOSED'}
+    bl_parent_id = "RENDER_PT_eevee_light_paths"
     COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     @classmethod
@@ -545,6 +609,27 @@ class RENDER_PT_eevee_clamping_volume(RenderButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop(props, "clamp_volume_direct", text="Direct Light")
         col.prop(props, "clamp_volume_indirect", text="Indirect Light")
+
+
+class RENDER_PT_eevee_light_paths_intensity(RenderButtonsPanel, Panel):
+    bl_label = "Intensity"
+    bl_parent_id = "RENDER_PT_eevee_light_paths"
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        scene = context.scene
+        props = scene.eevee
+
+        col = layout.column(align=True)
+        col.prop(props, "direct_light_intensity", text="Direct Light")
+        col.prop(props, "indirect_light_intensity", text="Indirect Light")
 
 
 class RENDER_PT_eevee_sampling_shadows(RenderButtonsPanel, Panel):
@@ -643,6 +728,7 @@ class RENDER_PT_eevee_sampling_render(RenderButtonsPanel, Panel):
 
         col = layout.column(align=True)
         col.prop(props, "taa_render_samples", text="Samples")
+        col.prop(props, "time_limit")
 
         # Add SSS sample count here.
 
@@ -714,7 +800,7 @@ def draw_curves_settings(self, context):
 class RENDER_PT_eevee_hair(RenderButtonsPanel, Panel):
     bl_label = "Curves"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -745,6 +831,7 @@ class RENDER_PT_eevee_performance(RenderButtonsPanel, Panel):
         layout.use_property_decorate = False  # No animation.
 
         layout.prop(rd, "use_high_quality_normals")
+        layout.prop(rd, "anisotropic_filter")
 
 
 class CompositorPerformanceButtonsPanel:
@@ -1102,9 +1189,11 @@ classes = (
     RENDER_PT_eevee_sampling_render,
     RENDER_PT_eevee_sampling_shadows,
     RENDER_PT_eevee_sampling_advanced,
+    RENDER_PT_eevee_light_paths,
     RENDER_PT_eevee_clamping,
     RENDER_PT_eevee_clamping_surface,
     RENDER_PT_eevee_clamping_volume,
+    RENDER_PT_eevee_light_paths_intensity,
     RENDER_PT_eevee_raytracing_presets,
     RENDER_PT_eevee_raytracing,
     RENDER_PT_eevee_screen_trace,
@@ -1138,10 +1227,11 @@ classes = (
     RENDER_PT_opengl_film,
     RENDER_PT_hydra_debug,
     RENDER_PT_color_management,
-    RENDER_PT_color_management_display_settings,
     RENDER_PT_color_management_curves,
     RENDER_PT_color_management_white_balance_presets,
     RENDER_PT_color_management_white_balance,
+    RENDER_PT_color_management_working_space,
+    RENDER_PT_color_management_advanced,
 )
 
 if __name__ == "__main__":  # only for live edit.

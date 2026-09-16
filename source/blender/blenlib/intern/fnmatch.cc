@@ -10,7 +10,7 @@
 /* Maintained by GLIBC. */
 /* clang-format off */
 
-/* Enable GNU extensions in fnmatch.h. */
+/* Enable GNU extensions in fnmatch.h.  */
 #ifndef _GNU_SOURCE
 # define _GNU_SOURCE    1
 #endif
@@ -18,7 +18,7 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include "BLI_fnmatch.h"
+#include "BLI_fnmatch.hh"
 
 
 /* Comment out all this code if we are using the GNU C Library, and are not

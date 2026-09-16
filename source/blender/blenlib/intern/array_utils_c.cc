@@ -10,19 +10,22 @@
  * and only included for the cases where the performance is acceptable.
  * Use with care.
  */
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
-#include "BLI_math_base.h"
-#include "BLI_sys_types.h"
-#include "BLI_utildefines.h"
+#include "BLI_alloca.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 void _bli_array_reverse(void *arr_v, uint arr_len, size_t arr_stride)
 {
@@ -70,7 +73,7 @@ void _bli_array_permute(
   uint i;
 
   if (arr_temp == nullptr) {
-    arr_orig = MEM_mallocN(len, __func__);
+    arr_orig = MEM_new_uninitialized(len, __func__);
   }
   else {
     arr_orig = arr_temp;
@@ -86,13 +89,13 @@ void _bli_array_permute(
   }
 
   if (arr_temp == nullptr) {
-    MEM_freeN(arr_orig);
+    MEM_delete_void(arr_orig);
   }
 }
 
 uint _bli_array_deduplicate_ordered(void *arr, uint arr_len, size_t arr_stride)
 {
-  if (UNLIKELY(arr_len <= 1)) {
+  if (arr_len <= 1) [[unlikely]] {
     return arr_len;
   }
 
@@ -115,7 +118,7 @@ uint _bli_array_deduplicate_ordered(void *arr, uint arr_len, size_t arr_stride)
 
 int _bli_array_findindex(const void *arr, uint arr_len, size_t arr_stride, const void *p)
 {
-  const char *arr_step = (const char *)arr;
+  const char *arr_step = static_cast<const char *>(arr);
   for (uint i = 0; i < arr_len; i++, arr_step += arr_stride) {
     if (memcmp(arr_step, p, arr_stride) == 0) {
       return int(i);
@@ -126,7 +129,7 @@ int _bli_array_findindex(const void *arr, uint arr_len, size_t arr_stride, const
 
 int _bli_array_rfindindex(const void *arr, uint arr_len, size_t arr_stride, const void *p)
 {
-  const char *arr_step = (const char *)arr + (arr_stride * arr_len);
+  const char *arr_step = static_cast<const char *>(arr) + (arr_stride * arr_len);
   for (uint i = arr_len; i-- != 0;) {
     arr_step -= arr_stride;
     if (memcmp(arr_step, p, arr_stride) == 0) {
@@ -221,13 +224,13 @@ bool _bli_array_iter_span(const void *arr,
 
       if (use_wrap) {
         uint i_step = i_curr + 1;
-        if (UNLIKELY(i_step == arr_len)) {
+        if (i_step == arr_len) [[unlikely]] {
           i_step = 0;
         }
         while (test_fn(POINTER_OFFSET(arr, i_step * arr_stride_uint), user_data)) {
           i_step_prev = i_step;
           i_step++;
-          if (UNLIKELY(i_step == arr_len)) {
+          if (i_step == arr_len) [[unlikely]] {
             i_step = 0;
           }
         }
@@ -274,7 +277,7 @@ bool _bli_array_iter_span(const void *arr,
 
 bool _bli_array_is_zeroed(const void *arr_v, uint arr_len, size_t arr_stride)
 {
-  const char *arr_step = (const char *)arr_v;
+  const char *arr_step = static_cast<const char *>(arr_v);
   size_t i = arr_stride * arr_len;
   while (i--) {
     if (*(arr_step++)) {
@@ -312,8 +315,8 @@ bool _bli_array_iter_spiral_square(const void *arr_v,
     int y_minus = center[1];
     int y_plus = arr_shape[1] - center[1] - 1;
 
-    steps_in = 2 * min_iiii(x_minus, x_plus, y_minus, y_plus);
-    steps_out = 2 * max_iiii(x_minus, x_plus, y_minus, y_plus);
+    steps_in = 2 * std::min({x_minus, x_plus, y_minus, y_plus});
+    steps_out = 2 * std::max({x_minus, x_plus, y_minus, y_plus});
   }
 
   /* For check_bounds. */
@@ -367,3 +370,5 @@ bool _bli_array_iter_spiral_square(const void *arr_v,
   }
   return false;
 }
+
+}  // namespace blender

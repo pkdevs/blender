@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2021-2022 Intel Corporation
+/* SPDX-FileCopyrightText: 2021-2025 Intel Corporation
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -6,6 +6,7 @@
 
 #  include "device/oneapi/queue.h"
 #  include "device/oneapi/device_impl.h"
+#  include "device/oneapi/graphics_interop.h"
 #  include "util/log.h"
 
 #  include "kernel/device/oneapi/kernel.h"
@@ -28,8 +29,8 @@ int OneapiDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
   int num_states = 4 * num_concurrent_busy_states(state_size);
 
-  VLOG_DEVICE_STATS << "GPU queue concurrent states: " << num_states << ", using up to "
-                    << string_human_readable_size(num_states * state_size);
+  LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
+            << string_human_readable_size(num_states * state_size);
 
   return num_states;
 }
@@ -42,14 +43,19 @@ int OneapiDeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) c
   return 4 * max(8 * max_num_threads, 65536);
 }
 
-int OneapiDeviceQueue::num_sort_partition_elements() const
+int OneapiDeviceQueue::num_sort_partitions(int max_num_paths, uint /*max_scene_shaders*/) const
 {
-  return (oneapi_device_->get_max_num_threads_per_multiprocessor() >= 128) ? 65536 : 8192;
+  int sort_partition_elements = (oneapi_device_->get_max_num_threads_per_multiprocessor() >= 128) ?
+                                    65536 :
+                                    8192;
+  /* Sort partitioning with local sorting on Intel GPUs is currently the most effective solution no
+   * matter the number of shaders. */
+  return max(max_num_paths / sort_partition_elements, 1);
 }
 
 void OneapiDeviceQueue::init_execution()
 {
-  oneapi_device_->load_texture_info();
+  oneapi_device_->load_image_info(nullptr);
 
   SyclQueue *device_queue = oneapi_device_->sycl_queue();
   void *kg_dptr = oneapi_device_->kernel_globals_device_pointer();
@@ -62,6 +68,11 @@ void OneapiDeviceQueue::init_execution()
   debug_init_execution();
 }
 
+void OneapiDeviceQueue::load_image_info()
+{
+  oneapi_device_->load_image_info(this);
+}
+
 bool OneapiDeviceQueue::enqueue(DeviceKernel kernel,
                                 const int signed_kernel_work_size,
                                 const DeviceKernelArguments &_args)
@@ -70,8 +81,8 @@ bool OneapiDeviceQueue::enqueue(DeviceKernel kernel,
     return false;
   }
 
-  /* Update texture info in case memory moved to host. */
-  if (oneapi_device_->load_texture_info()) {
+  /* Update image info in case memory moved to host. */
+  if (oneapi_device_->load_image_info(nullptr)) {
     if (!synchronize()) {
       return false;
     }
@@ -136,6 +147,26 @@ void OneapiDeviceQueue::copy_from_device(device_memory &mem)
 {
   oneapi_device_->mem_copy_from(mem);
 }
+
+void *OneapiDeviceQueue::copy_from_device_synchronized(device_memory &mem,
+                                                       vector<uint8_t> &storage)
+{
+  if (mem.memory_size() == 0) {
+    return nullptr;
+  }
+
+  storage.resize(mem.memory_size());
+  oneapi_device_->mem_copy_from(mem, 0, 0, 0, 0, storage.data());
+  synchronize();
+  return storage.data();
+}
+
+#  ifdef SYCL_LINEAR_MEMORY_INTEROP_AVAILABLE
+unique_ptr<DeviceGraphicsInterop> OneapiDeviceQueue::graphics_interop_create()
+{
+  return make_unique<OneapiDeviceGraphicsInterop>(this);
+}
+#  endif
 
 CCL_NAMESPACE_END
 

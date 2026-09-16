@@ -21,10 +21,14 @@
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
-struct CurveMapping;
-struct GPUShader;
+namespace blender {
 
-namespace blender::ocio {
+struct CurveMapping;
+namespace gpu {
+class Shader;
+}  // namespace gpu
+
+namespace ocio {
 
 class Config;
 
@@ -34,20 +38,34 @@ class GPUShaderCache;
 }  // namespace internal
 
 struct GPUDisplayParameters {
+  /* Convert from a colorspace to a display, using the view transform and look. */
   StringRefNull from_colorspace;
   StringRefNull view;
   StringRefNull display;
   StringRefNull look;
+  /* Artistic controls. */
   CurveMapping *curve_mapping = nullptr;
   float scale = 1.0f;
   float exponent = 1.0f;
   float dither = 0.0f;
   float temperature = 6500.0f;
   float tint = 10.0f;
+  float opacity = 1.0f;
   bool use_white_balance = false;
+  /* Divide RGB by alpha before performing the transform. */
   bool use_predivide = false;
+  /* Composite an overlay buffer on top of the image. */
   bool do_overlay_merge = false;
-  bool use_hdr = false;
+  /* Writing to a HDR buffer. */
+  bool use_hdr_buffer = false;
+  /* Chosen display is a HDR display. */
+  bool use_hdr_display = false;
+  /* Rather than outputting colors for the specified display, output extended
+   * sRGB colors emulating the specified display. */
+  bool use_display_emulation = false;
+  /* Rather than outputting native display colors, output in a color space
+   * suitable for plotting SDR or HDR scopes. */
+  bool use_scope_space = false;
 };
 
 class GPUShaderBinder {
@@ -80,10 +98,15 @@ class GPUShaderBinder {
   /**
    * Unbind previously bound GPU shader.
    *
-   * If the shader was not bound by  neither display_bind() nor
+   * If the shader was not bound by neither display_bind() nor
    * to_scene_linear_bind() the behavior is undefined.
    */
   void unbind() const;
+
+  /**
+   * Clear caches when configuration changes.
+   */
+  void clear_caches() const;
 
  protected:
   const Config &config_;
@@ -110,4 +133,5 @@ class GPUShaderBinder {
                                 Span<std::array<StringRefNull, 2>> additional_defines);
 };
 
-}  // namespace blender::ocio
+}  // namespace ocio
+}  // namespace blender

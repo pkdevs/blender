@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include <optional>
+
+#include "BLI_math_vector_types.hh"
+
 #include "COM_context.hh"
 #include "COM_domain.hh"
 #include "COM_input_descriptor.hh"
@@ -41,28 +45,25 @@ class RealizeOnDomainOperation : public SimpleOperation {
                                               const InputDescriptor &input_descriptor,
                                               const Domain &operation_domain);
 
-  /* Given a potentially transformed domain, compute a domain such that its rotation and scale
-   * become identity and the size of the domain is increased/reduced to adapt to the new
-   * transformation. For instance, if the domain is rotated, the returned domain will have zero
-   * rotation but expanded size to account for the bounding box of the domain after rotation. The
-   * size of the returned domain is bound and clipped by the maximum possible size to avoid
-   * allocations that surpass hardware limits. */
-  static Domain compute_realized_transformation_domain(Context &context, const Domain &domain);
-
  protected:
   /* The operation domain is just the target domain. */
   Domain compute_domain() override;
 
  private:
   /* Get the name of the realization shader of the appropriate type. */
-  const char *get_realization_shader_name();
+  const char *get_realization_shader_name(const float3x3 &transformation);
 
   /* Computes the translation that the input should be translated by to fix the artifacts related
    * to interpolation. See the implementation for more information. */
   float2 compute_corrective_translation();
 
-  void realize_on_domain_gpu(const float3x3 &inverse_transformation);
-  void realize_on_domain_cpu(const float3x3 &inverse_transformation);
+  /* Computes the Jacobian of the given output texel to input sampler transformation. If no area
+   * sampling is needed, possibly because it is just a rotation/translation, nullopt is returned to
+   * indicate simple point sampling should be used. */
+  std::optional<float2x2> compute_jacobian(const float3x3 &transformation);
+
+  void realize_on_domain_gpu(const float3x3 &transformation);
+  void realize_on_domain_cpu(const float3x3 &transformation);
 };
 
 }  // namespace blender::compositor

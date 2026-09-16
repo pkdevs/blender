@@ -181,7 +181,8 @@ ccl_device int bsdf_hair_chiang_setup(ccl_private ShaderData *sd, ccl_private Ch
 
   /* TODO: we convert this value to a cosine later and discard the sign, so
    * we could probably save some operations. */
-  bsdf->h = (sd->type & PRIMITIVE_CURVE_RIBBON) ? -sd->v : dot(cross(sd->Ng, X), Z);
+  bsdf->h = ((sd->type & PRIMITIVE_CURVE) == PRIMITIVE_CURVE_RIBBON) ? -sd->v :
+                                                                       dot(cross(sd->Ng, X), Z);
 
   kernel_assert(fabsf(bsdf->h) < 1.0f + 1e-4f);
   kernel_assert(isfinite_safe(Y));
@@ -189,7 +190,7 @@ ccl_device int bsdf_hair_chiang_setup(ccl_private ShaderData *sd, ccl_private Ch
 
   bsdf->N = Y;
   bsdf->alpha = -bsdf->alpha;
-  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_HAS_TRANSMISSION;
+  return SR_BSDF | SR_BSDF_HAS_EVAL | SR_BSDF_HAS_TRANSMISSION;
 }
 
 #endif /* __HAIR__ */

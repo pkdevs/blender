@@ -334,9 +334,12 @@ class POSE_PT_selection_sets(Panel):
 
     @classmethod
     def poll(cls, context):
-        return (context.object and
-                context.object.type == 'ARMATURE' and
-                context.object.pose)
+        ob = context.object
+        return (
+            (ob is not None) and
+            (ob.type == 'ARMATURE') and
+            (ob.pose is not None)
+        )
 
     def draw(self, context):
         layout = self.layout
@@ -383,8 +386,7 @@ class POSE_UL_selection_set(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
         row = layout.row()
         row.prop(item, "name", text="", emboss=False)
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            row.prop(item, "is_selected", text="")
+        row.prop(item, "is_selected", text="")
 
 
 class POSE_MT_selection_set_create(Menu):

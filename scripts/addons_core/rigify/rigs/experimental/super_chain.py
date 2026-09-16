@@ -245,7 +245,7 @@ class Rig:
         if self.params.conv_bone:
             conv_twk = 'tweak_' + strip_org(self.params.conv_bone)
 
-            if not(conv_twk in eb.keys()):
+            if conv_twk not in eb.keys():
                 conv_twk = copy_bone(self.obj, org(self.params.conv_bone), conv_twk)
 
         for b in org_bones:
@@ -726,6 +726,7 @@ def add_parameters(params):
         name='B-Bone Segments',
         default=10,
         min=1,
+        max=32,
         description='Number of B-Bone segments'
     )
 

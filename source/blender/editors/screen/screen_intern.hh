@@ -10,6 +10,8 @@
 
 #include "DNA_space_types.h"
 
+namespace blender {
+
 struct ARegion;
 struct AZone;
 struct ReportList;
@@ -25,6 +27,7 @@ struct ScrVert;
 struct WorkSpaceLayout;
 struct wmOperatorType;
 struct wmWindow;
+struct wmWindowManager;
 
 /* internal exports only */
 
@@ -67,6 +70,9 @@ enum class AreaDockTarget {
 #define AREAJOINTOLERANCEX (AREAMINX * UI_SCALE_FAC)
 #define AREAJOINTOLERANCEY (HEADERY * UI_SCALE_FAC)
 
+/* Edges must be within this amount to allow aligned edge merging and moving. */
+#define EDGE_ALIGN_TOLERANCE (7 * UI_SCALE_FAC)
+
 /**
  * Expanded interaction influence of area borders.
  */
@@ -79,6 +85,14 @@ enum class AreaDockTarget {
 
 /* Less expansion needed for global edges. */
 #define BORDERPADDING_GLOBAL (3.0f * UI_SCALE_FAC)
+
+#define AREA_CLOSE_FADEOUT 0.15f     /* seconds */
+#define AREA_DOCK_FADEOUT 0.15f      /* seconds */
+#define AREA_DOCK_FADEIN 0.15f       /* seconds */
+#define AREA_JOIN_FADEOUT 0.15f      /* seconds */
+#define AREA_SPLIT_FADEOUT 0.15f     /* seconds */
+#define AREA_MOVE_LINE_FADEIN 0.1f   /* seconds */
+#define AREA_MOVE_LINE_FADEOUT 0.15f /* seconds */
 
 /* `area.cc` */
 
@@ -98,19 +112,31 @@ void region_toggle_hidden(bContext *C, ARegion *region, bool do_fade);
  * \param sa1: Area from which the resultant originates.
  * \param sa2: Target area that will be replaced.
  */
-void screen_draw_join_highlight(const wmWindow *win, ScrArea *sa1, ScrArea *sa2, eScreenDir dir);
+void screen_draw_join_highlight(
+    const wmWindow *win, ScrArea *sa1, ScrArea *sa2, eScreenDir dir, float anim_factor);
 void screen_draw_dock_preview(const wmWindow *win,
                               ScrArea *source,
                               ScrArea *target,
                               AreaDockTarget dock_target,
                               float factor,
                               int x,
-                              int y);
+                              int y,
+                              float anim_factor);
 void screen_draw_split_preview(ScrArea *area, eScreenAxis dir_axis, float factor);
 
-void screen_draw_move_highlight(const wmWindow *win, bScreen *screen, eScreenAxis dir_axis);
+void screen_draw_move_highlight(const wmWindow *win,
+                                bScreen *screen,
+                                eScreenAxis dir_axis,
+                                float anim_factor);
 
 void screen_draw_region_scale_highlight(ARegion *region);
+
+void screen_animate_area_highlight(wmWindow *win,
+                                   bScreen *screen,
+                                   const rcti *rect,
+                                   float inner[4],
+                                   float outline[4],
+                                   float seconds);
 
 /* `screen_edit.cc` */
 
@@ -118,7 +144,6 @@ void screen_draw_region_scale_highlight(ARegion *region);
  * Empty screen, with 1 dummy area without space-data. Uses window size.
  */
 bScreen *screen_add(Main *bmain, const char *name, const rcti *rect);
-void screen_data_copy(bScreen *to, bScreen *from);
 /**
  * Prepare a newly created screen for initializing it as active screen.
  */
@@ -130,12 +155,8 @@ void screen_change_update(bContext *C, wmWindow *win, bScreen *screen);
  */
 void screen_change_prepare(
     bScreen *screen_old, bScreen *screen_new, Main *bmain, bContext *C, wmWindow *win);
-ScrArea *area_split(const wmWindow *win,
-                    bScreen *screen,
-                    ScrArea *area,
-                    eScreenAxis dir_axis,
-                    float fac,
-                    bool merge);
+ScrArea *area_split(
+    const wmWindow *win, bScreen *screen, ScrArea *area, eScreenAxis dir_axis, float fac);
 /**
  * Join any two neighboring areas. Might involve complex changes.
  */
@@ -153,8 +174,11 @@ eScreenDir area_getorientation(ScrArea *sa_a, ScrArea *sa_b);
 void area_getoffsets(ScrArea *sa_a, ScrArea *sa_b, eScreenDir dir, int *r_offset1, int *r_offset2);
 /**
  * Close a screen area, allowing most-aligned neighbor to take its place.
+ * not_area is optional area to NOT join into.
  */
-bool screen_area_close(bContext *C, ReportList *reports, bScreen *screen, ScrArea *area);
+bool screen_area_close(
+    bContext *C, ReportList *reports, bScreen *screen, ScrArea *area, ScrArea *not_area = nullptr);
+
 void screen_area_spacelink_add(const Scene *scene, ScrArea *area, eSpace_Type space_type);
 AZone *ED_area_actionzone_find_xy(ScrArea *area, const int xy[2]);
 
@@ -208,6 +232,21 @@ short screen_geom_find_area_split_point(const ScrArea *area,
  */
 void screen_geom_select_connected_edge(const wmWindow *win, ScrEdge *edge);
 
+/**
+ * Select all edges that are aligned with \a edge.
+ */
+void screen_geom_select_extended_edge(const wmWindow *win, ScrEdge *edge);
+
+/**
+ * True if the edge can be extended.
+ */
+bool screen_geom_edge_can_extend(const wmWindow *win, ScrEdge *edge);
+
+/**
+ * Merge aligned edges into a single edge.
+ */
+void screen_geom_edge_aligned_merge(const wmWindow *win, ScrEdge *edge);
+
 /* `screen_context.cc` */
 
 /**
@@ -217,6 +256,14 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 
 extern "C" const char *screen_context_dir[]; /* doc access */
 
+/* `screen_ops.cc` */
+
+/**
+ * Stop animation playback in the given screen.
+ * If there is no animation playing back in that screen, this is a no-op.
+ */
+void screen_stop_playback(Main *bmain, wmWindowManager *wm, wmWindow *win, bScreen *screen);
+
 /* `screendump.cc` */
 
 void SCREEN_OT_screenshot(wmOperatorType *ot);
@@ -225,3 +272,5 @@ void SCREEN_OT_screenshot_area(wmOperatorType *ot);
 /* `workspace_layout_edit.cc` */
 
 bool workspace_layout_set_poll(const WorkSpaceLayout *layout);
+
+}  // namespace blender

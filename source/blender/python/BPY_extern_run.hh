@@ -22,13 +22,16 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_string_ref.hh"
+#include "BLI_sys_types.hh"
 
-#include "BLI_compiler_attrs.h"
+namespace blender {
 
 struct ReportList;
 struct Text;
 struct bContext;
+struct IDProperty;
 
 /* `bpy_interface_run.cc` */
 
@@ -83,6 +86,11 @@ bool BPY_run_text(bContext *C, Text *text, ReportList *reports, bool do_jump) AT
  * \{ */
 
 /**
+ * Compile the python expression and \return true if no errors occurred during compilation,
+ * otherwise \return false.
+ */
+bool BPY_string_compile_check(const char *expr);
+/**
  * Run an entire script, matches: `exec(compile(..., "exec"))`
  *
  * \param C: Optional context (may be null),
@@ -96,6 +104,42 @@ bool BPY_run_string_exec(bContext *C, const char *imports[], const char *expr);
  *  used for `bpy.context` and reporting errors to `CTX_wm_reports(C)`.
  */
 bool BPY_run_string_eval(bContext *C, const char *imports[], const char *expr);
+
+/**
+ * Run a script, with the given local variables.
+ *
+ * \param C: Optional context (may be null),
+ *  used for `bpy.context` and reporting errors to `CTX_wm_reports(C)`.
+ *
+ * \param script: The Python script to run, can be multiple lines.
+ *
+ * \param locals: group property with string keys, defining the script's local variables.
+ */
+bool BPY_run_string_exec_with_locals(bContext *C, StringRefNull script, IDProperty &locals);
+
+/**
+ * Run a script, with the given local variables, and return a result.
+ *
+ * The script should assign a value to a script-local variable. Its value will be returned as
+ * IDProperty. This is limited to simple values (None, bool, int, float, string), where integers
+ * are limited to signed 32-bit values.
+ *
+ * \param C: Optional context (may be null), used for `bpy.context` and reporting errors to
+ * `CTX_wm_reports(C)`.
+ *
+ * \param script: The Python script to run, can be multiple lines.
+ *
+ * \param locals: group property with string keys, defining the script's local variables.
+ *
+ * \param result_var_name: the name of the local variable that the script assigns its result to.
+ * This MUST be a valid Python identifier.
+ *
+ * \returns the value of the result variable (see above) after the script finished. If the result
+ * value was not set, `std::noopt` is returned. A value of `None` will return in a `nullptr` value
+ * of the `std::optional`.
+ */
+std::optional<IDProperty *> BPY_run_string_exec_with_locals_return_idprop(
+    bContext *C, StringRefNull script, IDProperty &locals, StringRefNull result_var_name);
 
 /** \} */
 
@@ -131,11 +175,11 @@ struct BPy_RunErrInfo {
  * \param r_value: The resulting value.
  * \return Success.
  */
-bool BPY_run_string_as_number(bContext *C,
-                              const char *imports[],
-                              const char *expr,
-                              BPy_RunErrInfo *err_info,
-                              double *r_value) ATTR_NONNULL(1, 3, 5);
+[[nodiscard]] bool BPY_run_string_as_number(bContext *C,
+                                            const char *imports[],
+                                            const char *expr,
+                                            BPy_RunErrInfo *err_info,
+                                            double *r_value) ATTR_NONNULL(1, 3, 5);
 /**
  * Evaluate `expr` as an integer or pointer.
  *
@@ -148,11 +192,11 @@ bool BPY_run_string_as_number(bContext *C,
  * \param r_value: The resulting value.
  * \return Success.
  */
-bool BPY_run_string_as_intptr(bContext *C,
-                              const char *imports[],
-                              const char *expr,
-                              BPy_RunErrInfo *err_info,
-                              intptr_t *r_value) ATTR_NONNULL(1, 3, 5);
+[[nodiscard]] bool BPY_run_string_as_intptr(bContext *C,
+                                            const char *imports[],
+                                            const char *expr,
+                                            BPy_RunErrInfo *err_info,
+                                            intptr_t *r_value) ATTR_NONNULL(1, 3, 5);
 /**
  * Evaluate `expr` as a string.
  *
@@ -163,19 +207,19 @@ bool BPY_run_string_as_intptr(bContext *C,
  * \param r_value: The resulting value.
  * \return Success.
  */
-bool BPY_run_string_as_string_and_len(bContext *C,
-                                      const char *imports[],
-                                      const char *expr,
-                                      BPy_RunErrInfo *err_info,
-                                      char **r_value,
-                                      size_t *r_value_len) ATTR_NONNULL(1, 3, 5, 6);
+[[nodiscard]] bool BPY_run_string_as_string_and_len(bContext *C,
+                                                    const char *imports[],
+                                                    const char *expr,
+                                                    BPy_RunErrInfo *err_info,
+                                                    char **r_value,
+                                                    size_t *r_value_len) ATTR_NONNULL(1, 3, 5, 6);
 
 /** See #BPY_run_string_as_string_and_len */
-bool BPY_run_string_as_string(bContext *C,
-                              const char *imports[],
-                              const char *expr,
-                              BPy_RunErrInfo *err_info,
-                              char **r_value) ATTR_NONNULL(1, 3, 5);
+[[nodiscard]] bool BPY_run_string_as_string(bContext *C,
+                                            const char *imports[],
+                                            const char *expr,
+                                            BPy_RunErrInfo *err_info,
+                                            char **r_value) ATTR_NONNULL(1, 3, 5);
 
 /**
  * Evaluate `expr` as a string or None.
@@ -188,18 +232,21 @@ bool BPY_run_string_as_string(bContext *C,
  * \param r_value: The resulting value.
  * \return Success.
  */
-bool BPY_run_string_as_string_and_len_or_none(bContext *C,
-                                              const char *imports[],
-                                              const char *expr,
-                                              BPy_RunErrInfo *err_info,
-                                              char **r_value,
-                                              size_t *r_value_len) ATTR_NONNULL(1, 3, 5, 6);
+[[nodiscard]] bool BPY_run_string_as_string_and_len_or_none(bContext *C,
+                                                            const char *imports[],
+                                                            const char *expr,
+                                                            BPy_RunErrInfo *err_info,
+                                                            char **r_value,
+                                                            size_t *r_value_len)
+    ATTR_NONNULL(1, 3, 5, 6);
 
 /** See #BPY_run_string_as_string_and_len */
-bool BPY_run_string_as_string_or_none(bContext *C,
-                                      const char *imports[],
-                                      const char *expr,
-                                      BPy_RunErrInfo *err_info,
-                                      char **r_value) ATTR_NONNULL(1, 3, 5);
+[[nodiscard]] bool BPY_run_string_as_string_or_none(bContext *C,
+                                                    const char *imports[],
+                                                    const char *expr,
+                                                    BPy_RunErrInfo *err_info,
+                                                    char **r_value) ATTR_NONNULL(1, 3, 5);
 
 /** \} */
+
+}  // namespace blender

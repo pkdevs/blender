@@ -12,15 +12,15 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 int GPU_max_texture_size();
 int GPU_max_texture_3d_size();
+uint32_t GPU_max_buffer_texture_size();
 int GPU_max_texture_layers();
 int GPU_max_textures();
-int GPU_max_textures_vert();
-int GPU_max_textures_geom();
-int GPU_max_textures_frag();
 int GPU_max_images();
 int GPU_max_work_group_count(int index);
 int GPU_max_work_group_size(int index);
@@ -32,7 +32,7 @@ int GPU_max_vertex_attribs();
 int GPU_max_varying_floats();
 int GPU_max_shader_storage_buffer_bindings();
 int GPU_max_compute_shader_storage_blocks();
-int GPU_max_samplers();
+size_t GPU_max_uniform_buffer_size();
 size_t GPU_max_storage_buffer_size();
 /* Used when binding subrange of SSBOs. In bytes.
  * The start of the range must be aligned with this value. */
@@ -43,24 +43,30 @@ const char *GPU_extension_get(int i);
 
 int GPU_texture_size_with_limit(int res);
 
+/**
+ * Returns whether it should be "safe" to use texture of a given size.
+ *
+ * The heuristic is that maybe allocating texture that is 25% of
+ * #GPU_max_texture_size squared is fine. Note that the actual texture creation
+ * can still fail even if deemed "safe" by this function, depending on current memory
+ * usage, texture format, etc.
+ */
+bool GPU_is_safe_texture_size(int width, int height);
+
 bool GPU_use_subprocess_compilation();
 int GPU_max_parallel_compilations();
 
 bool GPU_stencil_clasify_buffer_workaround();
-bool GPU_node_link_instancing_workaround();
-bool GPU_mip_render_workaround();
 bool GPU_depth_blitting_workaround();
 bool GPU_use_main_context_workaround();
 bool GPU_use_hq_normals_workaround();
-bool GPU_crappy_amd_driver();
-
-bool GPU_vulkan_render_pass_workaround();
 
 bool GPU_geometry_shader_support();
-bool GPU_shader_draw_parameters_support();
 bool GPU_hdr_support();
+bool GPU_multi_viewport_support();
 bool GPU_stencil_export_support();
-bool GPU_clip_control_support();
+bool GPU_ray_query_support();
+bool GPU_vertex_pipeline_stores_and_atomics_support();
 
 bool GPU_mem_stats_supported();
 void GPU_mem_stats_get(int *r_totalmem, int *r_freemem);
@@ -74,3 +80,5 @@ int GPU_minimum_per_vertex_stride();
 
 /** WARNING: Should only be called at startup from creator_args. Never call it at runtime. */
 void GPU_compilation_subprocess_override_set(int count);
+
+}  // namespace blender

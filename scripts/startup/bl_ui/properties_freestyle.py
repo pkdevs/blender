@@ -116,12 +116,8 @@ class ViewLayerFreestyleLinestyleStrokesSubPanel(ViewLayerFreestyleLineStyle):
 class VIEWLAYER_UL_linesets(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, index):
         lineset = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(lineset, "name", text="", emboss=False, icon_value=icon)
-            layout.prop(lineset, "show_render", text="", index=index)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon)
+        layout.prop(lineset, "name", text="", emboss=False, icon_value=icon)
+        layout.prop(lineset, "show_render", text="", index=index)
 
 
 class RENDER_MT_lineset_context_menu(Menu):
@@ -494,7 +490,7 @@ def draw_modifier_box_header(box, modifier):
 
 def draw_modifier_box_error(box, _modifier, message):
     row = box.row()
-    row.label(text=message, icon='ERROR')
+    row.label(text=message, icon='STATUS_ERROR')
 
 
 def draw_modifier_common(box, modifier):
@@ -1247,12 +1243,11 @@ class VIEWLAYER_PT_freestyle_linestyle_texture(ViewLayerFreestyleLineStyle, Pane
         layout.prop(linestyle, "texture_spacing", text="Spacing Along Stroke")
 
         row = layout.row()
-        props = row.operator(
-            "wm.properties_context_change",
-            text="Go to Linestyle Textures Properties",
-            icon='TEXTURE',
-        )
-        props.context = 'TEXTURE'
+        if linestyle.active_texture:
+            slot = linestyle.texture_slots[linestyle.active_texture_index]
+            layout.template_ID(slot, "texture", new="texture.new")
+        else:
+            layout.template_ID(linestyle, "active_texture", new="texture.new")
 
 
 class VIEWLAYER_PT_freestyle_animation(ViewLayerFreestyleButtonsPanel, PropertiesAnimationMixin, Panel):

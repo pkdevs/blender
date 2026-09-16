@@ -31,6 +31,9 @@ void PassAccessorGPU::run_film_convert_kernels(DeviceKernel kernel,
   init_kernel_film_convert(&kfilm_convert, buffer_params, destination);
 
   const int work_size = buffer_params.window_width * buffer_params.window_height;
+  if (!work_size) {
+    return;
+  }
 
   const int destination_stride = destination.stride != 0 ? destination.stride :
                                                            buffer_params.window_width;
@@ -90,11 +93,13 @@ void PassAccessorGPU::run_film_convert_kernels(DeviceKernel kernel,
 /* Float (scalar) passes. */
 DEFINE_PASS_ACCESSOR(depth, DEPTH);
 DEFINE_PASS_ACCESSOR(mist, MIST);
+DEFINE_PASS_ACCESSOR(volume_majorant, VOLUME_MAJORANT);
 DEFINE_PASS_ACCESSOR(sample_count, SAMPLE_COUNT);
 DEFINE_PASS_ACCESSOR(float, FLOAT);
 
 /* Float3 passes. */
 DEFINE_PASS_ACCESSOR(light_path, LIGHT_PATH);
+DEFINE_PASS_ACCESSOR(rgbe, RGBE);
 DEFINE_PASS_ACCESSOR(float3, FLOAT3);
 
 /* Float4 passes. */

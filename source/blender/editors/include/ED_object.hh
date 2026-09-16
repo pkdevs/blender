@@ -10,20 +10,24 @@
 
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#include "DNA_listBase.h"
 #include "DNA_object_enums.h"
 #include "DNA_userdef_enums.h"
-#include "DNA_windowmanager_types.h"
+
+namespace blender {
 
 struct Base;
 struct Depsgraph;
 struct EnumPropertyItem;
 struct ID;
+struct KeyBlock;
 struct GpencilModifierData;
 struct Main;
 struct ModifierData;
@@ -37,12 +41,18 @@ struct ViewLayer;
 struct bConstraint;
 struct bContext;
 struct bPoseChannel;
-struct uiLayout;
 struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
+enum eReportType : uint16_t;
 
-namespace blender::ed::object {
+namespace ui {
+struct Layout;
+}  // namespace ui
+
+enum eObject_Partype : short;
+
+namespace ed::object {
 
 struct XFormObjectData;
 
@@ -55,7 +65,7 @@ Object *context_object(const bContext *C);
  * \note context can be NULL when called from a enum with #PROP_ENUM_NO_CONTEXT.
  */
 Object *context_active_object(const bContext *C);
-void collection_hide_menu_draw(const bContext *C, uiLayout *layout);
+void collection_hide_menu_draw(const bContext *C, ui::Layout &layout);
 
 /**
  * Return an array of objects:
@@ -65,8 +75,9 @@ void collection_hide_menu_draw(const bContext *C, uiLayout *layout);
  *   the callers \a filter_fn needs to check of they are editable
  *   (assuming they need to be modified).
  */
-blender::Vector<Object *> objects_in_mode_or_selected(
-    bContext *C, bool (*filter_fn)(const Object *ob, void *user_data), void *filter_user_data);
+Vector<Object *> objects_in_mode_or_selected(bContext *C,
+                                             bool (*filter_fn)(const Object *ob, void *user_data),
+                                             void *filter_user_data);
 
 /**
  * Set the active material by index.
@@ -98,6 +109,16 @@ bool shape_key_report_if_active_locked(Object *ob, ReportList *reports);
  * \return true if a shape key was locked.
  */
 bool shape_key_report_if_any_locked(Object *ob, ReportList *reports);
+
+/**
+ * Return whether this shapekey is considered 'selected'.
+ *
+ * The active shapekey is always considered 'selected', even though it may not
+ * have its selection flag set.
+ */
+bool shape_key_is_selected(const Object &object, const KeyBlock &kb, int keyblock_index);
+
+void shape_key_mirror(Object *ob, KeyBlock *kb, bool use_topology, int &totmirr, int &totfail);
 
 /* `object_utils.cc` */
 
@@ -140,6 +161,7 @@ enum {
 struct XFormObjectSkipChild_Container;
 XFormObjectSkipChild_Container *xform_skip_child_container_create();
 void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Container *xcs,
+                                                       const Main &bmain,
                                                        const Scene *scene,
                                                        ViewLayer *view_layer,
                                                        Object **objects,
@@ -240,9 +262,14 @@ void base_free_and_unlink(Main *bmain, Scene *scene, Object *ob);
  * `ob` must not be indirectly used.
  */
 void base_free_and_unlink_no_indirect_check(Main *bmain, Scene *scene, Object *ob);
-bool base_deselect_all_ex(
-    const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action, bool *r_any_visible);
-bool base_deselect_all(const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
+bool base_deselect_all_ex(const Main &bmain,
+                          const Scene *scene,
+                          ViewLayer *view_layer,
+                          View3D *v3d,
+                          int action,
+                          bool *r_any_visible);
+bool base_deselect_all(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
 
 /**
  * Single object duplicate, if `dupflag == 0`, fully linked, else it uses the flags given.
@@ -254,8 +281,8 @@ bool base_deselect_all(const Scene *scene, ViewLayer *view_layer, View3D *v3d, i
 Base *add_duplicate(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base, eDupli_ID_Flags dupflag);
 
-void parent_set(Object *ob, Object *parent, int type, const char *substr);
-std::string drop_named_material_tooltip(bContext *C, const char *name, const int mval[2]);
+void parent_set(Object *ob, Object *parent, eObject_Partype type, const char *substr);
+std::string drop_named_material_tooltip(bContext *C, StringRef name, const int mval[2]);
 std::string drop_geometry_nodes_tooltip(bContext *C, PointerRNA *properties, const int mval[2]);
 
 /** Bit-flags for enter/exit edit-mode. */
@@ -304,7 +331,7 @@ float new_primitive_matrix(bContext *C,
  */
 #define OBJECT_ADD_SIZE_MAXF 1.0e12f
 
-void add_unit_props_size(wmOperatorType *ot);
+void add_unit_props_size(wmOperatorType *ot, float default_value = 2.0f);
 void add_unit_props_radius_ex(wmOperatorType *ot, float default_value);
 void add_unit_props_radius(wmOperatorType *ot);
 void add_generic_props(wmOperatorType *ot, bool do_editmode);
@@ -355,44 +382,30 @@ void single_obdata_user_make(Main *bmain, Scene *scene, Object *ob);
  */
 void motion_paths_clear(bContext *C, bool only_selected);
 
-/* Corresponds to eAnimvizCalcRange. */
-enum eObjectPathCalcRange {
-  OBJECT_PATH_CALC_RANGE_CURRENT_FRAME,
-  OBJECT_PATH_CALC_RANGE_CHANGED,
-  OBJECT_PATH_CALC_RANGE_FULL,
-};
-
 /**
- * For the objects with animation: update paths for those that have got them
- * This should selectively update paths that exist.
- *
- * To be called from various tools that do incremental updates
+ * Recalculate the motion paths on the given objects. This includes bones when recalculating
+ * armature objects.
  */
-void motion_paths_recalc(bContext *C,
-                         Scene *scene,
-                         eObjectPathCalcRange range,
-                         ListBase *ld_objects);
-
-void motion_paths_recalc_selected(bContext *C, Scene *scene, eObjectPathCalcRange range);
-
-void motion_paths_recalc_visible(bContext *C, Scene *scene, eObjectPathCalcRange range);
+void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects);
 
 /* constraints */
 /**
  * If object is in pose-mode, return active bone constraints, else object constraints.
  * No constraints are returned for a bone on an inactive bone-layer.
  */
-ListBase *constraint_active_list(Object *ob);
+ListBaseT<bConstraint> *constraint_active_list(Object *ob);
 /**
  * Get the constraints for the active pose bone. Bone may be on an inactive bone-layer
  * (unlike #constraint_active_list, such constraints are not excluded here).
  */
-ListBase *pose_constraint_list(const bContext *C);
+ListBaseT<bConstraint> *pose_constraint_list(const bContext *C);
 /**
  * Find the list that a given constraint belongs to,
  * and/or also get the pose-channel this is from (if applicable).
  */
-ListBase *constraint_list_from_constraint(Object *ob, bConstraint *con, bPoseChannel **r_pchan);
+ListBaseT<bConstraint> *constraint_list_from_constraint(Object *ob,
+                                                        bConstraint *con,
+                                                        bPoseChannel **r_pchan);
 /**
  * Single constraint.
  */
@@ -408,7 +421,10 @@ void constraint_tag_update(Main *bmain, Object *ob, bConstraint *con);
 void constraint_dependency_tag_update(Main *bmain, Object *ob, bConstraint *con);
 
 bool constraint_move_to_index(Object *ob, bConstraint *con, int index);
-void constraint_link(Main *bmain, Object *ob_dst, ListBase *dst, ListBase *src);
+void constraint_link(Main *bmain,
+                     Object *ob_dst,
+                     ListBaseT<bConstraint> *dst,
+                     ListBaseT<bConstraint> *src);
 void constraint_copy_for_object(Main *bmain, Object *ob_dst, bConstraint *con);
 void constraint_copy_for_pose(Main *bmain, Object *ob_dst, bPoseChannel *pchan, bConstraint *con);
 
@@ -420,9 +436,13 @@ void constraint_copy_for_pose(Main *bmain, Object *ob_dst, bPoseChannel *pchan, 
  */
 bool mode_compat_test(const Object *ob, eObjectMode mode);
 /**
- * Sets the mode to a compatible state (use before entering the mode).
+ * Set the provided object's mode to one that is compatible with the provided mode.
  *
- * This is so each mode's exec function can call
+ * \returns true if the provided object's mode matches the provided mode, or if the function was
+ * able to set the object back into Object Mode.
+ *
+ * This is so each mode toggle operator exec function can call this function to ensure the current
+ * mode runtime data is cleaned up prior to entering a new mode.
  */
 bool mode_compat_set(bContext *C, Object *ob, eObjectMode mode, ReportList *reports);
 bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *reports);
@@ -445,7 +465,8 @@ void posemode_set_for_weight_paint(bContext *C, Main *bmain, Object *ob, bool is
  *
  * \note The active object is always index 0.
  */
-int object_in_mode_to_index(const Scene *scene,
+int object_in_mode_to_index(const Main &bmain,
+                            const Scene *scene,
                             ViewLayer *view_layer,
                             eObjectMode mode,
                             const Object *ob);
@@ -453,10 +474,8 @@ int object_in_mode_to_index(const Scene *scene,
 /**
  * Access the object from the index returned by #object_in_mode_to_index.
  */
-Object *object_in_mode_from_index(const Scene *scene,
-                                  ViewLayer *view_layer,
-                                  eObjectMode mode,
-                                  int index);
+Object *object_in_mode_from_index(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, eObjectMode mode, int index);
 
 /**
  * Retrieve the alpha factors of the currently active mode transfer overlay animations. The key is
@@ -509,12 +528,12 @@ bool modifier_apply(Main *bmain,
                     bool do_all_keyframes);
 bool modifier_copy(ReportList *reports, Main *bmain, Scene *scene, Object *ob, ModifierData *md);
 void modifier_link(bContext *C, Object *ob_dst, Object *ob_src);
-bool modifier_copy_to_object(Main *bmain,
-                             const Scene *scene,
-                             const Object *ob_src,
-                             const ModifierData *md,
-                             Object *ob_dst,
-                             ReportList *reports);
+ModifierData *modifier_copy_to_object(Main *bmain,
+                                      const Scene *scene,
+                                      const Object *ob_src,
+                                      const ModifierData *md,
+                                      Object *ob_dst,
+                                      ReportList *reports);
 /**
  * If the object data of 'orig_ob' has other users, run 'callback' on
  * each of them.
@@ -558,7 +577,7 @@ void check_force_modifiers(Main *bmain, Scene *scene, Object *object);
  * If id is not already an Object, try to find an object that uses it as data.
  * Prefers active, then selected, then visible/selectable.
  */
-Base *find_first_by_data_id(const Scene *scene, ViewLayer *view_layer, ID *id);
+Base *find_first_by_data_id(const Main &bmain, const Scene *scene, ViewLayer *view_layer, ID *id);
 
 /**
  * Select and make the target object active in the view layer.
@@ -592,6 +611,10 @@ void data_xform_by_mat4(XFormObjectData &xod, const float4x4 &transform);
 void data_xform_restore(XFormObjectData &xod);
 void data_xform_tag_update(XFormObjectData &xod);
 
-void ui_template_modifier_asset_menu_items(uiLayout &layout, StringRef catalog_path);
+void ui_template_modifier_asset_menu_items(const bContext &C,
+                                           ui::Layout &layout,
+                                           StringRef catalog_path,
+                                           bool skip_essentials);
 
-}  // namespace blender::ed::object
+}  // namespace ed::object
+}  // namespace blender

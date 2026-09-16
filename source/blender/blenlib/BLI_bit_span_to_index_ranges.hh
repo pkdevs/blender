@@ -12,7 +12,7 @@
 
 #include "BLI_bit_span.hh"
 #include "BLI_index_ranges_builder.hh"
-#include "BLI_math_bits.h"
+#include "BLI_math_bits.hh"
 #include "BLI_simd.hh"
 
 namespace blender::bits {
@@ -58,7 +58,7 @@ inline void bits_to_index_ranges(const BitSpan bits, IndexRangesBuilder<IntT> &b
     const int64_t bit_i_to_output_offset = start - start_bit;
 
     /* Iterate over ranges of 1s. For example, if the bits are 0b000111110001111000, the loop
-     * below requires two iterations. The worst case for this is when the there are very many small
+     * below requires two iterations. The worst case for this is when there are very many small
      * ranges of 1s (e.g. 0b10101010101). So far it seems like the overhead of detecting such
      * cases is higher than the potential benefit of using another algorithm. */
     BitInt current_value = masked_value;
@@ -106,7 +106,7 @@ inline void bits_to_index_ranges(const BitSpan bits, IndexRangesBuilder<IntT> &b
     int64_t int_i = 0;
 
 /* Checking for chunks of 0 bits can be speedup using intrinsics quite significantly. */
-#if BLI_HAVE_SSE2
+#if BLI_HAVE_SSE4
     for (; int_i + 1 < ints_to_check; int_i += 2) {
       /* Loads the next 128 bit. */
       const __m128i group = _mm_loadu_si128(reinterpret_cast<const __m128i *>(start + int_i));

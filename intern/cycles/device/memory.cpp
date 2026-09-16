@@ -7,36 +7,83 @@
 
 CCL_NAMESPACE_BEGIN
 
+static const char *name_from_type(ImageDataType type)
+{
+  switch (type) {
+    case IMAGE_DATA_TYPE_FLOAT4:
+      return "float4";
+    case IMAGE_DATA_TYPE_BYTE4:
+      return "byte4";
+    case IMAGE_DATA_TYPE_HALF4:
+      return "half4";
+    case IMAGE_DATA_TYPE_FLOAT:
+      return "float";
+    case IMAGE_DATA_TYPE_BYTE:
+      return "byte";
+    case IMAGE_DATA_TYPE_HALF:
+      return "half";
+    case IMAGE_DATA_TYPE_USHORT4:
+      return "ushort4";
+    case IMAGE_DATA_TYPE_USHORT:
+      return "ushort";
+    case IMAGE_DATA_TYPE_NANOVDB_FLOAT:
+      return "nanovdb_float";
+    case IMAGE_DATA_TYPE_NANOVDB_FLOAT3:
+      return "nanovdb_float3";
+    case IMAGE_DATA_TYPE_NANOVDB_FLOAT4:
+      return "nanovdb_float4";
+    case IMAGE_DATA_TYPE_NANOVDB_FPN:
+      return "nanovdb_fpn";
+    case IMAGE_DATA_TYPE_NANOVDB_FP16:
+      return "nanovdb_fp16";
+    case IMAGE_DATA_TYPE_NANOVDB_EMPTY:
+      return "nanovdb_empty";
+    case IMAGE_DATA_NUM_TYPES:
+      assert(!"System enumerator type, should never be used");
+      return "";
+  }
+  assert(!"Unhandled image data type");
+  return "";
+}
+
 /* Device Memory */
 
-device_memory::device_memory(Device *device, const char *_name, MemoryType type)
+device_memory::device_memory(Device *device, const char *name, MemoryType type)
     : data_type(device_type_traits<uchar>::data_type),
       data_elements(device_type_traits<uchar>::num_elements),
       data_size(0),
       device_size(0),
       data_width(0),
       data_height(0),
-      data_depth(0),
       type(type),
-      name_storage(_name),
       device(device),
       device_pointer(0),
       host_pointer(nullptr),
       shared_pointer(nullptr),
       shared_counter(0),
+      name_(name),
       original_device_ptr(0),
       original_device_size(0),
       original_device(nullptr),
       need_realloc_(false),
       modified(false)
 {
-  name = name_storage.c_str();
 }
 
 device_memory::~device_memory()
 {
   assert(shared_pointer == nullptr);
   assert(shared_counter == 0);
+}
+
+const char *device_memory::global_name() const
+{
+  return name_;
+}
+
+string device_memory::log_name() const
+{
+  return (name_) ? name_ : "unknown";
 }
 
 void *device_memory::host_alloc(const size_t size)
@@ -70,12 +117,20 @@ void device_memory::host_and_device_free()
   data_size = 0;
   data_width = 0;
   data_height = 0;
-  data_depth = 0;
+}
+
+void device_memory::host_only_free()
+{
+  /* Free only the host buffer, leaving device allocation intact. */
+  if (host_pointer && host_pointer != shared_pointer) {
+    device->host_free(type, host_pointer, memory_size());
+    host_pointer = nullptr;
+  }
 }
 
 void device_memory::device_alloc()
 {
-  assert(!device_pointer && type != MEM_TEXTURE && type != MEM_GLOBAL);
+  assert(!device_pointer && type != MEM_IMAGE_TEXTURE && type != MEM_GLOBAL);
   device->mem_alloc(*this);
 }
 
@@ -95,7 +150,7 @@ void device_memory::device_move_to_host()
 
 void device_memory::device_copy_from(const size_t y, const size_t w, size_t h, const size_t elem)
 {
-  assert(type != MEM_TEXTURE && type != MEM_READ_ONLY && type != MEM_GLOBAL);
+  assert(type != MEM_IMAGE_TEXTURE && type != MEM_READ_ONLY);
   device->mem_copy_from(*this, y, w, h, elem);
 }
 
@@ -156,13 +211,13 @@ device_sub_ptr::~device_sub_ptr()
 
 /* Device Texture */
 
-device_texture::device_texture(Device *device,
-                               const char *name,
-                               const uint slot,
-                               ImageDataType image_data_type,
-                               InterpolationType interpolation,
-                               ExtensionType extension)
-    : device_memory(device, name, MEM_TEXTURE), slot(slot)
+device_image::device_image(Device *device,
+                           const char *name,
+                           const uint image_info_id,
+                           ImageDataType image_data_type,
+                           InterpolationType interpolation,
+                           ExtensionType extension)
+    : device_memory(device, name, MEM_IMAGE_TEXTURE), image_info_id(image_info_id)
 {
   switch (image_data_type) {
     case IMAGE_DATA_TYPE_FLOAT4:
@@ -180,8 +235,10 @@ device_texture::device_texture(Device *device,
     case IMAGE_DATA_TYPE_BYTE:
     case IMAGE_DATA_TYPE_NANOVDB_FLOAT:
     case IMAGE_DATA_TYPE_NANOVDB_FLOAT3:
+    case IMAGE_DATA_TYPE_NANOVDB_FLOAT4:
     case IMAGE_DATA_TYPE_NANOVDB_FPN:
     case IMAGE_DATA_TYPE_NANOVDB_FP16:
+    case IMAGE_DATA_TYPE_NANOVDB_EMPTY:
       data_type = TYPE_UCHAR;
       data_elements = 1;
       break;
@@ -211,15 +268,25 @@ device_texture::device_texture(Device *device,
   info.extension = extension;
 }
 
-device_texture::~device_texture()
+device_image::~device_image()
 {
   host_and_device_free();
 }
 
-/* Host memory allocation. */
-void *device_texture::alloc(const size_t width, const size_t height, const size_t depth)
+string device_image::log_name() const
 {
-  const size_t new_size = size(width, height, depth);
+  const char *name = (name_) ? name_ : "unknown";
+  if (type == MEM_IMAGE_TEXTURE) {
+    return string_printf(
+        "%s_%s_%03u", name, name_from_type(ImageDataType(info.data_type)), image_info_id);
+  }
+  return name;
+}
+
+/* Host memory allocation. */
+void *device_image::alloc(const size_t width, const size_t height)
+{
+  const size_t new_size = size(width, height);
 
   if (new_size != data_size) {
     host_and_device_free();
@@ -230,16 +297,16 @@ void *device_texture::alloc(const size_t width, const size_t height, const size_
   data_size = new_size;
   data_width = width;
   data_height = height;
-  data_depth = depth;
 
   info.width = width;
   info.height = height;
-  info.depth = depth;
+  info.inv_width = (width > 0) ? 1.0f / (float)width : 0.0f;
+  info.inv_height = (height > 0) ? 1.0f / (float)height : 0.0f;
 
   return host_pointer;
 }
 
-void device_texture::copy_to_device()
+void device_image::copy_to_device()
 {
   device_copy_to();
 }

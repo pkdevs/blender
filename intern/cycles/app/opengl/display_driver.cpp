@@ -7,7 +7,6 @@
 
 #include "util/log.h"
 
-#include <SDL.h>
 #include <epoxy/gl.h>
 
 CCL_NAMESPACE_BEGIN
@@ -126,7 +125,7 @@ half4 *OpenGLDisplayDriver::map_texture_buffer()
   half4 *mapped_rgba_pixels = reinterpret_cast<half4 *>(
       glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY));
   if (!mapped_rgba_pixels) {
-    LOG(ERROR) << "Error mapping OpenGLDisplayDriver pixel buffer object.";
+    LOG_ERROR << "Error mapping OpenGLDisplayDriver pixel buffer object.";
   }
 
   if (texture_.need_zero) {
@@ -188,7 +187,7 @@ void OpenGLDisplayDriver::graphics_interop_deactivate()
  * Drawing.
  */
 
-void OpenGLDisplayDriver::clear()
+void OpenGLDisplayDriver::zero()
 {
   texture_.need_zero = true;
 }
@@ -282,7 +281,7 @@ bool OpenGLDisplayDriver::gl_draw_resources_ensure()
   if (!vertex_buffer_) {
     glGenBuffers(1, &vertex_buffer_);
     if (!vertex_buffer_) {
-      LOG(ERROR) << "Error creating vertex buffer.";
+      LOG_ERROR << "Error creating vertex buffer.";
       return false;
     }
   }
@@ -326,7 +325,7 @@ bool OpenGLDisplayDriver::gl_texture_resources_ensure()
   /* Create texture. */
   glGenTextures(1, &texture_.gl_id);
   if (!texture_.gl_id) {
-    LOG(ERROR) << "Error creating texture.";
+    LOG_ERROR << "Error creating texture.";
     return false;
   }
 
@@ -340,7 +339,7 @@ bool OpenGLDisplayDriver::gl_texture_resources_ensure()
   /* Create PBO for the texture. */
   glGenBuffers(1, &texture_.gl_pbo_id);
   if (!texture_.gl_pbo_id) {
-    LOG(ERROR) << "Error creating texture pixel buffer object.";
+    LOG_ERROR << "Error creating texture pixel buffer object.";
     return false;
   }
 

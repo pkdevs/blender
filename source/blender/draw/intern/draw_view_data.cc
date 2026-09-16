@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_viewport.hh"
@@ -23,7 +23,7 @@
 #include "draw_manager.hh"
 #include "draw_view_data.hh"
 
-using namespace blender;
+namespace blender {
 
 DRWViewData::DRWViewData()
 {
@@ -94,15 +94,13 @@ void DRWViewData::clear(bool free_instance_data)
   if (free_instance_data) {
     foreach_engine([&](DrawEngine::Pointer &ptr) {
       if (ptr.instance) {
-        /* TODO Move where it belongs. */
-        DRW_text_cache_destroy(ptr.instance->text_draw_cache);
         ptr.free_instance();
       }
     });
   }
 }
 
-void DRWViewData::texture_list_size_validate(const blender::int2 &size)
+void DRWViewData::texture_list_size_validate(const int2 &size)
 {
   if (this->texture_list_size != size) {
     this->clear(false);
@@ -126,8 +124,6 @@ void DRW_view_data_free_unused(DRWViewData *view_data)
 {
   view_data->foreach_engine([&](DrawEngine::Pointer &ptr) {
     if (ptr.instance && ptr.instance->used == false) {
-      /* TODO Move where it belongs. */
-      DRW_text_cache_destroy(ptr.instance->text_draw_cache);
       ptr.free_instance();
     }
   });
@@ -138,3 +134,5 @@ draw::Manager *DRW_manager_get()
   BLI_assert(drw_get().view_data_active->manager);
   return drw_get().view_data_active->manager;
 }
+
+}  // namespace blender

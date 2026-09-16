@@ -10,10 +10,9 @@
 
 #include <cmath>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_hash.hh"
-#include "BLI_math_base.h"
-#include "BLI_struct_equality_utils.hh"
+#include "BLI_math_base_c.hh"
 
 namespace blender {
 
@@ -69,7 +68,7 @@ struct SubFrame {
     return get_default_hash(frame_, subframe_);
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_2(SubFrame, frame_, subframe_)
+  friend bool operator==(const SubFrame &a, const SubFrame &b) = default;
 
   friend bool operator<(const SubFrame &a, const SubFrame &b)
   {
@@ -78,7 +77,7 @@ struct SubFrame {
 
   friend bool operator<=(const SubFrame &a, const SubFrame &b)
   {
-    return a.frame_ <= b.frame_ || (a.frame_ == b.frame_ && a.subframe_ <= b.subframe_);
+    return a.frame_ < b.frame_ || (a.frame_ == b.frame_ && a.subframe_ <= b.subframe_);
   }
 
   friend bool operator>(const SubFrame &a, const SubFrame &b)
@@ -88,7 +87,7 @@ struct SubFrame {
 
   friend bool operator>=(const SubFrame &a, const SubFrame &b)
   {
-    return a.frame_ >= b.frame_ || (a.frame_ == b.frame_ && a.subframe_ >= b.subframe_);
+    return a.frame_ > b.frame_ || (a.frame_ == b.frame_ && a.subframe_ >= b.subframe_);
   }
 };
 

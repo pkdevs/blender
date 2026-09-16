@@ -8,9 +8,13 @@
 
 #include <Python.h>
 
-#include "BLI_utildefines.h"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
+
+#include "BLI_utildefines.hh"
 
 #include "bpy_app_build_options.hh"
+
+namespace blender {
 
 static PyTypeObject BlenderAppBuildOptionsType;
 
@@ -46,6 +50,7 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
     {"mod_remesh", nullptr},
     {"io_wavefront_obj", nullptr},
     {"io_ply", nullptr},
+    {"io_spz", nullptr},
     {"io_stl", nullptr},
     {"io_fbx", nullptr},
     {"io_gpencil", nullptr},
@@ -138,11 +143,8 @@ static PyObject *make_builtopts_info()
   /* HDR */
   SetObjIncref(Py_True);
 
-#ifdef WITH_IMAGE_OPENEXR
+  /* OpenEXR */
   SetObjIncref(Py_True);
-#else
-  SetObjIncref(Py_False);
-#endif
 
 #ifdef WITH_IMAGE_OPENJPEG
   SetObjIncref(Py_True);
@@ -249,6 +251,12 @@ static PyObject *make_builtopts_info()
   SetObjIncref(Py_False);
 #endif
 
+#ifdef WITH_IO_SPZ
+  SetObjIncref(Py_True);
+#else
+  SetObjIncref(Py_False);
+#endif
+
 #ifdef WITH_IO_STL
   SetObjIncref(Py_True);
 #else
@@ -267,11 +275,8 @@ static PyObject *make_builtopts_info()
   SetObjIncref(Py_False);
 #endif
 
-#ifdef WITH_OPENCOLORIO
+  /* OpenColorIO */
   SetObjIncref(Py_True);
-#else
-  SetObjIncref(Py_False);
-#endif
 
 #ifdef _OPENMP
   SetObjIncref(Py_True);
@@ -350,7 +355,9 @@ PyObject *BPY_app_build_options_struct()
   BlenderAppBuildOptionsType.tp_init = nullptr;
   BlenderAppBuildOptionsType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppBuildOptionsType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppBuildOptionsType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   return ret;
 }
+
+}  // namespace blender

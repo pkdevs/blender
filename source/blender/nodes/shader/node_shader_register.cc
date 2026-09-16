@@ -2,9 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_register.hh"
 
 #include "node_shader_register.hh"
+
+namespace blender {
 
 void register_shader_nodes()
 {
@@ -36,8 +42,6 @@ void register_shader_nodes()
   register_node_type_sh_camera();
   register_node_type_sh_clamp();
   register_node_type_sh_combcolor();
-  register_node_type_sh_combhsv();
-  register_node_type_sh_combrgb();
   register_node_type_sh_combxyz();
   register_node_type_sh_curve_float();
   register_node_type_sh_curve_rgb();
@@ -53,7 +57,12 @@ void register_shader_nodes()
   register_node_type_sh_hue_sat();
   register_node_type_sh_invert();
   register_node_type_sh_layer_weight();
+  register_node_type_sh_light_accumulation();
+  register_node_type_sh_light_evaluation();
   register_node_type_sh_light_falloff();
+  register_node_type_sh_light_info();
+  register_node_type_sh_light_iter_internal_input();
+  register_node_type_sh_light_iter_internal_output();
   register_node_type_sh_light_path();
   register_node_type_sh_map_range();
   register_node_type_sh_mapping();
@@ -71,14 +80,15 @@ void register_shader_nodes()
   register_node_type_sh_output_world();
   register_node_type_sh_particle_info();
   register_node_type_sh_point_info();
+  register_node_type_sh_radial_tiling();
+  register_node_type_sh_raycast();
   register_node_type_sh_rgb();
   register_node_type_sh_rgbtobw();
   register_node_type_sh_script();
   register_node_type_sh_sepcolor();
-  register_node_type_sh_sephsv();
-  register_node_type_sh_seprgb();
   register_node_type_sh_sepxyz();
   register_node_type_sh_shadertorgb();
+  register_node_type_sh_shadow_raycast();
   register_node_type_sh_squeeze();
   register_node_type_sh_subsurface_scattering();
   register_node_type_sh_tangent();
@@ -113,3 +123,5 @@ void register_shader_nodes()
   register_node_type_sh_wavelength();
   register_node_type_sh_wireframe();
 }
+
+}  // namespace blender

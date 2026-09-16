@@ -17,10 +17,10 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_assert.h"
-#include "BLI_mempool.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
+#include "BLI_assert.hh"
+#include "BLI_mempool.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #ifdef WITH_TBB
@@ -28,6 +28,10 @@
 #  include <tbb/task_arena.h>
 #  include <tbb/task_group.h>
 #endif
+
+namespace blender {
+
+struct ThreadSlot;
 
 /**
  * Task
@@ -58,7 +62,7 @@ class Task {
         freedata(pool, taskdata);
       }
       else {
-        MEM_freeN(taskdata);
+        MEM_delete_void(taskdata);
       }
     }
   }
@@ -165,15 +169,16 @@ struct TaskPool {
   std::unique_ptr<TBBTaskGroup> tbb_group;
 #endif
   volatile bool is_suspended = false;
-  blender::Vector<Task> suspended_tasks;
+  Vector<Task> suspended_tasks;
 
   /* Background task pool. */
-  ListBase background_threads;
+  ListBaseT<ThreadSlot> background_threads;
   ThreadQueue *background_queue;
-  volatile bool background_is_canceling = false;
+
+  eTaskPriority priority;
 
   TaskPool(const TaskPoolType type, const eTaskPriority priority, void *userdata)
-      : type(type), userdata(userdata)
+      : type(type), userdata(userdata), priority(priority)
   {
     this->use_threads = BLI_task_scheduler_num_threads() > 1 && type != TASK_POOL_NO_THREADS;
 
@@ -196,8 +201,6 @@ struct TaskPool {
         if (use_threads) {
           this->tbb_group = std::make_unique<TBBTaskGroup>(priority);
         }
-#else
-        UNUSED_VARS(priority);
 #endif
         break;
       }
@@ -284,39 +287,6 @@ struct TaskPool {
     }
   }
 
-  /**
-   * Cancel all tasks, keep worker threads running.
-   */
-  void cancel()
-  {
-    switch (this->type) {
-      case TASK_POOL_TBB:
-      case TASK_POOL_TBB_SUSPENDED:
-      case TASK_POOL_NO_THREADS:
-        this->tbb_task_pool_cancel();
-        break;
-      case TASK_POOL_BACKGROUND:
-      case TASK_POOL_BACKGROUND_SERIAL:
-        this->background_task_pool_cancel();
-        break;
-    }
-  }
-
-  bool current_canceled()
-  {
-    switch (this->type) {
-      case TASK_POOL_TBB:
-      case TASK_POOL_TBB_SUSPENDED:
-      case TASK_POOL_NO_THREADS:
-        return this->tbb_task_pool_canceled();
-      case TASK_POOL_BACKGROUND:
-      case TASK_POOL_BACKGROUND_SERIAL:
-        return this->background_task_pool_canceled();
-    }
-    BLI_assert_msg(0, "TaskPool::current_canceled: Control flow should not come here!");
-    return false;
-  }
-
  private:
   /* TBB Task Pool.
    *
@@ -327,16 +297,12 @@ struct TaskPool {
    * initialize data structures and create tasks in a single pass. */
   void tbb_task_pool_run(Task &&task);
   void tbb_task_pool_work_and_wait();
-  void tbb_task_pool_cancel();
-  bool tbb_task_pool_canceled();
 
   /* Background Task Pool.
    *
    * Fallback for running background tasks when building without TBB. */
   void background_task_pool_run(Task &&task);
   void background_task_pool_work_and_wait();
-  void background_task_pool_cancel();
-  bool background_task_pool_canceled();
   static void *background_task_run(void *userdata);
 };
 
@@ -396,34 +362,16 @@ void TaskPool::tbb_task_pool_work_and_wait()
 #endif
 }
 
-void TaskPool::tbb_task_pool_cancel()
-{
-  BLI_assert(ELEM(this->type, TASK_POOL_TBB, TASK_POOL_TBB_SUSPENDED, TASK_POOL_NO_THREADS));
-#ifdef WITH_TBB
-  if (this->use_threads) {
-    this->tbb_group->cancel();
-    this->tbb_group->wait();
-  }
-#endif
-}
-
-bool TaskPool::tbb_task_pool_canceled()
-{
-  BLI_assert(ELEM(this->type, TASK_POOL_TBB, TASK_POOL_TBB_SUSPENDED, TASK_POOL_NO_THREADS));
-#ifdef WITH_TBB
-  if (this->use_threads) {
-    return tbb::is_current_task_group_canceling();
-  }
-#endif
-  return false;
-}
-
 void TaskPool::background_task_pool_run(Task &&task)
 {
   BLI_assert(ELEM(this->type, TASK_POOL_BACKGROUND, TASK_POOL_BACKGROUND_SERIAL));
 
   Task *task_mem = MEM_new<Task>(__func__, std::move(task));
-  BLI_thread_queue_push(this->background_queue, task_mem);
+  BLI_thread_queue_push(this->background_queue,
+                        task_mem,
+                        this->priority == TASK_PRIORITY_HIGH ?
+                            BLI_THREAD_QUEUE_WORK_PRIORITY_HIGH :
+                            BLI_THREAD_QUEUE_WORK_PRIORITY_NORMAL);
 
   if (BLI_available_threads(&this->background_threads)) {
     BLI_threadpool_insert(&this->background_threads, this);
@@ -439,30 +387,6 @@ void TaskPool::background_task_pool_work_and_wait()
   BLI_thread_queue_nowait(this->background_queue);
   BLI_thread_queue_wait_finish(this->background_queue);
   BLI_threadpool_clear(&this->background_threads);
-}
-
-void TaskPool::background_task_pool_cancel()
-{
-  BLI_assert(ELEM(this->type, TASK_POOL_BACKGROUND, TASK_POOL_BACKGROUND_SERIAL));
-
-  this->background_is_canceling = true;
-
-  /* Remove tasks not yet started by background thread. */
-  BLI_thread_queue_nowait(this->background_queue);
-  while (Task *task = static_cast<Task *>(BLI_thread_queue_pop(this->background_queue))) {
-    MEM_delete(task);
-  }
-
-  /* Let background thread finish or cancel task it is working on. */
-  BLI_threadpool_remove(&this->background_threads, this);
-  this->background_is_canceling = false;
-}
-
-bool TaskPool::background_task_pool_canceled()
-{
-  BLI_assert(ELEM(this->type, TASK_POOL_BACKGROUND, TASK_POOL_BACKGROUND_SERIAL));
-
-  return this->background_is_canceling;
 }
 
 void *TaskPool::background_task_run(void *userdata)
@@ -533,17 +457,9 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
   pool->work_and_wait();
 }
 
-void BLI_task_pool_cancel(TaskPool *pool)
-{
-  pool->cancel();
-}
-
-bool BLI_task_pool_current_canceled(TaskPool *pool)
-{
-  return pool->current_canceled();
-}
-
 void *BLI_task_pool_user_data(TaskPool *pool)
 {
   return pool->userdata;
 }
+
+}  // namespace blender

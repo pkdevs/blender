@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_common_color_utils.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
 
 /* Curve maps are stored in texture samplers, so ensure that the parameters evaluate the sampler at
  * the center of the pixels, because samplers are evaluated using linear interpolation. Given the
@@ -15,13 +15,14 @@ float3 compute_hue_curve_map_coordinates(float3 parameters)
   return parameters * sampler_scale + sampler_offset;
 }
 
-void node_composite_hue_correct(float factor,
-                                float4 color,
+[[node]]
+void node_composite_hue_correct(float4 color,
+                                float factor,
                                 sampler1DArray curve_map,
                                 const float layer,
                                 float3 minimums,
                                 float3 range_dividers,
-                                out float4 result)
+                                float4 &result)
 {
   float4 hsv;
   rgb_to_hsv(color, hsv);

@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
-#include "gpu_glsl_cpp_stubs.hh"
+#include "gpu_shader_compat.hh"
 
 float linearrgb_to_srgb(float c)
 {

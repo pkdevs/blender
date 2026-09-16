@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <memory>
 
-#include "BLI_array.hh"
 #include "BLI_map.hh"
+#include "BLI_math_filter.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "COM_cached_resource.hh"
@@ -23,10 +23,10 @@ class Context;
  */
 class SymmetricBlurWeightsKey {
  public:
-  int type;
+  math::FilterKernel type;
   float2 radius;
 
-  SymmetricBlurWeightsKey(int type, float2 radius);
+  SymmetricBlurWeightsKey(math::FilterKernel type, float2 radius);
 
   uint64_t hash() const;
 };
@@ -41,13 +41,10 @@ bool operator==(const SymmetricBlurWeightsKey &a, const SymmetricBlurWeightsKey 
  * evaluated on the normalized distance to the center. Consequently, only the upper right quadrant
  * are computed and the user takes that into consideration. */
 class SymmetricBlurWeights : public CachedResource {
- private:
-  Array<float> weights_;
-
  public:
-  Result result;
+  Result weights;
 
-  SymmetricBlurWeights(Context &context, int type, float2 radius);
+  SymmetricBlurWeights(Context &context, math::FilterKernel type, float2 radius);
 
   ~SymmetricBlurWeights();
 };
@@ -66,7 +63,7 @@ class SymmetricBlurWeightsContainer : public CachedResourceContainer {
    * in the container, if one exists, return it, otherwise, return a newly created one and add it
    * to the container. In both cases, tag the cached resource as needed to keep it cached for the
    * next evaluation. */
-  Result &get(Context &context, int type, float2 radius);
+  Result &get(Context &context, math::FilterKernel type, float2 radius);
 };
 
 }  // namespace blender::compositor

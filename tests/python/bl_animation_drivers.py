@@ -236,6 +236,11 @@ class SubDataDriverRemovalTest(AbstractEmptyDriverTest, unittest.TestCase):
         self.assertEqual(len(pose_bone.constraints), 1)
         arm_ob.driver_add('pose.bones["test"].constraints["test"].distance')
         self.assertEqual(len(arm_ob.animation_data.drivers), 1)
+
+        # To do a proper test, the depsgraph needs to be evaluated between adding
+        # the data and removing it. This causes depsgraph nodes to be built, which
+        # have to be removed as well. See #141243
+        bpy.context.evaluated_depsgraph_get()
         pose_bone.constraints.remove(constraint)
         self.assertEqual(len(pose_bone.constraints), 0)
         self.assertEqual(len(arm_ob.animation_data.drivers), 0,
@@ -244,6 +249,7 @@ class SubDataDriverRemovalTest(AbstractEmptyDriverTest, unittest.TestCase):
     def test_remove_shapekey(self):
         self.obj.shape_key_add(name="base")
         test_key = self.obj.shape_key_add(name="test")
+        test_key.value = 0.0
         # Due to the weirdness of shapekeys, this is an ID.
         shape_key_id = self.obj.data.shape_keys
         self.assertEqual(len(shape_key_id.key_blocks), 2)
@@ -254,6 +260,47 @@ class SubDataDriverRemovalTest(AbstractEmptyDriverTest, unittest.TestCase):
         self.assertEqual(len(shape_key_id.key_blocks), 1)
         self.assertEqual(len(shape_key_id.animation_data.drivers), 0,
                          "Removing the shape key should remove any driver on it")
+
+    def test_remove_bone(self):
+        arm = bpy.data.armatures.new('Armature')
+        arm_ob = bpy.data.objects.new('ArmObject', arm)
+        bpy.context.scene.collection.objects.link(arm_ob)
+        bpy.context.view_layer.objects.active = arm_ob
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        ebone = arm.edit_bones.new(name="test")
+        ebone.tail = (1, 0, 0)
+        ebone = arm.edit_bones.new(name="keep_driver")
+        ebone.head = (0, 1, 0)
+        ebone.tail = (1, 1, 0)
+
+        bpy.ops.object.mode_set(mode='POSE')
+        pose_bone = arm_ob.pose.bones["test"]
+        pose_bone.driver_add("location", 0)
+        constraint = pose_bone.constraints.new('LIMIT_DISTANCE')
+        constraint.name = "test"
+        constraint.driver_add("distance")
+
+        pose_bone = arm_ob.pose.bones["keep_driver"]
+        pose_bone.driver_add("location", 1)
+        self.assertEqual(len(arm_ob.animation_data.drivers), 3)
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.context.evaluated_depsgraph_get()
+        arm.edit_bones.remove(arm.edit_bones["test"])
+        arm.edit_bones.remove(arm.edit_bones["keep_driver"])
+        self.assertEqual(
+            len(
+                arm_ob.animation_data.drivers),
+            3,
+            "Drivers should only be removed once leaving edit mode. "
+            "This allows replacing a bone by deleting it and creating a bone with the same name")
+        # Drivers for this bone will not be removed, because it was re-created before leaving edit mode.
+        ebone = arm.edit_bones.new(name="keep_driver")
+        ebone.tail = (1, 0, 0)
+        bpy.ops.object.mode_set(mode='POSE')
+        self.assertEqual(len(arm_ob.animation_data.drivers), 1,
+                         "Removing the bone should remove the driver on it and on its constraint")
 
 
 def main():

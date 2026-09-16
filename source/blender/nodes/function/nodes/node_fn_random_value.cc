@@ -2,14 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-// #include "BLI_hash.h"
+// #include "BLI_hash_c.hh"
 #include "BLI_noise.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 #include "NOD_socket_search_link.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 namespace blender::nodes::node_fn_random_value_cc {
@@ -18,74 +19,62 @@ NODE_STORAGE_FUNCS(NodeRandomValue)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Min").supports_field();
-  b.add_input<decl::Vector>("Max").default_value({1.0f, 1.0f, 1.0f}).supports_field();
-  b.add_input<decl::Float>("Min", "Min_001").supports_field();
-  b.add_input<decl::Float>("Max", "Max_001").default_value(1.0f).supports_field();
-  b.add_input<decl::Int>("Min", "Min_002").min(-100000).max(100000).supports_field();
-  b.add_input<decl::Int>("Max", "Max_002")
-      .default_value(100)
-      .min(-100000)
-      .max(100000)
-      .supports_field();
-  b.add_input<decl::Float>("Probability")
-      .min(0.0f)
-      .max(1.0f)
-      .default_value(0.5f)
-      .subtype(PROP_FACTOR)
-      .supports_field()
-      .make_available([](bNode &node) { node_storage(node).data_type = CD_PROP_BOOL; });
-  b.add_input<decl::Int>("ID").implicit_field(NODE_DEFAULT_INPUT_ID_INDEX_FIELD);
-  b.add_input<decl::Int>("Seed").default_value(0).min(-10000).max(10000).supports_field();
+  b.is_function_node();
+  const bNode *node = b.node_or_null();
 
-  b.add_output<decl::Vector>("Value").dependent_field();
-  b.add_output<decl::Float>("Value", "Value_001").dependent_field();
-  b.add_output<decl::Int>("Value", "Value_002").dependent_field();
-  b.add_output<decl::Bool>("Value", "Value_003").dependent_field();
+  if (node != nullptr) {
+    const NodeRandomValue &storage = node_storage(*node);
+    const eCustomDataType data_type = eCustomDataType(storage.data_type);
+    switch (data_type) {
+      case CD_PROP_FLOAT3:
+        b.add_input<decl::Vector>("Min"_ustr);
+        b.add_input<decl::Vector>("Max"_ustr).default_value({1.0f, 1.0f, 1.0f});
+        break;
+      case CD_PROP_FLOAT:
+        b.add_input<decl::Float>("Min"_ustr);
+        b.add_input<decl::Float>("Max"_ustr).default_value(1.0f);
+        break;
+      case CD_PROP_INT32:
+        b.add_input<decl::Int>("Min"_ustr);
+        b.add_input<decl::Int>("Max"_ustr).default_value(100);
+        break;
+      case CD_PROP_BOOL:
+        b.add_input<decl::Float>("Probability"_ustr)
+            .min(0.0f)
+            .max(1.0f)
+            .default_value(0.5f)
+            .subtype(PROP_FACTOR);
+        break;
+      default:
+        BLI_assert_unreachable();
+        break;
+    }
+  }
+
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
+  b.add_input<decl::Int>("ID"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .default_input_type(is_compositor ? NODE_DEFAULT_INPUT_VALUE :
+                                          NODE_DEFAULT_INPUT_ID_INDEX_FIELD);
+  b.add_input<decl::Int>("Seed"_ustr);
+
+  if (node != nullptr) {
+    const NodeRandomValue &storage = node_storage(*node);
+    const eCustomDataType data_type = eCustomDataType(storage.data_type);
+    b.add_output(data_type, "Value"_ustr);
+  }
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void fn_node_random_value_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeRandomValue *data = MEM_callocN<NodeRandomValue>(__func__);
+  NodeRandomValue *data = MEM_new<NodeRandomValue>(__func__);
   data->data_type = CD_PROP_FLOAT;
   node->storage = data;
-}
-
-static void fn_node_random_value_update(bNodeTree *ntree, bNode *node)
-{
-  const NodeRandomValue &storage = node_storage(*node);
-  const eCustomDataType data_type = eCustomDataType(storage.data_type);
-
-  bNodeSocket *sock_min_vector = (bNodeSocket *)node->inputs.first;
-  bNodeSocket *sock_max_vector = sock_min_vector->next;
-  bNodeSocket *sock_min_float = sock_max_vector->next;
-  bNodeSocket *sock_max_float = sock_min_float->next;
-  bNodeSocket *sock_min_int = sock_max_float->next;
-  bNodeSocket *sock_max_int = sock_min_int->next;
-  bNodeSocket *sock_probability = sock_max_int->next;
-
-  bNodeSocket *sock_out_vector = (bNodeSocket *)node->outputs.first;
-  bNodeSocket *sock_out_float = sock_out_vector->next;
-  bNodeSocket *sock_out_int = sock_out_float->next;
-  bNodeSocket *sock_out_bool = sock_out_int->next;
-
-  bke::node_set_socket_availability(*ntree, *sock_min_vector, data_type == CD_PROP_FLOAT3);
-  bke::node_set_socket_availability(*ntree, *sock_max_vector, data_type == CD_PROP_FLOAT3);
-  bke::node_set_socket_availability(*ntree, *sock_min_float, data_type == CD_PROP_FLOAT);
-  bke::node_set_socket_availability(*ntree, *sock_max_float, data_type == CD_PROP_FLOAT);
-  bke::node_set_socket_availability(*ntree, *sock_min_int, data_type == CD_PROP_INT32);
-  bke::node_set_socket_availability(*ntree, *sock_max_int, data_type == CD_PROP_INT32);
-  bke::node_set_socket_availability(*ntree, *sock_probability, data_type == CD_PROP_BOOL);
-
-  bke::node_set_socket_availability(*ntree, *sock_out_vector, data_type == CD_PROP_FLOAT3);
-  bke::node_set_socket_availability(*ntree, *sock_out_float, data_type == CD_PROP_FLOAT);
-  bke::node_set_socket_availability(*ntree, *sock_out_int, data_type == CD_PROP_INT32);
-  bke::node_set_socket_availability(*ntree, *sock_out_bool, data_type == CD_PROP_BOOL);
 }
 
 static std::optional<eCustomDataType> node_type_from_other_socket(const bNodeSocket &socket)
@@ -108,7 +97,6 @@ static std::optional<eCustomDataType> node_type_from_other_socket(const bNodeSoc
 
 static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
 {
-  const NodeDeclaration &declaration = *params.node_type().static_declaration;
   const std::optional<eCustomDataType> type = node_type_from_other_socket(params.other_socket());
   if (!type) {
     return;
@@ -116,23 +104,29 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   if (params.in_out() == SOCK_IN) {
     if (ELEM(*type, CD_PROP_INT32, CD_PROP_FLOAT3, CD_PROP_FLOAT)) {
       params.add_item(IFACE_("Min"), [type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("FunctionNodeRandomValue");
+        bNode &node = params.add_node("FunctionNodeRandomValue"_ustr);
         node_storage(node).data_type = *type;
-        params.update_and_connect_available_socket(node, "Min");
+        params.update_and_connect_available_socket(node, "Min"_ustr);
       });
       params.add_item(IFACE_("Max"), [type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("FunctionNodeRandomValue");
+        bNode &node = params.add_node("FunctionNodeRandomValue"_ustr);
         node_storage(node).data_type = *type;
-        params.update_and_connect_available_socket(node, "Max");
+        params.update_and_connect_available_socket(node, "Max"_ustr);
       });
     }
-    search_link_ops_for_declarations(params, declaration.inputs.as_span().take_back(3));
+    if (*type == CD_PROP_FLOAT) {
+      params.add_item(IFACE_("Probability"), [](LinkSearchOpParams &params) {
+        bNode &node = params.add_node("FunctionNodeRandomValue"_ustr);
+        node_storage(node).data_type = CD_PROP_BOOL;
+        params.update_and_connect_available_socket(node, "Probability"_ustr);
+      });
+    }
   }
   else {
     params.add_item(IFACE_("Value"), [type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("FunctionNodeRandomValue");
+      bNode &node = params.add_node("FunctionNodeRandomValue"_ustr);
       node_storage(node).data_type = *type;
-      params.update_and_connect_available_socket(node, "Value");
+      params.update_and_connect_available_socket(node, "Value"_ustr);
     });
   }
 }
@@ -175,7 +169,15 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
               std::swap(min_value, max_value);
             }
             const uint32_t hash = noise::hash(id, seed);
-            return min_value + hash % (max_value - min_value + 1);
+
+            /* Calculate range using unsigned types to fit the entire 32-bit space. */
+            const uint32_t range = uint32_t(max_value) - uint32_t(min_value) + 1;
+
+            /* Range wraps around to 0 when min_value is INT_MIN and max_value is INT_MAX.
+             * so the modulo is unnecessary and would cause a division by zero. */
+            const uint32_t modulo_result = (range == 0) ? hash : (hash % range);
+
+            return int(uint32_t(min_value) + modulo_result);
           },
           mf::build::exec_presets::SomeSpanOrSingle<2>());
       builder.set_matching_fn(fn);
@@ -198,23 +200,59 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
   }
 }
 
+static const char *gpu_shader_get_name(const eCustomDataType data_type)
+{
+  switch (data_type) {
+    case CD_PROP_FLOAT3:
+      return "random_value_vector";
+    case CD_PROP_FLOAT:
+      return "random_value_float";
+    case CD_PROP_INT32:
+      return "random_value_int";
+    case CD_PROP_BOOL:
+      return "random_value_bool";
+    default:
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+static int node_gpu_material(GPUMaterial *mat,
+                             bNode *node,
+                             bNodeExecData * /*execdata*/,
+                             GPUNodeStack *in,
+                             GPUNodeStack *out)
+{
+  const NodeRandomValue &storage = node_storage(*node);
+  const char *name = gpu_shader_get_name(eCustomDataType(storage.data_type));
+
+  if (name == nullptr) {
+    return 0;
+  }
+
+  return GPU_stack_link(mat, node, name, in, out);
+}
+
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeRandomValue", FN_NODE_RANDOM_VALUE);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeRandomValue"_ustr, FN_NODE_RANDOM_VALUE);
   ntype.ui_name = "Random Value";
+  ntype.ui_description = "Output a randomized value";
   ntype.enum_name_legacy = "RANDOM_VALUE";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.initfunc = fn_node_random_value_init;
-  ntype.updatefunc = fn_node_random_value_update;
   ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
+  ntype.gpu_fn = node_gpu_material;
   ntype.gather_link_search_ops = node_gather_link_search_ops;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeRandomValue", node_free_standard_storage, node_copy_standard_storage);
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

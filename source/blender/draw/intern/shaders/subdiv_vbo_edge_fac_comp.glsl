@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Extract edge data for object mode wire frame. */
+/** \file
+ * \ingroup draw
+ *
+ * Extract edge data for object mode wire frame.
+ */
 
 #include "subdiv_lib.glsl"
 
@@ -39,7 +43,7 @@ float compute_line_factor(uint corner_index, float3 face_normal)
     return 0.0f;
   }
 
-  uint start_corner_index_other = quad_other * 4;
+  uint start_corner_index_other = uint(quad_other * 4);
   Position pos_0 = positions[start_corner_index_other + 0];
   Position pos_1 = positions[start_corner_index_other + 1];
   Position pos_2 = positions[start_corner_index_other + 2];

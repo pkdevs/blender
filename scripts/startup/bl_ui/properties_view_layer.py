@@ -9,11 +9,31 @@ from rna_prop_ui import PropertyPanel
 
 
 class VIEWLAYER_UL_aov(UIList):
+    @staticmethod
+    def aov_icon(item):
+        """
+        :param item: AOV item to pick an icon for.
+        :type item: :class:`bpy.types.AOV`
+        :return: Icon identifier for *item*'s AOV type.
+        :rtype: str
+        """
+        if not item.is_valid:
+            return 'ERROR'
+
+        aov_type = item.type
+
+        if aov_type == 'VALUE':
+            return 'NODE_SOCKET_FLOAT'
+        elif aov_type == 'COLOR':
+            return 'NODE_SOCKET_RGBA'
+        else:
+            raise ValueError("Unrecognized AOV type: " + aov_type)
+
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname):
+        del icon
         row = layout.row()
         split = row.split(factor=0.65)
-        icon = 'NONE' if item.is_valid else 'ERROR'
-        split.row().prop(item, "name", text="", icon=icon, emboss=False)
+        split.row().prop(item, "name", text="", icon=self.aov_icon(item), emboss=False)
         split.row().prop(item, "type", text="", emboss=False)
 
 
@@ -26,6 +46,33 @@ class ViewLayerButtonsPanel:
     @classmethod
     def poll(cls, context):
         return (context.engine in cls.COMPAT_ENGINES)
+
+
+class VIEWLAYER_PT_context_layer(ViewLayerButtonsPanel, Panel):
+    bl_label = ""
+    bl_options = {'HIDE_HEADER'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
+
+    @classmethod
+    def poll(cls, context):
+        return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        layout = self.layout
+
+        window = context.window
+        scene = context.scene
+
+        layout.template_search(
+            window, "view_layer",
+            scene, "view_layers",
+            new="scene.view_layer_add",
+            unlink="scene.view_layer_remove",
+        )
 
 
 class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
@@ -85,6 +132,21 @@ class VIEWLAYER_PT_eevee_layer_passes_data(ViewLayerButtonsPanel, Panel):
         sub.active = not scene.render.use_motion_blur
         sub.prop(view_layer, "use_pass_vector")
         col.prop(view_layer, "use_pass_grease_pencil", text="Grease Pencil")
+
+        view_layer_eevee = view_layer.eevee
+        prefs = context.preferences
+        use_debug = prefs.view.show_developer_ui
+        if use_debug:
+            col = layout.column(heading="Denoising", align=True)
+            col.prop(view_layer_eevee, "denoising_store_passes", text="Denoising Data")
+            sub = col.column()
+            sub.active = view_layer_eevee.denoising_store_passes
+            sub.prop(
+                view_layer_eevee,
+                "denoising_pass_use_albedo_roughness_weighting",
+                text="Albedo Roughness Weighting")
+        else:
+            col.prop(view_layer_eevee, "denoising_store_passes", text="Denoising Data")
 
 
 class VIEWLAYER_PT_workbench_layer_passes_data(ViewLayerButtonsPanel, Panel):
@@ -166,7 +228,7 @@ class ViewLayerAOVPanelHelper(ViewLayerButtonsPanel):
 
         aov = view_layer.active_aov
         if aov and not aov.is_valid:
-            layout.label(text="Conflicts with another render pass with the same name", icon='ERROR')
+            layout.label_multiline(text="Conflicts with another render pass with the same name", icon='STATUS_ERROR')
 
 
 class VIEWLAYER_PT_layer_passes_aov(ViewLayerAOVPanelHelper, Panel):
@@ -274,7 +336,7 @@ class VIEWLAYER_PT_override(ViewLayerButtonsPanel, Panel):
     bl_label = "Override"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'CYCLES',
     }
 
@@ -300,6 +362,7 @@ class VIEWLAYER_PT_layer_custom_props(PropertyPanel, Panel):
 
 classes = (
     VIEWLAYER_MT_lightgroup_sync,
+    VIEWLAYER_PT_context_layer,
     VIEWLAYER_PT_layer,
     VIEWLAYER_PT_layer_passes,
     VIEWLAYER_PT_workbench_layer_passes_data,

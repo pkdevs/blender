@@ -11,8 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -20,18 +20,16 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
+#include "BKE_annotations.h"
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve_driver.h"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
-
-#include "UI_interface.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -48,6 +46,8 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "gpencil_intern.hh"
+
+namespace blender {
 
 /* ************************************************ */
 /* Datablock Operators */
@@ -84,14 +84,14 @@ static wmOperatorStatus gpencil_data_add_exec(bContext *C, wmOperator *op)
 
   /* Add new datablock, with a single layer ready to use
    * (so users don't have to perform an extra step). */
-  bGPdata *gpd = BKE_gpencil_data_addnew(bmain, DATA_("Annotations"));
+  bGPdata *gpd = BKE_annotations_data_addnew(bmain, DATA_("Annotations"));
   *gpd_ptr = gpd;
 
   /* tag for annotations */
   gpd->flag |= GP_DATA_ANNOTATIONS;
 
   /* add new layer (i.e. a "note") */
-  BKE_gpencil_layer_addnew(*gpd_ptr, DATA_("Note"), true, false);
+  BKE_annotations_layer_addnew(*gpd_ptr, DATA_("Note"), true, false);
 
   /* notifiers */
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
@@ -184,12 +184,12 @@ static wmOperatorStatus gpencil_layer_add_exec(bContext *C, wmOperator *op)
   }
   /* Annotations */
   if (*gpd_ptr == nullptr) {
-    *gpd_ptr = BKE_gpencil_data_addnew(bmain, DATA_("Annotations"));
+    *gpd_ptr = BKE_annotations_data_addnew(bmain, DATA_("Annotations"));
   }
 
   /* mark as annotation */
   (*gpd_ptr)->flag |= GP_DATA_ANNOTATIONS;
-  BKE_gpencil_layer_addnew(*gpd_ptr, DATA_("Note"), true, false);
+  BKE_annotations_layer_addnew(*gpd_ptr, DATA_("Note"), true, false);
   gpd = *gpd_ptr;
 
   /* notifiers */
@@ -225,7 +225,7 @@ void GPENCIL_OT_layer_annotation_add(wmOperatorType *ot)
 static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_annotation_data_get_active(C);
-  bGPDlayer *gpl = BKE_gpencil_layer_active_get(gpd);
+  bGPDlayer *gpl = BKE_annotations_layer_active_get(gpd);
 
   /* sanity checks */
   if (ELEM(nullptr, gpd, gpl)) {
@@ -242,10 +242,10 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
    * - if this is the only layer, this naturally becomes nullptr
    */
   if (gpl->prev) {
-    BKE_gpencil_layer_active_set(gpd, gpl->prev);
+    BKE_annotations_layer_active_set(gpd, gpl->prev);
   }
   else {
-    BKE_gpencil_layer_active_set(gpd, gpl->next);
+    BKE_annotations_layer_active_set(gpd, gpl->next);
   }
 
   if (gpl->flag & GP_LAYER_IS_RULER) {
@@ -253,10 +253,7 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
   }
 
   /* delete the layer now... */
-  BKE_gpencil_layer_delete(gpd, gpl);
-
-  /* Reorder masking. */
-  BKE_gpencil_layer_mask_sort_all(gpd);
+  BKE_annotations_layer_delete(gpd, gpl);
 
   /* notifiers */
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
@@ -264,8 +261,8 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_SELECTED, nullptr);
 
   /* Free Grease Pencil data block when last annotation layer is removed, see: #112683. */
-  if (gpd->layers.first == nullptr) {
-    BKE_gpencil_free_data(gpd, true);
+  if (gpd->layers.first_ == nullptr) {
+    BKE_annotations_free_data(gpd, true);
 
     bGPdata **gpd_ptr = ED_annotation_data_get_pointers(C, nullptr);
     *gpd_ptr = nullptr;
@@ -280,7 +277,7 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
 static bool gpencil_active_layer_annotation_poll(bContext *C)
 {
   bGPdata *gpd = ED_annotation_data_get_active(C);
-  bGPDlayer *gpl = BKE_gpencil_layer_active_get(gpd);
+  bGPDlayer *gpl = BKE_annotations_layer_active_get(gpd);
 
   return (gpl != nullptr);
 }
@@ -308,7 +305,7 @@ enum {
 static wmOperatorStatus gpencil_layer_move_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_annotation_data_get_active(C);
-  bGPDlayer *gpl = BKE_gpencil_layer_active_get(gpd);
+  bGPDlayer *gpl = BKE_annotations_layer_active_get(gpd);
 
   const int direction = RNA_enum_get(op->ptr, "type") * -1;
 
@@ -319,9 +316,6 @@ static wmOperatorStatus gpencil_layer_move_exec(bContext *C, wmOperator *op)
 
   BLI_assert(ELEM(direction, -1, 0, 1)); /* we use value below */
   if (BLI_listbase_link_move(&gpd->layers, gpl, direction)) {
-    /* Reorder masking. */
-    BKE_gpencil_layer_mask_sort_all(gpd);
-
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
   }
@@ -351,3 +345,5 @@ void GPENCIL_OT_layer_annotation_move(wmOperatorType *ot)
 
   ot->prop = RNA_def_enum(ot->srna, "type", slot_move, 0, "Type", "");
 }
+
+}  // namespace blender

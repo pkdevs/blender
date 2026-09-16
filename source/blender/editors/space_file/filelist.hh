@@ -12,10 +12,11 @@
 #include <cstdint>
 
 #include "DNA_space_types.h"
+struct BlendHandle;
+namespace blender {
 
 struct AssetLibraryReference;
 struct bContext;
-struct BlendHandle;
 struct FileIndexerType;
 struct FileList;
 struct FileSelection;
@@ -23,10 +24,10 @@ struct ID;
 struct ImBuf;
 struct bUUID;
 struct wmWindowManager;
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
 class AssetRepresentation;
-}  // namespace blender::asset_system
+}  // namespace asset_system
 
 struct FileDirEntry;
 
@@ -54,7 +55,8 @@ void filelist_setfilter_options(FileList *filelist,
                                 uint64_t filter,
                                 uint64_t filter_id,
                                 bool filter_assets_only,
-                                const char *filter_glob,
+                                bool filter_assets_hide_online,
+                                bool filter_assets_hide_offline,
                                 const char *filter_search);
 /**
  * Set the indexer to be used by the filelist.
@@ -62,6 +64,9 @@ void filelist_setfilter_options(FileList *filelist,
  * The given indexer allocation should be handled by the caller or defined statically.
  */
 void filelist_setindexer(FileList *filelist, const FileIndexerType *indexer);
+void filelist_remote_asset_library_refresh_online_assets_status(
+    const FileList *filelist, StringRef remote_url, StringRef absolute_downloaded_file);
+void filelist_set_asset_include_online(FileList *filelist, bool show_online_assets);
 /**
  * \param catalog_id: The catalog that should be filtered by if \a catalog_visibility is
  * #FILE_SHOW_ASSETS_FROM_CATALOG. May be NULL otherwise.
@@ -70,24 +75,25 @@ void filelist_set_asset_catalog_filter_options(
     FileList *filelist,
     eFileSel_Params_AssetCatalogVisibility catalog_visibility,
     const bUUID *catalog_id);
+bool filelist_needs_filtering(FileList *filelist);
 void filelist_tag_needs_filtering(FileList *filelist);
 void filelist_filter(FileList *filelist);
 /**
  * \param asset_library_ref: May be NULL to unset the library.
+ * \param on_change: Called when a different asset library was set. NOT called when the asset
+ *     library was unset (i.e. \a asset_library_ref is null).
  */
-void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_library_ref);
+void filelist_setlibrary(FileList *filelist,
+                         const AssetLibraryReference *asset_library_ref,
+                         FunctionRef<void()> on_change = nullptr);
 
 void filelist_init_icons();
 void filelist_free_icons();
 void filelist_file_get_full_path(const FileList *filelist,
                                  const FileDirEntry *file,
-                                 char r_filepath[/*FILE_MAX_LIBEXTRA*/ 1090]);
+                                 char r_filepath[/*FILE_MAX_LIBEXTRA*/ 1282]);
 bool filelist_file_is_preview_pending(const FileList *filelist, const FileDirEntry *file);
-/**
- * \return True if a new preview request was pushed, false otherwise (e.g. because the preview is
- * already loaded, invalid or not supported).
- */
-ImBuf *filelist_get_preview_image(FileList *filelist, int index);
+void filelist_online_asset_preview_request(const bContext *C, FileDirEntry *entry);
 ImBuf *filelist_file_get_preview_image(const FileDirEntry *file);
 ImBuf *filelist_geticon_special_file_image_ex(const FileDirEntry *file);
 /**
@@ -97,7 +103,12 @@ ImBuf *filelist_geticon_special_file_image_ex(const FileDirEntry *file);
 ImBuf *filelist_geticon_special_file_image(FileList *filelist, int index);
 int filelist_geticon_file_type(FileList *filelist, int index, bool is_main);
 
-FileList *filelist_new(short type);
+/**
+ * \param is_from_global_asset_list: Set to indicate that the file list is owned by the
+ *    #ED_asset_list.hh API (global storage to load and store assets globally), not by an
+ *    Asset/File Browser.
+ */
+FileList *filelist_new(short type, bool is_from_global_asset_list = false);
 void filelist_settype(FileList *filelist, short type);
 void filelist_clear(FileList *filelist);
 void filelist_clear_ex(FileList *filelist,
@@ -120,7 +131,7 @@ bool filelist_is_dir(const FileList *filelist, const char *path);
 /**
  * May modify in place given `dirpath`, which is expected to be #FILE_MAX_LIBEXTRA length.
  */
-void filelist_setdir(FileList *filelist, char dirpath[/*FILE_MAX_LIBEXTRA*/ 1090]);
+void filelist_setdir(FileList *filelist, char dirpath[/*FILE_MAX_LIBEXTRA*/ 1282]);
 
 /**
  * Limited version of full update done by space_file's file_refresh(),
@@ -154,14 +165,14 @@ int filelist_file_find_path(FileList *filelist, const char *filename);
  */
 int filelist_file_find_id(const FileList *filelist, const ID *id);
 /**
- * Get the ID a file represents (if any). For #FILE_MAIN, #FILE_MAIN_ASSET.
+ * Get the ID a file represents (if any). For #FILE_MAIN_ASSET.
  */
 ID *filelist_file_get_id(const FileDirEntry *file);
 /**
  * Same as #filelist_file_get_id(), but gets the file by index (doesn't require the file to be
  * cached, uses #FileListInternEntry only). */
 ID *filelist_entry_get_id(const FileList *filelist, int index);
-blender::asset_system::AssetRepresentation *filelist_entry_get_asset_representation(
+asset_system::AssetRepresentation *filelist_entry_get_asset_representation(
     const FileList *filelist, const int index);
 /**
  * Get the #FileDirEntry.relpath value without requiring the #FileDirEntry to be available (doesn't
@@ -215,8 +226,10 @@ void filelist_entry_parent_select_set(FileList *filelist,
                                       FileCheckType check);
 
 void filelist_setrecursion(FileList *filelist, int recursion_level);
+/** Set the extension glob used to tag entries with #FILE_TYPE_OPERATOR. */
+void filelist_setglob(FileList *filelist, const char *filter_glob);
 
-blender::asset_system::AssetLibrary *filelist_asset_library(FileList *filelist);
+asset_system::AssetLibrary *filelist_asset_library(FileList *filelist);
 
 BlendHandle *filelist_lib(FileList *filelist);
 /**
@@ -243,3 +256,5 @@ bool filelist_cache_previews_update(FileList *filelist);
 void filelist_cache_previews_set(FileList *filelist, bool use_previews);
 bool filelist_cache_previews_running(FileList *filelist);
 bool filelist_cache_previews_done(FileList *filelist);
+
+}  // namespace blender

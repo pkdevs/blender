@@ -16,8 +16,9 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector_set.hh"
 
-#include "DNA_customdata_types.h"
 #include "DNA_windowmanager_enums.h"
+
+namespace blender {
 
 struct ARegion;
 struct bContext;
@@ -27,15 +28,14 @@ struct UndoType;
 struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
-namespace blender::bke {
+namespace bke {
+enum class AttrType : int16_t;
 struct GSpanAttributeWriter;
-}  // namespace blender::bke
-namespace blender {
+}  // namespace bke
 class GMutableSpan;
-}  // namespace blender
 enum eSelectOp : int8_t;
 
-namespace blender::ed::pointcloud {
+namespace ed::pointcloud {
 
 void operatortypes_pointcloud();
 void operatormacros_pointcloud();
@@ -57,7 +57,7 @@ VectorSet<PointCloud *> get_unique_editable_pointclouds(const bContext &C);
  * helpful utilities on top of that.
  * \{ */
 
-void fill_selection_true(GMutableSpan span);
+void fill_selection_true(GMutableSpan selection);
 void fill_selection_false(GMutableSpan selection, const IndexMask &mask);
 void fill_selection_true(GMutableSpan selection, const IndexMask &mask);
 
@@ -78,7 +78,7 @@ void select_all(PointCloud &pointcloud, int action);
  * If the selection_id attribute doesn't exist, create it with the requested type (bool or float).
  */
 bke::GSpanAttributeWriter ensure_selection_attribute(PointCloud &pointcloud,
-                                                     eCustomDataType create_type);
+                                                     bke::AttrType create_type);
 
 bool select_box(PointCloud &pointcloud,
                 const ARegion &region,
@@ -150,4 +150,5 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op);
 
 /** \} */
 
-}  // namespace blender::ed::pointcloud
+}  // namespace ed::pointcloud
+}  // namespace blender

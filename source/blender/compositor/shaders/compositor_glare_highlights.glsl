@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_common_color_utils.glsl"
+#include "infos/compositor_glare_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_glare_highlights)
+
+#include "gpu_shader_common_color_utils.bsl.hh"
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 #define CMP_NODE_GLARE_QUALITY_HIGH 0

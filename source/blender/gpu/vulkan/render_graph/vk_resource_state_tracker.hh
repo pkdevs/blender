@@ -13,7 +13,7 @@
  * - Image layouts: The layout of pixels of an image on the GPU depends on the command being
  *   executed. A certain `vkCmd*` requires the image to be in a certain layout. Using incorrect
  *   layouts could lead to rendering artifacts.
- * - Resource ownership: Resources that are externally managed (swap chain or external) uses a
+ * - Resource ownership: Resources that are externally managed (swap-chain or external) uses a
  *   different workflow as its state can be altered externally and needs to be reset.
  * - Read/Write access masks: To generate correct and performing pipeline barriers the src/dst
  *   access masks needs to be accurate and precise. When creating pipeline barriers the resource
@@ -22,26 +22,18 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
 #include "BLI_vector.hh"
 
 #include "vk_common.hh"
 
-/**
- * Enable VK_RESOURCE_STATE_TRACKER_VALIDATION to perform a consistency check
- * on the state. The consistency check is time consuming and should only be
- * turned on when needed.
- */
-// #define VK_RESOURCE_STATE_TRACKER_VALIDATION
-
 namespace blender::gpu::render_graph {
 
 class VKCommandBuilder;
 struct VKRenderGraphLink;
 class VKScheduler;
-
-using ResourceHandle = uint64_t;
 
 /**
  * ModificationStamp is used to track resource modifications.
@@ -66,7 +58,7 @@ struct ResourceWithStamp {
  * Enum containing the different resource types that are being tracked.
  */
 enum class VKResourceType { NONE = (0 << 0), IMAGE = (1 << 0), BUFFER = (1 << 1) };
-ENUM_OPERATORS(VKResourceType, VKResourceType::BUFFER);
+ENUM_OPERATORS(VKResourceType);
 
 /**
  * State being tracked for a resource.
@@ -121,8 +113,8 @@ class VKResourceStateTracker {
       struct {
         /** VkImage handle of the resource being tracked. */
         VkImage vk_image = VK_NULL_HANDLE;
-        /** Number of layers that the resource has. */
-        uint32_t layer_count = 0;
+        /** Do we need to track subresources (layers/mipmaps). */
+        bool use_subresource_tracking = false;
       } image;
     };
 
@@ -132,36 +124,34 @@ class VKResourceStateTracker {
     /**
      * State tracking to ensure correct pipeline barriers and command creation.
      */
-    VKResourceBarrierState barrier_state;
+    VKResourceBarrierState barrier_state = {};
 
 #ifndef NDEBUG
-    const char *name;
+    std::string name;
 #endif
 
     /**
-     * Check if the given resource handle has multiple layers.
+     * Check if the given resource handle subresources needs to be tracked.
      *
      * Returns true when
-     * - handle is a layered image with more than one layer.
+     * - handle is an image with subresource tracking enables.
      *
      * Returns false when
      * - handle isn't an image resource or
-     * - handle isn't a layered image or
-     * - handle has only a single layer.
+     * - handle doesn't have subresource tracking enabled.
      */
-    bool has_multiple_layers()
+    bool use_subresource_tracking()
     {
       if (type == VKResourceType::BUFFER) {
         return false;
       }
-      return image.layer_count > 1;
+      return image.use_subresource_tracking;
     }
   };
 
-  Map<ResourceHandle, Resource> resources_;
+  Vector<Resource> resources_;
   Vector<ResourceHandle> unused_handles_;
   Map<VkImage, ResourceHandle> image_resources_;
-  Map<VkBuffer, ResourceHandle> buffer_resources_;
 
  public:
   /**
@@ -180,7 +170,7 @@ class VKResourceStateTracker {
    * When a buffer is created in VKBuffer, it needs to be registered in the device resources so the
    * resource state can be tracked during its lifetime.
    */
-  void add_buffer(VkBuffer vk_buffer, const char *name = nullptr);
+  ResourceHandle add_buffer(VkBuffer vk_buffer, const char *name = nullptr);
 
   /**
    * Register an image resource.
@@ -188,7 +178,30 @@ class VKResourceStateTracker {
    * When an image is created in VKTexture, it needs to be registered in the device resources so
    * the resource state can be tracked during its lifetime.
    */
-  void add_image(VkImage vk_image, uint32_t layer_count, const char *name = nullptr);
+  void add_image(VkImage vk_image, bool use_subresource_tracking, const char *name = nullptr);
+
+  /**
+   * \brief Register an image resource that can have aliased memory.
+   *
+   * The aliased memory can still be in use and requires the image to wait for all commands to be
+   * completed, before it can start writing to the aliased memory.
+   */
+  void add_aliased_image(VkImage vk_image,
+                         bool use_subresource_tracking,
+                         const char *name = nullptr);
+  void add_swapchain_image(VkImage vk_image, const char *name = nullptr);
+
+  /**
+   * \brief Update the layout of an image that has been externally modified.
+   *
+   * 'vkTransitionImageLayout' changes the image layout. When used the image layout needs to be
+   * updated to match the current layout, ensuring correct generation of pipeline barriers.
+   *
+   * \name vk_image:        VkImage handle to update the image layout for.
+   * \name vk_image_layout: The layout the resource state tracker should now be using, matching the
+   *                        current layout of the image.
+   */
+  void update_image_layout(VkImage vk_image, VkImageLayout vk_image_layout);
 
   /**
    * Remove an registered image.
@@ -204,7 +217,7 @@ class VKResourceStateTracker {
    * When a buffer is destroyed by calling `vmaDestroyBuffer`, a call to `remove_buffer` is needed
    * to unregister the resource from state tracking.
    */
-  void remove_buffer(VkBuffer vk_buffer);
+  VkBuffer remove_buffer(ResourceHandle buffer_handle);
 
   /**
    * Return the current stamp of the resource, and increase the stamp.
@@ -216,7 +229,11 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_image_and_increase_stamp(VkImage vk_image);
+  inline ResourceWithStamp get_image_and_increase_stamp(VkImage vk_image)
+  {
+    ResourceHandle handle = image_resources_.lookup(vk_image);
+    return {.handle = handle, .stamp = resources_[handle].stamp++};
+  }
 
   /**
    * Return the current stamp of the resource, and increase the stamp.
@@ -228,7 +245,10 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_buffer_and_increase_stamp(VkBuffer vk_buffer);
+  inline ResourceWithStamp get_buffer_and_increase_stamp(ResourceHandle buffer_handle)
+  {
+    return {.handle = buffer_handle, .stamp = resources_[buffer_handle].stamp++};
+  }
 
   /**
    * Return the current stamp of the resource.
@@ -238,7 +258,10 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_buffer(VkBuffer vk_buffer) const;
+  inline ResourceWithStamp get_buffer(ResourceHandle buffer_handle) const
+  {
+    return ResourceWithStamp{.handle = buffer_handle, .stamp = resources_[buffer_handle].stamp};
+  }
 
   /**
    * Return the current stamp of the resource.
@@ -248,35 +271,54 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_image(VkImage vk_image) const;
-
-  /** Get the resource type for the given handle. */
-  VKResourceType resource_type_get(ResourceHandle resource_handle) const
+  inline ResourceWithStamp get_image(VkImage vk_image) const
   {
-    return resources_.lookup(resource_handle).type;
+    ResourceHandle handle = image_resources_.lookup(vk_image);
+    return {.handle = handle, .stamp = resources_[handle].stamp};
   }
 
-  bool use_dynamic_rendering = true;
   bool use_dynamic_rendering_local_read = true;
 
   void debug_print() const;
 
  private:
-  /**
-   * Get the current stamp of the resource.
-   */
-  static ResourceWithStamp get_stamp(ResourceHandle handle, const Resource &resource);
-
-  /**
-   * Get the current stamp of the resource and increase the stamp.
-   */
-  static ResourceWithStamp get_and_increase_stamp(ResourceHandle handle, Resource &resource);
+  void add_image(VkImage vk_image,
+                 bool use_subresource_tracking,
+                 VKResourceBarrierState barrier_state,
+                 const char *name = nullptr);
 
   ResourceHandle create_resource_slot();
 
-#ifdef VK_RESOURCE_STATE_TRACKER_VALIDATION
-  void validate() const;
-#endif
+  /**
+   * Get the ref to an image resource state.
+   *
+   * NOTE: Can only be called when the mutex has been locked in the same thread.
+   */
+  inline Resource &get_image_resource(ResourceHandle resource_handle)
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE);
+    return resources_[resource_handle];
+  }
+  inline const Resource &get_image_resource(ResourceHandle resource_handle) const
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE);
+    return resources_[resource_handle];
+  }
+  /**
+   * Get the ref to an image resource state.
+   *
+   * NOTE: Can only be called when the mutex has been locked in the same thread.
+   */
+  inline Resource &get_buffer_resource(ResourceHandle resource_handle)
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::BUFFER);
+    return resources_[resource_handle];
+  }
+  inline const Resource &get_buffer_resource(ResourceHandle resource_handle) const
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::BUFFER);
+    return resources_[resource_handle];
+  }
 };
 
 }  // namespace blender::gpu::render_graph

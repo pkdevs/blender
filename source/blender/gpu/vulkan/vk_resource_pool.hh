@@ -12,6 +12,7 @@
 
 #include "vk_common.hh"
 
+#include "render_graph/vk_resource_state_tracker.hh"
 #include "vk_descriptor_pools.hh"
 #include "vk_immediate.hh"
 
@@ -79,16 +80,17 @@ class VKDiscardPool {
   friend class VKBackend;
 
  private:
+  TimelineResources<VkImage> swapchain_images_;
   TimelineResources<std::pair<VkImage, VmaAllocation>> images_;
-  TimelineResources<std::pair<VkBuffer, VmaAllocation>> buffers_;
+  TimelineResources<std::pair<ResourceHandle, VmaAllocation>> buffers_;
+  TimelineResources<VmaAllocation> allocations_;
   TimelineResources<VkImageView> image_views_;
   TimelineResources<VkBufferView> buffer_views_;
   TimelineResources<VkShaderModule> shader_modules_;
   TimelineResources<VkPipeline> pipelines_;
   TimelineResources<VkPipelineLayout> pipeline_layouts_;
-  TimelineResources<VkRenderPass> render_passes_;
-  TimelineResources<VkFramebuffer> framebuffers_;
-  TimelineResources<VkDescriptorPool> descriptor_pools_;
+  TimelineResources<VkAccelerationStructureKHR> acceleration_structures_;
+  TimelineResources<std::pair<VkDescriptorPool, VKDescriptorPools *>> descriptor_pools_;
 
   Mutex mutex_;
 
@@ -97,41 +99,43 @@ class VKDiscardPool {
  public:
   void deinit(VKDevice &device);
 
+  void discard_swapchain_image(VkImage vk_image);
   void discard_image(VkImage vk_image, VmaAllocation vma_allocation);
+  void discard_allocation(VmaAllocation vma_allocation);
   void discard_image_view(VkImageView vk_image_view);
-  void discard_buffer(VkBuffer vk_buffer, VmaAllocation vma_allocation);
+  void discard_buffer(ResourceHandle buffer_handle, VmaAllocation vma_allocation);
   void discard_buffer_view(VkBufferView vk_buffer_view);
   void discard_shader_module(VkShaderModule vk_shader_module);
   void discard_pipeline(VkPipeline vk_pipeline);
   void discard_pipeline_layout(VkPipelineLayout vk_pipeline_layout);
-  void discard_framebuffer(VkFramebuffer vk_framebuffer);
-  void discard_render_pass(VkRenderPass vk_render_pass);
-  void discard_descriptor_pool(VkDescriptorPool vk_descriptor_pool);
+  void discard_descriptor_pool_for_reuse(VkDescriptorPool vk_descriptor_pool,
+                                         VKDescriptorPools *descriptor_pools);
+  void discard_acceleration_structure(VkAccelerationStructureKHR vk_acceleration_structure);
 
   /**
    * Move discarded resources from src_pool into this.
    *
    * GPU resources that are discarded from the dependency graph are stored in the device orphaned
-   * data. When a swap chain context list is made active the orphaned data can be merged into a
-   * swap chain discard pool.
+   * data. When a swap-chain context list is made active the orphaned data can be merged into a
+   * swap-chain discard pool.
    *
    * All moved items will receive a new timeline.
    *
-   * Function must be externally synced (
+   * Function must be externally synced:
    *
-   * <source>
+   * \code{.cc}
    * {
    *   std::scoped_lock lock(pool.mutex_get()));
    *   pool.move_data(src_pool, timeline);
    * }
-   * </source>
+   * \endcode
    */
   void move_data(VKDiscardPool &src_pool, TimelineValue timeline);
   inline Mutex &mutex_get()
   {
     return mutex_;
   }
-  void destroy_discarded_resources(VKDevice &device, bool force = false);
+  void destroy_discarded_resources(VKDevice &device, TimelineValue current_timeline);
 
   /**
    * Returns the discard pool for the current thread.
@@ -140,17 +144,8 @@ class VKDiscardPool {
    * Otherwise a device discard pool is used.
    */
   static VKDiscardPool &discard_pool_get();
+
+  friend std::ostream &operator<<(std::ostream &os, const VKDiscardPool &discard_pool);
 };
 
-class VKResourcePool {
-
- public:
-  VKDescriptorPools descriptor_pools;
-  VKDescriptorSetTracker descriptor_set;
-  VKImmediate immediate;
-
-  void init(VKDevice &device);
-  void deinit(VKDevice &device);
-  void reset();
-};
 }  // namespace blender::gpu

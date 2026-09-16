@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#include "BLI_smaa_textures.h"
+#include "BLI_smaa_textures.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
@@ -40,7 +40,7 @@ SMAAPrecomputedTextures::~SMAAPrecomputedTextures()
   this->area_texture.release();
 }
 
-void SMAAPrecomputedTextures::bind_search_texture(GPUShader *shader,
+void SMAAPrecomputedTextures::bind_search_texture(gpu::Shader *shader,
                                                   const char *sampler_name) const
 {
   const int texture_image_unit = GPU_shader_get_sampler_binding(shader, sampler_name);
@@ -52,7 +52,8 @@ void SMAAPrecomputedTextures::unbind_search_texture() const
   GPU_texture_unbind(search_texture_);
 }
 
-void SMAAPrecomputedTextures::bind_area_texture(GPUShader *shader, const char *sampler_name) const
+void SMAAPrecomputedTextures::bind_area_texture(gpu::Shader *shader,
+                                                const char *sampler_name) const
 {
   const int texture_image_unit = GPU_shader_get_sampler_binding(shader, sampler_name);
   GPU_texture_bind(area_texture_, texture_image_unit);
@@ -69,7 +70,7 @@ void SMAAPrecomputedTextures::compute_gpu()
                                           SEARCHTEX_WIDTH,
                                           SEARCHTEX_HEIGHT,
                                           1,
-                                          GPU_R8,
+                                          gpu::TextureFormat::UNORM_8,
                                           GPU_TEXTURE_USAGE_SHADER_READ,
                                           nullptr);
   GPU_texture_update(search_texture_, GPU_DATA_UBYTE, searchTexBytes);
@@ -79,7 +80,7 @@ void SMAAPrecomputedTextures::compute_gpu()
                                         AREATEX_WIDTH,
                                         AREATEX_HEIGHT,
                                         1,
-                                        GPU_RG8,
+                                        gpu::TextureFormat::UNORM_8_8,
                                         GPU_TEXTURE_USAGE_SHADER_READ,
                                         nullptr);
   GPU_texture_update(area_texture_, GPU_DATA_UBYTE, areaTexBytes);

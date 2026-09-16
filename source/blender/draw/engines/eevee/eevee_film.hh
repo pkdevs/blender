@@ -36,11 +36,16 @@
 #include "DNA_scene_types.h"
 #include "DRW_render.hh"
 
-#include "eevee_shader_shared.hh"
+#include "draw_pass.hh"
+
+#include "eevee_film_shared.hh"
+#include "eevee_renderbuffers_shared.hh"
 
 #include <sstream>
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 
@@ -51,15 +56,17 @@ class Instance;
 class Film {
  public:
   /** Stores indirection table of AOVs based on their name hash and their type. */
-  AOVsInfoDataBuf aovs_info;
+  StorageBuffer<AOVsInfoData> aovs_info;
   /** For debugging purpose but could be a user option in the future. */
   static constexpr bool use_box_filter = false;
 
   struct DepthState {
     /** Set to 0 if reverse Z is supported, 1 otherwise. */
     float clear_value = 1.0f;
-    /** Set to DRW_STATE_DEPTH_GREATER_EQUAL if reverse Z is supported, DRW_STATE_DEPTH_LESS_EQUAL
-     * otherwise. */
+    /**
+     * Set to DRW_STATE_DEPTH_GREATER_EQUAL if reverse Z is supported, DRW_STATE_DEPTH_LESS_EQUAL
+     * otherwise.
+     */
     DRWState test_state = DRW_STATE_DEPTH_LESS_EQUAL;
   } depth;
 
@@ -67,13 +74,13 @@ class Film {
   Instance &inst_;
 
   /** Incoming combined buffer with post FX applied (motion blur + depth of field). */
-  GPUTexture *combined_final_tx_ = nullptr;
+  gpu::Texture *combined_final_tx_ = nullptr;
 
   /** Are we using the compute shader/pipeline. */
-  bool use_compute_;
+  bool use_compute_ = false;
 
   /** Copy of v3d->shading properties used to detect viewport settings update. */
-  eViewLayerEEVEEPassType ui_render_pass_ = eViewLayerEEVEEPassType(-1);
+  eViewLayerEEVEEPassType ui_render_pass_ = eViewLayerEEVEEPassType(0);
   std::string ui_aov_name_;
 
   /**
@@ -90,13 +97,16 @@ class Film {
   SwapChain<Texture, 2> combined_tx_;
   /** Weight buffers. Double buffered to allow updating it during accumulation. */
   SwapChain<Texture, 2> weight_tx_;
+  /** Denoising depth accumulation texture. Separated because using a different format. */
+  Texture denoising_depth_tx_;
 
   PassSimple accumulate_ps_ = {"Film.Accumulate"};
   PassSimple copy_ps_ = {"Film.Copy"};
   PassSimple cryptomatte_post_ps_ = {"Film.Cryptomatte.Post"};
 
   FilmData &data_;
-  int2 display_extent;
+  bool32_t display_only_;
+  int2 display_extent = int2(-1);
 
   eViewLayerEEVEEPassType enabled_passes_ = eViewLayerEEVEEPassType(0);
   /* Store the pass types needed by the viewport compositor separately, because some passes might
@@ -105,10 +115,12 @@ class Film {
   PassCategory enabled_categories_ = PassCategory(0);
   bool use_reprojection_ = false;
   bool is_valid_render_extent_ = true;
+  /** Cached value for `render_extent_get`, to avoid computing on every call. */
+  int2 render_extent_shading_view_ = int2(-1);
 
  public:
-  Film(Instance &inst, FilmData &data) : inst_(inst), data_(data){};
-  ~Film(){};
+  Film(Instance &inst, FilmData &data) : inst_(inst), data_(data) {};
+  ~Film() {};
 
   void init(const int2 &full_extent, const rcti *output_rect);
 
@@ -121,7 +133,7 @@ class Film {
   }
 
   /** Accumulate the newly rendered sample contained in #RenderBuffers and blit to display. */
-  void accumulate(View &view, GPUTexture *combined_final_tx);
+  void accumulate(View &view, gpu::Texture *combined_final_tx);
 
   /** Sort and normalize cryptomatte samples. */
   void cryptomatte_sort();
@@ -132,17 +144,28 @@ class Film {
   float *read_pass(eViewLayerEEVEEPassType pass_type, int layer_offset);
   float *read_aov(ViewLayerAOV *aov);
 
-  GPUTexture *get_pass_texture(eViewLayerEEVEEPassType pass_type, int layer_offset);
-  GPUTexture *get_aov_texture(ViewLayerAOV *aov);
+  gpu::Texture *get_pass_texture(eViewLayerEEVEEPassType pass_type, int layer_offset);
+  gpu::Texture *get_aov_texture(ViewLayerAOV *aov);
 
   void write_viewport_compositor_passes();
 
-  /** Returns shading views internal resolution. Includes overscan pixels. */
+  /**
+   * Returns the extent rendered by one shading view, including overscan: a square cubemap face
+   * for panoramic cameras and the rectangular render extent for all other cameras.
+   */
   int2 render_extent_get() const
+  {
+    return render_extent_shading_view_;
+  }
+  /**
+   * Returns the film's resolution.
+   * Includes overscan pixels.
+   */
+  int2 render_extent_original_get() const
   {
     return data_.render_extent;
   }
-  inline bool is_valid_render_extent() const
+  bool is_valid_render_extent() const
   {
     return is_valid_render_extent_;
   }
@@ -194,13 +217,16 @@ class Film {
   static ePassStorageType pass_storage_type(eViewLayerEEVEEPassType pass_type)
   {
     switch (pass_type) {
-      case EEVEE_RENDER_PASS_Z:
+      case EEVEE_RENDER_PASS_DEPTH:
       case EEVEE_RENDER_PASS_MIST:
+      case EEVEE_RENDER_PASS_DENOISING_ROUGHNESS:
         return PASS_STORAGE_VALUE;
       case EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT:
       case EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET:
       case EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL:
         return PASS_STORAGE_CRYPTOMATTE;
+      case EEVEE_RENDER_PASS_DENOISING_DEPTH:
+        return PASS_STORAGE_DENOISING_DEPTH;
       default:
         return PASS_STORAGE_COLOR;
     }
@@ -221,7 +247,7 @@ class Film {
     switch (pass_type) {
       case EEVEE_RENDER_PASS_COMBINED:
         return data_.combined_id;
-      case EEVEE_RENDER_PASS_Z:
+      case EEVEE_RENDER_PASS_DEPTH:
         return data_.depth_id;
       case EEVEE_RENDER_PASS_MIST:
         return data_.mist_id;
@@ -257,6 +283,16 @@ class Film {
         return data_.cryptomatte_asset_id;
       case EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL:
         return data_.cryptomatte_material_id;
+      case EEVEE_RENDER_PASS_DENOISING_DEPTH:
+        return data_.denoising_depth_id;
+      case EEVEE_RENDER_PASS_DENOISING_NORMAL:
+        return data_.denoising_normal_id;
+      case EEVEE_RENDER_PASS_DENOISING_ROUGHNESS:
+        return data_.denoising_roughness_id;
+      case EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO:
+        return data_.denoising_diffuse_albedo_id;
+      case EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO:
+        return data_.denoising_specular_albedo_id;
       default:
         return -1;
     }
@@ -283,8 +319,8 @@ class Film {
       case EEVEE_RENDER_PASS_COMBINED:
         result.append(RE_PASSNAME_COMBINED);
         break;
-      case EEVEE_RENDER_PASS_Z:
-        result.append(RE_PASSNAME_Z);
+      case EEVEE_RENDER_PASS_DEPTH:
+        result.append(RE_PASSNAME_DEPTH);
         break;
       case EEVEE_RENDER_PASS_MIST:
         result.append(RE_PASSNAME_MIST);
@@ -337,6 +373,21 @@ class Film {
       case EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL:
         build_cryptomatte_passes(RE_PASSNAME_CRYPTOMATTE_MATERIAL);
         break;
+      case EEVEE_RENDER_PASS_DENOISING_DEPTH:
+        result.append(RE_PASSNAME_DENOISING_DEPTH);
+        break;
+      case EEVEE_RENDER_PASS_DENOISING_NORMAL:
+        result.append(RE_PASSNAME_DENOISING_NORMAL);
+        break;
+      case EEVEE_RENDER_PASS_DENOISING_ROUGHNESS:
+        result.append(RE_PASSNAME_DENOISING_ROUGHNESS);
+        break;
+      case EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO:
+        result.append(RE_PASSNAME_DENOISING_DIFFUSE_ALBEDO);
+        break;
+      case EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO:
+        result.append(RE_PASSNAME_DENOISING_SPECULAR_ALBEDO);
+        break;
       default:
         BLI_assert(0);
         break;
@@ -344,16 +395,16 @@ class Film {
     return result;
   }
 
- private:
-  void init_aovs(const Set<std::string> &passes_used_by_viewport_compositor);
-  void sync_mist();
-
   /**
    * Precompute sample weights if they are uniform across the whole film extent.
    */
   void update_sample_table();
 
-  void init_pass(PassSimple &pass, GPUShader *sh);
+ private:
+  void init_aovs(const Set<std::string> &passes_used_by_viewport_compositor);
+  void sync_mist();
+
+  void init_pass(PassSimple &pass, gpu::Shader *sh);
 };
 
 /** \} */

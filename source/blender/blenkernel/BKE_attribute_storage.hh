@@ -2,27 +2,37 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include <variant>
 
-#include "BLI_function_ref.hh"
 #include "BLI_implicit_sharing_ptr.hh"
+#include "BLI_map.hh"
 #include "BLI_memory_counter_fwd.hh"
+#include "BLI_random_access_iterator_mixin.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
+#include "BKE_attribute_enums.hh"
+
 #include "DNA_attribute_types.h"
 
+namespace blender {
+
+struct Attribute;
 struct BlendDataReader;
 struct BlendWriter;
-namespace blender {
+struct IDTypeForeachColorFunctionCallback;
 class GPointer;
 class CPPType;
 class ResourceScope;
-}  // namespace blender
 
-namespace blender::bke {
+namespace bke {
 
 enum class AttrDomain : int8_t;
 enum class AttrType : int16_t;
@@ -40,12 +50,13 @@ class Attribute {
      * stores the size and type itself. It may be possible to make use of that fact to avoid
      * storing it here, or even vice versa. */
     void *data;
-    /* The number of elements in the array. */
+    /** The number of elements in the array. */
     int64_t size;
     ImplicitSharingPtr<> sharing_info;
-    static ArrayData ForValue(const GPointer &value, int64_t domain_size);
-    static ArrayData ForDefaultValue(const CPPType &type, int64_t domain_size);
-    static ArrayData ForConstructed(const CPPType &type, int64_t domain_size);
+    static ArrayData from_value(const GPointer &value, int64_t domain_size);
+    static ArrayData from_default_value(const CPPType &type, int64_t domain_size);
+    static ArrayData from_uninitialized(const CPPType &type, int64_t domain_size);
+    static ArrayData from_constructed(const CPPType &type, int64_t domain_size);
   };
   /** Data for an attribute stored as a single value for the entire domain. */
   struct SingleData {
@@ -53,8 +64,8 @@ class Attribute {
      * It's not necessary to manage a single value. */
     void *value;
     ImplicitSharingPtr<> sharing_info;
-    static SingleData ForValue(const GPointer &value);
-    static SingleData ForDefaultValue(const CPPType &type);
+    static SingleData from_value(const GPointer &value);
+    static SingleData from_default_value(const CPPType &type);
   };
   using DataVariant = std::variant<ArrayData, SingleData>;
   friend AttributeStorage;
@@ -103,10 +114,11 @@ class Attribute {
   /**
    * The same as #data(), but if the attribute data is shared initially, it will be unshared and
    * made mutable.
-   *
-   * \warning Does not yet support attributes stored as a single value (#AttrStorageType::Single).
    */
   DataVariant &data_for_write();
+
+  /** Replace the attribute's data without first making the existing data mutable. */
+  void assign_data(DataVariant &&data);
 };
 
 class AttributeStorageRuntime {
@@ -125,7 +137,7 @@ class AttributeStorageRuntime {
   CustomIDVectorSet<std::unique_ptr<Attribute>, AttributeNameGetter> attributes;
 };
 
-class AttributeStorage : public ::AttributeStorage {
+class AttributeStorage : public blender::AttributeStorage {
  public:
   AttributeStorage();
   AttributeStorage(const AttributeStorage &other);
@@ -133,15 +145,6 @@ class AttributeStorage : public ::AttributeStorage {
   AttributeStorage &operator=(const AttributeStorage &other);
   AttributeStorage &operator=(AttributeStorage &&other);
   ~AttributeStorage();
-
-  /**
-   * Iterate over all attributes, with the order defined by the order of insertion. It is not safe
-   * to add or remove attributes while iterating.
-   */
-  void foreach(FunctionRef<void(Attribute &)> fn);
-  void foreach(FunctionRef<void(const Attribute &)> fn) const;
-  void foreach_with_stop(FunctionRef<bool(Attribute &)> fn);
-  void foreach_with_stop(FunctionRef<bool(const Attribute &)> fn) const;
 
   /** Return the number of attributes. */
   int count() const;
@@ -165,6 +168,8 @@ class AttributeStorage : public ::AttributeStorage {
    * not be called while iterating over attributes.
    */
   bool remove(StringRef name);
+  bool remove(const Set<StringRef> &names);
+  bool remove(const Set<const Attribute *> &attributes);
 
   /**
    * Add an attribute with the given name, which must not already be used by an existing attribute
@@ -176,10 +181,18 @@ class AttributeStorage : public ::AttributeStorage {
                  Attribute::DataVariant data);
 
   /** Return a possibly changed version of the input name that is unique within existing names. */
-  std::string unique_name_calc(StringRef name);
+  std::string unique_name_calc(StringRef name) const;
 
   /** Change the name of a single existing attribute. */
   void rename(StringRef old_name, std::string new_name);
+  void rename(Attribute &attr, std::string new_name);
+  void rename(const Map<Attribute *, StringRef> &renames);
+
+  /**
+   * Resize the data for a given domain. New values will be default initialized (meaning no zero
+   * initialization for trivial types).
+   */
+  void resize(AttrDomain domain, int64_t new_size);
 
   /**
    * Read data owned by the #AttributeStorage struct. This works by converting the DNA-specific
@@ -191,8 +204,10 @@ class AttributeStorage : public ::AttributeStorage {
    * #attribute_storage_blend_write_prepare for more information.
    */
   struct BlendWriteData {
+    BlendWriter *writer;
     ResourceScope &scope;
-    Vector<::Attribute, 16> attributes;
+    Vector<blender::Attribute, 16> &attributes;
+    explicit BlendWriteData(BlendWriter *writer, ResourceScope &scope);
   };
   /**
    * Write the prepared data and the data stored in the DNA fields in
@@ -200,11 +215,68 @@ class AttributeStorage : public ::AttributeStorage {
    */
   void blend_write(BlendWriter &writer, const BlendWriteData &write_data);
 
+  /**
+   * Iterate over every color to change it to another color-space.
+   */
+  void foreach_working_space_color(const IDTypeForeachColorFunctionCallback &fn);
+
   void count_memory(MemoryCounter &memory) const;
+
+  class Iterator : public iterator::RandomAccessIteratorMixin<Iterator> {
+   private:
+    using It = const std::unique_ptr<Attribute> *;
+    It it_;
+
+   public:
+    using value_type = Attribute;
+    using pointer = const Attribute *;
+    using reference = const Attribute &;
+
+    explicit Iterator(It it) : it_(it) {}
+
+    const Attribute &operator*() const
+    {
+      return **it_;
+    }
+
+    const It &iter_prop() const
+    {
+      return it_;
+    }
+  };
+
+  class MutableIterator : public iterator::RandomAccessIteratorMixin<MutableIterator> {
+   private:
+    using It = std::unique_ptr<Attribute> *;
+    It it_;
+
+   public:
+    using value_type = Attribute;
+    using pointer = Attribute *;
+    using reference = Attribute &;
+
+    explicit MutableIterator(It it) : it_(it) {}
+
+    Attribute &operator*() const
+    {
+      return **it_;
+    }
+
+    const It &iter_prop() const
+    {
+      return it_;
+    }
+  };
+
+  Iterator begin() const;
+  Iterator end() const;
+
+  MutableIterator begin();
+  MutableIterator end();
 };
 
 /** The C++ wrapper needs to be the same size as the DNA struct. */
-static_assert(sizeof(AttributeStorage) == sizeof(::AttributeStorage));
+static_assert(sizeof(AttributeStorage) == sizeof(AttributeStorage));
 
 inline StringRefNull Attribute::name() const
 {
@@ -226,13 +298,55 @@ inline const Attribute::DataVariant &Attribute::data() const
   return data_;
 }
 
-}  // namespace blender::bke
+inline AttrStorageType Attribute::storage_type() const
+{
+  static_assert(std::is_same_v<
+                std::variant_alternative_t<int(AttrStorageType::Array), Attribute::DataVariant>,
+                Attribute::ArrayData>);
+  static_assert(std::is_same_v<
+                std::variant_alternative_t<int(AttrStorageType::Single), Attribute::DataVariant>,
+                Attribute::SingleData>);
+  return AttrStorageType(data_.index());
+}
 
-inline blender::bke::AttributeStorage &AttributeStorage::wrap()
+inline void Attribute::assign_data(DataVariant &&data)
 {
-  return *reinterpret_cast<blender::bke::AttributeStorage *>(this);
+  data_ = std::move(data);
 }
-inline const blender::bke::AttributeStorage &AttributeStorage::wrap() const
+
+inline AttributeStorage::Iterator AttributeStorage::begin() const
 {
-  return *reinterpret_cast<const blender::bke::AttributeStorage *>(this);
+  return Iterator(this->runtime->attributes.begin());
 }
+
+inline AttributeStorage::Iterator AttributeStorage::end() const
+{
+  return Iterator(this->runtime->attributes.end());
+}
+
+inline AttributeStorage::MutableIterator AttributeStorage::begin()
+{
+  /* Removing const is fine as long as the name of the attribute is not changed while iterating
+   * over the attributes. Renaming goes through #AttributeStorage::rename anyway. */
+  return MutableIterator(
+      const_cast<std::unique_ptr<Attribute> *>(this->runtime->attributes.begin()));
+}
+
+inline AttributeStorage::MutableIterator AttributeStorage::end()
+{
+  return MutableIterator(
+      const_cast<std::unique_ptr<Attribute> *>(this->runtime->attributes.end()));
+}
+
+}  // namespace bke
+
+inline bke::AttributeStorage &AttributeStorage::wrap()
+{
+  return *reinterpret_cast<bke::AttributeStorage *>(this);
+}
+inline const bke::AttributeStorage &AttributeStorage::wrap() const
+{
+  return *reinterpret_cast<const bke::AttributeStorage *>(this);
+}
+
+}  // namespace blender

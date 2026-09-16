@@ -10,10 +10,10 @@
 #include "BKE_object.hh"
 
 #include "BLI_delaunay_2d.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_object_types.h"
 
@@ -46,17 +46,17 @@ Vector<Vector<int>> fixup_invalid_face(Span<float3> vert_positions, Span<int> fa
     input_verts[i] = double2(coord2d.x, coord2d.y);
   }
 
-  Array<Vector<int>> input_faces(1);
-  input_faces.first().resize(input_verts.size());
-
-  std::iota(input_faces.first().begin(), input_faces.first().end(), 0);
+  const Array<int> face_offsets({0, int(input_verts.size())});
+  Array<int> face_vert_indices(input_verts.size());
+  std::iota(face_vert_indices.begin(), face_vert_indices.end(), 0);
 
   /* Prepare data for CDT. */
   CDT_input<double> input;
-  input.vert = std::move(input_verts);
-  input.face = std::move(input_faces);
+  input.vert = input_verts;
+  input.face_offsets = face_offsets.as_span();
+  input.face_vert_indices = face_vert_indices;
   input.epsilon = 1.0e-6f;
-  input.need_ids = true;
+  input.needed_ids = CDT_ORIG_VERTS | CDT_ONLY_ONE_ORIG;
   CDT_result<double> res = delaunay_2d_calc(input, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
 
   /* Emit new face information from CDT result. */
@@ -100,17 +100,6 @@ void transform_object(Object *object, const OBJImportParams &import_params)
       import_params.global_scale, import_params.global_scale, import_params.global_scale};
   rescale_m4(obmat, scale_vec);
   BKE_object_apply_mat4(object, obmat, true, false);
-
-  if (import_params.clamp_size > 0.0f) {
-    BLI_assert(object->type == OB_MESH);
-    const Mesh *mesh = static_cast<const Mesh *>(object->data);
-    const Bounds<float3> bounds = *mesh->bounds_min_max();
-    const float max_diff = math::reduce_max(bounds.max - bounds.min);
-    if (import_params.clamp_size < max_diff * import_params.global_scale) {
-      const float scale = import_params.clamp_size / max_diff;
-      copy_v3_fl(object->scale, scale);
-    }
-  }
 }
 
 std::string get_geometry_name(const std::string &full_name, char separator)

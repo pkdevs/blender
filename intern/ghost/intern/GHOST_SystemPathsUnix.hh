@@ -8,7 +8,12 @@
 
 #pragma once
 
-#include "../GHOST_Types.h"
+#include <array>
+#include <atomic>
+#include <optional>
+#include <string>
+
+#include "../GHOST_Types.hh"
 #include "GHOST_SystemPaths.hh"
 
 class GHOST_SystemPathsUnix : public GHOST_SystemPaths {
@@ -32,6 +37,14 @@ class GHOST_SystemPathsUnix : public GHOST_SystemPaths {
   const char *getSystemDir(int version, const char *versionstr) const override;
 
   /**
+   * Determine the base directory for architecture-dependent shared libraries, mirroring
+   * #getSystemDir under the install lib tree (eg `/usr/lib/blender/`).
+   * \return Unsigned char string pointing to the system libraries directory or null
+   * when the system-libraries path is not used.
+   */
+  const char *getSystemLibsDir(int version, const char *versionstr) const override;
+
+  /**
    * Determine the base directory in which user configuration is stored, including versioning.
    * If needed, it will create the base directory.
    * \return Unsigned char string pointing to user directory (eg `~/.config/.blender/`).
@@ -40,9 +53,9 @@ class GHOST_SystemPathsUnix : public GHOST_SystemPaths {
 
   /**
    * Determine a special ("well known") and easy to reach user directory.
-   * \return Unsigned char string pointing to user directory (eg `~/Documents/`).
+   * \return If successfull, a string containing the user directory path (eg `~/Documents/`).
    */
-  const char *getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const override;
+  std::optional<std::string> getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const override;
 
   /**
    * Determine the directory of the current binary.
@@ -54,4 +67,16 @@ class GHOST_SystemPathsUnix : public GHOST_SystemPaths {
    * Add the file to the operating system most recently used files
    */
   void addToSystemRecentFiles(const char *filepath) const override;
+
+ private:
+  struct UserSpecialDirCache {
+    /** Atomic so the resolved case can be checked without locking. */
+    std::atomic<bool> resolved = false;
+    /** Resolved path, or `nullopt` when the look-up failed. */
+    std::optional<std::string> path;
+  };
+  /**
+   * Cache to store the result of #getUserSpecialDir.
+   */
+  mutable std::array<UserSpecialDirCache, GHOST_kUserSpecialDirType_Num> user_special_dir_cache_;
 };

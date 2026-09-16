@@ -5,16 +5,9 @@
 #ifdef WITH_METAL
 
 #  include "device/metal/util.h"
-#  include "device/metal/device_impl.h"
-#  include "util/md5.h"
-#  include "util/path.h"
 #  include "util/string.h"
-#  include "util/time.h"
 
 #  include <IOKit/IOKitLib.h>
-#  include <ctime>
-#  include <pwd.h>
-#  include <sys/shm.h>
 
 CCL_NAMESPACE_BEGIN
 
@@ -32,17 +25,15 @@ string MetalInfo::get_device_name(id<MTLDevice> device)
 int MetalInfo::get_apple_gpu_core_count(id<MTLDevice> device)
 {
   int core_count = 0;
-  if (@available(macos 12.0, *)) {
-    io_service_t gpu_service = IOServiceGetMatchingService(
-        kIOMainPortDefault, IORegistryEntryIDMatching(device.registryID));
-    if (CFNumberRef numberRef = (CFNumberRef)IORegistryEntryCreateCFProperty(
-            gpu_service, CFSTR("gpu-core-count"), nullptr, 0))
-    {
-      if (CFGetTypeID(numberRef) == CFNumberGetTypeID()) {
-        CFNumberGetValue(numberRef, kCFNumberSInt32Type, &core_count);
-      }
-      CFRelease(numberRef);
+  io_service_t gpu_service = IOServiceGetMatchingService(
+      kIOMainPortDefault, IORegistryEntryIDMatching(device.registryID));
+  if (CFNumberRef numberRef = (CFNumberRef)IORegistryEntryCreateCFProperty(
+          gpu_service, CFSTR("gpu-core-count"), nullptr, 0))
+  {
+    if (CFGetTypeID(numberRef) == CFNumberGetTypeID()) {
+      CFNumberGetValue(numberRef, kCFNumberSInt32Type, &core_count);
     }
+    CFRelease(numberRef);
   }
   return core_count;
 }
@@ -84,12 +75,13 @@ const vector<id<MTLDevice>> &MetalInfo::get_usable_devices()
     return usable_devices;
   }
 
-  metal_printf("Usable Metal devices:\n");
+  metal_printf("Usable Metal devices:");
   for (id<MTLDevice> device in MTLCopyAllDevices()) {
     string device_name = get_device_name(device);
     bool usable = false;
 
-    if (@available(macos 12.2, *)) {
+    /* NOTE: This @available check sets the Cycles minimum macOS version. */
+    if (@available(macos 13.0, *)) {
       const char *device_name_char = [device.name UTF8String];
       if (!(strstr(device_name_char, "Intel") || strstr(device_name_char, "AMD")) &&
           strstr(device_name_char, "Apple"))
@@ -102,79 +94,20 @@ const vector<id<MTLDevice>> &MetalInfo::get_usable_devices()
     }
 
     if (usable) {
-      metal_printf("- %s\n", device_name.c_str());
+      metal_printf("- %s", device_name.c_str());
       [device retain];
       usable_devices.push_back(device);
     }
     else {
-      metal_printf("  (skipping \"%s\")\n", device_name.c_str());
+      metal_printf("  (skipping \"%s\")", device_name.c_str());
     }
   }
   if (usable_devices.empty()) {
-    metal_printf("   No usable Metal devices found\n");
+    metal_printf("   No usable Metal devices found");
   }
   already_enumerated = true;
 
   return usable_devices;
-}
-
-id<MTLBuffer> MetalBufferPool::get_buffer(id<MTLDevice> device,
-                                          id<MTLCommandBuffer> command_buffer,
-                                          NSUInteger length,
-                                          const void *pointer,
-                                          Stats &stats)
-{
-  id<MTLBuffer> buffer = nil;
-  {
-    thread_scoped_lock lock(buffer_mutex);
-    /* Find an unused buffer with matching size and storage mode. */
-    for (MetalBufferListEntry &bufferEntry : temp_buffers) {
-      if (bufferEntry.buffer.length == length && bufferEntry.command_buffer == nil) {
-        buffer = bufferEntry.buffer;
-        bufferEntry.command_buffer = command_buffer;
-        break;
-      }
-    }
-    if (!buffer) {
-      /* Create a new buffer and add it to the pool. Typically this pool will only grow to a
-       * handful of entries. */
-      buffer = [device newBufferWithLength:length options:MTLResourceStorageModeShared];
-      stats.mem_alloc(buffer.allocatedSize);
-      total_temp_mem_size += buffer.allocatedSize;
-      temp_buffers.push_back(MetalBufferListEntry{buffer, command_buffer});
-    }
-  }
-
-  /* Copy over data */
-  if (pointer) {
-    memcpy(buffer.contents, pointer, length);
-  }
-
-  return buffer;
-}
-
-void MetalBufferPool::process_command_buffer_completion(id<MTLCommandBuffer> command_buffer)
-{
-  assert(command_buffer);
-  thread_scoped_lock lock(buffer_mutex);
-  /* Mark any temp buffers associated with command_buffer as unused. */
-  for (MetalBufferListEntry &buffer_entry : temp_buffers) {
-    if (buffer_entry.command_buffer == command_buffer) {
-      buffer_entry.command_buffer = nil;
-    }
-  }
-}
-
-MetalBufferPool::~MetalBufferPool()
-{
-  thread_scoped_lock lock(buffer_mutex);
-  /* Release all buffers that have not been recently reused */
-  for (MetalBufferListEntry &buffer_entry : temp_buffers) {
-    total_temp_mem_size -= buffer_entry.buffer.allocatedSize;
-    [buffer_entry.buffer release];
-    buffer_entry.buffer = nil;
-  }
-  temp_buffers.clear();
 }
 
 CCL_NAMESPACE_END

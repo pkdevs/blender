@@ -2,9 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_glare_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_glare_bloom_downsample_shared)
+
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_safe.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 #if defined(KARIS_AVERAGE)
 /* Computes the weighted average of the given four colors, which are assumed to the colors of

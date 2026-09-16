@@ -9,9 +9,7 @@
  * dragging larger headers into the createInfo pipeline which would cause problems.
  */
 
-#ifndef GPU_SHADER
-#  pragma once
-#endif
+#pragma once
 
 #ifndef SQUARE
 #  define SQUARE(x) ((x) * (x))
@@ -22,8 +20,10 @@
 
 /* Hierarchical Z down-sampling. */
 #define HIZ_MIP_COUNT 7
-/* NOTE: The shader is written to update 5 mipmaps using LDS. */
-#define HIZ_GROUP_SIZE 32
+/* NOTE: The shader is written to update 5 mipmaps using LDS.
+ * Each thread actually update 4 LOD_0 pixels, which means the number of MIPLVL we cover is:
+ * `(log2(HIZ_GROUP_SIZE) + 1) + LOD_0 + LAST_GROUP_LVL = HIZ_MIP_COUNT` */
+#define HIZ_GROUP_SIZE 16
 
 /* Avoid too much overhead caused by resizing the light buffers too many time. */
 #define LIGHT_CHUNK 256
@@ -47,17 +47,18 @@
 /* Maximum number of thread-groups dispatched for remapping a probe to octahedral mapping. */
 #define SPHERE_PROBE_MAX_HARMONIC SQUARE(SPHERE_PROBE_ATLAS_RES / SPHERE_PROBE_REMAP_GROUP_SIZE)
 /* Start and end value for mixing sphere probe and volume probes. */
-#define SPHERE_PROBE_MIX_START_ROUGHNESS 0.7
-#define SPHERE_PROBE_MIX_END_ROUGHNESS 0.9
+#define SPHERE_PROBE_MIX_START_ROUGHNESS 0.7f
+#define SPHERE_PROBE_MIX_END_ROUGHNESS 0.9f
 /* Roughness of the last mip map for sphere probes. */
-#define SPHERE_PROBE_MIP_MAX_ROUGHNESS 0.7
+#define SPHERE_PROBE_MIP_MAX_ROUGHNESS 0.7f
+#define SPHERE_PROBE_FORMAT SFLOAT_16_16_16_16
 /**
  * Limited by the UBO size limit `(16384 bytes / sizeof(SphereProbeData))`.
  */
 #define SPHERE_PROBE_MAX 128
 
 /** NOTE: Runtime format only. */
-#define VOLUME_PROBE_FORMAT GPU_RGBA16F
+#define VOLUME_PROBE_FORMAT SFLOAT_16_16_16_16
 
 /**
  * Limited by the performance impact it can cause.
@@ -111,14 +112,15 @@
 #define SHADOW_AABB_TAG_GROUP_SIZE 64
 #define SHADOW_MAX_TILEMAP 4096
 #define SHADOW_MAX_TILE (SHADOW_MAX_TILEMAP * SHADOW_TILEDATA_PER_TILEMAP)
-#define SHADOW_MAX_PAGE 4096
+#define SHADOW_MAX_PAGE 8192
 #define SHADOW_BOUNDS_GROUP_SIZE 64
 #define SHADOW_CLIPMAP_GROUP_SIZE 64
 #define SHADOW_VIEW_MAX 64 /* Must match DRW_VIEW_MAX. */
 #define SHADOW_RENDER_MAP_SIZE (SHADOW_VIEW_MAX * SHADOW_TILEMAP_LOD0_LEN)
 #define SHADOW_ATOMIC 1
-#define SHADOW_PAGE_PER_ROW 4
-#define SHADOW_PAGE_PER_COL 4
+#define SHADOW_PAGE_PER_ROW 8
+#define SHADOW_PAGE_PER_COL 8
+#define SHADOW_PAGE_MAX_LAYER 128
 #define SHADOW_PAGE_PER_LAYER (SHADOW_PAGE_PER_ROW * SHADOW_PAGE_PER_COL)
 #define SHADOW_MAX_STEP 16
 #define SHADOW_MAX_RAY 4
@@ -131,21 +133,21 @@
 #define GBUF_NORMAL_FB_LAYER_COUNT 1
 
 /* Deferred Lighting. */
-#define DEFERRED_RADIANCE_FORMAT GPU_R32UI
+#define DEFERRED_RADIANCE_FORMAT UINT_32
 #define DEFERRED_GBUFFER_ROG_ID 0
 
 /* Ray-tracing. */
 #define RAYTRACE_GROUP_SIZE 8
 /* Keep this as a define to avoid shader variations. */
-#define RAYTRACE_RADIANCE_FORMAT GPU_R11F_G11F_B10F
-#define RAYTRACE_RAYTIME_FORMAT GPU_R32F
-#define RAYTRACE_VARIANCE_FORMAT GPU_R16F
-#define RAYTRACE_TILEMASK_FORMAT GPU_R8UI
+#define RAYTRACE_RADIANCE_FORMAT UFLOAT_11_11_10
+#define RAYTRACE_RAYTIME_FORMAT SFLOAT_32
+#define RAYTRACE_VARIANCE_FORMAT SFLOAT_16
+#define RAYTRACE_TILEMASK_FORMAT UINT_8
 
 /* Sub-Surface Scattering. */
 #define SUBSURFACE_GROUP_SIZE RAYTRACE_GROUP_SIZE
-#define SUBSURFACE_RADIANCE_FORMAT GPU_R11F_G11F_B10F
-#define SUBSURFACE_OBJECT_ID_FORMAT GPU_R16UI
+#define SUBSURFACE_RADIANCE_FORMAT UFLOAT_11_11_10
+#define SUBSURFACE_OBJECT_ID_FORMAT UINT_16
 
 /* Film. */
 #define FILM_GROUP_SIZE 16
@@ -191,6 +193,26 @@
 /* Velocity. */
 #define VERTEX_COPY_GROUP_SIZE 64
 
+/* Utility Texture. */
+#define UTIL_TEX_SIZE 64
+#define UTIL_BSDF_LAYER_COUNT 16
+/* Scale and bias to avoid interpolation of the border pixel.
+ * Remap UVs to the border pixels centers. */
+#define UTIL_TEX_UV_SCALE ((UTIL_TEX_SIZE - 1.0f) / UTIL_TEX_SIZE)
+#define UTIL_TEX_UV_BIAS (0.5f / UTIL_TEX_SIZE)
+
+#define UTIL_BLUE_NOISE_LAYER 0
+#define UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER 1
+#define UTIL_LTC_MAT_LAYER 2
+#define UTIL_BRDF_LAYER 3
+#define UTIL_BSDF_LAYER 4
+#define UTIL_DISK_INTEGRAL_LAYER UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER
+#define UTIL_DISK_INTEGRAL_COMP 3
+
+#define PREPASS_FRAG_OUT_NORMAL 0
+#define PREPASS_FRAG_OUT_OB_ID 1
+#define PREPASS_FRAG_OUT_VELOCITY 2
+
 /* Resource bindings. */
 
 /* Textures. */
@@ -205,15 +227,18 @@
 #define SPHERE_PROBE_TEX_SLOT 7
 #define VOLUME_SCATTERING_TEX_SLOT 8
 #define VOLUME_TRANSMITTANCE_TEX_SLOT 9
+#define HIZ_PREVIOUS_LAYER_TEX_SLOT 10
+#define RADIANCE_PREVIOUS_LAYER_TEX_SLOT 11
+#define RAYCAST_DEPTH_TEX_SLOT 12
+#define OBJECT_ID_TEX_SLOT 13
+#define PREPASS_NORMAL_TEX_SLOT 14
 /* Currently only used by ray-tracing, but might become used by forward too. */
-#define PLANAR_PROBE_DEPTH_TEX_SLOT 10
-#define PLANAR_PROBE_RADIANCE_TEX_SLOT 11
-/* Reserved slots info */
-#define MATERIAL_TEXTURE_RESERVED_SLOT_FIRST RBUFS_UTILITY_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_NO_EVAL HIZ_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_HYBRID SPHERE_PROBE_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_FORWARD VOLUME_TRANSMITTANCE_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_WORLD SPHERE_PROBE_TEX_SLOT
+#define PLANAR_PROBE_DEPTH_TEX_SLOT 15
+#define PLANAR_PROBE_RADIANCE_TEX_SLOT 16
+
+#define GBUF_CLOSURE_TEX_SLOT 17
+#define GBUF_NORMAL_TEX_SLOT 18
+#define GBUF_HEADER_TEX_SLOT 19
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0
@@ -238,15 +263,20 @@
 /* Uniform Buffers. */
 /* Slot 0 is GPU_NODE_TREE_UBO_SLOT. */
 #define UNIFORM_BUF_SLOT 1
+/* Split from the main uniform buffer since they're updated multiple times per frame. */
+#define PIPELINE_BUF_SLOT 2
+#define RAYTRACE_BUF_SLOT 3
 /* Only during surface shading (forward and deferred eval). */
-#define IRRADIANCE_GRID_BUF_SLOT 2
-#define SPHERE_PROBE_BUF_SLOT 3
-#define PLANAR_PROBE_BUF_SLOT 4
+#define IRRADIANCE_GRID_BUF_SLOT 4
+#define SPHERE_PROBE_BUF_SLOT 5
+#define PLANAR_PROBE_BUF_SLOT 6
 /* Only during pre-pass. */
-#define VELOCITY_CAMERA_PREV_BUF 2
-#define VELOCITY_CAMERA_CURR_BUF 3
-#define VELOCITY_CAMERA_NEXT_BUF 4
-#define CLIP_PLANE_BUF 5
+#define VELOCITY_CAMERA_PREV_BUF 4
+#define VELOCITY_CAMERA_CURR_BUF 5
+#define VELOCITY_CAMERA_NEXT_BUF 6
+#define CLIP_PLANE_BUF 7
+/* Only during subsurface scattering */
+#define SUBSURFACE_BUF_SLOT 4
 
 /* Storage Buffers. */
 #define LIGHT_CULL_BUF_SLOT 0
@@ -272,5 +302,9 @@
 #define VELOCITY_GEO_NEXT_BUF_SLOT 3
 #define VELOCITY_INDIRECTION_BUF_SLOT 4
 
+#define CLOSURE_WEIGHT_CUTOFF 1e-5f
 /* Treat closure as singular if the roughness is below this threshold. */
-#define BSDF_ROUGHNESS_THRESHOLD 2e-2
+#define BSDF_ROUGHNESS_THRESHOLD 2e-2f
+
+/* Cannot use math libraries in shared headers yet. */
+#define EEVEE_PI 3.14159265358979323846f /* pi */

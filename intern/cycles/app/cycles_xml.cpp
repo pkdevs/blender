@@ -2,13 +2,11 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include <cstdio>
-
 #include <algorithm>
+#include <cstdio>
 
 #include "graph/node_xml.h"
 
-#include "scene/alembic.h"
 #include "scene/background.h"
 #include "scene/camera.h"
 #include "scene/film.h"
@@ -22,8 +20,10 @@
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
 
+#include "util/log.h"
 #include "util/path.h"
 #include "util/projection.h"
+#include "util/string.h"
 #include "util/transform.h"
 #include "util/xml.h"
 
@@ -122,7 +122,9 @@ static bool xml_read_float3(float3 *value, const xml_node node, const char *name
   return false;
 }
 
-static bool xml_read_float3_array(vector<float3> &value, const xml_node node, const char *name)
+static bool xml_read_float3_array(vector<packed_float3> &value,
+                                  const xml_node node,
+                                  const char *name)
 {
   vector<float> array;
 
@@ -194,30 +196,6 @@ static void xml_read_camera(XMLReadState &state, const xml_node node)
   cam->update(state.scene);
 }
 
-/* Alembic */
-
-#ifdef WITH_ALEMBIC
-static void xml_read_alembic(XMLReadState &state, const xml_node graph_node)
-{
-  AlembicProcedural *proc = state.scene->create_node<AlembicProcedural>();
-  xml_read_node(state, proc, graph_node);
-
-  for (xml_node node = graph_node.first_child(); node; node = node.next_sibling()) {
-    if (string_iequals(node.name(), "object")) {
-      string path;
-      if (xml_read_string(&path, node, "path")) {
-        const ustring object_path(path, 0);
-        AlembicObject *object = proc->get_or_create_object(object_path);
-
-        array<Node *> used_shaders = object->get_used_shaders();
-        used_shaders.push_back_slow(state.shader);
-        object->set_used_shaders(used_shaders);
-      }
-    }
-  }
-}
-#endif
-
 /* Shader */
 
 static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml_node graph_node)
@@ -251,7 +229,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
         ShaderOutput *output = nullptr;
         ShaderInput *input = nullptr;
 
-        if (graph_reader.node_map.find(from_node_name) != graph_reader.node_map.end()) {
+        if (graph_reader.node_map.contains(from_node_name)) {
           ShaderNode *fromnode = (ShaderNode *)graph_reader.node_map[from_node_name];
 
           for (ShaderOutput *out : fromnode->outputs) {
@@ -261,17 +239,15 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
           }
 
           if (!output) {
-            fprintf(stderr,
-                    "Unknown output socket name \"%s\" on \"%s\".\n",
-                    from_node_name.c_str(),
-                    from_socket_name.c_str());
+            LOG_ERROR << "Unknown output socket name \"" << from_node_name << "\" on \""
+                      << from_socket_name << "\".";
           }
         }
         else {
-          fprintf(stderr, "Unknown shader node name \"%s\".\n", from_node_name.c_str());
+          LOG_ERROR << "Unknown shader node name \"" << from_node_name << "\"";
         }
 
-        if (graph_reader.node_map.find(to_node_name) != graph_reader.node_map.end()) {
+        if (graph_reader.node_map.contains(to_node_name)) {
           ShaderNode *tonode = (ShaderNode *)graph_reader.node_map[to_node_name];
 
           for (ShaderInput *in : tonode->inputs) {
@@ -281,14 +257,12 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
           }
 
           if (!input) {
-            fprintf(stderr,
-                    "Unknown input socket name \"%s\" on \"%s\".\n",
-                    to_socket_name.c_str(),
-                    to_node_name.c_str());
+            LOG_ERROR << "Unknown input socket name \"" << to_socket_name << "\" on \""
+                      << to_node_name << "\"";
           }
         }
         else {
-          fprintf(stderr, "Unknown shader node name \"%s\".\n", to_node_name.c_str());
+          LOG_ERROR << "Unknown shader node name \"" << to_node_name << "\"";
         }
 
         /* connect */
@@ -297,7 +271,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
         }
       }
       else {
-        fprintf(stderr, "Invalid from or to value for connect node.\n");
+        LOG_ERROR << "Invalid from or to value for connect node.";
       }
 
       continue;
@@ -320,17 +294,17 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
           snode = OSLShaderManager::osl_node(graph.get(), state.scene, filepath, "");
 
           if (!snode) {
-            fprintf(stderr, "Failed to create OSL node from \"%s\".\n", filepath.c_str());
+            LOG_ERROR << "Failed to create OSL node from \"" << filepath << "\"";
             continue;
           }
         }
         else {
-          fprintf(stderr, "OSL node missing \"src\" attribute.\n");
+          LOG_ERROR << "OSL node missing \"src\" attribute.";
           continue;
         }
       }
       else {
-        fprintf(stderr, "OSL node without using --shadingsys osl.\n");
+        LOG_ERROR << "OSL node without using --shadingsys osl.";
         continue;
       }
     }
@@ -345,15 +319,16 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, const xml
       const NodeType *node_type = NodeType::find(node_name);
 
       if (!node_type) {
-        fprintf(stderr, "Unknown shader node \"%s\".\n", node.name());
+        LOG_ERROR << "Unknown shader node \"" << node.name() << "\"";
         continue;
       }
       if (node_type->type != NodeType::SHADER) {
-        fprintf(stderr, "Node type \"%s\" is not a shader node.\n", node_type->name.c_str());
+        LOG_ERROR << "Node type \"" << node_type->name << "\" is not a shader node";
         continue;
       }
       if (node_type->create == nullptr) {
-        fprintf(stderr, "Can't create abstract node type \"%s\".\n", node_type->name.c_str());
+        LOG_ERROR << "Can't create abstract node type \""
+                  << "\"";
         continue;
       }
 
@@ -431,8 +406,8 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
   const bool smooth = state.smooth;
 
   /* read vertices and polygons */
-  vector<float3> P;
-  vector<float3> VN; /* Vertex normals */
+  vector<packed_float3> P;
+  vector<packed_float3> VN; /* Vertex normals */
   vector<float> UV;
   vector<float> T;  /* UV tangents */
   vector<float> TS; /* UV tangent signs */
@@ -450,21 +425,20 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
     mesh->set_subdivision_type(Mesh::SUBDIVISION_LINEAR);
   }
 
-  array<float3> P_array;
-  P_array = P;
-
   if (mesh->get_subdivision_type() == Mesh::SUBDIVISION_NONE) {
     /* create vertices */
-
-    mesh->set_verts(P_array);
 
     size_t num_triangles = 0;
     for (size_t i = 0; i < nverts.size(); i++) {
       num_triangles += nverts[i] - 2;
     }
-    mesh->reserve_mesh(mesh->get_verts().size(), num_triangles);
+    mesh->resize_mesh(P.size(), num_triangles);
+    std::copy_n(P.data(), P.size(), mesh->get_position_for_write());
+
+    int *triangles = mesh->get_triangles().data();
 
     /* create triangles */
+    int tri_index = 0;
     int index_offset = 0;
 
     for (size_t i = 0; i < nverts.size(); i++) {
@@ -477,20 +451,29 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
         assert(v1 < (int)P.size());
         assert(v2 < (int)P.size());
 
-        mesh->add_triangle(v0, v1, v2, shader, smooth);
+        triangles[tri_index * 3 + 0] = v0;
+        triangles[tri_index * 3 + 1] = v1;
+        triangles[tri_index * 3 + 2] = v2;
+        tri_index++;
       }
 
       index_offset += nverts[i];
     }
+    std::ranges::fill(mesh->get_smooth(), smooth);
+    std::ranges::fill(mesh->get_shader(), shader);
+
+    mesh->tag_triangles_modified();
+    mesh->tag_shader_modified();
+    mesh->tag_smooth_modified();
 
     /* Vertex normals */
     if (xml_read_float3_array(VN, node, Attribute::standard_name(ATTR_STD_VERTEX_NORMAL))) {
       Attribute *attr = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL);
-      float3 *fdata = attr->data_float3();
+      packed_normal *fdata = attr->data_for_write<packed_normal>();
 
       /* Loop over the normals */
       for (auto n : VN) {
-        fdata[0] = n;
+        fdata[0] = packed_normal(n);
         fdata++;
       }
     }
@@ -500,7 +483,7 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
         xml_read_float_array(UV, node, Attribute::standard_name(ATTR_STD_UV)))
     {
       Attribute *attr = mesh->attributes.add(ATTR_STD_UV);
-      float2 *fdata = attr->data_float2();
+      float2 *fdata = attr->data_for_write<float2>();
 
       /* Loop over the triangles */
       index_offset = 0;
@@ -527,7 +510,7 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
     /* Tangents */
     if (xml_read_float_array(T, node, Attribute::standard_name(ATTR_STD_UV_TANGENT))) {
       Attribute *attr = mesh->attributes.add(ATTR_STD_UV_TANGENT);
-      float3 *fdata = attr->data_float3();
+      packed_float3 *fdata = attr->data_for_write<packed_float3>();
 
       /* Loop over the triangles */
       index_offset = 0;
@@ -553,7 +536,7 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
     /* Tangent signs */
     if (xml_read_float_array(TS, node, Attribute::standard_name(ATTR_STD_UV_TANGENT_SIGN))) {
       Attribute *attr = mesh->attributes.add(ATTR_STD_UV_TANGENT_SIGN);
-      float *fdata = attr->data_float();
+      float *fdata = attr->data_for_write<float>();
 
       /* Loop over the triangles */
       index_offset = 0;
@@ -578,30 +561,57 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
   }
   else {
     /* create vertices */
-    mesh->set_verts(P_array);
+    mesh->resize_mesh(P.size(), 0);
 
     size_t num_corners = 0;
     for (size_t i = 0; i < nverts.size(); i++) {
       num_corners += nverts[i];
     }
-    mesh->reserve_subd_faces(nverts.size(), num_corners);
+    mesh->resize_subd_faces(nverts.size(), num_corners);
+
+    Attribute *subd_attr_P = mesh->subd_attributes.add(ATTR_STD_POSITION);
+    subd_attr_P->resize(P.size());
+    std::copy_n(P.data(), P.size(), subd_attr_P->data_for_write<packed_float3>());
+
+    int *subd_start_corner = mesh->get_subd_start_corner().data();
+    int *subd_num_corners = mesh->get_subd_num_corners().data();
+    int *subd_ptex_offset = mesh->get_subd_ptex_offset().data();
+    int *subd_face_corners = mesh->get_subd_face_corners().data();
+
+    std::ranges::fill(mesh->get_subd_shader(), shader);
+    std::ranges::fill(mesh->get_subd_smooth(), smooth);
+
+    std::ranges::copy(verts, subd_face_corners);
 
     /* create subd_faces */
-    int index_offset = 0;
+    int corner_index = 0;
+    int ptex_offset = 0;
 
     for (size_t i = 0; i < nverts.size(); i++) {
-      mesh->add_subd_face(&verts[index_offset], nverts[i], shader, smooth);
-      index_offset += nverts[i];
+      subd_start_corner[i] = corner_index;
+      subd_num_corners[i] = nverts[i];
+      corner_index += nverts[i];
+
+      subd_ptex_offset[i] = ptex_offset;
+      const int num_ptex = (nverts[i] == 4) ? 1 : nverts[i];
+      ptex_offset += num_ptex;
     }
+
+    mesh->tag_subd_face_corners_modified();
+    mesh->tag_subd_start_corner_modified();
+    mesh->tag_subd_num_corners_modified();
+    mesh->tag_subd_shader_modified();
+    mesh->tag_subd_smooth_modified();
+    mesh->tag_subd_ptex_offset_modified();
 
     /* UV map */
     if (xml_read_float_array(UV, node, "UV") ||
         xml_read_float_array(UV, node, Attribute::standard_name(ATTR_STD_UV)))
     {
       Attribute *attr = mesh->subd_attributes.add(ATTR_STD_UV);
-      float3 *fdata = attr->data_float3();
+      packed_float3 *fdata = attr->data_for_write<packed_float3>();
 
-      index_offset = 0;
+      int index_offset = 0;
       for (size_t i = 0; i < nverts.size(); i++) {
         for (int j = 0; j < nverts[i]; j++) {
           *(fdata++) = make_float3(UV[index_offset++]);
@@ -622,7 +632,7 @@ static void xml_read_mesh(const XMLReadState &state, const xml_node node)
    * coordinates as generated coordinates if requested */
   if (mesh->need_attribute(state.scene, ATTR_STD_GENERATED)) {
     Attribute *attr = mesh->attributes.add(ATTR_STD_GENERATED);
-    std::copy_n(mesh->get_verts().data(), mesh->get_verts().size(), attr->data_float3());
+    std::copy_n(mesh->get_position(), mesh->num_verts(), attr->data_for_write<packed_float3>());
   }
 }
 
@@ -633,7 +643,28 @@ static void xml_read_light(XMLReadState &state, const xml_node node)
   Scene *scene = state.scene;
 
   /* Create light. */
-  Light *light = scene->create_node<Light>();
+  string light_type;
+  if (!xml_read_string(&light_type, node, "light_type")) {
+    return;
+  }
+
+  Light *light;
+  if (light_type == "point") {
+    light = scene->create_node<PointLight>();
+  }
+  else if (light_type == "sun") {
+    light = scene->create_node<SunLight>();
+  }
+  else if (light_type == "background") {
+    light = scene->create_node<BackgroundLight>();
+  }
+  else if (light_type == "area") {
+    light = scene->create_node<AreaLight>();
+  }
+  else {
+    assert(light_type == "spot");
+    light = scene->create_node<SpotLight>();
+  }
 
   array<Node *> used_shaders;
   used_shaders.push_back_slow(state.shader);
@@ -642,7 +673,7 @@ static void xml_read_light(XMLReadState &state, const xml_node node)
   /* Create object. */
   Object *object = scene->create_node<Object>();
   object->set_tfm(state.tfm);
-  object->set_visibility(PATH_RAY_ALL_VISIBILITY & ~PATH_RAY_CAMERA);
+  object->set_visibility(PATH_RAY_VISIBILITY_ALL & ~PATH_RAY_VISIBILITY_CAMERA);
   object->set_geometry(light);
 
   xml_read_node(state, light, node);
@@ -698,7 +729,7 @@ static void xml_read_state(XMLReadState &state, const xml_node node)
     }
 
     if (!found) {
-      fprintf(stderr, "Unknown shader \"%s\".\n", shadername.c_str());
+      LOG_ERROR << "Unknown shader \"" << shadername << "\"";
     }
   }
 
@@ -717,7 +748,7 @@ static void xml_read_state(XMLReadState &state, const xml_node node)
     }
 
     if (!found) {
-      fprintf(stderr, "Unknown object \"%s\".\n", objectname.c_str());
+      LOG_ERROR << "Unknown object \"" << objectname << "\"";
     }
   }
 
@@ -802,13 +833,8 @@ static void xml_read_scene(XMLReadState &state, const xml_node scene_node)
       xml_read_object(substate, node);
       xml_read_scene(substate, node);
     }
-#ifdef WITH_ALEMBIC
-    else if (string_iequals(node.name(), "alembic")) {
-      xml_read_alembic(state, node);
-    }
-#endif
     else {
-      fprintf(stderr, "Unknown node \"%s\".\n", node.name());
+      LOG_ERROR << "Unknown node \"" << node.name() << "\"";
     }
   }
 }
@@ -832,7 +858,7 @@ static void xml_read_include(XMLReadState &state, const string &src)
     xml_read_scene(substate, cycles);
   }
   else {
-    fprintf(stderr, "%s read error: %s\n", src.c_str(), parse_result.description());
+    LOG_ERROR << "\"" << src << "\" read error: " << parse_result.description();
     exit(EXIT_FAILURE);
   }
 }

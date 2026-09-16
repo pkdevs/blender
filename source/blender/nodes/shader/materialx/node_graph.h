@@ -12,13 +12,15 @@
 #include "node_item.h"
 
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
+struct Depsgraph;
 struct bNode;
 struct Material;
-struct Depsgraph;
-
-namespace blender::nodes::materialx {
+namespace nodes::materialx {
 
 /*
  * Wrapper around MaterialX graph.
@@ -61,7 +63,9 @@ struct NodeGraph {
   MaterialX::GraphElement *graph_element_ = nullptr;
   Map<NodeKey, const std::string> root_key_to_name_map_;
   Map<NodeKey, const std::string> &key_to_name_map_;
+  Set<std::string> used_node_names_;
   std::string node_name_prefix_;
 };
 
-}  // namespace blender::nodes::materialx
+}  // namespace nodes::materialx
+}  // namespace blender

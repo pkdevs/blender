@@ -15,62 +15,72 @@
 #include "BLI_bit_span_ops.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_offset_indices.hh"
+#include "BLI_ordered_edge.hh"
+#include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_ccg.hh"
 
+namespace blender {
+
 struct Mesh;
-namespace blender::bke::subdiv {
+namespace bke::subdiv {
 struct Subdiv;
 }
 
-/* --------------------------------------------------------------------
- * Masks.
- */
+/* -------------------------------------------------------------------- */
+/** \name Masks
+ * \{ */
 
-/* Functor which evaluates mask value at a given (u, v) of given ptex face. */
+/** Functor which evaluates mask value at a given (u, v) of given ptex face. */
 struct SubdivCCGMaskEvaluator {
   float (*eval_mask)(SubdivCCGMaskEvaluator *mask_evaluator,
                      int ptex_face_index,
                      float u,
                      float v);
 
-  /* Free the data, not the evaluator itself. */
+  /** Free the data, not the evaluator itself. */
   void (*free)(SubdivCCGMaskEvaluator *mask_evaluator);
 
   void *user_data;
 };
 
-/* Return true if mesh has mask and evaluator can be used. */
+/** Return true if mesh has mask and evaluator can be used. */
 bool BKE_subdiv_ccg_mask_init_from_paint(SubdivCCGMaskEvaluator *mask_evaluator, const Mesh *mesh);
 
-/* --------------------------------------------------------------------
- * SubdivCCG.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name SubdivCCG.
+ * \{ */
 
 struct SubdivToCCGSettings {
-  /* Resolution at which regular ptex (created for quad face) are being
+  /**
+   * Resolution at which regular ptex (created for quad face) are being
    * evaluated. This defines how many vertices final mesh will have: every
    * regular ptex has resolution^2 vertices. Special (irregular, or ptex
    * created for a corner of non-quad face) will have resolution of
-   * `resolution - 1`. */
+   * `resolution - 1`.
+   */
   int resolution;
-  /* Denotes which extra layers to be added to CCG elements. */
+  /** Denotes which extra layers to be added to CCG elements. */
   bool need_normal;
   bool need_mask;
 };
 
 struct SubdivCCGCoord {
-  /* Index of the grid within SubdivCCG::grids array. */
+  /** Index of the grid within SubdivCCG::grids array. */
   int grid_index;
 
-  /* Coordinate within the grid. */
+  /** Coordinate within the grid. */
   short x, y;
 
-  /* Returns the coordinate for the index in an array sized to contain all grid vertices (including
-   * duplicates). */
+  /**
+   * Returns the coordinate for the index in an array sized to contain all grid vertices
+   * (including duplicates).
+   */
   static SubdivCCGCoord from_index(const CCGKey &key, int index)
   {
     const int grid_index = index / key.grid_area;
@@ -84,8 +94,10 @@ struct SubdivCCGCoord {
     return coord;
   }
 
-  /* Returns the index for the coordinate in an array sized to contain all grid vertices (including
-   * duplicates). */
+  /**
+   * Returns the index for the coordinate in an array sized to contain all grid vertices
+   * (including duplicates).
+   */
   int to_index(const CCGKey &key) const
   {
     return key.grid_area * this->grid_index +
@@ -93,33 +105,39 @@ struct SubdivCCGCoord {
   }
 };
 
-/* Definition of an edge which is adjacent to at least one of the faces. */
+/** Definition of an edge which is adjacent to at least one of the faces. */
 struct SubdivCCGAdjacentEdge {
-  int num_adjacent_faces;
-  /* Indexed by adjacent face index, then by point index on the edge.
-   * points to a coordinate into the grids. */
-  SubdivCCGCoord **boundary_coords;
+  /**
+   * Indexed by adjacent face index, then by point index on the edge.
+   * points to a coordinate into the grids.
+   */
+  Vector<Array<SubdivCCGCoord>> boundary_coords;
 };
 
-/* Definition of a vertex which is adjacent to at least one of the faces. */
+/** Definition of a vertex which is adjacent to at least one of the faces. */
 struct SubdivCCGAdjacentVertex {
-  int num_adjacent_faces;
-  /* Indexed by adjacent face index, points to a coordinate in the grids. */
-  SubdivCCGCoord *corner_coords;
+  /** Indexed by adjacent face index, points to a coordinate in the grids. */
+  Vector<SubdivCCGCoord> corner_coords;
 };
 
-/* Representation of subdivision surface which uses CCG grids. */
-struct SubdivCCG : blender::NonCopyable {
-  /* This is a subdivision surface this CCG was created for.
+/** Representation of subdivision surface which uses CCG grids. */
+struct SubdivCCG : NonCopyable {
+  /**
+   * This is a subdivision surface this CCG was created for.
    *
    * TODO(sergey): Make sure the whole descriptor is valid, including all the
-   * displacement attached to the surface. */
-  blender::bke::subdiv::Subdiv *subdiv = nullptr;
-  /* A level at which geometry was subdivided. This is what defines grid
-   * resolution. It is NOT the topology refinement level. */
+   * displacement attached to the surface.
+   */
+  bke::subdiv::Subdiv *subdiv = nullptr;
+  /**
+   * A level at which geometry was subdivided. This is what defines grid
+   * resolution. It is NOT the topology refinement level.
+   */
   int level = -1;
-  /* Resolution of grid. All grids have matching resolution, and resolution
-   * is same as ptex created for non-quad faces. */
+  /**
+   * Resolution of grid. All grids have matching resolution, and resolution
+   * is same as ptex created for non-quad faces.
+   */
   int grid_size = -1;
   /** The number of vertices in each grid (grid_size ^2). */
   int grid_area = -1;
@@ -129,29 +147,38 @@ struct SubdivCCG : blender::NonCopyable {
    * Positions represent limit surface, with displacement applied. The vertices in each grid are
    * stored in contiguous chunks of size #grid_area in the same order.
    */
-  blender::Array<blender::float3> positions;
+  Array<float3> positions;
   /** Vertex normals with the same indexing as #positions. */
-  blender::Array<blender::float3> normals;
+  Array<float3> normals;
   /** Optional mask values with the same indexing as #positions. */
-  blender::Array<float> masks;
+  Array<float> masks;
 
-  /* Faces from which grids are emitted. Owned by base mesh. */
-  blender::OffsetIndices<int> faces;
-  /* The face in #faces for each grid. Owned by base mesh (See #Mesh::corner_to_face_map()). */
-  blender::Span<int> grid_to_face_map;
+  /** Faces from which grids are emitted. Owned by base mesh. */
+  OffsetIndices<int> faces;
+  /** The face in #faces for each grid. Owned by base mesh (See #Mesh::corner_to_face_map()). */
+  Span<int> grid_to_face_map;
 
-  /* Edges which are adjacent to faces.
+  /**
+   * Edges which are adjacent to faces.
+   *
+   * Maps from coarse edge to a directional `grid_size` * 2 map of indices to `SubdivCCGCoord`,
+   * indexed by OpenSubdiv base mesh edge.
+   *
    * Used for faster grid stitching, at the cost of extra memory.
    */
-  blender::Array<SubdivCCGAdjacentEdge> adjacent_edges;
+  Array<SubdivCCGAdjacentEdge> adjacent_edges;
 
-  /* Vertices which are adjacent to faces
+  /**
+   * Vertices which are adjacent to faces.
+   *
+   * Maps from coarse vertex to `SubdivCCGCoord`, indexed by OpenSubdiv base mesh vertex.
+   *
    * Used for faster grid stitching, at the cost of extra memory.
    */
-  blender::Array<SubdivCCGAdjacentVertex> adjacent_verts;
+  Array<SubdivCCGAdjacentVertex> adjacent_verts;
 
   /** Store the visibility of the items in each grid. If empty, everything is visible. */
-  blender::BitGroupVector<> grid_hidden;
+  BitGroupVector<> grid_hidden;
 
   /* TODO(sergey): Consider adding some accessors to a "decoded" geometry,
    * to make integration with draw manager and such easy.
@@ -165,79 +192,75 @@ struct SubdivCCG : blender::NonCopyable {
   /* TODO(sergey): Is this really best way to go? Kind of annoying to have
    * such use-related flags in a more or less generic structure. */
   struct {
-    /* Corresponds to MULTIRES_COORDS_MODIFIED. */
+    /** Corresponds to MULTIRES_COORDS_MODIFIED. */
     bool coords = false;
-    /* Corresponds to MULTIRES_HIDDEN_MODIFIED. */
+    /** Corresponds to MULTIRES_HIDDEN_MODIFIED. */
     bool hidden = false;
   } dirty;
-
-  /* Cached values, are not supposed to be accessed directly. */
-  struct {
-    /* Indexed by face, indicates index of the first grid which corresponds to the face. */
-    blender::Array<int> start_face_grid_index;
-  } cache_;
 
   ~SubdivCCG();
 };
 
-/* Create CCG representation of subdivision surface.
+/**
+ * Create CCG representation of subdivision surface.
  *
- * NOTE: CCG stores dense vertices in a grid-like storage. There is no edges or
+ * \note CCG stores dense vertices in a grid-like storage. There is no edges or
  * faces information's for the high-poly surface.
  *
- * NOTE: Subdiv is expected to be refined and ready for evaluation.
- * NOTE: CCG becomes an owner of subdiv.
+ * \note Subdiv is expected to be refined and ready for evaluation.
+ * \note CCG becomes an owner of subdiv.
  *
  * TODO(sergey): Allow some user-counter or more explicit control over who owns
  * the Subdiv. The goal should be to allow viewport GL Mesh and CCG to share
- * same Subsurf without conflicts. */
-std::unique_ptr<SubdivCCG> BKE_subdiv_to_ccg(blender::bke::subdiv::Subdiv &subdiv,
+ * same Subsurf without conflicts.
+ */
+std::unique_ptr<SubdivCCG> BKE_subdiv_to_ccg(bke::subdiv::Subdiv &subdiv,
                                              const SubdivToCCGSettings &settings,
                                              const Mesh &coarse_mesh,
-                                             SubdivCCGMaskEvaluator *mask_evaluator);
+                                             SubdivCCGMaskEvaluator *mask_evaluator = nullptr);
 
-/* Helper function, creates Mesh structure which is properly setup to use
+/**
+ * Helper function, creates Mesh structure which is properly setup to use
  * grids.
  */
-Mesh *BKE_subdiv_to_ccg_mesh(blender::bke::subdiv::Subdiv &subdiv,
+Mesh *BKE_subdiv_to_ccg_mesh(bke::subdiv::Subdiv &subdiv,
                              const SubdivToCCGSettings &settings,
                              const Mesh &coarse_mesh);
 
-/* Create a key for accessing grid elements at a given level. */
+/** Create a key for accessing grid elements at a given level. */
 CCGKey BKE_subdiv_ccg_key(const SubdivCCG &subdiv_ccg, int level);
 CCGKey BKE_subdiv_ccg_key_top_level(const SubdivCCG &subdiv_ccg);
 
-/* Recalculate all normals based on grid element coordinates. */
+/** Recalculate all normals based on grid element coordinates. */
 void BKE_subdiv_ccg_recalc_normals(SubdivCCG &subdiv_ccg);
 
-/* Update normals of affected faces. */
-void BKE_subdiv_ccg_update_normals(SubdivCCG &subdiv_ccg, const blender::IndexMask &face_mask);
+/** Update normals of affected faces. */
+void BKE_subdiv_ccg_update_normals(SubdivCCG &subdiv_ccg, const IndexMask &face_mask);
 
-/* Average grid coordinates and normals along the grid boundaries. */
+/** Average grid coordinates and normals along the grid boundaries. */
 void BKE_subdiv_ccg_average_grids(SubdivCCG &subdiv_ccg);
 
-/* Similar to above, but only updates given faces. */
-void BKE_subdiv_ccg_average_stitch_faces(SubdivCCG &subdiv_ccg,
-                                         const blender::IndexMask &face_mask);
+/** Similar to above, but only updates given faces. */
+void BKE_subdiv_ccg_average_stitch_faces(SubdivCCG &subdiv_ccg, const IndexMask &face_mask);
 
-/* Get geometry counters at the current subdivision level. */
+/** Get geometry counters at the current subdivision level. */
 void BKE_subdiv_ccg_topology_counters(const SubdivCCG &subdiv_ccg,
                                       int &r_num_vertices,
                                       int &r_num_edges,
                                       int &r_num_faces,
                                       int &r_num_loops);
 
-using SubdivCCGNeighborCoords = blender::Vector<SubdivCCGCoord, 256>;
+using SubdivCCGNeighborCoords = Vector<SubdivCCGCoord, 256>;
 struct SubdivCCGNeighbors {
   SubdivCCGNeighborCoords coords;
   int num_duplicates;
 
-  blender::Span<SubdivCCGCoord> unique() const
+  Span<SubdivCCGCoord> unique() const
   {
     return this->coords.as_span().drop_back(num_duplicates);
   }
 
-  blender::Span<SubdivCCGCoord> duplicates() const
+  Span<SubdivCCGCoord> duplicates() const
   {
     return this->coords.as_span().take_back(num_duplicates);
   }
@@ -259,10 +282,12 @@ bool BKE_subdiv_ccg_check_coord_valid(const SubdivCCG &subdiv_ccg, const SubdivC
  * - For the boundary element two neighbor elements on the boundary (from same grid) and one
  *   element inside of every neighboring grid. */
 
-/* Get actual neighbors of the given coordinate.
+/**
+ * Get actual neighbors of the given coordinate.
  *
  * If include_duplicates is true, vertices in other grids that match
- * the current vertex are added at the end of the coords array. */
+ * the current vertex are added at the end of the coords array.
+ */
 void BKE_subdiv_ccg_neighbor_coords_get(const SubdivCCG &subdiv_ccg,
                                         const SubdivCCGCoord &coord,
                                         bool include_duplicates,
@@ -273,13 +298,10 @@ inline int BKE_subdiv_ccg_grid_to_face_index(const SubdivCCG &subdiv_ccg, const 
   return subdiv_ccg.grid_to_face_map[grid_index];
 }
 
-void BKE_subdiv_ccg_eval_limit_point(const SubdivCCG &subdiv_ccg,
-                                     const SubdivCCGCoord &coord,
-                                     blender::float3 &r_point);
 void BKE_subdiv_ccg_eval_limit_positions(const SubdivCCG &subdiv_ccg,
                                          const CCGKey &key,
                                          int grid_index,
-                                         blender::MutableSpan<blender::float3> r_limit_positions);
+                                         MutableSpan<float3> r_limit_positions);
 
 enum class SubdivCCGAdjacencyType : int8_t {
   None,
@@ -287,53 +309,46 @@ enum class SubdivCCGAdjacencyType : int8_t {
   Edge,
 };
 
-/* Returns if a grid coordinates is adjacent to a coarse mesh edge, vertex or nothing. If it is
+/**
+ * Returns if a grid coordinates is adjacent to a coarse mesh edge, vertex or nothing. If it is
  * adjacent to an edge, r_v1 and r_v2 will be set to the two vertices of that edge. If it is
- * adjacent to a vertex, r_v1 and r_v2 will be the index of that vertex. */
-SubdivCCGAdjacencyType BKE_subdiv_ccg_coarse_mesh_adjacency_info_get(
-    const SubdivCCG &subdiv_ccg,
-    const SubdivCCGCoord &coord,
-    blender::Span<int> corner_verts,
-    blender::OffsetIndices<int> faces,
-    int &r_v1,
-    int &r_v2);
+ * adjacent to a vertex, r_v1 and r_v2 will be the index of that vertex.
+ */
+SubdivCCGAdjacencyType BKE_subdiv_ccg_coarse_mesh_adjacency_info_get(const SubdivCCG &subdiv_ccg,
+                                                                     const SubdivCCGCoord &coord,
+                                                                     Span<int> corner_verts,
+                                                                     OffsetIndices<int> faces,
+                                                                     int &r_v1,
+                                                                     int &r_v2);
 
-/* Determines if a given grid coordinate is on a coarse mesh boundary. */
-bool BKE_subdiv_ccg_coord_is_mesh_boundary(blender::OffsetIndices<int> faces,
-                                           blender::Span<int> corner_verts,
-                                           blender::BitSpan boundary_verts,
+/** Determines if a given grid coordinate is on a coarse mesh boundary. */
+bool BKE_subdiv_ccg_coord_is_mesh_boundary(OffsetIndices<int> faces,
+                                           Span<int> corner_verts,
+                                           BitSpan boundary_verts,
+                                           const Set<OrderedEdge> &boundary_edges,
                                            const SubdivCCG &subdiv_ccg,
                                            SubdivCCGCoord coord);
 
-/* Get array which is indexed by face index and contains index of a first grid of the face.
- *
- * The "ensure" version allocates the mapping if it's not known yet and stores it in the subdiv_ccg
- * descriptor. This function is NOT safe for threading.
- *
- * The "get" version simply returns cached array. */
-const int *BKE_subdiv_ccg_start_face_grid_index_ensure(SubdivCCG &subdiv_ccg);
-const int *BKE_subdiv_ccg_start_face_grid_index_get(const SubdivCCG &subdiv_ccg);
-
-blender::BitGroupVector<> &BKE_subdiv_ccg_grid_hidden_ensure(SubdivCCG &subdiv_ccg);
+BitGroupVector<> &BKE_subdiv_ccg_grid_hidden_ensure(SubdivCCG &subdiv_ccg);
 void BKE_subdiv_ccg_grid_hidden_free(SubdivCCG &subdiv_ccg);
 
 template<typename Fn>
 inline void BKE_subdiv_ccg_foreach_visible_grid_vert(const CCGKey &key,
-                                                     const blender::BitGroupVector<> &grid_hidden,
+                                                     const BitGroupVector<> &grid_hidden,
                                                      const int grid,
                                                      const Fn &fn)
 {
   if (grid_hidden.is_empty()) {
-    for (const int i : blender::IndexRange(key.grid_area)) {
+    for (const int i : IndexRange(key.grid_area)) {
       fn(i);
     }
   }
   else {
-    blender::bits::foreach_0_index(grid_hidden[grid], fn);
+    bits::foreach_0_index(grid_hidden[grid], fn);
   }
 }
 
-namespace blender::bke::ccg {
+namespace bke::ccg {
 
 /** Find the range of vertices in the entire geometry that are part of a single grid. */
 inline IndexRange grid_range(const int grid_area, const int grid)
@@ -362,4 +377,8 @@ inline int grid_xy_to_vert(const CCGKey &key, const int grid, const int x, const
   return key.grid_area * grid + CCG_grid_xy_to_index(key.grid_size, x, y);
 }
 
-}  // namespace blender::bke::ccg
+}  // namespace bke::ccg
+
+/** \} */
+
+}  // namespace blender

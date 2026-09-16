@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Generate triangle indices from subdivision quads. */
+/** \file
+ * \ingroup draw
+ *
+ * Generate triangle indices from subdivision quads.
+ */
 
 #include "subdiv_lib.glsl"
 
@@ -25,8 +29,8 @@ void main()
   }
 
   uint loop_index = quad_index * 4;
-  uint coarse_quad_index = coarse_face_index_from_subdiv_quad_index(quad_index,
-                                                                    shader_data.coarse_face_count);
+  uint coarse_quad_index = coarse_face_index_from_subdiv_quad_index(
+      quad_index, uint(shader_data.coarse_face_count));
 
 #ifdef SINGLE_MATERIAL
   uint triangle_loop_index = quad_index * 6;

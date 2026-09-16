@@ -2,41 +2,100 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <ostream>
+
+#include "DEG_depsgraph_query.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
 namespace blender::bke {
 
-ModifierComputeContext::ModifierComputeContext(const ComputeContext *parent,
-                                               const NodesModifierData &nmd)
-    : ModifierComputeContext(parent, nmd.modifier.persistent_uid)
+DataBlockComputeContext::DataBlockComputeContext(const ComputeContext *parent, const ID &id)
+    : ComputeContext(parent), id_(&id)
+{
+  if (DEG_is_original(&id)) {
+    orig_session_uid_ = id.session_uid;
+  }
+  else if (const ID *orig_id = DEG_get_original_id(&id)) {
+    orig_session_uid_ = orig_id->session_uid;
+  }
+  else {
+    BLI_assert_unreachable();
+  }
+}
+
+DataBlockComputeContext::DataBlockComputeContext(const ComputeContext *parent,
+                                                 const uint32_t orig_session_uid,
+                                                 const ID *id)
+    : ComputeContext(parent), orig_session_uid_(orig_session_uid), id_(id)
+{
+  BLI_assert(!id || id->session_uid == orig_session_uid ||
+             DEG_get_original(id)->session_uid == orig_session_uid);
+}
+
+ComputeContextHash DataBlockComputeContext::compute_hash() const
+{
+  return ComputeContextHash::from(parent_, "DATABLOCK", orig_session_uid_);
+}
+
+void DataBlockComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "DataBlock: " << orig_session_uid_;
+  if (id_) {
+    stream << " " << id_->name;
+  }
+}
+
+GeometryNodesModifierComputeContext::GeometryNodesModifierComputeContext(
+    const ComputeContext *parent, const NodesModifierData &nmd)
+    : GeometryNodesModifierComputeContext(parent, nmd.modifier.persistent_uid)
 {
   nmd_ = &nmd;
 }
 
-ModifierComputeContext::ModifierComputeContext(const ComputeContext *parent,
-                                               const int modifier_uid)
+GeometryNodesModifierComputeContext::GeometryNodesModifierComputeContext(
+    const ComputeContext *parent, const int modifier_uid)
     : ComputeContext(parent), modifier_uid_(std::move(modifier_uid))
 {
 }
 
-ComputeContextHash ModifierComputeContext::compute_hash() const
+ComputeContextHash GeometryNodesModifierComputeContext::compute_hash() const
 {
   return ComputeContextHash::from(parent_, "MODIFIER", modifier_uid_);
 }
 
-void ModifierComputeContext::print_current_in_line(std::ostream &stream) const
+void GeometryNodesModifierComputeContext::print_current_in_line(std::ostream &stream) const
 {
   if (nmd_) {
     stream << "Modifier: " << nmd_->modifier.name;
   }
+}
+
+SceneCompositorEffectComputeContext::SceneCompositorEffectComputeContext(
+    const ComputeContext *parent, const SceneCompositorEffect &effect)
+    : ComputeContext(parent), effect_(effect)
+{
+}
+
+ComputeContextHash SceneCompositorEffectComputeContext::compute_hash() const
+{
+  return ComputeContextHash::from(parent_, "SCENE_COMPOSITOR_EFFECT", effect_.name);
+}
+
+void SceneCompositorEffectComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "Scene Compositor Effect: " << effect_.name;
 }
 
 NodeComputeContext::NodeComputeContext(const ComputeContext *parent,
@@ -113,7 +172,7 @@ ComputeContextHash RepeatZoneComputeContext::compute_hash() const
 
 void RepeatZoneComputeContext::print_current_in_line(std::ostream &stream) const
 {
-  stream << "Repeat Zone ID: " << output_node_id_;
+  stream << "Repeat Zone ID: " << output_node_id_ << ", Iteration: " << iteration_;
 }
 
 ForeachGeometryElementZoneComputeContext::ForeachGeometryElementZoneComputeContext(
@@ -147,6 +206,48 @@ EvaluateClosureComputeContext::EvaluateClosureComputeContext(
 {
 }
 
+bool EvaluateClosureComputeContext::is_recursive() const
+{
+  if (!closure_source_location_) {
+    /* Can't determine recursiveness in this case. */
+    return false;
+  }
+  for (const ComputeContext *parent = parent_; parent; parent = parent->parent()) {
+    if (const auto *evaluate_closure_compute_context =
+            dynamic_cast<const EvaluateClosureComputeContext *>(parent))
+    {
+      if (!evaluate_closure_compute_context->closure_source_location_) {
+        continue;
+      }
+      if (evaluate_closure_compute_context->closure_source_location_->tree ==
+              closure_source_location_->tree &&
+          evaluate_closure_compute_context->closure_source_location_->closure_output_node_id ==
+              closure_source_location_->closure_output_node_id)
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+ClosureToListComputeContext::ClosureToListComputeContext(const ComputeContext *parent,
+                                                         const int32_t node_id,
+                                                         const int list_index)
+    : NodeComputeContext(parent, node_id, nullptr), list_index_(list_index)
+{
+}
+
+ComputeContextHash ClosureToListComputeContext::compute_hash() const
+{
+  return ComputeContextHash::from(parent_, "CLOSURE_TO_LIST", node_id_, list_index_);
+}
+
+void ClosureToListComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "Closure to List ID: " << node_id_ << ", List Index: " << list_index_;
+}
+
 OperatorComputeContext::OperatorComputeContext() : OperatorComputeContext(nullptr) {}
 
 OperatorComputeContext::OperatorComputeContext(const ComputeContext *parent)
@@ -170,20 +271,70 @@ void OperatorComputeContext::print_current_in_line(std::ostream &stream) const
   stream << "Operator";
 }
 
-const ModifierComputeContext &ComputeContextCache::for_modifier(const ComputeContext *parent,
-                                                                const NodesModifierData &nmd)
+ShaderComputeContext::ShaderComputeContext(const ComputeContext *parent, const bNodeTree *tree)
+    : ComputeContext(parent), tree_(tree)
 {
-  return *modifier_contexts_cache_.lookup_or_add_cb(
-      std::pair{parent, nmd.modifier.persistent_uid},
-      [&]() { return &this->for_any_uncached<ModifierComputeContext>(parent, nmd); });
 }
 
-const ModifierComputeContext &ComputeContextCache::for_modifier(const ComputeContext *parent,
-                                                                const int modifier_uid)
+ComputeContextHash ShaderComputeContext::compute_hash() const
 {
-  return *modifier_contexts_cache_.lookup_or_add_cb(std::pair{parent, modifier_uid}, [&]() {
-    return &this->for_any_uncached<ModifierComputeContext>(parent, modifier_uid);
+  return ComputeContextHash::from(parent_, "SHADER");
+}
+
+void ShaderComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "Shader ";
+  if (tree_) {
+    stream << BKE_id_name(tree_->id);
+  }
+}
+
+const DataBlockComputeContext &ComputeContextCache::for_data_block(const ComputeContext *parent,
+                                                                   const uint32_t orig_session_uid,
+                                                                   const ID *id)
+{
+  return *data_block_contexts_cache_.lookup_or_add_cb(std::pair{parent, orig_session_uid}, [&]() {
+    return &this->for_any_uncached<DataBlockComputeContext>(parent, orig_session_uid, id);
   });
+}
+
+const DataBlockComputeContext &ComputeContextCache::for_data_block(const ComputeContext *parent,
+                                                                   const ID &id)
+{
+  uint32_t orig_session_uid = 0;
+  if (DEG_is_original(&id)) {
+    orig_session_uid = id.session_uid;
+  }
+  else {
+    orig_session_uid = DEG_get_original(&id)->session_uid;
+  }
+  return this->for_data_block(parent, orig_session_uid, &id);
+}
+
+const GeometryNodesModifierComputeContext &ComputeContextCache::for_geometry_nodes_modifier(
+    const ComputeContext *parent, const NodesModifierData &nmd)
+{
+  return *geometry_nodes_modifier_contexts_cache_.lookup_or_add_cb(
+      std::pair{parent, nmd.modifier.persistent_uid},
+      [&]() { return &this->for_any_uncached<GeometryNodesModifierComputeContext>(parent, nmd); });
+}
+
+const GeometryNodesModifierComputeContext &ComputeContextCache::for_geometry_nodes_modifier(
+    const ComputeContext *parent, const int modifier_uid)
+{
+  return *geometry_nodes_modifier_contexts_cache_.lookup_or_add_cb(
+      std::pair{parent, modifier_uid}, [&]() {
+        return &this->for_any_uncached<GeometryNodesModifierComputeContext>(parent, modifier_uid);
+      });
+}
+
+const SceneCompositorEffectComputeContext &ComputeContextCache::for_scene_compositor_effect(
+    const ComputeContext *parent, const SceneCompositorEffect &effect)
+{
+  return *scene_compositor_effect_contexts_cache_.lookup_or_add_cb(
+      std::pair{parent, effect.name}, [&]() {
+        return &this->for_any_uncached<SceneCompositorEffectComputeContext>(parent, effect);
+      });
 }
 
 const OperatorComputeContext &ComputeContextCache::for_operator(const ComputeContext *parent)
@@ -197,6 +348,13 @@ const OperatorComputeContext &ComputeContextCache::for_operator(const ComputeCon
 {
   return *operator_contexts_cache_.lookup_or_add_cb(
       parent, [&]() { return &this->for_any_uncached<OperatorComputeContext>(parent, tree); });
+}
+
+const ShaderComputeContext &ComputeContextCache::for_shader(const ComputeContext *parent,
+                                                            const bNodeTree *tree)
+{
+  return *shader_contexts_cache_.lookup_or_add_cb(
+      parent, [&]() { return &this->for_any_uncached<ShaderComputeContext>(parent, tree); });
 }
 
 const GroupNodeComputeContext &ComputeContextCache::for_group_node(const ComputeContext *parent,

@@ -9,29 +9,36 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
+
 #include "BLI_index_mask.hh"
 
-#include "transform.hh"
+#include "ED_grease_pencil.hh"
 
-struct BMEditMesh;
-struct BMesh;
-struct BezTriple;
-struct ListBase;
-struct Object;
+#include "UI_view2d.hh"
+
+#include "transform.hh"
 struct TransData;
 struct TransDataCurveHandleFlags;
 struct TransInfo;
+namespace blender {
+
+struct BMEditMesh;
+struct BMesh;
+struct bConstraint;
+struct BezTriple;
+struct Object;
 struct bContext;
 struct Strip;
 
-namespace blender::bke::crazyspace {
+namespace bke::crazyspace {
 struct GeometryDeformation;
 }
-namespace blender::bke {
+namespace bke {
 class CurvesGeometry;
 }
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 struct TransConvertTypeInfo {
   int flags; /* #eTFlag. */
@@ -93,11 +100,22 @@ struct TransDataVertSlideVert {
  * Used for both curves and grease pencil objects.
  */
 struct CurvesTransformData {
+  Vector<ed::greasepencil::MutableDrawingInfo> drawings;
+  /**
+   * Store grease pencil keyframes that are duplicated during transform, later remove them when
+   * operation is cancelled.
+   */
+  Map<bke::greasepencil::Layer *, int> duplicate_layer_keyframes;
+
   IndexMaskMemory memory;
   Vector<IndexMask> selection_by_layer;
-  /* TODO: add support for grease pencil layers. */
-  IndexMask aligned_with_left;
-  IndexMask aligned_with_right;
+
+  /**
+   * Masks of aligned points per curve.
+   * curves objects will only use the first element.
+   */
+  Vector<IndexMask> aligned_with_left;
+  Vector<IndexMask> aligned_with_right;
 
   /**
    * The offsets of every grease pencil layer into `positions` array.
@@ -144,7 +162,7 @@ void transform_convert_mesh_customdatacorrect_init(TransInfo *t);
 
 /* `transform_convert_sequencer.cc` */
 
-void transform_convert_sequencer_channel_clamp(TransInfo *t, float r_val[2]);
+bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2]);
 
 /********************* intern **********************/
 
@@ -164,7 +182,7 @@ void transform_around_single_fallback(TransInfo *t);
  * These particular constraints benefit from this, but others don't, hence
  * this semi-hack ;-)    - Aligorith
  */
-bool constraints_list_needinv(TransInfo *t, ListBase *list);
+bool constraints_list_needinv(TransInfo *t, ListBaseT<bConstraint> *list);
 void calc_distanceCurveVerts(TransData *head, TransData *tail, bool cyclic);
 /**
  * Utility function for getting the handle data from bezier's.
@@ -189,7 +207,7 @@ void animrecord_check_state(TransInfo *t, ID *id);
 namespace curves {
 
 /**
- * Used for both curves and grease pencil objects.
+ * Used for both curves and Grease Pencil objects.
  */
 void curve_populate_trans_data_structs(const TransInfo &t,
                                        TransDataContainer &tc,
@@ -197,7 +215,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
                                        const float4x4 &transform,
                                        const bke::crazyspace::GeometryDeformation &deformation,
                                        std::optional<MutableSpan<float>> value_attribute,
-                                       const Span<IndexMask> points_to_transform_per_attr,
+                                       Span<IndexMask> points_to_transform_per_attr,
                                        const IndexMask &affected_curves,
                                        bool use_connected_only,
                                        const IndexMask &bezier_curves,
@@ -206,8 +224,20 @@ void curve_populate_trans_data_structs(const TransInfo &t,
 CurvesTransformData *create_curves_transform_custom_data(TransCustomData &custom_data);
 
 void copy_positions_from_curves_transform_custom_data(const TransCustomData &custom_data,
-                                                      const int layer,
+                                                      int layer,
                                                       MutableSpan<float3> positions_dst);
+
+void create_aligned_handles_masks(const bke::CurvesGeometry &curves,
+                                  Span<IndexMask> points_to_transform_per_attr,
+                                  int curve_index,
+                                  TransCustomData &custom_data);
+void calculate_single_aligned_handles(const TransCustomData &custom_data,
+                                      bke::CurvesGeometry &curves,
+                                      int curve_index);
+bool update_handle_types_for_transform(eTfmMode mode,
+                                       const std::array<IndexMask, 3> &selection_per_attribute,
+                                       const IndexMask &bezier_points,
+                                       bke::CurvesGeometry &curves);
 
 }  // namespace curves
 
@@ -222,7 +252,6 @@ extern TransConvertTypeInfo TransConvertType_Pose;
 
 /**
  * Sets transform flags in the bones.
- * Returns total number of bones with #BONE_TRANSFORM.
  */
 void transform_convert_pose_transflags_update(Object *ob, int mode, short around);
 
@@ -297,6 +326,7 @@ struct TransMeshDataCrazySpace {
 };
 
 void transform_convert_mesh_islands_calc(BMEditMesh *em,
+                                         BMesh *bm,
                                          bool calc_single_islands,
                                          bool calc_island_center,
                                          bool calc_island_axismtx,
@@ -312,6 +342,7 @@ void transform_convert_mesh_connectivity_distance(BMesh *bm,
                                                   float *dists,
                                                   int *index);
 void transform_convert_mesh_mirrordata_calc(BMEditMesh *em,
+                                            BMesh *bm,
                                             bool use_select,
                                             bool use_topology,
                                             const bool mirror_axis[3],
@@ -323,7 +354,6 @@ void transform_convert_mesh_mirrordata_free(TransMirrorData *mirror_data);
  */
 void transform_convert_mesh_crazyspace_detect(TransInfo *t,
                                               TransDataContainer *tc,
-                                              BMEditMesh *em,
                                               TransMeshDataCrazySpace *r_crazyspace_data);
 void transform_convert_mesh_crazyspace_transdata_set(const float mtx[3][3],
                                                      const float smtx[3][3],
@@ -393,6 +423,26 @@ extern TransConvertTypeInfo TransConvertType_Sculpt;
 
 extern TransConvertTypeInfo TransConvertType_Sequencer;
 
+/**
+ * Sequencer transform customdata (stored in #TransCustomDataContainer).
+ */
+struct TransSeq {
+  /* An array of TransDataSeq for either retiming or normal transform. */
+  void *tdseq;
+  /* Maximum delta allowed along x and y before clamping selected strips/handles. Always active. */
+  rcti offset_clamp;
+  /* Maximum delta before clamping handles to the bounds of underlying content. May be disabled. */
+  int hold_clamp_min = INT_MIN;
+  int hold_clamp_max = INT_MAX;
+
+  /* Initial rect of the view2d, used for computing offset during edge panning. */
+  rctf initial_v2d_cur;
+  ui::View2DEdgePanData edge_pan;
+
+  /* Strips that aren't selected, but their position entirely depends on transformed strips. */
+  VectorSet<Strip *> time_dependent_strips;
+};
+
 bool seq_transform_check_overlap(Span<Strip *> transformed_strips);
 
 /* `transform_convert_sequencer_image.cc` */
@@ -411,4 +461,5 @@ extern TransConvertTypeInfo TransConvertType_Tracking;
 
 extern TransConvertTypeInfo TransConvertType_TrackingCurves;
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

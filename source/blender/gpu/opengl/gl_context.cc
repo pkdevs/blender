@@ -6,14 +6,12 @@
  * \ingroup gpu
  */
 
-#include "BLI_assert.h"
-#include "BLI_utildefines.h"
+#include "BLI_assert.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 
 #include "GPU_framebuffer.hh"
-
-#include "GHOST_C-api.h"
 
 #include "gpu_context_private.hh"
 #include "gpu_immediate_private.hh"
@@ -26,16 +24,21 @@
 #include "gl_backend.hh" /* TODO: remove. */
 #include "gl_context.hh"
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu;
 
 /* -------------------------------------------------------------------- */
 /** \name Constructor / Destructor
  * \{ */
 
-GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list)
+GLContext::GLContext(GHOST_IWindow *ghost_window,
+                     GHOST_IContext *ghost_context,
+                     GLSharedOrphanLists &shared_orphan_list)
     : shared_orphan_list_(shared_orphan_list)
 {
+  GLBackend::get()->add_context_id(context_id);
+
   if (G.debug & G_DEBUG_GPU) {
     debug::init_gl_callbacks();
   }
@@ -51,15 +54,15 @@ GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list
   ghost_window_ = ghost_window;
 
   if (ghost_window) {
-    GLuint default_fbo = GHOST_GetDefaultGPUFramebuffer((GHOST_WindowHandle)ghost_window);
-    GHOST_RectangleHandle bounds = GHOST_GetClientBounds((GHOST_WindowHandle)ghost_window);
-    int w = GHOST_GetWidthRectangle(bounds);
-    int h = GHOST_GetHeightRectangle(bounds);
-    GHOST_DisposeRectangle(bounds);
+    GLuint default_fbo = ghost_window->getDefaultFramebuffer();
+
+    GHOST_Rect bounds;
+    ghost_window->getClientBounds(bounds);
+    const int w = bounds.getWidth();
+    const int h = bounds.getHeight();
 
     if (default_fbo != 0) {
-      /* Bind default framebuffer, otherwise state might be undefined because of
-       * detect_mip_render_workaround(). */
+      /* Bind default framebuffer, otherwise state might be undefined. */
       glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
       front_left = new GLFrameBuffer("front_left", this, GL_COLOR_ATTACHMENT0, default_fbo, w, h);
       back_left = new GLFrameBuffer("back_left", this, GL_COLOR_ATTACHMENT0, default_fbo, w, h);
@@ -80,6 +83,7 @@ GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list
     /* For off-screen contexts. Default frame-buffer is null. */
     back_left = new GLFrameBuffer("back_left", this, GL_NONE, 0, 0, 0);
   }
+  ghost_context_ = ghost_context;
 
   active_fb = back_left;
   static_cast<GLStateManager *>(state_manager)->active_fb = static_cast<GLFrameBuffer *>(
@@ -103,6 +107,8 @@ GLContext::~GLContext()
     cache->clear();
   }
   glDeleteBuffers(1, &default_attr_vbo_);
+
+  GLBackend::get()->remove_context_id(context_id);
 }
 
 /** \} */
@@ -115,6 +121,8 @@ void GLContext::activate()
 {
   /* Make sure no other context is already bound to this thread. */
   BLI_assert(is_active_ == false);
+  /* Make sure the active GHOST context matches the one this GPU Context was created for. */
+  BLI_assert(ghost_context_ == GHOST_IContext::getActiveDrawingContext());
 
   is_active_ = true;
   thread_ = pthread_self();
@@ -124,10 +132,11 @@ void GLContext::activate()
 
   if (ghost_window_) {
     /* Get the correct framebuffer size for the internal framebuffers. */
-    GHOST_RectangleHandle bounds = GHOST_GetClientBounds((GHOST_WindowHandle)ghost_window_);
-    int w = GHOST_GetWidthRectangle(bounds);
-    int h = GHOST_GetHeightRectangle(bounds);
-    GHOST_DisposeRectangle(bounds);
+    GHOST_Rect bounds = {0};
+    ghost_window_->getClientBounds(bounds);
+
+    const int w = bounds.getWidth();
+    const int h = bounds.getHeight();
 
     if (front_left) {
       front_left->size_set(w, h);
@@ -192,21 +201,38 @@ void GLContext::finish()
  * In this case we delay the deletion until the context is bound again.
  * \{ */
 
+void GLSharedOrphanLists::OrphanList::clear(FunctionRef<void(GLuint, GLuint *)> free_fn)
+{
+  std::scoped_lock lock(mutex_);
+  if (!handles_.is_empty()) {
+    free_fn(uint(handles_.size()), handles_.data());
+    handles_.clear();
+  }
+};
+
+void GLSharedOrphanLists::OrphanList::append(GLuint handle)
+{
+  std::scoped_lock lock(mutex_);
+  handles_.append(handle);
+};
+
 void GLSharedOrphanLists::orphans_clear()
 {
   /* Check if any context is active on this thread! */
   BLI_assert(GLContext::get());
 
-  lists_mutex.lock();
-  if (!buffers.is_empty()) {
-    glDeleteBuffers(uint(buffers.size()), buffers.data());
-    buffers.clear();
-  }
-  if (!textures.is_empty()) {
-    glDeleteTextures(uint(textures.size()), textures.data());
-    textures.clear();
-  }
-  lists_mutex.unlock();
+  buffers.clear(glDeleteBuffers);
+  textures.clear(glDeleteTextures);
+  shaders.clear([](GLuint size, GLuint *handles) {
+    for (uint i = 0; i < size; i++) {
+      glDeleteShader(handles[i]);
+    }
+  });
+  programs.clear([](GLuint size, GLuint *handles) {
+    for (uint i = 0; i < size; i++) {
+      glDeleteProgram(handles[i]);
+    }
+  });
 };
 
 void GLContext::orphans_clear()
@@ -255,7 +281,7 @@ void GLContext::fbo_free(GLuint fbo_id)
   }
 }
 
-void GLContext::buf_free(GLuint buf_id)
+void GLContext::buffer_free(GLuint buf_id)
 {
   /* Any context can free. */
   if (GLContext::get()) {
@@ -263,11 +289,11 @@ void GLContext::buf_free(GLuint buf_id)
   }
   else {
     GLSharedOrphanLists &orphan_list = GLBackend::get()->shared_orphan_list_get();
-    orphans_add(orphan_list.buffers, orphan_list.lists_mutex, buf_id);
+    orphan_list.buffers.append(buf_id);
   }
 }
 
-void GLContext::tex_free(GLuint tex_id)
+void GLContext::texture_free(GLuint tex_id)
 {
   /* Any context can free. */
   if (GLContext::get()) {
@@ -275,7 +301,31 @@ void GLContext::tex_free(GLuint tex_id)
   }
   else {
     GLSharedOrphanLists &orphan_list = GLBackend::get()->shared_orphan_list_get();
-    orphans_add(orphan_list.textures, orphan_list.lists_mutex, tex_id);
+    orphan_list.textures.append(tex_id);
+  }
+}
+
+void GLContext::shader_free(GLuint shader_id)
+{
+  /* Any context can free. */
+  if (GLContext::get()) {
+    glDeleteShader(shader_id);
+  }
+  else {
+    GLSharedOrphanLists &orphan_list = GLBackend::get()->shared_orphan_list_get();
+    orphan_list.shaders.append(shader_id);
+  }
+}
+
+void GLContext::program_free(GLuint program_id)
+{
+  /* Any context can free. */
+  if (GLContext::get()) {
+    glDeleteProgram(program_id);
+  }
+  else {
+    GLSharedOrphanLists &orphan_list = GLBackend::get()->shared_orphan_list_get();
+    orphan_list.programs.append(program_id);
   }
 }
 
@@ -330,3 +380,5 @@ void GLContext::memory_statistics_get(int *r_total_mem, int *r_free_mem)
 }
 
 /** \} */
+
+}  // namespace blender

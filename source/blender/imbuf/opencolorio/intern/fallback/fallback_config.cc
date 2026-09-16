@@ -98,6 +98,34 @@ const ColorSpace *FallbackConfig::get_sorted_color_space_by_index(const int inde
   return get_color_space_by_index(index);
 }
 
+const ColorSpace *FallbackConfig::get_color_space_by_interop_id(StringRefNull interop_id) const
+{
+  if (ELEM(interop_id, "lin_rec709_scene", "lin_rec709_display")) {
+    return &colorspace_linear_;
+  }
+  if (ELEM(interop_id, "srgb_rec709_display", "srgb_rec709_scene")) {
+    return &colorspace_srgb_;
+  }
+  if (interop_id == "data") {
+    return &colorspace_data_;
+  }
+
+  return nullptr;
+}
+
+const ColorSpace *FallbackConfig::get_color_space_for_hdr_image(StringRefNull name) const
+{
+  return get_color_space(name);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Working space API
+ * \{ */
+
+void FallbackConfig::set_scene_linear_role(StringRefNull /*name*/) {}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

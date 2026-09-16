@@ -12,12 +12,13 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_fileops.h"
-#include "BLI_fnmatch.h"
+#include "BLI_fileops.hh"
+#include "BLI_fnmatch.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #ifdef WIN32
 #  include "utf_winfunc.hh"
@@ -27,8 +28,8 @@
 #    undef _WIN32_IE
 #  endif
 #  define _WIN32_IE 0x0501
-#  include "BLI_alloca.h"
-#  include "BLI_winstuff.h"
+#  include "BLI_alloca.hh"
+#  include "BLI_winstuff.hh"
 #  include <shlobj.h>
 #  include <windows.h>
 #else
@@ -36,6 +37,8 @@
 #endif /* WIN32 */
 
 #include "MEM_guardedalloc.h"
+
+namespace blender {
 
 /* Declarations. */
 
@@ -133,6 +136,12 @@ void BLI_path_sequence_encode(char *path,
 {
   BLI_string_debug_size(path, path_maxncpy);
 
+  /* FIXME: MAX_ID_NAME & FILE_MAXFILE
+   *
+   * As this function directly works on a full file path (typically a FILE_MAX long char buffer),
+   * and does not perform any check on the filename part of the path, it can easily generate final
+   * paths containing a filename longer than the max supported length (FILE_MAXFILE).
+   */
   BLI_snprintf(path, path_maxncpy, "%s%.*d%s", head, numlen, std::max(0, pic), tail);
 }
 
@@ -313,7 +322,7 @@ static int path_normalize_impl(char *path, bool check_blend_relative_prefix)
       path_len -= end - start;
       BLI_assert(strlen(path) == path_len);
       /* Other `..` directories may have been moved to the front, step `start_base` past them. */
-      if (UNLIKELY(start == start_base && (end != end_all))) {
+      if (start == start_base && (end != end_all)) [[unlikely]] {
         start_base += (end_all - end);
         start = (start_base < path + path_len) ? start_base : start_base - 1;
       }
@@ -477,7 +486,7 @@ bool BLI_path_make_safe_filename_ex(char *filename, bool allow_tokens)
       }
     }
 
-    MEM_freeN(filename_lower);
+    MEM_delete(filename_lower);
   }
 #endif
 
@@ -504,8 +513,8 @@ bool BLI_path_make_safe(char *path)
   }
 #endif
 
-  for (curr_slash = (char *)BLI_path_slash_find(curr_path); curr_slash;
-       curr_slash = (char *)BLI_path_slash_find(curr_path))
+  for (curr_slash = const_cast<char *>(BLI_path_slash_find(curr_path)); curr_slash;
+       curr_slash = const_cast<char *>(BLI_path_slash_find(curr_path)))
   {
     const char backup = *curr_slash;
     *curr_slash = '\0';
@@ -804,7 +813,7 @@ bool BLI_path_suffix(char *path, size_t path_maxncpy, const char *suffix, const 
 
   const size_t suffix_len = strlen(suffix);
   const size_t sep_len = strlen(sep);
-  char *extension = (char *)BLI_path_extension_or_end(path);
+  char *extension = const_cast<char *>(BLI_path_extension_or_end(path));
   const size_t extension_len = strlen(extension);
   const size_t path_end = extension - path;
   const size_t path_len = path_end + extension_len;
@@ -941,7 +950,7 @@ static bool path_frame_chars_find_range(const char *path, int *r_char_start, int
  */
 static void ensure_digits(char *path, int digits)
 {
-  char *file = (char *)BLI_path_basename(path);
+  char *file = const_cast<char *>(BLI_path_basename(path));
   if (strrchr(file, '#') == nullptr) {
     int len = strlen(file);
 
@@ -1015,9 +1024,16 @@ bool BLI_path_frame_get(const char *path, int *r_frame, int *r_digits_len)
     return false;
   }
 
-  /* No need to trim the string, `atio` ignores non-digits. */
-  *r_frame = atoi(c);
   *r_digits_len = digits_len;
+
+  /* Only consider numbers inside the range of valid frame-numbers (ints). */
+  /* No need to trim the string, `strtoll` ignores non-digits. */
+  const long long num = strtoll(c, nullptr, 10);
+  if (num > INT_MAX) {
+    return false;
+  }
+
+  *r_frame = int(num);
   return true;
 }
 
@@ -1029,8 +1045,10 @@ void BLI_path_frame_strip(char *path, char *r_ext, const size_t ext_maxncpy)
     return;
   }
 
-  char *file = (char *)BLI_path_basename(path);
-  char *file_ext = (char *)BLI_path_extension_or_end(file);
+  char *file = const_cast<char *>(BLI_path_basename(path));
+  char *file_ext = const_cast<char *>(BLI_path_extension_or_end(file));
+  BLI_strncpy(r_ext, file_ext, ext_maxncpy);
+
   char *c = file_ext;
 
   /* Find start of number (if there is one). */
@@ -1040,12 +1058,21 @@ void BLI_path_frame_strip(char *path, char *r_ext, const size_t ext_maxncpy)
   }
   c++;
 
-  BLI_strncpy(r_ext, file_ext, ext_maxncpy);
-
-  /* Replace the number with the suffix and terminate the string. */
-  while (digits_len--) {
-    *c++ = '#';
+  /* No need to trim the string, `strtoll` ignores non-digits. */
+  const long long num = strtoll(c, nullptr, 10);
+  if (num <= INT_MAX) {
+    /* Replace the number with the suffix. */
+    while (digits_len--) {
+      *c++ = '#';
+    }
   }
+  else {
+    /* Don't strip numbers outside the range of valid frame-numbers (ints).
+     * So go back to where we were before finding the start of the number. */
+    c += digits_len;
+  }
+
+  /* Terminate the string. */
   *c = '\0';
 }
 
@@ -1065,10 +1092,15 @@ void BLI_path_to_display_name(char *display_name, int display_name_maxncpy, cons
     strip_offset++;
   }
 
-  BLI_strncpy(display_name, name + strip_offset, display_name_maxncpy);
+  int display_name_len = BLI_strncpy_rlen(display_name, name + strip_offset, display_name_maxncpy);
 
   /* Replace underscores with spaces. */
   BLI_string_replace_char(display_name, '_', ' ');
+
+  /* In rare cases file paths may not contain valid UTF8 sequences.
+   * In this case show *something*, since it's possible stripping would remove all text.
+   * Use a dummy character as a hint the character could not be shown. */
+  BLI_str_utf8_invalid_substitute(display_name, display_name_len, '_');
 
   BLI_path_extension_strip(display_name);
 
@@ -1246,7 +1278,7 @@ bool BLI_path_program_extensions_add_win32(char *program_name, const size_t prog
   bool retval = false;
   int type;
 
-  type = BLI_exists(program_name);
+  type = BLI_file_stat_mode(program_name);
   if ((type == 0) || S_ISDIR(type)) {
     /* Typically 3-5, ".EXE", ".BAT"... etc. */
     const int ext_max = 12;
@@ -1266,11 +1298,11 @@ bool BLI_path_program_extensions_add_win32(char *program_name, const size_t prog
         ext_next = strchr(ext, ';');
         ext_len = ext_next ? ((ext_next++) - ext) : strlen(ext);
 
-        if (LIKELY(ext_len < ext_max)) {
+        if (ext_len < ext_max) [[likely]] {
           memcpy(filename_ext, ext, ext_len);
           filename_ext[ext_len] = '\0';
 
-          type = BLI_exists(filename);
+          type = BLI_file_stat_mode(filename);
           if (type && (!S_ISDIR(type))) {
             retval = true;
             BLI_strncpy(program_name, filename, program_name_maxncpy);
@@ -1374,6 +1406,7 @@ const char *BLI_getenv(const char *env)
   static wchar_t buffer[32768];
   wchar_t *env_16 = alloc_utf16_from_8(env, 0);
   if (env_16) {
+    /* Skip zero for both empty strings and when the environment variable isn't found. */
     if (GetEnvironmentVariableW(env_16, buffer, ARRAY_SIZE(buffer))) {
       char *res_utf8 = alloc_utf_8_from_16(buffer, 0);
       /* Make sure the result is valid, and will fit into our temporary storage buffer. */
@@ -1387,6 +1420,7 @@ const char *BLI_getenv(const char *env)
         free(res_utf8);
       }
     }
+    free(env_16);
   }
   return result;
 #else
@@ -1421,7 +1455,7 @@ bool BLI_path_extension_check_n(const char *path, ...)
 
   va_start(args, path);
 
-  while ((ext = (const char *)va_arg(args, void *))) {
+  while ((ext = static_cast<const char *>(va_arg(args, void *)))) {
     if (path_extension_check_ex(path, path_len, ext, strlen(ext))) {
       ret = true;
       break;
@@ -1504,7 +1538,7 @@ bool BLI_path_extension_replace(char *path, size_t path_maxncpy, const char *ext
 {
   BLI_string_debug_size_after_nil(path, path_maxncpy);
 
-  char *path_ext = (char *)BLI_path_extension_or_end(path);
+  char *path_ext = const_cast<char *>(BLI_path_extension_or_end(path));
   const size_t ext_len = strlen(ext);
   if ((path_ext - path) + ext_len >= path_maxncpy) {
     return false;
@@ -1516,7 +1550,7 @@ bool BLI_path_extension_replace(char *path, size_t path_maxncpy, const char *ext
 
 bool BLI_path_extension_strip(char *path)
 {
-  char *path_ext = (char *)BLI_path_extension(path);
+  char *path_ext = const_cast<char *>(BLI_path_extension(path));
   if (path_ext == nullptr) {
     return false;
   }
@@ -1560,7 +1594,7 @@ bool BLI_path_extension_ensure(char *path, size_t path_maxncpy, const char *ext)
 bool BLI_path_filename_ensure(char *filepath, size_t filepath_maxncpy, const char *filename)
 {
   BLI_string_debug_size_after_nil(filepath, filepath_maxncpy);
-  char *c = (char *)BLI_path_basename(filepath);
+  char *c = const_cast<char *>(BLI_path_basename(filepath));
   const size_t filename_size = strlen(filename) + 1;
   if (filename_size <= filepath_maxncpy - (c - filepath)) {
     memcpy(c, filename, filename_size);
@@ -1678,7 +1712,7 @@ size_t BLI_path_join_array(char *__restrict dst,
   BLI_assert(path_array_num > 0);
   BLI_string_debug_size(dst, dst_maxncpy);
 
-  if (UNLIKELY(dst_maxncpy == 0)) {
+  if (dst_maxncpy == 0) [[unlikely]] {
     return 0;
   }
   const char *path = path_array[0];
@@ -1886,7 +1920,7 @@ bool BLI_path_contains(const char *container_path, const char *containee_path)
   }
 
   /* Add a trailing slash to prevent same-prefix directories from matching.
-   * e.g. "/some/path" doesn't contain "/some/path_lib". */
+   * e.g. `/some/path` doesn't contain `/some/path_lib`. */
   BLI_path_slash_ensure(container_native, sizeof(container_native));
 
   return BLI_str_startswith(containee_native, container_native);
@@ -1988,9 +2022,9 @@ int BLI_path_cmp_normalized(const char *p1, const char *p2)
   const size_t p2_size = strlen(p2) + 1;
 
   char *norm_p1 = (p1_size <= sizeof(norm_p1_buf)) ? norm_p1_buf :
-                                                     MEM_calloc_arrayN<char>(p1_size, __func__);
+                                                     MEM_new_array_zeroed<char>(p1_size, __func__);
   char *norm_p2 = (p2_size <= sizeof(norm_p2_buf)) ? norm_p2_buf :
-                                                     MEM_calloc_arrayN<char>(p2_size, __func__);
+                                                     MEM_new_array_zeroed<char>(p2_size, __func__);
 
   memcpy(norm_p1, p1, p1_size);
   memcpy(norm_p2, p2, p2_size);
@@ -2008,10 +2042,10 @@ int BLI_path_cmp_normalized(const char *p1, const char *p2)
   const int result = BLI_path_cmp(norm_p1, norm_p2);
 
   if (norm_p1 != norm_p1_buf) {
-    MEM_freeN(norm_p1);
+    MEM_delete(norm_p1);
   }
   if (norm_p2 != norm_p2_buf) {
-    MEM_freeN(norm_p2);
+    MEM_delete(norm_p2);
   }
   return result;
 }
@@ -2051,3 +2085,5 @@ bool BLI_path_has_hidden_component(const char *path)
   /* Nothing was hidden. */
   return false;
 }
+
+}  // namespace blender

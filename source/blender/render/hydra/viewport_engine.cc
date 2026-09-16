@@ -9,14 +9,15 @@
 #include <pxr/imaging/glf/drawTarget.h>
 #include <pxr/usd/usdGeom/camera.h>
 
+#include "DNA_camera_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_vec_types.h" /* This include must be before `BKE_camera.h` due to `rctf` type. */
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_time.h"
-#include "BLI_timecode.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_time.hh"
+#include "BLI_timecode.hh"
 
 #include "BKE_camera.h"
 #include "BKE_context.hh"
@@ -53,64 +54,24 @@ ViewSettings::ViewSettings(bContext *context)
   screen_width = region->winx;
   screen_height = region->winy;
 
-  /* Getting render border. */
+  /* Apply the render border. */
   int x1 = 0, y1 = 0;
   int x2 = screen_width, y2 = screen_height;
 
-  if (region_data->persp == RV3D_CAMOB) {
-    Object *camera_obj = scene->camera;
-    if ((scene->r.mode & R_BORDER) && camera_obj && camera_obj->type == OB_CAMERA) {
-      float camera_points[4][3];
-      BKE_camera_view_frame(scene, static_cast<Camera *>(camera_obj->data), camera_points);
-
-      float screen_points[4][2];
-      for (int i = 0; i < 4; i++) {
-        float world_location[] = {
-            camera_points[i][0], camera_points[i][1], camera_points[i][2], 1.0f};
-        mul_m4_v4(camera_obj->object_to_world().ptr(), world_location);
-        mul_m4_v4(region_data->persmat, world_location);
-
-        if (world_location[3] > 0.0) {
-          screen_points[i][0] = screen_width * 0.5f +
-                                screen_width * 0.5f * (world_location[0] / world_location[3]);
-          screen_points[i][1] = screen_height * 0.5f +
-                                screen_height * 0.5f * (world_location[1] / world_location[3]);
-        }
-      }
-
-      /* Getting camera view region. */
-      float x1_f = std::min(
-          {screen_points[0][0], screen_points[1][0], screen_points[2][0], screen_points[3][0]});
-      float x2_f = std::max(
-          {screen_points[0][0], screen_points[1][0], screen_points[2][0], screen_points[3][0]});
-      float y1_f = std::min(
-          {screen_points[0][1], screen_points[1][1], screen_points[2][1], screen_points[3][1]});
-      float y2_f = std::max(
-          {screen_points[0][1], screen_points[1][1], screen_points[2][1], screen_points[3][1]});
-
-      /* Adjusting region to border. */
-      float x = x1_f, y = y1_f;
-      float dx = x2_f - x1_f, dy = y2_f - y1_f;
-
-      x1 = x + scene->r.border.xmin * dx;
-      x2 = x + scene->r.border.xmax * dx;
-      y1 = y + scene->r.border.ymin * dy;
-      y2 = y + scene->r.border.ymax * dy;
-
-      /* Adjusting to region screen resolution. */
-      x1 = std::max(std::min(x1, screen_width), 0);
-      x2 = std::max(std::min(x2, screen_width), 0);
-      y1 = std::max(std::min(y1, screen_height), 0);
-      y2 = std::max(std::min(y2, screen_height), 0);
-    }
-  }
-  else {
-    if (view3d->flag2 & V3D_RENDER_BORDER) {
-      x1 = view3d->render_border.xmin * screen_width;
-      x2 = view3d->render_border.xmax * screen_width;
-      y1 = view3d->render_border.ymin * screen_height;
-      y2 = view3d->render_border.ymax * screen_height;
-    }
+  rctf border_rect;
+  if (BKE_camera_view_render_border(scene,
+                                    depsgraph,
+                                    view3d,
+                                    region_data,
+                                    screen_width,
+                                    screen_height,
+                                    &border_rect,
+                                    nullptr))
+  {
+    x1 = std::max(std::min(int(border_rect.xmin), screen_width), 0);
+    x2 = std::max(std::min(int(border_rect.xmax), screen_width), 0);
+    y1 = std::max(std::min(int(border_rect.ymin), screen_height), 0);
+    y2 = std::max(std::min(int(border_rect.ymax), screen_height), 0);
   }
 
   border = pxr::GfVec4i(x1, y1, x2, y2);
@@ -163,15 +124,15 @@ void DrawTexture::create_from_buffer(pxr::HdRenderBuffer *buffer)
     return;
   }
 
-  eGPUTextureFormat texture_format;
+  gpu::TextureFormat texture_format;
   eGPUDataFormat data_format;
 
   if (buffer->GetFormat() == pxr::HdFormat::HdFormatFloat16Vec4) {
-    texture_format = GPU_RGBA16F;
+    texture_format = gpu::TextureFormat::SFLOAT_16_16_16_16;
     data_format = GPU_DATA_HALF_FLOAT;
   }
   else {
-    texture_format = GPU_RGBA32F;
+    texture_format = gpu::TextureFormat::SFLOAT_32_32_32_32;
     data_format = GPU_DATA_FLOAT;
   }
 
@@ -198,7 +159,7 @@ void DrawTexture::create_from_buffer(pxr::HdRenderBuffer *buffer)
   buffer->Unmap();
 }
 
-void DrawTexture::draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTexture *tex)
+void DrawTexture::draw(gpu::Shader *shader, const pxr::GfVec4d &viewport, gpu::Texture *tex)
 {
   if (!tex) {
     tex = texture_;
@@ -215,7 +176,7 @@ void DrawTexture::draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTextu
   GPU_matrix_pop();
 }
 
-GPUTexture *DrawTexture::texture() const
+gpu::Texture *DrawTexture::texture() const
 {
   return texture_;
 }
@@ -238,7 +199,7 @@ void ViewportEngine::render()
   render_task_delegate_->add_aov(pxr::HdAovTokens->color);
   render_task_delegate_->add_aov(pxr::HdAovTokens->depth);
 
-  GPUFrameBuffer *view_framebuffer = GPU_framebuffer_active_get();
+  gpu::FrameBuffer *view_framebuffer = GPU_framebuffer_active_get();
   render_task_delegate_->bind();
 
   auto t = tasks();
@@ -247,7 +208,7 @@ void ViewportEngine::render()
   render_task_delegate_->unbind();
 
   GPU_framebuffer_bind(view_framebuffer);
-  GPUShader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE);
+  gpu::Shader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE);
   GPU_shader_bind(shader);
 
   pxr::GfVec4d draw_viewport(view_settings.border[0],
@@ -293,6 +254,15 @@ void ViewportEngine::render(bContext *context)
 {
   context_ = context;
   render();
+}
+
+const Object *ViewportEngine::camera_object() const
+{
+  const View3D *v3d = context_ ? CTX_wm_view3d(context_) : nullptr;
+  if (v3d && v3d->camera) {
+    return DEG_get_evaluated(depsgraph_, v3d->camera);
+  }
+  return scene_->camera;
 }
 
 void ViewportEngine::notify_status(float /*progress*/,

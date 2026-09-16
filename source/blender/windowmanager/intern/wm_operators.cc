@@ -9,6 +9,7 @@
  * as well as some generic operators and shared operator properties.
  */
 
+#include "UI_interface_c.hh"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -21,7 +22,7 @@
 #include <fmt/format.h>
 
 #ifdef WIN32
-#  include "GHOST_C-api.h"
+#  include "GHOST_ISystem.hh"
 #endif
 
 #include "MEM_guardedalloc.h"
@@ -39,16 +40,16 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_dial_2d.h"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_brush.hh"
@@ -63,10 +64,12 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
+#include "BKE_paint.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh" /* #BKE_ST_MAXNAME. */
+#include "BKE_wm_runtime.hh"
 
 #include "BKE_idtype.hh"
 
@@ -77,6 +80,7 @@
 #include "GPU_matrix.hh"
 #include "GPU_state.hh"
 
+#include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "ED_fileselect.hh"
@@ -97,6 +101,7 @@
 
 #include "UI_interface.hh"
 #include "UI_interface_icons.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "WM_api.hh"
@@ -109,9 +114,12 @@
 #include "wm_event_types.hh"
 #include "wm_files.hh"
 #include "wm_window.hh"
+
 #ifdef WITH_XR_OPENXR
 #  include "wm_xr.hh"
 #endif
+
+namespace blender {
 
 #define UNDOCUMENTED_OPERATOR_TIP N_("(undocumented operator)")
 
@@ -194,9 +202,9 @@ bool WM_operator_bl_idname_is_valid(const char *idname)
   return true;
 }
 
-bool WM_operator_py_idname_ok_or_report(ReportList *reports,
-                                        const char *classname,
-                                        const char *idname)
+static bool operator_idname_ok_or_report_impl(ReportList *reports,
+                                              const char *idname,
+                                              FunctionRef<std::string()> error_prefix_fn)
 {
   const char *ch = idname;
   int dot = 0;
@@ -207,48 +215,52 @@ bool WM_operator_py_idname_ok_or_report(ReportList *reports,
     }
     else if (*ch == '.') {
       if (ch == idname || (*(ch + 1) == '\0')) {
-        BKE_reportf(reports,
-                    RPT_ERROR,
-                    "Registering operator class: '%s', invalid bl_idname '%s', at position %d",
-                    classname,
-                    idname,
-                    i);
+        std::string error_prefix = error_prefix_fn();
+        BKE_reportf(
+            reports, RPT_ERROR, "%sInvalid character at position %d", error_prefix.c_str(), i);
         return false;
       }
       dot++;
     }
     else {
-      BKE_reportf(reports,
-                  RPT_ERROR,
-                  "Registering operator class: '%s', invalid bl_idname '%s', at position %d",
-                  classname,
-                  idname,
-                  i);
+      std::string error_prefix = error_prefix_fn();
+      BKE_reportf(
+          reports, RPT_ERROR, "%sInvalid character at position %d", error_prefix.c_str(), i);
       return false;
     }
   }
 
   if (i > OP_MAX_PY_IDNAME) {
+    std::string error_prefix = error_prefix_fn();
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Registering operator class: '%s', invalid bl_idname '%s', "
-                "is too long, maximum length is %d",
-                classname,
-                idname,
+                "%sIdentifier too long, maximum length is %d",
+                error_prefix.c_str(),
                 OP_MAX_PY_IDNAME);
     return false;
   }
 
   if (dot != 1) {
-    BKE_reportf(
-        reports,
-        RPT_ERROR,
-        "Registering operator class: '%s', invalid bl_idname '%s', must contain 1 '.' character",
-        classname,
-        idname);
+    std::string error_prefix = error_prefix_fn();
+    BKE_reportf(reports, RPT_ERROR, "%sMust contain 1 '.' character", error_prefix.c_str());
     return false;
   }
   return true;
+}
+
+bool WM_operator_py_idname_ok_or_report(ReportList *reports,
+                                        const char *classname,
+                                        const char *idname)
+{
+  return operator_idname_ok_or_report_impl(reports, idname, [&]() {
+    return fmt::format(
+        "Registering operator class '{}', invalid bl_idname '{}', ", classname, idname);
+  });
+}
+
+bool WM_operator_idname_ok_or_report(ReportList *reports, const char *idname)
+{
+  return operator_idname_ok_or_report_impl(reports, idname, [&]() { return ""; });
 }
 
 std::string WM_operator_pystring_ex(bContext *C,
@@ -269,18 +281,18 @@ std::string WM_operator_pystring_ex(bContext *C,
   WM_operator_py_idname(idname_py, ot->idname);
   ss << "bpy.ops." << idname_py << "(";
 
-  if (op && op->macro.first) {
+  if (op && op->macro.first()) {
     /* Special handling for macros, else we only get default values in this case... */
     wmOperator *opm;
     bool first_op = true;
 
-    opm = static_cast<wmOperator *>(macro_args ? op->macro.first : nullptr);
+    opm = macro_args ? op->macro.first() : nullptr;
 
     for (; opm; opm = opm->next) {
       PointerRNA *opmptr = opm->ptr;
       PointerRNA opmptr_default;
       if (opmptr == nullptr) {
-        WM_operator_properties_create_ptr(&opmptr_default, opm->type);
+        opmptr_default = WM_operator_properties_create_ptr(opm->type);
         opmptr = &opmptr_default;
       }
 
@@ -301,10 +313,10 @@ std::string WM_operator_pystring_ex(bContext *C,
   else {
     /* Only to get the original props for comparisons. */
     PointerRNA opptr_default;
-    const bool macro_args_test = ot->macro.first ? macro_args : true;
+    const bool macro_args_test = ot->macro.first() ? macro_args : true;
 
     if (opptr == nullptr) {
-      WM_operator_properties_create_ptr(&opptr_default, ot);
+      opptr_default = WM_operator_properties_create_ptr(ot);
       opptr = &opptr_default;
     }
 
@@ -377,7 +389,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
 
   /* Don't get from the context store since this is normally
    * set only for the UI and not usable elsewhere. */
-  ListBase lb = CTX_data_dir_get_ex(C, false, true, true);
+  ListBaseT<LinkData> lb = CTX_data_dir_get_ex(C, false, true, true);
   LinkData *link;
 
   const char *member_found = nullptr;
@@ -389,7 +401,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
     PointerRNA ctx_item_ptr = {};
     // CTX_data_pointer_get(C, identifier);  /* XXX, this isn't working. */
 
-    if (ctx_item_ptr.type == nullptr) {
+    if (!ctx_item_ptr.has_type()) {
       continue;
     }
 
@@ -407,7 +419,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
       }
     }
   }
-  BLI_freelistN(&lb);
+  lb.free_no_destruct();
 
   if (member_found) {
     *r_is_id = member_found_is_id;
@@ -475,7 +487,7 @@ static const char *wm_context_member_from_ptr(const bContext *C,
 #  define TEST_PTR_DATA_TYPE(member, rna_type, rna_ptr, dataptr_cmp) \
     { \
       const char *ctx_member = member; \
-      if (RNA_struct_is_a((rna_ptr)->type, &(rna_type)) && (rna_ptr)->data == (dataptr_cmp)) { \
+      if (RNA_struct_is_a((rna_ptr)->type, (rna_type)) && (rna_ptr)->data == (dataptr_cmp)) { \
         member_id = ctx_member; \
         break; \
       } \
@@ -486,8 +498,8 @@ static const char *wm_context_member_from_ptr(const bContext *C,
 #  define TEST_PTR_DATA_TYPE_FROM_CONTEXT(member, rna_type, rna_ptr) \
     { \
       const char *ctx_member = member; \
-      if (RNA_struct_is_a((rna_ptr)->type, &(rna_type)) && \
-          (rna_ptr)->data == (CTX_data_pointer_get_type(C, ctx_member, &(rna_type)).data)) \
+      if (RNA_struct_is_a((rna_ptr)->type, (rna_type)) && \
+          (rna_ptr)->data == (CTX_data_pointer_get_type(C, ctx_member, (rna_type)).data)) \
       { \
         member_id = ctx_member; \
         break; \
@@ -530,7 +542,7 @@ static const char *wm_context_member_from_ptr(const bContext *C,
       case OB_DATA_SUPPORT_ID_CASE: {
 
         if (ptr_id_type == ID_AR) {
-          const bArmature *arm = (bArmature *)ptr->owner_id;
+          const bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
           if (arm->edbo != nullptr) {
             TEST_PTR_DATA_TYPE("active_bone", RNA_EditBone, ptr, arm->act_edbone);
           }
@@ -570,7 +582,7 @@ static const char *wm_context_member_from_ptr(const bContext *C,
 
           switch (space_data->spacetype) {
             case SPACE_VIEW3D: {
-              const View3D *v3d = (View3D *)space_data;
+              const View3D *v3d = reinterpret_cast<View3D *>(space_data);
               const View3DShading *shading = &v3d->shading;
 
               TEST_PTR_DATA_TYPE("space_data.overlay", RNA_View3DOverlay, ptr, v3d);
@@ -578,42 +590,47 @@ static const char *wm_context_member_from_ptr(const bContext *C,
               break;
             }
             case SPACE_GRAPH: {
-              const SpaceGraph *sipo = (SpaceGraph *)space_data;
+              const SpaceGraph *sipo = reinterpret_cast<SpaceGraph *>(space_data);
               const bDopeSheet *ads = sipo->ads;
               TEST_PTR_DATA_TYPE("space_data.dopesheet", RNA_DopeSheet, ptr, ads);
               break;
             }
             case SPACE_FILE: {
-              const SpaceFile *sfile = (SpaceFile *)space_data;
+              const SpaceFile *sfile = reinterpret_cast<SpaceFile *>(space_data);
               const FileSelectParams *params = ED_fileselect_get_active_params(sfile);
               TEST_PTR_DATA_TYPE("space_data.params", RNA_FileSelectParams, ptr, params);
               break;
             }
             case SPACE_IMAGE: {
-              const SpaceImage *sima = (SpaceImage *)space_data;
+              const SpaceImage *sima = reinterpret_cast<SpaceImage *>(space_data);
               TEST_PTR_DATA_TYPE("space_data.overlay", RNA_SpaceImageOverlay, ptr, sima);
               TEST_PTR_DATA_TYPE("space_data.uv_editor", RNA_SpaceUVEditor, ptr, sima);
               break;
             }
             case SPACE_NLA: {
-              const SpaceNla *snla = (SpaceNla *)space_data;
+              const SpaceNla *snla = reinterpret_cast<SpaceNla *>(space_data);
               const bDopeSheet *ads = snla->ads;
               TEST_PTR_DATA_TYPE("space_data.dopesheet", RNA_DopeSheet, ptr, ads);
               break;
             }
             case SPACE_ACTION: {
-              const SpaceAction *sact = (SpaceAction *)space_data;
+              const SpaceAction *sact = reinterpret_cast<SpaceAction *>(space_data);
               const bDopeSheet *ads = &sact->ads;
               TEST_PTR_DATA_TYPE("space_data.dopesheet", RNA_DopeSheet, ptr, ads);
               break;
             }
             case SPACE_NODE: {
-              const SpaceNode *snode = (SpaceNode *)space_data;
+              const SpaceNode *snode = reinterpret_cast<SpaceNode *>(space_data);
               TEST_PTR_DATA_TYPE("space_data.overlay", RNA_SpaceNodeOverlay, ptr, snode);
               break;
             }
+            case SPACE_CLIP: {
+              const SpaceClip *sclip = reinterpret_cast<SpaceClip *>(space_data);
+              TEST_PTR_DATA_TYPE("space_data.overlay", RNA_SpaceClipOverlay, ptr, sclip);
+              break;
+            }
             case SPACE_SEQ: {
-              const SpaceSeq *sseq = (SpaceSeq *)space_data;
+              const SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(space_data);
               TEST_PTR_DATA_TYPE(
                   "space_data.preview_overlay", RNA_SequencerPreviewOverlay, ptr, sseq);
               TEST_PTR_DATA_TYPE(
@@ -728,24 +745,23 @@ std::optional<std::string> WM_prop_pystring_assign(bContext *C,
   return ret;
 }
 
-void WM_operator_properties_create_ptr(PointerRNA *ptr, wmOperatorType *ot)
+PointerRNA WM_operator_properties_create_ptr(wmOperatorType *ot)
 {
+  wmWindowManager *wm = G_MAIN->wm.first();
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-  *ptr = RNA_pointer_create_discrete(static_cast<ID *>(G_MAIN->wm.first), ot->srna, nullptr);
+  return RNA_pointer_create_discrete(wm ? &wm->id : nullptr, ot->srna, nullptr);
 }
 
-void WM_operator_properties_create(PointerRNA *ptr, const char *opstring)
+PointerRNA WM_operator_properties_create(const char *opstring)
 {
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
 
   if (ot) {
-    WM_operator_properties_create_ptr(ptr, ot);
+    return WM_operator_properties_create_ptr(ot);
   }
-  else {
-    /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-    *ptr = RNA_pointer_create_discrete(
-        static_cast<ID *>(G_MAIN->wm.first), &RNA_OperatorProperties, nullptr);
-  }
+  wmWindowManager *wm = G_MAIN->wm.first();
+  /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
+  return RNA_pointer_create_discrete(wm ? &wm->id : nullptr, RNA_OperatorProperties, nullptr);
 }
 
 void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *opstring)
@@ -757,12 +773,11 @@ void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, con
   }
 
   if (*properties == nullptr) {
-    *properties = blender::bke::idprop::create_group("wmOpItemProp").release();
+    *properties = bke::idprop::create_group("wmOpItemProp").release();
   }
 
   if (*ptr == nullptr) {
-    *ptr = MEM_new<PointerRNA>("wmOpItemPtr");
-    WM_operator_properties_create(*ptr, opstring);
+    *ptr = MEM_new<PointerRNA>("wmOpItemPtr", WM_operator_properties_create(opstring));
   }
 
   (*ptr)->data = *properties;
@@ -784,7 +799,7 @@ void WM_operator_properties_sanitize(PointerRNA *ptr, const bool no_context)
         StructRNA *ptype = RNA_property_pointer_type(ptr, prop);
 
         /* Recurse into operator properties. */
-        if (RNA_struct_is_a(ptype, &RNA_OperatorProperties)) {
+        if (RNA_struct_is_a(ptype, RNA_OperatorProperties)) {
           PointerRNA opptr = RNA_property_pointer_get(ptr, prop);
           WM_operator_properties_sanitize(&opptr, no_context);
         }
@@ -804,7 +819,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
     switch (RNA_property_type(prop)) {
       case PROP_POINTER: {
         StructRNA *ptype = RNA_property_pointer_type(ptr, prop);
-        if (ptype != &RNA_Struct) {
+        if (ptype != RNA_Struct) {
           PointerRNA opptr = RNA_property_pointer_get(ptr, prop);
           changed |= WM_operator_properties_default(&opptr, do_update);
         }
@@ -812,7 +827,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
       }
       default:
         if ((do_update == false) || (RNA_property_is_set(ptr, prop) == false)) {
-          if (RNA_property_reset(ptr, prop, -1)) {
+          if (RNA_property_reset(nullptr, ptr, prop, -1)) {
             changed = true;
           }
         }
@@ -826,7 +841,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
 
 void WM_operator_properties_reset(wmOperator *op)
 {
-  if (op->ptr->data) {
+  if (*op->ptr) {
     PropertyRNA *iterprop = RNA_struct_iterator_property(op->type->srna);
 
     RNA_PROP_BEGIN (op->ptr, itemptr, iterprop) {
@@ -834,7 +849,7 @@ void WM_operator_properties_reset(wmOperator *op)
 
       if ((RNA_property_flag(prop) & (PROP_SKIP_SAVE | PROP_SKIP_PRESET)) == 0) {
         const char *identifier = RNA_property_identifier(prop);
-        RNA_struct_idprops_unset(op->ptr, identifier);
+        RNA_struct_system_idprops_unset(op->ptr, identifier);
       }
     }
     RNA_PROP_END;
@@ -871,7 +886,7 @@ void WM_operator_properties_free(PointerRNA *ptr)
 static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_properties)
 {
   bool changed = false;
-  IDProperty *replaceprops = blender::bke::idprop::create_group("wmOperatorProperties").release();
+  IDProperty *replaceprops = bke::idprop::create_group("wmOperatorProperties").release();
 
   PropertyRNA *iterprop = RNA_struct_iterator_property(op->type->srna);
 
@@ -899,7 +914,7 @@ static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_
   RNA_PROP_END;
 
   if (changed) {
-    CLOG_INFO(WM_LOG_OPERATORS, 1, "loading previous properties for '%s'", op->type->idname);
+    CLOG_DEBUG(WM_LOG_OPERATORS, "Loading previous properties for '%s'", op->type->idname);
   }
   IDP_MergeGroup(op->properties, replaceprops, true);
   IDP_FreeProperty(replaceprops);
@@ -911,10 +926,10 @@ bool WM_operator_last_properties_init(wmOperator *op)
   bool changed = false;
   if (op->type->last_properties) {
     changed |= operator_last_properties_init_impl(op, op->type->last_properties);
-    LISTBASE_FOREACH (wmOperator *, opm, &op->macro) {
-      IDProperty *idp_src = IDP_GetPropertyFromGroup(op->type->last_properties, opm->idname);
+    for (wmOperator &opm : op->macro) {
+      IDProperty *idp_src = IDP_GetPropertyFromGroup(op->type->last_properties, opm.idname);
       if (idp_src) {
-        changed |= operator_last_properties_init_impl(opm, idp_src);
+        changed |= operator_last_properties_init_impl(&opm, idp_src);
       }
     }
   }
@@ -929,21 +944,20 @@ bool WM_operator_last_properties_store(wmOperator *op)
   }
 
   if (op->properties) {
-    if (!BLI_listbase_is_empty(&op->properties->data.group)) {
-      CLOG_INFO(WM_LOG_OPERATORS, 1, "storing properties for '%s'", op->type->idname);
+    if (!op->properties->data.group.is_empty()) {
+      CLOG_DEBUG(WM_LOG_OPERATORS, "Storing properties for '%s'", op->type->idname);
     }
     op->type->last_properties = IDP_CopyProperty(op->properties);
   }
 
-  if (op->macro.first != nullptr) {
-    LISTBASE_FOREACH (wmOperator *, opm, &op->macro) {
-      if (opm->properties) {
+  if (op->macro.first() != nullptr) {
+    for (wmOperator &opm : op->macro) {
+      if (opm.properties) {
         if (op->type->last_properties == nullptr) {
-          op->type->last_properties =
-              blender::bke::idprop::create_group("wmOperatorProperties").release();
+          op->type->last_properties = bke::idprop::create_group("wmOperatorProperties").release();
         }
-        IDProperty *idp_macro = IDP_CopyProperty(opm->properties);
-        STRNCPY(idp_macro->name, opm->type->idname);
+        IDProperty *idp_macro = IDP_CopyProperty(opm.properties);
+        STRNCPY(idp_macro->name, opm.type->idname);
         IDP_ReplaceInGroup(op->type->last_properties, idp_macro);
       }
     }
@@ -976,19 +990,27 @@ wmOperatorStatus WM_generic_select_modal(bContext *C, wmOperator *op, const wmEv
 {
   PropertyRNA *wait_to_deselect_prop = RNA_struct_find_property(op->ptr,
                                                                 "wait_to_deselect_others");
+  const bool use_select_on_click = RNA_struct_property_is_set(op->ptr, "use_select_on_click");
   const short init_event_type = short(POINTER_AS_INT(op->customdata));
 
   /* Get settings from RNA properties for operator. */
   const int mval[2] = {RNA_int_get(op->ptr, "mouse_x"), RNA_int_get(op->ptr, "mouse_y")};
 
   if (init_event_type == 0) {
+    op->customdata = POINTER_FROM_INT(int(event->type));
+
+    if (use_select_on_click) {
+      /* Don't do any selection yet. Wait to see if there's a drag or click (release) event. */
+      WM_event_add_modal_handler(C, op);
+      return OPERATOR_RUNNING_MODAL | OPERATOR_PASS_THROUGH;
+    }
+
     if (event->val == KM_PRESS) {
       RNA_property_boolean_set(op->ptr, wait_to_deselect_prop, true);
 
       wmOperatorStatus retval = op->type->exec(C, op);
       OPERATOR_RETVAL_CHECK(retval);
 
-      op->customdata = POINTER_FROM_INT(int(event->type));
       if (retval & OPERATOR_RUNNING_MODAL) {
         WM_event_add_modal_handler(C, op);
       }
@@ -1079,10 +1101,10 @@ void WM_operator_view3d_unit_defaults(bContext *C, wmOperator *op)
 
 int WM_operator_smooth_viewtx_get(const wmOperator *op)
 {
-  return (op->flag & OP_IS_INVOKE) ? U.smooth_viewtx : 0;
+  return (op->flag & OP_IS_INVOKE && !(U.uiflag & USER_REDUCE_MOTION)) ? U.smooth_viewtx : 0;
 }
 
-wmOperatorStatus WM_menu_invoke_ex(bContext *C, wmOperator *op, wmOperatorCallContext opcontext)
+wmOperatorStatus WM_menu_invoke_ex(bContext *C, wmOperator *op, wm::OpCallContext opcontext)
 {
   PropertyRNA *prop = op->type->prop;
 
@@ -1101,18 +1123,17 @@ wmOperatorStatus WM_menu_invoke_ex(bContext *C, wmOperator *op, wmOperatorCallCo
     return retval;
   }
   else {
-    uiPopupMenu *pup = UI_popup_menu_begin(
+    ui::PopupMenu *pup = ui::popup_menu_begin(
         C, WM_operatortype_name(op->type, op->ptr).c_str(), ICON_NONE);
-    uiLayout *layout = UI_popup_menu_layout(pup);
+    ui::Layout &layout = *popup_menu_layout(pup);
     /* Set this so the default execution context is the same as submenus. */
-    layout->operator_context_set(opcontext);
-    uiItemsFullEnumO(layout,
-                     op->type->idname,
-                     RNA_property_identifier(prop),
-                     static_cast<IDProperty *>(op->ptr->data),
-                     opcontext,
-                     UI_ITEM_NONE);
-    UI_popup_menu_end(C, pup);
+    layout.operator_context_set(opcontext);
+    layout.op_enum(op->type->idname,
+                   RNA_property_identifier(prop),
+                   static_cast<IDProperty *>(op->ptr->data),
+                   opcontext,
+                   UI_ITEM_NONE);
+    popup_menu_end(C, pup);
     return OPERATOR_INTERFACE;
   }
 
@@ -1121,7 +1142,7 @@ wmOperatorStatus WM_menu_invoke_ex(bContext *C, wmOperator *op, wmOperatorCallCo
 
 wmOperatorStatus WM_menu_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
-  return WM_menu_invoke_ex(C, op, WM_OP_INVOKE_REGION_WIN);
+  return WM_menu_invoke_ex(C, op, wm::OpCallContext::InvokeRegionWin);
 }
 
 struct EnumSearchMenu {
@@ -1129,56 +1150,42 @@ struct EnumSearchMenu {
 };
 
 /** Generic enum search invoke popup. */
-static uiBlock *wm_enum_search_menu(bContext *C, ARegion *region, void *arg)
+static ui::Block *wm_enum_search_menu(bContext *C, ARegion *region, void *arg)
 {
   EnumSearchMenu *search_menu = static_cast<EnumSearchMenu *>(arg);
   wmWindow *win = CTX_wm_window(C);
   wmOperator *op = search_menu->op;
   /* `template_ID` uses `4 * widget_unit` for width,
    * we use a bit more, some items may have a suffix to show. */
-  const int width = UI_searchbox_size_x();
-  const int height = UI_searchbox_size_y();
+  const int width = ui::searchbox_size_x();
+  const int height = ui::searchbox_size_y();
   static char search[256] = "";
 
-  uiBlock *block = UI_block_begin(C, region, "_popup", blender::ui::EmbossType::Emboss);
-  UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_MOVEMOUSE_QUIT | UI_BLOCK_SEARCH_MENU);
-  UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_POPUP);
+  ui::Block *block = block_begin(C, region, "_popup", ui::EmbossType::Emboss);
+  block_flag_enable(block, ui::BLOCK_LOOP | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_SEARCH_MENU);
+  block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 
   search[0] = '\0';
-#if 0 /* Ok, this isn't so easy. */
-  uiDefBut(block,
-           UI_BTYPE_LABEL,
-           0,
-           WM_operatortype_name(op->type, op->ptr),
-           0,
-           0,
-           UI_searchbox_size_x(),
-           UI_UNIT_Y,
-           nullptr,
-           0.0,
-           0.0,
-           "");
-#endif
-  uiBut *but = uiDefSearchButO_ptr(block,
-                                   op->type,
-                                   static_cast<IDProperty *>(op->ptr->data),
-                                   search,
-                                   0,
-                                   ICON_VIEWZOOM,
-                                   sizeof(search),
-                                   0,
-                                   0,
-                                   width,
-                                   UI_UNIT_Y,
-                                   "");
+  ui::Button *but = uiDefSearchButO_ptr(block,
+                                        op->type,
+                                        static_cast<IDProperty *>(op->ptr->data),
+                                        search,
+                                        ICON_VIEWZOOM,
+                                        sizeof(search),
+                                        0,
+                                        0,
+                                        width,
+                                        UI_UNIT_Y,
+                                        "");
 
   /* Fake button, it holds space for search items. */
-  uiDefBut(block, UI_BTYPE_LABEL, 0, "", 0, -height, width, height, nullptr, 0, 0, std::nullopt);
+  uiDefBut(
+      block, ui::ButtonType::Label, "", 0, -height, width, height, nullptr, 0, 0, std::nullopt);
 
   /* Move it downwards, mouse over button. */
-  UI_block_bounds_set_popup(block, UI_SEARCHBOX_BOUNDS, blender::int2{0, -UI_UNIT_Y});
+  block_bounds_set_popup(block, UI_SEARCHBOX_BOUNDS, int2{0, -UI_UNIT_Y});
 
-  UI_but_focus_on_enter_event(win, but);
+  button_focus_on_enter_event(win, but);
 
   return block;
 }
@@ -1189,7 +1196,7 @@ wmOperatorStatus WM_enum_search_invoke(bContext *C, wmOperator *op, const wmEven
   search_menu.op = op;
   /* Refreshing not supported, because operator might get freed. */
   const bool can_refresh = false;
-  UI_popup_block_invoke_ex(C, wm_enum_search_menu, &search_menu, nullptr, can_refresh);
+  popup_block_invoke_ex(C, wm_enum_search_menu, &search_menu, nullptr, can_refresh);
   return OPERATOR_INTERFACE;
 }
 
@@ -1198,24 +1205,24 @@ wmOperatorStatus WM_operator_confirm_message_ex(bContext *C,
                                                 const char *title,
                                                 const int icon,
                                                 const char *message,
-                                                const wmOperatorCallContext /*opcontext*/)
+                                                const wm::OpCallContext /*opcontext*/)
 {
-  int alert_icon = ALERT_ICON_QUESTION;
+  ui::AlertIcon alert_icon = ui::AlertIcon::Question;
   switch (icon) {
     case ICON_NONE:
-      alert_icon = ALERT_ICON_NONE;
+      alert_icon = ui::AlertIcon::None;
       break;
-    case ICON_ERROR:
-      alert_icon = ALERT_ICON_WARNING;
+    case ICON_STATUS_WARNING_FILLED:
+      alert_icon = ui::AlertIcon::Warning;
       break;
     case ICON_QUESTION:
-      alert_icon = ALERT_ICON_QUESTION;
+      alert_icon = ui::AlertIcon::Question;
       break;
-    case ICON_CANCEL:
-      alert_icon = ALERT_ICON_ERROR;
+    case ICON_STATUS_ERROR_FILLED:
+      alert_icon = ui::AlertIcon::Error;
       break;
-    case ICON_INFO:
-      alert_icon = ALERT_ICON_INFO;
+    case ICON_STATUS_INFO_FILLED:
+      alert_icon = ui::AlertIcon::Info;
       break;
   }
   return WM_operator_confirm_ex(C, op, IFACE_(title), nullptr, IFACE_(message), alert_icon, false);
@@ -1224,13 +1231,13 @@ wmOperatorStatus WM_operator_confirm_message_ex(bContext *C,
 wmOperatorStatus WM_operator_confirm_message(bContext *C, wmOperator *op, const char *message)
 {
   return WM_operator_confirm_ex(
-      C, op, IFACE_(message), nullptr, IFACE_("OK"), ALERT_ICON_NONE, false);
+      C, op, IFACE_(message), nullptr, IFACE_("OK"), ui::AlertIcon::None, false);
 }
 
 wmOperatorStatus WM_operator_confirm(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   return WM_operator_confirm_ex(
-      C, op, IFACE_(op->type->name), nullptr, IFACE_("OK"), ALERT_ICON_NONE, false);
+      C, op, IFACE_(op->type->name), nullptr, IFACE_("OK"), ui::AlertIcon::None, false);
 }
 
 wmOperatorStatus WM_operator_confirm_or_exec(bContext *C,
@@ -1240,7 +1247,7 @@ wmOperatorStatus WM_operator_confirm_or_exec(bContext *C,
   const bool confirm = RNA_boolean_get(op->ptr, "confirm");
   if (confirm) {
     return WM_operator_confirm_ex(
-        C, op, IFACE_(op->type->name), nullptr, IFACE_("OK"), ALERT_ICON_NONE, false);
+        C, op, IFACE_(op->type->name), nullptr, IFACE_("OK"), ui::AlertIcon::None, false);
   }
   return op->type->exec(C, op);
 }
@@ -1282,7 +1289,8 @@ bool WM_operator_check_ui_enabled(const bContext *C, const char *idname)
   wmWindowManager *wm = CTX_wm_manager(C);
   Scene *scene = CTX_data_scene(C);
 
-  return !((ED_undo_is_valid(C, idname) == false) || WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY));
+  return !((ED_undo_is_valid(C, idname) == false) ||
+           WM_jobs_has_running(wm, scene, WM_JOB_TYPE_ANY, WM_JOB_BACKGROUND));
 }
 
 wmOperator *WM_operator_last_redo(const bContext *C)
@@ -1290,9 +1298,9 @@ wmOperator *WM_operator_last_redo(const bContext *C)
   wmWindowManager *wm = CTX_wm_manager(C);
 
   /* Only for operators that are registered and did an undo push. */
-  LISTBASE_FOREACH_BACKWARD (wmOperator *, op, &wm->operators) {
-    if ((op->type->flag & OPTYPE_REGISTER) && (op->type->flag & OPTYPE_UNDO)) {
-      return op;
+  for (wmOperator &op : wm->runtime->operators.items_reversed()) {
+    if ((op.type->flag & OPTYPE_REGISTER) && (op.type->flag & OPTYPE_UNDO)) {
+      return &op;
     }
   }
 
@@ -1302,15 +1310,16 @@ wmOperator *WM_operator_last_redo(const bContext *C)
 IDProperty *WM_operator_last_properties_ensure_idprops(wmOperatorType *ot)
 {
   if (ot->last_properties == nullptr) {
-    ot->last_properties = blender::bke::idprop::create_group("wmOperatorProperties").release();
+    ot->last_properties = bke::idprop::create_group("wmOperatorProperties").release();
   }
   return ot->last_properties;
 }
 
 void WM_operator_last_properties_ensure(wmOperatorType *ot, PointerRNA *ptr)
 {
+  wmWindowManager *wm = G_MAIN->wm.first();
   IDProperty *props = WM_operator_last_properties_ensure_idprops(ot);
-  *ptr = RNA_pointer_create_discrete(static_cast<ID *>(G_MAIN->wm.first), ot->srna, props);
+  *ptr = RNA_pointer_create_discrete(wm ? &wm->id : nullptr, ot->srna, props);
 }
 
 ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
@@ -1329,7 +1338,7 @@ ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
     errno = 0;
 
     if (idcode == ID_IM) {
-      id = reinterpret_cast<ID *>(BKE_image_load_exists(bmain, filepath, &exists));
+      id = reinterpret_cast<ID *>(BKE_image_load_exists(bmain, filepath, true, &exists));
     }
     else {
       BLI_assert_unreachable();
@@ -1348,7 +1357,7 @@ ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
     if (is_relative_path) {
       if (exists == false) {
         if (idcode == ID_IM) {
-          BLI_path_rel(((Image *)id)->filepath, BKE_main_blendfile_path(bmain));
+          BLI_path_rel((id_cast<Image *>(id))->filepath, BKE_main_blendfile_path(bmain));
         }
         else {
           BLI_assert_unreachable();
@@ -1412,42 +1421,51 @@ static void wm_block_redo_cancel_cb(bContext *C, void *arg_op)
   }
 }
 
-static uiBlock *wm_block_create_redo(bContext *C, ARegion *region, void *arg_op)
+static ui::Block *wm_block_create_redo(bContext *C, ARegion *region, void *arg_op)
 {
   wmOperator *op = static_cast<wmOperator *>(arg_op);
-  const uiStyle *style = UI_style_get_dpi();
+  const uiStyle *style = ui::style_get_dpi();
   int width = 15 * UI_UNIT_X;
 
-  uiBlock *block = UI_block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
-  UI_block_flag_disable(block, UI_BLOCK_LOOP);
-  UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_REGULAR);
+  ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
+  block_flag_disable(block, ui::BLOCK_LOOP);
+  block_theme_style_set(block, ui::BLOCK_THEME_STYLE_REGULAR);
 
-  /* #UI_BLOCK_NUMSELECT for layer buttons. */
-  UI_block_flag_enable(block, UI_BLOCK_NUMSELECT | UI_BLOCK_KEEP_OPEN | UI_BLOCK_MOVEMOUSE_QUIT);
+  /* #BLOCK_NUMSELECT for layer buttons. */
+  block_flag_enable(block,
+                    ui::BLOCK_NUMSELECT | ui::BLOCK_KEEP_OPEN | ui::BLOCK_MOVEMOUSE_QUIT |
+                        ui::BLOCK_POPUP);
 
   /* If register is not enabled, the operator gets freed on #OPERATOR_FINISHED
    * ui_apply_but_funcs_after calls #ED_undo_operator_repeate_cb and crashes. */
   BLI_assert(op->type->flag & OPTYPE_REGISTER);
 
-  UI_block_func_handle_set(block, wm_block_redo_cb, arg_op);
-  UI_popup_dummy_panel_set(region, block);
-  uiLayout *layout = UI_block_layout(
-      block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 0, 0, width, UI_UNIT_Y, 0, style);
+  block_func_handle_set(block, wm_block_redo_cb, arg_op);
+  popup_dummy_panel_set(region, block, op->idname);
+  ui::Layout &layout = ui::block_layout(block,
+                                        ui::LayoutDirection::Vertical,
+                                        ui::LayoutType::Panel,
+                                        0,
+                                        0,
+                                        width,
+                                        UI_UNIT_Y,
+                                        0,
+                                        style);
 
   if (op == WM_operator_last_redo(C)) {
     if (!WM_operator_check_ui_enabled(C, op->type->name)) {
-      uiLayoutSetEnabled(layout, false);
+      layout.enabled_set(false);
     }
   }
 
-  uiItemL_ex(layout, WM_operatortype_name(op->type, op->ptr), ICON_NONE, true, false);
-  layout->separator(0.2f, LayoutSeparatorType::Line);
-  layout->separator(0.5f);
+  uiItemL_ex(&layout, WM_operatortype_name(op->type, op->ptr), ICON_NONE, true, false);
+  layout.separator(0.2f, ui::LayoutSeparatorType::Line);
+  layout.separator(0.5f);
 
-  uiLayout *col = &layout->column(false);
-  uiTemplateOperatorPropertyButs(C, col, op, UI_BUT_LABEL_ALIGN_NONE, 0);
+  ui::Layout &col = layout.column(false);
+  uiTemplateOperatorPropertyButs(C, &col, op, ui::BUT_LABEL_ALIGN_NONE, 0);
 
-  UI_block_bounds_set_popup(block, 7 * UI_SCALE_FAC, nullptr);
+  block_bounds_set_popup(block, 7 * UI_SCALE_FAC, nullptr);
 
   return block;
 }
@@ -1459,36 +1477,36 @@ struct wmOpPopUp {
   std::string title;
   std::string message;
   std::string confirm_text;
-  eAlertIcon icon;
+  ui::AlertIcon icon;
   wmPopupSize size;
   wmPopupPosition position;
   bool cancel_default;
   bool mouse_move_quit;
+  /** Assign accelerator keys to buttons (#ui::BLOCK_NUMSELECT). */
+  bool use_numselect;
   bool include_properties;
 };
 
 /* Only invoked by OK button in popups created with #wm_block_dialog_create(). */
-static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
+static void dialog_exec_cb(bContext *C, wmOpPopUp *data, ui::Block *block)
 {
   wmOperator *op;
   {
     /* Execute will free the operator.
      * In this case, wm_operator_ui_popup_cancel won't run. */
-    wmOpPopUp *data = static_cast<wmOpPopUp *>(arg1);
     op = data->op;
     MEM_delete(data);
   }
 
-  uiBlock *block = static_cast<uiBlock *>(arg2);
-  /* Explicitly set UI_RETURN_OK flag, otherwise the menu might be canceled
+  /* Explicitly set RETURN_OK flag, otherwise the menu might be canceled
    * in case WM_operator_call_ex exits/reloads the current file (#49199). */
 
-  UI_popup_menu_retval_set(block, UI_RETURN_OK, true);
+  popup_menu_retval_set(block, ui::RETURN_OK, true);
 
   /* Get context data *after* WM_operator_call_ex
    * which might have closed the current file and changed context. */
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, block);
+  popup_block_close(C, win, block);
 
   WM_operator_call_ex(C, op, true);
 }
@@ -1496,49 +1514,48 @@ static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 static void wm_operator_ui_popup_cancel(bContext *C, void *user_data);
 
 /* Only invoked by Cancel button in popups created with #wm_block_dialog_create(). */
-static void dialog_cancel_cb(bContext *C, void *arg1, void *arg2)
+static void dialog_cancel_cb(bContext *C, wmOpPopUp *data, ui::Block *block)
 {
-  wm_operator_ui_popup_cancel(C, arg1);
-  uiBlock *block = static_cast<uiBlock *>(arg2);
-  UI_popup_menu_retval_set(block, UI_RETURN_CANCEL, true);
+  wm_operator_ui_popup_cancel(C, data);
+  popup_menu_retval_set(block, ui::RETURN_CANCEL, true);
   wmWindow *win = CTX_wm_window(C);
-  UI_popup_block_close(C, win, block);
+  popup_block_close(C, win, block);
 }
 
 /**
  * Dialogs are popups that require user verification (click OK) before exec.
  */
-static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_data)
+static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *user_data)
 {
   wmOpPopUp *data = static_cast<wmOpPopUp *>(user_data);
   wmOperator *op = data->op;
-  const uiStyle *style = UI_style_get_dpi();
+  const uiStyle *style = ui::style_get_dpi();
   const bool small = data->size == WM_POPUP_SIZE_SMALL;
   const short icon_size = (small ? 32 : 40) * UI_SCALE_FAC;
 
-  uiBlock *block = UI_block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
-  UI_block_flag_disable(block, UI_BLOCK_LOOP);
-  UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_POPUP);
-  UI_popup_dummy_panel_set(region, block);
+  ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
+  block_flag_disable(block, ui::BLOCK_LOOP);
+  block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
+  popup_dummy_panel_set(region, block, op->idname);
 
   if (data->mouse_move_quit) {
-    UI_block_flag_enable(block, UI_BLOCK_MOVEMOUSE_QUIT);
+    block_flag_enable(block, ui::BLOCK_MOVEMOUSE_QUIT);
   }
-  if (data->icon < ALERT_ICON_NONE || data->icon >= ALERT_ICON_MAX) {
-    data->icon = ALERT_ICON_QUESTION;
+  if (data->icon < ui::AlertIcon::None || data->icon >= ui::AlertIcon::Max) {
+    data->icon = ui::AlertIcon::Question;
   }
 
-  UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_NUMSELECT);
+  block_flag_enable(block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_NUMSELECT | ui::BLOCK_POPUP);
 
-  UI_fontstyle_set(&style->widget);
+  ui::fontstyle_set(&style->widget);
   /* Width based on the text lengths. */
   int text_width = std::max(
       120 * UI_SCALE_FAC,
       BLF_width(style->widget.uifont_id, data->title.c_str(), BLF_DRAW_STR_DUMMY_MAX));
 
   /* Break Message into multiple lines. */
-  blender::Vector<std::string> message_lines;
-  blender::StringRef messaged_trimmed = blender::StringRef(data->message).trim();
+  Vector<std::string> message_lines;
+  StringRef messaged_trimmed = StringRef(data->message).trim();
   std::istringstream message_stream(messaged_trimmed);
   std::string line;
   while (std::getline(message_stream, line)) {
@@ -1555,45 +1572,50 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
       BLF_width(style->widget.uifont_id, IFACE_("Cancel"), BLF_DRAW_STR_DUMMY_MAX));
   dialog_width = std::max(dialog_width, 3 * longest_button_text);
 
-  uiLayout *layout;
-  if (data->icon != ALERT_ICON_NONE) {
-    layout = uiItemsAlertBox(
-        block, style, dialog_width + icon_size, eAlertIcon(data->icon), icon_size);
-  }
-  else {
-    layout = UI_block_layout(
-        block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 0, 0, dialog_width, 0, 0, style);
-  }
+  ui::Layout &layout = [&]() -> ui::Layout & {
+    if (data->icon != ui::AlertIcon::None) {
+      return *uiItemsAlertBox(block, style, dialog_width + icon_size, data->icon, icon_size);
+    }
+    return ui::block_layout(block,
+                            ui::LayoutDirection::Vertical,
+                            ui::LayoutType::Panel,
+                            0,
+                            0,
+                            dialog_width,
+                            0,
+                            0,
+                            style);
+  }();
 
   /* Title. */
   if (!data->title.empty()) {
-    uiItemL_ex(layout, data->title, ICON_NONE, true, false);
+    uiItemL_ex(&layout, data->title, ICON_NONE, true, false);
 
     /* Line under the title if there are properties but no message body. */
     if (data->include_properties && message_lines.size() == 0) {
-      layout->separator(0.2f, LayoutSeparatorType::Line);
+      layout.separator(0.2f, ui::LayoutSeparatorType::Line);
     };
   }
 
   /* Message lines. */
   if (message_lines.size() > 0) {
-    uiLayout *lines = &layout->column(false);
-    lines->scale_y_set(0.65f);
-    lines->separator(0.1f);
+    ui::Layout &lines = layout.column(false);
+    lines.scale_y_set(0.65f);
+    lines.separator(0.1f);
     for (auto &st : message_lines) {
-      lines->label(st, ICON_NONE);
+      lines.label(st, ICON_NONE);
     }
   }
 
   if (data->include_properties) {
-    layout->separator(0.5f);
-    uiTemplateOperatorPropertyButs(C, layout, op, UI_BUT_LABEL_ALIGN_SPLIT_COLUMN, 0);
+    layout.separator(0.5f);
+    uiTemplateOperatorPropertyButs(C, &layout, op, ui::BUT_LABEL_ALIGN_SPLIT_COLUMN, 0);
   }
 
-  layout->separator(small ? 0.1f : 1.8f);
+  layout.separator(small ? 0.1f : 1.8f);
 
   /* Clear so the OK button is left alone. */
-  UI_block_func_set(block, nullptr, nullptr, nullptr);
+  block_func_set(block, nullptr, nullptr, nullptr);
 
 #ifdef _WIN32
   const bool windows_layout = true;
@@ -1603,20 +1625,19 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
 
   /* Check there are no active default buttons, allowing a dialog to define its own
    * confirmation buttons which are shown instead of these, see: #124098. */
-  if (!UI_block_has_active_default_button(uiLayoutGetBlock(layout))) {
+  if (!block_has_active_default_button(layout.block())) {
     /* New column so as not to interfere with custom layouts, see: #26436. */
-    uiLayout *col = &layout->column(false);
-    uiBlock *col_block = uiLayoutGetBlock(col);
-    uiBut *confirm_but;
-    uiBut *cancel_but;
+    ui::Layout &col = layout.column(false);
+    ui::Block *col_block = col.block();
+    ui::Button *confirm_but;
+    ui::Button *cancel_but;
 
-    col = &col->split(0.0f, true);
-    col->scale_y_set(small ? 1.0f : 1.2f);
+    ui::Layout &split = col.split(0.0f, true);
+    split.scale_y_set(small ? 1.0f : 1.2f);
 
     if (windows_layout) {
       confirm_but = uiDefBut(col_block,
-                             UI_BTYPE_BUT,
-                             0,
+                             ui::ButtonType::But,
                              data->confirm_text.c_str(),
                              0,
                              0,
@@ -1626,17 +1647,16 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
                              0,
                              0,
                              "");
-      col->column(false);
+      split.column(false);
     }
 
     cancel_but = uiDefBut(
-        col_block, UI_BTYPE_BUT, 0, IFACE_("Cancel"), 0, 0, 0, UI_UNIT_Y, nullptr, 0, 0, "");
+        col_block, ui::ButtonType::But, IFACE_("Cancel"), 0, 0, 0, UI_UNIT_Y, nullptr, 0, 0, "");
 
     if (!windows_layout) {
-      col->column(false);
+      split.column(false);
       confirm_but = uiDefBut(col_block,
-                             UI_BTYPE_BUT,
-                             0,
+                             ui::ButtonType::But,
                              data->confirm_text.c_str(),
                              0,
                              0,
@@ -1648,9 +1668,11 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
                              "");
     }
 
-    UI_but_func_set(confirm_but, dialog_exec_cb, data, col_block);
-    UI_but_func_set(cancel_but, dialog_cancel_cb, data, col_block);
-    UI_but_flag_enable((data->cancel_default) ? cancel_but : confirm_but, UI_BUT_ACTIVE_DEFAULT);
+    button_func_set(confirm_but,
+                    [data, col_block](bContext &C) { dialog_exec_cb(&C, data, col_block); });
+    button_func_set(cancel_but,
+                    [data, col_block](bContext &C) { dialog_cancel_cb(&C, data, col_block); });
+    button_flag_enable((data->cancel_default) ? cancel_but : confirm_but, ui::BUT_ACTIVE_DEFAULT);
   }
 
   const int padding = (small ? 7 : 14) * UI_SCALE_FAC;
@@ -1658,39 +1680,42 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
   if (data->position == WM_POPUP_POSITION_MOUSE) {
     const float button_center_x = windows_layout ? -0.4f : -0.90f;
     const float button_center_y = small ? 2.0f : 3.1f;
-    const int bounds_offset[2] = {int(button_center_x * uiLayoutGetWidth(layout)),
+    const int bounds_offset[2] = {int(button_center_x * layout.width()),
                                   int(button_center_y * UI_UNIT_X)};
-    UI_block_bounds_set_popup(block, padding, bounds_offset);
+    block_bounds_set_popup(block, padding, bounds_offset);
   }
   else if (data->position == WM_POPUP_POSITION_CENTER) {
-    UI_block_bounds_set_centered(block, padding);
+    block_bounds_set_centered(block, padding);
   }
 
   return block;
 }
 
-static uiBlock *wm_operator_ui_create(bContext *C, ARegion *region, void *user_data)
+static ui::Block *wm_operator_ui_create(bContext *C, ARegion *region, void *user_data)
 {
   wmOpPopUp *data = static_cast<wmOpPopUp *>(user_data);
   wmOperator *op = data->op;
-  const uiStyle *style = UI_style_get_dpi();
+  const uiStyle *style = ui::style_get_dpi();
 
-  uiBlock *block = UI_block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
-  UI_block_flag_disable(block, UI_BLOCK_LOOP);
-  UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_MOVEMOUSE_QUIT);
-  UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_REGULAR);
+  ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
+  block_flag_disable(block, ui::BLOCK_LOOP);
+  block_flag_enable(block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_POPUP);
+  if (data->use_numselect) {
+    block_flag_enable(block, ui::BLOCK_NUMSELECT);
+  }
+  block_theme_style_set(block, ui::BLOCK_THEME_STYLE_REGULAR);
 
-  UI_popup_dummy_panel_set(region, block);
+  popup_dummy_panel_set(region, block, op->idname);
 
-  uiLayout *layout = UI_block_layout(
-      block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 0, 0, data->width, 0, 0, style);
+  ui::Layout &layout = ui::block_layout(
+      block, ui::LayoutDirection::Vertical, ui::LayoutType::Panel, 0, 0, data->width, 0, 0, style);
 
   /* Since UI is defined the auto-layout args are not used. */
-  uiTemplateOperatorPropertyButs(C, layout, op, UI_BUT_LABEL_ALIGN_COLUMN, 0);
+  uiTemplateOperatorPropertyButs(C, &layout, op, ui::BUT_LABEL_ALIGN_COLUMN, 0);
 
-  UI_block_func_set(block, nullptr, nullptr, nullptr);
+  block_func_set(block, nullptr, nullptr, nullptr);
 
-  UI_block_bounds_set_popup(block, 6 * UI_SCALE_FAC, nullptr);
+  block_bounds_set_popup(block, 6 * UI_SCALE_FAC, nullptr);
 
   return block;
 }
@@ -1730,7 +1755,7 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
                                         const char *title,
                                         const char *message,
                                         const char *confirm_text,
-                                        int icon,
+                                        ui::AlertIcon icon,
                                         bool cancel_default)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
@@ -1738,33 +1763,37 @@ wmOperatorStatus WM_operator_confirm_ex(bContext *C,
 
   /* Larger dialog needs a wider minimum width to balance with the big icon. */
   const float min_width = (message == nullptr) ? 180.0f : 230.0f;
-  data->width = int(min_width * UI_SCALE_FAC * UI_style_get()->widget.points /
+  data->width = int(min_width * UI_SCALE_FAC * ui::style_get()->widget.points /
                     UI_DEFAULT_TEXT_POINTS);
 
   data->free_op = true;
   data->title = (title == nullptr) ? WM_operatortype_name(op->type, op->ptr) : title;
   data->message = (message == nullptr) ? std::string() : message;
   data->confirm_text = (confirm_text == nullptr) ? IFACE_("OK") : confirm_text;
-  data->icon = eAlertIcon(icon);
+  data->icon = icon;
   data->size = (message == nullptr) ? WM_POPUP_SIZE_SMALL : WM_POPUP_SIZE_LARGE;
   data->position = (message == nullptr) ? WM_POPUP_POSITION_MOUSE : WM_POPUP_POSITION_CENTER;
   data->cancel_default = cancel_default;
   data->mouse_move_quit = (message == nullptr) ? true : false;
   data->include_properties = false;
 
-  UI_popup_block_ex(
+  popup_block_ex(
       C, wm_block_dialog_create, wm_operator_ui_popup_ok, wm_operator_ui_popup_cancel, data, op);
 
   return OPERATOR_RUNNING_MODAL;
 }
 
-wmOperatorStatus WM_operator_ui_popup(bContext *C, wmOperator *op, int width)
+wmOperatorStatus WM_operator_ui_popup(bContext *C,
+                                      wmOperator *op,
+                                      int width,
+                                      const bool use_numselect)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
   data->width = width * UI_SCALE_FAC;
+  data->use_numselect = use_numselect;
   data->free_op = true; /* If this runs and gets registered we may want not to free it. */
-  UI_popup_block_ex(C, wm_operator_ui_create, nullptr, wm_operator_ui_popup_cancel, data, op);
+  popup_block_ex(C, wm_operator_ui_create, nullptr, wm_operator_ui_popup_cancel, data, op);
   return OPERATOR_RUNNING_MODAL;
 }
 
@@ -1780,7 +1809,8 @@ static wmOperatorStatus wm_operator_props_popup_ex(
     const bool do_redo,
     std::optional<std::string> title = std::nullopt,
     std::optional<std::string> confirm_text = std::nullopt,
-    const bool cancel_default = false)
+    const bool cancel_default = false,
+    std::optional<std::string> message = std::nullopt)
 {
   if ((op->type->flag & OPTYPE_REGISTER) == 0) {
     BKE_reportf(op->reports,
@@ -1803,10 +1833,11 @@ static wmOperatorStatus wm_operator_props_popup_ex(
   /* If we don't have global undo, we can't do undo push for automatic redo,
    * so we require manual OK clicking in this popup. */
   if (!do_redo || !(U.uiflag & USER_GLOBALUNDO)) {
-    return WM_operator_props_dialog_popup(C, op, 300, title, confirm_text, cancel_default);
+    return WM_operator_props_dialog_popup(
+        C, op, 300, title, confirm_text, cancel_default, message);
   }
 
-  UI_popup_block_ex(C, wm_block_create_redo, nullptr, wm_block_redo_cancel_cb, op, op);
+  popup_block_ex(C, wm_block_create_redo, nullptr, wm_block_redo_cancel_cb, op, op);
 
   if (do_call) {
     wm_block_redo_cb(C, op, 0);
@@ -1820,9 +1851,11 @@ wmOperatorStatus WM_operator_props_popup_confirm_ex(bContext *C,
                                                     const wmEvent * /*event*/,
                                                     std::optional<std::string> title,
                                                     std::optional<std::string> confirm_text,
-                                                    const bool cancel_default)
+                                                    const bool cancel_default,
+                                                    std::optional<std::string> message)
 {
-  return wm_operator_props_popup_ex(C, op, false, false, title, confirm_text, cancel_default);
+  return wm_operator_props_popup_ex(
+      C, op, false, false, title, confirm_text, cancel_default, message);
 }
 
 wmOperatorStatus WM_operator_props_popup_confirm(bContext *C,
@@ -1849,24 +1882,27 @@ wmOperatorStatus WM_operator_props_dialog_popup(bContext *C,
                                                 int width,
                                                 std::optional<std::string> title,
                                                 std::optional<std::string> confirm_text,
-                                                const bool cancel_default)
+                                                const bool cancel_default,
+                                                std::optional<std::string> message,
+                                                const bool show_icon)
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
-  data->width = int(float(width) * UI_SCALE_FAC * UI_style_get()->widget.points /
+  data->width = int(float(width) * UI_SCALE_FAC * ui::style_get()->widget.points /
                     UI_DEFAULT_TEXT_POINTS);
   data->free_op = true; /* If this runs and gets registered we may want not to free it. */
   data->title = title ? std::move(*title) : WM_operatortype_name(op->type, op->ptr);
   data->confirm_text = confirm_text ? std::move(*confirm_text) : IFACE_("OK");
-  data->icon = ALERT_ICON_NONE;
-  data->size = WM_POPUP_SIZE_SMALL;
-  data->position = WM_POPUP_POSITION_MOUSE;
+  data->message = message ? std::move(*message) : std::string();
+  data->icon = show_icon ? ui::AlertIcon::Info : ui::AlertIcon::None;
+  data->size = show_icon ? WM_POPUP_SIZE_LARGE : WM_POPUP_SIZE_SMALL;
+  data->position = (message) ? WM_POPUP_POSITION_CENTER : WM_POPUP_POSITION_MOUSE;
   data->cancel_default = cancel_default;
   data->mouse_move_quit = false;
   data->include_properties = true;
 
   /* The operator is not executed until popup OK button is clicked. */
-  UI_popup_block_ex(
+  popup_block_ex(
       C, wm_block_dialog_create, wm_operator_ui_popup_ok, wm_operator_ui_popup_cancel, data, op);
 
   return OPERATOR_RUNNING_MODAL;
@@ -1890,10 +1926,54 @@ wmOperatorStatus WM_operator_redo_popup(bContext *C, wmOperator *op)
 
   /* Operator is stored and kept alive in the window manager. So passing a pointer to the UI is
    * fine, it will remain valid. */
-  UI_popup_block_invoke(C, wm_block_create_redo, op, nullptr);
+  ui::popup_block_invoke(C, wm_block_create_redo, op, nullptr, op->type->srna);
 
   return OPERATOR_CANCELLED;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name IME Operator Helpers
+ * \{ */
+
+#ifdef WITH_INPUT_IME
+std::optional<wmOperatorStatus> WM_operator_IME_insert_maybe(bContext *C,
+                                                             wmOperator *op,
+                                                             const wmEvent *event,
+                                                             const char *prop_id)
+{
+  const wmWindow *win = CTX_wm_window(C);
+  if (win == nullptr) {
+    return std::nullopt;
+  }
+  if (IS_EVENT_IME_ANY(event->type)) {
+    /* Keep the composition preview current, including #WM_IME_COMPOSITE_END which must
+     * erase it (canceling inserts no text so nothing else redraws). */
+    ED_region_tag_redraw(CTX_wm_region(C));
+  }
+  if (event->type == WM_IME_COMPOSITE_EVENT) {
+    const wmIMEData *ime_data = win->runtime->ime_data;
+    if (ime_data && !ime_data->result.empty()) {
+      RNA_string_set(op->ptr, prop_id, ime_data->result.c_str());
+      return op->type->exec(C, op);
+    }
+  }
+  if (win->runtime->ime_data_is_composing) {
+    return OPERATOR_CANCELLED;
+  }
+  return std::nullopt;
+}
+
+std::optional<wmOperatorStatus> WM_operator_IME_edit_maybe(const bContext *C)
+{
+  const wmWindow *win = CTX_wm_window(C);
+  if (win && win->runtime->ime_data_is_composing) {
+    return OPERATOR_CANCELLED;
+  }
+  return std::nullopt;
+}
+#endif /* WITH_INPUT_IME */
 
 /** \} */
 
@@ -1942,14 +2022,14 @@ static void WM_OT_debug_menu(wmOperatorType *ot)
 
 static wmOperatorStatus wm_operator_defaults_exec(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "active_operator", &RNA_Operator);
+  PointerRNA ptr = CTX_data_pointer_get_type(C, "active_operator", RNA_Operator);
 
-  if (!ptr.data) {
+  if (!ptr) {
     BKE_report(op->reports, RPT_ERROR, "No operator in context");
     return OPERATOR_CANCELLED;
   }
 
-  WM_operator_properties_reset((wmOperator *)ptr.data);
+  WM_operator_properties_reset(static_cast<wmOperator *>(ptr.data));
   return OPERATOR_FINISHED;
 }
 
@@ -1985,46 +2065,44 @@ struct SearchPopupInit_Data {
 
 static char g_search_text[256] = "";
 
-static uiBlock *wm_block_search_menu(bContext *C, ARegion *region, void *userdata)
+static ui::Block *wm_block_search_menu(bContext *C, ARegion *region, void *userdata)
 {
   const SearchPopupInit_Data *init_data = static_cast<const SearchPopupInit_Data *>(userdata);
 
-  uiBlock *block = UI_block_begin(C, region, "_popup", blender::ui::EmbossType::Emboss);
-  UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_MOVEMOUSE_QUIT | UI_BLOCK_SEARCH_MENU);
-  UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_POPUP);
+  ui::Block *block = block_begin(C, region, "_popup", ui::EmbossType::Emboss);
+  block_flag_enable(block, ui::BLOCK_LOOP | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_SEARCH_MENU);
+  block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 
-  uiBut *but = uiDefSearchBut(block,
-                              g_search_text,
-                              0,
-                              ICON_VIEWZOOM,
-                              sizeof(g_search_text),
-                              0,
-                              0,
-                              init_data->size[0],
-                              UI_UNIT_Y,
-                              "");
+  ui::Button *but = uiDefSearchBut(block,
+                                   g_search_text,
+                                   ICON_VIEWZOOM,
+                                   sizeof(g_search_text),
+                                   0,
+                                   0,
+                                   init_data->size[0],
+                                   UI_UNIT_Y,
+                                   "");
 
   if (init_data->search_type == SEARCH_TYPE_OPERATOR) {
-    UI_but_func_operator_search(but);
+    button_func_operator_search(but);
   }
   else if (init_data->search_type == SEARCH_TYPE_MENU) {
-    UI_but_func_menu_search(but);
+    button_func_menu_search(but);
   }
   else if (init_data->search_type == SEARCH_TYPE_SINGLE_MENU) {
-    UI_but_func_menu_search(but, init_data->single_menu_idname.c_str());
-    UI_but_flag2_enable(but, UI_BUT2_ACTIVATE_ON_INIT_NO_SELECT);
+    button_func_menu_search(but, init_data->single_menu_idname.c_str());
+    button_flag_enable(but, ui::BUT_ACTIVATE_ON_INIT_NO_SELECT);
   }
   else {
     BLI_assert_unreachable();
   }
 
-  UI_but_flag_enable(but, UI_BUT_ACTIVATE_ON_INIT);
+  button_flag_enable(but, ui::BUT_ACTIVATE_ON_INIT);
 
   /* Fake button, it holds space for search items. */
   const int height = init_data->size[1] - UI_SEARCHBOX_BOUNDS;
   uiDefBut(block,
-           UI_BTYPE_LABEL,
-           0,
+           ui::ButtonType::Label,
            "",
            0,
            -height,
@@ -2036,7 +2114,7 @@ static uiBlock *wm_block_search_menu(bContext *C, ARegion *region, void *userdat
            std::nullopt);
 
   /* Move it downwards, mouse over button. */
-  UI_block_bounds_set_popup(block, UI_SEARCHBOX_BOUNDS, blender::int2{0, -UI_UNIT_Y});
+  block_bounds_set_popup(block, UI_SEARCHBOX_BOUNDS, int2{0, -UI_UNIT_Y});
 
   return block;
 }
@@ -2088,26 +2166,20 @@ static wmOperatorStatus wm_search_menu_invoke(bContext *C, wmOperator *op, const
   static SearchPopupInit_Data data{};
 
   if (search_type == SEARCH_TYPE_SINGLE_MENU) {
-    {
-      char *buffer = RNA_string_get_alloc(op->ptr, "menu_idname", nullptr, 0, nullptr);
-      data.single_menu_idname = buffer;
-      MEM_SAFE_FREE(buffer);
-    }
-    {
-      char *buffer = RNA_string_get_alloc(op->ptr, "initial_query", nullptr, 0, nullptr);
-      STRNCPY(g_search_text, buffer);
-      MEM_SAFE_FREE(buffer);
-    }
+    data.single_menu_idname = RNA_string_get(op->ptr, "menu_idname");
+
+    std::string buffer = RNA_string_get(op->ptr, "initial_query");
+    STRNCPY(g_search_text, buffer.c_str());
   }
   else {
     g_search_text[0] = '\0';
   }
 
   data.search_type = search_type;
-  data.size[0] = UI_searchbox_size_x() * 2;
-  data.size[1] = UI_searchbox_size_y();
+  data.size[0] = ui::searchbox_size_x() * 2;
+  data.size[1] = ui::searchbox_size_y();
 
-  UI_popup_block_invoke_ex(C, wm_block_search_menu, &data, nullptr, false);
+  popup_block_invoke_ex(C, wm_block_search_menu, &data, nullptr, false);
 
   return OPERATOR_INTERFACE;
 }
@@ -2158,7 +2230,7 @@ static wmOperatorStatus wm_call_menu_exec(bContext *C, wmOperator *op)
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(op->ptr, "name", idname);
 
-  return UI_popup_menu_invoke(C, idname, op->reports);
+  return ui::popup_menu_invoke(C, idname, op->reports);
 }
 
 static std::string wm_call_menu_get_name(wmOperatorType *ot, PointerRNA *ptr)
@@ -2197,7 +2269,7 @@ static wmOperatorStatus wm_call_pie_menu_invoke(bContext *C, wmOperator *op, con
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(op->ptr, "name", idname);
 
-  return UI_pie_menu_invoke(C, idname, event);
+  return ui::pie_menu_invoke(C, idname, event);
 }
 
 static wmOperatorStatus wm_call_pie_menu_exec(bContext *C, wmOperator *op)
@@ -2205,7 +2277,7 @@ static wmOperatorStatus wm_call_pie_menu_exec(bContext *C, wmOperator *op)
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(op->ptr, "name", idname);
 
-  return UI_pie_menu_invoke(C, idname, CTX_wm_window(C)->eventstate);
+  return ui::pie_menu_invoke(C, idname, CTX_wm_window(C)->runtime->eventstate);
 }
 
 static void WM_OT_call_menu_pie(wmOperatorType *ot)
@@ -2236,8 +2308,9 @@ static wmOperatorStatus wm_call_panel_exec(bContext *C, wmOperator *op)
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(op->ptr, "name", idname);
   const bool keep_open = RNA_boolean_get(op->ptr, "keep_open");
+  const bool use_numselect = RNA_boolean_get(op->ptr, "auto_keymap");
 
-  return UI_popover_panel_invoke(C, idname, keep_open, op->reports);
+  return ui::popover_panel_invoke(C, idname, keep_open, use_numselect, op->reports);
 }
 
 static std::string wm_call_panel_get_name(wmOperatorType *ot, PointerRNA *ptr)
@@ -2272,16 +2345,21 @@ static void WM_OT_call_panel(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   prop = RNA_def_boolean(ot->srna, "keep_open", true, "Keep Open", "");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "auto_keymap",
+                         false,
+                         "Auto Keymap",
+                         "Assign accelerator keys to buttons, shown as underlined characters");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 static wmOperatorStatus asset_shelf_popover_invoke(bContext *C,
                                                    wmOperator *op,
                                                    const wmEvent * /*event*/)
 {
-  char *asset_shelf_id = RNA_string_get_alloc(op->ptr, "name", nullptr, 0, nullptr);
-  BLI_SCOPED_DEFER([&]() { MEM_freeN(asset_shelf_id); });
+  std::string asset_shelf_id = RNA_string_get(op->ptr, "name");
 
-  if (!blender::ui::asset_shelf_popover_invoke(*C, asset_shelf_id, *op->reports)) {
+  if (!ui::asset_shelf_popover_invoke(*C, asset_shelf_id, *op->reports)) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }
 
@@ -2435,7 +2513,8 @@ static void WM_OT_quit_blender(wmOperatorType *ot)
 
 static wmOperatorStatus wm_console_toggle_exec(bContext * /*C*/, wmOperator * /*op*/)
 {
-  GHOST_setConsoleWindowState(GHOST_kConsoleWindowStateToggle);
+  GHOST_ISystem *ghost_system = GHOST_ISystem::getSystem();
+  ghost_system->setConsoleWindowState(GHOST_kConsoleWindowStateToggle);
   return OPERATOR_FINISHED;
 }
 
@@ -2465,15 +2544,15 @@ static void WM_OT_console_toggle(wmOperatorType *ot)
 
 wmPaintCursor *WM_paint_cursor_activate(short space_type,
                                         short region_type,
-                                        bool (*poll)(bContext *C),
+                                        wmPaintCursorPoll poll,
                                         wmPaintCursorDraw draw,
                                         void *customdata)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
 
-  wmPaintCursor *pc = MEM_callocN<wmPaintCursor>("paint cursor");
+  wmPaintCursor *pc = MEM_new_zeroed<wmPaintCursor>("paint cursor");
 
-  BLI_addtail(&wm->paintcursors, pc);
+  BLI_addtail(&wm->runtime->paintcursors, pc);
 
   pc->customdata = customdata;
   pc->poll = poll;
@@ -2487,26 +2566,28 @@ wmPaintCursor *WM_paint_cursor_activate(short space_type,
 
 bool WM_paint_cursor_end(wmPaintCursor *handle)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
-  LISTBASE_FOREACH (wmPaintCursor *, pc, &wm->paintcursors) {
-    if (pc == handle) {
-      BLI_remlink(&wm->paintcursors, pc);
-      MEM_freeN(pc);
+  wmWindowManager *wm = G_MAIN->wm.first();
+  for (wmPaintCursor &pc : wm->runtime->paintcursors) {
+    if (&pc == handle) {
+      BLI_remlink(&wm->runtime->paintcursors, &pc);
+      MEM_delete(&pc);
       return true;
     }
   }
   return false;
 }
 
-void WM_paint_cursor_remove_by_type(wmWindowManager *wm, void *draw_fn, void (*free)(void *))
+void WM_paint_cursor_remove_by_type(wmWindowManager *wm,
+                                    wmPaintCursorDraw draw_fn,
+                                    void (*free)(void *))
 {
-  LISTBASE_FOREACH_MUTABLE (wmPaintCursor *, pc, &wm->paintcursors) {
-    if (pc->draw == draw_fn) {
+  for (wmPaintCursor &pc : wm->runtime->paintcursors.items_mutable()) {
+    if (pc.draw == draw_fn) {
       if (free) {
-        free(pc->customdata);
+        free(pc.customdata);
       }
-      BLI_remlink(&wm->paintcursors, pc);
-      MEM_freeN(pc);
+      BLI_remlink(&wm->runtime->paintcursors, &pc);
+      MEM_delete(&pc);
     }
   }
 }
@@ -2540,13 +2621,16 @@ struct RadialControl {
   float current_value = 0.0f;
   float min_value = 0.0f;
   float max_value = 0.0f;
-  int initial_mouse[2] = {};
+  /* Original screen space coordinates that the operator started on. */
   int initial_co[2] = {};
+  /* Modified value of #initial_co to simplify calculating new values. */
+  int initial_radial_center[2] = {};
   int slow_mouse[2] = {};
   bool slow_mode = false;
+  bool snap = false;
   Dial *dial = nullptr;
-  GPUTexture *texture = nullptr;
-  ListBase orig_paintcursors = {};
+  gpu::Texture *texture = nullptr;
+  ListBaseT<wmPaintCursor> orig_paintcursors = {};
   bool use_secondary_tex = false;
   void *cursor = nullptr;
   NumInput num_input = {};
@@ -2570,9 +2654,11 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
     switch (rc->subtype) {
       case PROP_NONE:
       case PROP_DISTANCE:
+      case PROP_DISTANCE_DIAMETER:
         SNPRINTF(msg, "%s: %0.4f", ui_name, rc->current_value);
         break;
       case PROP_PIXEL:
+      case PROP_PIXEL_DIAMETER:
         SNPRINTF(msg, "%s: %d", ui_name, int(rc->current_value)); /* XXX: round to nearest? */
         break;
       case PROP_PERCENTAGE:
@@ -2585,7 +2671,7 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
         SNPRINTF(msg, "%s: %3.2f", ui_name, RAD2DEGF(rc->current_value));
         break;
       default:
-        SNPRINTF(msg, "%s", ui_name); /* XXX: No value? */
+        STRNCPY(msg, ui_name); /* XXX: No value? */
         break;
     }
   }
@@ -2598,7 +2684,7 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
   float d[2] = {0, 0};
   float zoom[2] = {1, 1};
 
-  copy_v2_v2_int(rc->initial_mouse, event->xy);
+  copy_v2_v2_int(rc->initial_radial_center, event->xy);
   copy_v2_v2_int(rc->initial_co, event->xy);
 
   switch (rc->subtype) {
@@ -2606,6 +2692,10 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
     case PROP_DISTANCE:
     case PROP_PIXEL:
       d[0] = rc->initial_value;
+      break;
+    case PROP_DISTANCE_DIAMETER:
+    case PROP_PIXEL_DIAMETER:
+      d[0] = rc->initial_value / 2.0f;
       break;
     case PROP_PERCENTAGE:
       d[0] = (rc->initial_value) / 100.0f * WM_RADIAL_CONTROL_DISPLAY_WIDTH +
@@ -2629,8 +2719,8 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
     d[1] *= zoom[1];
   }
 
-  rc->initial_mouse[0] -= d[0];
-  rc->initial_mouse[1] -= d[1];
+  rc->initial_radial_center[0] -= d[0];
+  rc->initial_radial_center[1] -= d[1];
 }
 
 static void radial_control_set_tex(RadialControl *rc)
@@ -2639,25 +2729,28 @@ static void radial_control_set_tex(RadialControl *rc)
 
   switch (RNA_type_to_ID_code(rc->image_id_ptr.type)) {
     case ID_BR:
-      if ((ibuf = BKE_brush_gen_radial_control_imbuf(
-               static_cast<Brush *>(rc->image_id_ptr.data),
-               rc->use_secondary_tex,
-               !ELEM(rc->subtype, PROP_NONE, PROP_PIXEL, PROP_DISTANCE))))
+      if ((ibuf = BKE_brush_gen_radial_control_imbuf(static_cast<Brush *>(rc->image_id_ptr.data),
+                                                     rc->use_secondary_tex,
+                                                     !ELEM(rc->subtype,
+                                                           PROP_NONE,
+                                                           PROP_PIXEL,
+                                                           PROP_PIXEL_DIAMETER,
+                                                           PROP_DISTANCE,
+                                                           PROP_DISTANCE_DIAMETER))))
       {
 
         rc->texture = GPU_texture_create_2d("radial_control",
                                             ibuf->x,
                                             ibuf->y,
                                             1,
-                                            GPU_R8,
+                                            gpu::TextureFormat::UNORM_8,
                                             GPU_TEXTURE_USAGE_SHADER_READ,
-                                            ibuf->float_buffer.data);
+                                            ibuf->float_data());
 
         GPU_texture_filter_mode(rc->texture, true);
         GPU_texture_swizzle_set(rc->texture, "111r");
 
-        MEM_freeN(ibuf->float_buffer.data);
-        MEM_freeN(ibuf);
+        IMB_freeImBuf(ibuf);
       }
       break;
     default:
@@ -2689,11 +2782,10 @@ static void radial_control_paint_tex(RadialControl *rc, float radius, float alph
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   if (rc->texture) {
-    uint texCoord = GPU_vertformat_attr_add(
-        format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
+    uint texCoord = GPU_vertformat_attr_add(format, "texCoord", gpu::VertAttrType::SFLOAT_32_32);
 
     /* Set up rotation if available. */
     if (rc->rot_prop) {
@@ -2746,7 +2838,7 @@ static void radial_control_paint_curve(uint pos, Brush *br, float radius, int li
   GPU_line_width(2.0f);
   immUniformColor4f(0.8f, 0.8f, 0.8f, 0.85f);
   float step = (radius * 2.0f) / float(line_segments);
-  BKE_curvemapping_init(br->curve);
+  BKE_curvemapping_init(br->curve_distance_falloff);
   immBegin(GPU_PRIM_LINES, line_segments * 2);
   for (int i = 0; i < line_segments; i++) {
     float h1 = BKE_brush_curve_strength_clamped(br, fabsf((i * step) - radius), radius);
@@ -2757,13 +2849,13 @@ static void radial_control_paint_curve(uint pos, Brush *br, float radius, int li
   immEnd();
 }
 
-static void radial_control_paint_cursor(bContext * /*C*/,
-                                        const blender::int2 & /*xy*/,
-                                        const blender::float2 & /*tilt*/,
+static void radial_control_paint_cursor(bContext *C,
+                                        const int2 & /*xy*/,
+                                        const float2 & /*tilt*/,
                                         void *customdata)
 {
   RadialControl *rc = static_cast<RadialControl *>(customdata);
-  const uiStyle *style = UI_style_get();
+  const uiStyle *style = ui::style_get();
   const uiFontStyle *fstyle = &style->widget;
   const int fontid = fstyle->uifont_id;
   short fstyle_points = fstyle->points;
@@ -2780,6 +2872,13 @@ static void radial_control_paint_cursor(bContext * /*C*/,
     case PROP_PIXEL:
       r1 = rc->current_value;
       r2 = rc->initial_value;
+      tex_radius = r1;
+      alpha = 0.75;
+      break;
+    case PROP_DISTANCE_DIAMETER:
+    case PROP_PIXEL_DIAMETER:
+      r1 = rc->current_value / 2.0f;
+      r2 = rc->initial_value / 2.0f;
       tex_radius = r1;
       alpha = 0.75;
       break;
@@ -2819,8 +2918,8 @@ static void radial_control_paint_cursor(bContext * /*C*/,
   if (rc->subtype == PROP_ANGLE) {
     /* Use the initial mouse position to draw the rotation preview. This avoids starting the
      * rotation in a random direction. */
-    x = rc->initial_mouse[0];
-    y = rc->initial_mouse[1];
+    x = rc->initial_radial_center[0];
+    y = rc->initial_radial_center[1];
   }
   else {
     /* Keep cursor in the original place. */
@@ -2847,7 +2946,7 @@ static void radial_control_paint_cursor(bContext * /*C*/,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -2871,14 +2970,49 @@ static void radial_control_paint_cursor(bContext * /*C*/,
     GPU_matrix_pop();
   }
 
+  bool draw_rounded_box = false;
+  float roundness = 1.0f;
+  float tip_scale_x = 1.0f;
+  if (RNA_type_to_ID_code(rc->image_id_ptr.type) == ID_BR && rc->prop &&
+      STREQ(RNA_property_identifier(rc->prop), "size"))
+  {
+    const Brush *br = static_cast<const Brush *>(rc->image_id_ptr.data);
+    if (br) {
+      const PaintMode paint_mode = BKE_paintmode_get_active_from_context(C);
+      draw_rounded_box = BKE_brush_has_cube_tip(br, paint_mode);
+      roundness = br->tip_roundness;
+      tip_scale_x = br->tip_scale_x;
+    }
+  }
+
   /* Draw circles on top. */
   GPU_line_width(2.0f);
   immUniformColor3fvAlpha(col, 0.8f);
-  imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r1, 80);
+  if (draw_rounded_box) {
+    gpu::imm_draw_rounded_box_wire_2d(pos,
+                                      0,
+                                      0,
+                                      float2(r1, r1 * tip_scale_x),
+                                      float2(r1 * roundness, r1 * roundness * tip_scale_x),
+                                      80);
+  }
+  else {
+    imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r1, 80);
+  }
 
   GPU_line_width(1.0f);
   immUniformColor3fvAlpha(col, 0.5f);
-  imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r2, 80);
+  if (draw_rounded_box) {
+    gpu::imm_draw_rounded_box_wire_2d(pos,
+                                      0,
+                                      0,
+                                      float2(r2, r2 * tip_scale_x),
+                                      float2(r2 * roundness, r2 * roundness * tip_scale_x),
+                                      80);
+  }
+  else {
+    imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r2, 80);
+  }
   if (rmin > 0.0f) {
     /* Inner fill circle to increase the contrast of the value. */
     const float black[3] = {0.0f};
@@ -2900,7 +3034,7 @@ static void radial_control_paint_cursor(bContext * /*C*/,
   immUnbindProgram();
 
   BLF_size(fontid, 1.75f * fstyle_points * UI_SCALE_FAC);
-  UI_GetThemeColor4fv(TH_TEXT_HI, text_color);
+  ui::theme::get_color_4fv(TH_TEXT_HI, text_color);
   BLF_color4fv(fontid, text_color);
 
   /* Draw value. */
@@ -2940,16 +3074,11 @@ static int radial_control_get_path(PointerRNA *ctx_ptr,
   }
 
   /* Get an rna string path from the operator's properties. */
-  char *str;
-  if (!(str = RNA_string_get_alloc(op->ptr, name, nullptr, 0, nullptr))) {
-    return 1;
-  }
-
-  if (str[0] == '\0') {
+  std::string str = RNA_string_get(op->ptr, name);
+  if (str.empty()) {
     if (r_prop) {
       *r_prop = nullptr;
     }
-    MEM_freeN(str);
     return 1;
   }
 
@@ -2958,8 +3087,7 @@ static int radial_control_get_path(PointerRNA *ctx_ptr,
   }
 
   /* Get rna from path. */
-  if (!RNA_path_resolve(ctx_ptr, str, r_ptr, r_prop)) {
-    MEM_freeN(str);
+  if (!RNA_path_resolve(ctx_ptr, str.c_str(), r_ptr, r_prop)) {
     if (flags & RC_PROP_ALLOW_MISSING) {
       return 1;
     }
@@ -2974,7 +3102,6 @@ static int radial_control_get_path(PointerRNA *ctx_ptr,
     if (((flags & RC_PROP_REQUIRE_BOOL) && (prop_type != PROP_BOOLEAN)) ||
         ((flags & RC_PROP_REQUIRE_FLOAT) && (prop_type != PROP_FLOAT)))
     {
-      MEM_freeN(str);
       BKE_reportf(op->reports, RPT_ERROR, "Property from path '%s' is not a float", name);
       return 0;
     }
@@ -2983,7 +3110,6 @@ static int radial_control_get_path(PointerRNA *ctx_ptr,
   /* Check property's array length. */
   int len;
   if (*r_prop && (len = RNA_property_array_length(r_ptr, *r_prop)) != req_length) {
-    MEM_freeN(str);
     BKE_reportf(op->reports,
                 RPT_ERROR,
                 "Property from path '%s' has length %d instead of %d",
@@ -2994,7 +3120,6 @@ static int radial_control_get_path(PointerRNA *ctx_ptr,
   }
 
   /* Success. */
-  MEM_freeN(str);
   return 1;
 }
 
@@ -3003,7 +3128,7 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
 {
   RadialControl *rc = static_cast<RadialControl *>(op->customdata);
 
-  PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, C);
+  PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_Context, C);
 
   /* Check if we use primary or secondary path. */
   PointerRNA use_secondary_ptr;
@@ -3098,7 +3223,7 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
   {
     return 0;
   }
-  if (rc->image_id_ptr.data) {
+  if (rc->image_id_ptr) {
     /* Extra check, pointer must be to an ID. */
     if (!RNA_struct_is_ID(rc->image_id_ptr.type)) {
       BKE_report(op->reports, RPT_ERROR, "Pointer from path image_id is not an ID");
@@ -3109,6 +3234,18 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
   rc->use_secondary_tex = RNA_boolean_get(op->ptr, "secondary_tex");
 
   return 1;
+}
+
+static void radial_control_status(bContext *C, const RadialControl *radial_control)
+{
+  const char *ui_name = RNA_property_ui_name(radial_control->prop);
+
+  WorkspaceStatus status(C);
+  status.item(IFACE_("Confirm"), ICON_EVENT_RETURN, ICON_MOUSE_LMB);
+  status.item(IFACE_("Cancel"), ICON_EVENT_ESC, ICON_MOUSE_RMB);
+  status.item(ui_name, ICON_MOUSE_MOVE);
+  status.item_bool(IFACE_("Snap"), radial_control->snap, ICON_EVENT_CTRL);
+  status.item_bool(IFACE_("Precision Mode"), radial_control->slow_mode, ICON_EVENT_SHIFT);
 }
 
 static wmOperatorStatus radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -3166,10 +3303,12 @@ static wmOperatorStatus radial_control_invoke(bContext *C, wmOperator *op, const
   if (!ELEM(rc->subtype,
             PROP_NONE,
             PROP_DISTANCE,
+            PROP_DISTANCE_DIAMETER,
             PROP_FACTOR,
             PROP_PERCENTAGE,
             PROP_ANGLE,
-            PROP_PIXEL))
+            PROP_PIXEL,
+            PROP_PIXEL_DIAMETER))
   {
     BKE_report(op->reports,
                RPT_ERROR,
@@ -3186,14 +3325,15 @@ static wmOperatorStatus radial_control_invoke(bContext *C, wmOperator *op, const
 
   /* Temporarily disable other paint cursors. */
   wmWindowManager *wm = CTX_wm_manager(C);
-  rc->orig_paintcursors = wm->paintcursors;
-  BLI_listbase_clear(&wm->paintcursors);
+  rc->orig_paintcursors = wm->runtime->paintcursors;
+  wm->runtime->paintcursors.clear_no_delete();
 
   /* Add radial control paint cursor. */
   rc->cursor = WM_paint_cursor_activate(
       SPACE_TYPE_ANY, RGN_TYPE_ANY, op->type->poll, radial_control_paint_cursor, rc);
 
   WM_event_add_modal_handler(C, op);
+  radial_control_status(C, rc);
 
   return OPERATOR_RUNNING_MODAL;
 }
@@ -3224,11 +3364,12 @@ static void radial_control_cancel(bContext *C, wmOperator *op)
   }
 
   ED_area_status_text(area, nullptr);
+  ED_workspace_status_text(C, nullptr);
 
   WM_paint_cursor_end(static_cast<wmPaintCursor *>(rc->cursor));
 
   /* Restore original paint cursors. */
-  wm->paintcursors = rc->orig_paintcursors;
+  wm->runtime->paintcursors = rc->orig_paintcursors;
 
   /* Not sure if this is a good notifier to use;
    * intended purpose is to update the UI so that the
@@ -3253,8 +3394,6 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
   bool handled = false;
   float numValue;
   /* TODO: fix hard-coded events. */
-
-  bool snap = (event->modifier & KM_CTRL) != 0;
 
   /* Modal numinput active, try to handle numeric inputs first... */
   if (event->val == KM_PRESS && has_numInput && handleNumInput(C, &rc->num_input, event)) {
@@ -3303,16 +3442,16 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
         if (rc->slow_mode) {
           if (rc->subtype == PROP_ANGLE) {
             /* Calculate the initial angle here first. */
-            delta[0] = rc->initial_mouse[0] - rc->slow_mouse[0];
-            delta[1] = rc->initial_mouse[1] - rc->slow_mouse[1];
+            delta[0] = rc->initial_radial_center[0] - rc->slow_mouse[0];
+            delta[1] = rc->initial_radial_center[1] - rc->slow_mouse[1];
 
             /* Precision angle gets calculated from dial and gets added later. */
-            angle_precision = -0.1f * BLI_dial_angle(rc->dial,
-                                                     blender::float2{float(event->xy[0]),
-                                                                     float(event->xy[1])});
+            angle_precision = -0.1f *
+                              BLI_dial_angle(rc->dial,
+                                             float2{float(event->xy[0]), float(event->xy[1])});
           }
           else {
-            delta[0] = rc->initial_mouse[0] - rc->slow_mouse[0];
+            delta[0] = rc->initial_radial_center[0] - rc->slow_mouse[0];
             delta[1] = 0.0f;
 
             if (rc->zoom_prop) {
@@ -3332,8 +3471,8 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
           }
         }
         else {
-          delta[0] = float(rc->initial_mouse[0] - event->xy[0]);
-          delta[1] = float(rc->initial_mouse[1] - event->xy[1]);
+          delta[0] = float(rc->initial_radial_center[0] - event->xy[0]);
+          delta[1] = float(rc->initial_radial_center[1] - event->xy[1]);
           if (rc->zoom_prop) {
             RNA_property_float_get_array(&rc->zoom_ptr, rc->zoom_prop, zoom);
             delta[0] /= zoom[0];
@@ -3347,13 +3486,22 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
           }
         }
 
+        /* If modifying a "diameter" value (e.g. the paint mode radii), assume that we've
+         * moved twice as far as we actually have to make the radius change in size in
+         * sync with the cursor */
+        if (ELEM(rc->subtype, PROP_DISTANCE_DIAMETER, PROP_PIXEL_DIAMETER)) {
+          dist *= 2.0f;
+        }
+
         /* Calculate new value and apply snapping. */
         switch (rc->subtype) {
           case PROP_NONE:
           case PROP_DISTANCE:
+          case PROP_DISTANCE_DIAMETER:
           case PROP_PIXEL:
+          case PROP_PIXEL_DIAMETER:
             new_value = dist;
-            if (snap) {
+            if (rc->snap) {
               new_value = (int(new_value) + 5) / 10 * 10;
             }
             break;
@@ -3361,13 +3509,13 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
             new_value = ((dist - WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE) /
                          WM_RADIAL_CONTROL_DISPLAY_WIDTH) *
                         100.0f;
-            if (snap) {
+            if (rc->snap) {
               new_value = int(new_value + 2.5f) / 5 * 5;
             }
             break;
           case PROP_FACTOR:
             new_value = (WM_RADIAL_CONTROL_DISPLAY_SIZE - dist) / WM_RADIAL_CONTROL_DISPLAY_WIDTH;
-            if (snap) {
+            if (rc->snap) {
               new_value = (int(ceil(new_value * 10.0f)) * 10.0f) / 100.0f;
             }
             /* Invert new value to increase the factor moving the mouse to the right. */
@@ -3379,7 +3527,7 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
             if (new_value < 0.0f) {
               new_value += 2.0f * float(M_PI);
             }
-            if (snap) {
+            if (rc->snap) {
               new_value = DEG2RADF((int(RAD2DEGF(new_value)) + 5) / 10 * 10);
             }
             break;
@@ -3404,8 +3552,8 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
         rc->slow_mouse[1] = event->xy[1];
         rc->slow_mode = true;
         if (rc->subtype == PROP_ANGLE) {
-          const float initial_position[2] = {float(rc->initial_mouse[0]),
-                                             float(rc->initial_mouse[1])};
+          const float initial_position[2] = {float(rc->initial_radial_center[0]),
+                                             float(rc->initial_radial_center[1])};
           const float current_position[2] = {float(rc->slow_mouse[0]), float(rc->slow_mouse[1])};
           rc->dial = BLI_dial_init(initial_position, 0.0f);
           /* Immediately set the position to get a an initial direction. */
@@ -3422,6 +3570,18 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
         }
       }
       break;
+    }
+
+    case EVT_LEFTCTRLKEY:
+    case EVT_RIGHTCTRLKEY: {
+      if (event->val == KM_PRESS) {
+        rc->snap = true;
+        handled = true;
+      }
+      if (event->val == KM_RELEASE) {
+        rc->snap = false;
+        handled = true;
+      }
     }
     default: {
       break;
@@ -3465,8 +3625,10 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
     wmWindowManager *wm = CTX_wm_manager(C);
     if (wm->op_undo_depth == 0) {
       ID *id = rc->ptr.owner_id;
-      if (ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr)) {
-        ED_undo_push(C, op->type->name);
+      std::optional<UndoEncodeHints> undo_hints_or_none =
+          ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr, *rc->prop);
+      if (undo_hints_or_none) {
+        ED_undo_push(C, op->type->name, *undo_hints_or_none);
       }
     }
   }
@@ -3475,6 +3637,9 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
     radial_control_cancel(C, op);
   }
 
+  if (ret == OPERATOR_RUNNING_MODAL) {
+    radial_control_status(C, rc);
+  }
   return ret;
 }
 
@@ -3589,8 +3754,8 @@ static void redraw_timer_window_swap(bContext *C)
 
   CTX_wm_region_popup_set(C, nullptr);
 
-  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-    ED_area_tag_redraw(area);
+  for (ScrArea &area : screen->areabase) {
+    ED_area_tag_redraw(&area);
   }
   wm_draw_update(C);
 
@@ -3647,14 +3812,14 @@ static void redraw_timer_step(bContext *C,
 
     CTX_wm_region_popup_set(C, nullptr);
 
-    LISTBASE_FOREACH (ScrArea *, area_iter, &screen->areabase) {
-      CTX_wm_area_set(C, area_iter);
-      LISTBASE_FOREACH (ARegion *, region_iter, &area_iter->regionbase) {
-        if (!region_iter->runtime->visible) {
+    for (ScrArea &area_iter : screen->areabase) {
+      CTX_wm_area_set(C, &area_iter);
+      for (ARegion &region_iter : area_iter.regionbase) {
+        if (!region_iter.runtime->visible) {
           continue;
         }
-        CTX_wm_region_set(C, region_iter);
-        wm_draw_region_test(C, area_iter, region_iter);
+        CTX_wm_region_set(C, &region_iter);
+        wm_draw_region_test(C, &area_iter, &region_iter);
       }
     }
 
@@ -3739,7 +3904,7 @@ static wmOperatorStatus redraw_timer_exec(bContext *C, wmOperator *op)
 
     if (type == eRTAnimationPlay) {
       WorkspaceStatus status(C);
-      status.item(fmt::format("{} / {} {}", a + 1, iter, infostr), ICON_INFO);
+      status.item(fmt::format("{} / {} {}", a + 1, iter, infostr), ICON_STATUS_INFO);
     }
 
     redraw_timer_step(C, scene, depsgraph, win, area, region, type, cfra, a, iter);
@@ -3840,8 +4005,8 @@ static void previews_id_ensure(bContext *C, Scene *scene, ID *id)
   /* Only preview non-library datablocks, lib ones do not pertain to this .blend file!
    * Same goes for ID with no user. */
   if (ID_IS_EDITABLE(id) && (id->us != 0)) {
-    UI_icon_render_id(C, scene, id, ICON_SIZE_ICON, false);
-    UI_icon_render_id(C, scene, id, ICON_SIZE_PREVIEW, false);
+    ui::icon_render_id(C, scene, id, ICON_SIZE_ICON, false);
+    ui::icon_render_id(C, scene, id, ICON_SIZE_PREVIEW, false);
   }
 }
 
@@ -3868,12 +4033,12 @@ static int previews_id_ensure_callback(LibraryIDLinkCallbackData *cb_data)
 static wmOperatorStatus previews_ensure_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
-  ListBase *lb[] = {&bmain->materials,
-                    &bmain->textures,
-                    &bmain->images,
-                    &bmain->worlds,
-                    &bmain->lights,
-                    nullptr};
+  ListBaseT<ID> *lb[] = {&bmain->materials.cast<ID>(),
+                         &bmain->textures.cast<ID>(),
+                         &bmain->images.cast<ID>(),
+                         &bmain->worlds.cast<ID>(),
+                         &bmain->lights.cast<ID>(),
+                         nullptr};
   PreviewsIDEnsureData preview_id_data;
 
   /* We use ID_TAG_DOIT to check whether we have already handled a given ID or not. */
@@ -3883,9 +4048,9 @@ static wmOperatorStatus previews_ensure_exec(bContext *C, wmOperator * /*op*/)
   }
 
   preview_id_data.C = C;
-  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-    preview_id_data.scene = scene;
-    ID *id = (ID *)scene;
+  for (Scene &scene : bmain->scenes) {
+    preview_id_data.scene = &scene;
+    ID *id = id_cast<ID *>(&scene);
 
     BKE_library_foreach_ID_link(
         nullptr, id, previews_id_ensure_callback, &preview_id_data, IDWALK_RECURSE);
@@ -3894,10 +4059,10 @@ static wmOperatorStatus previews_ensure_exec(bContext *C, wmOperator * /*op*/)
   /* Check a last time for ID not used (fake users only, in theory), and
    * do our best for those, using current scene... */
   for (int i = 0; lb[i]; i++) {
-    LISTBASE_FOREACH (ID *, id, lb[i]) {
-      if (id->tag & ID_TAG_DOIT) {
-        previews_id_ensure(C, nullptr, id);
-        id->tag &= ~ID_TAG_DOIT;
+    for (ID &id : *lb[i]) {
+      if (id.tag & ID_TAG_DOIT) {
+        previews_id_ensure(C, nullptr, &id);
+        id.tag &= ~ID_TAG_DOIT;
       }
     }
   }
@@ -3997,14 +4162,14 @@ static uint preview_filter_to_idfilter(enum PreviewFilterID filter)
 static wmOperatorStatus previews_clear_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  ListBase *lb[] = {
-      &bmain->objects,
-      &bmain->collections,
-      &bmain->materials,
-      &bmain->worlds,
-      &bmain->lights,
-      &bmain->textures,
-      &bmain->images,
+  ListBaseT<ID> *lb[] = {
+      &bmain->objects.cast<ID>(),
+      &bmain->collections.cast<ID>(),
+      &bmain->materials.cast<ID>(),
+      &bmain->worlds.cast<ID>(),
+      &bmain->lights.cast<ID>(),
+      &bmain->textures.cast<ID>(),
+      &bmain->images.cast<ID>(),
       nullptr,
   };
 
@@ -4012,7 +4177,7 @@ static wmOperatorStatus previews_clear_exec(bContext *C, wmOperator *op)
       PreviewFilterID(RNA_enum_get(op->ptr, "id_type")));
 
   for (int i = 0; lb[i]; i++) {
-    ID *id = static_cast<ID *>(lb[i]->first);
+    ID *id = lb[i]->first();
     if (!id) {
       continue;
     }
@@ -4066,16 +4231,15 @@ static void WM_OT_previews_clear(wmOperatorType *ot)
 
 static wmOperatorStatus doc_view_manual_ui_context_exec(bContext *C, wmOperator * /*op*/)
 {
-  PointerRNA ptr_props;
   wmOperatorStatus retval = OPERATOR_CANCELLED;
 
-  if (std::optional<std::string> manual_id = UI_but_online_manual_id_from_active(C)) {
-    WM_operator_properties_create(&ptr_props, "WM_OT_doc_view_manual");
+  if (std::optional<std::string> manual_id = ui::button_online_manual_id_from_active(C)) {
+    PointerRNA ptr_props = WM_operator_properties_create("WM_OT_doc_view_manual");
     RNA_string_set(&ptr_props, "doc_id", manual_id.value().c_str());
 
     retval = WM_operator_name_call_ptr(C,
                                        WM_operatortype_find("WM_OT_doc_view_manual", false),
-                                       WM_OP_EXEC_DEFAULT,
+                                       wm::OpCallContext::ExecDefault,
                                        &ptr_props,
                                        nullptr);
 
@@ -4169,6 +4333,7 @@ void wm_operatortypes_register()
   WM_operatortype_append(WM_OT_read_history);
   WM_operatortype_append(WM_OT_read_homefile);
   WM_operatortype_append(WM_OT_read_factory_settings);
+  WM_operatortype_append(WM_OT_save_auto_save);
   WM_operatortype_append(WM_OT_save_homefile);
   WM_operatortype_append(WM_OT_save_userpref);
   WM_operatortype_append(WM_OT_read_userpref);
@@ -4208,6 +4373,7 @@ void wm_operatortypes_register()
   WM_operatortype_append(WM_OT_previews_ensure);
   WM_operatortype_append(WM_OT_previews_clear);
   WM_operatortype_append(WM_OT_doc_view_manual_ui_context);
+  WM_operatortype_append(WM_OT_set_working_color_space);
 
 #ifdef WITH_XR_OPENXR
   wm_xr_operatortypes_register();
@@ -4248,6 +4414,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
   /* Assign map to operators. */
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_select_circle");
   WM_modalkeymap_assign(keymap, "UV_OT_select_circle");
+  WM_modalkeymap_assign(keymap, "SEQUENCER_OT_select_circle");
   WM_modalkeymap_assign(keymap, "CLIP_OT_select_circle");
   WM_modalkeymap_assign(keymap, "MASK_OT_select_circle");
   WM_modalkeymap_assign(keymap, "NODE_OT_select_circle");
@@ -4326,8 +4493,10 @@ static void gesture_box_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "SCREEN_OT_box_select");
 #endif
   WM_modalkeymap_assign(keymap, "SEQUENCER_OT_select_box");
+  WM_modalkeymap_assign(keymap, "SEQUENCER_OT_box_blade");
   WM_modalkeymap_assign(keymap, "SEQUENCER_OT_view_ghost_border");
   WM_modalkeymap_assign(keymap, "UV_OT_select_box");
+  WM_modalkeymap_assign(keymap, "UV_OT_custom_region_set");
   WM_modalkeymap_assign(keymap, "CLIP_OT_select_box");
   WM_modalkeymap_assign(keymap, "CLIP_OT_graph_select_box");
   WM_modalkeymap_assign(keymap, "MASK_OT_select_box");
@@ -4373,6 +4542,7 @@ static void gesture_lasso_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "GRAPH_OT_select_lasso");
   WM_modalkeymap_assign(keymap, "NODE_OT_select_lasso");
   WM_modalkeymap_assign(keymap, "UV_OT_select_lasso");
+  WM_modalkeymap_assign(keymap, "SEQUENCER_OT_select_lasso");
   WM_modalkeymap_assign(keymap, "PAINT_OT_hide_show_lasso_gesture");
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_erase_lasso");
 }
@@ -4460,6 +4630,17 @@ static bool rna_id_enum_filter_single(const ID *id, void *user_data)
   return (id != user_data);
 }
 
+static bool rna_id_enum_filter_single_and_assets(const ID *id, void *user_data)
+{
+  if (!rna_id_enum_filter_single(id, user_data)) {
+    return false;
+  }
+  if (id->asset_data != nullptr) {
+    return false;
+  }
+  return true;
+}
+
 /* Generic itemf's for operators that take library args. */
 static const EnumPropertyItem *rna_id_itemf(bool *r_free,
                                             ID *id,
@@ -4482,9 +4663,15 @@ static const EnumPropertyItem *rna_id_itemf(bool *r_free,
         item_tmp.identifier = item_tmp.name = id->name + 2;
         item_tmp.value = i++;
 
+        const BIFIconID lib_state_icon = ui::icon_from_library(id);
+        /* Indicate library linking, override or asset state in icon. In enum menus that's the only
+         * way to tell apart linked IDs from their overridden versions. */
+        if (lib_state_icon != ICON_NONE) {
+          item_tmp.icon = lib_state_icon;
+        }
         /* Show collection color tag icons in menus. */
-        if (id_type == ID_GR) {
-          item_tmp.icon = UI_icon_color_from_collection((Collection *)id);
+        else if (id_type == ID_GR) {
+          item_tmp.icon = ui::icon_color_from_collection(reinterpret_cast<Collection *>(id));
         }
 
         RNA_enum_item_add(&item, &totitem, &item_tmp);
@@ -4507,7 +4694,7 @@ const EnumPropertyItem *RNA_action_itemf(bContext *C,
 {
 
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->actions.first : nullptr, false, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->actions.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 #if 0 /* UNUSED. */
 const EnumPropertyItem *RNA_action_local_itemf(bContext *C,
@@ -4525,7 +4712,7 @@ const EnumPropertyItem *RNA_collection_itemf(bContext *C,
                                              bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->collections.first : nullptr, false, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->collections.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_collection_local_itemf(bContext *C,
                                                    PointerRNA * /*ptr*/,
@@ -4533,7 +4720,7 @@ const EnumPropertyItem *RNA_collection_local_itemf(bContext *C,
                                                    bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->collections.first : nullptr, true, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->collections.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_image_itemf(bContext *C,
@@ -4542,7 +4729,7 @@ const EnumPropertyItem *RNA_image_itemf(bContext *C,
                                         bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->images.first : nullptr, false, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->images.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_image_local_itemf(bContext *C,
                                               PointerRNA * /*ptr*/,
@@ -4550,7 +4737,7 @@ const EnumPropertyItem *RNA_image_local_itemf(bContext *C,
                                               bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->images.first : nullptr, true, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->images.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_scene_itemf(bContext *C,
@@ -4559,7 +4746,7 @@ const EnumPropertyItem *RNA_scene_itemf(bContext *C,
                                         bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->scenes.first : nullptr, false, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_scene_local_itemf(bContext *C,
                                               PointerRNA * /*ptr*/,
@@ -4567,19 +4754,19 @@ const EnumPropertyItem *RNA_scene_local_itemf(bContext *C,
                                               bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->scenes.first : nullptr, true, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
-const EnumPropertyItem *RNA_scene_without_active_itemf(bContext *C,
-                                                       PointerRNA * /*ptr*/,
-                                                       PropertyRNA * /*prop*/,
-                                                       bool *r_free)
+const EnumPropertyItem *RNA_scene_without_sequencer_scene_itemf(bContext *C,
+                                                                PointerRNA * /*ptr*/,
+                                                                PropertyRNA * /*prop*/,
+                                                                bool *r_free)
 {
-  Scene *scene_active = C ? CTX_data_scene(C) : nullptr;
+  Scene *sequencer_scene = C ? CTX_data_sequencer_scene(C) : nullptr;
   return rna_id_itemf(r_free,
-                      C ? (ID *)CTX_data_main(C)->scenes.first : nullptr,
+                      C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr,
                       false,
-                      rna_id_enum_filter_single,
-                      scene_active);
+                      rna_id_enum_filter_single_and_assets,
+                      sequencer_scene);
 }
 const EnumPropertyItem *RNA_movieclip_itemf(bContext *C,
                                             PointerRNA * /*ptr*/,
@@ -4587,7 +4774,7 @@ const EnumPropertyItem *RNA_movieclip_itemf(bContext *C,
                                             bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->movieclips.first : nullptr, false, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->movieclips.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_movieclip_local_itemf(bContext *C,
                                                   PointerRNA * /*ptr*/,
@@ -4595,7 +4782,7 @@ const EnumPropertyItem *RNA_movieclip_local_itemf(bContext *C,
                                                   bool *r_free)
 {
   return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->movieclips.first : nullptr, true, nullptr, nullptr);
+      r_free, C ? CTX_data_main(C)->movieclips.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_mask_itemf(bContext *C,
@@ -4603,16 +4790,24 @@ const EnumPropertyItem *RNA_mask_itemf(bContext *C,
                                        PropertyRNA * /*prop*/,
                                        bool *r_free)
 {
-  return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->masks.first : nullptr, false, nullptr, nullptr);
+  return rna_id_itemf(r_free,
+                      C ? static_cast<ID *>(CTX_data_main(C)->masks.first_) : nullptr,
+                      false,
+                      nullptr,
+                      nullptr);
 }
 const EnumPropertyItem *RNA_mask_local_itemf(bContext *C,
                                              PointerRNA * /*ptr*/,
                                              PropertyRNA * /*prop*/,
                                              bool *r_free)
 {
-  return rna_id_itemf(
-      r_free, C ? (ID *)CTX_data_main(C)->masks.first : nullptr, true, nullptr, nullptr);
+  return rna_id_itemf(r_free,
+                      C ? static_cast<ID *>(CTX_data_main(C)->masks.first_) : nullptr,
+                      true,
+                      nullptr,
+                      nullptr);
 }
 
 /** \} */
+
+}  // namespace blender

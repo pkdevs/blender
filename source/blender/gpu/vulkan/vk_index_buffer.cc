@@ -6,13 +6,21 @@
  * \ingroup gpu
  */
 
+#include "gpu_capabilities_private.hh"
+
 #include "vk_index_buffer.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
 #include "vk_state_manager.hh"
 
-namespace blender::gpu {
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG = {"gpu.vulkan"};
+
+namespace gpu {
 
 void VKIndexBuffer::ensure_updated()
 {
@@ -23,6 +31,10 @@ void VKIndexBuffer::ensure_updated()
 
   if (!buffer_.is_allocated()) {
     allocate();
+    if (!buffer_.is_allocated()) {
+      CLOG_ERROR(&LOG, "Unable to allocate index buffer. Most likely an out of memory issue.");
+      return;
+    }
   }
 
   if (data_ == nullptr) {
@@ -31,14 +43,26 @@ void VKIndexBuffer::ensure_updated()
 
   if (!data_uploaded_ && buffer_.is_mapped()) {
     buffer_.update_immediately(data_);
-    MEM_SAFE_FREE(data_);
+    MEM_SAFE_DELETE_VOID(data_);
   }
   else {
     VKContext &context = *VKContext::get();
     VKStagingBuffer staging_buffer(buffer_, VKStagingBuffer::Direction::HostToDevice);
-    staging_buffer.host_buffer_get().update_immediately(data_);
-    staging_buffer.copy_to_device(context);
-    MEM_SAFE_FREE(data_);
+    VKBuffer &buffer = staging_buffer.host_buffer_get();
+    if (buffer.is_allocated()) {
+      staging_buffer.host_buffer_get().update_immediately(data_);
+      staging_buffer.copy_to_device(context);
+    }
+    else {
+      buffer_.clear(context, 0u);
+      CLOG_ERROR(
+          &LOG,
+          "Unable to upload data to index buffer via a staging buffer as the staging buffer "
+          "could not be allocated. Index buffer will be filled with on zeros to reduce "
+          "drawing artifacts due to read from uninitialized memory.");
+      buffer_.clear(context, 0u);
+    }
+    MEM_SAFE_DELETE_VOID(data_);
   }
 
   data_uploaded_ = true;
@@ -64,13 +88,61 @@ void VKIndexBuffer::read(uint32_t *data) const
 {
   VKContext &context = *VKContext::get();
   VKStagingBuffer staging_buffer(buffer_, VKStagingBuffer::Direction::DeviceToHost);
-  staging_buffer.copy_from_device(context);
-  staging_buffer.host_buffer_get().read(context, data);
+  VKBuffer &buffer = staging_buffer.host_buffer_get();
+  if (buffer.is_mapped()) {
+    staging_buffer.copy_from_device(context);
+    staging_buffer.host_buffer_get().read(context, data);
+  }
+  else {
+    CLOG_ERROR(&LOG,
+               "Unable to read data from index buffer via a staging buffer as the staging buffer "
+               "could not be allocated. ");
+  }
 }
 
-void VKIndexBuffer::update_sub(uint /*start*/, uint /*len*/, const void * /*data*/)
+void VKIndexBuffer::update_sub(uint start, uint len, const void *data)
 {
-  NOT_YET_IMPLEMENTED
+  if (!buffer_.is_allocated()) {
+    /* Allocating huge buffers can fail, in that case we skip copying data. */
+    return;
+  }
+  BLI_assert_msg(start + len <= buffer_.size_in_bytes(), "Out of bound write to index buffer");
+  if (buffer_.is_mapped()) {
+    buffer_.update_sub_immediately(start, len, data);
+  }
+  else {
+    VKContext &context = *VKContext::get();
+    VKStagingBuffer staging_buffer(buffer_, VKStagingBuffer::Direction::HostToDevice, start, len);
+    memcpy(staging_buffer.host_buffer_get().mapped_memory_get(), data, len);
+    staging_buffer.copy_to_device(context);
+  }
+}
+
+void VKIndexBuffer::copy_sub(IndexBuf &source_buf,
+                             uint source_first_index,
+                             uint dest_first_index,
+                             uint index_len)
+{
+  VKIndexBuffer &src = static_cast<VKIndexBuffer &>(source_buf);
+  BLI_assert(!is_subrange_);
+  BLI_assert(!src.is_subrange_);
+  BLI_assert_msg(src.index_type_ == index_type_,
+                 "Index type mismatch between source and destination");
+  BLI_assert_msg(size_t(source_first_index) + index_len <= src.index_len_,
+                 "Copy source range exceeds the source index buffer bounds");
+  BLI_assert_msg(size_t(dest_first_index) + index_len <= index_len_,
+                 "Copy destination range exceeds the destination index buffer bounds");
+  BLI_assert_msg(buffer_.is_allocated(), "GPU_indexbuf_use() not called on this buffer");
+  BLI_assert_msg(src.buffer_.is_allocated(), "GPU_indexbuf_use() not called on the source buffer");
+
+  VKContext &context = *VKContext::get();
+  render_graph::VKCopyBufferNode::CreateInfo copy_buffer = {};
+  copy_buffer.src_buffer = src.buffer_.resource();
+  copy_buffer.dst_buffer = buffer_.resource();
+  copy_buffer.region.srcOffset = source_first_index * to_bytesize(src.index_type_);
+  copy_buffer.region.dstOffset = dest_first_index * to_bytesize(index_type_);
+  copy_buffer.region.size = index_len * to_bytesize(index_type_);
+  context.render_graph().add_node(copy_buffer);
 }
 
 void VKIndexBuffer::strip_restart_indices()
@@ -80,13 +152,22 @@ void VKIndexBuffer::strip_restart_indices()
 
 void VKIndexBuffer::allocate()
 {
+  VkBufferUsageFlags vk_buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                       VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  if (GCaps.ray_query_support) {
+    vk_buffer_usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+  }
+
   buffer_.create(size_get(),
-                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                     VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                 VkMemoryPropertyFlags(0),
-                 VmaAllocationCreateFlags(0));
-  debug::object_label(buffer_.vk_handle(), "IndexBuffer");
+                 vk_buffer_usage,
+                 VMA_MEMORY_USAGE_AUTO,
+                 VmaAllocationCreateFlags(0),
+                 0.8f,
+                 false,
+                 "IndexBuffer");
 }
 
 const VKBuffer &VKIndexBuffer::buffer_get() const
@@ -98,4 +179,5 @@ VKBuffer &VKIndexBuffer::buffer_get()
   return is_subrange_ ? unwrap(src_)->buffer_ : buffer_;
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

@@ -2,10 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_geometry_set.hh"
 #include "BKE_instances.hh"
-
-#include "attribute_access_intern.hh"
 
 namespace blender::bke {
 

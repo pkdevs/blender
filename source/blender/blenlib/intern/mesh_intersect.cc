@@ -6,7 +6,7 @@
  * \ingroup bli
  */
 
-/* The #blender::meshintersect API needs GMP. */
+/* The #meshintersect API needs GMP. */
 #ifdef WITH_GMP
 
 #  include <algorithm>
@@ -17,24 +17,25 @@
 #  include <numeric>
 
 #  include "BLI_array.hh"
-#  include "BLI_assert.h"
+#  include "BLI_assert.hh"
 #  include "BLI_delaunay_2d.hh"
 #  include "BLI_kdopbvh.hh"
 #  include "BLI_map.hh"
-#  include "BLI_math_geom.h"
-#  include "BLI_math_matrix.h"
+#  include "BLI_math_geom_c.hh"
+#  include "BLI_math_matrix_c.hh"
 #  include "BLI_math_mpq.hh"
-#  include "BLI_math_vector.h"
+#  include "BLI_math_vector_c.hh"
 #  include "BLI_math_vector_mpq_types.hh"
 #  include "BLI_math_vector_types.hh"
 #  include "BLI_mutex.hh"
-#  include "BLI_polyfill_2d.h"
+#  include "BLI_ordered_edge.hh"
+#  include "BLI_polyfill_2d.hh"
 #  include "BLI_set.hh"
 #  include "BLI_sort.hh"
 #  include "BLI_span.hh"
-#  include "BLI_task.h"
 #  include "BLI_task.hh"
-#  include "BLI_threads.h"
+#  include "BLI_task_c.hh"
+#  include "BLI_threads.hh"
 #  include "BLI_vector.hh"
 #  include "BLI_vector_set.hh"
 
@@ -43,7 +44,7 @@
 // #  define PERFDEBUG
 
 #  ifdef _WIN_32
-#    include "BLI_fileops.h"
+#    include "BLI_fileops.hh"
 #  endif
 
 namespace blender::meshintersect {
@@ -541,12 +542,6 @@ void IMesh::set_faces(Span<Face *> faces)
   face_ = faces;
 }
 
-int IMesh::lookup_vert(const Vert *v) const
-{
-  BLI_assert(vert_populated_);
-  return vert_to_index_.lookup_default(v, NO_INDEX);
-}
-
 void IMesh::populate_vert()
 {
   /* This is likely an overestimate, since verts are shared between
@@ -586,7 +581,7 @@ void IMesh::populate_vert(int max_verts)
    * TODO: when all debugged, set fix_order = false. */
   const bool fix_order = true;
   if (fix_order) {
-    blender::parallel_sort(vert_.begin(), vert_.end(), [](const Vert *a, const Vert *b) {
+    parallel_sort(vert_.begin(), vert_.end(), [](const Vert *a, const Vert *b) {
       if (a->orig != NO_INDEX && b->orig != NO_INDEX) {
         return a->orig < b->orig;
       }
@@ -716,7 +711,7 @@ struct BBCalcData {
   const IMesh &im;
   Array<BoundingBox> *face_bounding_box;
 
-  BBCalcData(const IMesh &im, Array<BoundingBox> *fbb) : im(im), face_bounding_box(fbb){};
+  BBCalcData(const IMesh &im, Array<BoundingBox> *fbb) : im(im), face_bounding_box(fbb) {};
 };
 
 static void calc_face_bb_range_func(void *__restrict userdata,
@@ -741,7 +736,7 @@ struct BBPadData {
   Array<BoundingBox> *face_bounding_box;
   double pad;
 
-  BBPadData(Array<BoundingBox> *fbb, double pad) : face_bounding_box(fbb), pad(pad){};
+  BBPadData(Array<BoundingBox> *fbb, double pad) : face_bounding_box(fbb), pad(pad) {};
 };
 
 static void pad_face_bb_range_func(void *__restrict userdata,
@@ -1496,8 +1491,9 @@ static ITT_value intersect_tri_tri(const IMesh &tm, int t1, int t2)
 struct CDT_data {
   const Plane *t_plane;
   Vector<mpq2> vert;
-  Vector<std::pair<int, int>> edge;
-  Vector<Vector<int>> face;
+  Vector<int2> edge;
+  Vector<int> face_offsets;
+  Vector<int> face_vert_indices;
   /** Parallels face, gives id from input #IMesh of input face. */
   Vector<int> input_face;
   /** Parallels face, says if input face orientation is opposite. */
@@ -1507,7 +1503,7 @@ struct CDT_data {
   /**
    * To speed up get_cdt_edge_orig, sometimes populate this map from vertex pair to output edge.
    */
-  Map<std::pair<int, int>, int> verts_to_edge;
+  Map<OrderedEdge, int> verts_to_edge;
   int proj_axis;
 };
 
@@ -1570,7 +1566,7 @@ static void prepare_need_edge(CDT_data &cd, const mpq3 &p1, const mpq3 &p2)
 {
   int v1 = prepare_need_vert(cd, p1);
   int v2 = prepare_need_vert(cd, p2);
-  cd.edge.append(std::pair<int, int>(v1, v2));
+  cd.edge.append(int2(v1, v2));
 }
 
 static void prepare_need_tri(CDT_data &cd, const IMesh &tm, int t)
@@ -1589,15 +1585,15 @@ static void prepare_need_tri(CDT_data &cd, const IMesh &tm, int t)
   else {
     rev = cd.proj_axis != 1;
   }
-  int cd_t = cd.face.append_and_get_index(Vector<int>());
-  cd.face[cd_t].append(v0);
+  cd.face_offsets.append(cd.face_vert_indices.size());
+  cd.face_vert_indices.append(v0);
   if (rev) {
-    cd.face[cd_t].append(v2);
-    cd.face[cd_t].append(v1);
+    cd.face_vert_indices.append(v2);
+    cd.face_vert_indices.append(v1);
   }
   else {
-    cd.face[cd_t].append(v1);
-    cd.face[cd_t].append(v2);
+    cd.face_vert_indices.append(v1);
+    cd.face_vert_indices.append(v2);
   }
   cd.input_face.append(t);
   cd.is_reversed.append(rev);
@@ -1629,6 +1625,7 @@ static CDT_data prepare_cdt_input(const IMesh &tm, int t, const Span<ITT_value> 
       }
     }
   }
+  ans.face_offsets.append(ans.face_vert_indices.size());
   return ans;
 }
 
@@ -1663,30 +1660,21 @@ static CDT_data prepare_cdt_input_for_cluster(const IMesh &tm,
         break;
     }
   }
+  ans.face_offsets.append(ans.face_vert_indices.size());
   return ans;
-}
-
-/* Return a copy of the argument with the integers ordered in ascending order. */
-static inline std::pair<int, int> sorted_int_pair(std::pair<int, int> pair)
-{
-  if (pair.first <= pair.second) {
-    return pair;
-  }
-  return std::pair<int, int>(pair.second, pair.first);
 }
 
 /**
  * Build cd.verts_to_edge to map from a pair of cdt output indices to an index in cd.cdt_out.edge.
  * Order the vertex indices so that the smaller one is first in the pair.
  */
-static void populate_cdt_edge_map(Map<std::pair<int, int>, int> &verts_to_edge,
+static void populate_cdt_edge_map(Map<OrderedEdge, int> &verts_to_edge,
                                   const CDT_result<mpq_class> &cdt_out)
 {
   verts_to_edge.reserve(cdt_out.edge.size());
   for (int e : cdt_out.edge.index_range()) {
-    std::pair<int, int> vpair = sorted_int_pair(cdt_out.edge[e]);
     /* There should be only one edge for each vertex pair. */
-    verts_to_edge.add(vpair, e);
+    verts_to_edge.add(OrderedEdge(cdt_out.edge[e]), e);
   }
 }
 
@@ -1698,8 +1686,9 @@ static void do_cdt(CDT_data &cd)
   constexpr int dbg_level = 0;
   CDT_input<mpq_class> cdt_in;
   cdt_in.vert = Span<mpq2>(cd.vert);
-  cdt_in.edge = Span<std::pair<int, int>>(cd.edge);
-  cdt_in.face = Span<Vector<int>>(cd.face);
+  cdt_in.edge = Span<int2>(cd.edge);
+  cdt_in.face_offsets = cd.face_offsets.as_span();
+  cdt_in.face_vert_indices = cd.face_vert_indices;
   if (dbg_level > 0) {
     std::cout << "CDT input\nVerts:\n";
     for (int i : cdt_in.vert.index_range()) {
@@ -1708,20 +1697,21 @@ static void do_cdt(CDT_data &cd)
     }
     std::cout << "Edges:\n";
     for (int i : cdt_in.edge.index_range()) {
-      std::cout << "e" << i << ": (" << cdt_in.edge[i].first << ", " << cdt_in.edge[i].second
-                << ")\n";
+      std::cout << "e" << i << ": (" << cdt_in.edge[i][0] << ", " << cdt_in.edge[i][1] << ")\n";
     }
     std::cout << "Tris\n";
-    for (int f : cdt_in.face.index_range()) {
+    const GroupedSpan<int> in_faces(cdt_in.face_offsets, cdt_in.face_vert_indices);
+    for (int f : in_faces.index_range()) {
       std::cout << "f" << f << ": ";
-      for (int j : cdt_in.face[f].index_range()) {
-        std::cout << cdt_in.face[f][j] << " ";
+      for (int j : in_faces[f].index_range()) {
+        std::cout << in_faces[f][j] << " ";
       }
       std::cout << "\n";
     }
   }
   cdt_in.epsilon = 0; /* TODO: needs attention for non-exact T. */
-  cd.cdt_out = blender::meshintersect::delaunay_2d_calc(cdt_in, CDT_INSIDE);
+  cdt_in.needed_ids = CDT_ORIG_VERTS | CDT_ORIG_EDGES | CDT_ORIG_FACES;
+  cd.cdt_out = delaunay_2d_calc(cdt_in, CDT_INSIDE);
   constexpr int make_edge_map_threshold = 15;
   if (cd.cdt_out.edge.size() >= make_edge_map_threshold) {
     populate_cdt_edge_map(cd.verts_to_edge, cd.cdt_out);
@@ -1746,8 +1736,8 @@ static void do_cdt(CDT_data &cd)
     }
     std::cout << "Edges\n";
     for (int e : cd.cdt_out.edge.index_range()) {
-      std::cout << "e" << e << ": (" << cd.cdt_out.edge[e].first << ", "
-                << cd.cdt_out.edge[e].second << ") ";
+      std::cout << "e" << e << ": (" << cd.cdt_out.edge[e][0] << ", " << cd.cdt_out.edge[e][1]
+                << ") ";
       std::cout << "orig: ";
       for (int j : cd.cdt_out.edge_orig[e].index_range()) {
         std::cout << cd.cdt_out.edge_orig[e][j] << " ";
@@ -1770,18 +1760,17 @@ static void do_cdt(CDT_data &cd)
 static int get_cdt_edge_orig(
     int i0, int i1, const CDT_data &cd, const IMesh &in_tm, bool *r_is_intersect)
 {
-  int foff = cd.cdt_out.face_edge_offset;
+  uint32_t foff = cd.cdt_out.face_edge_offset;
   *r_is_intersect = false;
   int e = NO_INDEX;
   if (cd.verts_to_edge.size() > 0) {
     /* Use the populated map to find the edge, if any, between vertices i0 and i1. */
-    std::pair<int, int> vpair = sorted_int_pair(std::pair<int, int>(i0, i1));
-    e = cd.verts_to_edge.lookup_default(vpair, NO_INDEX);
+    e = cd.verts_to_edge.lookup_default(OrderedEdge(i0, i1), NO_INDEX);
   }
   else {
     for (int ee : cd.cdt_out.edge.index_range()) {
-      std::pair<int, int> edge = cd.cdt_out.edge[ee];
-      if ((edge.first == i0 && edge.second == i1) || (edge.first == i1 && edge.second == i0)) {
+      const int2 edge = cd.cdt_out.edge[ee];
+      if ((edge[0] == i0 && edge[1] == i1) || (edge[0] == i1 && edge[1] == i0)) {
         e = ee;
         break;
       }
@@ -1796,12 +1785,12 @@ static int get_cdt_edge_orig(
    * then want to set *r_is_intersect to true. */
   int face_eorig = NO_INDEX;
   bool have_non_face_eorig = false;
-  for (int orig_index : cd.cdt_out.edge_orig[e]) {
+  for (uint32_t orig_index : cd.cdt_out.edge_orig[e]) {
     /* orig_index encodes the triangle and pos within the triangle of the input edge. */
     if (orig_index >= foff) {
       if (face_eorig == NO_INDEX) {
-        int in_face_index = (orig_index / foff) - 1;
-        int pos = orig_index % foff;
+        uint32_t in_face_index = (orig_index / foff) - 1;
+        int pos = int(orig_index % foff);
         /* We need to retrieve the edge orig field from the Face used to populate the
          * in_face_index'th face of the CDT, at the pos'th position of the face. */
         int in_tm_face_index = cd.input_face[in_face_index];
@@ -1932,7 +1921,7 @@ static Array<Face *> polyfill_triangulate_poly(Face *f, IMeshArena *arena)
     int eo_23 = f->edge_orig[2];
     int eo_30 = f->edge_orig[3];
     Face *f0, *f1;
-    if (UNLIKELY(is_quad_flip_first_third(v0->co, v1->co, v2->co, v3->co))) {
+    if (is_quad_flip_first_third(v0->co, v1->co, v2->co, v3->co)) [[unlikely]] {
       f0 = arena->add_face({v0, v1, v3}, f->orig, {eo_01, -1, eo_30}, {false, false, false});
       f1 = arena->add_face({v1, v2, v3}, f->orig, {eo_12, eo_23, -1}, {false, false, false});
     }
@@ -1944,12 +1933,12 @@ static Array<Face *> polyfill_triangulate_poly(Face *f, IMeshArena *arena)
   }
   /* Project along negative face normal so (x,y) can be used in 2d. */
   float axis_mat[3][3];
-  float(*projverts)[2];
+  float (*projverts)[2];
   uint(*tris)[3];
   const int totfilltri = flen - 2;
   /* Prepare projected vertices and array to receive triangles in tessellation. */
-  tris = MEM_malloc_arrayN<uint[3]>(size_t(totfilltri), __func__);
-  projverts = MEM_malloc_arrayN<float[2]>(size_t(flen), __func__);
+  tris = MEM_new_array_uninitialized<uint[3]>(size_t(totfilltri), __func__);
+  projverts = MEM_new_array_uninitialized<float[2]>(size_t(flen), __func__);
   axis_dominant_v3_to_m3_negate(axis_mat, no);
   for (int j = 0; j < flen; ++j) {
     const double3 &dco = (*f)[j]->co;
@@ -1979,8 +1968,8 @@ static Array<Face *> polyfill_triangulate_poly(Face *f, IMeshArena *arena)
     }
   }
 
-  MEM_freeN(tris);
-  MEM_freeN(projverts);
+  MEM_delete(tris);
+  MEM_delete(projverts);
 
   return ans;
 }
@@ -2004,9 +1993,9 @@ static Array<Face *> exact_triangulate_poly(Face *f, IMeshArena *arena)
 {
   int flen = f->size();
   Array<mpq2> in_verts(flen);
-  Array<Vector<int>> faces(1);
-  faces.first().resize(flen);
-  std::iota(faces.first().begin(), faces.first().end(), 0);
+  const Array<int> face_offsets({0, flen});
+  Array<int> face_vert_indices(flen);
+  std::iota(face_vert_indices.begin(), face_vert_indices.end(), 0);
 
   /* Project poly along dominant axis of normal to get 2d coords. */
   if (!f->plane_populated()) {
@@ -2033,8 +2022,10 @@ static Array<Face *> exact_triangulate_poly(Face *f, IMeshArena *arena)
   }
 
   CDT_input<mpq_class> cdt_in;
-  cdt_in.vert = std::move(in_verts);
-  cdt_in.face = std::move(faces);
+  cdt_in.vert = in_verts;
+  cdt_in.face_offsets = face_offsets.as_span();
+  cdt_in.face_vert_indices = face_vert_indices;
+  cdt_in.needed_ids = CDT_ORIG_VERTS | CDT_ORIG_EDGES | CDT_ORIG_FACES;
 
   CDT_result<mpq_class> cdt_out = delaunay_2d_calc(cdt_in, CDT_INSIDE);
   int n_tris = cdt_out.face.size();
@@ -2056,18 +2047,17 @@ static Array<Face *> exact_triangulate_poly(Face *f, IMeshArena *arena)
       /* Fall back on the polyfill triangulator. */
       return polyfill_triangulate_poly(f, arena);
     }
-    Map<std::pair<int, int>, int> verts_to_edge;
+    Map<OrderedEdge, int> verts_to_edge;
     populate_cdt_edge_map(verts_to_edge, cdt_out);
-    int foff = cdt_out.face_edge_offset;
+    uint32_t foff = cdt_out.face_edge_offset;
     for (int i = 0; i < 3; ++i) {
-      std::pair<int, int> vpair(i_v_out[i], i_v_out[(i + 1) % 3]);
-      std::pair<int, int> vpair_canon = sorted_int_pair(vpair);
+      const OrderedEdge vpair_canon(i_v_out[i], i_v_out[(i + 1) % 3]);
       int e_out = verts_to_edge.lookup_default(vpair_canon, NO_INDEX);
       BLI_assert(e_out != NO_INDEX);
       eo[i] = NO_INDEX;
-      for (int orig : cdt_out.edge_orig[e_out]) {
+      for (uint32_t orig : cdt_out.edge_orig[e_out]) {
         if (orig >= foff) {
-          int pos = orig % foff;
+          int pos = int(orig % foff);
           BLI_assert(pos < f->size());
           eo[i] = f->edge_orig[pos];
           break;
@@ -2114,7 +2104,7 @@ static bool face_is_degenerate(const Face *f)
 }
 
 /** Fast check for degenerate tris. It is OK if it returns true for nearly degenerate triangles. */
-static bool any_degenerate_tris_fast(const Array<Face *> triangulation)
+static bool any_degenerate_tris_fast(const Array<Face *> &triangulation)
 {
   for (const Face *f : triangulation) {
     const Vert *v0 = (*f)[0];
@@ -2319,7 +2309,7 @@ class TriOverlaps {
      * in the repeated part, sorting will then bring things with indexB together. */
     if (two_trees_no_self) {
       overlap_ = static_cast<BVHTreeOverlap *>(
-          MEM_reallocN(overlap_, 2 * overlap_num_ * sizeof(overlap_[0])));
+          MEM_realloc_uninitialized(overlap_, 2 * overlap_num_ * sizeof(overlap_[0])));
       for (uint i = 0; i < overlap_num_; ++i) {
         overlap_[overlap_num_ + i].indexA = overlap_[i].indexB;
         overlap_[overlap_num_ + i].indexB = overlap_[i].indexA;
@@ -2352,7 +2342,7 @@ class TriOverlaps {
       BLI_bvhtree_free(tree_b_);
     }
     if (overlap_) {
-      MEM_freeN(overlap_);
+      MEM_delete(overlap_);
     }
   }
 
@@ -2423,7 +2413,7 @@ static void calc_overlap_itts_range_func(void *__restrict userdata,
 
 /**
  * Fill in itt_map with the vector of ITT_values that result from intersecting the triangles in
- * ov. Use a canonical order for triangles: (a,b) where  a < b.
+ * ov. Use a canonical order for triangles: (a,b) where `a < b`.
  */
 static void calc_overlap_itts(Map<std::pair<int, int>, ITT_value> &itt_map,
                               const IMesh &tm,
@@ -2645,7 +2635,7 @@ static CDT_data calc_cluster_subdivided(const CoplanarClusterInfo &clinfo,
   return cd_data;
 }
 
-static IMesh union_tri_subdivides(const blender::Array<IMesh> &tri_subdivided)
+static IMesh union_tri_subdivides(const Array<IMesh> &tri_subdivided)
 {
   int tot_tri = 0;
   for (const IMesh &m : tri_subdivided) {
@@ -2846,8 +2836,7 @@ static IMesh remove_degenerate_tris(const IMesh &tm_in)
 
 IMesh trimesh_self_intersect(const IMesh &tm_in, IMeshArena *arena)
 {
-  return trimesh_nary_intersect(
-      tm_in, 1, [](int /*t*/) { return 0; }, true, arena);
+  return trimesh_nary_intersect(tm_in, 1, [](int /*t*/) { return 0; }, true, arena);
 }
 
 IMesh trimesh_nary_intersect(const IMesh &tm_in,

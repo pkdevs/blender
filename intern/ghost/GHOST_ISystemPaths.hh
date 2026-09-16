@@ -8,7 +8,10 @@
 
 #pragma once
 
-#include "GHOST_Types.h"
+#include <optional>
+#include <string>
+
+#include "GHOST_Types.hh"
 
 class GHOST_ISystemPaths {
  public:
@@ -25,7 +28,7 @@ class GHOST_ISystemPaths {
   static GHOST_TSuccess dispose();
 
   /**
-   * Returns a pointer to the one and only system (nil if it hasn't been created).
+   * Returns a pointer to the one and only system.
    * \return A pointer to the system.
    */
   static GHOST_ISystemPaths *get();
@@ -52,6 +55,21 @@ class GHOST_ISystemPaths {
   virtual const char *getSystemDir(int version, const char *versionstr) const = 0;
 
   /**
+   * The base directory where architecture-dependent files are located,
+   * mirroring #getSystemDir under the install lib tree (eg `/usr/lib/blender/`).
+   *
+   * \return String pointing to the system libraries directory,
+   * or null when this build has no separate system library directory.
+   *
+   * For portable builds this function always returns null, for specific details
+   * see CMake's `BLENDER_INSTALL_LIBDIR` define for when this is/isn't used and why.
+   */
+  virtual const char *getSystemLibsDir(int /*version*/, const char * /*versionstr*/) const
+  {
+    return nullptr;
+  }
+
+  /**
    * Determine the base directory in which user configuration is stored, including versioning.
    * If needed, it will create the base directory.
    * \return Unsigned char string pointing to user directory (eg `~/.blender/`).
@@ -60,9 +78,9 @@ class GHOST_ISystemPaths {
 
   /**
    * Determine a special ("well known") and easy to reach user directory.
-   * \return Unsigned char string pointing to user directory (eg `~/Documents/`).
+   * \return If successfull, a string containing the user directory path (eg `~/Documents/`).
    */
-  virtual const char *getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const = 0;
+  virtual std::optional<std::string> getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const = 0;
 
   /**
    * Determine the directory of the current binary
@@ -77,7 +95,7 @@ class GHOST_ISystemPaths {
 
  private:
   /** The one and only system paths. */
-  static GHOST_ISystemPaths *m_systemPaths;
+  static GHOST_ISystemPaths *system_paths_;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GHOST:GHOST_ISystemPaths")
 };

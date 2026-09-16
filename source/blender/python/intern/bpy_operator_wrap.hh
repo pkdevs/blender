@@ -10,6 +10,8 @@
 
 #include <Python.h>
 
+namespace blender {
+
 struct wmOperatorType;
 
 /**
@@ -17,7 +19,7 @@ struct wmOperatorType;
  *
  * Accessed via sub-classes of `bpy.types.Macro` using the `define` method.
  */
-PyObject *PYOP_wrap_macro_define(PyObject *self, PyObject *args);
+[[nodiscard]] PyObject *PYOP_wrap_macro_define(PyObject *self, PyObject *args);
 
 /* Exposed to RNA/WM API. */
 
@@ -31,3 +33,5 @@ void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata);
  * it's passed as an argument to #WM_operatortype_append_ptr in for operator registration.
  */
 void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata);
+
+}  // namespace blender

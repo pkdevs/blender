@@ -8,11 +8,11 @@ set(INC
   importer
   intern
   ../common
+  ../../editors/include
   ../../makesrna
 )
 
 set(INC_SYS
-  ../../../../extern/fast_float
 )
 
 set(SRC
@@ -26,6 +26,7 @@ set(SRC
   importer/ply_import.cc
   importer/ply_import_buffer.cc
   importer/ply_import_data.cc
+  importer/ply_import_gsplat.cc
   importer/ply_import_mesh.cc
   IO_ply.cc
 
@@ -39,6 +40,7 @@ set(SRC
   importer/ply_import.hh
   importer/ply_import_buffer.hh
   importer/ply_import_data.hh
+  importer/ply_import_gsplat.hh
   importer/ply_import_mesh.hh
   IO_ply.hh
 
@@ -55,7 +57,7 @@ set(LIB
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_io_common
-  PRIVATE bf::extern::fmtlib
+  PRIVATE bf::extern::fast_float
   PRIVATE bf::windowmanager
 )
 

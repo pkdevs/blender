@@ -6,7 +6,7 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_global.hh"
 
@@ -35,6 +35,7 @@ GLFrameBuffer::GLFrameBuffer(
     : FrameBuffer(name)
 {
   context_ = ctx;
+  context_id_ = context_->context_id;
   state_manager_ = static_cast<GLStateManager *>(ctx->state_manager);
   immutable_ = true;
   fbo_id_ = fbo;
@@ -62,6 +63,11 @@ GLFrameBuffer::~GLFrameBuffer()
     return;
   }
 
+  if (!GLBackend::get()->is_valid_context_id(context_id_)) {
+    /* Context was freed. It can happen for GLTexture::framebuffer_. */
+    return;
+  }
+
   /* Context might be partially freed. This happens when destroying the window frame-buffers. */
   if (context_ == Context::get()) {
     glDeleteFramebuffers(1, &fbo_id_);
@@ -81,6 +87,7 @@ GLFrameBuffer::~GLFrameBuffer()
 void GLFrameBuffer::init()
 {
   context_ = GLContext::get();
+  context_id_ = context_->context_id;
   state_manager_ = static_cast<GLStateManager *>(context_->state_manager);
   glGenFramebuffers(1, &fbo_id_);
   /* Binding before setting the label is needed on some drivers.
@@ -127,7 +134,7 @@ bool GLFrameBuffer::check(char err_out[256])
 
 #undef FORMAT_STATUS
 
-  const char *format = "GPUFrameBuffer: %s status %s\n";
+  const char *format = "gpu::FrameBuffer: %s status %s\n";
 
   if (err_out) {
     BLI_snprintf(err_out, 256, format, this->name_, err);
@@ -165,7 +172,7 @@ void GLFrameBuffer::update_attachments()
       glFramebufferTexture(GL_FRAMEBUFFER, gl_attachment, 0, 0);
       continue;
     }
-    GLuint gl_tex = static_cast<GLTexture *>(unwrap(attach.tex))->tex_id_;
+    GLuint gl_tex = static_cast<GLTexture *>(attach.tex)->tex_id_;
     if (attach.layer > -1 && GPU_texture_is_cube(attach.tex) && !GPU_texture_is_array(attach.tex))
     {
       /* Could be avoided if ARB_direct_state_access is required. In this case
@@ -195,7 +202,7 @@ void GLFrameBuffer::update_attachments()
       GPUAttachmentType type = GPU_FB_COLOR_ATTACHMENT0 + i;
       GPUAttachment &attach = attachments_[type];
       if (attach.tex != nullptr) {
-        gl_tex = static_cast<GLTexture *>(unwrap(attach.tex))->tex_id_;
+        gl_tex = static_cast<GLTexture *>(attach.tex)->tex_id_;
       }
       else if (gl_tex != 0) {
         GLenum gl_attachment = to_gl(type);
@@ -210,7 +217,7 @@ void GLFrameBuffer::update_attachments()
     int size[3];
     GPU_texture_get_mipmap_size(attach.tex, attach.mip, size);
     this->size_set(size[0], size[1]);
-    srgb_ = (GPU_texture_format(attach.tex) == GPU_SRGB8_A8);
+    srgb_ = (GPU_texture_format(attach.tex) == TextureFormat::SRGBA_8_8_8_8);
   }
   else {
     /* Empty frame-buffer. */
@@ -253,7 +260,7 @@ void GLFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attac
     GLenum attachments[GPU_FB_MAX_COLOR_ATTACHMENT] = {GL_NONE};
     for (int i : color_attachment_states.index_range()) {
       GPUAttachmentType type = GPU_FB_COLOR_ATTACHMENT0 + i;
-      GPUTexture *attach_tex = this->attachments_[type].tex;
+      gpu::Texture *attach_tex = this->attachments_[type].tex;
       if (color_attachment_states[i] == GPU_ATTACHMENT_READ) {
         tmp_detached_[type] = this->attachments_[type]; /* Bypass feedback loop check. */
         GPU_texture_bind_ex(attach_tex, GPUSamplerState::default_sampler(), i);
@@ -287,7 +294,7 @@ void GLFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attac
       }
       else if (color_attachment_states[i] == GPU_ATTACHMENT_READ) {
         tmp_detached_[type] = this->attachments_[type];
-        unwrap(tmp_detached_[type].tex)->detach_from(this);
+        tmp_detached_[type].tex->detach_from(this);
         GPU_texture_bind_ex(tmp_detached_[type].tex, GPUSamplerState::default_sampler(), i);
       }
     }
@@ -302,7 +309,7 @@ void GLFrameBuffer::attachment_set_loadstore_op(GPUAttachmentType type, GPULoadS
   BLI_assert(context_->active_fb == this);
 
   /* TODO(fclem): Add support for other ops. */
-  if (ls.load_action == eGPULoadOp::GPU_LOADACTION_CLEAR) {
+  if (ls.load_action == GPULoadOp::GPU_LOADACTION_CLEAR) {
     if (tmp_detached_[type].tex != nullptr) {
       /* #GPULoadStore is used to define the frame-buffer before it is used for rendering.
        * Binding back unattached attachment makes its state undefined. This is described by the
@@ -324,7 +331,7 @@ void GLFrameBuffer::attachment_set_loadstore_op(GPUAttachmentType type, GPULoadS
         this->update_attachments();
       }
     }
-    clear_attachment(type, GPU_DATA_FLOAT, ls.clear_value);
+    clear_attachment(type, ls.clear_value);
   }
 }
 
@@ -421,8 +428,8 @@ void GLFrameBuffer::bind(bool enabled_srgb)
 /** \name Operations.
  * \{ */
 
-void GLFrameBuffer::clear(eGPUFrameBufferBits buffers,
-                          const float clear_col[4],
+void GLFrameBuffer::clear(GPUFrameBufferBits buffers,
+                          const double4 clear_col,
                           float clear_depth,
                           uint clear_stencil)
 {
@@ -430,13 +437,26 @@ void GLFrameBuffer::clear(eGPUFrameBufferBits buffers,
   BLI_assert(context_->active_fb == this);
 
   /* Save and restore the state. */
-  eGPUWriteMask write_mask = GPU_write_mask_get();
+  GPUWriteMask write_mask = GPU_write_mask_get();
   uint stencil_mask = GPU_stencil_mask_get();
-  eGPUStencilTest stencil_test = GPU_stencil_test_get();
+  GPUStencilTest stencil_test = GPU_stencil_test_get();
 
   if (buffers & GPU_COLOR_BIT) {
-    GPU_color_mask(true, true, true, true);
-    glClearColor(clear_col[0], clear_col[1], clear_col[2], clear_col[3]);
+    if (immutable_) {
+      /* Immutable frame-buffers (default/window) have no texture attachments,
+       * clear via #glClearColor + #glClear (included in the mask below). */
+      GPU_color_mask(true, true, true, true);
+      glClearColor(
+          float(clear_col[0]), float(clear_col[1]), float(clear_col[2]), float(clear_col[3]));
+    }
+    else {
+      int type = GPU_FB_COLOR_ATTACHMENT0;
+      for (int i = 0; type < GPU_FB_MAX_ATTACHMENT; i++, type++) {
+        if (attachments_[type].tex != nullptr) {
+          this->clear_attachment(GPU_FB_COLOR_ATTACHMENT0 + i, clear_col);
+        }
+      }
+    }
   }
   if (buffers & GPU_DEPTH_BIT) {
     GPU_depth_mask(true);
@@ -450,7 +470,11 @@ void GLFrameBuffer::clear(eGPUFrameBufferBits buffers,
 
   context_->state_manager->apply_state();
 
-  GLbitfield mask = to_gl(buffers);
+  /* Mutable frame-buffers clear color via per-attachment calls above,
+   * exclude color from the #glClear mask in that case. */
+  GPUFrameBufferBits glclear_buffers = immutable_ ? buffers :
+                                                    GPUFrameBufferBits(buffers & ~GPU_COLOR_BIT);
+  GLbitfield mask = to_gl(glclear_buffers);
   glClear(mask);
 
   if (buffers & (GPU_COLOR_BIT | GPU_DEPTH_BIT)) {
@@ -462,75 +486,57 @@ void GLFrameBuffer::clear(eGPUFrameBufferBits buffers,
   }
 }
 
-void GLFrameBuffer::clear_attachment(GPUAttachmentType type,
-                                     eGPUDataFormat data_format,
-                                     const void *clear_value)
+void GLFrameBuffer::clear_attachment(GPUAttachmentType type, const double4 clear_value)
 {
   BLI_assert(GLContext::get() == context_);
   BLI_assert(context_->active_fb == this);
 
   /* Save and restore the state. */
-  eGPUWriteMask write_mask = GPU_write_mask_get();
-  GPU_color_mask(true, true, true, true);
-  bool depth_mask = GPU_depth_mask_get();
+  GPUWriteMask write_mask = GPU_write_mask_get();
+
   GPU_depth_mask(true);
+  GPU_color_mask(true, true, true, true);
 
   context_->state_manager->apply_state();
 
-  if (type == GPU_FB_DEPTH_STENCIL_ATTACHMENT) {
-    BLI_assert(data_format == GPU_DATA_UINT_24_8);
-    float depth = ((*(uint32_t *)clear_value) & 0x00FFFFFFu) / float(0x00FFFFFFu);
-    int stencil = ((*(uint32_t *)clear_value) >> 24);
-    glClearBufferfi(GL_DEPTH_STENCIL, 0, depth, stencil);
+  if (ELEM(type, GPU_FB_DEPTH_ATTACHMENT, GPU_FB_DEPTH_STENCIL_ATTACHMENT)) {
+    glClearDepth(float(clear_value.x));
+    glClear(to_gl(GPU_DEPTH_BIT));
   }
-  else if (type == GPU_FB_DEPTH_ATTACHMENT) {
-    if (data_format == GPU_DATA_FLOAT) {
-      glClearBufferfv(GL_DEPTH, 0, (GLfloat *)clear_value);
+  else {
+    int slot = type - GPU_FB_COLOR_ATTACHMENT0;
+    GPUTextureFormatFlag flag = attachments_[type].tex->format_flag_get();
+    if (flag & GPU_FORMAT_FLOAT || flag & GPU_FORMAT_NORMALIZED_INTEGER) {
+      float4 data = float4(clear_value);
+      glClearBufferfv(GL_COLOR, slot, &data.x);
     }
-    else if (data_format == GPU_DATA_UINT) {
-      float depth = *(uint32_t *)clear_value / float(0xFFFFFFFFu);
-      glClearBufferfv(GL_DEPTH, 0, &depth);
+    else if (flag & GPU_FORMAT_INTEGER && flag & GPU_FORMAT_SIGNED) {
+      int4 data = int4(clear_value);
+      glClearBufferiv(GL_COLOR, slot, &data.x);
+    }
+    else if (flag & GPU_FORMAT_INTEGER && !(flag & GPU_FORMAT_SIGNED)) {
+      uint4 data = uint4(clear_value);
+      glClearBufferuiv(GL_COLOR, slot, &data.x);
     }
     else {
       BLI_assert_msg(0, "Unhandled data format");
     }
   }
-  else {
-    int slot = type - GPU_FB_COLOR_ATTACHMENT0;
-    switch (data_format) {
-      case GPU_DATA_FLOAT:
-        glClearBufferfv(GL_COLOR, slot, (GLfloat *)clear_value);
-        break;
-      case GPU_DATA_UINT:
-        glClearBufferuiv(GL_COLOR, slot, (GLuint *)clear_value);
-        break;
-      case GPU_DATA_INT:
-        glClearBufferiv(GL_COLOR, slot, (GLint *)clear_value);
-        break;
-      default:
-        BLI_assert_msg(0, "Unhandled data format");
-        break;
-    }
-  }
 
   GPU_write_mask(write_mask);
-  GPU_depth_mask(depth_mask);
 }
 
-void GLFrameBuffer::clear_multi(const float (*clear_cols)[4])
+void GLFrameBuffer::clear_multi(Span<double4> clear_cols)
 {
-  /* WATCH: This can easily access clear_cols out of bounds it clear_cols is not big enough for
-   * all attachments.
-   * TODO(fclem): fix this insecurity? */
   int type = GPU_FB_COLOR_ATTACHMENT0;
   for (int i = 0; type < GPU_FB_MAX_ATTACHMENT; i++, type++) {
     if (attachments_[type].tex != nullptr) {
-      this->clear_attachment(GPU_FB_COLOR_ATTACHMENT0 + i, GPU_DATA_FLOAT, clear_cols[i]);
+      this->clear_attachment(GPU_FB_COLOR_ATTACHMENT0 + i, clear_cols[i]);
     }
   }
 }
 
-void GLFrameBuffer::read(eGPUFrameBufferBits plane,
+void GLFrameBuffer::read(GPUFrameBufferBits plane,
                          eGPUDataFormat data_format,
                          const int area[4],
                          int channel_len,
@@ -573,7 +579,7 @@ void GLFrameBuffer::read(eGPUFrameBufferBits plane,
 }
 
 void GLFrameBuffer::blit_to(
-    eGPUFrameBufferBits planes, int src_slot, FrameBuffer *dst_, int dst_slot, int x, int y)
+    GPUFrameBufferBits planes, int src_slot, FrameBuffer *dst_, int dst_slot, int x, int y)
 {
   GLFrameBuffer *src = this;
   GLFrameBuffer *dst = static_cast<GLFrameBuffer *>(dst_);

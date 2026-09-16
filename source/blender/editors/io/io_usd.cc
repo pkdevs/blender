@@ -15,7 +15,7 @@
 #  include "BKE_report.hh"
 
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
+#  include "BLI_string_utf8.hh"
 
 #  include "BLT_translation.hh"
 
@@ -29,6 +29,7 @@
 #  include "RNA_enum_types.hh"
 
 #  include "UI_interface.hh"
+#  include "UI_interface_layout.hh"
 #  include "UI_resources.hh"
 
 #  include "WM_api.hh"
@@ -41,12 +42,12 @@
 #  include "io_utils.hh"
 #  include "usd.hh"
 
-#  include <pxr/pxr.h>
-
 #  include <string>
 #  include <utility>
 
-using namespace blender::io::usd;
+namespace blender {
+
+using namespace io::usd;
 
 const EnumPropertyItem rna_enum_usd_export_evaluation_mode_items[] = {
     {DAG_EVAL_RENDER,
@@ -63,12 +64,12 @@ const EnumPropertyItem rna_enum_usd_export_evaluation_mode_items[] = {
 };
 
 const EnumPropertyItem rna_enum_usd_mtl_name_collision_mode_items[] = {
-    {USD_MTL_NAME_COLLISION_MAKE_UNIQUE,
+    {int(MtlNameCollisionMode::MakeUnique),
      "MAKE_UNIQUE",
      0,
      "Make Unique",
      "Import each USD material as a unique Blender material"},
-    {USD_MTL_NAME_COLLISION_REFERENCE_EXISTING,
+    {int(MtlNameCollisionMode::ReferenceExisting),
      "REFERENCE_EXISTING",
      0,
      "Reference Existing",
@@ -76,15 +77,15 @@ const EnumPropertyItem rna_enum_usd_mtl_name_collision_mode_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-const EnumPropertyItem rna_enum_usd_attr_import_mode_items[] = {
-    {USD_ATTR_IMPORT_NONE, "NONE", 0, "None", "Do not import USD custom attributes"},
-    {USD_ATTR_IMPORT_USER,
+const EnumPropertyItem rna_enum_usd_property_import_mode_items[] = {
+    {int(PropertyImportMode::None), "NONE", 0, "None", "Do not import USD custom attributes"},
+    {int(PropertyImportMode::User),
      "USER",
      0,
      "User",
      "Import USD attributes in the 'userProperties' namespace as Blender custom "
      "properties. The namespace will be stripped from the property names"},
-    {USD_ATTR_IMPORT_ALL,
+    {int(PropertyImportMode::All),
      "ALL",
      0,
      "All Custom",
@@ -94,34 +95,38 @@ const EnumPropertyItem rna_enum_usd_attr_import_mode_items[] = {
 };
 
 const EnumPropertyItem rna_enum_usd_tex_import_mode_items[] = {
-    {USD_TEX_IMPORT_NONE, "IMPORT_NONE", 0, "None", "Don't import textures"},
-    {USD_TEX_IMPORT_PACK, "IMPORT_PACK", 0, "Packed", "Import textures as packed data"},
-    {USD_TEX_IMPORT_COPY, "IMPORT_COPY", 0, "Copy", "Copy files to textures directory"},
+    {int(TexImportMode::None), "IMPORT_NONE", 0, "None", "Don't import textures"},
+    {int(TexImportMode::Pack), "IMPORT_PACK", 0, "Packed", "Import textures as packed data"},
+    {int(TexImportMode::Copy), "IMPORT_COPY", 0, "Copy", "Copy files to textures directory"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_usd_tex_name_collision_mode_items[] = {
-    {USD_TEX_NAME_COLLISION_USE_EXISTING,
+    {int(TexNameCollisionMode::UseExisting),
      "USE_EXISTING",
      0,
      "Use Existing",
      "If a file with the same name already exists, use that instead of copying"},
-    {USD_TEX_NAME_COLLISION_OVERWRITE, "OVERWRITE", 0, "Overwrite", "Overwrite existing files"},
+    {int(TexNameCollisionMode::Overwrite),
+     "OVERWRITE",
+     0,
+     "Overwrite",
+     "Overwrite existing files"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_usd_export_subdiv_mode_items[] = {
-    {USD_SUBDIV_IGNORE,
+    {int(SubdivExportMode::Ignore),
      "IGNORE",
      0,
      "Ignore",
      "Scheme = None. Export base mesh without subdivision"},
-    {USD_SUBDIV_TESSELLATE,
+    {int(SubdivExportMode::Tessellate),
      "TESSELLATE",
      0,
      "Tessellate",
      "Scheme = None. Export subdivided mesh"},
-    {USD_SUBDIV_BEST_MATCH,
+    {int(SubdivExportMode::Match),
      "BEST_MATCH",
      0,
      "Best Match",
@@ -131,40 +136,40 @@ const EnumPropertyItem rna_enum_usd_export_subdiv_mode_items[] = {
 };
 
 const EnumPropertyItem rna_enum_usd_xform_op_mode_items[] = {
-    {USD_XFORM_OP_TRS,
+    {int(XformOpMode::TRS),
      "TRS",
      0,
      "Translate, Rotate, Scale",
      "Export with translate, rotate, and scale Xform operators"},
-    {USD_XFORM_OP_TOS,
+    {int(XformOpMode::TOS),
      "TOS",
      0,
      "Translate, Orient, Scale",
      "Export with translate, orient quaternion, and scale Xform operators"},
-    {USD_XFORM_OP_MAT, "MAT", 0, "Matrix", "Export matrix operator"},
+    {int(XformOpMode::MAT), "MAT", 0, "Matrix", "Export matrix operator"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_usdz_downscale_size[] = {
-    {USD_TEXTURE_SIZE_KEEP, "KEEP", 0, "Keep", "Keep all current texture sizes"},
-    {USD_TEXTURE_SIZE_256, "256", 0, "256", "Resize to a maximum of 256 pixels"},
-    {USD_TEXTURE_SIZE_512, "512", 0, "512", "Resize to a maximum of 512 pixels"},
-    {USD_TEXTURE_SIZE_1024, "1024", 0, "1024", "Resize to a maximum of 1024 pixels"},
-    {USD_TEXTURE_SIZE_2048, "2048", 0, "2048", "Resize to a maximum of 2048 pixels"},
-    {USD_TEXTURE_SIZE_4096, "4096", 0, "4096", "Resize to a maximum of 4096 pixels"},
-    {USD_TEXTURE_SIZE_CUSTOM, "CUSTOM", 0, "Custom", "Specify a custom size"},
+    {int(TextureDownscaleSize::Keep), "KEEP", 0, "Keep", "Keep all current texture sizes"},
+    {int(TextureDownscaleSize::Size256), "256", 0, "256", "Resize to a maximum of 256 pixels"},
+    {int(TextureDownscaleSize::Size512), "512", 0, "512", "Resize to a maximum of 512 pixels"},
+    {int(TextureDownscaleSize::Size1024), "1024", 0, "1024", "Resize to a maximum of 1024 pixels"},
+    {int(TextureDownscaleSize::Size2048), "2048", 0, "2048", "Resize to a maximum of 2048 pixels"},
+    {int(TextureDownscaleSize::Size4096), "4096", 0, "4096", "Resize to a maximum of 4096 pixels"},
+    {int(TextureDownscaleSize::Custom), "CUSTOM", 0, "Custom", "Specify a custom size"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_usd_tex_export_mode_items[] = {
-    {USD_TEX_EXPORT_KEEP, "KEEP", 0, "Keep", "Use original location of textures"},
-    {USD_TEX_EXPORT_PRESERVE,
+    {int(TexExportMode::Keep), "KEEP", 0, "Keep", "Use original location of textures"},
+    {int(TexExportMode::Preserve),
      "PRESERVE",
      0,
      "Preserve",
      "Preserve file paths of textures from already imported USD files.\n"
      "Export remaining textures to a 'textures' folder next to the USD file"},
-    {USD_TEX_EXPORT_NEW_PATH,
+    {int(TexExportMode::NewPath),
      "NEW",
      0,
      "New Path",
@@ -172,18 +177,18 @@ const EnumPropertyItem rna_enum_usd_tex_export_mode_items[] = {
     {0, nullptr, 0, nullptr, nullptr}};
 
 const EnumPropertyItem rna_enum_usd_mtl_purpose_items[] = {
-    {USD_MTL_PURPOSE_ALL,
+    {int(MtlPurpose::All),
      "MTL_ALL_PURPOSE",
      0,
      "All Purpose",
      "Attempt to import 'allPurpose' materials."},
-    {USD_MTL_PURPOSE_PREVIEW,
+    {int(MtlPurpose::Preview),
      "MTL_PREVIEW",
      0,
      "Preview",
      "Attempt to import 'preview' materials. "
      "Load 'allPurpose' materials as a fallback"},
-    {USD_MTL_PURPOSE_FULL,
+    {int(MtlPurpose::Full),
      "MTL_FULL",
      0,
      "Full",
@@ -193,22 +198,26 @@ const EnumPropertyItem rna_enum_usd_mtl_purpose_items[] = {
 };
 
 const EnumPropertyItem rna_enum_usd_convert_scene_units_items[] = {
-    {USD_SCENE_UNITS_METERS, "METERS", 0, "Meters", "Scene meters per unit to 1.0"},
-    {USD_SCENE_UNITS_KILOMETERS, "KILOMETERS", 0, "Kilometers", "Scene meters per unit to 1000.0"},
-    {USD_SCENE_UNITS_CENTIMETERS,
+    {int(SceneUnits::Meters), "METERS", 0, "Meters", "Scene meters per unit to 1.0"},
+    {int(SceneUnits::Kilometers),
+     "KILOMETERS",
+     0,
+     "Kilometers",
+     "Scene meters per unit to 1000.0"},
+    {int(SceneUnits::Centimeters),
      "CENTIMETERS",
      0,
      "Centimeters",
      "Scene meters per unit to 0.01"},
-    {USD_SCENE_UNITS_MILLIMETERS,
+    {int(SceneUnits::Millimeters),
      "MILLIMETERS",
      0,
      "Millimeters",
      "Scene meters per unit to 0.001"},
-    {USD_SCENE_UNITS_INCHES, "INCHES", 0, "Inches", "Scene meters per unit to 0.0254"},
-    {USD_SCENE_UNITS_FEET, "FEET", 0, "Feet", "Scene meters per unit to 0.3048"},
-    {USD_SCENE_UNITS_YARDS, "YARDS", 0, "Yards", "Scene meters per unit to 0.9144"},
-    {USD_SCENE_UNITS_CUSTOM,
+    {int(SceneUnits::Inches), "INCHES", 0, "Inches", "Scene meters per unit to 0.0254"},
+    {int(SceneUnits::Feet), "FEET", 0, "Feet", "Scene meters per unit to 0.3048"},
+    {int(SceneUnits::Yards), "YARDS", 0, "Yards", "Scene meters per unit to 0.9144"},
+    {int(SceneUnits::Custom),
      "CUSTOM",
      0,
      "Custom",
@@ -226,30 +235,26 @@ static void free_operator_customdata(wmOperator *op)
 {
   if (op->customdata) {
     USDOperatorOptions *options = static_cast<USDOperatorOptions *>(op->customdata);
-    MEM_freeN(options);
+    MEM_delete(options);
     op->customdata = nullptr;
   }
 }
 
 /* Ensure that the prim_path is not set to
  * the absolute root path '/'. */
-static void process_prim_path(char *prim_path)
+static void process_prim_path(std::string &prim_path)
 {
-  if (prim_path == nullptr || prim_path[0] == '\0') {
+  if (prim_path.empty()) {
     return;
   }
 
-  /* The absolute root "/" path indicates a no-op,
-   * so clear the string. */
-  if (prim_path[0] == '/' && prim_path[1] == '\0') {
-    prim_path[0] = '\0';
+  /* The absolute root "/" path indicates a no-op, so clear the string. */
+  if (prim_path == "/") {
+    prim_path.clear();
   }
-
-  /* If a prim path doesn't start with a "/" it
-   * is invalid when creating the prim. */
-  if (prim_path[0] != '/') {
-    const std::string prim_path_copy = std::string(prim_path);
-    BLI_snprintf(prim_path, FILE_MAX, "/%s", prim_path_copy.c_str());
+  /* If a prim path doesn't start with a "/" it is invalid when creating the prim. */
+  else if (prim_path[0] != '/') {
+    prim_path.insert(0, 1, '/');
   }
 }
 
@@ -257,7 +262,7 @@ static wmOperatorStatus wm_usd_export_invoke(bContext *C,
                                              wmOperator *op,
                                              const wmEvent * /*event*/)
 {
-  USDOperatorOptions *options = MEM_callocN<USDOperatorOptions>("USDOperatorOptions");
+  USDOperatorOptions *options = MEM_new_zeroed<USDOperatorOptions>("USDOperatorOptions");
   options->as_background_job = true;
   op->customdata = options;
 
@@ -276,163 +281,98 @@ static wmOperatorStatus wm_usd_export_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  char filepath[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filepath);
-
-  USDOperatorOptions *options = static_cast<USDOperatorOptions *>(op->customdata);
+  const USDOperatorOptions *options = static_cast<USDOperatorOptions *>(op->customdata);
   const bool as_background_job = (options != nullptr && options->as_background_job);
   free_operator_customdata(op);
 
-  const bool selected_objects_only = RNA_boolean_get(op->ptr, "selected_objects_only");
-  const bool visible_objects_only = RNA_boolean_get(op->ptr, "visible_objects_only");
-  const bool export_animation = RNA_boolean_get(op->ptr, "export_animation");
-  const bool export_hair = RNA_boolean_get(op->ptr, "export_hair");
-  const bool export_uvmaps = RNA_boolean_get(op->ptr, "export_uvmaps");
-  const bool rename_uvmaps = RNA_boolean_get(op->ptr, "rename_uvmaps");
-  const bool export_mesh_colors = RNA_boolean_get(op->ptr, "export_mesh_colors");
-  const bool export_normals = RNA_boolean_get(op->ptr, "export_normals");
-  const bool export_materials = RNA_boolean_get(op->ptr, "export_materials");
-  const eSubdivExportMode export_subdiv = eSubdivExportMode(
-      RNA_enum_get(op->ptr, "export_subdivision"));
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
 
-  const bool export_meshes = RNA_boolean_get(op->ptr, "export_meshes");
-  const bool export_lights = RNA_boolean_get(op->ptr, "export_lights");
-  const bool export_cameras = RNA_boolean_get(op->ptr, "export_cameras");
-  const bool export_curves = RNA_boolean_get(op->ptr, "export_curves");
-  const bool export_points = RNA_boolean_get(op->ptr, "export_points");
-  const bool export_volumes = RNA_boolean_get(op->ptr, "export_volumes");
-
-  const bool use_instancing = RNA_boolean_get(op->ptr, "use_instancing");
-  const bool evaluation_mode = RNA_enum_get(op->ptr, "evaluation_mode");
-
-  const bool generate_preview_surface = RNA_boolean_get(op->ptr, "generate_preview_surface");
-  const bool generate_materialx_network = RNA_boolean_get(op->ptr, "generate_materialx_network");
-  const bool overwrite_textures = RNA_boolean_get(op->ptr, "overwrite_textures");
-  const bool relative_paths = RNA_boolean_get(op->ptr, "relative_paths");
-
-  const bool export_armatures = RNA_boolean_get(op->ptr, "export_armatures");
-  const bool export_shapekeys = RNA_boolean_get(op->ptr, "export_shapekeys");
-  const bool only_deform_bones = RNA_boolean_get(op->ptr, "only_deform_bones");
-
-  const bool export_custom_properties = RNA_boolean_get(op->ptr, "export_custom_properties");
-  const bool author_blender_name = RNA_boolean_get(op->ptr, "author_blender_name");
-
-  const bool triangulate_meshes = RNA_boolean_get(op->ptr, "triangulate_meshes");
-  const int quad_method = RNA_enum_get(op->ptr, "quad_method");
-  const int ngon_method = RNA_enum_get(op->ptr, "ngon_method");
-
-  const bool convert_orientation = RNA_boolean_get(op->ptr, "convert_orientation");
-
-  const int global_forward = RNA_enum_get(op->ptr, "export_global_forward_selection");
-  const int global_up = RNA_enum_get(op->ptr, "export_global_up_selection");
-
-  const bool convert_world_material = RNA_boolean_get(op->ptr, "convert_world_material") &&
-                                      export_lights;
-
-  const eUSDXformOpMode xform_op_mode = eUSDXformOpMode(RNA_enum_get(op->ptr, "xform_op_mode"));
-
-  const eUSDZTextureDownscaleSize usdz_downscale_size = eUSDZTextureDownscaleSize(
-      RNA_enum_get(op->ptr, "usdz_downscale_size"));
-
-  const int usdz_downscale_custom_size = RNA_int_get(op->ptr, "usdz_downscale_custom_size");
-
-  const bool merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
-
-  const bool allow_unicode = RNA_boolean_get(op->ptr, "allow_unicode");
-
-  /* When the texture export settings were moved into an enum this bit
-   * became more involved, but it needs to stick around for API backwards
-   * compatibility until Blender 5.0. */
-
-  const eUSDTexExportMode textures_mode = eUSDTexExportMode(
-      RNA_enum_get(op->ptr, "export_textures_mode"));
-  bool export_textures = RNA_boolean_get(op->ptr, "export_textures");
+  const TexExportMode textures_mode = TexExportMode(RNA_enum_get(op->ptr, "export_textures_mode"));
+  bool export_textures = false;
   bool use_original_paths = false;
 
-  if (!export_textures) {
-    switch (textures_mode) {
-      case eUSDTexExportMode::USD_TEX_EXPORT_PRESERVE:
-        export_textures = false;
-        use_original_paths = true;
-        break;
-      case eUSDTexExportMode::USD_TEX_EXPORT_NEW_PATH:
-        export_textures = true;
-        use_original_paths = false;
-        break;
-      default:
-        use_original_paths = false;
-    }
+  switch (textures_mode) {
+    case TexExportMode::Preserve:
+      export_textures = false;
+      use_original_paths = true;
+      break;
+    case TexExportMode::NewPath:
+      export_textures = true;
+      use_original_paths = false;
+      break;
+    case TexExportMode::Keep:
+      export_textures = false;
+      use_original_paths = false;
+      break;
+    default:
+      BLI_assert_unreachable();
+      break;
   }
 
-  const eUSDSceneUnits convert_scene_units = eUSDSceneUnits(
-      RNA_enum_get(op->ptr, "convert_scene_units"));
-  const float meters_per_unit = RNA_float_get(op->ptr, "meters_per_unit");
-
-  char root_prim_path[FILE_MAX];
-  RNA_string_get(op->ptr, "root_prim_path", root_prim_path);
-  process_prim_path(root_prim_path);
-
-  char custom_properties_namespace[MAX_IDPROP_NAME];
-  RNA_string_get(op->ptr, "custom_properties_namespace", custom_properties_namespace);
-
   USDExportParams params;
-  params.export_animation = export_animation;
-  params.selected_objects_only = selected_objects_only;
-  params.visible_objects_only = visible_objects_only;
+  params.export_animation = RNA_boolean_get(op->ptr, "export_animation");
+  params.incremental_frames = RNA_int_get(op->ptr, "incremental_frames");
+  params.selected_objects_only = RNA_boolean_get(op->ptr, "selected_objects_only");
 
-  params.export_meshes = export_meshes;
-  params.export_lights = export_lights;
-  params.export_cameras = export_cameras;
-  params.export_curves = export_curves;
-  params.export_points = export_points;
-  params.export_volumes = export_volumes;
-  params.export_hair = export_hair;
-  params.export_uvmaps = export_uvmaps;
-  params.rename_uvmaps = rename_uvmaps;
-  params.export_normals = export_normals;
-  params.export_mesh_colors = export_mesh_colors;
-  params.export_materials = export_materials;
+  params.export_meshes = RNA_boolean_get(op->ptr, "export_meshes");
+  params.export_lights = RNA_boolean_get(op->ptr, "export_lights");
+  params.convert_world_material = params.export_lights &&
+                                  RNA_boolean_get(op->ptr, "convert_world_material");
+  params.export_cameras = RNA_boolean_get(op->ptr, "export_cameras");
+  params.export_curves = RNA_boolean_get(op->ptr, "export_curves");
+  params.export_points = RNA_boolean_get(op->ptr, "export_points");
+  params.export_volumes = RNA_boolean_get(op->ptr, "export_volumes");
+  params.export_hair = RNA_boolean_get(op->ptr, "export_hair");
+  params.export_uvmaps = RNA_boolean_get(op->ptr, "export_uvmaps");
+  params.rename_uvmaps = RNA_boolean_get(op->ptr, "rename_uvmaps");
+  params.export_normals = RNA_boolean_get(op->ptr, "export_normals");
+  params.export_mesh_colors = RNA_boolean_get(op->ptr, "export_mesh_colors");
+  params.export_materials = RNA_boolean_get(op->ptr, "export_materials");
 
-  params.export_armatures = export_armatures;
-  params.export_shapekeys = export_shapekeys;
-  params.only_deform_bones = only_deform_bones;
+  params.export_armatures = RNA_boolean_get(op->ptr, "export_armatures");
+  params.export_shapekeys = RNA_boolean_get(op->ptr, "export_shapekeys");
+  params.only_deform_bones = RNA_boolean_get(op->ptr, "only_deform_bones");
 
-  params.convert_world_material = convert_world_material;
+  params.use_instancing = RNA_boolean_get(op->ptr, "use_instancing");
+  params.export_custom_properties = RNA_boolean_get(op->ptr, "export_custom_properties");
+  params.author_blender_name = RNA_boolean_get(op->ptr, "author_blender_name");
+  params.allow_unicode = RNA_boolean_get(op->ptr, "allow_unicode");
 
-  params.use_instancing = use_instancing;
-  params.export_custom_properties = export_custom_properties;
-  params.author_blender_name = author_blender_name;
-  params.allow_unicode = allow_unicode;
+  params.export_subdiv = SubdivExportMode(RNA_enum_get(op->ptr, "export_subdivision"));
+  params.evaluation_mode = eEvaluationMode(RNA_enum_get(op->ptr, "evaluation_mode"));
 
-  params.export_subdiv = export_subdiv;
-  params.evaluation_mode = eEvaluationMode(evaluation_mode);
-
-  params.generate_preview_surface = generate_preview_surface;
-  params.generate_materialx_network = generate_materialx_network;
+  params.generate_preview_surface = RNA_boolean_get(op->ptr, "generate_preview_surface");
+  params.generate_materialx_network = RNA_boolean_get(op->ptr, "generate_materialx_network");
+  params.overwrite_textures = RNA_boolean_get(op->ptr, "overwrite_textures");
+  params.relative_paths = RNA_boolean_get(op->ptr, "relative_paths");
   params.export_textures = export_textures;
-  params.overwrite_textures = overwrite_textures;
-  params.relative_paths = relative_paths;
   params.use_original_paths = use_original_paths;
 
-  params.triangulate_meshes = triangulate_meshes;
-  params.quad_method = quad_method;
-  params.ngon_method = ngon_method;
+  params.triangulate_meshes = RNA_boolean_get(op->ptr, "triangulate_meshes");
+  params.quad_method = RNA_enum_get(op->ptr, "quad_method");
+  params.ngon_method = RNA_enum_get(op->ptr, "ngon_method");
 
-  params.convert_orientation = convert_orientation;
-  params.forward_axis = eIOAxis(global_forward);
-  params.up_axis = eIOAxis(global_up);
-  params.xform_op_mode = xform_op_mode;
+  params.convert_orientation = RNA_boolean_get(op->ptr, "convert_orientation");
+  params.forward_axis = eIOAxis(RNA_enum_get(op->ptr, "export_global_forward_selection"));
+  params.up_axis = eIOAxis(RNA_enum_get(op->ptr, "export_global_up_selection"));
+  params.xform_op_mode = XformOpMode(RNA_enum_get(op->ptr, "xform_op_mode"));
 
-  params.usdz_downscale_size = usdz_downscale_size;
-  params.usdz_downscale_custom_size = usdz_downscale_custom_size;
-  params.convert_scene_units = convert_scene_units;
-  params.custom_meters_per_unit = meters_per_unit;
+  params.usdz_downscale_size = TextureDownscaleSize(RNA_enum_get(op->ptr, "usdz_downscale_size"));
+  params.usdz_downscale_custom_size = RNA_int_get(op->ptr, "usdz_downscale_custom_size");
+  params.convert_scene_units = SceneUnits(RNA_enum_get(op->ptr, "convert_scene_units"));
+  params.custom_meters_per_unit = RNA_float_get(op->ptr, "meters_per_unit");
 
-  params.merge_parent_xform = merge_parent_xform;
+  params.merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
 
-  STRNCPY(params.root_prim_path, root_prim_path);
-  STRNCPY(params.custom_properties_namespace, custom_properties_namespace);
+  params.root_prim_path = RNA_string_get(op->ptr, "root_prim_path");
+  process_prim_path(params.root_prim_path);
+
+  RNA_string_get(op->ptr, "custom_properties_namespace", params.custom_properties_namespace);
   RNA_string_get(op->ptr, "collection", params.collection);
+
+  params.accessibility_label = RNA_string_get(op->ptr, "accessibility_label");
+  params.accessibility_description = RNA_string_get(op->ptr, "accessibility_description");
 
   bool ok = USD_export(C, filepath, &params, as_background_job, op->reports);
 
@@ -441,26 +381,28 @@ static wmOperatorStatus wm_usd_export_exec(bContext *C, wmOperator *op)
 
 static void wm_usd_export_draw(bContext *C, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
   PointerRNA *ptr = op->ptr;
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  if (uiLayout *panel = layout->panel(C, "USD_export_general", false, IFACE_("General"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_export_general", false, IFACE_("General"))) {
+    ui::Layout *col = &panel->column(false);
     col->prop(ptr, "root_prim_path", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    uiLayout *sub = &col->column(true, IFACE_("Include"));
+    ui::Layout *sub = &col->column(true, IFACE_("Include"));
     if (CTX_wm_space_file(C)) {
       sub->prop(ptr, "selected_objects_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      sub->prop(ptr, "visible_objects_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     }
     sub->prop(ptr, "export_animation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    if (RNA_boolean_get(ptr, "export_animation")) {
+      sub->prop(ptr, "incremental_frames", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    }
 
     sub = &col->column(true, IFACE_("Blender Data"));
     sub->prop(ptr, "export_custom_properties", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    uiLayout *props_col = &sub->column(true);
+    ui::Layout *props_col = &sub->column(true);
     props_col->prop(ptr, "custom_properties_namespace", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     props_col->prop(ptr, "author_blender_name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     props_col->active_set(RNA_boolean_get(op->ptr, "export_custom_properties"));
@@ -477,7 +419,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
     }
 
     col->prop(ptr, "convert_scene_units", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    if (eUSDSceneUnits(RNA_enum_get(ptr, "convert_scene_units")) == USD_SCENE_UNITS_CUSTOM) {
+    if (SceneUnits(RNA_enum_get(ptr, "convert_scene_units")) == SceneUnits::Custom) {
       col->prop(ptr, "meters_per_unit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     }
 
@@ -487,85 +429,95 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
     col->prop(ptr, "evaluation_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_export_types", false, IFACE_("Object Types"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "export_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_lights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "USD_export_types", false, IFACE_("Object Types"))) {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "export_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_lights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    uiLayout *row = &col->row(true);
-    row->prop(ptr, "convert_world_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &row = col.row(true);
+    row.prop(ptr, "convert_world_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     const bool export_lights = RNA_boolean_get(ptr, "export_lights");
-    row->active_set(export_lights);
+    row.active_set(export_lights);
 
-    col->prop(ptr, "export_cameras", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_curves", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_points", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_volumes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_hair", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_cameras", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_curves", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_points", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_volumes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_hair", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_export_geometry", false, IFACE_("Geometry"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "export_uvmaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "rename_uvmaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "USD_export_geometry", false, IFACE_("Geometry"))) {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "export_uvmaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "rename_uvmaps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    col->prop(ptr, "merge_parent_xform", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "triangulate_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "merge_parent_xform", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "triangulate_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     if (RNA_boolean_get(ptr, "triangulate_meshes")) {
-      col->prop(ptr, "quad_method", UI_ITEM_NONE, IFACE_("Method Quads"), ICON_NONE);
-      col->prop(ptr, "ngon_method", UI_ITEM_NONE, IFACE_("Polygons"), ICON_NONE);
+      col.prop(ptr, "quad_method", UI_ITEM_NONE, IFACE_("Method Quads"), ICON_NONE);
+      col.prop(ptr, "ngon_method", UI_ITEM_NONE, IFACE_("Polygons"), ICON_NONE);
     }
 
-    col->prop(ptr, "export_subdivision", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_subdivision", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_export_rigging", true, IFACE_("Rigging"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_export_rigging", true, IFACE_("Rigging"))) {
+    ui::Layout &col = panel->column(false);
 
-    col->prop(ptr, "export_shapekeys", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "export_armatures", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_shapekeys", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "export_armatures", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    uiLayout *row = &col->row(true);
-    row->prop(ptr, "only_deform_bones", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    row->active_set(RNA_boolean_get(ptr, "export_armatures"));
+    ui::Layout &row = col.row(true);
+    row.prop(ptr, "only_deform_bones", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    row.active_set(RNA_boolean_get(ptr, "export_armatures"));
   }
 
   {
-    PanelLayout panel = layout->panel(C, "USD_export_materials", true);
-    uiLayoutSetPropSep(panel.header, false);
+    ui::PanelLayout panel = layout.panel(C, "USD_export_materials", true);
+    panel.header->use_property_split_set(false);
     panel.header->prop(ptr, "export_materials", UI_ITEM_NONE, "", ICON_NONE);
     panel.header->label(IFACE_("Materials"), ICON_NONE);
     if (panel.body) {
       const bool export_materials = RNA_boolean_get(ptr, "export_materials");
       panel.body->active_set(export_materials);
 
-      uiLayout *col = &panel.body->column(false);
+      ui::Layout *col = &panel.body->column(false);
       col->prop(ptr, "generate_preview_surface", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       col->prop(ptr, "generate_materialx_network", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      col = &panel.body->column(true);
-      uiLayoutSetPropSep(col, true);
 
+      col = &panel.body->column(true);
+      col->use_property_split_set(true);
       col->prop(ptr, "export_textures_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-      const eUSDTexExportMode textures_mode = eUSDTexExportMode(
+      const TexExportMode textures_mode = TexExportMode(
           RNA_enum_get(op->ptr, "export_textures_mode"));
 
-      uiLayout *col2 = &col->column(true);
-      uiLayoutSetPropSep(col2, true);
-      uiLayoutSetEnabled(col2, textures_mode == USD_TEX_EXPORT_NEW_PATH);
-      col2->prop(ptr, "overwrite_textures", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      col2->prop(ptr, "usdz_downscale_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      if (RNA_enum_get(ptr, "usdz_downscale_size") == USD_TEXTURE_SIZE_CUSTOM) {
-        col2->prop(ptr, "usdz_downscale_custom_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      ui::Layout &sub_col = col->column(true);
+      sub_col.use_property_split_set(true);
+      sub_col.enabled_set(textures_mode == TexExportMode::NewPath);
+      sub_col.prop(ptr, "overwrite_textures", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      sub_col.prop(ptr, "usdz_downscale_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      if (TextureDownscaleSize(RNA_enum_get(ptr, "usdz_downscale_size")) ==
+          TextureDownscaleSize::Custom)
+      {
+        sub_col.prop(ptr, "usdz_downscale_custom_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       }
     }
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_export_experimental", true, IFACE_("Experimental")))
+  if (ui::Layout *panel = layout.panel(
+          C, "USD_export_accessibility", true, IFACE_("Accessibility")))
   {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "use_instancing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "accessibility_label", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "accessibility_description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
+  if (ui::Layout *panel = layout.panel(C, "USD_export_experimental", true, IFACE_("Experimental")))
+  {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "use_instancing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -639,14 +591,7 @@ void WM_OT_usd_export(wmOperatorType *ot)
                   "Only export selected objects. Unselected parents of selected objects are "
                   "exported as empty transform");
 
-  RNA_def_boolean(ot->srna,
-                  "visible_objects_only",
-                  true,
-                  "Visible Only",
-                  "Only export visible objects. Invisible parents of exported objects are "
-                  "exported as empty transforms");
-
-  prop = RNA_def_string(ot->srna, "collection", nullptr, MAX_IDPROP_NAME, "Collection", nullptr);
+  prop = RNA_def_string(ot->srna, "collection", nullptr, MAX_ID_NAME - 2, "Collection", nullptr);
   RNA_def_property_flag(prop, PROP_HIDDEN);
 
   RNA_def_boolean(
@@ -655,6 +600,18 @@ void WM_OT_usd_export(wmOperatorType *ot)
       false,
       "Animation",
       "Export all frames in the render frame range, rather than only the current frame");
+  RNA_def_int(ot->srna,
+              "incremental_frames",
+              0,
+              0,
+              INT_MAX,
+              "Incremental Save",
+              "Incrementally save after the specified number of frames to reduce peak memory "
+              "usage. Incremental saves can result in longer export times and potential issues "
+              "with some file synchronization services. Zero disables incremental save",
+              0,
+              INT_MAX);
+
   RNA_def_boolean(
       ot->srna, "export_hair", false, "Hair", "Export hair particle systems as USD curves");
   RNA_def_boolean(
@@ -684,7 +641,7 @@ void WM_OT_usd_export(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "export_subdivision",
                rna_enum_usd_export_subdiv_mode_items,
-               USD_SUBDIV_BEST_MATCH,
+               int(SubdivExportMode::Match),
                "Subdivision",
                "Choose how subdivision modifiers will be mapped to the USD subdivision scheme "
                "during export");
@@ -751,17 +708,10 @@ void WM_OT_usd_export(wmOperatorType *ot)
       ot->srna, "export_global_up_selection", io_transform_axis, IO_AXIS_Y, "Up Axis", "");
   RNA_def_property_update_runtime(prop, up_axis_update);
 
-  RNA_def_boolean(ot->srna,
-                  "export_textures",
-                  false,
-                  "Export Textures",
-                  "If exporting materials, export textures referenced by material nodes "
-                  "to a 'textures' directory in the same directory as the USD file");
-
   RNA_def_enum(ot->srna,
                "export_textures_mode",
                rna_enum_usd_tex_export_mode_items,
-               USD_TEX_EXPORT_NEW_PATH,
+               int(TexExportMode::NewPath),
                "Export Textures",
                "Texture export method");
 
@@ -781,14 +731,14 @@ void WM_OT_usd_export(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "xform_op_mode",
                rna_enum_usd_xform_op_mode_items,
-               USD_XFORM_OP_TRS,
+               int(XformOpMode::TRS),
                "Xform Ops",
                "The type of transform operators to write");
 
   RNA_def_string(ot->srna,
                  "root_prim_path",
                  "/root",
-                 FILE_MAX,
+                 0,
                  "Root Prim",
                  "If set, add a transform primitive with the given path to the stage "
                  "as the parent of all exported data");
@@ -810,6 +760,22 @@ void WM_OT_usd_export(wmOperatorType *ot)
                  "to blender object and data names which are always exported in the "
                  "'userProperties:blender' namespace");
 
+  prop = RNA_def_string(ot->srna,
+                        "accessibility_label",
+                        nullptr,
+                        0,
+                        "Label",
+                        "Set the accessibility label for the exported stage's default prim");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_string(ot->srna,
+                        "accessibility_description",
+                        nullptr,
+                        0,
+                        "Description",
+                        "Set the accessibility description for the exported stage's default prim");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
   RNA_def_boolean(ot->srna,
                   "author_blender_name",
                   true,
@@ -829,7 +795,7 @@ void WM_OT_usd_export(wmOperatorType *ot)
   RNA_def_boolean(
       ot->srna,
       "allow_unicode",
-      false,
+      true,
       "Allow Unicode",
       "Preserve UTF-8 encoded characters when writing USD prim and property names "
       "(requires software utilizing USD 24.03 or greater when opening the resulting files)");
@@ -894,7 +860,7 @@ void WM_OT_usd_export(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "convert_scene_units",
                rna_enum_usd_convert_scene_units_items,
-               eUSDSceneUnits::USD_SCENE_UNITS_METERS,
+               int(SceneUnits::Meters),
                "Units",
                "Set the USD Stage meters per unit to the chosen measurement, or a custom value");
 
@@ -913,11 +879,11 @@ void WM_OT_usd_export(wmOperatorType *ot)
 
 static wmOperatorStatus wm_usd_import_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  USDOperatorOptions *options = MEM_callocN<USDOperatorOptions>("USDOperatorOptions");
+  USDOperatorOptions *options = MEM_new_zeroed<USDOperatorOptions>("USDOperatorOptions");
   options->as_background_job = true;
   op->customdata = options;
 
-  return blender::ed::io::filesel_drop_import_invoke(C, op, event);
+  return ed::io::filesel_drop_import_invoke(C, op, event);
 }
 
 static wmOperatorStatus wm_usd_import_exec(bContext *C, wmOperator *op)
@@ -928,24 +894,18 @@ static wmOperatorStatus wm_usd_import_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  char filepath[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filepath);
-
-  USDOperatorOptions *options = static_cast<USDOperatorOptions *>(op->customdata);
+  const USDOperatorOptions *options = static_cast<USDOperatorOptions *>(op->customdata);
   const bool as_background_job = (options != nullptr && options->as_background_job);
   free_operator_customdata(op);
 
-  const float scale = RNA_float_get(op->ptr, "scale");
-  const float light_intensity_scale = RNA_float_get(op->ptr, "light_intensity_scale");
-  const bool apply_unit_conversion_scale = RNA_boolean_get(op->ptr, "apply_unit_conversion_scale");
-
-  const bool set_frame_range = RNA_boolean_get(op->ptr, "set_frame_range");
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
 
   const bool read_mesh_uvs = RNA_boolean_get(op->ptr, "read_mesh_uvs");
   const bool read_mesh_colors = RNA_boolean_get(op->ptr, "read_mesh_colors");
   const bool read_mesh_attributes = RNA_boolean_get(op->ptr, "read_mesh_attributes");
 
-  char mesh_read_flag = MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY;
+  MeshSeqCacheModifierReadFlag mesh_read_flag = MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY;
   if (read_mesh_uvs) {
     mesh_read_flag |= MOD_MESHSEQ_READ_UV;
   }
@@ -956,121 +916,68 @@ static wmOperatorStatus wm_usd_import_exec(bContext *C, wmOperator *op)
     mesh_read_flag |= MOD_MESHSEQ_READ_ATTRIBUTES;
   }
 
-  const bool import_cameras = RNA_boolean_get(op->ptr, "import_cameras");
-  const bool import_curves = RNA_boolean_get(op->ptr, "import_curves");
-  const bool import_lights = RNA_boolean_get(op->ptr, "import_lights");
-  const bool import_materials = RNA_boolean_get(op->ptr, "import_materials");
-  const bool import_meshes = RNA_boolean_get(op->ptr, "import_meshes");
-  const bool import_volumes = RNA_boolean_get(op->ptr, "import_volumes");
-  const bool import_shapes = RNA_boolean_get(op->ptr, "import_shapes");
-  const bool import_skeletons = RNA_boolean_get(op->ptr, "import_skeletons");
-  const bool import_blendshapes = RNA_boolean_get(op->ptr, "import_blendshapes");
-  const bool import_points = RNA_boolean_get(op->ptr, "import_points");
-
-  const bool import_subdiv = RNA_boolean_get(op->ptr, "import_subdiv");
-
-  const bool support_scene_instancing = RNA_boolean_get(op->ptr, "support_scene_instancing");
-
-  const bool import_visible_only = RNA_boolean_get(op->ptr, "import_visible_only");
-
-  const bool import_defined_only = RNA_boolean_get(op->ptr, "import_defined_only");
-
-  const bool create_collection = RNA_boolean_get(op->ptr, "create_collection");
-
-  char *prim_path_mask = RNA_string_get_alloc(op->ptr, "prim_path_mask", nullptr, 0, nullptr);
-
-  const bool import_guide = RNA_boolean_get(op->ptr, "import_guide");
-  const bool import_proxy = RNA_boolean_get(op->ptr, "import_proxy");
-  const bool import_render = RNA_boolean_get(op->ptr, "import_render");
-
-  const bool import_all_materials = RNA_boolean_get(op->ptr, "import_all_materials");
-
-  const bool import_usd_preview = RNA_boolean_get(op->ptr, "import_usd_preview");
-  const bool set_material_blend = RNA_boolean_get(op->ptr, "set_material_blend");
-
-  const eUSDMtlPurpose mtl_purpose = eUSDMtlPurpose(RNA_enum_get(op->ptr, "mtl_purpose"));
-  const eUSDMtlNameCollisionMode mtl_name_collision_mode = eUSDMtlNameCollisionMode(
-      RNA_enum_get(op->ptr, "mtl_name_collision_mode"));
-
-  const eUSDAttrImportMode attr_import_mode = eUSDAttrImportMode(
-      RNA_enum_get(op->ptr, "attr_import_mode"));
-
-  const bool validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
-
-  const bool create_world_material = RNA_boolean_get(op->ptr, "create_world_material") &&
-                                     import_lights;
-
-  const bool merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
-
-  /* TODO(makowalski): Add support for sequences. */
-  const bool is_sequence = false;
-  int offset = 0;
-  int sequence_len = 1;
-
-  const eUSDTexImportMode import_textures_mode = eUSDTexImportMode(
-      RNA_enum_get(op->ptr, "import_textures_mode"));
-
-  char import_textures_dir[FILE_MAXDIR];
-  RNA_string_get(op->ptr, "import_textures_dir", import_textures_dir);
-
-  const eUSDTexNameCollisionMode tex_name_collision_mode = eUSDTexNameCollisionMode(
-      RNA_enum_get(op->ptr, "tex_name_collision_mode"));
-
   USDImportParams params{};
-  params.prim_path_mask = prim_path_mask;
-  params.scale = scale;
-  params.light_intensity_scale = light_intensity_scale;
-  params.apply_unit_conversion_scale = apply_unit_conversion_scale;
+  params.scale = RNA_float_get(op->ptr, "scale");
+  params.light_intensity_scale = RNA_float_get(op->ptr, "light_intensity_scale");
+  params.apply_unit_conversion_scale = RNA_boolean_get(op->ptr, "apply_unit_conversion_scale");
 
   params.mesh_read_flag = mesh_read_flag;
-  params.set_frame_range = set_frame_range;
-  params.is_sequence = is_sequence;
-  params.sequence_len = sequence_len;
-  params.offset = offset;
+  params.set_frame_range = RNA_boolean_get(op->ptr, "set_frame_range");
 
-  params.import_visible_only = import_visible_only;
-  params.import_defined_only = import_defined_only;
+  /* TODO(makowalski): Add support for sequences. */
+  params.is_sequence = false;
+  params.sequence_len = 1;
+  params.offset = 0;
+  params.relative_path = RNA_boolean_get(op->ptr, "relative_path");
 
-  params.import_cameras = import_cameras;
-  params.import_curves = import_curves;
-  params.import_lights = import_lights;
-  params.import_materials = import_materials;
-  params.import_all_materials = import_all_materials;
-  params.import_meshes = import_meshes;
-  params.import_points = import_points;
-  params.import_subdiv = import_subdiv;
-  params.import_volumes = import_volumes;
+  params.import_visible_only = RNA_boolean_get(op->ptr, "import_visible_only");
+  params.import_defined_only = RNA_boolean_get(op->ptr, "import_defined_only");
 
-  params.create_collection = create_collection;
-  params.create_world_material = create_world_material;
-  params.support_scene_instancing = support_scene_instancing;
+  params.import_cameras = RNA_boolean_get(op->ptr, "import_cameras");
+  params.import_curves = RNA_boolean_get(op->ptr, "import_curves");
+  params.import_lights = RNA_boolean_get(op->ptr, "import_lights");
+  params.create_world_material = params.import_lights &&
+                                 RNA_boolean_get(op->ptr, "create_world_material");
+  params.import_materials = RNA_boolean_get(op->ptr, "import_materials");
+  params.import_all_materials = RNA_boolean_get(op->ptr, "import_all_materials");
+  params.import_meshes = RNA_boolean_get(op->ptr, "import_meshes");
+  params.import_points = RNA_boolean_get(op->ptr, "import_points");
+  params.import_subdivision = RNA_boolean_get(op->ptr, "import_subdivision");
+  params.import_volumes = RNA_boolean_get(op->ptr, "import_volumes");
 
-  params.import_shapes = import_shapes;
-  params.import_skeletons = import_skeletons;
-  params.import_blendshapes = import_blendshapes;
+  params.create_collection = RNA_boolean_get(op->ptr, "create_collection");
+  params.support_scene_instancing = RNA_boolean_get(op->ptr, "support_scene_instancing");
 
-  params.validate_meshes = validate_meshes;
-  params.merge_parent_xform = merge_parent_xform;
+  params.import_shapes = RNA_boolean_get(op->ptr, "import_shapes");
+  params.import_skeletons = RNA_boolean_get(op->ptr, "import_skeletons");
+  params.import_blendshapes = RNA_boolean_get(op->ptr, "import_blendshapes");
 
-  params.import_guide = import_guide;
-  params.import_proxy = import_proxy;
-  params.import_render = import_render;
+  params.validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
+  params.merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
 
-  params.import_usd_preview = import_usd_preview;
-  params.set_material_blend = set_material_blend;
-  params.mtl_purpose = mtl_purpose;
-  params.mtl_name_collision_mode = mtl_name_collision_mode;
-  params.import_textures_mode = import_textures_mode;
-  params.tex_name_collision_mode = tex_name_collision_mode;
+  params.import_guide = RNA_boolean_get(op->ptr, "import_guide");
+  params.import_proxy = RNA_boolean_get(op->ptr, "import_proxy");
+  params.import_render = RNA_boolean_get(op->ptr, "import_render");
 
-  params.attr_import_mode = attr_import_mode;
+  params.import_usd_preview = RNA_boolean_get(op->ptr, "import_usd_preview");
+  params.set_material_blend = RNA_boolean_get(op->ptr, "set_material_blend");
+  params.mtl_purpose = MtlPurpose(RNA_enum_get(op->ptr, "mtl_purpose"));
+  params.mtl_name_collision_mode = MtlNameCollisionMode(
+      RNA_enum_get(op->ptr, "mtl_name_collision_mode"));
+  params.import_textures_mode = TexImportMode(RNA_enum_get(op->ptr, "import_textures_mode"));
+  params.tex_name_collision_mode = TexNameCollisionMode(
+      RNA_enum_get(op->ptr, "tex_name_collision_mode"));
 
-  STRNCPY(params.import_textures_dir, import_textures_dir);
+  params.property_import_mode = PropertyImportMode(RNA_enum_get(op->ptr, "property_import_mode"));
+
+  params.prim_path_mask = RNA_string_get(op->ptr, "prim_path_mask");
+
+  RNA_string_get(op->ptr, "import_textures_dir", params.import_textures_dir);
 
   /* Switch out of edit mode to avoid being stuck in it (#54326). */
-  Object *obedit = CTX_data_edit_object(C);
+  const Object *obedit = CTX_data_edit_object(C);
   if (obedit) {
-    blender::ed::object::mode_set(C, OB_MODE_EDIT);
+    ed::object::mode_set(C, OB_MODE_EDIT);
   }
 
   const bool ok = USD_import(C, filepath, &params, as_background_job, op->reports);
@@ -1085,20 +992,20 @@ static void wm_usd_import_cancel(bContext * /*C*/, wmOperator *op)
 
 static void wm_usd_import_draw(bContext *C, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
   PointerRNA *ptr = op->ptr;
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_general", false, IFACE_("General"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_general", false, IFACE_("General"))) {
+    ui::Layout *col = &panel->column(false);
 
     col->prop(ptr, "prim_path_mask", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    uiLayout *sub = &col->column(true, IFACE_("Include"));
-    sub->prop(ptr, "import_visible_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    sub->prop(ptr, "import_defined_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &sub = col->column(true, IFACE_("Include"));
+    sub.prop(ptr, "import_visible_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    sub.prop(ptr, "import_defined_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
     col = &panel->column(false);
     col->prop(ptr, "set_frame_range", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -1108,86 +1015,87 @@ static void wm_usd_import_draw(bContext *C, wmOperator *op)
     col->prop(ptr, "apply_unit_conversion_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "light_intensity_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "attr_import_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col->prop(ptr, "property_import_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_types", false, IFACE_("Object Types"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "import_cameras", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_curves", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_lights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_types", false, IFACE_("Object Types"))) {
+    ui::Layout &obj_col = panel->column(false);
+    obj_col.prop(ptr, "import_cameras", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_curves", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_lights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    uiLayout *row = &col->row(true);
-    row->prop(ptr, "create_world_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &row = obj_col.row(true);
+    row.prop(ptr, "create_world_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     const bool import_lights = RNA_boolean_get(ptr, "import_lights");
-    row->active_set(import_lights);
+    row.active_set(import_lights);
 
-    col->prop(ptr, "import_materials", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_volumes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_points", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_shapes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_materials", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_volumes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_points", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    obj_col.prop(ptr, "import_shapes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    col = &panel->column(true, IFACE_("Display Purpose"));
-    col->prop(ptr, "import_render", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_proxy", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_guide", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &disp_col = panel->column(true, IFACE_("Display Purpose"));
+    disp_col.prop(ptr, "import_render", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    disp_col.prop(ptr, "import_proxy", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    disp_col.prop(ptr, "import_guide", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-    col = &panel->column(true, IFACE_("Material Purpose"));
-    col->prop(ptr, "mtl_purpose", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &mtl_col = panel->column(true, IFACE_("Material Purpose"));
+    mtl_col.prop(ptr, "mtl_purpose", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_geometry", true, IFACE_("Geometry"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_geometry", true, IFACE_("Geometry"))) {
+    ui::Layout *col = &panel->column(false);
     col->prop(ptr, "read_mesh_uvs", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "read_mesh_colors", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "read_mesh_attributes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_subdiv", UI_ITEM_NONE, IFACE_("Subdivision"), ICON_NONE);
+    col->prop(ptr, "import_subdivision", UI_ITEM_NONE, IFACE_("Subdivision"), ICON_NONE);
 
     col = &panel->column(false);
     col->prop(ptr, "validate_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "merge_parent_xform", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_rigging", true, IFACE_("Rigging"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "import_blendshapes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_skeletons", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_rigging", true, IFACE_("Rigging"))) {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "import_blendshapes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "import_skeletons", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_material", true, IFACE_("Materials"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_material", true, IFACE_("Materials"))) {
+    ui::Layout &col = panel->column(false);
 
-    col->prop(ptr, "import_all_materials", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_usd_preview", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    uiLayoutSetEnabled(col, RNA_boolean_get(ptr, "import_materials"));
+    col.prop(ptr, "import_all_materials", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "import_usd_preview", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.enabled_set(RNA_boolean_get(ptr, "import_materials"));
 
-    uiLayout *row = &col->row(true);
-    row->prop(ptr, "set_material_blend", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    uiLayoutSetEnabled(row, RNA_boolean_get(ptr, "import_usd_preview"));
-    col->prop(ptr, "mtl_name_collision_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &row = col.row(true);
+    row.prop(ptr, "set_material_blend", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    row.enabled_set(RNA_boolean_get(ptr, "import_usd_preview"));
+    col.prop(ptr, "mtl_name_collision_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "USD_import_texture", true, IFACE_("Textures"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "USD_import_texture", true, IFACE_("Textures"))) {
+    ui::Layout &col = panel->column(false);
 
-    col->prop(ptr, "import_textures_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    bool copy_textures = RNA_enum_get(op->ptr, "import_textures_mode") == USD_TEX_IMPORT_COPY;
+    col.prop(ptr, "import_textures_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    const bool copy_textures = TexImportMode(RNA_enum_get(op->ptr, "import_textures_mode")) ==
+                               TexImportMode::Copy;
 
-    uiLayout *row = &col->row(true);
+    ui::Layout *row = &col.row(true);
     row->prop(ptr, "import_textures_dir", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    uiLayoutSetEnabled(row, copy_textures);
-    row = &col->row(true);
+    row->enabled_set(copy_textures);
+    row = &col.row(true);
     row->prop(ptr, "tex_name_collision_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    uiLayoutSetEnabled(row, copy_textures);
-    uiLayoutSetEnabled(col, RNA_boolean_get(ptr, "import_materials"));
+    row->enabled_set(copy_textures);
+    col.enabled_set(RNA_boolean_get(ptr, "import_materials"));
   }
 
-  if (uiLayout *panel = layout->panel(
+  if (ui::Layout *panel = layout.panel(
           C, "USD_import_instancing", true, IFACE_("Particles and Instancing")))
   {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "support_scene_instancing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "support_scene_instancing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -1245,7 +1153,7 @@ void WM_OT_usd_import(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "import_points", true, "Point Clouds", "");
 
   RNA_def_boolean(ot->srna,
-                  "import_subdiv",
+                  "import_subdivision",
                   false,
                   "Import Subdivision Scheme",
                   "Create subdivision surface modifiers based on the USD "
@@ -1331,7 +1239,7 @@ void WM_OT_usd_import(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "mtl_purpose",
                rna_enum_usd_mtl_purpose_items,
-               USD_MTL_PURPOSE_FULL,
+               int(MtlPurpose::Full),
                "Material Purpose",
                "Attempt to import materials with the given purpose. "
                "If no material with this purpose is bound to the primitive, "
@@ -1341,14 +1249,14 @@ void WM_OT_usd_import(wmOperatorType *ot)
       ot->srna,
       "mtl_name_collision_mode",
       rna_enum_usd_mtl_name_collision_mode_items,
-      USD_MTL_NAME_COLLISION_MAKE_UNIQUE,
+      int(MtlNameCollisionMode::MakeUnique),
       "Material Name Collision",
       "Behavior when the name of an imported material conflicts with an existing material");
 
   RNA_def_enum(ot->srna,
                "import_textures_mode",
                rna_enum_usd_tex_import_mode_items,
-               USD_TEX_IMPORT_PACK,
+               int(TexImportMode::Pack),
                "Import Textures",
                "Behavior when importing textures from a USDZ archive");
 
@@ -1363,14 +1271,14 @@ void WM_OT_usd_import(wmOperatorType *ot)
       ot->srna,
       "tex_name_collision_mode",
       rna_enum_usd_tex_name_collision_mode_items,
-      USD_TEX_NAME_COLLISION_USE_EXISTING,
+      int(TexNameCollisionMode::UseExisting),
       "File Name Collision",
       "Behavior when the name of an imported texture file conflicts with an existing file");
 
   RNA_def_enum(ot->srna,
-               "attr_import_mode",
-               rna_enum_usd_attr_import_mode_items,
-               USD_ATTR_IMPORT_ALL,
+               "property_import_mode",
+               rna_enum_usd_property_import_mode_items,
+               int(PropertyImportMode::All),
                "Custom Properties",
                "Behavior when importing USD attributes as Blender custom properties");
 
@@ -1411,18 +1319,19 @@ void WM_OT_usd_import(wmOperatorType *ot)
       "This scaling is applied in addition to the value specified in the Scale option");
 }
 
-namespace blender::ed::io {
+namespace ed::io {
 void usd_file_handler_add()
 {
-  auto fh = std::make_unique<blender::bke::FileHandlerType>();
-  STRNCPY(fh->idname, "IO_FH_usd");
-  STRNCPY(fh->import_operator, "WM_OT_usd_import");
-  STRNCPY(fh->export_operator, "WM_OT_usd_export");
-  STRNCPY(fh->label, "Universal Scene Description");
-  STRNCPY(fh->file_extensions_str, ".usd;.usda;.usdc;.usdz");
+  auto fh = std::make_unique<bke::FileHandlerType>();
+  STRNCPY_UTF8(fh->idname, "IO_FH_usd");
+  STRNCPY_UTF8(fh->import_operator, "WM_OT_usd_import");
+  STRNCPY_UTF8(fh->export_operator, "WM_OT_usd_export");
+  STRNCPY_UTF8(fh->label, "Universal Scene Description");
+  STRNCPY_UTF8(fh->file_extensions_str, ".usd;.usda;.usdc;.usdz");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));
 }
-}  // namespace blender::ed::io
+}  // namespace ed::io
+}  // namespace blender
 
 #endif /* WITH_USD */

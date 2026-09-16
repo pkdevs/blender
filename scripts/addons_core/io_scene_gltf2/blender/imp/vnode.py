@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import bpy
+from itertools import chain
 from mathutils import Vector, Quaternion, Matrix
 from ...io.imp.gltf2_io_binary import BinaryData
 from ..com.gltf2_blender_math import scale_rot_swap_matrix, nearby_signed_perm_matrix
@@ -138,7 +139,7 @@ def init_vnodes(gltf):
             add_nodes_to_scene(idx_scene, child)
 
     for idx_scene, scene in enumerate(gltf.data.scenes or []):
-        for node in scene.nodes:
+        for node in scene.nodes or []:
             add_nodes_to_scene(idx_scene, node)
 
     # Create a map of all scene / blender collections
@@ -149,19 +150,18 @@ def init_vnodes(gltf):
     # Create needed scenes
     for idx_scene, scene in enumerate(gltf.data.scenes or []):
         # Create a new scene for all not default scenes
-        if idx_scene != gltf.data.scene:
+        if idx_scene != (gltf.data.scene or 0):
             new_scene = bpy.data.scenes.new(name=scene.name or "Scene %d" % idx_scene)
             gltf.blender_scenes[idx_scene] = new_scene
         else:
             gltf.blender_scenes[idx_scene] = bpy.context.scene
 
-
     # If we have only 1 scene, we can use the active collection
     # If we have multiple scenes, we create a collection for each scene (as child of active collection)
     # And if some nodes are orphan, we create a collection for them too
-    if len(gltf.data.scenes) == 1:
-        gltf.blender_collections[gltf.data.scene] = bpy.context.collection
-    elif len(gltf.data.scenes) > 1:
+    if len(gltf.data.scenes or []) == 1:
+        gltf.blender_collections[gltf.data.scene or 0] = bpy.context.collection
+    elif len(gltf.data.scenes or []) > 1:
         for idx_scene, scene in enumerate(gltf.data.scenes or []):
             if gltf.import_settings['import_scene_as_collection'] is True:
                 # Create a new collection for the scene
@@ -175,8 +175,7 @@ def init_vnodes(gltf):
                 if idx_scene == gltf.data.scene:
                     gltf.blender_collections[idx_scene] = gltf.active_collection
                 # No collection creation, so no linking
-                # Link between glTF scence and blender scene is already done
-
+                # Link between glTF scene and blender scene is already done
 
     # Check if we have orphan nodes
     orphan_nodes = [node for node in gltf.vnodes if len(gltf.vnodes[node].scenes) == 0]
@@ -187,7 +186,6 @@ def init_vnodes(gltf):
         gltf.active_collection.children.link(orphan_collection)
         # Add the collection to the map
         gltf.blender_collections[None] = orphan_collection
-
 
     # Inserting a root node will simplify things.
     roots = [id for id in gltf.vnodes if gltf.vnodes[id].parent is None]
@@ -200,15 +198,16 @@ def init_vnodes(gltf):
 
 
 def manage_gpu_instancing(gltf, vnode, i, ext, mesh_id):
+    attrs = ext.get('attributes', {})
 
-    trans_list = BinaryData.get_data_from_accessor(gltf, ext['attributes'].get('TRANSLATION', None)) \
-        if ext['attributes'].get('TRANSLATION', None) is not None else None
+    trans_list = BinaryData.get_data_from_accessor(gltf, attrs.get('TRANSLATION', None)) \
+        if attrs.get('TRANSLATION', None) is not None else None
 
-    rot_list = BinaryData.get_data_from_accessor(gltf, ext['attributes'].get('ROTATION', None)) \
-        if ext['attributes'].get('ROTATION', None) is not None else None
+    rot_list = BinaryData.get_data_from_accessor(gltf, attrs.get('ROTATION', None)) \
+        if attrs.get('ROTATION', None) is not None else None
 
-    scale_list = BinaryData.get_data_from_accessor(gltf, ext['attributes'].get('SCALE', None)) \
-        if ext['attributes'].get('SCALE', None) is not None else None
+    scale_list = BinaryData.get_data_from_accessor(gltf, attrs.get('SCALE', None)) \
+        if attrs.get('SCALE', None) is not None else None
 
     # Retrieve the first available attribute to get the number of children
     val = next((elem for elem in [
@@ -242,6 +241,7 @@ def manage_gpu_instancing(gltf, vnode, i, ext, mesh_id):
         inst_vnode.children = []
         inst_vnode.base_trs = get_inst_trs(gltf, trans_list[inst], rot_list[inst], scale_list[inst])
         inst_vnode.mesh_idx = mesh_id
+        # Do not set scenes here, this will be handle later by recursive add_nodes_to_scene
 
         vnode.children.append(inst_id)
 
@@ -283,6 +283,13 @@ def mark_bones_and_armas(gltf):
             gltf.vnodes[arma_id].type = VNode.Object
             gltf.vnodes[arma_id].is_arma = True
             gltf.vnodes[arma_id].arma_name = skin.name or 'Armature'
+            # Because the dummy root node is no more an dummy node, but a real armature object,
+            # We need to set the scenes on the vnode
+            gltf.vnodes[arma_id].scenes = list(
+                set(chain.from_iterable(
+                    gltf.vnodes[joint].scenes for joint in skin.joints
+                ))
+            )
 
         for joint in skin.joints:
             while joint != arma_id:
@@ -434,6 +441,7 @@ def fixup_multitype_nodes(gltf):
                 gltf.vnodes[new_id] = VNode()
                 gltf.vnodes[new_id].mesh_node_idx = vnode.mesh_node_idx
                 gltf.vnodes[new_id].parent = id
+                gltf.vnodes[new_id].scenes = vnode.scenes
                 vnode.children.append(new_id)
                 vnode.mesh_node_idx = None
             needs_move = True
@@ -444,6 +452,7 @@ def fixup_multitype_nodes(gltf):
                 gltf.vnodes[new_id] = VNode()
                 gltf.vnodes[new_id].camera_node_idx = vnode.camera_node_idx
                 gltf.vnodes[new_id].parent = id
+                gltf.vnodes[new_id].scenes = vnode.scenes
                 vnode.children.append(new_id)
                 vnode.camera_node_idx = None
             needs_move = True
@@ -454,6 +463,7 @@ def fixup_multitype_nodes(gltf):
                 gltf.vnodes[new_id] = VNode()
                 gltf.vnodes[new_id].light_node_idx = vnode.light_node_idx
                 gltf.vnodes[new_id].parent = id
+                gltf.vnodes[new_id].scenes = vnode.scenes
                 vnode.children.append(new_id)
                 vnode.light_node_idx = None
             needs_move = True

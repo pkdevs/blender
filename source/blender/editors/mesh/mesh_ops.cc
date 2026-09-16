@@ -16,6 +16,8 @@
 
 #include "mesh_intern.hh" /* own include */
 
+namespace blender {
+
 /**************************** registration **********************************/
 
 void ED_operatortypes_mesh()
@@ -52,6 +54,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_primitive_monkey_add);
   WM_operatortype_append(MESH_OT_primitive_uv_sphere_add);
   WM_operatortype_append(MESH_OT_primitive_ico_sphere_add);
+  WM_operatortype_append(MESH_OT_primitive_quad_sphere_add);
 
   WM_operatortype_append(MESH_OT_primitive_cube_add_gizmo);
 
@@ -116,7 +119,9 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_select_similar);
   WM_operatortype_append(MESH_OT_select_similar_region);
   WM_operatortype_append(MESH_OT_select_mode);
-  WM_operatortype_append(MESH_OT_loop_multi_select);
+  WM_operatortype_append(MESH_OT_select_edge_loop_multi);
+  WM_operatortype_append(MESH_OT_select_edge_ring_multi);
+  WM_operatortype_append(MESH_OT_select_boundary_loop_multi);
   WM_operatortype_append(MESH_OT_mark_seam);
   WM_operatortype_append(MESH_OT_mark_sharp);
 #if defined(WITH_FREESTYLE)
@@ -140,6 +145,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_uv_texture_add);
   WM_operatortype_append(MESH_OT_uv_texture_remove);
   WM_operatortype_append(MESH_OT_customdata_mask_clear);
+  WM_operatortype_append(MESH_OT_customdata_face_sets_clear);
   WM_operatortype_append(MESH_OT_customdata_skin_add);
   WM_operatortype_append(MESH_OT_customdata_skin_clear);
   WM_operatortype_append(MESH_OT_customdata_custom_splitnormals_add);
@@ -178,10 +184,6 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_symmetrize);
   WM_operatortype_append(MESH_OT_symmetry_snap);
 
-  WM_operatortype_append(SCULPT_OT_paint_mask_extract);
-  WM_operatortype_append(SCULPT_OT_face_set_extract);
-  WM_operatortype_append(SCULPT_OT_paint_mask_slice);
-
   WM_operatortype_append(MESH_OT_point_normals);
   WM_operatortype_append(MESH_OT_merge_normals);
   WM_operatortype_append(MESH_OT_split_normals);
@@ -191,6 +193,12 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_smooth_normals);
   WM_operatortype_append(MESH_OT_mod_weighted_strength);
   WM_operatortype_append(MESH_OT_flip_quad_tessellation);
+  WM_operatortype_append(MESH_OT_reorder_vertices_spatial);
+
+  WM_operatortype_append(MESH_OT_circularize);
+  WM_operatortype_append(MESH_OT_flatten);
+  WM_operatortype_append(MESH_OT_space_edge_loops_evenly);
+  WM_operatortype_append(MESH_OT_relax_edge_loops);
 }
 
 #if 0 /* UNUSED, remove? */
@@ -367,3 +375,5 @@ void ED_keymap_mesh(wmKeyConfig *keyconf)
   point_normals_modal_keymap(keyconf);
   bevel_modal_keymap(keyconf);
 }
+
+}  // namespace blender

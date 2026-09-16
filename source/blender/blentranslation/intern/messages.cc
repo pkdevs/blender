@@ -19,8 +19,8 @@
 #include <string>
 #include <string_view>
 
-#include "BLI_assert.h"
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
 #include "BLI_hash.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
@@ -28,14 +28,14 @@
 #include "BLI_vector.hh"
 
 #ifdef _WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "CLG_log.h"
 
 namespace blender::locale {
 
-static CLG_LogRef LOG = {"translation.messages"};
+static CLG_LogRef LOG = {"translation"};
 
 /* Upper/lower case, intentionally restricted to ASCII. */
 
@@ -375,7 +375,7 @@ class MOFile {
       return;
     }
 
-    // Read all format sizes
+    /* Read all format sizes. */
     size_ = get(8);
     keys_offset_ = get(12);
     translations_offset_ = get(16);
@@ -562,6 +562,8 @@ class MOMessages {
       return false;
     }
 
+    CLOG_INFO(&LOG, "Load messages from \"%s\"", filepath.c_str());
+
     /* Create context + key to translated string mapping. */
     for (size_t i = 0; i < mo.size(); i++) {
       const MessageKey key(mo.key(i));
@@ -585,7 +587,13 @@ class MOMessages {
 
 /* Public API */
 
-static std::unique_ptr<MOMessages> global_messages;
+/* Lazily init inside function so it gets destructed before guardedalloc leak check. */
+static std::unique_ptr<MOMessages> &global_messages()
+{
+  static std::unique_ptr<MOMessages> global_messages_;
+  return global_messages_;
+}
+
 static std::string global_full_name;
 
 void init(const StringRef locale_full_name,
@@ -597,21 +605,22 @@ void init(const StringRef locale_full_name,
     return;
   }
 
-  global_messages = std::make_unique<MOMessages>(info, domains, paths);
+  global_messages() = std::make_unique<MOMessages>(info, domains, paths);
   global_full_name = info.to_full_name();
 
-  if (global_messages->error().empty()) {
-    CLOG_INFO(&LOG, 2, "Locale %s used for translation", global_full_name.c_str());
+  if (global_messages()->error().empty()) {
+    CLOG_INFO(&LOG, "Locale %s used for translation", global_full_name.c_str());
   }
   else {
-    CLOG_ERROR(&LOG, "Locale %s: %s", global_full_name.c_str(), global_messages->error().c_str());
+    CLOG_ERROR(
+        &LOG, "Locale %s: %s", global_full_name.c_str(), global_messages()->error().c_str());
     free();
   }
 }
 
 void free()
 {
-  global_messages.reset();
+  global_messages().reset();
   global_full_name = "";
 }
 
@@ -619,11 +628,11 @@ std::optional<StringRefNull> translate(const int domain,
                                        const StringRef context,
                                        const StringRef key)
 {
-  if (!global_messages) {
+  if (!global_messages()) {
     return std::nullopt;
   }
 
-  return global_messages->translate(domain, context, key);
+  return global_messages()->translate(domain, context, key);
 }
 
 const char *full_name()

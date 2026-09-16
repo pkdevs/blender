@@ -31,14 +31,10 @@ class LayerDataButtonsPanel:
 class GREASE_PENCIL_UL_masks(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
         mask = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            row = layout.row(align=True)
-            row.prop(mask, "name", text="", emboss=False, icon_value=icon)
-            row.prop(mask, "invert", text="", emboss=False)
-            row.prop(mask, "hide", text="", emboss=False)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.prop(mask, "name", text="", emboss=False, icon_value=icon)
+        row = layout.row(align=True)
+        row.prop(mask, "name", text="", emboss=False, icon_value=icon)
+        row.prop(mask, "invert", text="", emboss=False)
+        row.prop(mask, "hide", text="", emboss=False)
 
 
 class GreasePencil_LayerMaskPanel:
@@ -445,7 +441,7 @@ class DATA_PT_grease_pencil_animation(DataButtonsPanel, PropertiesAnimationMixin
 
 class DATA_PT_grease_pencil_custom_props(DataButtonsPanel, PropertyPanel, Panel):
     _context_path = "object.data"
-    _property_type = bpy.types.GreasePencilv3
+    _property_type = bpy.types.GreasePencil
 
 
 class GREASE_PENCIL_UL_attributes(UIList):

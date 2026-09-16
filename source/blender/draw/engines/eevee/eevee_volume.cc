@@ -27,6 +27,9 @@ void VolumeModule::init()
 
   const Scene *scene_eval = inst_.scene;
 
+  /* The froxel grid's aspect ratio must match the view it will be sampled against in
+   * `VolumeModule::set_view`, otherwise `coord_scale` ends up sampling outside the valid tile
+   * range. */
   const int2 extent = inst_.film.render_extent_get();
   int tile_size = clamp_i(scene_eval->eevee.volumetric_tile_size, 1, 16);
 
@@ -54,9 +57,6 @@ void VolumeModule::init()
 
   data_.tile_size = tile_size;
   data_.tile_size_lod = int(log2(tile_size));
-  data_.coord_scale = float2(extent) / float2(tile_size * tex_size);
-  data_.main_view_extent = float2(extent);
-  data_.main_view_extent_inv = 1.0f / float2(extent);
   data_.tex_size = tex_size;
   data_.inv_tex_size = 1.0f / float3(tex_size);
 
@@ -88,7 +88,9 @@ void VolumeModule::world_sync(const WorldHandle &world_handle)
 
 void VolumeModule::object_sync(const ObjectHandle &ob_handle)
 {
-  current_objects_.add(ob_handle.object_key);
+  for (int i : IndexRange(ob_handle.instances_count())) {
+    current_objects_.add(ObjectKey(ob_handle, i));
+  }
 
   if (!use_reprojection_) {
     return;
@@ -101,12 +103,15 @@ void VolumeModule::object_sync(const ObjectHandle &ob_handle)
 
 bool VolumeModule::will_enable() const
 {
-  return inst_.world.has_volume() || !current_objects_.is_empty();
+  return inst_.world.has_volume() || !current_objects_.is_empty() ||
+         inst_.film.get_data().volume_light_id != -1;
 }
 
 void VolumeModule::end_sync()
 {
   enabled_ = will_enable();
+  /* Save reset state. */
+  viewport_sampling_is_reset_ = inst_.is_viewport() && inst_.sampling.is_reset();
 
   const Scene *scene_eval = inst_.scene;
 
@@ -121,8 +126,11 @@ void VolumeModule::end_sync()
   }
 
   std::optional<Bounds<float>> volume_bounds = inst_.pipelines.volume.object_integration_range();
-  if (volume_bounds && !inst_.world.has_volume()) {
-    /* Restrict integration range to the object volume range. This increases precision. */
+  if (volume_bounds && !inst_.world.has_volume() && !inst_.camera.is_panoramic()) {
+    /* Restrict integration range to the object volume range. This increases precision.
+     * Panoramic cameras render several views and `volume_bounds` is currently derived from only
+     * the main camera transform, therefore is not a valid shared range for their radial froxels.
+     */
     integration_start = math::max(integration_start, -volume_bounds.value().max);
     integration_end = math::min(integration_end, -volume_bounds.value().min);
   }
@@ -145,7 +153,8 @@ void VolumeModule::end_sync()
     }
   }
 
-  if (inst_.camera.is_perspective()) {
+  if (!inst_.camera.is_orthographic()) {
+    /* Must match GPU's `ViewMatrices::is_perspective()`, true for panoramic subviews too. */
     float sample_distribution = scene_eval->eevee.volumetric_sample_distribution;
     sample_distribution = 4.0f * math::max(1.0f - sample_distribution, 1e-2f);
 
@@ -202,17 +211,18 @@ void VolumeModule::end_sync()
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                            GPU_TEXTURE_USAGE_ATTACHMENT;
 
-  prop_scattering_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  prop_extinction_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  prop_emission_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  prop_scattering_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  prop_extinction_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  prop_emission_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
   /* We need 2 separate images to prevent bugs in Nvidia drivers (See #122454). */
-  prop_phase_tx_.ensure_3d(GPU_R16F, data_.tex_size, usage);
-  prop_phase_weight_tx_.ensure_3d(GPU_R16F, data_.tex_size, usage);
+  prop_phase_tx_.ensure_3d(gpu::TextureFormat::SFLOAT_16, data_.tex_size, usage);
+  prop_phase_weight_tx_.ensure_3d(gpu::TextureFormat::SFLOAT_16, data_.tex_size, usage);
 
   int occupancy_layers = divide_ceil_u(data_.tex_size.z, 32u);
   eGPUTextureUsage occupancy_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                      GPU_TEXTURE_USAGE_SHADER_WRITE | GPU_TEXTURE_USAGE_ATOMIC;
-  occupancy_tx_.ensure_3d(GPU_R32UI, int3(data_.tex_size.xy(), occupancy_layers), occupancy_usage);
+  occupancy_tx_.ensure_3d(
+      gpu::TextureFormat::UINT_32, int3(data_.tex_size.xy(), occupancy_layers), occupancy_usage);
 
   {
     eGPUTextureUsage hit_count_usage = GPU_TEXTURE_USAGE_SHADER_READ |
@@ -225,29 +235,35 @@ void VolumeModule::end_sync()
       hit_list_layer = clamp_i(inst_.scene->eevee.volumetric_ray_depth, 1, 16);
       hit_list_size = data_.tex_size.xy();
     }
-    hit_depth_tx_.ensure_3d(GPU_R32F, int3(hit_list_size, hit_list_layer), hit_depth_usage);
-    if (hit_count_tx_.ensure_2d(GPU_R32UI, hit_list_size, hit_count_usage)) {
+    hit_depth_tx_.ensure_3d(
+        gpu::TextureFormat::SFLOAT_32, int3(hit_list_size, hit_list_layer), hit_depth_usage);
+    if (hit_count_tx_.ensure_2d(gpu::TextureFormat::UINT_32, hit_list_size, hit_count_usage)) {
       hit_count_tx_.clear(uint4(0u));
     }
   }
 
   eGPUTextureUsage front_depth_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                        GPU_TEXTURE_USAGE_ATTACHMENT;
-  front_depth_tx_.ensure_2d(GPU_DEPTH32F_STENCIL8, data_.tex_size.xy(), front_depth_usage);
+  front_depth_tx_.ensure_2d(
+      gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8, data_.tex_size.xy(), front_depth_usage);
   occupancy_fb_.ensure(GPU_ATTACHMENT_TEXTURE(front_depth_tx_));
 
   bool created = false;
-  created |= scatter_tx_.current().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= extinction_tx_.current().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= scatter_tx_.previous().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= extinction_tx_.previous().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  created |= scatter_tx_.current().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= extinction_tx_.current().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= scatter_tx_.previous().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= extinction_tx_.previous().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
 
   if (created) {
     valid_history_ = false;
   }
 
-  integrated_scatter_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  integrated_transmit_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  integrated_scatter_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  integrated_transmit_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
 
   /* Update references for bindings. */
   result.scattering_tx_ = integrated_scatter_tx_;
@@ -271,6 +287,7 @@ void VolumeModule::end_sync()
   scatter_ps_.init();
   scatter_ps_.shader_set(
       inst_.shaders.static_shader_get(use_lights_ ? VOLUME_SCATTER_WITH_LIGHTS : VOLUME_SCATTER));
+  scatter_ps_.bind_resources(inst_.hiz_buffer.front);
   scatter_ps_.bind_resources(inst_.lights);
   scatter_ps_.bind_resources(inst_.sphere_probes);
   scatter_ps_.bind_resources(inst_.volume_probes);
@@ -318,11 +335,11 @@ void VolumeModule::end_sync()
   resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
-void VolumeModule::draw_prepass(View &main_view)
+void VolumeModule::set_view(View &main_view, int2 render_extent)
 {
-  if (!enabled_) {
-    return;
-  }
+  data_.main_view_extent = float2(render_extent);
+  data_.main_view_extent_inv = 1.0f / float2(render_extent);
+  data_.coord_scale = float2(render_extent) / float2(data_.tile_size * data_.tex_size.xy());
 
   /* Number of frame to consider for blending with exponential (infinite) average. */
   int exponential_frame_count = 16;
@@ -332,6 +349,10 @@ void VolumeModule::draw_prepass(View &main_view)
   }
   else if (!use_reprojection_) {
     /* No re-projection if TAA is disabled. */
+    exponential_frame_count = 0;
+  }
+  else if (inst_.camera.is_panoramic()) {
+    /* Disable reprojection until the volume module supports per view history. */
     exponential_frame_count = 0;
   }
   else if (inst_.is_playback) {
@@ -352,7 +373,7 @@ void VolumeModule::draw_prepass(View &main_view)
      * artifacts on lights because of voxels stretched in Z or anisotropy. */
     exponential_frame_count = 8;
   }
-  else if (inst_.is_viewport() && inst_.sampling.is_reset()) {
+  else if (viewport_sampling_is_reset_) {
     /* If we are not falling in any cases above, this usually means there is a scene or object
      * parameter update. Reset accumulation completely. */
     exponential_frame_count = 0;
@@ -382,7 +403,7 @@ void VolumeModule::draw_prepass(View &main_view)
    * our froxel volume so that a 2D pixel covers exactly the number of pixel in a tile. */
   float2 render_size = float2(right - left, top - bottom);
   float2 volume_size = render_size * float2(data_.tex_size.xy() * data_.tile_size) /
-                       float2(inst_.film.render_extent_get());
+                       float2(render_extent);
   /* Change to the padded extends. */
   right = left + volume_size.x;
   top = bottom + volume_size.y;
@@ -417,13 +438,19 @@ void VolumeModule::draw_prepass(View &main_view)
   /* Compute re-projection matrix. */
   data_.curr_view_to_past_view = history_viewmat_ * main_view.viewinv();
 
-  inst_.uniform_data.push_update();
+  volume_view.sync(main_view.viewmat(), winmat_infinite);
+}
+
+void VolumeModule::draw_prepass(View &main_view)
+{
+  if (!enabled_) {
+    return;
+  }
 
   GPU_debug_group_begin("Volumes");
   occupancy_fb_.bind();
   inst_.pipelines.world_volume.render(main_view);
 
-  volume_view.sync(main_view.viewmat(), winmat_infinite);
   /* TODO(fclem): The infinite projection matrix makes the culling test unreliable (see #115595).
    * We need custom culling for these but that's not implemented yet. */
   volume_view.visibility_test(false);
@@ -447,7 +474,7 @@ void VolumeModule::draw_compute(View &main_view, int2 extent)
     inst_.hiz_buffer.update();
     inst_.volume_probes.set_view(main_view);
     inst_.sphere_probes.set_view(main_view);
-    inst_.shadows.set_view(main_view, extent);
+    inst_.shadows.render(main_view, extent);
   }
 
   scatter_tx_.swap();

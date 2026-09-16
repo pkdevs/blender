@@ -16,7 +16,8 @@
  * - Copy that file and rename it to the proper new version number (e.g. `versioning_501.cc`).
  * - Rename the two functions below by replacing the `xxx` with the matching new version number.
  * - Add the new file to CMakeList.txt
- * - Add matching calls in #do_versions_after_linking and #do_versions, in `readfile.cc`.
+ * - Add matching calls in #do_versions_after_linking and #do_versions, in `readfile.cc` and update
+ * declarations in`readfile.hh`.
  */
 
 #define DNA_DEPRECATED_ALLOW
@@ -32,7 +33,10 @@
 #include "versioning_common.hh"
 
 // #include "CLG_log.h"
-// static CLG_LogRef LOG = {"blo.readfile.doversion"};
+
+namespace blender {
+
+// static CLG_LogRef LOG = {"blend.doversion"};
 
 void do_versions_after_linking_xxx(FileData * /*fd*/, Main * /*bmain*/)
 {
@@ -53,3 +57,5 @@ void blo_do_versions_xxx(FileData * /*fd*/, Library * /*lib*/, Main * /*bmain*/)
    * \note Keep this message at the bottom of the function.
    */
 }
+
+}  // namespace blender

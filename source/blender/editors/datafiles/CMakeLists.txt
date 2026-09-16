@@ -8,7 +8,6 @@ set(INC
 )
 
 set(INC_SYS
-
 )
 
 # Part of the `blender` binary (sources for data-files are appended).
@@ -24,6 +23,7 @@ set(LIB
 # See: `make icons_geom` and the script `./release/datafiles/blender_icons_geom_update.py`.
 set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   # BEGIN ICON_GEOM_NAMES
+  brush.draw
   brush.generic
   brush.gpencil_draw.erase
   brush.gpencil_draw.fill
@@ -50,6 +50,7 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   brush.sculpt.displacement_smear
   brush.sculpt.draw_face_sets
   brush.sculpt.mask
+  brush.sculpt
   brush.sculpt.paint
   brush.sculpt.simplify
   brush.uv_sculpt.grab
@@ -118,7 +119,9 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.mesh.rip_edge
   ops.mesh.spin
   ops.mesh.vertices_smooth
+  ops.node.add_reroute
   ops.node.links_cut
+  ops.node.links_mute
   ops.paint.eyedropper_add
   ops.paint.vertex_color_fill
   ops.paint.weight_fill
@@ -152,6 +155,7 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.sculpt.polyline_trim
   ops.sequencer.blade
   ops.sequencer.retime
+  ops.sequencer.slip
   ops.transform.bone_envelope
   ops.transform.bone_size
   ops.transform.edge_slide
@@ -242,6 +246,14 @@ if(WITH_BLENDER)
       clipuv_dehlt
       clipuv_hlt
       collapsemenu
+      collection_color_01
+      collection_color_02
+      collection_color_03
+      collection_color_04
+      collection_color_05
+      collection_color_06
+      collection_color_07
+      collection_color_08
       collection_new
       color
       color_blue
@@ -261,6 +273,7 @@ if(WITH_BLENDER)
       con_floor
       con_followpath
       con_followtrack
+      con_geometryattribute
       con_kinematic
       con_locktrack
       con_loclike
@@ -311,12 +324,18 @@ if(WITH_BLENDER)
       documents
       dot
       downarrow_hlt
+      download
+      download_done
       driver
       driver_distance
       driver_rotational_difference
       driver_transform
       duplicate
       edgesel
+      edge_bevel
+      edge_crease
+      edge_seam
+      edge_sharp
       editmode_hlt
       empty_arrows
       empty_axis
@@ -362,6 +381,7 @@ if(WITH_BLENDER)
       file_tick
       file_volume
       filter
+      filter_filled
       fixed_size
       folder_redirect
       fontpreview
@@ -396,6 +416,9 @@ if(WITH_BLENDER)
       gizmo
       gp_caps_flat
       gp_caps_round
+      gp_draw_stroke
+      gp_draw_fill
+      gp_draw_both
       gp_multiframe_editing
       gp_only_selected
       gp_select_between_strokes
@@ -407,6 +430,7 @@ if(WITH_BLENDER)
       grid
       grip
       grip_v
+      grip_corner_bottom_right
       group
       group_bone
       group_uvs
@@ -437,6 +461,7 @@ if(WITH_BLENDER)
       image_zdepth
       imgdisplay
       import
+      import_export
       indirect_only_off
       indirect_only_on
       info
@@ -544,6 +569,7 @@ if(WITH_BLENDER)
       mesh_monkey
       mesh_plane
       mesh_torus
+      mesh_quadsphere
       mesh_uvsphere
       meta_ball
       meta_capsule
@@ -559,10 +585,14 @@ if(WITH_BLENDER)
       mod_array
       mod_bevel
       mod_boolean
+      mod_brightness_contrast
       mod_build
       mod_cast
       mod_cloth
+      mod_color_balance
       mod_curve
+      mod_curve_to_tube
+      mod_curves
       mod_dash
       mod_data_transfer
       mod_decim
@@ -573,6 +603,7 @@ if(WITH_BLENDER)
       mod_explode
       mod_fluid
       mod_fluidsim
+      mod_hue_correct
       mod_hue_saturation
       mod_instance
       mod_lattice
@@ -592,6 +623,7 @@ if(WITH_BLENDER)
       mod_particle_instance
       mod_physics
       mod_remesh
+      mod_scatter_on_surface
       mod_screw
       mod_shrinkwrap
       mod_simpledeform
@@ -604,11 +636,13 @@ if(WITH_BLENDER)
       mod_thickness
       mod_time
       mod_tint
+      mod_tonemap
       mod_triangulate
       mod_uvproject
       mod_vertex_weight
       mod_warp
       mod_wave
+      mod_white_balance
       mod_wireframe
       monkey
       mouse_lmb
@@ -723,6 +757,8 @@ if(WITH_BLENDER)
       play
       play_reverse
       play_sound
+      playhead_snap_off
+      playhead_snap_on
       plugin
       plus
       pmarker
@@ -737,6 +773,7 @@ if(WITH_BLENDER)
       preview_loading
       preview_range
       prev_keyframe
+      project
       properties
       prop_con
       prop_off
@@ -756,6 +793,7 @@ if(WITH_BLENDER)
       render_animation
       render_result
       render_still
+      render_swap_dimensions
       restrict_color_off
       restrict_color_on
       restrict_instanced_off
@@ -772,7 +810,6 @@ if(WITH_BLENDER)
       rigid_body
       rigid_body_constraint
       rna
-      rna_add
       rndcurve
       rootcurve
       scene
@@ -793,8 +830,11 @@ if(WITH_BLENDER)
       seq_preview
       seq_sequencer
       seq_splitview
+      seq_strip
+      seq_strip_data
       seq_strip_duplicate
       seq_strip_meta
+      seq_strip_modifier
       settings
       shaderfx
       shading_bbox
@@ -836,6 +876,12 @@ if(WITH_BLENDER)
       split_horizontal
       split_vertical
       spreadsheet
+      status_error
+      status_error_filled
+      status_info
+      status_info_filled
+      status_warning
+      status_warning_filled
       statusbar
       sticky_uvs_disable
       sticky_uvs_loc
@@ -890,6 +936,8 @@ if(WITH_BLENDER)
       unlocked
       unpinned
       url
+      usb_drive
+      usb_drive_large
       user
       uv
       uv_data
@@ -899,6 +947,7 @@ if(WITH_BLENDER)
       uv_sync_select
       uv_vertexsel
       vertexsel
+      vertex_crease
       view3d
       viewzoom
       view_camera
@@ -931,8 +980,49 @@ if(WITH_BLENDER)
       zoom_previous
       zoom_selected
     )
-    set(SVG_CONTENTS_H)
-    set(SVG_CONTENTS_C)
+
+    set(SVG_CURSORS_FILENAMES_NOEXT
+      cursor_blade
+      cursor_both_handles
+      cursor_crossc
+      cursor_crosshair
+      cursor_dot
+      cursor_e_arrow
+      cursor_eraser
+      cursor_ew_scroll
+      cursor_eyedropper
+      cursor_hand
+      cursor_hand_closed
+      cursor_hand_point
+      cursor_h_split
+      cursor_knife
+      cursor_left_handle
+      cursor_mute
+      cursor_n_arrow
+      cursor_nsew_scroll
+      cursor_ns_scroll
+      cursor_paint
+      cursor_pencil
+      cursor_pick_area
+      cursor_pointer
+      cursor_right_handle
+      cursor_s_arrow
+      cursor_slip
+      cursor_stop
+      cursor_swap_area
+      cursor_text_edit
+      cursor_v_split
+      cursor_vertex_loop
+      cursor_wait
+      cursor_w_arrow
+      cursor_x_move
+      cursor_y_move
+      cursor_zoom_in
+      cursor_zoom_out
+    )
+
+    set(SVG_CONTENTS_H "")
+    set(SVG_CONTENTS_C "")
     foreach(svg ${SVG_FILENAMES_NOEXT})
       data_to_c_simple(../../../../release/datafiles/icons_svg/${svg}.svg SRC)
       string(TOUPPER ${svg} svg_name_upper)
@@ -940,7 +1030,7 @@ if(WITH_BLENDER)
         "extern const char datatoc_${svg}_svg[]\;\n"
       )
       list(APPEND SVG_CONTENTS_C
-        "case ICON_${svg_name_upper}: return datatoc_${svg}_svg\;\n"
+        "case blender::ICON_${svg_name_upper}: return datatoc_${svg}_svg\;\n"
       )
     endforeach()
     unset(svg_name_upper)
@@ -963,6 +1053,25 @@ if(WITH_BLENDER)
 
     list(APPEND SRC ${CMAKE_CURRENT_BINARY_DIR}/svg_icons.h)
     list(APPEND SRC ${CMAKE_CURRENT_BINARY_DIR}/svg_icons.cc)
+
+    set(SVG_CURSORS_CONTENTS_H "")
+    foreach(svg ${SVG_CURSORS_FILENAMES_NOEXT})
+      data_to_c_simple(../../../../release/datafiles/cursors/${svg}.svg SRC)
+      list(APPEND SVG_CURSORS_CONTENTS_H
+        "extern const char datatoc_${svg}_svg[]\;\n"
+      )
+    endforeach()
+    list(APPEND SRC ${CMAKE_CURRENT_BINARY_DIR}/svg_cursors.h)
+    list(JOIN SVG_CURSORS_CONTENTS_H "" SVG_CURSORS_CONTENTS_H)
+
+    configure_file(
+      "svg_cursors.h.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/svg_cursors.h"
+      ESCAPE_QUOTES
+      @ONLY
+    )
+    unset(SVG_CURSORS_CONTENTS_H)
+
     # Blend files.
     data_to_c_simple(../../../../release/datafiles/preview.blend SRC)
     data_to_c_simple(../../../../release/datafiles/preview_grease_pencil.blend SRC)

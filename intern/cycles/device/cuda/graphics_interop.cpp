@@ -52,7 +52,7 @@ void CUDADeviceGraphicsInterop::set_buffer(GraphicsInteropBuffer &interop_buffer
                                                          interop_buffer.take_handle(),
                                                          CU_GRAPHICS_MAP_RESOURCE_FLAGS_NONE);
       if (result != CUDA_SUCCESS) {
-        LOG(ERROR) << "Error registering OpenGL buffer: " << cuewErrorString(result);
+        LOG_ERROR << "Error registering OpenGL buffer: " << cuewErrorString(result);
         break;
       }
 
@@ -74,8 +74,7 @@ void CUDADeviceGraphicsInterop::set_buffer(GraphicsInteropBuffer &interop_buffer
 #  endif
       external_memory_handle_desc.size = interop_buffer.get_size();
 
-      const CUresult result = cuImportExternalMemory(&cu_external_memory_,
-                                                     &external_memory_handle_desc);
+      CUresult result = cuImportExternalMemory(&cu_external_memory_, &external_memory_handle_desc);
       if (result != CUDA_SUCCESS) {
 #  ifdef _WIN32
         CloseHandle(HANDLE(vulkan_windows_handle_));
@@ -83,7 +82,7 @@ void CUDADeviceGraphicsInterop::set_buffer(GraphicsInteropBuffer &interop_buffer
 #  else
         close(external_memory_handle_desc.handle.fd);
 #  endif
-        LOG(ERROR) << "Error importing Vulkan memory: " << cuewErrorString(result);
+        LOG_ERROR << "Error importing Vulkan memory: " << cuewErrorString(result);
         break;
       }
 
@@ -94,10 +93,18 @@ void CUDADeviceGraphicsInterop::set_buffer(GraphicsInteropBuffer &interop_buffer
       external_memory_buffer_desc.offset = 0;
 
       CUdeviceptr external_memory_device_ptr = 0;
-      cuda_device_assert(device_,
-                         cuExternalMemoryGetMappedBuffer(&external_memory_device_ptr,
-                                                         cu_external_memory_,
-                                                         &external_memory_buffer_desc));
+      result = cuExternalMemoryGetMappedBuffer(
+          &external_memory_device_ptr, cu_external_memory_, &external_memory_buffer_desc);
+      if (result != CUDA_SUCCESS) {
+        if (external_memory_device_ptr) {
+          cuMemFree(external_memory_device_ptr);
+          external_memory_device_ptr = 0;
+        }
+
+        LOG_ERROR << "Error mapping Vulkan memory: " << cuewErrorString(result);
+        break;
+      }
+
       cu_external_memory_ptr_ = external_memory_device_ptr;
       break;
     }
@@ -152,12 +159,15 @@ void CUDADeviceGraphicsInterop::free()
     cu_graphics_resource_ = nullptr;
   }
 
+  if (cu_external_memory_ptr_) {
+    cuda_device_assert(device_, cuMemFree(cu_external_memory_ptr_));
+    cu_external_memory_ptr_ = 0;
+  }
+
   if (cu_external_memory_) {
     cuda_device_assert(device_, cuDestroyExternalMemory(cu_external_memory_));
     cu_external_memory_ = nullptr;
   }
-
-  cu_external_memory_ptr_ = 0;
 
 #  ifdef _WIN32
   if (vulkan_windows_handle_) {

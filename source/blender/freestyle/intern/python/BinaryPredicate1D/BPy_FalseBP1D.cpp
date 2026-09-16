@@ -23,13 +23,12 @@ PyDoc_STRVAR(
     "\n"
     "   Always returns false.\n"
     "\n"
-    "   :arg inter1: The first Interface1D object.\n"
+    "   :param inter1: The first Interface1D object.\n"
     "   :type inter1: :class:`freestyle.types.Interface1D`\n"
-    "   :arg inter2: The second Interface1D object.\n"
+    "   :param inter2: The second Interface1D object.\n"
     "   :type inter2: :class:`freestyle.types.Interface1D`\n"
     "   :return: False.\n"
     "   :rtype: bool\n");
-
 static int FalseBP1D___init__(BPy_FalseBP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

@@ -11,6 +11,7 @@
 
 #include "abc_writer_curves.h"
 #include "intern/abc_axis_conversion.h"
+#include "intern/abc_util.h"
 
 #include "BLI_array_utils.hh"
 #include "BLI_offset_indices.hh"
@@ -18,6 +19,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_anonymous_attribute_id.hh"
 #include "BKE_curve_legacy_convert.hh"
 #include "BKE_curve_to_mesh.hh"
 #include "BKE_curves.hh"
@@ -26,6 +28,9 @@
 #include "BKE_object.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::AbcGeom::OCompoundProperty;
@@ -35,9 +40,7 @@ using Alembic::AbcGeom::OInt16Property;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 
-namespace blender::io::alembic {
-
-const std::string ABC_CURVE_RESOLUTION_U_PROPNAME("blender:resolution");
+namespace io::alembic {
 
 static inline Imath::V3f to_yup_V3f(float3 v)
 {
@@ -46,11 +49,36 @@ static inline Imath::V3f to_yup_V3f(float3 v)
   return p;
 }
 
+/* Excluded attributes are those which are handled through native Alembic concepts
+ * and should not be exported as generic attributes. */
+static bool is_excluded_attr(StringRefNull name)
+{
+  static const Set<StringRefNull> excluded_attrs = {
+      "position",
+      "radius",
+      "resolution",
+      "id",
+      "cyclic",
+      "curve_type",
+      "normal_mode",
+      "handle_left",
+      "handle_right",
+      "handle_type_left",
+      "handle_type_right",
+      "knots_mode",
+      "nurbs_order",
+      "nurbs_weight",
+      "velocity",
+  };
+
+  return excluded_attrs.contains(name);
+}
+
 ABCCurveWriter::ABCCurveWriter(const ABCWriterConstructorArgs &args) : ABCAbstractWriter(args) {}
 
 void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
 {
-  CLOG_INFO(&LOG, 2, "exporting %s", args_.abc_path.c_str());
+  CLOG_DEBUG(&LOG, "exporting %s", args_.abc_path.c_str());
   abc_curve_ = OCurves(args_.abc_parent, args_.abc_name, timesample_index_);
   abc_curve_schema_ = abc_curve_.getSchema();
 
@@ -61,16 +89,18 @@ void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
   int resolution_u = 1;
   switch (context->object->type) {
     case OB_CURVES_LEGACY: {
-      Curve *curves_id = static_cast<Curve *>(context->object->data);
+      Curve *curves_id = id_cast<Curve *>(context->object->data);
       resolution_u = curves_id->resolu;
       break;
     }
     case OB_CURVES: {
-      Curves *curves_id = static_cast<Curves *>(context->object->data);
+      Curves *curves_id = id_cast<Curves *>(context->object->data);
       const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
       resolution_u = curves.resolution().first();
       break;
     }
+    default:
+      break;
   }
 
   OCompoundProperty user_props = abc_curve_schema_.getUserProperties();
@@ -95,14 +125,14 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
 
   switch (context.object->type) {
     case OB_CURVES_LEGACY: {
-      const Curve *legacy_curve = static_cast<Curve *>(context.object->data);
+      const Curve *legacy_curve = id_cast<Curve *>(context.object->data);
       converted_curves = std::unique_ptr<Curves, std::function<void(Curves *)>>(
           bke::curve_legacy_to_curves(*legacy_curve), [](Curves *c) { BKE_id_free(nullptr, c); });
       curves_id = converted_curves.get();
       break;
     }
     case OB_CURVES:
-      curves_id = static_cast<Curves *>(context.object->data);
+      curves_id = id_cast<Curves *>(context.object->data);
       break;
     default:
       BLI_assert_unreachable();
@@ -163,15 +193,15 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   std::vector<uint8_t> orders;
 
   const Span<float3> positions = curves.positions();
-  const Span<float> nurbs_weights = curves.nurbs_weights();
+  const std::optional<Span<float>> nurbs_weights = curves.nurbs_weights();
   const VArray<int8_t> nurbs_orders = curves.nurbs_orders();
   const VArray<float> radii = curves.radius();
 
   vert_counts.resize(curves.curves_num());
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  if (blender_curve_type == CURVE_TYPE_BEZIER) {
-    const Span<float3> handles_l = curves.handle_positions_left();
-    const Span<float3> handles_r = curves.handle_positions_right();
+  const std::optional<Span<float3>> handles_l = curves.handle_positions_left();
+  const std::optional<Span<float3>> handles_r = curves.handle_positions_right();
+  if (blender_curve_type == CURVE_TYPE_BEZIER && handles_l && handles_r) {
 
     for (const int i_curve : curves.curves_range()) {
       const IndexRange points = points_by_curve[i_curve];
@@ -190,8 +220,8 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
         verts.push_back(to_yup_V3f(positions[i_point]));
         widths.push_back(radii[i_point] * 2.0f);
 
-        verts.push_back(to_yup_V3f(handles_r[i_point]));
-        verts.push_back(to_yup_V3f(handles_l[i_point + 1]));
+        verts.push_back(to_yup_V3f((*handles_r)[i_point]));
+        verts.push_back(to_yup_V3f((*handles_l)[i_point + 1]));
       }
 
       /* The last vert in the array doesn't need a right handle because the curve stops
@@ -202,8 +232,8 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
       /* If the curve is cyclic, include the right handle of the last point and the
        * left handle of the first point. */
       if (is_cyclic) {
-        verts.push_back(to_yup_V3f(handles_r[last_point_index]));
-        verts.push_back(to_yup_V3f(handles_l[start_point_index]));
+        verts.push_back(to_yup_V3f((*handles_r)[last_point_index]));
+        verts.push_back(to_yup_V3f((*handles_l)[start_point_index]));
       }
 
       vert_counts[i_curve] = verts.size() - current_vert_count;
@@ -218,8 +248,10 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
     }
 
     if (blender_curve_type == CURVE_TYPE_NURBS) {
-      weights.resize(curves.points_num());
-      std::copy_n(nurbs_weights.data(), weights.size(), weights.data());
+      if (nurbs_weights) {
+        weights.resize(curves.points_num());
+        std::copy_n(nurbs_weights->data(), weights.size(), weights.data());
+      }
 
       orders.resize(curves.curves_num());
       for (const int i_curve : curves.curves_range()) {
@@ -245,9 +277,60 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
                                orders,
                                knots);
 
+  std::vector<Imath::V3f> velocities;
+  if (get_velocities(curves.attributes(), velocities)) {
+    sample.setVelocities(velocities);
+  }
+
   update_bounding_box(context.object);
   sample.setSelfBounds(bounding_box_);
   abc_curve_schema_.set(sample);
+
+  write_arb_geo_params(curves, *context.object, abc_curve_schema_.getNumSamples());
+}
+
+void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
+                                          const Object &object,
+                                          const size_t num_geom_samples)
+{
+  Alembic::Abc::OCompoundProperty arb_geom_params = abc_curve_schema_.getArbGeomParams();
+
+  const bke::AttributeAccessor attributes = curves.attributes();
+
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
+    if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
+        is_excluded_attr(iter.name))
+    {
+      return;
+    }
+
+    AttributeParamMaps &param_maps = get_attribute_param_maps();
+    /* Pass num_geom_samples - 1 so we write empty samples up until this frame. */
+    BLI_assert(num_geom_samples >= 1);
+    create_geom_param_for_attribute(arb_geom_params,
+                                    param_maps,
+                                    iter,
+                                    timesample_index(),
+                                    {},
+                                    BKE_id_name(object.id),
+                                    num_geom_samples - 1);
+  });
+
+  if (attribute_maps_) {
+    /* If an attribute was missing this frame, write empty samples for it.
+     * This is mostly to ensure that attributes have the same number of samples as the geometry
+     * data if some disappear midway in the animation and never come back. */
+    attribute_maps_->write_empty_samples(num_geom_samples);
+  }
+}
+
+AttributeParamMaps &ABCCurveWriter::get_attribute_param_maps()
+{
+  if (!attribute_maps_) {
+    attribute_maps_ = std::make_unique<AttributeParamMaps>();
+  }
+  return *attribute_maps_.get();
 }
 
 ABCCurveMeshWriter::ABCCurveMeshWriter(const ABCWriterConstructorArgs &args)
@@ -270,13 +353,17 @@ Mesh *ABCCurveMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree
       return BKE_mesh_new_nomain_from_curve(object_eval);
     }
 
-    case OB_CURVES:
-      Curves *curves = static_cast<Curves *>(object_eval->data);
+    case OB_CURVES: {
+      Curves *curves = id_cast<Curves *>(object_eval->data);
       r_needsfree = true;
       return bke::curve_to_wire_mesh(curves->geometry.wrap());
+    }
+    default:
+      break;
   }
 
   return nullptr;
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

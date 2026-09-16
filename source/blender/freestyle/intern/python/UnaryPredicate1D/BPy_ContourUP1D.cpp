@@ -24,11 +24,10 @@ PyDoc_STRVAR(
     "   Returns true if the Interface1D is a contour. An Interface1D is a\n"
     "   contour if it is bordered by a different shape on each of its sides.\n"
     "\n"
-    "   :arg inter: An Interface1D object.\n"
+    "   :param inter: An Interface1D object.\n"
     "   :type inter: :class:`freestyle.types.Interface1D`\n"
     "   :return: True if the Interface1D is a contour, false otherwise.\n"
     "   :rtype: bool\n");
-
 static int ContourUP1D___init__(BPy_ContourUP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

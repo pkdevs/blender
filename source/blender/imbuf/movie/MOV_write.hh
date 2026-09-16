@@ -9,22 +9,33 @@
  * \ingroup imbuf
  */
 
+namespace blender {
+
+struct ImageFormatData;
 struct ImBuf;
 struct MovieWriter;
 struct RenderData;
 struct ReportList;
 struct Scene;
 
-MovieWriter *MOV_write_begin(const char imtype,
-                             const Scene *scene,
-                             RenderData *rd,
+namespace bke {
+class BlenderProject;
+}
+
+MovieWriter *MOV_write_begin(const Scene *scene,
+                             const bke::BlenderProject *project,
+                             const RenderData *rd,
+                             const ImageFormatData *imf,
                              int rectx,
                              int recty,
                              ReportList *reports,
                              bool preview,
                              const char *suffix);
 bool MOV_write_append(MovieWriter *writer,
-                      RenderData *rd,
+                      const Scene *scene,
+                      const bke::BlenderProject *project,
+                      const RenderData *rd,
+                      const ImageFormatData *imf,
                       int start_frame,
                       int frame,
                       const ImBuf *image,
@@ -36,7 +47,11 @@ void MOV_write_end(MovieWriter *writer);
  * \note Similar to #BKE_image_path_from_imformat()
  */
 void MOV_filepath_from_settings(char filepath[/*FILE_MAX*/ 1024],
+                                const Scene *scene,
+                                const bke::BlenderProject *project,
                                 const RenderData *rd,
                                 bool preview,
                                 const char *suffix,
                                 ReportList *reports);
+
+}  // namespace blender

@@ -8,6 +8,8 @@
  * \brief Extraction of Mesh data into VBO to feed to GPU.
  */
 
+#include "BKE_attribute.hh"
+
 #include "DNA_mesh_types.h"
 #include "DNA_scene_types.h"
 
@@ -16,6 +18,7 @@
 #include "BLI_task.hh"
 
 #include "GPU_capabilities.hh"
+#include "GPU_debug.hh"
 
 #include "draw_cache_extract.hh"
 #include "draw_subdivision.hh"
@@ -25,10 +28,14 @@
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
 
 namespace blender::draw {
+
+/* ---------------------------------------------------------------------- */
+/** \name Dependency Data
+ * \{ */
 
 static void ensure_dependency_data(MeshRenderData &mr,
                                    Span<IBOType> ibo_requests,
@@ -72,6 +79,33 @@ static void ensure_dependency_data(MeshRenderData &mr,
 /* ---------------------------------------------------------------------- */
 /** \name Extract Loop
  * \{ */
+
+/**
+ * The mesh normals access functions can end up mixing face corner normals calculated with the
+ * costly tangent space method. The "Simplify Normals" option is supposed to avoid that, but not
+ * the "Free" normals which are actually cheaper than calculating true normals.
+ */
+static bool use_normals_simplify(const Scene &scene, const MeshRenderData &mr)
+{
+  if (!(scene.r.mode & R_SIMPLIFY) || !(scene.r.mode & R_SIMPLIFY_NORMALS)) {
+    return false;
+  }
+  if (!mr.mesh) {
+    return true;
+  }
+  const Mesh &mesh = *mr.mesh;
+  const std::optional<bke::AttributeMetaData> meta_data = mesh.attributes().lookup_meta_data(
+      "custom_normal");
+  if (!meta_data) {
+    return false;
+  }
+  if (meta_data->domain == bke::AttrDomain::Corner &&
+      meta_data->data_type == bke::AttrType::Int16_2D)
+  {
+    return true;
+  }
+  return false;
+}
 
 void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
                                         const Scene &scene,
@@ -118,10 +152,10 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
   MeshRenderData mr = mesh_render_data_create(
       object, mesh, is_editmode, is_paint_mode, do_final, do_uvedit, use_hide, scene.toolsettings);
 
-  ensure_dependency_data(mr, ibo_requests, vbo_requests, mbc);
-
   mr.use_subsurf_fdots = mr.mesh && !mr.mesh->runtime->subsurf_face_dot_tags.is_empty();
-  mr.use_simplify_normals = (scene.r.mode & R_SIMPLIFY) && (scene.r.mode & R_SIMPLIFY_NORMALS);
+  mr.use_simplify_normals = use_normals_simplify(scene, mr);
+
+  ensure_dependency_data(mr, ibo_requests, vbo_requests, mbc);
 
   Array<gpu::IndexBufPtr, 16> created_ibos(ibos_to_create.size());
 
@@ -159,14 +193,20 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case IBOType::LinesAdjacency:
         created_ibos[i] = extract_lines_adjacency(mr, cache.is_manifold);
         break;
-      case IBOType::UVLines:
-        created_ibos[i] = extract_edituv_lines(mr, false);
+      case IBOType::UVTris:
+        created_ibos[i] = extract_edituv_tris(mr, false);
         break;
       case IBOType::EditUVTris:
-        created_ibos[i] = extract_edituv_tris(mr);
+        created_ibos[i] = extract_edituv_tris(mr, true);
+        break;
+      case IBOType::AllUVLines:
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::All);
+        break;
+      case IBOType::UVLines:
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::Selection);
         break;
       case IBOType::EditUVLines:
-        created_ibos[i] = extract_edituv_lines(mr, true);
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::Edit);
         break;
       case IBOType::EditUVPoints:
         created_ibos[i] = extract_edituv_points(mr);
@@ -329,9 +369,15 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
     return;
   }
 
+  static gpu::DebugScope subdiv_extract_scope = {"SubdivExtraction"};
+  auto capture = subdiv_extract_scope.scoped_capture();
+
   if (vbos_to_create.contains(VBOType::Position) || vbos_to_create.contains(VBOType::Orco)) {
     gpu::VertBufPtr orco_vbo;
-    buffers.vbos.add_new(
+    /* Don't use `add_new` because #VBOType::Orco might be requested after #VBOType::Position
+     * already exists. It's inefficient to build the position VBO a second time but that's the API
+     * that GPU subdivision provides. */
+    buffers.vbos.add(
         VBOType::Position,
         extract_positions_subdiv(
             subdiv_cache, mr, vbos_to_create.contains(VBOType::Orco) ? &orco_vbo : nullptr));
@@ -433,8 +479,14 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
     /* Make sure UVs are computed before edituv stuffs. */
     buffers.vbos.add_new(VBOType::UVs, extract_uv_maps_subdiv(subdiv_cache, cache));
   }
+  if (ibos_to_create.contains(IBOType::AllUVLines)) {
+    buffers.ibos.add_new(IBOType::AllUVLines,
+                         extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::All));
+  }
   if (ibos_to_create.contains(IBOType::UVLines)) {
-    buffers.ibos.add_new(IBOType::UVLines, extract_edituv_lines_subdiv(mr, subdiv_cache, false));
+    buffers.ibos.add_new(
+        IBOType::UVLines,
+        extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::Selection));
   }
   if (vbos_to_create.contains(VBOType::EditUVStretchArea)) {
     buffers.vbos.add_new(
@@ -453,7 +505,7 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
   }
   if (ibos_to_create.contains(IBOType::EditUVLines)) {
     buffers.ibos.add_new(IBOType::EditUVLines,
-                         extract_edituv_lines_subdiv(mr, subdiv_cache, true));
+                         extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::Edit));
   }
   if (ibos_to_create.contains(IBOType::EditUVPoints)) {
     buffers.ibos.add_new(IBOType::EditUVPoints, extract_edituv_points_subdiv(mr, subdiv_cache));

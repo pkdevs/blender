@@ -13,12 +13,21 @@
 
 namespace blender::bke::curves::nurbs {
 
-bool check_valid_num_and_order(const int points_num,
-                               const int8_t order,
-                               const bool cyclic,
-                               const KnotsMode knots_mode)
+bool check_valid_eval_params(const int points_num,
+                             const int8_t order,
+                             const bool cyclic,
+                             const KnotsMode knots_mode,
+                             const int resolution)
 {
   if (points_num < order) {
+    return false;
+  }
+
+  if (order < 2) {
+    return false;
+  }
+
+  if (resolution < 1) {
     return false;
   }
 
@@ -37,6 +46,7 @@ static int calc_nonzero_knot_spans(const int points_num,
                                    const int8_t order,
                                    const bool cyclic)
 {
+  BLI_assert(order >= 2);
   const bool is_bezier = ELEM(mode, NURBS_KNOT_MODE_BEZIER, NURBS_KNOT_MODE_ENDPOINT_BEZIER);
   const bool is_end_point = ELEM(mode, NURBS_KNOT_MODE_ENDPOINT, NURBS_KNOT_MODE_ENDPOINT_BEZIER);
   /* Inner knots are always repeated once except on Bezier case. */
@@ -54,6 +64,11 @@ static int calc_nonzero_knot_spans(const int points_num,
   return non_zero_knots;
 }
 
+static bool is_breakpoint(const Span<float> knots, const int knot_span)
+{
+  return (knots[knot_span + 1] - knots[knot_span]) > 0.0f;
+}
+
 static int count_nonzero_knot_spans(const int points_num,
                                     const int order,
                                     const bool cyclic,
@@ -62,8 +77,10 @@ static int count_nonzero_knot_spans(const int points_num,
   BLI_assert(points_num > 0);
   const int degree = order - 1;
   int span_num = 0;
-  for (const int knot_span : IndexRange::from_begin_end(cyclic ? 0 : degree, points_num)) {
-    span_num += (knots[knot_span + 1] - knots[knot_span]) > 0.0f;
+
+  const int wrapped_points_num = control_points_num(points_num, order, cyclic);
+  for (const int knot_span : IndexRange::from_begin_end(degree, wrapped_points_num)) {
+    span_num += is_breakpoint(knots, knot_span);
   }
   return span_num;
 }
@@ -75,7 +92,7 @@ int calculate_evaluated_num(const int points_num,
                             const KnotsMode knots_mode,
                             const Span<float> knots)
 {
-  if (!check_valid_num_and_order(points_num, order, cyclic, knots_mode)) {
+  if (!check_valid_eval_params(points_num, order, cyclic, knots_mode, resolution)) {
     return points_num;
   }
   const int nonzero_span_num = knots_mode == KnotsMode::NURBS_KNOT_MODE_CUSTOM &&
@@ -183,57 +200,38 @@ Vector<int> calculate_multiplicity_sequence(const Span<float> knots)
   return multiplicity;
 }
 
-static void calculate_basis_for_point(const float parameter,
-                                      const int points_num,
+/* Basis function calculation, implementation based on 'The NURBS Book' p. 70, ISBN: 3540615458.
+ */
+static void calculate_basis_for_point(const Span<float> knots,
                                       const int degree,
-                                      const Span<float> knots,
+                                      const float parameter,
+                                      const int span_index,
                                       MutableSpan<float> r_weights,
                                       int &r_start_index)
 {
+  BLI_assert(degree >= 1);
+  BLI_assert(span_index >= degree);
+  BLI_assert(span_index + degree < knots.size());
+  BLI_assert(knots[span_index + 1] > knots[span_index]);
   const int order = degree + 1;
 
-  int start = 0;
-  int end = 0;
-  for (const int i : IndexRange(points_num + degree)) {
-    const bool knots_equal = knots[i] == knots[i + 1];
-    if (knots_equal || parameter < knots[i] || parameter > knots[i + 1]) {
-      continue;
-    }
+  r_start_index = span_index - degree;
 
-    start = std::max(i - degree, 0);
-    end = i;
-    break;
+  Array<float, 12> left(order);
+  Array<float, 12> right(order);
+  r_weights[0] = 1.0f;
+
+  for (const int j : IndexRange(1, degree)) {
+    left[j] = parameter - knots[span_index + 1 - j];
+    right[j] = knots[span_index + j] - parameter;
+    float saved = 0.0f;
+    for (const int r : IndexRange(j)) {
+      const float temp = r_weights[r] / (right[r + 1] + left[j - r]);
+      r_weights[r] = saved + right[r + 1] * temp;
+      saved = left[j - r] * temp;
+    }
+    r_weights[j] = saved;
   }
-
-  Array<float, 12> buffer(order * 2, 0.0f);
-
-  buffer[end - start] = 1.0f;
-
-  for (const int i_order : IndexRange(2, degree)) {
-    if (end + i_order >= knots.size()) {
-      end = points_num + degree - i_order;
-    }
-    for (const int i : IndexRange(end - start + 1)) {
-      const int knot_index = start + i;
-
-      float new_basis = 0.0f;
-      if (buffer[i] != 0.0f) {
-        new_basis += ((parameter - knots[knot_index]) * buffer[i]) /
-                     (knots[knot_index + i_order - 1] - knots[knot_index]);
-      }
-
-      if (buffer[i + 1] != 0.0f) {
-        new_basis += ((knots[knot_index + i_order] - parameter) * buffer[i + 1]) /
-                     (knots[knot_index + i_order] - knots[knot_index + 1]);
-      }
-
-      buffer[i] = new_basis;
-    }
-  }
-
-  buffer.as_mutable_span().drop_front(end - start + 1).fill(0.0f);
-  r_weights.copy_from(buffer.as_span().take_front(order));
-  r_start_index = start;
 }
 
 void calculate_basis_cache(const int points_num,
@@ -241,12 +239,14 @@ void calculate_basis_cache(const int points_num,
                            const int8_t order,
                            const int resolution,
                            const bool cyclic,
+                           const KnotsMode knots_mode,
                            const Span<float> knots,
                            BasisCache &basis_cache)
 {
   BLI_assert(points_num > 0);
 
   const int8_t degree = order - 1;
+  const int wrapped_points_num = control_points_num(points_num, order, cyclic);
 
   basis_cache.weights.resize(evaluated_num * order);
   basis_cache.start_indices.resize(evaluated_num);
@@ -255,38 +255,60 @@ void calculate_basis_cache(const int points_num,
     return;
   }
 
+  if (!check_valid_eval_params(points_num, order, cyclic, knots_mode, resolution)) {
+    return;
+  }
+
   MutableSpan<float> basis_weights(basis_cache.weights);
   MutableSpan<int> basis_start_indices(basis_cache.start_indices);
 
-  const int last_control_point_index = control_points_num(points_num, order, cyclic);
+  /* Find the 'span index' for each breakpoint that defines the 'evaluated spans'.
+   * An evaluated span (or 'segment') in this context is the parameter interval
+   * between two consecutive knots [i, i + 1], where the knot at index `i` is a
+   * breakpoint and is strictly less than the value of following knot. For repeated
+   * knots, with multiplicity > 1, only the rightmost is considered a breakpoint
+   * as the spans between repeated knot values are zero length!
+   */
+  const int breakpoint_num = (evaluated_num - !cyclic) / resolution;
+  Array<int, 20> span_offsets(breakpoint_num);
 
-  int eval_point = 0;
-
-  for (const int knot_span : IndexRange::from_begin_end(degree, last_control_point_index)) {
-    const float start = knots[knot_span];
-    const float end = knots[knot_span + 1];
-    if (start == end) {
-      continue;
-    }
-    const float step_width = (end - start) / resolution;
-    for (const int step : IndexRange::from_begin_size(0, resolution)) {
-      const float parameter = start + step * step_width;
-      calculate_basis_for_point(parameter,
-                                last_control_point_index,
-                                degree,
-                                knots,
-                                basis_weights.slice(eval_point * order, order),
-                                basis_start_indices[eval_point]);
-      eval_point++;
+  int breakpoint_count = 0;
+  for (const int span_index : IndexRange::from_begin_end(degree, wrapped_points_num)) {
+    if (is_breakpoint(knots, span_index)) {
+      span_offsets[breakpoint_count++] = span_index;
     }
   }
+  BLI_assert(breakpoint_count == breakpoint_num);
+
+  /* Build the basis cache, sampling each evaluated span at intervals. */
+  threading::parallel_for(span_offsets.index_range(), 4096, [&](const IndexRange range) {
+    for (const int index : range) {
+      const int span_index = span_offsets[index];
+      int eval_point = index * resolution;
+
+      const float knot_delta = knots[span_index + 1] - knots[span_index];
+      const float knot_step = knot_delta / resolution;
+      BLI_assert(knot_delta > 0.0f);
+
+      for (const int step : IndexRange::from_begin_size(0, resolution)) {
+        const float parameter = knots[span_index] + step * knot_step;
+        calculate_basis_for_point(knots,
+                                  degree,
+                                  parameter,
+                                  span_index,
+                                  basis_weights.slice(eval_point * order, order),
+                                  basis_start_indices[eval_point]);
+        eval_point++;
+      }
+    }
+  });
   if (!cyclic) {
-    calculate_basis_for_point(knots[last_control_point_index],
-                              last_control_point_index,
+    calculate_basis_for_point(knots,
                               degree,
-                              knots,
-                              basis_weights.slice(eval_point * order, order),
-                              basis_start_indices[eval_point]);
+                              knots[wrapped_points_num],
+                              span_offsets.last(),
+                              basis_weights.slice(basis_weights.size() - order, order),
+                              basis_start_indices.last());
   }
 }
 
@@ -345,8 +367,7 @@ void interpolate_to_evaluated(const BasisCache &basis_cache,
   }
 
   BLI_assert(dst.size() == basis_cache.start_indices.size());
-  attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(src.type(), [&]<typename T>() {
     if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
       if (control_weights.is_empty()) {
         interpolate_to_evaluated(basis_cache, order, src.typed<T>(), dst.typed<T>());

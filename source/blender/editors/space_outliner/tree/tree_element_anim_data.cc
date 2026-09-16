@@ -9,13 +9,16 @@
 #include "DNA_anim_types.h"
 #include "DNA_outliner_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 
 #include "../outliner_intern.hh"
 
+#include "tree_display.hh"
 #include "tree_element_anim_data.hh"
+#include "tree_element_driver.hh"
+#include "tree_element_nla.hh"
 
 namespace blender::ed::outliner {
 
@@ -33,32 +36,32 @@ void TreeElementAnimData::expand(SpaceOutliner & /*space_outliner*/) const
 
   if (anim_data_.action) {
     /* Animation data-block itself. */
-    add_element(&legacy_te_.subtree,
-                reinterpret_cast<ID *>(anim_data_.action),
-                nullptr,
-                &legacy_te_,
-                TSE_SOME_ID,
-                0);
+    add_id_element({}, reinterpret_cast<ID *>(anim_data_.action));
   }
 
   expand_drivers();
   expand_NLA_tracks();
 }
 
+animrig::slot_handle_t TreeElementAnimData::get_slot_handle() const
+{
+  return this->anim_data_.slot_handle;
+}
+
 void TreeElementAnimData::expand_drivers() const
 {
-  if (BLI_listbase_is_empty(&anim_data_.drivers)) {
+  if (anim_data_.drivers.is_empty()) {
     return;
   }
-  add_element(&legacy_te_.subtree, nullptr, &anim_data_, &legacy_te_, TSE_DRIVER_BASE, 0);
+  add_element<TreeElementDriverBase>({}, anim_data_);
 }
 
 void TreeElementAnimData::expand_NLA_tracks() const
 {
-  if (BLI_listbase_is_empty(&anim_data_.nla_tracks)) {
+  if (anim_data_.nla_tracks.is_empty()) {
     return;
   }
-  add_element(&legacy_te_.subtree, nullptr, &anim_data_, &legacy_te_, TSE_NLA, 0);
+  add_element<TreeElementNLA>({}, anim_data_);
 }
 
 }  // namespace blender::ed::outliner

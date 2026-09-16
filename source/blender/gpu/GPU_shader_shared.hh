@@ -6,11 +6,11 @@
  * \ingroup gpu
  */
 
-#ifndef USE_GPU_SHADER_CREATE_INFO
-#  pragma once
+#pragma once
 
-#  include "GPU_shader_shared_utils.hh"
+#include "GPU_shader_shared_utils.hh"
 
+#ifndef GPU_SHADER
 struct TestOutputRawData;
 #endif
 
@@ -19,7 +19,7 @@ struct TestOutputRawData;
  * required in the common use-case where a float3 and an int/float are paired together for optimal
  * data transfer. */
 
-enum eGPUKeyframeShapes : uint32_t {
+enum [[host_shared]] GPUKeyframeShapes : uint32_t {
   GPU_KEYFRAME_SHAPE_DIAMOND = (1u << 0u),
   GPU_KEYFRAME_SHAPE_CIRCLE = (1u << 1u),
   GPU_KEYFRAME_SHAPE_CLIPPED_VERTICAL = (1u << 2u),
@@ -36,7 +36,7 @@ enum eGPUKeyframeShapes : uint32_t {
 #define MAX_SOCKET_INSTANCE 32
 
 /* Node Socket shader parameters. Must match the shader layout of "gpu_shader_2D_node_socket". */
-struct NodeSocketShaderParameters {
+struct [[host_shared]] NodeSocketShaderParameters {
   float4 rect;
   float4 color_inner;
   float4 color_outline;
@@ -45,70 +45,78 @@ struct NodeSocketShaderParameters {
   float shape;
   float aspect;
 };
-BLI_STATIC_ASSERT_ALIGN(NodeSocketShaderParameters, 16)
 
-struct NodeLinkData {
-  float4 colors[3];
-  /* bezierPts Is actually a float2, but due to std140 each element needs to be aligned to 16
-   * bytes. */
-  float4 bezierPts[4];
-  bool32_t doArrow;
-  bool32_t doMuted;
+/* Per link data. */
+struct [[host_shared]] NodeLinkData {
+  float4 start_color;
+  float4 end_color;
+  float2 bezier_P0;
+  float2 bezier_P1;
+  float2 bezier_P2;
+  float2 bezier_P3;
+  uint color_ids;
+  float dash_length;
+  float dash_factor;
+  float dash_alpha;
   float dim_factor;
   float thickness;
-  float4 dash_params;
-  bool32_t has_back_link;
   float aspect;
-  float arrowSize;
-  float _pad;
+  bool32_t do_arrow;
+  bool32_t do_muted;
+  bool32_t has_back_link;
+  float _pad0;
+  float _pad1;
 };
-BLI_STATIC_ASSERT_ALIGN(NodeLinkData, 16)
 
-struct NodeLinkInstanceData {
+/* Destination tile size handled by one workgroup of the mipmap compute shader. */
+#define MIPMAP_UPDATE_TILE_SIZE 8
+
+/* Chunk size for partial mipmap updates. */
+#define MIPMAP_UPDATE_CHUNK_SIZE 256
+
+/* Coordinate of a mipmap chunk for partial mipmap updates. */
+struct [[host_shared]] MipmapChunkCoord {
+  int2 coord;
+};
+
+/* Data common to all links. */
+struct [[host_shared]] NodeLinkUniformData {
   float4 colors[6];
   float aspect;
-  float arrowSize;
+  float arrow_size;
   float2 _pad;
 };
-BLI_STATIC_ASSERT_ALIGN(NodeLinkInstanceData, 16)
 
-struct GPencilStrokeData {
+struct [[host_shared]] GPencilStrokeData {
   float2 viewport;
   float pixsize;
   float objscale;
-  float pixfactor;
-  int xraymode;
   int caps_start;
   int caps_end;
-  bool32_t keep_size;
   bool32_t fill_stroke;
-  float2 _pad;
+  float _pad;
 };
-BLI_STATIC_ASSERT_ALIGN(GPencilStrokeData, 16)
 
-struct GPUClipPlanes {
+struct [[host_shared]] GPUClipPlanes {
   float4x4 ClipModelMatrix;
   float4 world[6];
 };
-BLI_STATIC_ASSERT_ALIGN(GPUClipPlanes, 16)
 
-struct SimpleLightingData {
+struct [[host_shared]] SimpleLightingData {
   float4 l_color;
   packed_float3 light;
   float _pad;
 };
-BLI_STATIC_ASSERT_ALIGN(SimpleLightingData, 16)
 
 #define MAX_CALLS 16
 
-struct MultiIconCallData {
+struct [[host_shared]] MultiIconCallData {
   float4 calls_data[MAX_CALLS * 3];
 };
-BLI_STATIC_ASSERT_ALIGN(MultiIconCallData, 16)
 
 #define GPU_SEQ_STRIP_DRAW_DATA_LEN 256
 
-enum eGPUSeqFlags : uint32_t {
+enum [[host_shared]] GPUSeqFlags : uint32_t {
   GPU_SEQ_FLAG_BACKGROUND = (1u << 0u),
   GPU_SEQ_FLAG_SINGLE_IMAGE = (1u << 1u),
   GPU_SEQ_FLAG_COLOR_BAND = (1u << 2u),
@@ -123,66 +131,102 @@ enum eGPUSeqFlags : uint32_t {
   GPU_SEQ_FLAG_SELECTED_LH = (1u << 11u),
   GPU_SEQ_FLAG_SELECTED_RH = (1u << 12u),
   GPU_SEQ_FLAG_OVERLAP = (1u << 15u),
+  GPU_SEQ_FLAG_CLAMPED = (1u << 16u),
+  GPU_SEQ_FLAG_THUMBNAILS_BACKGROUND = (1u << 17u),
 
   GPU_SEQ_FLAG_ANY_HANDLE = GPU_SEQ_FLAG_SELECTED_LH | GPU_SEQ_FLAG_SELECTED_RH
 };
 
+/* Glyph for text rendering. */
+struct [[host_shared]] GlyphQuad {
+  int4 position;
+  float4 glyph_color; /* Cannot be name `color` because of metal macros. */
+  int2 glyph_size;
+  int offset;
+  uint flags;
+};
+
 /* VSE per-strip data for timeline rendering. */
-struct SeqStripDrawData {
+struct [[host_shared]] SeqStripDrawData {
   /* Horizontal strip positions (1.0 is one frame). */
-  float left_handle, right_handle;  /* Left and right strip sides. */
-  float content_start, content_end; /* Start and end of actual content (only relevant for strips
-                                     * that have holdout regions). */
+  /* Left and right strip sides. */
+  float left_handle;
+  float right_handle;
+  /* Start and end of actual content (only relevant for strips  that have holdout regions). */
+  float content_start;
+  float content_end;
   float handle_width;
   /* Vertical strip positions (1.0 is one channel). */
   float bottom;
   float top;
   float strip_content_top; /* Content coordinate, i.e. below title bar if there is one. */
-  uint flags;              /* eGPUSeqFlags bitmask. */
+  uint flags;              /* GPUSeqFlags bitmask. */
   /* Strip colors, each is uchar4 packed with equivalent of packUnorm4x8. */
   uint col_background;
   uint col_outline;
   uint col_color_band;
-  uint col_transition_in, col_transition_out;
-  float _pad0, _pad1;
+  uint col_transition_in;
+  uint col_transition_out;
+  float _pad0;
+  float _pad1;
 };
-BLI_STATIC_ASSERT_ALIGN(SeqStripDrawData, 16)
+#ifndef GPU_SHADER
 BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
                   "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE per-thumbnail data for timeline rendering. */
-struct SeqStripThumbData {
-  float left, right, bottom, top; /* Strip rectangle positions. */
-  float x1, y1, x2, y2;           /* Thumbnail rectangle positions. */
-  float u1, v1, u2, v2;           /* Thumbnail UVs. */
+struct [[host_shared]] SeqStripThumbData {
+  /* Strip rectangle positions. */
+  float left;
+  float right;
+  float bottom;
+  float top;
+  /* Thumbnail rectangle positions. */
+  float x1;
+  float y1;
+  float x2;
+  float y2;
+  /* Thumbnail UVs. */
+  float u1;
+  float v1;
+  float u2;
+  float v2;
   float4 tint_color;
 };
-BLI_STATIC_ASSERT_ALIGN(SeqStripThumbData, 16)
+#ifndef GPU_SHADER
 BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
                   "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE global data for timeline rendering. */
-struct SeqContextDrawData {
+struct [[host_shared]] SeqContextDrawData {
   float round_radius;
   float pixelsize;
   uint col_back;
   float _pad0;
 };
-BLI_STATIC_ASSERT_ALIGN(SeqContextDrawData, 16)
 
-struct GreasePencilStrokeData {
+/* VSE scope point rasterizer data. */
+struct [[host_shared]] SeqScopeRasterData {
+  uint col_r;
+  uint col_g;
+  uint col_b;
+  uint col_a;
+};
+
+struct [[host_shared]] GreasePencilStrokeData {
   packed_float3 position;
   float stroke_thickness;
   float4 stroke_color;
 };
-BLI_STATIC_ASSERT_ALIGN(GreasePencilStrokeData, 16)
 
-enum TestStatus : uint32_t {
+enum [[host_shared]] TestStatus : uint32_t {
   TEST_STATUS_NONE = 0u,
   TEST_STATUS_PASSED = 1u,
   TEST_STATUS_FAILED = 2u,
 };
-enum TestType : uint32_t {
+enum [[host_shared]] TestType : uint32_t {
   TEST_TYPE_BOOL = 0u,
   TEST_TYPE_UINT = 1u,
   TEST_TYPE_INT = 2u,
@@ -208,14 +252,13 @@ enum TestType : uint32_t {
 };
 
 /** \note Contains arrays of scalar. To be use only with SSBOs to avoid padding issues. */
-struct TestOutputRawData {
+struct [[host_shared]] TestOutputRawData {
   uint data[16];
 };
-BLI_STATIC_ASSERT_ALIGN(TestOutputRawData, 16)
 
-struct TestOutput {
-  TestOutputRawData expect;
-  TestOutputRawData result;
+struct [[host_shared]] TestOutput {
+  struct TestOutputRawData expect;
+  struct TestOutputRawData result;
   /** TestStatus. */
   uint status;
   /** Line error in the GLSL file. */
@@ -224,17 +267,14 @@ struct TestOutput {
   uint type;
   int _pad0;
 };
-BLI_STATIC_ASSERT_ALIGN(TestOutput, 16)
 
 #ifdef GPU_SHADER
-TestOutput test_output(
-    TestOutputRawData expect, TestOutputRawData result, bool status, int line, uint type)
+TestOutput test_output(TestOutputRawData expect, TestOutputRawData result, bool status, uint type)
 {
   TestOutput test;
   test.expect = expect;
   test.result = result;
   test.status = status ? TEST_STATUS_PASSED : TEST_STATUS_FAILED;
-  test.line = line;
   test.type = type;
   return test;
 }

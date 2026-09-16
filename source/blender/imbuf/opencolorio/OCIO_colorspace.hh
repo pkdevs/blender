@@ -22,18 +22,15 @@ class ColorSpace {
   int index = -1;
 
   /**
-   * Name and description of this space.
+   * Name, description, and family of this space.
    *
    * The name is used to address to this color space from various places of the configuration.
    * The description is used for UI to give better clue what the space is to artists.
+   * The family is used for organizational purposes in menus.
    */
   virtual StringRefNull name() const = 0;
   virtual StringRefNull description() const = 0;
-
-  /**
-   * Returns true if there is a conversion from this color space to the scene linear.
-   */
-  virtual bool is_invertible() const = 0;
+  virtual StringRefNull family() const = 0;
 
   /**
    * Check whether this color space matches one of the built-in spaces like scene linear or sRGB
@@ -50,6 +47,23 @@ class ColorSpace {
   virtual bool is_data() const = 0;
 
   /**
+   * The color space is display referred rather than scene referred.
+   */
+  virtual bool is_display_referred() const = 0;
+
+  /*
+   * Identifier for colorspaces that works with multiple OpenColorIO configurations,
+   * as defined by the ASWF Color Interop Forum.
+   */
+  virtual StringRefNull interop_id() const = 0;
+  virtual bool is_primary_interop_id() const = 0;
+
+  /*
+   * ICC profile path from attribute in the configuration.
+   */
+  virtual std::string icc_profile_path() const = 0;
+
+  /**
    * Quick access to CPU processors that convert color space from the current one to scene linear
    * and vice versa.
    * The call is allowed to be caching from the color space implementation perspective.
@@ -57,5 +71,15 @@ class ColorSpace {
   const virtual CPUProcessor *get_to_scene_linear_cpu_processor() const = 0;
   const virtual CPUProcessor *get_from_scene_linear_cpu_processor() const = 0;
 };
+
+/**
+ * Drop the namespace from an interop ID, so e.g. `blender:g24_rec2020_display` becomes
+ * `g24_rec2020_display`.
+ */
+inline StringRef interop_id_drop_namespace(const StringRef interop_id)
+{
+  const int64_t colon = interop_id.find(':');
+  return (colon == StringRef::not_found) ? interop_id : interop_id.drop_prefix(colon + 1);
+}
 
 }  // namespace blender::ocio

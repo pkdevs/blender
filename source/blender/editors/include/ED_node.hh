@@ -2,10 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editors
+ */
+
 #pragma once
 
 #include <optional>
 
+#include "BLI_bounds.hh"
 #include "BLI_compute_context.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
@@ -18,28 +23,43 @@
 
 #include "ED_node_c.hh"
 
+#include "UI_interface_layout.hh"
+
+namespace blender {
+
 struct SpaceNode;
 struct ARegion;
 struct Main;
 struct bContext;
 struct bNodeSocket;
 struct bNodeTree;
+struct bNodeTreeInterfacePanel;
+struct bNodeTreeInterfaceSocket;
 struct Object;
 struct rcti;
 struct rctf;
 struct NodesModifierData;
-struct uiLayout;
 
-namespace blender::bke {
+namespace bke {
 class bNodeTreeZone;
 }
 
-namespace blender::ed::space_node {
+namespace ui {
+struct Layout;
+}  // namespace ui
+
+namespace nodes {
+class ItemDeclaration;
+}
+
+namespace ed::space_node {
 
 void tree_update(const bContext *C);
-void tag_update_id(ID *id);
 
 float grid_size_get();
+
+/* Compute the nearest 1D coordinate corresponding to the nearest grid in node editors. */
+float nearest_node_grid_coord(float co);
 
 /** Update the active node tree based on the context. */
 void snode_set_context(const bContext &C);
@@ -58,7 +78,7 @@ void node_insert_on_link_flags_set(SpaceNode &snode,
 /**
  * Tag the editor to highlight the frame that currently transformed nodes will be attached to.
  */
-void node_insert_on_frame_flag_set(bContext &C, SpaceNode &snode, const int2 &cursor);
+void node_insert_on_frame_flag_set(SpaceNode &snode, ARegion &region, const int2 &cursor);
 void node_insert_on_frame_flag_clear(SpaceNode &snode);
 
 /**
@@ -88,14 +108,20 @@ std::optional<nodes::FoundNestedNodeID> find_nested_node_id_in_root(const SpaceN
 std::optional<nodes::FoundNestedNodeID> find_nested_node_id_in_root(
     const bNodeTree &root_tree, const ComputeContext *compute_context, const int node_id);
 
+/**
+ * Finds the context object for the node editor, taking pinning into account.
+ */
+Object *get_space_editor_object(const bContext *C);
+
 struct ObjectAndModifier {
-  const Object *object;
-  const NodesModifierData *nmd;
+  const Object *object = nullptr;
+  const NodesModifierData *nmd = nullptr;
 };
 /**
- * Finds the context-modifier for the node editor.
+ * Finds the geometry nodes context-modifier for the node editor.
  */
-std::optional<ObjectAndModifier> get_modifier_for_node_editor(const SpaceNode &snode);
+std::optional<ObjectAndModifier> get_geometry_nodes_modifier_for_node_editor(
+    const SpaceNode &snode);
 
 bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
                                                 const Object &object,
@@ -120,35 +146,6 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
     const SpaceNode &snode, bke::ComputeContextCache &compute_context_cache, const bNode &node);
 
 /**
- * Attempts to find a compute context that the closure is evaluated in. If none is found, null is
- * returned. If multiple are found, it currently picks the first one it finds which is somewhat
- * arbitrary.
- */
-[[nodiscard]] const ComputeContext *compute_context_for_closure_evaluation(
-    const ComputeContext *closure_socket_context,
-    const bNodeSocket &closure_socket,
-    bke::ComputeContextCache &compute_context_cache,
-    const std::optional<nodes::ClosureSourceLocation> &source_location);
-
-/**
- * Finds closure output nodes that are linked to the given closure socket.
- */
-Vector<const bNode *> gather_linked_closure_origin_nodes(
-    const ComputeContext *closure_socket_context,
-    const bNodeSocket &closure_socket,
-    bke::ComputeContextCache &compute_context_cache);
-
-Vector<const bNode *> gather_linked_separate_bundle_nodes(
-    const ComputeContext *bundle_socket_context,
-    const bNodeSocket &bundle_socket,
-    bke::ComputeContextCache &compute_context_cache);
-
-Vector<const bNode *> gather_linked_combine_bundle_nodes(
-    const ComputeContext *bundle_socket_context,
-    const bNodeSocket &bundle_socket,
-    bke::ComputeContextCache &compute_context_cache);
-
-/**
  * Creates a compute context for the given zone. It takes e.g. the current inspection index into
  * account.
  */
@@ -156,9 +153,31 @@ Vector<const bNode *> gather_linked_combine_bundle_nodes(
     const bke::bNodeTreeZone &zone,
     bke::ComputeContextCache &compute_context_cache,
     const ComputeContext *parent_compute_context);
+[[nodiscard]] const ComputeContext *compute_context_for_zones(
+    const Span<const bke::bNodeTreeZone *> zones,
+    bke::ComputeContextCache &compute_context_cache,
+    const ComputeContext *parent_compute_context);
 
-void ui_template_node_asset_menu_items(uiLayout &layout,
+void ui_template_node_asset_menu_items(ui::Layout &layout,
                                        const bContext &C,
-                                       StringRef catalog_path);
+                                       StringRef catalog_path,
+                                       const ui::NodeAssetMenuOperatorType operator_type);
 
-}  // namespace blender::ed::space_node
+/** See #ed::space_node::SpaceNode_Runtime::node_can_sync_states. */
+Map<int, bool> &node_can_sync_cache_get(SpaceNode &snode);
+
+void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree);
+
+const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label = nullptr);
+
+const char *node_socket_get_description(const bNodeSocket *socket);
+
+std::optional<Bounds<float2>> node_bounds(Span<const bNode *> nodes);
+std::optional<Bounds<float2>> node_location_bounds(Span<const bNode *> nodes);
+
+/** Find the top-most parent shared by all the nodes, or null if no parent contains all nodes. */
+bNode *find_common_parent_node(Span<bNode *> nodes);
+
+}  // namespace ed::space_node
+
+}  // namespace blender

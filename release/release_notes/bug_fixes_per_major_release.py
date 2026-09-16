@@ -30,7 +30,7 @@ some missing commits), but it's significantly better than nothing.
   - --backport-tasks (-bpt) (Optional, but recommended)
 - Here is an example if you wish to collect the list for Blender 5.0 during
 the Alpha stage of development.
-  - `python bug_fixes_per_major_release.py -cv 5.0 -pv 4.5 -ct main -pt blender-v4.5-release -bpt 124452 135860`
+  - `python bug_fixes_per_major_release.py -cv 5.0 -pv 4.5 -ct main -pt blender-v4.5-release -bpt 124452 135860 141871`
 - Here is an example if you wish to collect the list for Blender 4.5 during
 the Beta stage of development.
   - `python bug_fixes_per_major_release.py -cv 4.5 -pv 4.4 -ct blender-v4.5-release -pt blender-v4.4-release -bpt 109399 124452 135860`
@@ -50,7 +50,7 @@ issue: https://projects.blender.org/blender/blender/issues/137983
 
 ### How the script works
 - First the script gathers all commits that contain `Fix #NUMBER` that
-occured between the two versions of Blender you're interested in.
+occurred between the two versions of Blender you're interested in.
   - This is done using:
   `git --no-pager log PREVIOUS_VERSION..CURRENT_VERSION --oneline -i -P --grep "Fix.*#+\d+"`
 - The script then extracts all report numbers (`#NUMBER`)
@@ -193,10 +193,6 @@ OLDER_VERION = "OLDER"
 NEWER_VERION = "NEWER"
 SAME_VERION = "SAME"
 
-dir_of_script = Path(__file__).parent.resolve()
-PATH_TO_CACHED_COMMITS = dir_of_script.joinpath('cached_commits.json')
-del dir_of_script
-
 # Add recent Blender versions to this list, including in-development versions.
 # This list is used to identify if a version number found in a report is a valid version number.
 # This is to help eliminate dates and other weird information people put
@@ -228,7 +224,7 @@ LIST_OF_OFFICIAL_BLENDER_VERSIONS = (
     # 4.x.
     '4.0', '4.1', '4.2', '4.3', '4.4', '4.5',
     # 5.x.
-    '5.0',
+    '5.0', '5.1', '5.2',
 )
 
 # Catch duplicates
@@ -330,7 +326,8 @@ class CommitInfo:
         # E.g. Fix `blender/blender-manual#NUMBER`, will be picked out for processing.
         match = re.findall(r'\s#+(\d+)', command_output)
         if match:
-            return match
+            # Remove duplicates reports.
+            return list(dict.fromkeys(match))
         return []
 
     def get_backports(self, dict_of_backports: dict[str, list[str]]) -> None:
@@ -664,10 +661,14 @@ def get_backported_commits(issue_number: str) -> dict[str, list[str]]:
 
     dict_of_backports: dict[str, list[str]] = {}
 
-    blender_version_start = "## Blender "
     for line in lines:
-        if line.startswith(blender_version_start):
-            current_version = line.strip(blender_version_start)
+        if line.startswith("## Blender "):
+            version_match = re.search(r"(\d+.\d+.\d+)", line)
+            if version_match:
+                current_version = version_match[0]
+            else:
+                print(f"{line} from backport task {issue_number} did not follow the expected Blender version format.")
+                current_version = None
         if current_version is None:
             # We haven't got a Blender version yet.
             continue
@@ -746,7 +747,7 @@ def classify_commits(
 
 # ---
 
-def prepare_for_print(list_of_commits: list[CommitInfo]) -> dict[str, dict[str, list[CommitInfo]]]:
+def organize_commits(list_of_commits: list[CommitInfo]) -> dict[str, dict[str, list[CommitInfo]]]:
     # This function takes in a list of commits, and sorts them based on their classification and module.
 
     dict_of_sorted_commits: dict[str, dict[str, list[CommitInfo]]] = {}
@@ -770,7 +771,7 @@ def prepare_for_print(list_of_commits: list[CommitInfo]) -> dict[str, dict[str, 
     return dict_of_sorted_commits
 
 
-def print_list_of_commits(title: str, dict_of_commits: dict[str, list[CommitInfo]]) -> None:
+def gather_list_of_commits_to_print(title: str, dict_of_commits: dict[str, list[CommitInfo]]) -> str:
     commits_message = ""
     number_of_commits = 0
     unknown_module_commit_message = ""
@@ -793,37 +794,51 @@ def print_list_of_commits(title: str, dict_of_commits: dict[str, list[CommitInfo
                 commits_message += printed_line
 
     if number_of_commits != 0:
-        print(f"{title} {number_of_commits}")
-        print(commits_message)
-        print(unknown_module_commit_message)
-        print("\n\n\n")
+        return f"""{title} {number_of_commits}
+        {commits_message}
+        {unknown_module_commit_message}"""
+    return ""
 
 
 # ---
 
 def print_release_notes(list_of_commits: list[CommitInfo]) -> None:
-    dict_of_sorted_commits = prepare_for_print(list_of_commits)
+    def print_with_spacer(info_to_print: str) -> None:
+        if len(info_to_print) > 0:
+            print(info_to_print)
+            # Print spacer
+            print("\n\n\n")
 
-    print_list_of_commits("Commits that fixed old issues:", dict_of_sorted_commits[FIXED_OLD_ISSUE])
+    dict_of_sorted_commits = organize_commits(list_of_commits)
 
-    print_list_of_commits(
-        "Revert commits. Add overrides to https://projects.blender.org/blender/blender/issues/137983:",
-        dict_of_sorted_commits[REVERT])
+    print_with_spacer(
+        gather_list_of_commits_to_print(
+            "Commits that fixed old issues:",
+            dict_of_sorted_commits[FIXED_OLD_ISSUE]))
 
-    print_list_of_commits("Commits that need manual sorting:", dict_of_sorted_commits[NEEDS_MANUAL_SORTING])
+    print_with_spacer(
+        gather_list_of_commits_to_print(
+            "Revert commits. Add overrides to https://projects.blender.org/blender/blender/issues/137983:",
+            dict_of_sorted_commits[REVERT]))
 
-    print_list_of_commits(
-        "Commits that need a override in https://projects.blender.org/blender/blender/issues/137983 as they claim to fix a PR:",
-        dict_of_sorted_commits[FIXED_PR])
+    print_with_spacer(
+        gather_list_of_commits_to_print(
+            "Commits that need manual sorting:",
+            dict_of_sorted_commits[NEEDS_MANUAL_SORTING]))
 
-    print_list_of_commits("Ignored commits:", dict_of_sorted_commits[IGNORED])
+    print_with_spacer(
+        gather_list_of_commits_to_print(
+            "Commits that need a override in https://projects.blender.org/blender/blender/issues/137983 as they claim to fix a PR:",
+            dict_of_sorted_commits[FIXED_PR]))
+
+    print_with_spacer(gather_list_of_commits_to_print("Ignored commits:", dict_of_sorted_commits[IGNORED]))
 
     # Currently disabled as this information isn't particularly useful.
-    # print_list_of_commits(dict_of_sorted_commits[FIXED_NEW_ISSUE])
+    # print(gather_list_of_commits_to_print(dict_of_sorted_commits[FIXED_NEW_ISSUE]))
 
     print(r"""What to do with this output:
     - Go through every commit in the "Commits that need manual sorting" section and:
-      - Find the corrisponding issue that was fixed (it will be in the commit message)
+      - Find the corresponding issue that was fixed (it will be in the commit message)
       - Update the "Broken" and/or "Working" fields of the report with relevant information so this script can sort it.
         - Add a module label if it's missing one.
       - Rerun this script.
@@ -847,16 +862,16 @@ def print_release_notes(list_of_commits: list[CommitInfo]) -> None:
 # -----------------------------------------------------------------------------
 # Caching Utilities
 
-def cached_commits_load(list_of_commits: list[CommitInfo]) -> None:
-    if PATH_TO_CACHED_COMMITS.exists():
-        with open(str(PATH_TO_CACHED_COMMITS), 'r', encoding='utf-8') as file:
+def cached_commits_load(list_of_commits: list[CommitInfo], path_to_cached_commits: Path) -> None:
+    if path_to_cached_commits.exists():
+        with open(str(path_to_cached_commits), 'r', encoding='utf-8') as file:
             cached_data = json.load(file)
         for commit in list_of_commits:
             if commit.hash in cached_data:
                 commit.read_from_cache(cached_data[commit.hash])
 
 
-def cached_commits_store(list_of_commits: list[CommitInfo]) -> None:
+def cached_commits_store(list_of_commits: list[CommitInfo], path_to_cached_commits: Path) -> None:
     # Cache information for commits that have been sorted.
     # Commits that still need sorting are not cached.
     # This is done so if a user is repeatably running this script so they can sort
@@ -864,12 +879,15 @@ def cached_commits_store(list_of_commits: list[CommitInfo]) -> None:
     # on commits that are already sorted (and they're not interested in).
     data_to_cache = {}
     for commit in list_of_commits:
-        if (commit.classification not in (NEEDS_MANUAL_SORTING, IGNORED)) and not (
-                commit.has_been_overwritten) and (commit.module != UNKNOWN):
+        if (
+            (commit.classification not in (NEEDS_MANUAL_SORTING, IGNORED)) and
+            (commit.has_been_overwritten is False) and
+            (commit.module != UNKNOWN)
+        ):
             commit_hash, data = commit.prepare_for_cache()
             data_to_cache[commit_hash] = data
 
-    with open(str(PATH_TO_CACHED_COMMITS), 'w', encoding='utf-8') as file:
+    with open(str(path_to_cached_commits), 'w', encoding='utf-8') as file:
         json.dump(data_to_cache, file, indent=4)
 
 
@@ -1034,7 +1052,7 @@ def validate_arguments(args: argparse.Namespace) -> bool:
     if len(args.backport_tasks) == 0:
         print("WARNING: (Optional) -bpt/--backport-tasks is not defined.")
         if not (args.silence or should_quit):
-            yes_no = input("Do you want to proceeed without it? (y/n)")
+            yes_no = input("Do you want to proceed without it? (y/n)")
             if yes_no.lower() == "n":
                 should_quit = True
 
@@ -1044,6 +1062,47 @@ def validate_arguments(args: argparse.Namespace) -> bool:
 # -----------------------------------------------------------------------------
 # Main Function
 
+def gather_and_sort_commits(
+        current_release_tag: str,
+        current_version: str,
+        previous_release_tag: str,
+        previous_version: str,
+        backport_tasks: list[str],
+        cache: bool = False,
+        silence: bool = False,
+        single_thread: bool = False,
+) -> list[CommitInfo]:
+    set_crawl_delay()
+
+    dir_of_sciprt = Path(__file__).parent.resolve()
+    # Replace "/" with "-" to avoid issues with directories in case someone
+    # uses "remote/branch" as their current or previous tag.
+    path_to_cached_commits = dir_of_sciprt.joinpath(
+        f'cached_commits_{previous_release_tag.replace("/", "-")}..{current_release_tag.replace("/", "-")}.json')
+
+    list_of_commits = get_fix_commits(
+        current_release_tag=current_release_tag,
+        previous_release_tag=previous_release_tag,
+        single_thread=single_thread,
+    )
+
+    if cache:
+        cached_commits_load(list_of_commits, path_to_cached_commits)
+
+    overrides_apply(list_of_commits, silence)
+
+    classify_commits(
+        backport_tasks,
+        list_of_commits,
+        current_version=current_version,
+        previous_version=previous_version,
+    )
+
+    if cache:
+        cached_commits_store(list_of_commits, path_to_cached_commits)
+
+    return list_of_commits
+
 
 def main() -> int:
     args = argparse_create().parse_args()
@@ -1051,28 +1110,16 @@ def main() -> int:
     if not validate_arguments(args):
         return 0
 
-    set_crawl_delay()
-
-    list_of_commits = get_fix_commits(
-        current_release_tag=args.current_release_tag,
-        previous_release_tag=args.previous_release_tag,
-        single_thread=args.single_thread,
-    )
-
-    if args.cache:
-        cached_commits_load(list_of_commits)
-
-    overrides_apply(list_of_commits, args.silence)
-
-    classify_commits(
+    list_of_commits = gather_and_sort_commits(
+        args.current_release_tag,
+        args.current_version,
+        args.previous_release_tag,
+        args.previous_version,
         args.backport_tasks,
-        list_of_commits,
-        current_version=args.current_version,
-        previous_version=args.previous_version,
+        args.cache,
+        args.silence,
+        args.single_thread,
     )
-
-    if args.cache:
-        cached_commits_store(list_of_commits)
 
     print_release_notes(list_of_commits)
     return 0

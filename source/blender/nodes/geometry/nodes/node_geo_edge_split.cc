@@ -4,6 +4,7 @@
 
 #include "DNA_mesh_types.h"
 
+#include "GEO_foreach_geometry.hh"
 #include "GEO_mesh_split_edges.hh"
 
 #include "node_geometry_util.hh"
@@ -14,18 +15,23 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_output<decl::Geometry>("Mesh").propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
+  b.add_input<decl::Geometry>("Mesh"_ustr)
+      .supported_type(GeometryComponent::Type::Mesh)
+      .description("Mesh whose edges to split");
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
 
-  const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
+  const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (const Mesh *mesh = geometry_set.get_mesh()) {
       const bke::MeshFieldContext field_context{*mesh, AttrDomain::Edge};
       fn::FieldEvaluator selection_evaluator{field_context, mesh->edges_num};
@@ -37,25 +43,25 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
 
       geometry::split_edges(
-          *geometry_set.get_mesh_for_write(), mask, params.get_attribute_filter("Mesh"));
+          *geometry_set.get_mesh_for_write(), mask, params.get_attribute_filter("Mesh"_ustr));
     }
   });
 
-  params.set_output("Mesh", std::move(geometry_set));
+  params.set_output("Mesh"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSplitEdges", GEO_NODE_SPLIT_EDGES);
+  geo_node_type_base(&ntype, "GeometryNodeSplitEdges"_ustr, GEO_NODE_SPLIT_EDGES);
   ntype.ui_name = "Split Edges";
   ntype.ui_description = "Duplicate mesh edges and break connections with the surrounding faces";
   ntype.enum_name_legacy = "SPLIT_EDGES";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

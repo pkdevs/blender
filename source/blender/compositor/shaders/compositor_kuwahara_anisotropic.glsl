@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_kuwahara_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_kuwahara_anisotropic_variable_size)
+
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
 
 /* An implementation of the Anisotropic Kuwahara filter described in the paper:
  *
@@ -22,7 +26,8 @@
  */
 
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_constants.bsl.hh"
 
 void main()
 {

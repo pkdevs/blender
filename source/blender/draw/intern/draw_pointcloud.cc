@@ -68,20 +68,30 @@ void DRW_pointcloud_module_free(PointCloudModule *pointcloud_module)
 
 template<typename PassT>
 gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
-                                                     Object *object,
+                                                     const ObjectRef &ob_ref,
+                                                     const ResourceHandleRange &res_handle,
                                                      GPUMaterial *gpu_material)
 {
+  const Object *object = ob_ref.object;
   BLI_assert(object->type == OB_POINTCLOUD);
+
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*object);
-  /* An empty point cloud should never result in a draw-call. However, the buffer binding commands
-   * will still be executed. In this case, in order to avoid assertion, we bind dummy VBOs. */
-  bool is_empty = pointcloud.totpoint == 0;
+  if (pointcloud.type == PointCloudType::GSplat) {
+    /* GSplats are a subtype of pointclouds, so we forward to their implementation. */
+    return gsplat_sub_pass_setup(sub_ps, ob_ref, res_handle, gpu_material);
+  }
 
   PointCloudModule &module = *drw_get().data->pointcloud_module;
-  /* Fix issue with certain driver not drawing anything if there is no texture bound to
-   * "ac", "au", "u" or "c". */
+
+  /* An empty pointcloud should never result in a draw-call. However, the buffer binding commands
+   * will still be executed. In this case, in order to avoid assertion, we bind dummy VBOs. */
+  const bool is_empty = pointcloud.totpoint == 0;
+
+  /* Ensure we have no unbound resources, required for Vulkan.
+   * Certain GL drivers also refuse to draw anything otherwise. */
   sub_ps.bind_texture("u", module.dummy_vbo);
   sub_ps.bind_texture("au", module.dummy_vbo);
+  sub_ps.bind_texture("a", module.dummy_vbo);
   sub_ps.bind_texture("c", module.dummy_vbo);
   sub_ps.bind_texture("ac", module.dummy_vbo);
 
@@ -89,14 +99,14 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
   sub_ps.bind_texture("ptcloud_pos_rad_tx", is_empty ? module.dummy_vbo : pos_rad_buf);
 
   if (gpu_material != nullptr) {
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
+    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
+    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
       char sampler_name[32];
       /** NOTE: Reusing curve attribute function. */
-      drw_curves_get_attribute_sampler_name(gpu_attr->name, sampler_name);
+      drw_curves_get_attribute_sampler_name(gpu_attr.name, sampler_name);
 
       gpu::VertBuf **attribute_buf = DRW_pointcloud_evaluated_attribute(&pointcloud,
-                                                                        gpu_attr->name);
+                                                                        gpu_attr.name);
       sub_ps.bind_texture(sampler_name,
                           (attribute_buf && !is_empty) ? attribute_buf : &module.dummy_vbo);
     }
@@ -107,17 +117,19 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
 }
 
 gpu::Batch *pointcloud_sub_pass_setup(PassMain::Sub &sub_ps,
-                                      Object *object,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material)
 {
-  return pointcloud_sub_pass_setup_implementation(sub_ps, object, gpu_material);
+  return pointcloud_sub_pass_setup_implementation(sub_ps, ob_ref, res_handle, gpu_material);
 }
 
 gpu::Batch *pointcloud_sub_pass_setup(PassSimple::Sub &sub_ps,
-                                      Object *object,
+                                      const ObjectRef &ob_ref,
+                                      const ResourceHandleRange &res_handle,
                                       GPUMaterial *gpu_material)
 {
-  return pointcloud_sub_pass_setup_implementation(sub_ps, object, gpu_material);
+  return pointcloud_sub_pass_setup_implementation(sub_ps, ob_ref, res_handle, gpu_material);
 }
 
 }  // namespace blender::draw

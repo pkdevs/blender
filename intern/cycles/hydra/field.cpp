@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "hydra/field.h"
+#include "hydra/util.h"
+
+#include "util/log.h"
 
 #ifdef WITH_OPENVDB
 #  include "hydra/session.h"
@@ -12,17 +15,10 @@
 #endif
 
 #include <pxr/imaging/hd/sceneDelegate.h>
+#include <pxr/imaging/hd/volumeFieldSchema.h>
 #include <pxr/usd/sdf/assetPath.h>
 
 HDCYCLES_NAMESPACE_OPEN_SCOPE
-
-#if PXR_VERSION < 2108
-// clang-format off
-TF_DEFINE_PRIVATE_TOKENS(_tokens,
-   (fieldName)
-);
-// clang-format on
-#endif
 
 #ifdef WITH_OPENVDB
 class HdCyclesVolumeLoader : public VDBImageLoader {
@@ -42,10 +38,10 @@ class HdCyclesVolumeLoader : public VDBImageLoader {
       }
     }
     catch (const openvdb::IoError &e) {
-      VLOG_WARNING << "Error loading OpenVDB file: " << e.what();
+      LOG_ERROR << "Error loading OpenVDB file: " << e.what();
     }
     catch (...) {
-      VLOG_WARNING << "Error loading OpenVDB file: Unknown error";
+      LOG_ERROR << "Error loading OpenVDB file: Unknown error";
     }
   }
 };
@@ -67,25 +63,31 @@ void HdCyclesField::Sync(HdSceneDelegate *sceneDelegate,
                          HdDirtyBits *dirtyBits)
 {
 #ifdef WITH_OPENVDB
-  VtValue value;
   const SdfPath &id = GetId();
 
   if (*dirtyBits & DirtyBits::DirtyParams) {
-    value = sceneDelegate->Get(id, HdFieldTokens->filePath);
-    if (value.IsHolding<SdfAssetPath>()) {
-      std::string filename = value.UncheckedGet<SdfAssetPath>().GetResolvedPath();
-      if (filename.empty()) {
-        filename = value.UncheckedGet<SdfAssetPath>().GetAssetPath();
+    const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
+    HdVolumeFieldSchema schema = HdVolumeFieldSchema::GetFromParent(prim.dataSource);
+
+    SdfAssetPath assetPath;
+    if (auto ds = schema.GetFilePath()) {
+      assetPath = ds->GetTypedValue(0.0f);
+    }
+
+    std::string filename = assetPath.GetResolvedPath();
+    if (filename.empty()) {
+      filename = assetPath.GetAssetPath();
+    }
+
+    if (!filename.empty()) {
+      TfToken fieldName;
+      if (auto ds = schema.GetFieldName()) {
+        fieldName = ds->GetTypedValue(0.0f);
       }
 
-#  if PXR_VERSION >= 2108
-      value = sceneDelegate->Get(id, HdFieldTokens->fieldName);
-#  else
-      value = sceneDelegate->Get(id, _tokens->fieldName);
-#  endif
-      if (value.IsHolding<TfToken>()) {
-        unique_ptr<ImageLoader> loader = make_unique<HdCyclesVolumeLoader>(
-            filename, value.UncheckedGet<TfToken>().GetString());
+      if (!fieldName.IsEmpty()) {
+        unique_ptr<ImageLoader> loader = make_unique<HdCyclesVolumeLoader>(filename,
+                                                                           fieldName.GetString());
 
         const SceneLock lock(renderParam);
 

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BLI_array_utils.hh"
 #include "BLI_stack.hh"
 
@@ -133,10 +137,17 @@ static void reorder_and_flip_attributes_group_to_group(
     if (iter.domain != domain) {
       return;
     }
-    if (iter.data_type == CD_PROP_STRING) {
+    if (iter.data_type == bke::AttrType::String) {
       return;
     }
     const GVArray src = *iter.get(domain);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.type(), info.data));
+      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+        return;
+      }
+    }
     bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, domain, iter.data_type);
     if (!dst) {

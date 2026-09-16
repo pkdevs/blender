@@ -10,6 +10,8 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 #define DEPTH_INVALID 1.0f
 
 /* internal exports only */
@@ -23,6 +25,7 @@ struct RNG;
 
 struct ARegion;
 struct Brush;
+struct Depsgraph;
 struct Scene;
 struct View2D;
 struct View3D;
@@ -30,10 +33,8 @@ struct ViewDepths;
 struct wmOperatorType;
 struct wmWindow;
 
-struct Depsgraph;
 struct Object;
 struct ScrArea;
-struct ListBase;
 struct bGPDlayer;
 
 struct EnumPropertyItem;
@@ -91,13 +92,6 @@ void gpencil_point_to_xy(const GP_SpaceConversion *gsc,
 /* Copy/Paste Buffer --------------------------------- */
 /* `gpencil_edit.cc` */
 
-/**
- * list of #bGPDstroke instances
- *
- * \note is exposed within the editors/gpencil module so that other tools can use it too.
- */
-extern ListBase gpencil_strokes_copypastebuf;
-
 /* ***************************************************** */
 /* Operator Defines */
 
@@ -122,3 +116,5 @@ enum eGPencil_PaintModes {
 
 /* chunk size for gp-session buffer (the total size is a multiple of this number) */
 #define GP_STROKE_BUFFER_CHUNK 2048
+
+}  // namespace blender

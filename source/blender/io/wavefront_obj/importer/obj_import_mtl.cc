@@ -11,9 +11,9 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -24,9 +24,12 @@
 #include "obj_import_mtl.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 
 /**
  * Set the socket's (of given ID) value to the given number(s).
@@ -38,7 +41,7 @@ static void set_property_of_socket(eNodeSocketDatatype property_type,
                                    bNode *r_node)
 {
   BLI_assert(r_node);
-  bNodeSocket *socket{bke::node_find_socket(*r_node, SOCK_IN, socket_id)};
+  bNodeSocket *socket{bke::node_find_socket(*r_node, SOCK_IN, UString(socket_id))};
   BLI_assert(socket && socket->type == property_type);
   switch (property_type) {
     case SOCK_FLOAT: {
@@ -73,7 +76,7 @@ static Image *load_image_at_path(Main *bmain, const std::string &path, bool rela
     CLOG_WARN(&LOG, "Cannot load image file: '%s'", path.c_str());
     return nullptr;
   }
-  CLOG_INFO(&LOG, 1, "Loaded image from: '%s'", path.c_str());
+  CLOG_INFO(&LOG, "Loaded image from: '%s'", path.c_str());
   if (relative_paths) {
     BLI_path_rel(image->filepath, BKE_main_blendfile_path(bmain));
     BLI_path_normalize(image->filepath);
@@ -85,8 +88,8 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
 {
   const float color[4] = {0, 0, 0, 1};
   Image *image = BKE_image_add_generated(bmain,
-                                         32,
-                                         32,
+                                         1,
+                                         1,
                                          BLI_path_basename(path.c_str()),
                                          24,
                                          false,
@@ -96,7 +99,12 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
                                          false,
                                          false);
   STRNCPY(image->filepath, path.c_str());
+
+  /* Ensure that we are not marked as a generated image and clear any buffers created so far. */
   image->source = IMA_SRC_FILE;
+  image->type = IMA_TYPE_IMAGE;
+  BKE_image_free_buffers(image);
+
   return image;
 }
 
@@ -170,8 +178,8 @@ static void link_sockets(bNodeTree *ntree,
                          bNode *to_node,
                          const char *to_node_id)
 {
-  bNodeSocket *from_sock{bke::node_find_socket(*from_node, SOCK_OUT, from_node_id)};
-  bNodeSocket *to_sock{bke::node_find_socket(*to_node, SOCK_IN, to_node_id)};
+  bNodeSocket *from_sock{bke::node_find_socket(*from_node, SOCK_OUT, UString(from_node_id))};
+  bNodeSocket *to_sock{bke::node_find_socket(*to_node, SOCK_IN, UString(to_node_id))};
   BLI_assert(from_sock && to_sock);
   bke::node_add_link(*ntree, *from_node, *from_sock, *to_node, *to_sock);
 }
@@ -432,8 +440,8 @@ bNodeTree *create_mtl_node_tree(Main *bmain,
                                 Material *mat,
                                 bool relative_paths)
 {
-  bNodeTree *ntree = blender::bke::node_tree_add_tree_embedded(
-      nullptr, &mat->id, "Shader Nodetree", ntreeType_Shader->idname);
+  bNodeTree *ntree = mat->nodetree;
+  BLI_assert(mat->nodetree);
 
   bNode *bsdf = add_node(ntree, SH_NODE_BSDF_PRINCIPLED, node_locx_bsdf, node_locy_top);
   bNode *output = add_node(ntree, SH_NODE_OUTPUT_MATERIAL, node_locx_output, node_locy_top);
@@ -446,4 +454,5 @@ bNodeTree *create_mtl_node_tree(Main *bmain,
   return ntree;
 }
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

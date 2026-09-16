@@ -5,7 +5,7 @@
 /** \file
  * \ingroup pythonintern
  *
- * This adds helpers to #uiLayout which can't be added easily to RNA itself.
+ * This adds helpers to #ui::Layout which can't be added easily to RNA itself.
  */
 
 #include <Python.h>
@@ -14,28 +14,30 @@
 
 #include "../generic/py_capi_utils.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "bpy_rna.hh"
 #include "bpy_rna_ui.hh" /* Declare #BPY_rna_uilayout_introspect_method_def. */
+
+namespace blender {
 
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_rna_uilayout_introspect_doc,
     ".. method:: introspect()\n"
     "\n"
-    "   Return a dictionary containing a textual representation of the UI layout.\n");
+    "   Return a list of dictionaries containing a textual representation of the UI layout.\n"
+    "\n"
+    "   :rtype: list[dict[str, Any]]\n");
 static PyObject *bpy_rna_uilayout_introspect(PyObject *self)
 {
-  BPy_StructRNA *pyrna = (BPy_StructRNA *)self;
-  uiLayout *layout = static_cast<uiLayout *>(pyrna->ptr->data);
+  BPy_StructRNA *pyrna = reinterpret_cast<BPy_StructRNA *>(self);
+  ui::Layout *layout = pyrna->ptr->data_as<ui::Layout>();
 
-  const char *expr = UI_layout_introspect(layout);
+  std::string expr = layout_introspect(layout);
   PyObject *main_mod = PyC_MainModule_Backup();
   PyObject *py_dict = PyC_DefaultNameSpace("<introspect>");
-  PyObject *result = PyRun_String(expr, Py_eval_input, py_dict, py_dict);
-  MEM_freeN(expr);
-  Py_DECREF(py_dict);
+  PyObject *result = PyRun_String(expr.c_str(), Py_eval_input, py_dict, py_dict);
   PyC_MainModule_Restore(main_mod);
   return result;
 }
@@ -52,7 +54,7 @@ static PyObject *bpy_rna_uilayout_introspect(PyObject *self)
 
 PyMethodDef BPY_rna_uilayout_introspect_method_def = {
     "introspect",
-    (PyCFunction)bpy_rna_uilayout_introspect,
+    reinterpret_cast<PyCFunction>(bpy_rna_uilayout_introspect),
     METH_NOARGS,
     bpy_rna_uilayout_introspect_doc,
 };
@@ -64,3 +66,5 @@ PyMethodDef BPY_rna_uilayout_introspect_method_def = {
 #    pragma GCC diagnostic pop
 #  endif
 #endif
+
+}  // namespace blender

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editor/io
+ */
+
 #include "io_ops.hh" /* own include */
 
 #include "WM_api.hh"
@@ -23,11 +27,13 @@
 #include "io_grease_pencil.hh"
 #include "io_obj.hh"
 #include "io_ply_ops.hh"
+#include "io_spz_ops.hh"
 #include "io_stl_ops.hh"
+
+namespace blender {
 
 void ED_operatortypes_io()
 {
-  using namespace blender;
 #ifdef WITH_ALEMBIC
   WM_operatortype_append(WM_OT_alembic_import);
   WM_operatortype_append(WM_OT_alembic_export);
@@ -74,11 +80,18 @@ void ED_operatortypes_io()
   ed::io::stl_file_handler_add();
 #endif
 
+#ifdef WITH_IO_SPZ
+  WM_operatortype_append(WM_OT_spz_import);
+  ed::io::spz_file_handler_add();
+#endif
+
 #ifdef WITH_IO_FBX
   WM_operatortype_append(WM_OT_fbx_import);
-  /* ed::io::fbx_file_handler_add(); TODO: add once not experimental */
+  ed::io::fbx_file_handler_add();
 #endif
 
   WM_operatortype_append(WM_OT_drop_import_file);
   ED_dropbox_drop_import_file();
 }
+
+}  // namespace blender

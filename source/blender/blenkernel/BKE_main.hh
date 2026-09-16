@@ -21,25 +21,109 @@
  */
 
 #include <array>
+#include <atomic>
 
 #include "DNA_listBase.h"
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_sys_types.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_map.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_set.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_utility_mixins.hh"
+#include "BLI_vector_set.hh"
 
+#include "BKE_blender_project.hh"
 #include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag. */
+
+struct MainLock;
+namespace blender {
 
 struct BLI_mempool;
 struct BlendThumbnail;
-struct GHash;
-struct GSet;
 struct ID;
 struct IDNameLib_Map;
 struct ImBuf;
 struct Library;
-struct MainLock;
 struct ReportList;
 struct UniqueName_Map;
+struct Scene;
+struct Object;
+struct Mesh;
+struct Curve;
+struct MetaBall;
+struct Material;
+struct Tex;
+struct Image;
+struct Lattice;
+struct Light;
+struct Camera;
+struct Key;
+struct World;
+struct bScreen;
+struct VFont;
+struct Text;
+struct Speaker;
+struct LightProbe;
+struct bSound;
+struct Collection;
+struct bArmature;
+struct bAction;
+struct bNodeTree;
+struct Brush;
+struct ParticleSettings;
+struct Palette;
+struct PaintCurve;
+struct wmWindowManager;
+struct bGPdata;
+struct GreasePencil;
+struct MovieClip;
+struct Mask;
+struct FreestyleLineStyle;
+struct CacheFile;
+struct WorkSpace;
+struct Curves;
+struct PointCloud;
+struct Volume;
+
+struct Brush;
+struct CacheFile;
+struct Camera;
+struct Collection;
+struct Curve;
+struct Curves;
+struct FreestyleLineStyle;
+struct GreasePencil;
+struct Image;
+struct Key;
+struct Lattice;
+struct Light;
+struct LightProbe;
+struct Mask;
+struct Material;
+struct Mesh;
+struct MetaBall;
+struct MovieClip;
+struct Object;
+struct PaintCurve;
+struct Palette;
+struct ParticleSettings;
+struct PointCloud;
+struct Scene;
+struct Speaker;
+struct Tex;
+struct Text;
+struct VFont;
+struct Volume;
+struct WorkSpace;
+struct World;
+struct bAction;
+struct bArmature;
+struct bGPdata;
+struct bNodeTree;
+struct bScreen;
+struct bSound;
+struct wmWindowManager;
 
 /**
  * Blender thumbnail, as written to the `.blend` file (width, height, and data as char RGBA).
@@ -58,7 +142,7 @@ struct MainIDRelationsEntryItem {
     /** For `from_ids` list, a user of the hashed ID. */
     ID *from;
     /** For `to_ids` list, an ID used by the hashed ID. */
-    ID **to;
+    ID *to;
   } id_pointer;
   /** Session uid of the `id_pointer`. */
   uint session_uid;
@@ -124,7 +208,7 @@ struct MainIDRelations {
    * Mapping from an ID pointer to all of its parents (IDs using it) and children (IDs it uses).
    * Values are `MainIDRelationsEntry` pointers.
    */
-  GHash *relations_from_pointers;
+  Map<const ID *, MainIDRelationsEntry *> *relations_from_pointers;
   /* NOTE: we could add more mappings when needed (e.g. from session uid?). */
 
   short flag;
@@ -138,8 +222,34 @@ enum {
   MAINIDRELATIONS_INCLUDE_UI = 1 << 0,
 };
 
-struct Main {
-  Main *next, *prev;
+struct MainColorspace {
+  /**
+   * File working color-space for all scene linear colors.
+   * The name is only for the user interface and is not a unique identifier, the matrix is
+   * the XYZ color-space is the source of truth.
+   */
+  char scene_linear_name[64 /*MAX_COLORSPACE_NAME*/] = "";
+  float3x3 scene_linear_to_xyz = float3x3::zero();
+
+  /**
+   * A color-space, view or display was not found, which likely means the OpenColorIO config
+   * used to create this blend file is missing.
+   */
+  bool is_missing_opencolorio_config = false;
+};
+
+struct Main : NonCopyable, NonMovable {
+  /**
+   * Runtime vector storing all split Mains (one Main for each library data), during readfile or
+   * linking process.
+   * Shared across all of the split mains when defined.
+   *
+   * \note The order stability properties of #VectorSet elements is used in readfile code (in
+   * particular during memfile/undo reading), to ensure that the local Main is always the first
+   * item, even once library ones are moved between the old and new Mains (see also
+   * #read_undo_move_libmain_data).
+   */
+  std::shared_ptr<VectorSet<Main *>> split_mains = {};
   /**
    * The file-path of this blend file, an empty string indicates an unsaved file.
    *
@@ -152,55 +262,60 @@ struct Main {
    * to read data temporarily (preferences & startup) for example
    * where the `filepath` is not persistent or used as a basis for other paths.
    */
-  char filepath[/*FILE_MAX*/ 1024];
-  short versionfile, subversionfile; /* see BLENDER_FILE_VERSION, BLENDER_FILE_SUBVERSION */
-  short minversionfile, minsubversionfile;
+  char filepath[/*FILE_MAX*/ 1024] = "";
+  /* See BLENDER_FILE_VERSION, BLENDER_FILE_SUBVERSION. */
+  short versionfile = 0;
+  short subversionfile = 0;
+  /* See BLENDER_FILE_MIN_VERSION, BLENDER_FILE_MIN_SUBVERSION. */
+  short minversionfile = 0;
+  short minsubversionfile = 0;
   /**
    * The currently opened .blend file was written from a newer version of Blender, and has forward
    * compatibility issues (data loss).
    *
    * \note In practice currently this is only based on the version numbers, in the future it
-   * could try to use more refined detection on load. */
-  bool has_forward_compatibility_issues;
+   * could try to use more refined detection on load.
+   */
+  bool has_forward_compatibility_issues = false;
 
   /**
    * This file was written by the asset system with the #G_FILE_ASSET_EDIT_FILE flag (now cleared).
    * It must not be overwritten, except by the asset system itself. Otherwise the file could end up
    * with user created data that would be lost when the asset system regenerates the file.
    */
-  bool is_asset_edit_file;
+  bool is_asset_edit_file = false;
 
   /** Commit timestamp from `buildinfo`. */
-  uint64_t build_commit_timestamp;
+  uint64_t build_commit_timestamp = 0;
   /** Commit Hash from `buildinfo`. */
-  char build_hash[16];
+  char build_hash[16] = {};
   /** Indicate the #Main.filepath (file) is the recovered one. */
-  bool recovered;
+  bool recovered = false;
   /** All current ID's exist in the last memfile undo step. */
-  bool is_memfile_undo_written;
+  bool is_memfile_undo_written = false;
   /**
    * An ID needs its data to be flushed back.
    * use "needs_flush_to_id" in edit data to flag data which needs updating.
    */
-  bool is_memfile_undo_flush_needed;
+  bool is_memfile_undo_flush_needed = false;
   /**
    * Indicates that next memfile undo step should not allow reusing old bmain when re-read, but
    * instead do a complete full re-read/update from stored memfile.
    */
-  bool use_memfile_full_barrier;
+  bool use_memfile_full_barrier = false;
 
   /**
    * When linking, disallow creation of new data-blocks.
    * Make sure we don't do this by accident, see #76738.
    */
-  bool is_locked_for_linking;
+  bool is_locked_for_linking = false;
 
   /**
    * When set, indicates that an unrecoverable error/data corruption was detected.
    * Should only be set by readfile code, and used by upper-level code (typically #setup_app_data)
    * to cancel a file reading operation.
    */
-  bool is_read_invalid;
+  bool is_read_invalid = false;
 
   /**
    * True if this main is the 'GMAIN' of current Blender.
@@ -208,7 +323,7 @@ struct Main {
    * \note There should always be only one global main, all others generated temporarily for
    * various data management process must have this property set to false..
    */
-  bool is_global_main;
+  bool is_global_main = false;
 
   /**
    * True if the Action Slot-to-ID mapping is dirty.
@@ -220,15 +335,20 @@ struct Main {
    * \note This flag should not be set directly. Use #animrig::Slot::users_invalidate() instead.
    * That way the handling of this flag is limited to the code in #animrig::Slot.
    *
-   * \see `blender::animrig::Slot::users_invalidate(Main &bmain)`
+   * \see `animrig::Slot::users_invalidate(Main &bmain)`
    */
-  bool is_action_slot_to_id_map_dirty;
+  bool is_action_slot_to_id_map_dirty = false;
+
+  /**
+   * Set when reading a file from undo with incomplete preview, to trigger restart of preview jobs.
+   */
+  bool need_preview_render_restart = false;
 
   /**
    * The blend-file thumbnail. If set, it will show as image preview of the blend-file in the
    * system's file-browser.
    */
-  BlendThumbnail *blen_thumb;
+  BlendThumbnail *blen_thumb = nullptr;
 
   /**
    * The library matching the current Main.
@@ -238,78 +358,109 @@ struct Main {
    * Mainly set and used during the blend-file read/write process when 'split' Mains are used to
    * isolate and process all linked IDs from a single library.
    */
-  Library *curlib;
+  Library *curlib = nullptr;
+
+  /**
+   * Color-space information for this file.
+   */
+  MainColorspace colorspace;
+
+  /**
+   * Whether this bmain belongs to the global Blender Project or not.
+   *
+   * NOTE: this is currently always true, as we haven't yet determined which
+   * cases it should be false for, and at the moment it's unlikely to hurt much
+   * of anything to be erroneously true. However, in principle this can be false
+   * and likely will be false in some cases of temp mains in the future, so code
+   * should never assume that it's true.
+   */
+  bool is_part_of_project = true;
 
   /* List bases for all ID types, containing all IDs for the current #Main. */
 
-  ListBase scenes;
-  ListBase libraries;
-  ListBase objects;
-  ListBase meshes;
-  ListBase curves;
-  ListBase metaballs;
-  ListBase materials;
-  ListBase textures;
-  ListBase images;
-  ListBase lattices;
-  ListBase lights;
-  ListBase cameras;
-  /** Deprecated (only for versioning). */
-  ListBase ipo;
-  ListBase shapekeys;
-  ListBase worlds;
-  ListBase screens;
-  ListBase fonts;
-  ListBase texts;
-  ListBase speakers;
-  ListBase lightprobes;
-  ListBase sounds;
-  ListBase collections;
-  ListBase armatures;
-  ListBase actions;
-  ListBase nodetrees;
-  ListBase brushes;
-  ListBase particles;
-  ListBase palettes;
-  ListBase paintcurves;
+  ListBaseT<Scene> scenes = {};
+  ListBaseT<Library> libraries = {};
+  ListBaseT<Object> objects = {};
+  ListBaseT<Mesh> meshes = {};
+  ListBaseT<Curve> curves = {};
+  ListBaseT<MetaBall> metaballs = {};
+  ListBaseT<Material> materials = {};
+  ListBaseT<Tex> textures = {};
+  ListBaseT<Image> images = {};
+  ListBaseT<Lattice> lattices = {};
+  ListBaseT<Light> lights = {};
+  ListBaseT<Camera> cameras = {};
+  ListBaseT<Key> shapekeys = {};
+  ListBaseT<World> worlds = {};
+  ListBaseT<bScreen> screens = {};
+  ListBaseT<VFont> fonts = {};
+  ListBaseT<Text> texts = {};
+  ListBaseT<Speaker> speakers = {};
+  ListBaseT<LightProbe> lightprobes = {};
+  ListBaseT<bSound> sounds = {};
+  ListBaseT<Collection> collections = {};
+  ListBaseT<bArmature> armatures = {};
+  ListBaseT<bAction> actions = {};
+  ListBaseT<bNodeTree> nodetrees = {};
+  ListBaseT<Brush> brushes = {};
+  ListBaseT<ParticleSettings> particles = {};
+  ListBaseT<Palette> palettes = {};
+  ListBaseT<PaintCurve> paintcurves = {};
   /** Singleton (exception). */
-  ListBase wm;
+  ListBaseT<wmWindowManager> wm = {};
   /** Legacy Grease Pencil. */
-  ListBase gpencils;
-  ListBase grease_pencils;
-  ListBase movieclips;
-  ListBase masks;
-  ListBase linestyles;
-  ListBase cachefiles;
-  ListBase workspaces;
+  ListBaseT<bGPdata> gpencils = {};
+  ListBaseT<GreasePencil> grease_pencils = {};
+  ListBaseT<MovieClip> movieclips = {};
+  ListBaseT<Mask> masks = {};
+  ListBaseT<FreestyleLineStyle> linestyles = {};
+  ListBaseT<CacheFile> cachefiles = {};
+  ListBaseT<WorkSpace> workspaces = {};
   /**
    * \note The name `hair_curves` is chosen to be different than `curves`,
    * but they are generic curve data-blocks, not just for hair.
    */
-  ListBase hair_curves;
-  ListBase pointclouds;
-  ListBase volumes;
+  ListBaseT<Curves> hair_curves = {};
+  ListBaseT<PointCloud> pointclouds = {};
+  ListBaseT<Volume> volumes = {};
 
   /**
    * Must be generated, used and freed by same code - never assume this is valid data unless you
    * know when, who and how it was created.
    * Used by code doing a lot of remapping etc. at once to speed things up.
    */
-  MainIDRelations *relations;
+  MainIDRelations *relations = nullptr;
 
   /** IDMap of IDs. Currently used when reading (expanding) libraries. */
-  IDNameLib_Map *id_map;
+  IDNameLib_Map *id_map = nullptr;
 
   /** Used for efficient calculations of unique names. */
-  UniqueName_Map *name_map;
+  UniqueName_Map *name_map = nullptr;
 
   /**
    * Used for efficient calculations of unique names. Covers all names in current Main, including
    * linked data ones.
    */
-  UniqueName_Map *name_map_global;
+  UniqueName_Map *name_map_global = nullptr;
 
-  MainLock *lock;
+  MainLock *lock = nullptr;
+
+  /**
+   * Simple re-entrant 'lock' to prevent view-layers re-synchronize during heavy
+   * operations that could lead to needlessly re-synchronize the view-layers *many* times.
+   *
+   * Stored in Main to avoid a global lock, which can cause issues with asynchronous jobs using
+   * their own local temp Main to manage their data, e.g. the preview rending tasks. See also
+   * #156117.
+   *
+   * NOTE: This can also be modified from several threads (e.g. during depsgraph evaluation),
+   * leading to transitional big numbers.
+   */
+  std::atomic<int32_t> no_resync = 0;
+
+  /* Constructors and destructors. */
+  Main();
+  ~Main();
 };
 
 /**
@@ -320,31 +471,20 @@ struct Main {
  */
 Main *BKE_main_new();
 /**
- * Initialize a Main data-base.
- *
- * \note Always generate a non-global Main, use #BKE_blender_globals_main_replace to put a newly
- * created one in `G_MAIN`.
+ * Initialize a new Main data-base, based on a reference for relative path and colorspace
+ * conversions.
  */
-void BKE_main_init(Main &bmain);
+void BKE_main_init_from_reference(Main &bmain, const Main &reference);
 /**
  * Make given \a bmain empty again, and free all runtime mappings.
  *
- * This is similar to a call to #BKE_main_destroy followed by #BKE_main_init, however the internal
- * #Main::lock is kept unchanged, and the #Main::is_global_main flag is not reset to `true` either.
+ * This is similar to deleting and re-creating the Main, however the internal #Main::lock is kept
+ * unchanged, and the #Main::is_global_main flag is not reset to `true` either.
  *
  * \note Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
  * other linked Main.
  */
 void BKE_main_clear(Main &bmain);
-/**
- * Clear and free all data in given \a bmain, but does not free \a bmain itself.
- *
- * \note In most cases, #BKE_main_free should be used instead of this function.
- *
- * \note Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
- * other linked Main.
- */
-void BKE_main_destroy(Main &bmain);
 /**
  * Completely destroy the given \a bmain, and all its linked 'libraries' ones if any (all other
  * bmains, following the #Main.next chained list).
@@ -391,8 +531,33 @@ struct MainMergeReport {
  *
  * Since `bmain_src` is either empty or contains left-over IDs with (likely) invalid ID
  * relationships and other potential issues after the merge, it is always freed.
+ *
+ * \param force_merge_src_ids: If not null, a set of source IDs that should always be merged, even
+ * if a matching destination ID could be found. Typically used to ensure that 'container IDs' for
+ * complex copy/paste of ID sub-data (nodes, sequencer strips...) are always merged in destination
+ * main, even if another ID with the same exact name already exists there.
  */
+void BKE_main_merge(Main *bmain_dst,
+                    Set<ID *> *force_merge_src_ids,
+                    Main **r_bmain_src,
+                    MainMergeReport &reports);
+/** Simpler overload of the other #BKE_main_merge. */
 void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports);
+
+/**
+ * Simplified merge that moves all non-Library IDs from `bmain_src` into `bmain_dst`, assigning
+ * them all to `dst_external_library` as their owning library namespace.
+ *
+ * Unlike the general #BKE_main_merge, this overload skips deduplication and filepath rebasing.
+ * It is intended for merging data imported from an external (non-blend) source that has already
+ * been given a dedicated archive library in `bmain_dst`.
+ *
+ * The source Main is always freed and `*r_bmain_src` is set to nullptr on return.
+ */
+void BKE_main_merge_as_archive_library(Main &bmain_dst,
+                                       Main *&r_bmain_src,
+                                       Library &dst_external_library,
+                                       MainMergeReport &reports);
 
 /**
  * Check whether given `bmain` is empty or contains some IDs.
@@ -420,12 +585,12 @@ void BKE_main_relations_free(Main *bmain);
 void BKE_main_relations_tag_set(Main *bmain, eMainIDRelationsEntryTags tag, bool value);
 
 /**
- * Create a #GSet storing all IDs present in given \a bmain, by their pointers.
+ * Create a #Set storing all IDs present in given \a bmain, by their pointers.
  *
- * \param gset: If not NULL, given GSet will be extended with IDs from given \a bmain,
+ * \param set: If not NULL, given Set will be extended with IDs from given \a bmain,
  * instead of creating a new one.
  */
-GSet *BKE_main_gset_create(Main *bmain, GSet *gset);
+Set<const ID *> *BKE_main_set_create(Main *bmain, Set<const ID *> *set);
 
 /* Temporary runtime API to allow re-using local (already appended)
  * IDs instead of appending a new copy again. */
@@ -516,7 +681,8 @@ ID *BKE_main_library_weak_reference_find(Main *bmain,
 
 /**
  * Add library weak reference to ID, referencing the specified library and ID name.
- * For cases where creating a full MainLibraryWeakReferenceMap is unnecessary.*/
+ * For cases where creating a full MainLibraryWeakReferenceMap is unnecessary.
+ */
 void BKE_main_library_weak_reference_add(ID *local_id,
                                          const char *library_filepath,
                                          const char *library_id_name);
@@ -525,7 +691,7 @@ void BKE_main_library_weak_reference_add(ID *local_id,
 
 #define FOREACH_MAIN_LISTBASE_ID_BEGIN(_lb, _id) \
   { \
-    ID *_id_next = static_cast<ID *>((_lb)->first); \
+    ID *_id_next = static_cast<ID *>((_lb)->first_); \
     for ((_id) = _id_next; (_id) != nullptr; (_id) = _id_next) { \
       _id_next = static_cast<ID *>((_id)->next);
 
@@ -553,10 +719,11 @@ void BKE_main_library_weak_reference_add(ID *local_id,
  * before objects, which will be processed before obdata types, etc.).
  *
  * WARNING: DO NOT use break statement with that macro, use #FOREACH_MAIN_LISTBASE and
- * #FOREACH_MAIN_LISTBASE_ID instead if you need that kind of control flow. */
+ * #FOREACH_MAIN_LISTBASE_ID instead if you need that kind of control flow.
+ */
 #define FOREACH_MAIN_ID_BEGIN(_bmain, _id) \
   { \
-    ListBase *_lb; \
+    ListBaseT<ID> *_lb; \
     FOREACH_MAIN_LISTBASE_BEGIN ((_bmain), _lb) { \
       FOREACH_MAIN_LISTBASE_ID_BEGIN (_lb, (_id))
 
@@ -611,25 +778,168 @@ const char *BKE_main_blendfile_path(const Main *bmain) ATTR_NONNULL();
  * you should always try to get a valid Main pointer from context.
  */
 const char *BKE_main_blendfile_path_from_global();
+/**
+ * Return the absolute file-path of a library.
+ */
+const char *BKE_main_blendfile_path_from_library(const Library &library);
 
 /**
- * \return A pointer to the \a ListBase of given \a bmain for requested \a type ID type.
+ * \return A pointer to the \a ListBaseT of given \a bmain for requested \a type ID type.
  */
-ListBase *which_libbase(Main *bmain, short type);
+ListBaseT<ID> *which_libbase(Main *bmain, short type);
 
 /** Subtracting 1, because #INDEX_ID_NULL is ignored here. */
-using MainListsArray = std::array<ListBase *, INDEX_ID_MAX - 1>;
+using MainListsArray = std::array<ListBaseT<ID> *, INDEX_ID_MAX - 1>;
 
 /**
- * Returns the pointers to all the #ListBase structs in given `bmain`.
+ * Returns the pointers to all the #ListBaseT structs in given `bmain`.
  *
  * This is useful for generic traversal of all the blocks in a #Main (by traversing all the lists
  * in turn), without worrying about block types.
  *
- * \note The order of each ID type #ListBase in the array is determined by the `INDEX_ID_<IDTYPE>`
+ * \note The order of each ID type #ListBaseT in the array is determined by the `INDEX_ID_<IDTYPE>`
  * enum definitions in `DNA_ID.h`. See also the #FOREACH_MAIN_ID_BEGIN macro in `BKE_main.hh`
  */
 MainListsArray BKE_main_lists_get(Main &bmain);
+
+/**
+ * An iterator over all IDs in the given Main.
+ *
+ * As with the historic C-based APIs, order is defined by these rules:
+ *   - ID types are iterated based on their #eID_Index, by default from higher index to lower one
+ *     (for historical reasons). This can be inverted by using the #reverse_id_type_order option.
+ *   - Within a same type, IDs are iterated based on their libraries (local IDs always iterated
+ *     first) and names (alphanumeric sorting).
+ *
+ * This iterator will remain stable if the underlying Main is modified, as long as the current ID
+ * pointed at by the iterator is not modified.
+ *   - Renaming the current ID may shift its position in the underlying main, making the iterator
+ *     unstable (some items may be skipped, or iterated over several times).
+ *   - Deleting the current ID will fully invalidate the iterator, attempt to use it in any way
+ *     afterwards will result in invalid memory accesses.
+ */
+class MainAllIDsIterator {
+ public:
+  using iterator_category = std::bidirectional_iterator_tag;
+  using value_type = ID;
+  using difference_type = std::ptrdiff_t;
+  using pointer = ID *;
+  using reference = ID &;
+
+ private:
+  MainListsArray lbarray_;
+  bool reverse_id_type_order_ = false;
+  int64_t curr_lbarray_index_;
+  ID *curr_id_ = nullptr;
+
+ public:
+  /* Note: default constructor is a requirement to make the iterator usable with std::ranges. */
+  MainAllIDsIterator() : lbarray_{}
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+  explicit MainAllIDsIterator(MainListsArray &lbarray, const bool reverse_id_type_order = false)
+      : lbarray_(lbarray), reverse_id_type_order_(reverse_id_type_order)
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+  explicit MainAllIDsIterator(Main &bmain, const bool reverse_id_type_order = false)
+      : lbarray_(BKE_main_lists_get(bmain)), reverse_id_type_order_(reverse_id_type_order)
+  {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
+    ++(*this);
+  }
+
+ private:
+  /** Exclusive: Return the invalid index 'just before' the first valid one. */
+  int64_t lbarray_index_lower_bound() const
+  {
+    return reverse_id_type_order_ ? -1 : int64_t(lbarray_.size());
+  }
+
+  /** Exclusive: Return the invalid index 'just after' the last valid one. */
+  int64_t lbarray_index_upper_bound() const
+  {
+    return reverse_id_type_order_ ? int64_t(lbarray_.size()) : -1;
+  }
+
+  bool lbarray_index_is_valid() const
+  {
+    return (curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+  }
+
+  void lbarray_index_step_next()
+  {
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_++;
+    }
+    else {
+      curr_lbarray_index_--;
+    }
+  }
+
+  void lbarray_index_step_prev()
+  {
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_--;
+    }
+    else {
+      curr_lbarray_index_++;
+    }
+  }
+
+ public:
+  MainAllIDsIterator begin() const
+  {
+    MainAllIDsIterator tmp = *this;
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_lower_bound();
+    tmp.curr_id_ = nullptr;
+    return ++tmp;
+  }
+
+  MainAllIDsIterator end() const
+  {
+    MainAllIDsIterator tmp = *this;
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_upper_bound();
+    tmp.curr_id_ = nullptr;
+    return tmp;
+  }
+
+  MainAllIDsIterator &operator++();
+
+  MainAllIDsIterator operator++(int)
+  {
+    MainAllIDsIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+
+  MainAllIDsIterator &operator--();
+
+  MainAllIDsIterator operator--(int)
+  {
+    MainAllIDsIterator tmp = *this;
+    --(*this);
+    return tmp;
+  }
+
+  friend bool operator==(const MainAllIDsIterator &a, const MainAllIDsIterator &b)
+  {
+    return a.curr_id_ == b.curr_id_ && a.curr_lbarray_index_ == b.curr_lbarray_index_;
+  }
+
+  ID &operator*() const
+  {
+    return *curr_id_;
+  }
+
+  /** Return the total number of IDs in the Main database that this iterator is iterating over. */
+  int64_t size() const;
+};
 
 #define MAIN_VERSION_FILE_ATLEAST(main, ver, subver) \
   ((main)->versionfile > (ver) || \
@@ -643,8 +953,13 @@ MainListsArray BKE_main_lists_get(Main &bmain);
   ((main)->versionfile < (ver) || \
    ((main)->versionfile == (ver) && (main)->subversionfile <= (subver)))
 
+/**
+ * \note in case `versionfile` is 0, this check is invalid, always return false then. This happens
+ * typically when a library is missing, by definition its data (placeholder IDs) does not need
+ * versioning anyway then.
+ */
 #define LIBRARY_VERSION_FILE_ATLEAST(lib, ver, subver) \
-  ((lib)->runtime->versionfile > (ver) || \
+  ((lib)->runtime->versionfile == 0 || (lib)->runtime->versionfile > (ver) || \
    ((lib)->runtime->versionfile == (ver) && (lib)->runtime->subversionfile >= (subver)))
 
 /**
@@ -657,7 +972,9 @@ MainListsArray BKE_main_lists_get(Main &bmain);
 #define BLEN_THUMB_SIZE 128
 
 #define BLEN_THUMB_MEMSIZE(_x, _y) \
-  (sizeof(BlendThumbnail) + ((size_t)(_x) * (size_t)(_y)) * sizeof(int))
+  (sizeof(BlendThumbnail) + (size_t(_x) * size_t(_y)) * sizeof(int))
 /** Protect against buffer overflow vulnerability & negative sizes. */
 #define BLEN_THUMB_MEMSIZE_IS_VALID(_x, _y) \
   (((_x) > 0 && (_y) > 0) && ((uint64_t)(_x) * (uint64_t)(_y) < (SIZE_MAX / (sizeof(int) * 4))))
+
+}  // namespace blender

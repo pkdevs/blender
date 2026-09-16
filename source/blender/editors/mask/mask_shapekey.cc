@@ -8,15 +8,16 @@
 
 #include <cstdlib>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
-#include "BKE_mask.h"
+#include "BKE_mask.hh"
 
 #include "DNA_mask_types.h"
 #include "DNA_scene_types.h"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -28,6 +29,16 @@
 
 #include "mask_intern.hh" /* own include */
 
+namespace blender {
+
+static void select_only_layer_shape(MaskLayer *mask_layer, MaskLayerShape *mask_layer_shape)
+{
+  for (MaskLayerShape &mask_layer_shape_iter : mask_layer->splines_shapes) {
+    mask_layer_shape_iter.flag &= ~MASK_SHAPE_SELECT;
+  }
+  mask_layer_shape->flag |= MASK_SHAPE_SELECT;
+}
+
 static wmOperatorStatus mask_shape_key_insert_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
@@ -35,16 +46,31 @@ static wmOperatorStatus mask_shape_key_insert_exec(bContext *C, wmOperator * /*o
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
+  bool mask_was_animated = false;
+  bool mask_now_animated = false;
+
+  for (MaskLayer &mask_layer : mask->masklayers) {
     MaskLayerShape *mask_layer_shape;
 
-    if (!ED_mask_layer_select_check(mask_layer)) {
+    if (!ED_mask_layer_select_check(&mask_layer)) {
       continue;
     }
 
-    mask_layer_shape = BKE_mask_layer_shape_verify_frame(mask_layer, frame);
-    BKE_mask_layer_shape_from_mask(mask_layer, mask_layer_shape);
+    mask_was_animated |= BKE_mask_layer_is_animated(mask_layer);
+
+    mask_layer_shape = BKE_mask_layer_shape_verify_frame(&mask_layer, frame);
+    BKE_mask_layer_shape_from_mask(&mask_layer, mask_layer_shape);
     changed = true;
+
+    mask_now_animated |= BKE_mask_layer_is_animated(mask_layer);
+
+    select_only_layer_shape(&mask_layer, mask_layer_shape);
+  }
+
+  /* The depsgraph relations were built assuming the mask was not animated, so need to update
+   * relations. */
+  if (mask_was_animated != mask_now_animated) {
+    DEG_relations_tag_update(CTX_data_main(C));
   }
 
   if (changed) {
@@ -78,19 +104,32 @@ static wmOperatorStatus mask_shape_key_clear_exec(bContext *C, wmOperator * /*op
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
+  bool mask_was_animated = false;
+  bool mask_now_animated = false;
+
+  for (MaskLayer &mask_layer : mask->masklayers) {
     MaskLayerShape *mask_layer_shape;
 
-    if (!ED_mask_layer_select_check(mask_layer)) {
+    if (!ED_mask_layer_select_check(&mask_layer)) {
       continue;
     }
 
-    mask_layer_shape = BKE_mask_layer_shape_find_frame(mask_layer, frame);
+    mask_was_animated |= BKE_mask_layer_is_animated(mask_layer);
+
+    mask_layer_shape = BKE_mask_layer_shape_find_frame(&mask_layer, frame);
 
     if (mask_layer_shape) {
-      BKE_mask_layer_shape_unlink(mask_layer, mask_layer_shape);
+      BKE_mask_layer_shape_unlink(&mask_layer, mask_layer_shape);
       changed = true;
     }
+
+    mask_now_animated |= BKE_mask_layer_is_animated(mask_layer);
+  }
+
+  /* The depsgraph relations were built assuming the mask was animated, so need to update
+   * relations. */
+  if (mask_was_animated != mask_now_animated) {
+    DEG_relations_tag_update(CTX_data_main(C));
   }
 
   if (changed) {
@@ -124,36 +163,35 @@ static wmOperatorStatus mask_shape_key_feather_reset_exec(bContext *C, wmOperato
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
+  for (MaskLayer &mask_layer : mask->masklayers) {
 
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    if (mask_layer->splines_shapes.first) {
+    if (mask_layer.splines_shapes.first_) {
       MaskLayerShape *mask_layer_shape_reset;
 
       /* Get the shape-key of the current state. */
-      mask_layer_shape_reset = BKE_mask_layer_shape_alloc(mask_layer, frame);
+      mask_layer_shape_reset = BKE_mask_layer_shape_alloc(&mask_layer, frame);
       /* Initialize from mask - as if inserting a keyframe. */
-      BKE_mask_layer_shape_from_mask(mask_layer, mask_layer_shape_reset);
+      BKE_mask_layer_shape_from_mask(&mask_layer, mask_layer_shape_reset);
 
-      LISTBASE_FOREACH (MaskLayerShape *, mask_layer_shape, &mask_layer->splines_shapes) {
-        if (mask_layer_shape_reset->tot_vert == mask_layer_shape->tot_vert) {
+      for (MaskLayerShape &mask_layer_shape : mask_layer.splines_shapes) {
+        if (mask_layer_shape_reset->tot_vert == mask_layer_shape.tot_vert) {
           int i_abs = 0;
           MaskLayerShapeElem *shape_ele_src;
           MaskLayerShapeElem *shape_ele_dst;
 
-          shape_ele_src = (MaskLayerShapeElem *)mask_layer_shape_reset->data;
-          shape_ele_dst = (MaskLayerShapeElem *)mask_layer_shape->data;
+          shape_ele_src = reinterpret_cast<MaskLayerShapeElem *>(mask_layer_shape_reset->data);
+          shape_ele_dst = reinterpret_cast<MaskLayerShapeElem *>(mask_layer_shape.data);
 
-          LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-            for (int i = 0; i < spline->tot_point; i++) {
-              MaskSplinePoint *point = &spline->points[i];
+          for (MaskSpline &spline : mask_layer.splines) {
+            for (int i = 0; i < spline.tot_point; i++) {
+              MaskSplinePoint *point = &spline.points[i];
 
-              if (MASKPOINT_ISSEL_ANY(point)) {
-                /* TODO: nicer access here. */
-                shape_ele_dst->value[6] = shape_ele_src->value[6];
+              if (BKE_mask_point_selected(point)) {
+                shape_ele_dst->weight = shape_ele_src->weight;
               }
 
               shape_ele_src++;
@@ -217,22 +255,21 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
   const bool do_feather = RNA_boolean_get(op->ptr, "feather");
   const bool do_location = RNA_boolean_get(op->ptr, "location");
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &mask_layer : mask->masklayers) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
     /* we need at least one point selected here to bother re-interpolating */
-    if (!ED_mask_layer_select_check(mask_layer)) {
+    if (!ED_mask_layer_select_check(&mask_layer)) {
       continue;
     }
 
-    if (mask_layer->splines_shapes.first) {
+    if (mask_layer.splines_shapes.first_) {
       MaskLayerShape *mask_layer_shape, *mask_layer_shape_next;
       MaskLayerShape *mask_layer_shape_lastsel = nullptr;
 
-      for (mask_layer_shape = static_cast<MaskLayerShape *>(mask_layer->splines_shapes.first);
-           mask_layer_shape;
+      for (mask_layer_shape = mask_layer.splines_shapes.first(); mask_layer_shape;
            mask_layer_shape = mask_layer_shape_next)
       {
         MaskLayerShape *mask_layer_shape_a = nullptr;
@@ -246,7 +283,8 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
             mask_layer_shape_lastsel = mask_layer_shape;
           }
           if ((mask_layer_shape->next == nullptr) ||
-              (((MaskLayerShape *)mask_layer_shape->next)->flag & MASK_SHAPE_SELECT) == 0)
+              ((static_cast<MaskLayerShape *>(mask_layer_shape->next))->flag &
+               MASK_SHAPE_SELECT) == 0)
           {
             mask_layer_shape_a = mask_layer_shape_lastsel;
             mask_layer_shape_b = mask_layer_shape;
@@ -259,7 +297,7 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
 
         /* we have a from<>to? - re-interpolate! */
         if (mask_layer_shape_a && mask_layer_shape_b) {
-          ListBase shapes_tmp = {nullptr, nullptr};
+          ListBaseT<MaskLayerShape> shapes_tmp = {nullptr, nullptr};
           MaskLayerShape *mask_layer_shape_tmp;
           MaskLayerShape *mask_layer_shape_tmp_next;
           MaskLayerShape *mask_layer_shape_tmp_last = mask_layer_shape_b->next;
@@ -271,25 +309,23 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
                mask_layer_shape_tmp = mask_layer_shape_tmp_next)
           {
             mask_layer_shape_tmp_next = mask_layer_shape_tmp->next;
-            BLI_remlink(&mask_layer->splines_shapes, mask_layer_shape_tmp);
+            BLI_remlink(&mask_layer.splines_shapes, mask_layer_shape_tmp);
             BLI_addtail(&shapes_tmp, mask_layer_shape_tmp);
           }
 
           /* re-key, NOTE: can't modify the keys here since it messes up. */
-          for (mask_layer_shape_tmp = static_cast<MaskLayerShape *>(shapes_tmp.first);
-               mask_layer_shape_tmp;
+          for (mask_layer_shape_tmp = shapes_tmp.first(); mask_layer_shape_tmp;
                mask_layer_shape_tmp = mask_layer_shape_tmp->next)
           {
-            BKE_mask_layer_evaluate(mask_layer, mask_layer_shape_tmp->frame, true);
+            BKE_mask_layer_evaluate(&mask_layer, mask_layer_shape_tmp->frame, true);
             mask_layer_shape_tmp_rekey = BKE_mask_layer_shape_verify_frame(
-                mask_layer, mask_layer_shape_tmp->frame);
-            BKE_mask_layer_shape_from_mask(mask_layer, mask_layer_shape_tmp_rekey);
+                &mask_layer, mask_layer_shape_tmp->frame);
+            BKE_mask_layer_shape_from_mask(&mask_layer, mask_layer_shape_tmp_rekey);
             mask_layer_shape_tmp_rekey->flag = mask_layer_shape_tmp->flag & MASK_SHAPE_SELECT;
           }
 
           /* restore unselected points and free copies */
-          for (mask_layer_shape_tmp = static_cast<MaskLayerShape *>(shapes_tmp.first);
-               mask_layer_shape_tmp;
+          for (mask_layer_shape_tmp = shapes_tmp.first(); mask_layer_shape_tmp;
                mask_layer_shape_tmp = mask_layer_shape_tmp_next)
           {
             /* restore */
@@ -301,24 +337,26 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
 
             /* we know this exists, added above */
             mask_layer_shape_tmp_rekey = BKE_mask_layer_shape_find_frame(
-                mask_layer, mask_layer_shape_tmp->frame);
+                &mask_layer, mask_layer_shape_tmp->frame);
 
-            shape_ele_src = (MaskLayerShapeElem *)mask_layer_shape_tmp->data;
-            shape_ele_dst = (MaskLayerShapeElem *)mask_layer_shape_tmp_rekey->data;
+            shape_ele_src = reinterpret_cast<MaskLayerShapeElem *>(mask_layer_shape_tmp->data);
+            shape_ele_dst = reinterpret_cast<MaskLayerShapeElem *>(
+                mask_layer_shape_tmp_rekey->data);
 
-            LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-              for (int i = 0; i < spline->tot_point; i++) {
-                MaskSplinePoint *point = &spline->points[i];
+            for (MaskSpline &spline : mask_layer.splines) {
+              for (int i = 0; i < spline.tot_point; i++) {
+                MaskSplinePoint *point = &spline.points[i];
 
                 /* not especially efficient but makes this easier to follow */
                 std::swap(*shape_ele_src, *shape_ele_dst);
 
-                if (MASKPOINT_ISSEL_ANY(point)) {
+                if (BKE_mask_point_selected(point)) {
                   if (do_location) {
-                    memcpy(shape_ele_dst->value, shape_ele_src->value, sizeof(float[6]));
+                    memcpy(
+                        shape_ele_dst->point, shape_ele_src->point, sizeof(shape_ele_src->point));
                   }
                   if (do_feather) {
-                    shape_ele_dst->value[6] = shape_ele_src->value[6];
+                    shape_ele_dst->weight = shape_ele_src->weight;
                   }
                 }
 
@@ -338,7 +376,7 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
       }
 
       /* re-evaluate */
-      BKE_mask_layer_evaluate(mask_layer, frame, true);
+      BKE_mask_layer_evaluate(&mask_layer, frame, true);
     }
   }
 
@@ -373,39 +411,53 @@ void MASK_OT_shape_key_rekey(wmOperatorType *ot)
 
 /* *** Shape Key Utils *** */
 
-void ED_mask_layer_shape_auto_key(MaskLayer *mask_layer, const int frame)
+void ED_mask_layer_shape_auto_key(const bContext *C, MaskLayer *mask_layer, const int frame)
 {
   MaskLayerShape *mask_layer_shape;
 
+  const bool mask_was_animated = BKE_mask_layer_is_animated(*mask_layer);
+
   mask_layer_shape = BKE_mask_layer_shape_verify_frame(mask_layer, frame);
   BKE_mask_layer_shape_from_mask(mask_layer, mask_layer_shape);
+
+  const bool mask_now_animated = BKE_mask_layer_is_animated(*mask_layer);
+
+  /* The depsgraph relations were built assuming the mask was not animated, so need to update
+   * relations. */
+  if (mask_was_animated != mask_now_animated) {
+    DEG_relations_tag_update(CTX_data_main(C));
+  }
+
+  select_only_layer_shape(mask_layer, mask_layer_shape);
 }
 
-bool ED_mask_layer_shape_auto_key_all(Mask *mask, const int frame)
+bool ED_mask_layer_shape_auto_key_all(const bContext *C, Mask *mask, const int frame)
 {
   bool changed = false;
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
-    ED_mask_layer_shape_auto_key(mask_layer, frame);
+  for (MaskLayer &mask_layer : mask->masklayers) {
+    ED_mask_layer_shape_auto_key(C, &mask_layer, frame);
     changed = true;
   }
 
   return changed;
 }
 
-bool ED_mask_layer_shape_auto_key_select(Mask *mask, const int frame)
+bool ED_mask_layer_shape_auto_key_select(const bContext *C, Mask *mask, const int frame)
 {
   bool changed = false;
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
+  for (MaskLayer &mask_layer : mask->masklayers) {
 
-    if (!ED_mask_layer_select_check(mask_layer)) {
+    if (!ED_mask_layer_select_check(&mask_layer)) {
       continue;
     }
 
-    ED_mask_layer_shape_auto_key(mask_layer, frame);
+    ED_mask_layer_shape_auto_key(C, &mask_layer, frame);
     changed = true;
   }
 
   return changed;
 }
+
+}  // namespace blender

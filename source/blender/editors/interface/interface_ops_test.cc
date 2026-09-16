@@ -2,11 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <cstring>
-
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -15,10 +14,11 @@
 #include "DNA_anim_types.h"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 #include "RNA_prototypes.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "ED_keyframing.hh"
 
@@ -28,12 +28,11 @@
 
 #include "interface_intern.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
-namespace blender::interface::tests {
+namespace blender::ui::tests {
 
-class CopyDriversToSelected : public testing::Test {
+class CopyDriversToSelected : public bke::BlenderGTestBase {
  public:
   Main *bmain;
 
@@ -48,20 +47,6 @@ class CopyDriversToSelected : public testing::Test {
   PropertyRNA *suzanne_quaternion_prop;
   PropertyRNA *suzanne_rotation_mode_prop;
 
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
-
   void SetUp() override
   {
     bmain = BKE_main_new();
@@ -69,11 +54,11 @@ class CopyDriversToSelected : public testing::Test {
     cube = BKE_object_add_only_object(bmain, OB_EMPTY, "OBCube");
     suzanne = BKE_object_add_only_object(bmain, OB_EMPTY, "OBSuzanne");
 
-    cube_ptr = RNA_pointer_create_discrete(&cube->id, &RNA_Object, &cube->id);
+    cube_ptr = RNA_pointer_create_discrete(&cube->id, RNA_Object, &cube->id);
     cube_quaternion_prop = RNA_struct_find_property(&cube_ptr, "rotation_quaternion");
     cube_rotation_mode_prop = RNA_struct_find_property(&cube_ptr, "rotation_mode");
 
-    suzanne_ptr = RNA_pointer_create_discrete(&suzanne->id, &RNA_Object, &suzanne->id);
+    suzanne_ptr = RNA_pointer_create_discrete(&suzanne->id, RNA_Object, &suzanne->id);
     suzanne_quaternion_prop = RNA_struct_find_property(&suzanne_ptr, "rotation_quaternion");
     suzanne_rotation_mode_prop = RNA_struct_find_property(&suzanne_ptr, "rotation_mode");
 
@@ -87,8 +72,8 @@ class CopyDriversToSelected : public testing::Test {
     ANIM_add_driver(&tmp_report_list, &cube->id, "rotation_quaternion", 1, 0, DRIVER_TYPE_PYTHON);
     FCurve *cube_quat_0_driver = static_cast<FCurve *>(BLI_findlink(&adt_cube->drivers, 0));
     FCurve *cube_quat_1_driver = static_cast<FCurve *>(BLI_findlink(&adt_cube->drivers, 1));
-    STRNCPY(cube_quat_0_driver->driver->expression, "0.0");
-    STRNCPY(cube_quat_1_driver->driver->expression, "1.0");
+    STRNCPY_UTF8(cube_quat_0_driver->driver->expression, "0.0");
+    STRNCPY_UTF8(cube_quat_1_driver->driver->expression, "1.0");
 
     /* Set up suzanne drivers. */
     ANIM_add_driver(
@@ -103,16 +88,16 @@ class CopyDriversToSelected : public testing::Test {
     FCurve *suzanne_quat_3_driver = static_cast<FCurve *>(BLI_findlink(&adt_suzanne->drivers, 2));
     FCurve *suzanne_rotation_mode_driver = static_cast<FCurve *>(
         BLI_findlink(&adt_suzanne->drivers, 3));
-    STRNCPY(suzanne_quat_0_driver->driver->expression, "0.5");
-    STRNCPY(suzanne_quat_2_driver->driver->expression, "2.5");
-    STRNCPY(suzanne_quat_3_driver->driver->expression, "3.5");
-    STRNCPY(suzanne_rotation_mode_driver->driver->expression, "4");
+    STRNCPY_UTF8(suzanne_quat_0_driver->driver->expression, "0.5");
+    STRNCPY_UTF8(suzanne_quat_2_driver->driver->expression, "2.5");
+    STRNCPY_UTF8(suzanne_quat_3_driver->driver->expression, "3.5");
+    STRNCPY_UTF8(suzanne_rotation_mode_driver->driver->expression, "4");
 
     /* Add animation to cube's fourth quaternion element. */
-    PointerRNA cube_ptr = RNA_pointer_create_discrete(&cube->id, &RNA_Object, &cube->id);
+    PointerRNA cube_ptr = RNA_pointer_create_discrete(&cube->id, RNA_Object, &cube->id);
     bAction *act = animrig::id_action_ensure(bmain, &cube->id);
     FCurve *fcu = animrig::action_fcurve_ensure_ex(
-        bmain, act, "Object Transforms", &cube_ptr, {"rotation_quaternion", 3});
+        bmain, act, &cube_ptr, {"rotation_quaternion", 3});
     animrig::KeyframeSettings keyframe_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO, BEZT_IPO_BEZ};
     insert_vert_fcurve(fcu, {1.0, 1.0}, keyframe_settings, INSERTKEY_NOFLAGS);
   }
@@ -120,6 +105,7 @@ class CopyDriversToSelected : public testing::Test {
   void TearDown() override
   {
     BKE_main_free(bmain);
+    RNA_exit();
   }
 };
 
@@ -287,4 +273,4 @@ TEST_F(CopyDriversToSelected, paste_property_drivers)
   }
 }
 
-}  // namespace blender::interface::tests
+}  // namespace blender::ui::tests

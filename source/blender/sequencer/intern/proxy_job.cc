@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * \ingroup bke
+ * \ingroup sequencer
  */
 
 #include "MEM_guardedalloc.h"
@@ -13,7 +13,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 
@@ -29,21 +29,21 @@ namespace blender::seq {
 static void proxy_freejob(void *pjv)
 {
   ProxyJob *pj = static_cast<ProxyJob *>(pjv);
-
-  BLI_freelistN(&pj->queue);
-
-  MEM_freeN(pj);
+  MEM_delete(pj);
 }
 
 /* Only this runs inside thread. */
 static void proxy_startjob(void *pjv, wmJobWorkerStatus *worker_status)
 {
   ProxyJob *pj = static_cast<ProxyJob *>(pjv);
-
-  LISTBASE_FOREACH (LinkData *, link, &pj->queue) {
-    IndexBuildContext *context = static_cast<IndexBuildContext *>(link->data);
-
-    proxy_rebuild(context, worker_status);
+  for (const int i : pj->queue.index_range()) {
+    ProxyBuildContext *context = pj->queue[i];
+    proxy_build_process(
+        context, &worker_status->stop, &worker_status->do_update, [&](const float new_progress) {
+          /* Remap the progress of the current proxy to the total progress. */
+          const float total_progress = (i + new_progress) / pj->queue.size();
+          worker_status->progress = total_progress;
+        });
 
     if (worker_status->stop) {
       pj->stop = true;
@@ -58,9 +58,10 @@ static void proxy_endjob(void *pjv)
   ProxyJob *pj = static_cast<ProxyJob *>(pjv);
   Editing *ed = editing_get(pj->scene);
 
-  LISTBASE_FOREACH (LinkData *, link, &pj->queue) {
-    proxy_rebuild_finish(static_cast<IndexBuildContext *>(link->data), pj->stop);
+  for (ProxyBuildContext *context : pj->queue) {
+    proxy_build_finish(context);
   }
+  pj->queue.clear();
 
   relations_free_imbuf(pj->scene, &ed->seqbase, false);
 
@@ -69,12 +70,10 @@ static void proxy_endjob(void *pjv)
 
 ProxyJob *ED_seq_proxy_job_get(const bContext *C, wmJob *wm_job)
 {
-  Scene *scene = CTX_data_scene(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
   ProxyJob *pj = static_cast<ProxyJob *>(WM_jobs_customdata_get(wm_job));
   if (!pj) {
-    pj = MEM_callocN<ProxyJob>("proxy rebuild job");
-    pj->depsgraph = depsgraph;
+    pj = MEM_new<ProxyJob>("proxy rebuild job");
     pj->scene = scene;
     pj->main = CTX_data_main(C);
     WM_jobs_customdata_set(wm_job, pj, proxy_freejob);
@@ -86,11 +85,11 @@ ProxyJob *ED_seq_proxy_job_get(const bContext *C, wmJob *wm_job)
 
 wmJob *ED_seq_proxy_wm_job_get(const bContext *C)
 {
-  Scene *scene = CTX_data_scene(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
   wmJob *wm_job = WM_jobs_get(CTX_wm_manager(C),
                               CTX_wm_window(C),
                               scene,
-                              "Building Proxies",
+                              "Building proxies...",
                               WM_JOB_PROGRESS,
                               WM_JOB_TYPE_SEQ_BUILD_PROXY);
   return wm_job;

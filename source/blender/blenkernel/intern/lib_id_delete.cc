@@ -14,9 +14,9 @@
 #include "DNA_ID.h"
 #include "DNA_key_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -31,6 +31,7 @@
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_main_namemap.hh"
 
 #include "BLO_readfile.hh"
@@ -43,18 +44,18 @@
 #  include "BPY_extern.hh"
 #endif
 
-using namespace blender::bke::id;
+namespace blender {
+
+using namespace bke::id;
 
 void BKE_libblock_free_data(ID *id, const bool do_id_user)
 {
   if (id->properties) {
-    IDP_FreePropertyContent_ex(id->properties, do_id_user);
-    MEM_freeN(id->properties);
+    IDP_FreeProperty_ex(id->properties, do_id_user);
     id->properties = nullptr;
   }
   if (id->system_properties) {
-    IDP_FreePropertyContent_ex(id->system_properties, do_id_user);
-    MEM_freeN(id->system_properties);
+    IDP_FreeProperty_ex(id->system_properties, do_id_user);
     id->system_properties = nullptr;
   }
 
@@ -68,12 +69,12 @@ void BKE_libblock_free_data(ID *id, const bool do_id_user)
   }
 
   if (id->library_weak_reference != nullptr) {
-    MEM_freeN(id->library_weak_reference);
+    MEM_delete(id->library_weak_reference);
   }
 
-  BKE_libblock_free_runtime_data(id);
-
   BKE_animdata_free(id, do_id_user);
+
+  BKE_libblock_free_runtime_data(id);
 }
 
 void BKE_libblock_free_datablock(ID *id, const int /*flag*/)
@@ -92,11 +93,15 @@ void BKE_libblock_free_datablock(ID *id, const int /*flag*/)
 
 void BKE_libblock_free_runtime_data(ID *id)
 {
-  /* During "normal" file loading this data is released when versioning ends. Some versioning code
-   * also deletes IDs, though. For example, in the startup blend file, brushes that were replaced
-   * by assets are deleted. This means that the regular "delete this ID" flow (aka this code here)
-   * also needs to free this data. */
-  BLO_readfile_id_runtime_data_free(*id);
+  if (id->runtime) {
+    /* During "normal" file loading this data is released when versioning ends. Some versioning
+     * code also deletes IDs, though. For example, in the startup blend file, brushes that were
+     * replaced by assets are deleted. This means that the regular "delete this ID" flow (aka this
+     * code here) also needs to free this data. */
+    BLO_readfile_id_runtime_data_free(*id);
+
+    MEM_SAFE_DELETE(id->runtime);
+  }
 }
 
 static int id_free(Main *bmain, void *idv, int flag, const bool use_flag_from_idtag)
@@ -130,7 +135,7 @@ static int id_free(Main *bmain, void *idv, int flag, const bool use_flag_from_id
   BLI_assert((flag & LIB_ID_FREE_NO_MAIN) != 0 || (flag & LIB_ID_FREE_NOT_ALLOCATED) == 0);
   BLI_assert((flag & LIB_ID_FREE_NO_MAIN) != 0 || (flag & LIB_ID_FREE_NO_USER_REFCOUNT) == 0);
 
-  const short type = GS(id->name);
+  const short type = id->id_type();
 
   if (bmain && (flag & LIB_ID_FREE_NO_DEG_TAG) == 0) {
     BLI_assert(bmain->is_locked_for_linking == false);
@@ -170,7 +175,7 @@ static int id_free(Main *bmain, void *idv, int flag, const bool use_flag_from_id
   }
 
   if ((flag & LIB_ID_FREE_NO_MAIN) == 0) {
-    ListBase *lb = which_libbase(bmain, type);
+    ListBaseT<ID> *lb = which_libbase(bmain, type);
     BLI_remlink(lb, id);
     if ((flag & LIB_ID_FREE_NO_NAMEMAP_REMOVE) == 0) {
       BKE_main_namemap_remove_id(*bmain, *id);
@@ -184,7 +189,7 @@ static int id_free(Main *bmain, void *idv, int flag, const bool use_flag_from_id
   }
 
   if ((flag & LIB_ID_FREE_NOT_ALLOCATED) == 0) {
-    MEM_freeN(id);
+    MEM_delete(id);
   }
 
   return flag;
@@ -196,16 +201,16 @@ void BKE_id_free_ex(Main *bmain, void *idv, const int flag_orig, const bool use_
    * between the Scene's master collection and its view_layers become invalid
    * (due to remapping). */
   if (bmain && (flag_orig & LIB_ID_FREE_NO_MAIN) == 0) {
-    BKE_layer_collection_resync_forbid();
+    BKE_layer_collection_resync_forbid(*bmain);
   }
 
-  const ID_Type id_type = GS(static_cast<ID *>(idv)->name);
+  const ID_Type id_type = static_cast<ID *>(idv)->id_type();
 
   int flag_final = id_free(bmain, idv, flag_orig, use_flag_from_idtag);
 
   if (bmain) {
     if ((flag_orig & LIB_ID_FREE_NO_MAIN) == 0) {
-      BKE_layer_collection_resync_allow();
+      BKE_layer_collection_resync_allow(*bmain);
     }
 
     if ((flag_final & LIB_ID_FREE_NO_MAIN) == 0) {
@@ -235,12 +240,12 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
    *     Otherwise, there is no real way to get rid of an object anymore -
    *     better handling of this is TODO.
    */
-  if ((GS(id->name) == ID_OB) && (id->us == 1) && !ID_IS_LINKED(id)) {
+  if ((id->id_type() == ID_OB) && (id->us == 1) && !ID_IS_LINKED(id)) {
     id_us_clear_real(id);
   }
 
   if (id->us == 0) {
-    const bool is_lib = GS(id->name) == ID_LI;
+    const bool is_lib = id->id_type() == ID_LI;
 
     BKE_libblock_unlink(bmain, id, false);
 
@@ -252,11 +257,11 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
   }
 }
 
-static size_t id_delete(Main *bmain,
-                        blender::Set<ID *> &ids_to_delete,
-                        const int extra_remapping_flags)
+static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const BKEIDDeleteOptions &options)
 {
+  const int extra_remapping_flags = options.extra_remapping_flags;
   bool has_deleted_library = false;
+  bool has_deleted_linked_or_liboverride_id = false;
 
   /* Used by batch tagged deletion, when we call BKE_id_free then, id is no more in Main database,
    * and has already properly unlinked its other IDs usages.
@@ -270,15 +275,33 @@ static size_t id_delete(Main *bmain,
   const int base_count = lbarray.size();
 
   BKE_main_lock(bmain);
-  BKE_layer_collection_resync_forbid();
+  BKE_layer_collection_resync_forbid(*bmain);
   IDRemapper id_remapper;
+
+  auto process_id_to_delete =
+      [&bmain, &ids_to_delete, &id_remapper, &has_deleted_linked_or_liboverride_id](
+          ListBaseT<ID> *lb, ID *id_iter) -> void {
+    /* Do not tag as no_main now, we want to unlink it first (lower-level ID management
+     * code has some specific handling of 'no main' IDs that would be a problem in that
+     * case). */
+    BLI_remlink(lb, id_iter);
+    BKE_main_namemap_remove_id(*bmain, *id_iter);
+    ids_to_delete.add(id_iter);
+    id_remapper.add(id_iter, nullptr);
+
+    if (!has_deleted_linked_or_liboverride_id &&
+        (ID_IS_LINKED(id_iter) || ID_IS_OVERRIDE_LIBRARY(id_iter)))
+    {
+      has_deleted_linked_or_liboverride_id = true;
+    }
+  };
 
   /* Main idea of batch deletion is to remove all IDs to be deleted from Main database.
    * This means that we won't have to loop over all deleted IDs to remove usages
    * of other deleted IDs.
    * This gives tremendous speed-up when deleting a large amount of IDs from a Main
    * containing thousands of these.
-   * This also means that we have to be very careful here, as we by-pass many 'common'
+   * This also means that we have to be very careful here, as we bypass many 'common'
    * processing, hence risking to 'corrupt' at least user counts, if not IDs themselves. */
   bool keep_looping = true;
   while (keep_looping) {
@@ -289,7 +312,7 @@ static size_t id_delete(Main *bmain,
      * (e.g. meshes before objects). Reduces the chances to have to loop many times in the
      * `while (keep_looking)` outer loop. */
     for (int i = 0; i < base_count; i++) {
-      ListBase *lb = lbarray[i];
+      ListBaseT<ID> *lb = lbarray[i];
       ID *id_iter;
 
       FOREACH_MAIN_LISTBASE_ID_BEGIN (lb, id_iter) {
@@ -297,23 +320,14 @@ static size_t id_delete(Main *bmain,
         if (ids_to_delete.contains(id_iter) ||
             (ID_IS_LINKED(id_iter) && ids_to_delete.contains(&id_iter->lib->id)))
         {
-          BLI_remlink(lb, id_iter);
-          BKE_main_namemap_remove_id(*bmain, *id_iter);
-          ids_to_delete.add(id_iter);
-          id_remapper.add(id_iter, nullptr);
-          /* Do not tag as no_main now, we want to unlink it first (lower-level ID management
-           * code has some specific handling of 'no main' IDs that would be a problem in that
-           * case). */
+          process_id_to_delete(lb, id_iter);
 
           /* Forcefully also delete shapekeys of the deleted ID if any, 'orphaned' shapekeys are
            * not allowed in Blender and will cause lots of problem in modern code (liboverrides,
            * warning on write & read, etc.). */
           Key *shape_key = BKE_key_from_id(id_iter);
           if (shape_key && !ids_to_delete.contains(&shape_key->id)) {
-            BLI_remlink(&bmain->shapekeys, &shape_key->id);
-            BKE_main_namemap_remove_id(*bmain, shape_key->id);
-            ids_to_delete.add(&shape_key->id);
-            id_remapper.add(&shape_key->id, nullptr);
+            process_id_to_delete(&bmain->shapekeys.cast<ID>(), &shape_key->id);
           }
 
           keep_looping = true;
@@ -331,12 +345,17 @@ static size_t id_delete(Main *bmain,
     BKE_libblock_remap_multiple_locked(bmain, id_remapper, remapping_flags);
     for (ID *id_never_null_iter : id_remapper.never_null_users()) {
       ids_to_delete.add(id_never_null_iter);
+      keep_looping = true;
     }
     id_remapper.clear();
   }
 
+  /* Remapping above may have left some Library::runtime::archived_libraries items to nullptr,
+   * clean this up and shrink the vector accordingly. */
+  bke::library::main_cleanup_parent_archives(*bmain);
+
   /* Since we removed IDs from Main, their own other IDs usages need to be removed 'manually'. */
-  blender::Vector<ID *> cleanup_ids{ids_to_delete.begin(), ids_to_delete.end()};
+  Vector<ID *> cleanup_ids{ids_to_delete.begin(), ids_to_delete.end()};
   BKE_libblock_relink_multiple(
       bmain,
       cleanup_ids,
@@ -356,7 +375,7 @@ static size_t id_delete(Main *bmain,
      * remapping code, depending on order in which these are handled). */
     id->us = ID_FAKE_USERS(id);
 
-    if (!has_deleted_library && GS(id->name) == ID_LI) {
+    if (!has_deleted_library && id->id_type() == ID_LI) {
       has_deleted_library = true;
     }
 
@@ -364,34 +383,38 @@ static size_t id_delete(Main *bmain,
   }
 
   BKE_main_unlock(bmain);
-  BKE_layer_collection_resync_allow();
+  BKE_layer_collection_resync_allow(*bmain);
   BKE_main_collection_sync_remap(bmain);
+  if (!options.prevent_invariants_update) {
+    BKE_main_ensure_invariants(*bmain);
+  }
 
   if (has_deleted_library) {
     BKE_library_main_rebuild_hierarchy(bmain);
+  }
+
+  /* Deleting a liboverride or linked ID may have had some impact on validity of liboverrides
+   * hierarchy roots, these need to be re-validated/re-generated. */
+  if (has_deleted_linked_or_liboverride_id && !options.prevent_liboverride_hierarchy_root_ensure) {
+    BKE_lib_override_library_main_hierarchy_root_ensure(bmain);
   }
 
   bmain->is_memfile_undo_written = false;
   return size_t(ids_to_delete.size());
 }
 
-void BKE_id_delete_ex(Main *bmain, void *idv, const int extra_remapping_flags)
+void BKE_id_delete(Main *bmain, void *idv, const BKEIDDeleteOptions &options)
 {
   ID *id = static_cast<ID *>(idv);
   BLI_assert_msg((id->tag & ID_TAG_NO_MAIN) == 0, "Cannot be used with IDs outside of Main");
 
-  blender::Set<ID *> ids_to_delete = {id};
-  id_delete(bmain, ids_to_delete, extra_remapping_flags);
+  Set<ID *> ids_to_delete = {id};
+  id_delete(bmain, ids_to_delete, options);
 }
 
-void BKE_id_delete(Main *bmain, void *idv)
+size_t BKE_id_multi_tagged_delete(Main *bmain, const BKEIDDeleteOptions &options)
 {
-  BKE_id_delete_ex(bmain, idv, 0);
-}
-
-size_t BKE_id_multi_tagged_delete(Main *bmain)
-{
-  blender::Set<ID *> ids_to_delete;
+  Set<ID *> ids_to_delete;
   ID *id_iter;
   FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
     if (id_iter->tag & ID_TAG_DOIT) {
@@ -399,12 +422,14 @@ size_t BKE_id_multi_tagged_delete(Main *bmain)
     }
   }
   FOREACH_MAIN_ID_END;
-  return id_delete(bmain, ids_to_delete, 0);
+  return id_delete(bmain, ids_to_delete, options);
 }
 
-size_t BKE_id_multi_delete(Main *bmain, blender::Set<ID *> &ids_to_delete)
+size_t BKE_id_multi_delete(Main *bmain,
+                           Set<ID *> &ids_to_delete,
+                           const BKEIDDeleteOptions &options)
 {
-  return id_delete(bmain, ids_to_delete, 0);
+  return id_delete(bmain, ids_to_delete, options);
 }
 
 /* -------------------------------------------------------------------- */
@@ -426,3 +451,5 @@ void BKE_libblock_free_data_py(ID *id)
 }
 
 /** \} */
+
+}  // namespace blender

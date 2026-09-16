@@ -77,6 +77,8 @@ dict_custom = {
     "canonicalized",
     "canonicalizing",
     "catadioptric",
+    "changeset",
+    "changesets",
     "checksums",
     "chromaticity",
     "chrominance",
@@ -91,6 +93,7 @@ dict_custom = {
     "confusticated",
     "constructability",
     "constructible",
+    "contextless",
     "convolved",
     "coplanarity",
     "copyable",
@@ -150,6 +153,7 @@ dict_custom = {
     "dihedral",
     "dimensionality",
     "directionality",
+    "directionally",
     "disambiguated",
     "disambiguates",
     "discoverability",
@@ -158,6 +162,7 @@ dict_custom = {
     "discretizes",
     "distributable",
     "downcasting",
+    "downloader",
     "downsample",
     "downsampled",
     "downsampler",
@@ -173,9 +178,11 @@ dict_custom = {
     "elementwise",
     "embedder",
     "enablement",
+    "encodable",
     "enqueueing",
     "equiangular",
     "evolute",
+    "exitant",
     "extrema",
     "fallbacks",
     "finalizer",
@@ -187,6 +194,7 @@ dict_custom = {
     "foveation",
     "generatrix",
     "glitchy",
+    "handlings",
     "haptics",
     "headerless",
     "highlightable",
@@ -210,6 +218,7 @@ dict_custom = {
     "interdependencies",
     "interferences",
     "interocular",
+    "interpolant",
     "interpolator",
     "invariance",
     "invariant",
@@ -308,6 +317,7 @@ dict_custom = {
     "prepend",
     "prepending",
     "preprocess",
+    "preprocesses",
     "preprocessing",
     "preprocessor",
     "preprocessors",
@@ -341,6 +351,7 @@ dict_custom = {
     "redistributions",
     "registerable",
     "reimplement",
+    "reimplementation",
     "reimplemented",
     "reimplementing",
     "reimport",
@@ -359,6 +370,7 @@ dict_custom = {
     "reparameterization",
     "reparametrization",
     "representable",
+    "reproject",
     "reprojected",
     "reprojecting",
     "reprojection",
@@ -397,6 +409,7 @@ dict_custom = {
     "stitchable",
     "strobing",
     "subclass",
+    "subclassed",
     "subclasses",
     "subclassing",
     "subdirectories",
@@ -426,9 +439,11 @@ dict_custom = {
     "tertiarily",
     "testability",
     "thumbstick",
+    "tokenization",
     "tokenize",
     "tokenizing",
     "toolchain",
+    "toolkits",
     "trackpad",
     "transcode",
     "transmissive",
@@ -537,6 +552,7 @@ dict_custom = {
     "unsharp",
     "unshearing",
     "unspecialized",
+    "unsplittable",
     "unsqueezed",
     "unstretch",
     "unsubdivided",
@@ -651,6 +667,8 @@ dict_custom = {
     "decrefing",
     "diff",
     "diffs",
+    "docstring",
+    "docstrings",
     "endian",
     "endianness",
     "env",
@@ -904,15 +922,21 @@ dict_ignore_hyphenated_suffix = {
 }
 
 files_ignore = {
+    "scripts/modules/_bl_i18n_utils/utils_spell_check.py",  # UI spelling, doesn't always match code spelling.
+    "tools/utils/git_data_canonical_authors.py",  # Too many names which aren't in the dictionary.
     "tools/utils_doc/rna_manual_reference_updater.py",  # Contains language ID references.
 
     # Maintained by 3rd parties.
     "source/blender/blenlib/intern/fnmatch.c",
     "source/blender/draw/intern/shaders/common_fxaa_lib.glsl",
     "source/blender/gpu/shaders/common/gpu_shader_smaa_lib.glsl",
+
+    # Contains `Lorem Ipsum`.
+    "source/blender/blenlib/tests/BLI_resource_strings.h",
 }
 
+# These contain many typos that could be resolved, then removed from this list.
 directories_ignore = {
-    "scripts/addons",
-    "scripts/addons_core",
+    "scripts/addons_core/io_scene_gltf2/",
+    "scripts/addons_core/rigify/",
 }

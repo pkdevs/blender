@@ -12,29 +12,34 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_kdtree.h"
-#include "BLI_linklist_stack.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_array_utils.hh"
+#include "BLI_function_ref.hh"
+#include "BLI_kdtree.hh"
+#include "BLI_linklist_stack.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
+#include "BKE_constraint.h"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_modifier.hh"
 #include "BKE_nla.hh"
+#include "BKE_object_types.hh"
 #include "BKE_scene.hh"
 
 #include "ED_particle.hh"
 #include "ED_screen.hh"
 #include "ED_screen_types.hh"
-#include "ED_sequencer.hh"
 
 #include "ANIM_keyframing.hh"
 #include "ANIM_nla.hh"
+
+#include "SEQ_retiming.hh"
 
 #include "UI_view2d.hh"
 
@@ -81,51 +86,57 @@ void transform_around_single_fallback(TransInfo *t)
 /** \name Proportional Editing
  * \{ */
 
-static int trans_data_compare_dist(const void *a, const void *b)
+/**
+ * Construct `tc->sorted_index_map` so that its indices visit `tc->{data,data_ext,data_2d}` in
+ * sorted order, given the compare function.
+ */
+static void make_sorted_index_map(TransDataContainer *tc, FunctionRef<bool(int, int)> compare)
 {
-  const TransData *td_a = (const TransData *)a;
-  const TransData *td_b = (const TransData *)b;
+  BLI_assert(tc->sorted_index_map == nullptr);
+  tc->sorted_index_map = MEM_new_array_uninitialized<int>(tc->data_len, __func__);
 
-  if (td_a->dist < td_b->dist) {
-    return -1;
-  }
-  if (td_a->dist > td_b->dist) {
-    return 1;
-  }
-  return 0;
+  const MutableSpan sorted_index_span(tc->sorted_index_map, tc->data_len);
+  array_utils::fill_index_range(sorted_index_span);
+  std::ranges::sort(sorted_index_span, compare);
 }
 
-static int trans_data_compare_rdist(const void *a, const void *b)
-{
-  const TransData *td_a = (const TransData *)a;
-  const TransData *td_b = (const TransData *)b;
-
-  if (td_a->rdist < td_b->rdist) {
-    return -1;
-  }
-  if (td_a->rdist > td_b->rdist) {
-    return 1;
-  }
-  return 0;
-}
-
+/**
+ * Construct an index map to visit `tc->data`, `tc->data_ext`, and `tc->data_2d` in order of
+ * selection state (selected first). Unselected items are visited by either their `dist` or `rdist`
+ * property, depending on a flag in `t`.
+ */
 static void sort_trans_data_dist_container(const TransInfo *t, TransDataContainer *tc)
 {
-  TransData *start = tc->data;
-  int i;
-
-  for (i = 0; i < tc->data_len && start->flag & TD_SELECTED; i++) {
-    start++;
-  }
-
-  if (i < tc->data_len) {
-    if (t->flag & T_PROP_CONNECTED) {
-      qsort(start, size_t(tc->data_len) - i, sizeof(TransData), trans_data_compare_dist);
+  const bool use_dist = (t->flag & T_PROP_CONNECTED);
+  const auto compare = [&](const int a, const int b) {
+    /* If both selected, then they are equivalent. To keep memory access sequential (and thus more
+     * predictable for pre-caching) when iterating the arrays, keep them sorted by array index. */
+    const bool is_selected_a = tc->data[a].flag & TD_SELECTED;
+    const bool is_selected_b = tc->data[b].flag & TD_SELECTED;
+    if (is_selected_a && is_selected_b) {
+      return a < b;
     }
-    else {
-      qsort(start, size_t(tc->data_len) - i, sizeof(TransData), trans_data_compare_rdist);
+
+    /* Selected comes before unselected. */
+    if (is_selected_a) {
+      return true;
     }
-  }
+    if (is_selected_b) {
+      return false;
+    }
+
+    /* If both are unselected, only then the distance matters. */
+    if (use_dist) {
+      return tc->data[a].dist < tc->data[b].dist;
+    }
+    return tc->data[a].rdist < tc->data[b].rdist;
+  };
+
+  /* The "sort by distance" is often preceded by "calculate distance", which is
+   * often preceded by "sort selected first". */
+  MEM_SAFE_DELETE(tc->sorted_index_map);
+
+  make_sorted_index_map(tc, compare);
 }
 void sort_trans_data_dist(TransInfo *t)
 {
@@ -135,33 +146,29 @@ void sort_trans_data_dist(TransInfo *t)
 }
 
 /**
- * Make #TD_SELECTED first in the array.
+ * Construct an index map to visit `tc->data`, `tc->data_ext`, and `tc->data_2d` in order of
+ * selection state (selected first).
  */
 static void sort_trans_data_selected_first_container(TransDataContainer *tc)
 {
-  TransData *sel, *unsel;
-  TransData temp;
-  unsel = tc->data;
-  sel = &tc->data[tc->data_len - 1];
-  while (sel > unsel) {
-    while (unsel->flag & TD_SELECTED) {
-      unsel++;
-      if (unsel == sel) {
-        return;
-      }
+  BLI_assert_msg(tc->sorted_index_map == nullptr,
+                 "Expected sorting by selection state to only happen once");
+
+  const auto compare = [&](const int a, const int b) {
+    /* If the selection state is the same, they are equivalent. To keep memory
+     * access sequential (and thus more predictable for pre-caching) when
+     * iterating the arrays, keep them sorted by array index. */
+    const bool is_selected_a = tc->data[a].flag & TD_SELECTED;
+    const bool is_selected_b = tc->data[b].flag & TD_SELECTED;
+    if (is_selected_a == is_selected_b) {
+      return a < b;
     }
-    while (!(sel->flag & TD_SELECTED)) {
-      sel--;
-      if (unsel == sel) {
-        return;
-      }
-    }
-    temp = *unsel;
-    *unsel = *sel;
-    *sel = temp;
-    sel--;
-    unsel++;
-  }
+
+    /* If A is selected, a comes before b, so return true.
+     * If B is selected, a comes after b, so return false. */
+    return is_selected_a;
+  };
+  make_sorted_index_map(tc, compare);
 }
 static void sort_trans_data_selected_first(TransInfo *t)
 {
@@ -175,32 +182,32 @@ static float3 prop_dist_loc_get(const TransDataContainer *tc,
                                 const bool use_island,
                                 const float proj_vec[3])
 {
-  float3 r_vec;
+  float3 vec;
 
   if (use_island) {
     if (tc->use_local_mat) {
-      mul_v3_m4v3(r_vec, tc->mat, td->iloc);
+      mul_v3_m4v3(vec, tc->mat, td->iloc);
     }
     else {
-      mul_v3_m3v3(r_vec, td->mtx, td->iloc);
+      mul_v3_m3v3(vec, td->mtx, td->iloc);
     }
   }
   else {
     if (tc->use_local_mat) {
-      mul_v3_m4v3(r_vec, tc->mat, td->center);
+      mul_v3_m4v3(vec, tc->mat, td->center);
     }
     else {
-      mul_v3_m3v3(r_vec, td->mtx, td->center);
+      mul_v3_m3v3(vec, td->mtx, td->center);
     }
   }
 
   if (proj_vec) {
     float vec_p[3];
-    project_v3_v3v3(vec_p, r_vec, proj_vec);
-    sub_v3_v3(r_vec, vec_p);
+    project_v3_v3v3(vec_p, vec, proj_vec);
+    sub_v3_v3(vec, vec_p);
   }
 
-  return r_vec;
+  return vec;
 }
 
 /**
@@ -211,8 +218,6 @@ static float3 prop_dist_loc_get(const TransDataContainer *tc,
  */
 static void set_prop_dist(TransInfo *t, const bool with_dist)
 {
-  int a;
-
   float _proj_vec[3];
   const float *proj_vec = nullptr;
 
@@ -230,78 +235,65 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
   /* Count number of selected. */
   int td_table_len = 0;
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    TransData *td = tc->data;
-    for (a = 0; a < tc->data_len; a++, td++) {
-      if (td->flag & TD_SELECTED) {
-        td_table_len++;
-      }
-      else {
-        /* By definition transform-data has selected items in beginning. */
-        break;
-      }
-    }
+    tc->foreach_index_selected([&](const int /*i*/) { td_table_len++; });
   }
 
   /* Pointers to selected's #TransData.
-   * Used to find #TransData from the index returned by #BLI_kdtree_find_nearest. */
-  TransData **td_table = static_cast<TransData **>(
-      MEM_mallocN(sizeof(*td_table) * td_table_len, __func__));
+   * Used to find #TransData from the index returned by #blender::kdtree_find_nearest. */
+  TransData **td_table = MEM_new_array_uninitialized<TransData *>(td_table_len, __func__);
 
   /* Create and fill KD-tree of selected's positions - in global or proj_vec space. */
-  KDTree_3d *td_tree = BLI_kdtree_3d_new(td_table_len);
+  KDTree<float3> *td_tree = kdtree_new<float3>(td_table_len);
 
   int td_table_index = 0;
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    TransData *td = tc->data;
-    for (a = 0; a < tc->data_len; a++, td++) {
-      if (td->flag & TD_SELECTED) {
-        /* Initialize, it was malloced. */
-        td->rdist = 0.0f;
+    tc->foreach_index_selected([&](const int i) {
+      TransData *td = &tc->data[i];
+      /* Initialize, it was malloced. */
+      td->rdist = 0.0f;
 
-        const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
+      const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
 
-        BLI_kdtree_3d_insert(td_tree, td_table_index, vec);
-        td_table[td_table_index++] = td;
-      }
-      else {
-        /* By definition transform-data has selected items in beginning. */
-        break;
-      }
-    }
+      kdtree_insert<float3>(td_tree, td_table_index, vec);
+      td_table[td_table_index++] = td;
+    });
   }
   BLI_assert(td_table_index == td_table_len);
 
-  BLI_kdtree_3d_balance(td_tree);
+  kdtree_balance<float3>(td_tree);
 
   /* For each non-selected vertex, find distance to the nearest selected vertex. */
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    TransData *td = tc->data;
-    for (a = 0; a < tc->data_len; a++, td++) {
-      if ((td->flag & TD_SELECTED) == 0) {
-        const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
+    tc->foreach_index([&](const int i) {
+      TransData *td = &tc->data[i];
+      if (td->flag & TD_SELECTED) {
+        return true;
+      }
 
-        KDTreeNearest_3d nearest;
-        const int td_index = BLI_kdtree_3d_find_nearest(td_tree, vec, &nearest);
+      const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
 
-        td->rdist = -1.0f;
-        if (td_index != -1) {
-          td->rdist = nearest.dist;
-          if (use_island) {
-            /* Use center and axismtx of closest point found. */
-            copy_v3_v3(td->center, td_table[td_index]->center);
-            copy_m3_m3(td->axismtx, td_table[td_index]->axismtx);
-          }
-        }
+      KDTreeNearest<float3> nearest;
+      const int td_index = kdtree_find_nearest<float3>(td_tree, vec, &nearest);
 
-        if (with_dist) {
-          td->dist = td->rdist;
+      td->rdist = -1.0f;
+      if (td_index != -1) {
+        td->rdist = nearest.dist;
+        if (use_island) {
+          /* Use center and axismtx of closest point found. */
+          copy_v3_v3(td->center, td_table[td_index]->center);
+          copy_m3_m3(td->axismtx, td_table[td_index]->axismtx);
         }
       }
-    }
+
+      if (with_dist) {
+        td->dist = td->rdist;
+      }
+      return true;
+    });
   }
 
-  BLI_kdtree_3d_free(td_tree);
-  MEM_freeN(td_table);
+  kdtree_free<float3>(td_tree);
+  MEM_delete(td_table);
 }
 
 /** \} */
@@ -321,25 +313,27 @@ static bool pchan_autoik_adjust(bPoseChannel *pchan, short chainlen)
   }
 
   /* Check if pchan has ik-constraint. */
-  LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
-    if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
+  for (bConstraint &con : pchan->constraints) {
+    if (con.type != CONSTRAINT_TYPE_KINEMATIC) {
       continue;
     }
-    if (con->type == CONSTRAINT_TYPE_KINEMATIC && (con->enforce != 0.0f)) {
-      bKinematicConstraint *data = static_cast<bKinematicConstraint *>(con->data);
+    if (!BKE_constraint_has_influence(&con)) {
+      continue;
+    }
 
-      /* Only accept if a temporary one (for auto-IK). */
-      if (data->flag & CONSTRAINT_IK_TEMP) {
-        /* `chainlen` is new `chainlen`, but is limited by maximum `chainlen`. */
-        const int old_rootbone = data->rootbone;
-        if ((chainlen == 0) || (chainlen > data->max_rootbone)) {
-          data->rootbone = data->max_rootbone;
-        }
-        else {
-          data->rootbone = chainlen;
-        }
-        changed |= (data->rootbone != old_rootbone);
+    bKinematicConstraint *data = static_cast<bKinematicConstraint *>(con.data);
+
+    /* Only accept if a temporary one (for auto-IK). */
+    if (data->flag & CONSTRAINT_IK_TEMP) {
+      /* `chainlen` is new `chainlen`, but is limited by maximum `chainlen`. */
+      const int old_rootbone = data->rootbone;
+      if ((chainlen == 0) || (chainlen > data->max_rootbone)) {
+        data->rootbone = data->max_rootbone;
       }
+      else {
+        data->rootbone = chainlen;
+      }
+      changed |= (data->rootbone != old_rootbone);
     }
   }
 
@@ -378,8 +372,8 @@ void transform_autoik_update(TransInfo *t, short mode)
       continue;
     }
 
-    LISTBASE_FOREACH (bPoseChannel *, pchan, &tc->poseobj->pose->chanbase) {
-      changed |= pchan_autoik_adjust(pchan, *chainlen);
+    for (bPoseChannel &pchan : tc->poseobj->pose->chanbase) {
+      changed |= pchan_autoik_adjust(&pchan, *chainlen);
     }
   }
 
@@ -461,7 +455,7 @@ TransDataCurveHandleFlags *initTransDataCurveHandles(TransData *td, BezTriple *b
 {
   TransDataCurveHandleFlags *hdata;
   td->flag |= TD_BEZTRIPLE;
-  hdata = td->hdata = MEM_mallocN<TransDataCurveHandleFlags>("CuHandle Data");
+  hdata = td->hdata = MEM_new_uninitialized<TransDataCurveHandleFlags>("CuHandle Data");
   hdata->ih1 = bezt->h1;
   hdata->h1 = &bezt->h1;
   hdata->ih2 = bezt->h2; /* In case the second is not selected. */
@@ -505,24 +499,27 @@ void clipUVData(TransInfo *t)
 
 char transform_convert_frame_side_dir_get(TransInfo *t, float cframe)
 {
-  char r_dir;
+  char dir;
   float center[2];
   if (t->flag & T_MODAL) {
-    UI_view2d_region_to_view(
-        (View2D *)t->view, t->mouse.imval[0], t->mouse.imval[1], &center[0], &center[1]);
-    r_dir = (center[0] > cframe) ? 'R' : 'L';
+    ui::view2d_region_to_view(static_cast<View2D *>(t->view),
+                              t->mouse.imval[0],
+                              t->mouse.imval[1],
+                              &center[0],
+                              &center[1]);
+    dir = (center[0] > cframe) ? 'R' : 'L';
     {
       /* XXX: This saves the direction in the "mirror" property to be used for redo! */
-      if (r_dir == 'R') {
+      if (dir == 'R') {
         t->flag |= T_NO_MIRROR;
       }
     }
   }
   else {
-    r_dir = (t->flag & T_NO_MIRROR) ? 'R' : 'L';
+    dir = (t->flag & T_NO_MIRROR) ? 'R' : 'L';
   }
 
-  return r_dir;
+  return dir;
 }
 
 bool FrameOnMouseSide(char side, float frame, float cframe)
@@ -545,82 +542,84 @@ bool FrameOnMouseSide(char side, float frame, float cframe)
 /** \name Transform Utilities
  * \{ */
 
-bool constraints_list_needinv(TransInfo *t, ListBase *list)
+bool constraints_list_needinv(TransInfo *t, ListBaseT<bConstraint> *list)
 {
   /* Loop through constraints, checking if there's one of the mentioned
    * constraints needing special crazy-space corrections. */
   if (list) {
-    LISTBASE_FOREACH (bConstraint *, con, list) {
+    for (bConstraint &con : *list) {
       /* Only consider constraint if it is enabled, and has influence on result. */
-      if ((con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) == 0 && (con->enforce != 0.0f)) {
-        /* Affirmative: returns for specific constraints here. */
-        /* Constraints that require this regardless. */
-        if (ELEM(con->type,
-                 CONSTRAINT_TYPE_FOLLOWPATH,
-                 CONSTRAINT_TYPE_CLAMPTO,
-                 CONSTRAINT_TYPE_ARMATURE,
-                 CONSTRAINT_TYPE_OBJECTSOLVER,
-                 CONSTRAINT_TYPE_FOLLOWTRACK))
+      if (!BKE_constraint_has_influence(&con)) {
+        continue;
+      }
+
+      /* Affirmative: returns for specific constraints here. */
+      /* Constraints that require this regardless. */
+      if (ELEM(con.type,
+               CONSTRAINT_TYPE_FOLLOWPATH,
+               CONSTRAINT_TYPE_CLAMPTO,
+               CONSTRAINT_TYPE_ARMATURE,
+               CONSTRAINT_TYPE_OBJECTSOLVER,
+               CONSTRAINT_TYPE_FOLLOWTRACK))
+      {
+        return true;
+      }
+
+      /* Constraints that require this only under special conditions. */
+      if (con.type == CONSTRAINT_TYPE_CHILDOF) {
+        /* ChildOf constraint only works when using all location components, see #42256. */
+        bChildOfConstraint *data = static_cast<bChildOfConstraint *>(con.data);
+
+        if ((data->flag & CHILDOF_LOCX) && (data->flag & CHILDOF_LOCY) &&
+            (data->flag & CHILDOF_LOCZ))
         {
           return true;
         }
+      }
+      else if (con.type == CONSTRAINT_TYPE_ROTLIKE) {
+        /* CopyRot constraint only does this when rotating, and offset is on. */
+        bRotateLikeConstraint *data = static_cast<bRotateLikeConstraint *>(con.data);
 
-        /* Constraints that require this only under special conditions. */
-        if (con->type == CONSTRAINT_TYPE_CHILDOF) {
-          /* ChildOf constraint only works when using all location components, see #42256. */
-          bChildOfConstraint *data = (bChildOfConstraint *)con->data;
-
-          if ((data->flag & CHILDOF_LOCX) && (data->flag & CHILDOF_LOCY) &&
-              (data->flag & CHILDOF_LOCZ))
-          {
-            return true;
-          }
+        if (ELEM(data->mix_mode, ROTLIKE_MIX_OFFSET, ROTLIKE_MIX_BEFORE) &&
+            ELEM(t->mode, TFM_ROTATION))
+        {
+          return true;
         }
-        else if (con->type == CONSTRAINT_TYPE_ROTLIKE) {
-          /* CopyRot constraint only does this when rotating, and offset is on. */
-          bRotateLikeConstraint *data = (bRotateLikeConstraint *)con->data;
+      }
+      else if (con.type == CONSTRAINT_TYPE_TRANSLIKE) {
+        /* Copy Transforms constraint only does this in the Before mode. */
+        bTransLikeConstraint *data = static_cast<bTransLikeConstraint *>(con.data);
 
-          if (ELEM(data->mix_mode, ROTLIKE_MIX_OFFSET, ROTLIKE_MIX_BEFORE) &&
-              ELEM(t->mode, TFM_ROTATION))
-          {
-            return true;
-          }
+        if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE, TRANSLIKE_MIX_BEFORE_FULL) &&
+            ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION))
+        {
+          return true;
         }
-        else if (con->type == CONSTRAINT_TYPE_TRANSLIKE) {
-          /* Copy Transforms constraint only does this in the Before mode. */
-          bTransLikeConstraint *data = (bTransLikeConstraint *)con->data;
-
-          if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE, TRANSLIKE_MIX_BEFORE_FULL) &&
-              ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION))
-          {
-            return true;
-          }
-          if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
-            return true;
-          }
+        if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
+          return true;
         }
-        else if (con->type == CONSTRAINT_TYPE_ACTION) {
-          /* The Action constraint only does this in the Before mode. */
-          bActionConstraint *data = (bActionConstraint *)con->data;
+      }
+      else if (con.type == CONSTRAINT_TYPE_ACTION) {
+        /* The Action constraint only does this in the Before mode. */
+        bActionConstraint *data = static_cast<bActionConstraint *>(con.data);
 
-          if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE, ACTCON_MIX_BEFORE_FULL) &&
-              ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION))
-          {
-            return true;
-          }
-          if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
-            return true;
-          }
+        if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE, ACTCON_MIX_BEFORE_FULL) &&
+            ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION))
+        {
+          return true;
         }
-        else if (con->type == CONSTRAINT_TYPE_TRANSFORM) {
-          /* Transform constraint needs it for rotation at least (r.57309),
-           * but doing so when translating may also mess things up, see: #36203. */
-          bTransformConstraint *data = (bTransformConstraint *)con->data;
+        if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
+          return true;
+        }
+      }
+      else if (con.type == CONSTRAINT_TYPE_TRANSFORM) {
+        /* Transform constraint needs it for rotation at least (r.57309),
+         * but doing so when translating may also mess things up, see: #36203. */
+        bTransformConstraint *data = static_cast<bTransformConstraint *>(con.data);
 
-          if (data->to == TRANS_ROTATION) {
-            if (t->mode == TFM_ROTATION && data->mix_mode_rot == TRANS_MIXROT_BEFORE) {
-              return true;
-            }
+        if (data->to == TRANS_ROTATION) {
+          if (t->mode == TFM_ROTATION && data->mix_mode_rot == TRANS_MIXROT_BEFORE) {
+            return true;
           }
         }
       }
@@ -705,8 +704,8 @@ static int countAndCleanTransDataContainer(TransInfo *t)
     }
   }
   if (data_container_len_orig != t->data_container_len) {
-    t->data_container = static_cast<TransDataContainer *>(
-        MEM_reallocN(t->data_container, sizeof(*t->data_container) * t->data_container_len));
+    t->data_container = static_cast<TransDataContainer *>(MEM_realloc_uninitialized(
+        t->data_container, sizeof(*t->data_container) * t->data_container_len));
   }
   return t->data_len_all;
 }
@@ -767,7 +766,7 @@ static void init_proportional_edit(TransInfo *t)
       /* Already calculated by #uv_set_connectivity_distance. */
     }
     else if (t->data_type == &TransConvertType_Curve) {
-      BLI_assert(t->obedit_type == OB_CURVES_LEGACY);
+      BLI_assert(ELEM(t->obedit_type, OB_CURVES_LEGACY, OB_SURF));
       if (t->flag & T_PROP_CONNECTED) {
         /* Already calculated by #calc_distanceCurveVerts. */
       }
@@ -822,7 +821,7 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
     return;
   }
 
-  const eObjectMode object_mode = eObjectMode(obact ? obact->mode : OB_MODE_OBJECT);
+  const eObjectMode object_mode = obact ? obact->mode : OB_MODE_OBJECT;
   const short object_type = obact ? obact->type : -1;
 
   if ((object_mode & OB_MODE_EDIT) ||
@@ -830,7 +829,7 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
       ((object_mode & OB_MODE_POSE) && (object_type == OB_ARMATURE)))
   {
     if (t->data_container) {
-      MEM_freeN(t->data_container);
+      MEM_delete(t->data_container);
     }
 
     Vector<Object *> local_objects;
@@ -840,6 +839,7 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
       /* Pose transform operates on `ob->pose` so don't skip duplicate object-data. */
       params.no_dup_data = (object_mode & OB_MODE_POSE) == 0;
       local_objects = BKE_view_layer_array_from_objects_in_mode_params(
+          *t->bmain,
           t->scene,
           t->view_layer,
           static_cast<const View3D *>((t->spacetype == SPACE_VIEW3D) ? t->view : nullptr),
@@ -847,18 +847,21 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
       objects = local_objects;
     }
 
-    t->data_container = MEM_calloc_arrayN<TransDataContainer>(objects.size(), __func__);
+    t->data_container = MEM_new_array_zeroed<TransDataContainer>(objects.size(), __func__);
     t->data_container_len = objects.size();
 
     for (int i = 0; i < objects.size(); i++) {
       TransDataContainer *tc = &t->data_container[i];
       if (!(t->flag & T_NO_MIRROR) && (objects[i]->type == OB_MESH)) {
-        tc->use_mirror_axis_x = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_X) != 0;
-        tc->use_mirror_axis_y = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Y) != 0;
-        tc->use_mirror_axis_z = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Z) != 0;
+        tc->use_mirror_axis_x = ((id_cast<Mesh *>(objects[i]->data))->symmetry & ME_SYMMETRY_X) !=
+                                0;
+        tc->use_mirror_axis_y = ((id_cast<Mesh *>(objects[i]->data))->symmetry & ME_SYMMETRY_Y) !=
+                                0;
+        tc->use_mirror_axis_z = ((id_cast<Mesh *>(objects[i]->data))->symmetry & ME_SYMMETRY_Z) !=
+                                0;
       }
 
-      if (object_mode & OB_MODE_EDIT) {
+      if (object_mode & OB_MODE_EDIT || object_mode & OB_MODE_PAINT_GREASE_PENCIL) {
         tc->obedit = objects[i];
         /* Check needed for UVs. */
         if ((t->flag & T_2D_EDIT) == 0) {
@@ -891,7 +894,7 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
 static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj_armature)
 {
   ViewLayer *view_layer = t->view_layer;
-  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+  BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   /* If tests must match recalc_data for correct updates. */
@@ -907,7 +910,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     return &TransConvertType_Cursor3D;
   }
   if (!(t->options & CTX_PAINT_CURVE) && (t->spacetype == SPACE_VIEW3D) && ob &&
-      (ob->mode == OB_MODE_SCULPT) && ob->sculpt)
+      (ob->mode == OB_MODE_SCULPT) && ob->runtime->sculpt_session)
   {
     return &TransConvertType_Sculpt;
   }
@@ -947,7 +950,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     if (t->options & CTX_SEQUENCER_IMAGE) {
       return &TransConvertType_SequencerImage;
     }
-    if (vse::sequencer_retiming_mode_is_active(t->context)) {
+    if (seq::retiming_keys_are_selected(t->scene)) {
       return &TransConvertType_SequencerRetiming;
     }
     return &TransConvertType_Sequencer;
@@ -960,7 +963,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   }
   if (t->spacetype == SPACE_CLIP) {
     if (t->options & CTX_MOVIECLIP) {
-      if (t->region->regiontype == RGN_TYPE_PREVIEW) {
+      if (t->region && (t->region->regiontype == RGN_TYPE_PREVIEW)) {
         return &TransConvertType_TrackingCurves;
       }
       return &TransConvertType_Tracking;
@@ -1016,14 +1019,19 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   {
     return &TransConvertType_Particle;
   }
-  if (ob && ((ob->mode & OB_MODE_ALL_PAINT) || (ob->mode & OB_MODE_SCULPT_CURVES))) {
+  if (ob && ((ob->mode & OB_MODE_ALL_PAINT_MESH) || (ob->mode & OB_MODE_SCULPT_CURVES))) {
     if ((t->options & CTX_PAINT_CURVE) && !ELEM(t->mode, TFM_SHEAR, TFM_SHRINKFATTEN)) {
       return &TransConvertType_PaintCurve;
     }
     return nullptr;
   }
-  if (ob && (ob->mode & OB_MODE_ALL_PAINT_GPENCIL)) {
-    /* In grease pencil all transformations must be canceled if not Object or Edit. */
+  if (ob && ELEM(ob->mode,
+                 OB_MODE_VERTEX_GREASE_PENCIL,
+                 OB_MODE_SCULPT_GREASE_PENCIL,
+                 OB_MODE_WEIGHT_GREASE_PENCIL))
+  {
+    /* Draw and Edit mode handle transformations via #TransConverType_GreasePencil, avoid
+     * transformations otherwise. */
     return nullptr;
   }
   return &TransConvertType_Object;
@@ -1048,7 +1056,7 @@ void create_trans_data(bContext *C, TransInfo *t)
     init_TransDataContainers(t, ob_armature, {ob_armature});
   }
   else {
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     Object *ob = BKE_view_layer_active_object_get(t->view_layer);
     init_TransDataContainers(t, ob, {});
   }
@@ -1092,6 +1100,9 @@ void create_trans_data(bContext *C, TransInfo *t)
     else if (t->data_type == &TransConvertType_SequencerImage) {
       t->obedit_type = -1;
     }
+    else if (t->data_type == &TransConvertType_NLA) {
+      t->obedit_type = -1;
+    }
     t->data_type->create_trans_data(C, t);
   }
 
@@ -1109,11 +1120,12 @@ void create_trans_data(bContext *C, TransInfo *t)
 void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc)
 {
   Object *ob = tc->obedit;
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+  ModifierData *md = ob->modifiers.first();
+  tc->has_mirror_clipping = false;
 
   for (; md; md = md->next) {
     if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
-      MirrorModifierData *mmd = (MirrorModifierData *)md;
+      MirrorModifierData *mmd = reinterpret_cast<MirrorModifierData *>(md);
 
       if ((mmd->flag & MOD_MIR_CLIPPING) == 0) {
         continue;
@@ -1179,6 +1191,7 @@ void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc)
             mul_m4_v3(imtx, loc);
           }
           copy_v3_v3(td->loc, loc);
+          tc->has_mirror_clipping = true;
         }
       }
     }
@@ -1209,7 +1222,7 @@ void animrecord_check_state(TransInfo *t, ID *id)
      * we need to add a new NLA track+strip to allow a clean pass to occur. */
     if ((sad) && (sad->flag & ANIMPLAY_FLAG_JUMPED)) {
       AnimData *adt = BKE_animdata_from_id(id);
-      const bool is_first = (adt) && (adt->nla_tracks.first == nullptr);
+      const bool is_first = (adt) && (adt->nla_tracks.first_ == nullptr);
 
       /* Perform push-down manually with some differences
        * NOTE: #BKE_nla_action_pushdown() sync warning. */

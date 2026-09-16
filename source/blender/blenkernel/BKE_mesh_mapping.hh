@@ -11,6 +11,8 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 
+namespace blender {
+
 struct BMLoop;
 struct MemArena;
 
@@ -99,14 +101,11 @@ struct MeshElemMap {
 
 /* mapping */
 
-UvVertMap *BKE_mesh_uv_vert_map_create(blender::OffsetIndices<int> faces,
-                                       const bool *hide_poly,
-                                       const bool *select_poly,
-                                       const int *corner_verts,
-                                       const float (*mloopuv)[2],
-                                       unsigned int totvert,
-                                       const float limit[2],
-                                       bool selected,
+UvVertMap *BKE_mesh_uv_vert_map_create(OffsetIndices<int> faces,
+                                       Span<int> corner_verts,
+                                       Span<float2> uv_map,
+                                       int verts_num,
+                                       const float2 &limit,
                                        bool use_winding);
 
 UvMapVert *BKE_mesh_uv_vert_map_get_vert(UvVertMap *vmap, unsigned int v);
@@ -120,7 +119,7 @@ void BKE_mesh_uv_vert_map_free(UvVertMap *vmap);
 void BKE_mesh_vert_corner_tri_map_create(MeshElemMap **r_map,
                                          int **r_mem,
                                          int totvert,
-                                         const blender::int3 *corner_tris,
+                                         const int3 *corner_tris,
                                          int tris_num,
                                          const int *corner_verts,
                                          int corners_num);
@@ -131,8 +130,8 @@ void BKE_mesh_vert_corner_tri_map_create(MeshElemMap **r_map,
  * This has the advantage that it can operate on any data-types.
  *
  * \param totsource: The total number of elements that \a final_origindex points to.
- * \param totfinal: The size of \a final_origindex
  * \param final_origindex: The size of the final array.
+ * \param totfinal: The size of \a final_origindex
  *
  * \note `totsource` could be `faces_num`,
  *       `totfinal` could be `tottessface` and `final_origindex` its ORIGINDEX custom-data.
@@ -146,7 +145,7 @@ void BKE_mesh_origindex_map_create(
  */
 void BKE_mesh_origindex_map_create_corner_tri(MeshElemMap **r_map,
                                               int **r_mem,
-                                              blender::OffsetIndices<int> faces,
+                                              OffsetIndices<int> faces,
                                               const int *corner_tri_faces,
                                               int corner_tris_num);
 
@@ -192,15 +191,12 @@ void BKE_mesh_loop_islands_add(MeshIslandStore *island_store,
                                int num_innercut_items,
                                int *innercut_item_indices);
 
-using MeshRemapIslandsCalc = bool (*)(const float (*vert_positions)[3],
-                                      int totvert,
-                                      const blender::int2 *edges,
-                                      int totedge,
-                                      const bool *uv_seams,
-                                      blender::OffsetIndices<int> faces,
-                                      const int *corner_verts,
-                                      const int *corner_edges,
-                                      int corners_num,
+using MeshRemapIslandsCalc = bool (*)(Span<float3> vert_positions,
+                                      Span<int2> edges,
+                                      Span<bool> uv_seams,
+                                      OffsetIndices<int> faces,
+                                      Span<int> corner_verts,
+                                      Span<int> corner_edges,
                                       MeshIslandStore *r_island_store);
 
 /* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
@@ -209,42 +205,16 @@ using MeshRemapIslandsCalc = bool (*)(const float (*vert_positions)[3],
 /**
  * Calculate 'generic' UV islands, i.e. based only on actual geometry data (edge seams),
  * not some UV layers coordinates.
+ *
+ * \param uv_seams: Optional (possibly empty) span.
  */
-bool BKE_mesh_calc_islands_loop_face_edgeseam(const float (*vert_positions)[3],
-                                              int totvert,
-                                              const blender::int2 *edges,
-                                              int totedge,
-                                              const bool *uv_seams,
-                                              blender::OffsetIndices<int> faces,
-                                              const int *corner_verts,
-                                              const int *corner_edges,
-                                              int corners_num,
+bool BKE_mesh_calc_islands_loop_face_edgeseam(Span<float3> vert_positions,
+                                              Span<int2> edges,
+                                              Span<bool> uv_seams,
+                                              OffsetIndices<int> faces,
+                                              Span<int> corner_verts,
+                                              Span<int> corner_edges,
                                               MeshIslandStore *r_island_store);
-
-/**
- * Calculate UV islands.
- *
- * \note If no UV layer is passed, we only consider edges tagged as seams as UV boundaries.
- * This has the advantages of simplicity, and being valid/common to all UV maps.
- * However, it means actual UV islands without matching UV seams will not be handled correctly.
- * If a valid UV layer is passed as \a luvs parameter,
- * UV coordinates are also used to detect islands boundaries.
- *
- * \note All this could be optimized.
- * Not sure it would be worth the more complex code, though,
- * those loops are supposed to be really quick to do.
- */
-bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
-                                           int totvert,
-                                           blender::int2 *edges,
-                                           int totedge,
-                                           const bool *uv_seams,
-                                           blender::OffsetIndices<int> faces,
-                                           const int *corner_verts,
-                                           const int *corner_edges,
-                                           int corners_num,
-                                           const float (*luvs)[2],
-                                           MeshIslandStore *r_island_store);
 
 /**
  * Calculate smooth groups from sharp edges, using increasing numbers as identifier for each group.
@@ -253,13 +223,13 @@ bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
  * \param sharp_faces: Optional (possibly empty) span.
  * \param r_totgroup: The total number of groups, 1 or more.
  * \return Face aligned array of group index values, starting at 1 (0 being used as 'invalid'
- * flag). Note that it's the callers responsibility to MEM_freeN the returned array.
+ * flag). Note that it's the callers responsibility to MEM_delete the returned array.
  */
 int *BKE_mesh_calc_smoothgroups(int edges_num,
-                                blender::OffsetIndices<int> faces,
-                                blender::Span<int> corner_edges,
-                                blender::Span<bool> sharp_edges,
-                                blender::Span<bool> sharp_faces,
+                                OffsetIndices<int> faces,
+                                Span<int> corner_edges,
+                                Span<bool> sharp_edges,
+                                Span<bool> sharp_faces,
                                 int *r_totgroup);
 /**
  * Same as #BKE_mesh_calc_smoothgroups, but use bit-flags instead of increasing numbers for each
@@ -281,16 +251,16 @@ int *BKE_mesh_calc_smoothgroups(int edges_num,
  * \param sharp_faces: Optional (possibly empty) span.
  * \param r_totgroup: The total number of groups, 1 or more.
  * \return Face aligned array of group bit-flags values (i.e. always powers of 2), starting at 1 (0
- * being used as 'invalid' flag). Note that it's the callers responsibility to MEM_freeN the
+ * being used as 'invalid' flag). Note that it's the callers responsibility to MEM_delete the
  * returned array.
  */
 int *BKE_mesh_calc_smoothgroups_bitflags(int edges_num,
                                          int verts_num,
-                                         blender::OffsetIndices<int> faces,
-                                         blender::Span<int> corner_edges,
-                                         blender::Span<int> corner_verts,
-                                         blender::Span<bool> sharp_edges,
-                                         blender::Span<bool> sharp_faces,
+                                         OffsetIndices<int> faces,
+                                         Span<int> corner_edges,
+                                         Span<int> corner_verts,
+                                         Span<bool> sharp_edges,
+                                         Span<bool> sharp_faces,
                                          bool use_boundary_vertices_for_bitflags,
                                          int *r_totgroup);
 
@@ -304,7 +274,7 @@ int *BKE_mesh_calc_smoothgroups_bitflags(int edges_num,
     ((_tri)[2] == _v) ? 2 : \
                         -1))
 
-namespace blender::bke::mesh {
+namespace bke::mesh {
 
 Array<int> build_corner_to_face_map(OffsetIndices<int> faces);
 
@@ -340,4 +310,5 @@ GroupedSpan<int> build_edge_to_face_map(OffsetIndices<int> faces,
                                         Array<int> &r_offsets,
                                         Array<int> &r_indices);
 
-}  // namespace blender::bke::mesh
+}  // namespace bke::mesh
+}  // namespace blender

@@ -3,15 +3,25 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <algorithm>
+#include <type_traits>
 
+#include "BLI_index_range.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
-#include "NOD_derived_node_tree.hh"
+#include "DNA_node_types.h"
 
-#include "BKE_node_legacy_types.hh"
+#include "BKE_compute_contexts.hh"
+#include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
+#include "BKE_node_tree_zones.hh"
+#include "BKE_type_conversions.hh"
+
+#include "NOD_geo_index_switch.hh"
+#include "NOD_geo_menu_switch.hh"
 
 #include "COM_context.hh"
 #include "COM_scheduler.hh"
@@ -19,55 +29,31 @@
 
 namespace blender::compositor {
 
-using namespace nodes::derived_node_tree_types;
-
-/* Returns true if any of the node group nodes that make up this tree context are muted. */
-static bool is_tree_context_muted(const DTreeContext &tree_context)
+bool has_viewer_node(const bNodeTree &node_group,
+                     const ComputeContext &compute_context,
+                     const ComputeContextHash &active_compute_context_hash)
 {
-  /* Root contexts are never muted. */
-  if (tree_context.is_root()) {
-    return false;
-  }
+  node_group.ensure_topology_cache();
 
-  /* The node group that represents this context is muted. */
-  if (tree_context.parent_node()->is_muted()) {
-    return true;
-  }
-
-  /* Recursively check parent contexts up until the root context. */
-  return is_tree_context_muted(*tree_context.parent_context());
-}
-
-/* Add the active viewer node in the given tree context to the given stack. If viewer nodes are
- * treated as composite outputs, this function will also add either the viewer or the composite
- * node since composite nodes were skipped in add_output_nodes such that viewer nodes take
- * precedence. */
-static bool add_viewer_nodes_in_context(const Context &context,
-                                        const DTreeContext *tree_context,
-                                        Stack<DNode> &node_stack)
-{
-  /* Do not add viewers that are inside muted contexts. */
-  if (is_tree_context_muted(*tree_context)) {
-    return false;
-  }
-
-  for (const bNode *node : tree_context->btree().nodes_by_type("CompositorNodeViewer")) {
-    if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
-      node_stack.push(DNode(tree_context, node));
-      return true;
+  /* If this is the active node group, check if a viewer node exists.  */
+  if (compute_context.hash() == active_compute_context_hash) {
+    for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
+      if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
+        return true;
+      }
     }
   }
 
-  /* If we are not treating viewers as composite outputs, there is nothing else to do. Otherwise,
-   * the active composite node might be added. */
-  if (!context.treat_viewer_as_composite_output()) {
-    return false;
-  }
+  /* Otherwise, we have to check node groups recursively. */
+  for (const bNode *group_node : node_group.group_nodes()) {
+    if (group_node->is_muted() || !group_node->id) {
+      continue;
+    }
 
-  /* No active viewers exist in this tree context, add the active Composite node if one exist. */
-  for (const bNode *node : tree_context->btree().nodes_by_type("CompositorNodeComposite")) {
-    if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
-      node_stack.push(DNode(tree_context, node));
+    const bNodeTree &child_node_group = *reinterpret_cast<const bNodeTree *>(group_node->id);
+    const bke::GroupNodeComputeContext node_compute_context(
+        &compute_context, group_node->identifier, &group_node->owner_tree());
+    if (has_viewer_node(child_node_group, node_compute_context, active_compute_context_hash)) {
       return true;
     }
   }
@@ -75,89 +61,300 @@ static bool add_viewer_nodes_in_context(const Context &context,
   return false;
 }
 
-/* Add all File Output nodes inside the given tree_context recursively to the node stack. */
-static void add_file_output_nodes(const DTreeContext &tree_context, Stack<DNode> &node_stack)
+/* Checks if the node group has a File Output node in it or in one of its descendants. */
+static bool has_file_output_recursive(const bNodeTree &node_group)
 {
-  for (const bNode *node : tree_context.btree().nodes_by_type("CompositorNodeOutputFile")) {
-    if (node->is_muted()) {
-      continue;
+  node_group.ensure_topology_cache();
+  for (const bNode *node : node_group.nodes_by_type("CompositorNodeOutputFile"_ustr)) {
+    if (!node->is_muted()) {
+      return true;
     }
-
-    node_stack.push(DNode(&tree_context, node));
   }
 
-  for (const bNode *node : tree_context.btree().group_nodes()) {
-    if (node->is_muted()) {
-      continue;
-    }
-
-    const bNodeTree *group_tree = reinterpret_cast<const bNodeTree *>(node->id);
-    if (!group_tree) {
-      continue;
-    }
-
-    add_file_output_nodes(*tree_context.child_context(*node), node_stack);
-  }
-}
-
-/* Add the output nodes whose result should be computed to the given stack. This includes File
- * Output, Composite, and Viewer nodes. Viewer nodes are a special case, as only the nodes that
- * satisfies the requirements in the add_viewer_nodes_in_context function are added. First, the
- * active context is searched for viewer nodes, if non were found, the root context is searched.
- * For more information on what contexts mean here, see the DerivedNodeTree::active_context()
- * function. */
-static void add_output_nodes(const Context &context,
-                             const DerivedNodeTree &tree,
-                             Stack<DNode> &node_stack)
-{
-  const DTreeContext &root_context = tree.root_context();
-
-  /* Only add File Output nodes if the context supports them. */
-  if (bool(context.needed_outputs() & OutputTypes::FileOutput)) {
-    add_file_output_nodes(root_context, node_stack);
-  }
-
-  /* Add the active composite node in the root tree if needed, but only if we are not treating
-   * viewer outputs as composite ones. That's because in cases where viewer nodes will be treated
-   * as composite outputs, viewer nodes will take precedence, so this is handled as a special case
-   * in the add_viewer_nodes_in_context function instead and no need to add it here. */
-  if (bool(context.needed_outputs() & OutputTypes::Composite)) {
-    if (!context.treat_viewer_as_composite_output()) {
-      for (const bNode *node : root_context.btree().nodes_by_type("CompositorNodeComposite")) {
-        if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
-          node_stack.push(DNode(&root_context, node));
-          break;
-        }
+  for (const bNode *group_node : node_group.group_nodes()) {
+    if (!group_node->is_muted() && group_node->id) {
+      if (has_file_output_recursive(*reinterpret_cast<const bNodeTree *>(group_node->id))) {
+        return true;
       }
     }
   }
 
-  if (!bool(context.needed_outputs() & OutputTypes::Viewer)) {
-    return;
+  return false;
+}
+
+/* Returns the value of the given input if it can be determined statically, otherwise nullopt is
+ * returned. The value is only known statically if the socket_result_fn returns an allocated result
+ * for it or the input is connected to a context-based nodes like the Is Viewport node. */
+template<typename T, typename SocketT>
+static std::optional<T> get_input_socket_value(const Context &context,
+                                               const bNodeSocket &input,
+                                               SocketResultFn socket_result_fn)
+{
+  if (!input.is_logically_linked()) {
+    return T(input.default_value_typed<SocketT>()->value);
   }
 
-  const DTreeContext &active_context = tree.active_context();
-  const bool viewer_was_added = add_viewer_nodes_in_context(context, &active_context, node_stack);
-
-  /* An active viewer was added, no need to search further. */
-  if (viewer_was_added) {
-    return;
+  const bNodeSocket *linked_output = input.logically_linked_sockets()[0];
+  if (linked_output->owner_node().is_type("GeometryNodeIsViewport"_ustr)) {
+    /* Is Viewport node's value can be determined statically.
+     * Convert according to the same implicit conversion table used at runtime. */
+    const bool is_viewport = context.is_viewport();
+    if constexpr (std::is_same_v<T, bool>) {
+      return is_viewport;
+    }
+    else {
+      const CPPType &from_type = CPPType::get<bool>();
+      const CPPType &to_type = CPPType::get<T>();
+      const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+      if (!conversions.is_convertible(from_type, to_type)) {
+        return std::nullopt;
+      }
+      T converted_value;
+      conversions.convert_to_uninitialized(from_type, to_type, &is_viewport, &converted_value);
+      return converted_value;
+    }
   }
 
-  /* If the active context is the root one and no viewer nodes were found, we consider this node
-   * tree to have no viewer nodes, even if one of the non-active descendants have viewer nodes. */
-  if (active_context.is_root()) {
-    return;
+  if (linked_output->type != input.type) {
+    return std::nullopt;
   }
 
-  /* The active context doesn't have a viewer node, search in the root context as a fallback. */
-  add_viewer_nodes_in_context(context, &tree.root_context(), node_stack);
+  const Result *result = socket_result_fn(*linked_output);
+  if (!result || !result->is_allocated()) {
+    return std::nullopt;
+  }
+
+  return result->get_single_value_default<T>();
+}
+
+/* Returns true if the given input of the given Switch node in the given operation is needed by the
+ * node. */
+static bool is_switch_node_input_needed(const Context &context,
+                                        const bNode &node,
+                                        const bNodeSocket &input,
+                                        SocketResultFn socket_result_fn)
+{
+  const UString condition_identifier = "Switch"_ustr;
+  if (input.identifier_ustr() == condition_identifier) {
+    return true;
+  }
+
+  const std::optional<bool> condition = get_input_socket_value<bool, bNodeSocketValueBoolean>(
+      context, *node.input_by_identifier(condition_identifier), socket_result_fn);
+  if (!condition.has_value()) {
+    return true;
+  }
+
+  return (input.identifier_ustr() == "True"_ustr) == condition.value();
+}
+
+/* Returns true if the given input of the given menu switch node in the given operation is needed
+ * by the node. */
+static bool is_menu_switch_node_input_needed(const Context &context,
+                                             const bNode &node,
+                                             const bNodeSocket &input,
+                                             SocketResultFn socket_result_fn)
+{
+  const UString menu_identifier = "Menu"_ustr;
+  if (input.identifier_ustr() == menu_identifier) {
+    return true;
+  }
+
+  const std::optional<nodes::MenuValue> menu =
+      get_input_socket_value<nodes::MenuValue, bNodeSocketValueMenu>(
+          context, *node.input_by_identifier(menu_identifier), socket_result_fn);
+  if (!menu.has_value()) {
+    return true;
+  }
+
+  const NodeEnumItem menu_item = NodeEnumItem{nullptr, nullptr, menu.value().value};
+  const std::string identifier = nodes::MenuSwitchItemsAccessor::socket_identifier_for_item(
+      menu_item);
+  return input.identifier == identifier;
+}
+
+/* Returns true if the given input of the given Index Switch node in the given operation is needed
+ * by the node. */
+static bool is_index_switch_node_input_needed(const Context &context,
+                                              const bNode &node,
+                                              const bNodeSocket &input,
+                                              SocketResultFn socket_result_fn)
+{
+  const UString index_identifier = "Index"_ustr;
+  if (input.identifier_ustr() == index_identifier) {
+    return true;
+  }
+
+  const std::optional<int> index = get_input_socket_value<int, bNodeSocketValueInt>(
+      context, *node.input_by_identifier(index_identifier), socket_result_fn);
+  if (!index.has_value()) {
+    return true;
+  }
+
+  const NodeIndexSwitch &storage = *static_cast<const NodeIndexSwitch *>(node.storage);
+  if (!IndexRange(storage.items_num).contains(index.value())) {
+    return false;
+  }
+
+  const std::string identifier = nodes::IndexSwitchItemsAccessor::socket_identifier_for_item(
+      storage.items[index.value()]);
+  return input.identifier == identifier;
+}
+
+/* Returns true if the given input of the given node in the given operation is needed by the
+ * compositor. */
+static bool is_input_needed(const Context &context,
+                            const bNode &node,
+                            const bNodeSocket &input,
+                            SocketResultFn socket_result_fn)
+{
+  if (node.is_group_output()) {
+    const Result *result = socket_result_fn(input);
+    if (!result) {
+      return true;
+    }
+    return result->should_compute();
+  }
+
+  if (node.is_type("GeometryNodeSwitch"_ustr)) {
+    return is_switch_node_input_needed(context, node, input, socket_result_fn);
+  }
+
+  if (node.is_type("GeometryNodeMenuSwitch"_ustr)) {
+    return is_menu_switch_node_input_needed(context, node, input, socket_result_fn);
+  }
+
+  if (node.is_type("GeometryNodeIndexSwitch"_ustr)) {
+    return is_index_switch_node_input_needed(context, node, input, socket_result_fn);
+  }
+
+  return true;
+}
+
+/* Get a stack of the output nodes whose result should be computed. This typically includes the
+ * main output node like the Group Output node, as well as side-effect nodes if requested by the
+ * context like the File Output, Viewer nodes, or group nodes that have those side effect nodes. If
+ * zone is not nullptr, only output nodes in that zone will be included. */
+static Stack<const bNode *> get_output_nodes(const Context &context,
+                                             const bNodeTree &node_group,
+                                             const ComputeContext &compute_context,
+                                             const bke::bNodeTreeZone *zone,
+                                             SocketResultFn socket_result_fn)
+{
+  node_group.ensure_topology_cache();
+  const bke::bNodeTreeZones &zones = *node_group.zones();
+  const SideEffectOutputTypes needed_side_effect_output_types =
+      context.needed_side_effect_output_types();
+
+  Stack<const bNode *> node_stack;
+
+  /* Add group nodes that contain File Output and Viewer nodes. */
+  for (const bNode *group_node : node_group.group_nodes()) {
+    if (group_node->is_muted() || !group_node->id) {
+      continue;
+    }
+
+    /* Only consider nodes in the same zone being scheduled. */
+    if (zones.get_zone_by_node(group_node->identifier) != zone) {
+      continue;
+    }
+
+    const bNodeTree &child_tree = *reinterpret_cast<const bNodeTree *>(group_node->id);
+    const bke::GroupNodeComputeContext node_compute_context(
+        &compute_context, group_node->identifier, &group_node->owner_tree());
+    if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode) &&
+        has_viewer_node(
+            child_tree, node_compute_context, context.get_active_compute_context_hash()))
+    {
+      node_stack.push(group_node);
+      continue;
+    }
+
+    if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::FileOutputNode) &&
+        has_file_output_recursive(child_tree))
+    {
+      node_stack.push(group_node);
+    }
+  }
+
+  /* Add Warning nodes. */
+  for (const bNode *node : node_group.nodes_by_type("GeometryNodeWarning"_ustr)) {
+    if (node->is_muted()) {
+      continue;
+    }
+
+    /* Only consider nodes in the same zone being scheduled. */
+    if (zones.get_zone_by_node(node->identifier) != zone) {
+      continue;
+    }
+
+    node_stack.push(node);
+  }
+
+  /* Add File Output nodes. */
+  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::FileOutputNode)) {
+    for (const bNode *node : node_group.nodes_by_type("CompositorNodeOutputFile"_ustr)) {
+      if (node->is_muted()) {
+        continue;
+      }
+
+      /* Only consider nodes in the same zone being scheduled. */
+      if (zones.get_zone_by_node(node->identifier) != zone) {
+        continue;
+      }
+
+      node_stack.push(node);
+    }
+  }
+
+  /* Add Viewer node if this is the active context. */
+  const bool is_active_context = compute_context.hash() ==
+                                 context.get_active_compute_context_hash();
+  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode) &&
+      is_active_context)
+  {
+    for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
+      if (!(node->flag & NODE_DO_OUTPUT) || node->is_muted()) {
+        continue;
+      }
+
+      /* Only consider nodes in the same zone being scheduled. */
+      if (zones.get_zone_by_node(node->identifier) != zone) {
+        continue;
+      }
+
+      node_stack.push(node);
+      break;
+    }
+  }
+
+  /* Add Group Output node if any of its inputs are needed and we are not scheduling a zone. */
+  const bNode *output_node = node_group.group_output_node();
+  if (!zone && output_node && !output_node->is_muted()) {
+    for (const bNodeSocket *input : output_node->input_sockets()) {
+      if (!is_socket_available(input)) {
+        continue;
+      }
+
+      if (is_input_needed(context, *output_node, *input, socket_result_fn)) {
+        node_stack.push(output_node);
+        break;
+      }
+    }
+  }
+
+  /* Add the Zone Output node if we are scheduling a zone. */
+  if (zone) {
+    node_stack.push(zone->output_node());
+  }
+
+  return node_stack;
 }
 
 /* A type representing a mapping that associates each node with a heuristic estimation of the
  * number of intermediate buffers needed to compute it and all of its dependencies. See the
  * compute_number_of_needed_buffers function for more information. */
-using NeededBuffers = Map<DNode, int>;
+using NeededBuffers = Map<const bNode *, int>;
 
 /* Compute a heuristic estimation of the number of intermediate buffers needed to compute each node
  * and all of its dependencies for all nodes that the given node depends on. The output is a map
@@ -180,10 +377,10 @@ using NeededBuffers = Map<DNode, int>;
  * nodes, only inputs and outputs linked to nodes that are not pixel nodes should be considered.
  * Note that this might not actually be true, because the compiler may decide to split a pixel
  * operation into multiples ones that will pass buffers, but this is not something that can be
- * known at scheduling-time. See the discussion in COM_compile_state.hh, COM_evaluator.hh, and
- * COM_shader_operation.hh for more information. In the node tree shown below, node 4 will have
- * exactly the same number of needed buffers by node 3, because its inputs and outputs are all
- * internally linked in the pixel operation.
+ * known at scheduling-time. See the description of NodeTreeEvaluator and COM_shader_operation.hh
+ * for more information. In the node tree shown below, node 4 will have exactly the same number of
+ * needed buffers by node 3, because its inputs and outputs are all internally linked in the pixel
+ * operation.
  *
  *                                      Pixel Operation
  *                   +------------------------------------------------------+
@@ -208,14 +405,16 @@ using NeededBuffers = Map<DNode, int>;
  *   implementation because it rarely affects the output and is done by very few nodes.
  * - The compiler may decide to compiler the schedule differently depending on runtime information
  *   which we can merely speculate at scheduling-time as described above. */
-static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes)
+static NeededBuffers compute_number_of_needed_buffers(const Context &context,
+                                                      Stack<const bNode *> &output_nodes,
+                                                      SocketResultFn socket_result_fn)
 {
   NeededBuffers needed_buffers;
 
-  /* A stack of nodes used to traverse the node tree starting from the output nodes. */
-  Stack<DNode> node_stack = output_nodes;
+  /* A stack of nodes used to traverse the node group starting from the output nodes. */
+  Stack<const bNode *> node_stack = output_nodes;
 
-  /* Traverse the node tree in a post order depth first manner and compute the number of needed
+  /* Traverse the node group in a post order depth first manner and compute the number of needed
    * buffers for each node. Post order traversal guarantee that all the node dependencies of each
    * node are computed before it. This is done by pushing all the uncomputed node dependencies to
    * the node stack first and only popping and computing the node when all its node dependencies
@@ -224,34 +423,38 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
     /* Do not pop the node immediately, as it may turn out that we can't compute its number of
      * needed buffers just yet because its dependencies weren't computed, it will be popped later
      * when needed. */
-    DNode &node = node_stack.peek();
+    const bNode &node = *node_stack.peek();
 
     /* Go over the node dependencies connected to the inputs of the node and push them to the node
      * stack if they were not computed already. */
-    Set<DNode> pushed_nodes;
-    for (const bNodeSocket *input : node->input_sockets()) {
-      const DInputSocket dinput{node.context(), input};
-
+    Set<const bNode *> pushed_nodes;
+    for (const bNodeSocket *input : node.input_sockets()) {
       if (!is_socket_available(input)) {
+        continue;
+      }
+
+      if (!is_input_needed(context, node, *input, socket_result_fn)) {
         continue;
       }
 
       /* Get the output linked to the input. If it is null, that means the input is unlinked and
        * has no dependency node. */
-      const DOutputSocket doutput = get_output_linked_to_input(dinput);
-      if (!doutput) {
+      const bNodeSocket *output = get_output_linked_to_input(*input);
+      if (!output) {
         continue;
       }
 
       /* The node dependency was already computed or pushed before, so skip it. */
-      if (needed_buffers.contains(doutput.node()) || pushed_nodes.contains(doutput.node())) {
+      if (needed_buffers.contains(&output->owner_node()) ||
+          pushed_nodes.contains(&output->owner_node()))
+      {
         continue;
       }
 
       /* The output node needs to be computed, push the node dependency to the node stack and
        * indicate that it was pushed. */
-      node_stack.push(doutput.node());
-      pushed_nodes.add_new(doutput.node());
+      node_stack.push(&output->owner_node());
+      pushed_nodes.add_new(&output->owner_node());
     }
 
     /* If any of the node dependencies were pushed, that means that not all of them were computed
@@ -267,39 +470,39 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
      * buffers needed to compute the most demanding of the node dependencies. */
     int number_of_input_buffers = 0;
     int buffers_needed_by_dependencies = 0;
-    for (const bNodeSocket *input : node->input_sockets()) {
-      const DInputSocket dinput{node.context(), input};
-
+    for (const bNodeSocket *input : node.input_sockets()) {
       if (!is_socket_available(input)) {
+        continue;
+      }
+
+      if (!is_input_needed(context, node, *input, socket_result_fn)) {
         continue;
       }
 
       /* Get the output linked to the input. If it is null, that means the input is unlinked.
        * Unlinked inputs do not take a buffer, so skip those inputs. */
-      const DOutputSocket doutput = get_output_linked_to_input(dinput);
-      if (!doutput) {
+      const bNodeSocket *output = get_output_linked_to_input(*input);
+      if (!output) {
         continue;
       }
 
       /* Since this input is linked, if the link is not between two pixel nodes, it means that the
        * node takes a buffer through this input and so we increment the number of input buffers. */
-      if (!is_pixel_node(node) || !is_pixel_node(doutput.node())) {
+      if (!is_pixel_node(node) || !is_pixel_node(output->owner_node())) {
         number_of_input_buffers++;
       }
 
       /* If the number of buffers needed by the node dependency is more than the total number of
        * buffers needed by the dependencies, then update the latter to be the former. This is
        * computing the "d" in the aforementioned equation "max(n + m, d)". */
-      const int buffers_needed_by_dependency = needed_buffers.lookup(doutput.node());
+      const int buffers_needed_by_dependency = needed_buffers.lookup(&output->owner_node());
       buffers_needed_by_dependencies = std::max(buffers_needed_by_dependency,
                                                 buffers_needed_by_dependencies);
     }
 
     /* Compute the number of buffers that will be computed/output by this node. */
     int number_of_output_buffers = 0;
-    for (const bNodeSocket *output : node->output_sockets()) {
-      const DOutputSocket doutput{node.context(), output};
-
+    for (const bNodeSocket *output : node.output_sockets()) {
       if (!is_socket_available(output)) {
         continue;
       }
@@ -311,7 +514,11 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
 
       /* If any of the links is not between two pixel nodes, it means that the node outputs
        * a buffer through this output and so we increment the number of output buffers. */
-      if (!is_output_linked_to_node_conditioned(doutput, is_pixel_node) || !is_pixel_node(node)) {
+      if (!is_pixel_node(node) ||
+          is_output_linked_to_input_conditioned(*output, [&](const bNodeSocket &input) {
+            return !is_pixel_node(input.owner_node());
+          }))
+      {
         number_of_output_buffers++;
       }
     }
@@ -321,10 +528,109 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
      * "max(n + m, d)". */
     const int total_buffers = std::max(number_of_input_buffers + number_of_output_buffers,
                                        buffers_needed_by_dependencies);
-    needed_buffers.add(node, total_buffers);
+    needed_buffers.add(&node, total_buffers);
   }
 
   return needed_buffers;
+}
+
+/* Find the nodes that the given node depends on. Nodes already scheduled are not included. Only
+ * nodes in the given zone are included, except for zone output nodes of child zones, which acts as
+ * representatives for the zone in the schedule. Unneeded inputs are marked in the schedule. */
+static Vector<const bNode *> find_node_dependency_nodes(const Context &context,
+                                                        Schedule &schedule,
+                                                        const bNode &node,
+                                                        const bke::bNodeTreeZone *zone,
+                                                        SocketResultFn socket_result_fn)
+{
+  const bke::bNodeTreeZones &zones = *node.owner_tree().zones();
+
+  VectorSet<const bNode *> dependency_nodes;
+  for (const bNodeSocket *input : node.input_sockets()) {
+    if (!is_socket_available(input)) {
+      continue;
+    }
+
+    if (!is_input_needed(context, node, *input, socket_result_fn)) {
+      schedule.unneeded_inputs.add(input);
+      continue;
+    }
+
+    const bNodeSocket *output = get_output_linked_to_input(*input);
+    if (!output) {
+      continue;
+    }
+
+    /* The dependency node was already scheduled, so skip it. */
+    if (schedule.nodes.contains(&output->owner_node())) {
+      continue;
+    }
+
+    /* Dependency node is not in the same zone, so skip it. */
+    const bke::bNodeTreeZone *dependency_node_zone = zones.get_zone_by_socket(*output);
+    if (dependency_node_zone != zone) {
+      continue;
+    }
+
+    dependency_nodes.add(&output->owner_node());
+  }
+
+  return dependency_nodes.extract_vector();
+}
+
+/* Find the nodes that the given zone depends on, this includes both source nodes of zone border
+ * links as well as the dependencies of the inputs of the zone input node. Nodes already scheduled
+ * are not included. Only dependencies in the parent zone are included. */
+static Vector<const bNode *> find_zone_dependency_nodes(const Context &context,
+                                                        Schedule &schedule,
+                                                        const bke::bNodeTreeZone &zone,
+                                                        SocketResultFn socket_result_fn)
+{
+  VectorSet<const bNode *> dependency_nodes;
+  for (const bNodeLink *link : zone.border_links) {
+    if (!link->is_available()) {
+      continue;
+    }
+
+    /* The dependency node was already scheduled, so skip it. */
+    const bNodeSocket &output = *get_output_linked_to_input(*link->tosock);
+    if (schedule.nodes.contains(&output.owner_node())) {
+      continue;
+    }
+
+    /* Only consider nodes in the same zone being scheduled. */
+    if (zone.owner->get_zone_by_socket(output) != zone.parent_zone) {
+      continue;
+    }
+
+    dependency_nodes.add(link->fromnode);
+  }
+
+  Vector<const bNode *> zone_input_dependency_nodes = find_node_dependency_nodes(
+      context, schedule, *zone.input_node(), zone.parent_zone, socket_result_fn);
+  dependency_nodes.add_multiple(zone_input_dependency_nodes);
+  return dependency_nodes.extract_vector();
+}
+
+/* Find the nodes that the given node depends on. Nodes already scheduled are not included. Only
+ * nodes in the given zone are included, except for zone output nodes of child zones, which acts as
+ * representatives for the zone in the schedule. Unneeded inputs are marked in the schedule. */
+static Vector<const bNode *> find_dependency_nodes(const Context &context,
+                                                   Schedule &schedule,
+                                                   const bNode &node,
+                                                   const bke::bNodeTreeZone *zone,
+                                                   SocketResultFn socket_result_fn)
+{
+
+  /* If the node is a zone output of a child zone, we find the dependencies of the zone not its
+   * inner nodes. */
+  const bke::bNodeTreeZones &zones = *node.owner_tree().zones();
+  const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node.identifier);
+  if (node_zone && node_zone->output_node() == &node && node_zone->parent_zone == zone) {
+    return find_zone_dependency_nodes(context, schedule, *node_zone, socket_result_fn);
+  }
+
+  return find_node_dependency_nodes(context, schedule, node, zone, socket_result_fn);
 }
 
 /* There are multiple different possible orders of evaluating a node graph, each of which needs
@@ -342,25 +648,34 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
  * doesn't always guarantee an optimal evaluation order, as the optimal evaluation order is very
  * difficult to compute, however, this method works well in most cases. Moreover it assumes that
  * all buffers will have roughly the same size, which may not always be the case. */
-Schedule compute_schedule(const Context &context, const DerivedNodeTree &tree)
+Schedule compute_schedule(const Context &context,
+                          const bNodeTree &node_group,
+                          const ComputeContext &compute_context,
+                          const SocketResultFn socket_result_fn,
+                          const bke::bNodeTreeZone *zone)
 {
   Schedule schedule;
 
-  /* A stack of nodes used to traverse the node tree starting from the output nodes. */
-  Stack<DNode> node_stack;
+  /* Validate node group. */
+  node_group.ensure_topology_cache();
+  if (node_group.has_available_link_cycle()) {
+    return schedule;
+  }
 
-  /* Add the output nodes whose result should be computed to the stack. */
-  add_output_nodes(context, tree, node_stack);
+  /* Get a stack of the initial output nodes used to traverse the node group. */
+  Stack<const bNode *> node_stack = get_output_nodes(
+      context, node_group, compute_context, zone, socket_result_fn);
 
-  /* No output nodes, the node tree has no effect, return an empty schedule. */
+  /* No output nodes, the node group has no effect, return an empty schedule. */
   if (node_stack.is_empty()) {
     return schedule;
   }
 
   /* Compute the number of buffers needed by each node connected to the outputs. */
-  const NeededBuffers needed_buffers = compute_number_of_needed_buffers(node_stack);
+  const NeededBuffers needed_buffers = compute_number_of_needed_buffers(
+      context, node_stack, socket_result_fn);
 
-  /* Traverse the node tree in a post order depth first manner, scheduling the nodes in an order
+  /* Traverse the node group in a post order depth first manner, scheduling the nodes in an order
    * informed by the number of buffers needed by each node. Post order traversal guarantee that all
    * the node dependencies of each node are scheduled before it. This is done by pushing all the
    * unscheduled node dependencies to the node stack first and only popping and scheduling the node
@@ -368,65 +683,24 @@ Schedule compute_schedule(const Context &context, const DerivedNodeTree &tree)
   while (!node_stack.is_empty()) {
     /* Do not pop the node immediately, as it may turn out that we can't schedule it just yet
      * because its dependencies weren't scheduled, it will be popped later when needed. */
-    DNode &node = node_stack.peek();
+    const bNode &node = *node_stack.peek();
 
-    /* Compute the nodes directly connected to the node inputs sorted by their needed buffers such
-     * that the node with the lowest number of needed buffers comes first. Note that we actually
-     * want the node with the highest number of needed buffers to be schedule first, but since
-     * those are pushed to the traversal stack, we need to push them in reverse order. */
-    Vector<DNode> sorted_dependency_nodes;
-    for (const bNodeSocket *input : node->input_sockets()) {
-      const DInputSocket dinput{node.context(), input};
+    Vector<const bNode *> dependency_nodes = find_dependency_nodes(
+        context, schedule, node, zone, socket_result_fn);
 
-      if (!is_socket_available(input)) {
-        continue;
-      }
-
-      /* Get the output linked to the input. If it is null, that means the input is unlinked and
-       * has no dependency node, so skip it. */
-      const DOutputSocket doutput = get_output_linked_to_input(dinput);
-      if (!doutput) {
-        continue;
-      }
-
-      /* The dependency node was added before, so skip it. The number of dependency nodes is very
-       * small, typically less than 3, so a linear search is okay. */
-      if (sorted_dependency_nodes.contains(doutput.node())) {
-        continue;
-      }
-
-      /* The dependency node was already schedule, so skip it. */
-      if (schedule.contains(doutput.node())) {
-        continue;
-      }
-
-      /* Sort in ascending order on insertion, the number of dependency nodes is very small,
-       * typically less than 3, so insertion sort is okay. */
-      int insertion_position = 0;
-      for (int i = 0; i < sorted_dependency_nodes.size(); i++) {
-        if (needed_buffers.lookup(doutput.node()) >
-            needed_buffers.lookup(sorted_dependency_nodes[i]))
-        {
-          insertion_position++;
-        }
-        else {
-          break;
-        }
-      }
-      sorted_dependency_nodes.insert(insertion_position, doutput.node());
-    }
-
-    /* Push the sorted dependency nodes to the node stack in order. */
-    for (const DNode &dependency_node : sorted_dependency_nodes) {
-      node_stack.push(dependency_node);
-    }
+    /* Push the dependency nodes to the node stack such that the node with the highest number of
+     * needed buffers is scheduled first, so we push the nodes in ascending order. */
+    std::ranges::stable_sort(dependency_nodes, [&](const bNode *a, const bNode *b) {
+      return needed_buffers.lookup(a) < needed_buffers.lookup(b);
+    });
+    node_stack.push_multiple(dependency_nodes);
 
     /* If there are no sorted dependency nodes, that means they were all already scheduled or that
      * none exists in the first place, so we can pop and schedule the node now. */
-    if (sorted_dependency_nodes.is_empty()) {
+    if (dependency_nodes.is_empty()) {
       /* The node might have already been scheduled, so we don't use add_new here and simply don't
        * add it if it was already scheduled. */
-      schedule.add(node_stack.pop());
+      schedule.nodes.add(node_stack.pop());
     }
   }
 

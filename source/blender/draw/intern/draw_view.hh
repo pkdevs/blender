@@ -164,6 +164,17 @@ class View {
     return data_[view_id].winmat * data_[view_id].viewmat;
   }
 
+  /** Compute the approximate world space radius of 1 pixel at 1 unit from the view origin. */
+  static float screen_pixel_radius(const float4x4 &wininv,
+                                   bool is_perspective,
+                                   const int2 &extent);
+
+  /** The approximate world space radius of 1 pixel at 1 unit from the view origin. */
+  float screen_pixel_radius(const int2 &extent, int view_id = 0) const
+  {
+    return screen_pixel_radius(wininv(view_id), is_persp(view_id), extent);
+  }
+
   int visibility_word_per_draw() const
   {
     return (view_len_ == 1) ? 0 : divide_ceil_u(view_len_, 32);
@@ -194,7 +205,7 @@ class View {
     {
     }
 
-    float4x4 winmat_polygon_offset(float4x4 winmat, float offset)
+    float4x4 winmat_polygon_offset(const float4x4 &winmat, float offset)
     {
       float view_dist = dist;
       /* Special exception for orthographic camera:
@@ -203,12 +214,13 @@ class View {
         view_dist = 1.0f / max_ff(fabsf(winmat[0][0]), fabsf(winmat[1][1]));
       }
 
-      winmat[3][2] -= GPU_polygon_offset_calc(winmat.ptr(), view_dist, offset);
-      return winmat;
+      float4x4 result = winmat;
+      result[3][2] -= GPU_polygon_offset_calc(winmat.ptr(), view_dist, offset);
+      return result;
     }
 
     /* Return unit offset to apply to `gl_Position.z`. To be scaled depending on purpose. */
-    float polygon_offset_factor(float4x4 winmat)
+    float polygon_offset_factor(const float4x4 &winmat)
     {
       float view_dist = dist;
       /* Special exception for orthographic camera:
@@ -222,9 +234,10 @@ class View {
   };
 
   /* Returns frustum planes equations. Available only after sync. */
-  std::array<float4, 6> frustum_planes_get(int view_id = 0);
-  /* Returns frustum corners positions in world space. Available only after sync. */
-  std::array<float3, 8> frustum_corners_get(int view_id = 0);
+  std::array<float4, 6> frustum_planes_get(int view_id = 0) const;
+  /* Returns frustum corners positions in world space. Available only after sync.
+   * Follow bounding box corner order. */
+  std::array<float3, 8> frustum_corners_get(int view_id = 0) const;
 
  protected:
   /** Called from draw manager. */

@@ -13,15 +13,79 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_inline bool shadow_intersections_has_remaining(const uint num_hits)
+enum TransparentShadowEvalResult {
+  TRANSPARENT_SHADOW_EVAL_CONTINUE = 0,
+  TRANSPARENT_SHADOW_EVAL_OPAQUE = 1,
+  TRANSPARENT_SHADOW_EVAL_CACHE_MISS = 2,
+};
+
+#ifdef __KERNEL_GPU__
+/* Assume we can pack num hits into 12 bits, so that we can also store resume hits
+ * and skip volume in the 16 bit num_hits. */
+#  define SHADOW_HIT_COUNT_BITS_GPU 12
+#  define SHADOW_HIT_COUNT_MASK_GPU ((1 << SHADOW_HIT_COUNT_BITS_GPU) - 1)
+#  define SHADOW_RESUME_BITS_GPU 3
+#  define SHADOW_RESUME_MASK_GPU ((1 << SHADOW_RESUME_BITS_GPU) - 1)
+
+/* +1 is for the extra loop iteration for the final volume segment. */
+static_assert(INTEGRATOR_SHADOW_ISECT_SIZE_GPU + 1 < (1 << SHADOW_RESUME_BITS_GPU),
+              "INTEGRATOR_SHADOW_ISECT_SIZE_GPU too large for resume_hit bits");
+#endif
+
+ccl_device_inline uint shadow_num_hits_get(const uint packed_num_hits)
 {
-  return num_hits >= INTEGRATOR_SHADOW_ISECT_SIZE;
+#ifdef __KERNEL_GPU__
+  return packed_num_hits & SHADOW_HIT_COUNT_MASK_GPU;
+#else
+  return packed_num_hits;
+#endif
+}
+
+ccl_device_inline uint shadow_resume_hit_get(const uint packed_num_hits)
+{
+#ifdef __KERNEL_GPU__
+  return (packed_num_hits >> SHADOW_HIT_COUNT_BITS_GPU) & SHADOW_RESUME_MASK_GPU;
+#else
+  (void)packed_num_hits;
+  return 0;
+#endif
+}
+
+ccl_device_inline bool shadow_surface_cache_miss_get(const uint packed_num_hits)
+{
+#ifdef __KERNEL_GPU__
+  return (packed_num_hits >> (SHADOW_HIT_COUNT_BITS_GPU + SHADOW_RESUME_BITS_GPU)) & 1;
+#else
+  (void)packed_num_hits;
+  return false;
+#endif
+}
+
+ccl_device_inline uint shadow_num_hits_pack(const uint num_hits,
+                                            const uint resume_hit,
+                                            const bool surface_hit)
+{
+#ifdef __KERNEL_GPU__
+  return (num_hits & SHADOW_HIT_COUNT_MASK_GPU) |
+         ((resume_hit & SHADOW_RESUME_MASK_GPU) << SHADOW_HIT_COUNT_BITS_GPU) |
+         ((surface_hit ? 1u : 0u) << (SHADOW_HIT_COUNT_BITS_GPU + SHADOW_RESUME_BITS_GPU));
+#else
+  /* Cache miss resume not supported on CPU. */
+  kernel_assert(resume_hit == 0 && !surface_hit);
+  (void)resume_hit;
+  (void)surface_hit;
+  return num_hits;
+#endif
+}
+
+ccl_device_inline bool shadow_intersections_has_remaining(const uint packed_num_hits)
+{
+  return shadow_num_hits_get(packed_num_hits) >= INTEGRATOR_SHADOW_ISECT_SIZE;
 }
 
 #ifdef __TRANSPARENT_SHADOWS__
-ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg,
-                                                                IntegratorShadowState state,
-                                                                const int hit)
+ccl_device_inline TransparentShadowEvalResult integrate_transparent_surface_shadow(
+    KernelGlobals kg, IntegratorShadowState state, const int num_hits, const int hit)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SURFACE);
 
@@ -43,35 +107,56 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
   shader_setup_from_ray(kg, shadow_sd, &ray, &isect);
 
   /* Evaluate shader. */
-  if (!(shadow_sd->flag & SD_HAS_ONLY_VOLUME)) {
+  if (!(shadow_sd->shader_flag & SD_HAS_ONLY_VOLUME)) {
     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
-        kg, state, shadow_sd, nullptr, PATH_RAY_SHADOW);
+        kg, state, shadow_sd, nullptr, PATH_RAY_VISIBILITY_SHADOW, PATH_RAY_FLAG_NONE);
+    if (shadow_sd->runtime_flag & SR_CACHE_MISS) {
+      /* Store resume state at current hit. */
+      INTEGRATOR_STATE_WRITE(state, shadow_path, packed_num_hits) = shadow_num_hits_pack(
+          num_hits, hit, true);
+      return TRANSPARENT_SHADOW_EVAL_CACHE_MISS;
+    }
   }
   else {
     INTEGRATOR_STATE_WRITE(state, shadow_path, volume_bounds_bounce) += 1;
+    if (INTEGRATOR_STATE(state, shadow_path, volume_bounds_bounce) > VOLUME_BOUNDS_MAX) {
+      return TRANSPARENT_SHADOW_EVAL_OPAQUE;
+    }
   }
 
 #  ifdef __VOLUME__
   /* Exit/enter volume. */
-  shadow_volume_stack_enter_exit(kg, state, shadow_sd);
+  volume_stack_enter_exit<true>(kg, state, shadow_sd);
 #  endif
 
   /* Disable transparent shadows for ray portals */
-  if (shadow_sd->flag & SD_RAY_PORTAL) {
-    return zero_spectrum();
+  if (shadow_sd->runtime_flag & SR_RAY_PORTAL) {
+    return TRANSPARENT_SHADOW_EVAL_OPAQUE;
   }
 
   /* Compute transparency from closures. */
-  return surface_shader_transparency(shadow_sd);
+  const Spectrum transparency = surface_shader_transparency(shadow_sd);
+  const Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput) * transparency;
+
+  if (is_zero(throughput)) {
+    return TRANSPARENT_SHADOW_EVAL_OPAQUE;
+  }
+
+  INTEGRATOR_STATE_WRITE(state, shadow_path, throughput) = throughput;
+  INTEGRATOR_STATE_WRITE(state, shadow_path, transparent_bounce) += 1;
+  INTEGRATOR_STATE_WRITE(state, shadow_path, rng_offset) += PRNG_BOUNCE_NUM;
+
+  return TRANSPARENT_SHADOW_EVAL_CONTINUE;
 }
 
 #  ifdef __VOLUME__
-ccl_device_inline void integrate_transparent_volume_shadow(KernelGlobals kg,
-                                                           IntegratorShadowState state,
-                                                           const int hit,
-                                                           const int num_recorded_hits,
-                                                           ccl_private Spectrum *ccl_restrict
-                                                               throughput)
+ccl_device_inline TransparentShadowEvalResult
+integrate_transparent_volume_shadow(KernelGlobals kg,
+                                    IntegratorShadowState state,
+                                    const int num_hits,
+                                    const int hit,
+                                    const int num_recorded_hits,
+                                    ccl_private Spectrum *ccl_restrict throughput)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_VOLUME);
 
@@ -94,30 +179,56 @@ ccl_device_inline void integrate_transparent_volume_shadow(KernelGlobals kg,
   /* `object` is only needed for light tree with light linking, it is irrelevant for shadow. */
   shader_setup_from_volume(shadow_sd, &ray, OBJECT_NONE);
 
-  VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i));
-  const float step_size = volume_stack_step_size(kg, volume_read_lambda_pass);
+  if (kernel_data.integrator.volume_ray_marching) {
+    const float step_size = volume_stack_step_size<true>(kg, state);
+    volume_shadow_ray_marching(kg, state, &ray, shadow_sd, throughput, step_size);
+  }
+  else {
+    volume_shadow_null_scattering(kg, state, &ray, shadow_sd, throughput);
+  }
 
-  volume_shadow_heterogeneous(kg, state, &ray, shadow_sd, throughput, step_size);
+  if (is_zero(*throughput)) {
+    return TRANSPARENT_SHADOW_EVAL_OPAQUE;
+  }
+
+  if (shadow_sd->runtime_flag & SR_CACHE_MISS) {
+    /* Store resume state at current hit. */
+    INTEGRATOR_STATE_WRITE(state, shadow_path, packed_num_hits) = shadow_num_hits_pack(
+        num_hits, hit, false);
+    return TRANSPARENT_SHADOW_EVAL_CACHE_MISS;
+  }
+
+  return TRANSPARENT_SHADOW_EVAL_CONTINUE;
 }
 #  endif
 
-ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
-                                                    IntegratorShadowState state,
-                                                    const uint num_hits)
+ccl_device_inline TransparentShadowEvalResult integrate_transparent_shadow(
+    KernelGlobals kg, IntegratorShadowState state, const uint packed_num_hits)
 {
   /* Accumulate shadow for transparent surfaces. */
+  const uint num_hits = shadow_num_hits_get(packed_num_hits);
   const uint num_recorded_hits = min(num_hits, (uint)INTEGRATOR_SHADOW_ISECT_SIZE);
 
+  /* Resume state from previous cache miss. */
+  const uint resume_hit = shadow_resume_hit_get(packed_num_hits);
+  const bool cache_miss_surface = shadow_surface_cache_miss_get(packed_num_hits);
+
   /* Plus one to account for world volume, which has no boundary to hit but casts shadows. */
-  for (uint hit = 0; hit < num_recorded_hits + 1; hit++) {
+  for (uint hit = resume_hit; hit < num_recorded_hits + 1; hit++) {
+    /* Skip volume if resuming after volume completed but surface had cache miss. */
+    const bool skip_volume = (hit == resume_hit) && cache_miss_surface;
+
     /* Volume shaders. */
-    if (hit < num_recorded_hits || !shadow_intersections_has_remaining(num_hits)) {
+    if (!skip_volume &&
+        (hit < num_recorded_hits || !shadow_intersections_has_remaining(packed_num_hits)))
+    {
 #  ifdef __VOLUME__
       if (!integrator_state_shadow_volume_stack_is_empty(kg, state)) {
         Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput);
-        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &throughput);
-        if (is_zero(throughput)) {
-          return true;
+        const TransparentShadowEvalResult result = integrate_transparent_volume_shadow(
+            kg, state, num_hits, hit, num_recorded_hits, &throughput);
+        if (result != TRANSPARENT_SHADOW_EVAL_CONTINUE) {
+          return result;
         }
 
         INTEGRATOR_STATE_WRITE(state, shadow_path, throughput) = throughput;
@@ -127,34 +238,25 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
 
     /* Surface shaders. */
     if (hit < num_recorded_hits) {
-      const Spectrum shadow = integrate_transparent_surface_shadow(kg, state, hit);
-      const Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput) * shadow;
-      if (is_zero(throughput)) {
-        return true;
+      const TransparentShadowEvalResult result = integrate_transparent_surface_shadow(
+          kg, state, num_hits, hit);
+      if (result != TRANSPARENT_SHADOW_EVAL_CONTINUE) {
+        return result;
       }
-
-      INTEGRATOR_STATE_WRITE(state, shadow_path, throughput) = throughput;
-      INTEGRATOR_STATE_WRITE(state, shadow_path, transparent_bounce) += 1;
-      INTEGRATOR_STATE_WRITE(state, shadow_path, rng_offset) += PRNG_BOUNCE_NUM;
     }
-
-    if (INTEGRATOR_STATE(state, shadow_path, volume_bounds_bounce) > VOLUME_BOUNDS_MAX) {
-      return true;
-    }
-
     /* Note we do not need to check max_transparent_bounce here, the number
      * of intersections is already limited and made opaque in the
      * INTERSECT_SHADOW kernel. */
   }
 
-  if (shadow_intersections_has_remaining(num_hits)) {
+  if (shadow_intersections_has_remaining(packed_num_hits)) {
     /* There are more hits that we could not recorded due to memory usage,
      * adjust ray to intersect again from the last hit. */
     const float last_hit_t = INTEGRATOR_STATE_ARRAY(state, shadow_isect, num_recorded_hits - 1, t);
     INTEGRATOR_STATE_WRITE(state, shadow_ray, tmin) = intersection_t_offset(last_hit_t);
   }
 
-  return false;
+  return TRANSPARENT_SHADOW_EVAL_CONTINUE;
 }
 #endif /* __TRANSPARENT_SHADOWS__ */
 
@@ -163,18 +265,25 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
                                         ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SETUP);
-  const uint num_hits = INTEGRATOR_STATE(state, shadow_path, num_hits);
+  const uint packed_num_hits = INTEGRATOR_STATE(state, shadow_path, packed_num_hits);
 
 #ifdef __TRANSPARENT_SHADOWS__
   /* Evaluate transparent shadows. */
-  const bool opaque = integrate_transparent_shadow(kg, state, num_hits);
-  if (opaque) {
+  const TransparentShadowEvalResult result = integrate_transparent_shadow(
+      kg, state, packed_num_hits);
+  if (result == TRANSPARENT_SHADOW_EVAL_CACHE_MISS) {
+    integrator_shadow_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
+    return;
+  }
+  if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) {
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
+
+  kernel_assert(result == TRANSPARENT_SHADOW_EVAL_CONTINUE);
 #endif
 
-  if (shadow_intersections_has_remaining(num_hits)) {
+  if (shadow_intersections_has_remaining(packed_num_hits)) {
     /* More intersections to find, continue shadow ray. */
     integrator_shadow_path_next(
         state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);

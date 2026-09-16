@@ -8,12 +8,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_action.hh"
 #include "BKE_context.hh"
@@ -53,6 +53,8 @@
 
 #include "DNA_camera_types.h"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Camera to View Operator
  * \{ */
@@ -75,7 +77,9 @@ static wmOperatorStatus view3d_camera_to_view_exec(bContext *C, wmOperator * /*o
 
   BKE_object_tfm_protected_backup(v3d->camera, &obtfm);
 
-  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist);
+  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist, 0.0f);
+  rv3d->camroll = 0.0f;
+  rv3d->rflag &= ~RV3D_FLIP_X;
 
   BKE_object_tfm_protected_restore(v3d->camera, &obtfm, v3d->camera->protectflag);
 
@@ -178,11 +182,11 @@ static void sync_viewport_camera_smoothview(bContext *C,
                                             const int smooth_viewtx)
 {
   Main *bmain = CTX_data_main(C);
-  LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, space_link, &area->spacedata) {
-        if (space_link->spacetype == SPACE_VIEW3D) {
-          View3D *other_v3d = reinterpret_cast<View3D *>(space_link);
+  for (bScreen &screen : bmain->screens) {
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &space_link : area.spacedata) {
+        if (space_link.spacetype == SPACE_VIEW3D) {
+          View3D *other_v3d = reinterpret_cast<View3D *>(&space_link);
           if (other_v3d == v3d) {
             continue;
           }
@@ -191,12 +195,13 @@ static void sync_viewport_camera_smoothview(bContext *C,
           }
           /* Checking the other view is needed to prevent local cameras being modified. */
           if (v3d->scenelock && other_v3d->scenelock) {
-            ListBase *lb = (space_link == area->spacedata.first) ? &area->regionbase :
-                                                                   &space_link->regionbase;
-            LISTBASE_FOREACH (ARegion *, other_region, lb) {
-              if (other_region->regiontype == RGN_TYPE_WINDOW) {
-                if (other_region->regiondata) {
-                  RegionView3D *other_rv3d = static_cast<RegionView3D *>(other_region->regiondata);
+            ListBaseT<ARegion> *lb = (&space_link == area.spacedata.first_) ?
+                                         &area.regionbase :
+                                         &space_link.regionbase;
+            for (ARegion &other_region : *lb) {
+              if (other_region.regiontype == RGN_TYPE_WINDOW) {
+                if (other_region.regiondata) {
+                  RegionView3D *other_rv3d = static_cast<RegionView3D *>(other_region.regiondata);
                   if (other_rv3d->persp == RV3D_CAMOB) {
                     Object *other_camera_old = other_v3d->camera;
                     other_v3d->camera = ob;
@@ -213,7 +218,7 @@ static void sync_viewport_camera_smoothview(bContext *C,
 
                     ED_view3d_lastview_store(other_rv3d);
                     ED_view3d_smooth_view(
-                        C, other_v3d, other_region, smooth_viewtx, &sview_params);
+                        C, other_v3d, &other_region, smooth_viewtx, &sview_params);
                   }
                   else {
                     other_v3d->camera = ob;
@@ -381,10 +386,20 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   rv3d->view = RV3D_VIEW_USER; /* don't show the grid */
 
   normalize_m4_m4(bmat, ob->object_to_world().ptr());
+  /* Apply roll. */
+  if (rv3d->camroll != 0.0f) {
+    rotate_m4(bmat, 'Z', -rv3d->camroll);
+  }
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */
   mat4_normalized_to_quat(rv3d->viewquat, rv3d->viewmat);
+
+  if (rv3d->rflag & RV3D_FLIP_X) {
+    transpose_m4(rv3d->viewmat);
+    negate_v4(rv3d->viewmat[0]);
+    transpose_m4(rv3d->viewmat);
+  }
 }
 
 void view3d_viewmatrix_set(const Depsgraph *depsgraph,
@@ -491,7 +506,8 @@ struct DrawSelectLoopUserData {
   uint hits;
   GPUSelectBuffer *buffer;
   const rcti *rect;
-  eGPUSelectMode gpu_select_mode;
+  int radius;
+  GPUSelectMode gpu_select_mode;
 };
 
 static bool drw_select_loop_pass(eDRWSelectStage stage, void *user_data)
@@ -499,7 +515,8 @@ static bool drw_select_loop_pass(eDRWSelectStage stage, void *user_data)
   bool continue_pass = false;
   DrawSelectLoopUserData *data = static_cast<DrawSelectLoopUserData *>(user_data);
   if (stage == DRW_SELECT_PASS_PRE) {
-    GPU_select_begin_next(data->buffer, data->rect, data->gpu_select_mode, data->hits);
+    GPU_select_begin_next(
+        data->buffer, data->rect, data->radius, data->gpu_select_mode, data->hits);
     /* always run POST after PRE. */
     continue_pass = true;
   }
@@ -517,16 +534,62 @@ static bool drw_select_loop_pass(eDRWSelectStage stage, void *user_data)
   return continue_pass;
 }
 
-eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene, const Object *obact)
+/** When the mode is locked, optionally override the filter (a special case). */
+static std::optional<eV3DSelectObjectFilter> view3d_select_filter_from_mode_lock_override(
+    const View3D *v3d, const Object *obact)
 {
-  if (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) {
-    if (obact && (obact->mode & OB_MODE_ALL_WEIGHT_PAINT) &&
-        BKE_object_pose_armature_get((Object *)obact))
+  /* The caller ensures this only runs when #SCE_OBJECT_MODE_LOCK is set.
+   * Only restrict selection to bones when the user turns on "Lock Object Modes".
+   * If the lock is off, skip this so other objects can still be selected, see #66950 & #125822. */
+
+  if (v3d->flag2 & V3D_HIDE_OVERLAYS) {
+    return std::nullopt;
+  }
+
+  /* NOTE: don't use #BKE_object_pose_armature_get as it doesn't check for weight-paint mode
+   * when using the deforming armature (breaking selection outside weight paint mode). */
+  if (const Object *obpose = OBPOSE_FROM_OBACT(obact)) {
+    if (obpose->mode == OB_MODE_POSE) {
+      /* This check only makes sense in pose-mode,
+       * where this "X-ray" options gives pose-bones a priority over other objects.
+       *
+       * Must not be used in weight-paint mode as it prevents pose
+       * selection *unless* X-ray is enabled. see: #158045. */
+      if ((v3d->overlay.flag & V3D_OVERLAY_BONE_SELECT) == 0) {
+        return std::nullopt;
+      }
+      return VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE;
+    }
+  }
+  else if (const Object *obweight = OBWEIGHTPAINT_ALL_FROM_OBACT(obact)) {
+    /* Only use Armature pose selection, when connected armature is in pose mode. */
+    if (const Object *ob_armature = BKE_modifiers_is_deformed_by_armature(
+            const_cast<Object *>(obweight)))
     {
-      return VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK;
+      if (ob_armature->mode == OB_MODE_POSE) {
+        return VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK;
+      }
+    }
+  }
+
+  /* No pose override. */
+  return std::nullopt;
+}
+
+eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene,
+                                                         const View3D *v3d,
+                                                         const Object *obact)
+{
+  const ToolSettings *ts = scene->toolsettings;
+  if (ts->object_flag & SCE_OBJECT_MODE_LOCK) {
+    if (std::optional<eV3DSelectObjectFilter> filter_override =
+            view3d_select_filter_from_mode_lock_override(v3d, obact))
+    {
+      return *filter_override;
     }
     return VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK;
   }
+
   return VIEW3D_SELECT_FILTER_NOP;
 }
 
@@ -534,7 +597,14 @@ eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene, con
 static bool drw_select_filter_object_mode_lock(Object *ob, void *user_data)
 {
   const Object *obact = static_cast<const Object *>(user_data);
-  return BKE_object_is_mode_compat(ob, eObjectMode(obact->mode));
+  return BKE_object_is_mode_compat(ob, obact->mode);
+}
+
+/** Implement #VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE. */
+static bool drw_select_filter_object_mode_lock_same_type(Object *ob, void *user_data)
+{
+  const Object *obact = static_cast<const Object *>(user_data);
+  return (obact->type == ob->type) && BKE_object_is_mode_compat(ob, obact->mode);
 }
 
 /**
@@ -552,9 +622,10 @@ int view3d_gpu_select_ex(const ViewContext *vc,
                          const rcti *input,
                          eV3DSelectMode select_mode,
                          eV3DSelectObjectFilter select_filter,
+                         const eV3DSelectShape select_shape,
                          const bool do_material_slot_selection)
 {
-  bThemeState theme_state;
+  ui::theme::bThemeState theme_state;
   const wmWindowManager *wm = CTX_wm_manager(vc->C);
   Depsgraph *depsgraph = vc->depsgraph;
   Scene *scene = vc->scene;
@@ -562,13 +633,11 @@ int view3d_gpu_select_ex(const ViewContext *vc,
   ARegion *region = vc->region;
   rcti rect;
   int hits = 0;
-  BKE_view_layer_synced_ensure(scene, vc->view_layer);
-  const bool use_obedit_skip = (BKE_view_layer_edit_object_get(vc->view_layer) != nullptr) &&
-                               (vc->obedit == nullptr);
+  BKE_view_layer_synced_ensure(*vc->bmain, scene, vc->view_layer);
   const bool use_nearest = select_mode == VIEW3D_SELECT_PICK_NEAREST;
   bool draw_surface = true;
 
-  eGPUSelectMode gpu_select_mode = GPU_SELECT_INVALID;
+  GPUSelectMode gpu_select_mode = GPU_SELECT_INVALID;
 
   /* case not a box select */
   if (input->xmin == input->xmax) {
@@ -599,8 +668,10 @@ int view3d_gpu_select_ex(const ViewContext *vc,
 
   /* Re-use cache (rect must be smaller than the cached)
    * other context is assumed to be unchanged */
+  const int select_radius = select_shape == eV3DSelectShape::CIRCLE ? BLI_rcti_size_x(input) / 2 :
+                                                                      0;
   if (GPU_select_is_cached()) {
-    GPU_select_begin_next(buffer, &rect, gpu_select_mode, 0);
+    GPU_select_begin_next(buffer, &rect, select_radius, gpu_select_mode, 0);
     GPU_select_cache_load_id();
     hits = GPU_select_end();
     return hits;
@@ -611,6 +682,14 @@ int view3d_gpu_select_ex(const ViewContext *vc,
       Object *obact = vc->obact;
       if (obact && obact->mode != OB_MODE_OBJECT) {
         object_filter.fn = drw_select_filter_object_mode_lock;
+        object_filter.user_data = obact;
+      }
+      break;
+    }
+    case VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE: {
+      Object *obact = vc->obact;
+      if (obact && obact->mode != OB_MODE_OBJECT) {
+        object_filter.fn = drw_select_filter_object_mode_lock_same_type;
         object_filter.user_data = obact;
       }
       break;
@@ -647,8 +726,8 @@ int view3d_gpu_select_ex(const ViewContext *vc,
   }
 
   /* Tools may request depth outside of regular drawing code. */
-  UI_Theme_Store(&theme_state);
-  UI_SetTheme(SPACE_VIEW3D, RGN_TYPE_WINDOW);
+  ui::theme::theme_store(&theme_state);
+  ui::theme::theme_set(SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
   /* All of the queries need to be perform on the drawing context. */
   DRW_gpu_context_enable();
@@ -673,13 +752,13 @@ int view3d_gpu_select_ex(const ViewContext *vc,
     drw_select_loop_user_data.hits = 0;
     drw_select_loop_user_data.buffer = buffer;
     drw_select_loop_user_data.rect = &rect;
+    drw_select_loop_user_data.radius = select_radius;
     drw_select_loop_user_data.gpu_select_mode = gpu_select_mode;
 
     draw_surface = false;
     DRW_draw_select_loop(depsgraph,
                          region,
                          v3d,
-                         use_obedit_skip,
                          draw_surface,
                          use_nearest,
                          do_material_slot_selection,
@@ -702,6 +781,7 @@ int view3d_gpu_select_ex(const ViewContext *vc,
     drw_select_loop_user_data.hits = 0;
     drw_select_loop_user_data.buffer = buffer;
     drw_select_loop_user_data.rect = &rect;
+    drw_select_loop_user_data.radius = select_radius;
     drw_select_loop_user_data.gpu_select_mode = gpu_select_mode;
 
     /* If are not in wireframe mode, we need to use the mesh surfaces to check for hits */
@@ -709,7 +789,6 @@ int view3d_gpu_select_ex(const ViewContext *vc,
     DRW_draw_select_loop(depsgraph,
                          region,
                          v3d,
-                         use_obedit_skip,
                          draw_surface,
                          use_nearest,
                          do_material_slot_selection,
@@ -731,7 +810,7 @@ int view3d_gpu_select_ex(const ViewContext *vc,
 
   DRW_gpu_context_disable();
 
-  UI_Theme_Restore(&theme_state);
+  ui::theme::theme_restore(&theme_state);
 
   return hits;
 }
@@ -740,9 +819,10 @@ int view3d_gpu_select(const ViewContext *vc,
                       GPUSelectBuffer *buffer,
                       const rcti *input,
                       eV3DSelectMode select_mode,
-                      eV3DSelectObjectFilter select_filter)
+                      eV3DSelectObjectFilter select_filter,
+                      const eV3DSelectShape select_shape)
 {
-  return view3d_gpu_select_ex(vc, buffer, input, select_mode, select_filter, false);
+  return view3d_gpu_select_ex(vc, buffer, input, select_mode, select_filter, select_shape, false);
 }
 
 int view3d_gpu_select_with_id_filter(const ViewContext *vc,
@@ -753,7 +833,8 @@ int view3d_gpu_select_with_id_filter(const ViewContext *vc,
                                      uint select_id)
 {
   const int64_t start = buffer->storage.size();
-  int hits = view3d_gpu_select(vc, buffer, input, select_mode, select_filter);
+  int hits = view3d_gpu_select(
+      vc, buffer, input, select_mode, select_filter, eV3DSelectShape::BOX);
 
   /* Selection sometimes uses -1 for an invalid selection ID, remove these as they
    * interfere with detection of actual number of hits in the selection. */
@@ -779,9 +860,9 @@ static uint free_localview_bit(Main *bmain)
 
   /* Sometimes we lose a local-view: when an area is closed.
    * Check all areas: which local-views are in use? */
-  LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+  for (bScreen &screen : bmain->screens) {
+    for (ScrArea &area : screen.areabase) {
+      SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       for (; sl; sl = sl->next) {
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
@@ -813,8 +894,8 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
                                   const int smooth_viewtx,
                                   ReportList *reports)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
-  blender::float3 min, max, box;
+  View3D *v3d = area->spacedata.first_as<View3D>();
+  float3 min, max, box;
   float size = 0.0f;
   uint local_view_bit;
   bool changed = false;
@@ -834,14 +915,14 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
     changed = false;
   }
   else {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Object *obedit = BKE_view_layer_edit_object_get(view_layer);
     if (obedit) {
-      BKE_view_layer_synced_ensure(scene, view_layer);
-      LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-        base->local_view_bits &= ~local_view_bit;
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+      for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+        base.local_view_bits &= ~local_view_bit;
       }
-      FOREACH_BASE_IN_EDIT_MODE_BEGIN (scene, view_layer, v3d, base_iter) {
+      FOREACH_BASE_IN_EDIT_MODE_BEGIN (bmain, scene, view_layer, v3d, base_iter) {
         Object *ob_eval = DEG_get_evaluated(depsgraph, base_iter->object);
         BKE_object_minmax(ob_eval ? ob_eval : base_iter->object, min, max);
         base_iter->local_view_bits |= local_view_bit;
@@ -850,22 +931,22 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
       FOREACH_BASE_IN_EDIT_MODE_END;
     }
     else {
-      BKE_view_layer_synced_ensure(scene, view_layer);
-      LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-        if (BASE_SELECTED(v3d, base)) {
-          Object *ob_eval = DEG_get_evaluated(depsgraph, base->object);
-          BKE_object_minmax(ob_eval ? ob_eval : base->object, min, max);
-          base->local_view_bits |= local_view_bit;
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+      for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+        if (BASE_SELECTED(v3d, &base)) {
+          Object *ob_eval = DEG_get_evaluated(depsgraph, base.object);
+          BKE_object_minmax(ob_eval ? ob_eval : base.object, min, max);
+          base.local_view_bits |= local_view_bit;
           changed = true;
         }
         else {
-          base->local_view_bits &= ~local_view_bit;
+          base.local_view_bits &= ~local_view_bit;
         }
       }
     }
 
     sub_v3_v3v3(box, max, min);
-    size = max_fff(box[0], box[1], box[2]);
+    size = std::max({box[0], box[1], box[2]});
   }
 
   if (changed == false) {
@@ -873,30 +954,29 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
   }
 
   /* Apply any running smooth-view values before reading from the viewport. */
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (region->regiontype == RGN_TYPE_WINDOW) {
-      RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  for (ARegion &region : area->regionbase) {
+    if (region.regiontype == RGN_TYPE_WINDOW) {
+      RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
       if (rv3d->sms) {
-        ED_view3d_smooth_view_force_finish_no_camera_lock(depsgraph, wm, win, scene, v3d, region);
+        ED_view3d_smooth_view_force_finish_no_camera_lock(depsgraph, wm, win, scene, v3d, &region);
       }
     }
   }
 
-  v3d->localvd = MEM_mallocN<View3D>("localview");
-  *v3d->localvd = blender::dna::shallow_copy(*v3d);
+  v3d->localvd = MEM_new<View3D>("localview");
+  *v3d->localvd = dna::shallow_copy(*v3d);
   v3d->local_view_uid = local_view_bit;
 
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (region->regiontype == RGN_TYPE_WINDOW) {
-      RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  for (ARegion &region : area->regionbase) {
+    if (region.regiontype == RGN_TYPE_WINDOW) {
+      RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
       bool ok_dist = true;
 
       /* New view values. */
       Object *camera_old = nullptr;
       float dist_new, ofs_new[3];
 
-      rv3d->localvd = MEM_mallocN<RegionView3D>("localview region");
-      memcpy(rv3d->localvd, rv3d, sizeof(RegionView3D));
+      rv3d->localvd = MEM_new<RegionView3D>("localview region", dna::shallow_copy(*rv3d));
 
       if (frame_selected) {
         float mid[3];
@@ -904,9 +984,14 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
         negate_v3_v3(ofs_new, mid);
 
         if (rv3d->persp == RV3D_CAMOB) {
+          rv3d->persp = RV3D_PERSP;
           camera_old = v3d->camera;
-          const Camera &camera = *static_cast<Camera *>(camera_old->data);
-          rv3d->persp = (camera.type == CAM_ORTHO) ? RV3D_ORTHO : RV3D_PERSP;
+          if (camera_old && camera_old->type == OB_CAMERA) {
+            const Camera &camera = *id_cast<Camera *>(camera_old->data);
+            if (camera.type == CAM_ORTHO) {
+              rv3d->persp = RV3D_ORTHO;
+            }
+          }
         }
 
         if (rv3d->persp == RV3D_ORTHO) {
@@ -917,7 +1002,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
 
         if (ok_dist) {
           dist_new = ED_view3d_radius_to_dist(
-              v3d, region, depsgraph, rv3d->persp, true, (size / 2) * VIEW3D_MARGIN);
+              v3d, &region, depsgraph, rv3d->persp, true, (size / 2) * VIEW3D_MARGIN);
 
           if (rv3d->persp == RV3D_PERSP) {
             /* Don't zoom closer than the near clipping plane. */
@@ -936,7 +1021,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
         sview_params.undo_str = nullptr;
 
         ED_view3d_smooth_view_ex(
-            depsgraph, wm, win, area, v3d, region, smooth_viewtx, &sview_params);
+            depsgraph, wm, win, area, v3d, &region, smooth_viewtx, &sview_params);
       }
     }
   }
@@ -953,28 +1038,28 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
                                   const bool frame_selected,
                                   const int smooth_viewtx)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   bool changed = false;
 
   if (v3d->localvd == nullptr) {
     return changed;
   }
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (base->local_view_bits & v3d->local_view_uid) {
-      base->local_view_bits &= ~v3d->local_view_uid;
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (base.local_view_bits & v3d->local_view_uid) {
+      base.local_view_bits &= ~v3d->local_view_uid;
     }
   }
 
   /* Apply any running smooth-view values before reading from the viewport. */
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (region->regiontype == RGN_TYPE_WINDOW) {
-      RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  for (ARegion &region : area->regionbase) {
+    if (region.regiontype == RGN_TYPE_WINDOW) {
+      RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
       if (rv3d->localvd == nullptr) {
         continue;
       }
       if (rv3d->sms) {
-        ED_view3d_smooth_view_force_finish_no_camera_lock(depsgraph, wm, win, scene, v3d, region);
+        ED_view3d_smooth_view_force_finish_no_camera_lock(depsgraph, wm, win, scene, v3d, &region);
       }
     }
   }
@@ -985,13 +1070,13 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
   v3d->local_view_uid = 0;
   v3d->camera = v3d->localvd->camera;
 
-  MEM_freeN(v3d->localvd);
+  MEM_delete(v3d->localvd);
   v3d->localvd = nullptr;
   ED_view3d_local_stats_free(v3d);
 
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (region->regiontype == RGN_TYPE_WINDOW) {
-      RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  for (ARegion &region : area->regionbase) {
+    if (region.regiontype == RGN_TYPE_WINDOW) {
+      RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
 
       if (rv3d->localvd == nullptr) {
         continue;
@@ -1018,10 +1103,10 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
         sview_params.undo_str = nullptr;
 
         ED_view3d_smooth_view_ex(
-            depsgraph, wm, win, area, v3d, region, smooth_viewtx, &sview_params);
+            depsgraph, wm, win, area, v3d, &region, smooth_viewtx, &sview_params);
       }
 
-      MEM_freeN(rv3d->localvd);
+      MEM_delete(rv3d->localvd);
       rv3d->localvd = nullptr;
       changed = true;
     }
@@ -1045,9 +1130,9 @@ bool ED_localview_exit_if_empty(const Depsgraph *depsgraph,
 
   v3d->localvd->runtime.flag &= ~V3D_RUNTIME_LOCAL_MAYBE_EMPTY;
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (base->local_view_bits & v3d->local_view_uid) {
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (base.local_view_bits & v3d->local_view_uid) {
       return false;
     }
   }
@@ -1133,13 +1218,13 @@ static wmOperatorStatus localview_remove_from_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   bool changed = false;
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (BASE_SELECTED(v3d, base)) {
-      base->local_view_bits &= ~v3d->local_view_uid;
-      blender::ed::object::base_select(base, blender::ed::object::BA_DESELECT);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (BASE_SELECTED(v3d, &base)) {
+      base.local_view_bits &= ~v3d->local_view_uid;
+      ed::object::base_select(&base, ed::object::BA_DESELECT);
 
-      if (base == view_layer->basact) {
+      if (&base == view_layer->basact) {
         view_layer->basact = nullptr;
       }
       changed = true;
@@ -1207,11 +1292,11 @@ static uint free_localcollection_bit(const Main *bmain,
   ushort local_view_bits = 0;
 
   /* Check all areas: which local-views are in use? */
-  LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        if (sl->spacetype == SPACE_VIEW3D) {
-          View3D *v3d = reinterpret_cast<View3D *>(sl);
+  for (bScreen &screen : bmain->screens) {
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        if (sl.spacetype == SPACE_VIEW3D) {
+          View3D *v3d = reinterpret_cast<View3D *>(&sl);
           if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
             local_view_bits |= v3d->local_collections_uid;
           }
@@ -1246,17 +1331,17 @@ static void local_collections_reset_uuid(LayerCollection *layer_collection,
     layer_collection->local_collections_bits |= local_view_bit;
   }
 
-  LISTBASE_FOREACH (LayerCollection *, child, &layer_collection->layer_collections) {
-    local_collections_reset_uuid(child, local_view_bit);
+  for (LayerCollection &child : layer_collection->layer_collections) {
+    local_collections_reset_uuid(&child, local_view_bit);
   }
 }
 
 static void view3d_local_collections_reset(const Main *bmain, const uint local_view_bit)
 {
-  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-    LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
-      LISTBASE_FOREACH (LayerCollection *, layer_collection, &view_layer->layer_collections) {
-        local_collections_reset_uuid(layer_collection, local_view_bit);
+  for (Scene &scene : bmain->scenes) {
+    for (ViewLayer &view_layer : scene.view_layers) {
+      for (LayerCollection &layer_collection : view_layer.layer_collections) {
+        local_collections_reset_uuid(&layer_collection, local_view_bit);
       }
     }
   }
@@ -1293,11 +1378,11 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
   bool do_reset = false;
 
   /* Reset only the ones that are not in use. */
-  LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        if (sl->spacetype == SPACE_VIEW3D) {
-          View3D *v3d = reinterpret_cast<View3D *>(sl);
+  for (bScreen &screen : bmain->screens) {
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        if (sl.spacetype == SPACE_VIEW3D) {
+          View3D *v3d = reinterpret_cast<View3D *>(&sl);
           if (v3d->local_collections_uid) {
             if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
               local_view_bit &= ~v3d->local_collections_uid;
@@ -1318,7 +1403,7 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
     view3d_local_collections_reset(bmain, ~0);
     View3D v3d = {};
     v3d.local_collections_uid = ~0;
-    BKE_layer_collection_local_sync(CTX_data_scene(C), CTX_data_view_layer(C), &v3d);
+    BKE_layer_collection_local_sync(*bmain, CTX_data_scene(C), CTX_data_view_layer(C), &v3d);
     DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS);
   }
 }
@@ -1334,7 +1419,7 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
 static void view3d_xr_mirror_begin(RegionView3D *rv3d)
 {
   /* If there is no session yet, changes below should not be applied! */
-  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first)->xr));
+  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first_)->xr));
 
   rv3d->runtime_viewlock |= RV3D_LOCK_ANY_TRANSFORM;
   /* Force perspective view. This isn't reset but that's not really an issue. */
@@ -1367,7 +1452,7 @@ void ED_view3d_xr_shading_update(wmWindowManager *wm, const View3D *v3d, const S
   if (v3d->runtime.flag & V3D_RUNTIME_XR_SESSION_ROOT) {
     View3DShading *xr_shading = &wm->xr.session_settings.shading;
     /* Flags that shouldn't be overridden by the 3D View shading. */
-    int flag_copy = 0;
+    eView3DShading_Flag flag_copy = eView3DShading_Flag{};
     if (v3d->shading.type != OB_SOLID) {
       /* Don't set V3D_SHADING_WORLD_ORIENTATION for solid shading since it results in distorted
        * lighting when the view matrix has a scale factor. */
@@ -1390,7 +1475,7 @@ void ED_view3d_xr_shading_update(wmWindowManager *wm, const View3D *v3d, const S
     }
 
     /* Copy shading from View3D to VR view. */
-    const int old_xr_shading_flag = xr_shading->flag;
+    const eView3DShading_Flag old_xr_shading_flag = xr_shading->flag;
     *xr_shading = v3d->shading;
     xr_shading->flag = (xr_shading->flag & ~flag_copy) | (old_xr_shading_flag & flag_copy);
     if (v3d->shading.prop) {
@@ -1413,3 +1498,5 @@ bool ED_view3d_is_region_xr_mirror_active(const wmWindowManager *wm,
 #endif
 
 /** \} */
+
+}  // namespace blender

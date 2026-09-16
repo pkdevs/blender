@@ -7,7 +7,7 @@
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::tests {
 
@@ -281,10 +281,10 @@ TEST(span, ContainsPtr)
   std::array<int, 3> a = {5, 6, 7};
   int other = 10;
   Span<int> a_span(a);
-  EXPECT_TRUE(a_span.contains_ptr(&a[0] + 0));
-  EXPECT_TRUE(a_span.contains_ptr(&a[0] + 1));
-  EXPECT_TRUE(a_span.contains_ptr(&a[0] + 2));
-  EXPECT_FALSE(a_span.contains_ptr(&a[0] + 3));
+  EXPECT_TRUE(a_span.contains_ptr(a.data() + 0));
+  EXPECT_TRUE(a_span.contains_ptr(a.data() + 1));
+  EXPECT_TRUE(a_span.contains_ptr(a.data() + 2));
+  EXPECT_FALSE(a_span.contains_ptr(a.data() + 3));
   int *ptr_before = reinterpret_cast<int *>(uintptr_t(a.data()) - 1);
   EXPECT_FALSE(a_span.contains_ptr(ptr_before));
   EXPECT_FALSE(a_span.contains_ptr(&other));
@@ -311,7 +311,7 @@ TEST(span, CastSameSize)
   EXPECT_EQ(new_a_span.size(), 4);
 
   EXPECT_EQ(a_span[0], &value);
-  EXPECT_EQ(new_a_span[0], (float *)&value);
+  EXPECT_EQ(new_a_span[0], reinterpret_cast<float *>(&value));
 }
 
 TEST(span, CastSmallerSize)
@@ -367,7 +367,7 @@ TEST(span, ReverseIterator)
     reversed_vec.append(*it);
   }
   EXPECT_EQ(reversed_vec.size(), 4);
-  EXPECT_EQ_ARRAY(reversed_vec.data(), Span({7, 6, 5, 4}).data(), 4);
+  EXPECT_EQ_SPAN<int>(reversed_vec, Span({7, 6, 5, 4}));
 }
 
 TEST(span, ReverseMutableSpan)
@@ -375,22 +375,22 @@ TEST(span, ReverseMutableSpan)
   std::array<int, 0> src0 = {};
   MutableSpan<int> span0 = src0;
   span0.reverse();
-  EXPECT_EQ_ARRAY(span0.data(), Span<int>({}).data(), 0);
+  EXPECT_EQ_SPAN<int>(span0, Span<int>({}));
 
   std::array<int, 1> src1 = {4};
   MutableSpan<int> span1 = src1;
   span1.reverse();
-  EXPECT_EQ_ARRAY(span1.data(), Span<int>({4}).data(), 1);
+  EXPECT_EQ_SPAN<int>(span1, Span({4}));
 
   std::array<int, 2> src2 = {4, 5};
   MutableSpan<int> span2 = src2;
   span2.reverse();
-  EXPECT_EQ_ARRAY(span2.data(), Span<int>({5, 4}).data(), 2);
+  EXPECT_EQ_SPAN<int>(span2, Span({5, 4}));
 
   std::array<int, 5> src5 = {4, 5, 6, 7, 8};
   MutableSpan<int> span5 = src5;
   span5.reverse();
-  EXPECT_EQ_ARRAY(span5.data(), Span<int>({8, 7, 6, 5, 4}).data(), 5);
+  EXPECT_EQ_SPAN<int>(span5, Span({8, 7, 6, 5, 4}));
 }
 
 TEST(span, MutableReverseIterator)
@@ -404,8 +404,8 @@ TEST(span, MutableReverseIterator)
     *it += 10;
   }
   EXPECT_EQ(reversed_vec.size(), 4);
-  EXPECT_EQ_ARRAY(reversed_vec.data(), Span({7, 6, 5, 4}).data(), 4);
-  EXPECT_EQ_ARRAY(src.data(), Span({14, 15, 16, 17}).data(), 4);
+  EXPECT_EQ_SPAN<int>(reversed_vec, Span({7, 6, 5, 4}));
+  EXPECT_EQ_SPAN<int>(src, Span({14, 15, 16, 17}));
 }
 
 TEST(span, Constexpr)

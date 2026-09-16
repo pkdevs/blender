@@ -21,26 +21,36 @@
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_key_types.h"
 #include "DNA_material_types.h"
+#include "DNA_object_types.h"
+
+#include "IO_validate.hh"
 
 #include "fbx_import_anim.hh"
 #include "fbx_import_util.hh"
 
+#include "CLG_log.h"
+
 namespace blender::io::fbx {
+
+static CLG_LogRef LOG = {"io.fbx"};
 
 static FCurve *create_fcurve(animrig::Channelbag &channelbag,
                              const animrig::FCurveDescriptor &descriptor,
                              int64_t key_count)
 {
-  FCurve *cu = channelbag.fcurve_create_unique(nullptr, descriptor);
-  BLI_assert_msg(cu, "The same F-Curve is being created twice, this is unexpected.");
+  if (!validate::size_fits_in_int(key_count)) {
+    CLOG_WARN(&LOG, "Animation curve too large to import, exceeds max int size");
+    key_count = 0;
+  }
+  FCurve &cu = channelbag.fcurve_ensure(nullptr, descriptor);
   BKE_fcurve_bezt_resize(cu, key_count);
-  return cu;
+  return &cu;
 }
 
 static void set_curve_sample(FCurve *curve, int64_t key_index, float time, float value)
@@ -50,7 +60,7 @@ static void set_curve_sample(FCurve *curve, int64_t key_index, float time, float
   bez.vec[1][0] = time;
   bez.vec[1][1] = value;
   bez.ipo = BEZT_IPO_LIN;
-  bez.f1 = bez.f2 = bez.f3 = SELECT;
+  bez.f1 = bez.f2 = bez.f3 = BEZT_FLAG_SELECT;
   bez.h1 = bez.h2 = HD_AUTO_ANIM;
 }
 
@@ -74,7 +84,9 @@ static Vector<ElementAnimations> gather_animated_properties(const FbxElementMapp
   int64_t order = 0;
   Map<const ufbx_element *, ElementAnimations> elem_map;
   for (const ufbx_anim_prop &fprop : flayer.anim_props) {
-    if (fprop.anim_value->curves[0] == nullptr) {
+    if (fprop.anim_value->curves[0] == nullptr && fprop.anim_value->curves[1] == nullptr &&
+        fprop.anim_value->curves[2] == nullptr)
+    {
       continue;
     }
     bool supported_prop = false;
@@ -185,17 +197,16 @@ static Vector<ElementAnimations> gather_animated_properties(const FbxElementMapp
 
   /* Sort returned result in the original fbx file order. */
   Vector<ElementAnimations> animations(elem_map.values().begin(), elem_map.values().end());
-  std::sort(
-      animations.begin(),
-      animations.end(),
-      [](const ElementAnimations &a, const ElementAnimations &b) { return a.order < b.order; });
+  std::ranges::sort(animations, [](const ElementAnimations &a, const ElementAnimations &b) {
+    return a.order < b.order;
+  });
   return animations;
 }
 
 static void finalize_curve(FCurve *cu)
 {
   if (cu != nullptr) {
-    BKE_fcurve_handles_recalc(cu);
+    BKE_fcurve_handles_recalc(*cu);
   }
 }
 
@@ -333,19 +344,27 @@ static void create_transform_curve_data(const FbxElementMapping &mapping,
     }
   }
   Vector<double> sorted_key_times(unique_key_times.begin(), unique_key_times.end());
-  std::sort(sorted_key_times.begin(), sorted_key_times.end());
+  std::ranges::sort(sorted_key_times);
 
   int64_t pos_index = 0;
   int64_t rot_index = pos_index + 3;
   int64_t scale_index = rot_index + rot_channels;
   int64_t tot_curves = scale_index + 3;
+  int64_t key_count = sorted_key_times.size();
+  if (!validate::size_fits_in_int(key_count)) {
+    CLOG_WARN(&LOG, "Animation curve too large to import, exceeds max int size");
+    key_count = 0;
+  }
   for (int64_t i = 0; i < tot_curves; i++) {
     BLI_assert_msg(curves[i], "fbx: animation curve was not created successfully");
-    BKE_fcurve_bezt_resize(curves[i], sorted_key_times.size());
+    if (curves[i]) {
+      BKE_fcurve_bezt_resize(*curves[i], key_count);
+    }
   }
 
   /* Evaluate transforms at all the key times. */
-  for (int64_t i = 0; i < sorted_key_times.size(); i++) {
+  math::Quaternion quat_prev = math::Quaternion::identity();
+  for (int64_t i = 0; i < key_count; i++) {
     double t = sorted_key_times[i];
     float tf = float(t * fps + anim_offset);
     ufbx_transform xform = ufbx_evaluate_transform(fbx_anim, fnode, t);
@@ -362,6 +381,11 @@ static void create_transform_curve_data(const FbxElementMapping &mapping,
     math::Quaternion quat(xform.rotation.w, xform.rotation.x, xform.rotation.y, xform.rotation.z);
     switch (rot_mode) {
       case ROT_MODE_QUAT:
+        /* Ensure shortest interpolation path between consecutive quaternions. */
+        if (i != 0 && math::dot(quat, quat_prev) < 0.0f) {
+          quat = -quat;
+        }
+        quat_prev = quat;
         set_curve_sample(curves[rot_index + 0], i, tf, quat.w);
         set_curve_sample(curves[rot_index + 1], i, tf, quat.x);
         set_curve_sample(curves[rot_index + 2], i, tf, quat.y);
@@ -401,7 +425,7 @@ static void create_camera_curves(const ufbx_metadata &metadata,
   if (anim.prop_focal_length != nullptr) {
     const ufbx_anim_curve *input_curve = anim.prop_focal_length->anim_value->curves[0];
     FCurve *curve = create_fcurve(channelbag, {"lens", 0}, input_curve->keyframes.count);
-    for (int i = 0; i < input_curve->keyframes.count; i++) {
+    for (int64_t i = 0; i < curve->totvert; i++) {
       const ufbx_keyframe &fkey = input_curve->keyframes[i];
       float tf = float(fkey.time * fps + anim_offset);
       float val = float(fkey.value);
@@ -414,7 +438,7 @@ static void create_camera_curves(const ufbx_metadata &metadata,
     const ufbx_anim_curve *input_curve = anim.prop_focus_dist->anim_value->curves[0];
     FCurve *curve = create_fcurve(
         channelbag, {"dof.focus_distance", 0}, input_curve->keyframes.count);
-    for (int i = 0; i < input_curve->keyframes.count; i++) {
+    for (int64_t i = 0; i < curve->totvert; i++) {
       const ufbx_keyframe &fkey = input_curve->keyframes[i];
       float tf = float(fkey.time * fps + anim_offset);
       /* Animation curves containing camera focus distance have values multiplied by 1000.0 */
@@ -439,8 +463,8 @@ static void create_material_curves(const ElementAnimations &anim,
   const char *rna_path_2 = "nodes[\"Principled BSDF\"].inputs[0].default_value";
 
   /* Also create animation curves for the node tree diffuse color input. */
-  Material *target_mat = (Material *)anim.target_id;
-  ID *target_ntree = (ID *)target_mat->nodetree;
+  Material *target_mat = id_cast<Material *>(anim.target_id);
+  ID *target_ntree = reinterpret_cast<ID *>(target_mat->nodetree);
   animrig::Action &act = action->wrap();
   const animrig::Slot *slot = animrig::assign_action_ensure_slot_for_keying(act, *target_ntree);
   BLI_assert(slot != nullptr);
@@ -452,7 +476,7 @@ static void create_material_curves(const ElementAnimations &anim,
       const ufbx_anim_curve *input_curve = anim.prop_mat_diffuse->anim_value->curves[ch];
       FCurve *curve_1 = create_fcurve(channelbag, {rna_path_1, ch}, input_curve->keyframes.count);
       FCurve *curve_2 = create_fcurve(chbag_node, {rna_path_2, ch}, input_curve->keyframes.count);
-      for (int i = 0; i < input_curve->keyframes.count; i++) {
+      for (int64_t i = 0; i < curve_1->totvert; i++) {
         const ufbx_keyframe &fkey = input_curve->keyframes[i];
         float tf = float(fkey.time * fps + anim_offset);
         float val = float(fkey.value);
@@ -476,7 +500,7 @@ static void create_blend_shape_curves(const ElementAnimations &anim,
                          "\"].value";
   const ufbx_anim_curve *input_curve = anim.prop_blend_shape->anim_value->curves[0];
   FCurve *curve = create_fcurve(channelbag, {rna_path, 0}, input_curve->keyframes.count);
-  for (int i = 0; i < input_curve->keyframes.count; i++) {
+  for (int64_t i = 0; i < curve->totvert; i++) {
     const ufbx_keyframe &fkey = input_curve->keyframes[i];
     double t = fkey.time;
     float tf = float(t * fps + anim_offset);
@@ -566,7 +590,7 @@ void import_animations(Main &bmain,
             anim_transform_curve_index[index] = -1;
           }
         }
-        blender::Vector<FCurve *> transform_curves;
+        Vector<FCurve *> transform_curves;
         if (!curve_desc.is_empty()) {
           transform_curves = channelbag.fcurve_create_many(nullptr, curve_desc.as_span());
         }

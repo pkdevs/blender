@@ -16,11 +16,16 @@ namespace blender::nodes {
  */
 struct IndexSwitchItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = IndexSwitchItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeIndexSwitch";
   static constexpr bool has_type = false;
   static constexpr bool has_name = false;
+  struct operator_idnames {
+    static constexpr StringRefNull add_item = "NODE_OT_index_switch_item_add";
+    static constexpr StringRefNull remove_item = "NODE_OT_index_switch_item_remove";
+    static constexpr StringRefNull move_item = "NODE_OT_index_switch_item_move";
+  };
 
   static socket_items::SocketItemsRef<IndexSwitchItem> get_items_from_node(bNode &node)
   {

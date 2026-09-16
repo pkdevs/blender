@@ -6,12 +6,16 @@
  * \ingroup pythonintern
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include <Python.h>
+
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "bpy_app_openvdb.hh"
 
 #include "../generic/py_capi_utils.hh"
+
+namespace blender {
 
 #ifdef WITH_OPENVDB
 #  include "openvdb_capi.h"
@@ -66,7 +70,7 @@ static PyObject *make_openvdb_info()
   SetStrItem("Unknown");
 #endif
 
-  if (UNLIKELY(PyErr_Occurred())) {
+  if (PyErr_Occurred()) [[unlikely]] {
     Py_DECREF(openvdb_info);
     return nullptr;
   }
@@ -89,7 +93,9 @@ PyObject *BPY_app_openvdb_struct()
   BlenderAppOVDBType.tp_init = nullptr;
   BlenderAppOVDBType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppOVDBType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppOVDBType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   return ret;
 }
+
+}  // namespace blender

@@ -15,22 +15,25 @@
 
 #include "BKE_global.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "DRW_gpu_wrapper.hh"
 
 #include "GPU_index_buffer.hh"
+#include "GPU_ray_tracing.hh"
 #include "draw_command_shared.hh"
 #include "draw_handle.hh"
 #include "draw_state.hh"
 #include "draw_view.hh"
 
+namespace blender {
+
 /* Forward declarations. */
-namespace blender::draw::detail {
+namespace draw::detail {
 template<typename T, int64_t block_size> class SubPassVector;
 template<typename DrawCommandBufType> class PassBase;
-}  // namespace blender::draw::detail
+}  // namespace draw::detail
 
-namespace blender::draw::command {
+namespace draw::command {
 
 class DrawCommandBuf;
 class DrawMultiBuf;
@@ -49,13 +52,11 @@ struct RecordingState {
   bool specialization_constants_in_use = false;
   /* True if the bound shader uses specialization. */
   bool shader_use_specialization = false;
-  GPUShader *shader = nullptr;
+  gpu::Shader *shader = nullptr;
   bool front_facing = true;
   bool inverted_view = false;
   DRWState pipeline_state = DRW_STATE_NO_DRAW;
   int clip_plane_count = 0;
-  /** Used for gl_BaseInstance workaround. */
-  GPUStorageBuf *resource_id_buf = nullptr;
   /** Used for pass simple resource ID. Starts at 1 as 0 is the identity handle. */
   int instance_offset = 1;
 
@@ -118,6 +119,7 @@ enum class Type : uint8_t {
   SubPassTransition,
   StateSet,
   StencilSet,
+  TextureCopy,
 
   /** Special commands stored in separate buffers. */
   SubPass,
@@ -137,14 +139,14 @@ struct Header {
 };
 
 struct ShaderBind {
-  GPUShader *shader;
+  gpu::Shader *shader;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct FramebufferBind {
-  GPUFrameBuffer **framebuffer;
+  gpu::FrameBuffer **framebuffer;
 
   void execute() const;
   std::string serialize() const;
@@ -174,58 +176,64 @@ struct ResourceBind {
     UniformAsStorageBuf,
     VertexAsStorageBuf,
     IndexAsStorageBuf,
+    TopLevelAS,
   } type;
 
   union {
-    /** TODO: Use draw::Texture|StorageBuffer|UniformBuffer as resources as they will give more
-     * debug info. */
-    GPUUniformBuf *uniform_buf;
-    GPUUniformBuf **uniform_buf_ref;
-    GPUStorageBuf *storage_buf;
-    GPUStorageBuf **storage_buf_ref;
+    /**
+     * TODO: Use draw::Texture|StorageBuffer|UniformBuffer as resources as they will give more
+     * debug info.
+     */
+    gpu::UniformBuf *uniform_buf;
+    gpu::UniformBuf **uniform_buf_ref;
+    gpu::StorageBuf *storage_buf;
+    gpu::StorageBuf **storage_buf_ref;
     /** NOTE: Texture is used for both Sampler and Image binds. */
-    GPUTexture *texture;
-    GPUTexture **texture_ref;
+    gpu::Texture *texture;
+    gpu::Texture **texture_ref;
     gpu::VertBuf *vertex_buf;
     gpu::VertBuf **vertex_buf_ref;
     gpu::IndexBuf *index_buf;
     gpu::IndexBuf **index_buf_ref;
+    gpu::TopLevelAS *tlas;
   };
 
   ResourceBind() = default;
 
-  ResourceBind(int slot_, GPUUniformBuf *res)
-      : slot(slot_), is_reference(false), type(Type::UniformBuf), uniform_buf(res){};
-  ResourceBind(int slot_, GPUUniformBuf **res)
-      : slot(slot_), is_reference(true), type(Type::UniformBuf), uniform_buf_ref(res){};
-  ResourceBind(int slot_, GPUStorageBuf *res)
-      : slot(slot_), is_reference(false), type(Type::StorageBuf), storage_buf(res){};
-  ResourceBind(int slot_, GPUStorageBuf **res)
-      : slot(slot_), is_reference(true), type(Type::StorageBuf), storage_buf_ref(res){};
-  ResourceBind(int slot_, GPUUniformBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::UniformAsStorageBuf), uniform_buf(res){};
-  ResourceBind(int slot_, GPUUniformBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::UniformAsStorageBuf), uniform_buf_ref(res){};
+  ResourceBind(int slot_, gpu::UniformBuf *res)
+      : slot(slot_), is_reference(false), type(Type::UniformBuf), uniform_buf(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf **res)
+      : slot(slot_), is_reference(true), type(Type::UniformBuf), uniform_buf_ref(res) {};
+  ResourceBind(int slot_, gpu::StorageBuf *res)
+      : slot(slot_), is_reference(false), type(Type::StorageBuf), storage_buf(res) {};
+  ResourceBind(int slot_, gpu::StorageBuf **res)
+      : slot(slot_), is_reference(true), type(Type::StorageBuf), storage_buf_ref(res) {};
+  ResourceBind(int slot_, gpu::TopLevelAS *res)
+      : slot(slot_), is_reference(false), type(Type::TopLevelAS), tlas(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf *res, Type /*type*/)
+      : slot(slot_), is_reference(false), type(Type::UniformAsStorageBuf), uniform_buf(res) {};
+  ResourceBind(int slot_, gpu::UniformBuf **res, Type /*type*/)
+      : slot(slot_), is_reference(true), type(Type::UniformAsStorageBuf), uniform_buf_ref(res) {};
   ResourceBind(int slot_, gpu::VertBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::VertexAsStorageBuf), vertex_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::VertexAsStorageBuf), vertex_buf(res) {};
   ResourceBind(int slot_, gpu::VertBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::VertexAsStorageBuf), vertex_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::VertexAsStorageBuf), vertex_buf_ref(res) {};
   ResourceBind(int slot_, gpu::IndexBuf *res, Type /*type*/)
-      : slot(slot_), is_reference(false), type(Type::IndexAsStorageBuf), index_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::IndexAsStorageBuf), index_buf(res) {};
   ResourceBind(int slot_, gpu::IndexBuf **res, Type /*type*/)
-      : slot(slot_), is_reference(true), type(Type::IndexAsStorageBuf), index_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::IndexAsStorageBuf), index_buf_ref(res) {};
   ResourceBind(int slot_, draw::Image *res)
-      : slot(slot_), is_reference(false), type(Type::Image), texture(draw::as_texture(res)){};
+      : slot(slot_), is_reference(false), type(Type::Image), texture(draw::as_texture(res)) {};
   ResourceBind(int slot_, draw::Image **res)
-      : slot(slot_), is_reference(true), type(Type::Image), texture_ref(draw::as_texture(res)){};
-  ResourceBind(int slot_, GPUTexture *res, GPUSamplerState state)
-      : sampler(state), slot(slot_), is_reference(false), type(Type::Sampler), texture(res){};
-  ResourceBind(int slot_, GPUTexture **res, GPUSamplerState state)
-      : sampler(state), slot(slot_), is_reference(true), type(Type::Sampler), texture_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::Image), texture_ref(draw::as_texture(res)) {};
+  ResourceBind(int slot_, gpu::Texture *res, GPUSamplerState state)
+      : sampler(state), slot(slot_), is_reference(false), type(Type::Sampler), texture(res) {};
+  ResourceBind(int slot_, gpu::Texture **res, GPUSamplerState state)
+      : sampler(state), slot(slot_), is_reference(true), type(Type::Sampler), texture_ref(res) {};
   ResourceBind(int slot_, gpu::VertBuf *res)
-      : slot(slot_), is_reference(false), type(Type::BufferSampler), vertex_buf(res){};
+      : slot(slot_), is_reference(false), type(Type::BufferSampler), vertex_buf(res) {};
   ResourceBind(int slot_, gpu::VertBuf **res)
-      : slot(slot_), is_reference(true), type(Type::BufferSampler), vertex_buf_ref(res){};
+      : slot(slot_), is_reference(true), type(Type::BufferSampler), vertex_buf_ref(res) {};
 
   void execute() const;
   std::string serialize() const;
@@ -270,42 +278,43 @@ struct PushConstant {
   PushConstant() = default;
 
   PushConstant(int loc, const float &val)
-      : location(loc), array_len(1), comp_len(1), type(Type::FloatValue), float1_value(val){};
+      : location(loc), array_len(1), comp_len(1), type(Type::FloatValue), float1_value(val) {};
   PushConstant(int loc, const float2 &val)
-      : location(loc), array_len(1), comp_len(2), type(Type::FloatValue), float2_value(val){};
+      : location(loc), array_len(1), comp_len(2), type(Type::FloatValue), float2_value(val) {};
   PushConstant(int loc, const float3 &val)
-      : location(loc), array_len(1), comp_len(3), type(Type::FloatValue), float3_value(val){};
+      : location(loc), array_len(1), comp_len(3), type(Type::FloatValue), float3_value(val) {};
   PushConstant(int loc, const float4 &val)
-      : location(loc), array_len(1), comp_len(4), type(Type::FloatValue), float4_value(val){};
+      : location(loc), array_len(1), comp_len(4), type(Type::FloatValue), float4_value(val) {};
 
   PushConstant(int loc, const int &val)
-      : location(loc), array_len(1), comp_len(1), type(Type::IntValue), int1_value(val){};
+      : location(loc), array_len(1), comp_len(1), type(Type::IntValue), int1_value(val) {};
   PushConstant(int loc, const int2 &val)
-      : location(loc), array_len(1), comp_len(2), type(Type::IntValue), int2_value(val){};
+      : location(loc), array_len(1), comp_len(2), type(Type::IntValue), int2_value(val) {};
   PushConstant(int loc, const int3 &val)
-      : location(loc), array_len(1), comp_len(3), type(Type::IntValue), int3_value(val){};
+      : location(loc), array_len(1), comp_len(3), type(Type::IntValue), int3_value(val) {};
   PushConstant(int loc, const int4 &val)
-      : location(loc), array_len(1), comp_len(4), type(Type::IntValue), int4_value(val){};
+      : location(loc), array_len(1), comp_len(4), type(Type::IntValue), int4_value(val) {};
 
   PushConstant(int loc, const float *val, int arr)
-      : location(loc), array_len(arr), comp_len(1), type(Type::FloatReference), float_ref(val){};
+      : location(loc), array_len(arr), comp_len(1), type(Type::FloatReference), float_ref(val) {};
   PushConstant(int loc, const float2 *val, int arr)
-      : location(loc), array_len(arr), comp_len(2), type(Type::FloatReference), float2_ref(val){};
+      : location(loc), array_len(arr), comp_len(2), type(Type::FloatReference), float2_ref(val) {};
   PushConstant(int loc, const float3 *val, int arr)
-      : location(loc), array_len(arr), comp_len(3), type(Type::FloatReference), float3_ref(val){};
+      : location(loc), array_len(arr), comp_len(3), type(Type::FloatReference), float3_ref(val) {};
   PushConstant(int loc, const float4 *val, int arr)
-      : location(loc), array_len(arr), comp_len(4), type(Type::FloatReference), float4_ref(val){};
+      : location(loc), array_len(arr), comp_len(4), type(Type::FloatReference), float4_ref(val) {};
   PushConstant(int loc, const float4x4 *val)
-      : location(loc), array_len(1), comp_len(16), type(Type::FloatReference), float4x4_ref(val){};
+      : location(loc), array_len(1), comp_len(16), type(Type::FloatReference), float4x4_ref(val) {
+        };
 
   PushConstant(int loc, const int *val, int arr)
-      : location(loc), array_len(arr), comp_len(1), type(Type::IntReference), int_ref(val){};
+      : location(loc), array_len(arr), comp_len(1), type(Type::IntReference), int_ref(val) {};
   PushConstant(int loc, const int2 *val, int arr)
-      : location(loc), array_len(arr), comp_len(2), type(Type::IntReference), int2_ref(val){};
+      : location(loc), array_len(arr), comp_len(2), type(Type::IntReference), int2_ref(val) {};
   PushConstant(int loc, const int3 *val, int arr)
-      : location(loc), array_len(arr), comp_len(3), type(Type::IntReference), int3_ref(val){};
+      : location(loc), array_len(arr), comp_len(3), type(Type::IntReference), int3_ref(val) {};
   PushConstant(int loc, const int4 *val, int arr)
-      : location(loc), array_len(arr), comp_len(4), type(Type::IntReference), int4_ref(val){};
+      : location(loc), array_len(arr), comp_len(4), type(Type::IntReference), int4_ref(val) {};
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
@@ -313,7 +322,7 @@ struct PushConstant {
 
 struct SpecializeConstant {
   /* Shader to set the constant in. */
-  GPUShader *shader;
+  gpu::Shader *shader;
   /* Value of the constant or a reference to it. */
   union {
     int int_value;
@@ -341,22 +350,22 @@ struct SpecializeConstant {
 
   SpecializeConstant() = default;
 
-  SpecializeConstant(GPUShader *sh, int loc, const float &val)
-      : shader(sh), float_value(val), location(loc), type(Type::FloatValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const int &val)
-      : shader(sh), int_value(val), location(loc), type(Type::IntValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const uint &val)
-      : shader(sh), uint_value(val), location(loc), type(Type::UintValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const bool &val)
-      : shader(sh), bool_value(val), location(loc), type(Type::BoolValue){};
-  SpecializeConstant(GPUShader *sh, int loc, const float *val)
-      : shader(sh), float_ref(val), location(loc), type(Type::FloatReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const int *val)
-      : shader(sh), int_ref(val), location(loc), type(Type::IntReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const uint *val)
-      : shader(sh), uint_ref(val), location(loc), type(Type::UintReference){};
-  SpecializeConstant(GPUShader *sh, int loc, const bool *val)
-      : shader(sh), bool_ref(val), location(loc), type(Type::BoolReference){};
+  SpecializeConstant(gpu::Shader *sh, int loc, const float &val)
+      : shader(sh), float_value(val), location(loc), type(Type::FloatValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const int &val)
+      : shader(sh), int_value(val), location(loc), type(Type::IntValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const uint &val)
+      : shader(sh), uint_value(val), location(loc), type(Type::UintValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const bool &val)
+      : shader(sh), bool_value(val), location(loc), type(Type::BoolValue) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const float *val)
+      : shader(sh), float_ref(val), location(loc), type(Type::FloatReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const int *val)
+      : shader(sh), int_ref(val), location(loc), type(Type::IntReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const uint *val)
+      : shader(sh), uint_ref(val), location(loc), type(Type::UintReference) {};
+  SpecializeConstant(gpu::Shader *sh, int loc, const bool *val)
+      : shader(sh), bool_ref(val), location(loc), type(Type::BoolReference) {};
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
@@ -364,12 +373,12 @@ struct SpecializeConstant {
 
 struct Draw {
   gpu::Batch *batch;
-  uint16_t instance_len;
-  uint8_t expand_prim_type; /* #GPUPrimType */
-  uint8_t expand_prim_len;
+  uint32_t instance_len : 24;
+  uint32_t expand_prim_type : 4; /* #GPUPrimType */
+  uint32_t expand_prim_len : 4;
   uint32_t vertex_first;
   uint32_t vertex_len;
-  ResourceHandle handle;
+  ResourceID res_id;
 
   Draw() = default;
 
@@ -379,12 +388,14 @@ struct Draw {
        uint vertex_first,
        GPUPrimType expanded_prim_type,
        uint expanded_prim_len,
-       ResourceHandle handle)
+       ResourceID res_id)
   {
     BLI_assert(batch != nullptr);
+    BLI_assert(expanded_prim_type <= 15);
+    BLI_assert(expanded_prim_len <= 15);
     this->batch = batch;
-    this->handle = handle;
-    this->instance_len = uint16_t(min_uu(instance_len, USHRT_MAX));
+    this->res_id = res_id;
+    this->instance_len = min_uu(instance_len, (1 << 24) - 1);
     this->vertex_len = vertex_len;
     this->vertex_first = vertex_first;
     this->expand_prim_type = expanded_prim_type;
@@ -412,8 +423,8 @@ struct DrawMulti {
 
 struct DrawIndirect {
   gpu::Batch *batch;
-  GPUStorageBuf **indirect_buf;
-  ResourceHandle handle;
+  gpu::StorageBuf **indirect_buf;
+  ResourceID res_id;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
@@ -428,29 +439,29 @@ struct Dispatch {
 
   Dispatch() = default;
 
-  Dispatch(int3 group_len) : is_reference(false), size(group_len){};
-  Dispatch(int3 *group_len) : is_reference(true), size_ref(group_len){};
+  Dispatch(int3 group_len) : is_reference(false), size(group_len) {};
+  Dispatch(int3 *group_len) : is_reference(true), size_ref(group_len) {};
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct DispatchIndirect {
-  GPUStorageBuf **indirect_buf;
+  gpu::StorageBuf **indirect_buf;
 
   void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
 struct Barrier {
-  eGPUBarrier type;
+  GPUBarrier type;
 
   void execute() const;
   std::string serialize() const;
 };
 
 struct Clear {
-  uint8_t clear_channels; /* #eGPUFrameBufferBits. But want to save some bits. */
+  uint8_t clear_channels; /* #GPUFrameBufferBits. But want to save some bits. */
   uint8_t stencil;
   float depth;
   float4 color;
@@ -461,7 +472,7 @@ struct Clear {
 
 struct ClearMulti {
   /** \note This should be a Span<float4> but we need have to only have trivial types here. */
-  const float4 *colors;
+  const double4 *colors;
   int colors_len;
 
   void execute() const;
@@ -488,6 +499,22 @@ struct StencilSet {
   std::string serialize() const;
 };
 
+struct TextureCopy {
+  union {
+    gpu::Texture *src;
+    gpu::Texture **src_ref;
+  };
+  union {
+    gpu::Texture *dst;
+    gpu::Texture **dst_ref;
+  };
+  bool src_is_ref;
+  bool dst_is_ref;
+
+  void execute() const;
+  std::string serialize() const;
+};
+
 union Undetermined {
   ShaderBind shader_bind;
   ResourceBind resource_bind;
@@ -505,6 +532,7 @@ union Undetermined {
   ClearMulti clear_multi;
   StateSet state_set;
   StencilSet stencil_set;
+  TextureCopy texture_copy;
 };
 
 /** Try to keep the command size as low as possible for performance. */
@@ -547,7 +575,7 @@ class DrawCommandBuf {
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
-                   ResourceHandleRange handle_range,
+                   ResourceIDRange id_range,
                    uint custom_id,
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
@@ -559,7 +587,7 @@ class DrawCommandBuf {
     BLI_assert_msg(custom_id == 0, "Custom ID is not supported in PassSimple");
     UNUSED_VARS_NDEBUG(custom_id);
 
-    for (auto handle : handle_range.index_range()) {
+    for (auto res_id : id_range.id_range()) {
       int64_t index = commands.append_and_get_index({});
       headers.append({Type::Draw, uint(index)});
       commands[index].draw = {batch,
@@ -568,7 +596,7 @@ class DrawCommandBuf {
                               vertex_first,
                               expanded_prim_type,
                               expanded_prim_len,
-                              ResourceHandle(handle)};
+                              ResourceID(res_id)};
     }
   }
 
@@ -668,7 +696,7 @@ class DrawMultiBuf {
                    uint instance_len,
                    uint vertex_len,
                    uint vertex_first,
-                   ResourceHandleRange handle_range,
+                   ResourceIDRange id_range,
                    uint custom_id,
                    GPUPrimType expanded_prim_type,
                    uint16_t expanded_prim_len)
@@ -685,18 +713,18 @@ class DrawMultiBuf {
     if (headers.is_empty() || headers.last().type != Type::DrawMulti) {
       uint index = commands.append_and_get_index({});
       headers.append({Type::DrawMulti, index});
-      commands[index].draw_multi = {batch, this, (uint)-1, header_id_counter_++};
+      commands[index].draw_multi = {batch, this, uint(-1), header_id_counter_++};
     }
 
     DrawMulti &cmd = commands.last().draw_multi;
 
     uint &group_id = group_ids_.lookup_or_add(DrawGroupKey(cmd.uuid, batch), uint(-1));
 
-    bool inverted = handle_range.handle_first.has_inverted_handedness();
+    bool inverted = id_range.has_inverted_handedness();
 
-    for (auto handle : handle_range.index_range()) {
+    for (auto res_id : id_range.id_range()) {
       DrawPrototype &draw = prototype_buf_.get_or_resize(prototype_count_++);
-      draw.res_handle = uint32_t(handle);
+      draw.res_id = uint32_t(res_id);
       draw.custom_id = custom_id;
       draw.instance_len = instance_len;
       draw.group_id = group_id;
@@ -757,4 +785,6 @@ class DrawMultiBuf {
 
 /** \} */
 
-};  // namespace blender::draw::command
+};  // namespace draw::command
+
+}  // namespace blender

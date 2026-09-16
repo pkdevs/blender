@@ -100,7 +100,7 @@ if(MSVC)
         external_zstandard
         external_cython
       OUTPUT
-      ${PYTARGET}/bin/python${PYTHON_POSTFIX}.exe
+        ${PYTARGET}/bin/python${PYTHON_POSTFIX}.exe
     )
   endif()
 endif()

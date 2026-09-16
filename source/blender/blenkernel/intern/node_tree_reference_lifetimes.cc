@@ -2,9 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <iostream>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
@@ -24,7 +29,7 @@ namespace blender::bke::node_tree_reference_lifetimes {
 
 using bits::BitInt;
 using nodes::NodeDeclaration;
-namespace aal = nodes::aal;
+namespace rl = nodes::rl;
 
 std::ostream &operator<<(std::ostream &stream, const ReferenceSetInfo &info)
 {
@@ -53,9 +58,9 @@ std::ostream &operator<<(std::ostream &stream, const ReferenceSetInfo &info)
   return stream;
 }
 
-static bool socket_may_have_reference(const bNodeTree &tree, const bNodeSocket &socket)
+static bool socket_may_have_reference(const bNodeSocket &socket)
 {
-  return tree.runtime->field_states[socket.index_in_tree()] == FieldSocketState::IsField;
+  return socket.may_be_field() || ELEM(socket.type, SOCK_BUNDLE, SOCK_CLOSURE, SOCK_GEOMETRY);
 }
 
 static bool or_into_each_other_masked(MutableBoundedBitSpan a,
@@ -83,7 +88,7 @@ static bool or_into_each_other(MutableBoundedBitSpan a, MutableBoundedBitSpan b)
 bool can_contain_reference(const eNodeSocketDatatype socket_type)
 {
   return nodes::socket_type_supports_fields(socket_type) ||
-         ELEM(socket_type, SOCK_BUNDLE, SOCK_CLOSURE);
+         ELEM(socket_type, SOCK_GEOMETRY, SOCK_BUNDLE, SOCK_CLOSURE);
 }
 
 bool can_contain_referenced_data(const eNodeSocketDatatype socket_type)
@@ -107,19 +112,19 @@ static const bNodeTreeZone *get_zone_of_node_if_full(const bNodeTreeZones *zones
   return zone;
 }
 
-static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNodeTree &tree,
-                                                                     ResourceScope &scope)
+static Array<const rl::RelationsInNode *> prepare_relations_by_node(const bNodeTree &tree,
+                                                                    ResourceScope &scope)
 {
-  Array<const aal::RelationsInNode *> relations_by_node(tree.all_nodes().size());
+  Array<const rl::RelationsInNode *> relations_by_node(tree.all_nodes().size());
   for (const bNode *node : tree.all_nodes()) {
-    const aal::RelationsInNode *node_relations = nullptr;
+    const rl::RelationsInNode *node_relations = nullptr;
     switch (node->type_legacy) {
       case GEO_NODE_SIMULATION_INPUT:
       case GEO_NODE_SIMULATION_OUTPUT:
       case GEO_NODE_BAKE: {
         /* The relations of these nodes depend on field evaluation to avoid unnecessary
          * relations, but besides that they don't need special handling. */
-        aal::RelationsInNode &relations = scope.construct<aal::RelationsInNode>();
+        rl::RelationsInNode &relations = scope.construct<rl::RelationsInNode>();
         {
           /* Add eval relations. */
           int prev_geometry_index = -1;
@@ -132,8 +137,8 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
             if (prev_geometry_index == -1) {
               continue;
             }
-            if (socket_may_have_reference(tree, socket)) {
-              relations.eval_relations.append({i, prev_geometry_index});
+            if (socket_may_have_reference(socket)) {
+              relations.use_relations.append({i, prev_geometry_index});
             }
           }
         }
@@ -148,7 +153,7 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
             if (prev_geometry_index == -1) {
               continue;
             }
-            if (socket_may_have_reference(tree, socket)) {
+            if (socket_may_have_reference(socket)) {
               relations.available_relations.append({i, prev_geometry_index});
             }
           }
@@ -158,21 +163,21 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
       }
       case GEO_NODE_REPEAT_INPUT:
       case GEO_NODE_REPEAT_OUTPUT: {
-        aal::RelationsInNode &relations = scope.construct<aal::RelationsInNode>();
+        rl::RelationsInNode &relations = scope.construct<rl::RelationsInNode>();
         for (const bNodeSocket *socket : node->output_sockets()) {
-          if (can_contain_referenced_data(eNodeSocketDatatype(socket->type))) {
+          if (can_contain_referenced_data(socket->type)) {
             for (const bNodeSocket *other_output : node->output_sockets()) {
-              if (socket_may_have_reference(tree, *other_output)) {
+              if (socket_may_have_reference(*other_output)) {
                 relations.available_relations.append({other_output->index(), socket->index()});
               }
             }
           }
         }
         for (const bNodeSocket *socket : node->input_sockets()) {
-          if (can_contain_referenced_data(eNodeSocketDatatype(socket->type))) {
+          if (can_contain_referenced_data(socket->type)) {
             for (const bNodeSocket *other_input : node->input_sockets()) {
-              if (socket_may_have_reference(tree, *other_input)) {
-                relations.eval_relations.append({other_input->index(), socket->index()});
+              if (socket_may_have_reference(*other_input)) {
+                relations.use_relations.append({other_input->index(), socket->index()});
               }
             }
           }
@@ -188,11 +193,11 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
             const int input_index = input_items_start + i;
             const int output_index = output_items_start + i;
             const bNodeSocket &input_socket = node->input_socket(input_index);
-            if (can_contain_referenced_data(eNodeSocketDatatype(input_socket.type))) {
-              relations.propagate_relations.append({input_index, output_index});
+            if (can_contain_referenced_data(input_socket.type)) {
+              relations.data_propagations.append({input_index, output_index});
             }
-            else if (socket_may_have_reference(tree, input_socket)) {
-              relations.reference_relations.append({input_index, output_index});
+            else if (socket_may_have_reference(input_socket)) {
+              relations.reference_propagations.append({input_index, output_index});
             }
           }
         }
@@ -200,10 +205,10 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
         break;
       }
       case NODE_REROUTE: {
-        static const aal::RelationsInNode reroute_relations = []() {
-          aal::RelationsInNode relations;
-          relations.propagate_relations.append({0, 0});
-          relations.reference_relations.append({0, 0});
+        static const rl::RelationsInNode reroute_relations = []() {
+          rl::RelationsInNode relations;
+          relations.data_propagations.append({0, 0});
+          relations.reference_propagations.append({0, 0});
           return relations;
         }();
         node_relations = &reroute_relations;
@@ -220,7 +225,7 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
       }
       default: {
         if (const NodeDeclaration *node_decl = node->declaration()) {
-          node_relations = node_decl->anonymous_attribute_relations();
+          node_relations = node_decl->reference_lifetime_relations();
         }
         break;
       }
@@ -232,7 +237,7 @@ static Array<const aal::RelationsInNode *> prepare_relations_by_node(const bNode
 
 static Vector<ReferenceSetInfo> find_reference_sets(
     const bNodeTree &tree,
-    const Span<const aal::RelationsInNode *> &relations_by_node,
+    const Span<const rl::RelationsInNode *> &relations_by_node,
     Vector<int> &r_group_output_reference_sets,
     MultiValueMap<const bNodeTreeZone *, int> &r_output_set_sources_by_closure_zone)
 {
@@ -278,10 +283,10 @@ static Vector<ReferenceSetInfo> find_reference_sets(
     if (node->is_muted()) {
       continue;
     }
-    if (const aal::RelationsInNode *relations = relations_by_node[node->index()]) {
-      for (const aal::AvailableRelation &relation : relations->available_relations) {
-        const bNodeSocket &data_socket = node->output_socket(relation.geometry_output);
-        const bNodeSocket &reference_socket = node->output_socket(relation.field_output);
+    if (const rl::RelationsInNode *relations = relations_by_node[node->index()]) {
+      for (const rl::AvailableRelation &relation : relations->available_relations) {
+        const bNodeSocket &data_socket = node->output_socket(relation.data_output);
+        const bNodeSocket &reference_socket = node->output_socket(relation.reference_output);
         if (!reference_socket.is_available() || !reference_socket.is_available()) {
           continue;
         }
@@ -301,22 +306,22 @@ static Vector<ReferenceSetInfo> find_reference_sets(
   for (const bNodeTreeZone *zone : zones->zones) {
     const bNode &input_node = *zone->input_node();
     const bNode &output_node = *zone->output_node();
-    if (output_node.type_legacy != GEO_NODE_CLOSURE_OUTPUT) {
+    if (output_node.type_legacy != NODE_CLOSURE_OUTPUT) {
       continue;
     }
-    const auto &storage = *static_cast<const NodeGeometryClosureOutput *>(output_node.storage);
+    const auto &storage = *static_cast<const NodeClosureOutput *>(output_node.storage);
     const int old_reference_sets_count = reference_sets.size();
     /* Handle references coming from field inputs in the closure. */
     for (const int input_i : IndexRange(storage.input_items.items_num)) {
       const bNodeSocket &socket = input_node.output_socket(input_i);
-      if (can_contain_reference(eNodeSocketDatatype(socket.type))) {
+      if (can_contain_reference(socket.type)) {
         reference_sets.append({ReferenceSetType::ClosureInputReferenceSet, &socket});
       }
     }
     /* Handle references required by output geometries in the closure. */
     for (const int output_i : IndexRange(storage.output_items.items_num)) {
       const bNodeSocket &socket = output_node.input_socket(output_i);
-      if (can_contain_referenced_data(eNodeSocketDatatype(socket.type))) {
+      if (can_contain_referenced_data(socket.type)) {
         r_output_set_sources_by_closure_zone.add(
             zone,
             reference_sets.append_and_get_index({ReferenceSetType::ClosureOutputData, &socket}));
@@ -327,7 +332,7 @@ static Vector<ReferenceSetInfo> find_reference_sets(
         old_reference_sets_count);
     for (const int input_i : IndexRange(storage.input_items.items_num)) {
       const bNodeSocket &socket = input_node.output_socket(input_i);
-      if (can_contain_referenced_data(eNodeSocketDatatype(socket.type))) {
+      if (can_contain_referenced_data(socket.type)) {
         for (ReferenceSetInfo &source : new_reference_sets) {
           source.potential_data_origins.append(&socket);
         }
@@ -395,7 +400,7 @@ static BitVector<> get_references_coming_from_outside_zone(
  * \return True when propagation needs to be done again.
  */
 static bool pass_left_to_right(const bNodeTree &tree,
-                               const Span<const aal::RelationsInNode *> &relations_by_node,
+                               const Span<const rl::RelationsInNode *> &relations_by_node,
                                BitGroupVector<> &r_potential_data_by_socket,
                                BitGroupVector<> &r_potential_reference_by_socket)
 {
@@ -417,9 +422,9 @@ static bool pass_left_to_right(const bNodeTree &tree,
       }
     }
     if (node->is_muted()) {
-      for (const bNodeLink &link : node->internal_links()) {
-        const bNodeSocket &input_socket = *link.fromsock;
-        const bNodeSocket &output_socket = *link.tosock;
+      for (const bNodeInternalLink &link : node->internal_links()) {
+        const bNodeSocket &input_socket = *link.in;
+        const bNodeSocket &output_socket = *link.out;
         if (!input_socket.is_available() || !output_socket.is_available()) {
           continue;
         }
@@ -430,11 +435,11 @@ static bool pass_left_to_right(const bNodeTree &tree,
       }
       continue;
     }
-    if (const aal::RelationsInNode *relations = relations_by_node[node->index()]) {
+    if (const rl::RelationsInNode *relations = relations_by_node[node->index()]) {
       /* Propagate references. */
-      for (const aal::ReferenceRelation &relation : relations->reference_relations) {
-        const bNodeSocket &from_socket = node->input_socket(relation.from_field_input);
-        const bNodeSocket &to_socket = node->output_socket(relation.to_field_output);
+      for (const rl::ReferencePropagation &relation : relations->reference_propagations) {
+        const bNodeSocket &from_socket = node->input_socket(relation.from_input);
+        const bNodeSocket &to_socket = node->output_socket(relation.to_output);
         if (!from_socket.is_available() || !to_socket.is_available()) {
           continue;
         }
@@ -443,9 +448,9 @@ static bool pass_left_to_right(const bNodeTree &tree,
         r_potential_reference_by_socket[dst_index] |= r_potential_reference_by_socket[src_index];
       }
       /* Propagate data. */
-      for (const aal::PropagateRelation &relation : relations->propagate_relations) {
-        const bNodeSocket &from_socket = node->input_socket(relation.from_geometry_input);
-        const bNodeSocket &to_socket = node->output_socket(relation.to_geometry_output);
+      for (const rl::DataPropagation &relation : relations->data_propagations) {
+        const bNodeSocket &from_socket = node->input_socket(relation.from_input);
+        const bNodeSocket &to_socket = node->output_socket(relation.to_output);
         if (!from_socket.is_available() || !to_socket.is_available()) {
           continue;
         }
@@ -493,7 +498,7 @@ static bool pass_left_to_right(const bNodeTree &tree,
         }
         break;
       }
-      case GEO_NODE_CLOSURE_INPUT: {
+      case NODE_CLOSURE_INPUT: {
         const bNodeTreeZone *zone = get_zone_of_node_if_full(zones, *node);
         if (!zone) {
           break;
@@ -509,7 +514,7 @@ static bool pass_left_to_right(const bNodeTree &tree,
         }
         break;
       }
-      case GEO_NODE_CLOSURE_OUTPUT: {
+      case NODE_CLOSURE_OUTPUT: {
         const bNodeTreeZone *zone = get_zone_of_node_if_full(zones, *node);
         if (!zone) {
           break;
@@ -518,12 +523,29 @@ static bool pass_left_to_right(const bNodeTree &tree,
         /* References passed through border links are referenced by the closure. */
         const BitVector<> passed_in_references = get_references_coming_from_outside_zone(
             *zone, {&r_potential_reference_by_socket});
+        const BitVector<> passed_in_data = get_references_coming_from_outside_zone(
+            *zone, {&r_potential_data_by_socket});
         const int dst_index = output_node.output_socket(0).index_in_tree();
-        for (const int i : node->input_sockets().index_range()) {
-          const int src_index = output_node.input_socket(i).index_in_tree();
-          r_potential_data_by_socket[dst_index] |= r_potential_data_by_socket[src_index];
-          r_potential_reference_by_socket[dst_index] |= r_potential_reference_by_socket[src_index];
+        for ([[maybe_unused]] const int i : node->input_sockets().index_range()) {
+          r_potential_data_by_socket[dst_index] |= passed_in_data;
           r_potential_reference_by_socket[dst_index] |= passed_in_references;
+        }
+        break;
+      }
+      case NODE_EVALUATE_CLOSURE: {
+        BitVector<> potential_input_references(r_potential_reference_by_socket.group_size());
+        BitVector<> potential_input_data(r_potential_data_by_socket.group_size());
+        /* Gather all references and data from all inputs, including the once on the closure input.
+         * The output may reference any of those. */
+        for (const bNodeSocket *socket : node->input_sockets()) {
+          const int src_index = socket->index_in_tree();
+          potential_input_references |= r_potential_reference_by_socket[src_index];
+          potential_input_data |= r_potential_data_by_socket[src_index];
+        }
+        for (const bNodeSocket *out_socket : node->output_sockets()) {
+          const int dst_index = out_socket->index_in_tree();
+          r_potential_reference_by_socket[dst_index] |= potential_input_references;
+          r_potential_data_by_socket[dst_index] |= potential_input_data;
         }
         break;
       }
@@ -601,7 +623,7 @@ static void prepare_required_data_for_group_outputs(
       potential_output_references |= potential_reference_by_socket[socket->index_in_tree()];
     }
     for (const bNodeSocket *socket : sockets) {
-      if (!can_contain_referenced_data(eNodeSocketDatatype(socket->type))) {
+      if (!can_contain_referenced_data(socket->type)) {
         continue;
       }
       const int index = socket->index_in_tree();
@@ -630,7 +652,7 @@ static void prepare_required_data_for_closure_outputs(
       continue;
     }
     const bNode &output_node = *zone->output_node();
-    if (output_node.type_legacy != GEO_NODE_CLOSURE_OUTPUT) {
+    if (output_node.type_legacy != NODE_CLOSURE_OUTPUT) {
       continue;
     }
     const Span<int> closure_output_set_sources = output_set_sources_by_closure_zone.lookup(zone);
@@ -645,7 +667,7 @@ static void prepare_required_data_for_closure_outputs(
       potential_output_references |= potential_reference_by_socket[socket->index_in_tree()];
     }
     for (const bNodeSocket *socket : sockets) {
-      if (!can_contain_referenced_data(eNodeSocketDatatype(socket->type))) {
+      if (!can_contain_referenced_data(socket->type)) {
         continue;
       }
       const int index = socket->index_in_tree();
@@ -681,7 +703,7 @@ static void prepare_required_data_for_outputs(
 }
 
 static bool pass_right_to_left(const bNodeTree &tree,
-                               const Span<const aal::RelationsInNode *> &relations_by_node,
+                               const Span<const rl::RelationsInNode *> &relations_by_node,
                                const BitGroupVector<> &potential_reference_by_socket,
                                BitGroupVector<> &r_required_data_by_socket)
 {
@@ -702,9 +724,9 @@ static bool pass_right_to_left(const bNodeTree &tree,
       }
     }
     if (node->is_muted()) {
-      for (const bNodeLink &link : node->internal_links()) {
-        const bNodeSocket &input_socket = *link.fromsock;
-        const bNodeSocket &output_socket = *link.tosock;
+      for (const bNodeInternalLink &link : node->internal_links()) {
+        const bNodeSocket &input_socket = *link.in;
+        const bNodeSocket &output_socket = *link.out;
         if (!input_socket.is_available() || !output_socket.is_available()) {
           continue;
         }
@@ -714,10 +736,10 @@ static bool pass_right_to_left(const bNodeTree &tree,
       }
       continue;
     }
-    if (const aal::RelationsInNode *relations = relations_by_node[node->index()]) {
-      for (const aal::PropagateRelation &relation : relations->propagate_relations) {
-        const bNodeSocket &output_socket = node->output_socket(relation.to_geometry_output);
-        const bNodeSocket &input_socket = node->input_socket(relation.from_geometry_input);
+    if (const rl::RelationsInNode *relations = relations_by_node[node->index()]) {
+      for (const rl::DataPropagation &relation : relations->data_propagations) {
+        const bNodeSocket &output_socket = node->output_socket(relation.to_output);
+        const bNodeSocket &input_socket = node->input_socket(relation.from_input);
         if (!input_socket.is_available() || !output_socket.is_available()) {
           continue;
         }
@@ -725,9 +747,9 @@ static bool pass_right_to_left(const bNodeTree &tree,
         const int src_index = output_socket.index_in_tree();
         r_required_data_by_socket[dst_index] |= r_required_data_by_socket[src_index];
       }
-      for (const aal::EvalRelation &relation : relations->eval_relations) {
-        const bNodeSocket &data_socket = node->input_socket(relation.geometry_input);
-        const bNodeSocket &reference_socket = node->input_socket(relation.field_input);
+      for (const rl::UseRelation &relation : relations->use_relations) {
+        const bNodeSocket &data_socket = node->input_socket(relation.data_input);
+        const bNodeSocket &reference_socket = node->input_socket(relation.reference_input);
         if (!data_socket.is_available() || !reference_socket.is_available()) {
           continue;
         }
@@ -800,18 +822,7 @@ static bool pass_right_to_left(const bNodeTree &tree,
         }
         break;
       }
-      case GEO_NODE_EVALUATE_CLOSURE: {
-        /* Data referenced by the closure is required on all the other inputs. */
-        const bNodeSocket &closure_socket = node->input_socket(0);
-        const BoundedBitSpan required_references =
-            potential_reference_by_socket[closure_socket.index_in_tree()];
-        for (const bNodeSocket *input_socket : node->input_sockets().drop_front(1)) {
-          const int dst_index = input_socket->index_in_tree();
-          r_required_data_by_socket[dst_index] |= required_references;
-        }
-        break;
-      }
-      case GEO_NODE_CLOSURE_OUTPUT: {
+      case NODE_CLOSURE_OUTPUT: {
         const bNodeTreeZone *zone = get_zone_of_node_if_full(zones, *node);
         if (!zone) {
           break;
@@ -853,14 +864,14 @@ class bNodeTreeBitGroupVectorOptions : public bNodeTreeToDotOptions {
   }
 };
 
-static aal::RelationsInNode get_tree_relations(
+static rl::RelationsInNode get_tree_relations(
     const bNodeTree &tree,
     const Span<ReferenceSetInfo> reference_sets,
     const BitGroupVector<> &potential_data_by_socket,
     const BitGroupVector<> &potential_reference_by_socket,
     const BitGroupVector<> &required_data_by_socket)
 {
-  aal::RelationsInNode tree_relations;
+  rl::RelationsInNode tree_relations;
   const bNode *group_output_node = tree.group_output_node();
 
   for (const int input_i : tree.interface_inputs().index_range()) {
@@ -876,12 +887,11 @@ static aal::RelationsInNode get_tree_relations(
         const ReferenceSetInfo &reference_set = reference_sets[reference_set_i];
         switch (reference_set.type) {
           case ReferenceSetType::GroupOutputData: {
-            tree_relations.propagate_relations.append_non_duplicates(
-                {input_i, reference_set.index});
+            tree_relations.data_propagations.append_non_duplicates({input_i, reference_set.index});
             break;
           }
           case ReferenceSetType::GroupInputReferenceSet: {
-            tree_relations.eval_relations.append_non_duplicates({reference_set.index, input_i});
+            tree_relations.use_relations.append_non_duplicates({reference_set.index, input_i});
             break;
           }
           default:
@@ -893,7 +903,7 @@ static aal::RelationsInNode get_tree_relations(
   if (group_output_node) {
     for (const int output_i : tree.interface_outputs().index_range()) {
       const bNodeSocket &socket = group_output_node->input_socket(output_i);
-      const eNodeSocketDatatype socket_type = eNodeSocketDatatype(socket.type);
+      const eNodeSocketDatatype socket_type = socket.type;
       if (can_contain_reference(socket_type)) {
         const BoundedBitSpan potential_references =
             potential_reference_by_socket[socket.index_in_tree()];
@@ -901,7 +911,7 @@ static aal::RelationsInNode get_tree_relations(
           const ReferenceSetInfo &reference_set = reference_sets[reference_set_i];
           switch (reference_set.type) {
             case ReferenceSetType::GroupInputReferenceSet: {
-              tree_relations.reference_relations.append_non_duplicates(
+              tree_relations.reference_propagations.append_non_duplicates(
                   {reference_set.index, output_i});
               break;
             }
@@ -920,7 +930,7 @@ static aal::RelationsInNode get_tree_relations(
               for (const bNodeSocket *other_socket :
                    group_output_node->input_sockets().drop_back(1))
               {
-                if (!can_contain_reference(eNodeSocketDatatype(other_socket->type))) {
+                if (!can_contain_reference(other_socket->type)) {
                   continue;
                 }
                 const BoundedBitSpan potential_references =
@@ -944,6 +954,32 @@ static aal::RelationsInNode get_tree_relations(
   return tree_relations;
 }
 
+/**
+ * After creating detecting the final propagate-relations, we can detect some input geometry that
+ * looked like it was passed to the output actually is not. So we can update
+ * #required_data_by_socket to never use the corresponding #ReferenceSetInfo.
+ */
+static void disable_unused_group_output_propagation(
+    const Span<ReferenceSetInfo> reference_sets,
+    const Span<rl::DataPropagation> &propagate_relations,
+    BitGroupVector<> &required_data_by_socket)
+{
+  Vector<int> propagate_targets;
+  for (const auto relation : propagate_relations) {
+    propagate_targets.append(relation.to_output);
+  }
+  BitVector<> reference_sets_mask(reference_sets.size(), true);
+  for (const int i : reference_sets.index_range()) {
+    const ReferenceSetInfo &reference_set = reference_sets[i];
+    if (reference_set.type == ReferenceSetType::GroupOutputData) {
+      if (!propagate_targets.contains(reference_set.index)) {
+        reference_sets_mask[i].reset();
+      }
+    }
+  }
+  required_data_by_socket.foreach_and(reference_sets_mask);
+}
+
 static std::unique_ptr<ReferenceLifetimesInfo> make_reference_lifetimes_info(const bNodeTree &tree)
 {
   tree.ensure_topology_cache();
@@ -960,7 +996,7 @@ static std::unique_ptr<ReferenceLifetimesInfo> make_reference_lifetimes_info(con
       std::make_unique<ReferenceLifetimesInfo>();
 
   ResourceScope scope;
-  Array<const aal::RelationsInNode *> relations_by_node = prepare_relations_by_node(tree, scope);
+  Array<const rl::RelationsInNode *> relations_by_node = prepare_relations_by_node(tree, scope);
 
   Vector<int> group_output_set_sources;
   MultiValueMap<const bNodeTreeZone *, int> output_set_sources_by_closure_zone;
@@ -1000,21 +1036,27 @@ static std::unique_ptr<ReferenceLifetimesInfo> make_reference_lifetimes_info(con
   /* Make sure that all required data is also potentially available. */
   required_data_by_socket.all_bits() &= potential_data_by_socket.all_bits();
 
-/* Only useful when debugging the reference lifetimes analysis. */
-#if 0
-  std::cout << "\n\n"
-            << node_tree_to_dot(tree,
-                                bNodeTreeBitGroupVectorOptions(
-                                    {potential_reference_by_socket, required_data_by_socket}))
-
-            << "\n\n";
-#endif
-
   reference_lifetimes_info->tree_relations = get_tree_relations(tree,
                                                                 reference_sets,
                                                                 potential_data_by_socket,
                                                                 potential_reference_by_socket,
                                                                 required_data_by_socket);
+  disable_unused_group_output_propagation(
+      reference_sets,
+      reference_lifetimes_info->tree_relations.data_propagations,
+      required_data_by_socket);
+
+/* Only useful when debugging the reference lifetimes analysis. */
+#if 0
+  std::cout << "\n\n"
+            << node_tree_to_dot(tree,
+                                bNodeTreeBitGroupVectorOptions({potential_data_by_socket,
+                                                                potential_reference_by_socket,
+                                                                required_data_by_socket}))
+
+            << "\n\n";
+#endif
+
   reference_lifetimes_info->required_data_by_socket = std::move(required_data_by_socket);
   return reference_lifetimes_info;
 }

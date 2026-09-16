@@ -61,7 +61,7 @@ ccl_device float3 phase_rayleigh_sample(const float3 D, const float2 rand, ccl_p
 {
   const float a = 2 - 4 * rand.x;
   /* Metal doesn't have cbrtf, but since we compute u - 1/u anyways, we can just as well
-   * use the inverse cube root for which there is a simple Quake-style fast implementation.*/
+   * use the inverse cube root for which there is a simple Quake-style fast implementation. */
   const float inv_u = -fast_inv_cbrtf(sqrtf(1 + sqr(a)) + a);
   const float cos_theta = 1 / inv_u - inv_u;
   *pdf = phase_rayleigh(cos_theta);
@@ -196,7 +196,7 @@ ccl_device float phase_fournier_forand(const float cos_theta, const float3 coeff
   const float n = coeffs.x;
   const float v = coeffs.y;
   const float pf_coeff = coeffs.z * (1.0f / (16.0f * M_PI_F));
-  const float sin_htheta_sqr = 0.5f * (1 - cos_theta); /* sin^2(theta / 2)*/
+  const float sin_htheta_sqr = 0.5f * (1 - cos_theta); /* `sin^2(theta / 2)`. */
   const float delta = phase_fournier_forand_delta(n, sin_htheta_sqr);
 
   return phase_fournier_forand_impl(cos_theta, delta, powf(delta, v), v, sin_htheta_sqr, pf_coeff);
@@ -211,7 +211,7 @@ ccl_device float phase_fournier_forand_newton(const float rand, const float3 coe
 
   float cos_theta = 0.64278760968f; /* Initial guess: 50 degrees */
   for (int it = 0; it < 20; it++) {
-    const float sin_htheta_sqr = 0.5f * (1 - cos_theta); /* sin^2(theta / 2)*/
+    const float sin_htheta_sqr = 0.5f * (1 - cos_theta); /* `sin^2(theta / 2)`. */
     const float delta = phase_fournier_forand_delta(n, sin_htheta_sqr);
     const float pow_delta_v = powf(delta, v);
     const float m_delta = 1 - delta;

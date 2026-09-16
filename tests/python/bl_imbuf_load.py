@@ -73,6 +73,7 @@ class ImBufTest(AbstractImBufTest):
     def _save_exr(self, img, out_exr_path):
         scene = bpy.data.scenes[0]
         image_settings = scene.render.image_settings
+        image_settings.media_type = 'IMAGE'
         image_settings.file_format = "OPEN_EXR"
         image_settings.color_mode = "RGBA"
         image_settings.color_depth = "32"
@@ -125,8 +126,6 @@ class ImBufLoadTest(ImBufTest):
         self.check("*.png")
 
     def test_load_exr(self):
-        self.skip_if_format_missing("OPENEXR")
-
         self.check("*.exr")
 
     def test_load_hdr(self):
@@ -160,8 +159,17 @@ class ImBufLoadTest(ImBufTest):
 
         self.check("*.webp")
 
+    def test_load_avif(self):
+        self.check("*.avif")
+
     def test_load_psd(self):
         self.check("*.psd")
+
+    def test_load_iris(self):
+        self.check("*.rgb")
+
+    def test_load_dds(self):
+        self.check("*.dds")
 
 
 class ImBufBrokenTest(AbstractImBufTest):
@@ -186,8 +194,6 @@ class ImBufBrokenTest(AbstractImBufTest):
 
 class ImBufLoadBrokenTest(ImBufBrokenTest):
     def test_load_exr(self):
-        self.skip_if_format_missing("OPENEXR")
-
         self.check("*.exr")
 
 

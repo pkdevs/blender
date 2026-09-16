@@ -9,12 +9,17 @@
 #pragma once
 
 #include "BLI_compute_context.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_node.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_view2d.hh"
+
+namespace blender {
 
 struct ARegion;
 struct NodeInsertOfsData;
@@ -32,11 +37,192 @@ extern "C" {
 extern const char *node_context_dir[];
 };
 
-namespace blender::ed::asset {
+namespace ed::asset {
 struct AssetItemTree;
 }
 
-namespace blender::ed::space_node {
+/**
+ * Utility for referencing a const socket and its owner node.
+ * \note This is needed because the socket \a owner_node pointer depends on topology cache, which
+ * becomes invalid by adding new links.
+ */
+struct NodeAndSocket {
+  const bNode &node;
+  std::string socket_identifier;
+  eNodeSocketInOut in_out;
+  bool link_muted;
+  std::optional<int> multi_input_sort_id;
+
+  NodeAndSocket(const bNode &node,
+                const StringRef socket_identifier,
+                const eNodeSocketInOut in_out,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket_identifier),
+        in_out(in_out),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+  NodeAndSocket(const bNode &node,
+                const bNodeSocket &socket,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+  NodeAndSocket(const bNodeSocket &socket,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(socket.owner_node()),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+
+  bool is_input() const
+  {
+    return in_out == SOCK_IN;
+  }
+
+  bool is_output() const
+  {
+    return in_out == SOCK_OUT;
+  }
+
+  const bNodeSocket *find_socket_in_node(const bNode &other_node) const;
+  bNodeSocket *find_socket_in_node(bNode &other_node) const;
+
+  const bNodeSocket *find_socket() const
+  {
+    return find_socket_in_node(this->node);
+  }
+
+  friend bool operator==(const NodeAndSocket &a, const NodeAndSocket &b)
+  {
+    return &a.node == &b.node && a.in_out == b.in_out &&
+           a.socket_identifier == b.socket_identifier && a.link_muted == b.link_muted &&
+           a.multi_input_sort_id == b.multi_input_sort_id;
+  }
+};
+
+/**
+ * Utility for referencing a mutable socket and its owner node.
+ * \note This is needed because the socket \a owner_node pointer depends on topology cache, which
+ * becomes invalid by adding new links.
+ */
+struct MutableNodeAndSocket {
+  bNode &node;
+  std::string socket_identifier;
+  eNodeSocketInOut in_out;
+  bool link_muted;
+  std::optional<int> multi_input_sort_id;
+
+  MutableNodeAndSocket(bNode &node,
+                       const StringRef socket_identifier,
+                       const eNodeSocketInOut in_out,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket_identifier),
+        in_out(in_out),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+  MutableNodeAndSocket(bNode &node,
+                       bNodeSocket &socket,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+  MutableNodeAndSocket(bNodeSocket &socket,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(socket.owner_node()),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
+  {
+  }
+
+  NodeAndSocket operator()() const
+  {
+    return {node, socket_identifier, in_out, link_muted, multi_input_sort_id};
+  }
+
+  bool is_input() const
+  {
+    return in_out == SOCK_IN;
+  }
+
+  bool is_output() const
+  {
+    return in_out == SOCK_OUT;
+  }
+
+  const bNodeSocket *find_socket_in_node(const bNode &other_node) const;
+  bNodeSocket *find_socket_in_node(bNode &other_node) const;
+
+  bNodeSocket *find_socket() const
+  {
+    return find_socket_in_node(this->node);
+  }
+
+  friend bool operator==(const MutableNodeAndSocket &a, const MutableNodeAndSocket &b)
+  {
+    return &a.node == &b.node && a.in_out == b.in_out &&
+           (a.socket_identifier == b.socket_identifier) && a.link_muted == b.link_muted &&
+           a.multi_input_sort_id == b.multi_input_sort_id;
+  }
+};
+
+template<> struct DefaultHash<NodeAndSocket> {
+  uint64_t operator()(const NodeAndSocket &value) const
+  {
+    return get_default_hash(&value.node,
+                            value.in_out,
+                            value.socket_identifier,
+                            value.link_muted,
+                            value.multi_input_sort_id ? *value.multi_input_sort_id : 0);
+  }
+  uint64_t operator()(const bNodeSocket &socket) const
+  {
+    return get_default_hash(
+        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier, false, 0);
+  }
+};
+
+template<> struct DefaultHash<MutableNodeAndSocket> {
+  uint64_t operator()(const MutableNodeAndSocket &value) const
+  {
+    return get_default_hash(&value.node,
+                            value.in_out,
+                            value.socket_identifier,
+                            value.link_muted,
+                            value.multi_input_sort_id ? *value.multi_input_sort_id : 0);
+  }
+  uint64_t operator()(const bNodeSocket &socket) const
+  {
+    return get_default_hash(
+        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier, false, 0);
+  }
+};
+
+namespace ed::space_node {
 struct NestedTreePreviews;
 
 /** Temporary data used in node link drag modal operator. */
@@ -77,7 +263,18 @@ struct bNodeLinkDrag {
   bool swap_links = false;
 
   /* Data for edge panning */
-  View2DEdgePanData pan_data;
+  ui::View2DEdgePanData pan_data;
+};
+
+struct NodeInsertOfsData {
+  bNodeTree *ntree = nullptr;
+  /** Inserted node. */
+  bNode *insert = nullptr;
+  /** Previous/next node in the chain. */
+  bNode *prev = nullptr;
+  bNode *next = nullptr;
+
+  wmTimer *anim_timer = nullptr;
 };
 
 struct SpaceNode_Runtime {
@@ -88,18 +285,12 @@ struct SpaceNode_Runtime {
 
   std::optional<int> frame_identifier_to_highlight;
 
-  /**
-   * Indicates that the compositing int the space tree needs to be re-evaluated using
-   * regular compositing pipeline.
-   */
-  bool recalc_regular_compositing;
-
   /** Temporary data for modal linking operator. */
   std::unique_ptr<bNodeLinkDrag> linkdrag;
 
   /* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
   /** Temporary data for node insert offset (in UI called Auto-offset). */
-  NodeInsertOfsData *iofsd;
+  std::unique_ptr<NodeInsertOfsData> iofsd;
 
   /**
    * Use this to store data for the displayed node tree. It has an entry for every distinct
@@ -116,6 +307,14 @@ struct SpaceNode_Runtime {
    * Stored with a shared pointer so that it can be forward declared.
    */
   std::shared_ptr<asset::AssetItemTree> assets_for_menu;
+
+  /**
+   * Caches the sockets of which nodes can be synced. This can occasionally be expensive to compute
+   * because it needs to traverse the tree. Also, we don't want to check whether syncing is
+   * necessary for all nodes eagerly but only if a relevant node is visible to the user. The cache
+   * is reset when something changes that may affect what nodes need to be synced.
+   */
+  Map<int, bool> node_can_sync_states;
 };
 
 enum NodeResizeDirection {
@@ -125,10 +324,9 @@ enum NodeResizeDirection {
   NODE_RESIZE_RIGHT = (1 << 2),
   NODE_RESIZE_LEFT = (1 << 3),
 };
-ENUM_OPERATORS(NodeResizeDirection, NODE_RESIZE_LEFT);
+ENUM_OPERATORS(NodeResizeDirection);
 
 /* Nodes draw without DPI - the view zoom is flexible. */
-#define HIDDEN_RAD (0.75f * U.widget_unit)
 #define BASIS_RAD (0.2f * U.widget_unit)
 #define NODE_DYS (U.widget_unit / 2)
 #define NODE_DY U.widget_unit
@@ -162,11 +360,9 @@ void node_socket_color_get(const bContext &C,
                            const bNodeSocket &sock,
                            float r_color[4]);
 
-const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label);
-
 void node_draw_space(const bContext &C, ARegion &region);
 
-void node_socket_add_tooltip(const bNodeTree &ntree, const bNodeSocket &sock, uiLayout &layout);
+void node_socket_add_tooltip(const bNodeTree &ntree, const bNodeSocket &sock, ui::Layout &layout);
 
 /**
  * Update node draw order nodes based on selection: unselected nodes first, then selected,
@@ -193,6 +389,7 @@ void node_keymap(wmKeyConfig *keyconf);
 
 rctf node_frame_rect_inside(const SpaceNode &snode, const bNode &node);
 bool node_or_socket_isect_event(const bContext &C, const wmEvent &event);
+bNode *node_under_mouse_get(const SpaceNode &snode, const float2 mouse);
 
 bool node_deselect_all(bNodeTree &node_tree);
 void node_socket_select(bNode *node, bNodeSocket &sock);
@@ -245,8 +442,8 @@ void UI_node_socket_draw_cache_flush();
 void nodesocket_batch_start();
 void nodesocket_batch_end();
 
-void nodelink_batch_start(SpaceNode &snode);
-void nodelink_batch_end(SpaceNode &snode);
+void nodelink_batch_start(const SpaceNode &snode);
+void nodelink_batch_end(const SpaceNode &snode);
 
 /**
  * \note this is used for fake links in groups too.
@@ -286,7 +483,7 @@ void draw_nodespace_back_pix(const bContext &C,
 
 /* `node_add.cc` */
 
-bNode *add_node(const bContext &C, StringRef idname, const float2 &location);
+bNode *add_node(const bContext &C, UString idname, const float2 &location);
 bNode *add_static_node(const bContext &C, int type, const float2 &location);
 
 void NODE_OT_add_reroute(wmOperatorType *ot);
@@ -299,18 +496,22 @@ void NODE_OT_add_mask(wmOperatorType *ot);
 void NODE_OT_add_material(wmOperatorType *ot);
 void NODE_OT_add_color(wmOperatorType *ot);
 void NODE_OT_add_import_node(wmOperatorType *ot);
+void NODE_OT_swap_group_asset(wmOperatorType *ot);
 void NODE_OT_new_node_tree(wmOperatorType *ot);
 void NODE_OT_new_compositing_node_group(wmOperatorType *ot);
+void NODE_OT_duplicate_compositing_modifier_node_group(wmOperatorType *ot);
+void NODE_OT_new_compositor_sequencer_node_group(wmOperatorType *operator_type);
 void NODE_OT_add_group_input_node(wmOperatorType *ot);
 
 /* `node_group.cc` */
 
-StringRef node_group_idname(const bContext *C);
+UString node_group_idname(const bContext *C);
 void NODE_OT_group_make(wmOperatorType *ot);
 void NODE_OT_group_insert(wmOperatorType *ot);
 void NODE_OT_group_ungroup(wmOperatorType *ot);
 void NODE_OT_group_separate(wmOperatorType *ot);
 void NODE_OT_group_edit(wmOperatorType *ot);
+void NODE_OT_group_enter_exit(wmOperatorType *ot);
 
 void NODE_OT_default_group_width_set(wmOperatorType *ot);
 
@@ -331,6 +532,7 @@ void NODE_OT_parent_set(wmOperatorType *ot);
 void NODE_OT_join(wmOperatorType *ot);
 void NODE_OT_attach(wmOperatorType *ot);
 void NODE_OT_detach(wmOperatorType *ot);
+void NODE_OT_join_nodes(wmOperatorType *ot);
 
 void NODE_OT_link_viewer(wmOperatorType *ot);
 
@@ -370,20 +572,18 @@ void NODE_OT_delete_reconnect(wmOperatorType *ot);
 void NODE_OT_resize(wmOperatorType *ot);
 
 void NODE_OT_mute_toggle(wmOperatorType *ot);
-void NODE_OT_hide_toggle(wmOperatorType *ot);
+void NODE_OT_collapse_toggle(wmOperatorType *ot);
 void NODE_OT_hide_socket_toggle(wmOperatorType *ot);
 void NODE_OT_preview_toggle(wmOperatorType *ot);
 void NODE_OT_options_toggle(wmOperatorType *ot);
 void NODE_OT_node_copy_color(wmOperatorType *ot);
 void NODE_OT_deactivate_viewer(wmOperatorType *ot);
 void NODE_OT_activate_viewer(wmOperatorType *ot);
+void NODE_OT_toggle_viewer(wmOperatorType *ot);
+void NODE_OT_test_inlining_shader_nodes(wmOperatorType *ot);
 
 void NODE_OT_read_viewlayers(wmOperatorType *ot);
 void NODE_OT_render_changed(wmOperatorType *ot);
-
-void NODE_OT_output_file_add_socket(wmOperatorType *ot);
-void NODE_OT_output_file_remove_active_socket(wmOperatorType *ot);
-void NODE_OT_output_file_move_active_socket(wmOperatorType *ot);
 
 /**
  * \note clipboard_cut is a simple macro of copy + delete.
@@ -403,18 +603,19 @@ void NODE_OT_cryptomatte_layer_remove(wmOperatorType *ot);
 
 void NODE_GGT_backdrop_transform(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_crop(wmGizmoGroupType *gzgt);
-void NODE_GGT_backdrop_sun_beams(wmGizmoGroupType *gzgt);
+void NODE_GGT_backdrop_glare(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_box_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_ellipse_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_split(wmGizmoGroupType *gzgt);
+void NODE_GGT_compositor_translate(wmGizmoGroupType *gzgt);
 
 /* `node_geometry_attribute_search.cc` */
 
 void node_geometry_add_attribute_search_button(const bContext &C,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
-                                               uiLayout &layout,
+                                               ui::Layout &layout,
                                                StringRef placeholder = "");
 
 /* `node_geometry_layer_search.cc` */
@@ -422,8 +623,23 @@ void node_geometry_add_attribute_search_button(const bContext &C,
 void node_geometry_add_layer_search_button(const bContext &C,
                                            const bNode &node,
                                            PointerRNA &socket_ptr,
-                                           uiLayout &layout,
+                                           ui::Layout &layout,
                                            StringRef placeholder = "");
+/* `node_geometry_volume_grid_search.cc` */
+
+void node_geometry_add_volume_grid_search_button(const bContext &C,
+                                                 const bNode &node,
+                                                 PointerRNA &socket_ptr,
+                                                 ui::Layout &layout,
+                                                 StringRef placeholder = "");
+
+/* `node_bundle_type_search.cc` */
+
+void node_bundle_type_add_string_search_button(const bContext &C,
+                                               const bNode &node,
+                                               PointerRNA &socket_ptr,
+                                               ui::Layout &layout,
+                                               StringRef placeholder = "");
 
 /* `node_context_path.cc` */
 
@@ -436,10 +652,190 @@ void invoke_node_link_drag_add_menu(bContext &C,
                                     bNodeSocket &socket,
                                     const float2 &cursor);
 
+void NODE_OT_link_drag_operation_test(wmOperatorType *ot);
+
 /* `add_menu_assets.cc` */
 
-MenuType add_catalog_assets_menu_type();
-MenuType add_unassigned_assets_menu_type();
+MenuType catalog_assets_menu_type();
+MenuType unassigned_assets_menu_type();
 MenuType add_root_catalogs_menu_type();
 
-}  // namespace blender::ed::space_node
+MenuType swap_root_catalogs_menu_type();
+
+/* `node_sync_sockets.cc` */
+
+void NODE_OT_sockets_sync(wmOperatorType *ot);
+
+/* node_socket_tooltip.cc */
+
+void build_socket_tooltip(ui::TooltipData &tip_data,
+                          bContext &C,
+                          ui::Button *but,
+                          const bNodeTree &tree,
+                          const bNodeSocket &socket);
+
+/** node_tree_interface_ui.cc */
+
+void node_tree_interface_panel_register(ARegionType *art);
+
+/* -------------------------------------------------------------------- */
+/** \name Utilities for copying node sets
+ * \{ */
+
+/**
+ * Controls the behavior of interface generator functions.
+ */
+struct NodeSetInterfaceParams {
+  /* Hidden sockets are not added to the interface. */
+  bool skip_hidden = false;
+  /* Only sockets with external connections are added to the interface. */
+  bool skip_unconnected = true;
+  /* Register links of the group node as external links.
+   * Otherwise interface sockets are externally disconnected. */
+  bool add_external_links = true;
+  /* Create a unique interface for every exposed input.
+   * Otherwise inputs linked to the same socket use the same interface. */
+  bool use_unique_input = true;
+  /* Create a unique interface for every output connection.
+   * Otherwise outputs with multiple connections create a single interface. */
+  bool use_unique_output = false;
+};
+
+/**
+ * Maps a subset of tree interface items to internal and external sockets.
+ */
+class NodeTreeInterfaceMapping {
+ public:
+  struct InterfaceSocketData {
+    /* Sockets inside the group node tree. */
+    VectorSet<NodeAndSocket> internal_sockets;
+    /* External sockets to connect the interface. */
+    VectorSet<MutableNodeAndSocket> external_sockets;
+    /* New group node socket is hidden. */
+    bool hidden = false;
+    /* New group node socket is collapsed in tree view UI. */
+    bool collapsed = false;
+  };
+  struct InterfacePanelData {
+    /* New group node panel is collapsed. */
+    bool collapsed = false;
+  };
+
+  Map<const bNodeTreeInterfaceSocket *, InterfaceSocketData> socket_data;
+  Map<const bNodeTreeInterfacePanel *, InterfacePanelData> panel_data;
+};
+
+/**
+ * Construct new interface sockets between internal and external nodes.
+ * Sockets inside the \a src_nodes set are exposed if they have a link to an external node, or if
+ * \a params.skip_unconnected is false.
+ * Sockets outside the \a src_nodes set with links to internal sockets are connected to the new
+ * interface sockets.
+ */
+NodeTreeInterfaceMapping build_node_set_interface(const NodeSetInterfaceParams &params,
+                                                  const bNodeTree &src_tree,
+                                                  const Span<bNode *> src_nodes,
+                                                  bNodeTree &dst_tree);
+/**
+ * Construct new interface sockets based on the declaration of a single node.
+ * This recreates the layout of the \a src_node exactly, including the panel structure.
+ */
+NodeTreeInterfaceMapping build_node_declaration_interface(const NodeSetInterfaceParams &params,
+                                                          const bNode &src_node,
+                                                          bNodeTree &dst_tree);
+/**
+ * Map the existing node group interface to internal nodes and external connections of the group
+ * node. No new sockets are added to the interface.
+ */
+NodeTreeInterfaceMapping map_group_node_interface(const NodeSetInterfaceParams &params,
+                                                  const bNodeTree &tree,
+                                                  const bNode &group_node);
+
+/**
+ * Set of nodes that are copied from other nodes and can be mapped to the original nodes.
+ */
+class NodeSetCopy {
+ private:
+  bNodeTree &dst_tree_;
+  Map<const bNode *, bNode *> node_map_;
+  Map<int32_t, int32_t> node_identifier_map_;
+
+ public:
+  bNodeTree &dst_tree() const;
+  const Map<const bNode *, bNode *> &node_map() const;
+  const Map<int32_t, int32_t> &node_identifier_map() const;
+
+  static NodeSetCopy from_nodes(Main &bmain,
+                                const bNodeTree &src_tree,
+                                const Span<const bNode *> src_nodes,
+                                bNodeTree &dst_tree);
+  static NodeSetCopy from_predicate(Main &bmain,
+                                    const bNodeTree &src_tree,
+                                    FunctionRef<bool(const bNode &node)> node_predicate,
+                                    bNodeTree &dst_tree);
+
+ private:
+  NodeSetCopy(bNodeTree &tree) : dst_tree_(tree) {}
+};
+
+struct GroupInputOutputNodes {
+  bNode *input_node;
+  bNode *output_node;
+};
+
+/**
+ * Connect copied node sockets to group node input/output nodes, recreating the interface mapping
+ * of original nodes. The owner tree of the copied nodes must be the same as the interface tree.
+ */
+GroupInputOutputNodes connect_copied_nodes_to_interface(
+    const bContext &C,
+    const NodeSetCopy &copied_nodes,
+    const NodeTreeInterfaceMapping &io_mapping);
+
+/**
+ * Proxy nodes to replace the original group tree interface after ungrouping.
+ * Keys are the tree interface socket identifiers.
+ * May contain null pointers!
+ */
+using InterfaceProxyNodes = Map<std::string, bNode *>;
+
+/**
+ * Connect copied node sockets to external nodes in the interface mapping.
+ */
+InterfaceProxyNodes connect_copied_nodes_to_external_sockets(
+    bContext &C,
+    const bNodeTree &src_tree,
+    const NodeSetCopy &copied_nodes,
+    const NodeTreeInterfaceMapping &io_mapping,
+    const bNode *group_node = nullptr);
+
+/**
+ * Connect the group node to external sockets in the interface mapping.
+ * The group node must be in the same node tree as the mapped external sockets.
+ */
+void connect_group_node_to_external_sockets(bNode &group_node,
+                                            const NodeTreeInterfaceMapping &io_mapping);
+
+/**
+ * Move nested node refs from nodes in \a src_tree into the \a group_node tree.
+ * Any reference to copied nodes is recreated inside the group. The original node refs in \a
+ * src_tree are replaced by nested node refs pointing to the \a group_node.
+ */
+void update_nested_node_refs_after_moving_nodes_into_group(bNodeTree &src_tree,
+                                                           const bNode &group_node,
+                                                           const NodeSetCopy &node_set_copy);
+
+/**
+ * Copy nested node refs from nodes in \a group_node into \a dst_tree.
+ * Any reference to copied nodes is recreated inside \a dst_tree, pointing to nested node refs
+ * inside \a group_node.
+ */
+void update_nested_node_refs_after_ungroup(bNodeTree &dst_tree,
+                                           const bNode &group_node,
+                                           const NodeSetCopy &node_set_copy);
+
+/** \} */
+
+}  // namespace ed::space_node
+
+}  // namespace blender

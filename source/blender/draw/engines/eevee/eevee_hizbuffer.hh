@@ -14,9 +14,15 @@
 
 #include "DRW_render.hh"
 
-#include "eevee_shader_shared.hh"
+#include "DRW_gpu_wrapper.hh"
+
+#include "draw_pass.hh"
+#include "eevee_defines.hh"
+#include "eevee_hizbuffer_shared.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 
@@ -31,7 +37,10 @@ class HiZBuffer {
   /** Contains depth pyramid of the current pass and the previous pass. */
   SwapChain<Texture, 2> hiz_tx_;
   /** References to the mip views of the current (front) HiZ texture. */
-  std::array<GPUTexture *, HIZ_MIP_COUNT> hiz_mip_ref_;
+  std::array<gpu::Texture *, HIZ_MIP_COUNT> hiz_mip_ref_;
+
+  /** Dummy texture cleared to max depth to be used before the first hiz update. */
+  draw::Texture dummy_empty_hiz_tx_ = {"dummy_empty_hiz_tx_"};
 
   /**
    * Atomic counter counting the number of tile that have finished down-sampling.
@@ -48,8 +57,8 @@ class HiZBuffer {
   /** Dirty flag to check if the update is necessary. */
   bool is_dirty_ = true;
   /** Reference to the depth texture to downsample. */
-  GPUTexture *src_tx_ = nullptr;
-  GPUTexture **src_tx_ptr_ = nullptr;
+  gpu::Texture *src_tx_ = nullptr;
+  gpu::Texture **src_tx_ptr_ = nullptr;
 
   HiZData &data_;
 
@@ -57,6 +66,9 @@ class HiZBuffer {
   HiZBuffer(Instance &inst, HiZData &data) : inst_(inst), data_(data)
   {
     atomic_tile_counter_.clear_to_zero();
+    float value = 1.0f;
+    dummy_empty_hiz_tx_.ensure_2d(
+        gpu::TextureFormat::SFLOAT_32, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, &value);
   };
 
   void sync();
@@ -66,11 +78,14 @@ class HiZBuffer {
    * Need to be called once at the start of a pipeline or view.
    * Tag the buffer as dirty.
    */
-  void set_source(GPUTexture **texture, int layer = -1)
+  void set_source(gpu::Texture **texture, int layer = -1)
   {
     src_tx_ptr_ = texture;
     layer_id_ = layer;
     swap_layer();
+    /* Both layer becomes undefined. Replace by dummy texture. */
+    back.ref_tx_ = dummy_empty_hiz_tx_;
+    front.ref_tx_ = dummy_empty_hiz_tx_;
   }
 
   /**
@@ -82,7 +97,7 @@ class HiZBuffer {
   void swap_layer()
   {
     hiz_tx_.swap();
-    back.ref_tx_ = hiz_tx_.previous();
+    back.ref_tx_ = front.ref_tx_;
     front.ref_tx_ = hiz_tx_.current();
     set_dirty();
   }
@@ -102,12 +117,12 @@ class HiZBuffer {
    */
   void update();
 
-  void debug_draw(View &view, GPUFrameBuffer *view_fb);
+  void debug_draw(View &view, gpu::FrameBuffer *view_fb);
 
   /* Back is Previous layer depth (ex: For refraction). Front for current layer depth. */
   struct {
     /** References to the textures in the swap-chain. */
-    GPUTexture *ref_tx_ = nullptr;
+    gpu::Texture *ref_tx_ = nullptr;
 
     template<typename PassType> void bind_resources(PassType &pass)
     {

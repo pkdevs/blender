@@ -10,8 +10,11 @@
 
 #include "BLI_utility_mixins.hh"
 
+#include "IO_wavefront_obj.hh"
 #include "obj_import_mtl.hh"
 #include "obj_import_objects.hh"
+
+namespace blender {
 
 struct Main;
 struct Mesh;
@@ -19,7 +22,7 @@ struct Material;
 struct Object;
 struct OBJImportParams;
 
-namespace blender::io::obj {
+namespace io::obj {
 
 /**
  * Make a Blender Mesh Object from a Geometry of GEOM_MESH type.
@@ -69,12 +72,14 @@ class MeshFromGeometry : NonMovable, NonCopyable {
                         Map<std::string, std::unique_ptr<MTLMaterial>> &materials,
                         Map<std::string, Material *> &created_materials,
                         Object *obj,
-                        bool relative_paths);
+                        bool relative_paths,
+                        eOBJMtlNameCollisionMode mtl_name_collision_mode);
   void create_normals(Mesh *mesh);
   void create_colors(Mesh *mesh);
-  void create_vertex_groups(Object *obj);
+  void create_vertex_groups(Mesh *mesh);
 
   bool has_normals() const;
 };
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

@@ -29,6 +29,9 @@ echo - 2019b ^(build with visual studio 2019 Build Tools^)
 echo - 2022 ^(build with visual studio 2022^)
 echo - 2022pre ^(build with visual studio 2022 pre-release^)
 echo - 2022b ^(build with visual studio 2022 Build Tools^)
+echo - 2026 ^(build with visual studio 2026^)
+echo - 2026i ^(build with visual studio 2026 insiders^)
+echo - 2026b ^(build with visual studio 2026 Build Tools^)
 echo - clang ^(enable building with clang - default on ARM64^)
 echo - msvc ^(enable building with msvc - default on x64, unsupported on ARM64^)
 
@@ -38,7 +41,7 @@ echo - doc_py ^(Generate sphinx python api docs^)
 
 echo.
 echo Experimental options
-echo - with_gpu_tests ^(enable both the render and draw gpu test suites including EEVEE, Workbench, Grease Pencil, draw manager and GPU backends^)
+echo - with_gpu_tests ^(enable EEVEE, Workbench, Grease Pencil, Compositor, GPU module and UI tests^)
 echo - asan ^(enable asan^)
 echo - ninja ^(enable building with ninja instead of msbuild^)
 echo.

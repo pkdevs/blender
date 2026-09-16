@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_summed_area_table_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_summed_area_table_compute_complete_x_prologues)
+
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 /* A shared memory to sum the prologues using parallel reduction. See the parallel reduction shader
@@ -29,25 +33,32 @@ void main()
       imageStore(complete_x_prologues_sum_img, int2(y, 0), float4(0.0f));
     }
 
+    /* Synchronize between iterations: ensure the read of complete_prologue[0] from the previous
+     * iteration is visible before any invocation writes to the shared array for the next
+     * iteration. */
+    barrier();
+
     /* A parallel reduction loop to sum the prologues. This is exactly the same as the parallel
      * reduction loop in the shader `compositor_parallel_reduction.glsl`, see that shader for
      * more information. */
     complete_prologue[gl_LocalInvocationIndex] = accumulated_color;
     for (uint stride = gl_WorkGroupSize.x / 2; stride > 0; stride /= 2) {
       barrier();
-
-      if (gl_LocalInvocationIndex >= stride) {
-        continue;
+      float4 first_value = complete_prologue[gl_LocalInvocationIndex];
+      float4 second_value = float4(0.0f);
+      if (gl_LocalInvocationIndex + stride < gl_WorkGroupSize.x) {
+        second_value = complete_prologue[gl_LocalInvocationIndex + stride];
       }
+      barrier();
 
-      complete_prologue[gl_LocalInvocationIndex] =
-          complete_prologue[gl_LocalInvocationIndex] +
-          complete_prologue[gl_LocalInvocationIndex + stride];
+      if (gl_LocalInvocationIndex < stride) {
+        complete_prologue[gl_LocalInvocationIndex] = first_value + second_value;
+      }
     }
 
     barrier();
     if (gl_LocalInvocationIndex == 0) {
-      /*  Note that we store using a transposed texel, but that is only to undo the transposition
+      /* Note that we store using a transposed texel, but that is only to undo the transposition
        * mentioned above. Also note that we start from the second row because the first row is
        * set to zero as mentioned above. */
       float4 sum = complete_prologue[0];

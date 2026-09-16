@@ -29,10 +29,12 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+
+#include "WM_types.hh"
 
 namespace blender::io::usd {
 
@@ -57,6 +59,7 @@ bool USDHierarchyIterator::mark_as_weak_export(const Object *object) const
     case OB_MESH:
     case OB_MBALL:
     case OB_FONT:
+    case OB_SURF:
       return !params_.export_meshes;
     case OB_CAMERA:
       return !params_.export_cameras;
@@ -108,7 +111,7 @@ void USDHierarchyIterator::set_export_frame(float frame_nr)
 USDExporterContext USDHierarchyIterator::create_usd_export_context(const HierarchyContext *context)
 {
   pxr::SdfPath path;
-  if (params_.root_prim_path[0] != '\0') {
+  if (!params_.root_prim_path.empty()) {
     path = pxr::SdfPath(params_.root_prim_path + context->export_path);
   }
   else {
@@ -136,38 +139,45 @@ USDExporterContext USDHierarchyIterator::create_usd_export_context(const Hierarc
   const std::string export_file_path = root_layer->GetRealPath();
   auto get_time_code = [this]() { return this->export_time_; };
 
-  USDExporterContext exporter_context = USDExporterContext{
-      bmain_, depsgraph_, stage_, path, get_time_code, params_, export_file_path, nullptr};
+  USDExporterContext exporter_context = USDExporterContext{bmain_,
+                                                           depsgraph_,
+                                                           stage_,
+                                                           path,
+                                                           get_time_code,
+                                                           params_,
+                                                           export_file_path,
+                                                           nullptr,
+                                                           nullptr,
+                                                           this};
 
   /* Provides optional skel mapping hook. Now it's been used in USDPointInstancerWriter for write
    * base layer. */
-  exporter_context.add_skel_mapping_fn = [this](const Object *obj, const pxr::SdfPath &path) {
-    this->add_usd_skel_export_mapping(obj, path);
+  exporter_context.add_skel_mapping_fn = [this](const Object *obj, const pxr::SdfPath &usd_path) {
+    this->add_usd_skel_export_mapping(obj, usd_path);
   };
 
   return exporter_context;
 }
 
-void USDHierarchyIterator::determine_point_instancers(const HierarchyContext *context)
+bool USDHierarchyIterator::determine_point_instancers(const HierarchyContext *context)
 {
   if (!context) {
-    return;
+    return true;
   }
 
   if (context->object->type == OB_ARMATURE) {
-    return;
+    return true;
   }
 
+  bool is_referencing_self = false;
   if (context->is_point_instancer()) {
     /* Mark the point instancer's children as a point instance. */
     USDExporterContext usd_export_context = create_usd_export_context(context);
-    ExportChildren *children = graph_children(context);
-
-    bool is_referencing_self = false;
+    const ExportChildren *children = graph_children(context);
 
     pxr::SdfPath instancer_path;
-    if (strlen(params_.root_prim_path) != 0) {
-      instancer_path = pxr::SdfPath(std::string(params_.root_prim_path) + context->export_path);
+    if (!params_.root_prim_path.empty()) {
+      instancer_path = pxr::SdfPath(params_.root_prim_path + context->export_path);
     }
     else {
       instancer_path = pxr::SdfPath(context->export_path);
@@ -190,31 +200,30 @@ void USDHierarchyIterator::determine_point_instancers(const HierarchyContext *co
         if (child_context->is_instance() && child_context->duplicator != nullptr) {
           /* When the current child context is point instancer's instance, use reference path
            * (original_export_path) as the prototype path. */
-          if (strlen(params_.root_prim_path) != 0) {
-            prototype_path = pxr::SdfPath(std::string(params_.root_prim_path) +
+          if (!params_.root_prim_path.empty()) {
+            prototype_path = pxr::SdfPath(params_.root_prim_path +
                                           child_context->original_export_path);
           }
           else {
             prototype_path = pxr::SdfPath(child_context->original_export_path);
           }
 
-          prototype_paths[instancer_path].insert(
-              std::make_pair(prototype_path, child_context->object));
+          prototype_paths_.lookup_or_add(instancer_path, {})
+              .add(std::make_pair(prototype_path, child_context->object));
           child_context->is_point_instance = true;
         }
         else {
           /* When the current child context is point instancer's prototype, use its own export path
            * (export_path) as the prototype path. */
-          if (strlen(params_.root_prim_path) != 0) {
-            prototype_path = pxr::SdfPath(std::string(params_.root_prim_path) +
-                                          child_context->export_path);
+          if (!params_.root_prim_path.empty()) {
+            prototype_path = pxr::SdfPath(params_.root_prim_path + child_context->export_path);
           }
           else {
             prototype_path = pxr::SdfPath(child_context->export_path);
           }
 
-          prototype_paths[instancer_path].insert(
-              std::make_pair(prototype_path, child_context->object));
+          prototype_paths_.lookup_or_add(instancer_path, {})
+              .add(std::make_pair(prototype_path, child_context->object));
           child_context->is_point_proto = true;
         }
       }
@@ -232,13 +241,19 @@ void USDHierarchyIterator::determine_point_instancers(const HierarchyContext *co
           "base geometry input itself. Both cases prevent valid point instancer export. If it's "
           "the former, enable 'As Instance' to avoid incorrect self-referencing.");
 
-      prototype_paths[instancer_path].clear();
+      /* Clear any paths which had already been accumulated. */
+      Set<std::pair<pxr::SdfPath, Object *>> *paths = prototype_paths_.lookup_ptr(instancer_path);
+      if (paths) {
+        paths->clear();
+      }
       for (HierarchyContext *child_context : *children) {
         child_context->is_point_instance = false;
         child_context->is_point_proto = false;
       }
     }
   }
+
+  return !is_referencing_self;
 }
 
 AbstractHierarchyWriter *USDHierarchyIterator::create_transform_writer(
@@ -247,7 +262,12 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_transform_writer(
   /* The transform writer is always called before data writers,
    * so determine if the #Xform's children is a point instancer before writing data. */
   if (params_.use_instancing) {
-    determine_point_instancers(context);
+    if (!determine_point_instancers(context)) {
+      /* If we could not determine that our point instancing setup is safe, we should not continue
+       * writing. Continuing would result in enormous amounts of USD warnings about cyclic
+       * references. */
+      return nullptr;
+    }
   }
 
   return new USDTransformWriter(create_usd_export_context(context));
@@ -257,20 +277,25 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
 {
   USDExporterContext usd_export_context = create_usd_export_context(context);
   USDAbstractWriter *data_writer = nullptr;
-  std::set<std::pair<pxr::SdfPath, Object *>> proto_paths =
-      prototype_paths[usd_export_context.usd_path.GetParentPath()];
+  const Set<std::pair<pxr::SdfPath, Object *>> *proto_paths = prototype_paths_.lookup_ptr(
+      usd_export_context.usd_path.GetParentPath());
+  const bool use_point_instancing = context->is_point_instancer() &&
+                                    (proto_paths && !proto_paths->is_empty());
 
   switch (context->object->type) {
     case OB_MESH:
+    case OB_SURF:
+      /* NURBS surfaces are tessellated to a mesh during depsgraph evaluation,
+       * so they can be written through the standard mesh writer. */
       if (usd_export_context.export_params.export_meshes) {
-        if (params_.use_instancing && context->is_point_instancer() && !proto_paths.empty()) {
+        if (params_.use_instancing && use_point_instancing) {
           USDExporterContext mesh_context = create_point_instancer_context(context,
                                                                            usd_export_context);
           std::unique_ptr<USDMeshWriter> mesh_writer = std::make_unique<USDMeshWriter>(
               mesh_context);
 
           data_writer = new USDPointInstancerWriter(
-              usd_export_context, proto_paths, std::move(mesh_writer));
+              usd_export_context, *proto_paths, std::move(mesh_writer));
         }
         else {
           data_writer = new USDMeshWriter(usd_export_context);
@@ -305,14 +330,14 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
     case OB_CURVES_LEGACY:
     case OB_CURVES:
       if (usd_export_context.export_params.export_curves) {
-        if (params_.use_instancing && context->is_point_instancer() && !proto_paths.empty()) {
+        if (params_.use_instancing && use_point_instancing) {
           USDExporterContext curves_context = create_point_instancer_context(context,
                                                                              usd_export_context);
           std::unique_ptr<USDCurvesWriter> curves_writer = std::make_unique<USDCurvesWriter>(
               curves_context);
 
           data_writer = new USDPointInstancerWriter(
-              usd_export_context, proto_paths, std::move(curves_writer));
+              usd_export_context, *proto_paths, std::move(curves_writer));
         }
         else {
           data_writer = new USDCurvesWriter(usd_export_context);
@@ -340,14 +365,14 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
       break;
     case OB_POINTCLOUD:
       if (usd_export_context.export_params.export_points) {
-        if (params_.use_instancing && context->is_point_instancer() && !proto_paths.empty()) {
+        if (params_.use_instancing && use_point_instancing) {
           USDExporterContext point_cloud_context = create_point_instancer_context(
               context, usd_export_context);
           std::unique_ptr<USDPointsWriter> point_cloud_writer = std::make_unique<USDPointsWriter>(
               point_cloud_context);
 
           data_writer = new USDPointInstancerWriter(
-              usd_export_context, proto_paths, std::move(point_cloud_writer));
+              usd_export_context, *proto_paths, std::move(point_cloud_writer));
         }
         else {
           data_writer = new USDPointsWriter(usd_export_context);
@@ -359,7 +384,6 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
       break;
 
     case OB_EMPTY:
-    case OB_SURF:
     case OB_SPEAKER:
     case OB_LIGHTPROBE:
     case OB_LATTICE:
@@ -431,21 +455,50 @@ void USDHierarchyIterator::add_usd_skel_export_mapping(const Object *obj, const 
   }
 }
 
+const Map<pxr::SdfPath, Vector<ID *>> &USDHierarchyIterator::get_exported_prim_map() const
+{
+  return exported_prim_map_;
+}
+
+pxr::UsdStageRefPtr USDHierarchyIterator::get_stage() const
+{
+  return stage_;
+}
+
+void USDHierarchyIterator::add_to_prim_map(const pxr::SdfPath &usd_path, const ID *id) const
+{
+  if (!id) {
+    return;
+  }
+  ID *local_id = BKE_libblock_find_name(bmain_, GS(id->name), id->name + 2);
+  if (local_id) {
+    Vector<ID *> &id_list = exported_prim_map_.lookup_or_add_default(usd_path);
+    if (!id_list.contains(local_id)) {
+      id_list.append(local_id);
+    }
+  }
+}
+
 USDExporterContext USDHierarchyIterator::create_point_instancer_context(
-    const HierarchyContext *context, const USDExporterContext &usd_export_context)
+    const HierarchyContext *context, const USDExporterContext &export_context) const
 {
   BLI_assert(context && context->object);
   std::string base_name = std::string(BKE_id_name(context->object->id)).append("_base");
-  std::string safe_name = make_safe_name(base_name,
-                                         usd_export_context.export_params.allow_unicode);
+  std::string safe_name = make_safe_name(base_name, export_context.export_params.allow_unicode);
 
-  pxr::SdfPath base_path = usd_export_context.usd_path.GetParentPath().AppendChild(
+  pxr::SdfPath base_path = export_context.usd_path.GetParentPath().AppendChild(
       pxr::TfToken(safe_name));
 
-  USDExporterContext new_context = usd_export_context;
-  *const_cast<pxr::SdfPath *>(&new_context.usd_path) = base_path;
-
-  return new_context;
+  return {export_context.bmain,
+          export_context.depsgraph,
+          export_context.stage,
+          base_path,
+          export_context.get_time_code,
+          export_context.export_params,
+          export_context.export_file_path,
+          export_context.export_image_fn,
+          export_context.add_skel_mapping_fn,
+          export_context.hierarchy_iterator};
 }
 
 }  // namespace blender::io::usd

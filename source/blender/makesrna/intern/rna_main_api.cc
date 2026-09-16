@@ -19,43 +19,45 @@
 
 #ifdef RNA_RUNTIME
 
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+
 #  include "BKE_action.hh"
+#  include "BKE_annotations.h"
 #  include "BKE_armature.hh"
 #  include "BKE_brush.hh"
 #  include "BKE_camera.h"
 #  include "BKE_collection.hh"
 #  include "BKE_curve.hh"
 #  include "BKE_curves.h"
-#  include "BKE_displist.h"
-#  include "BKE_gpencil_legacy.h"
 #  include "BKE_grease_pencil.hh"
-#  include "BKE_icons.h"
 #  include "BKE_idtype.hh"
 #  include "BKE_image.hh"
 #  include "BKE_lattice.hh"
+#  include "BKE_lib_id.hh"
 #  include "BKE_lib_remap.hh"
+#  include "BKE_library.hh"
 #  include "BKE_light.h"
 #  include "BKE_lightprobe.h"
 #  include "BKE_linestyle.h"
 #  include "BKE_main_invariants.hh"
-#  include "BKE_mask.h"
+#  include "BKE_mask.hh"
 #  include "BKE_material.hh"
 #  include "BKE_mball.hh"
 #  include "BKE_mesh.hh"
-#  include "BKE_movieclip.h"
+#  include "BKE_movieclip.hh"
 #  include "BKE_node.hh"
 #  include "BKE_object.hh"
 #  include "BKE_paint.hh"
 #  include "BKE_particle.h"
 #  include "BKE_pointcloud.hh"
 #  include "BKE_scene.hh"
-#  include "BKE_sound.h"
-#  include "BKE_speaker.h"
+#  include "BKE_sound.hh"
+#  include "BKE_speaker.hh"
 #  include "BKE_text.h"
 #  include "BKE_texture.h"
 #  include "BKE_vfont.hh"
 #  include "BKE_volume.hh"
-#  include "BKE_workspace.hh"
 #  include "BKE_world.h"
 
 #  include "DEG_depsgraph_build.hh"
@@ -89,7 +91,9 @@
 #  include "DNA_world_types.h"
 
 #  include "ED_node.hh"
-#  include "ED_screen.hh"
+#  include "ED_scene.hh"
+
+#  include "NOD_defaults.hh"
 
 #  include "BLT_translation.hh"
 
@@ -100,10 +104,12 @@
 #  include "WM_api.hh"
 #  include "WM_types.hh"
 
+namespace blender {
+
 static void rna_idname_validate(const char *name, char *r_name)
 {
-  BLI_strncpy(r_name, name, MAX_ID_NAME - 2);
-  BLI_str_utf8_invalid_strip(r_name, strlen(r_name));
+  const size_t r_name_len = BLI_strncpy_rlen(r_name, name, MAX_ID_NAME - 2);
+  BLI_str_utf8_invalid_strip(r_name, r_name_len);
 }
 
 static void rna_Main_ID_remove(Main *bmain,
@@ -122,11 +128,30 @@ static void rna_Main_ID_remove(Main *bmain,
                 id->name + 2);
     return;
   }
+
+  /* Volume light probes being baked cannot be removed. */
+  if (GS(id->name) == ID_OB) {
+    Object *ob = reinterpret_cast<Object *>(id);
+    if (ob->type == OB_LIGHTPROBE &&
+        (reinterpret_cast<LightProbe *>(ob->data))->type == LIGHTPROBE_TYPE_VOLUME)
+    {
+      wmWindowManager *wm = bmain->wm.first();
+      if (wm && WM_jobs_has_running(wm, nullptr, WM_JOB_TYPE_LIGHT_BAKE)) {
+        BKE_reportf(reports,
+                    RPT_ERROR,
+                    "Cannot remove volume light probes while light probe baking is running");
+        return;
+      }
+    }
+  }
+
   if (do_unlink) {
     BKE_id_delete(bmain, id);
     id_ptr->invalidate();
     /* Force full redraw, mandatory to avoid crashes when running this from UI... */
     WM_main_add_notifier(NC_WINDOW, nullptr);
+    WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, nullptr);
+    WM_main_add_notifier(NC_SCENE | ND_LAYER_CONTENT, nullptr);
   }
   else if (ID_REAL_USERS(id) <= 0) {
     const int flag = (do_id_user ? 0 : LIB_ID_FREE_NO_USER_REFCOUNT) |
@@ -144,6 +169,53 @@ static void rna_Main_ID_remove(Main *bmain,
         id->name + 2,
         ID_REAL_USERS(id));
   }
+}
+
+static ID *rna_Main_pack_linked_ids_hierarchy(struct BlendData *blenddata,
+                                              ReportList *reports,
+                                              ID *root_id)
+{
+  if (!ID_IS_LINKED(root_id)) {
+    BKE_reportf(reports, RPT_ERROR, "Only linked IDs can be packed");
+    return nullptr;
+  }
+  if (ID_IS_PACKED(root_id)) {
+    /* Nothing to do. */
+    return root_id;
+  }
+
+  Main *bmain = reinterpret_cast<Main *>(blenddata);
+  bke::library::pack_linked_id_hierarchy(*bmain, *root_id);
+
+  ID *packed_root_id = root_id->newid;
+  BKE_main_id_newptr_and_tag_clear(bmain);
+
+  return packed_root_id;
+}
+
+static void rna_Main_blender_project_init(struct BlendData * /* blenddata */,
+                                          ReportList *reports,
+                                          const char *name,
+                                          const char *project_root)
+{
+  if (!BKE_blender_project_init(name, project_root)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Failed to initialize project. Ensure that both the name and project_root "
+                "parameters are non-empty.");
+  }
+
+  /* Force full redraw of all windows. */
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+static void rna_Main_blender_project_clear(struct BlendData * /* blenddata */,
+                                           ReportList * /* reports */)
+{
+  BKE_blender_project_clear();
+
+  /* Force full redraw of all windows. */
+  WM_main_add_notifier(NC_WINDOW, nullptr);
 }
 
 static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
@@ -177,31 +249,23 @@ static void rna_Main_scenes_remove(
   Scene *scene = static_cast<Scene *>(scene_ptr->data);
 
   if (BKE_scene_can_be_removed(bmain, scene)) {
-    Scene *scene_new = static_cast<Scene *>(scene->id.prev ? scene->id.prev : scene->id.next);
     if (do_unlink) {
-      wmWindow *win = CTX_wm_window(C);
-
-      if (WM_window_get_active_scene(win) == scene) {
-
-#  ifdef WITH_PYTHON
-        BPy_BEGIN_ALLOW_THREADS;
-#  endif
-
-        WM_window_set_active_scene(bmain, C, win, scene_new);
-
-#  ifdef WITH_PYTHON
-        BPy_END_ALLOW_THREADS;
-#  endif
+      Scene *scene_new = BKE_scene_find_replacement(*bmain, *scene);
+      if (scene_new && ED_scene_replace_active_for_deletion(*C, *bmain, *scene, scene_new)) {
+        rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+        return;
       }
     }
-    rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+    else {
+      rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+      return;
+    }
   }
-  else {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Scene '%s' is the last local one, cannot be removed",
-                scene->id.name + 2);
-  }
+
+  BKE_reportf(reports,
+              RPT_ERROR,
+              "Scene '%s' is the last local one, cannot be removed",
+              scene->id.name + 2);
 }
 
 static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char *name, ID *data)
@@ -234,10 +298,10 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
     id_us_plus(data);
   }
 
-  ob = BKE_object_add_only_object(bmain, type, safe_name);
+  ob = BKE_object_add_only_object(bmain, ObjectType(type), safe_name);
 
   ob->data = data;
-  BKE_object_materials_sync_length(bmain, ob, static_cast<ID *>(ob->data));
+  BKE_object_materials_sync_length(bmain, ob, ob->data);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -249,27 +313,29 @@ static Material *rna_Main_materials_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  ID *id = (ID *)BKE_material_add(bmain, safe_name);
-  id_us_min(id);
+  Material *material = BKE_material_add(bmain, safe_name);
+  id_us_min(&material->id);
+
+  nodes::node_tree_shader_default(nullptr, bmain, &material->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
-  return (Material *)id;
+  return material;
 }
 
 static void rna_Main_materials_gpencil_data(Main * /*bmain*/, PointerRNA *id_ptr)
 {
   ID *id = static_cast<ID *>(id_ptr->data);
-  Material *ma = (Material *)id;
+  Material *ma = id_cast<Material *>(id);
   BKE_gpencil_material_attr_init(ma);
 }
 
 static void rna_Main_materials_gpencil_remove(Main * /*bmain*/, PointerRNA *id_ptr)
 {
   ID *id = static_cast<ID *>(id_ptr->data);
-  Material *ma = (Material *)id;
+  Material *ma = id_cast<Material *>(id);
   if (ma->gp_style) {
-    MEM_SAFE_FREE(ma->gp_style);
+    MEM_SAFE_DELETE(ma->gp_style);
   }
 }
 
@@ -285,9 +351,9 @@ static bNodeTree *rna_Main_nodetree_new(Main *bmain, const char *name, int type)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  blender::bke::bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
+  bke::bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
   if (typeinfo) {
-    bNodeTree *ntree = blender::bke::node_tree_add_tree(bmain, safe_name, typeinfo->idname);
+    bNodeTree *ntree = bke::node_tree_add_tree(bmain, safe_name, typeinfo->idname.ref());
     BKE_main_ensure_invariants(*bmain);
 
     id_us_min(&ntree->id);
@@ -344,7 +410,7 @@ static Light *rna_Main_lights_new(Main *bmain, const char *name, int type)
   rna_idname_validate(name, safe_name);
 
   Light *lamp = BKE_light_add(bmain, safe_name);
-  lamp->type = type;
+  lamp->type = eLightType(type);
   id_us_min(&lamp->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -406,7 +472,7 @@ static Image *rna_Main_images_load(Main *bmain,
                 errno ? strerror(errno) : RPT_("unsupported image format"));
   }
 
-  id_us_min((ID *)ima);
+  id_us_min(id_cast<ID *>(ima));
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -431,7 +497,7 @@ static Curve *rna_Main_curves_new(Main *bmain, const char *name, int type)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  Curve *cu = BKE_curve_add(bmain, safe_name, type);
+  Curve *cu = BKE_curve_add(bmain, safe_name, ObjectType(type));
   id_us_min(&cu->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -486,7 +552,7 @@ static Tex *rna_Main_textures_new(Main *bmain, const char *name, int type)
   rna_idname_validate(name, safe_name);
 
   Tex *tex = BKE_texture_add(bmain, safe_name);
-  BKE_texture_type_set(tex, type);
+  BKE_texture_type_set(tex, eTex_Type(type));
   id_us_min(&tex->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -521,6 +587,8 @@ static World *rna_Main_worlds_new(Main *bmain, const char *name)
 
   World *world = BKE_world_add(bmain, safe_name);
   id_us_min(&world->id);
+
+  nodes::node_tree_shader_default(nullptr, bmain, &world->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -655,7 +723,7 @@ static Palette *rna_Main_palettes_new(Main *bmain, const char *name)
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
-  return (Palette *)palette;
+  return static_cast<Palette *>(palette);
 }
 
 static MovieClip *rna_Main_movieclip_load(Main *bmain,
@@ -685,7 +753,7 @@ static MovieClip *rna_Main_movieclip_load(Main *bmain,
                 errno ? strerror(errno) : RPT_("unable to load movie clip"));
   }
 
-  id_us_min((ID *)clip);
+  id_us_min(id_cast<ID *>(clip));
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -725,7 +793,7 @@ static LightProbe *rna_Main_lightprobe_new(Main *bmain, const char *name, int ty
 
   LightProbe *probe = BKE_lightprobe_add(bmain, safe_name);
 
-  BKE_lightprobe_type_set(probe, type);
+  BKE_lightprobe_type_set(probe, eLightProbeType(type));
 
   id_us_min(&probe->id);
 
@@ -739,7 +807,7 @@ static bGPdata *rna_Main_annotations_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  bGPdata *gpd = BKE_gpencil_data_addnew(bmain, safe_name);
+  bGPdata *gpd = BKE_annotations_data_addnew(bmain, safe_name);
   id_us_min(&gpd->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -803,7 +871,7 @@ static Volume *rna_Main_volumes_new(Main *bmain, const char *name)
 #  define RNA_MAIN_ID_TAG_FUNCS_DEF(_func_name, _listbase_name, _id_type) \
     static void rna_Main_##_func_name##_tag(Main *bmain, bool value) \
     { \
-      BKE_main_id_tag_listbase(&bmain->_listbase_name, ID_TAG_DOIT, value); \
+      BKE_main_id_tag_listbase(&bmain->_listbase_name.cast<ID>(), ID_TAG_DOIT, value); \
     }
 
 RNA_MAIN_ID_TAG_FUNCS_DEF(cameras, cameras, ID_CA)
@@ -848,14 +916,18 @@ RNA_MAIN_ID_TAG_FUNCS_DEF(volumes, volumes, ID_VO)
 
 #  undef RNA_MAIN_ID_TAG_FUNCS_DEF
 
+}  // namespace blender
+
 #else
 
-void RNA_api_main(StructRNA * /*srna*/)
+namespace blender {
+
+void RNA_api_main(StructRNA *srna)
 {
-#  if 0
   FunctionRNA *func;
   PropertyRNA *parm;
 
+#  if 0
   /* maybe we want to add functions in 'bpy.data' still?
    * for now they are all in collections bpy.data.images.new(...) */
   func = RNA_def_function(srna, "add_image", "rna_Main_add_image");
@@ -866,6 +938,28 @@ void RNA_api_main(StructRNA * /*srna*/)
   parm = RNA_def_pointer(func, "image", "Image", "", "New image");
   RNA_def_function_return(func, parm);
 #  endif
+
+  func = RNA_def_function(srna, "pack_linked_ids_hierarchy", "rna_Main_pack_linked_ids_hierarchy");
+  RNA_def_function_ui_description(
+      func, "Pack the given linked ID and its dependencies into current blendfile");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  parm = RNA_def_pointer(func, "root_id", "ID", "", "Root linked ID to pack");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "packed_id", "ID", "", "The packed ID matching the given root ID");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "project_init", "rna_Main_blender_project_init");
+  RNA_def_function_ui_description(func, "Initialize a new active project");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  parm = RNA_def_string(func, "name", nullptr, 0, nullptr, "The project's name");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string_dir_path(
+      func, "project_root", nullptr, 0, nullptr, "The filepath of the project's root folder");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "project_clear", "rna_Main_blender_project_clear");
+  RNA_def_function_ui_description(func, "Clear the currently active project");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
 }
 
 void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop)
@@ -885,6 +979,7 @@ void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "camera", "Camera", "", "New camera data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -903,7 +998,7 @@ void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this camera");
+                  "Decrement user counter of all data-blocks used by this camera");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this camera");
 
@@ -929,6 +1024,7 @@ void RNA_def_main_scenes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "scene", "Scene", "", "New scene data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_scenes_remove");
@@ -966,6 +1062,7 @@ void RNA_def_main_objects(BlenderRNA *brna, PropertyRNA *cprop)
 
   /* return type */
   parm = RNA_def_pointer(func, "object", "Object", "", "New object data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -980,7 +1077,7 @@ void RNA_def_main_objects(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this object");
+                  "Decrement user counter of all data-blocks used by this object");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this object");
 
@@ -1006,6 +1103,7 @@ void RNA_def_main_materials(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "material", "Material", "", "New material data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "create_gpencil_data", "rna_Main_materials_gpencil_data");
@@ -1030,7 +1128,7 @@ void RNA_def_main_materials(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this material");
+                  "Decrement user counter of all data-blocks used by this material");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this material");
 
@@ -1073,7 +1171,7 @@ void RNA_def_main_node_groups(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this node tree");
+                  "Decrement user counter of all data-blocks used by this node tree");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this node tree");
 
@@ -1098,6 +1196,7 @@ void RNA_def_main_meshes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "mesh", "Mesh", "", "New mesh data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "new_from_object", "rna_Main_meshes_new_from_object");
@@ -1126,6 +1225,7 @@ void RNA_def_main_meshes(BlenderRNA *brna, PropertyRNA *cprop)
                          "Mesh",
                          "",
                          "Mesh created from object, remove it if it is only used for export");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1144,7 +1244,7 @@ void RNA_def_main_meshes(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this mesh data");
+                  "Decrement user counter of all data-blocks used by this mesh data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this mesh data");
 
@@ -1173,6 +1273,7 @@ void RNA_def_main_lights(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "light", "Light", "", "New light data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1191,7 +1292,7 @@ void RNA_def_main_lights(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this light data");
+                  "Decrement user counter of all data-blocks used by this light data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this light data");
 
@@ -1227,7 +1328,7 @@ void RNA_def_main_libraries(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this library");
+                  "Decrement user counter of all data-blocks used by this library");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this library");
 }
@@ -1291,6 +1392,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_boolean(func, "tiled", false, "Tiled", "Create a tiled image");
   /* return type */
   parm = RNA_def_pointer(func, "image", "Image", "", "New image data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "load", "rna_Main_images_load");
@@ -1306,6 +1408,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
                   "Using existing data-block if this file is already loaded");
   /* return type */
   parm = RNA_def_pointer(func, "image", "Image", "", "New image data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1316,8 +1419,11 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this image before deleting it");
-  RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this image");
+  RNA_def_boolean(func,
+                  "do_id_user",
+                  true,
+                  "",
+                  "Decrement user counter of all data-blocks used by this image");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this image");
 
@@ -1343,6 +1449,7 @@ void RNA_def_main_lattices(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "lattice", "Lattice", "", "New lattice data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1361,7 +1468,7 @@ void RNA_def_main_lattices(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this lattice data");
+                  "Decrement user counter of all data-blocks used by this lattice data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this lattice data");
 
@@ -1389,6 +1496,7 @@ void RNA_def_main_curves(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "curve", "Curve", "", "New curve data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1407,7 +1515,7 @@ void RNA_def_main_curves(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this curve data");
+                  "Decrement user counter of all data-blocks used by this curve data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this curve data");
 
@@ -1432,6 +1540,7 @@ void RNA_def_main_metaballs(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "metaball", "MetaBall", "", "New metaball data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1450,7 +1559,7 @@ void RNA_def_main_metaballs(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this metaball data");
+                  "Decrement user counter of all data-blocks used by this metaball data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this metaball data");
 
@@ -1482,6 +1591,7 @@ void RNA_def_main_fonts(BlenderRNA *brna, PropertyRNA *cprop)
                   "Using existing data-block if this file is already loaded");
   /* return type */
   parm = RNA_def_pointer(func, "vfont", "VectorFont", "", "New font data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1493,7 +1603,7 @@ void RNA_def_main_fonts(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this font before deleting it");
   RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this font");
+      func, "do_id_user", true, "", "Decrement user counter of all data-blocks used by this font");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this font");
 
@@ -1521,6 +1631,7 @@ void RNA_def_main_textures(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "texture", "Texture", "", "New texture data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1535,7 +1646,7 @@ void RNA_def_main_textures(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this texture");
+                  "Decrement user counter of all data-blocks used by this texture");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this texture");
 
@@ -1566,6 +1677,7 @@ void RNA_def_main_brushes(BlenderRNA *brna, PropertyRNA *cprop)
                       "Paint Mode for the new brush");
   /* return type */
   parm = RNA_def_pointer(func, "brush", "Brush", "", "New brush data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1576,8 +1688,11 @@ void RNA_def_main_brushes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this brush before deleting it");
-  RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this brush");
+  RNA_def_boolean(func,
+                  "do_id_user",
+                  true,
+                  "",
+                  "Decrement user counter of all data-blocks used by this brush");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this brush");
 
@@ -1608,6 +1723,7 @@ void RNA_def_main_worlds(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "world", "World", "", "New world data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1618,8 +1734,11 @@ void RNA_def_main_worlds(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this world before deleting it");
-  RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this world");
+  RNA_def_boolean(func,
+                  "do_id_user",
+                  true,
+                  "",
+                  "Decrement user counter of all data-blocks used by this world");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this world");
 
@@ -1645,6 +1764,7 @@ void RNA_def_main_collections(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "collection", "Collection", "", "New collection data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1659,7 +1779,7 @@ void RNA_def_main_collections(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this collection");
+                  "Decrement user counter of all data-blocks used by this collection");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this collection");
 
@@ -1685,6 +1805,7 @@ void RNA_def_main_speakers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "speaker", "Speaker", "", "New speaker data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1703,7 +1824,7 @@ void RNA_def_main_speakers(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this speaker data");
+                  "Decrement user counter of all data-blocks used by this speaker data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this speaker data");
 
@@ -1729,6 +1850,7 @@ void RNA_def_main_texts(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "text", "Text", "", "New text data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1740,7 +1862,7 @@ void RNA_def_main_texts(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this text before deleting it");
   RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this text");
+      func, "do_id_user", true, "", "Decrement user counter of all data-blocks used by this text");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this text");
 
@@ -1755,6 +1877,7 @@ void RNA_def_main_texts(BlenderRNA *brna, PropertyRNA *cprop)
       func, "internal", false, "Make internal", "Make text file internal after loading");
   /* return type */
   parm = RNA_def_pointer(func, "text", "Text", "", "New text data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "tag", "rna_Main_texts_tag");
@@ -1786,6 +1909,7 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
                   "Using existing data-block if this file is already loaded");
   /* return type */
   parm = RNA_def_pointer(func, "sound", "Sound", "", "New text data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1796,8 +1920,11 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this sound before deleting it");
-  RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this sound");
+  RNA_def_boolean(func,
+                  "do_id_user",
+                  true,
+                  "",
+                  "Decrement user counter of all data-blocks used by this sound");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this sound");
 
@@ -1823,6 +1950,7 @@ void RNA_def_main_armatures(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "armature", "Armature", "", "New armature data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1841,7 +1969,7 @@ void RNA_def_main_armatures(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this armature data");
+                  "Decrement user counter of all data-blocks used by this armature data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this armature data");
 
@@ -1866,6 +1994,7 @@ void RNA_def_main_actions(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "action", "Action", "", "New action data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1880,7 +2009,7 @@ void RNA_def_main_actions(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this action");
+                  "Decrement user counter of all data-blocks used by this action");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this action");
 
@@ -1908,6 +2037,7 @@ void RNA_def_main_particles(BlenderRNA *brna, PropertyRNA *cprop)
   /* return type */
   parm = RNA_def_pointer(
       func, "particle", "ParticleSettings", "", "New particle settings data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1926,7 +2056,7 @@ void RNA_def_main_particles(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this particle settings");
+                  "Decrement user counter of all data-blocks used by this particle settings");
   RNA_def_boolean(func,
                   "do_ui_user",
                   true,
@@ -1955,6 +2085,7 @@ void RNA_def_main_palettes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "palette", "Palette", "", "New palette data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -1969,7 +2100,7 @@ void RNA_def_main_palettes(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this palette");
+                  "Decrement user counter of all data-blocks used by this palette");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this palette");
 
@@ -2013,8 +2144,8 @@ void RNA_def_main_annotations(BlenderRNA *brna, PropertyRNA *cprop)
   FunctionRNA *func;
   PropertyRNA *parm;
 
-  RNA_def_property_srna(cprop, "BlendDataGreasePencils");
-  srna = RNA_def_struct(brna, "BlendDataGreasePencils", nullptr);
+  RNA_def_property_srna(cprop, "BlendDataAnnotations");
+  srna = RNA_def_struct(brna, "BlendDataAnnotations", nullptr);
   RNA_def_struct_sdna(srna, "Main");
   RNA_def_struct_ui_text(srna, "Main Annotations", "Collection of annotations");
 
@@ -2023,17 +2154,18 @@ void RNA_def_main_annotations(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "new", "rna_Main_annotations_new");
-  RNA_def_function_ui_description(func, "Add a new annotation datablock to the main database");
-  parm = RNA_def_string(func, "name", "GreasePencil", 0, "", "New name for the data-block");
+  RNA_def_function_ui_description(func, "Add a new annotation data-block to the main database");
+  parm = RNA_def_string(func, "name", "Annotation", 0, "", "New name for the data-block");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
-  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencil", "", "New annotation data-block");
+  parm = RNA_def_pointer(func, "annotation", "Annotation", "", "New annotation data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Remove annotation instance from the current blendfile");
-  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencil", "", "Grease Pencil to remove");
+  parm = RNA_def_pointer(func, "annotation", "Annotation", "", "Grease Pencil to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
@@ -2042,7 +2174,7 @@ void RNA_def_main_annotations(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this annotation");
+                  "Decrement user counter of all data-blocks used by this annotation");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this annotation");
 }
@@ -2063,19 +2195,20 @@ void RNA_def_main_grease_pencil(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "new", "rna_Main_grease_pencils_new");
-  RNA_def_function_ui_description(func, "Add a new Grease Pencil datablock to the main database");
+  RNA_def_function_ui_description(func, "Add a new Grease Pencil data-block to the main database");
   parm = RNA_def_string(func, "name", "GreasePencil", 0, "", "New name for the data-block");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(
-      func, "grease_pencil", "GreasePencilv3", "", "New Grease Pencil data-block");
+      func, "grease_pencil", "GreasePencil", "", "New Grease Pencil data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func,
                                   "Remove a Grease Pencil instance from the current blendfile");
-  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencilv3", "", "Grease Pencil to remove");
+  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencil", "", "Grease Pencil to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
@@ -2084,7 +2217,7 @@ void RNA_def_main_grease_pencil(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this Grease Pencil");
+                  "Decrement user counter of all data-blocks used by this Grease Pencil");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this Grease Pencil");
 }
@@ -2116,7 +2249,7 @@ void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this movie clip");
+                  "Decrement user counter of all data-blocks used by this movie clip");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this movie clip");
 
@@ -2138,6 +2271,7 @@ void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop)
                   "Using existing data-block if this file is already loaded");
   /* return type */
   parm = RNA_def_pointer(func, "clip", "MovieClip", "", "New movie clip data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 }
 
@@ -2164,6 +2298,7 @@ void RNA_def_main_masks(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "mask", "Mask", "", "New mask data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* remove func */
@@ -2176,7 +2311,7 @@ void RNA_def_main_masks(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_boolean(
       func, "do_unlink", true, "", "Unlink all usages of this mask before deleting it");
   RNA_def_boolean(
-      func, "do_id_user", true, "", "Decrement user counter of all datablocks used by this mask");
+      func, "do_id_user", true, "", "Decrement user counter of all data-blocks used by this mask");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this mask");
 }
@@ -2202,6 +2337,7 @@ void RNA_def_main_linestyles(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "linestyle", "FreestyleLineStyle", "", "New line style data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -2216,7 +2352,7 @@ void RNA_def_main_linestyles(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this line style");
+                  "Decrement user counter of all data-blocks used by this line style");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this line style");
 }
@@ -2257,6 +2393,7 @@ void RNA_def_main_lightprobes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "lightprobe", "LightProbe", "", "New light probe data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -2275,7 +2412,7 @@ void RNA_def_main_lightprobes(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this light probe");
+                  "Decrement user counter of all data-blocks used by this light probe");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this light probe");
 
@@ -2301,6 +2438,7 @@ void RNA_def_main_hair_curves(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "curves", "Curves", "", "New curves data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -2319,7 +2457,7 @@ void RNA_def_main_hair_curves(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this curves data");
+                  "Decrement user counter of all data-blocks used by this curves data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this curves data");
 
@@ -2345,6 +2483,7 @@ void RNA_def_main_pointclouds(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "pointcloud", "PointCloud", "", "New point cloud data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -2363,7 +2502,7 @@ void RNA_def_main_pointclouds(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this point cloud data");
+                  "Decrement user counter of all data-blocks used by this point cloud data");
   RNA_def_boolean(func,
                   "do_ui_user",
                   true,
@@ -2392,6 +2531,7 @@ void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "volume", "Volume", "", "New volume data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
@@ -2410,7 +2550,7 @@ void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop)
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this volume data");
+                  "Decrement user counter of all data-blocks used by this volume data");
   RNA_def_boolean(
       func, "do_ui_user", true, "", "Make sure interface does not reference this volume data");
 
@@ -2418,5 +2558,7 @@ void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }
+
+}  // namespace blender
 
 #endif

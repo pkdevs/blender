@@ -6,20 +6,21 @@
  * \ingroup edmesh
  */
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_buffer.h"
-#include "BLI_linklist_stack.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_stack.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_stack_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
 #include "BKE_layer.hh"
+#include "BKE_mesh_types.hh"
 #include "BKE_report.hh"
 
 #include "RNA_access.hh"
@@ -27,7 +28,7 @@
 
 #include "WM_types.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "ED_mesh.hh"
@@ -39,10 +40,10 @@
 #include "tools/bmesh_intersect.hh"
 #include "tools/bmesh_separate.hh"
 
+namespace blender {
+
 /* detect isolated holes and fill them */
 #define USE_NET_ISLAND_CONNECT
-
-using blender::Vector;
 
 /**
  * Compare selected with itself.
@@ -87,21 +88,25 @@ static int bm_face_isect_pair_swap(BMFace *f, void * /*user_data*/)
 /**
  * Use for intersect and boolean.
  */
-static void edbm_intersect_select(BMEditMesh *em, Mesh *mesh, bool do_select)
+static void edbm_intersect_select(Mesh *mesh, bool do_select)
 {
+  BMEditMesh *em = mesh->runtime->edit_mesh.get();
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
   if (do_select) {
-    BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+    BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
-    if (em->bm->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
+    if (bm->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
       BMIter iter;
       BMEdge *e;
 
-      BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
+      BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
         if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
-          BM_edge_select_set(em->bm, e, true);
+          BM_edge_select_set(bm, e, true);
         }
       }
-      EDBM_selectmode_flush(em);
+
+      EDBM_selectmode_flush(bm, em->selectmode);
+      EDBM_uvselect_clear(bm);
     }
   }
 
@@ -146,7 +151,7 @@ static wmOperatorStatus edbm_intersect_exec(bContext *C, wmOperator *op)
   const bool exact = RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT;
 #else
   if (RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT) {
-    BKE_report(op->reports, RPT_WARNING, "Compiled without GMP, using fast solver");
+    BKE_report(op->reports, RPT_WARNING, "Compiled without GMP, using \"float\" solver");
   }
   const bool exact = false;
 #endif
@@ -181,32 +186,26 @@ static wmOperatorStatus edbm_intersect_exec(bContext *C, wmOperator *op)
     default: /* ISECT_SEPARATE_NONE */
       break;
   }
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint isect_len = 0;
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (em->bm->totfacesel == 0) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    if (bm->totfacesel == 0) {
       continue;
     }
 
     if (exact) {
       int nshapes = use_self ? 1 : 2;
-      has_isect = BM_mesh_boolean_knife(em->bm,
-                                        em->looptris,
-                                        test_fn,
-                                        nullptr,
-                                        nshapes,
-                                        use_self,
-                                        use_separate_all,
-                                        false,
-                                        true);
+      has_isect = BM_mesh_boolean_knife(
+          bm, em->looptris, test_fn, nullptr, nshapes, use_self, use_separate_all, false, true);
     }
     else {
-      has_isect = BM_mesh_intersect(em->bm,
+      has_isect = BM_mesh_intersect(bm,
                                     em->looptris,
                                     test_fn,
                                     nullptr,
@@ -223,10 +222,10 @@ static wmOperatorStatus edbm_intersect_exec(bContext *C, wmOperator *op)
     if (use_separate_cut) {
       /* detach selected/un-selected faces */
       BM_mesh_separate_faces(
-          em->bm, BM_elem_cb_check_hflag_enabled_simple(const BMFace *, BM_ELEM_SELECT));
+          bm, BM_elem_cb_check_hflag_enabled_simple(const BMFace *, BM_ELEM_SELECT));
     }
 
-    edbm_intersect_select(em, static_cast<Mesh *>(obedit->data), has_isect);
+    edbm_intersect_select(id_cast<Mesh *>(obedit->data), has_isect);
 
     if (!has_isect) {
       isect_len++;
@@ -241,26 +240,25 @@ static wmOperatorStatus edbm_intersect_exec(bContext *C, wmOperator *op)
 
 static void edbm_intersect_ui(bContext * /*C*/, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
-  uiLayout *row;
+  ui::Layout &layout = *op->layout;
 
   bool use_exact = RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT;
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
-  row = &layout->row(false);
-  row->prop(op->ptr, "mode", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  layout->separator();
-  row = &layout->row(false);
-  row->prop(op->ptr, "separate_mode", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  layout->separator();
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  ui::Layout *row = &layout.row(false);
+  row->prop(op->ptr, "mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.separator();
+  row = &layout.row(false);
+  row->prop(op->ptr, "separate_mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.separator();
 
-  row = &layout->row(false);
-  row->prop(op->ptr, "solver", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  layout->separator();
+  row = &layout.row(false);
+  row->prop(op->ptr, "solver", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.separator();
 
   if (!use_exact) {
-    layout->prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -289,7 +287,7 @@ void MESH_OT_intersect(wmOperatorType *ot)
 
   static const EnumPropertyItem isect_intersect_solver_items[] = {
       {ISECT_SOLVER_FAST,
-       "FAST",
+       "FLOAT",
        0,
        "Float",
        "Simple solver with good performance, without support for overlapping geometry"},
@@ -346,7 +344,7 @@ static wmOperatorStatus edbm_intersect_boolean_exec(bContext *C, wmOperator *op)
   const bool use_exact = RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT;
 #else
   if (RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT) {
-    BKE_report(op->reports, RPT_WARNING, "Compiled without GMP, using fast solver");
+    BKE_report(op->reports, RPT_WARNING, "Compiled without GMP, using \"float\" solver");
   }
   const bool use_exact = false;
 #endif
@@ -355,24 +353,25 @@ static wmOperatorStatus edbm_intersect_boolean_exec(bContext *C, wmOperator *op)
   bool has_isect;
 
   test_fn = use_swap ? bm_face_isect_pair_swap : bm_face_isect_pair;
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint isect_len = 0;
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-    if (em->bm->totfacesel == 0) {
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    if (bm->totfacesel == 0) {
       continue;
     }
 
     if (use_exact) {
       has_isect = BM_mesh_boolean(
-          em->bm, em->looptris, test_fn, nullptr, 2, use_self, true, false, boolean_operation);
+          bm, em->looptris, test_fn, nullptr, 2, use_self, true, false, boolean_operation);
     }
     else {
-      has_isect = BM_mesh_intersect(em->bm,
+      has_isect = BM_mesh_intersect(bm,
                                     em->looptris,
                                     test_fn,
                                     nullptr,
@@ -386,7 +385,7 @@ static wmOperatorStatus edbm_intersect_boolean_exec(bContext *C, wmOperator *op)
                                     eps);
     }
 
-    edbm_intersect_select(em, static_cast<Mesh *>(obedit->data), has_isect);
+    edbm_intersect_select(id_cast<Mesh *>(obedit->data), has_isect);
 
     if (!has_isect) {
       isect_len++;
@@ -401,26 +400,25 @@ static wmOperatorStatus edbm_intersect_boolean_exec(bContext *C, wmOperator *op)
 
 static void edbm_intersect_boolean_ui(bContext * /*C*/, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
-  uiLayout *row;
+  ui::Layout &layout = *op->layout;
 
   bool use_exact = RNA_enum_get(op->ptr, "solver") == ISECT_SOLVER_EXACT;
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  row = &layout->row(false);
-  row->prop(op->ptr, "operation", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  layout->separator();
+  ui::Layout &operation_row = layout.row(false);
+  operation_row.prop(op->ptr, "operation", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.separator();
 
-  row = &layout->row(false);
-  row->prop(op->ptr, "solver", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  layout->separator();
+  ui::Layout &solver_row = layout.row(false);
+  solver_row.prop(op->ptr, "solver", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.separator();
 
-  layout->prop(op->ptr, "use_swap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout->prop(op->ptr, "use_self", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "use_swap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "use_self", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (!use_exact) {
-    layout->prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -434,7 +432,7 @@ void MESH_OT_intersect_boolean(wmOperatorType *ot)
   };
 
   static const EnumPropertyItem isect_boolean_solver_items[] = {
-      {ISECT_SOLVER_FAST, "FAST", 0, "Fast", "Faster solver, some limitations"},
+      {ISECT_SOLVER_FAST, "FLOAT", 0, "Float", "Faster solver, some limitations"},
       {ISECT_SOLVER_EXACT, "EXACT", 0, "Exact", "Exact solver, slower, handles more cases"},
       {0, nullptr, 0, nullptr, nullptr},
   };
@@ -485,7 +483,7 @@ void MESH_OT_intersect_boolean(wmOperatorType *ot)
 static void bm_face_split_by_edges(BMesh *bm,
                                    BMFace *f,
                                    const char hflag, /* reusable memory buffer */
-                                   BLI_Buffer *edge_net_temp_buf)
+                                   Vector<BMEdge *, 128> *edge_net_temp_buf)
 {
   const int f_index = BM_elem_index_get(f);
 
@@ -498,7 +496,7 @@ static void bm_face_split_by_edges(BMesh *bm,
   BLI_SMALLSTACK_DECLARE(vert_stack, BMVert *);
   BLI_SMALLSTACK_DECLARE(vert_stack_next, BMVert *);
 
-  BLI_assert(edge_net_temp_buf->count == 0);
+  BLI_assert(edge_net_temp_buf->is_empty());
 
   /* collect all edges */
   l_iter = l_first = BM_FACE_FIRST_LOOP(f);
@@ -512,7 +510,7 @@ static void bm_face_split_by_edges(BMesh *bm,
         v->e = e;
 
         BLI_SMALLSTACK_PUSH(vert_stack, v);
-        BLI_buffer_append(edge_net_temp_buf, BMEdge *, e);
+        edge_net_temp_buf->append(e);
       }
     }
   } while ((l_iter = l_iter->next) != l_first);
@@ -529,7 +527,7 @@ static void bm_face_split_by_edges(BMesh *bm,
         v_next = BM_edge_other_vert(e_next, v);
         BM_elem_index_set(e_next, f_index);
         BLI_SMALLSTACK_PUSH(vert_stack_next, v_next);
-        BLI_buffer_append(edge_net_temp_buf, BMEdge *, e_next);
+        edge_net_temp_buf->append(e_next);
       }
     }
 
@@ -539,10 +537,9 @@ static void bm_face_split_by_edges(BMesh *bm,
   }
 
   Vector<BMFace *> face_arr;
-  BM_face_split_edgenet(
-      bm, f, static_cast<BMEdge **>(edge_net_temp_buf->data), edge_net_temp_buf->count, &face_arr);
+  BM_face_split_edgenet(bm, f, edge_net_temp_buf->data(), edge_net_temp_buf->size(), &face_arr);
 
-  BLI_buffer_clear(edge_net_temp_buf);
+  edge_net_temp_buf->clear();
 
   for (BMFace *face : face_arr) {
     BM_face_select_set(bm, face, true);
@@ -577,26 +574,19 @@ struct LinkBase {
   uint list_len;
 };
 
-static void ghash_insert_face_edge_link(GHash *gh,
+static void ghash_insert_face_edge_link(Map<BMFace *, LinkBase *> &gh,
                                         BMFace *f_key,
                                         BMEdge *e_val,
                                         MemArena *mem_arena)
 {
-  void **ls_base_p;
-  LinkBase *ls_base;
-  LinkNode *ls;
-
-  if (!BLI_ghash_ensure_p(gh, f_key, &ls_base_p)) {
-    ls_base = static_cast<LinkBase *>(*ls_base_p = BLI_memarena_alloc(mem_arena,
-                                                                      sizeof(*ls_base)));
+  LinkBase *ls_base = gh.lookup_or_add_cb(f_key, [&]() {
+    LinkBase *ls_base = static_cast<LinkBase *>(BLI_memarena_alloc(mem_arena, sizeof(*ls_base)));
     ls_base->list = nullptr;
     ls_base->list_len = 0;
-  }
-  else {
-    ls_base = static_cast<LinkBase *>(*ls_base_p);
-  }
+    return ls_base;
+  });
 
-  ls = static_cast<LinkNode *>(BLI_memarena_alloc(mem_arena, sizeof(*ls)));
+  LinkNode *ls = static_cast<LinkNode *>(BLI_memarena_alloc(mem_arena, sizeof(*ls)));
   ls->next = ls_base->list;
   ls->link = e_val;
   ls_base->list = ls;
@@ -605,8 +595,10 @@ static void ghash_insert_face_edge_link(GHash *gh,
 
 static int bm_edge_sort_length_cb(const void *e_a_v, const void *e_b_v)
 {
-  const float val_a = -BM_edge_calc_length_squared(*((BMEdge **)e_a_v));
-  const float val_b = -BM_edge_calc_length_squared(*((BMEdge **)e_b_v));
+  const float val_a = -BM_edge_calc_length_squared(
+      *(static_cast<BMEdge **>(const_cast<void *>(e_a_v))));
+  const float val_b = -BM_edge_calc_length_squared(
+      *(static_cast<BMEdge **>(const_cast<void *>(e_b_v))));
 
   if (val_a > val_b) {
     return 1;
@@ -751,8 +743,8 @@ static BMEdge *bm_face_split_edge_find(BMEdge *e_a,
       if ((dist_test_sq < dist_best_sq) || (e_split == nullptr)) {
         bool ok = true;
 
-        if (UNLIKELY(BM_edge_exists(v_pivot, l_iter->e->v1) ||
-                     BM_edge_exists(v_pivot, l_iter->e->v2)))
+        if (BM_edge_exists(v_pivot, l_iter->e->v1) || BM_edge_exists(v_pivot, l_iter->e->v2))
+            [[unlikely]]
         {
           /* very unlikely but will cause complications splicing the verts together,
            * so just skip this case */
@@ -808,14 +800,14 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
 
   BLI_SMALLSTACK_DECLARE(loop_stack, BMLoop *);
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
-
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     if ((bm->totedgesel == 0) || (bm->totfacesel == 0)) {
       continue;
     }
@@ -928,14 +920,13 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
 
     {
       BMFace *f;
-      BLI_buffer_declare_static(BMEdge **, edge_net_temp_buf, 0, 128);
+      Vector<BMEdge *, 128> edge_net_temp_buf;
 
       BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
         if (BM_elem_flag_test(f, hflag)) {
           bm_face_split_by_edges(bm, f, hflag, &edge_net_temp_buf);
         }
       }
-      BLI_buffer_free(&edge_net_temp_buf);
     }
 
 #ifdef USE_NET_ISLAND_CONNECT
@@ -952,13 +943,13 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
     params.calc_looptris = true;
     params.calc_normals = true;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 
 #ifdef USE_NET_ISLAND_CONNECT
     /* we may have remaining isolated regions remaining,
      * these will need to have connecting edges created */
     if (!BLI_stack_is_empty(edges_loose)) {
-      GHash *face_edge_map = BLI_ghash_ptr_new(__func__);
+      Map<BMFace *, LinkBase *> face_edge_map;
 
       MemArena *mem_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 
@@ -993,11 +984,10 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
       /* detect edges chains that span faces
        * and splice vertices into the closest edges */
       {
-        GHashIterator gh_iter;
 
-        GHASH_ITER (gh_iter, face_edge_map) {
-          BMFace *f = static_cast<BMFace *>(BLI_ghashIterator_getKey(&gh_iter));
-          LinkBase *e_ls_base = static_cast<LinkBase *>(BLI_ghashIterator_getValue(&gh_iter));
+        for (const auto &item : face_edge_map.items()) {
+          BMFace *f = item.key;
+          LinkBase *e_ls_base = item.value;
           LinkNode *e_link = e_ls_base->list;
 
           do {
@@ -1036,11 +1026,9 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
       {
         MemArena *mem_arena_edgenet = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 
-        GHashIterator gh_iter;
-
-        GHASH_ITER (gh_iter, face_edge_map) {
-          BMFace *f = static_cast<BMFace *>(BLI_ghashIterator_getKey(&gh_iter));
-          LinkBase *e_ls_base = static_cast<LinkBase *>(BLI_ghashIterator_getValue(&gh_iter));
+        for (const auto &item : face_edge_map.items()) {
+          BMFace *f = item.key;
+          LinkBase *e_ls_base = item.value;
 
           bm_face_split_by_edges_island_connect(
               bm, f, e_ls_base->list, e_ls_base->list_len, mem_arena_edgenet);
@@ -1053,17 +1041,17 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
 
       BLI_memarena_free(mem_arena);
 
-      BLI_ghash_free(face_edge_map, nullptr, nullptr);
-
       EDBMUpdate_Params params{};
       params.calc_looptris = true;
       params.calc_normals = true;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     }
 
     BLI_stack_free(edges_loose);
 #endif /* USE_NET_ISLAND_CONNECT */
+
+    BM_mesh_select_mode_flush(bm);
   }
   return OPERATOR_FINISHED;
 }
@@ -1084,3 +1072,5 @@ void MESH_OT_face_split_by_edges(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

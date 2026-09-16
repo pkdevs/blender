@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_kuwahara_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_kuwahara_classic_convolution_variable_size)
+
 #include "gpu_shader_compositor_summed_area_table_lib.glsl"
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 void main()
 {

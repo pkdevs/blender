@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "BLI_array.hh"
 #include "BLI_map.hh"
 
 #include "COM_cached_resource.hh"
@@ -42,22 +41,18 @@ bool operator==(const MorphologicalDistanceFeatherWeightsKey &a,
  * functions are all even functions. Consequently, only the positive half of the filter is computed
  * and the shader takes that into consideration. */
 class MorphologicalDistanceFeatherWeights : public CachedResource {
- private:
-  Array<float> weights_;
-  Array<float> falloffs_;
-
  public:
-  Result weights_result;
-  Result falloffs_result;
+  Result weights;
+  Result falloffs;
 
   MorphologicalDistanceFeatherWeights(Context &context, int type, int radius);
 
   ~MorphologicalDistanceFeatherWeights();
 
  private:
-  void compute_weights(int radius);
+  Result compute_weights(Context &context, int radius);
 
-  void compute_distance_falloffs(int type, int radius);
+  Result compute_distance_falloffs(Context &context, int type, int radius);
 };
 
 /* ------------------------------------------------------------------------------------------------

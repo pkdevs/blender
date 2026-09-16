@@ -10,33 +10,21 @@
 
 namespace blender::nodes {
 
-inline bool socket_type_supported_in_bundle(const eNodeSocketDatatype socket_type)
+inline bool socket_type_supported_in_bundle(const eNodeSocketDatatype socket_type,
+                                            const int ntree_type)
 {
-  return ELEM(socket_type,
-              SOCK_FLOAT,
-              SOCK_VECTOR,
-              SOCK_RGBA,
-              SOCK_BOOLEAN,
-              SOCK_ROTATION,
-              SOCK_MATRIX,
-              SOCK_INT,
-              SOCK_STRING,
-              SOCK_GEOMETRY,
-              SOCK_OBJECT,
-              SOCK_MATERIAL,
-              SOCK_IMAGE,
-              SOCK_COLLECTION,
-              SOCK_BUNDLE,
-              SOCK_CLOSURE);
+  return bke::node_tree_type_supports_socket_type_static(ntree_type, socket_type);
 }
 
 struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
-  using ItemT = NodeGeometryCombineBundleItem;
-  static StructRNA *item_srna;
+  using ItemT = NodeCombineBundleItem;
+  static StructRNA **item_srna;
   static int node_type;
-  static constexpr StringRefNull node_idname = "GeometryNodeCombineBundle";
+  static constexpr StringRefNull node_idname = "NodeCombineBundle";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
+  static constexpr bool has_name_validation = true;
+  static constexpr char unique_name_separator = '_';
   struct operator_idnames {
     static constexpr StringRefNull add_item = "NODE_OT_combine_bundle_item_add";
     static constexpr StringRefNull remove_item = "NODE_OT_combine_bundle_item_remove";
@@ -52,7 +40,7 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
 
   static socket_items::SocketItemsRef<ItemT> get_items_from_node(bNode &node)
   {
-    auto *storage = static_cast<NodeGeometryCombineBundle *>(node.storage);
+    auto *storage = static_cast<NodeCombineBundle *>(node.storage);
     return {&storage->items, &storage->items_num, &storage->active_index};
   }
 
@@ -64,7 +52,7 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
 
   static void destruct_item(ItemT *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -72,7 +60,7 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
 
   static eNodeSocketDatatype get_socket_type(const ItemT &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(ItemT &item)
@@ -80,9 +68,9 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int ntree_type)
   {
-    return socket_type_supported_in_bundle(socket_type);
+    return socket_type_supported_in_bundle(socket_type, ntree_type);
   }
 
   static void init_with_socket_type_and_name(bNode &node,
@@ -90,7 +78,7 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
                                              const eNodeSocketDatatype socket_type,
                                              const char *name)
   {
-    auto *storage = static_cast<NodeGeometryCombineBundle *>(node.storage);
+    auto *storage = static_cast<NodeCombineBundle *>(node.storage);
     item.socket_type = socket_type;
     item.identifier = storage->next_identifier++;
     socket_items::set_item_name_and_make_unique<CombineBundleItemsAccessor>(node, item, name);
@@ -100,15 +88,19 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
   {
     return "Item_" + std::to_string(item.identifier);
   }
+
+  static std::string validate_name(const StringRef name);
 };
 
 struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
-  using ItemT = NodeGeometrySeparateBundleItem;
-  static StructRNA *item_srna;
+  using ItemT = NodeSeparateBundleItem;
+  static StructRNA **item_srna;
   static int node_type;
-  static constexpr StringRefNull node_idname = "GeometryNodeSeparateBundle";
+  static constexpr StringRefNull node_idname = "NodeSeparateBundle";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
+  static constexpr bool has_name_validation = true;
+  static constexpr char unique_name_separator = '_';
   struct operator_idnames {
     static constexpr StringRefNull add_item = "NODE_OT_separate_bundle_item_add";
     static constexpr StringRefNull remove_item = "NODE_OT_separate_bundle_item_remove";
@@ -124,7 +116,7 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
 
   static socket_items::SocketItemsRef<ItemT> get_items_from_node(bNode &node)
   {
-    auto *storage = static_cast<NodeGeometrySeparateBundle *>(node.storage);
+    auto *storage = static_cast<NodeSeparateBundle *>(node.storage);
     return {&storage->items, &storage->items_num, &storage->active_index};
   }
 
@@ -136,7 +128,7 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
 
   static void destruct_item(ItemT *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -144,7 +136,7 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
 
   static eNodeSocketDatatype get_socket_type(const ItemT &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(ItemT &item)
@@ -152,9 +144,9 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int ntree_type)
   {
-    return socket_type_supported_in_bundle(socket_type);
+    return socket_type_supported_in_bundle(socket_type, ntree_type);
   }
 
   static void init_with_socket_type_and_name(bNode &node,
@@ -162,7 +154,7 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
                                              const eNodeSocketDatatype socket_type,
                                              const char *name)
   {
-    auto *storage = static_cast<NodeGeometrySeparateBundle *>(node.storage);
+    auto *storage = static_cast<NodeSeparateBundle *>(node.storage);
     item.socket_type = socket_type;
     item.identifier = storage->next_identifier++;
     socket_items::set_item_name_and_make_unique<SeparateBundleItemsAccessor>(node, item, name);
@@ -172,6 +164,13 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
   {
     return "Item_" + std::to_string(item.identifier);
   }
+
+  static std::string validate_name(const StringRef name)
+  {
+    return CombineBundleItemsAccessor::validate_name(name);
+  }
 };
+
+std::optional<StringRefNull> combine_bundle_node_type(const bNodeTree &tree, const bNode &node);
 
 }  // namespace blender::nodes

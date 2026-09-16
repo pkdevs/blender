@@ -233,10 +233,32 @@ class PREFERENCES_OT_keyconfig_import(Operator):
         default=True,
     )
 
-    def execute(self, _context):
+    # When importing keymap files with the same name with built-in presets (like
+    # "Blender" or "Industry Compatible"), we need to rename the imported ones
+    # so those entries can be properly removed (built-in ones can't be removed).
+    # See #118035.
+    @classmethod
+    def _preset_prevent_name_collision(cls, config_name):
         import os
-        from os.path import basename
+        from bpy.utils import is_path_builtin
+        path = bpy.utils.user_resource(
+            'SCRIPTS',
+            path=os.path.join("presets", "keyconfig"),
+            create=True,
+        )
+
+        config_name_final = config_name
+        config_name_noext, config_name_ext = os.path.splitext(config_name)
+        preset_path = bpy.utils.preset_find(config_name_noext, "keyconfig", ext=".py")
+
+        if preset_path is not None and is_path_builtin(preset_path):
+            config_name_final = "{:s} (User){:s}".format(config_name_noext, config_name_ext)
+
+        return os.path.join(path, config_name_final)
+
+    def execute(self, _context):
         import shutil
+        from os.path import basename
 
         if not self.filepath:
             self.report({'ERROR'}, "Filepath not set")
@@ -244,12 +266,7 @@ class PREFERENCES_OT_keyconfig_import(Operator):
 
         config_name = basename(self.filepath)
 
-        path = bpy.utils.user_resource(
-            'SCRIPTS',
-            path=os.path.join("presets", "keyconfig"),
-            create=True,
-        )
-        path = os.path.join(path, config_name)
+        path = self._preset_prevent_name_collision(config_name)
 
         try:
             if self.keep_original:
@@ -1065,6 +1082,17 @@ class PREFERENCES_OT_studiolight_install(Operator):
     bl_idname = "preferences.studiolight_install"
     bl_label = "Install Light"
 
+    def update_type(self, context):
+        filter_glob = "*.sl" if self.type == 'STUDIO' else "*.png;*.jpg;*.hdr;*.exr"
+        if filter_glob == self.filter_glob:
+            return
+
+        self.filter_glob = filter_glob
+
+        space_data = context.space_data
+        if space_data is not None and space_data.type == 'FILE_BROWSER':
+            space_data.params.filter_glob = filter_glob
+
     files: CollectionProperty(
         name="File Path",
         type=OperatorFileListElement,
@@ -1079,7 +1107,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
     )
     filter_glob: StringProperty(
         default="*.png;*.jpg;*.hdr;*.exr",
-        options={'HIDDEN'},
+        options={'HIDDEN', 'SKIP_SAVE'},
     )
     type: EnumProperty(
         name="Type",
@@ -1088,6 +1116,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
             ('WORLD', "World", "Install custom HDRIs"),
             ('STUDIO', "Studio", "Install custom Studio Lights"),
         ),
+        update=update_type,
     )
 
     def execute(self, context):
@@ -1101,9 +1130,24 @@ class PREFERENCES_OT_studiolight_install(Operator):
             self.report({'ERROR'}, "Failed to create Studio Light path")
             return {'CANCELLED'}
 
+        installed = 0
+
         for e in self.files:
-            shutil.copy(os.path.join(self.directory, e.name), path_studiolights)
+            filepath = os.path.join(self.directory, e.name)
+
+            try:
+                shutil.copy(filepath, path_studiolights)
+            except Exception as ex:
+                msg = rpt_("Unable to copy {!r}: {:s}").format(e.name, str(ex))
+                print(msg)
+                self.report({'WARNING'}, msg)
+                continue
+
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
+            installed += 1
+
+        if installed == 0:
+            return {'CANCELLED'}
 
         # print message
         msg = rpt_("StudioLight Installed {!r} into {!r}").format(

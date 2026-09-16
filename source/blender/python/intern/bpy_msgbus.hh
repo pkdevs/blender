@@ -10,4 +10,8 @@
 
 #include <Python.h>
 
-PyObject *BPY_msgbus_module();
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_msgbus_module();
+
+}  // namespace blender

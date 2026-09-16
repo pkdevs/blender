@@ -2,13 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <fmt/format.h>
 
 #include "BLT_translation.hh"
 
+#include "BLI_math_base.hh"
+#include "BLI_path_utils.hh"
 #include "BLI_span.hh"
 
+#include "BKE_blender_project.hh"
 #include "BKE_context.hh"
+#include "BKE_idprop.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_path_templates.hh"
 #include "BKE_scene.hh"
@@ -19,11 +28,16 @@
 #include "DNA_ID_enums.h"
 #include "DNA_node_types.h"
 
-namespace blender::bke::path_templates {
+namespace blender {
 
-bool VariableMap::contains(blender::StringRef name) const
+namespace bke::path_templates {
+
+bool VariableMap::contains(StringRef name) const
 {
   if (this->strings_.contains(name)) {
+    return true;
+  }
+  if (this->filepaths_.contains(name)) {
     return true;
   }
   if (this->integers_.contains(name)) {
@@ -35,9 +49,12 @@ bool VariableMap::contains(blender::StringRef name) const
   return false;
 }
 
-bool VariableMap::remove(blender::StringRef name)
+bool VariableMap::remove(StringRef name)
 {
   if (this->strings_.remove(name)) {
+    return true;
+  }
+  if (this->filepaths_.remove(name)) {
     return true;
   }
   if (this->integers_.remove(name)) {
@@ -49,7 +66,7 @@ bool VariableMap::remove(blender::StringRef name)
   return false;
 }
 
-bool VariableMap::add_string(blender::StringRef name, blender::StringRef value)
+bool VariableMap::add_string(StringRef name, StringRef value)
 {
   if (this->contains(name)) {
     return false;
@@ -58,7 +75,16 @@ bool VariableMap::add_string(blender::StringRef name, blender::StringRef value)
   return true;
 }
 
-bool VariableMap::add_integer(blender::StringRef name, const int64_t value)
+bool VariableMap::add_filepath(StringRef name, StringRef value)
+{
+  if (this->contains(name)) {
+    return false;
+  }
+  this->filepaths_.add_new(name, value);
+  return true;
+}
+
+bool VariableMap::add_integer(StringRef name, const int64_t value)
 {
   if (this->contains(name)) {
     return false;
@@ -67,7 +93,7 @@ bool VariableMap::add_integer(blender::StringRef name, const int64_t value)
   return true;
 }
 
-bool VariableMap::add_float(blender::StringRef name, const double value)
+bool VariableMap::add_float(StringRef name, const double value)
 {
   if (this->contains(name)) {
     return false;
@@ -76,16 +102,25 @@ bool VariableMap::add_float(blender::StringRef name, const double value)
   return true;
 }
 
-std::optional<blender::StringRefNull> VariableMap::get_string(blender::StringRef name) const
+std::optional<StringRefNull> VariableMap::get_string(StringRef name) const
 {
   const std::string *value = this->strings_.lookup_ptr(name);
   if (value == nullptr) {
     return std::nullopt;
   }
-  return blender::StringRefNull(*value);
+  return StringRefNull(*value);
 }
 
-std::optional<int64_t> VariableMap::get_integer(blender::StringRef name) const
+std::optional<StringRefNull> VariableMap::get_filepath(StringRef name) const
+{
+  const std::string *value = this->filepaths_.lookup_ptr(name);
+  if (value == nullptr) {
+    return std::nullopt;
+  }
+  return StringRefNull(*value);
+}
+
+std::optional<int64_t> VariableMap::get_integer(StringRef name) const
 {
   const int64_t *value = this->integers_.lookup_ptr(name);
   if (value == nullptr) {
@@ -94,7 +129,7 @@ std::optional<int64_t> VariableMap::get_integer(blender::StringRef name) const
   return *value;
 }
 
-std::optional<double> VariableMap::get_float(blender::StringRef name) const
+std::optional<double> VariableMap::get_float(StringRef name) const
 {
   const double *value = this->floats_.lookup_ptr(name);
   if (value == nullptr) {
@@ -103,14 +138,60 @@ std::optional<double> VariableMap::get_float(blender::StringRef name) const
   return *value;
 }
 
+bool VariableMap::add_filename_only(StringRef var_name,
+                                    StringRefNull full_path,
+                                    StringRef fallback)
+{
+  const char *file_name = BLI_path_basename(full_path.c_str());
+  const char *file_name_end = BLI_path_extension_or_end(file_name);
+
+  if (file_name[0] == '\0') {
+    /* If there is no file name, default to the fallback. */
+    return this->add_filepath(var_name, fallback);
+  }
+  if (file_name_end == file_name) {
+    /* When the filename has no extension, but starts with a period. */
+    return this->add_filepath(var_name, StringRef(file_name));
+  }
+  /* Normal case. */
+  return this->add_filepath(var_name, StringRef(file_name, file_name_end));
+}
+
+bool VariableMap::add_path_up_to_file(StringRef var_name,
+                                      StringRefNull full_path,
+                                      StringRef fallback)
+{
+  /* Empty path. */
+  if (full_path.is_empty()) {
+    return this->add_filepath(var_name, fallback);
+  }
+
+  /* No filename at the end. */
+  if (BLI_path_basename(full_path.c_str()) == full_path.end()) {
+    return this->add_filepath(var_name, full_path);
+  }
+
+  Vector<char> dir_path(full_path.size() + 1);
+  full_path.copy_unsafe(dir_path.data());
+
+  const bool success = BLI_path_parent_dir(dir_path.data());
+
+  if (!success || dir_path[0] == '\0') {
+    /* If no path before the filename, default to the fallback. */
+    return this->add_filepath(var_name, fallback);
+  }
+
+  return this->add_filepath(var_name, dir_path.data());
+}
+
 bool operator==(const Error &left, const Error &right)
 {
   return left.type == right.type && left.byte_range == right.byte_range;
 }
 
-}  // namespace blender::bke::path_templates
+}  // namespace bke::path_templates
 
-using namespace blender::bke::path_templates;
+using namespace bke::path_templates;
 
 std::optional<VariableMap> BKE_build_template_variables_for_prop(const bContext *C,
                                                                  PointerRNA *ptr,
@@ -120,19 +201,32 @@ std::optional<VariableMap> BKE_build_template_variables_for_prop(const bContext 
    * This function should be maintained such that it always produces variables
    * consistent with the variables produced elsewhere in the code base for the
    * same property. For example, render paths are processed in the rendering
-   * code and variables are built for that purpose there, and this function
-   * should produce variables consistent with that for those render path
+   * code and the variables for that purpose are built there; this function
+   * should produce variables consistent with that for the same render path
    * properties here.
    *
-   * The recommended strategy when adding support for additional path templating
-   * use cases (that don't already have an appropriate
-   * `PropertyPathTemplateType` item) is to:
+   * This function is organized into three sections: one for "general"
+   * variables, one for "purpose-specific" variables, and one for
+   * "type-specific" variables. (See the top-level documentation in
+   * BKE_path_templates.hh for details on what that means).
    *
-   * 1. Create a separate function to build variables for that use case (see
-   *    e.g. `BKE_build_template_variables_for_render_path()`).
-   * 2. Call that function from here in the switch statement below.
-   * 3. Also call that function from the other parts of the code base that need
-   *    it.
+   * To add support for additional variables here:
+   *
+   * - For "general" variables, simply add them to
+   *   #BKE_add_template_variables_general(). Nothing else special needs to be
+   *   done.
+   * - For "purpose-specific" variables, add them to the appropriate
+   *   purpose-specific function (e.g.
+   *   #BKE_add_template_variables_for_render_path()). If no function exists
+   *   for your purpose yet, add a new enum item to #PropertyPathTemplateType
+   *   and a corresponding new function, add your variable to the new function,
+   *   and then call it from the `switch` on #RNA_property_path_template_type()
+   *   below.
+   * - For "type-specific" variables, add them to the appropriate type-specific
+   *   function (e.g. #BKE_add_template_variables_for_node()). If no function
+   *   exists for that type yet, create a new function for it, add the variable
+   *   there, and then call it from the bottom section of this function, with an
+   *   appropriate guard on the struct type.
    */
 
   /* No property passed, or it doesn't support path templates. */
@@ -142,84 +236,144 @@ std::optional<VariableMap> BKE_build_template_variables_for_prop(const bContext 
     return std::nullopt;
   }
 
+  VariableMap variables;
+
+  /* General variables. */
+  BKE_blender_project_read_callback(CTX_data_main(C), [&](const bke::BlenderProject *project) {
+    BKE_add_template_variables_general(variables, ptr->owner_id, project);
+  });
+
+  /* Purpose-specific variables. */
   switch (RNA_property_path_template_type(prop)) {
     case PROP_VARIABLES_NONE: {
-      BLI_assert_msg(
-          false,
-          "Should never have `PROP_VARIABLES_NONE` for a path that supports path templates.");
-      return VariableMap();
+      /* Do nothing: no purpose-specific variables. */
+      break;
     }
 
     /* Scene render output path, the compositor's File Output node's paths, etc. */
     case PROP_VARIABLES_RENDER_OUTPUT: {
-      const RenderData *render_data;
+      const Scene *scene;
       if (GS(ptr->owner_id->name) == ID_SCE) {
-        render_data = &reinterpret_cast<const Scene *>(ptr->owner_id)->r;
+        scene = reinterpret_cast<const Scene *>(ptr->owner_id);
       }
       else {
-        const Scene *scene = CTX_data_scene(C);
-        render_data = scene ? &scene->r : nullptr;
+        scene = CTX_data_scene(C);
       }
 
-      return BKE_build_template_variables_for_render_path(BKE_main_blendfile_path_from_global(),
-                                                          render_data);
+      BKE_add_template_variables_for_render_path(variables, *scene);
+      break;
     }
   }
 
-  /* All paths that support path templates should be handled above, and any that
-   * aren't should already be rejected by the test at the top of the function. */
-  BLI_assert_unreachable();
+  /* Type-specific variables. */
 
-  return std::nullopt;
-}
-
-VariableMap BKE_build_template_variables_for_render_path(const char *blend_file_path,
-                                                         const RenderData *render_data)
-{
-  VariableMap variables;
-
-  /* Blend file name. */
-  if (blend_file_path) {
-    const char *file_name = BLI_path_basename(blend_file_path);
-    const char *file_name_end = BLI_path_extension_or_end(file_name);
-    if (file_name[0] == '\0') {
-      /* If the file has never been saved (indicated by an empty file name),
-       * default to "Unsaved". */
-      variables.add_string("blend_name", blender::StringRef(DATA_("Unsaved")));
-    }
-    else if (file_name_end == file_name) {
-      /* When the filename has no extension, but starts with a period. */
-      variables.add_string("blend_name", blender::StringRef(file_name));
-    }
-    else {
-      /* Normal case. */
-      variables.add_string("blend_name", blender::StringRef(file_name, file_name_end));
-    }
-  }
-
-  /* Render resolution and fps. */
-  if (render_data) {
-    int res_x, res_y;
-    BKE_render_resolution(render_data, false, &res_x, &res_y);
-    variables.add_integer("resolution_x", res_x);
-    variables.add_integer("resolution_y", res_y);
-
-    /* FPS eval code copied from `BKE_cachefile_filepath_get()`.
-     *
-     * TODO: should probably use one function for this everywhere to ensure that
-     * fps is computed consistently, but at the time of writing no such function
-     * seems to exist. Every place in the code base just has its own bespoke
-     * code, using different precision, etc. */
-    const double fps = double(render_data->frs_sec) / double(render_data->frs_sec_base);
-    variables.add_float("fps", fps);
+  /* Nodes. */
+  if (std::optional<AncestorPointerRNA> node_rna_ptr = RNA_struct_search_closest_ancestor_by_type(
+          ptr, RNA_Node))
+  {
+    const bNode *bnode = reinterpret_cast<const bNode *>(node_rna_ptr->data);
+    BKE_add_template_variables_for_node(variables, *bnode);
   }
 
   return variables;
 }
 
+void BKE_add_template_variables_general(bke::path_templates::VariableMap &variables,
+                                        const ID *path_owner_id,
+                                        const bke::BlenderProject *project)
+{
+  /* Project variables. */
+  if (project) {
+    variables.add_string("project_name", project->get_name());
+    variables.add_filepath("project_root", project->get_root_path());
+
+    for (const std::unique_ptr<bke::ProjectVariable> &var : project->variables) {
+      switch (var->type_get()) {
+        case bke::ProjectVariableType::STRING: {
+          if (var->string_subtype_get() == bke::ProjectVariableStringSubtype::FILEPATH) {
+            variables.add_filepath(var->name_get(), var->value_string_get());
+          }
+          else {
+            variables.add_string(var->name_get(), var->value_string_get());
+          }
+          break;
+        }
+
+        case bke::ProjectVariableType::INT:
+          variables.add_integer(var->name_get(), var->value_int_get());
+          break;
+
+        case bke::ProjectVariableType::FLOAT:
+          variables.add_float(var->name_get(), var->value_float_get());
+          break;
+      }
+    }
+  }
+
+  /* Global blend filepath (a.k.a. path to the blend file that's currently
+   * open). */
+  {
+    const char *g_blend_file_path = BKE_main_blendfile_path_from_global();
+
+    variables.add_filename_only("blend_name", g_blend_file_path, StringRef(DATA_("Unsaved")));
+
+    /* Note: fallback to `./` for unsaved files, which if used at the start of a
+     * path is equivalent to the current working directory. This is consistent
+     * with how `//` works. */
+    variables.add_path_up_to_file("blend_dir", g_blend_file_path, StringRef("./"));
+  }
+
+  /* Library blend filepath (a.k.a. path to the blend file that actually owns the ID). */
+  if (path_owner_id) {
+    const char *lib_blend_file_path = ID_BLEND_PATH_FROM_GLOBAL(path_owner_id);
+    variables.add_filename_only(
+        "blend_name_lib", lib_blend_file_path, StringRef(DATA_("Unsaved")));
+
+    /* Note: fallback to `./` for unsaved files, which if used at the start of a
+     * path is equivalent to the current working directory. This is consistent
+     * with how `//` works. */
+    variables.add_path_up_to_file("blend_dir_lib", lib_blend_file_path, StringRef("./"));
+  }
+}
+
+void BKE_add_template_variables_for_render_path(VariableMap &variables, const Scene &scene)
+{
+  /* Resolution variables. */
+  int res_x, res_y;
+  BKE_render_resolution(&scene.r, false, &res_x, &res_y);
+  variables.add_integer("resolution_x", res_x);
+  variables.add_integer("resolution_y", res_y);
+
+  /* FPS variable.
+   *
+   * FPS eval code copied from #BKE_cachefile_filepath_get().
+   *
+   * TODO: should probably use one function for this everywhere to ensure that
+   * fps is computed consistently, but at the time of writing no such function
+   * seems to exist. Every place in the code base just has its own bespoke
+   * code, using different precision, etc. */
+  const double fps = double(scene.r.frs_sec) / double(scene.r.frs_sec_base);
+  variables.add_float("fps", fps);
+
+  /* Scene name variable. */
+  variables.add_string("scene_name", scene.id.name + 2);
+
+  /* Camera name variable. */
+  if (scene.camera) {
+    variables.add_string("camera_name", scene.camera->id.name + 2);
+  }
+}
+
+void BKE_add_template_variables_for_node(bke::path_templates::VariableMap &variables,
+                                         const bNode &owning_node)
+{
+  variables.add_string("node_name", owning_node.name);
+}
+
 /* -------------------------------------------------------------------- */
 
-#define FORMAT_BUFFER_SIZE 128
+/* Set to FILE_MAX to ensure that it can handle all path variables. */
+#define FORMAT_BUFFER_SIZE FILE_MAX
 
 namespace {
 
@@ -276,13 +430,13 @@ struct Token {
 
   /* Byte index range (exclusive on the right) of the token or syntax error in
    * the path string. */
-  blender::IndexRange byte_range;
+  IndexRange byte_range;
 
   /* Reference to the variable name as written in the template string. Note
    * that this points into the template string, and does not own the value.
    *
    * Only relevant when `type == VARIABLE_EXPRESSION`. */
-  blender::StringRef variable_name;
+  StringRef variable_name;
 
   /* Indicates how the variable's value should be formatted into a string. This
    * is derived from the format specification (e.g. the "###" in "{blah:###}").
@@ -406,9 +560,7 @@ static int format_float_to_string(const FormatSpecifier &format,
 
       /* If the string consists only of digits and a possible negative sign, then
        * we append a ".0" to match Python. */
-      if (blender::StringRef(r_output_string).find_first_not_of("-0123456789") ==
-          std::string::npos)
-      {
+      if (StringRef(r_output_string).find_first_not_of("-0123456789") == std::string::npos) {
         r_output_string[output_length] = '.';
         r_output_string[output_length + 1] = '0';
         r_output_string[output_length + 2] = '\0';
@@ -471,7 +623,7 @@ static int format_float_to_string(const FormatSpecifier &format,
  * string should be passed alone (just the "##.###"), without the rest of the
  * variable expression.
  */
-static FormatSpecifier parse_format_specifier(blender::StringRef format_specifier)
+static FormatSpecifier parse_format_specifier(StringRef format_specifier)
 {
   FormatSpecifier format = {};
 
@@ -495,8 +647,8 @@ static FormatSpecifier parse_format_specifier(blender::StringRef format_specifie
   const bool found_dot = dot_index != std::string::npos;
   const bool only_one_dot = dot_index == dot_index_last;
   if (format_specifier.find_first_not_of(".#") == std::string::npos && found_dot && only_one_dot) {
-    blender::StringRef left = format_specifier.substr(0, dot_index);
-    blender::StringRef right = format_specifier.substr(dot_index + 1);
+    StringRef left = format_specifier.substr(0, dot_index);
+    StringRef right = format_specifier.substr(dot_index + 1);
 
     /* We currently require that the fractional digits are specified, so bail if
      * they aren't. */
@@ -523,14 +675,13 @@ static FormatSpecifier parse_format_specifier(blender::StringRef format_specifie
  * Find and parse the next valid token in `path` starting from index
  * `from_char`.
  *
- * \param path The path string to parse.
+ * \param path: The path string to parse.
  *
- * \param from_char The char index to start from.
+ * \param from_char: The char index to start from.
  *
- * \return The parsed token information, or nullopt if no token is found in
- * `path`.
+ * \return The parsed token information, or #std::nullopt if no token is found in `path`.
  */
-static std::optional<Token> next_token(blender::StringRef path, const int from_char)
+static std::optional<Token> next_token(StringRef path, const int from_char)
 {
   Token token;
 
@@ -548,7 +699,7 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
     {
       Token token;
       token.type = TokenType::LEFT_CURLY_BRACE;
-      token.byte_range = blender::IndexRange::from_begin_end(byte_index, byte_index + 2);
+      token.byte_range = IndexRange::from_begin_end(byte_index, byte_index + 2);
       return token;
     }
 
@@ -561,7 +712,7 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
         path[byte_index + 1] == '}')
     {
       token.type = TokenType::RIGHT_CURLY_BRACE;
-      token.byte_range = blender::IndexRange::from_begin_end(byte_index, byte_index + 2);
+      token.byte_range = IndexRange::from_begin_end(byte_index, byte_index + 2);
       return token;
     }
 
@@ -569,7 +720,7 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
      * illegal. */
     if (start == -1 && path[byte_index] == '}') {
       token.type = TokenType::UNESCAPED_CURLY_BRACE_ERROR;
-      token.byte_range = blender::IndexRange::from_begin_end(byte_index, byte_index + 1);
+      token.byte_range = IndexRange::from_begin_end(byte_index, byte_index + 1);
       return token;
     }
 
@@ -578,7 +729,7 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
       if (start != -1) {
         /* Already inside a variable expression. */
         token.type = TokenType::VARIABLE_SYNTAX_ERROR;
-        token.byte_range = blender::IndexRange::from_begin_end(start, byte_index);
+        token.byte_range = IndexRange::from_begin_end(start, byte_index);
         return token;
       }
       start = byte_index;
@@ -618,12 +769,12 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
   /* Unclosed variable expression. Syntax error. */
   if (end == -1) {
     token.type = TokenType::VARIABLE_SYNTAX_ERROR;
-    token.byte_range = blender::IndexRange::from_begin_end(start, path.size());
+    token.byte_range = IndexRange::from_begin_end(start, path.size());
     return token;
   }
 
   /* Parse the variable expression we found. */
-  token.byte_range = blender::IndexRange::from_begin_end(start, end);
+  token.byte_range = IndexRange::from_begin_end(start, end);
   if (format_specifier_split == -1) {
     /* No format specifier. */
     token.variable_name = path.substr(start + 1, (end - 1) - (start + 1));
@@ -642,11 +793,43 @@ static std::optional<Token> next_token(blender::StringRef path, const int from_c
   return token;
 }
 
+namespace bke::path_templates {
+
+std::optional<ExpressionInfo> next_template_variable_expression(StringRef text,
+                                                                size_t starting_offset)
+{
+  while (const std::optional<Token> token = next_token(text, starting_offset)) {
+    switch (token->type) {
+      case TokenType::LEFT_CURLY_BRACE:
+      case TokenType::RIGHT_CURLY_BRACE: {
+        starting_offset = token->byte_range.one_after_last();
+        continue;
+      }
+
+      case TokenType::VARIABLE_EXPRESSION: {
+        ExpressionInfo info;
+        info.byte_range = token->byte_range;
+        info.variable_name = token->variable_name;
+        return info;
+      }
+
+      case TokenType::VARIABLE_SYNTAX_ERROR:
+      case TokenType::UNESCAPED_CURLY_BRACE_ERROR: {
+        return std::nullopt;
+      }
+    }
+  }
+
+  return std::nullopt;
+}
+
+}  // namespace bke::path_templates
+
 /* Parse the given template and return the list of tokens found, in the same
  * order as they appear in the template. */
-static blender::Vector<Token> parse_template(blender::StringRef path)
+static Vector<Token> parse_template(StringRef path)
 {
-  blender::Vector<Token> tokens;
+  Vector<Token> tokens;
 
   for (int bytes_read = 0; bytes_read < path.size();) {
     const std::optional<Token> token = next_token(path, bytes_read);
@@ -671,9 +854,7 @@ static std::optional<Error> token_to_syntax_error(const Token &token)
       if (token.format.type == FormatSpecifierType::SYNTAX_ERROR) {
         return {{ErrorType::FORMAT_SPECIFIER, token.byte_range}};
       }
-      else {
-        return {{ErrorType::VARIABLE_SYNTAX, token.byte_range}};
-      }
+      return {{ErrorType::VARIABLE_SYNTAX, token.byte_range}};
     }
 
     case TokenType::UNESCAPED_CURLY_BRACE_ERROR: {
@@ -691,23 +872,19 @@ static std::optional<Error> token_to_syntax_error(const Token &token)
   return std::nullopt;
 }
 
-bool BKE_path_contains_template_syntax(blender::StringRef path)
+bool BKE_path_contains_template_syntax(StringRef path)
 {
   return path.find_first_of("{}") != std::string_view::npos;
 }
 
 /**
- * Evaluates the path template in `in_path` and writes the result to `out_path`
+ * Evaluates the path template in `in_path` and writes the result to `r_out_path`
  * if provided.
  *
- * \param out_path: buffer to write the evaluated path to. May be null, in which
+ * \param r_out_path: string to write the evaluated path to. May be null, in which
  * case writing is skipped, and this function just acts to validate the
- * templating in the path.
- *
- * \param out_path_max_length: The maximum length that template expansion is
- * allowed to make the template-expanded path (in bytes), including the null
- * terminator. In general, this should be the size of the underlying allocation
- * of `out_path`.
+ * templating in the path. If there are errors returned, there are no guarantees
+ * about the string's contents.
  *
  * \param template_variables: map of variables and their values to use during
  * template substitution.
@@ -716,29 +893,31 @@ bool BKE_path_contains_template_syntax(blender::StringRef path)
  * failure. Note that even if there are errors, `out_path` may get modified, and
  * it should be treated as bogus data in that case.
  */
-static blender::Vector<Error> eval_template(char *out_path,
-                                            const int out_path_max_length,
-                                            blender::StringRef in_path,
-                                            const VariableMap &template_variables)
+static Vector<Error> eval_template(std::string *r_out_path,
+                                   StringRef in_path,
+                                   const VariableMap &template_variables)
 {
-  if (out_path) {
-    in_path.copy_utf8_truncated(out_path, out_path_max_length);
+  if (r_out_path) {
+    /* Just in case. */
+    r_out_path->clear();
   }
 
-  const blender::Vector<Token> tokens = parse_template(in_path);
+  const Vector<Token> tokens = parse_template(in_path);
 
   if (tokens.is_empty()) {
-    /* No tokens found, so nothing to do. */
+    /* No tokens found, so the output is the same as the input. */
+    if (r_out_path) {
+      r_out_path->append(in_path);
+    }
     return {};
   }
 
   /* Accumulates errors as we process the tokens. */
-  blender::Vector<Error> errors;
+  Vector<Error> errors;
 
-  /* Tracks the change in string length due to the modifications as we go. We
-   * need this to properly map the token byte ranges to the being-modified
-   * string. */
-  int length_diff = 0;
+  /* Byte index of our position in the input path, to track where we are while
+   * copying things over. */
+  int in_head = 0;
 
   for (const Token &token : tokens) {
     /* Syntax errors. */
@@ -759,27 +938,38 @@ static blender::Vector<Error> eval_template(char *out_path,
 
       /* Curly brace escapes. */
       case TokenType::LEFT_CURLY_BRACE: {
-        strcpy(replacement_string, "{");
+        ARRAY_SET_ITEMS(replacement_string, '{', '\0');
         break;
       }
       case TokenType::RIGHT_CURLY_BRACE: {
-        strcpy(replacement_string, "}");
+        ARRAY_SET_ITEMS(replacement_string, '}', '\0');
         break;
       }
 
       /* Expand variable expression into the variable's value. */
       case TokenType::VARIABLE_EXPRESSION: {
-        if (std::optional<blender::StringRefNull> string_value = template_variables.get_string(
+        if (std::optional<StringRefNull> string_value = template_variables.get_string(
                 token.variable_name))
         {
-          /* String variable found, but we only process it if there's no format
-           * specifier: string variables do not support format specifiers. */
           if (token.format.type != FormatSpecifierType::NONE) {
             /* String variables don't take format specifiers: error. */
             errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
             continue;
           }
-          BLI_strncpy(replacement_string, string_value->c_str(), sizeof(replacement_string));
+          STRNCPY(replacement_string, string_value->c_str());
+          BLI_path_make_safe_filename(replacement_string);
+          break;
+        }
+
+        if (std::optional<StringRefNull> path_value = template_variables.get_filepath(
+                token.variable_name))
+        {
+          if (token.format.type != FormatSpecifierType::NONE) {
+            /* Path variables don't take format specifiers: error. */
+            errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
+            continue;
+          }
+          STRNCPY(replacement_string, path_value->c_str());
           break;
         }
 
@@ -804,54 +994,73 @@ static blender::Vector<Error> eval_template(char *out_path,
       }
     }
 
-    /* Perform the actual substitution with the expanded value. */
-    if (out_path) {
-      /* We're off the end of the available space. */
-      if (token.byte_range.start() + length_diff >= out_path_max_length) {
-        break;
-      }
+    if (r_out_path) {
+      /* Copy over any non-token text that precedes the token. */
+      r_out_path->append(in_path.substr(in_head, token.byte_range.start() - in_head));
 
-      BLI_string_replace_range(out_path,
-                               out_path_max_length,
-                               token.byte_range.start() + length_diff,
-                               token.byte_range.one_after_last() + length_diff,
-                               replacement_string);
-
-      length_diff -= token.byte_range.size();
-      length_diff += strlen(replacement_string);
+      /* Copy over the token replacement text. */
+      r_out_path->append(StringRef(replacement_string));
     }
+    in_head = token.byte_range.one_after_last();
+  }
+
+  /* Copy any remaining non-token text after the last token. */
+  if (r_out_path) {
+    r_out_path->append(in_path.substr(in_head));
   }
 
   return errors;
 }
 
-blender::Vector<Error> BKE_path_validate_template(
-    blender::StringRef path, const blender::bke::path_templates::VariableMap &template_variables)
+Vector<Error> BKE_path_validate_template(
+    StringRef path, const bke::path_templates::VariableMap &template_variables)
 {
-  return eval_template(nullptr, 0, path, template_variables);
+  return eval_template(nullptr, path, template_variables);
 }
 
-blender::Vector<Error> BKE_path_apply_template(char *path,
-                                               int path_max_length,
-                                               const VariableMap &template_variables)
+Vector<Error> BKE_path_apply_template(char *path,
+                                      int path_maxncpy,
+                                      const VariableMap &template_variables)
 {
   BLI_assert(path != nullptr);
 
-  blender::Vector<char> path_buffer(path_max_length);
-
-  const blender::Vector<Error> errors = eval_template(
-      path_buffer.data(), path_buffer.size(), path, template_variables);
+  std::string evaluated_path;
+  const Vector<Error> errors = eval_template(&evaluated_path, path, template_variables);
 
   if (errors.is_empty()) {
     /* No errors, so copy the modified path back to the original. */
-    BLI_strncpy(path, path_buffer.data(), path_max_length);
+    BLI_strncpy(path, evaluated_path.c_str(), path_maxncpy);
   }
   return errors;
 }
 
-std::string BKE_path_template_error_to_string(const Error &error, blender::StringRef path)
+Vector<Error> BKE_path_apply_template_alloc(char **path,
+                                            int path_maxncpy,
+                                            const VariableMap &template_variables)
 {
-  blender::StringRef subpath = path.substr(error.byte_range.start(), error.byte_range.size());
+  BLI_assert(path != nullptr);
+  BLI_assert(*path != nullptr);
+
+  std::string evaluated_path;
+  const Vector<Error> errors = eval_template(&evaluated_path, *path, template_variables);
+
+  if (!errors.is_empty()) {
+    return errors;
+  }
+
+  const int buffer_size = math::min(int(evaluated_path.size()) + 1, path_maxncpy);
+  char *buffer = MEM_new_array_uninitialized<char>(buffer_size, __func__);
+  BLI_strncpy(buffer, evaluated_path.c_str(), buffer_size);
+
+  MEM_delete(*path);
+  *path = buffer;
+
+  return {};
+}
+
+std::string BKE_path_template_error_to_string(const Error &error, StringRef path)
+{
+  StringRef subpath = path.substr(error.byte_range.start(), error.byte_range.size());
 
   switch (error.type) {
     case ErrorType::UNESCAPED_CURLY_BRACE: {
@@ -877,8 +1086,8 @@ std::string BKE_path_template_error_to_string(const Error &error, blender::Strin
 
 void BKE_report_path_template_errors(ReportList *reports,
                                      const eReportType report_type,
-                                     blender::StringRef path,
-                                     blender::Span<Error> errors)
+                                     StringRef path,
+                                     Span<Error> errors)
 {
   BLI_assert(!errors.is_empty());
 
@@ -890,8 +1099,8 @@ void BKE_report_path_template_errors(ReportList *reports,
   BKE_report(reports, report_type, error_message.c_str());
 }
 
-std::optional<std::string> BKE_path_template_format_float(
-    const blender::StringRef format_specifier, const double value)
+std::optional<std::string> BKE_path_template_format_float(const StringRef format_specifier,
+                                                          const double value)
 {
   const FormatSpecifier format = parse_format_specifier(format_specifier);
   if (format.type == FormatSpecifierType::SYNTAX_ERROR) {
@@ -902,7 +1111,7 @@ std::optional<std::string> BKE_path_template_format_float(
   return buffer;
 }
 
-std::optional<std::string> BKE_path_template_format_int(const blender::StringRef format_specifier,
+std::optional<std::string> BKE_path_template_format_int(const StringRef format_specifier,
                                                         const int64_t value)
 {
   const FormatSpecifier format = parse_format_specifier(format_specifier);
@@ -913,3 +1122,5 @@ std::optional<std::string> BKE_path_template_format_int(const blender::StringRef
   format_int_to_string(format, value, buffer);
   return buffer;
 }
+
+}  // namespace blender

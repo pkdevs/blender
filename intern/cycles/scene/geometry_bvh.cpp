@@ -52,7 +52,7 @@ void Geometry::compute_bvh(Device *device,
     /* Ensure all visibility bits are set at the geometry level BVH. In
      * the object level BVH is where actual visibility is tested. */
     object.set_is_shadow_catcher(true);
-    object.set_visibility(~0);
+    object.set_visibility(PATH_RAY_VISIBILITY_ALL);
 
     object.set_geometry(this);
 
@@ -113,7 +113,7 @@ void GeometryManager::device_update_bvh(Device *device,
   bparams.bvh_type = scene->params.bvh_type;
   bparams.curve_subdivisions = scene->params.curve_subdivisions();
 
-  VLOG_INFO << "Using " << bvh_layout_name(bparams.bvh_layout) << " layout.";
+  LOG_INFO << "Using " << bvh_layout_name(bparams.bvh_layout) << " layout.";
 
   const bool can_refit = scene->bvh != nullptr && scene->params.bvh_type == BVH_TYPE_DYNAMIC &&
                          (bparams.bvh_layout == BVHLayout::BVH_LAYOUT_OPTIX ||

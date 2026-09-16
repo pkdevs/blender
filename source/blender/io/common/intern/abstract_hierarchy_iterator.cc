@@ -10,23 +10,21 @@
 
 #include "BKE_anim_data.hh"
 #include "BKE_duplilist.hh"
+#include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_key.hh"
-#include "BKE_modifier.hh"
-#include "BKE_node_legacy_types.hh"
 #include "BKE_object.hh"
 #include "BKE_particle.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
+#include "BLI_assert.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_set.hh"
 #include "BLI_string_utils.hh"
 
 #include "DNA_ID.h"
 #include "DNA_layer_types.h"
 #include "DNA_modifier_types.h"
-#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 #include "DNA_rigidbody_types.h"
@@ -57,7 +55,7 @@ bool HierarchyContext::is_prototype() const
 {
   /* The context is for a prototype if it's for a duplisource or
    * for a duplicated object that was designated to be a prototype
-   * because the original was not included in the export.*/
+   * because the original was not included in the export. */
   return is_duplisource || (duplicator != nullptr && !is_instance());
 }
 
@@ -123,7 +121,7 @@ bool AbstractHierarchyWriter::check_is_animated(const HierarchyContext &context)
 {
   Object *object = context.object;
 
-  if (BKE_animdata_id_is_animated(static_cast<ID *>(object->data))) {
+  if (BKE_animdata_id_is_animated(object->data)) {
     return true;
   }
   if (BKE_key_from_object(object) != nullptr) {
@@ -136,7 +134,7 @@ bool AbstractHierarchyWriter::check_is_animated(const HierarchyContext &context)
   /* Test modifiers. */
   /* TODO(Sybren): replace this with a check on the depsgraph to properly check for dependency on
    * time. */
-  ModifierData *md = static_cast<ModifierData *>(object->modifiers.first);
+  ModifierData *md = object->modifiers.first();
   while (md) {
     if (md->type != eModifierType_Subsurf) {
       return true;
@@ -295,8 +293,6 @@ void AbstractHierarchyIterator::debug_print_export_graph(const ExportGraph &grap
 
 void AbstractHierarchyIterator::export_graph_construct()
 {
-  Scene *scene = DEG_get_evaluated_scene(depsgraph_);
-
   /* Add a "null" root node with no children immediately for the case where the top-most node in
    * the scene is not being exported and a root node otherwise wouldn't get added. */
   ObjectIdentifier root_node_id = ObjectIdentifier::for_real_object(nullptr);
@@ -318,20 +314,19 @@ void AbstractHierarchyIterator::export_graph_construct()
     }
 
     /* Export the duplicated objects instanced by this object. */
-    object_duplilist(depsgraph_, scene, object, nullptr, duplilist);
+    object_duplilist(depsgraph_, object, nullptr, duplilist);
     if (!duplilist.is_empty()) {
       DupliParentFinder dupli_parent_finder;
 
-      for (DupliObject &dupli_object : duplilist) {
-        PersistentID persistent_id(&dupli_object);
-        if (!should_visit_dupli_object(&dupli_object)) {
+      for (const DupliObject &dupli_object : duplilist) {
+        if (!should_visit_dupli_object(&dupli_object, object)) {
           continue;
         }
         dupli_parent_finder.insert(&dupli_object);
       }
 
-      for (DupliObject &dupli_object : duplilist) {
-        if (!should_visit_dupli_object(&dupli_object)) {
+      for (const DupliObject &dupli_object : duplilist) {
+        if (!should_visit_dupli_object(&dupli_object, object)) {
           continue;
         }
         visit_dupli_object(&dupli_object, object, dupli_parent_finder);
@@ -445,8 +440,7 @@ void AbstractHierarchyIterator::visit_object(Object *object,
   context->original_export_path = "";
   context->higher_up_export_path = "";
   context->is_duplisource = false;
-
-  copy_m4_m4(context->matrix_world, object->object_to_world().ptr());
+  context->matrix_world = object->object_to_world();
 
   ObjectIdentifier graph_index = determine_graph_index_object(context);
   context_update_for_graph_index(context, graph_index);
@@ -469,7 +463,7 @@ ObjectIdentifier AbstractHierarchyIterator::determine_graph_index_object(
   return ObjectIdentifier::for_real_object(context->export_parent);
 }
 
-void AbstractHierarchyIterator::visit_dupli_object(DupliObject *dupli_object,
+void AbstractHierarchyIterator::visit_dupli_object(const DupliObject *dupli_object,
                                                    Object *duplicator,
                                                    const DupliParentFinder &dupli_parent_finder)
 {
@@ -483,8 +477,7 @@ void AbstractHierarchyIterator::visit_dupli_object(DupliObject *dupli_object,
   context->original_export_path = "";
   context->animation_check_include_parent = false;
   context->is_duplisource = false;
-
-  copy_m4_m4(context->matrix_world, dupli_object->mat);
+  context->matrix_world = float4x4(dupli_object->mat);
 
   /* Construct export name for the dupli-instance. */
   std::string export_name = get_object_name(context->object) + "-" +
@@ -525,7 +518,7 @@ void AbstractHierarchyIterator::context_update_for_graph_index(
 
   /* If the parent type is such that it cannot be exported (at least not currently to USD or
    * Alembic), always check the parent for animation. */
-  const short partype = context->object->partype & PARTYPE;
+  const eObject_Partype partype = context->object->partype & PARTYPE;
   context->animation_check_include_parent |= ELEM(partype, PARBONE, PARVERT1, PARVERT3, PARSKEL);
 
   if (context->export_parent != context->object->parent) {
@@ -564,7 +557,7 @@ void AbstractHierarchyIterator::determine_export_paths(const HierarchyContext *p
       duplisource_export_path_.add(source_ob, context->export_path);
 
       if (context->object->data != nullptr) {
-        ID *source_data = static_cast<ID *>(context->object->data);
+        ID *source_data = context->object->data;
         duplisource_export_path_.add(source_data, get_object_data_path(context));
       }
     }
@@ -582,7 +575,7 @@ bool AbstractHierarchyIterator::determine_duplication_references(
   }
 
   /* Will be set to true if any child contexts are instances that were designated
-   * as proxies for the original prototype.*/
+   * as proxies for the original prototype. */
   bool contains_proxy_prototype = false;
 
   for (HierarchyContext *context : *children) {
@@ -600,7 +593,7 @@ bool AbstractHierarchyIterator::determine_duplication_references(
       }
 
       if (context->object->data) {
-        ID *source_data_id = (ID *)context->object->data;
+        ID *source_data_id = context->object->data;
         if (!duplisource_export_path_.contains(source_data_id)) {
           /* The original was not found, so mark this instance as "original". */
           std::string data_path = get_object_data_path(context);
@@ -634,13 +627,13 @@ bool AbstractHierarchyIterator::determine_duplication_references(
 
 void AbstractHierarchyIterator::make_writers(const HierarchyContext *parent_context)
 {
-  float parent_matrix_inv_world[4][4];
+  float4x4 parent_matrix_inv_world;
 
   if (parent_context) {
-    invert_m4_m4(parent_matrix_inv_world, parent_context->matrix_world);
+    parent_matrix_inv_world = math::invert(parent_context->matrix_world);
   }
   else {
-    unit_m4(parent_matrix_inv_world);
+    parent_matrix_inv_world = float4x4::identity();
   }
 
   const ExportChildren *children = graph_children(parent_context);
@@ -648,15 +641,18 @@ void AbstractHierarchyIterator::make_writers(const HierarchyContext *parent_cont
     return;
   }
 
+  bool has_point_instance_ancestor = false;
+  if (parent_context &&
+      (parent_context->is_point_instance || parent_context->has_point_instance_ancestor))
+  {
+    has_point_instance_ancestor = true;
+  }
+
   for (HierarchyContext *context : *children) {
-    if (parent_context) {
-      if (parent_context->is_point_instance || parent_context->has_point_instance_ancestor) {
-        context->has_point_instance_ancestor = true;
-      }
-    }
+    context->has_point_instance_ancestor = has_point_instance_ancestor;
 
     /* Update the context so that it is correct for this parent-child relation. */
-    copy_m4_m4(context->parent_matrix_inv_world, parent_matrix_inv_world);
+    context->parent_matrix_inv_world = parent_matrix_inv_world;
     if (parent_context != nullptr) {
       context->higher_up_export_path = parent_context->export_path;
     }
@@ -668,7 +664,7 @@ void AbstractHierarchyIterator::make_writers(const HierarchyContext *parent_cont
     if (!transform_writer) {
       /* Unable to export, so there is nothing to attach any children to; just abort this entire
        * branch of the export hierarchy. */
-      return;
+      continue;
     }
 
     const bool need_writers = context->is_point_proto || (!context->is_point_instance &&
@@ -722,7 +718,7 @@ void AbstractHierarchyIterator::make_writer_object_data(const HierarchyContext *
 
   HierarchyContext data_context = context_for_object_data(context);
   if (data_context.is_instance()) {
-    ID *object_data = static_cast<ID *>(context->object->data);
+    ID *object_data = context->object->data;
     data_context.original_export_path = duplisource_export_path_.lookup(object_data);
 
     /* If the object is marked as an instance, so should the object data. */
@@ -745,7 +741,7 @@ void AbstractHierarchyIterator::make_writers_particle_systems(
     const HierarchyContext *transform_context)
 {
   Object *object = transform_context->object;
-  ParticleSystem *psys = static_cast<ParticleSystem *>(object->particlesystem.first);
+  ParticleSystem *psys = object->particlesystem.first();
   for (; psys; psys = psys->next) {
     if (!psys_check_enabled(object, psys, true)) {
       continue;
@@ -775,6 +771,8 @@ void AbstractHierarchyIterator::make_writers_particle_systems(
       case PART_FLUID_SPRAYFOAMBUBBLE:
         writer = ensure_writer(&hair_context, &AbstractHierarchyIterator::create_particle_writer);
         break;
+      default:
+        break;
     }
     if (!writer) {
       continue;
@@ -787,7 +785,7 @@ void AbstractHierarchyIterator::make_writers_particle_systems(
   }
 }
 
-std::string AbstractHierarchyIterator::get_object_name(const Object *object)
+std::string AbstractHierarchyIterator::get_object_name(const Object *object) const
 {
   return get_id_name(&object->id);
 }
@@ -800,7 +798,7 @@ std::string AbstractHierarchyIterator::get_object_name(const Object *object, con
 
 std::string AbstractHierarchyIterator::get_object_data_name(const Object *object) const
 {
-  ID *object_data = static_cast<ID *>(object->data);
+  const ID *object_data = object->data;
   return get_id_name(object_data);
 }
 
@@ -811,7 +809,7 @@ AbstractHierarchyWriter *AbstractHierarchyIterator::get_writer(
 }
 
 EnsuredWriter AbstractHierarchyIterator::ensure_writer(
-    HierarchyContext *context, AbstractHierarchyIterator::create_writer_func create_func)
+    const HierarchyContext *context, AbstractHierarchyIterator::create_writer_func create_func)
 {
   AbstractHierarchyWriter *writer = get_writer(context->export_path);
   if (writer != nullptr) {
@@ -837,11 +835,24 @@ bool AbstractHierarchyIterator::mark_as_weak_export(const Object * /*object*/) c
 {
   return false;
 }
-bool AbstractHierarchyIterator::should_visit_dupli_object(const DupliObject *dupli_object) const
+bool AbstractHierarchyIterator::should_visit_dupli_object(const DupliObject *dupli_object,
+                                                          const Object *duplicator) const
 {
-  /* Do not visit dupli objects if their `no_draw` flag is set (things like custom bone shapes) or
-   * if they are meta-balls / text objects. */
-  if (dupli_object->no_draw || ELEM(dupli_object->ob->type, OB_MBALL, OB_FONT)) {
+  /* Do not visit dupli objects that the depsgraph iterator would hide for this evaluation mode
+   * (covers the `no_draw` flag, meta-ball instance data and originals hidden behind their duplis),
+   * so the exported instances match what Cycles and the Hydra delegate render. */
+  if (!DEG_iterator_dupli_is_visible(dupli_object, DEG_get_mode(depsgraph_))) {
+    return false;
+  }
+
+  /* Meta-balls / text objects / NURBS surfaces generate a dupli that just re-exposes the
+   * duplicator's own evaluated mesh conversion, duplicating the object/data pairing that is
+   * already exported for the duplicator itself. Skip only that redundant case, i.e. when the
+   * dupli is the duplicator object re-instancing itself; a dupli of one of these object types
+   * generated by a genuine instance elsewhere (e.g. a collection instance or a Geometry Nodes
+   * "Instance on Points") is the only representation of that instance and must still be
+   * exported. */
+  if (ELEM(dupli_object->ob->type, OB_MBALL, OB_FONT, OB_SURF) && dupli_object->ob == duplicator) {
     return false;
   }
 

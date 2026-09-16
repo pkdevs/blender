@@ -2,73 +2,71 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "MEM_guardedalloc.h"
 
-#include "BKE_node.hh"
-
-#include "BLI_assert.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_node_types.h"
-#include "RNA_types.hh"
+
+#include "RNA_enum_types.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
+
+#include "BKE_node.hh"
 
 #include "COM_domain.hh"
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
-#include "UI_interface_layout.hh"
-#include "UI_resources.hh"
 #include "node_composite_util.hh"
-
-/* **************** Displace  ******************** */
 
 namespace blender::nodes::node_composite_displace_cc {
 
-NODE_STORAGE_FUNCS(NodeDisplaceData)
-
-static void cmp_node_displace_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
-      .compositor_domain_priority(0);
-  b.add_input<decl::Vector>("Vector")
+      .hide_value()
+      .structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
+
+  b.add_input<decl::Vector>("Displacement"_ustr)
       .dimensions(2)
-      .default_value({1.0f, 1.0f})
-      .min(0.0f)
-      .max(1.0f)
-      .subtype(PROP_TRANSLATION)
-      .compositor_domain_priority(1);
-  b.add_input<decl::Float>("X Scale")
-      .default_value(0.0f)
-      .min(-1000.0f)
-      .max(1000.0f)
-      .compositor_domain_priority(2);
-  b.add_input<decl::Float>("Y Scale")
-      .default_value(0.0f)
-      .min(-1000.0f)
-      .max(1000.0f)
-      .compositor_domain_priority(3);
-  b.add_output<decl::Color>("Image");
+      .default_value({0.0f, 0.0f})
+      .structure_type(StructureType::Dynamic);
+
+  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling"_ustr).default_closed(true);
+  sampling_panel.add_input<decl::Menu>("Interpolation"_ustr)
+      .default_value(CMP_NODE_INTERPOLATION_BILINEAR)
+      .static_items(rna_enum_node_compositor_interpolation_items)
+      .description("Interpolation method")
+      .optional_label();
+  sampling_panel.add_input<decl::Menu>("Extension X"_ustr)
+      .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
+      .static_items(rna_enum_node_compositor_extension_items)
+      .description("The extension mode applied to the X axis")
+      .optional_label();
+  sampling_panel.add_input<decl::Menu>("Extension Y"_ustr)
+      .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
+      .static_items(rna_enum_node_compositor_extension_items)
+      .description("The extension mode applied to the Y axis")
+      .optional_label();
 }
 
-static void cmp_node_init_displace(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeDisplaceData *data = MEM_callocN<NodeDisplaceData>(__func__);
-  data->interpolation = CMP_NODE_INTERPOLATION_ANISOTROPIC;
+  /* Unused, kept for forward compatibility. */
+  NodeDisplaceData *data = MEM_new<NodeDisplaceData>(__func__);
   node->storage = data;
-}
-
-static void cmp_buts_displace(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout->prop(ptr, "interpolation", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
 using namespace blender::compositor;
@@ -79,10 +77,20 @@ class DisplaceOperation : public NodeOperation {
 
   void execute() override
   {
-    if (this->is_identity()) {
-      const Result &input = this->get_input("Image");
-      Result &output = this->get_result("Image");
+    const Result &input = this->get_input("Image");
+    Result &output = this->get_result("Image");
+    if (input.is_single_value()) {
       output.share_data(input);
+      return;
+    }
+
+    const Result &displacement = this->get_input("Displacement");
+    if (displacement.is_single_value()) {
+      output.share_data(input);
+      output.transform(math::from_location<float3x3>(displacement.get_single_value<float2>()));
+      output.get_realization_options().interpolation = this->get_interpolation();
+      output.get_realization_options().extension_x = this->get_extension_mode_x();
+      output.get_realization_options().extension_y = this->get_extension_mode_y();
       return;
     }
 
@@ -96,11 +104,11 @@ class DisplaceOperation : public NodeOperation {
 
   void execute_gpu()
   {
-    GPUShader *shader = context().get_shader(this->get_shader_name());
+    const Interpolation interpolation = this->get_interpolation();
+    gpu::Shader *shader = this->context().get_shader(this->get_shader_name(interpolation));
     GPU_shader_bind(shader);
 
-    const Result &input_image = get_input("Image");
-    const Interpolation interpolation = this->get_interpolation();
+    const Result &input_image = this->get_input("Image");
     if (interpolation == Interpolation::Anisotropic) {
       GPU_texture_anisotropic_filter(input_image, true);
       GPU_texture_mipmap_mode(input_image, true, true);
@@ -110,51 +118,49 @@ class DisplaceOperation : public NodeOperation {
           interpolation, Interpolation::Bilinear, Interpolation::Bicubic);
       GPU_texture_filter_mode(input_image, use_bilinear);
     }
-    GPU_texture_extend_mode(input_image, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+
+    const Extension extension_x = this->get_extension_mode_x();
+    const Extension extension_y = this->get_extension_mode_y();
+    GPU_texture_extend_mode_x(input_image, map_extension_mode_to_extend_mode(extension_x));
+    GPU_texture_extend_mode_y(input_image, map_extension_mode_to_extend_mode(extension_y));
     input_image.bind_as_texture(shader, "input_tx");
 
-    const Result &input_displacement = get_input("Vector");
-    input_displacement.bind_as_texture(shader, "displacement_tx");
-    const Result &input_x_scale = get_input("X Scale");
-    input_x_scale.bind_as_texture(shader, "x_scale_tx");
-    const Result &input_y_scale = get_input("Y Scale");
-    input_y_scale.bind_as_texture(shader, "y_scale_tx");
+    const Result &displacement = this->get_input("Displacement");
+    displacement.bind_as_texture(shader, "displacement_tx");
 
-    const Domain domain = compute_domain();
-    Result &output_image = get_result("Image");
+    const Domain domain = this->compute_domain();
+    Result &output_image = this->get_result("Image");
     output_image.allocate_texture(domain);
     output_image.bind_as_image(shader, "output_img");
 
-    compute_dispatch_threads_at_least(shader, domain.size);
+    compute_dispatch_threads_at_least(shader, domain.data_size);
 
     input_image.unbind_as_texture();
-    input_displacement.unbind_as_texture();
-    input_x_scale.unbind_as_texture();
-    input_y_scale.unbind_as_texture();
+    displacement.unbind_as_texture();
     output_image.unbind_as_image();
     GPU_shader_unbind();
   }
 
   void execute_cpu()
   {
-    const Result &image = get_input("Image");
-    const Result &input_displacement = get_input("Vector");
-    const Result &x_scale = get_input("X Scale");
-    const Result &y_scale = get_input("Y Scale");
+    const Result &image = this->get_input("Image");
+    const Result &displacement = this->get_input("Displacement");
 
     const Interpolation interpolation = this->get_interpolation();
-    const Domain domain = compute_domain();
-    Result &output = get_result("Image");
+    const Extension extension_x = this->get_extension_mode_x();
+    const Extension extension_y = this->get_extension_mode_y();
+    const Domain domain = this->compute_domain();
+    Result &output = this->get_result("Image");
     output.allocate_texture(domain);
 
-    const int2 size = domain.size;
+    const int2 size = domain.data_size;
 
     if (interpolation == Interpolation::Anisotropic) {
-      this->compute_anisotropic(size, image, output, input_displacement, x_scale, y_scale);
+      this->compute_anisotropic(size, image, output, displacement);
     }
     else {
       this->compute_interpolation(
-          interpolation, size, image, output, input_displacement, x_scale, y_scale);
+          interpolation, size, image, output, displacement, extension_x, extension_y);
     }
   }
 
@@ -162,28 +168,15 @@ class DisplaceOperation : public NodeOperation {
                              const int2 &size,
                              const Result &image,
                              Result &output,
-                             const Result &input_displacement,
-                             const Result &x_scale,
-                             const Result &y_scale) const
+                             const Result &displacement,
+                             const Extension &extension_mode_x,
+                             const Extension &extension_mode_y) const
   {
     parallel_for(size, [&](const int2 base_texel) {
-      const float2 coordinates = compute_coordinates(
-          base_texel, size, input_displacement, x_scale, y_scale);
-      switch (interpolation) {
-        /* The anisotropic case requires gradient computation and is handled separately. */
-        case Interpolation::Anisotropic:
-          BLI_assert_unreachable();
-          break;
-        case Interpolation::Nearest:
-          output.store_pixel(base_texel, image.sample_nearest_zero(coordinates));
-          break;
-        case Interpolation::Bilinear:
-          output.store_pixel(base_texel, image.sample_bilinear_zero(coordinates));
-          break;
-        case Interpolation::Bicubic:
-          output.store_pixel(base_texel, image.sample_cubic_wrap(coordinates, false, false));
-          break;
-      }
+      const float2 coordinates = this->compute_coordinates(base_texel, size, displacement);
+      output.store_pixel(
+          base_texel,
+          image.sample<Color>(coordinates, interpolation, extension_mode_x, extension_mode_y));
     });
   }
 
@@ -197,18 +190,8 @@ class DisplaceOperation : public NodeOperation {
   void compute_anisotropic(const int2 &size,
                            const Result &image,
                            Result &output,
-                           const Result &input_displacement,
-                           const Result &x_scale,
-                           const Result &y_scale) const
+                           const Result &displacement) const
   {
-    auto compute_anisotropic_pixel = [&](const int2 &texel,
-                                         const float2 &coordinates,
-                                         const float2 &x_gradient,
-                                         const float2 &y_gradient) {
-      /* Sample the input using the displaced coordinates passing in the computed gradients in
-       * order to utilize the anisotropic filtering capabilities of the sampler. */
-      output.store_pixel(texel, image.sample_ewa_zero(coordinates, x_gradient, y_gradient));
-    };
     parallel_for(math::divide_ceil(size, int2(2)), [&](const int2 base_texel) {
       /* Compute each of the pixels in the 2x2 block, making sure to exempt out of bounds right
        * and upper pixels. */
@@ -220,23 +203,36 @@ class DisplaceOperation : public NodeOperation {
       const int2 upper_left_texel = int2(x, y + 1);
       const int2 upper_right_texel = int2(x + 1, y + 1);
 
-      const float2 lower_left_coordinates = compute_coordinates(
-          lower_left_texel, size, input_displacement, x_scale, y_scale);
-      const float2 lower_right_coordinates = compute_coordinates(
-          lower_right_texel, size, input_displacement, x_scale, y_scale);
-      const float2 upper_left_coordinates = compute_coordinates(
-          upper_left_texel, size, input_displacement, x_scale, y_scale);
-      const float2 upper_right_coordinates = compute_coordinates(
-          upper_right_texel, size, input_displacement, x_scale, y_scale);
+      const float2 lower_left_coordinates = this->compute_coordinates(
+          lower_left_texel, size, displacement);
+      const float2 lower_right_coordinates = this->compute_coordinates(
+          lower_right_texel, size, displacement);
+      const float2 upper_left_coordinates = this->compute_coordinates(
+          upper_left_texel, size, displacement);
+      const float2 upper_right_coordinates = this->compute_coordinates(
+          upper_right_texel, size, displacement);
 
-      /* Compute the partial derivatives using finite difference. Divide by the input size since
-       * sample_ewa_zero assumes derivatives with respect to texel coordinates. */
-      const float2 lower_x_gradient = (lower_right_coordinates - lower_left_coordinates) / size.x;
-      const float2 left_y_gradient = (upper_left_coordinates - lower_left_coordinates) / size.y;
-      const float2 right_y_gradient = (upper_right_coordinates - lower_right_coordinates) / size.y;
-      const float2 upper_x_gradient = (upper_right_coordinates - upper_left_coordinates) / size.x;
+      /* Compute the partial derivatives using finite difference. */
+      const float2 lower_x_gradient = lower_right_coordinates - lower_left_coordinates;
+      const float2 left_y_gradient = upper_left_coordinates - lower_left_coordinates;
+      const float2 right_y_gradient = upper_right_coordinates - lower_right_coordinates;
+      const float2 upper_x_gradient = upper_right_coordinates - upper_left_coordinates;
 
       /* Computes one of the 2x2 pixels given its texel location, coordinates, and gradients. */
+      auto compute_anisotropic_pixel = [&](const int2 &texel,
+                                           const float2 &coordinates,
+                                           const float2 &x_gradient,
+                                           const float2 &y_gradient) {
+        /* Sample the input using the displaced coordinates passing in the computed gradients in
+         * order to utilize the anisotropic filtering capabilities of the sampler. */
+        const float2x2 jacobian = float2x2(x_gradient, y_gradient);
+        output.store_pixel(texel,
+                           image.sample<Color>(coordinates,
+                                               Interpolation::Anisotropic,
+                                               Extension::Clip,
+                                               Extension::Clip,
+                                               jacobian));
+      };
 
       compute_anisotropic_pixel(
           lower_left_texel, lower_left_coordinates, lower_x_gradient, left_y_gradient);
@@ -255,101 +251,102 @@ class DisplaceOperation : public NodeOperation {
     });
   }
 
-  float2 compute_coordinates(const int2 &texel,
-                             const int2 &size,
-                             const Result &input_displacement,
-                             const Result &x_scale,
-                             const Result &y_scale) const
+  float2 compute_coordinates(const int2 &texel, const int2 &size, const Result &displacement) const
   {
-    /* Add 0.5 to evaluate the sampler at the center of the pixel and divide by the image
-     * size to get the coordinates into the sampler's expected [0, 1] range. */
-    float2 coordinates = (float2(texel) + float2(0.5f)) / float2(size);
-
     /* Note that the input displacement is in pixel space, so divide by the input size to
      * transform it into the normalized sampler space. */
-    float2 scale = float2(x_scale.load_pixel_extended<float, true>(texel),
-                          y_scale.load_pixel_extended<float, true>(texel));
-    float2 displacement = input_displacement.load_pixel_extended<float3, true>(texel).xy() *
-                          scale / float2(size);
-    return coordinates - displacement;
+    const float2 coordinates = (float2(texel) + float2(0.5f)) / float2(size);
+    return coordinates - displacement.load_pixel_extended<float2>(texel) / float2(size);
   }
 
-  const char *get_shader_name() const
+  const char *get_shader_name(const Interpolation &interpolation) const
   {
-    if (this->get_interpolation() == Interpolation::Anisotropic) {
-      return "compositor_displace_anisotropic";
+    switch (interpolation) {
+      case Interpolation::Anisotropic:
+        return "compositor_displace_anisotropic";
+      case Interpolation::Bicubic:
+        return "compositor_displace_bicubic";
+      case Interpolation::Bilinear:
+      case Interpolation::Nearest:
+        return "compositor_displace";
     }
+
     return "compositor_displace";
   }
 
-  Interpolation get_interpolation() const
+  Interpolation get_interpolation()
   {
-    switch (node_storage(bnode()).interpolation) {
-      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
-        return Interpolation::Anisotropic;
+    const CMPNodeInterpolation interpolation = static_cast<CMPNodeInterpolation>(
+        this->get_input("Interpolation").get_single_value_default<MenuValue>().value);
+    switch (interpolation) {
       case CMP_NODE_INTERPOLATION_NEAREST:
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
+        return Interpolation::Anisotropic;
     }
 
-    BLI_assert_unreachable();
     return Interpolation::Nearest;
   }
 
-  bool is_identity()
+  Extension get_extension_mode_x()
   {
-    const Result &input_image = get_input("Image");
-    if (input_image.is_single_value()) {
-      return true;
+    const CMPExtensionMode extension_x = static_cast<CMPExtensionMode>(
+        this->get_input("Extension X").get_single_value_default<MenuValue>().value);
+    switch (extension_x) {
+      case CMP_NODE_EXTENSION_MODE_CLIP:
+        return Extension::Clip;
+      case CMP_NODE_EXTENSION_MODE_REPEAT:
+        return Extension::Repeat;
+      case CMP_NODE_EXTENSION_MODE_EXTEND:
+        return Extension::Extend;
     }
 
-    const Result &input_displacement = get_input("Vector");
-    if (input_displacement.is_single_value() &&
-        math::is_zero(input_displacement.get_single_value<float3>().xy()))
-    {
-      return true;
+    return Extension::Clip;
+  }
+
+  Extension get_extension_mode_y()
+  {
+    const CMPExtensionMode extension_y = static_cast<CMPExtensionMode>(
+        this->get_input("Extension Y").get_single_value_default<MenuValue>().value);
+    switch (extension_y) {
+      case CMP_NODE_EXTENSION_MODE_CLIP:
+        return Extension::Clip;
+      case CMP_NODE_EXTENSION_MODE_REPEAT:
+        return Extension::Repeat;
+      case CMP_NODE_EXTENSION_MODE_EXTEND:
+        return Extension::Extend;
     }
 
-    const Result &input_x_scale = get_input("X Scale");
-    const Result &input_y_scale = get_input("Y Scale");
-    if (input_x_scale.is_single_value() && input_x_scale.get_single_value<float>() == 0.0f &&
-        input_y_scale.is_single_value() && input_y_scale.get_single_value<float>() == 0.0f)
-    {
-      return true;
-    }
-
-    return false;
+    return Extension::Clip;
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new DisplaceOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_displace_cc
-
-static void register_node_type_cmp_displace()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_displace_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeDisplace", CMP_NODE_DISPLACE);
+  cmp_node_type_base(&ntype, "CompositorNodeDisplace"_ustr, CMP_NODE_DISPLACE);
   ntype.ui_name = "Displace";
   ntype.ui_description = "Displace pixel position using an offset vector";
   ntype.enum_name_legacy = "DISPLACE";
   ntype.nclass = NODE_CLASS_DISTORT;
-  ntype.declare = file_ns::cmp_node_displace_declare;
-  ntype.draw_buttons = file_ns::cmp_buts_displace;
-  ntype.initfunc = file_ns::cmp_node_init_displace;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeDisplaceData", node_free_standard_storage, node_copy_standard_storage);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_displace)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_displace_cc

@@ -12,12 +12,11 @@ from ..cache import cached
 from . import texture as gltf2_blender_gather_texture
 from .search_node_tree import \
     get_texture_node_from_socket, \
-    from_socket, \
     FilterByType, \
     previous_node, \
-    get_const_from_socket, \
     NodeSocket, \
-    get_texture_transform_from_mapping_node
+    get_texture_transform_from_mapping_node, \
+    NodeTreeSearcher
 
 # blender_shader_sockets determine the texture and primary_socket determines
 # the textransform and UVMap. Ex: when combining an ORM texture, for
@@ -122,7 +121,7 @@ def gather_udim_texture_info(
     if tex in ["normalTexture", "clearcoatNormalTexture"]:
         fields['scale'] = __gather_normal_scale(primary_socket, export_settings)
         texture_info = gltf2_io.MaterialNormalTextureInfoClass(**fields)
-    elif tex in "occlusionTexture":
+    elif tex == "occlusionTexture":
         fields['strength'] = __gather_occlusion_strength(primary_socket, export_settings)
         texture_info = gltf2_io.MaterialOcclusionTextureInfoClass(**fields)
     else:
@@ -171,9 +170,10 @@ def __gather_extras(blender_shader_sockets, export_settings):
 
 # MaterialNormalTextureInfo only
 def __gather_normal_scale(primary_socket, export_settings):
-    result = from_socket(
+    result = NodeTreeSearcher.from_socket(
         primary_socket,
-        FilterByType(bpy.types.ShaderNodeNormalMap))
+        FilterByType(bpy.types.ShaderNodeNormalMap),
+        export_settings)
     if not result:
         return None
     strengthInput = result[0].shader_node.inputs['Strength']
@@ -236,7 +236,8 @@ def __gather_texture_transform_and_tex_coord(primary_socket, export_settings):
     result_tex = get_texture_node_from_socket(primary_socket, export_settings)
     blender_shader_node = result_tex.shader_node
 
-    blender_shader_node['used'] = True
+    nodes_used = export_settings.get('nodes_used', {})
+    nodes_used[blender_shader_node.name] = True
 
     # Skip over UV wrapping stuff (it goes in the sampler)
     result = detect_manual_uv_wrapping(blender_shader_node, result_tex.group_path)
@@ -266,7 +267,7 @@ def __gather_texture_transform_and_tex_coord(primary_socket, export_settings):
         uvmap_info['value'] = node.node.attribute_name
 
     else:
-        uvmap_info['type'] = 'Active'
+        uvmap_info['type'] = 'Render'
 
     return texture_transform, uvmap_info
 

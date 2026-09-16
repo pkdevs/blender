@@ -8,20 +8,29 @@
 
 #include "abc_writer_points.h"
 
+#include <numeric>
+
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_pointcloud_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_anonymous_attribute_id.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_particle.h"
+#include "BKE_pointcloud.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 using Alembic::AbcGeom::kVertexScope;
 using Alembic::AbcGeom::OPoints;
@@ -31,7 +40,7 @@ ABCPointsWriter::ABCPointsWriter(const ABCWriterConstructorArgs &args) : ABCAbst
 
 void ABCPointsWriter::create_alembic_objects(const HierarchyContext * /*context*/)
 {
-  CLOG_INFO(&LOG, 2, "exporting OPoints %s", args_.abc_path.c_str());
+  CLOG_DEBUG(&LOG, "exporting OPoints %s", args_.abc_path.c_str());
   abc_points_ = OPoints(args_.abc_parent, args_.abc_name, timesample_index_);
   abc_points_schema_ = abc_points_.getSchema();
 }
@@ -126,4 +135,124 @@ void ABCPointsWriter::do_write(HierarchyContext &context)
   abc_points_schema_.set(sample);
 }
 
-}  // namespace blender::io::alembic
+ABCPointCloudWriter::ABCPointCloudWriter(const ABCWriterConstructorArgs &args)
+    : ABCAbstractWriter(args)
+{
+}
+
+void ABCPointCloudWriter::create_alembic_objects(const HierarchyContext * /*context*/)
+{
+  CLOG_DEBUG(&LOG, "exporting OPoints %s", args_.abc_path.c_str());
+  abc_points_ = OPoints(args_.abc_parent, args_.abc_name, timesample_index_);
+  abc_points_schema_ = abc_points_.getSchema();
+}
+
+Alembic::Abc::OObject ABCPointCloudWriter::get_alembic_object() const
+{
+  return abc_points_;
+}
+
+Alembic::Abc::OCompoundProperty ABCPointCloudWriter::abc_prop_for_custom_props()
+{
+  return abc_schema_prop_for_custom_props(abc_points_schema_);
+}
+
+void ABCPointCloudWriter::do_write(HierarchyContext &context)
+{
+  const PointCloud *pointcloud = id_cast<const PointCloud *>(context.object->data);
+
+  OPointsSchema::Sample sample;
+
+  std::vector<Imath::V3f> points;
+  get_positions(pointcloud->positions(), points);
+  sample.setPositions(points);
+
+  std::vector<uint64_t> ids;
+  ids.resize(pointcloud->totpoint);
+  const VArraySpan point_ids = *pointcloud->attributes().lookup<int>("id", bke::AttrDomain::Point);
+  if (point_ids.is_empty()) {
+    /* Fill ids from 0 to size - 1 if we do not have any as Alembic requires a sample to have ids.
+     */
+    std::iota(ids.begin(), ids.end(), 0);
+  }
+  else {
+    for (const int i : point_ids.index_range()) {
+      ids[i] = uint64_t(point_ids[i]);
+    }
+  }
+  sample.setIds(ids);
+
+  VArray<float> radii = pointcloud->radius();
+  std::vector<float> widths;
+  if (!radii.is_empty()) {
+    widths.resize(radii.size());
+
+    /* TODO(kevindietrich): if the radius is stored as a single value, export it as such on the
+     * Uniform scope. */
+    for (const int i : radii.index_range()) {
+      widths[i] = radii[i] * 2.0f;
+    }
+
+    Alembic::Abc::FloatArraySample wsample_array(widths);
+    Alembic::AbcGeom::OFloatGeomParam::Sample wsample(wsample_array, kVertexScope);
+    sample.setWidths(wsample);
+  }
+
+  std::vector<Imath::V3f> velocities;
+  if (get_velocities(pointcloud->attributes(), velocities)) {
+    sample.setVelocities(velocities);
+  }
+
+  update_bounding_box(context.object);
+  sample.setSelfBounds(bounding_box_);
+  abc_points_schema_.set(sample);
+
+  write_arb_geo_params(pointcloud, *context.object, abc_points_schema_.getNumSamples());
+}
+
+void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud,
+                                               const Object &object,
+                                               const size_t num_geom_samples)
+{
+  Alembic::Abc::OCompoundProperty arb_geom_params = abc_points_schema_.getArbGeomParams();
+
+  const bke::AttributeAccessor attributes = pointcloud->attributes();
+
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
+    if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
+        ELEM(iter.name, "position", "velocity", "id", "radius"))
+    {
+      return;
+    }
+
+    AttributeParamMaps &param_maps = get_attribute_param_maps();
+    /* Pass num_geom_samples - 1 so we write empty samples up until this frame. */
+    BLI_assert(num_geom_samples >= 1);
+    create_geom_param_for_attribute(arb_geom_params,
+                                    param_maps,
+                                    iter,
+                                    timesample_index(),
+                                    {},
+                                    BKE_id_name(object.id),
+                                    num_geom_samples - 1);
+  });
+
+  if (attribute_maps_) {
+    /* If an attribute was missing this frame, write empty samples for it.
+     * This is mostly to ensure that attributes have the same number of samples as the geometry
+     * data if some disappear midway in the animation and never come back. */
+    attribute_maps_->write_empty_samples(num_geom_samples);
+  }
+}
+
+AttributeParamMaps &ABCPointCloudWriter::get_attribute_param_maps()
+{
+  if (!attribute_maps_) {
+    attribute_maps_ = std::make_unique<AttributeParamMaps>();
+  }
+  return *attribute_maps_.get();
+}
+
+}  // namespace io::alembic
+}  // namespace blender

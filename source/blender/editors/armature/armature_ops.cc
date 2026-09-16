@@ -16,6 +16,8 @@
 
 #include "armature_intern.hh"
 
+namespace blender {
+
 /* ************************** registration **********************************/
 
 void ED_operatortypes_armature()
@@ -47,6 +49,7 @@ void ED_operatortypes_armature()
   WM_operatortype_append(ARMATURE_OT_delete);
   WM_operatortype_append(ARMATURE_OT_dissolve);
   WM_operatortype_append(ARMATURE_OT_duplicate);
+  WM_operatortype_append(ARMATURE_OT_duplicate_rename);
   WM_operatortype_append(ARMATURE_OT_symmetrize);
   WM_operatortype_append(ARMATURE_OT_extrude);
   WM_operatortype_append(ARMATURE_OT_hide);
@@ -174,3 +177,5 @@ void ED_keymap_armature(wmKeyConfig *keyconf)
   keymap = WM_keymap_ensure(keyconf, "Pose", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = ED_operator_posemode;
 }
+
+}  // namespace blender

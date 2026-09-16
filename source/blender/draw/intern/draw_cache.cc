@@ -18,14 +18,16 @@
 #include "DNA_scene_types.h"
 #include "DNA_volume_types.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_context.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_subdiv_modifier.hh"
 
 #include "DRW_render.hh"
@@ -35,6 +37,7 @@
 
 #include "draw_cache.hh"
 #include "draw_cache_impl.hh"
+#include "draw_common_c.hh"
 #include "draw_context_private.hh"
 
 /* -------------------------------------------------------------------- */
@@ -114,7 +117,8 @@ gpu::Batch *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob)
     case OB_MESH:
       return DRW_cache_mesh_face_wireframe_get(ob);
     case OB_POINTCLOUD:
-      return DRW_pointcloud_batch_cache_get_dots(ob);
+      return pointcloud_is_gsplat(ob) ? DRW_gsplat_batch_cache_get_dots(ob) :
+                                        DRW_pointcloud_batch_cache_get_dots(ob);
     case OB_VOLUME:
       return DRW_cache_volume_face_wireframe_get(ob);
     case OB_GREASE_PENCIL:
@@ -139,6 +143,16 @@ gpu::Batch *DRW_cache_object_surface_get(Object *ob)
   switch (ob->type) {
     case OB_MESH:
       return DRW_cache_mesh_surface_get(ob);
+    default:
+      return nullptr;
+  }
+}
+
+gpu::BottomLevelAS *DRW_cache_object_surface_blas_get(Object *ob)
+{
+  switch (ob->type) {
+    case OB_MESH:
+      return DRW_cache_mesh_surface_blas_get(ob);
     default:
       return nullptr;
   }
@@ -196,6 +210,14 @@ gpu::Batch *DRW_cache_mesh_surface_get(Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface(DRW_object_get_data_for_drawing<Mesh>(*ob));
+}
+
+gpu::BottomLevelAS *DRW_cache_mesh_surface_blas_get(Object *ob)
+{
+  BLI_assert(ob->type == OB_MESH);
+  /* Ensure the surface VBOs/IBOs are requested, since BLAS relies on them. */
+  DRW_cache_mesh_surface_get(ob);
+  return DRW_mesh_batch_cache_get_surface_blas(DRW_object_get_data_for_drawing<Mesh>(*ob));
 }
 
 gpu::Batch *DRW_cache_mesh_paint_overlay_surface_get(Object *ob)
@@ -361,9 +383,7 @@ gpu::Batch *DRW_cache_lattice_wire_get(Object *ob, bool use_weight)
   Lattice &lt = DRW_object_get_data_for_drawing<Lattice>(*ob);
   int actdef = -1;
 
-  if (use_weight && !BLI_listbase_is_empty(&lt.vertex_group_names) && lt.editlatt &&
-      lt.editlatt->latt->dvert)
-  {
+  if (use_weight && !lt.vertex_group_names.is_empty() && lt.editlatt && lt.editlatt->latt->dvert) {
     actdef = lt.vertex_group_active_index - 1;
   }
 
@@ -387,9 +407,19 @@ gpu::Batch *DRW_cache_lattice_vert_overlay_get(Object *ob)
 gpu::Batch *DRW_cache_pointcloud_vert_overlay_get(Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
+  return DRW_pointcloud_batch_cache_get_edit_dots(ob);
+}
 
-  PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  return DRW_pointcloud_batch_cache_get_edit_dots(&pointcloud);
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name GSplat
+ * \{ */
+
+gpu::Batch *DRW_cache_gsplat_vert_overlay_get(Object *ob)
+{
+  BLI_assert(ob->type == OB_POINTCLOUD);
+  return DRW_gsplat_batch_cache_get_edit_dots(ob);
 }
 
 /** \} */
@@ -474,6 +504,7 @@ void drw_batch_cache_validate(Object *ob)
       break;
     case OB_POINTCLOUD:
       DRW_pointcloud_batch_cache_validate(&DRW_object_get_data_for_drawing<PointCloud>(*ob));
+      DRW_gsplat_batch_cache_validate(&DRW_object_get_data_for_drawing<PointCloud>(*ob));
       break;
     case OB_VOLUME:
       DRW_volume_batch_cache_validate(&DRW_object_get_data_for_drawing<Volume>(*ob));
@@ -518,6 +549,7 @@ void drw_batch_cache_generate_requested(Object *ob, TaskGraph &task_graph)
       break;
     case OB_POINTCLOUD:
       DRW_pointcloud_batch_cache_create_requested(ob);
+      DRW_gsplat_batch_cache_create_requested(ob);
       break;
     /* TODO: all cases. */
     default:
@@ -536,18 +568,27 @@ void drw_batch_cache_generate_requested_evaluated_mesh_or_curve(Object *ob, Task
   const bool is_paint_mode = ELEM(
       mode, CTX_MODE_SCULPT, CTX_MODE_PAINT_TEXTURE, CTX_MODE_PAINT_VERTEX, CTX_MODE_PAINT_WEIGHT);
 
-  const bool use_hide = ((ob->type == OB_MESH) &&
-                         ((is_paint_mode && (ob == draw_ctx->obact) &&
-                           DRW_object_use_hide_faces(ob)) ||
-                          ((mode == CTX_MODE_EDIT_MESH) && (ob->mode == OB_MODE_EDIT))));
-
-  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob);
-  /* Try getting the mesh first and if that fails, try getting the curve data.
-   * If the curves are surfaces or have certain modifiers applied to them, the will have mesh data
-   * of the final result.
-   */
-  if (mesh != nullptr) {
-    DRW_mesh_batch_cache_create_requested(task_graph, *ob, *mesh, *scene, is_paint_mode, use_hide);
+  if (ob->type == OB_MESH) {
+    const bool use_hide = ((is_paint_mode && (ob == draw_ctx->obact) &&
+                            DRW_object_use_hide_faces(ob)) ||
+                           ((mode == CTX_MODE_EDIT_MESH) && (ob->mode == OB_MODE_EDIT)));
+    if (Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
+      DRW_mesh_batch_cache_create_requested(
+          task_graph, *ob, DRW_mesh_get_for_drawing(*mesh), *scene, is_paint_mode, use_hide);
+    }
+  }
+  else if (Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob)) {
+    /* Legacy curve objects can have evaluated mesh data while the original object is still a curve
+     * in edit mode (see #156971). #DRW_mesh_batch_cache_create_requested expects the object to
+     * match the mesh data and to be in object mode for non-edit mesh extraction, so use a shallow
+     * temporary mesh object for drawing. */
+    bke::ObjectRuntime tmp_runtime = *ob->runtime;
+    Object tmp_object = dna::shallow_copy(*ob);
+    tmp_object.runtime = &tmp_runtime;
+    tmp_object.mode = OB_MODE_OBJECT;
+    BKE_object_replace_data_on_shallow_copy(&tmp_object, &mesh->id);
+    DRW_mesh_batch_cache_create_requested(
+        task_graph, tmp_object, DRW_mesh_get_for_drawing(*mesh), *scene, is_paint_mode, false);
   }
   else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_FONT, OB_SURF)) {
     DRW_curve_batch_cache_create_requested(ob, scene);
@@ -557,10 +598,7 @@ void drw_batch_cache_generate_requested_evaluated_mesh_or_curve(Object *ob, Task
 void drw_batch_cache_generate_requested_delayed(Object *ob)
 {
   DRWContext &draw_ctx = drw_get();
-  if (draw_ctx.delayed_extraction == nullptr) {
-    draw_ctx.delayed_extraction = BLI_gset_ptr_new(__func__);
-  }
-  BLI_gset_add(draw_ctx.delayed_extraction, ob);
+  draw_ctx.delayed_extraction.add(ob);
 }
 
 void DRW_batch_cache_free_old(Object *ob, int ctime)
@@ -575,6 +613,7 @@ void DRW_batch_cache_free_old(Object *ob, int ctime)
     case OB_POINTCLOUD:
       DRW_pointcloud_batch_cache_free_old(&DRW_object_get_data_for_drawing<PointCloud>(*ob),
                                           ctime);
+      DRW_gsplat_batch_cache_free_old(&DRW_object_get_data_for_drawing<PointCloud>(*ob), ctime);
       break;
     default:
       break;
@@ -585,7 +624,7 @@ void DRW_batch_cache_free_old(Object *ob, int ctime)
 
 void DRW_cdlayer_attr_aliases_add(GPUVertFormat *format,
                                   const char *base_name,
-                                  const int data_type,
+                                  const bke::AttrType data_type,
                                   const StringRef layer_name,
                                   bool is_active_render,
                                   bool is_active_layer)
@@ -603,7 +642,7 @@ void DRW_cdlayer_attr_aliases_add(GPUVertFormat *format,
 
   /* Active render layer name. */
   if (is_active_render) {
-    GPU_vertformat_alias_add(format, data_type == CD_PROP_FLOAT2 ? "a" : base_name);
+    GPU_vertformat_alias_add(format, data_type == bke::AttrType::Float2 ? "a" : base_name);
   }
 
   /* Active display layer name. */

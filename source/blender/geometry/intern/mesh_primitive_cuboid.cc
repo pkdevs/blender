@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BKE_attribute.hh"
 #include "BKE_mesh.hh"
 
@@ -369,7 +373,7 @@ Mesh *create_cuboid_mesh(const float3 &size,
                          const int verts_x,
                          const int verts_y,
                          const int verts_z,
-                         const std::optional<StringRef> &uv_id)
+                         const std::optional<StringRef> uv_id)
 {
   const CuboidConfig config(size, verts_x, verts_y, verts_z);
 

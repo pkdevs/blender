@@ -22,6 +22,11 @@
 
 #include "kernel/camera/camera.h"
 
+/* Custom cameras don't work with adaptive subdivision currently, and it's a bit tricky
+ * to fix for the OptiX case as there is no OSL shader compiled for the CPU. This is a temporary
+ * workaround to fall back to a perspective camera for that case. */
+#define FIX_CUSTOM_CAMERA_CRASH
+
 CCL_NAMESPACE_BEGIN
 
 static float shutter_curve_eval(float x, array<float> &shutter_curve)
@@ -132,19 +137,29 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(farclip, "Far Clip", 1e5f);
 
   SOCKET_FLOAT(viewplane.left, "Viewplane Left", 0);
-  SOCKET_FLOAT(viewplane.right, "Viewplane Right", 0);
+  SOCKET_FLOAT(viewplane.right, "Viewplane Right", 1);
   SOCKET_FLOAT(viewplane.bottom, "Viewplane Bottom", 0);
-  SOCKET_FLOAT(viewplane.top, "Viewplane Top", 0);
+  SOCKET_FLOAT(viewplane.top, "Viewplane Top", 1);
+
+  SOCKET_FLOAT(viewplane_pre.left, "Viewplane Pre Left", 0);
+  SOCKET_FLOAT(viewplane_pre.right, "Viewplane Pre Right", 0);
+  SOCKET_FLOAT(viewplane_pre.bottom, "Viewplane Pre Bottom", 0);
+  SOCKET_FLOAT(viewplane_pre.top, "Viewplane Pre Top", 0);
+
+  SOCKET_FLOAT(viewplane_post.left, "Viewplane Post Left", 0);
+  SOCKET_FLOAT(viewplane_post.right, "Viewplane Post Right", 0);
+  SOCKET_FLOAT(viewplane_post.bottom, "Viewplane Post Bottom", 0);
+  SOCKET_FLOAT(viewplane_post.top, "Viewplane Post Top", 0);
 
   SOCKET_FLOAT(border.left, "Border Left", 0);
-  SOCKET_FLOAT(border.right, "Border Right", 0);
+  SOCKET_FLOAT(border.right, "Border Right", 1);
   SOCKET_FLOAT(border.bottom, "Border Bottom", 0);
-  SOCKET_FLOAT(border.top, "Border Top", 0);
+  SOCKET_FLOAT(border.top, "Border Top", 1);
 
   SOCKET_FLOAT(viewport_camera_border.left, "Viewport Border Left", 0);
-  SOCKET_FLOAT(viewport_camera_border.right, "Viewport Border Right", 0);
+  SOCKET_FLOAT(viewport_camera_border.right, "Viewport Border Right", 1);
   SOCKET_FLOAT(viewport_camera_border.bottom, "Viewport Border Bottom", 0);
-  SOCKET_FLOAT(viewport_camera_border.top, "Viewport Border Top", 0);
+  SOCKET_FLOAT(viewport_camera_border.top, "Viewport Border Top", 1);
 
   SOCKET_FLOAT(offscreen_dicing_scale, "Offscreen Dicing Scale", 1.0f);
 
@@ -159,9 +174,6 @@ NODE_DEFINE(Camera)
 Camera::Camera() : Node(get_node_type())
 {
   shutter_table_offset = TABLE_OFFSET_INVALID;
-
-  width = 1024;
-  height = 512;
 
   use_perspective_motion = false;
 
@@ -196,7 +208,7 @@ Camera::~Camera() = default;
 void Camera::compute_auto_viewplane()
 {
   if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
-    viewplane = BoundBox2D();
+    viewplane = BoundBox2D::full;
   }
   else {
     const float aspect = (float)full_width / (float)full_height;
@@ -263,6 +275,14 @@ void Camera::update(Scene *scene)
   rastertocamera = screentocamera * rastertoscreen;
   full_rastertocamera = screentocamera * full_rastertoscreen;
 
+#ifdef FIX_CUSTOM_CAMERA_CRASH
+  if (camera_type == CAMERA_CUSTOM) {
+    const ProjectionTransform full_cameratoscreen = projection_perspective(fov, nearclip, farclip);
+    const ProjectionTransform full_screentocamera = projection_inverse(full_cameratoscreen);
+    full_rastertocamera = full_screentocamera * full_rastertoscreen;
+  }
+#endif
+
   cameratoworld = matrix;
   screentoworld = cameratoworld * screentocamera;
   rastertoworld = cameratoworld * rastertocamera;
@@ -294,6 +314,14 @@ void Camera::update(Scene *scene)
               transform_perspective(&full_rastertocamera, make_float3(0, 0, 0));
   }
   else {
+#ifdef FIX_CUSTOM_CAMERA_CRASH
+    if (camera_type == CAMERA_CUSTOM) {
+      full_dx = transform_perspective(&full_rastertocamera, make_float3(1, 0, 0)) -
+                transform_perspective(&full_rastertocamera, make_float3(0, 0, 0));
+      full_dy = transform_perspective(&full_rastertocamera, make_float3(0, 1, 0)) -
+                transform_perspective(&full_rastertocamera, make_float3(0, 0, 0));
+    }
+#endif
     dx = zero_float3();
     dy = zero_float3();
   }
@@ -303,7 +331,11 @@ void Camera::update(Scene *scene)
   full_dx = transform_direction(&cameratoworld, full_dx);
   full_dy = transform_direction(&cameratoworld, full_dy);
 
+#ifdef FIX_CUSTOM_CAMERA_CRASH
+  if (camera_type == CAMERA_PERSPECTIVE || camera_type == CAMERA_CUSTOM) {
+#else
   if (camera_type == CAMERA_PERSPECTIVE) {
+#endif
     float3 v = transform_perspective(&full_rastertocamera,
                                      make_float3(full_width, full_height, 0.0f));
     frustum_right_normal = normalize(make_float3(v.z, 0.0f, -v.x));
@@ -339,31 +371,49 @@ void Camera::update(Scene *scene)
     have_motion = have_motion || motion[i] != matrix;
   }
 
-  if (need_motion == Scene::MOTION_PASS) {
-    if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
-      if (have_motion) {
-        kcam->motion_pass_pre = transform_inverse(motion[0]);
-        kcam->motion_pass_post = transform_inverse(motion[motion.size() - 1]);
-      }
-      else {
-        kcam->motion_pass_pre = kcam->worldtocamera;
-        kcam->motion_pass_post = kcam->worldtocamera;
-      }
+  if (need_motion == Scene::MOTION_PASS || need_motion == Scene::MOTION_PASS_INTERACTIVE) {
+    if (have_motion) {
+      kcam->motion_pass_pre = transform_inverse(motion[0]);
+      kcam->motion_pass_post = transform_inverse(motion[motion.size() - 1]);
     }
     else {
-      if (have_motion || fov != fov_pre || fov != fov_post) {
+      kcam->motion_pass_pre = kcam->worldtocamera;
+      kcam->motion_pass_post = kcam->worldtocamera;
+    }
+    if (camera_type != CAMERA_PANORAMA && camera_type != CAMERA_CUSTOM) {
+      const BoundBox2D motion_viewplane_pre = viewplane_pre.is_empty() ? viewplane : viewplane_pre;
+      const BoundBox2D motion_viewplane_post = viewplane_post.is_empty() ? viewplane :
+                                                                           viewplane_post;
+
+      if (have_motion || fov != fov_pre || fov != fov_post || viewplane != motion_viewplane_pre ||
+          viewplane != motion_viewplane_post)
+      {
         /* Note the values for perspective_pre/perspective_post calculated for MOTION_PASS are
          * different to those calculated for MOTION_BLUR below, so the code has not been combined.
          */
-        const ProjectionTransform cameratoscreen_pre = projection_perspective(
-            fov_pre, nearclip, farclip);
-        const ProjectionTransform cameratoscreen_post = projection_perspective(
-            fov_post, nearclip, farclip);
-        const ProjectionTransform cameratoraster_pre = screentoraster * cameratoscreen_pre;
-        const ProjectionTransform cameratoraster_post = screentoraster * cameratoscreen_post;
-        kcam->perspective_pre = cameratoraster_pre * transform_inverse(motion[0]);
-        kcam->perspective_post = cameratoraster_post *
-                                 transform_inverse(motion[motion.size() - 1]);
+        ProjectionTransform cameratoscreen_pre = cameratoscreen;
+        ProjectionTransform cameratoscreen_post = cameratoscreen;
+        if (camera_type == CAMERA_PERSPECTIVE) {
+          cameratoscreen_pre = projection_perspective(fov_pre, nearclip, farclip);
+          cameratoscreen_post = projection_perspective(fov_post, nearclip, farclip);
+        }
+
+        const Transform screentoraster_pre = ndctoraster * fulltoborder *
+                                             transform_from_viewplane(motion_viewplane_pre);
+        const Transform screentoraster_post = ndctoraster * fulltoborder *
+                                              transform_from_viewplane(motion_viewplane_post);
+
+        const ProjectionTransform cameratoraster_pre = screentoraster_pre * cameratoscreen_pre;
+        const ProjectionTransform cameratoraster_post = screentoraster_post * cameratoscreen_post;
+        if (have_motion) {
+          kcam->perspective_pre = cameratoraster_pre * transform_inverse(motion[0]);
+          kcam->perspective_post = cameratoraster_post *
+                                   transform_inverse(motion[motion.size() - 1]);
+        }
+        else {
+          kcam->perspective_pre = cameratoraster_pre * worldtocamera;
+          kcam->perspective_post = cameratoraster_post * worldtocamera;
+        }
       }
       else {
         kcam->perspective_pre = worldtoraster;
@@ -458,6 +508,10 @@ void Camera::update(Scene *scene)
   kcam->dx = make_float4(dx);
   kcam->dy = make_float4(dy);
 
+  /* Compensation for progressive rendering, so we use the same texture cache tiles
+   * as for the full render resolution rather. */
+  kcam->differential_scale = 0.5f * (width / float(full_width) + height / float(full_height));
+
   /* clipping */
   kcam->nearclip = nearclip;
   kcam->cliplength = (farclip == FLT_MAX) ? FLT_MAX : farclip - nearclip;
@@ -471,6 +525,24 @@ void Camera::update(Scene *scene)
   need_device_update = true;
   need_flags_update = true;
   previous_need_motion = need_motion;
+}
+
+void Camera::update_interactive_motion()
+{
+  array<Transform> motion = get_motion();
+  if (!motion.empty()) {
+    motion[0] = matrix;
+
+    /* Trigger another update if there was motion compared to previous frame, so that last viewport
+     * camera movement does not stick around. */
+    set_motion(motion);
+  }
+
+  set_fov_pre(fov);
+  set_viewplane_pre_left(viewplane.left);
+  set_viewplane_pre_right(viewplane.right);
+  set_viewplane_pre_bottom(viewplane.bottom);
+  set_viewplane_pre_top(viewplane.top);
 }
 
 void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scene)
@@ -524,28 +596,34 @@ void Camera::device_update_volume(Device * /*device*/, DeviceScene *dscene, Scen
 
   KernelIntegrator *kintegrator = &dscene->data.integrator;
   if (kintegrator->use_volumes) {
-    BoundBox viewplane_boundbox = viewplane_bounds_get();
+    if (camera_type == CAMERA_CUSTOM) {
+      kernel_camera.is_inside_volume = 1;
+      LOG_INFO << "Considering custom camera to be inside volume.";
+    }
+    else {
+      BoundBox viewplane_boundbox = viewplane_bounds_get();
 
-    /* Parallel object update, with grain size to avoid too much threading overhead
-     * for individual objects. */
-    static const int OBJECTS_PER_TASK = 32;
-    parallel_for(blocked_range<size_t>(0, scene->objects.size(), OBJECTS_PER_TASK),
-                 [&](const blocked_range<size_t> &r) {
-                   for (size_t i = r.begin(); i != r.end(); i++) {
-                     Object *object = scene->objects[i];
-                     if (object->get_geometry()->has_volume &&
-                         viewplane_boundbox.intersects(object->bounds)) {
-                       /* TODO(sergey): Consider adding more grained check. */
-                       VLOG_INFO << "Detected camera inside volume.";
-                       kernel_camera.is_inside_volume = 1;
-                       parallel_for_cancel();
-                       break;
+      /* Parallel object update, with grain size to avoid too much threading overhead
+       * for individual objects. */
+      static const int OBJECTS_PER_TASK = 32;
+      parallel_for(blocked_range<size_t>(0, scene->objects.size(), OBJECTS_PER_TASK),
+                   [&](const blocked_range<size_t> &r) {
+                     for (size_t i = r.begin(); i != r.end(); i++) {
+                       Object *object = scene->objects[i];
+                       if (object->get_geometry()->has_volume &&
+                           viewplane_boundbox.intersects(object->bounds)) {
+                         /* TODO(sergey): Consider adding more grained check. */
+                         LOG_INFO << "Detected camera inside volume.";
+                         kernel_camera.is_inside_volume = 1;
+                         parallel_for_cancel();
+                         break;
+                       }
                      }
-                   }
-                 });
+                   });
 
-    if (!kernel_camera.is_inside_volume) {
-      VLOG_INFO << "Camera is outside of the volume.";
+      if (!kernel_camera.is_inside_volume) {
+        LOG_INFO << "Camera is outside of the volume.";
+      }
     }
   }
 
@@ -696,7 +774,11 @@ float Camera::world_to_raster_size(const float3 P)
       }
     }
   }
+#ifdef FIX_CUSTOM_CAMERA_CRASH
+  else if (camera_type == CAMERA_PERSPECTIVE || camera_type == CAMERA_CUSTOM) {
+#else
   else if (camera_type == CAMERA_PERSPECTIVE) {
+#endif
     /* Calculate as if point is directly ahead of the camera. */
     const float3 raster = make_float3(0.5f * full_width, 0.5f * full_height, 0.0f);
     const float3 Pcamera = transform_perspective(&full_rastertocamera, raster);
@@ -783,12 +865,14 @@ float Camera::world_to_raster_size(const float3 P)
      * may be a better way to do this, but calculating differentials from the
      * point directly ahead seems to produce good enough results. */
     if (camera_type == CAMERA_CUSTOM) {
+      int cache_miss = 0;
       camera_sample_custom(nullptr,
                            &kernel_camera,
                            kernel_camera_motion.data(),
                            0.5f * make_float2(full_width, full_height),
                            zero_float2(),
-                           &ray);
+                           &ray,
+                           cache_miss);
     }
     else {
 #if 0
@@ -827,7 +911,7 @@ bool Camera::use_motion() const
   return motion.size() > 1;
 }
 
-bool Camera::set_screen_size(const int width_, int height_)
+bool Camera::set_screen_size(const int width_, const int height_)
 {
   if (width_ != width || height_ != height) {
     width = width_;
@@ -864,6 +948,9 @@ void Camera::set_osl_camera(Scene *scene,
                             const std::string &bytecode)
 {
 #ifdef WITH_OSL
+  /* Ensure shading system exists before we try to load a shader. */
+  scene->osl_manager->shading_system_init(scene->shader_manager->get_scene_linear_interop_id());
+
   /* Load the shader. */
   const char *hash;
 
@@ -898,7 +985,9 @@ void Camera::set_osl_camera(Scene *scene,
       /* Skip unsupported types. */
       if (param->varlenarray || param->isstruct || param->type.arraylen > 1 || param->isoutput ||
           param->isclosure)
+      {
         continue;
+      }
 
       vector<uint8_t> raw_data;
       int vec_size = (int)param->type.aggregate;
@@ -926,8 +1015,9 @@ void Camera::set_osl_camera(Scene *scene,
         raw_data.resize(data.length() + 1);
         memcpy(raw_data.data(), data.c_str(), data.length() + 1);
       }
-      else
+      else {
         continue;
+      }
 
       auto entry = std::make_pair(raw_data, param->type);
       auto it = script_params.find(param->name);
@@ -945,7 +1035,7 @@ void Camera::set_osl_camera(Scene *scene,
 
     /* Remove unused parameters. */
     for (auto it = script_params.begin(); it != script_params.end();) {
-      if (used_params.count(it->first)) {
+      if (used_params.contains(it->first)) {
         it++;
       }
       else {
@@ -984,9 +1074,9 @@ void Camera::clear_osl_camera(Scene *scene)
 #endif
 }
 
-uint Camera::get_kernel_features() const
+uint64_t Camera::get_kernel_features() const
 {
-  uint kernel_features = 0;
+  uint64_t kernel_features = 0;
 
   if (!script_name.empty()) {
     kernel_features |= KERNEL_FEATURE_OSL_CAMERA;

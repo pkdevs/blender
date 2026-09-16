@@ -8,14 +8,20 @@
 
 #pragma once
 
+#include <optional>
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_workspace_types.h"
 
+#include "ED_screen_types.hh"
+
 #include "WM_types.hh"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
+
+namespace blender {
 
 struct ARegion;
 struct AZone;
@@ -30,9 +36,8 @@ struct WorkSpaceInstanceHook;
 struct bContext;
 struct bScreen;
 struct rcti;
-struct uiBlock;
-struct uiLayout;
 struct wmKeyConfig;
+struct wmKeyMap;
 struct wmMsgSubscribeKey;
 struct wmMsgSubscribeValue;
 struct wmNotifier;
@@ -42,6 +47,12 @@ struct wmRegionMessageSubscribeParams;
 struct wmSpaceTypeListenerParams;
 struct wmWindow;
 struct wmWindowManager;
+
+namespace ui {
+struct Layout;
+struct Block;
+enum class ButtonSectionsAlign : int8_t;
+}  // namespace ui
 
 /* regions */
 /** Only exported for WM. */
@@ -53,7 +64,7 @@ void ED_region_do_draw(bContext *C, ARegion *region);
 void ED_region_exit(bContext *C, ARegion *region);
 /**
  * Utility to exit and free an area-region. Screen level regions (menus/popups) need to be treated
- * slightly differently, see #ui_region_temp_remove().
+ * slightly differently, see #ui::region_temp_remove().
  */
 void ED_region_remove(bContext *C, ScrArea *area, ARegion *region);
 void ED_region_pixelspace(const ARegion *region);
@@ -71,10 +82,26 @@ void ED_region_tag_redraw_cursor(ARegion *region);
 void ED_region_tag_redraw_no_rebuild(ARegion *region);
 void ED_region_tag_refresh_ui(ARegion *region);
 /**
+ * Attempt to activate an button referencing an RNA property in the \a region, it may redraw the
+ * region so it can try one more time.
+ */
+void ED_region_activate_rna_prop(bContext *C,
+                                 ARegion *region,
+                                 const void *data,
+                                 StringRefNull prop_name);
+/**
  * Tag editor overlays to be redrawn. If in doubt about which parts need to be redrawn (partial
  * clipping rectangle set), redraw everything.
  */
 void ED_region_tag_redraw_editor_overlays(ARegion *region);
+
+/**
+ * If the region has tag RGN_FLAG_INDICATE_OVERFLOW then draw
+ * a line or gradient on edges if there is content overflowing.
+ */
+void ED_region_draw_overflow_indication(const ScrArea *area,
+                                        const ARegion *region,
+                                        const rcti *mask = nullptr);
 
 /**
  * Set the temporary update flag for property search.
@@ -84,11 +111,15 @@ void ED_region_search_filter_update(const ScrArea *area, ARegion *region);
  * Returns the search string if the space type and region type support property search.
  */
 const char *ED_area_region_search_filter_get(const ScrArea *area, const ARegion *region);
+/**
+ * Returns the maximum size a region can grow to so it still fits in the area.
+ */
+int ED_area_max_regionsize(const ScrArea *area, const ARegion *scale_region, const AZEdge edge);
 
 void ED_region_panels_init(wmWindowManager *wm, ARegion *region);
 void ED_region_panels_ex(const bContext *C,
                          ARegion *region,
-                         wmOperatorCallContext op_context,
+                         wm::OpCallContext op_context,
                          const char *contexts[]);
 void ED_region_panels(const bContext *C, ARegion *region);
 /**
@@ -98,8 +129,8 @@ void ED_region_panels(const bContext *C, ARegion *region);
  */
 void ED_region_panels_layout_ex(const bContext *C,
                                 ARegion *region,
-                                ListBase *paneltypes,
-                                wmOperatorCallContext op_context,
+                                ListBaseT<PanelType> *paneltypes,
+                                wm::OpCallContext op_context,
                                 const char *contexts[],
                                 const char *category_override);
 /**
@@ -108,7 +139,7 @@ void ED_region_panels_layout_ex(const bContext *C,
  */
 bool ED_region_property_search(const bContext *C,
                                ARegion *region,
-                               ListBase *paneltypes,
+                               ListBaseT<PanelType> *paneltypes,
                                const char *contexts[],
                                const char *category_override);
 
@@ -119,16 +150,15 @@ void ED_region_header_init(ARegion *region);
 void ED_region_header(const bContext *C, ARegion *region);
 void ED_region_header_layout(const bContext *C, ARegion *region);
 void ED_region_header_draw(const bContext *C, ARegion *region);
-/* Forward declare enum. */
-enum class uiButtonSectionsAlign : int8_t;
+
 /** Version of #ED_region_header() that draws with button sections. */
 void ED_region_header_with_button_sections(const bContext *C,
                                            ARegion *region,
-                                           uiButtonSectionsAlign align);
+                                           ui::ButtonSectionsAlign align);
 /** Version of #ED_region_header_draw() that draws with button sections. */
 void ED_region_header_draw_with_button_sections(const bContext *C,
                                                 const ARegion *region,
-                                                uiButtonSectionsAlign align);
+                                                ui::ButtonSectionsAlign align);
 
 void ED_region_cursor_set(wmWindow *win, ScrArea *area, ARegion *region);
 /**
@@ -158,9 +188,15 @@ void ED_region_info_draw_multiline(ARegion *region,
                                    const char *text_array[],
                                    const float fill_color[4],
                                    bool full_redraw);
-void ED_region_image_metadata_panel_draw(ImBuf *ibuf, uiLayout *layout);
+void ED_region_image_metadata_panel_draw(ImBuf *ibuf, ui::Layout *layout);
 void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, float y0);
 float ED_region_blend_alpha(ARegion *region);
+/**
+ * The region's on-screen rectangle, accounting for its current blend animation slide offset (see
+ * #ED_region_blend_alpha). Equal to `region->winrct` when the region isn't currently blending
+ * in/out.
+ */
+void ED_region_blend_rect(ARegion *region, rcti *r_rect);
 const rcti *ED_region_visible_rect(ARegion *region);
 /**
  * Overlapping regions only in the following restricted cases.
@@ -201,7 +237,7 @@ void ED_spacetypes_keymap(wmKeyConfig *keyconf);
 /**
  * Returns offset for next button in header.
  */
-int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco);
+int ED_area_header_switchbutton(const bContext *C, ui::Block *block, int yco);
 
 /* areas */
 /**
@@ -213,7 +249,7 @@ void ED_area_and_region_types_init(ScrArea *area);
  */
 void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area);
 void ED_area_exit(bContext *C, ScrArea *area);
-blender::StringRefNull ED_area_name(const ScrArea *area);
+StringRefNull ED_area_name(const ScrArea *area);
 int ED_area_icon(const ScrArea *area);
 int ED_screen_area_active(const bContext *C);
 void ED_screen_global_areas_refresh(wmWindow *win);
@@ -224,6 +260,9 @@ void ED_area_tag_redraw(ScrArea *area);
 void ED_area_tag_redraw_no_rebuild(ScrArea *area);
 void ED_area_tag_redraw_regiontype(ScrArea *area, int regiontype);
 void ED_area_tag_refresh(ScrArea *area);
+void ED_area_hud_region_set_padding_flag(ScrArea *area,
+                                         ARegion *changed_region,
+                                         const bool set_padding = false);
 /**
  * For regions that change the region size in their #ARegionType.layout() callback: Mark the area
  * as having a changed region size, requiring refitting of regions within the area.
@@ -283,12 +322,12 @@ ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
   for (ScrArea *area_name = ED_screen_areas_iter_first(win, screen); area_name != NULL; \
        area_name = ED_screen_areas_iter_next(screen, area_name))
 #define ED_screen_verts_iter(win, screen, vert_name) \
-  for (ScrVert *vert_name = (win)->global_areas.vertbase.first ? \
-                                (ScrVert *)(win)->global_areas.vertbase.first : \
-                                (ScrVert *)(screen)->vertbase.first; \
+  for (ScrVert *vert_name = (win)->global_areas.vertbase.first_ ? \
+                                (ScrVert *)(win)->global_areas.vertbase.first_ : \
+                                (ScrVert *)(screen)->vertbase.first_; \
        vert_name != NULL; \
-       vert_name = (vert_name == (win)->global_areas.vertbase.last) ? \
-                       (ScrVert *)(screen)->vertbase.first : \
+       vert_name = (vert_name == (win)->global_areas.vertbase.last()) ? \
+                       (ScrVert *)(screen)->vertbase.first_ : \
                        vert_name->next)
 
 /**
@@ -334,8 +373,22 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen);
  * redraws: uses defines from `stime->redraws`
  * \param enable: 1 - forward on, -1 - backwards on, 0 - off.
  */
-void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable);
+void ED_screen_animation_timer(
+    bContext *C, Scene *scene, ViewLayer *view_layer, int redraws, int sync, int enable);
+/**
+ * Remove the animation timer, same as calling ED_screen_animation_timer(..., enable=0).
+ */
+void ED_screen_animation_timer_remove(wmWindowManager *wm, wmWindow *win);
 void ED_screen_animation_timer_update(bScreen *screen, int redraws);
+/**
+ * Stop the animation in all screens where should_stop_fn(screen) returns true.
+ *
+ * The callback is only called for screens that have an animation timer.
+ */
+void ED_screen_animation_stop(Main *bmain,
+                              wmWindowManager *wm,
+                              FunctionRef<bool(const bScreen &screen)> should_stop_fn);
+
 void ED_screen_restore_temp_type(bContext *C, ScrArea *area);
 ScrArea *ED_screen_full_newspace(bContext *C, ScrArea *area, int type);
 /**
@@ -364,23 +417,21 @@ bScreen *ED_screen_state_maximized_create(bContext *C);
  *
  * \warning \a area may be freed.
  */
-ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, short state);
+ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, eScreen_State state);
 /**
  * Wrapper to open a temporary space either as full-screen space, or as separate window,
  * as defined by \a display_type.
  *
  * \param title: Title to set for the window, if a window is spawned.
- * \param rect_unscaled: Position & size of the window, if a window is spawned.
  */
 ScrArea *ED_screen_temp_space_open(bContext *C,
                                    const char *title,
-                                   const rcti *rect_unscaled,
                                    eSpace_Type space_type,
                                    int display_type,
-                                   bool dialog) ATTR_NONNULL(1, 2, 3);
-void ED_screens_header_tools_menu_create(bContext *C, uiLayout *layout, void *arg);
-void ED_screens_footer_tools_menu_create(bContext *C, uiLayout *layout, void *arg);
-void ED_screens_region_flip_menu_create(bContext *C, uiLayout *layout, void *arg);
+                                   bool dialog) ATTR_NONNULL(1);
+void ED_screens_header_tools_menu_create(bContext *C, ui::Layout *layout, void *arg);
+void ED_screens_footer_tools_menu_create(bContext *C, ui::Layout *layout, void *arg);
+void ED_screens_region_flip_menu_create(bContext *C, ui::Layout *layout, void *arg);
 /**
  * \return true if any active area requires to see in 3D.
  */
@@ -476,6 +527,11 @@ class WorkspaceStatus {
   void item(std::string text, int icon1, int icon2 = 0);
 
   /**
+   * Add extra (or negative) space between items.
+   */
+  void separator(float factor = 1.0f);
+
+  /**
    * Add a dynamic status entry with up to two icons that change appearance.
    * Example:
    *   [CTRL] Tweak
@@ -495,6 +551,16 @@ class WorkspaceStatus {
    *   [V] X-Ray
    */
   void opmodal(std::string text, const wmOperatorType *ot, int propvalue, bool inverted = false);
+
+  /**
+   * Add a dynamic status entry for a given property in a modal keymap.
+   * Example:
+   *   [V] X-Ray
+   */
+  void modal_keymap(std::string text,
+                    const wmKeyMap *keymap,
+                    int propvalue,
+                    bool inverted = false);
 };
 
 void ED_workspace_do_listen(bContext *C, const wmNotifier *note);
@@ -510,11 +576,37 @@ void ED_update_for_newframe(Main *bmain, Depsgraph *depsgraph);
  */
 void ED_reset_audio_device(bContext *C);
 wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode);
+
+/**
+ * Start scrubbing, returns optional playback state.
+ * \param C: The current context, which is used to find the screen that is currently managing the
+ * animation playback.
+ * \param screen: The screen that is currently being used to scrub.
+ */
+std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen &screen);
+/**
+ * Stop scrubbing, optionally resumes playback.
+ * \param C: The current context, which is used to find the screen that is currently managing the
+ * animation playback.
+ * \param screen: The screen that is currently being used to scrub.
+ * \param resume: Optional saved playback data - if it has a value, playback is started with the
+ * given settings.
+ */
+void ED_screen_scrubbing_disable(bContext &C,
+                                 bScreen &screen,
+                                 const std::optional<PreScrubbingState> &resume);
+
 /**
  * Find window that owns the animation timer.
  */
+wmWindow *ED_window_animation_playing_no_scrub(const wmWindowManager *wm);
 bScreen *ED_screen_animation_playing(const wmWindowManager *wm);
 bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm);
+
+/**
+ * Find the scene that is currently playing in a window/screen.
+ */
+Scene *ED_screen_find_playing_scene(const bScreen *screen, bool scrub = false);
 
 /* screen keymaps */
 /* called in `spacetypes.cc`. */
@@ -529,6 +621,7 @@ void ED_operatortypes_workspace();
 /* operators; context poll callbacks */
 
 bool ED_operator_screenactive(bContext *C);
+bool ED_operator_active_screen_and_scene(bContext *C);
 bool ED_operator_screenactive_nobackground(bContext *C);
 /**
  * When mouse is over area-edge.
@@ -539,6 +632,9 @@ bool ED_operator_regionactive(bContext *C);
 
 bool ED_operator_scene(bContext *C);
 bool ED_operator_scene_editable(bContext *C);
+bool ED_operator_sequencer_scene(bContext *C);
+bool ED_operator_sequencer_scene_editable(bContext *C);
+
 bool ED_operator_objectmode(bContext *C);
 /**
  * Same as #ED_operator_objectmode() but additionally sets a "disabled hint". That is, a message
@@ -555,6 +651,7 @@ bool ED_operator_region_gizmo_active(bContext *C);
  * Generic for any view2d which uses anim_ops.
  */
 bool ED_operator_animview_active(bContext *C);
+bool ED_operator_region_animview_active(bContext *C);
 bool ED_operator_outliner_active(bContext *C);
 bool ED_operator_region_outliner_active(bContext *C);
 bool ED_operator_outliner_active_no_editobject(bContext *C);
@@ -564,6 +661,7 @@ bool ED_operator_outliner_active_no_editobject(bContext *C);
  * #ED_operator_asset_browsing_active() (asset browsing only).
  */
 bool ED_operator_file_active(bContext *C);
+bool ED_operator_region_file_active(bContext *C);
 /**
  * \note Will only return true if the file space is in file browsing mode, not asset browsing! See
  * #ED_operator_file_active() (file or asset browsing) and
@@ -573,28 +671,41 @@ bool ED_operator_file_browsing_active(bContext *C);
 bool ED_operator_asset_browsing_active(bContext *C);
 bool ED_operator_spreadsheet_active(bContext *C);
 bool ED_operator_action_active(bContext *C);
+bool ED_operator_region_action_active(bContext *C);
 bool ED_operator_buttons_active(bContext *C);
 bool ED_operator_node_active(bContext *C);
 bool ED_operator_node_editable(bContext *C);
 bool ED_operator_graphedit_active(bContext *C);
+bool ED_operator_region_graphedit_active(bContext *C);
 bool ED_operator_sequencer_active(bContext *C);
 bool ED_operator_sequencer_active_editable(bContext *C);
 bool ED_operator_image_active(bContext *C);
 bool ED_operator_nla_active(bContext *C);
+bool ED_operator_region_nla_active(bContext *C);
 bool ED_operator_info_active(bContext *C);
+bool ED_operator_region_info_active(bContext *C);
 bool ED_operator_console_active(bContext *C);
+bool ED_operator_preferences_active(bContext *C);
 
 /** Only check there is an active object (no visibility check). */
 bool ED_operator_object_active_only(bContext *C);
 bool ED_operator_object_active(bContext *C);
+bool ED_operator_object_active_objectmode(bContext *C);
 bool ED_operator_object_active_editable_ex(bContext *C, const Object *ob);
 bool ED_operator_object_active_editable(bContext *C);
+
+/** Use in cases where it's essential the object is the active object in the current view layer. */
+bool ED_operator_object_active_only_from_view_layer(bContext *C);
+bool ED_operator_object_active_from_view_layer(bContext *C);
+
 /**
  * Object must be editable and fully local (i.e. not an override).
  */
 bool ED_operator_object_active_local_editable_ex(bContext *C, const Object *ob);
 bool ED_operator_object_active_local_editable(bContext *C);
 bool ED_operator_object_active_editable_mesh(bContext *C);
+bool ED_operator_object_active_editable_obdata_from_view_layer_ex(bContext *C, short obtype);
+bool ED_operator_object_active_editable_mesh_from_view_layer(bContext *C);
 bool ED_operator_object_active_editable_font(bContext *C);
 bool ED_operator_editable_mesh(bContext *C);
 bool ED_operator_editmesh(bContext *C);
@@ -640,31 +751,34 @@ bUserMenu *ED_screen_user_menu_ensure(bContext *C);
  * \param op_prop_enum: name of an operator property when the operator is called with an enum (to
  * be an empty string otherwise)
  */
-bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(ListBase *lb,
+bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(ListBaseT<bUserMenuItem> *lb,
                                                          const wmOperatorType *ot,
                                                          IDProperty *prop,
                                                          const char *op_prop_enum,
-                                                         wmOperatorCallContext opcontext);
-bUserMenuItem_Menu *ED_screen_user_menu_item_find_menu(ListBase *lb, const MenuType *mt);
-bUserMenuItem_Prop *ED_screen_user_menu_item_find_prop(ListBase *lb,
+                                                         wm::OpCallContext opcontext);
+bUserMenuItem_Menu *ED_screen_user_menu_item_find_menu(ListBaseT<bUserMenuItem> *lb,
+                                                       const MenuType *mt);
+bUserMenuItem_Prop *ED_screen_user_menu_item_find_prop(ListBaseT<bUserMenuItem> *lb,
                                                        const char *context_data_path,
                                                        const char *prop_id,
                                                        int prop_index);
 
-void ED_screen_user_menu_item_add_operator(ListBase *lb,
+void ED_screen_user_menu_item_add_operator(ListBaseT<bUserMenuItem> *lb,
                                            const char *ui_name,
                                            const wmOperatorType *ot,
                                            const IDProperty *prop,
                                            const char *op_prop_enum,
-                                           wmOperatorCallContext opcontext);
-void ED_screen_user_menu_item_add_menu(ListBase *lb, const char *ui_name, const MenuType *mt);
-void ED_screen_user_menu_item_add_prop(ListBase *lb,
+                                           wm::OpCallContext opcontext);
+void ED_screen_user_menu_item_add_menu(ListBaseT<bUserMenuItem> *lb,
+                                       const char *ui_name,
+                                       const MenuType *mt);
+void ED_screen_user_menu_item_add_prop(ListBaseT<bUserMenuItem> *lb,
                                        const char *ui_name,
                                        const char *context_data_path,
                                        const char *prop_id,
                                        int prop_index);
 
-void ED_screen_user_menu_item_remove(ListBase *lb, bUserMenuItem *umi);
+void ED_screen_user_menu_item_remove(ListBaseT<bUserMenuItem> *lb, bUserMenuItem *umi);
 void ED_screen_user_menu_register();
 
 /* Cache display helpers */
@@ -718,6 +832,7 @@ ARegion *ED_area_find_region_xy_visual(const ScrArea *area, int regiontype, cons
 
 /* `interface_region_hud.cc` */
 
+namespace ui {
 ARegionType *ED_area_type_hud(int space_type);
 void ED_area_type_hud_clear(wmWindowManager *wm, ScrArea *area_keep);
 void ED_area_type_hud_ensure(bContext *C, ScrArea *area);
@@ -727,6 +842,7 @@ void ED_area_type_hud_ensure(bContext *C, ScrArea *area);
  * same region type is present multiple times.
  */
 ARegion *ED_area_type_hud_redo_region_find(const ScrArea *area, const ARegion *hud_region);
+}  // namespace ui
 
 /**
  * Default key-maps, bit-flags (matches order of evaluation).
@@ -750,3 +866,5 @@ enum eScreenCycle {
   SPACE_CONTEXT_CYCLE_PREV,
   SPACE_CONTEXT_CYCLE_NEXT,
 };
+
+}  // namespace blender

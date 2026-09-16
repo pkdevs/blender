@@ -35,13 +35,9 @@ class MATERIAL_UL_matslots(UIList):
         layout.context_pointer_set("id", ma)
         layout.context_pointer_set("material_slot", slot)
 
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            if ma:
-                layout.prop(ma, "name", text="", emboss=False, icon_value=icon)
-            else:
-                layout.label(text="", icon_value=icon)
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
+        if ma:
+            layout.prop(ma, "name", text="", emboss=False, icon_value=icon)
+        else:
             layout.label(text="", icon_value=icon)
 
 
@@ -143,8 +139,9 @@ class EEVEE_MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
             if ob.mode == 'EDIT':
                 row = layout.row(align=True)
                 row.operator("object.material_slot_assign", text="Assign")
-                row.operator("object.material_slot_select", text="Select")
-                row.operator("object.material_slot_deselect", text="Deselect")
+                if ob.type != 'FONT':
+                    row.operator("object.material_slot_select", text="Select")
+                    row.operator("object.material_slot_deselect", text="Deselect")
 
         elif mat:
             row.template_ID(space, "pin_id")
@@ -173,16 +170,8 @@ class EEVEE_MATERIAL_PT_surface(MaterialButtonsPanel, Panel):
 
         mat = context.material
 
-        if mat.use_nodes:
-            layout.use_property_split = True
-            panel_node_draw(layout, mat.node_tree, 'OUTPUT_MATERIAL', "Surface")
-        else:
-            layout.prop(mat, "use_nodes", icon='NODETREE')
-            layout.use_property_split = True
-            layout.prop(mat, "diffuse_color", text="Base Color")
-            layout.prop(mat, "metallic")
-            layout.prop(mat, "specular_intensity", text="Specular")
-            layout.prop(mat, "roughness")
+        layout.use_property_split = True
+        panel_node_draw(layout, mat.node_tree, 'OUTPUT_MATERIAL', "Surface")
 
 
 class EEVEE_MATERIAL_PT_volume(MaterialButtonsPanel, Panel):
@@ -196,7 +185,7 @@ class EEVEE_MATERIAL_PT_volume(MaterialButtonsPanel, Panel):
     def poll(cls, context):
         engine = context.engine
         mat = context.material
-        return mat and mat.use_nodes and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+        return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
 
     def draw(self, context):
         layout = self.layout
@@ -218,7 +207,7 @@ class EEVEE_MATERIAL_PT_displacement(MaterialButtonsPanel, Panel):
     def poll(cls, context):
         engine = context.engine
         mat = context.material
-        return mat and mat.use_nodes and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+        return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
 
     def draw(self, context):
         layout = self.layout
@@ -241,7 +230,7 @@ class EEVEE_MATERIAL_PT_thickness(MaterialButtonsPanel, Panel):
     def poll(cls, context):
         engine = context.engine
         mat = context.material
-        return mat and mat.use_nodes and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+        return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
 
     def draw(self, context):
         layout = self.layout
@@ -265,13 +254,15 @@ def draw_material_surface_settings(layout, mat, is_eevee=True):
         col.prop(mat, "displacement_method", text="Displacement")
         col = col.column(align=True)
 
-    col.enabled = mat.displacement_method != 'BUMP'
+    # NOTE: "max_vertex_displacement" also drives the max offset when using Shadow Ray-cast with a custom Position.
+    col.enabled = mat.displacement_method != 'BUMP' or is_eevee
+
     # Clarify that this is for displacement if the displacement method setting is not above.
     max_diplacement_text = "Max Distance" if is_eevee else "Max Displacement"
     col.prop(mat, "max_vertex_displacement", text=max_diplacement_text)
 
     if mat.displacement_method == 'DISPLACEMENT':
-        layout.label(text="Unsupported displacement method", icon='ERROR')
+        layout.label(text="Unsupported displacement method", icon='STATUS_ERROR')
 
     if is_eevee:
         layout.prop(mat, "use_transparent_shadow")

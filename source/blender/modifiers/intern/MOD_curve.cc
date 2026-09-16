@@ -8,11 +8,10 @@
 
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
@@ -23,10 +22,11 @@
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_prototypes.hh"
+#include "RNA_types.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -34,18 +34,17 @@
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
 
+namespace blender {
+
 static void init_data(ModifierData *md)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(cmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(cmd, DNA_struct_default_get(CurveModifierData), modifier);
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(cmd, modifier);
 }
 
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
 
   /* Ask for vertex-groups if we need them. */
   if (cmd->name[0] != '\0') {
@@ -55,7 +54,7 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
 
   /* The object type check is only needed here in case we have a placeholder
    * object assigned (because the library containing the curve is missing).
@@ -67,14 +66,14 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
 
-  walk(user_data, ob, (ID **)&cmd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&cmd->object), IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
   if (cmd->object != nullptr) {
     /* TODO(sergey): Need to do the same eval_flags trick for path
      * as happening in legacy depsgraph callback.
@@ -93,9 +92,9 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         blender::MutableSpan<blender::float3> positions)
+                         MutableSpan<float3> positions)
 {
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
 
   const MDeformVert *dvert = nullptr;
   int defgrp_index = -1;
@@ -106,7 +105,7 @@ static void deform_verts(ModifierData *md,
   const int defaxis = std::clamp(cmd->defaxis - 1, 0, 5);
   BKE_curve_deform_coords(cmd->object,
                           ctx->object,
-                          reinterpret_cast<float(*)[3]>(positions.data()),
+                          reinterpret_cast<float (*)[3]>(positions.data()),
                           positions.size(),
                           dvert,
                           defgrp_index,
@@ -118,14 +117,14 @@ static void deform_verts_EM(ModifierData *md,
                             const ModifierEvalContext *ctx,
                             const BMEditMesh *em,
                             Mesh *mesh,
-                            blender::MutableSpan<blender::float3> positions)
+                            MutableSpan<float3> positions)
 {
   if (mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_MDATA) {
     deform_verts(md, ctx, mesh, positions);
     return;
   }
 
-  CurveModifierData *cmd = (CurveModifierData *)md;
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
   bool use_dverts = false;
   int defgrp_index = -1;
 
@@ -140,7 +139,7 @@ static void deform_verts_EM(ModifierData *md,
   if (use_dverts) {
     BKE_curve_deform_coords_with_editmesh(cmd->object,
                                           ctx->object,
-                                          reinterpret_cast<float(*)[3]>(positions.data()),
+                                          reinterpret_cast<float (*)[3]>(positions.data()),
                                           positions.size(),
                                           defgrp_index,
                                           cmd->flag,
@@ -150,7 +149,7 @@ static void deform_verts_EM(ModifierData *md,
   else {
     BKE_curve_deform_coords(cmd->object,
                             ctx->object,
-                            reinterpret_cast<float(*)[3]>(positions.data()),
+                            reinterpret_cast<float (*)[3]>(positions.data()),
                             positions.size(),
                             nullptr,
                             defgrp_index,
@@ -161,15 +160,15 @@ static void deform_verts_EM(ModifierData *md,
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  layout->prop(ptr, "object", UI_ITEM_NONE, IFACE_("Curve Object"), ICON_NONE);
-  layout->prop(ptr, "deform_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "object", UI_ITEM_NONE, IFACE_("Curve Object"), ICON_NONE);
+  layout.prop(ptr, "deform_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
@@ -215,4 +214,7 @@ ModifierTypeInfo modifierType_Curve = {
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender
