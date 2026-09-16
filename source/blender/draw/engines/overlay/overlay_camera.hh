@@ -401,10 +401,8 @@ class Cameras : Overlay {
     const bool is_mirrorball = cam.panorama_type == CAM_PANORAMA_MIRRORBALL;
     const bool is_equirectangular = cam.panorama_type == CAM_PANORAMA_EQUIRECTANGULAR;
 
-    const bool is_panoramic = cam.type == CAM_PANO &&
-                              cam.panorama_type != CAM_PANORAMA_FISHEYE_LENS_POLYNOMIAL &&
-                              cam.panorama_type != CAM_PANORAMA_CENTRAL_CYLINDRICAL &&
-                              cam.panorama_type != CAM_PANORAMA_EQUIANGULAR_CUBEMAP_FACE;
+    const bool is_panoramic = cam.type == CAM_PANO && (is_equisolid || is_equidistant ||
+                                                       is_mirrorball || is_equirectangular);
 
     const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
     const bool is_stereo3d_view = (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
@@ -481,43 +479,27 @@ class Cameras : Overlay {
             *DEG_get_bmain(state.depsgraph), data, select_id, scene, v3d, res, ob);
       }
       else {
-        if (is_equidistant || is_mirrorball || is_equirectangular || is_equisolid) {
+        if (is_panoramic) {
 
           CameraPanoramicData pano_data(data.matrix, data.color_);
-
-          pano_data.shift_x = cam.shiftx;
-          pano_data.shift_y = cam.shifty;
-          pano_data.aspect = aspect_ratio.x < aspect_ratio.y ? aspect_ratio.x : -aspect_ratio.y;
-
-          if (is_equirectangular) {
-            pano_data.longitude_min = cam.longitude_min;
-            pano_data.longitude_max = cam.longitude_max;
-            /*            printf("longitude_min %f \n",pano_data.longitude_min); */
-            pano_data.latitude_min = cam.latitude_min;
-            pano_data.latitude_max = cam.latitude_max;
-          }
-          if (is_mirrorball) {
-            pano_data.fisheye_fov = M_PI * 2;
-          }
-          else if (is_equirectangular) {
-          }
-          else {
-            pano_data.fisheye_fov = cam.fisheye_fov;
-          }
 
           pano_data.matrix.x_axis() *= cam.drawsize;
           pano_data.matrix.y_axis() *= cam.drawsize;
           pano_data.matrix.z_axis() *= cam.drawsize;
 
-          if (is_equidistant || is_equisolid || is_mirrorball) {
-
-            (is_active ? call_buffers_.fisheye_tria_buf : call_buffers_.fisheye_tria_wire_buf)
-                .append(pano_data, select_id);
+          if (is_equirectangular) {
+            pano_data.longitude_min = cam.longitude_min;
+            pano_data.longitude_max = cam.longitude_max;
+            pano_data.latitude_min = cam.latitude_min;
+            pano_data.latitude_max = cam.latitude_max;
           }
-
-          if (is_equidistant) {
-            pano_data.matrix.x_axis() *= aspect_ratio.x;
-            pano_data.matrix.y_axis() *= aspect_ratio.y;
+          else if (is_mirrorball) {
+            pano_data.fisheye_fov = M_PI * 2;
+          }
+          else {
+            pano_data.fisheye_fov = cam.fisheye_fov;
+            pano_data.latitude_position = 0.0f;
+            call_buffers_.fisheye_latitude_buf.append(pano_data, select_id);
           }
 
           if (is_equirectangular) {
@@ -529,38 +511,22 @@ class Cameras : Overlay {
             call_buffers_.equirectangular_latitude_buf.append(pano_data, select_id);
             pano_data.latitude_position = -1.0f;
             call_buffers_.equirectangular_latitude_buf.append(pano_data, select_id);
-          }
 
-          if (is_equidistant || is_equisolid) {
-            pano_data.latitude_position = 0.0f;
-            call_buffers_.fisheye_latitude_buf.append(pano_data, select_id);
+            pano_data.longitude_angle = DEG2RAD(180);
+            call_buffers_.equirectangular_left_buf.append(pano_data, select_id);
+            call_buffers_.equirectangular_right_buf.append(pano_data, select_id);
+          }
+          else {
+            (is_active ? call_buffers_.fisheye_tria_buf : call_buffers_.fisheye_tria_wire_buf)
+                .append(pano_data, select_id);
           }
 
           for (int axis : IndexRange(4)) {
             pano_data.longitude_angle = DEG2RAD(90 * axis);
 
-            if (is_equirectangular) {
-              call_buffers_.equirectangular_longitude_buf.append(pano_data, select_id);
-            }
-            else if (is_equisolid || is_equidistant || is_mirrorball) {
-              call_buffers_.fisheye_longitude_buf.append(pano_data, select_id);
-            }
-          }
-
-          if (is_equirectangular) {
-            pano_data.longitude_angle = DEG2RAD(180);
-            call_buffers_.equirectangular_left_buf.append(pano_data, select_id);
-            call_buffers_.equirectangular_right_buf.append(pano_data, select_id);
-          }
-
-          if (is_equisolid) {
-            pano_data.matrix.x_axis() *= aspect_ratio.x;
-            pano_data.matrix.y_axis() *= aspect_ratio.y;
-          }
-
-          if (is_equisolid || is_equidistant) {
-            pano_data.shift_x = shift.x;
-            call_buffers_.fisheye_frame_buf.append(pano_data, select_id);
+            (is_equirectangular ? call_buffers_.equirectangular_longitude_buf :
+                                  call_buffers_.fisheye_longitude_buf)
+                .append(pano_data, select_id);
           }
         }
 
