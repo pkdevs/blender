@@ -108,14 +108,14 @@ void RenderBuffers::acquire(int2 extent, gpu::TextureFormat raycast_depth_format
   int color_len = data.color_len + data.aovs.color_len;
   int value_len = data.value_len + data.aovs.value_len;
 
-  rp_color_tx.ensure_2d_array(color_format,
-                              (color_len > 0) ? extent : int2(1),
-                              math::max(1, color_len),
-                              usage_attachment_read_write);
-  rp_value_tx.ensure_2d_array(float_format,
-                              (value_len > 0) ? extent : int2(1),
-                              math::max(1, value_len),
-                              usage_attachment_read_write);
+  rp_color_tx.acquire_2d_array((color_len > 0) ? extent : int2(1),
+                               math::max(1, color_len),
+                               color_format,
+                               usage_attachment_read_write);
+  rp_value_tx.acquire_2d_array((value_len > 0) ? extent : int2(1),
+                               math::max(1, value_len),
+                               float_format,
+                               usage_attachment_read_write);
 
   const gpu::TextureFormat cryptomatte_format = gpu::TextureFormat::SFLOAT_32_32_32_32;
   cryptomatte_tx.acquire_2d(pass_extent(EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT |
@@ -141,6 +141,9 @@ void RenderBuffers::release()
   prepass_normal_tx.release();
 
   cryptomatte_tx.release();
+
+  rp_color_tx.release();
+  rp_value_tx.release();
 }
 
 gpu::TextureFormat RenderBuffers::vector_tx_format()

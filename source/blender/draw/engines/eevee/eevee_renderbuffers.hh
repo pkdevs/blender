@@ -39,9 +39,8 @@ class RenderBuffers {
   TextureFromPool object_id_tx;
   TextureFromPool prepass_normal_tx;
   TextureFromPool cryptomatte_tx;
-  /* TODO(fclem): Use texture from pool once they support texture array. */
-  Texture rp_color_tx;
-  Texture rp_value_tx;
+  TextureFromPool rp_color_tx;
+  TextureFromPool rp_value_tx;
 
  private:
   Instance &inst_;
