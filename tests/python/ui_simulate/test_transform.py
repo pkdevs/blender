@@ -210,8 +210,8 @@ def view3d_mesh_edit_snap_skips_selection():
     """
     The selection is what's being transformed, so it must not be a snap target.
 
-    Were it one, nudging a vertex a few pixels would snap it straight back onto its own
-    original location and the transform would do nothing at all.
+    If it were a target, nudging a vertex a few pixels would snap it straight back onto
+    its own original location and the transform would do nothing at all.
     """
     e, t, window = ui.test_window()
 

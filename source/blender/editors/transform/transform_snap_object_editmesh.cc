@@ -46,16 +46,6 @@ static const Mesh *get_mesh_ref(const Object *ob_eval)
 /** \name Snap Target Elements
  * \{ */
 
-/**
- * The elements of a mesh converted from edit-mode that can be snapped to.
- *
- * Hidden elements are always skipped. #SNAP_EDIT_MESH_VISIBLE_UNSELECTED also skips selected
- * elements and elements that use a selected vertex, since those are the ones being transformed.
- *
- * Edges and vertices are only included when they aren't used by a snappable face or edge
- * respectively, since the triangles of those faces and the snappable edges already cover them.
- * This mirrors what #Mesh::bvh_loose_no_hidden_edges and friends do for evaluated meshes.
- */
 struct SnapTargetElems {
   IndexMaskMemory memory;
   IndexMask faces;
@@ -64,7 +54,7 @@ struct SnapTargetElems {
 };
 
 static void calc_target_elems(const Mesh &mesh,
-                              const eSnapEditMeshTarget target,
+                              const SnapEditMeshTarget target,
                               SnapTargetElems &r_elems)
 {
   const bke::AttributeAccessor attributes = mesh.attributes();
@@ -72,7 +62,6 @@ static void calc_target_elems(const Mesh &mesh,
   const OffsetIndices faces = mesh.faces();
   IndexMaskMemory &memory = r_elems.memory;
 
-  /* Hidden elements are never snapped to. */
   IndexMask target_verts = IndexMask::from_bools_inverse(
       *attributes.lookup_or_default(".hide_vert", bke::AttrDomain::Point, false), memory);
   IndexMask target_edges = IndexMask::from_bools_inverse(
@@ -80,8 +69,7 @@ static void calc_target_elems(const Mesh &mesh,
   IndexMask target_faces = IndexMask::from_bools_inverse(
       *attributes.lookup_or_default(".hide_poly", bke::AttrDomain::Face, false), memory);
 
-  if (target == SNAP_EDIT_MESH_VISIBLE_UNSELECTED) {
-    /* The selection is what's being transformed, so snapping to it is meaningless. */
+  if (target == SnapEditMeshTarget::VisibleUnselected) {
     const VArray<bool> select_vert = *attributes.lookup_or_default(
         ".select_vert", bke::AttrDomain::Point, false);
 
@@ -95,8 +83,7 @@ static void calc_target_elems(const Mesh &mesh,
         *attributes.lookup_or_default(".select_poly", bke::AttrDomain::Face, false),
         memory);
 
-    /* Elements that use a selected vertex are dragged along with it, so they aren't snap
-     * targets either. */
+    /* Also remove edges and faces that use a selected vertex. */
     target_edges = IndexMask::from_predicate(target_edges, memory, [&](const int edge) {
       return !select_vert[edges[edge][0]] && !select_vert[edges[edge][1]];
     });
@@ -124,13 +111,11 @@ static void calc_target_elems(const Mesh &mesh,
 
 /**
  * The BVH trees of the elements of a mesh converted from edit-mode that can be snapped to.
- *
- * Which elements those are depends on #eSnapEditMeshTarget, which the mesh's hide attributes
- * can't express, so unlike for evaluated meshes the trees can't be cached on the mesh itself.
+ * This data is specialized enough that it isn't cached on the mesh itself.
  */
 class SnapTargetTreesEditMesh : public SnapTargetTrees {
   const Mesh *mesh_ = nullptr;
-  eSnapEditMeshTarget target_ = SNAP_EDIT_MESH_VISIBLE;
+  SnapEditMeshTarget target_ = SnapEditMeshTarget::Visible;
 
   std::optional<SnapTargetElems> elems_;
   std::optional<bke::BVHTreeFromMesh> corner_tris_;
@@ -141,7 +126,7 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
   SnapTargetTreesEditMesh() : SnapTargetTrees(true) {}
 
   /** Discard what was built before when the mesh or the set of snappable elements changed. */
-  void set_source(const Mesh &mesh, const eSnapEditMeshTarget target)
+  void set_source(const Mesh &mesh, const SnapEditMeshTarget target)
   {
     if (mesh_ == &mesh && target_ == target) {
       return;
@@ -171,7 +156,7 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
                                                            mesh_->faces(),
                                                            mesh_->corner_verts(),
                                                            mesh_->corner_tris(),
-                                                           this->elems().faces);
+                                                           this->selection().faces);
     }
     return *corner_tris_;
   }
@@ -180,7 +165,7 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
   {
     if (!loose_edges_) {
       loose_edges_ = bke::bvhtree_from_mesh_edges_ex(
-          mesh_->vert_positions(), mesh_->edges(), this->elems().loose_edges);
+          mesh_->vert_positions(), mesh_->edges(), this->selection().loose_edges);
     }
     return *loose_edges_;
   }
@@ -189,13 +174,13 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
   {
     if (!loose_verts_) {
       loose_verts_ = bke::bvhtree_from_mesh_verts_ex(mesh_->vert_positions(),
-                                                     this->elems().loose_verts);
+                                                     this->selection().loose_verts);
     }
     return *loose_verts_;
   }
 
  private:
-  const SnapTargetElems &elems()
+  const SnapTargetElems &selection()
   {
     if (!elems_) {
       calc_target_elems(*mesh_, target_, elems_.emplace());

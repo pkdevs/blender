@@ -40,14 +40,14 @@ enum eSnapOcclusionTest {
 };
 
 /** Which elements of a mesh in edit-mode are valid snap targets. */
-enum eSnapEditMeshTarget {
+enum class SnapEditMeshTarget {
   /** Every element that isn't hidden. */
-  SNAP_EDIT_MESH_VISIBLE = 0,
+  Visible = 0,
   /**
    * Also skip selected elements and elements that use a selected vertex, since they are the ones
    * being transformed.
    */
-  SNAP_EDIT_MESH_VISIBLE_UNSELECTED = 1,
+  VisibleUnselected = 1,
 };
 
 /** used for storing multiple hits */
@@ -93,12 +93,8 @@ struct SnapObjectContext;
 SnapObjectContext *snap_object_context_create();
 void snap_object_context_destroy(SnapObjectContext *sctx);
 
-/**
- * Choose which elements of meshes in edit-mode can be snapped to.
- *
- * \note Changing this invalidates the BVH trees cached for meshes in edit-mode.
- */
-void snap_object_context_set_editmesh_target(SnapObjectContext *sctx, eSnapEditMeshTarget target);
+/** Choose which elements of meshes in edit-mode can be snapped to. */
+void snap_object_context_set_editmesh_target(SnapObjectContext *sctx, SnapEditMeshTarget target);
 
 bool snap_object_project_ray_ex(SnapObjectContext *sctx,
                                 Depsgraph *depsgraph,

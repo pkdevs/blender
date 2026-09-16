@@ -2050,8 +2050,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       });
   bm.elem_index_dirty &= ~(BM_VERT | BM_EDGE | BM_FACE | BM_LOOP);
 
-  /* The tables are built unconditionally since they also index the topology, so filter out the
-   * attributes the caller isn't interested in here. */
   need_select_vert &= add_selection;
   need_select_edge &= add_selection;
   need_select_poly &= add_selection;
@@ -2214,8 +2212,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
         }
       });
 
-  /* Finishing the writers that were never initialized is a no-op, as is optimizing the storage
-   * of the attributes when none besides the topology were added. */
   select_vert.finish();
   hide_vert.finish();
   select_edge.finish();

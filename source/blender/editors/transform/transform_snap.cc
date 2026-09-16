@@ -838,8 +838,9 @@ static void snap_object_context_init(TransInfo *t)
    * them is meaningless. */
   ed::transform::snap_object_context_set_editmesh_target(
       t->tsnap.object_context,
-      t->data_type == &TransConvertType_Mesh ? ed::transform::SNAP_EDIT_MESH_VISIBLE_UNSELECTED :
-                                               ed::transform::SNAP_EDIT_MESH_VISIBLE);
+      t->data_type == &TransConvertType_Mesh ?
+          ed::transform::SnapEditMeshTarget::VisibleUnselected :
+          ed::transform::SnapEditMeshTarget::Visible);
 }
 
 static void initSnappingMode(TransInfo *t)

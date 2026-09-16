@@ -39,14 +39,7 @@ struct View3D;
 
 namespace ed::transform {
 
-/**
- * Lazy access to the BVH trees of the mesh elements that can be snapped to.
- *
- * Evaluated meshes use #SnapTargetTreesMesh, which forwards to the trees cached on the mesh and
- * optionally skips hidden elements. Meshes in edit-mode use the trees owned by their snap cache
- * instead, because there the set of snappable elements also depends on #eSnapEditMeshTarget,
- * which the mesh's hide attributes can't express.
- */
+/** Lazy access to the BVH trees of the mesh elements that can be snapped to. */
 class SnapTargetTrees {
  public:
   /**
@@ -94,7 +87,7 @@ struct SnapObjectContext {
   Map<const ID *, std::unique_ptr<SnapCache>> editmesh_caches;
 
   /* Which elements of meshes in edit-mode are valid snap targets. */
-  eSnapEditMeshTarget editmesh_target = SNAP_EDIT_MESH_VISIBLE;
+  SnapEditMeshTarget editmesh_target = SnapEditMeshTarget::Visible;
 
   struct {
     /* Compare with #RegionView3D::persmat to update. */

@@ -94,10 +94,7 @@ void BM_mesh_bm_to_me(struct Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMe
  */
 void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks *cd_mask_extra);
 
-/**
- * Which of the attributes that #BMesh stores in element flags or fields rather than in custom
- * data layers are written to the #Mesh, and whether the custom data layers are copied at all.
- */
+/** Controls for which attributes are copied to the #Mesh. */
 enum class BMeshToMeshAttrs {
   None = 0,
   /** ".hide_vert", ".hide_edge" and ".hide_poly". */
@@ -118,8 +115,7 @@ ENUM_OPERATORS(BMeshToMeshAttrs)
  *
  * \param mask: Custom data masks to control which layers are copied.
  * If nullptr, no layer data is copied.
- * \param attrs_to_add: Which mesh attributes to add during the conversion. Skipping the ones the
- * caller doesn't use avoids the cost of building them.
+ * \param attrs_to_add: Which mesh attributes to add during the conversion.
  */
 void BM_mesh_bm_to_me_compact(BMesh &bm,
                               Mesh &mesh,

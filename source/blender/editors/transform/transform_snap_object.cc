@@ -1094,10 +1094,8 @@ void snap_object_context_destroy(SnapObjectContext *sctx)
 }
 
 void snap_object_context_set_editmesh_target(SnapObjectContext *sctx,
-                                             const eSnapEditMeshTarget target)
+                                             const SnapEditMeshTarget target)
 {
-  /* The cached meshes stay valid when this changes. Only the trees of snappable elements have to
-   * be rebuilt, which #SnapCache_EditMesh does lazily the next time they're used. */
   sctx->editmesh_target = target;
 }
 

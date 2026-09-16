@@ -223,8 +223,8 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
 
   if (t->data_type == &TransConvertType_Mesh) {
     /* The snap source can be placed anywhere, including on the geometry being transformed. */
-    ed::transform::snap_object_context_set_editmesh_target(t->tsnap.object_context,
-                                                           ed::transform::SNAP_EDIT_MESH_VISIBLE);
+    ed::transform::snap_object_context_set_editmesh_target(
+        t->tsnap.object_context, ed::transform::SnapEditMeshTarget::Visible);
   }
 
 #ifdef RESET_TRANSFORMATION
