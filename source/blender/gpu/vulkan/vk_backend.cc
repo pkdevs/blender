@@ -17,6 +17,7 @@
 #include "CLG_log.h"
 
 #include "GPU_capabilities.hh"
+#include "GPU_framebuffer.hh"
 #include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
 
@@ -168,6 +169,9 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (!extensions.contains(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
     missing_capabilities.append(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
   }
+  if (!extensions.contains(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME)) {
+    missing_capabilities.append(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME);
+  }
 
   /* Check device features. */
   VkPhysicalDeviceFeatures2 features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
@@ -179,9 +183,6 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
     missing_capabilities.append("geometry shaders");
   }
 #endif
-  if (features.features.multiViewport == VK_FALSE) {
-    missing_capabilities.append("multi viewport");
-  }
   if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
     missing_capabilities.append("fragment stores and atomics");
   }
@@ -517,6 +518,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
     GCaps.stencil_export_support = false;
     GCaps.texture_pool_workaround = true;
     GCaps.vertex_pipeline_stores_and_atomics_support = false;
+    GCaps.multi_viewport_support = false;
 
     device.workarounds_ = workarounds;
     device.extensions_ = extensions;
@@ -854,6 +856,9 @@ void VKBackend::capabilities_init(VKDevice &device)
       device.physical_device_acceleration_structure_properties_get().maxGeometryCount > 0 &&
       device.physical_device_acceleration_structure_properties_get().maxPrimitiveCount > 0 &&
       device.physical_device_acceleration_structure_properties_get().maxInstanceCount > 0;
+
+  GCaps.multi_viewport_support = device.physical_device_features_get().multiViewport &&
+                                 limits.maxViewports >= GPU_MAX_VIEWPORTS;
 
   GCaps.srgb_write_view_support = true;
 
