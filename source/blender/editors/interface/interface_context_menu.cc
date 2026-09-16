@@ -596,7 +596,11 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   set_layout_context_from_button(C, layout, but);
   layout.operator_context_set(wm::OpCallContext::InvokeDefault);
-
+  if (but->block->handle) {
+    PointerRNA region_ptr = RNA_pointer_create_discrete(
+        id_cast<ID *>(CTX_wm_screen(C)), RNA_Region, but->block->handle->region);
+    layout.context_ptr_set("context_menu_src_region", &region_ptr);
+  }
   const bool is_disabled = but->flag & BUT_DISABLED;
 
   if (is_disabled) {

@@ -9978,10 +9978,22 @@ Button *context_active_but_get(const bContext *C)
   return context_button_active(CTX_wm_region(C), nullptr);
 }
 
+ARegion *context_active_region_respect_context_menu_src_region(const bContext *C)
+{
+  if (const PointerRNA ptr = CTX_data_pointer_get_type(C, "context_menu_src_region", RNA_Region);
+      ptr.has_data())
+  {
+    return ptr.data_as<ARegion>();
+  }
+  else if (ARegion *region_popup = CTX_wm_region_popup(C)) {
+    return region_popup;
+  }
+  return CTX_wm_region(C);
+}
+
 Button *context_active_but_get_respect_popup(const bContext *C)
 {
-  ARegion *region_popup = CTX_wm_region_popup(C);
-  return context_button_active(region_popup ? region_popup : CTX_wm_region(C), nullptr);
+  return context_button_active(context_active_region_respect_context_menu_src_region(C), nullptr);
 }
 
 Button *region_active_but_get(const ARegion *region)
@@ -10025,9 +10037,8 @@ Button *context_active_but_prop_get(const bContext *C,
                                     PropertyRNA **r_prop,
                                     int *r_index)
 {
-  ARegion *region_popup = CTX_wm_region_popup(C);
   return region_active_but_prop_get(
-      region_popup ? region_popup : CTX_wm_region(C), r_ptr, r_prop, r_index);
+      context_active_region_respect_context_menu_src_region(C), r_ptr, r_prop, r_index);
 }
 
 void context_active_but_prop_handle(bContext *C, const bool handle_undo)
@@ -10108,7 +10119,7 @@ ARegion *region_searchbox_region_get(const ARegion *button_region)
 void context_update_anim_flag(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ARegion *region = CTX_wm_region(C);
+  ARegion *region = context_active_region_respect_context_menu_src_region(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
       depsgraph, (scene) ? BKE_scene_frame_get(scene) : 0.0f);

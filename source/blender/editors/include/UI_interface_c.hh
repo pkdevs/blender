@@ -2869,6 +2869,12 @@ bool context_copy_to_selected_check(PointerRNA *ptr,
 
 /* Helpers for Operators */
 Button *context_active_but_get(const bContext *C);
+
+/**
+ * Returns the active region, it might use the region of the popup where a context menu were
+ * invoked, or the result of #CTX_wm_region_popup() if set.
+ */
+ARegion *context_active_region_respect_context_menu_src_region(const bContext *C);
 /**
  * Version of #UI_context_active_get() that uses the result of #CTX_wm_region_popup() if set.
  * Does not traverse into parent menus, which may be wanted in some cases.
