@@ -20,9 +20,9 @@ class VIEW3D_PT_copy_world_space_animation(GlobalTransformPanelMixin, Panel):
         layout = self.layout
 
         layout.operator("anim.world_space_copy", icon='COPYDOWN', text="Copy Playback Range").range_mode = 'PLAYBACK'
-        column = layout.column(align=True)
-        column.operator("anim.world_space_paste", icon='PASTEDOWN', text="Paste")
-        column.operator("anim.world_space_paste", icon='PASTEDOWN', text="Paste at Playhead").offset = 'START'
+        row = layout.row(align=True)
+        row.operator("anim.world_space_paste", icon='PASTEDOWN', text="Paste")
+        row.operator("anim.world_space_paste", icon='PASTEDOWN', text="At Playhead").offset = 'START'
 
 
 class VIEW3D_PT_copy_global_transform(GlobalTransformPanelMixin, Panel):
