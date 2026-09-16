@@ -561,7 +561,11 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
   std::optional<AttributeMetaData> meta_data = this->lookup_meta_data(name);
   if (meta_data.has_value()) {
     if (meta_data->domain == domain && meta_data->data_type == data_type) {
-      return this->lookup_for_write(name);
+      if (GAttributeWriter writer = this->lookup_for_write(name)) {
+        /* Even if the domain and type match, getting a writer can fail if the original
+         * is a vertex group. */
+        return writer;
+      }
     }
     /* The attribute already exists, but with the wrong domain or type.
      * Convert it. */
