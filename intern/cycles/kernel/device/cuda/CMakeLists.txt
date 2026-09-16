@@ -43,6 +43,9 @@ function(cuda_get_arch_supported nvcc_executable arch out_is_supported)
     return()
   endif()
 
+  # Normalize the new lines for easier regex.
+  string(REPLACE "\r\n" "\n" NVCC_OUT "${NVCC_OUT}")
+
   if("${NVCC_OUT}" MATCHES "(^|\n)${arch}\n")
     set(${out_is_supported} TRUE PARENT_SCOPE)
     return()
