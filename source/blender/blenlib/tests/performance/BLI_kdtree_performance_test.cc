@@ -289,6 +289,10 @@ static void run_table(const char *title,
                       const Span<int64_t> point_counts = POINT_COUNTS,
                       const Span<Impl> implementations = IMPLEMENTATIONS)
 {
+  /* Without this the scheduler reports a single thread, which makes #threading::max_threads_task
+   * do nothing, so the tree's own limit on how many threads it builds with has no effect. */
+  BLI_task_scheduler_init();
+
   print_table_header(title, value_description, point_counts);
   for (const Distribution &distribution : DISTRIBUTIONS) {
     for (const Impl impl : implementations) {
@@ -676,6 +680,8 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
 
 TEST(kdtree_performance, KDTreeNewLeafSize)
 {
+  BLI_task_scheduler_init(); /* Without this, the build's own thread limit has no effect. */
+
   static const int leaf_sizes[] = {4, 8, 10, 16, 32, 64, 128};
   static const int64_t point_counts[] = {10000, 1000000};
 

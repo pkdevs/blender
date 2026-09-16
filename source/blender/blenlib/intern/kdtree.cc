@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <numeric>
 #include <optional>
 
@@ -37,21 +38,8 @@ namespace blender {
 /** Tree size that makes building with more than one thread worthwhile. */
 static constexpr int PARALLEL_BUILD_THRESHOLD = 10000;
 
-/**
- * Building the tree repeatedly reorders the coordinates, so it is bottlenecked by memory
- * bandwidth. Past this level, extra threads won't be able to do any useful work.
- *
- * Measured on a 12 core Apple M3 Max, a million point build takes 33 ms on one thread, 8 ms on
- * eight and 7 ms on 12, using half again as much CPU time. See `BLI_kdtree_performance_test`.
- */
-static constexpr int PARALLEL_BUILD_MAX_THREADS = 16;
-
-/**
- * Experimentally derived value to increase building thread count from 4 to 8 as point count
- * increases from 10'000 to 100'000, balancing threading overhead with increased parallelism
- * opportunity. See `BLI_kdtree_performance_test`.
- */
-static constexpr int PARALLEL_BUILD_POINTS_PER_THREAD = 2500;
+/** Threads used to build a tree of #PARALLEL_BUILD_THRESHOLD points. */
+static constexpr int PARALLEL_BUILD_THRESHOLD_THREADS = 4;
 
 /** Subtrees smaller than this are built in one task, which is cheaper than handing them over. */
 static constexpr int PARALLEL_SUBTREE_GRAIN = 4096;
@@ -75,10 +63,23 @@ static constexpr int NODE_BLOCK_FRACTION = 8;
  */
 static constexpr int PARTITION_BLOCK_SIZE = 128;
 
+/**
+ * The best number of threads to build a tree depends on the memory bandwidth relative to the
+ * amount of computational work necessary. Building repeatedly reorders coordinates and indices so
+ * it is heavily bottlenecked by memory bandwidth at high point counts. We want to be relatively
+ * conservative with the thread count as well; the CPU may be better off spending time on other
+ * less memory-bound tasks.
+ *
+ * This fourth root relationship between increases in point count and threads used is tuned for a
+ * 16 core Ryzen 7950X: a million point build takes 25 ms on one thread and 3.5 ms on eight, past
+ * which it stops improving, while the processor time it uses keeps growing with every thread. See
+ * `BLI_kdtree_performance_test`.
+ */
 static int parallel_build_threads(const int64_t points_num)
 {
-  return int(std::clamp<int64_t>(
-      points_num / PARALLEL_BUILD_POINTS_PER_THREAD, 1, PARALLEL_BUILD_MAX_THREADS));
+  const double growth = std::sqrt(
+      std::sqrt(double(points_num) / double(PARALLEL_BUILD_THRESHOLD)));
+  return std::max(int(std::round(double(PARALLEL_BUILD_THRESHOLD_THREADS) * growth)), 1);
 }
 
 /** \} */
