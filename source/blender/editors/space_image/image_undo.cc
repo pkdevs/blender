@@ -1020,11 +1020,29 @@ static void image_undosys_foreach_ID_ref(UndoStep *us_p,
   }
 }
 
+static bool image_undosys_poll(bContext *C)
+{
+  Object *obact = CTX_data_active_object(C);
+
+  ScrArea *area = CTX_wm_area(C);
+  if (area && (area->spacetype == SPACE_IMAGE)) {
+    SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
+    if ((obact && (obact->mode & OB_MODE_TEXTURE_PAINT)) || (sima->mode == SI_MODE_PAINT)) {
+      return true;
+    }
+  }
+  else {
+    if (obact && (obact->mode & OB_MODE_TEXTURE_PAINT)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void ED_image_undosys_type(UndoType *ut)
 {
   ut->identifier = "IMAGE";
-  /* Note, we do not need the `poll` method overridden because of the `step_encode_init` callback
-   * and exposed #ED_image_undo_push_begin/end calls. */
+  ut->poll = image_undosys_poll;
   ut->step_encode_init = image_undosys_step_encode_init;
   ut->step_encode = image_undosys_step_encode;
   ut->step_decode = image_undosys_step_decode;
@@ -1036,7 +1054,7 @@ void ED_image_undosys_type(UndoType *ut)
    * specific case, see `image_undosys_step_encode` code. We cannot specify
    * `UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE` though, as it can be called with a null context by
    * current code. */
-  ut->flags = UNDOTYPE_FLAG_DECODE_ACTIVE_STEP;
+  ut->flags = UNDOTYPE_FLAG_DECODE_ACTIVE_STEP | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(ImageUndoStep);
 }

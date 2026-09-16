@@ -641,6 +641,9 @@ std::optional<UndoEncodeHints> ED_undo_is_legacy_compatible_for_property(bContex
         CLOG_DEBUG(&LOG, "skipping undo for sculpt-mode");
         return std::nullopt;
       }
+      if (obact->mode & OB_MODE_TEXTURE_PAINT) {
+        return UndoEncodeHints::PreMemFileChanges | UndoEncodeHints::HasMemFileChangesOnly;
+      }
       if (obact->mode & OB_MODE_PARTICLE_EDIT) {
         /* Particle-edit undo steps only store point-cache data
          * (see #particle_undosys_step_encode), never generic ID/property state,
@@ -682,6 +685,13 @@ std::optional<UndoEncodeHints> ED_undo_is_legacy_compatible_for_property(bContex
           }
         }
       }
+    }
+  }
+  ScrArea *area = CTX_wm_area(C);
+  if (area && area->spacetype == SPACE_IMAGE) {
+    SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
+    if (sima && sima->mode == SI_MODE_PAINT) {
+      return UndoEncodeHints::PreMemFileChanges | UndoEncodeHints::HasMemFileChangesOnly;
     }
   }
   return UndoEncodeHints::None;
