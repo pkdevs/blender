@@ -52,12 +52,6 @@ static void node_copybuffer_filepath_get(char filepath[FILE_MAX], size_t filepat
   BLI_path_join(filepath, filepath_maxncpy, BKE_tempdir_base(), "copybuffer_nodes.blend");
 }
 
-/**
- * TODO:
- * copy necessary panels
- * fix wrong socket copying
- */
-
 /** Returns the number of nodes copied. */
 static int node_copy_local(bNodeTree &from_tree,
                            bNodeTree &to_tree,
@@ -131,6 +125,8 @@ static int node_copy_local(bNodeTree &from_tree,
 
   remap_node_pairing(to_tree, node_map);
 
+  /* Group inputs and outputs from #from_tree and #to_tree don't match, so some form of update is
+   * required for the group node to have the correct sockets. */
   BKE_main_ensure_invariants(*CTX_data_main(C), to_tree.id);
 
   /* Copy links between selected nodes. */
@@ -151,10 +147,16 @@ static int node_copy_local(bNodeTree &from_tree,
       if (io_map) {
         if (io_map->contains(link.fromsock->identifier_ustr())) {
           UString from_socket_identifier{io_map->lookup(link.fromsock->identifier_ustr())};
+          if (from_socket_identifier.is_empty()) {
+            continue;
+          }
           from = bke::node_find_socket(*from_node, SOCK_OUT, from_socket_identifier);
         }
         if (io_map->contains(link.tosock->identifier_ustr())) {
           UString to_socket_identifier{io_map->lookup(link.tosock->identifier_ustr())};
+          if (to_socket_identifier.is_empty()) {
+            continue;
+          }
           to = bke::node_find_socket(*to_node, SOCK_IN, to_socket_identifier);
         }
       }
@@ -342,7 +344,8 @@ static bNodeTreeInterfaceItem *add_item_and_panels_recursive(
     added_panels.add(item, &added_panel->item);
     return &added_panel->item;
   }
-  else if (bke::node_interface::detail::item_is_type<bNodeTreeInterfaceSocket>(*item)) {
+  else {
+    BLI_assert(bke::node_interface::detail::item_is_type<bNodeTreeInterfaceSocket>(*item));
     return tree.tree_interface.add_item_copy(*item, parent_panel);
   }
 }
@@ -461,15 +464,19 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
       /* If the socket is not found, the interface has changed and the socket needs to be readded.
        */
     }
+    /* If the node tree doesn't support this socket type, don't add it and map it to an empty
+     * string. */
+    if (!bke::node_tree_type_supports_socket_type_static(to_tree->type,
+                                                         src_io_socket->socket_typeinfo()->type))
+    {
+      iface_socket_map.add_new(UString(src_io_socket->identifier), UString());
+      continue;
+    }
 
     auto *dst_io_socket{reinterpret_cast<bNodeTreeInterfaceSocket *>(
         add_item_and_panels_recursive(*to_tree, src_io_item, panel_map, added_panels))};
     iface_socket_map.add_new(UString(src_io_socket->identifier),
                              UString(dst_io_socket->identifier));
-
-    /* Also adds item to #from_tree to ensure we don't need to update the pasted group input node
-     * does not need to be updated with #BKE_main_ensure_invariants within #node_copy_local. */
-    // from_tree->tree_interface.add_item_copy(src_io_socket->item, nullptr);
   }
 
   BKE_main_ensure_invariants(*CTX_data_main(C), to_tree->id);
