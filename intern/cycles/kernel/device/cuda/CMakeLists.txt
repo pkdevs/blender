@@ -85,7 +85,6 @@ function(cuda_get_toolkit_for_arch arch out_root_dir out_nvcc_executable out_ver
 
     cuda_get_arch_supported("${_nvcc_executable}" "${arch}" _is_supported)
     if(NOT ${_is_supported})
-      message(WARNING "${_nvcc_executable} does not support ${arch}")
       continue()
     endif()
 
@@ -246,6 +245,8 @@ if(WITH_CYCLES_CUDA_BINARIES)
     endif()
     cuda_get_toolkit_for_arch("${arch}" cuda_toolkit_root_dir cuda_nvcc_executable cuda_version)
     if(DEFINED cuda_nvcc_executable AND DEFINED cuda_toolkit_root_dir)
+      message(STATUS "Cycles CUDA: Using CUDA toolkit ${cuda_toolkit_root_dir} (version ${cuda_version}) for ${arch}")
+
       # Compile regular kernel
       cycles_cuda_kernel_add(${arch} ${prev_arch} kernel "" "${cuda_sources}" FALSE)
 

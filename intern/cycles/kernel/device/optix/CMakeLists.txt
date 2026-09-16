@@ -73,6 +73,8 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
       message(FATAL_ERROR "Could not find suitable combination of compute architecture and nvcc compiler")
     endif()
 
+    message(STATUS "Cycles OptiX: Using CUDA toolkit ${cuda_toolkit_root_dir} (version ${cuda_version}) for ${arch}")
+
     cuda_add_common_flags(${cuda_version} ${arch} "${cuda_flags}" cuda_flags)
 
     add_custom_command(
