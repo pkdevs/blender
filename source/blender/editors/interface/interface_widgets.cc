@@ -2175,7 +2175,7 @@ static void widget_draw_text_ime_underline(const uiFontStyle *fstyle,
 #endif /* WITH_INPUT_IME */
 
 /* Text selection uses a lower opacity than the item color.
- * See #163729, where the item color was increased for the File Browser. */
+ * See PR #163741, where the item color was increased for the File Browser. */
 static void widget_text_selection_color(const uiWidgetColors *wcol, uchar color[4])
 {
   copy_v4_v4_uchar(color, wcol->item);
