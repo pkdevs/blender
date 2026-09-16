@@ -1,2 +1,3 @@
 Referenced by issue #151170, Some operators (e.g. Insert Keyframe) do not work in Quick Favorites context menu popup
 Referenced by issue #117116, Some operators (e.g. "Online manual", "Reset to Default Value", "Copy Data Path", "Copy Python Command", ...) not working in context menu spawned from certain popups (operator dialogs, context menus, ...)
+Referenced by pull request #163865, Fix: Context menu buttons not working when invoked in popups
