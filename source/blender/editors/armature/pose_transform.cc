@@ -58,7 +58,6 @@
 #include "ANIM_bone_collections.hh"
 #include "ANIM_keyframing.hh"
 #include "ANIM_keyingsets.hh"
-#include "ANIM_rna.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -815,10 +814,6 @@ static bPoseChannel *pose_bone_blend_to(Object &paste_ob,
     }
   }
 
-  PointerRNA copy_bone_ptr = RNA_pointer_create_discrete(
-      copy_transformable.owner_id(), RNA_PoseBone, &copy_bone);
-  PointerRNA paste_bone_ptr = RNA_pointer_create_discrete(&paste_ob.id, RNA_PoseBone, paste_bone);
-
   /* ID properties. */
   if (copy_bone->prop) {
     if (paste_bone->prop) {
@@ -1556,7 +1551,7 @@ static void pose_bone_copy_transform_values(Object &paste_ob,
      * instead of just blindly replacing all. */
     IDP_SyncGroupValues(paste_bone->prop, copy_bone.prop);
   }
-  if (copy_bone.system_properties && paste_bone->prop) {
+  if (copy_bone.system_properties && paste_bone->system_properties) {
     /* Same logic as above for system IDProperties. */
     IDP_SyncGroupValues(paste_bone->system_properties, copy_bone.system_properties);
   }
