@@ -298,16 +298,14 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
   fn.lookup_meta_data = [](const void *owner, StringRef name) -> std::optional<AttributeMetaData> {
     const CurvesGeometry &curves = *static_cast<const CurvesGeometry *>(owner);
     if (BKE_defgroup_name_index(&curves.vertex_group_names, name) != -1) {
-      return AttributeMetaData{
-          AttrDomain::Point, AttrType::Float, AttributeMetaData::Backend::VertexGroup};
+      return AttributeMetaData{AttrDomain::Point, AttrType::Float};
     }
     const AttributeStorage &storage = curves.attribute_storage.wrap();
     const Attribute *attr = storage.lookup(name);
     if (!attr) {
       return std::nullopt;
     }
-    return AttributeMetaData{
-        attr->domain(), attr->data_type(), AttributeMetaData::Backend::AttributeStorage};
+    return AttributeMetaData{attr->domain(), attr->data_type()};
   };
   fn.lookup = [](const void *owner, const StringRef name) -> GAttributeReader {
     const CurvesGeometry &curves = *static_cast<const CurvesGeometry *>(owner);

@@ -859,7 +859,7 @@ static bool data_transfer_layersmapping_cdlayers(Vector<CustomDataTransferLayerM
     else if (tolayers == DT_LAYERS_NAME_DST) {
       const char *name = name_src.c_str();
       if (mesh_dst.attributes().lookup_meta_data(name) !=
-          bke::AttributeMetaData{domain, attr_type, bke::AttributeMetaData::Backend::DontCare})
+          bke::AttributeMetaData{domain, attr_type})
       {
         if (!use_create) {
           return true;

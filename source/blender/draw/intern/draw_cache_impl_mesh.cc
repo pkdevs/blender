@@ -176,8 +176,7 @@ static std::optional<bke::AttributeMetaData> lookup_meta_data(const Mesh &mesh,
   if (mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
       if (const BMDataLayerLookup attr = BM_data_layer_lookup(*em->bm, name)) {
-        return bke::AttributeMetaData{
-            attr.domain, attr.type, bke::AttributeMetaData::Backend::BMesh};
+        return bke::AttributeMetaData{attr.domain, attr.type};
       }
       return std::nullopt;
     }
@@ -191,8 +190,7 @@ static void mesh_cd_calc_used_gpu_layers(const Object &object,
                                          VectorSet<std::string> *r_attributes,
                                          DRW_MeshCDMask *r_cd_used)
 {
-  constexpr bke::AttributeMetaData UV_METADATA{
-      bke::AttrDomain::Corner, bke::AttrType::Float2, bke::AttributeMetaData::Backend::DontCare};
+  constexpr bke::AttributeMetaData UV_METADATA{bke::AttrDomain::Corner, bke::AttrType::Float2};
   const Mesh &me_final = editmesh_final_or_this(object, mesh);
 
   for (const GPUMaterial *gpumat : materials) {

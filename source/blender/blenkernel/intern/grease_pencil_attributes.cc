@@ -72,8 +72,7 @@ static AttributeAccessorFunctions get_grease_pencil_accessor_functions()
     if (!attr) {
       return std::nullopt;
     }
-    return AttributeMetaData{
-        attr->domain(), attr->data_type(), AttributeMetaData::Backend::AttributeStorage};
+    return AttributeMetaData{attr->domain(), attr->data_type()};
   };
   fn.adapt_domain = [](const void * /*owner*/,
                        const GVArray &varray,
