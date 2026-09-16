@@ -36,7 +36,6 @@ function(buildbot_set_cuda_toolkit_major_version_paths_checked version)
       "${CUDA${version}_NVCC_EXECUTABLE}"
       "CUDA-${version} NVCC executable does not exist: ${CUDA${version}_NVCC_EXECUTABLE}")
 endfunction()
-buildbot_set_cuda_toolkit_major_version_paths_checked(11)
 buildbot_set_cuda_toolkit_major_version_paths_checked(12)
 buildbot_set_cuda_toolkit_major_version_paths_checked(13)
 

@@ -31,8 +31,7 @@ function(buildbot_set_cuda_toolkit_major_version_paths_checked version)
       "CUDA-${version} NVCC executable does not exist: ${CUDA${version}_NVCC_EXECUTABLE}")
 endfunction()
 if(NOT BUILDBOT_ARM64)
-  # No CUDA 11 or 12 on Windows arm64.
-  buildbot_set_cuda_toolkit_major_version_paths_checked(11)
+  # No CUDA 12 on Windows arm64.
   buildbot_set_cuda_toolkit_major_version_paths_checked(12)
 endif()
 buildbot_set_cuda_toolkit_major_version_paths_checked(13)

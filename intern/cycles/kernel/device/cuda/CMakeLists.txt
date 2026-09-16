@@ -59,9 +59,8 @@ function(cuda_get_toolkit_for_arch arch out_root_dir out_nvcc_executable out_ver
   set(${out_nvcc_executable} PARENT_SCOPE)
   set(${out_version}         PARENT_SCOPE)
 
-  set(_preferred_toolkits 13 12 11)
+  set(_preferred_toolkits 13 12)
   if(arch MATCHES "^compute_[0-9]+$")
-    list(REMOVE_ITEM _preferred_toolkits 11)
     list(REVERSE _preferred_toolkits)
   endif()
 
