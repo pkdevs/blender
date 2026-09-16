@@ -78,10 +78,7 @@ void RenderBuffers::acquire(int2 extent, gpu::TextureFormat raycast_depth_format
                                            GPU_TEXTURE_USAGE_ATTACHMENT;
 
   /* Depth and combined are always needed. */
-  depth_tx.ensure_2d(depth_format, extent, usage_attachment_read);
-  /* TODO(fclem): depth_tx should ideally be a texture from pool but we need stencil_view
-   * which is currently unsupported by pool textures. */
-  // depth_tx.acquire(extent, depth_format);
+  depth_tx.acquire_2d(extent, depth_format, usage_attachment_read);
   combined_tx.acquire_2d(extent, color_format);
 
   eGPUTextureUsage usage_attachment_read_write = GPU_TEXTURE_USAGE_ATTACHMENT |
@@ -130,9 +127,7 @@ void RenderBuffers::acquire(int2 extent, gpu::TextureFormat raycast_depth_format
 
 void RenderBuffers::release()
 {
-  /* TODO(fclem): depth_tx should ideally be a texture from pool but we need stencil_view
-   * which is currently unsupported by pool textures. */
-  // depth_tx.release();
+  depth_tx.release();
   combined_tx.release();
 
   const bool do_motion_vectors_swizzle = vector_tx_format() == gpu::TextureFormat::SFLOAT_16_16;

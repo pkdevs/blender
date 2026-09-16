@@ -30,7 +30,7 @@ class RenderBuffers {
   static constexpr gpu::TextureFormat object_id_format = gpu::TextureFormat::UINT_16;
   static constexpr gpu::TextureFormat prepass_normal_format = gpu::TextureFormat::UNORM_10_10_10_2;
 
-  Texture depth_tx;
+  TextureFromPool depth_tx;
   TextureFromPool combined_tx;
 
   // TextureFromPool mist_tx; /* Derived from depth_tx during accumulation. */
