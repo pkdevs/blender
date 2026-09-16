@@ -273,32 +273,41 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
 
   /* Verify the Keying Set to use:
    * - use the active one for now (more control over this can be added later)
-   * - add a new one if it doesn't exist
+   * - add a new one if it doesn't exist.
+   * - only add keying set when this operation is run on top of an animatable property.
    */
   KeyingSet *keyingset = nullptr;
-  Scene *scene = CTX_data_scene(C);
-  if (scene->active_keyingset == 0) {
-    /* Validate flags
-     * - absolute KeyingSets should be created by default
-     */
-    const eKS_Settings flag = KEYINGSET_ABSOLUTE;
+  bool unable_keyingset = false;
+  auto get_keyingset = [&](void) {
+    if (keyingset || unable_keyingset) {
+      return keyingset;
+    }
+    Scene *scene = CTX_data_scene(C);
+    if (scene->active_keyingset == 0) {
+      /* Validate flags
+       * - absolute KeyingSets should be created by default
+       */
+      const eKS_Settings flag = KEYINGSET_ABSOLUTE;
 
-    const eInsertKeyFlags keyingflag = animrig::get_keyframing_flags(scene);
+      const eInsertKeyFlags keyingflag = animrig::get_keyframing_flags(scene);
 
-    /* Call the API func, and set the active keyingset index. */
-    keyingset = BKE_keyingset_add(
-        &scene->keyingsets, "ButtonKeyingSet", "Button Keying Set", flag, keyingflag);
+      /* Call the API func, and set the active keyingset index. */
+      keyingset = BKE_keyingset_add(
+          &scene->keyingsets, "ButtonKeyingSet", "Button Keying Set", flag, keyingflag);
 
-    scene->active_keyingset = scene->keyingsets.count();
-  }
-  else if (scene->active_keyingset < 0) {
-    BKE_report(op->reports, RPT_ERROR, "Cannot add property to built in keying set");
-    return OPERATOR_CANCELLED;
-  }
-  else {
-    keyingset = static_cast<KeyingSet *>(
-        BLI_findlink(&scene->keyingsets, scene->active_keyingset - 1));
-  }
+      scene->active_keyingset = scene->keyingsets.count();
+    }
+    else if (scene->active_keyingset < 0) {
+      unable_keyingset = true;
+      keyingset = nullptr;
+      return keyingset;
+    }
+    else {
+      keyingset = static_cast<KeyingSet *>(
+          BLI_findlink(&scene->keyingsets, scene->active_keyingset - 1));
+    }
+    return keyingset;
+  };
 
   /* Check if property is able to be added. */
   const bool all = RNA_boolean_get(op->ptr, "all");
@@ -315,10 +324,16 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
         index = 0;
       }
 
+      KeyingSet *use_keyingset = get_keyingset();
+      if (unable_keyingset) {
+        BKE_report(op->reports, RPT_ERROR, "Cannot add property to built in keying set");
+        return OPERATOR_CANCELLED;
+      }
+
       /* Add path to this setting. */
       BKE_keyingset_add_path(
-          keyingset, ptr.owner_id, nullptr, path->c_str(), index, pflag, KSP_GROUP_KSNAME);
-      keyingset->active_path = keyingset->paths.count();
+          use_keyingset, ptr.owner_id, nullptr, path->c_str(), index, pflag, KSP_GROUP_KSNAME);
+      use_keyingset->active_path = use_keyingset->paths.count();
       changed = true;
     }
   }
