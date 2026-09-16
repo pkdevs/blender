@@ -975,21 +975,6 @@ def extension_asset_library_enabled_id_set(asset_libraries):
     return {lib.extension_id for lib in asset_libraries if lib.extension_id and lib.enabled}
 
 
-def asset_library_is_enabled(asset_library):
-    # Whether the library is used, an extension defined library is only used while the repository
-    # defining it is enabled. Match `BKE_preferences_asset_library_is_enabled` in `preferences.cc`.
-    if not asset_library.enabled:
-        return False
-    repo_module, sep, _pkg_id = asset_library.extension_id.partition(".")
-    if not sep:
-        return True
-    for repo in bpy.context.preferences.extensions.repos:
-        if repo.module == repo_module:
-            return repo.enabled
-    # The entries of a removed repository are removed too, any that remain are unusable.
-    return False
-
-
 def extension_asset_library_repo_and_item_from_url(repo_cache_store, remote_url, *, error_fn):
     # Return `(repo_item, item_local)` of the extension in an enabled repository defining
     # an entry with `remote_url`, or None.

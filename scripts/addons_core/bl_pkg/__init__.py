@@ -550,11 +550,9 @@ def _remote_asset_library_sync_all_periodic():
     if not bpy.context.preferences.experimental.use_remote_asset_libraries:
         return
 
-    from .bl_extension_ops import asset_library_is_enabled
-
     prefs = bpy.context.preferences
     for asset_lib in prefs.filepaths.asset_libraries:
-        if not asset_library_is_enabled(asset_lib):
+        if not asset_lib.is_available():
             continue
         if not asset_lib.use_remote_url:
             continue
@@ -584,10 +582,8 @@ def _remote_asset_library_restore_backups() -> None:
     if not bpy.context.preferences.experimental.use_remote_asset_libraries:
         return
 
-    from .bl_extension_ops import asset_library_is_enabled
-
     for asset_lib in bpy.context.preferences.filepaths.asset_libraries:
-        if not asset_library_is_enabled(asset_lib):
+        if not asset_lib.is_available():
             continue
         if not asset_lib.use_remote_url:
             continue

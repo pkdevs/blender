@@ -147,14 +147,14 @@ int BKE_preferences_asset_library_get_index(const struct UserDef *userdef,
     ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 /**
- * Check if \a library is used, an extension defined library is only used while the repository
- * defining it is enabled.
+ * Check if \a library can be used, this matches the "enabled" setting except libraries defined
+ * by extensions also require their repository to be enabled.
  *
  * \note #bUserAssetLibrary::is_enabled is only the setting the user controls, disabling a
  * repository never changes it so the setting is kept for when the repository is enabled again.
  */
-bool BKE_preferences_asset_library_is_enabled(const struct UserDef *userdef,
-                                              const struct bUserAssetLibrary *library)
+bool BKE_preferences_asset_library_is_available(const struct UserDef *userdef,
+                                                const struct bUserAssetLibrary *library)
     ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 /**

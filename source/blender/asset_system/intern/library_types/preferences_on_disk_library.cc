@@ -74,7 +74,7 @@ bool PreferencesOnDiskAssetLibrary::is_enabled() const
     return false;
   }
 
-  return BKE_preferences_asset_library_is_enabled(&U, library_definition);
+  return BKE_preferences_asset_library_is_available(&U, library_definition);
 }
 
 }  // namespace blender::asset_system

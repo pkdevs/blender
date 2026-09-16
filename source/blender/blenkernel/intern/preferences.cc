@@ -160,8 +160,8 @@ int BKE_preferences_asset_library_get_index(const UserDef *userdef,
   return BLI_findindex(&userdef->asset_libraries, library);
 }
 
-bool BKE_preferences_asset_library_is_enabled(const UserDef *userdef,
-                                              const bUserAssetLibrary *library)
+bool BKE_preferences_asset_library_is_available(const UserDef *userdef,
+                                                const bUserAssetLibrary *library)
 {
   if (library->flag & ASSET_LIBRARY_DISABLED) {
     return false;
@@ -185,7 +185,7 @@ bool BKE_preferences_asset_library_is_valid(const UserDef *userdef,
                                             const bool check_directory_exists)
 {
   /* Check disabled libraries. */
-  if (!BKE_preferences_asset_library_is_enabled(userdef, library)) {
+  if (!BKE_preferences_asset_library_is_available(userdef, library)) {
     return false;
   }
 

@@ -859,6 +859,11 @@ static void rna_AssetLibraryCollection_active_set(PointerRNA * /*ptr*/,
   }
 }
 
+static bool rna_userdef_asset_library_is_available(bUserAssetLibrary *library)
+{
+  return BKE_preferences_asset_library_is_available(&U, library);
+}
+
 static void rna_userdef_asset_library_remove(bContext *C, ReportList *reports, PointerRNA *ptr)
 {
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
@@ -7114,6 +7119,7 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  FunctionRNA *func;
 
   srna = RNA_def_struct(brna, "UserAssetLibrary", nullptr);
   RNA_def_struct_sdna(srna, "bUserAssetLibrary");
@@ -7212,6 +7218,13 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
       "Invalid UUID",
       "If the UUID is invalid for the asset, the invalid string will be available here.");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  func = RNA_def_function(srna, "is_available", "rna_userdef_asset_library_is_available");
+  RNA_def_function_ui_description(func,
+                                  "Check if this asset library can be used, this matches "
+                                  "\"enabled\" except asset libraries defined by extensions also "
+                                  "require their repository to be enabled");
+  RNA_def_function_return(func, RNA_def_boolean(func, "result", false, "", ""));
 }
 
 static void rna_def_userdef_preferences_asset_library(BlenderRNA *brna)
@@ -7341,7 +7354,7 @@ static void rna_def_userdef_filepaths_extension_repo(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Enabled", "Enable the repository");
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_userdef_extension_repo_enabled_set");
   /* The asset libraries this repository defines become usable or unusable, see
-   * #BKE_preferences_asset_library_is_enabled. */
+   * #BKE_preferences_asset_library_is_available. */
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_refresh");
 
