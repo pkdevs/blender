@@ -5,6 +5,15 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/config/blender_release.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/blender_common.cmake")
 
+# Variables to help identifying the target platform to be built.
+# Works around the fact that CMAKE_SYSTEM_PROCESSOR variable is not yet available at the time
+# this configuration is run by the CMake.
+if ("$ENV{PROCESSOR_ARCHITECTURE}" STREQUAL "ARM64")
+  set(BUILDBOT_ARM64 TRUE)
+elseif()
+  set(BUILDBOT_X64 TRUE)
+endif()
+
 set(WITH_CYCLES_TEST_OSL     ON CACHE BOOL "" FORCE)
 
 set(HIPRT_COMPILER_PARALLEL_JOBS        6 CACHE STRING "" FORCE)
@@ -21,7 +30,7 @@ function(buildbot_set_cuda_toolkit_major_version_paths_checked version)
       "${CUDA${version}_NVCC_EXECUTABLE}"
       "CUDA-${version} NVCC executable does not exist: ${CUDA${version}_NVCC_EXECUTABLE}")
 endfunction()
-if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+if(NOT BUILDBOT_ARM64)
   # No CUDA 11 or 12 on Windows arm64.
   buildbot_set_cuda_toolkit_major_version_paths_checked(11)
   buildbot_set_cuda_toolkit_major_version_paths_checked(12)
