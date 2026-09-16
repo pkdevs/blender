@@ -2372,7 +2372,7 @@ static wmOperatorStatus move_to_collection_invoke(bContext *C,
   return move_to_collection_exec(C, op);
 }
 
-static void move_to_collection_menu_draw(Menu *menu, Collection *collection, int icon)
+static void move_to_collection_menu_draw(Menu *menu, Collection *collection, int icon, const bool is_scene_collection = false)
 {
   ui::Layout &layout = *menu->layout;
   bool is_move = ELEM(StringRefNull(menu->type->idname),
@@ -2383,13 +2383,18 @@ static void move_to_collection_menu_draw(Menu *menu, Collection *collection, int
 
   layout.operator_context_set(wm::OpCallContext::InvokeDefault);
 
+  if (!is_scene_collection) {
+    PointerRNA op_ptr = layout.op(ot, "Move Inside", ICON_NONE);
+    RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
+    layout.separator();
+  }
+
   PointerRNA op_ptr = layout.op(
       ot, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "New Collection"), ICON_ADD);
   RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
   RNA_boolean_set(&op_ptr, "is_new", true);
 
-  if (icon == ICON_SCENE_DATA) {
-    /* Scene collection. */
+  if (is_scene_collection) {
     layout.separator();
     op_ptr = layout.op(ot, BKE_collection_ui_name_get(collection), icon);
     RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
@@ -2415,16 +2420,6 @@ static void move_to_collection_recursive_menu_draw(const bContext * /*C*/, Menu 
     return;
   }
 
-  const bool is_move = ELEM(StringRefNull(menu->type->idname),
-                            "OBJECT_MT_move_to_collection",
-                            "OBJECT_MT_move_to_collection_recursive");
-  wmOperatorType *ot = WM_operatortype_find(
-      is_move ? "OBJECT_OT_move_to_collection" : "OBJECT_OT_link_to_collection", false);
-
-  PointerRNA op_ptr = layout.op(ot, "Move Inside", ICON_NONE);
-  RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
-  layout.separator();
-
   move_to_collection_menu_draw(menu, collection, ui::icon_color_from_collection(collection));
 }
 
@@ -2440,7 +2435,7 @@ static void move_to_collection_menu_draw(const bContext *C, Menu *menu)
     RNA_string_set(&op_ptr, "menu_idname", menu->type->idname);
     layout.separator();
   }
-  move_to_collection_menu_draw(menu, scene->master_collection, ICON_SCENE_DATA);
+  move_to_collection_menu_draw(menu, scene->master_collection, ICON_SCENE_DATA, true);
 }
 
 void move_to_collection_menu_register()
