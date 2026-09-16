@@ -999,6 +999,50 @@ class Segment {
                                     const std::optional<int> inter_index_end);
 };
 
+struct IntersectionPoint {
+  int point_i = -1;
+  int point_j = -1;
+  float factor_i = -1.0f;
+  float factor_j = -1.0f;
+  int curve_i = -1;
+  int curve_j = -1;
+
+  int segment_index_i[2] = {-1, -1};
+  int segment_index_j[2] = {-1, -1};
+
+  constexpr IntersectionPoint() = default;
+
+  float point_for_curve(const int curve) const
+  {
+    BLI_assert(curve == curve_i || curve == curve_j);
+    return curve == curve_i ? point_i : point_j;
+  }
+
+  float factor_for_curve(const int curve) const
+  {
+    BLI_assert(curve == curve_i || curve == curve_j);
+    return curve == curve_i ? factor_i : factor_j;
+  }
+
+  float parameter_for_curve(const int curve) const
+  {
+    return this->point_for_curve(curve) + this->factor_for_curve(curve);
+  }
+
+  int other_curve(const int curve) const
+  {
+    BLI_assert(curve == curve_i || curve == curve_j);
+    return curve == curve_i ? curve_j : curve_i;
+  }
+};
+
+IntersectionPoint create_intersection(const int point_i,
+                                      const int point_j,
+                                      const float factor_i,
+                                      const float factor_j,
+                                      const int curve_i,
+                                      const int curve_j);
+
 using EncodedConnection = int;
 constexpr EncodedConnection SEGMENT_CONNECTION_NULL = 0;
 
@@ -1025,6 +1069,22 @@ void cut_caps(bke::CurvesGeometry &dst,
               const Span<bool> segment_reversed,
               const Span<bool> cyclic,
               const OffsetIndices<int> segment_offsets);
+
+void store_segment_map_on_intersections(const Span<Segment> all_segments,
+                                        MutableSpan<IntersectionPoint> intersections);
+int create_segments_from_intersections_single_curve(const int curve_k,
+                                                    const Span<Vector<int>> inters_per_curves,
+                                                    const OffsetIndices<int> points_by_curve,
+                                                    const Span<IntersectionPoint> &intersections,
+                                                    const VArray<bool> &cyclic,
+                                                    Vector<Segment> &all_segments);
+void follow_segment_connections(const Span<Segment> all_segments,
+                                const Span<bool> segments_to_keep,
+                                const Span<SegmentConnections> segment_connections,
+                                Vector<Segment> &segments,
+                                Vector<int> &segment_offset_data,
+                                Vector<bool> &segment_reversed,
+                                Vector<bool> &cyclic);
 
 namespace trim {
 
