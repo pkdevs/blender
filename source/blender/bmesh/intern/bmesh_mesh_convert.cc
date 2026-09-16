@@ -1971,8 +1971,13 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
 void BM_mesh_bm_to_me_compact(BMesh &bm,
                               Mesh &mesh,
                               const CustomData_MeshMasks *mask,
-                              const bool add_mesh_attributes)
+                              const BMeshToMeshAttrs attrs_to_add)
 {
+  const bool add_hide = bool(attrs_to_add & BMeshToMeshAttrs::Hide);
+  const bool add_selection = bool(attrs_to_add & BMeshToMeshAttrs::Selection);
+  const bool add_other = bool(attrs_to_add & BMeshToMeshAttrs::Other);
+  const bool add_generic = bool(attrs_to_add & BMeshToMeshAttrs::Generic);
+
   /* NOTE: The function is called from multiple threads with the same input BMesh and different
    * mesh objects. */
 
@@ -1989,7 +1994,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   mesh.faces_num = bm.totface;
 
   /* Will have been cleared when clearing geometry. */
-  const bool need_uv_select = CustomData_has_layer(&bm.ldata, CD_PROP_FLOAT2);
+  const bool need_uv_select = add_selection && CustomData_has_layer(&bm.ldata, CD_PROP_FLOAT2);
   if (need_uv_select && bm.uv_select_sync_valid) {
     mesh.flag |= ME_FLAG_UV_SELECT_SYNC_VALID;
   }
@@ -2045,7 +2050,20 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       });
   bm.elem_index_dirty &= ~(BM_VERT | BM_EDGE | BM_FACE | BM_LOOP);
 
-  if (add_mesh_attributes) {
+  /* The tables are built unconditionally since they also index the topology, so filter out the
+   * attributes the caller isn't interested in here. */
+  need_select_vert &= add_selection;
+  need_select_edge &= add_selection;
+  need_select_poly &= add_selection;
+  need_hide_vert &= add_hide;
+  need_hide_edge &= add_hide;
+  need_hide_poly &= add_hide;
+  need_material_index &= add_other;
+  need_sharp_edge &= add_other;
+  need_sharp_face &= add_other;
+  need_uv_seams &= add_other;
+
+  if (add_generic) {
     const CustomData_MeshMasks &mask_final = mask ? *mask : CD_MASK_DERIVEDMESH;
 
     const CustomData &bm_data = get_bm_custom_data(bm, AttrDomain::Corner);
@@ -2087,49 +2105,44 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   bke::SpanAttributeWriter<int> material_index;
 
   bke::MutableAttributeAccessor attrs = mesh.attributes_for_write();
-  if (add_mesh_attributes) {
-    if (need_select_vert) {
-      select_vert = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert",
-                                                                  AttrDomain::Point);
-    }
-    if (need_hide_vert) {
-      hide_vert = attrs.lookup_or_add_for_write_only_span<bool>(".hide_vert", AttrDomain::Point);
-    }
-    if (need_select_edge) {
-      select_edge = attrs.lookup_or_add_for_write_only_span<bool>(".select_edge",
-                                                                  AttrDomain::Edge);
-    }
-    if (need_sharp_edge) {
-      sharp_edge = attrs.lookup_or_add_for_write_only_span<bool>("sharp_edge", AttrDomain::Edge);
-    }
-    if (need_uv_seams) {
-      uv_seams = attrs.lookup_or_add_for_write_only_span<bool>("uv_seam", AttrDomain::Edge);
-    }
-    if (need_hide_edge) {
-      hide_edge = attrs.lookup_or_add_for_write_only_span<bool>(".hide_edge", AttrDomain::Edge);
-    }
-    if (need_select_poly) {
-      select_poly = attrs.lookup_or_add_for_write_only_span<bool>(".select_poly",
+  if (need_select_vert) {
+    select_vert = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert", AttrDomain::Point);
+  }
+  if (need_hide_vert) {
+    hide_vert = attrs.lookup_or_add_for_write_only_span<bool>(".hide_vert", AttrDomain::Point);
+  }
+  if (need_select_edge) {
+    select_edge = attrs.lookup_or_add_for_write_only_span<bool>(".select_edge", AttrDomain::Edge);
+  }
+  if (need_sharp_edge) {
+    sharp_edge = attrs.lookup_or_add_for_write_only_span<bool>("sharp_edge", AttrDomain::Edge);
+  }
+  if (need_uv_seams) {
+    uv_seams = attrs.lookup_or_add_for_write_only_span<bool>("uv_seam", AttrDomain::Edge);
+  }
+  if (need_hide_edge) {
+    hide_edge = attrs.lookup_or_add_for_write_only_span<bool>(".hide_edge", AttrDomain::Edge);
+  }
+  if (need_select_poly) {
+    select_poly = attrs.lookup_or_add_for_write_only_span<bool>(".select_poly", AttrDomain::Face);
+  }
+  if (need_hide_poly) {
+    hide_poly = attrs.lookup_or_add_for_write_only_span<bool>(".hide_poly", AttrDomain::Face);
+  }
+  if (need_sharp_face) {
+    sharp_face = attrs.lookup_or_add_for_write_only_span<bool>("sharp_face", AttrDomain::Face);
+  }
+  if (need_uv_select) {
+    uv_select_vert = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_vert",
+                                                                   AttrDomain::Corner);
+    uv_select_edge = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_edge",
+                                                                   AttrDomain::Corner);
+    uv_select_face = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_face",
+                                                                   AttrDomain::Face);
+  }
+  if (need_material_index) {
+    material_index = attrs.lookup_or_add_for_write_only_span<int>("material_index",
                                                                   AttrDomain::Face);
-    }
-    if (need_hide_poly) {
-      hide_poly = attrs.lookup_or_add_for_write_only_span<bool>(".hide_poly", AttrDomain::Face);
-    }
-    if (need_sharp_face) {
-      sharp_face = attrs.lookup_or_add_for_write_only_span<bool>("sharp_face", AttrDomain::Face);
-    }
-    if (need_uv_select) {
-      uv_select_vert = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_vert",
-                                                                     AttrDomain::Corner);
-      uv_select_edge = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_edge",
-                                                                     AttrDomain::Corner);
-      uv_select_face = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_face",
-                                                                     AttrDomain::Face);
-    }
-    if (need_material_index) {
-      material_index = attrs.lookup_or_add_for_write_only_span<int>("material_index",
-                                                                    AttrDomain::Face);
-    }
   }
 
   attrs.add<float3>("position", bke::AttrDomain::Point, bke::AttributeInitConstruct());
@@ -2201,26 +2214,26 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
         }
       });
 
-  if (add_mesh_attributes) {
-    select_vert.finish();
-    hide_vert.finish();
-    select_edge.finish();
-    hide_edge.finish();
-    sharp_edge.finish();
-    uv_seams.finish();
-    select_poly.finish();
-    hide_poly.finish();
-    sharp_face.finish();
-    uv_select_vert.finish();
-    uv_select_edge.finish();
-    uv_select_face.finish();
-    material_index.finish();
+  /* Finishing the writers that were never initialized is a no-op, as is optimizing the storage
+   * of the attributes when none besides the topology were added. */
+  select_vert.finish();
+  hide_vert.finish();
+  select_edge.finish();
+  hide_edge.finish();
+  sharp_edge.finish();
+  uv_seams.finish();
+  select_poly.finish();
+  hide_poly.finish();
+  sharp_face.finish();
+  uv_select_vert.finish();
+  uv_select_edge.finish();
+  uv_select_face.finish();
+  material_index.finish();
 
-    vert_single_checker.optimize_storage();
-    edge_single_checker.optimize_storage();
-    face_single_checker.optimize_storage();
-    corner_single_checker.optimize_storage();
-  }
+  vert_single_checker.optimize_storage();
+  edge_single_checker.optimize_storage();
+  face_single_checker.optimize_storage();
+  corner_single_checker.optimize_storage();
 }
 
 void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks *cd_mask_extra)
@@ -2233,7 +2246,7 @@ void BM_mesh_bm_to_me_for_eval(BMesh &bm, Mesh &mesh, const CustomData_MeshMasks
   }
   mask.vmask &= ~CD_MASK_SHAPEKEY;
 
-  BM_mesh_bm_to_me_compact(bm, mesh, &mask, true);
+  BM_mesh_bm_to_me_compact(bm, mesh, &mask, BMeshToMeshAttrs::All);
 }
 
 }  // namespace blender
