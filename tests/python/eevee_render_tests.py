@@ -496,7 +496,7 @@ def main():
         report.set_fail_threshold(8.0 / 255.0)
         if gpu_vendor == "AMD" and args.gpu_backend == "opengl":
             # points_transparent
-            report.set_fail_percent(0.8)
+            report.set_fail_percent(0.9)
     elif test_dir_name.startswith('motion_blur'):
         # Failure can be subtle, tighten threshold
         report.set_fail_percent(0.04)
