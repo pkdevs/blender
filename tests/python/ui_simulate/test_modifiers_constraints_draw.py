@@ -6,11 +6,10 @@
 This file does not run anything, its methods are accessed for tests by ``run_blender_setup.py``.
 
 This test:
-1. Creates test objects of different types (Mesh, Curve, Grease Pencil, Lattice, Volume, Armature).
-2. Adds all available modifiers to the objects dynamically.
-3. Switches the Properties editor to the Modifiers tab for each object type and redraws.
-4. Adds all available constraints to the objects and bones.
-5. Switches the Properties editor to the Constraints tab and redraws.
+1. Adds all available modifiers to the objects dynamically.
+2. Switches the Properties editor to the Modifiers tab for each object type and redraws.
+3. Adds all available constraints to a mesh object, using a bone for bone-only constraints.
+4. Switches the Properties editor to the Constraints tab and redraws the panels.
 """
 
 import modules.ui_test_utils as ui
@@ -94,16 +93,17 @@ def modifiers_constraints_draw():
     unsupported_modifiers = []
 
     for mod_type in modifier_types:
+        supported = False
         for obj_type, obj in objects.items():
-            # Skip Armature for modifiers as it doesn't support them directly in the UI stack
+            # Armatures don't support modifiers.
             if obj_type == 'ARMATURE':
                 continue
             try:
                 obj.modifiers.new(name=mod_type, type=mod_type)
-                break
+                supported = True
             except (RuntimeError, TypeError):
                 pass
-        else:
+        if not supported:
             unsupported_modifiers.append(mod_type)
 
     t.assertFalse(
@@ -143,11 +143,10 @@ def modifiers_constraints_draw():
         try:
             mesh_obj.constraints.new(type=const_type)
         except (RuntimeError, TypeError):
-            if bone:
-                try:
-                    bone.constraints.new(type=const_type)
-                except (RuntimeError, TypeError):
-                    unsupported_constraints.append(const_type)
+            try:
+                bone.constraints.new(type=const_type)
+            except (RuntimeError, TypeError):
+                unsupported_constraints.append(const_type)
 
     t.assertFalse(
         unsupported_constraints,
