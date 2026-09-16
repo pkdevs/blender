@@ -219,8 +219,8 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     /* The now deprecated compositing_node_group is always written on file writes for forward
      * compatibility, so it has to be reset to nullptr if no versioning was needed.
      *
-     * Todo(#140111): Forward compatibility support will be removed in 6.0, and this loop can
-     * then be placed behind a `MAIN_VERSION_FILE_OLDER(bmain, 600, xxx)` check . */
+     * Todo(#140111): Forward compatibility support will be removed in 6.0, and this loop can then
+     * be placed behind a `MAIN_VERSION_FILE_OLDER(bmain, 600, xxx)` check . */
     for (Scene &scene : bmain->scenes) {
       scene.compositing_node_group = nullptr;
     }
@@ -275,9 +275,9 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 
   /* The compositor previously did not support default inputs for group nodes, but some built-in
    * nodes had the position field default type for some inputs, so node groups would gain it as a
-   * default type through some operators. Later, the default inputs were supported for group
-   * nodes, though position field were not supported in the compositor, so it would assert. To
-   * fix this, we reset any position field default input to the default value. */
+   * default type through some operators. Later, the default inputs were supported for group nodes,
+   * though position field were not supported in the compositor, so it would assert. To fix this,
+   * we reset any position field default input to the default value. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 3)) {
     FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
       if (node_tree->type == NTREE_COMPOSIT) {
@@ -580,10 +580,10 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
    */
 
   /* Keep this versioning always enabled at the bottom of the function; it can only be moved
-   * behind a subversion bump when the file format is changed (#mesh_skin_to_legacy is removed
-   * from #mesh_blend_write). Since that function keeps writing the old-format #CD_MVERT_SKIN
-   * layer for forward compatibility, files saved by *this* version also need this conversion to
-   * run unconditionally on read, not just for files older than this subversion.
+   * behind a subversion bump when the file format is changed (#mesh_skin_to_legacy is removed from
+   * #mesh_blend_write). Since that function keeps writing the old-format #CD_MVERT_SKIN layer for
+   * forward compatibility, files saved by *this* version also need
+   * this conversion to run unconditionally on read, not just for files older than this subversion.
    */
   for (Mesh &mesh : bmain->meshes) {
     bke::mesh_skin_to_generic(mesh);
