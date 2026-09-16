@@ -349,7 +349,8 @@ void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
 /**
  * Separate disjoint fill islands.
  *
- * Note: Nested islands of 3 or more curves will not be split.
+ * Note: Nested islands of 3 or more curves will not be split, (i.e. an island inside a lake inside
+ * a island, will stay the same fill id as the upper most parent island.)
  *
  * If a curve as been changed and it is not a child then update it's and it's children's fill ids.
  *
