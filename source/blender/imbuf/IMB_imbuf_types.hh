@@ -233,6 +233,9 @@ struct ImBuf {
   imbuf::partial_update::Tracker *partial_update = nullptr;
   Mutex partial_update_mutex;
 
+  /** Changeset ID of the last full update. */
+  std::atomic<int64_t> full_update_changeset = -1;
+
   /** Resolution in pixels per meter. Multiply by `0.0254` for DPI. */
   double ppm[2] = {0.0, 0.0};
 

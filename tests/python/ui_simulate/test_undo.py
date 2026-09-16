@@ -637,6 +637,166 @@ def view3d_texture_paint_complex():
     t.assertEqual(window.view_layer.objects.active.mode, 'OBJECT')
 
 
+def _paint_stroke(e, window, y_factor):
+    """
+    Horizontal stroke on image.
+    """
+    size = ui.get_window_size_in_pixels(window)
+    coords = [(x, int(size[1] * y_factor)) for x in range(int(size[0] * 0.2), int(size[0] * 0.8), 80)]
+    yield from e.leftmouse.cursor_motion(coords)
+    e.cursor_position_set(coords[0][0], coords[0][1] + 1, move=True)
+    yield
+
+
+def _view3d_texture_paint_startup(e):
+    """
+    Enter texture paint on a monkey with a new base color image, return its name.
+    """
+    yield from _view3d_startup_area_maximized(e)
+
+    yield from ui.call_menu(e, "Add -> Mesh -> Monkey")
+    yield e.numpad_period()
+    yield e.ctrl.tab().t()
+
+    yield from ui.call_operator(e, "Add Texture Paint Slot")
+    yield e.ret()
+    return 'Suzanne Base Color'
+
+
+def _image_editor_paint_startup(e, window):
+    """
+    Switch to an image editor in paint mode with a new image, return its name.
+    """
+    import bpy
+    area = ui.get_window_area_by_type(window, 'VIEW_3D')
+    e.cursor_position_set(*ui.get_area_center(area), move=True)
+    area.type = 'IMAGE_EDITOR'
+    yield
+
+    image = bpy.data.images.new("Paint", 1024, 1024)
+    bpy.ops.ed.undo_push(message="New Image")
+    space = area.spaces.active
+    space.image = image
+    space.mode = 'PAINT'
+    yield
+    bpy.context.tool_settings.image_paint.unified_paint_settings.color = (1.0, 1.0, 1.0)
+    yield from _paint_stroke(e, window, 0.75)
+    return image.name
+
+
+def _image_regenerate_with_memfile_step(image_name):
+    """
+    Change the image contents outside of image undo, stored by a memfile step.
+    """
+    import bpy
+    bpy.data.images[image_name].generated_type = 'UV_GRID'
+    bpy.ops.ed.undo_push(message="Generated Type")
+
+
+def _image_pixels(image_name):
+    import bpy
+    return tuple(bpy.data.images[image_name].pixels)
+
+
+def _assert_pixels_equal(t, image_name, pixels, msg):
+    t.assertTrue(_image_pixels(image_name) == pixels, msg)
+
+
+def _assert_pixels_differ(t, image_name, pixels, msg):
+    t.assertTrue(_image_pixels(image_name) != pixels, msg)
+
+
+def view3d_texture_paint_undo_after_memfile_step():
+    # An image step should not share tiles with an older image step when a
+    # memfile step in between changed the image, see #163757.
+    import bpy
+    e, t, window = ui.test_window()
+    image = yield from _view3d_texture_paint_startup(e)
+
+    yield from _paint_stroke(e, window, 0.55)
+
+    _image_regenerate_with_memfile_step(image)
+    yield
+    uv_grid = _image_pixels(image)
+
+    yield from _paint_stroke(e, window, 0.45)
+    after_b = _image_pixels(image)
+    _assert_pixels_differ(t, image, uv_grid, "Second stroke should change pixels")
+
+    yield e.ctrl.z()                    # Undo: second stroke.
+    _assert_pixels_equal(t, image, uv_grid, "Undo should restore the regenerated image")
+    yield e.ctrl.z()                    # Undo: generated type.
+    t.assertEqual(bpy.data.images[image].generated_type, 'BLANK')
+    t.assertEqual(window.view_layer.objects.active.mode, 'TEXTURE_PAINT')
+
+    yield e.ctrl.shift.z()              # Redo: generated type.
+    t.assertEqual(bpy.data.images[image].generated_type, 'UV_GRID')
+    yield e.ctrl.shift.z()              # Redo: second stroke.
+    _assert_pixels_equal(t, image, after_b, "Redo should restore second stroke")
+
+
+def view3d_texture_paint_undo_redo_after_pack_and_generate():
+    # Pack and change image source in between painting.
+    import bpy
+    e, t, window = ui.test_window()
+    image = yield from _view3d_texture_paint_startup(e)
+    initial = _image_pixels(image)
+
+    yield from _paint_stroke(e, window, 0.55)
+
+    bpy.data.images[image].pack()
+    bpy.ops.ed.undo_push(message="Pack")
+    yield
+    bpy.data.images[image].source = 'GENERATED'
+    bpy.data.images[image].generated_type = 'UV_GRID'
+    bpy.ops.ed.undo_push(message="Generated")
+    yield
+    uv_grid = _image_pixels(image)
+
+    yield from _paint_stroke(e, window, 0.45)
+    after_b = _image_pixels(image)
+    yield from _paint_stroke(e, window, 0.65)
+    after_c = _image_pixels(image)
+    _assert_pixels_differ(t, image, after_b, "Third stroke should change pixels")
+
+    for _ in range(3):
+        yield e.ctrl.z()                # Undo: third stroke.
+        _assert_pixels_equal(t, image, after_b, "Undo should restore second stroke")
+        yield e.ctrl.z()                # Undo: second stroke.
+        _assert_pixels_equal(t, image, uv_grid, "Undo should restore the generated image")
+        yield e.ctrl.shift.z()          # Redo: second stroke.
+        _assert_pixels_equal(t, image, after_b, "Redo should restore second stroke")
+        yield e.ctrl.shift.z()          # Redo: third stroke.
+        _assert_pixels_equal(t, image, after_c, "Redo should restore third stroke")
+
+    # Undo and redo everything, across the memfile steps.
+    yield e.ctrl.z(5)
+    _assert_pixels_equal(t, image, initial, "Undo should restore initial image")
+    yield e.ctrl.shift.z(5)
+    _assert_pixels_equal(t, image, after_c, "Redo should restore third stroke")
+
+
+def image_editor_paint_undo_after_memfile_step():
+    # Image editor variant of `view3d_texture_paint_undo_after_memfile_step`.
+    e, t, window = ui.test_window()
+    image = yield from _image_editor_paint_startup(e, window)
+
+    yield from _paint_stroke(e, window, 0.55)
+
+    _image_regenerate_with_memfile_step(image)
+    yield
+    uv_grid = _image_pixels(image)
+
+    yield from _paint_stroke(e, window, 0.45)
+    after_b = _image_pixels(image)
+    _assert_pixels_differ(t, image, uv_grid, "Second stroke should change pixels")
+
+    yield e.ctrl.z()                    # Undo: second stroke.
+    _assert_pixels_equal(t, image, uv_grid, "Undo should restore the regenerated image")
+    yield e.ctrl.shift.z()              # Redo: second stroke.
+    _assert_pixels_equal(t, image, after_b, "Redo should restore second stroke")
+
+
 def view3d_particle_edit_undo_from_texture_paint():
     import bpy
 
