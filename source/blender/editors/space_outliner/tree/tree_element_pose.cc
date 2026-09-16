@@ -64,7 +64,8 @@ void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
       }
     }
     /* make hierarchy */
-    for (int index : legacy_te_.subtree.index_range()) {
+    int index = 0;
+    while (index < legacy_te_.subtree.size()) {
       TreeElement *ten = legacy_te_.subtree[index];
       TreeStoreElem *tselem = TREESTORE(ten);
       if (tselem->type == TSE_POSE_CHANNEL) {
@@ -74,8 +75,10 @@ void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
           TreeElement *par = static_cast<TreeElement *>(pchan->parent->temp);
           par->subtree.append(ten);
           ten->parent = par;
+          continue;
         }
       }
+      index++;
     }
   }
 }

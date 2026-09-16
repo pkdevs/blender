@@ -277,6 +277,12 @@ static int outliner_get_insert_index(TreeElement *drag_te,
                                      ListBaseT<T> *listbase)
 {
   int index = BLI_findindex(listbase, drop_te->directdata);
+
+  if (index < 0) {
+    /* Element not found. */
+    BLI_assert_unreachable();
+    return -1;
+  }
   /* Find the element to insert after. Null is the start of the list. */
   if (drag_te->index < drop_te->index) {
     if (insert_type == TE_INSERT_BEFORE) {

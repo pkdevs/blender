@@ -38,7 +38,7 @@ void all(Span<TreeElement *> subtree, const VisitorFn visitor)
 {
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
-    Vector<TreeElement *> subtree = element->subtree;
+    Vector<TreeElement *> &subtree = element->subtree;
 
     visitor(element);
     /* Don't access element from now on, it may be freed. */

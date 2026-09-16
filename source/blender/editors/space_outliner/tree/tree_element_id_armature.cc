@@ -64,12 +64,11 @@ void TreeElementIDArmature::expand_edit_bones() const
     ebone.temp.p = ten;
   }
   /* make hierarchy */
-  TreeElement *ten = arm_.edbo->first() ?
-                         static_cast<TreeElement *>(
-                             (static_cast<EditBone *>(arm_.edbo->first()))->temp.p) :
-                         nullptr;
+  TreeElement *ten = arm_.edbo->first() ? static_cast<TreeElement *>(arm_.edbo->first()->temp.p) :
+                                          nullptr;
 
-  for (int index : ten->subtree.index_range()) {
+  int index = 0;
+  while (index < ten->subtree.size()) {
     TreeElement *par;
     TreeElement *te = ten->subtree[index];
     EditBone *ebone = static_cast<EditBone *>(te->directdata);
@@ -78,7 +77,9 @@ void TreeElementIDArmature::expand_edit_bones() const
       par = static_cast<TreeElement *>(ebone->parent->temp.p);
       par->subtree.append(te);
       te->parent = par;
+      continue;
     }
+    index++;
   }
 }
 
