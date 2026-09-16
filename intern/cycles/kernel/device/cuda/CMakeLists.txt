@@ -24,11 +24,85 @@ set(LIB
 
 )
 
-function(cuda_get_version out_version)
-  execute_process(COMMAND ${CUDA_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
+function(cuda_get_version nvcc_executable out_version)
+  execute_process(COMMAND "${nvcc_executable}" "--version" OUTPUT_VARIABLE NVCC_OUT)
   string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR "${NVCC_OUT}")
   string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR "${NVCC_OUT}")
-  set(${out_version} "${CUDA_VERSION_MAJOR}${CUDA_VERSION_MINOR}" PARENT_SCOPE)
+  set(${out_version} "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" PARENT_SCOPE)
+endfunction()
+
+function(cuda_get_arch_supported nvcc_executable arch out_is_supported)
+  if("${arch}" MATCHES "^compute_[0-9]+$")
+    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-arch" OUTPUT_VARIABLE NVCC_OUT)
+  elseif("${arch}" MATCHES "^sm_[0-9]+$")
+    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-code" OUTPUT_VARIABLE NVCC_OUT)
+  else()
+    message(WARNING "Unknown CUDA architecture ${arch}")
+    # Leave the actual check to the toolkit.
+    set(${out_is_supported} TRUE PARENT_SCOPE)
+    return()
+  endif()
+
+  if("${NVCC_OUT}" MATCHES "(^|\n)${arch}\n")
+    set(${out_is_supported} TRUE PARENT_SCOPE)
+    return()
+  endif()
+
+  set(${out_is_supported} FALSE PARENT_SCOPE)
+endfunction()
+
+function(cuda_get_toolkit_for_arch arch out_root_dir out_nvcc_executable out_version)
+  set(${out_root_dir}        PARENT_SCOPE)
+  set(${out_nvcc_executable} PARENT_SCOPE)
+  set(${out_version}         PARENT_SCOPE)
+
+  set(_preferred_toolkits 13 12 11)
+  if(arch MATCHES "^compute_[0-9]+$")
+    list(REMOVE_ITEM _preferred_toolkits 11)
+    list(REVERSE _preferred_toolkits)
+  endif()
+
+  foreach(major_toolkit_version ${_preferred_toolkits})
+    if(DEFINED "CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR")
+      if(NOT EXISTS "${CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR}")
+        message(WARNING "CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR does not exist: ${CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR}")
+        continue()
+      endif()
+      if(NOT EXISTS "${CUDA${major_toolkit_version}_NVCC_EXECUTABLE}")
+        message(WARNING "CUDA${major_toolkit_version}_NVCC_EXECUTABLE does not exist: ${CUDA${major_toolkit_version}_NVCC_EXECUTABLE}")
+        continue()
+      endif()
+
+      set(_root_dir        "${CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR}")
+      set(_nvcc_executable "${CUDA${major_toolkit_version}_NVCC_EXECUTABLE}")
+      cuda_get_version("${_nvcc_executable}" _version)
+    else()
+      continue()
+    endif()
+
+    cuda_get_arch_supported("${_nvcc_executable}" "${arch}" _is_supported)
+    if(NOT ${_is_supported})
+      message(WARNING "${_nvcc_executable} does not support ${arch}")
+      continue()
+    endif()
+
+    set(${out_root_dir}        "${_root_dir}"         PARENT_SCOPE)
+    set(${out_nvcc_executable} "${_nvcc_executable}"  PARENT_SCOPE)
+    set(${out_version}         "${_version}"          PARENT_SCOPE)
+    return()
+  endforeach()
+
+  # No suitable explicit toolkit found. Fallback to the default.
+
+  cuda_get_arch_supported("${CUDA_NVCC_EXECUTABLE}" "${arch}" _is_supported)
+  if(NOT _is_supported)
+    return()
+  endif()
+
+  cuda_get_version("${CUDA_NVCC_EXECUTABLE}" _version)
+  set(${out_root_dir}        "${CUDA_TOOLKIT_ROOT_DIR}" PARENT_SCOPE)
+  set(${out_nvcc_executable} "${CUDA_NVCC_EXECUTABLE}"  PARENT_SCOPE)
+  set(${out_version}         "${_version}"              PARENT_SCOPE)
 endfunction()
 
 function(cuda_add_common_flags cuda_version arch in_flags out_flags)
@@ -54,12 +128,12 @@ function(cuda_add_common_flags cuda_version arch in_flags out_flags)
     set(flags ${flags} -D WITH_NANOVDB)
   endif()
 
-  if("${cuda_version}" GREATER_EQUAL 123 AND "${arch}" STREQUAL "sm_120")
+  if("${cuda_version}" VERSION_GREATER_EQUAL 12.3 AND "${arch}" STREQUAL "sm_120")
     # Enable jump table generation for the SVM switch statement.
     set(flags ${flags} --jump-table-density 80)
   endif()
 
-  if(NOT WITH_CYCLES_CUDA_BUILD_SERIAL AND "${cuda_version}" GREATER_EQUAL 129)
+  if(NOT WITH_CYCLES_CUDA_BUILD_SERIAL AND "${cuda_version}" VERSION_GREATER_EQUAL 12.9)
     # Only use split compile with few binaries, to avoid excessive memory usage.
     # This is mainly helpful for quick local builds for one architecture.
     list(LENGTH CYCLES_CUDA_BINARIES_ARCH _num_binaries)
@@ -76,11 +150,11 @@ if(WITH_CYCLES_CUDA_BINARIES)
   set(CUDA_BITS 64)
 
   # CUDA version
-  cuda_get_version(CUDA_VERSION)
+  cuda_get_version("${CUDA_NVCC_EXECUTABLE}" CUDA_VERSION)
 
   # warn for other versions
-  if((CUDA_VERSION STREQUAL "101") OR
-     (CUDA_VERSION STREQUAL "102") OR
+  if((CUDA_VERSION VERSION_EQUAL 10.1) OR
+     (CUDA_VERSION VERSION_EQUAL 10.2) OR
      (CUDA_VERSION_MAJOR STREQUAL "11") OR
      (CUDA_VERSION_MAJOR STREQUAL "12"))
   else()
@@ -162,50 +236,11 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
   set(prev_arch "none")
   foreach(arch ${CYCLES_CUDA_BINARIES_ARCH})
-    if(${arch} MATCHES ".*_3.")
+    if("${arch}" MATCHES ".*_3.")
       message(STATUS "CUDA binaries for ${arch} are no longer supported, skipped.")
-    elseif(${arch} MATCHES "compute_7." AND DEFINED CUDA11_NVCC_EXECUTABLE)
-      # Use CUDA 11 if available for the default PTX kernel. This allows us to
-      # keep the driver requirements for user machines low.
-      set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
-      set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
-      set(cuda_version 110)
-    elseif((${arch} MATCHES ".*_5." OR ${arch} MATCHES ".*_6." OR ${arch} MATCHES ".*_70") AND "${CUDA_VERSION}" GREATER_EQUAL 130)
-      # Support for Maxwell, Pascal and Volta was dropped in CUDA 13
-      if(DEFINED CUDA11_NVCC_EXECUTABLE)
-        set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
-        set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
-        set(cuda_version 110)
-      else()
-        message(STATUS "CUDA binaries for ${arch} are no longer supported with CUDA 13.0+, skipped.")
-      endif()
-    elseif(${arch} MATCHES ".*_7." AND "${CUDA_VERSION}" LESS 100)
-      message(STATUS "CUDA binaries for ${arch} require CUDA 10.0+, skipped.")
-    elseif(${arch} MATCHES ".*_8.")
-      if("${CUDA_VERSION}" GREATER_EQUAL 111) # Support for sm_86 was introduced in CUDA 11
-        set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
-        set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
-        set(cuda_version ${CUDA_VERSION})
-      elseif(DEFINED CUDA11_NVCC_EXECUTABLE)
-        set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
-        set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
-        set(cuda_version 110)
-      else()
-        message(STATUS "CUDA binaries for ${arch} require CUDA 11.1+, skipped.")
-      endif()
-    elseif(${arch} MATCHES ".*_10." OR ${arch} MATCHES ".*_120")
-      if("${CUDA_VERSION}" GREATER_EQUAL 128) # Support for sm_100, sm_101, sm_120 was introduced in CUDA 12.8
-        set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
-        set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
-        set(cuda_version ${CUDA_VERSION})
-      else()
-        message(STATUS "CUDA binaries for ${arch} require CUDA 12.8+, skipped.")
-      endif()
-    else()
-      set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
-      set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
-      set(cuda_version ${CUDA_VERSION})
+      continue()
     endif()
+    cuda_get_toolkit_for_arch("${arch}" cuda_toolkit_root_dir cuda_nvcc_executable cuda_version)
     if(DEFINED cuda_nvcc_executable AND DEFINED cuda_toolkit_root_dir)
       # Compile regular kernel
       cycles_cuda_kernel_add(${arch} ${prev_arch} kernel "" "${cuda_sources}" FALSE)
@@ -216,6 +251,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
       unset(cuda_nvcc_executable)
       unset(cuda_toolkit_root_dir)
+    else()
+      if(WITH_STRICT_BUILD_OPTIONS)
+        message(FATAL_ERROR "Unable to find CUDA toolkit for ${arch}")
+      else()
+        message(WARNING "Unable to find CUDA toolkit for ${arch}, skipping the architecture")
+      endif()
     endif()
   endforeach()
 

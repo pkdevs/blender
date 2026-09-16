@@ -44,9 +44,6 @@ set(LIB
 )
 
 if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
-  # CUDA version
-  cuda_get_version(CUDA_VERSION)
-
   # Modifies in parent scope:
   # - `optix_ptx`: appended with compressed ptx output.
   function(cycles_optix_kernel_add name input flags)
@@ -64,17 +61,16 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
         -D OIIO_VERSION=${OIIO_VERSION})
     endif()
 
-    set(arch compute_50)
-    set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
-    set(cuda_version ${CUDA_VERSION})
-    if("${CUDA_VERSION}" GREATER_EQUAL 130) # Support for Maxwell, Pascal and Volta was dropped in CUDA 13
-      if(DEFINED CUDA11_NVCC_EXECUTABLE)
-        # Use CUDA 11 for the OptiX PTX kernel, to retain support for older architectures.
-        set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
-        set(cuda_version 110)
-      else()
-        set(arch compute_75)
+    foreach(_arch compute_50 compute_75)
+      cuda_get_toolkit_for_arch("${_arch}" cuda_toolkit_root_dir cuda_nvcc_executable cuda_version)
+      if(DEFINED cuda_nvcc_executable)
+        set(arch "${_arch}")
+        break()
       endif()
+    endforeach()
+
+    if(NOT DEFINED cuda_nvcc_executable)
+      message(FATAL_ERROR "Could not find suitable combination of compute architecture and nvcc compiler")
     endif()
 
     cuda_add_common_flags(${cuda_version} ${arch} "${cuda_flags}" cuda_flags)
