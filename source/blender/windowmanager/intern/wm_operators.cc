@@ -2249,6 +2249,9 @@ static std::string wm_call_menu_get_description(bContext * /*C*/,
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(ptr, "name", idname);
   MenuType *mt = WM_menutype_find(idname, true);
+  if (!mt) {
+    return "";
+  }
   if (!mt->description) {
     return "";
   }
