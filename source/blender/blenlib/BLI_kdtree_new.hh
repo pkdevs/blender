@@ -254,6 +254,10 @@ namespace kdtree {
 /**
  * A search reports its visits to a "Result Set", which is responsible for storing results and
  * telling the search when to continue. Returning false from #add_point ends the search.
+ *
+ * The search only reports a point once it is close enough to keep, so #add_point does not have to
+ * check the distance. #inclusive tells the search whether points exactly #max_distance_sq away
+ * should be processed.
  */
 template<typename ValueT> class NearestResult {
  private:
@@ -261,6 +265,8 @@ template<typename ValueT> class NearestResult {
   ValueT distance_sq_ = std::numeric_limits<ValueT>::max();
 
  public:
+  static constexpr bool inclusive = false;
+
   int index() const
   {
     return index_;
@@ -272,10 +278,8 @@ template<typename ValueT> class NearestResult {
 
   bool add_point(const ValueT distance_sq, const int index)
   {
-    if (distance_sq < distance_sq_) {
-      distance_sq_ = distance_sq;
-      index_ = index;
-    }
+    distance_sq_ = distance_sq;
+    index_ = index;
     return true;
   }
 
@@ -293,6 +297,8 @@ template<typename ValueT, typename Filter> class FilteredNearestResult {
   ValueT distance_sq_ = std::numeric_limits<ValueT>::max();
 
  public:
+  static constexpr bool inclusive = false;
+
   explicit FilteredNearestResult(Filter filter) : filter_(filter) {}
 
   int index() const
@@ -306,7 +312,7 @@ template<typename ValueT, typename Filter> class FilteredNearestResult {
 
   bool add_point(const ValueT distance_sq, const int index)
   {
-    if (distance_sq < distance_sq_ && filter_(index)) {
+    if (filter_(index)) {
       distance_sq_ = distance_sq;
       index_ = index;
     }
@@ -326,6 +332,8 @@ template<typename NearestT, typename ValueT> class NearestNResult {
   int count_ = 0;
 
  public:
+  static constexpr bool inclusive = false;
+
   explicit NearestNResult(MutableSpan<NearestT> nearest) : nearest_(nearest) {}
 
   int count() const
@@ -375,6 +383,8 @@ template<typename ValueT, typename Fn> class RadiusResult {
   int count_ = 0;
 
  public:
+  static constexpr bool inclusive = true;
+
   RadiusResult(const ValueT radius_sq, Fn fn) : radius_sq_(radius_sq), fn_(fn) {}
 
   int count() const
@@ -384,10 +394,8 @@ template<typename ValueT, typename Fn> class RadiusResult {
 
   bool add_point(const ValueT distance_sq, const int index)
   {
-    if (distance_sq <= radius_sq_) {
-      count_++;
-      fn_(index, distance_sq);
-    }
+    count_++;
+    fn_(index, distance_sq);
     return true;
   }
 
@@ -397,6 +405,18 @@ template<typename ValueT, typename Fn> class RadiusResult {
     return radius_sq_;
   }
 };
+
+/** Whether a distance is close enough for \a ResultSet to still be interested in it. */
+template<typename ResultSet, typename ValueT>
+inline bool keep_distance(const ValueT distance_sq, const ValueT max_distance_sq)
+{
+  if constexpr (ResultSet::inclusive) {
+    return distance_sq <= max_distance_sq;
+  }
+  else {
+    return distance_sq < max_distance_sq;
+  }
+}
 
 /**
  * Group points that are within \a range of each other, favoring speed over quality: each point is
@@ -581,7 +601,7 @@ bool KDTreeNew<T>::search_node(ResultSet &result,
     for (int i = node->leaf.start; i < node->leaf.end; i++) {
       const int index = indices[i];
       const ValueT point_distance_sq = math::distance_squared(position, points[index]);
-      if (point_distance_sq < result.max_distance_sq()) {
+      if (kdtree::keep_distance<ResultSet>(point_distance_sq, result.max_distance_sq())) {
         if (!result.add_point(point_distance_sq, index)) {
           return false;
         }
@@ -626,7 +646,7 @@ bool KDTreeNew<T>::search_node(ResultSet &result,
   /* Swap in the distance to the far side for this dimension, keeping the others. */
   const ValueT previous = offsets[dim];
   const ValueT far_distance_sq = distance_sq + far_offset - previous;
-  if (far_distance_sq > result.max_distance_sq()) {
+  if (!kdtree::keep_distance<ResultSet>(far_distance_sq, result.max_distance_sq())) {
     return true;
   }
   offsets[dim] = far_offset;
