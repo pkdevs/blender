@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Header, Menu, Panel
 from bpy.app.translations import (
     pgettext_iface as iface_,
@@ -12,8 +11,7 @@ from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import MarkersPanelBase, MarkersMarkerPanelBase, playback_controls
-from rna_prop_ui import PropertyPanel
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 
 
 def drivers_editor_footer(layout, context):
@@ -592,20 +590,13 @@ class GRAPH_MT_snap_pie(Menu):
         pie.operator("graph.snap_cursor_value", text="Cursor Value to Selection")
 
 
-class GRAPH_PT_marker(MarkersMarkerPanelBase, Panel):
+class GRAPH_PT_marker(MarkerPanelBase, Panel):
     bl_space_type = 'GRAPH_EDITOR'
 
     @classmethod
     def poll(cls, context):
         sd = context.space_data
-        return sd.mode != 'DRIVERS' and MarkersMarkerPanelBase.poll(context)
-
-
-class GRAPH_PT_marker_custom_props(MarkersPanelBase, PropertyPanel, Panel):
-    bl_space_type = 'GRAPH_EDITOR'
-
-    _context_path = "active_marker"
-    _property_type = bpy.types.TimelineMarker
+        return sd.mode != 'DRIVERS' and MarkerPanelBase.poll(context)
 
 
 classes = (
@@ -632,7 +623,6 @@ classes = (
     GRAPH_PT_snapping,
     GRAPH_PT_driver_snapping,
     GRAPH_PT_marker,
-    GRAPH_PT_marker_custom_props,
 )
 
 if __name__ == "__main__":  # only for live edit.

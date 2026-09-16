@@ -21,7 +21,7 @@ from bl_ui.space_toolsystem_common import (
 )
 
 from rna_prop_ui import PropertyPanel
-from bl_ui.space_time import MarkersPanelBase, MarkersMarkerPanelBase, playback_controls
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 from bl_ui.properties_data_camera import DATA_PT_camera_display_composition_guides
 
 
@@ -2083,8 +2083,7 @@ class SEQUENCER_PT_sequencer_snapping(Panel):
         col.prop(sequencer_tool_settings, "snap_ignore_sound", text="Sound Strips")
 
 
-# Mix-in class, do not use directly.
-class SequencerMarkersPanelBase(MarkersPanelBase):
+class SEQUENCER_PT_marker(MarkerPanelBase, Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
 
     @classmethod
@@ -2095,18 +2094,6 @@ class SequencerMarkersPanelBase(MarkersPanelBase):
     @classmethod
     def get_marker_scene(cls, context):
         return context.sequencer_scene
-
-
-class SEQUENCER_PT_marker(MarkersMarkerPanelBase, SequencerMarkersPanelBase, Panel):
-    pass
-
-
-class SEQUENCER_PT_marker_custom_props(SequencerMarkersPanelBase, PropertyPanel, Panel):
-    bl_space_type = 'SEQUENCE_EDITOR'
-
-    # TODO: temp override for sequencer context
-    _context_path = "active_marker"
-    _property_type = bpy.types.TimelineMarker
 
 
 classes = (
@@ -2186,7 +2173,6 @@ classes = (
     SEQUENCER_PT_sequencer_snapping,
 
     SEQUENCER_PT_marker,
-    SEQUENCER_PT_marker_custom_props,
 )
 
 if __name__ == "__main__":  # only for live edit.

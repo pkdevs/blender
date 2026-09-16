@@ -8,7 +8,6 @@ from bpy.app.translations import (
     pgettext_n as n_,
     contexts as i18n_contexts,
 )
-from rna_prop_ui import PropertyPanel
 
 
 class TIME_PT_playhead_snapping(Panel):
@@ -372,9 +371,10 @@ class TIME_PT_playback_options(TimelinePanelButtons, Panel):
 
 
 # Mix-in class, do not use directly.
-class MarkersPanelBase:
+class MarkerPanelBase:
     bl_region_type = 'UI'
     bl_category = "Markers"
+    bl_label = "Marker"
 
     @classmethod
     def get_marker_scene(cls, context):
@@ -387,11 +387,6 @@ class MarkersPanelBase:
     @classmethod
     def poll(cls, context):
         return cls.get_active_marker(context) is not None
-
-
-# Mix-in class, do not use directly.
-class MarkersMarkerPanelBase(MarkersPanelBase):
-    bl_label = "Marker"
 
     def draw(self, context):
         layout = self.layout
@@ -407,15 +402,8 @@ class MarkersMarkerPanelBase(MarkersPanelBase):
         layout.prop(marker, "camera")
 
 
-class TIME_PT_marker(MarkersMarkerPanelBase, Panel):
+class TIME_PT_marker(MarkerPanelBase, Panel):
     bl_space_type = 'DOPESHEET_EDITOR'
-
-
-class TIME_PT_marker_custom_props(MarkersPanelBase, PropertyPanel, Panel):
-    bl_space_type = 'DOPESHEET_EDITOR'
-
-    _context_path = "active_marker"
-    _property_type = bpy.types.TimelineMarker
 
 
 ###################################
@@ -429,7 +417,6 @@ classes = (
     TIME_PT_playback_options,
     TIME_PT_playhead_snapping,
     TIME_PT_marker,
-    TIME_PT_marker_custom_props,
 )
 
 if __name__ == "__main__":  # only for live edit.

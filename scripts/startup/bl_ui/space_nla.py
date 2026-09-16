@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Header, Menu, Panel
 from bpy.app.translations import contexts as i18n_contexts
 from bl_ui.space_dopesheet import (
@@ -10,8 +9,7 @@ from bl_ui.space_dopesheet import (
     DopesheetActionPanelBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import MarkersPanelBase, MarkersMarkerPanelBase, playback_controls
-from rna_prop_ui import PropertyPanel
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 
 
 class NLA_HT_header(Header):
@@ -406,15 +404,8 @@ class NLA_MT_channel_context_menu(Menu):
         layout.operator("nla.tracks_delete", icon='X')
 
 
-class NLA_PT_marker(MarkersMarkerPanelBase, Panel):
+class NLA_PT_marker(MarkerPanelBase, Panel):
     bl_space_type = 'NLA_EDITOR'
-
-
-class NLA_PT_marker_custom_props(MarkersPanelBase, PropertyPanel, Panel):
-    bl_space_type = 'NLA_EDITOR'
-
-    _context_path = "active_marker"
-    _property_type = bpy.types.TimelineMarker
 
 
 classes = (
@@ -437,7 +428,6 @@ classes = (
     NLA_PT_action,
     NLA_PT_snapping,
     NLA_PT_marker,
-    NLA_PT_marker_custom_props,
 )
 
 if __name__ == "__main__":  # only for live edit.
