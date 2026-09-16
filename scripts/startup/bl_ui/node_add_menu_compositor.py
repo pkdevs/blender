@@ -636,7 +636,6 @@ swap_menus = node_add_menu.generate_menus(
 # See #EFFECT_MENU_BLACKLIST for filtering nodes within an existing category.
 effect_menus = {
     # menu bl_idname: baseclass
-    "NODE_MT_compositor_node_input_scene_effect": NODE_MT_compositor_node_input_scene_base,
     "NODE_MT_compositor_node_color_effect": NODE_MT_compositor_node_color_base,
     "NODE_MT_compositor_node_color_adjust_effect": NODE_MT_compositor_node_color_adjust_base,
     "NODE_MT_compositor_node_filter_effect": NODE_MT_compositor_node_filter_base,
@@ -644,9 +643,6 @@ effect_menus = {
     "NODE_MT_compositor_node_creative_effect": NODE_MT_compositor_node_creative_base,
     "NODE_MT_compositor_node_keying_effect": NODE_MT_compositor_node_keying_base,
     "NODE_MT_compositor_node_transform_effect": NODE_MT_compositor_node_transform_base,
-    "NODE_MT_compositor_node_vector_effect": NODE_MT_compositor_node_vector_base,
-    "NODE_MT_compositor_node_math_effect": NODE_MT_compositor_node_math_base,
-    "NODE_MT_compositor_node_text_effect": NODE_MT_compositor_node_text_base,
     "NODE_MT_compositor_node_effect_all": NODE_MT_compositor_node_all_base,
 }
 
