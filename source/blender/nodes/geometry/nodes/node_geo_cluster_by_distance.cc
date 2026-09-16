@@ -111,7 +111,9 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
     if (groups_num == 1) {
       index_mask::masked_fill<int>(cluster_ids, NO_CLUSTER_VALUE, mask_to_cluster);
       const KDTreeNew<float3> tree(positions, mask_to_cluster);
-      tree.calc_duplicates(distance_, cluster_ids);
+      /* Visiting the points in index order keeps the result from depending on the tree's
+       * layout, which changes as points move. See #calc_duplicates. */
+      kdtree::calc_duplicates(tree, distance_, mask_to_cluster, cluster_ids);
       set_no_cluster_value(cluster_ids, mask_to_cluster);
       return VArray<int>::from_container(std::move(cluster_ids));
     }
@@ -142,7 +144,8 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
             LinearAllocator<> tree_memory;
             tree_memory.provide_buffer(tree_buffer);
             const KDTreeNew<float3> tree(positions, group, tree_memory);
-            tree.calc_duplicates(distance_, cluster_ids);
+            /* The group's indices are sorted, so this visits the points in index order. */
+            kdtree::calc_duplicates(tree, distance_, group, cluster_ids);
             for (const int i : group) {
               if (cluster_ids[i] == NO_CLUSTER_VALUE) {
                 cluster_ids[i] = i;

@@ -346,7 +346,7 @@ TEST(kdtree, CalcDuplicates)
     for (const float range : {0.001f, 0.02f, 0.05f, 0.2f, 5.0f}) {
       const KDTreeNew<float3> tree(positions);
       Array<int> duplicates(points_num, -1);
-      const int found = tree.calc_duplicates(range, duplicates);
+      const int found = kdtree::calc_duplicates(tree, range, duplicates);
       SCOPED_TRACE(std::to_string(points_num) + " points, range " + std::to_string(range));
       check_duplicates(positions, indices, range, duplicates, found);
     }
@@ -365,7 +365,7 @@ TEST(kdtree, CalcDuplicatesWithDuplicatePoints)
 
   const KDTreeNew<float3> tree(positions);
   Array<int> duplicates(positions.size(), -1);
-  const int found = tree.calc_duplicates(0.1f, duplicates);
+  const int found = kdtree::calc_duplicates(tree, 0.1f, duplicates);
   check_duplicates(positions, indices, 0.1f, duplicates, found);
 
   /* Every point ends up in the cluster of the points that share its coordinates, and each of the
@@ -390,7 +390,7 @@ TEST(kdtree, CalcDuplicatesMasked)
 
   const KDTreeNew<float3> tree(positions, mask);
   Array<int> duplicates(positions.size(), -1);
-  const int found = tree.calc_duplicates(0.1f, duplicates);
+  const int found = kdtree::calc_duplicates(tree, 0.1f, duplicates);
   check_duplicates(positions, indices, 0.1f, duplicates, found);
 
   /* Points outside the mask are never touched. */
@@ -404,7 +404,7 @@ TEST(kdtree, CalcDuplicatesMasked)
    * same clusters down to which point of each is the target. */
   const KDTreeNew<float3> tree_from_indices(positions, indices.as_span());
   Array<int> from_indices(positions.size(), -1);
-  const int found_from_indices = tree_from_indices.calc_duplicates(0.1f, from_indices);
+  const int found_from_indices = kdtree::calc_duplicates(tree_from_indices, 0.1f, from_indices);
   EXPECT_EQ(Span<int>(from_indices), Span<int>(duplicates));
   EXPECT_EQ(found_from_indices, found);
 }
@@ -420,12 +420,90 @@ TEST(kdtree, CalcDuplicatesPresetTargets)
     duplicates[i] = i;
   }
   const KDTreeNew<float3> tree(positions);
-  const int found = tree.calc_duplicates(0.15f, duplicates);
+  const int found = kdtree::calc_duplicates(tree, 0.15f, duplicates);
 
   for (const int i : IndexRange(0, 20)) {
     EXPECT_EQ(duplicates[i], i) << "preset point " << i << " was merged into another point";
   }
   check_duplicates(positions, indices, 0.15f, duplicates, found);
+}
+
+/**
+ * Visiting the points in index order keeps the tree's layout out of the result: the target of
+ * every cluster is its lowest index, and the same points built into a different tree cluster the
+ * same way.
+ */
+TEST(kdtree, CalcDuplicatesIndexOrder)
+{
+  const Array<float3> positions = random_points(2000, 10);
+  const Vector<int> indices = all_indices(positions.size());
+
+  for (const float range : {0.02f, 0.05f, 0.2f}) {
+    SCOPED_TRACE("range " + std::to_string(range));
+    const KDTreeNew<float3> tree(positions);
+    Array<int> duplicates(positions.size(), -1);
+    const int found = kdtree::calc_duplicates(tree, range, indices.as_span(), duplicates);
+    check_duplicates(positions, indices, range, duplicates, found);
+
+    /* Every cluster is targeted at its lowest index: a point with a lower index would have been
+     * visited first and claimed the target rather than the other way around. */
+    for (const int i : positions.index_range()) {
+      if (duplicates[i] != -1) {
+        EXPECT_GE(i, duplicates[i]) << "point " << i << " merged into a higher index";
+      }
+    }
+
+    /* The mask overload visits the same points in the same order. */
+    IndexMaskMemory memory;
+    const IndexMask mask = IndexMask::from_indices<int>(indices, memory);
+    Array<int> from_mask(positions.size(), -1);
+    const int found_from_mask = kdtree::calc_duplicates(tree, range, mask, from_mask);
+    EXPECT_EQ(Span<int>(from_mask), Span<int>(duplicates));
+    EXPECT_EQ(found_from_mask, found);
+
+    /* Nothing of the tree reaches the result, so a tree with a different leaf size, which stores
+     * the points in a different order, gives exactly the same clusters. */
+    const KDTreeNew<float3> other_tree(positions, 4);
+    Array<int> other(positions.size(), -1);
+    const int other_found = kdtree::calc_duplicates(other_tree, range, indices.as_span(), other);
+    EXPECT_EQ(Span<int>(other), Span<int>(duplicates));
+    EXPECT_EQ(other_found, found);
+  }
+}
+
+/** #CalcDuplicatesIndexOrder for a tree covering a subset of the points. */
+TEST(kdtree, CalcDuplicatesIndexOrderMasked)
+{
+  const Array<float3> positions = random_points(500, 11);
+  IndexMaskMemory memory;
+  const IndexMask mask = IndexMask::from_predicate(
+      positions.index_range(), memory, [](const int64_t i) { return i % 4 != 0; });
+  const Vector<int> indices = mask.to_indices<int>();
+
+  const KDTreeNew<float3> tree(positions, mask);
+  Array<int> duplicates(positions.size(), -1);
+  const int found = kdtree::calc_duplicates(tree, 0.1f, mask, duplicates);
+  check_duplicates(positions, indices, 0.1f, duplicates, found);
+
+  for (const int i : indices) {
+    if (duplicates[i] != -1) {
+      EXPECT_GE(i, duplicates[i]) << "point " << i << " merged into a higher index";
+    }
+  }
+
+  /* Points outside the mask are never touched. */
+  for (const int i : positions.index_range()) {
+    if (i % 4 == 0) {
+      EXPECT_EQ(duplicates[i], -1);
+    }
+  }
+
+  /* The span overload visits the same points in the same order. */
+  Array<int> from_indices(positions.size(), -1);
+  const int found_from_indices = kdtree::calc_duplicates(
+      tree, 0.1f, indices.as_span(), from_indices);
+  EXPECT_EQ(Span<int>(from_indices), Span<int>(duplicates));
+  EXPECT_EQ(found_from_indices, found);
 }
 
 /**
@@ -461,7 +539,7 @@ TEST(kdtree, ThreadedBuild)
   }
 
   Array<int> duplicates(positions.size(), -1);
-  const int found = tree.calc_duplicates(0.02f, duplicates);
+  const int found = kdtree::calc_duplicates(tree, 0.02f, duplicates);
   EXPECT_GT(found, 0);
   check_duplicates(positions, all_indices(positions.size()), 0.02f, duplicates, found, false);
 
@@ -474,7 +552,7 @@ TEST(kdtree, ThreadedBuild)
     int other_found = 0;
     {
       const KDTreeNew<float3> other_tree(positions);
-      other_found = other_tree.calc_duplicates(0.02f, other);
+      other_found = kdtree::calc_duplicates(other_tree, 0.02f, other);
     }
     BLI_task_scheduler_exit();
     BLI_system_num_threads_override_set(0);

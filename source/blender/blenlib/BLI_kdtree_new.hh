@@ -155,10 +155,26 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
 
   ~KDTreeNew();
 
-  /** The number of points, which may be less than `points().size()` for a masked tree. */
+  /** The number of points, which may be less than the size of #points for a masked tree. */
   int size() const;
 
   bool is_empty() const;
+
+  /**
+   * The coordinates the tree was built from, which every index it returns refers to. Only the
+   * start of the array is known, since the tree may cover a subset of it.
+   */
+  const T *points() const;
+
+  /**
+   * The indices of the points in the tree, in the order it stores them. Points close together in
+   * space are closer in this order, which can utilized for more optimal cache usage.
+   *
+   * \note The order is deterministic, but it follows from the coordinates and from how the tree
+   * is built. It changes when unrelated points move and when the build is tuned, so results that
+   * have to stay the same as geometry is edited or animated should not depend on it.
+   */
+  Span<int> indices() const;
 
   /**
    * Find the point closest to \a position.
@@ -200,28 +216,6 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
 
   /** The number of points within \a radius of \a position. */
   int count_in_radius(const T &position, const ValueT radius) const;
-
-  /**
-   * Group points that are within \a range of each other, favoring speed over quality: each point
-   * is merged into the first point that claims it rather than into its closest neighbor.
-   *
-   * Which point of a cluster the others merge into is not defined, only the properties described
-   * below: points are visited in the order the tree stores them, which is an internal detail that
-   * can change, though it is deterministic.
-   *
-   * \param duplicates: Indexed by point index, so it must be large enough for the largest index
-   * in the tree. Points with a value of -1 are candidates to be merged into another point.
-   * Presetting a point to its own index keeps it from being merged into anything, though it can
-   * still become the target other points merge into. When the function returns, a merged point
-   * holds the index of the point it was merged into, and a point that others were merged into
-   * holds its own index. Points that are neither are left at -1.
-   *
-   * \return The number of points that were merged into another point.
-   *
-   * \note Merging is a single step: a point is never merged into a point that is itself merged
-   * into a third point.
-   */
-  int calc_duplicates(const ValueT range, MutableSpan<int> duplicates) const;
 
   /**
    * Visit the points that could be closer to \a position than the result set has accepted so
@@ -404,6 +398,54 @@ template<typename ValueT, typename Fn> class RadiusResult {
   }
 };
 
+/**
+ * Group points that are within \a range of each other, favoring speed over quality: each point is
+ * merged into the first point that claims it rather than into its closest neighbor. Points are
+ * visited in \a visit_order, which must contain every point in the tree.
+ *
+ * Which point of a cluster the others merge into follows from that order alone, since a point
+ * claims every unclaimed point in range of it whatever order the search finds them in. Visiting
+ * them in a fixed order, their index order for example, therefore keeps the result from
+ * depending on the tree's layout and so on where the points are.
+ *
+ * \param duplicates: Indexed by point index, so it must be large enough for the largest index in
+ * the tree. Points with a value of -1 are candidates to be merged into another point. Presetting
+ * a point to its own index keeps it from being merged into anything, though it can still become
+ * the target other points merge into. When the function returns, a merged point holds the index
+ * of the point it was merged into, and a point that others were merged into holds its own index.
+ * Points that are neither are left at -1.
+ *
+ * \return The number of points that were merged into another point.
+ *
+ * \note Merging is a single step: a point is never merged into a point that is itself merged into
+ * a third point.
+ */
+template<typename T>
+int calc_duplicates(const KDTreeNew<T> &tree,
+                    typename T::base_type range,
+                    Span<int> visit_order,
+                    MutableSpan<int> duplicates);
+template<typename T>
+int calc_duplicates(const KDTreeNew<T> &tree,
+                    typename T::base_type range,
+                    const IndexMask &visit_order,
+                    MutableSpan<int> duplicates);
+
+/**
+ * #calc_duplicates visiting the points in the order the tree stores them, measured to be
+ * roughly 1.1x to 1.8x faster than providing a separate visit order as the point count increases
+ * to ~ 1 million, though that depends on the spatial contiguity of the original point order. The
+ * downside is that this ties the result to the internal layout, so it is only meant for callers
+ * that don't care which point of a cluster the others merge into. See #KDTreeNew::indices.
+ */
+template<typename T>
+inline int calc_duplicates(const KDTreeNew<T> &tree,
+                           const typename T::base_type range,
+                           const MutableSpan<int> duplicates)
+{
+  return calc_duplicates(tree, range, tree.indices(), duplicates);
+}
+
 }  // namespace kdtree
 
 template<typename T> int KDTreeNew<T>::size() const
@@ -414,6 +456,16 @@ template<typename T> int KDTreeNew<T>::size() const
 template<typename T> bool KDTreeNew<T>::is_empty() const
 {
   return size_ == 0;
+}
+
+template<typename T> const T *KDTreeNew<T>::points() const
+{
+  return points_;
+}
+
+template<typename T> Span<int> KDTreeNew<T>::indices() const
+{
+  return Span<int>(indices_, size_);
 }
 
 template<typename T> int KDTreeNew<T>::find_nearest(const T &position, ValueT *r_distance_sq) const
@@ -492,33 +544,6 @@ int KDTreeNew<T>::count_in_radius(const T &position, const ValueT radius) const
   kdtree::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius, {});
   this->search(result, position);
   return result.count();
-}
-
-template<typename T>
-int KDTreeNew<T>::calc_duplicates(const ValueT range, MutableSpan<int> duplicates) const
-{
-  int found = 0;
-  for (const int index : Span<int>(indices_, size_)) {
-    BLI_assert(index < duplicates.size());
-    /* Skip points that are already merged into another point. Points that were preset to their
-     * own index are not merged themselves, but can still be merged into. */
-    if (duplicates[index] != -1 && duplicates[index] != index) {
-      continue;
-    }
-    const int found_before = found;
-    this->foreach_in_radius(
-        points_[index], range, [&](const int other, const ValueT /*distance_sq*/) {
-          if (other != index && duplicates[other] == -1) {
-            duplicates[other] = index;
-            found++;
-          }
-        });
-    if (found != found_before) {
-      /* Mark as a target so the merged points don't form chains. */
-      duplicates[index] = index;
-    }
-  }
-  return found;
 }
 
 template<typename T>

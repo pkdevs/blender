@@ -824,4 +824,83 @@ template class KDTreeNew<float3>;
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name #calc_duplicates
+ * \{ */
+
+namespace kdtree {
+
+template<typename T, typename ForeachFn>
+static int calc_duplicates_impl(const KDTreeNew<T> &tree,
+                                const typename T::base_type range,
+                                const MutableSpan<int> duplicates,
+                                const ForeachFn foreach_index)
+{
+  using ValueT = typename T::base_type;
+  const T *points = tree.points();
+  int found = 0;
+  foreach_index([&](const int index) {
+    BLI_assert(index < duplicates.size());
+    /* Skip points that are already merged into another point. Points that were preset to their
+     * own index are not merged themselves, but can still be merged into. */
+    if (duplicates[index] != -1 && duplicates[index] != index) {
+      return;
+    }
+    const int found_before = found;
+    tree.foreach_in_radius(
+        points[index], range, [&](const int other, const ValueT /*distance_sq*/) {
+          if (other != index && duplicates[other] == -1) {
+            duplicates[other] = index;
+            found++;
+          }
+        });
+    if (found != found_before) {
+      /* Mark as a target so the merged points don't form chains. */
+      duplicates[index] = index;
+    }
+  });
+  return found;
+}
+
+template<typename T>
+int calc_duplicates(const KDTreeNew<T> &tree,
+                    const typename T::base_type range,
+                    const Span<int> visit_order,
+                    const MutableSpan<int> duplicates)
+{
+  BLI_assert(visit_order.size() == tree.size());
+  return calc_duplicates_impl(tree, range, duplicates, [&](const auto fn) {
+    for (const int index : visit_order) {
+      fn(index);
+    }
+  });
+}
+
+template<typename T>
+int calc_duplicates(const KDTreeNew<T> &tree,
+                    const typename T::base_type range,
+                    const IndexMask &visit_order,
+                    const MutableSpan<int> duplicates)
+{
+  BLI_assert(visit_order.size() == tree.size());
+  return calc_duplicates_impl(tree, range, duplicates, [&](const auto fn) {
+    visit_order.foreach_index_optimized<int>(fn);
+  });
+}
+
+template int calc_duplicates(const KDTreeNew<float2> &, float, Span<int>, MutableSpan<int>);
+template int calc_duplicates(const KDTreeNew<float3> &, float, Span<int>, MutableSpan<int>);
+template int calc_duplicates(const KDTreeNew<float2> &,
+                             float,
+                             const IndexMask &,
+                             MutableSpan<int>);
+template int calc_duplicates(const KDTreeNew<float3> &,
+                             float,
+                             const IndexMask &,
+                             MutableSpan<int>);
+
+}  // namespace kdtree
+
+/** \} */
+
 }  // namespace blender

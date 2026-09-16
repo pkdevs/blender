@@ -12,6 +12,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_index_mask.hh"
 #include "BLI_kdtree.hh"
 #include "BLI_kdtree_new.hh"
 #include "BLI_math_vector_types.hh"
@@ -477,9 +478,10 @@ TEST(kdtree_performance, CalcDuplicates)
                 return time;
               }
               const KDTreeNew<float3> tree(positions);
+              const IndexMask visit_order(points_num);
               return run_iterations(points_num, [&]() {
                 duplicates.as_mutable_span().fill(-1);
-                tree.calc_duplicates(radius, duplicates);
+                kdtree::calc_duplicates(tree, radius, visit_order, duplicates);
               });
             });
 }
@@ -658,12 +660,13 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
           });
         }
         AlignedBuffer<8192, 8> buffer;
+        const IndexMask visit_order(points_num);
         return run_batched(points_num, [&]() {
           LinearAllocator<> memory;
           memory.provide_buffer(buffer);
           const KDTreeNew<float3> tree(positions, memory);
           duplicates.as_mutable_span().fill(-1);
-          tree.calc_duplicates(radius, duplicates);
+          kdtree::calc_duplicates(tree, radius, visit_order, duplicates);
         });
       },
       TINY_POINT_COUNTS);
