@@ -31,9 +31,6 @@
 namespace blender {
 #endif
 
-/* Force enable `printf` support in release build. */
-#define GPU_FORCE_ENABLE_SHADER_PRINTF 1
-
 #if !defined(NDEBUG) || GPU_FORCE_ENABLE_SHADER_PRINTF
 #  define GPU_SHADER_PRINTF_ENABLE 1
 #else
