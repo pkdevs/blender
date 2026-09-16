@@ -25,7 +25,6 @@
 namespace blender {
 
 struct bDeformGroup;
-struct BMEditMesh;
 struct Bone;
 struct Depsgraph;
 struct IDProperty;
@@ -49,9 +48,8 @@ struct EditBone {
   /** System-Defined Properties storage. */
   IDProperty *system_properties = nullptr;
   /**
-   * Edit-bones have a one-way link  (i.e. children refer
-   * to parents.  This is converted to a two-way link for
-   * normal bones when leaving edit-mode.
+   * Edit-bones have a one-way link  (i.e. children refer to parents).
+   * This is converted to a two-way link for normal bones when leaving edit-mode.
    */
   EditBone *parent = nullptr;
   char name[/*MAXBONENAME*/ 64] = "";
@@ -384,7 +382,7 @@ void BKE_armature_mat_pose_to_bone_ex(Depsgraph *depsgraph,
 /**
  * Same as #BKE_object_mat3_to_rot().
  *
- * \param use_compat only applies when the `pchan` is in euler rotation mode. It then picks the
+ * \param use_compat: only applies when the `pchan` is in euler rotation mode. It then picks the
  * closest euler values relative to what the `pchan` already has.
  */
 void BKE_pchan_mat3_to_rot(bPoseChannel *pchan, const float mat[3][3], bool use_compat);
@@ -530,6 +528,11 @@ struct BBoneSplineParameters {
 
 /** Sets the location of the pose channel, respecting #bPoseChannel::protectflag. */
 void BKE_pchan_protected_location_set(bPoseChannel *pchan, const float location[3]);
+/**
+ * Sets the rotation of the pose channel, respecting the #bPoseChannel::protectflag. Depending on
+ * the current rotation mode, this either modifies quaternion, euler or axis angle.
+ */
+void BKE_pchan_protected_rotation_set(bPoseChannel *pchan, const float mat[3][3]);
 /** Sets the location of the pose channel, respecting #bPoseChannel::protectflag. */
 void BKE_pchan_protected_scale_set(bPoseChannel *pchan, const float scale[3]);
 /** Sets the quaternion rotation of the pose channel, respecting #bPoseChannel::protectflag. */
@@ -610,7 +613,7 @@ void BKE_pchan_bbone_deform_clamp_segment_index(const Bone &bone,
  * Calculate index and blend factor for the two B-Bone segment nodes
  * affecting the specified point in object (pose) space.
  *
- * \param pchan: Pose channel.
+ * \param pchanbone: Pose channel.
  * \param co: Pose space coordinates of the point being deformed.
  * \param r_index: OUTPUT index of the first segment joint affecting the point.
  * \param r_blend_next: OUTPUT blend factor between the first and the second segment in [0..1]
@@ -622,10 +625,8 @@ void BKE_pchan_bbone_deform_segment_index(bke::PChanBoneConst pchanbone,
 
 /* context.selected_pose_bones */
 #define FOREACH_PCHAN_SELECTED_IN_OBJECT_BEGIN(_ob, _pchan) \
-  for (bPoseChannel *_pchan = (bPoseChannel *)(_ob)->pose->chanbase.first; _pchan; \
-       _pchan = _pchan->next) \
-  { \
-    if (animrig::bone_is_visible(((bArmature *)(_ob)->data), _pchan) && \
+  for (bPoseChannel *_pchan = (_ob)->pose->chanbase.first(); _pchan; _pchan = _pchan->next) { \
+    if (animrig::bone_is_visible(((bArmature *)(_ob)->data), {_pchan, _pchan->bone_get(*_ob)}) && \
         ((_pchan)->flag & POSE_SELECTED)) \
     {
 #define FOREACH_PCHAN_SELECTED_IN_OBJECT_END \
@@ -634,10 +635,8 @@ void BKE_pchan_bbone_deform_segment_index(bke::PChanBoneConst pchanbone,
   ((void)0)
 /* context.visible_pose_bones */
 #define FOREACH_PCHAN_VISIBLE_IN_OBJECT_BEGIN(_ob, _pchan) \
-  for (bPoseChannel *_pchan = (bPoseChannel *)(_ob)->pose->chanbase.first; _pchan; \
-       _pchan = _pchan->next) \
-  { \
-    if (animrig::bone_is_visible(((bArmature *)(_ob)->data), _pchan)) {
+  for (bPoseChannel *_pchan = (_ob)->pose->chanbase.first(); _pchan; _pchan = _pchan->next) { \
+    if (animrig::bone_is_visible(((bArmature *)(_ob)->data), {_pchan, pchan->bone_get(*_ob)})) {
 #define FOREACH_PCHAN_VISIBLE_IN_OBJECT_END \
   } \
   } \
@@ -720,8 +719,7 @@ void BKE_armature_deform_coords_with_editmesh(
     std::optional<Span<float3>> vert_coords_prev,
     std::optional<MutableSpan<float3x3>> vert_deform_mats,
     int deformflag,
-    StringRefNull defgrp_name,
-    const BMEditMesh &em_target);
+    StringRefNull defgrp_name);
 
 /** \} */
 
@@ -750,7 +748,8 @@ struct bArmature_Runtime {
    *
    * This is used when regenerating the bones array, to ensure only a single thread does this. Read
    * access to the bones array is not protected. So far this has worked well; it's not guaranteed
-   * that there won't be a race condition, though. */
+   * that there won't be a race condition, though.
+   */
   Mutex bones_mutex;
 
   /** Clear the `bones` array, ensuring it is rebuilt on its next use. */

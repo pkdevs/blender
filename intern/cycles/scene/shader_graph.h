@@ -58,6 +58,7 @@ enum ShaderNodeSpecialType {
   SHADER_SPECIAL_TYPE_BUMP,
   SHADER_SPECIAL_TYPE_OUTPUT_AOV,
   SHADER_SPECIAL_TYPE_LIGHT_PATH,
+  SHADER_SPECIAL_TYPE_SCENE_TIME,
 };
 
 /* Base class for ShaderInput and ShaderOutput. */
@@ -184,6 +185,10 @@ class ShaderNode : public Node {
   {
     return false;
   }
+  virtual bool has_dispersion()
+  {
+    return false;
+  }
   virtual bool has_bump()
   {
     return false;
@@ -247,7 +252,7 @@ class ShaderNode : public Node {
    * so it's possible to disable huge nodes inside of the required
    * nodes group.
    */
-  virtual uint get_feature()
+  virtual uint64_t get_feature()
   {
     return bump == SHADER_BUMP_NONE ? 0 : KERNEL_FEATURE_NODE_BUMP;
   }
@@ -268,6 +273,9 @@ class ShaderNode : public Node {
    * is to be handled in the subclass.
    */
   virtual bool equals(const ShaderNode &other);
+
+  /* Helps to avoid adding input link to the node after the node is already added to SVM. */
+  bool added_to_svm = false;
 
  protected:
   bool need_derivatives_ = false;

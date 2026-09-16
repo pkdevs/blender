@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <optional>
 #include <regex>
 
@@ -25,7 +29,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes::socket_usage_inference {
@@ -584,11 +588,11 @@ class SocketUsageInferencerImpl {
   {
     const NodeInContext node = socket.owner_node();
     Vector<const bNodeSocket *> dependent_sockets;
-    for (const bNodeLink &internal_link : node->internal_links()) {
-      if (internal_link.fromsock != socket.socket) {
+    for (const bNodeInternalLink &internal_link : node->internal_links()) {
+      if (internal_link.in != socket.socket) {
         continue;
       }
-      dependent_sockets.append(internal_link.tosock);
+      dependent_sockets.append(internal_link.out);
     }
     this->usage_task__with_dependent_sockets(socket, dependent_sockets, {}, socket.context);
   }
@@ -743,12 +747,11 @@ class SocketUsageInferencerImpl {
   void disabled_output_task__output__muted_node(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
-    for (const bNodeLink &internal_link : node->internal_links()) {
-      if (internal_link.tosock != socket.socket) {
+    for (const bNodeInternalLink &internal_link : node->internal_links()) {
+      if (internal_link.out != socket.socket) {
         continue;
       }
-      this->disabled_output_task__with_origin_socket(socket,
-                                                     {socket.context, internal_link.fromsock});
+      this->disabled_output_task__with_origin_socket(socket, {socket.context, internal_link.in});
       return;
     }
     all_socket_disable_states_.add_new(socket, false);
@@ -1095,6 +1098,17 @@ bool SocketUsageParams::menu_input_may_be(const UString identifier, const int en
     return true;
   }
   return value.get_primitive<MenuValue>().value == enum_value;
+}
+
+bool SocketUsageParams::bool_input_may_be(const UString identifier, const bool bool_value) const
+{
+  BLI_assert(this->node.input_by_identifier(identifier)->type == SOCK_BOOLEAN);
+  const InferenceValue value = this->get_input(identifier);
+  if (!value.is_primitive_value()) {
+    /* The value is unknown, so it may be the requested enum value. */
+    return true;
+  }
+  return value.get_primitive<bool>() == bool_value;
 }
 
 void SocketUsageInferencer::mark_top_level_node_outputs_as_used()

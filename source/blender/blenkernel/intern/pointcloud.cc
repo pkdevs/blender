@@ -19,7 +19,7 @@
 #include "BLI_index_range.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_anim_data.hh"
@@ -32,6 +32,7 @@
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_material.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
@@ -118,7 +119,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   bke::AttributeStorage::BlendWriteData attribute_data{writer, scope};
   attribute_storage_blend_write_prepare(
       pointcloud->attribute_storage.wrap(),
-      !BLO_write_is_undo(writer),
+      !writer->is_undo(),
       [&](const AttrDomain /*domain*/) { return pointcloud->totpoint; },
       attribute_data);
 
@@ -130,12 +131,15 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
     pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
     pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
   }
-  BLO_write_generated_pointer_tag(writer, pointcloud->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(pointcloud->attribute_storage.dna_attributes);
 
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud);
+  writer->write_id_struct(
+      id_address, pointcloud, [](BlendStructWriter<PointCloud> &struct_writer) {
+        struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+      });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
@@ -178,6 +182,7 @@ IDTypeInfo IDType_ID_PT = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = pointcloud_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = pointcloud_blend_write,
@@ -308,6 +313,11 @@ bool BKE_pointcloud_attribute_required(const PointCloud * /*pointcloud*/, const 
   return name == ATTR_POSITION;
 }
 
+void BKE_pointcloud_material_remap(PointCloud *pointcloud, const uint *remap, const int remap_num)
+{
+  BKE_material_attr_indices_remap(pointcloud->attributes_for_write(), remap, remap_num);
+}
+
 void pointcloud_copy_parameters(const PointCloud &src, PointCloud &dst)
 {
   dst.flag = src.flag;
@@ -340,7 +350,7 @@ void pointcloud_resize(PointCloud &pointcloud, const int size)
   if (size > old_totpoint) {
     /* Initialize new points. */
     fill_attribute_range_default(
-        attributes, bke::AttrDomain::Point, {}, IndexRange(old_totpoint, size));
+        attributes, bke::AttrDomain::Point, {}, IndexRange::from_begin_end(old_totpoint, size));
   }
 }
 
@@ -372,7 +382,7 @@ static void pointcloud_evaluate_modifiers(Depsgraph *depsgraph,
 
   /* Evaluate modifiers. */
   for (; md; md = md->next) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
 
     if (!BKE_modifier_is_enabled(scene, md, required_mode)) {
       continue;

@@ -83,10 +83,6 @@ if(DEFINED LIBDIR)
 
   file(GLOB LIB_SUBDIRS ${LIBDIR}/*)
 
-  # Ignore Mesa software OpenGL libraries, they are not intended to be
-  # linked against but to optionally override at runtime.
-  list(REMOVE_ITEM LIB_SUBDIRS ${LIBDIR}/mesa)
-
   # Ignore DPC++ as it contains its own copy of LLVM/CLang which we do
   # not need to be ever discovered for the Blender linking.
   list(REMOVE_ITEM LIB_SUBDIRS ${LIBDIR}/dpcpp)
@@ -94,7 +90,7 @@ if(DEFINED LIBDIR)
   # NOTE: Make sure "proper" compiled zlib comes first
   set(CMAKE_PREFIX_PATH ${LIBDIR}/zlib ${LIB_SUBDIRS})
 
-  include(platform_old_libs_update)
+  include("${CMAKE_CURRENT_LIST_DIR}/platform_old_libs_update.cmake")
 
   set(WITH_STATIC_LIBS ON)
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
@@ -112,6 +108,8 @@ if(DEFINED LIBDIR)
   set(absl_ROOT ${LIBDIR}/abseil)
   set(Ceres_ROOT ${LIBDIR}/ceres)
   set(Eigen3_ROOT ${LIBDIR}/eigen)
+  set(meshoptimizer_ROOT ${LIBDIR}/meshoptimizer)
+  set(draco_ROOT ${LIBDIR}/draco)
 endif()
 
 # Wrapper to prefer static libraries
@@ -146,16 +144,6 @@ if(DEFINED fmt_DIR)
   # Hide the fmt_DIR from the standard user settings to be consistent with our
   # other "here is the library" settings.
   mark_as_advanced(fmt_DIR)
-endif()
-
-# XXX Linking errors with debian static tiff :/
-# find_package_wrapper(TIFF REQUIRED)
-find_package(TIFF)
-# CMake 3.28.1 defines this, it doesn't seem to be used, hide by default in the UI.
-# NOTE(@ideasman42): this doesn't seem to be important,
-# on my system it's not-found even when the TIFF library is.
-if(DEFINED Tiff_DIR)
-  mark_as_advanced(Tiff_DIR)
 endif()
 
 if(WITH_VULKAN_BACKEND)
@@ -300,22 +288,10 @@ if(WITH_OPENAL)
 endif()
 
 if(WITH_SDL)
-  find_package_wrapper(SDL2)
-  if(SDL2_FOUND)
-    # Use same names for both versions of SDL until we move to 2.x.
-    set(SDL_INCLUDE_DIR "${SDL2_INCLUDE_DIR}")
-    set(SDL_LIBRARY "${SDL2_LIBRARY}")
-    set(SDL_FOUND "${SDL2_FOUND}")
-  else()
-    find_package_wrapper(SDL)
-  endif()
-  mark_as_advanced(
-    SDL_INCLUDE_DIR
-    SDL_LIBRARY
-  )
-  # unset(SDLMAIN_LIBRARY CACHE)
-  set_and_warn_library_found("SDL" SDL_FOUND WITH_SDL)
+  find_package_wrapper(SDL3)
+  set_and_warn_library_found("SDL" SDL3_FOUND WITH_SDL)
 endif()
+add_bundled_libraries(sdl/lib)
 
 # Codecs
 if(WITH_CODEC_SNDFILE)
@@ -416,6 +392,8 @@ if(DEFINED LIBDIR)
     ${SYCL_ROOT_DIR}/lib/libur_*.so.*
   )
   list(FILTER _sycl_runtime_libraries EXCLUDE REGEX "\\.py$")
+  # Only bundle the v2 Level Zero adapter, not the legacy libur_adapter_level_zero.so (#159584).
+  list(FILTER _sycl_runtime_libraries EXCLUDE REGEX "ur_adapter_level_zero\\.so")
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()
@@ -477,9 +455,12 @@ endif()
 add_bundled_libraries(openimageio/lib)
 
 find_package_wrapper(OpenColorIO 2.0.0 REQUIRED)
+if(DEFINED OpenColorIO_DIR)
+  mark_as_advanced(OpenColorIO_DIR)
+endif()
 add_bundled_libraries(opencolorio/lib)
 
-if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   find_package(Embree 4.0.0 REQUIRED)
 endif()
 add_bundled_libraries(embree/lib)
@@ -542,6 +523,7 @@ if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK)
   set_and_warn_library_found("OpenXR-SDK" XR_OPENXR_SDK_FOUND WITH_XR_OPENXR)
 endif()
+add_bundled_libraries(xr_openxr_sdk/lib)
 
 if(WITH_GMP)
   find_package_wrapper(GMP)
@@ -599,8 +581,11 @@ if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
 endif()
 
 if(WITH_TRACY)
-  set(Tracy_ROOT_DIR ${LIBDIR}/tracy)
+  if(DEFINED LIBDIR)
+    set(Tracy_ROOT_DIR ${LIBDIR}/tracy)
+  endif()
   find_package_wrapper(Tracy REQUIRED)
+  mark_as_advanced(Tracy_DIR)
 endif()
 
 if(DEFINED LIBDIR)
@@ -672,8 +657,45 @@ mark_as_advanced(Eigen3_DIR)
 
 if(WITH_LIBMV)
   find_package_wrapper(Ceres REQUIRED)
+  mark_as_advanced(Ceres_DIR)
+  # Dep of Ceres
+  mark_as_advanced(absl_DIR)
 endif()
 add_bundled_libraries(ceres/lib)
+
+if(WITH_DRACO)
+  if(WITH_LIBS_PRECOMPILED OR WITH_STRICT_BUILD_OPTIONS)
+    find_package_wrapper(draco REQUIRED)
+  else()
+    # This isn't a common system library, so disable if it's not found.
+    find_package_wrapper(draco)
+    if(TARGET draco::draco)
+      set(DRACO_FOUND TRUE)
+    endif()
+    set_and_warn_library_found("Draco" DRACO_FOUND WITH_DRACO)
+  endif()
+  if(DEFINED draco_DIR)
+    mark_as_advanced(draco_DIR)
+  endif()
+endif()
+add_bundled_libraries(draco/lib)
+
+if(WITH_MESHOPTIMIZER)
+  if(WITH_LIBS_PRECOMPILED OR WITH_STRICT_BUILD_OPTIONS)
+    find_package_wrapper(meshoptimizer REQUIRED)
+  else()
+    # This isn't a common system library, so disable if it's not found.
+    find_package_wrapper(meshoptimizer)
+    if(TARGET meshoptimizer::meshoptimizer)
+      set(MESHOPTIMIZER_FOUND TRUE)
+    endif()
+    set_and_warn_library_found("meshoptimizer" MESHOPTIMIZER_FOUND WITH_MESHOPTIMIZER)
+  endif()
+  if(DEFINED meshoptimizer_DIR)
+    mark_as_advanced(meshoptimizer_DIR)
+  endif()
+endif()
+add_bundled_libraries(meshoptimizer/lib)
 
 # Jack is intended to use the system library.
 if(WITH_JACK)
@@ -699,6 +721,15 @@ if(WITH_SYSTEM_AUDASPACE)
   find_package_wrapper(Audaspace)
   set(AUDASPACE_FOUND ${AUDASPACE_FOUND} AND ${AUDASPACE_C_FOUND})
   set_and_warn_library_found("External Audaspace" AUDASPACE_FOUND WITH_SYSTEM_AUDASPACE)
+endif()
+
+# Reading desktop settings (the light/dark theme preference) from the XDG desktop portal.
+# Only the headers are needed when `WITH_GHOST_DBUS_DYNLOAD` is enabled, `libdbus` itself is
+# then an optional runtime dependency.
+if(WITH_GHOST_DBUS)
+  find_package(PkgConfig)
+  pkg_check_modules(dbus dbus-1)
+  set_and_warn_library_found("dbus-1" dbus_FOUND WITH_GHOST_DBUS)
 endif()
 
 if(WITH_GHOST_WAYLAND)
