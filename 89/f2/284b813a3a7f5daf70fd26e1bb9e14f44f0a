@@ -1,2 +1,3 @@
 Referenced by issue #163176, Assets Libraries: Online libraries asserts in latests commits
 Referenced by pull request #163777, Projects: Asset library path fixes and improvements
+Referenced by commit e99522baa73bbdcd22b26239863148a07988b6b0, Fix: Projects: Buffer overflow expanding asset library paths
