@@ -566,7 +566,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
       /* Wait for skip input to be computed. */
       return;
     }
-    const bool skip = skip_variant->get<bool>();
+    const bool skip = skip_variant->copy_as<bool>();
 
     /* Instead of outputting the values directly, convert them to a bake state and then back.
      * This ensures that some geometry processing happens on the data consistently (e.g. removing
@@ -708,7 +708,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
   if (!ctx.is_bakeable_in_current_context) {
     NodeExtraInfoRow row;
     row.text = TIP_("Cannot bake in zone");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     params.rows.append(std::move(row));
   }
   if (ctx.is_baked) {

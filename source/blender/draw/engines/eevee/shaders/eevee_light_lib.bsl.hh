@@ -257,10 +257,8 @@ LightVertices light_shape_corners(LightData light, LightVector lv)
 
 float light_ltc(sampler2DArray utility_tx,
                 LightData light,
-                float3 N,
-                float3 V,
+                eevee::LTCData ltc_data,
                 LightVector lv,
-                float4 ltc_mat,
                 LightVertices vertices)
 {
   if (is_sphere_light(light.type) && lv.dist < light.local().local.shape_radius) {
@@ -268,11 +266,28 @@ float light_ltc(sampler2DArray utility_tx,
     return 1.0f;
   }
 
-  float3x3 Minv = eevee::lut::ltc::unpack(ltc_mat);
   if (light.type == LIGHT_RECT) {
-    return eevee::ltc::evaluate_quad(utility_tx, vertices.v, N, V, Minv);
+    return eevee::ltc::evaluate_quad(utility_tx, ltc_data, vertices.v);
   }
-  return eevee::ltc::evaluate_disk(utility_tx, N, V, Minv, vertices.v);
+  return eevee::ltc::evaluate_disk(utility_tx, ltc_data, vertices.v);
 }
+
+namespace eevee {
+namespace light {
+
+float power_get(LightData light, LightingType type)
+{
+  /* Mask anything above 3. See LIGHT_TRANSLUCENT_WITH_THICKNESS. */
+  return light.power_factor[type & 3u] *
+         (type != LIGHT_VOLUME ? light.shape_power : light.point_power);
+}
+
+bool light_linking_affects_receiver(uint2 light_set_membership, uchar receiver_light_set)
+{
+  return bitmask64_test(light_set_membership, receiver_light_set);
+}
+
+}  // namespace light
+}  // namespace eevee
 
 /** \} */

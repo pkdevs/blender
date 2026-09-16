@@ -477,6 +477,7 @@ static void rna_NodeSocket_hide_set(PointerRNA *ptr, bool value)
 
   if (value) {
     sock->flag |= SOCK_HIDDEN;
+    sock->flag &= ~SOCK_SELECT;
   }
   else {
     sock->flag &= ~SOCK_HIDDEN;
@@ -1692,6 +1693,10 @@ static void rna_def_node_socket_interface_string(BlenderRNA *brna,
   // TODO: Do I need to call RNA_def_property_string_funcs() ?
   RNA_def_property_ui_text(prop, "Default Value", "Input value used for unconnected socket");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTreeInterfaceItem_update");
+
+  if (subtype == PROP_FILEPATH) {
+    RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_BLEND_RELATIVE);
+  }
 
   RNA_def_struct_sdna_from(srna, "bNodeTreeInterfaceSocket", nullptr);
 

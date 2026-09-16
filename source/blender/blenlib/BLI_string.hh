@@ -13,6 +13,7 @@
 #include <string>
 
 #include "BLI_compiler_attrs.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_utildefines.hh"
 
 namespace blender {
@@ -200,13 +201,13 @@ size_t BLI_vsnprintf_rlen(char *__restrict dst,
                           va_list arg) ATTR_PRINTF_FORMAT(3, 0);
 
 char *BLI_sprintfN_with_buffer(char *fixed_buf,
-                               size_t fixed_buf_size,
+                               size_t fixed_buf_maxncpy,
                                size_t *result_len,
                                const char *__restrict format,
                                ...) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1, 3, 4)
     ATTR_PRINTF_FORMAT(4, 5);
 char *BLI_vsprintfN_with_buffer(char *fixed_buf,
-                                size_t fixed_buf_size,
+                                size_t fixed_buf_maxncpy,
                                 size_t *result_len,
                                 const char *__restrict format,
                                 va_list args) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1, 3, 4)
@@ -234,11 +235,10 @@ char *BLI_vsprintfN(const char *__restrict format, va_list args) ATTR_NONNULL(1)
  *
  * \note This is used for creating animation paths in blend files.
  */
-size_t BLI_str_escape(char *__restrict dst, const char *__restrict src, size_t dst_maxncpy)
-    ATTR_NONNULL(1, 2);
+size_t BLI_str_escape(char *__restrict dst, StringRef src, size_t dst_maxncpy) ATTR_NONNULL(1);
 
 /** Same as above, but returns an std::string. */
-std::string BLI_str_escape(const char *str);
+std::string BLI_str_escape(StringRef str);
 
 /**
  * This roughly matches C and Python's string escaping with double quotes - `"`.

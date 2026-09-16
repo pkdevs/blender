@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BKE_appdir.hh"
+#include "BKE_geometry_set.hh"
+#include "BKE_object_types.hh"
 #include "BKE_scene.hh"
 #include "DEG_depsgraph_query.hh"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_world_types.h"
+#include "RE_engine.h"
 #include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
@@ -113,7 +116,7 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
   blender::Object *b_dicing_camera_object = get_dicing_camera_object(b_v3d, b_rv3d);
   bool dicing_camera_updated = false;
 
-  /* Iterate over all blender::IDs in this depsgraph. */
+  /* Iterate over all IDs in this depsgraph. */
   blender::DEGIDIterData deg_iter_data{};
   deg_iter_data.graph = &b_depsgraph;
   deg_iter_data.only_updated = true;
@@ -126,24 +129,24 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
   {
     /* TODO(sergey): Can do more selective filter here. For example, ignore changes made to
      * screen data-block. Note that sync_data() needs to be called after object deletion, and
-     * currently this is ensured by the scene blender::ID tagged for update, which sets the
-     * `has_updates_` flag. */
+     * currently this is ensured by the scene ID tagged for update, which sets the `has_updates_`
+     * flag. */
     has_updates_ = true;
 
     const bool updated_shading = ((b_id->recalc & (blender::ID_RECALC_SHADING |
                                                    blender::ID_RECALC_ANIMATION)) != 0);
 
     /* Material */
-    if (GS(b_id->name) == blender::ID_MA) {
+    if (b_id->id_type() == blender::ID_MA) {
       shader_map.set_recalc(b_id);
     }
     /* Light */
-    else if (GS(b_id->name) == blender::ID_LA) {
+    else if (b_id->id_type() == blender::ID_LA) {
       shader_map.set_recalc(b_id);
       geometry_map.set_recalc(b_id);
     }
     /* Object */
-    else if (GS(b_id->name) == blender::ID_OB) {
+    else if (b_id->id_type() == blender::ID_OB) {
       blender::Object *b_ob = blender::id_cast<blender::Object *>(b_id);
       const bool can_have_geometry = object_can_have_geometry(*b_ob);
       const bool is_light = !can_have_geometry && object_is_light(*b_ob);
@@ -214,11 +217,11 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
       }
     }
     /* Mesh */
-    else if (GS(b_id->name) == blender::ID_ME) {
+    else if (b_id->id_type() == blender::ID_ME) {
       geometry_map.set_recalc(b_id);
     }
     /* World */
-    else if (GS(b_id->name) == blender::ID_WO) {
+    else if (b_id->id_type() == blender::ID_WO) {
       const blender::World *b_world = blender::id_cast<blender::World *>(b_id);
       if (world_map == b_world) {
         world_recalc = true;
@@ -226,15 +229,15 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
       shader_map.set_recalc(b_id);
     }
     /* Scene */
-    else if (GS(b_id->name) == blender::ID_SCE) {
+    else if (b_id->id_type() == blender::ID_SCE) {
       shader_map.set_recalc(b_id);
     }
     /* Volume */
-    else if (GS(b_id->name) == blender::ID_VO) {
+    else if (b_id->id_type() == blender::ID_VO) {
       geometry_map.set_recalc(b_id);
     }
     /* Camera */
-    else if (GS(b_id->name) == blender::ID_CA) {
+    else if (b_id->id_type() == blender::ID_CA) {
       if (b_dicing_camera_object && b_dicing_camera_object->data == b_id) {
         dicing_camera_updated = true;
       }
@@ -299,7 +302,6 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
                             blender::RegionView3D *b_rv3d,
                             const int width,
                             const int height,
-                            void **python_thread_state,
                             const DeviceInfo &denoise_device_info)
 {
   /* For auto refresh images. */
@@ -334,8 +336,7 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
 
   geometry_synced.clear(); /* use for objects and motion sync */
 
-  sync_objects_and_motion(
-      b_render, b_depsgraph, b_screen, b_v3d, b_rv3d, width, height, python_thread_state);
+  sync_objects_and_motion(b_render, b_depsgraph, b_screen, b_v3d, b_rv3d, width, height);
 
   geometry_synced.clear();
 
@@ -834,7 +835,7 @@ void BlenderSync::sync_render_passes(blender::RenderLayer &b_rlay,
   /* Always add combined pass. */
   pass_add(scene, PASS_COMBINED, "Combined");
 
-  /* Cryptomatte stores two blender::ID/weight pairs per RGBA layer.
+  /* Cryptomatte stores two ID/weight pairs per RGBA layer.
    * User facing parameter is the number of pairs. */
   const int crypto_depth = divide_up(min(16, b_view_layer.cryptomatte_levels), 2);
   scene->film->set_cryptomatte_depth(crypto_depth);
@@ -946,7 +947,10 @@ void BlenderSync::free_data_after_sync(blender::Depsgraph &b_depsgraph)
   {
     /* Grease pencil render requires all evaluated objects available as-is after Cycles is done
      * with its part. */
-    if (b_ob->type == blender::OB_GREASE_PENCIL) {
+    if (b_ob->type == blender::OB_GREASE_PENCIL ||
+        (b_ob->runtime->contained_geometry_types &
+         (1 << int(blender::bke::GeometryComponent::Type::GreasePencil))))
+    {
       continue;
     }
     BKE_object_free_caches(b_ob);
@@ -1022,13 +1026,6 @@ SceneParams BlenderSync::get_scene_params(blender::UserDef &b_preferences,
 }
 
 /* Session Parameters */
-
-bool BlenderSync::get_session_pause(blender::Scene &b_scene, bool background)
-{
-  blender::PointerRNA scene_rna_ptr = RNA_id_pointer_create(&b_scene.id);
-  blender::PointerRNA cscene = RNA_pointer_get(&scene_rna_ptr, "cycles");
-  return (background) ? false : get_boolean(cscene, "preview_pause");
-}
 
 SessionParams BlenderSync::get_session_params(blender::RenderEngine &b_engine,
                                               blender::UserDef &b_preferences,

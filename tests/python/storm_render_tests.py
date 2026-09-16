@@ -24,6 +24,12 @@ except ImportError:
     # this script is run during preparation steps.
     pass
 
+BLOCKLIST = [
+    # Currently, image_mipmap tests are not enabled for storm-usd
+    "image_cache_evict.blend",
+    "image_mipmap_.*.blend",
+]
+
 # Unsupported or broken scenarios for the Storm render engine
 BLOCKLIST_HYDRA = [
     # Corrupted output around borders
@@ -40,6 +46,10 @@ BLOCKLIST_HYDRA = [
     "principled_bsdf_thin_glass.blend",
     # Custom OSL camera not supported.
     "osl_camera_.*.blend",
+    # The result doesn't match storm-usd
+    "many_lights.blend",
+    # The result differs between platforms
+    "principled_bsdf_dispersion.blend",
 ]
 
 BLOCKLIST_USD = [
@@ -58,6 +68,8 @@ BLOCKLIST_USD = [
     "principled_bsdf_thin_glass.blend",
     # Custom OSL camera not supported.
     "osl_camera_.*.blend",
+    # The result in incorrect
+    "principled_bsdf_dispersion.blend",
 ]
 
 # Metal support in Storm is no as good as OpenGL, though this needs to be
@@ -71,6 +83,7 @@ BLOCKLIST_METAL = [
     "transparent_shadow.blend",
     "transparent_shadow_hair.blend",
     "transparent_shadow_hair_blur.blend",
+    "transparent_shadow_hair_colored.blend",
     "shadow_all_max_bounces.blend",
     "underwater_caustics.blend",
     "shadow_link_transparency.blend",
@@ -92,6 +105,9 @@ BLOCKLIST_METAL = [
 BLOCKLIST_AMD = BLOCKLIST_METAL + [
     "volume_tricubic_interpolation.blend",
     "holdout.blend",
+    "principled_bsdf_anisotropic_transmission.blend",
+    # Upper left sphere renders incorrectly.
+    "principled_bsdf_coated_transmission.blend",
 ]
 
 # Minor difference in texture coordinate for white noise hash.
@@ -201,7 +217,7 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     arguments.extend([
         filepath,
@@ -232,7 +248,7 @@ def main():
     parser = create_argparse()
     args = parser.parse_args()
 
-    blocklist = []
+    blocklist = BLOCKLIST
     if args.gpu_backend == "metal":
         blocklist += BLOCKLIST_METAL
     elif args.gpu_backend == "vulkan":
@@ -242,7 +258,7 @@ def main():
         else:
             blocklist += BLOCKLIST_VULKAN_USD
         if os.getenv("BLENDER_TEST_IGNORE_VENDOR_BLOCKLIST") is None:
-            gpu_vendor = render_report.get_gpu_device_vendor(args.blender)
+            gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
             if gpu_vendor == "NVIDIA":
                 blocklist += BLOCKLIST_VULKAN_NVIDIA
             elif gpu_vendor == "AMD":
@@ -251,7 +267,7 @@ def main():
                 blocklist += BLOCKLIST_VULKAN_INTEL_LINUX
     else:
         if os.getenv("BLENDER_TEST_IGNORE_VENDOR_BLOCKLIST") is None:
-            gpu_vendor = render_report.get_gpu_device_vendor(args.blender)
+            gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
             if gpu_vendor == "AMD":
                 blocklist += BLOCKLIST_AMD
             elif gpu_vendor == "INTEL" and sys.platform == "linux":

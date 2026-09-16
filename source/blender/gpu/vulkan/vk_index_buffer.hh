@@ -27,6 +27,11 @@ class VKIndexBuffer : public IndexBuf {
 
   void update_sub(uint start, uint len, const void *data) override;
 
+  void copy_sub(IndexBuf &source_buf,
+                uint source_first_index,
+                uint dest_first_index,
+                uint index_len) override;
+
   VkBuffer vk_handle() const
   {
     return buffer_get().vk_handle();
@@ -34,6 +39,10 @@ class VKIndexBuffer : public IndexBuf {
   const VKResourceWithHandle<VkBuffer> &resource() const
   {
     return buffer_get().resource();
+  }
+  inline bool has_device_address() const
+  {
+    return buffer_get().has_device_address();
   }
   inline VkDeviceAddress device_address_get() const
   {
@@ -61,6 +70,11 @@ class VKIndexBuffer : public IndexBuf {
 static inline VKIndexBuffer *unwrap(IndexBuf *index_buffer)
 {
   return static_cast<VKIndexBuffer *>(index_buffer);
+}
+
+static inline VKIndexBuffer &unwrap(IndexBuf &index_buffer)
+{
+  return static_cast<VKIndexBuffer &>(index_buffer);
 }
 
 }  // namespace blender::gpu
