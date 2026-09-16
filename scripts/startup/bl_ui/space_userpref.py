@@ -2858,7 +2858,7 @@ class USERPREF_PT_studiolight_matcaps(StudioLightPanel, StudioLightPanelMixin, P
 
     def draw_header_preset(self, _context):
         layout = self.layout
-        layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'MATCAP'
+        layout.operator("preferences.lights_matcap_install", icon='IMPORT', text="Install...")
         layout.separator()
 
     def get_error_message(self):
@@ -2871,7 +2871,7 @@ class USERPREF_PT_studiolight_world(StudioLightPanel, StudioLightPanelMixin, Pan
 
     def draw_header_preset(self, _context):
         layout = self.layout
-        layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'WORLD'
+        layout.operator("preferences.lights_world_install", icon='IMPORT', text="Install...")
         layout.separator()
 
     def get_error_message(self):
@@ -2884,9 +2884,7 @@ class USERPREF_PT_studiolight_lights(StudioLightPanel, StudioLightPanelMixin, Pa
 
     def draw_header_preset(self, _context):
         layout = self.layout
-        props = layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...")
-        props.type = 'STUDIO'
-        props.filter_glob = ".sl"
+        layout.operator("preferences.lights_studio_install", icon='IMPORT', text="Install...")
         layout.separator()
 
     def get_error_message(self):

@@ -1077,11 +1077,7 @@ class PREFERENCES_OT_app_template_install(Operator):
 # -----------------------------------------------------------------------------
 # Studio Light Operations
 
-class PREFERENCES_OT_studiolight_install(Operator):
-    """Install a user defined light"""
-    bl_idname = "preferences.studiolight_install"
-    bl_label = "Install Light"
-
+class StudiolightInstallHelper:
     def update_type(self, context):
         filter_glob = "*.sl" if self.type == 'STUDIO' else "*.png;*.jpg;*.hdr;*.exr"
         if filter_glob == self.filter_glob:
@@ -1166,6 +1162,42 @@ class PREFERENCES_OT_studiolight_install(Operator):
 
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+
+class PREFERENCES_OT_studiolight_install(Operator, StudiolightInstallHelper):
+    """Install a user defined light"""
+    bl_idname = "preferences.studiolight_install"
+    bl_label = "Install Light"
+
+
+class PREFERENCES_OT_lights_studio_install(Operator, StudiolightInstallHelper):
+    """Install a user defined studio light"""
+    bl_idname = "preferences.lights_studio_install"
+    bl_label = "Install Studio Light"
+
+    def invoke(self, context, _event):
+        self.type = 'STUDIO'
+        return super().invoke(context, _event)
+
+
+class PREFERENCES_OT_lights_matcap_install(Operator, StudiolightInstallHelper):
+    """Install a user defined matcap light"""
+    bl_idname = "preferences.lights_matcap_install"
+    bl_label = "Install Matcap Light"
+
+    def invoke(self, context, _event):
+        self.type = 'MATCAP'
+        return super().invoke(context, _event)
+
+
+class PREFERENCES_OT_lights_world_install(Operator, StudiolightInstallHelper):
+    """Install a user defined world light"""
+    bl_idname = "preferences.lights_world_install"
+    bl_label = "Install World Light"
+
+    def invoke(self, context, _event):
+        self.type = 'WORLD'
+        return super().invoke(context, _event)
 
 
 class PREFERENCES_OT_studiolight_new(Operator):
@@ -1343,6 +1375,9 @@ classes = (
     PREFERENCES_OT_keymap_restore,
     PREFERENCES_OT_theme_install,
     PREFERENCES_OT_studiolight_install,
+    PREFERENCES_OT_lights_studio_install,
+    PREFERENCES_OT_lights_matcap_install,
+    PREFERENCES_OT_lights_world_install,
     PREFERENCES_OT_studiolight_new,
     PREFERENCES_OT_studiolight_uninstall,
     PREFERENCES_OT_studiolight_copy_settings,
