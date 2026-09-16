@@ -14,6 +14,7 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
@@ -488,6 +489,12 @@ void debug_markers_print_list(ListBaseT<TimeMarker> *markers)
 
 static void marker_color_get(const TimeMarker *marker, uchar *r_color)
 {
+  if (marker->flag & TIME_MARKER_USE_CUSTOM_COLOR) {
+    rgb_float_to_uchar(r_color, marker->color);
+    r_color[3] = (marker->flag & SELECT) ? 255 : 180;
+    return;
+  }
+
   if (marker->flag & SELECT) {
     ui::theme::get_color_4ubv(TH_TIME_MARKER_LINE_SELECTED, r_color);
   }
@@ -1323,10 +1330,16 @@ static void ed_marker_duplicate_apply(bContext *C)
 
       /* create and set up new marker */
       TimeMarker *newmarker = MEM_new<TimeMarker>("TimeMarker");
-      newmarker->flag = SELECT;
+
+      /* Copy flags, except for temp flags. Ensure duplicated markers are selected. */
+      newmarker->flag = marker.flag;
+      newmarker->flag &= ~TIME_MARKER_ELEVATED_TEMP;
+      newmarker->flag |= SELECT;
+
       newmarker->frame = marker.frame;
       STRNCPY_UTF8(newmarker->name, marker.name);
       newmarker->camera = marker.camera;
+      copy_v3_v3(newmarker->color, marker.color);
 
       if (marker.prop != nullptr) {
         newmarker->prop = IDP_CopyProperty(marker.prop);

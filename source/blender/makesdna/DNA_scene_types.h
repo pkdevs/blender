@@ -1081,6 +1081,8 @@ struct TimeMarker {
   unsigned int flag = 0;
   struct Object *camera = nullptr;
   struct IDProperty *prop = nullptr;
+  float color[3] = {0.0f, 0.0f, 0.0f};
+  char _pad[4] = {};
 };
 
 typedef enum TimeMarkerFlag : unsigned int {
@@ -1088,6 +1090,8 @@ typedef enum TimeMarkerFlag : unsigned int {
 
   /* Temporarily tag markers as elevated within draw functions. Flag is cleared afterwards. */
   TIME_MARKER_ELEVATED_TEMP = (1 << 1),
+  /* Use the custom color defined on the marker. */
+  TIME_MARKER_USE_CUSTOM_COLOR = (1 << 2),
 } TimeMarkerFlag;
 
 /** \} */

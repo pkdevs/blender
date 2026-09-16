@@ -71,7 +71,6 @@ static void rna_def_timeline_marker(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Marker", "Marker for noting points in the timeline");
   RNA_def_struct_system_idprops_func(srna, "rna_TimelineMarker_idprops");
 
-  /* String values */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Name", "");
   RNA_def_struct_name_property(srna, prop);
@@ -92,6 +91,16 @@ static void rna_def_timeline_marker(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Camera", "Camera that becomes active on this frame");
   RNA_def_property_update(prop, 0, "rna_TimelineMarker_camera_update");
+
+  prop = RNA_def_property(srna, "use_custom_color", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", TIME_MARKER_USE_CUSTOM_COLOR);
+  RNA_def_property_ui_text(prop, "Custom Color", "Use custom color for the marker");
+
+  prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_float_default(prop, 1.0);
+  RNA_def_property_ui_text(prop, "Color", "Custom color for the marker");
+  RNA_def_property_update(prop, 0, "rna_TimelineMarker_update");
 }
 
 void RNA_def_timeline_marker(BlenderRNA *brna)
