@@ -9020,12 +9020,19 @@ static int do_but_TRACKPREVIEW(
   return WM_UI_HANDLER_CONTINUE;
 }
 
-static int region_cursor_handler(ARegion *region, const wmEvent *event)
+static int region_cursor_handler(bContext *C, ARegion *region, const wmEvent *event)
 {
   if (event->type == TIMER && region->runtime->text_cursor_overlay &&
       region->runtime->text_cursor_overlay->timer == event->customdata)
   {
     region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
+    /* Stop blink timer after 30 seconds. */
+    if (region->runtime->text_cursor_overlay->timer->time_duration >= 30.0) {
+      region->runtime->text_cursor_overlay->inactive = true;
+      WM_event_timer_remove(
+          CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
+      region->runtime->text_cursor_overlay->timer = nullptr;
+    }
     return WM_UI_HANDLER_BREAK;
   }
   return WM_UI_HANDLER_CONTINUE;
@@ -9137,7 +9144,7 @@ static int do_button(bContext *C, Block *block, Button *but, const wmEvent *even
       return WM_UI_HANDLER_BREAK;
     }
   }
-  if (region_cursor_handler(data->region, event) == WM_UI_HANDLER_BREAK) {
+  if (region_cursor_handler(C, data->region, event) == WM_UI_HANDLER_BREAK) {
     return WM_UI_HANDLER_BREAK;
   }
   if (but->flag & BUT_DISABLED) {
@@ -13223,7 +13230,7 @@ void region_handlers_add(ListBaseT<wmEventHandler> *handlers)
 static int region_cursor_handler(bContext *C, const wmEvent *event, void *)
 {
   ARegion *region = CTX_wm_region(C);
-  if (region_cursor_handler(region, event) == WM_UI_HANDLER_BREAK) {
+  if (region_cursor_handler(C, region, event) == WM_UI_HANDLER_BREAK) {
     /* View3d do its own cursor drawing, tag to redraw overlays. */
     if (region->regiontype == RGN_TYPE_WINDOW && CTX_wm_view3d(C)) {
       ED_region_tag_redraw_editor_overlays(region);

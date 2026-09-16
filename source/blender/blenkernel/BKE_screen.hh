@@ -595,6 +595,9 @@ struct TextCursorOverlay {
   wmTimer *timer = nullptr;
   float color[4];
 
+  /** */
+  bool inactive = false;
+
   bool is_blink() const;
 };
 

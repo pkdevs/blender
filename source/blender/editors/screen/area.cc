@@ -156,6 +156,7 @@ void ED_region_do_listen(wmRegionListenerParams *params)
           if (region->regiontype == RGN_TYPE_WINDOW && params->area->spacetype == SPACE_VIEW3D) {
             region->runtime->do_draw |= RGN_DRAW_EDITOR_OVERLAYS;
           }
+          region->runtime->text_cursor_overlay->inactive = false;
           region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
               params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
           region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
@@ -4457,7 +4458,9 @@ void ED_region_ensure_blink_cursor_overlay(const bContext *C,
       region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
     }
     if (region == win->runtime->topmost_active_region && win->active) {
-      if (!region->runtime->text_cursor_overlay->timer) {
+      if (!region->runtime->text_cursor_overlay->timer &&
+          !region->runtime->text_cursor_overlay->inactive)
+      {
         /* Ensure timer is set when this region is the topmost active region. */
         region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
             CTX_wm_manager(C), win, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
