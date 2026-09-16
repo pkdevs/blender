@@ -15,6 +15,8 @@
 
 #endif
 
+#include "BLI_math_matrix.hh"
+
 #include "NOD_geo_tag_filter.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_simulation.hh"
@@ -24,6 +26,11 @@
 #include "GEO_jolt.hh"
 
 namespace blender::nodes::node_geo_jolt_solver_cc {
+
+using simulation::DataKey;
+using simulation::GeometrySetData;
+
+namespace attribute_names = simulation::attribute_names;
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -216,33 +223,191 @@ using JoltStateOwnerPtr = ImplicitSharingPtr<JoltStateOwner>;
 //   return bundle_type;
 // }
 
-static void execute_jolt_step(JoltState &state, const float delta_time, const int substeps)
-{
-  if (!state.is_initialized) {
-    /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
-     * time.*/
-    const int max_bodies = 65536;
-    const int num_body_mutexes = 0;
-    const int max_body_pairs = 65536;
-    const int max_contact_constraints = 10240;
-    state.system.Init(max_bodies,
-                      num_body_mutexes,
-                      max_body_pairs,
-                      max_contact_constraints,
-                      state.broad_phase_layer_interface,
-                      state.object_vs_broad_phase_layer_filter,
-                      state.object_layer_pair_filter);
-    state.system.SetBodyActivationListener(&state.body_activation_listener);
-    state.system.SetContactListener(&state.contact_listener);
-    state.is_initialized = true;
+#endif
+
+struct GeometryData {
+  bke::MutableAttributeAccessor attributes;
+  AttrDomain domain;
+  int size;
+
+  bke::SpanAttributeWriter<float3> position_attr;
+  bke::SpanAttributeWriter<float3> velocity_attr;
+  bke::SpanAttributeWriter<math::Quaternion> rotation_attr;
+  bke::SpanAttributeWriter<float3> angular_velocity_attr;
+
+  GeometryData(const bke::MutableAttributeAccessor attributes) : attributes(attributes) {}
+};
+
+struct Geometries {
+  Vector<simulation::GeometrySetData> geometry_sets;
+
+  VectorSet<DataKey> data_keys;
+  Vector<GeometryData *> data;
+};
+
+class JoltSolverStep {
+ private:
+  struct TLS {
+    ResourceScope scope;
+    LinearAllocator<> &allocator;
+
+    TLS() : scope(1024), allocator(scope.allocator()) {}
+  };
+
+  threading::EnumerableThreadSpecific<TLS> tls_;
+
+  /* Internal state of the Jolt simulation. */
+  JoltState &state_;
+
+  /** The simulation world that is being modified. */
+  Bundle &world_;
+
+  const float delta_time_;
+  const int substeps_;
+
+  const float interpolation_begin_;
+  const float interpolation_end_;
+
+  const float4x4 world_to_simulation_;
+
+  std::string geometry_tag_filter_;
+
+  Geometries geometries_;
+
+ public:
+  JoltSolverStep(JoltState &state,
+                 Bundle &world,
+                 const float total_delta_time,
+                 const int substeps,
+                 const float interpolation_begin,
+                 const float interpolation_end,
+                 const StringRef geometry_tag_filter,
+                 const float4x4 &simulation_to_world)
+      : state_(state),
+        world_(world),
+        delta_time_(total_delta_time),
+        substeps_(substeps),
+        interpolation_begin_(interpolation_begin),
+        interpolation_end_(interpolation_end),
+        world_to_simulation_(math::invert(simulation_to_world)),
+        geometry_tag_filter_(geometry_tag_filter)
+  {
   }
 
-  JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
-  JPH::JobSystemSingleThreaded job_system;
-  state.system.Update(delta_time, substeps, &temp_allocator, &job_system);
-}
+  void do_step()
+  {
+#ifdef WITH_JOLT
+    if (!state_.is_initialized) {
+      /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
+       * time.*/
+      const int max_bodies = 65536;
+      const int num_body_mutexes = 0;
+      const int max_body_pairs = 65536;
+      const int max_contact_constraints = 10240;
+      state_.system.Init(max_bodies,
+                         num_body_mutexes,
+                         max_body_pairs,
+                         max_contact_constraints,
+                         state_.broad_phase_layer_interface,
+                         state_.object_vs_broad_phase_layer_filter,
+                         state_.object_layer_pair_filter);
+      state_.system.SetBodyActivationListener(&state_.body_activation_listener);
+      state_.system.SetContactListener(&state_.contact_listener);
+      state_.is_initialized = true;
+    }
 
+    // this->gather_nested_bundle_paths();
+    this->gather_from_world__geometries();
+    // this->prepare_geometry_chunks();
+    // this->prepare_inverse_masses();
+    // this->prepare_inverse_moments_of_inertia();
+
+    // this->gather_from_world__mesh_colliders();
+    // this->gather_from_world__stretch_shear_constraints();
+    // this->gather_from_world__bend_twist_constraints();
+    // this->gather_from_world__edge_length_constraints();
+    // this->gather_from_world__cross_edge_length_constraints();
+    // this->gather_from_world__damping();
+    // this->gather_from_world__pin_positions();
+    // this->gather_from_world__pin_rotations();
+    // this->gather_from_world__collision_contacts();
+
+    // this->parallel_for_each_chunk(32, [&](const int chunk_i) {
+    //   TLS &tls = tls_.local();
+    //   this->create_chunk_constraints__rod_stretch_shear(tls, chunk_i);
+    //   this->create_chunk_constraints__rod_bend_twist(tls, chunk_i);
+    //   this->create_chunk_constraints__damping(tls, chunk_i);
+    //   this->create_chunk_constraints__pin_positions(tls, chunk_i);
+    //   this->create_chunk_constraints__pin_rotations(tls, chunk_i);
+    // });
+
+    // result_ = this->do_simulation();
+
+    JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+    JPH::JobSystemSingleThreaded job_system;
+    state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
 #endif
+
+    // this->write_back__pin_positions();
+    // this->write_back__rod_stretch_shear();
+
+    // this->finish_common_attribute_writers();
+    // this->write_back_geometries_to_world();
+
+    // this->write_back__contacts();
+  }
+
+ private:
+  void gather_from_world__geometries()
+  {
+    geometries_.geometry_sets = simulation::gather_geometry_set_data(world_, geometry_tag_filter_);
+
+    TLS &tls = tls_.local();
+
+    /* Gather individual components that should be simulated. There may be more than geometry sets
+     * because each geometry set could contain e.g. a mesh and curves. */
+    for (const int geo_bundle_i : geometries_.geometry_sets.index_range()) {
+      GeometrySetData &geo_set_data = geometries_.geometry_sets[geo_bundle_i];
+      GeometrySet &geometry = geo_set_data.geometry;
+      for (bke::GeometryComponent::Type type : {bke::GeometryComponent::Type::Instance}) {
+        if (!geometry.has(type)) {
+          continue;
+        }
+        bke::GeometryComponent &component = geometry.get_component_for_write(type);
+        geometries_.data_keys.add_new({geo_bundle_i, type, std::nullopt});
+        GeometryData &geo_data = tls.scope.construct<GeometryData>(
+            *component.attributes_for_write());
+        geo_data.domain = AttrDomain::Instance;
+        geometries_.data.append(&geo_data);
+      }
+    }
+
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      GeometryData &geo_data = *geometries_.data[data_key_i];
+      const AttrDomain domain = geo_data.domain;
+      geo_data.size = geo_data.attributes.domain_size(domain);
+      // geo_data.temp_positions.reinitialize(geo_data.size);
+      // geo_data.temp_rotations.reinitialize(geo_data.size);
+      geo_data.position_attr = simulation::ensure_attribute<float3>(
+          geo_data.attributes, attribute_names::position, domain);
+      geo_data.velocity_attr = simulation::ensure_attribute<float3>(
+          geo_data.attributes, attribute_names::velocity, domain);
+      // geo_data.external_force_attr = this->lookup_attribute_default<float3>(
+      //     data_key_i, attribute_names::external_force, domain, float3(0, 0, 0));
+      // geo_data.masses = this->lookup_attribute_default<float>(
+      //     data_key_i, attribute_names::mass, domain, 1.0f);
+
+      geo_data.rotation_attr = simulation::ensure_attribute<math::Quaternion>(
+          geo_data.attributes, attribute_names::rotation, domain);
+      geo_data.angular_velocity_attr = simulation::ensure_attribute<float3>(
+          geo_data.attributes, attribute_names::angular_velocity, domain);
+      // geo_data.external_torque_attr = this->lookup_attribute_default<float3>(
+      //     data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
+      // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
+      //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
+    }
+  }
+};
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
@@ -259,6 +424,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float delta_time = params.extract_input<float>("Delta Time"_ustr);
   const int substeps = params.extract_input<int>("Substeps"_ustr);
   const std::string geometry_tag_filter = params.extract_input<std::string>("Filter"_ustr);
+  const float4x4 simulation_to_world = params.extract_input<float4x4>("Simulation to World"_ustr);
+  const float interpolation_begin = params.extract_input<float>("Begin"_ustr);
+  const float interpolation_end = params.extract_input<float>("End"_ustr);
   const std::string solver_path = params.extract_input<std::string>("Solver Path"_ustr);
 
   BundlePtr solver_data_ptr;
@@ -284,7 +452,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   if (jolt_state_owner->mutex.try_lock()) {
-    execute_jolt_step(jolt_state_owner->state, delta_time, substeps);
+    JoltSolverStep jolt_step(jolt_state_owner->state,
+                             world,
+                             delta_time,
+                             substeps,
+                             interpolation_begin,
+                             interpolation_end,
+                             geometry_tag_filter,
+                             simulation_to_world);
     jolt_state_owner->mutex.unlock();
   }
   else {
