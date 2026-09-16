@@ -38,9 +38,12 @@ class GreasePencilPaintTests(unittest.TestCase):
     """
 
     def setUp(self):
-        bpy.ops.wm.open_mainfile(filepath=str(args.testdir / "../grease_pencil/grease_pencil_paint_tests.blend"), load_ui=False)
+        bpy.ops.wm.open_mainfile(
+            filepath=str(
+                args.testdir /
+                "../grease_pencil/grease_pencil_paint_tests.blend"),
+            load_ui=False)
         bpy.ops.ed.undo_push()
-
 
     def prepare(self):
         data = bpy.data.grease_pencils.new("test")
@@ -63,7 +66,7 @@ class GreasePencilPaintTests(unittest.TestCase):
         with bpy.context.temp_override(**context_override):
             bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
 
-        #bpy.ops.wm.save_mainfile()
+        # bpy.ops.wm.save_mainfile()
 
         # Remove the 'init_time' attribute before comparing, because it will differ by definition
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], "init_time")
@@ -72,14 +75,12 @@ class GreasePencilPaintTests(unittest.TestCase):
         # the gp object was in
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], ".selection")
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], ".selection")
-        comparison = bpy.data.grease_pencils['expected'].unit_test_compare(grease_pencil=bpy.data.grease_pencils['test'], threshold=0.001)
+        comparison = bpy.data.grease_pencils['expected'].unit_test_compare(
+            grease_pencil=bpy.data.grease_pencils['test'], threshold=0.001)
 
-
-
-        #compare with expected
+        # compare with expected
         self.assertTrue(comparison == 'Same', comparison)
         self.cleanup()
-
 
 
 def main():
