@@ -26,9 +26,9 @@ set(LIB
 
 function(cuda_get_version nvcc_executable out_version)
   execute_process(COMMAND "${nvcc_executable}" "--version" OUTPUT_VARIABLE NVCC_OUT)
-  string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR "${NVCC_OUT}")
-  string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR "${NVCC_OUT}")
-  set(${out_version} "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" PARENT_SCOPE)
+  string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\1" version_major "${NVCC_OUT}")
+  string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\2" version_minor "${NVCC_OUT}")
+  set(${out_version} "${version_major}.${version_minor}" PARENT_SCOPE)
 endfunction()
 
 function(cuda_get_arch_supported nvcc_executable arch out_is_supported)

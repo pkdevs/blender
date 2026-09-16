@@ -6,7 +6,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/blender_version.cmake")
 
 # Preprocess variables so that they match what the configuration expects.
 
-string(REGEX MATCH "^[0-9]+\\.[0-9]+" CUDA11_FOLDER_VERSION "${CUDA11_VERSION}")
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" CUDA12_FOLDER_VERSION "${CUDA12_VERSION}")
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" CUDA13_FOLDER_VERSION "${CUDA13_VERSION}")
 
