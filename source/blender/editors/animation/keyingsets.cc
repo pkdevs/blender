@@ -273,8 +273,8 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
 
   /* Verify the Keying Set to use:
    * - use the active one for now (more control over this can be added later)
-   * - add a new one if it doesn't exist.
-   * - only add keying set when this operation is run on top of an animatable property.
+   * - add a new one if it doesn't exist
+   * - only add keying set when this operation is run on top of an animatable property
    */
   auto get_keyingset = [&](void) {
     KeyingSet *keyingset = nullptr;
