@@ -114,7 +114,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /* --------------------------------------------------------------------
    * Transmission Component
    */
-  PanelDeclarationBuilder &transmission = b.add_panel("Transmission"_ustr).default_closed(false);
+  PanelDeclarationBuilder &transmission = b.add_panel("Transmission"_ustr).default_closed(true);
   transmission.description(
       "For modeling materials that transmit and refract light into the object interior, ranging "
       "from clear or colored glass and liquids to translucent materials with significant "
@@ -173,7 +173,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /* --------------------------------------------------------------------
    * Subsurface Component
    */
-  PanelDeclarationBuilder &subsurface = b.add_panel("Subsurface"_ustr).default_closed(false);
+  PanelDeclarationBuilder &subsurface = b.add_panel("Subsurface"_ustr).default_closed(true);
   subsurface.description(
       "Generates a soft appearance due to light scattering under the surface. Used to render "
       "materials such as skin, milk and wax");
@@ -220,7 +220,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /* --------------------------------------------------------------------
    * Coat Component
    */
-  PanelDeclarationBuilder &coat = b.add_panel("Coat"_ustr).default_closed(false);
+  PanelDeclarationBuilder &coat = b.add_panel("Coat"_ustr).default_closed(true);
   coat.description(
       "A layer of coat on top of the material that transmits and possibly absorbs light, to "
       "simulate the appearance of objects with colored varnish or lacquer");
@@ -271,7 +271,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /* --------------------------------------------------------------------
    * Fuzz Component
    */
-  PanelDeclarationBuilder &fuzz = b.add_panel("Fuzz"_ustr).default_closed(false);
+  PanelDeclarationBuilder &fuzz = b.add_panel("Fuzz"_ustr).default_closed(true);
   fuzz.description(
       "The topmost scattering layer simulating fuzzy or dusty appearance, producing a specular "
       "highlight at grazing angles");
@@ -298,7 +298,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /* --------------------------------------------------------------------
    * Emission Component
    */
-  PanelDeclarationBuilder &emission = b.add_panel("Emission"_ustr).default_closed(false);
+  PanelDeclarationBuilder &emission = b.add_panel("Emission"_ustr).default_closed(true);
   emission.description("Light emission from the base substrate");
   emission.add_input<decl::Float>("Emission Luminance"_ustr)
       .default_value(0.0f)
