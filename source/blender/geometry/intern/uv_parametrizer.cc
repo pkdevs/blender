@@ -1301,12 +1301,15 @@ static void p_polygon_calc_tris(ParamHandle *handle,
   BLI_polyfill_beautify(projverts, nverts, *r_tris, arena, heap);
 }
 
-static void p_chart_fill_boundary(
-    ParamHandle *handle, PChart *chart, Vector<PEdge *> border_edges, const float **co, int nedges)
+static void p_chart_fill_boundary(ParamHandle *handle,
+                                  PChart *chart,
+                                  MutableSpan<PEdge *> border_edges,
+                                  const float **co)
 {
   uint(*tris)[3];
+  int nedges = border_edges.size();
   uint nfilltri = nedges - 2;
-  Vector<bool> filled_indices(nfilltri, false);
+  Array<bool> filled_indices(nfilltri, false);
 
   p_polygon_calc_tris(handle, co, &tris, nedges);
 
@@ -1415,7 +1418,7 @@ static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, const PE
         bv->u.id = i;
       }
 
-      p_chart_fill_boundary(handle, chart, border_edges, co.data(), nedges);
+      p_chart_fill_boundary(handle, chart, border_edges, co.data());
 
       for (int i = 0; i < nedges; i++) {
         border_edges[i]->vert->u.key = stored_indexes[i];
