@@ -1666,15 +1666,13 @@ static bConstraintTypeInfo CTI_FOLLOWPATH = {
     /*evaluate_constraint*/ followpath_evaluate,
 };
 
-/* --------- Limit Constraint New Data --------- */
+/* --------- Limit Location --------- */
 
-static void limitconstraint_new_data(void *cdata)
+static void loclimitconstraint_new_data(void *cdata)
 {
   bLocLimitConstraint *data = static_cast<bLocLimitConstraint *>(cdata);
   data->flag2 = LIMIT_TRANSFORM;
 }
-
-/* --------- Limit Location --------- */
 
 static void loclimit_evaluate(bConstraint *con,
                               bConstraintOb *cob,
@@ -1710,7 +1708,7 @@ static bConstraintTypeInfo CTI_LOCLIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ limitconstraint_new_data,
+    /*new_data*/ loclimitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
@@ -1718,6 +1716,12 @@ static bConstraintTypeInfo CTI_LOCLIMIT = {
 };
 
 /* -------- Limit Rotation --------- */
+
+static void rotlimitconstraint_new_data(void *cdata)
+{
+  bRotLimitConstraint *data = static_cast<bRotLimitConstraint *>(cdata);
+  data->flag2 = LIMIT_TRANSFORM;
+}
 
 /**
  * Wraps a number to be in [-PI, +PI].
@@ -1859,7 +1863,7 @@ static bConstraintTypeInfo CTI_ROTLIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ limitconstraint_new_data,
+    /*new_data*/ rotlimitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
@@ -1867,6 +1871,12 @@ static bConstraintTypeInfo CTI_ROTLIMIT = {
 };
 
 /* --------- Limit Scale --------- */
+
+static void sizelimitconstraint_new_data(void *cdata)
+{
+  bSizeLimitConstraint *data = static_cast<bSizeLimitConstraint *>(cdata);
+  data->flag2 = LIMIT_TRANSFORM;
+}
 
 static void sizelimit_evaluate(bConstraint *con,
                                bConstraintOb *cob,
@@ -1917,7 +1927,7 @@ static bConstraintTypeInfo CTI_SIZELIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ limitconstraint_new_data,
+    /*new_data*/ sizelimitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
