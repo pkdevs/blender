@@ -185,6 +185,7 @@ class NODE_MT_shader_node_output_base(node_add_menu.NodeMenu):
     def draw(self, context):
         layout = self.layout
 
+        self.node_operator(layout, "NodeEnableOutput")
         self.node_operator(
             layout,
             "ShaderNodeOutputAOV",
