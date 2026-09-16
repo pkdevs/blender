@@ -28,7 +28,6 @@ struct CameraInstanceData : public ExtraInstanceData {
   float &volume_end = color_[3];
   float &depth = color_[3];
   float &focus = color_[3];
-
   float4x4 &matrix = object_to_world;
   float &dist_color_id = matrix[0][3];
   float &corner_x = matrix[0][3];
@@ -65,19 +64,6 @@ struct CameraPanoramicData : public CameraPanoramicInstanceData {
   float &longitude_max = pano_params0.y;
   float &latitude_min = pano_params0.z;
   float &latitude_max = pano_params0.w;
-
-  float &fisheye_polynomial_k0 = pano_params0.x;
-  float &fisheye_polynomial_k1 = pano_params0.y;
-  float &fisheye_polynomial_k2 = pano_params0.z;
-  float &fisheye_polynomial_k3 = pano_params0.w;
-  float &fisheye_polynomial_k4 = pano_params1.x;
-
-  float &central_cylindrical_range_u_min = pano_params0.x;
-  float &central_cylindrical_range_u_max = pano_params0.y;
-  float &central_cylindrical_range_v_min = pano_params0.z;
-  float &central_cylindrical_range_v_max = pano_params0.w;
-  float &central_cylindrical_radius = pano_params1.x;
-
   float &latitude_position = pano_params1.y;
   float &shift_x = pano_params1.y;
   float &shift_y = pano_params1.z;
@@ -510,21 +496,6 @@ class Cameras : Overlay {
             pano_data.latitude_min = cam.latitude_min;
             pano_data.latitude_max = cam.latitude_max;
           }
-          // else if (is_lens_polynomial) {
-          //   pano_data.fisheye_polynomial_k0 = cam.fisheye_polynomial_k0;
-          //   pano_data.fisheye_polynomial_k1 = cam.fisheye_polynomial_k1;
-          //   pano_data.fisheye_polynomial_k2 = cam.fisheye_polynomial_k2;
-          //   pano_data.fisheye_polynomial_k3 = cam.fisheye_polynomial_k3;
-          //   pano_data.fisheye_polynomial_k4 = cam.fisheye_polynomial_k4;
-          // }
-          // else if (is_central_cylindrical) {
-          //   pano_data.central_cylindrical_range_u_min = cam.central_cylindrical_range_u_min;
-          //   pano_data.central_cylindrical_range_u_max = cam.central_cylindrical_range_u_max;
-          //   pano_data.central_cylindrical_range_v_min = cam.central_cylindrical_range_v_min;
-          //   pano_data.central_cylindrical_range_v_max = cam.central_cylindrical_range_v_max;
-          //   pano_data.central_cylindrical_radius = cam.central_cylindrical_radius;
-          // }
-
           if (is_mirrorball) {
             pano_data.fisheye_fov = M_PI * 2;
           }
@@ -614,7 +585,6 @@ class Cameras : Overlay {
 
     if (cam.flag & CAM_SHOWLIMITS) {
       /* Scale focus point. */
-
       data.matrix.x_axis() *= cam.drawsize;
       data.matrix.y_axis() *= cam.drawsize;
 

@@ -275,19 +275,6 @@ static Vector<Vertex> tria_verts(const VertexClass vclass, bool wire = false)
   if (wire) {
     verts.append({{-1.0f, 0.0f, 0.0f}, vclass});
   }
-
-  /* Wire */
-  /*     append_line_loop(verts, triangle, 1.0f, vclass); */
-
-  /*   Vector<Vertex> verts;
-    float scale = 0.7f;
-    float width = 0.21f * scale;
-    float length = 0.2f * scale;
-    float margin = 0.0f;
-
-    verts.append({{width, margin, 0.0}, vclass});
-    verts.append({{0.0, margin + length, 0.0}, vclass});
-    verts.append({{-width, margin, 0.0}, vclass}); */
   return verts;
 }
 
@@ -300,10 +287,6 @@ static Vector<Vertex> fisheye_frame_verts()
   verts.append({{-size, -size, 0.0}, VCLASS_CAMERA_FISHEYE_FRAME});
   verts.append({{-size, size, 0.0}, VCLASS_CAMERA_FISHEYE_FRAME});
   verts.append({{size, size, 0.0}, VCLASS_CAMERA_FISHEYE_FRAME});
-
-  /*   verts.append({{-1.0f, -1.0f, 0.0}, VCLASS_NONE});
-  verts.append({{1.0f, -1.0f, 0.0}, VCLASS_NONE}); */
-
   return verts;
 }
 
@@ -365,11 +348,6 @@ static Vector<Vertex> equirectangular_latitude_arc_verts(const VertexClass vclas
   Vector<float2> arc = arc_vertices(radius, segments);
 
   for (int i : IndexRange(segments)) {
-
-    /*     int segs = 2;
-        if (i >= segments - 1) {
-          segs = 1;
-        } */
 
     for (int j : IndexRange(2)) {
 

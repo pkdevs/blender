@@ -14,7 +14,6 @@ VERTEX_SHADER_CREATE_INFO(overlay_extra_spot_cone)
 
 void main()
 {
-
   select_id_set(in_select_buf[gl_InstanceID]);
 
   /* Loading the matrix first before doing the manipulation fixes an issue
@@ -25,7 +24,6 @@ void main()
   /* Extract data packed inside the unused float4x4 members. */
   float4 inst_data = float4(input_mat[0][3], input_mat[1][3], input_mat[2][3], input_mat[3][3]);
   float4 color = data_buf[gl_InstanceID].color_;
-
   float inst_color_data = color.a;
   float4x4 obmat = input_mat;
   obmat[0][3] = obmat[1][3] = obmat[2][3] = 0.0f;
