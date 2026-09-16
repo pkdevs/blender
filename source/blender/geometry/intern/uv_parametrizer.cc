@@ -1258,12 +1258,15 @@ static void p_chart_boundaries(PChart *chart, PEdge **r_outer)
   }
 }
 
-static void get_tessellated_trifill(ParamHandle *handle,
-                                    float (*coords_3d)[3],
-                                    uint (**r_tris)[3],
-                                    uint nverts)
+static void p_polygon_calc_tris(ParamHandle *handle,
+                                const float **co,
+                                uint (**r_tris)[3],
+                                uint nverts)
 {
-  /* Allocate memory for polyfill. */
+  /**
+   * Allocate memory for polyfill.
+   * NOTE: Call `BLI_memarena_clear(handle->polyfill_arena)` after use.
+   */
   MemArena *arena = handle->polyfill_arena;
   Heap *heap = handle->polyfill_heap;
   uint nfilltri = nverts - 2;
@@ -1274,7 +1277,14 @@ static void get_tessellated_trifill(ParamHandle *handle,
 
   /* Calc normal, flipped: to get a positive 2d cross product. */
   float normal[3];
-  if (normal_poly_v3(normal, coords_3d, nverts) == 0.0f) [[unlikely]] {
+  zero_v3(normal);
+  const float *co_curr, *co_prev = co[nverts - 1];
+  for (int j = 0; j < nverts; j++) {
+    co_curr = co[j];
+    add_newell_cross_v3_v3v3(normal, co_prev, co_curr);
+    co_prev = co_curr;
+  }
+  if (normalize_v3(normal) == 0.0f) [[unlikely]] {
     normal[2] = 1.0f;
   }
 
@@ -1282,7 +1292,7 @@ static void get_tessellated_trifill(ParamHandle *handle,
   float axis_mat[3][3];
   axis_dominant_v3_to_m3_negate(axis_mat, normal);
   for (int j = 0; j < nverts; j++) {
-    mul_v2_m3v3(projverts[j], axis_mat, coords_3d[j]);
+    mul_v2_m3v3(projverts[j], axis_mat, co[j]);
   }
 
   BLI_polyfill_calc_arena(projverts, nverts, 1, *r_tris, arena);
@@ -1291,17 +1301,14 @@ static void get_tessellated_trifill(ParamHandle *handle,
   BLI_polyfill_beautify(projverts, nverts, *r_tris, arena, heap);
 }
 
-static void p_chart_fill_boundary(ParamHandle *handle,
-                                  PChart *chart,
-                                  Vector<PEdge *> border_edges,
-                                  Vector<float3> coords_3d,
-                                  int nedges)
+static void p_chart_fill_boundary(
+    ParamHandle *handle, PChart *chart, Vector<PEdge *> border_edges, const float **co, int nedges)
 {
   uint(*tris)[3];
   uint nfilltri = nedges - 2;
   Vector<bool> filled_indices(nfilltri, false);
 
-  get_tessellated_trifill(handle, reinterpret_cast<float (*)[3]>(coords_3d.data()), &tris, nedges);
+  p_polygon_calc_tris(handle, co, &tris, nedges);
 
   while (nedges >= 3) {
 
@@ -1397,18 +1404,18 @@ static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, const PE
         continue;
       }
 
-      Vector<float3, 32> coords_3d;
+      Vector<const float *, 32> co;
       Vector<PHashKey, 32> stored_indexes;
-      coords_3d.reserve(nedges);
+      co.reserve(nedges);
       stored_indexes.reserve(nedges);
       for (int i = 0; i < nedges; i++) {
         PVert *bv = border_edges[i]->vert;
-        coords_3d.append_unchecked(bv->co);
+        co.append_unchecked(bv->co);
         stored_indexes.append_unchecked(bv->u.key);
         bv->u.id = i;
       }
 
-      p_chart_fill_boundary(handle, chart, border_edges, coords_3d, nedges);
+      p_chart_fill_boundary(handle, chart, border_edges, co.data(), nedges);
 
       for (int i = 0; i < nedges; i++) {
         border_edges[i]->vert->u.key = stored_indexes[i];
@@ -3916,7 +3923,7 @@ static void p_add_ngon(ParamHandle *handle,
   uint(*tris)[3];
   uint nfilltri = nverts - 2;
 
-  get_tessellated_trifill(handle, reinterpret_cast<float (*)[3]>(co), &tris, nverts);
+  p_polygon_calc_tris(handle, co, &tris, nverts);
 
   /* Add triangles. */
   for (uint j = 0; j < nfilltri; j++) {
