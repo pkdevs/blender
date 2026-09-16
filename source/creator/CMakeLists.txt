@@ -1983,37 +1983,6 @@ endif()
 
 
 # -----------------------------------------------------------------------------
-# Compositor node groups for built-in nodes, used by Scene Effects
-
-set(_nodes_as_node_groups_blend
-  ${CMAKE_BINARY_DIR}/release/datafiles/nodes_as_node_groups.blend
-)
-add_custom_command(
-  OUTPUT ${_nodes_as_node_groups_blend}
-  COMMAND
-    $<TARGET_FILE:blender>
-    --background
-    --factory-startup
-    --python-exit-code 1
-    --env-system-scripts ${CMAKE_SOURCE_DIR}/scripts
-    --python ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
-    -- --output ${_nodes_as_node_groups_blend}
-  DEPENDS
-    # Avoid building on every relink to speed up rebuild times.
-    bf_nodes_composite
-    ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
-)
-add_custom_target(nodes_as_node_groups ALL DEPENDS ${_nodes_as_node_groups_blend})
-# Ordering only: Blender must exist to run the script, but the blend must not depend on the
-# binary's timestamp (that would regenerate it on every relink).
-add_dependencies(nodes_as_node_groups blender)
-install(
-  FILES ${_nodes_as_node_groups_blend}
-  DESTINATION ${TARGETDIR_VER}/datafiles/nodes
-)
-
-
-# -----------------------------------------------------------------------------
 # Setup link libraries
 
 target_link_libraries(blender PRIVATE ${LIB})
