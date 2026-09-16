@@ -46,12 +46,16 @@ set(DLSS_SDK_ROOT "${BUILDBOT_DLSS_TOOLKITS_ROOT_DIR}/DLSS SDK ${DLSS_VERSION}" 
 buildbot_assert_path_exists("${DLSS_SDK_ROOT}" "DLSS root directory does not exist: ${DLSS_SDK_ROOT}")
 
 # HIP configuration.
-set(HIP_ROOT_DIR "${BUILDBOT_HIP_TOOLKITS_ROOT_DIR}/hip_sdk_${HIP_VERSION}" CACHE PATH "" FORCE)
-buildbot_assert_path_exists("${HIP_ROOT_DIR}" "HIP root directory does not exist: ${HIP_ROOT_DIR}")
+if(NOT BUILDBOT_ARM64)
+  set(HIP_ROOT_DIR "${BUILDBOT_HIP_TOOLKITS_ROOT_DIR}/hip_sdk_${HIP_VERSION}" CACHE PATH "" FORCE)
+  buildbot_assert_path_exists("${HIP_ROOT_DIR}" "HIP root directory does not exist: ${HIP_ROOT_DIR}")
+endif()
 
 # OCLOC configuration.
-set(OCLOC_INSTALL_DIR "${BUILDBOT_OCLOC_TOOLKITS_ROOT_DIR}/ocloc_${OCLOC_VERSION}" CACHE PATH "" FORCE)
-buildbot_assert_path_exists("${OCLOC_INSTALL_DIR}" "OCLOC install directory does not exist: ${OCLOC_INSTALL_DIR}")
+if(NOT BUILDBOT_ARM64)
+  set(OCLOC_INSTALL_DIR "${BUILDBOT_OCLOC_TOOLKITS_ROOT_DIR}/ocloc_${OCLOC_VERSION}" CACHE PATH "" FORCE)
+  buildbot_assert_path_exists("${OCLOC_INSTALL_DIR}" "OCLOC install directory does not exist: ${OCLOC_INSTALL_DIR}")
+endif()
 
 # OptiX configuration.
 set(OPTIX_ROOT_DIR "${BUILDBOT_OPTIX_TOOLKITS_ROOT_DIR}/OptiX SDK ${OPTIX_VERSION}" CACHE PATH "" FORCE)
