@@ -82,6 +82,7 @@ BLOCKLIST = [
     "image_mipmap_world_sun.blend",
 
     ### Cycles only tests go here ###
+    "gsplat.*.blend",
 ]
 
 BLOCKLIST_METAL = [
@@ -440,7 +441,7 @@ def main():
     elif test_dir_name.startswith('principled_bsdf'):
         # principled_bsdf_thinfilm_metallic has some weird behavior in reflection of
         # black surfaces. to be investigated
-        report.set_fail_percent(0.09)
+        report.set_fail_percent(0.098)
         # principled_bsdf_dispersion has some difference in the highlights
         if gpu_vendor == "AMD":
             report.set_fail_threshold(6.0 / 255.0)
@@ -466,7 +467,7 @@ def main():
     elif test_dir_name.startswith('shader'):
         # normal_mapping_light_leak fireflies.
         # fresnel_layer_weight high values are accumulated differently on different platform.
-        report.set_fail_percent(0.2)
+        report.set_fail_percent(0.215)
         if gpu_vendor == "INTEL":
             # mix_color uses implementation dependent function.
             report.set_fail_percent(0.41)

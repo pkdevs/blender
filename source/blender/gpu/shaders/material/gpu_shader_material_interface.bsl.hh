@@ -295,6 +295,8 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
 
 float4 attr_load_color_post(float4 attr);
 float attr_load_temperature_post(float attr);
+float4 attr_load_radiance_post(float4 attr);
+
 /* TODO remove attr as parameter. */
 float4 attr_load_uniform([[resource_table]] KernelGlobals & /*kg*/,
                          const ShadingData & /*sd*/,

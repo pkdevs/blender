@@ -87,9 +87,8 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_global.hh"
-#include "BKE_gpencil_geom_legacy.h"
-#include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_modifiers.h"
 #include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_image.hh"
@@ -456,7 +455,7 @@ static void object_foreach_id(ID *id, LibraryForeachIDData *data)
       data, BKE_modifiers_foreach_ID_link(object, library_foreach_modifiersForeachIDLink, data));
   BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
       data,
-      BKE_gpencil_modifiers_foreach_ID_link(
+      BKE_grease_pencil_modifiers_foreach_ID_link(
           object, library_foreach_gpencil_modifiersForeachIDLink, data));
   BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
       data,
@@ -919,7 +918,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
 
   /* do it here, below old data gets converted */
   BKE_modifier_blend_read_data(reader, &ob->modifiers, ob);
-  BKE_gpencil_modifier_blend_read_data(reader, &ob->greasepencil_modifiers, ob);
+  BKE_grease_pencil_modifier_blend_read_data(reader, &ob->greasepencil_modifiers, ob);
   BKE_shaderfx_blend_read_data(reader, &ob->shader_fx, ob);
 
   BLO_read_struct_list(reader, PartEff, &ob->effect);
@@ -1346,7 +1345,7 @@ void BKE_object_free_modifiers(Object *ob, const int flag)
   while (GpencilModifierData *gp_md = static_cast<GpencilModifierData *>(
              BLI_pophead(&ob->greasepencil_modifiers)))
   {
-    BKE_gpencil_modifier_free_ex(gp_md, flag);
+    BKE_grease_pencil_modifier_free_ex(gp_md, flag);
   }
   /* Particle modifiers were freed, so free the particle-systems as well. */
   BKE_object_free_particlesystems(ob);
