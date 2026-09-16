@@ -1270,6 +1270,10 @@ void wm_homefile_read_ex(bContext *C,
     SET_FLAG_FROM_TEST(G.f, (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0, G_FLAG_SCRIPT_AUTOEXEC);
   }
 
+  /* Cleared below when switching templates so the template's UI loads,
+   * restored after the load (#150661). */
+  const bool load_ui_at_entry = (G.fileflags & G_FILE_NO_UI) == 0;
+
   if (use_data) {
     if (reset_app_template) {
       /* Always load UI when switching to another template. */
@@ -1510,6 +1514,14 @@ void wm_homefile_read_ex(bContext *C,
      * whether the UI is loaded from the .blend file or not, etc. */
     wm_setup_data->is_factory_startup = loaded_factory_settings;
     wm_file_read_setup_wm_finalize(C, bmain, wm_setup_data);
+  }
+
+  if (use_data && !use_userdef) {
+    /* Restore the Load UI state that was cleared to force loading the UI of the template
+     * being switched to. Leaving it cleared would make later file loads ignore the Load UI
+     * preference for the rest of the session (#150661). When preferences are loaded,
+     * #wm_init_userdef already re-syncs this flag from the preferences. */
+    SET_FLAG_FROM_TEST(G.fileflags, load_ui_at_entry, G_FILE_NO_UI);
   }
 
   if (use_userdef) {
