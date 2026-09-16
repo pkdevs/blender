@@ -274,7 +274,7 @@ PreviewImage *BKE_previewimg_id_ensure(ID *id)
   return *prv_p;
 }
 
-PreviewImage* BKE_previewimg_id_load_file(ID *id, const char *filepath)
+PreviewImage* BKE_previewimg_id_load(ID *id, const char *filepath)
 {
   BKE_previewimg_id_custom_set(id, filepath);
   PreviewImage **prv_p = BKE_previewimg_id_get_p(id);

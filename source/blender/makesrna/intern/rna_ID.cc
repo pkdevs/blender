@@ -2767,7 +2767,7 @@ static void rna_def_ID(BlenderRNA *brna)
       func, "preview_image", "ImagePreview", "", "The existing or created preview");
   RNA_def_function_return(func, parm);
 
-  func = RNA_def_function(srna, "preview_load_file", "BKE_previewimg_id_load_file");
+  func = RNA_def_function(srna, "preview_load", "BKE_previewimg_id_load");
   RNA_def_function_ui_description(func, "Load preview data from an image file");
   prop = RNA_def_string_file_path(func,
                                   "filepath",
