@@ -99,22 +99,6 @@ int Segment::points_num() const
   return this->point_range().size();
 }
 
-template<typename Fn> void Segment::foreach_point(Fn &&fn) const
-{
-  const IndexRange point_range = this->point_range();
-
-  for (const int64_t pos : point_range.index_range()) {
-    const int i = this->wrap_index(point_range[pos]);
-
-    if constexpr (std::is_invocable_r_v<void, Fn, int64_t, int64_t>) {
-      fn(i, pos);
-    }
-    else {
-      fn(i);
-    }
-  }
-}
-
 Segment Segment::from_curve(const int curve_i, const IndexRange points, const bool cyclic)
 {
   Segment segment;

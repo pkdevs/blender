@@ -999,6 +999,22 @@ class Segment {
                                     const std::optional<int> inter_index_end);
 };
 
+template<typename Fn> void Segment::foreach_point(Fn &&fn) const
+{
+  const IndexRange point_range = this->point_range();
+
+  for (const int64_t pos : point_range.index_range()) {
+    const int i = this->wrap_index(point_range[pos]);
+
+    if constexpr (std::is_invocable_r_v<void, Fn, int64_t, int64_t>) {
+      fn(i, pos);
+    }
+    else {
+      fn(i);
+    }
+  }
+}
+
 struct IntersectionPoint {
   int point_i = -1;
   int point_j = -1;
