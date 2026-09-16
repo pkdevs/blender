@@ -7195,7 +7195,6 @@ static void rna_def_userdef_filepaths_extension_repo(BlenderRNA *brna)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_EDITOR_FILEBROWSER);
   RNA_def_property_string_funcs(
       prop, nullptr, nullptr, "rna_userdef_extension_repo_custom_directory_set");
-  RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_TEMPLATES);
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   prop = RNA_def_property(srna, "directory", PROP_STRING, PROP_DIRPATH);
