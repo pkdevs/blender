@@ -276,12 +276,8 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
    * - add a new one if it doesn't exist.
    * - only add keying set when this operation is run on top of an animatable property.
    */
-  KeyingSet *keyingset = nullptr;
-  bool unable_keyingset = false;
   auto get_keyingset = [&](void) {
-    if (keyingset || unable_keyingset) {
-      return keyingset;
-    }
+    KeyingSet *keyingset = nullptr;
     Scene *scene = CTX_data_scene(C);
     if (scene->active_keyingset == 0) {
       /* Validate flags
@@ -298,9 +294,7 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
       scene->active_keyingset = scene->keyingsets.count();
     }
     else if (scene->active_keyingset < 0) {
-      unable_keyingset = true;
-      keyingset = nullptr;
-      return keyingset;
+      return static_cast<KeyingSet *>(nullptr);
     }
     else {
       keyingset = static_cast<KeyingSet *>(
@@ -324,25 +318,22 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
         index = 0;
       }
 
-      KeyingSet *use_keyingset = get_keyingset();
-      if (unable_keyingset) {
+      KeyingSet *keyingset = get_keyingset();
+      if (!keyingset) {
         BKE_report(op->reports, RPT_ERROR, "Cannot add property to built in keying set");
         return OPERATOR_CANCELLED;
       }
 
       /* Add path to this setting. */
       BKE_keyingset_add_path(
-          use_keyingset, ptr.owner_id, nullptr, path->c_str(), index, pflag, KSP_GROUP_KSNAME);
-      use_keyingset->active_path = use_keyingset->paths.count();
+          keyingset, ptr.owner_id, nullptr, path->c_str(), index, pflag, KSP_GROUP_KSNAME);
+      keyingset->active_path = keyingset->paths.count();
+
+      WM_event_add_notifier(C, NC_SCENE | ND_KEYINGSET, nullptr);
+      /* Show notification/report header, so that users notice that something changed. */
+      BKE_reportf(op->reports, RPT_INFO, "Property added to Keying Set: '%s'", keyingset->name);
       changed = true;
     }
-  }
-
-  if (changed) {
-    WM_event_add_notifier(C, NC_SCENE | ND_KEYINGSET, nullptr);
-
-    /* Show notification/report header, so that users notice that something changed. */
-    BKE_reportf(op->reports, RPT_INFO, "Property added to Keying Set: '%s'", keyingset->name);
   }
 
   return (changed) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
