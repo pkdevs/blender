@@ -155,7 +155,6 @@ void ED_region_do_listen(wmRegionListenerParams *params)
           }
           if (region->regiontype == RGN_TYPE_WINDOW && params->area->spacetype == SPACE_VIEW3D) {
             region->runtime->do_draw |= RGN_DRAW_EDITOR_OVERLAYS;
-            printf("gool\n");
           }
           region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
               params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
@@ -1155,7 +1154,14 @@ void WorkspaceStatus::opmodal(std::string text,
                               const int propvalue,
                               const bool inverted)
 {
-  wmKeyMap *keymap = WM_keymap_active(wm_, ot->modalkeymap);
+  this->modal_keymap(std::move(text), WM_keymap_active(wm_, ot->modalkeymap), propvalue, inverted);
+}
+
+void WorkspaceStatus::modal_keymap(std::string text,
+                                   const wmKeyMap *keymap,
+                                   const int propvalue,
+                                   const bool inverted)
+{
   if (keymap) {
     const wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(keymap, propvalue);
     if (kmi) {

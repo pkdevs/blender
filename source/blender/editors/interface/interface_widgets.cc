@@ -41,6 +41,7 @@
 #include "UI_view2d.hh"
 
 #include "buttons/interface_label.hh"
+#include "buttons/interface_label_markdown.hh"
 #include "buttons/interface_textbox.hh"
 #include "interface_intern.hh"
 
@@ -3194,6 +3195,9 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
   /* Text-box wraps content in lines, skip clipping text.  */
   if (but->type == ButtonType::TextBox) {
   }
+  else if (button_label_is_markdown(but) || button_label_is_multiline(but)) {
+    /* Multi-line and markdown labels manage their own wrapping. */
+  }
   else if (but->text_direction != TextDirection::Default) {
     /* Do not clip vertical text.  */
   }
@@ -3223,6 +3227,9 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
   }
   else if (button_label_is_multiline(but)) {
     widget_draw_multiline_text(fstyle, wcol, but, rect);
+  }
+  else if (button_label_is_markdown(but)) {
+    label_markdown_draw(static_cast<const ButtonLabel *>(but), wcol->text, rect);
   }
   else if (but->type == ButtonType::TextBox) {
     widget_draw_textbox(fstyle, wcol, but, rect);
@@ -4780,6 +4787,7 @@ static void widget_numslider(Button *but,
 
     round_box_edges(&wtb1, roundboxalign_slider, &rect1, rad);
     wtb1.draw_outline = false;
+    wtb1.draw_emboss = false;
     widgetbase_set_uniform_discard_factor(&wtb1, factor_discard);
     widgetbase_draw(&wtb1, wcol);
 
@@ -4793,6 +4801,7 @@ static void widget_numslider(Button *but,
   /* Outline. */
   wtb.draw_outline = true;
   wtb.draw_inner = false;
+  wtb.draw_emboss = false;
   widgetbase_draw(&wtb, wcol);
 
   /* Add space at either side of the button so text aligns with number-buttons
