@@ -900,18 +900,12 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
   Vector<Object *> objects = BKE_object_pose_array_get_unique(
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
-  /* Store currently selected bones and the armature they belong to. */
-  struct SelectedBone {
-    Object *ob;
-    bPoseChannel *pchan;
-  };
-
-  Vector<SelectedBone> starting_bone_selection;
+  Set<bPoseChannel *> starting_bone_selection;
 
   for (Object *ob : objects) {
     for (bPoseChannel &pchan : ob->pose->chanbase) {
       if (pchan.flag & POSE_SELECTED) {
-        starting_bone_selection.append(SelectedBone{ob, &pchan});
+        starting_bone_selection.add(&pchan);
       }
     }
   }
@@ -939,19 +933,13 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
             continue;
           }
 
-          for (const SelectedBone &selected : starting_bone_selection) {
-            if (ct.tar == selected.ob && STREQ(ct.subtarget, selected.pchan->name)) {
-              matched = true;
-              break;
-            }
-          }
+          bPoseChannel *target_pchan = BKE_pose_channel_find_name(ct.tar->pose, ct.subtarget);
 
-          if (matched) {
+          if (target_pchan && starting_bone_selection.contains(target_pchan)) {
+            matched = true;
             break;
           }
         }
-
-        BKE_constraint_targets_flush(&con, &targets, true);
 
         if (!matched) {
           continue;
