@@ -642,11 +642,6 @@ void GPU_texture_bind_ex(gpu::Texture *texture, GPUSamplerState state, int unit)
 {
   Texture *tex = texture;
   state = (state.type == GPU_SAMPLER_STATE_TYPE_INTERNAL) ? tex->sampler_state : state;
-  if ((state.filtering & GPU_SAMPLER_FILTERING_MIPMAP) &&
-      (tex->sampler_state.filtering & GPU_SAMPLER_FILTERING_MIPMAP) == 0)
-  {
-    state.disable_filtering_flag(GPU_SAMPLER_FILTERING_MIPMAP);
-  }
   Context::get()->state_manager->texture_bind(tex, state, unit);
 }
 
