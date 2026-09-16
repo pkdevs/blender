@@ -806,6 +806,7 @@ static void rna_def_pose_channel_constraints(BlenderRNA *brna, PropertyRNA *cpro
                         FUNC_USE_MAIN | FUNC_USE_SELF_ID); /* ID and Main needed for refresh */
   /* return type */
   parm = RNA_def_pointer(func, "constraint", "Constraint", "", "New constraint");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   /* constraint to add */
   parm = RNA_def_enum(
@@ -843,6 +844,7 @@ static void rna_def_pose_channel_constraints(BlenderRNA *brna, PropertyRNA *cpro
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "new_constraint", "Constraint", "", "New constraint");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 }
 
@@ -1122,6 +1124,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_min_x", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmin[0]");
   RNA_def_property_range(prop, -M_PI, 0.0f);
+  RNA_def_property_float_default(prop, -M_PI);
   RNA_def_property_ui_text(prop, "IK X Minimum", "Minimum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
@@ -1129,6 +1132,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_max_x", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmax[0]");
   RNA_def_property_range(prop, 0.0f, M_PI);
+  RNA_def_property_float_default(prop, M_PI);
   RNA_def_property_ui_text(prop, "IK X Maximum", "Maximum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
@@ -1136,6 +1140,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_min_y", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmin[1]");
   RNA_def_property_range(prop, -M_PI, 0.0f);
+  RNA_def_property_float_default(prop, -M_PI);
   RNA_def_property_ui_text(prop, "IK Y Minimum", "Minimum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
@@ -1143,6 +1148,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_max_y", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmax[1]");
   RNA_def_property_range(prop, 0.0f, M_PI);
+  RNA_def_property_float_default(prop, M_PI);
   RNA_def_property_ui_text(prop, "IK Y Maximum", "Maximum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
@@ -1150,6 +1156,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_min_z", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmin[2]");
   RNA_def_property_range(prop, -M_PI, 0.0f);
+  RNA_def_property_float_default(prop, -M_PI);
   RNA_def_property_ui_text(prop, "IK Z Minimum", "Minimum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
@@ -1157,6 +1164,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ik_max_z", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "limitmax[2]");
   RNA_def_property_range(prop, 0.0f, M_PI);
+  RNA_def_property_float_default(prop, M_PI);
   RNA_def_property_ui_text(prop, "IK Z Maximum", "Maximum angles for IK Limit");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");

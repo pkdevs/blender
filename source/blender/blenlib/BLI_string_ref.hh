@@ -32,7 +32,6 @@
  */
 
 #include <cstring>
-#include <fmt/ranges.h>
 #include <string>
 #include <string_view>
 
@@ -54,6 +53,9 @@ class StringRefBase {
   constexpr StringRefBase(const char *data, int64_t size);
 
  public:
+  /** Makes this type "string-like" for some libraries (e.g. `fmt`). */
+  using value_type = char;
+
   /** Similar to #string_view::npos, but signed. */
   static constexpr int64_t not_found = -1;
 
@@ -126,6 +128,10 @@ class StringRefBase {
   constexpr StringRef trim() const;
   constexpr StringRef trim(StringRef characters_to_remove) const;
   constexpr StringRef trim(char character_to_remove) const;
+  constexpr StringRef trim_left() const;
+  constexpr StringRef trim_left(StringRef characters_to_remove) const;
+  constexpr StringRef trim_right() const;
+  constexpr StringRef trim_right(StringRef characters_to_remove) const;
 };
 
 /**
@@ -434,6 +440,48 @@ constexpr StringRef StringRefBase::trim(StringRef characters_to_remove) const
   return this->substr(find_front, substr_len);
 }
 
+/**
+ * Return a new StringRef that does not contain leading white-space.
+ */
+constexpr StringRef StringRefBase::trim_left() const
+{
+  return this->trim_left(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the leading characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_left(StringRef characters_to_remove) const
+{
+  const int64_t find_front = this->find_first_not_of(characters_to_remove);
+  if (find_front == not_found) {
+    return StringRef();
+  }
+  return this->substr(find_front);
+}
+
+/**
+ * Return a new StringRef that does not contain trailing white-space.
+ */
+constexpr StringRef StringRefBase::trim_right() const
+{
+  return this->trim_right(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the trailing characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_right(StringRef characters_to_remove) const
+{
+  const int64_t find_end = this->find_last_not_of(characters_to_remove);
+  if (find_end == not_found) {
+    return StringRef();
+  }
+  return this->substr(0, find_end + 1);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -672,14 +720,3 @@ inline std::string_view format_as(StringRef str)
 /** \} */
 
 }  // namespace blender
-
-/**
- * Disable conflicting range formatter in fmtlib. Otherwise we will get compile errors
- * where fmtlib doesn't know if it should use the formatter from format.h or ranges.h.
- */
-namespace fmt {
-
-template<> struct is_range<blender::StringRef, char> : std::false_type {};
-template<> struct is_range<blender::StringRefNull, char> : std::false_type {};
-
-}  // namespace fmt
