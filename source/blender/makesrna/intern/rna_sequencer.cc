@@ -800,7 +800,7 @@ static int rna_Strip_content_duration_get(PointerRNA *ptr)
 static int strip_default_duration(const Strip *strip, const Scene *scene)
 {
   if (seq::transform_single_image_check(strip)) {
-    return seq::DEFAULT_STRIP_LENGTH;
+    return seq::default_strip_length(scene->frames_per_second());
   }
   return strip->length(scene);
 }
@@ -1226,9 +1226,8 @@ static int rna_Strip_filepath_length(PointerRNA *ptr)
   Strip *strip = static_cast<Strip *>(ptr->data);
   char filepath[FILE_MAX];
 
-  BLI_path_join(
+  return BLI_path_join(
       filepath, sizeof(filepath), strip->data->dirpath, strip->data->stripdata->filename);
-  return strlen(filepath);
 }
 
 static void rna_Strip_proxy_filepath_set(PointerRNA *ptr, const char *value)
@@ -1256,8 +1255,7 @@ static int rna_Strip_proxy_filepath_length(PointerRNA *ptr)
   StripProxy *proxy = static_cast<StripProxy *>(ptr->data);
   char filepath[FILE_MAX];
 
-  BLI_path_join(filepath, sizeof(filepath), proxy->dirpath, proxy->filename);
-  return strlen(filepath);
+  return BLI_path_join(filepath, sizeof(filepath), proxy->dirpath, proxy->filename);
 }
 
 static void rna_Strip_audio_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
@@ -1429,9 +1427,7 @@ static bool colbalance_seq_cmp_fn(Strip *strip, void *arg_pt)
 {
   StripSearchData *data = static_cast<StripSearchData *>(arg_pt);
 
-  for (StripModifierData *smd = static_cast<StripModifierData *>(strip->modifiers.first); smd;
-       smd = smd->next)
-  {
+  for (StripModifierData *smd = strip->modifiers.first(); smd; smd = smd->next) {
     if (smd->type == eSeqModifierType_ColorBalance) {
       ColorBalanceModifierData *cbmd = reinterpret_cast<ColorBalanceModifierData *>(smd);
 

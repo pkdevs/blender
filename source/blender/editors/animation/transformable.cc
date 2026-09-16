@@ -6,6 +6,8 @@
  * \ingroup edanimation
  */
 
+#include <fmt/format.h>
+
 #include "BLI_math_rotation_c.hh"
 #include "BLI_string.hh"
 
@@ -250,6 +252,7 @@ AnimTransformable::AnimTransformable(Object &owner_id, bPoseChannel &pchan)
       owner_id_(&owner_id.id),
       data_(&pchan),
       fcurve_group_name_(pchan.name),
+      name_(pchan.name),
       location_({pchan.loc, 3}),
       rotation_mode_(&pchan.rotmode),
       scale_({pchan.scale, 3})
@@ -263,6 +266,7 @@ AnimTransformable::AnimTransformable(Object &obj)
       owner_id_(&obj.id),
       data_(&obj),
       fcurve_group_name_("Object Transforms"),
+      name_(&obj.id.name[2]),
       location_({obj.loc, 3}),
       rotation_mode_(reinterpret_cast<eRotationModes *>(&obj.rotmode)),
       scale_({obj.scale, 3})

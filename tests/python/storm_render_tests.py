@@ -105,6 +105,9 @@ BLOCKLIST_METAL = [
 BLOCKLIST_AMD = BLOCKLIST_METAL + [
     "volume_tricubic_interpolation.blend",
     "holdout.blend",
+    "principled_bsdf_anisotropic_transmission.blend",
+    # Upper left sphere renders incorrectly.
+    "principled_bsdf_coated_transmission.blend",
 ]
 
 # Minor difference in texture coordinate for white noise hash.
@@ -214,7 +217,7 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     arguments.extend([
         filepath,

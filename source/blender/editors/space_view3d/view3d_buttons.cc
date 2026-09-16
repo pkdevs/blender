@@ -76,7 +76,10 @@
 
 namespace blender {
 
-/* ******************* view3d space & buttons ************** */
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel Types
+ * \{ */
+
 enum {
   B_TRANSFORM_PANEL_MEDIAN = 1008,
   B_TRANSFORM_PANEL_DIMS = 1009,
@@ -144,6 +147,8 @@ struct TransformProperties {
 
 #define TRANSFORM_MEDIAN_ARRAY_LEN (sizeof(TransformMedian) / sizeof(float))
 
+/** \} */
+
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d);
 
 /* -------------------------------------------------------------------- */
@@ -161,15 +166,16 @@ static void *editmesh_partial_update_begin_fn(bContext * /*C*/,
     return nullptr;
   }
 
-  BMEditMesh *em = static_cast<BMEditMesh *>(arg1);
+  Object *ob = static_cast<Object *>(arg1);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
 
   int verts_mask_count = 0;
   BMIter iter;
   BMVert *eve;
   int i;
 
-  BitVector<> verts_mask(em->bm->totvert);
-  BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
+  BitVector<> verts_mask(bm->totvert);
+  BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {
     if (!BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
       continue;
     }
@@ -181,7 +187,7 @@ static void *editmesh_partial_update_begin_fn(bContext * /*C*/,
   update_params.do_tessellate = true;
   update_params.do_normals = true;
   BMPartialUpdate *bmpinfo = BM_mesh_partial_create_from_verts_group_single(
-      *em->bm, update_params, verts_mask, verts_mask_count);
+      *bm, update_params, verts_mask, verts_mask_count);
 
   return bmpinfo;
 }
@@ -215,12 +221,18 @@ static void editmesh_partial_update_update_fn(bContext *C,
   }
   tfp->tag_for_update = false;
 
-  BMEditMesh *em = static_cast<BMEditMesh *>(arg1);
+  Object *ob = static_cast<Object *>(arg1);
+  BMEditMesh *em = BKE_editmesh_from_object(ob);
 
-  BKE_editmesh_looptris_and_normals_calc_with_partial(em, bmpinfo);
+  BKE_editmesh_looptris_and_normals_calc_with_partial(
+      em, BKE_editmesh_bmesh_get_for_write(ob), bmpinfo);
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Median Utilities
+ * \{ */
 
 /* Helper function to compute a median changed value,
  * when the value should be clamped in [0.0, 1.0].
@@ -306,6 +318,12 @@ static void apply_scale_factor_clamp(float *val,
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Properties
+ * \{ */
+
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
 {
   if (v3d->runtime.properties_storage == nullptr) {
@@ -320,6 +338,12 @@ static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
   }
   return static_cast<TransformProperties *>(v3d->runtime.properties_storage);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curves Selection Status
+ * \{ */
 
 struct CurvesPointSelectionStatus {
   TransformMedian_Curves median = {};
@@ -692,6 +716,12 @@ static CurvesSelectionStatus init_grease_pencil_selection_status(
   return status;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Edit Vertex Buttons
+ * \{ */
+
 /* is used for both read and write... */
 static void v3d_editvertex_buts(
     const bContext *C, ui::Layout *layout, View3D *v3d, Object *ob, float lim)
@@ -711,8 +741,7 @@ static void v3d_editvertex_buts(
   if (ob->type == OB_MESH) {
     TransformMedian_Mesh *median = &median_basis.mesh;
     Mesh *mesh = id_cast<Mesh *>(ob->data);
-    BMEditMesh *em = mesh->runtime->edit_mesh.get();
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
     BMVert *eve;
     BMEdge *eed;
     BMIter iter;
@@ -1392,12 +1421,12 @@ static void v3d_editvertex_buts(
 
     if (ob->type == OB_MESH) {
       Mesh *mesh = id_cast<Mesh *>(ob->data);
-      if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+      if (mesh->runtime->edit_mesh) {
         ui::BlockInteraction_CallbackData callback_data{};
         callback_data.begin_fn = editmesh_partial_update_begin_fn;
         callback_data.end_fn = editmesh_partial_update_end_fn;
         callback_data.update_fn = editmesh_partial_update_update_fn;
-        callback_data.arg1 = em;
+        callback_data.arg1 = ob;
         block_interaction_set(block, &callback_data);
       }
     }
@@ -1433,8 +1462,7 @@ static void v3d_editvertex_buts(
     {
       const TransformMedian_Mesh *median = &median_basis.mesh, *ve_median = &ve_median_basis.mesh;
       Mesh *mesh = id_cast<Mesh *>(ob->data);
-      BMEditMesh *em = mesh->runtime->edit_mesh.get();
-      BMesh *bm = em->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
       BMIter iter;
       BMVert *eve;
       BMEdge *eed;
@@ -1721,6 +1749,12 @@ static void v3d_editvertex_buts(
 
 #undef TRANSFORM_MEDIAN_ARRAY_LEN
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Dimension Buttons
+ * \{ */
+
 static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v3d, Object *ob)
 {
   ui::Block *block = (layout) ? layout->block() : nullptr;
@@ -1795,6 +1829,12 @@ static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v
     RNA_property_update(C, &obptr, prop);
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Vertex Group Panel
+ * \{ */
 
 #define B_VGRP_PNL_EDIT_SINGLE 8 /* or greater */
 
@@ -1893,7 +1933,7 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
     const int vgroup_num = defbase->count();
     tfp->vertex_weights.resize(vgroup_num);
 
-    for (i = 0, dg = static_cast<bDeformGroup *>(defbase->first); dg; i++, dg = dg->next) {
+    for (i = 0, dg = defbase->first(); dg; i++, dg = dg->next) {
       bool locked = (dg->flag & DG_LOCK_WEIGHT) != 0;
       if (vgroup_validmap[i]) {
         MDeformWeight *dw = BKE_defvert_find_index(dv, i);
@@ -2012,7 +2052,13 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
   }
 }
 
-static void v3d_transform_butsR(ui::Layout &layout, PointerRNA *ptr)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Buttons
+ * \{ */
+
+static void v3d_transform_butsR(const bContext *C, ui::Layout &layout, PointerRNA *ptr)
 {
   ui::Layout *split = &layout.split(0.8f, false);
 
@@ -2092,7 +2138,10 @@ static void v3d_transform_butsR(ui::Layout &layout, PointerRNA *ptr)
                    ICON_DECORATE_UNLOCKED);
       break;
   }
-  layout.prop(ptr, "rotation_mode", UI_ITEM_NONE, "", ICON_NONE);
+
+  ui::Layout &row = layout.row(/*align=*/true);
+  row.prop(ptr, "rotation_mode", UI_ITEM_NONE, "", ICON_NONE);
+  row.op_menu_enum(C, "ANIM_OT_rotation_mode_convert", "mode", "", ICON_DOWNARROW_HLT);
 
   split = &layout.split(0.8f, false);
   colsub = &split->column(true);
@@ -2104,7 +2153,7 @@ static void v3d_transform_butsR(ui::Layout &layout, PointerRNA *ptr)
       ptr, "lock_scale", ui::ITEM_R_TOGGLE | ui::ITEM_R_ICON_ONLY, "", ICON_DECORATE_UNLOCKED);
 }
 
-static void v3d_posearmature_buts(ui::Layout &layout, Object *ob)
+static void v3d_posearmature_buts(const bContext *C, ui::Layout &layout, Object *ob)
 {
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
 
@@ -2120,7 +2169,7 @@ static void v3d_posearmature_buts(ui::Layout &layout, Object *ob)
   /* XXX: RNA buts show data in native types (i.e. quaternion, 4-component axis/angle, etc.)
    * but old-school UI shows in eulers always. Do we want to be able to still display in Eulers?
    * Maybe needs RNA/UI options to display rotations as different types. */
-  v3d_transform_butsR(col, &pchanptr);
+  v3d_transform_butsR(C, col, &pchanptr);
 }
 
 static void v3d_editarmature_buts(ui::Layout &layout, Object *ob)
@@ -2200,6 +2249,12 @@ static void v3d_editmetaball_buts(ui::Layout &layout, Object *ob)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel
+ * \{ */
+
 static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 {
   const Main *bmain = CTX_data_main(C);
@@ -2263,20 +2318,25 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
     }
   }
   else if (ob->mode & OB_MODE_POSE) {
-    v3d_posearmature_buts(col, ob);
+    v3d_posearmature_buts(C, col, ob);
   }
   else {
     PointerRNA obptr = RNA_id_pointer_create(&ob->id);
-    v3d_transform_butsR(col, &obptr);
+    v3d_transform_butsR(C, col, &obptr);
 
     /* Dimensions and editmode are mostly the same check. */
-    if (OB_TYPE_SUPPORT_EDITMODE(ob->type) || ELEM(ob->type, OB_VOLUME, OB_CURVES, OB_POINTCLOUD))
-    {
+    if (OB_TYPE_SUPPORT_EDITMODE(ob->type) || ELEM(ob->type, OB_VOLUME)) {
       View3D *v3d = CTX_wm_view3d(C);
       v3d_object_dimension_buts(nullptr, &col, v3d, ob);
     }
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curve Data Panel
+ * \{ */
 
 static bool view3d_panel_curve_data_poll(const bContext *C, PanelType * /*pt*/)
 {
@@ -2766,7 +2826,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
   auto add_labeled_field =
       [&](const StringRef label, const bool active, FunctionRef<ui::Button *()> add_button) {
         ui::Layout &row = bcol.row(true);
-        ui::Layout &split = row.split(0.4, true);
+        ui::Layout &split = row.split(ui::Layout::PROPERTY_SPLIT_FACTOR, true);
         ui::Layout &col = split.column(true);
         col.alignment_set(ui::LayoutAlign::Right);
         col.label(label, ICON_NONE);
@@ -2969,6 +3029,12 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Registration
+ * \{ */
+
 void view3d_buttons_register(ARegionType *art)
 {
   PanelType *pt;
@@ -3002,6 +3068,12 @@ void view3d_buttons_register(ARegionType *art)
   BLI_addtail(&art->paneltypes, pt);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Mode Pie or Toggle Operator
+ * \{ */
+
 static wmOperatorStatus view3d_object_mode_menu_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
@@ -3029,5 +3101,7 @@ void VIEW3D_OT_object_mode_pie_or_toggle(wmOperatorType *ot)
   /* flags */
   ot->flag = 0;
 }
+
+/** \} */
 
 }  // namespace blender
