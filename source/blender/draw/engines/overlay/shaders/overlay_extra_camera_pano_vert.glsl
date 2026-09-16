@@ -127,7 +127,7 @@ void main()
   }
 
   if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_FRAME)) {
-    printf("FISHEYE FRAME shift.x %f shift.y %f \n",shift.x,shift.y);
+    printf("FISHEYE FRAME shift.x %f shift.y %f \n", shift.x, shift.y);
     /* Feel free to optimize this. I am not a math guy! */
     const float calculated_height = 1.0f * (1.0 - cos(fisheye_fov / 2));
     const float calculated_radius = (1.0f * sin(fisheye_fov / 2));
@@ -341,7 +341,7 @@ void main()
 
   if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_TRIA)) {
 
-    vpos*=.2;
+    vpos *= .2;
     float radius = 1.0f;
     float calculated_height = radius * (1.0 - cos(fisheye_fov / 2));
     float calculated_radius = radius * sin(fisheye_fov / 2);
@@ -350,7 +350,7 @@ void main()
     const float shifted_radius_y = (calculated_radius * 2) * shift.y;
 
     vpos.x += shifted_radius_x * aspect.x;
-    vpos.y += (shifted_radius_y * aspect.y) + (calculated_radius*aspect.y);
+    vpos.y += (shifted_radius_y * aspect.y) + (calculated_radius * aspect.y);
 
     vpos.z = -1.0f + calculated_height;
   }

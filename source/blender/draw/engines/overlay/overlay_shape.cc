@@ -256,46 +256,38 @@ static Vector<Vertex> sphere_axes_circles(const float radius,
 
 /* Returns lines segment geometry forming 3 circles, one on each axis. */
 
-static Vector<Vertex> tria_verts(const VertexClass vclass,bool wire = false)
+static Vector<Vertex> tria_verts(const VertexClass vclass, bool wire = false)
 {
 
+  /*     const Vector<float2> triangle =  */
+  Vector<Vertex> verts;
+  verts.append({{-1.0f, 0.0f, 0.0f}, vclass});
+  if (wire) {
+    verts.append({{1.0f, 0.0f, 0.0f}, vclass});
+  }
+  verts.append({{1.0f, 0.0f, 0.0f}, vclass});
 
-/*     const Vector<float2> triangle =  */
-    Vector<Vertex> verts;
-     verts.append({{-1.0f, 0.0f, 0.0f}, vclass});
-     if(wire)
-     {
-     verts.append({{1.0f, 0.0f, 0.0f}, vclass});
-     }
-     verts.append({{1.0f, 0.0f,0.0f}, vclass});
+  if (wire) {
+    verts.append({{0.0f, 1.0f, 0.0f}, vclass});
+  }
 
-     if(wire)
-     {
-     verts.append({{0.0f, 1.0f,0.0f}, vclass});
-     }
-     
-     
-     verts.append({{0.0f, 1.0f,0.0f}, vclass});
-     if(wire)
-     {
-     verts.append({{-1.0f, 0.0f, 0.0f}, vclass});
-     }
+  verts.append({{0.0f, 1.0f, 0.0f}, vclass});
+  if (wire) {
+    verts.append({{-1.0f, 0.0f, 0.0f}, vclass});
+  }
 
-     
-    /* Wire */
-/*     append_line_loop(verts, triangle, 1.0f, vclass); */
+  /* Wire */
+  /*     append_line_loop(verts, triangle, 1.0f, vclass); */
 
+  /*   Vector<Vertex> verts;
+    float scale = 0.7f;
+    float width = 0.21f * scale;
+    float length = 0.2f * scale;
+    float margin = 0.0f;
 
-
-/*   Vector<Vertex> verts;
-  float scale = 0.7f;
-  float width = 0.21f * scale;
-  float length = 0.2f * scale;
-  float margin = 0.0f;
-
-  verts.append({{width, margin, 0.0}, vclass});
-  verts.append({{0.0, margin + length, 0.0}, vclass});
-  verts.append({{-width, margin, 0.0}, vclass}); */
+    verts.append({{width, margin, 0.0}, vclass});
+    verts.append({{0.0, margin + length, 0.0}, vclass});
+    verts.append({{-width, margin, 0.0}, vclass}); */
   return verts;
 }
 
@@ -1078,7 +1070,8 @@ ShapeCache::ShapeCache()
 
   {
 
-    Vector<Vertex> verts = fisheye_longitude_arc_verts(true, VCLASS_CAMERA_EQUIRECTANGULAR_LATITUDE);
+    Vector<Vertex> verts = fisheye_longitude_arc_verts(true,
+                                                       VCLASS_CAMERA_EQUIRECTANGULAR_LATITUDE);
 
     camera_equirectangular_longitude = BatchPtr(
         GPU_batch_create_ex(GPU_PRIM_LINES, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
@@ -1128,32 +1121,27 @@ ShapeCache::ShapeCache()
   /*Fisheye camera tria */
   {
 
-    Vector<Vertex> verts = tria_verts(VCLASS_CAMERA_FISHEYE_TRIA,true);
- 
+    Vector<Vertex> verts = tria_verts(VCLASS_CAMERA_FISHEYE_TRIA, true);
+
     camera_fisheye_tria_wire = BatchPtr(
         GPU_batch_create_ex(GPU_PRIM_LINES, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
-    
+
     verts = tria_verts(VCLASS_CAMERA_FISHEYE_TRIA);
 
     camera_fisheye_tria = BatchPtr(
         GPU_batch_create_ex(GPU_PRIM_TRIS, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
-
-
   }
   /* Equirectangular Tria*/
   {
-    Vector<Vertex> verts = tria_verts(VCLASS_CAMERA_EQUIRECTANGULAR_TRIA,true);
- 
+    Vector<Vertex> verts = tria_verts(VCLASS_CAMERA_EQUIRECTANGULAR_TRIA, true);
+
     camera_equirectangular_tria_wire = BatchPtr(
         GPU_batch_create_ex(GPU_PRIM_LINES, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
-    
+
     verts = tria_verts(VCLASS_CAMERA_EQUIRECTANGULAR_TRIA);
 
     camera_equirectangular_tria = BatchPtr(
         GPU_batch_create_ex(GPU_PRIM_TRIS, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
-
-
-
   }
 
   /* spheres */

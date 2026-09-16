@@ -126,7 +126,7 @@ class Cameras : Overlay {
     CameraInstanceBuf volume_buf = {selection_type_, "camera_volume_buf"};
     CameraInstanceBuf volume_wire_buf = {selection_type_, "camera_volume_wire_buf"};
     CameraInstanceBuf sphere_solid_buf = {selection_type_, "camera_sphere_solid_buf"};
-    
+
     CameraPanoInstanceBuf fisheye_tria_buf = {selection_type_, "camera_fisheye_tria_buf"};
     CameraPanoInstanceBuf fisheye_tria_wire_buf = {selection_type_,
                                                    "camera_fisheye_tria_wire_buf"};
@@ -135,11 +135,10 @@ class Cameras : Overlay {
                                                    "camera_fisheye_longitude_buf"};
     CameraPanoInstanceBuf fisheye_latitude_buf = {selection_type_, "camera_fisheye_latitude_buf"};
 
-
     CameraPanoInstanceBuf equirectangular_tria_buf = {selection_type_,
                                                       "camera_equirectangular_tria_buf"};
     CameraPanoInstanceBuf equirectangular_tria_wire_buf = {selection_type_,
-                                                      "camera_equirectangular_tria_wire_buf"};
+                                                           "camera_equirectangular_tria_wire_buf"};
     CameraPanoInstanceBuf equirectangular_longitude_buf = {selection_type_,
                                                            "camera_equirectangular_longitude_buf"};
     CameraPanoInstanceBuf equirectangular_latitude_buf = {selection_type_,
@@ -149,11 +148,6 @@ class Cameras : Overlay {
                                                       "camera_equirectangular_left_buf"};
     CameraPanoInstanceBuf equirectangular_right_buf = {selection_type_,
                                                        "camera_equirectangular_right_buf"};
-    
-    
-    
-
-    
 
     LinePrimitiveBuf stereo_connect_lines = {selection_type_, "camera_dashed_lines_buf"};
     LinePrimitiveBuf tracking_path = {selection_type_, "camera_tracking_path_buf"};
@@ -182,7 +176,7 @@ class Cameras : Overlay {
 
     if (extras_enabled_ || motion_tracking_enabled_) {
       call_buffers_.distances_buf.clear();
-      call_buffers_.frame_buf.clear();      
+      call_buffers_.frame_buf.clear();
       call_buffers_.tria_buf.clear();
       call_buffers_.tria_wire_buf.clear();
       call_buffers_.volume_buf.clear();
@@ -200,8 +194,6 @@ class Cameras : Overlay {
       call_buffers_.equirectangular_latitude_buf.clear();
       call_buffers_.equirectangular_left_buf.clear();
       call_buffers_.equirectangular_right_buf.clear();
-          
-      
 
       call_buffers_.sphere_solid_buf.clear();
       call_buffers_.stereo_connect_lines.clear();
@@ -309,7 +301,6 @@ class Cameras : Overlay {
       call_buffers_.fisheye_latitude_buf.end_sync(sub_pass,
                                                   res.shapes.camera_fisheye_latitude.get());
 
-      
       call_buffers_.equirectangular_tria_buf.end_sync(
           sub_pass, res.shapes.camera_equirectangular_tria.get());
       call_buffers_.equirectangular_tria_wire_buf.end_sync(
@@ -322,11 +313,6 @@ class Cameras : Overlay {
           sub_pass, res.shapes.camera_equirectangular_longitude.get());
       call_buffers_.equirectangular_latitude_buf.end_sync(
           sub_pass, res.shapes.camera_equirectangular_latitude.get());
-
-      
-
-
-      
     }
 
     {
@@ -424,14 +410,15 @@ class Cameras : Overlay {
     const bool is_active = (ob == camera_object);
     const bool is_camera_view = (is_active && (rv3d->persp == RV3D_CAMOB));
 
-    const bool is_panoramic = cam.type == CAM_PANO;
     const bool is_equisolid = cam.panorama_type == CAM_PANORAMA_FISHEYE_EQUISOLID;
     const bool is_equidistant = cam.panorama_type == CAM_PANORAMA_FISHEYE_EQUIDISTANT;
     const bool is_mirrorball = cam.panorama_type == CAM_PANORAMA_MIRRORBALL;
-
     const bool is_equirectangular = cam.panorama_type == CAM_PANORAMA_EQUIRECTANGULAR;
-    const bool is_lens_polynomial = cam.panorama_type == CAM_PANORAMA_FISHEYE_LENS_POLYNOMIAL;
-    const bool is_central_cylindrical = cam.panorama_type == CAM_PANORAMA_CENTRAL_CYLINDRICAL;
+
+    const bool is_panoramic = cam.type == CAM_PANO &&
+                              cam.panorama_type != CAM_PANORAMA_FISHEYE_LENS_POLYNOMIAL &&
+                              cam.panorama_type != CAM_PANORAMA_CENTRAL_CYLINDRICAL &&
+                              cam.panorama_type != CAM_PANORAMA_EQUIANGULAR_CUBEMAP_FACE;
 
     const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
     const bool is_stereo3d_view = (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
@@ -523,22 +510,20 @@ class Cameras : Overlay {
             pano_data.latitude_min = cam.latitude_min;
             pano_data.latitude_max = cam.latitude_max;
           }
-          else if (is_lens_polynomial) {
-            pano_data.fisheye_polynomial_k0 = cam.fisheye_polynomial_k0;
-            pano_data.fisheye_polynomial_k1 = cam.fisheye_polynomial_k1;
-            pano_data.fisheye_polynomial_k2 = cam.fisheye_polynomial_k2;
-            pano_data.fisheye_polynomial_k3 = cam.fisheye_polynomial_k3;
-            pano_data.fisheye_polynomial_k4 = cam.fisheye_polynomial_k4;
-          }
-          else if (is_central_cylindrical) {
-            pano_data.central_cylindrical_range_u_min = cam.central_cylindrical_range_u_min;
-            pano_data.central_cylindrical_range_u_max = cam.central_cylindrical_range_u_max;
-            pano_data.central_cylindrical_range_v_min = cam.central_cylindrical_range_v_min;
-            pano_data.central_cylindrical_range_v_max = cam.central_cylindrical_range_v_max;
-            pano_data.central_cylindrical_radius = cam.central_cylindrical_radius;
-          }
-
-
+          // else if (is_lens_polynomial) {
+          //   pano_data.fisheye_polynomial_k0 = cam.fisheye_polynomial_k0;
+          //   pano_data.fisheye_polynomial_k1 = cam.fisheye_polynomial_k1;
+          //   pano_data.fisheye_polynomial_k2 = cam.fisheye_polynomial_k2;
+          //   pano_data.fisheye_polynomial_k3 = cam.fisheye_polynomial_k3;
+          //   pano_data.fisheye_polynomial_k4 = cam.fisheye_polynomial_k4;
+          // }
+          // else if (is_central_cylindrical) {
+          //   pano_data.central_cylindrical_range_u_min = cam.central_cylindrical_range_u_min;
+          //   pano_data.central_cylindrical_range_u_max = cam.central_cylindrical_range_u_max;
+          //   pano_data.central_cylindrical_range_v_min = cam.central_cylindrical_range_v_min;
+          //   pano_data.central_cylindrical_range_v_max = cam.central_cylindrical_range_v_max;
+          //   pano_data.central_cylindrical_radius = cam.central_cylindrical_radius;
+          // }
 
           if (is_mirrorball) {
             pano_data.fisheye_fov = M_PI * 2;
@@ -554,8 +539,9 @@ class Cameras : Overlay {
           pano_data.matrix.z_axis() *= cam.drawsize;
 
           if (is_equidistant || is_equisolid || is_mirrorball) {
-            
-            (is_active ? call_buffers_.fisheye_tria_buf : call_buffers_.fisheye_tria_wire_buf).append(pano_data, select_id);
+
+            (is_active ? call_buffers_.fisheye_tria_buf : call_buffers_.fisheye_tria_wire_buf)
+                .append(pano_data, select_id);
           }
 
           if (is_equidistant) {
@@ -564,8 +550,10 @@ class Cameras : Overlay {
           }
 
           if (is_equirectangular) {
-            (is_active ? call_buffers_.equirectangular_tria_buf : call_buffers_.equirectangular_tria_wire_buf).append(pano_data, select_id);
-            
+            (is_active ? call_buffers_.equirectangular_tria_buf :
+                         call_buffers_.equirectangular_tria_wire_buf)
+                .append(pano_data, select_id);
+
             pano_data.latitude_position = 1.0f;
             call_buffers_.equirectangular_latitude_buf.append(pano_data, select_id);
             pano_data.latitude_position = -1.0f;
@@ -583,7 +571,7 @@ class Cameras : Overlay {
             if (is_equirectangular) {
               call_buffers_.equirectangular_longitude_buf.append(pano_data, select_id);
             }
-            else if(is_equisolid || is_equidistant || is_mirrorball) {
+            else if (is_equisolid || is_equidistant || is_mirrorball) {
               call_buffers_.fisheye_longitude_buf.append(pano_data, select_id);
             }
           }
@@ -599,10 +587,9 @@ class Cameras : Overlay {
             pano_data.matrix.y_axis() *= aspect_ratio.y;
           }
 
-          if(is_equisolid || is_equidistant)
-          {
-          pano_data.shift_x = shift.x;
-          call_buffers_.fisheye_frame_buf.append(pano_data, select_id);
+          if (is_equisolid || is_equidistant) {
+            pano_data.shift_x = shift.x;
+            call_buffers_.fisheye_frame_buf.append(pano_data, select_id);
           }
         }
 
