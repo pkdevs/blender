@@ -70,7 +70,6 @@ static bool WIDGETGROUP_camera_poll(const bContext *C, wmGizmoGroupType * /*gzgt
     Object *ob = base->object;
     if (ob->type == OB_CAMERA) {
       const Camera *camera = id_cast<Camera *>(ob->data);
-
       if (camera->type == CAM_PANO) {
         return false;
       }
