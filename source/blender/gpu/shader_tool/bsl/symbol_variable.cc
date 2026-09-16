@@ -48,7 +48,7 @@ SymbolVariable::SymbolVariable(SymbolScope *parent,
         array_elements = -1;
         break;
       }
-      array_elements *= value_as<int>(result.value);
+      array_elements *= result.value.comp_as<int>(0);
     }
   }
 }
@@ -90,61 +90,60 @@ static std::string to_string_exact(float val)
   return str + "f";
 }
 
-template<typename T, int size> static std::string to_string(const Vec<T, size> &v)
+std::string constexpr_to_string(const ConstexprValue &v)
 {
+  const int size = v.values.size();
+  const ConstexprValue::CompType comp_type = v.comp_type();
   std::string s;
-  if constexpr (size > 1) {
-    if constexpr (std::is_same_v<T, bool>) {
-      s += "bool";
-    }
-    else if constexpr (std::is_unsigned_v<T>) {
-      s += "uint";
-    }
-    else if constexpr (std::is_same_v<T, float>) {
-      s += "float";
-    }
-    else {
-      s += "int";
+
+  if (size > 1) {
+    switch (comp_type) {
+      case ConstexprValue::BOOL:
+        s += "bool";
+        break;
+      case ConstexprValue::UINT:
+        s += "uint";
+        break;
+      case ConstexprValue::INT:
+        s += "int";
+        break;
+      case ConstexprValue::FLOAT:
+        s += "float";
+        break;
     }
     s += std::to_string(size) + "(";
   }
 
   for (int i = 0; i < size; ++i) {
-    if constexpr (std::is_same_v<T, bool>) {
-      s += v[i] ? "true" : "false";
+    switch (comp_type) {
+      case ConstexprValue::BOOL:
+        s += v.values[i] ? "true" : "false";
+        break;
+      case ConstexprValue::UINT:
+        s += std::to_string(v.values[i]) + "u";
+        break;
+      case ConstexprValue::INT:
+        s += std::to_string(int32_t(v.values[i]));
+        break;
+      case ConstexprValue::FLOAT:
+        if (std::isnan(std::bit_cast<float>(v.values[i]))) {
+          s += "uintBitsToFloat(0x7FC00000u)";
+        }
+        else {
+          s += to_string_exact(std::bit_cast<float>(v.values[i]));
+        }
+        break;
     }
-    else if constexpr (std::is_unsigned_v<T>) {
-      s += std::to_string(v[i]) + "u";
-    }
-    else if constexpr (std::is_same_v<T, float>) {
-      if (std::isnan(v[i])) {
-        s += "uintBitsToFloat(0x7FC00000u)";
-      }
-      else {
-        s += to_string_exact(v[i]);
-      }
-    }
-    else {
-      s += std::to_string(v[i]);
-    }
-
-    if constexpr (size > 1) {
-      if (i < size - 1) {
-        s += ", ";
-      }
+    if (size > 1 && i < size - 1) {
+      s += ", ";
     }
   }
 
-  if constexpr (size > 1) {
+  if (size > 1) {
     s += ")";
   }
 
   return s;
-}
-
-std::string constexpr_to_string(const ConstexprValue &v)
-{
-  return visit([](auto &&v) -> string { return to_string(v); }, v);
 }
 
 string SymbolVariable::value_str() const
