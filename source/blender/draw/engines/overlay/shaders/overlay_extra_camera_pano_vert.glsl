@@ -28,11 +28,9 @@ void longitude_clip(
       vpos.x = pos.x;
       vpos.z = pos.y;
 
-      /* vpos *= 0; */
     }
   }
-  if (rad < longitude_min) {
-    printf("SOMETHING IS SMALLER THAN MIN %f \n", vpos.z);
+  if (rad < longitude_min) {    
     float2 pos;
     pos.x = radius * cos(longitude_min - radians(90));
     pos.y = radius * sin(longitude_min - radians(90));
@@ -126,9 +124,7 @@ void main()
     vpos.xy = (camera_center + camera_corner * vpos.xy) * abs(vpos.z);
   }
 
-  if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_FRAME)) {
-    printf("FISHEYE FRAME shift.x %f shift.y %f \n", shift.x, shift.y);
-    /* Feel free to optimize this. I am not a math guy! */
+  if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_FRAME)) {   
     const float calculated_height = 1.0f * (1.0 - cos(fisheye_fov / 2));
     const float calculated_radius = (1.0f * sin(fisheye_fov / 2));
     const float shifted_radius_x = (calculated_radius * 2) * shift.x;
@@ -140,9 +136,7 @@ void main()
                           -calculated_radius + shifted_radius_y;
     vpos.z = -1.0f + calculated_height;
   }
-  if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_LONGITUDE)) {
-    /* Feel free to optimize this. I am not a math guy! */
-
+  if (flag_test(vclass, VCLASS_CAMERA_FISHEYE_LONGITUDE)) {    
     float3 rotated = vpos;
     float rotation_offset = 0;
 
@@ -211,8 +205,7 @@ void main()
       }
     }
     else {
-      /* Equidistant Fisheye */
-      if (latitude_position < rads90 - fisheye_fov / 2) {
+        if (latitude_position < rads90 - fisheye_fov / 2) {
         float new_height = 1.0f * (1.0 - cos(fisheye_fov / 2));
         float new_radius = 1.0f * sin(fisheye_fov / 2);
         vpos.z = -1.0f + new_height;
@@ -234,9 +227,7 @@ void main()
       vpos.z = -1.0f + new_height;
 
       vpos.x = 0;
-      vpos.x = 0;
-      /*       vpos.x = new_radius + (shift.x*2);
-            vpos.y = new_radiusshift.y*2;  */
+      vpos.x = 0;      
     }
     else {
       vpos *= 1.0f;
