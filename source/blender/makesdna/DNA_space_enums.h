@@ -419,6 +419,10 @@ enum eSpaceSeq_SequencerTimelineOverlay_Flag : int {
   SEQ_TIMELINE_SHOW_GRID = (1 << 18),
   /** Show continuous sequence of thumbnails. */
   SEQ_TIMELINE_CONTINUOUS_THUMBNAILS = (1 << 19),
+  /** Show a single thumbnail in the middle. */
+  SEQ_TIMELINE_MIDDLE_THUMBNAILS = (1 << 20),
+  /** Draw thumbnails on strips. */
+  SEQ_TIMELINE_SHOW_THUMBNAILS = (1 << 21),
 };
 ENUM_OPERATORS(eSpaceSeq_SequencerTimelineOverlay_Flag)
 
@@ -901,6 +905,7 @@ enum eSpaceNodeOverlay_Flag : int {
    */
   SN_OVERLAY_SHOW_REROUTE_AUTO_LABELS = (1 << 7),
   SN_OVERLAY_SHOW_RENDER_REGION = (1 << 8),
+  SN_OVERLAY_SHOW_TEXT_INFO = (1 << 9),
 };
 ENUM_OPERATORS(eSpaceNodeOverlay_Flag)
 
