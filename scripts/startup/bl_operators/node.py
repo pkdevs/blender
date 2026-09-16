@@ -817,13 +817,37 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         return context.scene is not None
 
     def create_packed_effect_group(self, node_type):
+        """Creates a node group from node_type, writes it into a cached file and packs it into current file."""
         import os
+        filepath = os.path.join(bpy.app.cachedir, "nodes_as_node_group.blend")
 
-        filepath = os.path.join(
-            bpy.utils.system_resource('DATAFILES'),
-            "nodes",
-            "nodes_as_node_groups.blend",
-        )
+        cached_names = []
+        cached_groups = []
+        if os.path.exists(filepath):
+            with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+                cached_names = list(data_from.node_groups)
+                # Load the cached node groups to write them back with the new one below.
+                if node_type not in cached_names:
+                    data_to.node_groups = cached_names
+            cached_groups = [group for group in data_to.node_groups if group is not None]
+
+        if node_type not in cached_names:
+            temp_group = bpy.data.node_groups.new("temp group", "CompositorNodeTree")
+            node = temp_group.nodes.new(type=node_type)
+
+            # Applying settings might change the node interface, so apply it before creating the node group.
+            self.apply_node_settings(node)
+            group = node.group_make()
+            group.name = node.bl_idname
+
+            bpy.data.node_groups.remove(temp_group)
+            cached_groups.append(group)
+
+            bpy.data.libraries.write(filepath, set(cached_groups))
+
+            # Cleanup current file.
+            for group in cached_groups:
+                bpy.data.node_groups.remove(group)
 
         with bpy.data.libraries.load(filepath, link=True, pack=True) as (data_from, data_to):
             data_to.node_groups.append(node_type)
@@ -839,7 +863,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
 
         group = self.create_packed_effect_group(self.type)
         if group is None:
-            self.report({'ERROR'}, f"Failed to load node group {self.type}")
+            self.report({'ERROR'}, f"Failed to create node group {self.type}")
             return {'CANCELLED'}
 
         # The group contains a single node, which is the one the menu entry configures.
