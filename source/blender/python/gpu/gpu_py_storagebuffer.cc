@@ -159,29 +159,12 @@ static PyObject *pygpu_storagebuffer_clear_to_zero(BPyGPUStorageBuf *self)
 
 PyDoc_STRVAR(
     /* Wrap. */
-    pygpu_storagebuffer_sync_to_host_doc,
-    ".. method:: sync_to_host()\n"
-    "\n"
-    "   Explicitly sync updated storage buffer contents back to host. This ensures any "
-    "changes made by the GPU are visible to the host.\n"
-    "\n"
-    "   Only needed to overlap the sync with other work when planning to call :meth:`read` "
-    "later on. :meth:`read` on its own already performs the necessary synchronization.\n");
-static PyObject *pygpu_storagebuffer_sync_to_host(BPyGPUStorageBuf *self)
-{
-  BPYGPU_STORAGEBUF_CHECK_OBJ(self);
-
-  GPU_storagebuf_sync_to_host(self->ssbo);
-  Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(
-    /* Wrap. */
     pygpu_storagebuffer_read_doc,
     ".. method:: read()\n"
     "\n"
     "   Read back the contents of the storage buffer.\n"
-    "   Slow! Only use for inspection / debugging.\n"
+    "   This waits until all GPU operations are finished, performing the necessary "
+    "synchronization.\n"
     "\n"
     "   :return: The Buffer with the read data.\n"
     "   :rtype: :class:`gpu.types.Buffer`\n");
@@ -236,10 +219,6 @@ static PyMethodDef pygpu_storagebuffer__tp_methods[] = {
      reinterpret_cast<PyCFunction>(pygpu_storagebuffer_clear_to_zero),
      METH_NOARGS,
      pygpu_storagebuffer_clear_to_zero_doc},
-    {"sync_to_host",
-     reinterpret_cast<PyCFunction>(pygpu_storagebuffer_sync_to_host),
-     METH_NOARGS,
-     pygpu_storagebuffer_sync_to_host_doc},
     {"read",
      reinterpret_cast<PyCFunction>(pygpu_storagebuffer_read),
      METH_NOARGS,

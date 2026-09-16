@@ -56,9 +56,6 @@ class TestGpuStorageBuf(unittest.TestCase):
         ssbo.clear_to_zero()
         self.assertEqual(struct.unpack("4f", bytes(ssbo.read())), (0.0, 0.0, 0.0, 0.0))
 
-        # Should not raise.
-        ssbo.sync_to_host()
-
     def test_compute_shader_binding(self):
         import struct
 
