@@ -1108,16 +1108,17 @@ void POSE_OT_paste(wmOperatorType *ot)
                   "On Selected Only",
                   "Only paste the stored pose on to selected bones in the current pose");
 
-  RNA_def_float(ot->srna,
-                "factor",
-                1.0f,
-                -FLT_MAX,
-                FLT_MAX,
-                "Factor",
-                "Blends the current pose to the pose to paste. At 1, the pasted pose completely "
-                "overwrites the current pose",
-                0.0f,
-                1.0f);
+  RNA_def_float_factor(
+      ot->srna,
+      "factor",
+      1.0f,
+      -FLT_MAX,
+      FLT_MAX,
+      "Factor",
+      "Blends the current pose to the pose to paste. At 1, the pasted pose completely "
+      "overwrites the current pose",
+      0.0f,
+      1.0f);
 }
 
 /** \} */
