@@ -584,7 +584,7 @@ static void convert_brush_flags_to_type(Brush &brush)
 {
   /* BRUSH_AIRBRUSH was replaced with BRUSH_UNUSED_1 in 29c9353429f4b60c6e4ad234a4d6392a1f513079
    * and subsequently re-used for BRUSH_HARDNESS_PRESSURE in 5.3 subversion 22. */
-  constexpr eBrushFlags BRUSH_AIRBRUSH = BRUSH_HARDNESS_PRESSURE;
+  constexpr eBrushFlags BRUSH_AIRBRUSH = eBrushFlags(1 << 0);
   if (brush.flag & BRUSH_AIRBRUSH) {
     brush.flag &= ~BRUSH_AIRBRUSH;
     brush.stroke_method = BRUSH_STROKE_AIRBRUSH;
