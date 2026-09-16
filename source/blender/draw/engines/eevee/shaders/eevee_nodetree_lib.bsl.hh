@@ -953,13 +953,15 @@ float4 attr_load_color_post(float4 attr)
  *
  * \{ */
 
-void gsplat_transmittance([[maybe_unused]] float3 &transmittance)
+float3 gsplat_transmittance(float3 transmittance)
 {
 #ifdef MAT_GEOM_GSPLAT
   float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
                                                 gsplat_interp_flat.opacity);
   alpha = saturate(alpha * (256.0f / 255.0f));
-  transmittance = float3(1.0f) - alpha * (float3(1.0f) - transmittance);
+  return float3(1.0f) - alpha * (float3(1.0f) - transmittance);
+#else
+  return transmittance;
 #endif
 }
 
