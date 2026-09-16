@@ -9,15 +9,23 @@
 #include <memory>
 
 #include "BKE_blender.hh"
+#include "BKE_idprop.hh"
 #include "BKE_preferences.h"
 
 #include "BLI_fileops.hh"  // IWYU pragma: keep
 #include "BLI_path_utils.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#ifdef WITH_PYTHON
+#  include "BPY_extern_run.hh"
+#endif
+
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
+
+#include "WM_api.hh"
 
 #include "CLG_log.h"
 
@@ -71,6 +79,113 @@ void AssetLibraryService::destroy()
   instance_.reset();
 }
 
+/**
+ * Ensures that #bUserAssetLibrary::uuid is set and matches the value stored in the
+ * `.blender_asset_lib.toml` library file. This would assign a new UUID if not value is assigned
+ * yet in any of both fields, if just one of them have assined a value it will copy the value into
+ * the other.
+ * If both the custom library and the `.blender_asset_lib.toml` library file already contains
+ * different uuid values it will set the uuid store in the file as #bUserAssetLibrary.invalid_uuid.
+ */
+static void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
+{
+  if (custom_library.flag & ASSET_LIBRARY_PROJECT_DEFINED) {
+    return;
+  }
+#ifdef WITH_PYTHON
+  {
+    static constexpr const char *script =
+        R"(
+import tomllib
+from pathlib import Path
+
+ret = None
+
+try:
+    with open(Path(library_path) / ".blender_asset_lib.toml", "rb") as f:
+        config_dict = tomllib.load(f)
+except FileNotFoundError:
+    # Use an emtpy dictionary when there is not an existing file
+    config_dict = {}
+except e:
+    # Something went wrong, raise error
+    raise e
+
+# Assign input uuid when no value is assigned to the library yet
+if "uuid" not in config_dict or config_dict["uuid"] is None:
+    config_dict["uuid"] = uuid
+
+    import tomli_w
+    max_len_backup = tomli_w._writer.MAX_LINE_LENGTH
+    try:
+        tomli_w._writer.MAX_LINE_LENGTH = 10
+        config_toml = tomli_w.dumps(config_dict)
+    finally:
+        # Restore max line length, for any other users of tomli_w.
+        tomli_w._writer.MAX_LINE_LENGTH = max_len_backup
+    try:
+        with (Path(library_path) / ".blender_asset_lib.toml").open(mode='wt') as f:
+            f.write(config_toml)
+    finally:
+        pass
+
+# Return stored uuid value so the caller can test if #bUserAssetLibrary::uuid and the library uuid matches.
+ret_uuid = config_dict["uuid"]
+)";
+    UUID uuid = !BLI_uuid_is_nil(custom_library.uuid) ? custom_library.uuid :
+                                                        BLI_uuid_generate_random();
+    std::unique_ptr locals = bke::idprop::create_group("locals");
+    IDP_AddToGroup(locals.get(), IDP_NewString(uuid.str(), "uuid"));
+    IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
+
+    std::optional<blender::IDProperty *> idprop_optptr =
+        BPY_run_string_exec_with_locals_return_idprop(nullptr, script, *locals, "ret_uuid");
+
+    MEM_delete(custom_library.invalid_uuid);
+    custom_library.invalid_uuid = nullptr;
+
+    if (!idprop_optptr) {
+      custom_library.invalid_uuid = BLI_strdup("<error-reading-uuid>");
+      return;
+    }
+    IDProperty *ret_idprop = *idprop_optptr;
+
+    /* Check the returned value. */
+    if (ret_idprop == nullptr || ret_idprop->type != IDP_STRING) {
+      custom_library.invalid_uuid = BLI_strdup("<error-reading-uuid>");
+      IDP_FreeProperty(ret_idprop);
+      return;
+    }
+
+    bUUID ret_uuid;
+    const char *ret_uuid_str = IDP_string_get(ret_idprop);
+    if (!BLI_uuid_parse_string(&ret_uuid, ret_uuid_str)) {
+      custom_library.invalid_uuid = BLI_strdup(ret_uuid_str);
+      IDP_FreeProperty(ret_idprop);
+      return;
+    }
+    IDP_FreeProperty(ret_idprop);
+
+    /* If the user library already has an uuid, make sure it matches to one assigned in the
+     * `.blender_asset_lib.toml` file. */
+    if (!BLI_uuid_is_nil(custom_library.uuid) && !BLI_uuid_equal(uuid, ret_uuid)) {
+      custom_library.invalid_uuid = BLI_strdup(IDP_string_get(ret_idprop));
+      return;
+    }
+    /* If the user library doesn't have an uuid, set either the new generated uuid or the already
+     * assigned value in the library file. */
+    if (BLI_uuid_is_nil(custom_library.uuid)) {
+      if (U.runtime.is_dirty == false) {
+        U.runtime.is_dirty = true;
+        WM_main_add_notifier(NC_WINDOW, nullptr);
+      }
+      custom_library.uuid = ret_uuid;
+    }
+    BLI_assert(BLI_uuid_equal(custom_library.uuid, ret_uuid));
+  }
+#endif
+}
+
 AssetLibrary *AssetLibraryService::get_asset_library(
     const Main *bmain, const AssetLibraryReference &library_reference)
 {
@@ -107,8 +222,8 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (!custom_library) {
         return nullptr;
       }
-
       if (custom_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
+        user_asset_library_uuid_ensure(*custom_library);
         if (is_online_essentials_url(custom_library->remote_url)) {
           return this->get_online_essentials_asset_library();
         }
@@ -119,7 +234,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
       if (root_path.empty()) {
         return nullptr;
       }
-
+      user_asset_library_uuid_ensure(*custom_library);
       AssetLibrary *library = this->get_asset_library_on_disk_custom_preferences(custom_library);
       library->may_override_import_method_ = true;
 

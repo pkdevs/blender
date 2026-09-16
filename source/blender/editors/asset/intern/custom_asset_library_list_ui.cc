@@ -6,6 +6,8 @@
  * \ingroup spuserpref
  */
 
+#include <fmt/format.h>
+
 #include "BKE_global.hh"
 
 #include "BLT_translation.hh"
@@ -52,6 +54,61 @@ bool AssetLibraryListItemCommon::rename(const bContext &C, StringRefNull new_nam
   RNA_property_string_set(&ptr, prop, new_name.c_str());
   RNA_property_update(&const_cast<bContext &>(C), &ptr, prop);
   return true;
+}
+
+static void asset_library_identifier_invalid_error_draw(ui::Layout &layout,
+                                                        const AnyAssetLibraryDefinition &library)
+{
+  if (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED) {
+    ui::Layout &row = layout.row(false);
+    row.red_alert_set(true);
+    row.label_multiline(
+        "Asset Library has an invalid identifier (invalid UUID). Either manually edit the "
+        "configuration file or regenerate it here.",
+        ICON_ERROR,
+        ui::UI_STYLE_TEXT_LEFT,
+        7);
+    ui::Layout &row2 = row.row(false);
+    row2.alignment_set(ui::LayoutAlign::Left);
+    row2.red_alert_set(false);
+    row2.button("Regenerate UUID", 0, [library](blender::bContext & /*C*/) {
+      MEM_delete(library.user_library->invalid_uuid);
+      library.user_library->invalid_uuid = nullptr;
+    });
+    return;
+  }
+  ui::Layout &row = layout.row(false);
+  row.red_alert_set(true);
+  if (BLI_uuid_is_nil(library.user_library->uuid)) {
+    row.label_multiline(
+        "Asset Library has an invalid identifier (invalid UUID). Manually edit the "
+        "configuration file.",
+        ICON_ERROR,
+        ui::UI_STYLE_TEXT_LEFT,
+        7);
+  }
+  else {
+    const std::string error_text = fmt::format(
+        "Asset Library identifier (`{}`) does not matches the identifier stored in the "
+        "library files  (`{}`). Either manually edit the library file or update the Asset "
+        "Library identifier.",
+        UUID(library.user_library->uuid).str(),
+        library.user_library->invalid_uuid);
+    row.label_markdown(error_text);
+    ui::Layout &row2 = row.row(false);
+    row2.alignment_set(ui::LayoutAlign::Left);
+    row2.red_alert_set(false);
+    ui::Button *button = row2.button(
+        "Update Asset Library UUID", 0, [library](blender::bContext & /*C*/) -> void {
+          BLI_uuid_parse_string(&library.user_library->uuid, library.user_library->invalid_uuid);
+          MEM_delete(library.user_library->invalid_uuid);
+          library.user_library->invalid_uuid = nullptr;
+        });
+    if (bUUID dummy_uuid; !BLI_uuid_parse_string(&dummy_uuid, library.user_library->invalid_uuid))
+    {
+      ui::button_disable(button, "Stored Library identifier (UUID) is invalid.");
+    }
+  }
 }
 
 void draw_active_library_settings(const bContext *C,
@@ -108,24 +165,13 @@ void draw_active_library_settings(const bContext *C,
                    std::nullopt);
         }
       }
+      if (library.user_library->invalid_uuid) {
+        asset_library_identifier_invalid_error_draw(layout, library);
+      }
     }
     else {
       if (library.user_library->invalid_uuid) {
-        ui::Layout &row = layout.row(false);
-        row.red_alert_set(true);
-        row.label_multiline(
-            "Asset Library has an invalid identifier (invalid UUID). Either manually edit the "
-            "configuration file or regenerate it here.",
-            ICON_ERROR,
-            ui::UI_STYLE_TEXT_LEFT,
-            7);
-        ui::Layout &row2 = row.row(false);
-        row2.alignment_set(ui::LayoutAlign::Left);
-        row2.red_alert_set(false);
-        row2.button("Regenerate UUID", 0, [library](blender::bContext & /*C*/) {
-          MEM_delete(library.user_library->invalid_uuid);
-          library.user_library->invalid_uuid = nullptr;
-        });
+        asset_library_identifier_invalid_error_draw(layout, library);
       }
 
       layout.prop(&library_ptr, "path", UI_ITEM_NONE, std::nullopt, ICON_NONE);
