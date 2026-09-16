@@ -113,6 +113,11 @@ void BKE_previewimg_id_copy(ID *new_id, const ID *old_id);
 PreviewImage *BKE_previewimg_id_ensure(ID *id);
 
 /**
+ * Load a preview image from an image file.
+ */
+PreviewImage* BKE_previewimg_id_load_file(ID *id, const char* filepath);
+
+/**
  * Handle deferred (lazy) loading/generation of preview image, if needed.
  * For now, only used with file thumbnails.
  */

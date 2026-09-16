@@ -2767,6 +2767,19 @@ static void rna_def_ID(BlenderRNA *brna)
       func, "preview_image", "ImagePreview", "", "The existing or created preview");
   RNA_def_function_return(func, parm);
 
+  func = RNA_def_function(srna, "preview_load_file", "BKE_previewimg_id_load_file");
+  RNA_def_function_ui_description(func, "Load preview data from an image file");
+  prop = RNA_def_string_file_path(func,
+                                  "filepath",
+                                  nullptr,
+                                  FILE_MAX,
+                                  "File Name",
+                                  "File name of the image to load for the preview image");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(
+      func, "preview_image", "ImagePreview", "", "This existing or created preview");
+  RNA_def_function_return(func, parm);
+
 #  ifdef WITH_PYTHON
   RNA_def_struct_register_funcs(srna, nullptr, nullptr, "rna_ID_instance");
 #  endif

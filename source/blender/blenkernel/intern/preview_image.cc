@@ -274,6 +274,19 @@ PreviewImage *BKE_previewimg_id_ensure(ID *id)
   return *prv_p;
 }
 
+PreviewImage* BKE_previewimg_id_load_file(ID *id, const char *filepath)
+{
+  BKE_previewimg_id_custom_set(id, filepath);
+  PreviewImage **prv_p = BKE_previewimg_id_get_p(id);
+  if (!prv_p) {
+    return nullptr;
+  }
+  if (*prv_p == nullptr) {
+    *prv_p = BKE_previewimg_create();
+  }
+  return *prv_p;
+}
+
 void BKE_previewimg_id_custom_set(ID *id, const char *filepath)
 {
   PreviewImage **prv = BKE_previewimg_id_get_p(id);
