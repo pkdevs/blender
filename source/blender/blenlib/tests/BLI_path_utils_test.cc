@@ -1796,9 +1796,6 @@ TEST(path_utils, RelativeTo)
   EXPECT_FALSE(BLI_path_relative_to("//inside", "/some/path", true, relative, sizeof(relative)))
       << "Blend file relative paths are not supported";
 
-  EXPECT_FALSE(BLI_path_relative_to("/some/path", "", true, relative, sizeof(relative)))
-      << "Empty base directory is not supported";
-
 #ifdef WIN32
   /* Case insensitive on Windows only. */
   EXPECT_TRUE(BLI_path_relative_to(

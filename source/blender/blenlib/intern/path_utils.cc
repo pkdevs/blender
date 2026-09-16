@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "BLI_assert.hh"
 #include "BLI_fileops.hh"
 #include "BLI_fnmatch.hh"
 #include "BLI_path_utils.hh"
@@ -1935,6 +1936,7 @@ bool BLI_path_relative_to(const char *path,
   }
 
   if (base_dir[0] == '\0') {
+    BLI_assert_msg(0, "BLI_path_relative_to should not be called with an empty base directory");
     return false;
   }
 
@@ -2044,7 +2046,9 @@ void BLI_path_slash_native(char *path)
 
 void BLI_path_slash_forward_from_native(char *path)
 {
-  BLI_string_replace_char(path, SEP, '/');
+  if (SEP != '/') {
+    BLI_string_replace_char(path, SEP, '/');
+  }
 }
 
 int BLI_path_cmp_normalized(const char *p1, const char *p2)
