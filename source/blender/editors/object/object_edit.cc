@@ -2389,10 +2389,12 @@ static void move_to_collection_menu_draw(Menu *menu, Collection *collection, int
   RNA_boolean_set(&op_ptr, "is_new", true);
 
   if (icon == ICON_SCENE_DATA) {
+    /* Scene collection. */
     layout.separator();
     op_ptr = layout.op(ot, BKE_collection_ui_name_get(collection), icon);
     RNA_int_set(&op_ptr, "collection_uid", collection->id.session_uid);
   }
+
   for (CollectionChild &child : collection->children) {
     collection = child.collection;
     const PointerRNA ptr = RNA_id_pointer_create(&collection->id);
@@ -2413,9 +2415,9 @@ static void move_to_collection_recursive_menu_draw(const bContext * /*C*/, Menu 
     return;
   }
 
-  bool is_move = ELEM(StringRefNull(menu->type->idname),
-                      "OBJECT_MT_move_to_collection",
-                      "OBJECT_MT_move_to_collection_recursive");
+  const bool is_move = ELEM(StringRefNull(menu->type->idname),
+                            "OBJECT_MT_move_to_collection",
+                            "OBJECT_MT_move_to_collection_recursive");
   wmOperatorType *ot = WM_operatortype_find(
       is_move ? "OBJECT_OT_move_to_collection" : "OBJECT_OT_link_to_collection", false);
 
