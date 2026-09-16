@@ -705,6 +705,10 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
 
   info.compilation_constant(
       gpu::shader::Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
+  if (pipeline_type == MAT_PIPE_SHADOW) {
+    info.compilation_constant(
+        gpu::shader::Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
+  }
   info.compilation_constant(
       gpu::shader::Type::bool_t, "use_clip_plane", pipeline_type == MAT_PIPE_PREPASS_PLANAR);
 
@@ -901,6 +905,15 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
       info.vertex_source("eevee_geom_curves.bsl.hh");
       info.vertex_function("eevee_geom_curves");
       break;
+    case MAT_GEOM_GSPLAT:
+      geometry_info_name = "eevee_geom_gsplat_infos_";
+      info.name_ += "_gsplat";
+      info.define("MAT_GEOM_GSPLAT");
+      /* Until every vertex shader are ported, we need to bridge the gap here by defining the
+       * pipeline. */
+      info.vertex_source("eevee_geom_gsplat.bsl.hh");
+      info.vertex_function("eevee_geom_gsplat");
+      break;
     case MAT_GEOM_MESH:
       geometry_info_name = "eevee_geom_mesh_infos_";
       info.name_ += "_mesh";
@@ -997,7 +1010,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   }
 
   bool use_transparency = false;
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT) || geometry_type == MAT_GEOM_GSPLAT) {
     if (pipeline_type != MAT_PIPE_SHADOW || transparent_shadows) {
       info.define("MAT_TRANSPARENT");
       use_transparency = true;
@@ -1203,6 +1216,11 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       }
       break;
     case MAT_GEOM_POINTCLOUD:
+      /* Fall through to the curves case. */
+      ATTR_FALLTHROUGH;
+    case MAT_GEOM_GSPLAT:
+      /* Fall through to the curves case. */
+      ATTR_FALLTHROUGH;
     case MAT_GEOM_CURVES:
       /** Hair attributes come from sampler buffer. Transfer attributes to sampler. */
       for (auto &input : vertex_inputs) {
@@ -1276,6 +1294,9 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                                                        "MeshVertex";
       domain_type_vert = "MeshVertex";
       break;
+    case MAT_GEOM_GSPLAT:
+      /* Fall through to pointclouds, reuse their attribute domain. */
+      ATTR_FALLTHROUGH;
     case MAT_GEOM_POINTCLOUD:
       domain_type_frag = (pipeline_type == MAT_PIPE_VOLUME_MATERIAL) ? "VolumePoint" :
                                                                        "PointCloudPoint";
