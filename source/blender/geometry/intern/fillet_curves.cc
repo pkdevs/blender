@@ -255,34 +255,36 @@ static void calculate_fillet_positions(const Span<float3> src_positions,
 }
 
 /**
- * Keep aligned handles when aligning to the outer vector preserves the circular arc. Comparing
- * reconstructed positions also detects non-collinear directions caused by nearly coincident
- * points, which a dot-product sign check alone would miss.
+ * Return the type for `handle`. Keep it aligned if recalculating it from `other_handle` preserves
+ * its position. Otherwise, use a free handle to preserve the circular arc constructed by the
+ * fillet.
  */
 static HandleType fillet_handle_type(const float3 &position,
-                                     const float3 &outer_handle,
-                                     const float3 &inner_handle)
+                                     const float3 &handle,
+                                     const float3 &other_handle)
 {
-  const float3 inner = inner_handle - position;
-  const float3 outer_direction = math::normalize(outer_handle - position);
-  if (math::is_zero(outer_direction) || math::is_zero(inner)) {
+  const float3 handle_offset = handle - position;
+  const float3 other_direction = math::normalize(other_handle - position);
+  if (math::is_zero(other_direction) || math::is_zero(handle_offset)) {
     return BEZIER_HANDLE_ALIGN;
   }
-  if (math::dot(inner, outer_direction) >= 0.0f) {
+  if (math::dot(handle_offset, other_direction) >= 0.0f) {
     return BEZIER_HANDLE_FREE;
   }
-  const float length = math::length(inner);
-  const float3 aligned_handle = position - outer_direction * length;
-  /* Allow rounding from subtracting positions, computing two lengths, normalizing, and
-   * reconstructing the handle. This is a floating-point error bound, not a scene-space epsilon.
-   * gamma(12) bounds the accumulated relative error of these arithmetic operations. */
+  const float length = math::length(handle_offset);
+  const float3 aligned_handle = position - other_direction * length;
+  /* Allow rounding when reconstructing the handle, including cancellation near zero after
+   * translation. Use a floating-point error bound rather than a scene-space epsilon.
+   * gamma(12) bounds the accumulated relative error of the reconstruction operations. */
   constexpr double unit_roundoff = FLT_EPSILON / 2.0;
   constexpr double relative_error = 12 * unit_roundoff / (1 - 12 * unit_roundoff);
+  /* All components must agree within the rounding bound to preserve the handle's 3D position.
+   * A mismatch on any axis means alignment would change the circular arc. */
   for (const int axis : IndexRange(3)) {
-    const double error = relative_error * length +
-                         unit_roundoff * (std::abs(double(position[axis])) +
-                                          std::abs(double(inner_handle[axis])));
-    if (std::abs(double(aligned_handle[axis]) - inner_handle[axis]) > error) {
+    const double rounding_bound = relative_error * length +
+                                  unit_roundoff * (std::abs(double(position[axis])) +
+                                                   std::abs(double(handle[axis])));
+    if (std::abs(double(aligned_handle[axis]) - handle[axis]) > rounding_bound) {
       return BEZIER_HANDLE_FREE;
     }
   }
@@ -350,9 +352,9 @@ static void calculate_bezier_handles_bezier_mode(const Span<float3> src_handles_
       dst_handles_r[i_dst_a] = arc_start - prev_dir * handle_length;
       dst_handles_l[i_dst_b] = arc_end - next_dir * handle_length;
       dst_types_r[i_dst_a] = fillet_handle_type(
-          arc_start, dst_handles_l[i_dst_a], dst_handles_r[i_dst_a]);
+          arc_start, dst_handles_r[i_dst_a], dst_handles_l[i_dst_a]);
       dst_types_l[i_dst_b] = fillet_handle_type(
-          arc_end, dst_handles_r[i_dst_b], dst_handles_l[i_dst_b]);
+          arc_end, dst_handles_l[i_dst_b], dst_handles_r[i_dst_b]);
     }
   });
 }
