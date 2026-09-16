@@ -18,7 +18,7 @@ def _get_window_region(area):
     for region in area.regions:
         if region.type == "WINDOW":
             return region
-    return None
+    assert False, "Info area should have a WINDOW region"
 
 
 def _setup_info_area():
@@ -108,6 +108,9 @@ def test_info_report_delete():
     yield from _select_reports(area, 'SELECT', t)
     yield from _delete_reports(area, t)
 
+    t.assertEqual(len(bpy.context.window_manager.reports), 0, "All reports should be deleted")
+
+    # Verify selecting and deleting reports when the reports list is empty.
     yield from _select_reports(area, 'SELECT', t)
     yield from _delete_reports(area, t)
 
