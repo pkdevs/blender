@@ -36,4 +36,32 @@ void BLI_time_sleep_ms(int ms);
  */
 void BLI_time_sleep_precise_us(int us);
 
+/**
+ * Local wall-clock date and time fields, accurate to the second.
+ *
+ * \note This is intentionally separate from #BLI_time_now_seconds(), which uses a monotonic clock
+ * and is only meaningful for measuring elapsed time, not for producing a calendar date.
+ */
+struct DateTime {
+  int year;   /* e.g. 2026 */
+  int month;  /* 1-12 */
+  int day;    /* 1-31 */
+  int hour;   /* 0-23 */
+  int minute; /* 0-59 */
+  int second; /* 0-59 */
+};
+
+/**
+ * The current wall-clock time as milliseconds since the Unix epoch (UTC).
+ *
+ * The value is timezone-independent, so it can be stored and passed around, then converted to
+ * local fields with #BLI_time_local_from_unix_ms() when needed.
+ */
+int64_t BLI_time_wall_clock_ms();
+
+/**
+ * Convert milliseconds since the Unix epoch (UTC) to local wall-clock fields.
+ */
+DateTime BLI_time_local_from_unix_ms(int64_t unix_ms);
+
 }  // namespace blender

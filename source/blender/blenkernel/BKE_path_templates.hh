@@ -72,6 +72,7 @@
 #include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utils.hh"
+#include "BLI_time.hh"
 
 #include "BKE_blender_project.hh"
 #include "BKE_report.hh"
@@ -97,12 +98,13 @@ namespace bke::path_templates {
  * transient for collecting data that is relevant/available in a given
  * templating context.
  *
- * There are currently four supported variable types:
+ * There are currently five supported variable types:
  *
  * - String
  * - Filepath
  * - Integer
  * - Float
+ * - DateTime
  *
  * Names must be unique across all variable types: you can't have a string *and*
  * integer both with the name "bob".
@@ -119,6 +121,7 @@ class VariableMap {
   Map<std::string, std::string> filepaths_;
   Map<std::string, int64_t> integers_;
   Map<std::string, double> floats_;
+  Map<std::string, DateTime> datetimes_;
 
  public:
   /**
@@ -179,6 +182,17 @@ class VariableMap {
   bool add_float(StringRef name, double value);
 
   /**
+   * Add a date/time variable with the given name and value.
+   *
+   * If there is already a variable with that name, regardless of type, the new
+   * variable is *not* added (no overwriting).
+   *
+   * \return True if the variable was successfully added, false if there was
+   * already a variable with that name.
+   */
+  bool add_datetime(StringRef name, const DateTime &value);
+
+  /**
    * Fetch the value of the string variable with the given name.
    *
    * \return The value if a string variable with that name exists,
@@ -209,6 +223,14 @@ class VariableMap {
    * #std::nullopt otherwise.
    */
   std::optional<double> get_float(StringRef name) const;
+
+  /**
+   * Fetch the value of the date/time variable with the given name.
+   *
+   * \return The value if a date/time variable with that name exists,
+   * #std::nullopt otherwise.
+   */
+  std::optional<DateTime> get_datetime(StringRef name) const;
 
   /* ------------------------------------------------------------------
    * Convenience methods, to aid in consistency across different uses. */
@@ -336,6 +358,31 @@ void BKE_add_template_variables_for_project(bke::path_templates::VariableMap &va
 void BKE_add_template_variables_general(bke::path_templates::VariableMap &variables,
                                         const ID *path_owner_id,
                                         const bke::BlenderProject *project);
+
+/**
+ * Add the date/time variable that should be available for all path templates.
+ *
+ * The value is supplied by the caller rather than sampled internally, so that a single timestamp
+ * can be captured once per render task and shared by every frame and every file output. This
+ * implements the "task start time" semantics of the `{datetime}` variable.
+ *
+ * \param datetime: the wall-clock time to expose, typically captured at the start of a render
+ * task with #BLI_time_wall_clock_ms() and converted with #BLI_time_local_from_unix_ms().
+ *
+ * \see #BKE_path_apply_template()
+ */
+void BKE_add_template_variables_datetime(bke::path_templates::VariableMap &variables,
+                                         const DateTime &datetime);
+
+/**
+ * Add the date/time variable using the timestamp captured at the start of the last render of the
+ * given scene, falling back to the current time if the scene has not been rendered yet.
+ *
+ * Reading rendered output back (for example View Animation) uses the stored timestamp, so it
+ * resolves to the same value that was used to write the files.
+ */
+void BKE_add_template_variables_datetime_from_scene(bke::path_templates::VariableMap &variables,
+                                                    const Scene &scene);
 
 /**
  * Add the variables that should be available for render output paths.

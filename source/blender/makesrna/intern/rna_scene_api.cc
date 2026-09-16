@@ -136,6 +136,9 @@ static void rna_SceneRender_get_frame_path(ID *id,
       BKE_add_template_variables_general(template_variables, &scene->id, project);
     });
     BKE_add_template_variables_for_render_path(template_variables, *scene);
+    /* Date/time variable, resolved from the scene's last render timestamp so that reading the
+     * output back (e.g. View Animation) matches what was written. */
+    BKE_add_template_variables_datetime_from_scene(template_variables, *scene);
 
     const char *relbase = BKE_main_blendfile_path(bmain);
 

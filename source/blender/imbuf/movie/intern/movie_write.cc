@@ -1622,6 +1622,7 @@ static bool ffmpeg_filepath_get(MovieWriter *context,
   bke::path_templates::VariableMap template_variables;
   BKE_add_template_variables_general(template_variables, &scene->id, project);
   BKE_add_template_variables_for_render_path(template_variables, *scene);
+  BKE_add_template_variables_datetime_from_scene(template_variables, *scene);
 
   const Vector<bke::path_templates::Error> errors = BKE_path_apply_template(
       filepath, FILE_MAX, template_variables);

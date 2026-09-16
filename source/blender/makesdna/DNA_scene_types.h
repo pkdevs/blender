@@ -2987,6 +2987,12 @@ struct Scene {
   struct SceneGpencil grease_pencil_settings;
   struct SceneHydra hydra;
 
+  /* Local wall-clock time of the start of the last render task, stored as
+   * [year, month, day, hour, minute, second]. Used by the `{datetime}` path template so that
+   * reading the rendered output back (for example View Animation) resolves to the same timestamp
+   * that was used to write the files. A year of 0 means "no render has been performed yet". */
+  int last_render_datetime[6] = {};
+
   bke::SceneRuntime *runtime = nullptr;
 #ifdef __cplusplus
   /* Return the frame rate of the scene. */

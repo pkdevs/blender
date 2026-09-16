@@ -216,6 +216,19 @@ TEST_F(PathTemplatesTest, VariableMap_add_path_up_to_file)
 
   /* Attempt to add already-added variable. */
   EXPECT_FALSE(map.add_filename_only("g", "", "fallback"));
+
+  /* Date/time variables. */
+  EXPECT_FALSE(map.contains("when"));
+  EXPECT_EQ(std::nullopt, map.get_datetime("when"));
+  EXPECT_TRUE(map.add_datetime("when", DateTime{2024, 1, 2, 3, 4, 5}));
+  EXPECT_TRUE(map.contains("when"));
+  ASSERT_TRUE(map.get_datetime("when").has_value());
+  EXPECT_EQ(2024, map.get_datetime("when")->year);
+  EXPECT_EQ(1, map.get_datetime("when")->month);
+  EXPECT_EQ(5, map.get_datetime("when")->second);
+  /* Adding a variable with an existing name should fail, regardless of type. */
+  EXPECT_FALSE(map.add_datetime("when", DateTime{2000, 1, 1, 0, 0, 0}));
+  EXPECT_FALSE(map.add_string("when", "sup"));
 }
 
 struct PathTemplateTestCase {
@@ -244,6 +257,7 @@ TEST_F(PathTemplatesTest, validate_and_apply_template)
     variables.add_float("f_negative", -3.14159265358979323846);
     variables.add_float("huge", 200000000000000000000000000000000.0);
     variables.add_float("tiny", 0.000000000000000000000000000000002);
+    variables.add_datetime("datetime", DateTime{2026, 9, 12, 22, 45, 30});
   }
 
   const Vector<PathTemplateTestCase> test_cases = {
@@ -382,6 +396,43 @@ TEST_F(PathTemplatesTest, validate_and_apply_template)
           "{hi_{{hi}}_{bye}",
           {
               {ErrorType::VARIABLE_SYNTAX, IndexRange(0, 4)},
+          },
+      },
+
+      /* Date/time variable: default format. */
+      {
+          "{datetime}",
+          "20260912_224530",
+          {},
+      },
+
+      /* Date/time variable: custom patterns and literal separators. */
+      {
+          "{datetime:yyyyMMdd}_{datetime:yyyy-MM-dd}_{datetime:HH:mm:ss}",
+          "20260912_2026-09-12_22:45:30",
+          {},
+      },
+
+      /* Date/time variable: two-digit year, 12-hour clock, and quoted literal text. */
+      {
+          "{datetime:yy}_{datetime:hh}_{datetime:'year='yyyy}",
+          "26_10_year=2026",
+          {},
+      },
+
+      /* Date/time variable: non-ASCII characters are treated as literals. */
+      {
+          "{datetime:yyyy年MM月dd日}",
+          "2026年09月12日",
+          {},
+      },
+
+      /* Error: unterminated quote in a date/time pattern. */
+      {
+          "{datetime:'yyyy}",
+          "{datetime:'yyyy}",
+          {
+              {ErrorType::FORMAT_SPECIFIER, IndexRange(0, 16)},
           },
       },
 

@@ -2020,6 +2020,20 @@ void RE_RenderFrame(Render *re,
 {
   CLOG_INFO(&LOG, "Rendering frame %d", frame);
 
+  /* Capture the wall-clock time once for this render task and store it on the scene. Path
+   * template date/time variables use this value so that every frame and file output of the task
+   * shares the same timestamp, and so that reading the output back (for example View Animation)
+   * resolves to the same value. */
+  {
+    const DateTime render_datetime = BLI_time_local_from_unix_ms(BLI_time_wall_clock_ms());
+    scene->last_render_datetime[0] = render_datetime.year;
+    scene->last_render_datetime[1] = render_datetime.month;
+    scene->last_render_datetime[2] = render_datetime.day;
+    scene->last_render_datetime[3] = render_datetime.hour;
+    scene->last_render_datetime[4] = render_datetime.minute;
+    scene->last_render_datetime[5] = render_datetime.second;
+  }
+
   render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_INIT);
 
   /* Ugly global still...
@@ -2058,6 +2072,7 @@ void RE_RenderFrame(Render *re,
           BKE_add_template_variables_general(template_variables, &scene->id, project);
         });
         BKE_add_template_variables_for_render_path(template_variables, *scene);
+        BKE_add_template_variables_datetime_from_scene(template_variables, *scene);
 
         const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
             filepath_override,
@@ -2312,6 +2327,7 @@ static bool do_write_image_or_movie(Render *re,
           BKE_add_template_variables_general(template_variables, &scene->id, project);
         });
         BKE_add_template_variables_for_render_path(template_variables, *scene);
+        BKE_add_template_variables_datetime_from_scene(template_variables, *scene);
 
         const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
             filepath,
@@ -2431,6 +2447,17 @@ void RE_RenderAnim(Render *re,
   }
   else {
     CLOG_INFO(&LOG, "Rendering animation (frames %d..%d)", sfra, efra);
+  }
+
+  /* Capture the wall-clock time once for this render task (see #RE_RenderFrame). */
+  {
+    const DateTime render_datetime = BLI_time_local_from_unix_ms(BLI_time_wall_clock_ms());
+    scene->last_render_datetime[0] = render_datetime.year;
+    scene->last_render_datetime[1] = render_datetime.month;
+    scene->last_render_datetime[2] = render_datetime.day;
+    scene->last_render_datetime[3] = render_datetime.hour;
+    scene->last_render_datetime[4] = render_datetime.minute;
+    scene->last_render_datetime[5] = render_datetime.second;
   }
 
   /* Call hooks before taking a copy of scene->r, so user can alter the render settings prior to
@@ -2557,6 +2584,7 @@ void RE_RenderAnim(Render *re,
         BKE_add_template_variables_general(template_variables, &scene->id, project);
       });
       BKE_add_template_variables_for_render_path(template_variables, *scene);
+      BKE_add_template_variables_datetime_from_scene(template_variables, *scene);
 
       const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
           filepath,

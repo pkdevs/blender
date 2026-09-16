@@ -9,6 +9,7 @@
 #include "BLI_time.hh"
 
 #include <chrono>
+#include <ctime>
 
 #ifdef WIN32
 
@@ -104,5 +105,34 @@ void BLI_time_sleep_precise_us(int us)
 }
 
 #endif
+
+int64_t BLI_time_wall_clock_ms()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+DateTime BLI_time_local_from_unix_ms(const int64_t unix_ms)
+{
+  const std::chrono::system_clock::time_point time_point{std::chrono::milliseconds(unix_ms)};
+  const std::time_t time = std::chrono::system_clock::to_time_t(time_point);
+
+  std::tm tm_buf{};
+#if defined(WIN32)
+  localtime_s(&tm_buf, &time);
+#else
+  localtime_r(&time, &tm_buf);
+#endif
+
+  DateTime dt;
+  dt.year = tm_buf.tm_year + 1900;
+  dt.month = tm_buf.tm_mon + 1;
+  dt.day = tm_buf.tm_mday;
+  dt.hour = tm_buf.tm_hour;
+  dt.minute = tm_buf.tm_min;
+  dt.second = tm_buf.tm_sec;
+  return dt;
+}
 
 }  // namespace blender

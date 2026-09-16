@@ -11,6 +11,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -182,6 +183,7 @@ static Vector<bke::path_templates::Error> compute_image_path(const StringRefNull
   });
   BKE_add_template_variables_for_render_path(template_variables, scene);
   BKE_add_template_variables_for_node(template_variables, node);
+  BKE_add_template_variables_datetime_from_scene(template_variables, scene);
 
   /* Substitute #### frame variables if not doing an animation render. For animation renders, this
    * is handled internally by the following function. */

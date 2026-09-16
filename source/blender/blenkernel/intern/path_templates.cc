@@ -8,6 +8,9 @@
 
 #include <fmt/format.h>
 
+#include <iterator>
+#include <string>
+
 #include "BLT_translation.hh"
 
 #include "BLI_math_base.hh"
@@ -46,6 +49,9 @@ bool VariableMap::contains(StringRef name) const
   if (this->floats_.contains(name)) {
     return true;
   }
+  if (this->datetimes_.contains(name)) {
+    return true;
+  }
   return false;
 }
 
@@ -61,6 +67,9 @@ bool VariableMap::remove(StringRef name)
     return true;
   }
   if (this->floats_.remove(name)) {
+    return true;
+  }
+  if (this->datetimes_.remove(name)) {
     return true;
   }
   return false;
@@ -102,6 +111,15 @@ bool VariableMap::add_float(StringRef name, const double value)
   return true;
 }
 
+bool VariableMap::add_datetime(StringRef name, const DateTime &value)
+{
+  if (this->contains(name)) {
+    return false;
+  }
+  this->datetimes_.add_new(name, value);
+  return true;
+}
+
 std::optional<StringRefNull> VariableMap::get_string(StringRef name) const
 {
   const std::string *value = this->strings_.lookup_ptr(name);
@@ -132,6 +150,15 @@ std::optional<int64_t> VariableMap::get_integer(StringRef name) const
 std::optional<double> VariableMap::get_float(StringRef name) const
 {
   const double *value = this->floats_.lookup_ptr(name);
+  if (value == nullptr) {
+    return std::nullopt;
+  }
+  return *value;
+}
+
+std::optional<DateTime> VariableMap::get_datetime(StringRef name) const
+{
+  const DateTime *value = this->datetimes_.lookup_ptr(name);
   if (value == nullptr) {
     return std::nullopt;
   }
@@ -263,6 +290,9 @@ std::optional<VariableMap> BKE_build_template_variables_for_prop(const bContext 
       }
 
       BKE_add_template_variables_for_render_path(variables, *scene);
+      /* Date/time variables. For UI preview this resolves to the scene's last render timestamp,
+       * which is also what reading the output back uses. */
+      BKE_add_template_variables_datetime_from_scene(variables, *scene);
       break;
     }
 
@@ -352,6 +382,33 @@ void BKE_add_template_variables_general(bke::path_templates::VariableMap &variab
      * path is equivalent to the current working directory. This is consistent
      * with how `//` works. */
     variables.add_path_up_to_file("blend_dir_lib", lib_blend_file_path, StringRef("./"));
+  }
+}
+
+void BKE_add_template_variables_datetime(VariableMap &variables, const DateTime &datetime)
+{
+  variables.add_datetime("datetime", datetime);
+}
+
+void BKE_add_template_variables_datetime_from_scene(VariableMap &variables, const Scene &scene)
+{
+  /* Use the timestamp captured at the start of the last render of this scene, so that reading the
+   * output back resolves to the same value that was used to write the files. Fall back to the
+   * current time if the scene has not been rendered yet. */
+  const int *stored = scene.last_render_datetime;
+  if (stored[0] != 0) {
+    DateTime datetime;
+    datetime.year = stored[0];
+    datetime.month = stored[1];
+    datetime.day = stored[2];
+    datetime.hour = stored[3];
+    datetime.minute = stored[4];
+    datetime.second = stored[5];
+    BKE_add_template_variables_datetime(variables, datetime);
+  }
+  else {
+    BKE_add_template_variables_datetime(variables,
+                                        BLI_time_local_from_unix_ms(BLI_time_wall_clock_ms()));
   }
 }
 
@@ -457,11 +514,16 @@ struct Token {
    * Only relevant when `type == VARIABLE_EXPRESSION`. */
   StringRef variable_name;
 
-  /* Indicates how the variable's value should be formatted into a string. This
-   * is derived from the format specification (e.g. the "###" in "{blah:###}").
+  /* The raw format specification text, e.g. the "###" in "{blah:###}". The
+   * specification is intentionally *not* parsed here, because its grammar
+   * depends on the variable's type, which is only known during evaluation.
    *
-   * Only relevant when `type == VARIABLE_EXPRESSION`. */
-  FormatSpecifier format;
+   * Only relevant when `type == VARIABLE_EXPRESSION` and `has_format` is true. */
+  StringRef format_text;
+
+  /* Whether a ":" and format specification were present. Distinguishes "{a}"
+   * from "{a:}". */
+  bool has_format = false;
 };
 
 }  // namespace
@@ -690,6 +752,196 @@ static FormatSpecifier parse_format_specifier(StringRef format_specifier)
   return format;
 }
 
+/* --------------------------------------------------------------------
+ * Date/time format patterns.
+ *
+ * The `{datetime}` variable takes an ICU/CLDR-style pattern such as
+ * "yyyy_MM_dd_HHmmss". Only a small subset of field symbols is supported. Any
+ * other character (including unrecognized letters) is copied verbatim, and a
+ * run of literal text that contains field symbols can be quoted with single
+ * quotes, where a doubled quote represents a literal quote.
+ */
+
+/** Default pattern used by `{datetime}` when no explicit pattern is given. */
+static const char *const DEFAULT_DATETIME_PATTERN = "yyyyMMdd_HHmmss";
+
+enum class DateTimeField {
+  YEAR_4,
+  YEAR_2,
+  MONTH,
+  DAY,
+  HOUR_24,
+  HOUR_12,
+  MINUTE,
+  SECOND,
+};
+
+struct DateTimePatternSegment {
+  bool is_literal;
+  DateTimeField field; /* Valid when `!is_literal`. */
+  std::string literal; /* Valid when `is_literal`. */
+};
+
+/**
+ * Try to match a date/time field symbol at the start of `pattern`.
+ *
+ * \return The matched field and its byte length, or #std::nullopt if the start
+ * of `pattern` does not begin with a field symbol.
+ */
+static std::optional<std::pair<DateTimeField, int>> match_datetime_field(StringRef pattern)
+{
+  /* Longer symbols must be tested first. */
+  if (pattern.startswith("yyyy")) {
+    return std::pair(DateTimeField::YEAR_4, 4);
+  }
+  if (pattern.size() >= 2) {
+    const StringRef symbol = pattern.substr(0, 2);
+    if (symbol == "yy") {
+      return std::pair(DateTimeField::YEAR_2, 2);
+    }
+    if (symbol == "MM") {
+      return std::pair(DateTimeField::MONTH, 2);
+    }
+    if (symbol == "dd") {
+      return std::pair(DateTimeField::DAY, 2);
+    }
+    if (symbol == "HH") {
+      return std::pair(DateTimeField::HOUR_24, 2);
+    }
+    if (symbol == "hh") {
+      return std::pair(DateTimeField::HOUR_12, 2);
+    }
+    if (symbol == "mm") {
+      return std::pair(DateTimeField::MINUTE, 2);
+    }
+    if (symbol == "ss") {
+      return std::pair(DateTimeField::SECOND, 2);
+    }
+  }
+  return std::nullopt;
+}
+
+/**
+ * Parse a date/time format pattern into a sequence of literal and field segments.
+ *
+ * \return The segments, or #std::nullopt if the pattern has a syntax error
+ * (currently only an unterminated quoted section).
+ */
+static std::optional<Vector<DateTimePatternSegment>> parse_datetime_pattern(StringRef pattern)
+{
+  Vector<DateTimePatternSegment> segments;
+  std::string literal_buffer;
+
+  auto flush_literal = [&]() {
+    if (!literal_buffer.empty()) {
+      DateTimePatternSegment segment;
+      segment.is_literal = true;
+      segment.literal = std::move(literal_buffer);
+      literal_buffer.clear();
+      segments.append(std::move(segment));
+    }
+  };
+
+  for (int i = 0; i < pattern.size();) {
+    /* Quoted literal section. */
+    if (pattern[i] == '\'') {
+      i++;
+      bool closed = false;
+      while (i < pattern.size()) {
+        if (pattern[i] == '\'') {
+          if ((i + 1) < pattern.size() && pattern[i + 1] == '\'') {
+            /* A doubled quote is a literal quote. */
+            literal_buffer += '\'';
+            i += 2;
+            continue;
+          }
+          i++;
+          closed = true;
+          break;
+        }
+        literal_buffer += pattern[i];
+        i++;
+      }
+      if (!closed) {
+        return std::nullopt;
+      }
+      continue;
+    }
+
+    /* Field symbol. */
+    if (std::optional<std::pair<DateTimeField, int>> match = match_datetime_field(
+            pattern.substr(i)))
+    {
+      flush_literal();
+      DateTimePatternSegment segment;
+      segment.is_literal = false;
+      segment.field = match->first;
+      segments.append(std::move(segment));
+      i += match->second;
+      continue;
+    }
+
+    /* Anything else is a literal (separator). */
+    literal_buffer += pattern[i];
+    i++;
+  }
+
+  flush_literal();
+  return segments;
+}
+
+/**
+ * Format `dt` according to `pattern`, writing the result to `r_out`.
+ *
+ * \return False if the pattern is invalid, in which case `r_out` is unspecified.
+ */
+static bool format_datetime(StringRef pattern, const DateTime &dt, char r_out[FORMAT_BUFFER_SIZE])
+{
+  const std::optional<Vector<DateTimePatternSegment>> segments = parse_datetime_pattern(pattern);
+  if (!segments.has_value()) {
+    return false;
+  }
+
+  std::string result;
+  for (const DateTimePatternSegment &segment : *segments) {
+    if (segment.is_literal) {
+      result += segment.literal;
+      continue;
+    }
+    switch (segment.field) {
+      case DateTimeField::YEAR_4:
+        fmt::format_to(std::back_inserter(result), "{:04}", dt.year);
+        break;
+      case DateTimeField::YEAR_2:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.year % 100);
+        break;
+      case DateTimeField::MONTH:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.month);
+        break;
+      case DateTimeField::DAY:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.day);
+        break;
+      case DateTimeField::HOUR_24:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.hour);
+        break;
+      case DateTimeField::HOUR_12: {
+        const int hour_12 = (dt.hour % 12 == 0) ? 12 : (dt.hour % 12);
+        fmt::format_to(std::back_inserter(result), "{:02}", hour_12);
+        break;
+      }
+      case DateTimeField::MINUTE:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.minute);
+        break;
+      case DateTimeField::SECOND:
+        fmt::format_to(std::back_inserter(result), "{:02}", dt.second);
+        break;
+    }
+  }
+
+  BLI_strncpy(r_out, result.c_str(), FORMAT_BUFFER_SIZE);
+  return true;
+}
+
 /**
  * Find and parse the next valid token in `path` starting from index
  * `from_char`.
@@ -799,14 +1051,12 @@ static std::optional<Token> next_token(StringRef path, const int from_char)
     token.variable_name = path.substr(start + 1, (end - 1) - (start + 1));
   }
   else {
-    /* Found format specifier. */
+    /* Found a format specifier. Its grammar depends on the variable type, which
+     * is only known during evaluation, so store the raw text to parse later. */
     token.variable_name = path.substr(start + 1, format_specifier_split - (start + 1));
-    token.format = parse_format_specifier(
-        path.substr(format_specifier_split + 1, (end - 1) - (format_specifier_split + 1)));
-    if (token.format.type == FormatSpecifierType::SYNTAX_ERROR) {
-      token.type = TokenType::VARIABLE_SYNTAX_ERROR;
-      return token;
-    }
+    token.format_text = path.substr(format_specifier_split + 1,
+                                    (end - 1) - (format_specifier_split + 1));
+    token.has_format = true;
   }
 
   return token;
@@ -870,9 +1120,6 @@ static std::optional<Error> token_to_syntax_error(const Token &token)
 {
   switch (token.type) {
     case TokenType::VARIABLE_SYNTAX_ERROR: {
-      if (token.format.type == FormatSpecifierType::SYNTAX_ERROR) {
-        return {{ErrorType::FORMAT_SPECIFIER, token.byte_range}};
-      }
       return {{ErrorType::VARIABLE_SYNTAX, token.byte_range}};
     }
 
@@ -985,7 +1232,7 @@ static Vector<Error> eval_template(std::string *r_out_path,
         if (std::optional<StringRefNull> string_value = template_variables.get_string(
                 token.variable_name))
         {
-          if (token.format.type != FormatSpecifierType::NONE) {
+          if (token.has_format) {
             /* String variables don't take format specifiers: error. */
             errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
             continue;
@@ -998,7 +1245,7 @@ static Vector<Error> eval_template(std::string *r_out_path,
         if (std::optional<StringRefNull> path_value = template_variables.get_filepath(
                 token.variable_name))
         {
-          if (token.format.type != FormatSpecifierType::NONE) {
+          if (token.has_format) {
             /* Path variables don't take format specifiers: error. */
             errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
             continue;
@@ -1011,14 +1258,41 @@ static Vector<Error> eval_template(std::string *r_out_path,
                 token.variable_name))
         {
           /* Integer variable found. */
-          format_int_to_string(token.format, *integer_value, replacement_string);
+          const FormatSpecifier format = token.has_format ?
+                                             parse_format_specifier(token.format_text) :
+                                             FormatSpecifier{};
+          if (format.type == FormatSpecifierType::SYNTAX_ERROR) {
+            errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
+            continue;
+          }
+          format_int_to_string(format, *integer_value, replacement_string);
           break;
         }
 
         if (std::optional<double> float_value = template_variables.get_float(token.variable_name))
         {
           /* Float variable found. */
-          format_float_to_string(token.format, *float_value, replacement_string);
+          const FormatSpecifier format = token.has_format ?
+                                             parse_format_specifier(token.format_text) :
+                                             FormatSpecifier{};
+          if (format.type == FormatSpecifierType::SYNTAX_ERROR) {
+            errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
+            continue;
+          }
+          format_float_to_string(format, *float_value, replacement_string);
+          break;
+        }
+
+        if (std::optional<DateTime> datetime_value = template_variables.get_datetime(
+                token.variable_name))
+        {
+          /* Date/time variable found. */
+          const StringRef pattern = token.has_format ? token.format_text :
+                                                       StringRef(DEFAULT_DATETIME_PATTERN);
+          if (!format_datetime(pattern, *datetime_value, replacement_string)) {
+            errors.append({ErrorType::FORMAT_SPECIFIER, token.byte_range});
+            continue;
+          }
           break;
         }
 
