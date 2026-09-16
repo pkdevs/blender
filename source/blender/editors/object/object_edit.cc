@@ -2372,7 +2372,10 @@ static wmOperatorStatus move_to_collection_invoke(bContext *C,
   return move_to_collection_exec(C, op);
 }
 
-static void move_to_collection_menu_draw(Menu *menu, Collection *collection, int icon, const bool is_scene_collection = false)
+static void move_to_collection_menu_draw(Menu *menu,
+                                         Collection *collection,
+                                         int icon,
+                                         const bool is_scene_collection = false)
 {
   ui::Layout &layout = *menu->layout;
   bool is_move = ELEM(StringRefNull(menu->type->idname),
