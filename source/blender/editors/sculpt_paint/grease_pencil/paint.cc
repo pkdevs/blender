@@ -69,22 +69,11 @@ static float brush_radius_to_pixel_radius(const RegionView3D *rv3d,
 }
 
 template<typename T>
-static inline void linear_interpolation(const T &a,
-                                        const T &b,
-                                        MutableSpan<T> dst,
-                                        const bool include_first_point)
+static inline void linear_interpolation(const T &a, const T &b, MutableSpan<T> dst)
 {
-  if (include_first_point) {
-    const float step = math::safe_rcp(float(dst.size() - 1));
-    for (const int i : dst.index_range()) {
-      dst[i] = bke::attribute_math::mix2(float(i) * step, a, b);
-    }
-  }
-  else {
-    const float step = 1.0f / float(dst.size());
-    for (const int i : dst.index_range()) {
-      dst[i] = bke::attribute_math::mix2(float(i + 1) * step, a, b);
-    }
+  const float step = 1.0f / float(dst.size());
+  for (const int i : dst.index_range()) {
+    dst[i] = bke::attribute_math::mix2(float(i + 1) * step, a, b);
   }
 }
 
@@ -318,6 +307,7 @@ struct PaintOperationExecutor {
                             const bContext &C,
                             const InputSample &start_sample,
                             const int material_index,
+                            const bool use_stroke,
                             const bool use_fill)
   {
     const float2 start_coords = start_sample.mouse_position;
@@ -387,6 +377,9 @@ struct PaintOperationExecutor {
     const IndexRange curve_points = curves.points_by_curve()[active_curve];
     const int last_active_point = curve_points.last();
 
+    /* Don't smooth the first point. */
+    self.active_smooth_start_index_ = 1;
+
     Set<std::string> point_attributes_to_skip;
     Set<std::string> curve_attributes_to_skip;
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
@@ -412,7 +405,7 @@ struct PaintOperationExecutor {
         "material_index", bke::AttrDomain::Curve);
     bke::SpanAttributeWriter<bool> cyclic = attributes.convert_or_add_for_write_span<bool>(
         "cyclic", bke::AttrDomain::Curve);
-    cyclic.span[active_curve] = use_fill;
+    cyclic.span[active_curve] = use_fill && !use_stroke;
     materials.span[active_curve] = material_index;
     curve_attributes_to_skip.add_multiple({"material_index", "cyclic"});
     cyclic.finish();
@@ -434,7 +427,7 @@ struct PaintOperationExecutor {
     curve_attributes_to_skip.add("aspect_ratio");
     aspect_ratio.finish();
 
-    if ((settings_->flag2 & GP_BRUSH_USE_STROKE) == 0) {
+    if (!use_stroke) {
       bke::SpanAttributeWriter<bool> hide_stroke = attributes.convert_or_add_for_write_span<bool>(
           "hide_stroke", bke::AttrDomain::Curve);
       hide_stroke.span[active_curve] = true;
@@ -480,16 +473,21 @@ struct PaintOperationExecutor {
       end_caps.finish();
     }
 
-    if (use_fill &&
-        (start_opacity < 1.0f || attributes.contains("fill_opacity") || hide_fill_while_drawing))
+    if (attributes.contains("fill_opacity") ||
+        (use_fill && (start_opacity < 1.0f || hide_fill_while_drawing)))
     {
       bke::SpanAttributeWriter<float> fill_opacities =
           attributes.convert_or_add_for_write_span<float>(
               "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f));
-      /* Use 10% opacity when using the option to hide the fill while drawing
-       * (#GP_BRUSH_DISSABLE_LASSO). */
-      self.start_opacity_ = start_opacity;
-      fill_opacities.span[active_curve] = !hide_fill_while_drawing ? start_opacity : 0.1f;
+      if (use_fill) {
+        /* Use 10% opacity when using the option to hide the fill while drawing
+         * (#GP_BRUSH_DISSABLE_LASSO). */
+        self.start_opacity_ = start_opacity;
+        fill_opacities.span[active_curve] = !hide_fill_while_drawing ? start_opacity : 0.1f;
+      }
+      else {
+        fill_opacities.span[active_curve] = 1.0f;
+      }
       curve_attributes_to_skip.add("fill_opacity");
       fill_opacities.finish();
     }
@@ -811,9 +809,9 @@ struct PaintOperationExecutor {
     MutableSpan<float> new_opacities = self.drawing_->opacities_for_write().slice(new_points);
 
     /* Interpolate the screen space positions. */
-    linear_interpolation<float2>(prev_coords, coords, new_screen_space_coords, is_first_sample);
-    linear_interpolation<float>(prev_radius, radius, new_radii, is_first_sample);
-    linear_interpolation<float>(prev_opacity, opacity, new_opacities, is_first_sample);
+    linear_interpolation<float2>(prev_coords, coords, new_screen_space_coords);
+    linear_interpolation<float>(prev_radius, radius, new_radii);
+    linear_interpolation<float>(prev_opacity, opacity, new_opacities);
     point_attributes_to_skip.add_multiple({"position", "radius", "opacity"});
 
     /* Randomize radii. */
@@ -857,8 +855,7 @@ struct PaintOperationExecutor {
     if (use_vertex_color_ || attributes.contains("vertex_color")) {
       MutableSpan<ColorGeometry4f> new_vertex_colors =
           self.drawing_->vertex_colors_for_write().slice(new_points);
-      linear_interpolation<ColorGeometry4f>(
-          prev_vertex_color, vertex_color_, new_vertex_colors, is_first_sample);
+      linear_interpolation<ColorGeometry4f>(prev_vertex_color, vertex_color_, new_vertex_colors);
       if (use_settings_random_ || attributes.contains("vertex_color")) {
         for (const int i : IndexRange(new_points_num)) {
           new_vertex_colors[i] = ed::greasepencil::randomize_color(*settings_,
@@ -878,10 +875,8 @@ struct PaintOperationExecutor {
     const double new_delta_time = BLI_time_now_seconds() - self.start_time_;
     bke::SpanAttributeWriter<float> delta_times = attributes.convert_or_add_for_write_span<float>(
         "delta_time", bke::AttrDomain::Point);
-    linear_interpolation<float>(float(self.delta_time_),
-                                float(new_delta_time),
-                                delta_times.span.slice(new_points),
-                                is_first_sample);
+    linear_interpolation<float>(
+        float(self.delta_time_), float(new_delta_time), delta_times.span.slice(new_points));
     point_attributes_to_skip.add("delta_time");
     delta_times.finish();
 
@@ -1209,9 +1204,11 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
     stroke_random_val_factor_ = rng_.get_float() * 2.0f - 1.0f;
   }
 
+  /* At this point it should be fine to create a new material + slot. */
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(&C), object_, brush);
   const int material_index = BKE_object_material_index_get(object_, material);
+  const bool use_stroke = (settings->flag2 & GP_BRUSH_USE_STROKE) != 0;
   const bool use_fill = (settings->flag2 & GP_BRUSH_USE_FILL) != 0;
 
   frame_number_ = scene_->r.cfra;
@@ -1228,7 +1225,7 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
   delta_time_ = 0.0f;
 
   PaintOperationExecutor executor{*scene_};
-  executor.process_start_sample(*this, C, start_sample, material_index, use_fill);
+  executor.process_start_sample(*this, C, start_sample, material_index, use_stroke, use_fill);
 
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, grease_pencil);
@@ -1461,16 +1458,18 @@ static int trim_end_points(bke::greasepencil::Drawing &drawing,
   }
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  const int last_active_point = curves.points_by_curve()[0].last();
 
   /* Shift the data before resizing to not delete the data at the end. */
+  const int current_points_num = curves.points_by_curve()[0].size();
+  const int new_points_num = current_points_num - num_points_to_remove;
+
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     if (iter.domain != bke::AttrDomain::Point) {
       return;
     }
 
     bke::GSpanAttributeWriter dst = attributes.lookup_for_write_span(iter.name);
-    bke::attribute_math::shift_left(dst.span, last_active_point, curves.points_num(), 0);
+    bke::attribute_math::shift_left(dst.span, current_points_num, dst.span.size(), new_points_num);
     dst.finish();
   });
 

@@ -5,8 +5,8 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"           /* IWYU pragma: export */
+#include "gpu_shader_math_vector_compare.bsl.hh" /* IWYU pragma: export */
 
 #include "GPU_shader_shared.hh"
 
@@ -179,4 +179,5 @@ struct ShaderTestOutput {
   [[storage(0, write)]] TestOutput (&out_test)[];
 };
 
-#define TEST(a, b) if (true)
+/* Must be followed by semicolon to not confuse the BSL parser. */
+#define TEST(a, b)

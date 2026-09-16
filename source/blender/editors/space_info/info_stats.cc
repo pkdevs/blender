@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
@@ -230,18 +232,18 @@ static void stats_object(Object *ob,
 static void stats_object_edit(Object *obedit, SceneStats *stats)
 {
   if (obedit->type == OB_MESH) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
 
-    stats->totvert += em->bm->totvert;
-    stats->totvertsel += em->bm->totvertsel;
+    stats->totvert += bm->totvert;
+    stats->totvertsel += bm->totvertsel;
 
-    stats->totedge += em->bm->totedge;
-    stats->totedgesel += em->bm->totedgesel;
+    stats->totedge += bm->totedge;
+    stats->totedgesel += bm->totedgesel;
 
-    stats->totface += em->bm->totface;
-    stats->totfacesel += em->bm->totfacesel;
+    stats->totface += bm->totface;
+    stats->totfacesel += bm->totfacesel;
 
-    stats->tottri += em->looptris.size();
+    stats->tottri += poly_to_tri_count(bm->totface, bm->totloop);
   }
   else if (obedit->type == OB_ARMATURE) {
     /* Armature Edit */
@@ -543,7 +545,7 @@ void ED_info_stats_clear(wmWindowManager *wm, ViewLayer *view_layer)
     const bScreen *screen = WM_window_get_active_screen(&win);
     for (ScrArea &area : screen->areabase) {
       if (area.spacetype == SPACE_VIEW3D) {
-        View3D *v3d = static_cast<View3D *>(area.spacedata.first);
+        View3D *v3d = area.spacedata.first_as<View3D>();
         if (v3d->localvd) {
           ED_view3d_local_stats_free(v3d);
         }
@@ -564,7 +566,7 @@ static bool format_stats(
   SceneStats **stats_p = (v3d_local) ? &v3d_local->runtime.local_stats : &view_layer->stats;
   if (*stats_p == nullptr) {
     /* Don't access dependency graph if interface is marked as locked. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+    wmWindowManager *wm = bmain->wm.first();
     if (wm->runtime->is_interface_locked) {
       return false;
     }

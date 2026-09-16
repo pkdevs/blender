@@ -7,9 +7,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-VERTEX_SHADER_CREATE_INFO(eevee_nodetree)
-VERTEX_SHADER_CREATE_INFO(eevee_clip_plane)
-
 #include "draw_model.bsl.hh"
 #include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
@@ -47,8 +44,7 @@ struct GeomPointCloud {
     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
     [[vertex_id]] const int vert_id,
     [[position]] float4 &out_position,
-    /* Note: Removed manually if not needed. Otherwise, can generate geometry shader fallback. */
-    [[viewport_index]] int &out_viewport)
+    [[viewport_index, condition(is_shadow_pipe &&use_multi_viewport)]] int &out_viewport)
 {
   draw::ID id = res_id.get(inst_index);
   uint view_id = 0;
@@ -73,7 +69,9 @@ struct GeomPointCloud {
     auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
-    out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    if (pipe.use_multi_viewport) [[static_branch]] {
+      out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    }
   }
 
   init_interface(id.raw_id);
