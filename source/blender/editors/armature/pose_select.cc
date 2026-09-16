@@ -965,7 +965,7 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
 
 void POSE_OT_select_constrained_by_selection(wmOperatorType *ot)
 {
-  /* identifiers */
+  /* Identifiers. */
   ot->name = "Select Constraint Owners";
   ot->idname = "POSE_OT_select_constrained_by_selection";
   ot->description = "Select bones that use the currently selected bones as constraint targets";
@@ -974,7 +974,7 @@ void POSE_OT_select_constrained_by_selection(wmOperatorType *ot)
   ot->exec = pose_select_constrained_by_selection_exec;
   ot->poll = ED_operator_posemode;
 
-  /* flags */
+  /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
