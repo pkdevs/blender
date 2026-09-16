@@ -2422,7 +2422,6 @@ static void move_to_collection_recursive_menu_draw(const bContext * /*C*/, Menu 
   if (!collection) {
     return;
   }
-
   move_to_collection_menu_draw(menu, collection, ui::icon_color_from_collection(collection));
 }
 
