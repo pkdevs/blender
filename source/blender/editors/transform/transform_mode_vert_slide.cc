@@ -572,9 +572,10 @@ static void applyVertSlide(TransInfo *t)
   ED_area_status_text(t->area, str);
 }
 
-static void vert_slide_status(TransInfo *t, const wmKeyMap *keymap)
+static void vert_slide_status(TransInfo *t)
 {
   VertSlideParams *slp = static_cast<VertSlideParams *>(t->custom.mode.data);
+  const wmKeyMap *keymap = t->keymap;
   if (!keymap) {
     return;
   }

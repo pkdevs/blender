@@ -152,9 +152,10 @@ static void applyShrinkFatten(TransInfo *t)
   ED_area_status_text(t->area, fmt::to_string(str).c_str());
 }
 
-static void shrink_fatten_status(TransInfo *t, const wmKeyMap *keymap)
+static void shrink_fatten_status(TransInfo *t)
 {
   ShrinkFattenCustomData *custom_data = static_cast<ShrinkFattenCustomData *>(t->custom.mode.data);
+  const wmKeyMap *keymap = t->keymap;
   if (keymap) {
     WorkspaceStatus status(t->context);
 

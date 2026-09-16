@@ -297,9 +297,10 @@ static void apply_shear(TransInfo *t)
   ED_area_status_text(t->area, str);
 }
 
-static void shear_status(TransInfo *t, const wmKeyMap *keymap)
+static void shear_status(TransInfo *t)
 {
   ShearCustomData *custom_data = static_cast<ShearCustomData *>(t->custom.mode.data);
+  const wmKeyMap *keymap = t->keymap;
   if (keymap && custom_data->update_status_bar) {
     custom_data->update_status_bar = false;
 

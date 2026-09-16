@@ -56,7 +56,7 @@ struct TransModeInfo {
   void (*draw_fn)(TransInfo *);
 
   /** Optional callback to override the status bar. Requires `t->context` to be set. */
-  void (*status_fn)(TransInfo *, const wmKeyMap *);
+  void (*status_fn)(TransInfo *);
 };
 
 /* Header of #TransDataEdgeSlideVert, #TransDataEdgeSlideEdge. */

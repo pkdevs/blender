@@ -116,8 +116,9 @@ static void applySeqSlide(TransInfo *t)
   ED_area_status_text(t->area, str);
 }
 
-static void seq_slide_status(TransInfo *t, const wmKeyMap *keymap)
+static void seq_slide_status(TransInfo *t)
 {
+  const wmKeyMap *keymap = t->keymap;
   if (!keymap || t->data_container_len == 0) {
     return;
   }

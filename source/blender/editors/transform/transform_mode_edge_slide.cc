@@ -816,9 +816,10 @@ static void applyEdgeSlide(TransInfo *t)
   ED_area_status_text(t->area, str);
 }
 
-static void edge_slide_status(TransInfo *t, const wmKeyMap *keymap)
+static void edge_slide_status(TransInfo *t)
 {
   EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
+  const wmKeyMap *keymap = t->keymap;
   if (!keymap) {
     return;
   }
