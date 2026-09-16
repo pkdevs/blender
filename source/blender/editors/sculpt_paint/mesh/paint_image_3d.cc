@@ -1055,7 +1055,8 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
             filter_distances_with_radius(cache.radius, tri_distances, tri_factors);
             apply_hardness_to_distances(cache, tri_distances);
             calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
-            calc_brush_texture_factors(PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
+            calc_brush_texture_factors(
+                PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
             scale_factors(tri_factors, cache.bstrength);
 
             /* Track which subset of the run has non-zero factors. */
@@ -1238,7 +1239,8 @@ static void do_paint_blur_pixels(const Depsgraph &depsgraph,
             filter_distances_with_radius(cache.radius, tri_distances, tri_factors);
             apply_hardness_to_distances(cache, tri_distances);
             calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
-            calc_brush_texture_factors(PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
+            calc_brush_texture_factors(
+                PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
             scale_factors(tri_factors, cache.bstrength);
 
             /* Track which subset of the run has non-zero factors. */
@@ -1478,6 +1480,8 @@ KDTree<float3> *build_kd_tree(Object &ob,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   PixelData &pixel_data = *pbvh.pixels_;
   Span<PixelNode> pixel_nodes = pixel_data.nodes;
+  uint32_t skipped_pixels = 0;
+  uint32_t total_pixels = 0;
   for (const PixelNode &pixel_node : pixel_nodes) {
     for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
       if (tile_data.tile_number != tile_number) {
@@ -1501,10 +1505,17 @@ KDTree<float3> *build_kd_tree(Object &ob,
 
         for (int k = run_begin; k < run_end; k++) {
           const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
+          const int uv_prim = tri_row.uv_primitive_index;
           const int tri_row_size = int(tri_row.num_pixels);
+          /* TODO: Maybe there's a better way to filter this? */
+          if (!pixel_node.uv_primitives.original_tris[uv_prim]) {
+            tri_row_offset += tri_row_size;
+            skipped_pixels += tri_row_size;
+            total_pixels += tri_row_size;
+            continue;
+          }
 
           const int tri_row_x = run_x + tri_row_offset;
-          const int uv_prim = tri_row.uv_primitive_index;
           const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
           const float3 P_delta = pixel_to_position[0];
           const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
@@ -1528,10 +1539,12 @@ KDTree<float3> *build_kd_tree(Object &ob,
           }
 
           tri_row_offset += tri_row_size;
+          total_pixels += tri_row_size;
         }
       }
     }
   }
+  printf("%d / %d\n", skipped_pixels, total_pixels);
   BKE_image_release_ibuf(data.image, tile_buffer, nullptr);
   kdtree_balance(tree);
   return tree;
