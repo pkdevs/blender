@@ -698,11 +698,11 @@ static bool check_and_join_segments(Segment &first, const Segment &second)
   return false;
 }
 
-static void cut_caps(bke::CurvesGeometry &dst,
-                     const Span<Segment> segments,
-                     const Span<bool> segment_reversed,
-                     const Span<bool> cyclic,
-                     const OffsetIndices<int> segment_offsets)
+void cut_caps(bke::CurvesGeometry &dst,
+              const Span<Segment> segments,
+              const Span<bool> segment_reversed,
+              const Span<bool> cyclic,
+              const OffsetIndices<int> segment_offsets)
 {
   bke::MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
 
@@ -746,27 +746,21 @@ static void cut_caps(bke::CurvesGeometry &dst,
   dst_end_caps.finish();
 }
 
-using EncodedConnection = int;
-static constexpr EncodedConnection SEGMENT_CONNECTION_NULL = 0;
-
 /* We store the side as sign, but because a segment with index zero is valid, we shift by one. */
-static EncodedConnection encode_index_and_side(const int index, const Side side)
+EncodedConnection encode_index_and_side(const int index, const Side side)
 {
   return side == Side::Start ? index + 1 : -(index + 1);
 }
 
-static int decode_index(const EncodedConnection encoded)
+int decode_index(const EncodedConnection encoded)
 {
   return math::abs(encoded) - 1;
 }
 
-static Side decode_side(const EncodedConnection encoded)
+Side decode_side(const EncodedConnection encoded)
 {
   return encoded < 0 ? Side::End : Side::Start;
 }
-
-/* Both the start and end of every segment is connected to two other segments or null. */
-using SegmentConnections = VecBase<EncodedConnection, 2>;
 
 static void create_connections_from_curves(const OffsetIndices<int> segments_by_curve,
                                            const Span<bool> segments_to_keep,
@@ -990,11 +984,9 @@ static void follow_segment_connections(const Span<Segment> all_segments,
   }
 }
 
-/* Compute bounding boxes of curves in screen space. The bounding boxes are used to speed
- * up the search for intersecting curves. */
-static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
-                                   const Span<float2> screen_space_positions,
-                                   MutableSpan<Bounds<float2>> screen_space_bbox)
+void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                            const Span<float2> screen_space_positions,
+                            MutableSpan<Bounds<float2>> screen_space_bbox)
 {
   threading::parallel_for(
       src_points_by_curve.index_range(), 512, [&](const IndexRange src_curves) {
@@ -1010,10 +1002,10 @@ static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
       });
 }
 
-static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
-                                   const GroupedSpan<int> shapes,
-                                   const Span<float2> screen_space_positions,
-                                   MutableSpan<Bounds<float2>> screen_space_bbox)
+void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                            const GroupedSpan<int> shapes,
+                            const Span<float2> screen_space_positions,
+                            MutableSpan<Bounds<float2>> screen_space_bbox)
 {
   threading::parallel_for(shapes.index_range(), 512, [&](const IndexRange shape_ids) {
     for (const int shape_id : shape_ids) {

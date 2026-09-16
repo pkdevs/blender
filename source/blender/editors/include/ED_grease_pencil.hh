@@ -999,6 +999,33 @@ class Segment {
                                     const std::optional<int> inter_index_end);
 };
 
+using EncodedConnection = int;
+constexpr EncodedConnection SEGMENT_CONNECTION_NULL = 0;
+
+/* We store the side as sign, but because a segment with index zero is valid, we shift by one. */
+EncodedConnection encode_index_and_side(const int index, const Side side);
+int decode_index(const EncodedConnection encoded);
+Side decode_side(const EncodedConnection encoded);
+
+/* Both the start and end of every segment is connected to two other segments or null. */
+using SegmentConnections = VecBase<EncodedConnection, 2>;
+
+/* Compute bounding boxes of curves in screen space. The bounding boxes are used to speed
+ * up the search for intersecting curves. */
+void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                            const Span<float2> screen_space_positions,
+                            MutableSpan<Bounds<float2>> screen_space_bbox);
+void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                            const GroupedSpan<int> shapes,
+                            const Span<float2> screen_space_positions,
+                            MutableSpan<Bounds<float2>> screen_space_bbox);
+
+void cut_caps(bke::CurvesGeometry &dst,
+              const Span<Segment> segments,
+              const Span<bool> segment_reversed,
+              const Span<bool> cyclic,
+              const OffsetIndices<int> segment_offsets);
+
 namespace trim {
 
 /**
