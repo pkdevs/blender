@@ -4,15 +4,13 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/blender_version.cmake")
 
-# Preprocess variables so that they match what the configuration expects.
+function(get_cuda_toolkit_folder_version cuda_version out_variable)
+  string(REGEX MATCH "^[0-9]+\\.[0-9]+" folder_version "${cuda_version}")
+  set(${out_variable} "${folder_version}" PARENT_SCOPE)
+endfunction()
 
-string(REGEX MATCH "^[0-9]+\\.[0-9]+" CUDA12_FOLDER_VERSION "${CUDA12_VERSION}")
-string(REGEX MATCH "^[0-9]+\\.[0-9]+" CUDA13_FOLDER_VERSION "${CUDA13_VERSION}")
-
-# Utility functions used by the platform-specific buildbot configuration.
-
-function(buildbot_assert_path_exists path message)
+function(buildbot_assert_path_exists path subject)
   if(NOT EXISTS "${path}")
-    message(FATAL_ERROR "${message}")
+    message(FATAL_ERROR "${subject} does not exist: ${path}")
   endif()
 endfunction()

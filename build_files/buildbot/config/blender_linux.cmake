@@ -26,15 +26,16 @@ set(WITH_SYSTEM_PYTHON_TESTS ON CACHE BOOL "" FORCE)
 set(TEST_SYSTEM_PYTHON_EXE "/usr/bin/python3.6" CACHE PATH "" FORCE)
 
 # Paths to CUDA tookits with explicit versioning (CUDA<version>_) variables.
-function(buildbot_set_cuda_toolkit_major_version_paths_checked version)
-  set(CUDA${version}_TOOLKIT_ROOT_DIR
-      "${BUILDBOT_CUDA_TOOLKITS_ROOT_DIR}/cuda-${CUDA${version}_FOLDER_VERSION}"
+function(buildbot_set_cuda_toolkit_major_version_paths_checked major_version)
+  get_cuda_toolkit_folder_version("${CUDA${major_version}_VERSION}" folder_version)
+  set(CUDA${major_version}_TOOLKIT_ROOT_DIR
+      "${BUILDBOT_CUDA_TOOLKITS_ROOT_DIR}/cuda-${folder_version}"
       CACHE PATH "" FORCE)
-  set(CUDA${version}_NVCC_EXECUTABLE
-      "${CUDA${version}_TOOLKIT_ROOT_DIR}/bin/nvcc" CACHE PATH "" FORCE)
+  set(CUDA${major_version}_NVCC_EXECUTABLE
+      "${CUDA${major_version}_TOOLKIT_ROOT_DIR}/bin/nvcc" CACHE PATH "" FORCE)
   buildbot_assert_path_exists(
-      "${CUDA${version}_NVCC_EXECUTABLE}"
-      "CUDA-${version} NVCC executable does not exist: ${CUDA${version}_NVCC_EXECUTABLE}")
+      "${CUDA${major_version}_NVCC_EXECUTABLE}"
+      "CUDA-${major_version} NVCC executable")
 endfunction()
 buildbot_set_cuda_toolkit_major_version_paths_checked(12)
 buildbot_set_cuda_toolkit_major_version_paths_checked(13)
@@ -45,11 +46,11 @@ set(CUDA_NVCC_EXECUTABLE  "${CUDA${DEFAULT_CUDA_MAJOR_VERSION}_NVCC_EXECUTABLE}"
 
 # DLSS configuration.
 set(DLSS_SDK_ROOT "${BUILDBOT_DLSS_TOOLKITS_ROOT_DIR}/dlss-sdk-${DLSS_VERSION}" CACHE PATH "" FORCE)
-buildbot_assert_path_exists("${DLSS_SDK_ROOT}" "DLSS root directory does not exist: ${DLSS_SDK_ROOT}")
+buildbot_assert_path_exists("${DLSS_SDK_ROOT}" "DLSS root directory")
 
 # HIP configuration.
 set(HIP_ROOT_DIR "${BUILDBOT_HIP_TOOLKITS_ROOT_DIR}/rocm-${HIP_VERSION}" CACHE PATH "" FORCE)
-buildbot_assert_path_exists("${HIP_ROOT_DIR}" "HIP root directory does not exist: ${HIP_ROOT_DIR}")
+buildbot_assert_path_exists("${HIP_ROOT_DIR}" "HIP root directory")
 
 # OptiX configuration.
 if(EXISTS "/opt/nvidia/optix-sdk-${OPTIX_VERSION}")
@@ -63,4 +64,4 @@ else()
     CACHE PATH "" FORCE
   )
 endif()
-buildbot_assert_path_exists("${OPTIX_ROOT_DIR}" "OptiX root directory does not exist: ${OPTIX_ROOT_DIR}")
+buildbot_assert_path_exists("${OPTIX_ROOT_DIR}" "OptiX root directory")
