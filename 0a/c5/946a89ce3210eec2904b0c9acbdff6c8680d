@@ -1,2 +1,3 @@
 Referenced by issue #163757, Texture Paint: Mysterious undo bug
 Referenced by pull request #163827, WIP: Fix #163757: Image Undo restores old tiles in specific situations
+Referenced by pull request #163986, WIP: Fix #163757: Image Undo can sometimes restore incorrect tiles
