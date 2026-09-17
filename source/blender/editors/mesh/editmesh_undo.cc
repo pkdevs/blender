@@ -1165,7 +1165,7 @@ struct MeshUndoStep {
   MeshUndoStep_SceneData scene_data;
   MeshUndoStep_Elem *elems;
   uint elems_len;
-  blender::ed::EditModeSceneState scene_state;
+  ed::EditModeSceneState scene_state;
 };
 
 static bool mesh_undosys_poll(bContext *C)
@@ -1188,6 +1188,7 @@ static bool mesh_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
   us->elems = MEM_new_array_zeroed<MeshUndoStep_Elem>(objects.size(), __func__);
   us->elems_len = objects.size();
 
+  new (&us->scene_state) ed::EditModeSceneState();
   ED_scene_state_store(us->scene_state, *scene);
   UndoMesh **um_references = nullptr;
 
@@ -1314,6 +1315,7 @@ static void mesh_undosys_step_free(UndoStep *us_p)
     undomesh_free_data(&elem->data);
   }
   MEM_delete(us->elems);
+  us->scene_state.~EditModeSceneState();
 }
 
 static void mesh_undosys_foreach_ID_ref(UndoStep *us_p,

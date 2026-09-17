@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2025 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,13 +10,12 @@
 
 #include "BLI_vector.hh"
 #include "DNA_scene_types.h"
-#include "DNA_screen_types.h"
 
 namespace blender::ed {
 
 struct EditModeSceneState {
   /* Custom transform orientations. */
-  blender::Vector<TransformOrientation *> transform_spaces;
+  Vector<TransformOrientation> transform_spaces;
   /* Active orientation slots. */
   TransformOrientationSlot orientation_slots[4];
 
@@ -24,13 +23,6 @@ struct EditModeSceneState {
   char proportional_edit;
   char prop_mode;
   float proportional_size;
-
-  ~EditModeSceneState()
-  {
-    for (TransformOrientation *to : transform_spaces) {
-      MEM_freeN(to);
-    }
-  }
 };
 
 /* Store and restore scene state for undo. */
