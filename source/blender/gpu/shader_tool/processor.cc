@@ -1223,6 +1223,10 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 
         metadata_.functions.emplace_back(fn);
       });
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
+  }
 }
 
 void SourceProcessor::parse_library_functions_ast(Parser &parser)
@@ -1230,15 +1234,15 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
   using namespace metadata;
   for (FuncDecl func : parser.root().children_of_type<FuncDecl>()) {
     if (!func.attributes().contains_attr("node")) {
-      return;
+      continue;
     }
     if (func.return_type().str() != "void") {
       report_error(func.return_type(), "Expected void return type for node function");
-      return;
+      continue;
     }
     if (func.arguments().is_empty()) {
       report_error(func.identifier(), "Expected at least one argument for node function");
-      return;
+      continue;
     }
 
     FunctionFormat fn;
@@ -1253,32 +1257,37 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
       Type type = Type(hash(string(arg.type().identifier().str())));
       Qualifier qualifier;
       if (arg.is_reference() && !arg.is_const()) {
-        qualifier = Qualifier(hash("inout"));
+        qualifier = Qualifier::out;
       }
       else {
-        qualifier = Qualifier(hash("in"));
+        qualifier = Qualifier::in;
+      }
+
+      if (type == Type::KernelGlobals || type == Type::ShadingData) {
+        /* They are technically inout, but we declare them at the end of the input list. */
+        qualifier = Qualifier::in;
       }
 
       [&](Type type) {
         switch (type) {
-          case metadata::Type::float1:
-          case metadata::Type::float2:
-          case metadata::Type::float3:
-          case metadata::Type::float4:
-          case metadata::Type::float3x3:
-          case metadata::Type::float4x4:
-          case metadata::Type::int1:
-          case metadata::Type::int2:
-          case metadata::Type::int3:
-          case metadata::Type::int4:
-          case metadata::Type::bool1:
-          case metadata::Type::sampler1DArray:
-          case metadata::Type::sampler2DArray:
-          case metadata::Type::sampler2D:
-          case metadata::Type::sampler3D:
-          case metadata::Type::Closure:
-          case metadata::Type::KernelGlobals:
-          case metadata::Type::ShadingData:
+          case Type::float1:
+          case Type::float2:
+          case Type::float3:
+          case Type::float4:
+          case Type::float3x3:
+          case Type::float4x4:
+          case Type::int1:
+          case Type::int2:
+          case Type::int3:
+          case Type::int4:
+          case Type::bool1:
+          case Type::sampler1DArray:
+          case Type::sampler2DArray:
+          case Type::sampler2D:
+          case Type::sampler3D:
+          case Type::Closure:
+          case Type::KernelGlobals:
+          case Type::ShadingData:
             return;
         }
         report_error(arg.type().identifier(),
@@ -1289,6 +1298,10 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
       fn.arguments.emplace_back(qualifier, type);
     }
     metadata_.functions.emplace_back(fn);
+  }
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
   }
 }
 
