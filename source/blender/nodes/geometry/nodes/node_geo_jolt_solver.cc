@@ -346,15 +346,15 @@ class JoltSolverStep {
     JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
     JPH::JobSystemSingleThreaded job_system;
     state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
-#endif
 
     // this->write_back__pin_positions();
     // this->write_back__rod_stretch_shear();
 
-    // this->finish_common_attribute_writers();
+    this->finish_common_attribute_writers();
     // this->write_back_geometries_to_world();
 
     // this->write_back__contacts();
+#endif
   }
 
  private:
@@ -405,6 +405,18 @@ class JoltSolverStep {
       //     data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
       // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
+    }
+  }
+
+  void finish_common_attribute_writers()
+  {
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      GeometryData &geo_data = *geometries_.data[data_key_i];
+
+      geo_data.position_attr.finish();
+      geo_data.velocity_attr.finish();
+      geo_data.rotation_attr.finish();
+      geo_data.angular_velocity_attr.finish();
     }
   }
 };
