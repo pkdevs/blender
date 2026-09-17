@@ -174,6 +174,8 @@ static void export_pointcloud_gsplat_attributes(
       }
     });
   }
+
+  pointcloud->create_missing_gsplat_attributes();
 }
 
 static void export_pointcloud_motion_gsplat_attributes(

@@ -87,6 +87,8 @@ class PointCloud : public Geometry {
   /* Recalculate point radius to bound Gaussian splats. */
   void update_gsplat_radii();
 
+  void create_missing_gsplat_attributes();
+
   NODE_SOCKET_API(RenderAs, render_as)
 
  private:
