@@ -154,9 +154,6 @@ if(WITH_CYCLES_CUDA_BINARIES)
   # 64 bit only
   set(CUDA_BITS 64)
 
-  # CUDA version
-  cuda_get_version("${CUDA_NVCC_EXECUTABLE}" CUDA_VERSION)
-
   # warn for other versions
   if((CUDA_VERSION VERSION_EQUAL 10.1) OR
      (CUDA_VERSION VERSION_EQUAL 10.2) OR
