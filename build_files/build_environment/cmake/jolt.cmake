@@ -9,8 +9,7 @@ set(JOLT_EXTRA_ARGS
   -DCROSS_PLATFORM_DETERMINISTIC=ON
   -DDEBUG_RENDERER_IN_DEBUG_AND_RELEASE=OFF
   -DPROFILER_IN_DEBUG_AND_RELEASE=OFF
-  # TODO: Confirm DOUBLE_PRECISION ON/OFF value with Nodes & Physics Module developers, set to the default for now.
-  -DDOUBLE_PRECISION=OFF
+  -DDOUBLE_PRECISION=ON
 
   # Compute backends.
   -DJPH_USE_DX12=OFF
@@ -44,6 +43,11 @@ ExternalProject_Add(external_jolt
   PREFIX ${BUILD_DIR}/jolt
   CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   SOURCE_SUBDIR Build
+
+  PATCH_COMMAND
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/jolt/src/external_jolt <
+      ${PATCH_DIR}/jolt_ndebug.diff
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/jolt
