@@ -26,16 +26,13 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
                               ShadingData &sd,
                               Closure /*cl*/)
 {
-  /* Workaround for gl_FragCoord. */
-  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
-
   [[resource_table]] const draw::View &views = kg.view;
   [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
   [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
   auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
-  const float2 frag_co = gl_FragCoord.xy;
+  const float2 frag_co = sd.frag_co.xy;
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
@@ -52,7 +49,7 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
     [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
 
     float3 V = -views.get(0).world_incident_vector(sd.P);
-    eevee::LightProbeSample samp = lightprobes.load(frag_co.xy, sd.P, sd.N, V);
+    eevee::LightProbeSample samp = lightprobes.load(frag_co, sd.P, sd.N, V);
     float3 radiance_behind = lp_spheres.spherical_sample_normalized_with_parallax(
         samp, sd.P, V, 0.0);
 

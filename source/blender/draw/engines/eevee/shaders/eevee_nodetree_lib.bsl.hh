@@ -522,8 +522,6 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
   }
 
   {
-    FRAGMENT_SHADER_CREATE_INFO(draw_view);
-
     [[resource_table]] const draw::View &views = kg.view;
     [[resource_table]] const eevee::Sampling &samp = kg.sampling;
     const auto &raycast_depth_tx = sampler_get(eevee_raycast, raycast_depth_tx);
@@ -542,7 +540,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
     }
 
     float noise_offset = samp.rng_1D_get(SAMPLING_RAYTRACE_W);
-    float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+    float jitter = interleaved_gradient_noise(sd.frag_co.xy, 1.0f, noise_offset);
 
     float2 hit_uv = float2(0.0f);
     uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
@@ -1039,7 +1037,7 @@ void light_iter_init([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   const ViewMatrices view = kg.view_matrices_get(sd);
   const float3 forward = view.forward();
   const float linear_view_z = dot(forward, sd.P) - dot(forward, view.position());
-  iter.init(gl_FragCoord.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
+  iter.init(sd.frag_co.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
 #endif
 }
 
@@ -1215,7 +1213,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
                                     (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO),
                                     false,
                                     false,
-                                    gl_FragCoord.xy,
+                                    sd.frag_co.xy,
                                     sd.thickness,
                                     position,
                                     sd.Ng,

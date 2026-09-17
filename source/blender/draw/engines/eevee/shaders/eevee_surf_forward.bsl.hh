@@ -25,9 +25,6 @@ float4 closure_to_rgba_forward([[resource_table]] KernelGlobals &kg,
                                ShadingData &sd,
                                Closure /*cl_unused*/)
 {
-  /* Workaround for gl_FragCoord. */
-  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
-
   [[resource_table]] const draw::View &views = kg.view;
   [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
   [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
@@ -35,7 +32,7 @@ float4 closure_to_rgba_forward([[resource_table]] KernelGlobals &kg,
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
-  const float2 frag_co = gl_FragCoord.xy;
+  const float2 frag_co = sd.frag_co.xy;
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
@@ -129,7 +126,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
 
   ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
-  float noise = util_tx.fetch(gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
+  float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
   fragment_displacement(kg, sd);
@@ -140,7 +137,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      kg, sd, view, resource_id, sd.thickness, gl_FragCoord.xy, radiance, transmittance);
+      kg, sd, view, resource_id, sd.thickness, frag_co.xy, radiance, transmittance);
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
     radiance += sd.light_accum.diffuse_light;
@@ -149,7 +146,7 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
   }
 
   /* Volumetric resolve and compositing. */
-  float2 uvs = gl_FragCoord.xy * uni.uniform_buf.volumes.main_view_extent_inv;
+  float2 uvs = frag_co.xy * uni.uniform_buf.volumes.main_view_extent_inv;
   VolumeResolveSample vol = volumes.resolve(float3(uvs, reverse_z::read(frag_co.z)));
   /* Removes the part of the volume scattering that has
    * already been added to the destination pixels by the opaque resolve.
