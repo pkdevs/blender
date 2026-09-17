@@ -3,3 +3,4 @@ Referenced by pull request #161298, Outliner: Enable rename button on new create
 Referenced by commit 75a37d9227d7025e926d8472e437a49f4a6826db, Fix: Outliner scroll to new collection fails when active object exists
 Referenced by commit d817626525bf22b0a7415d99422eeb53ce36c5b0, Outliner: Enable rename button on new created collection
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by pull request #164069, Fix #164054: Selecting objects in the 3D Viewport does not deselect Collections
