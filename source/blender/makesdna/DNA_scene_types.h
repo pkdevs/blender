@@ -1082,6 +1082,7 @@ struct TimeMarker {
   struct Object *camera = nullptr;
   /* System properties. */
   struct IDProperty *system_properties = nullptr;
+  /* User-defined custom properties. */
   struct IDProperty *properties = nullptr;
 };
 
