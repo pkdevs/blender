@@ -299,8 +299,10 @@ enum {
    * Other Notes
    * -----------
    *
-   * - On macOS double clicking on the blend-file is handled by the running Blender itself,
-   *   see #GHOST_kEventOpenMainFile, other systems start a new instance.
+   * - On macOS, files opened from the file-manager don't pass the path via the command line,
+   *   they always go through #GHOST_kEventOpenMainFile (even on startup),
+   *   which uses the default trust as there is no file selector to opt in/out.
+   *   Other systems pass the path on the command line.
    * - Reverting a file keeps the trust of the current session.
    * - Scripts calling `wm.open_mainfile` without "use_scripts"
    *   use the trust of the file already open.
