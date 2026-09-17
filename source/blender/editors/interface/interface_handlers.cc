@@ -13447,7 +13447,7 @@ static Button *block_find_rna_text_button(Block &block,
                                           const char *rna_prop_id)
 {
   for (Button &but : block.buttons()) {
-    if (but.type == ButtonType::Text) {
+    if (ELEM(but.type, ButtonType::Text, ButtonType::TextBox)) {
       if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
         if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
           return &but;

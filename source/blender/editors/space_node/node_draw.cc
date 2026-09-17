@@ -1703,6 +1703,21 @@ static void node_toggle_button_cb(bContext *C, void *node_argv, void *op_argv)
   WM_operator_name_call(C, opname, wm::OpCallContext::InvokeDefault, nullptr, nullptr);
 }
 
+static void node_comment_edit_button_cb(bContext *C, void *node_argv, void * /*arg*/)
+{
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &node_tree = *snode.edittree;
+  bNode &node = *node_tree.node_by_id(POINTER_AS_INT(node_argv));
+
+  node_select_single(*C, node);
+
+  PointerRNA props_ptr = WM_operator_properties_create("NODE_OT_comment_edit");
+  RNA_boolean_set(&props_ptr, "use_active", true);
+  WM_operator_name_call(
+      C, "NODE_OT_comment_edit", wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
+  WM_operator_properties_free(&props_ptr);
+}
+
 static void node_draw_shadow(const SpaceNode &snode,
                              const bNode &node,
                              const float radius,
@@ -3659,19 +3674,40 @@ static void comment_node_prepare_for_draw(SpaceNode &snode,
 
   if (node.is_selected() || !is_render) {
     block_emboss_set(&block, ui::EmbossType::None);
-    uiDefIconButR(&block,
-                  ui::ButtonType::IconToggle,
-                  is_render ? ICON_GREASEPENCIL : ICON_HIDE_OFF,
-                  node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE,
-                  node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE,
-                  NODE_HEADER_ICON_SIZE,
-                  NODE_HEADER_ICON_SIZE,
-                  &node_ptr,
-                  "render",
-                  -1,
-                  0,
-                  0,
-                  std::nullopt);
+    const int but_x = node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE;
+    const int but_y = node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE;
+    if (is_render) {
+      ui::Button *but = uiDefIconBut(&block,
+                                     ui::ButtonType::But,
+                                     ICON_GREASEPENCIL,
+                                     but_x,
+                                     but_y,
+                                     NODE_HEADER_ICON_SIZE,
+                                     NODE_HEADER_ICON_SIZE,
+                                     nullptr,
+                                     0,
+                                     0,
+                                     "");
+      /* The operator already adds an undo step, so no need for the button to also add one. */
+      button_flag_disable(but, ui::BUT_UNDO);
+      button_func_set(
+          but, node_comment_edit_button_cb, POINTER_FROM_INT(node.identifier), nullptr);
+    }
+    else {
+      uiDefIconButR(&block,
+                    ui::ButtonType::IconToggle,
+                    ICON_HIDE_OFF,
+                    but_x,
+                    but_y,
+                    NODE_HEADER_ICON_SIZE,
+                    NODE_HEADER_ICON_SIZE,
+                    &node_ptr,
+                    "render",
+                    -1,
+                    0,
+                    0,
+                    std::nullopt);
+    }
     block_emboss_set(&block, ui::EmbossType::Emboss);
   }
 }
