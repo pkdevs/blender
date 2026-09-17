@@ -2103,7 +2103,8 @@ static void v3d_editvertex_buts(
         }
       };
       if (dims_mat) {
-        /* The coordinate cursor runs across drawings, keep the order stable. */
+        /* `coords_orig` stores one coordinate per point in visit order, so `drawings`
+         * must be visited serially and in the same order on every update. */
         for (const MutableDrawingInfo &info : drawings) {
           apply_drawing(info);
         }
