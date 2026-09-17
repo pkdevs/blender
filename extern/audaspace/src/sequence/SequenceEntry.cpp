@@ -102,6 +102,8 @@ void SequenceEntry::move(double begin, double end, double skip)
 
 void SequenceEntry::sourceTimeRange(double begin, double end, double& minimum, double& maximum)
 {
+	std::lock_guard<std::recursive_mutex> pitch_lock(m_pitch.m_mutex);
+
 	const double fps = m_sequence_data->getFPS();
 	const double first = std::max(0.0, std::max(0.0, (begin - m_begin) * fps) + m_skip * fps);
 	const double last = std::max(0.0, std::max(0.0, (end - m_begin) * fps) + m_skip * fps);

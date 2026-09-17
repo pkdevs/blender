@@ -48,6 +48,8 @@ enum AnimateablePropertyType
 class AUD_API AnimateableProperty : private Buffer
 {
 private:
+	friend class SequenceEntry;
+
 	struct Unknown {
 		int start;
 		int end;
