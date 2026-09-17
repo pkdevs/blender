@@ -1736,7 +1736,7 @@ bool grease_pencil_draw_operator_begin(bContext *C,
       (!ID_IS_EDITABLE(&object->id) || ID_IS_OVERRIDE_LIBRARY(&object->id)))
   {
     BKE_report(op->reports, RPT_ERROR, "Cannot create new material on linked object");
-    return OPERATOR_CANCELLED;
+    return false;
   }
 
   /* Ensure a drawing at the current keyframe. */
