@@ -569,6 +569,12 @@ enum eUserpref_SeqEditorFlags : int {
 };
 ENUM_OPERATORS(eUserpref_SeqEditorFlags)
 
+enum eUserpref_OutlinerFlags : char {
+  USER_OUTLINER_SCROLL_TO_ACTIVE = (1 << 0),
+  USER_OUTLINER_EXPAND_ON_FOCUS = (1 << 1),
+};
+ENUM_OPERATORS(eUserpref_OutlinerFlags)
+
 enum eUserpref_ShaderCompileMethod : short {
   USER_SHADER_COMPILE_THREAD = 0,
   USER_SHADER_COMPILE_SUBPROCESS = 1,
@@ -1292,7 +1298,10 @@ struct UserDef {
   eUserpref_RenderDisplayType render_display_type = USER_RENDER_DISPLAY_WINDOW;
   eUserpref_TempSpaceDisplayType filebrowser_display_type = USER_TEMP_SPACE_DISPLAY_WINDOW;
   eUserpref_TempSpaceDisplayType preferences_display_type = USER_TEMP_SPACE_DISPLAY_WINDOW;
-  char _pad18[3] = {};
+
+  eUserpref_OutlinerFlags outliner_flag = USER_OUTLINER_SCROLL_TO_ACTIVE;
+
+  char _pad18[2] = {};
 
   /** Default duration in *seconds* for strips with no inherent duration (color, text, etc). */
   float sequencer_default_strip_length = 1.0f;

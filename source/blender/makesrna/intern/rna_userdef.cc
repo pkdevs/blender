@@ -5978,6 +5978,21 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Sculpt/Paint Overlay Color", "Color of texture overlay");
 
+  /* Outliner */
+  prop = RNA_def_property(srna, "outliner_scroll_to_active", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "outliner_flag", USER_OUTLINER_SCROLL_TO_ACTIVE);
+  RNA_def_property_ui_text(prop,
+                           "Scroll to Active",
+                           "For newly created outliners, scroll the active item into view when it "
+                           "changes outside of the outliner");
+
+  prop = RNA_def_property(srna, "outliner_expand_on_focus", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "outliner_flag", USER_OUTLINER_EXPAND_ON_FOCUS);
+  RNA_def_property_ui_text(
+      prop,
+      "Expand on Focus",
+      "For newly created outliners, uncollapse the active item when scrolling it into view");
+
   /* VSE */
   prop = RNA_def_property(srna, "connect_strips_by_default", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(

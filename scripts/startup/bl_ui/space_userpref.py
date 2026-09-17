@@ -563,6 +563,21 @@ class USERPREF_PT_edit_text_editor(EditingPanel, CenterAlignMixIn, Panel):
         layout.prop(edit, "use_text_edit_auto_close")
 
 
+class USERPREF_PT_edit_outliner(EditingPanel, CenterAlignMixIn, Panel):
+    bl_label = "Outliner"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_centered(self, context, layout):
+        prefs = context.preferences
+        edit = prefs.edit
+
+        col = layout.column(align=True)
+        col.prop(edit, "outliner_scroll_to_active", text="Scroll to Active")
+        row = col.row(align=True)
+        row.active = edit.outliner_scroll_to_active
+        row.prop(edit, "outliner_expand_on_focus", text="Expand on Focus")
+
+
 class USERPREF_PT_edit_node_editor(EditingPanel, CenterAlignMixIn, Panel):
     bl_label = "Node Editor"
     bl_options = {'DEFAULT_CLOSED'}
@@ -3119,6 +3134,7 @@ classes = (
     USERPREF_PT_edit_weight_paint,
     USERPREF_PT_edit_gpencil,
     USERPREF_PT_edit_text_editor,
+    USERPREF_PT_edit_outliner,
     USERPREF_PT_edit_node_editor,
     USERPREF_PT_edit_sequence_editor,
     USERPREF_PT_edit_sequence_editor_new_strips,

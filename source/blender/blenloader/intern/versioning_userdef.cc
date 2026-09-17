@@ -1821,6 +1821,11 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
+  if (!USER_VERSION_ATLEAST(503, 23)) {
+    userdef->outliner_flag |= USER_OUTLINER_SCROLL_TO_ACTIVE;
+    userdef->outliner_flag &= ~USER_OUTLINER_EXPAND_ON_FOCUS;
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
