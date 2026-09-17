@@ -41,7 +41,7 @@ struct ShapeData {
  * shapes:        _ _ _____ _ _ ___
  *                    a       c b     (ordered by the first occurrence in `fill_id`)
  *
- * Returns a pair with #shape_map and #shape_offsets to be used in a #GroupedSpan
+ * Returns a #ShapeData struct with the #shape_map and #shape_offsets.
  */
 ShapeData shapes_from_fill_ids(const VArray<int> &fill_ids, int curves_num);
 
