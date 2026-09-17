@@ -1002,7 +1002,6 @@ ShapeCache::ShapeCache()
         GPU_batch_create_ex(GPU_PRIM_LINES, vbo_from_vector(verts), nullptr, GPU_BATCH_OWNS_VBO));
 
     verts.clear();
-
     /* Triangle */
     for (const float2 &point : triangle) {
       verts.append({{point.x, point.y, 1.0f}, VCLASS_CAMERA_FRAME});

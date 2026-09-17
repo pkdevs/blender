@@ -362,6 +362,16 @@ static void WIDGETGROUP_camera_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     WM_gizmo_set_flag(cagzgroup->focal_len, WM_GIZMO_HIDDEN, true);
     WM_gizmo_set_flag(cagzgroup->ortho_scale, WM_GIZMO_HIDDEN, true);
   }
+  const bool is_equisolid = ca->panorama_type == CAM_PANORAMA_FISHEYE_EQUISOLID;
+  const bool is_equidistant = ca->panorama_type == CAM_PANORAMA_FISHEYE_EQUIDISTANT;
+  const bool is_mirrorball = ca->panorama_type == CAM_PANORAMA_MIRRORBALL;
+  const bool is_equirectangular = ca->panorama_type == CAM_PANORAMA_EQUIRECTANGULAR;
+
+  const bool is_panoramic = ca->type == CAM_PANO && (is_equisolid || is_equidistant ||
+                                                     is_mirrorball || is_equirectangular);
+  if (is_panoramic) {
+    WM_gizmo_set_flag(cagzgroup->focal_len, WM_GIZMO_HIDDEN, true);
+  }
 }
 
 static void WIDGETGROUP_camera_message_subscribe(const bContext *C,
