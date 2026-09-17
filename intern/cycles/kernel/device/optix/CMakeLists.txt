@@ -77,6 +77,8 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
       endif()
     endif()
 
+    message(STATUS "Cycles OptiX: Using CUDA nvcc ${cuda_nvcc_executable} (version ${cuda_version}) for ${arch}")
+
     cuda_add_common_flags(${cuda_version} ${arch} "${cuda_flags}" cuda_flags)
 
     add_custom_command(

@@ -207,6 +207,8 @@ if(WITH_CYCLES_CUDA_BINARIES)
       set(cuda_version ${CUDA_VERSION})
     endif()
     if(DEFINED cuda_nvcc_executable AND DEFINED cuda_toolkit_root_dir)
+      message(STATUS "Cycles CUDA: Using CUDA toolkit ${cuda_toolkit_root_dir} (version ${cuda_version}) for ${arch}")
+
       # Compile regular kernel
       cycles_cuda_kernel_add(${arch} ${prev_arch} kernel "" "${cuda_sources}" FALSE)
 
