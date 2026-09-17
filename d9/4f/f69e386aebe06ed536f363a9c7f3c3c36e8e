@@ -1,1 +1,2 @@
 Referenced by commit 28d47268bddcb9dc69143f0e2d9410969da16311, Geometry Nodes: Use new KDTree in Interpolate Curves node
+Referenced by commit 8d1cbfc3b991d7d379b30cfd3684d4eba8675048, Curves: Use new KDTree in sculpt mode operations
