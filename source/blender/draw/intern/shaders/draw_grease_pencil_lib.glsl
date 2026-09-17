@@ -178,12 +178,12 @@ float gpencil_stroke_segment_mask(float2 p1,
       /* Bevel by cutting with a the half angle line. */
       float2 bevel_tan = orthogonal(tan_norm0 - tan_norm1);
 
-      dist = dot(pos1, bevel_tan) / dot(tan_norm1, bevel_tan);
-      dist *= dist;
+      dist = abs(dot(pos1, bevel_tan) / dot(tan_norm1, bevel_tan));
+      dist *= radius;
     }
     else {
       /* Continue the main line to get a sharp corner. */
-      dist = dist_sq_1;
+      dist = sqrt(dist_sq_1) / radius;
     }
   }
 
@@ -193,16 +193,15 @@ float gpencil_stroke_segment_mask(float2 p1,
       /* Bevel by cutting with a the half angle line. */
       float2 bevel_tan = orthogonal(tan_norm2 - tan_norm1);
 
-      dist = dot(pos2, bevel_tan) / dot(tan_norm1, bevel_tan);
-      dist *= dist;
+      dist = abs(dot(pos2, bevel_tan) / dot(tan_norm1, bevel_tan));
+      dist *= radius;
     }
     else {
       /* Continue the main line to get a sharp corner. */
-      dist = dist_sq_1;
+      dist = sqrt(dist_sq_1) / radius;
     }
   }
 
-  dist = sqrt(dist) / radius;
   return gpencil_stroke_hardess_mask(dist, hardfac) * joint;
 }
 
