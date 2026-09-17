@@ -1129,15 +1129,9 @@ void node_light_evaluation_common_impl([[resource_table]] KernelGlobals &kg,
   if (pipe.use_lighting_nodes) [[static_branch]] {
     [[resource_table]] const eevee::LightRenderData &lrd = kg.lrd;
 
-<<<<<<< HEAD
     LightData light = lrd.light_buf[light_index];
     const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
     LightVector lv = LightVector::get(light, is_directional, position);
-=======
-    LightData light = lrd.light_buf[light_index];
-    const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
-    LightVector lv = light_vector_get(light, is_directional, position);
->>>>>>> 17f096d12d2 (Fix: GPU: Make shaders compile without Dead Code Elimination)
 
     direction = lv.L;
     distance = lv.dist;
@@ -1159,17 +1153,10 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
     [[resource_table]] const eevee::LightRenderData &lrd = kg.lrd;
     [[resource_table]] UtilityTexture &util_tx = kg.util_tx;
 
-<<<<<<< HEAD
     LightData light = lrd.light_buf[light_index];
     const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
     LightVector lv = LightVector::get(light, is_directional, position);
     LightShape light_shape_vertices = LightShape::get(light, lv);
-=======
-    LightData light = lrd.light_buf[light_index];
-    const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
-    LightVector lv = light_vector_get(light, is_directional, position);
-    LightVertices light_shape_vertices = light_shape_corners(light, lv);
->>>>>>> 17f096d12d2 (Fix: GPU: Make shaders compile without Dead Code Elimination)
 
     const ViewMatrices view = kg.view_matrices_get(sd);
     const float3 V = view.world_incident_vector(position);
@@ -1185,7 +1172,7 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
     }
     float3x3 T = from_incident_vector(normal, V);
     ltc_data.Minv = ltc_data.Minv * transpose(T);
-    factor = light_ltc(util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices);
+    factor = eevee::ltc::evaluate(util_tx.utility_tx, light, light_shape_vertices, lv, ltc_data);
 
     const bool is_transmission = false; /* TODO: Expose? */
     factor *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
@@ -1195,23 +1182,6 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
      * The goal is to get a somewhat normalized factor. */
     factor /= (light.point_power * M_1_PI);
   }
-<<<<<<< HEAD
-  else {
-    ltc_data = eevee::LTCData::sample_ltc_lut(util_tx, normal, V, dot(normal, V), roughness);
-  }
-  float3x3 T = from_incident_vector(normal, V);
-  ltc_data.Minv = ltc_data.Minv * transpose(T);
-  factor = eevee::ltc::evaluate(util_tx.utility_tx, light, light_shape_vertices, lv, ltc_data);
-
-  const bool is_transmission = false; /* TODO: Expose? */
-  factor *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
-
-  factor *= light.shape_power;
-  /* Remove the base power (exposed in Light Info).
-   * The goal is to get a somewhat normalized factor. */
-  factor /= (light.point_power * M_1_PI);
-=======
->>>>>>> 17f096d12d2 (Fix: GPU: Make shaders compile without Dead Code Elimination)
 }
 
 template void node_light_evaluation_impl<true>(
