@@ -416,6 +416,98 @@ float4 dot_segment(float2 xy, float4 ss1, float4 ss2, bool is_squares, float4 vi
   return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
 }
 
+float4 dot_segment2(
+    float2 xy, float4 ss1, float4 ss2, bool flat_start, bool flat_end, float4 viewport_res)
+{
+  float l = 0.0f;
+  float2 local_x = safe_normalize_and_get_length(ss2.xy - ss1.xy, l);
+  float2 local_y = orthogonal(local_x);
+
+  float r1 = ss1.w;
+  float r2 = ss2.w;
+
+  float x = xy.x;
+  float y = xy.y;
+
+  float max_r = max(r1, r2);
+  float a = r2 - r1;
+  float cos_theta = -a / l;
+  float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
+  float tan_half_theta = (1.0f - cos_theta) / sin_theta;
+
+  /* Discard segments that are behind the camera. */
+  if (ss1.z < 0.0f || ss2.z < 0.0f) {
+    return discard_ndc();
+  }
+
+  float2 local = float2(0.0f, 0.0f);
+
+  /* Check if one circle is inside the other. */
+  if (abs(cos_theta) > 1.0f) {
+    if (r1 > r2) {
+      local = xy * r1;
+    }
+    else {
+      local = xy * r2 + float2(l, 0.0f);
+    }
+  }
+  else {
+    /* Calculate the area of both shapes divided by the width */
+    float area_trapezoid = 0.5f * (r1 / tan_half_theta + r2 * tan_half_theta);
+    float area_rectangle = max_r;
+
+    /* Determent if it is better to use a trapezoid or a rectangle. */
+    if (area_trapezoid < area_rectangle) {
+      /* Trapezoid. */
+      if (x == -1.0f) {
+        local.x += -r1;
+        local.y += y * r1 / tan_half_theta;
+      }
+      else {
+        local.x += l + r2;
+        local.y += y * r2 * tan_half_theta;
+      }
+
+      if (flat_start) {
+        float hi = r1 / tan_half_theta +
+                   (r2 * tan_half_theta - r1 / tan_half_theta) * r1 / (l + r2 + r1);
+
+        local = float2(0.0f, hi * y);
+      }
+
+      if (flat_end) {
+        float hi = r1 / tan_half_theta +
+                   (r2 * tan_half_theta - r1 / tan_half_theta) * (l + r1) / (l + r2 + r1);
+
+        local = float2(l, hi * y);
+      }
+    }
+    else {
+      /* Rectangle. */
+      if (x == -1.0f) {
+        local.x -= r1;
+        local.y += y * max_r;
+      }
+      else {
+        local.x += l + r2;
+        local.y += y * max_r;
+      }
+
+      if (flat_start) {
+        local.x = 0.0f;
+      }
+      if (flat_end) {
+        local.x = l;
+      }
+    }
+  }
+
+  float2 ssp = ss1.xy + local.x * local_x + local.y * local_y;
+
+  float z_depth = mix(ss1.z, ss2.z, 0.5f);
+  return screen_space_to_ndc(float4(ssp, z_depth, 0.0f), viewport_res.xy);
+}
+
 float2 get_rotation(float4 viewport_res,
                     gpMaterialFlag material_flags,
                     float2 alignment_rot,
@@ -747,43 +839,15 @@ float4 gpencil_vertex(float4 viewport_res,
         out_thickness.w = MITER_LIMIT_TYPE_BEVEL;
       }
 
-      float miter_limit = use_curr ? miter_limit1 : miter_limit2;
-
-      if (miter_limit == MITER_LIMIT_TYPE_BEVEL || miter_limit == MITER_LIMIT_TYPE_ROUND) {
-        miter_limit = 0.5f; /* Default to cos(60) */
-      }
-
-      /* Prevent the limit from becoming to small. */
-      if (miter_limit < 0.5f) {
-        miter_limit = 0.5f;
-      }
-
-      /* Mitter tangent vector. */
-      float2 miter_tan = safe_normalize(line_adj + line);
-      float miter_dot = dot(miter_tan, line_adj);
-      float cos_angle_adj = (use_curr) ? cos_angle1 : cos_angle2;
-      /* Break corners after a certain angle to avoid really thick corners. */
-      bool miter_break = cos_angle_adj > miter_limit;
-      miter_tan = (miter_break || is_stroke_start || is_stroke_end) ? line :
-                                                                      (miter_tan / miter_dot);
-      /* Rotate 90 degrees counter-clockwise. */
-      float2 miter = float2(-miter_tan.y, miter_tan.x);
-
       out_thickness.x = clamped_thickness / out_ndc.w;
       out_thickness.y = thickness / out_ndc.w;
       out_aspect = float4(1.0f, 1.0f, 1.0f, 0.0f);
 
-      float2 screen_ofs = miter * y;
-
       /* Reminder: we packed the cap flag into the sign of strength and thickness sign. */
-      if ((is_stroke_start && strength1 > 0.0f) || (is_stroke_end && thickness1 > 0.0f) ||
-          (miter_break && !is_stroke_start && !is_stroke_end))
-      {
-        screen_ofs += line * x;
-      }
+      bool flat_start = is_stroke_start && strength1 < 0.0f;
+      bool flat_end = is_stroke_end && thickness1 < 0.0f;
 
-      // out_ndc.xy += screen_ofs * viewport_res.zw * clamped_thickness;
-      out_ndc = dot_segment(float2(x, y), ss1, ss2, is_squares, viewport_res);
+      out_ndc = dot_segment2(float2(x, y), ss1, ss2, flat_start, flat_end, viewport_res);
 
       out_uv.x = (use_curr) ? uv1.z : uv2.z;
     }
