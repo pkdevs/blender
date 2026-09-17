@@ -3873,10 +3873,18 @@ std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64
   return std::nullopt;
 }
 
+std::optional<StringRef> template_variable_item_name(StringRef item_text)
+{
+  /* Search items are stored (and displayed) as the full "{name}" expression; recover the bare
+   * name. */
+  if (item_text.size() < 2 || item_text[0] != '{' || item_text.back() != '}') {
+    return std::nullopt;
+  }
+  return item_text.substr(1, item_text.size() - 2);
+}
+
 static void button_edit_template_variable_hint_refresh(Button *but, HandleButtonData *data)
 {
-  data->text_edit_unit_hint.clear();
-
   if (but->type != ButtonType::SearchMenu || but->rnaprop == nullptr ||
       (RNA_property_flag(but->rnaprop) & PROP_PATH_SUPPORTS_TEMPLATES) == 0 ||
       data->text_edit.edit_string == nullptr || data->searchbox == nullptr)
@@ -3899,12 +3907,11 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
     return;
   }
 
-  /* Items are stored (and displayed) as the full "{name}" expression; recover the bare name. */
-  const StringRefNull item_text = active_item;
-  if (item_text.size() < 2 || item_text[0] != '{' || item_text.back() != '}') {
+  const std::optional<StringRef> name_opt = template_variable_item_name(active_item);
+  if (!name_opt.has_value()) {
     return;
   }
-  const StringRef name = item_text.substr(1, item_text.size() - 2);
+  const StringRef name = *name_opt;
 
   const StringRef typed = text.substr(span->start(), cursor - span->start());
   if (name.size() <= typed.size() || !name.startswith(typed)) {
@@ -4585,9 +4592,23 @@ static int do_but_textedit(
         }
         break;
 
-      case EVT_TABKEY:
+      case EVT_TABKEY: {
+        bool handled_by_searchbox = false;
+        if (data->searchbox && but->type == ButtonType::SearchMenu) {
+          const ButtonSearch *but_search = static_cast<const ButtonSearch *>(but);
+          if (but_search->results_are_suggestions) {
+            handled_by_searchbox = true;
+            if (searchbox_autocomplete_common_prefix(but, data->searchbox)) {
+              changed = true;
+            }
+          }
+        }
+
+        if (handled_by_searchbox) {
+          /* Nothing further to do: `changed` (if set) drives the searchbox refresh below. */
+        }
         /* There is a key conflict here, we can't tab with auto-complete. */
-        if (but->autocomplete_func || data->searchbox) {
+        else if (but->autocomplete_func || data->searchbox) {
           const int autocomplete = textedit_autocomplete(C, but, data);
           changed = autocomplete != AUTOCOMPLETE_NO_MATCH;
 
@@ -4614,6 +4635,7 @@ static int do_but_textedit(
         }
         retval = WM_UI_HANDLER_BREAK;
         break;
+      }
       case EVT_ZKEY: {
         /* Ctrl-Z or Ctrl-Shift-Z: Undo/Redo (allowing for OS-Key on Apple). */
 

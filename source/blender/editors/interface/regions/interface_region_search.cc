@@ -353,6 +353,42 @@ bool searchbox_inside(ARegion *region, const int xy[2])
   return BLI_rcti_isect_pt(&data->bbox, xy[0] - region->winrct.xmin, xy[1] - region->winrct.ymin);
 }
 
+/**
+ * Replace `but->editstr[replace_start, replace_end)` with `replacement`, shifting the rest of
+ * the string to make room. Leaves the string untouched and returns false if the range is
+ * invalid or the result wouldn't fit within `maxstrlen`.
+ *
+ * On success, `but->pos` is left just after the inserted text.
+ */
+static bool button_editstr_splice(Button *but,
+                                  int64_t replace_start,
+                                  int64_t replace_end,
+                                  StringRef replacement,
+                                  int64_t maxstrlen)
+{
+  char *editstr = but->editstr;
+  const int64_t old_len = int64_t(std::strlen(editstr));
+
+  if (replace_start < 0 || replace_end < replace_start || replace_end > old_len) {
+    return false;
+  }
+
+  const int64_t tail_len = old_len - replace_end;
+  const int64_t new_len = replace_start + replacement.size() + tail_len;
+  if (new_len >= maxstrlen) {
+    return false;
+  }
+
+  /* Shift the tail of the string to make room, then copy the replacement text in. */
+  std::memmove(
+      editstr + replace_start + replacement.size(), editstr + replace_end, size_t(tail_len) + 1);
+  std::memcpy(editstr + replace_start, replacement.data(), replacement.size());
+
+  but->pos = int(replace_start + replacement.size());
+
+  return true;
+}
+
 bool searchbox_apply(Button *but, ARegion *region)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
@@ -377,26 +413,12 @@ bool searchbox_apply(Button *but, ARegion *region)
       const SearchItems &items = data->items;
 
       if (items.replace_start >= 0 && items.replace_end >= items.replace_start) {
-        const size_t name_len = name_sep ? static_cast<size_t>(name_sep - name) :
-                                           std::strlen(name);
-        const size_t old_len = std::strlen(but->editstr);
-        const size_t replace_start = static_cast<size_t>(items.replace_start);
-        const size_t replace_end = static_cast<size_t>(items.replace_end);
-
-        if (replace_end <= old_len) {
-          const size_t replace_len = replace_end - replace_start;
-          const size_t new_len = old_len - replace_len + name_len;
-
-          if (new_len < static_cast<size_t>(items.maxstrlen)) {
-            /* Shift the tail of the string to make room, then
-             * copy the replacement text in. */
-            std::memmove(but->editstr + replace_start + name_len,
-                         but->editstr + replace_end,
-                         (old_len - replace_end) + 1);
-            std::memcpy(but->editstr + replace_start, name, name_len);
-            but->pos = static_cast<int>(replace_start + name_len);
-          }
-        }
+        const int64_t name_len = name_sep ? int64_t(name_sep - name) : int64_t(std::strlen(name));
+        button_editstr_splice(but,
+                              items.replace_start,
+                              items.replace_end,
+                              StringRef(name, name_len),
+                              items.maxstrlen);
       }
       else {
         BLI_strncpy(but->editstr, name, name_sep ? (name_sep - name) + 1 : data->items.maxstrlen);
@@ -429,6 +451,49 @@ void searchbox_hide(ARegion *region)
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
   data->items.totitem = 0;
   data->active = -1;
+}
+
+bool searchbox_autocomplete_common_prefix(Button *but, ARegion *region)
+{
+  const uiSearchboxData *data = static_cast<const uiSearchboxData *>(region->regiondata);
+  const SearchItems &items = data->items;
+
+  if (items.totitem == 0 || items.replace_start < 0 || items.cursor_pos < 0) {
+    return false;
+  }
+
+  const int64_t name_start = int64_t(items.replace_start) + 1;
+  const int64_t cursor = int64_t(items.cursor_pos);
+  if (cursor < name_start) {
+    return false;
+  }
+  const int64_t typed_len = cursor - name_start;
+
+  const std::string typed(but->editstr + name_start, size_t(typed_len));
+  AutoComplete *autocpl = autocomplete_begin(typed.c_str(), size_t(items.maxstrlen));
+  for (int i = 0; i < items.totitem; i++) {
+    const std::optional<StringRef> name = template_variable_item_name(items.names[i]);
+    if (name.has_value()) {
+      autocomplete_update_name(autocpl, *name);
+    }
+  }
+  std::string common(size_t(items.maxstrlen), '\0');
+  const int match = autocomplete_end(autocpl, common.data());
+  if (match == AUTOCOMPLETE_NO_MATCH) {
+    return false;
+  }
+  common.resize(std::strlen(common.c_str()));
+
+  if (int64_t(common.size()) <= typed_len) {
+    return false;
+  }
+
+  if (!button_editstr_splice(but, name_start, cursor, common, items.maxstrlen)) {
+    return false;
+  }
+  but->selsta = but->selend = but->pos;
+
+  return true;
 }
 
 static ARegion *wm_searchbox_tooltip_init(

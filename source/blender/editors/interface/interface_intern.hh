@@ -980,6 +980,11 @@ struct ButtonEditHint {
 std::optional<ButtonEditHint> button_edit_hint_get(const Button &but);
 
 std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor);
+/**
+ * Recover the bare variable name from a path-template search item's display text (the full
+ * "{name}" expression), or nullopt if `item_text` isn't wrapped in braces as expected.
+ */
+std::optional<StringRef> template_variable_item_name(StringRef item_text);
 
 void def_but_icon(Button *but, int icon, int64_t flag);
 /**
@@ -1211,6 +1216,15 @@ const char *searchbox_active_item_name(ARegion *region);
  * Hide the search box's results without ending the text edit they belong to
  */
 void searchbox_hide(ARegion *region);
+/**
+ * Extend the text currently being completed (as set by #search_items_set_replace_range) up to
+ * the point where the visible matches diverge, like shell/file-browser path completion. Doesn't
+ * require (or change) which item is highlighted, and never inserts a full match by itself, so
+ * the caller can keep the search box open for further typing.
+ *
+ * Returns true if the button's text was changed.
+ */
+bool searchbox_autocomplete_common_prefix(Button *but, ARegion *region);
 void searchbox_free(bContext *C, ARegion *region);
 /**
  * XXX weak: search_func adds all partial matches.
