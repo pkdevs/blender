@@ -244,10 +244,12 @@ enum GPUType {
   GPU_TEX2D_ARRAY,
   GPU_TEX3D,
 
-  /* GLSL Struct types */
+  /* Struct types. */
   GPU_CLOSURE,
+  GPU_KERNEL_GLOBALS,
+  GPU_SHADING_DATA,
 
-  /* Opengl Attributes */
+  /* Vertex Attributes. */
   GPU_ATTR,
 };
 
@@ -281,6 +283,8 @@ constexpr int gpu_type_element_count(const GPUType type)
     case GPU_TEX3D:
     case GPU_CLOSURE:
     case GPU_ATTR:
+    case GPU_KERNEL_GLOBALS:
+    case GPU_SHADING_DATA:
       break;
   }
 
@@ -450,6 +454,8 @@ inline GPUNodeStackValue GPU_node_stack_default_value(const GPUType type)
     case GPU_TEX3D:
     case GPU_CLOSURE:
     case GPU_ATTR:
+    case GPU_KERNEL_GLOBALS:
+    case GPU_SHADING_DATA:
       break;
   }
 
@@ -493,7 +499,18 @@ struct GPUNodeStack {
     if (this->link) {
       return true;
     }
-    return saturate_f(std::get<float>(this->value)) > near_zero;
+    switch (this->type) {
+      case GPU_FLOAT:
+        return saturate_f(std::get<float>(this->value)) > near_zero;
+      case GPU_INT:
+        return std::get<int>(this->value) != 0;
+      case GPU_BOOL:
+        return std::get<bool>(this->value);
+      default:
+        break;
+    }
+    BLI_assert_unreachable();
+    return true;
   }
 
   bool socket_not_one() const
@@ -501,7 +518,18 @@ struct GPUNodeStack {
     if (this->link) {
       return true;
     }
-    return saturate_f(std::get<float>(this->value)) < near_one;
+    switch (this->type) {
+      case GPU_FLOAT:
+        return saturate_f(std::get<float>(this->value)) < near_one;
+      case GPU_INT:
+        return std::get<int>(this->value) != 1;
+      case GPU_BOOL:
+        return !std::get<bool>(this->value);
+      default:
+        break;
+    }
+    BLI_assert_unreachable();
+    return true;
   }
 
   bool socket_not_black() const
@@ -587,6 +615,8 @@ struct GPUCodegenOutput {
   GPUShaderCreateInfo *create_info;
 };
 
+GPUNodeLink *GPU_shading_data();
+GPUNodeLink *GPU_kernel_globals();
 GPUNodeLink *GPU_constant(const float *num);
 GPUNodeLink *GPU_uniform(const float *num);
 GPUNodeLink *GPU_constant(const int *num);

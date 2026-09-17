@@ -115,6 +115,12 @@ enum class Diag {
   AutoTypeNestedInitializer,
   AutoTypeCannotBeDeduced,
 
+  BitFieldNotIntegral,
+  BitFieldSizeNegative,
+  BitFieldSizeTooLarge,
+  BitFieldSizeNull,
+  BitFieldNotSingleDeclarator,
+
   ConstexprDivisionByZero,
   ConstexprGlobalNonStatic,
   ConstexprIfConditionNotConstexpr,
@@ -122,7 +128,8 @@ enum class Diag {
   ConstexprShiftNegative,
   ConstexprShiftTooLarge,
   ConstexprVarMustBeInitializedByConstantExpr,
-  ConstexprVarMustBeIntOrUint,
+  ConstexprVarMustBeInitializedByCorrectType,
+  ConstexprVarMustBeValidType,
   ConstexprVarMustNotBeArray,
 
   ResourceTableDeclarationAlreadyOfType,
@@ -295,6 +302,16 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Only entry points can use 'out' attribute";
     case Diag::AutoTypeCannotBeDeduced:
       return "Cannot deduce actual type for variable '{}' with type 'auto'";
+    case Diag::BitFieldNotIntegral:
+      return "Bit-field has non-integral type '{}'";
+    case Diag::BitFieldSizeNegative:
+      return "Width of bit-field ({} bits) is negative";
+    case Diag::BitFieldSizeTooLarge:
+      return "Width of bit-field ({} bits) exceeds the width of its type";
+    case Diag::BitFieldSizeNull:
+      return "Width of bit-field is zero";
+    case Diag::BitFieldNotSingleDeclarator:
+      return "Bitfields must have single declarator";
     case Diag::AutoTypeMultipleExpressions:
       return "Initializer for variable '{}' with type 'auto' contains multiple expressions";
     case Diag::AutoTypeNestedInitializer:
@@ -319,8 +336,12 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Shift count {} >= width of type 32";
     case Diag::ConstexprVarMustBeInitializedByConstantExpr:
       return "Constexpr variable '{}' must be initialized by a constant expression";
-    case Diag::ConstexprVarMustBeIntOrUint:
-      return "Constexpr variable must be of type 'int', 'uint', 'bool' or 'float'";
+    case Diag::ConstexprVarMustBeInitializedByCorrectType:
+      return "Constexpr variable '{}' must be initialized by a constant expression of type '{}' "
+             "but got '{}'";
+    case Diag::ConstexprVarMustBeValidType:
+      return "Constexpr variable must be scalar or vector of type 'int', 'uint', 'bool' or "
+             "'float'";
     case Diag::ConstexprVarMustNotBeArray:
       return "Array variables cannot be constexpr";
     case Diag::EmptyClassNotSupportedInBuffer:
