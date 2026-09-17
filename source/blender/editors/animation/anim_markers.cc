@@ -1331,6 +1331,9 @@ static void ed_marker_duplicate_apply(bContext *C)
       if (marker.prop != nullptr) {
         newmarker->prop = IDP_CopyProperty(marker.prop);
       }
+      if (marker.userprop != nullptr) {
+        newmarker->userprop = IDP_CopyProperty(marker.userprop);
+      }
 
       /* new marker is added to the beginning of list */
       /* FIXME: bad ordering! */
@@ -1866,6 +1869,9 @@ static wmOperatorStatus ed_marker_delete_exec(bContext *C, wmOperator * /*op*/)
     if (marker->flag & SELECT) {
       if (marker->prop != nullptr) {
         IDP_FreeProperty(marker->prop);
+      }
+      if (marker->userprop != nullptr) {
+        IDP_FreeProperty(marker->userprop);
       }
       BLI_freelinkN(markers, marker);
       changed = true;

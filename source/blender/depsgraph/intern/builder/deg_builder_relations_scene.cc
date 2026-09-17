@@ -65,6 +65,7 @@ void DepsgraphRelationBuilder::build_scene_parameters(Scene *scene)
 
   for (TimeMarker &marker : scene->markers) {
     build_idproperties(marker.prop);
+    build_idproperties(marker.userprop);
   }
 }
 

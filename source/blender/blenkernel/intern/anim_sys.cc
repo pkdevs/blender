@@ -3936,6 +3936,9 @@ void BKE_time_markers_blend_write(BlendWriter *writer, ListBaseT<TimeMarker> &ma
     if (marker.prop != nullptr) {
       IDP_BlendWrite(writer, marker.prop);
     }
+    if (marker.userprop != nullptr) {
+      IDP_BlendWrite(writer, marker.userprop);
+    }
   }
 }
 
@@ -3945,6 +3948,8 @@ void BKE_time_markers_blend_read(BlendDataReader *reader, ListBaseT<TimeMarker> 
   for (TimeMarker &marker : markers) {
     BLO_read_struct(reader, IDProperty, &marker.prop);
     IDP_BlendDataRead(reader, &marker.prop);
+    BLO_read_struct(reader, IDProperty, &marker.userprop);
+    IDP_BlendDataRead(reader, &marker.userprop);
   }
 }
 
@@ -3956,6 +3961,9 @@ void BKE_copy_time_markers(ListBaseT<TimeMarker> &markers_dst,
   for (TimeMarker &marker : markers_dst) {
     if (marker.prop != nullptr) {
       marker.prop = IDP_CopyProperty_ex(marker.prop, flag);
+    }
+    if (marker.userprop != nullptr) {
+      marker.userprop = IDP_CopyProperty_ex(marker.userprop, flag);
     }
   }
 }
