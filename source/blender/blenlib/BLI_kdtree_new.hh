@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <limits>
 
 #include "BLI_bounds_types.hh"
@@ -44,6 +45,30 @@ template<typename ValueT> struct Node {
   };
   /** Dimension an interior node splits. */
   int dim;
+};
+
+/** A callable usable as the predicate for #KDTreeNew::find_nearest_filtered. */
+template<typename Filter>
+concept FilterFn = std::predicate<Filter, int>;
+
+/**
+ * A type usable as the \a ResultSet for #KDTreeNew::search, responsible for storing results and
+ * telling the search when to continue. See #NearestResult and the others beside it.
+ */
+template<typename ResultSet, typename ValueT>
+concept ResultSetFor = requires(ResultSet &result, const ValueT distance_sq, const int index) {
+  {
+    /** Tells the search whether points exactly #max_distance_sq away should be processed. */
+    ResultSet::inclusive
+  } -> std::convertible_to<bool>;
+  {
+    /** Optionally store a result index and tell the search when to continue. */
+    result.add_point(distance_sq, index)
+  } -> std::convertible_to<bool>;
+  {
+    /** Return the distance below which the search will stop. */
+    result.max_distance_sq()
+  } -> std::convertible_to<ValueT>;
 };
 
 }  // namespace kdtree
@@ -193,7 +218,8 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   template<typename Filter>
   int find_nearest_filtered(const T &position,
                             Filter &&filter,
-                            ValueT *r_distance_sq = nullptr) const;
+                            ValueT *r_distance_sq = nullptr) const
+    requires kdtree::FilterFn<Filter>;
 
   /**
    * Find the closest points to \a position, in order of increasing distance.
@@ -222,7 +248,9 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * far, reporting each of them to it. The result set decides what to keep and how far the
    * search still has to look. See #NearestResult and the others beside it.
    */
-  template<typename ResultSet> void search(ResultSet &result, const T &position) const;
+  template<typename ResultSet>
+  void search(ResultSet &result, const T &position) const
+    requires kdtree::ResultSetFor<ResultSet, ValueT>;
 
  private:
   /**
@@ -246,19 +274,13 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
                    const T &position,
                    const Node *node,
                    const ValueT distance_sq,
-                   T &offsets) const;
+                   T &offsets) const
+    requires kdtree::ResultSetFor<ResultSet, ValueT>;
 };
 
 namespace kdtree {
 
-/**
- * A search reports its visits to a "Result Set", which is responsible for storing results and
- * telling the search when to continue. Returning false from #add_point ends the search.
- *
- * The search only reports a point once it is close enough to keep, so #add_point does not have to
- * check the distance. #inclusive tells the search whether points exactly #max_distance_sq away
- * should be processed.
- */
+/** A search for the single closest point. */
 template<typename ValueT> class NearestResult {
  private:
   int index_ = -1;
@@ -506,6 +528,7 @@ template<typename Filter>
 int KDTreeNew<T>::find_nearest_filtered(const T &position,
                                         Filter &&filter,
                                         ValueT *r_distance_sq) const
+  requires kdtree::FilterFn<Filter>
 {
   if (this->is_empty()) {
     return -1;
@@ -569,6 +592,7 @@ int KDTreeNew<T>::count_in_radius(const T &position, const ValueT radius) const
 template<typename T>
 template<typename ResultSet>
 void KDTreeNew<T>::search(ResultSet &result, const T &position) const
+  requires kdtree::ResultSetFor<ResultSet, ValueT>
 {
   BLI_assert(!this->is_empty());
   /* Squared distance to the bounds of the tree, per dimension, which the walk below replaces
@@ -594,6 +618,7 @@ bool KDTreeNew<T>::search_node(ResultSet &result,
                                const Node *node,
                                const ValueT distance_sq,
                                T &offsets) const
+  requires kdtree::ResultSetFor<ResultSet, ValueT>
 {
   if (node->children == nullptr) {
     const int *indices = indices_;
