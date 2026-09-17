@@ -240,9 +240,13 @@ int imagewrap(Tex *tex,
     /* Important that this value is wrapped #27782.
      * this applies the modifications made by the checks above,
      * back to the floating point values */
-    fx -= float(xi - x) / float(ibuf->x);
-    fy -= float(yi - y) / float(ibuf->y);
-
+    if (tex->extend == TEX_EXTEND) {
+      CLAMP(fx , 0.0, 1.0);
+      CLAMP(fy , 0.0, 1.0);
+    } else {
+      fx -= float(xi - x) / float(ibuf->x);
+      fy -= float(yi - y) / float(ibuf->y);
+    }
     boxsample(ibuf,
               fx - filterx,
               fy - filtery,
