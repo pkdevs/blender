@@ -3639,7 +3639,7 @@ static void comment_node_prepare_for_draw(
     /* Different paddings are used here to compensate for padding applied elsewhere. */
     const int pad_left = 0.2 * UI_UNIT_X;
     const int pad_right = 0.25 * UI_UNIT_X;
-    const int pad_top = 0.15 * UI_UNIT_Y;
+    const int pad_top = 0.2 * UI_UNIT_Y;
     const int pad_bottom = 0.2 * UI_UNIT_Y;
 
     ui::Layout &layout = ui::block_layout(&block,
