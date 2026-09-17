@@ -12,8 +12,8 @@
 
 #include "bmesh.hh"
 
-#include "GEO_randomize.hh"
 #include "GEO_mesh_primitive_ico_sphere.hh"
+#include "GEO_randomize.hh"
 
 namespace blender::geometry {
 
@@ -51,7 +51,7 @@ Mesh *create_ico_sphere_mesh(const int subdivisions,
 {
   if (subdivisions >= 3) {
     /* Most nodes don't need this because they internally use multi-threading which triggers
-      * lazy-threading without any extra code. */
+     * lazy-threading without any extra code. */
     lazy_threading::send_hint();
   }
 
@@ -65,8 +65,8 @@ Mesh *create_ico_sphere_mesh(const int subdivisions,
   BMesh *bm = BM_mesh_create(&allocsize, &bmesh_create_params);
   BM_data_layer_add_named(bm, &bm->ldata, CD_PROP_FLOAT2, "UVMap");
   /* Make sure the associated boolean layers exists as well. Normally this would be done when
-    * adding a UV layer via python or when copying from Mesh, but when we 'manually' create the UV
-    * layer we need to make sure the boolean layers exist as well. */
+   * adding a UV layer via python or when copying from Mesh, but when we 'manually' create the UV
+   * layer we need to make sure the boolean layers exist as well. */
   BM_uv_map_attr_pin_ensure_for_all_layers(bm);
 
   BMO_op_callf(bm,
@@ -85,7 +85,7 @@ Mesh *create_ico_sphere_mesh(const int subdivisions,
   BM_mesh_free(bm);
 
   /* The code above generates a "UVMap" attribute. The code below renames that attribute, we don't
-    * have a simple utility for that yet though so there is some overhead right now. */
+   * have a simple utility for that yet though so there is some overhead right now. */
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
   if (create_uv_map) {
     const VArraySpan orig_uv_map = *attributes.lookup<float2>("UVMap");
@@ -103,4 +103,4 @@ Mesh *create_ico_sphere_mesh(const int subdivisions,
 
   return mesh;
 }
-}
+}  // namespace blender::geometry

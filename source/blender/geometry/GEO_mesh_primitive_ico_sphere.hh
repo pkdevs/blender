@@ -15,8 +15,8 @@ struct Mesh;
 namespace geometry {
 
 Mesh *create_ico_sphere_mesh(const int subdivisions,
-                                      const float radius,
-                                      const std::optional<StringRef> &uv_map_id);
+                             const float radius,
+                             const std::optional<StringRef> &uv_map_id);
 
 }  // namespace geometry
 }  // namespace blender
