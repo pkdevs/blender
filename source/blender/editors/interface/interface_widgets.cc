@@ -2706,6 +2706,9 @@ static void widget_draw_text(const uiFontStyle *fstyle,
     }
     if (ime_data && !ime_data->composite.empty()) {
       /* Composite underline. */
+      GPU_blend(GPU_BLEND_ALPHA);
+      widgetbase_draw_cache_flush();
+      GPU_blend(GPU_BLEND_NONE);
       widget_draw_text_ime_underline(fstyle, wcol, but, rect, ime_data, drawstr, align_x_ofs);
     }
 #endif

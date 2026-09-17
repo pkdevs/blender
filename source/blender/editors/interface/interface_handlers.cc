@@ -12752,6 +12752,7 @@ static int handle_menus_recursive(bContext *C,
       }
     }
   }
+
   /* now handle events for our own menu */
 
   if (retval == WM_UI_HANDLER_CONTINUE) {

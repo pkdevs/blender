@@ -882,11 +882,6 @@ void ED_region_exit(bContext *C, ARegion *region)
   wmWindow *win = CTX_wm_window(C);
   ARegion *prevar = CTX_wm_region(C);
 
-  if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
-    WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
-    region->runtime->text_cursor_overlay = std::nullopt;
-  }
-
   if (region->runtime->type && region->runtime->type->exit) {
     region->runtime->type->exit(wm, region);
   }
@@ -897,6 +892,13 @@ void ED_region_exit(bContext *C, ARegion *region)
 
   WM_event_remove_handlers(C, &region->runtime->handlers);
   WM_event_modal_handler_region_replace(win, region, nullptr);
+
+  if (region->runtime->text_cursor_overlay) {
+    if (region->runtime->text_cursor_overlay->timer) {
+      WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
+    }
+    region->runtime->text_cursor_overlay = std::nullopt;
+  }
 
   /* Stop panel animation in this region if there are any. */
   for (Panel &panel : region->panels) {

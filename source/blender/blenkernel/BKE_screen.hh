@@ -208,7 +208,6 @@ struct wmRegionListenerParams {
   ARegion *region;
   const wmNotifier *notifier;
   const Scene *scene;
-  const bScreen *screen;
 };
 
 struct wmRegionMessageSubscribeParams {
