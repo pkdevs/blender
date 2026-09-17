@@ -959,7 +959,6 @@ PopupBlockHandle *popup_block_create(bContext *C,
 
   /* create area region */
   ARegion *region = region_temp_add(CTX_wm_screen(C));
-
   handle->region = region;
 
   WM_window_topmost_active_region_tag_refresh(window);
