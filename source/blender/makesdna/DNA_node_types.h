@@ -4026,7 +4026,7 @@ struct NodeStoreBundleItem {
 };
 
 enum class NodeCommentFlag : uint8_t {
-  /** Whether the text is being edit inside of the node. */
+  /** Whether the text is being edited inside of the node. */
   Edit = (1 << 0),
 };
 ENUM_OPERATORS(NodeCommentFlag)
