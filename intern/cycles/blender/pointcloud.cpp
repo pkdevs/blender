@@ -199,7 +199,7 @@ static void export_pointcloud_motion_gsplat_attributes(
                                                  blender::bke::AttrDomain::Point)))
     {
       float4 *motion_radiance_base = attr_radiance_base->data_for_write<float4>(attr_step);
-      std::fill_n(motion_radiance_base, num_points, zero_float4());
+      std::fill_n(motion_radiance_base, num_points, PointCloud::DEFAULT_GSPLAT_RADIANCE_BASE);
     }
 
     if (!sync_attribute_motion_step_from_blender(
@@ -208,7 +208,7 @@ static void export_pointcloud_motion_gsplat_attributes(
             b_attributes.lookup<blender::float3>("scale", blender::bke::AttrDomain::Point)))
     {
       packed_float3 *motion_scale = attr_scale->data_for_write<packed_float3>(attr_step);
-      std::fill_n(motion_scale, num_points, zero_float3());
+      std::fill_n(motion_scale, num_points, PointCloud::DEFAULT_GSPLAT_SCALE);
     }
 
     if (!sync_attribute_motion_step_from_blender(*attr_rotation,
