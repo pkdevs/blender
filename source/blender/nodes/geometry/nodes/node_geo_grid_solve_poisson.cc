@@ -317,7 +317,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       const Field<float> boundary_value_field = params.extract_input<Field<float>>(
           "Boundary Value"_ustr);
 
-      Vector<bke::GVolumeGrid> grids(1);
+      std::array<bke::GVolumeGrid, 1> grids;
       bke::VolumeTreeAccessToken grid_token;
       if (boundary_value_field.depends_on_input()) {
         const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
@@ -344,7 +344,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       const Field<float3> boundary_gradient_field = params.extract_input<Field<float3>>(
           "Boundary Gradient"_ustr);
 
-      Vector<bke::GVolumeGrid> grids(1);
+      std::array<bke::GVolumeGrid, 1> grids;
       bke::VolumeTreeAccessToken grid_token;
       if (boundary_gradient_field.depends_on_input()) {
         const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
@@ -377,8 +377,8 @@ static void node_geo_exec(GeoNodeExecParams params)
           "Boundary Factor"_ustr);
       const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
 
-      Vector<bke::GVolumeGrid> grids(3);
-      bke::VolumeTreeAccessToken grid_tokens[3];
+      std::array<bke::GVolumeGrid, 3> grids;
+      std::array<bke::VolumeTreeAccessToken, 3> grid_tokens;
 
       if (boundary_value_field.depends_on_input() || boundary_gradient_field.depends_on_input() ||
           boundary_factor_field.depends_on_input())
