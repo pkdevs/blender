@@ -720,7 +720,6 @@ float4 gpencil_vertex(float4 viewport_res,
       out_aspect.xy = 1.0f / out_aspect.xy;
 
       out_ndc.xy += (x * x_axis + y * y_axis) * viewport_res.zw * clamped_thickness;
-      // out_sspos_0.xy = ss1.xy + x_axis * 0.5f;
 
       out_thickness.x = (is_squares) ? 1e18f : (clamped_thickness / out_ndc.w);
       out_thickness.y = (is_squares) ? 1e18f : (thickness / out_ndc.w);
