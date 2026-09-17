@@ -1217,7 +1217,9 @@ static void node_comment_init(bNodeTree * /*tree*/, bNode *node)
 
 static void node_comment_free(bNode *node)
 {
-  MEM_delete(static_cast<NodeComment *>(node->storage));
+  NodeComment *storage = static_cast<NodeComment *>(node->storage);
+  MEM_delete(storage->text);
+  MEM_delete(storage);
 }
 
 static void node_comment_copy(bNodeTree * /*dest_ntree*/, bNode *dst_node, const bNode *src_node)
