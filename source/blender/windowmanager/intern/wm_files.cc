@@ -528,11 +528,9 @@ static void wm_init_userdef(Main *bmain)
   /* Needed so loading a file from the command line respects user-pref #26156. */
   SET_FLAG_FROM_TEST(G.fileflags, U.flag & USER_FILENOUI, G_FILE_NO_UI);
 
-  /* Set the python auto-execute setting from user prefs. */
-  /* Enabled by default, unless explicitly enabled in the command line which overrides. */
-  if ((G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) == 0) {
-    SET_FLAG_FROM_TEST(G.f, (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0, G_FLAG_SCRIPT_AUTOEXEC);
-  }
+  SET_FLAG_FROM_TEST(G.f,
+                     G.autoexec_override.value_or((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0),
+                     G_FLAG_SCRIPT_AUTOEXEC);
 
   /* Only reset "offline mode" if they weren't passes via command line arguments. */
   if ((G.f & G_FLAG_INTERNET_OVERRIDE_PREF_ANY) == 0) {
@@ -613,7 +611,7 @@ static int wm_read_exotic(const char *filepath)
 
 void WM_file_autoexec_init(const char *filepath)
 {
-  if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
+  if (G.autoexec_override.has_value()) {
     return;
   }
   if (G.f & G_FLAG_SCRIPT_AUTOEXEC) {
@@ -1266,9 +1264,9 @@ void wm_homefile_read_ex(bContext *C,
   /* Options exclude each other. */
   BLI_assert((use_factory_settings && filepath_startup_override) == 0);
 
-  if ((G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) == 0) {
-    SET_FLAG_FROM_TEST(G.f, (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0, G_FLAG_SCRIPT_AUTOEXEC);
-  }
+  SET_FLAG_FROM_TEST(G.f,
+                     G.autoexec_override.value_or((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0),
+                     G_FLAG_SCRIPT_AUTOEXEC);
 
   if (use_data) {
     if (reset_app_template) {
@@ -2489,8 +2487,8 @@ bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
         RNA_property_string_get(op->ptr, prop_filepath, filepath);
       }
 
-      if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
-        value = (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
+      if (G.autoexec_override.has_value()) {
+        value = *G.autoexec_override;
       }
       else if (prop_filepath == nullptr) {
         /* Recovering the last session doesn't provide the path being recovered,
@@ -3372,8 +3370,7 @@ static bool wm_open_mainfile_check(bContext * /*C*/, wmOperator *op)
   RNA_string_get(op->ptr, "filepath", filepath);
 
   /* Excluded paths can't be trusted, unless the command line overrides the preference. */
-  if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && ((G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) == 0))
-  {
+  if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && !G.autoexec_override.has_value()) {
     if (BKE_autoexec_match(filepath, true, true)) {
       RNA_property_boolean_set(op->ptr, prop, false);
       is_untrusted = true;
