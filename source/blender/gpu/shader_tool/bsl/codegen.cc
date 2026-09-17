@@ -346,7 +346,7 @@ struct CodegenContext : NodeErrorHandler {
           id, call.parameters(), symbol_scope, scope, loc);
 
       if (sym->is_error) {
-        ctx.error(call, Diag::UnknownFunction);
+        ctx.error(call, Diag::UnknownFunction, string(id.str()));
         return {"", sym->return_type};
       }
 
@@ -1859,7 +1859,7 @@ struct CodegenContext : NodeErrorHandler {
           error(attr.identifier(), Diag::MultipleConditionAttributes);
           break;
         }
-        for (LocalVar var : attributes.children_of_type<LocalVar>()) {
+        for (LocalVar var : attributes.descendants_of_type<LocalVar>()) {
           string id = string(var.identifier().str());
           cond += "int " + id + " = ShaderCreateInfo::find_constant(constants, \"" + id + "\"); ";
         }
