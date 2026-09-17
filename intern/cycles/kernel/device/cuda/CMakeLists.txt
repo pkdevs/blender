@@ -163,7 +163,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
   else()
     message(WARNING
       "CUDA version ${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR} detected, "
-      "build may succeed but only CUDA 12, 11, 10.2 and 10.1 have been tested")
+      "build may succeed but only CUDA 13, 12, 11, 10.2 and 10.1 have been tested")
   endif()
 
   # build for each arch
