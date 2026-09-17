@@ -68,6 +68,12 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .description("Rotates the direction of anisotropy, with 1.0 going full circle");
+  b.add_input<decl::Float>("Retroreflectivity"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR)
+      .description("Blends between regular reflection and retroreflection, reflecting light back toward its source");
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
@@ -107,8 +113,8 @@ static int node_shader_gpu_bsdf_metallic(GPUMaterial *mat,
   float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
   float use_complex_ior = (node->custom2 == SHD_PHYSICAL_CONDUCTOR) ? 1.0f : 0.0f;
 
-  if (!in[7].link) {
-    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[7].link);
+  if (!in[8].link) {
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[8].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
@@ -159,6 +165,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem edge_tint = get_input_value("Edge Tint", NodeItem::Type::Color3);
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem anisotropy = get_input_value("Anisotropy", NodeItem::Type::Color3);
+  NodeItem retroreflectivity =
+    get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem tangent = get_input_link("Tangent", NodeItem::Type::Vector3);
   NodeItem thin_film_thickness = get_input_value("Thin Film Thickness", NodeItem::Type::Float);
@@ -184,6 +192,7 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"ior", ior_out},
                       {"extinction", extinction_out},
                       {"roughness", roughness},
+                      {"retroreflective", retroreflectivity},
                       {"thinfilm_thickness", thin_film_thickness},
                       {"thinfilm_ior", thin_film_ior}});
 }

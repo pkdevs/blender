@@ -83,6 +83,7 @@ BLOCKLIST = [
 
     ### Cycles only tests go here ###
     "gsplat.*.blend",
+    "principled_bsdf_retroreflective.blend",
 ]
 
 BLOCKLIST_METAL = [

@@ -32,6 +32,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>("Retroreflectivity"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
@@ -54,8 +59,8 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {
-  if (!in[4].link) {
-    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[4].link);
+  if (!in[5].link) {
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[5].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
@@ -86,6 +91,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem color = get_input_value("Color", NodeItem::Type::Color3);
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem anisotropy = get_input_value("Anisotropy", NodeItem::Type::Color3);
+  NodeItem retroreflectivity =
+    get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem tangent = get_input_link("Tangent", NodeItem::Type::Vector3);
 
@@ -101,7 +108,8 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tangent", tangent},
                       {"ior", ior_out},
                       {"extinction", extinction_out},
-                      {"roughness", roughness}});
+                      {"roughness", roughness},
+                      {"retroreflective", retroreflectivity}});
 }
 #endif
 NODE_SHADER_MATERIALX_END

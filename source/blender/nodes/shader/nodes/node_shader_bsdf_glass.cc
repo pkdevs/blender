@@ -48,6 +48,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR)
       .description("Rotates the direction of anisotropy, with 1.0 going full circle");
   b.add_input<decl::Float>("IOR"_ustr).default_value(1.5f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Float>("Retroreflectivity"_ustr)
+    .default_value(0.0f)
+    .min(0.0f)
+    .max(1.0f)
+    .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
@@ -82,8 +87,8 @@ static int node_shader_gpu_bsdf_glass(GPUMaterial *mat,
                                       GPUNodeStack *in,
                                       GPUNodeStack *out)
 {
-  if (!in[5].link) {
-    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[5].link);
+  if (!in[6].link) {
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[6].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY | GPU_MATFLAG_REFRACT);
@@ -118,6 +123,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem thin_film_thickness = get_input_value("Thin Film Thickness", NodeItem::Type::Float);
   NodeItem thin_film_ior = get_input_value("Thin Film IOR", NodeItem::Type::Float);
+  NodeItem retroreflectivity =
+    get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
 
   return create_node("dielectric_bsdf",
                      NodeItem::Type::BSDF,
@@ -125,6 +132,7 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tint", color},
                       {"roughness", roughness},
                       {"ior", ior},
+                      {"retroreflective", retroreflectivity},
                       {"thinfilm_thickness", thin_film_thickness},
                       {"thinfilm_ior", thin_film_ior},
                       {"scatter_mode", val(std::string("RT"))}});
