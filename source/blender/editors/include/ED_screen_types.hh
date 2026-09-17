@@ -38,6 +38,9 @@ struct ScreenAnimData {
   int sfra;
   /** Next frame to go to (when ANIMPLAY_FLAG_USE_NEXT_FRAME is set) */
   int nextfra;
+  /** Last range submitted for audio preparation, not the range stored in the audio cache. */
+  int audio_frame_start;
+  int audio_frame_end;
   /** Used for frame dropping */
   double lagging_frame_count;
   /** Playback was invoked from animation editor */

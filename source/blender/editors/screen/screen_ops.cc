@@ -6547,6 +6547,29 @@ static void screen_animation_region_tag_redraw(
 
 // #define PROFILE_AUDIO_SYNC
 
+static Scene *screen_animation_ensure_audio(Main *bmain,
+                                            Scene *scene,
+                                            Depsgraph *depsgraph,
+                                            ScreenAnimData *sad)
+{
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  if (scene_eval == nullptr) {
+    return nullptr;
+  }
+  const int frame_start = scene->playback_start();
+  const int frame_end = scene->playback_end();
+  /* Check nested ranges and cache compatibility only when the request or its inputs change. */
+  if (scene_eval->runtime->audio.animation_cache_dirty || sad->audio_frame_start != frame_start ||
+      sad->audio_frame_end != frame_end)
+  {
+    BKE_sound_ensure_scene_audio_animation(bmain, scene, depsgraph, frame_start, frame_end);
+    sad->audio_frame_start = frame_start;
+    sad->audio_frame_end = frame_end;
+    scene_eval = DEG_get_evaluated_scene(depsgraph);
+  }
+  return scene_eval;
+}
+
 static wmOperatorStatus screen_animation_step_invoke(bContext *C,
                                                      wmOperator * /*op*/,
                                                      const wmEvent *event)
@@ -6694,12 +6717,8 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
         }
         else {
           sad->flag &= ~ANIMPLAY_FLAG_REVERSE;
-          if (depsgraph != nullptr && scene_eval != nullptr &&
-              scene_eval->runtime->audio.animation_cache_dirty)
-          {
-            BKE_sound_ensure_scene_audio_animation(
-                bmain, scene, depsgraph, start_frame, end_frame);
-            scene_eval = DEG_get_evaluated_scene(depsgraph);
+          if (depsgraph != nullptr) {
+            scene_eval = screen_animation_ensure_audio(bmain, scene, depsgraph, sad);
           }
           BKE_sound_play_scene(scene_eval);
           scene->r.cfra = start_frame + 1;
@@ -6744,10 +6763,8 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
     }
 
     scene_eval = DEG_get_evaluated_scene(depsgraph);
-    if ((sad->flag & ANIMPLAY_FLAG_REVERSE) == 0 && scene_eval != nullptr &&
-        scene_eval->runtime->audio.animation_cache_dirty)
-    {
-      BKE_sound_ensure_scene_audio_animation(bmain, scene, depsgraph, start_frame, end_frame);
+    if ((sad->flag & ANIMPLAY_FLAG_REVERSE) == 0) {
+      scene_eval = screen_animation_ensure_audio(bmain, scene, depsgraph, sad);
     }
   }
 
@@ -7023,6 +7040,15 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
 
     sad->region = CTX_wm_region(C);
     sad->sfra = frame_before_loop_jump;
+    if (mode == 1) {
+      sad->audio_frame_start = scene->playback_start();
+      sad->audio_frame_end = scene->playback_end();
+    }
+    else {
+      /* Reverse playback has not submitted an audio range yet. */
+      sad->audio_frame_start = 1;
+      sad->audio_frame_end = 0;
+    }
   }
 
   /* Send a fake mouse-move event so that the active button (the one the mouse hovers over) is
