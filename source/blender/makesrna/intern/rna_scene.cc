@@ -1045,6 +1045,7 @@ static void rna_Scene_framelen_update(Main * /*bmain*/, Scene * /*active_scene*/
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   scene->r.framelen = float(scene->r.framapto) / float(scene->r.images);
+  DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME | ID_RECALC_SEQUENCER_STRIPS);
 }
 
 static void rna_Scene_frame_current_set(PointerRNA *ptr, int value)

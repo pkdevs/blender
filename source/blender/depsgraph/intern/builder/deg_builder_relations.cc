@@ -1102,6 +1102,22 @@ void DepsgraphRelationBuilder::build_object_data_speaker(Object *object)
   ComponentKey speaker_key(&speaker->id, NodeType::AUDIO);
   ComponentKey object_key(&object->id, NodeType::AUDIO);
   add_relation(speaker_key, object_key, "Speaker Update");
+
+  /* Speaker handles, including those from nested Scenes, belong to the graph's root Scene.
+   * Explicit caches include their evaluated properties and transforms. Only user edits invalidate
+   * that cache; Automatic preparation continues to evaluate Speakers at the current frame. */
+  OperationKey scene_cache_key(
+      &graph_->scene->id, NodeType::CACHE, OperationCode::AUDIO_CACHE_INVALIDATE);
+  const int flags = RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD;
+  add_relation(ComponentKey(&object->id, NodeType::TRANSFORM),
+               scene_cache_key,
+               "Speaker Transform -> Audio Cache",
+               flags);
+  /* Speaker data animation targets Parameters, not the Audio placeholder. */
+  add_relation(ComponentKey(&speaker->id, NodeType::PARAMETERS),
+               scene_cache_key,
+               "Speaker Parameters -> Audio Cache",
+               flags);
 }
 
 void DepsgraphRelationBuilder::build_object_parent(Object *object)
