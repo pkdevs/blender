@@ -1,1 +1,2 @@
 Referenced by issue #98799, Cannot select camera by clicking on the border edge, if the scale is below 0.51
+Referenced by issue #89476, Can't select camera from camera view by clicking on the border if the camera object is too small
