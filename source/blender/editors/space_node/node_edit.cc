@@ -1699,11 +1699,11 @@ static wmOperatorStatus node_comment_edit_invoke(bContext *C, wmOperator *op, co
   }
 
   NodeComment &storage = *static_cast<NodeComment *>(node->storage);
-  if (!bool(storage.flag & NodeCommentFlag::Render)) {
+  if (bool(storage.flag & NodeCommentFlag::Edit)) {
     return OPERATOR_PASS_THROUGH;
   }
 
-  storage.flag &= ~NodeCommentFlag::Render;
+  storage.flag |= NodeCommentFlag::Edit;
   WM_event_add_notifier(C, NC_NODE | NA_EDITED, nullptr);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
   return OPERATOR_FINISHED;

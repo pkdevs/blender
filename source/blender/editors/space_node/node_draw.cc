@@ -3630,14 +3630,31 @@ static void comment_node_prepare_for_draw(const bContext &C,
                                           ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
-  const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
+  const bool is_edit = bool(storage.flag & NodeCommentFlag::Edit);
   const StringRef text = storage.text;
 
   const float2 loc = node_to_view(node.location);
   PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &node);
 
   float bottom_y;
-  if (is_render) {
+  if (is_edit) {
+    const int but_h = ui::textbox_but_height(storage.textbox_state_node);
+    ui::Button *but = uiDefButTextBoxR(&block,
+                                       &node_ptr,
+                                       "text",
+                                       &storage.textbox_state_node,
+                                       loc.x,
+                                       loc.y - but_h,
+                                       int(node.width * UI_SCALE_FAC));
+    /* Same approach to detecting when a text property is not active anymore is used elsewhere
+     * (e.g. #outliner_buttons) */
+    if (!ui::button_active_only(&C, CTX_wm_region(&C), &block, but)) {
+      storage.flag &= ~NodeCommentFlag::Edit;
+      WM_event_add_notifier(&C, NC_NODE | ND_DISPLAY, nullptr);
+    }
+    bottom_y = loc.y - but_h;
+  }
+  else {
     /* Different paddings are used here to compensate for padding applied elsewhere. */
     const int pad_left = 0.2 * UI_UNIT_X;
     const int pad_right = 0.25 * UI_UNIT_X;
@@ -3657,26 +3674,9 @@ static void comment_node_prepare_for_draw(const bContext &C,
     block_align_end(&block);
     bottom_y = ui::block_layout_resolve(&block).y - pad_bottom;
   }
-  else {
-    const int but_h = ui::textbox_but_height(storage.textbox_state_node);
-    ui::Button *but = uiDefButTextBoxR(&block,
-                                       &node_ptr,
-                                       "text",
-                                       &storage.textbox_state_node,
-                                       loc.x,
-                                       loc.y - but_h,
-                                       int(node.width * UI_SCALE_FAC));
-    /* Same approach to detecting when a text property is not active anymore is used elsewhere
-     * (e.g. #outliner_buttons) */
-    if (!ui::button_active_only(&C, CTX_wm_region(&C), &block, but)) {
-      storage.flag |= NodeCommentFlag::Render;
-      WM_event_add_notifier(&C, NC_NODE | ND_DISPLAY, nullptr);
-    }
-    bottom_y = loc.y - but_h;
-  }
 
   const float icon_pad = 0.15f * U.widget_unit;
-  float height = std::max<float>(!is_render || !text.trim().is_empty() ? loc.y - bottom_y : 0,
+  float height = std::max<float>(is_edit || !text.trim().is_empty() ? loc.y - bottom_y : 0,
                                  NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
   node.runtime->draw_bounds.xmin = loc.x;
@@ -3684,7 +3684,7 @@ static void comment_node_prepare_for_draw(const bContext &C,
   node.runtime->draw_bounds.ymin = loc.y - height;
   node.runtime->draw_bounds.ymax = loc.y;
 
-  if (is_render && node.is_selected()) {
+  if (!is_edit && node.is_selected()) {
     block_emboss_set(&block, ui::EmbossType::None);
     const int but_x = node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE;
     const int but_y = node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE;
@@ -4199,9 +4199,9 @@ static void node_draw_comment(const bContext &C,
   }
 
   const NodeComment &storage = *static_cast<const NodeComment *>(node.storage);
-  const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
+  const bool is_edit = bool(storage.flag & NodeCommentFlag::Edit);
 
-  if (is_render) {
+  if (!is_edit) {
     ColorTheme4f color;
     node_frame_get_color(node, color);
     ui::draw_roundbox_corner_set(ui::CNR_ALL);
@@ -4217,7 +4217,7 @@ static void node_draw_comment(const bContext &C,
                &block);
   block_draw(&C, &block);
 
-  if (node.flag & SELECT && is_render) {
+  if (node.flag & SELECT && !is_edit) {
     ColorTheme4f outline_color;
     if (node.flag & NODE_ACTIVE) {
       ui::theme::get_color_shade_alpha_4fv(TH_ACTIVE, 0, -40, outline_color);
