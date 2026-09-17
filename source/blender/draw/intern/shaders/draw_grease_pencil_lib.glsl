@@ -54,7 +54,7 @@ float gpencil_stroke_hardess_mask(float dist, float hardfac)
  *        p1------1>------p2
  *       / \              / \
  *      /   *============*   \
- *     0                      1
+ *     0                      2
  *    /                        \
  *   /                          \
  * p0                            p3
