@@ -4505,6 +4505,10 @@ static void node_draw_zones_and_frames(const ARegion &region,
   GPU_blend(GPU_BLEND_NONE);
 }
 
+/**
+ * Comments separately so that they can't overlap other nodes. For small comments that wouldn't be
+ * a problem. However, large comments can easily hide entire nodes behind them which isn't obvious.
+ */
 static void draw_comments(const bContext &C,
                           TreeDrawContext &tree_draw_ctx,
                           ARegion &region,
