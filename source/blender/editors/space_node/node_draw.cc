@@ -3684,27 +3684,24 @@ static void comment_node_prepare_for_draw(const bContext &C,
   node.runtime->draw_bounds.ymin = loc.y - height;
   node.runtime->draw_bounds.ymax = loc.y;
 
-  if (node.is_selected() || !is_render) {
+  if (is_render && node.is_selected()) {
     block_emboss_set(&block, ui::EmbossType::None);
     const int but_x = node.runtime->draw_bounds.xmax - icon_pad - NODE_HEADER_ICON_SIZE;
     const int but_y = node.runtime->draw_bounds.ymax - icon_pad - NODE_HEADER_ICON_SIZE;
-    if (is_render) {
-      ui::Button *but = uiDefIconBut(&block,
-                                     ui::ButtonType::But,
-                                     ICON_GREASEPENCIL,
-                                     but_x,
-                                     but_y,
-                                     NODE_HEADER_ICON_SIZE,
-                                     NODE_HEADER_ICON_SIZE,
-                                     nullptr,
-                                     0,
-                                     0,
-                                     "");
-      /* The operator already adds an undo step, so no need for the button to also add one. */
-      button_flag_disable(but, ui::BUT_UNDO);
-      button_func_set(
-          but, node_comment_edit_button_cb, POINTER_FROM_INT(node.identifier), nullptr);
-    }
+    ui::Button *but = uiDefIconBut(&block,
+                                   ui::ButtonType::But,
+                                   ICON_GREASEPENCIL,
+                                   but_x,
+                                   but_y,
+                                   NODE_HEADER_ICON_SIZE,
+                                   NODE_HEADER_ICON_SIZE,
+                                   nullptr,
+                                   0,
+                                   0,
+                                   "");
+    /* The operator already adds an undo step, so no need for the button to also add one. */
+    button_flag_disable(but, ui::BUT_UNDO);
+    button_func_set(but, node_comment_edit_button_cb, POINTER_FROM_INT(node.identifier), nullptr);
     block_emboss_set(&block, ui::EmbossType::Emboss);
   }
 }
