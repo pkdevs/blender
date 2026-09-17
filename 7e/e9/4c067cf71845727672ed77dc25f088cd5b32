@@ -1,3 +1,4 @@
 Referenced by pull request #158949, Cycles: Tune inlining to fix oneAPI performance regression
 Referenced by commit bd83a4506c2b20705c62a88f3b44daeb4cf8b9c0, Cycles: Tune inlining to fix oneAPI performance regression
 Referenced by pull request #164019, Fix #163829: Cycles: Crash with bump from displacement and emission
+Referenced by commit c737da411738b40b1fce5520f7dad90d221cd38e, Fix #163829: Cycles: Crash with bump from displacement and emission
