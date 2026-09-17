@@ -1260,6 +1260,7 @@ void register_node_type_comment()
   ntype.draw_buttons_ex = node_comment_layout_ex;
   ntype.initfunc = node_comment_init;
   ntype.maxwidth = FLT_MAX;
+  ntype.no_muting = true;
   ntype.default_width = bke::NodeWidth::_200;
   ntype.blend_write_storage_content = node_comment_blend_write;
   ntype.blend_data_read_storage_content = node_comment_blend_read;
