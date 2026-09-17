@@ -570,7 +570,6 @@ static void button_activate_init(bContext *C,
 static void button_activate_state(bContext *C, Button *but, HandleButtonState state);
 static void button_activate_exit(
     bContext *C, Button *but, HandleButtonData *data, const bool mousemove, const bool onfree);
-static int handle_button_event(bContext *C, const wmEvent *event, Button *but);
 static int handler_region_menu(bContext *C, const wmEvent *event, void *userdata);
 static void handle_button_activate(bContext *C,
                                    ARegion *region,
@@ -4166,17 +4165,6 @@ static int do_but_textedit(
         break;
       }
 
-      /* Allow clicks on overlapping buttons while editing (e.g. floating icons). */
-      if (ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
-        Button *but_over = but_find_mouse_over(data->region, event);
-        if (but_over && but_over != but) {
-          ARegion *region = data->region;
-          button_activate_exit(C, but, data, false, false);
-          button_activate_init(C, region, but_over, BUTTON_ACTIVATE_OVER);
-          return handle_button_event(C, event, but_over);
-        }
-      }
-
       const bool had_selection = but->selsta != but->selend;
 
       /* exit on LMB only on RELEASE for searchbox, to mimic other popups,
@@ -5478,18 +5466,6 @@ static int do_but_TEXTBOX(bContext *C,
 
       /* Update mouse cursor on mouse move. */
       if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
-        /* Prefer the default cursor when hovering overlapping buttons (e.g. floating icons). */
-        if (data->state == BUTTON_STATE_TEXT_EDITING) {
-          Button *but_over = but_find_mouse_over(data->region, event);
-          if (but_over && but_over != textbox) {
-            if (win->cursor != WM_CURSOR_DEFAULT) {
-              WM_cursor_modal_restore(win);
-              WM_cursor_set(win, WM_CURSOR_DEFAULT);
-              data->changed_cursor = false;
-            }
-            break;
-          }
-        }
         if (BLI_rctf_isect_pt(&scroll_rect, UNPACK2(event->xy))) {
           if (textbox->last_total_lines > textbox->visible_lines()) {
             WM_cursor_modal_restore(win);
