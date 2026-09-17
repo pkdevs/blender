@@ -66,8 +66,6 @@ class GreasePencilPaintTests(unittest.TestCase):
         with bpy.context.temp_override(**context_override):
             bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
 
-        # bpy.ops.wm.save_mainfile()
-
         # Remove the 'init_time' and 'delta_time' attributes before comparing, because they will
         # differ by definition.
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], "init_time")
