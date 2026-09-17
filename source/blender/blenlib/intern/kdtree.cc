@@ -90,7 +90,7 @@ static int parallel_build_threads(const int64_t points_num)
 
 template<typename T> class TreeBuilder {
  public:
-  using ValueT = typename T::base_type;
+  using value_type = typename T::base_type;
   static constexpr int dimensions = T::type_length;
 
  private:
@@ -98,9 +98,9 @@ template<typename T> class TreeBuilder {
    * A point as the build holds it: its coordinates, and its index in #points_ in the element
    * after them.
    */
-  using BuildPoint = VecBase<ValueT, dimensions + 1>;
+  using BuildPoint = VecBase<value_type, dimensions + 1>;
 
-  using Node = kdtree::Node<ValueT>;
+  using Node = kdtree::Node<value_type>;
 
   /**
    * Nodes are handed out from batches, so that a walk down the tree stays within a few
@@ -317,7 +317,7 @@ template<typename T> class TreeBuilder {
     for (const int dim : IndexRange(dimensions)) {
       point[dim] = points_[index][dim];
     }
-    point[dimensions] = std::bit_cast<ValueT>(index);
+    point[dimensions] = std::bit_cast<value_type>(index);
     return point;
   }
 
@@ -370,7 +370,7 @@ template<typename T> class TreeBuilder {
         dim = other;
       }
     }
-    const ValueT split_value = bounds.min[dim] + extent[dim] / 2;
+    const value_type split_value = bounds.min[dim] + extent[dim] / 2;
 
     /* Split the node a block at a time, which a threaded build spreads over its threads. For
      * determinism, only the range size is used to check whether to use the blocked partitioning,
@@ -484,7 +484,7 @@ template<typename T> class TreeBuilder {
                               const int start,
                               const int end,
                               const int dim,
-                              const ValueT split_value)
+                              const value_type split_value)
   {
     constexpr int block = PARTITION_BLOCK_SIZE;
 
@@ -540,7 +540,7 @@ template<typename T> class TreeBuilder {
                                     const int start,
                                     const int end,
                                     const int dim,
-                                    const ValueT split_value)
+                                    const value_type split_value)
   {
     const int count = end - start;
     BLI_assert(count <= 2 * PARTITION_BLOCK_SIZE);
@@ -585,7 +585,7 @@ template<typename T> class TreeBuilder {
   int partition_points_in_blocks(const int start,
                                  const int end,
                                  const int dim,
-                                 const ValueT split_value)
+                                 const value_type split_value)
   {
     const MutableSpan<BuildPoint> points = build_points_;
     const int count = end - start;
@@ -837,7 +837,7 @@ static int calc_duplicates_impl(const KDTreeNew<T> &tree,
                                 const MutableSpan<int> duplicates,
                                 const ForeachFn foreach_index)
 {
-  using ValueT = typename T::base_type;
+  using value_type = typename T::base_type;
   const T *points = tree.points();
   int found = 0;
   foreach_index([&](const int index) {
@@ -849,7 +849,7 @@ static int calc_duplicates_impl(const KDTreeNew<T> &tree,
     }
     const int found_before = found;
     tree.foreach_in_radius(
-        points[index], range, [&](const int other, const ValueT /*distance_sq*/) {
+        points[index], range, [&](const int other, const value_type /*distance_sq*/) {
           if (other != index && duplicates[other] == -1) {
             duplicates[other] = index;
             found++;

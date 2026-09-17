@@ -88,7 +88,7 @@ concept ResultSetFor = requires(ResultSet &result, const ValueT distance_sq, con
  */
 template<typename T> class KDTreeNew : NonMovable, NonCopyable {
  public:
-  using ValueT = typename T::base_type;
+  using value_type = typename T::base_type;
   static constexpr int dimensions = T::type_length;
 
   /** A single search result. */
@@ -96,7 +96,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
     /** Index of the point in #points. */
     int index;
     /** Squared distance between the point and the search position. */
-    ValueT distance_sq;
+    value_type distance_sq;
   };
 
   /**
@@ -110,7 +110,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   static constexpr int LEAF_SIZE_DEFAULT = 32;
 
  private:
-  using Node = kdtree::Node<ValueT>;
+  using Node = kdtree::Node<value_type>;
 
   /**
    * The coordinates the tree was built from, which outlive it. Only the pointer is kept: the
@@ -205,7 +205,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * Find the point closest to \a position.
    * \return Its index, or -1 if the tree is empty.
    */
-  int find_nearest(const T &position, ValueT *r_distance_sq = nullptr) const;
+  int find_nearest(const T &position, value_type *r_distance_sq = nullptr) const;
 
   /**
    * Find the point closest to \a position for which \a filter returns true. Useful to skip the
@@ -218,7 +218,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   template<typename Filter>
   int find_nearest_filtered(const T &position,
                             Filter &&filter,
-                            ValueT *r_distance_sq = nullptr) const
+                            value_type *r_distance_sq = nullptr) const
     requires kdtree::FilterFn<Filter>;
 
   /**
@@ -230,7 +230,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
 
   /** Call \a fn for every point within \a radius of \a position, in an unspecified order. */
   template<typename Fn>
-  void foreach_in_radius(const T &position, const ValueT radius, Fn &&fn) const;
+  void foreach_in_radius(const T &position, const value_type radius, Fn &&fn) const;
 
   /**
    * Find every point within \a radius of \a position.
@@ -238,10 +238,10 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * Passing in the same vector for many searches avoids reallocating it every time.
    * \return The number of results.
    */
-  int find_in_radius(const T &position, const ValueT radius, Vector<Nearest> &r_nearest) const;
+  int find_in_radius(const T &position, const value_type radius, Vector<Nearest> &r_nearest) const;
 
   /** The number of points within \a radius of \a position. */
-  int count_in_radius(const T &position, const ValueT radius) const;
+  int count_in_radius(const T &position, const value_type radius) const;
 
   /**
    * Visit the points that could be closer to \a position than the result set has accepted so
@@ -250,7 +250,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    */
   template<typename ResultSet>
   void search(ResultSet &result, const T &position) const
-    requires kdtree::ResultSetFor<ResultSet, ValueT>;
+    requires kdtree::ResultSetFor<ResultSet, value_type>;
 
  private:
   /**
@@ -273,9 +273,9 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
   bool search_node(ResultSet &result,
                    const T &position,
                    const Node *node,
-                   const ValueT distance_sq,
+                   const value_type distance_sq,
                    T &offsets) const
-    requires kdtree::ResultSetFor<ResultSet, ValueT>;
+    requires kdtree::ResultSetFor<ResultSet, value_type>;
 };
 
 namespace kdtree {
@@ -510,12 +510,13 @@ template<typename T> Span<int> KDTreeNew<T>::indices() const
   return Span<int>(indices_, size_);
 }
 
-template<typename T> int KDTreeNew<T>::find_nearest(const T &position, ValueT *r_distance_sq) const
+template<typename T>
+int KDTreeNew<T>::find_nearest(const T &position, value_type *r_distance_sq) const
 {
   if (this->is_empty()) {
     return -1;
   }
-  kdtree::NearestResult<ValueT> result;
+  kdtree::NearestResult<value_type> result;
   this->search(result, position);
   if (result.index() != -1 && r_distance_sq) {
     *r_distance_sq = result.distance_sq();
@@ -527,13 +528,14 @@ template<typename T>
 template<typename Filter>
 int KDTreeNew<T>::find_nearest_filtered(const T &position,
                                         Filter &&filter,
-                                        ValueT *r_distance_sq) const
+                                        value_type *r_distance_sq) const
   requires kdtree::FilterFn<Filter>
 {
   if (this->is_empty()) {
     return -1;
   }
-  kdtree::FilteredNearestResult<ValueT, std::decay_t<Filter>> result(std::forward<Filter>(filter));
+  kdtree::FilteredNearestResult<value_type, std::decay_t<Filter>> result(
+      std::forward<Filter>(filter));
   this->search(result, position);
   if (result.index() != -1 && r_distance_sq) {
     *r_distance_sq = result.distance_sq();
@@ -547,29 +549,29 @@ int KDTreeNew<T>::find_nearest_n(const T &position, MutableSpan<Nearest> r_neare
   if (this->is_empty() || r_nearest.is_empty()) {
     return 0;
   }
-  kdtree::NearestNResult<Nearest, ValueT> result(r_nearest);
+  kdtree::NearestNResult<Nearest, value_type> result(r_nearest);
   this->search(result, position);
   return result.count();
 }
 
 template<typename T>
 template<typename Fn>
-void KDTreeNew<T>::foreach_in_radius(const T &position, const ValueT radius, Fn &&fn) const
+void KDTreeNew<T>::foreach_in_radius(const T &position, const value_type radius, Fn &&fn) const
 {
   if (this->is_empty()) {
     return;
   }
-  kdtree::RadiusResult<ValueT, std::decay_t<Fn>> result(radius * radius, std::forward<Fn>(fn));
+  kdtree::RadiusResult<value_type, std::decay_t<Fn>> result(radius * radius, std::forward<Fn>(fn));
   this->search(result, position);
 }
 
 template<typename T>
 int KDTreeNew<T>::find_in_radius(const T &position,
-                                 const ValueT radius,
+                                 const value_type radius,
                                  Vector<Nearest> &r_nearest) const
 {
   r_nearest.clear();
-  this->foreach_in_radius(position, radius, [&](const int index, const ValueT distance_sq) {
+  this->foreach_in_radius(position, radius, [&](const int index, const value_type distance_sq) {
     r_nearest.append({index, distance_sq});
   });
   std::sort(r_nearest.begin(), r_nearest.end(), [](const Nearest &a, const Nearest &b) {
@@ -579,12 +581,12 @@ int KDTreeNew<T>::find_in_radius(const T &position,
 }
 
 template<typename T>
-int KDTreeNew<T>::count_in_radius(const T &position, const ValueT radius) const
+int KDTreeNew<T>::count_in_radius(const T &position, const value_type radius) const
 {
   if (this->is_empty()) {
     return 0;
   }
-  kdtree::RadiusResult<ValueT, decltype([](int, ValueT) {})> result(radius * radius, {});
+  kdtree::RadiusResult<value_type, decltype([](int, value_type) {})> result(radius * radius, {});
   this->search(result, position);
   return result.count();
 }
@@ -592,13 +594,13 @@ int KDTreeNew<T>::count_in_radius(const T &position, const ValueT radius) const
 template<typename T>
 template<typename ResultSet>
 void KDTreeNew<T>::search(ResultSet &result, const T &position) const
-  requires kdtree::ResultSetFor<ResultSet, ValueT>
+  requires kdtree::ResultSetFor<ResultSet, value_type>
 {
   BLI_assert(!this->is_empty());
   /* Squared distance to the bounds of the tree, per dimension, which the walk below replaces
    * one dimension at a time rather than recomputing. */
-  T offsets(ValueT(0));
-  ValueT distance_sq = 0;
+  T offsets(value_type(0));
+  value_type distance_sq = 0;
   for (const int dim : IndexRange(dimensions)) {
     if (position[dim] < bounds_.min[dim]) {
       offsets[dim] = math::square(bounds_.min[dim] - position[dim]);
@@ -616,16 +618,16 @@ template<typename ResultSet>
 bool KDTreeNew<T>::search_node(ResultSet &result,
                                const T &position,
                                const Node *node,
-                               const ValueT distance_sq,
+                               const value_type distance_sq,
                                T &offsets) const
-  requires kdtree::ResultSetFor<ResultSet, ValueT>
+  requires kdtree::ResultSetFor<ResultSet, value_type>
 {
   if (node->children == nullptr) {
     const int *indices = indices_;
     const T *points = points_;
     for (int i = node->leaf.start; i < node->leaf.end; i++) {
       const int index = indices[i];
-      const ValueT point_distance_sq = math::distance_squared(position, points[index]);
+      const value_type point_distance_sq = math::distance_squared(position, points[index]);
       if (kdtree::keep_distance<ResultSet>(point_distance_sq, result.max_distance_sq())) {
         if (!result.add_point(point_distance_sq, index)) {
           return false;
@@ -644,15 +646,15 @@ bool KDTreeNew<T>::search_node(ResultSet &result,
   /* Visit the side of the split the position is on first, since what it finds there is what
    * lets the other side be skipped. */
   const int dim = node->dim;
-  const ValueT value = position[dim];
-  const ValueT to_low = value - node->split.low;
-  const ValueT to_high = value - node->split.high;
+  const value_type value = position[dim];
+  const value_type to_low = value - node->split.low;
+  const value_type to_high = value - node->split.high;
 
   /* Written as a branch rather than as a choice between two pointers, so that the processor
    * predicts which child comes next and starts loading it before the comparison has resolved.
    * Selecting the pointer instead makes the walk down the tree wait at every level. */
   const Node *far_child;
-  ValueT far_offset;
+  value_type far_offset;
   if ((to_low + to_high) < 0) {
     if (!this->search_node(result, position, low_child, distance_sq, offsets)) {
       return false;
@@ -669,8 +671,8 @@ bool KDTreeNew<T>::search_node(ResultSet &result,
   }
 
   /* Swap in the distance to the far side for this dimension, keeping the others. */
-  const ValueT previous = offsets[dim];
-  const ValueT far_distance_sq = distance_sq + far_offset - previous;
+  const value_type previous = offsets[dim];
+  const value_type far_distance_sq = distance_sq + far_offset - previous;
   if (!kdtree::keep_distance<ResultSet>(far_distance_sq, result.max_distance_sq())) {
     return true;
   }
