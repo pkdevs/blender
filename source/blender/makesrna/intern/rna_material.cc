@@ -76,7 +76,6 @@ const EnumPropertyItem rna_enum_ramp_blend_items[] = {
 #  include "BKE_colorband.hh"
 #  include "BKE_context.hh"
 #  include "BKE_editmesh.hh"
-#  include "BKE_gpencil_legacy.h"
 #  include "BKE_grease_pencil.hh"
 #  include "BKE_lib_id.hh"
 #  include "BKE_main.hh"
@@ -96,6 +95,9 @@ const EnumPropertyItem rna_enum_ramp_blend_items[] = {
 #  include "ED_image.hh"
 #  include "ED_node.hh"
 #  include "ED_screen.hh"
+
+/* Stroke and Fill - Alpha Visibility Threshold */
+#  define GPENCIL_ALPHA_OPACITY_THRESH 0.001f
 
 namespace blender {
 
@@ -120,9 +122,7 @@ static void rna_MaterialGpencil_update(Main *bmain, Scene *scene, PointerRNA *pt
   rna_Material_update(bmain, scene, ptr);
 
   /* Need set all caches as dirty. */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (Object *ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ob->type == OB_GREASE_PENCIL) {
       GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
       DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);

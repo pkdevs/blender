@@ -237,7 +237,7 @@ static Base *rna_Object_local_view_property_helper(bScreen *screen,
   }
 
   if (view_layer == nullptr) {
-    win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+    win = ED_screen_window_find(screen, G_MAIN->wm.first());
     view_layer = WM_window_get_active_view_layer(win);
   }
 
@@ -1109,7 +1109,7 @@ void RNA_api_object(StructRNA *srna)
   RNA_def_function_ui_description(
       func, "Find armature influencing this object as a parent or via a modifier");
   parm = RNA_def_pointer(
-      func, "ob_arm", "Object", "", "Armature object influencing this object or nullptr");
+      func, "ob_arm", "Object", "", "Armature object influencing this object or None");
   RNA_def_function_return(func, parm);
 
   /* Shape key */

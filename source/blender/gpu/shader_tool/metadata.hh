@@ -84,6 +84,8 @@ enum Type : uint64_t {
   sampler2D = hash("sampler2D"),
   sampler3D = hash("sampler3D"),
   Closure = hash("Closure"),
+  KernelGlobals = hash("KernelGlobals"),
+  ShadingData = hash("ShadingData"),
 };
 
 struct ArgumentFormat {
@@ -201,6 +203,9 @@ struct ParsedVertInput {
   std::string var_name;
 
   std::string slot;
+
+  /** Optional condition to enable this resource. */
+  std::string res_condition;
 
   std::string serialize() const;
 };

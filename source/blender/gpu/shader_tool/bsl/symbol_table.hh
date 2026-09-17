@@ -32,7 +32,7 @@ struct SymbolScope;
 
 struct SymbolTable {
 
-  static constexpr string err_symbol = "ERROR_SYMBOL";
+  static constexpr const char *err_symbol = "ERROR_SYMBOL";
 
   template<typename T> struct Allocator {
    private:
@@ -111,7 +111,7 @@ struct SymbolTable {
 
   unordered_map<int, string> image_formats;
 
-  static constexpr string subscript_operator_id = "arr_op_";
+  static constexpr const char *subscript_operator_id = "arr_op_";
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);
 
@@ -148,6 +148,8 @@ struct SymbolTable {
 
   SymbolClass *to_class(builtin::ClassId id) const;
 
+  SymbolClass *make_type(SymbolClass *base, int size) const;
+
  private:
   struct BuiltinType {
     /* "int", "int2", ... */
@@ -173,8 +175,7 @@ struct SymbolTable {
   vector<BuiltinType> generate_builtin_types();
   vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
   vector<BuiltinFunc> generate_all_builtin_functions();
-
-  SymbolClass *make_type(SymbolClass *base, int size);
+  vector<BuiltinFunc> generate_all_builtin_constexpr_functions();
 
   void add_operator(
       SourceLocation loc, SymbolClass *left, TokenType op, SymbolClass *right, SymbolClass *ret);
