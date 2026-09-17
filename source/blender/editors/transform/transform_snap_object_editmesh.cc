@@ -19,8 +19,6 @@
 
 #include "GEO_mesh_selection.hh"
 
-#include "intern/bmesh_mesh_convert.hh"
-
 #include "DEG_depsgraph_query.hh"
 
 #include "ED_transform_snap_object_context.hh"
@@ -28,6 +26,10 @@
 #include "transform_snap_object.hh"
 
 namespace blender::ed::transform {
+
+/* -------------------------------------------------------------------- */
+/** \name Snap Object Data
+ * \{ */
 
 static const Mesh *get_mesh_ref(const Object *ob_eval)
 {
@@ -41,10 +43,6 @@ static const Mesh *get_mesh_ref(const Object *ob_eval)
 
   return id_cast<const Mesh *>(ob_eval->data);
 }
-
-/* -------------------------------------------------------------------- */
-/** \name Snap Target Elements
- * \{ */
 
 struct SnapTargetElems {
   IndexMaskMemory memory;
@@ -186,12 +184,6 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
     return *elems_;
   }
 };
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Snap Object Data
- * \{ */
 
 /**
  * Edit mesh snap cache.
