@@ -5,3 +5,4 @@ Referenced by commit 76313f262ea0511ff4f3b5ab332b540bb540e64d, Fix #160071: Sele
 Referenced by issue #160076, GP: New Deselect Linked missing from the menus
 Referenced by pull request #160958, Fix #160076: GP: New Deselect Linked missing from the menus
 Referenced by commit 37fbb9e22cdf65a28b02a75a1652ee835d8a5559, Fix #160076: GP: New Deselect Linked missing from the menus
+Referenced by issue #164026, Select Linked doesn't work on hair curves after Grow Selection
