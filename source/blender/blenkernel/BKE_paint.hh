@@ -305,6 +305,10 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    PaintMode paint_mode,
                                    bool in_stroke,
                                    bool is_first_dab);
+float paint_rake_rotation_spacing(const Paint &paint,
+                                  const Brush &brush,
+                                  bool in_stroke,
+                                  bool is_first_dab);
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
 
 namespace bke::paint {

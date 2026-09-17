@@ -1591,7 +1591,8 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   const float mouse_delta_length = math::length(sample_average.mouse - this->last_mouse_position);
   /* This indicates the first step where rake should be calculated. */
   const bool first_rake_step = paint_rake_rotation_active(*br, mode) && !rake_started_ &&
-                               mouse_delta_length >= WM_event_drag_threshold(event);
+                               mouse_delta_length >=
+                                   paint_rake_rotation_spacing(*paint, *br, true, true);
 
   if ((frist_step || first_rake_step) && !(br->flag & BRUSH_SMOOTH_STROKE)) {
     paint_runtime.overlap_factor = paint_stroke_integrate_overlap(*br, 1.0);

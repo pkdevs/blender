@@ -1912,10 +1912,10 @@ float paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y
 }
 
 /* Threshold to move before updating the brush rotation, reduces jitter. */
-static float paint_rake_rotation_spacing(const Paint & /*paint*/,
-                                         const Brush &brush,
-                                         bool in_stroke,
-                                         bool is_first_dab)
+float paint_rake_rotation_spacing(const Paint & /*paint*/,
+                                  const Brush &brush,
+                                  bool in_stroke,
+                                  bool is_first_dab)
 {
   const float rotation_spacing = brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f :
                                                                                             20.0f;
