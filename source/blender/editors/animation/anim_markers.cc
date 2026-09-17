@@ -1328,11 +1328,11 @@ static void ed_marker_duplicate_apply(bContext *C)
       STRNCPY_UTF8(newmarker->name, marker.name);
       newmarker->camera = marker.camera;
 
-      if (marker.prop != nullptr) {
-        newmarker->prop = IDP_CopyProperty(marker.prop);
+      if (marker.system_properties != nullptr) {
+        newmarker->system_properties = IDP_CopyProperty(marker.system_properties);
       }
-      if (marker.userprop != nullptr) {
-        newmarker->userprop = IDP_CopyProperty(marker.userprop);
+      if (marker.properties != nullptr) {
+        newmarker->properties = IDP_CopyProperty(marker.properties);
       }
 
       /* new marker is added to the beginning of list */
@@ -1867,11 +1867,11 @@ static wmOperatorStatus ed_marker_delete_exec(bContext *C, wmOperator * /*op*/)
   for (marker = markers->first(); marker; marker = nmarker) {
     nmarker = marker->next;
     if (marker->flag & SELECT) {
-      if (marker->prop != nullptr) {
-        IDP_FreeProperty(marker->prop);
+      if (marker->system_properties != nullptr) {
+        IDP_FreeProperty(marker->system_properties);
       }
-      if (marker->userprop != nullptr) {
-        IDP_FreeProperty(marker->userprop);
+      if (marker->properties != nullptr) {
+        IDP_FreeProperty(marker->properties);
       }
       BLI_freelinkN(markers, marker);
       changed = true;

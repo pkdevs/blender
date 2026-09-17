@@ -61,8 +61,8 @@ void DepsgraphNodeBuilder::build_scene_parameters(Scene *scene)
   add_operation_node(&scene->id, NodeType::SCENE, OperationCode::SCENE_EVAL);
 
   for (TimeMarker &marker : scene->markers) {
-    build_idproperties(marker.prop);
-    build_idproperties(marker.userprop);
+    build_idproperties(marker.system_properties);
+    build_idproperties(marker.properties);
   }
 }
 

@@ -1081,8 +1081,8 @@ struct TimeMarker {
   unsigned int flag = 0;
   struct Object *camera = nullptr;
   /* System properties. */
-  struct IDProperty *prop = nullptr;
-  struct IDProperty *userprop = nullptr;
+  struct IDProperty *system_properties = nullptr;
+  struct IDProperty *properties = nullptr;
 };
 
 typedef enum TimeMarkerFlag : unsigned int {

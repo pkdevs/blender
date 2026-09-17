@@ -3933,11 +3933,11 @@ void BKE_time_markers_blend_write(BlendWriter *writer, ListBaseT<TimeMarker> &ma
   for (TimeMarker &marker : markers) {
     writer->write_struct(&marker);
 
-    if (marker.prop != nullptr) {
-      IDP_BlendWrite(writer, marker.prop);
+    if (marker.system_properties != nullptr) {
+      IDP_BlendWrite(writer, marker.system_properties);
     }
-    if (marker.userprop != nullptr) {
-      IDP_BlendWrite(writer, marker.userprop);
+    if (marker.properties != nullptr) {
+      IDP_BlendWrite(writer, marker.properties);
     }
   }
 }
@@ -3946,10 +3946,10 @@ void BKE_time_markers_blend_read(BlendDataReader *reader, ListBaseT<TimeMarker> 
 {
   BLO_read_struct_list(reader, TimeMarker, &markers);
   for (TimeMarker &marker : markers) {
-    BLO_read_struct(reader, IDProperty, &marker.prop);
-    IDP_BlendDataRead(reader, &marker.prop);
-    BLO_read_struct(reader, IDProperty, &marker.userprop);
-    IDP_BlendDataRead(reader, &marker.userprop);
+    BLO_read_struct(reader, IDProperty, &marker.system_properties);
+    IDP_BlendDataRead(reader, &marker.system_properties);
+    BLO_read_struct(reader, IDProperty, &marker.properties);
+    IDP_BlendDataRead(reader, &marker.properties);
   }
 }
 
@@ -3959,11 +3959,11 @@ void BKE_copy_time_markers(ListBaseT<TimeMarker> &markers_dst,
 {
   BLI_duplicatelist(&markers_dst, &markers_src);
   for (TimeMarker &marker : markers_dst) {
-    if (marker.prop != nullptr) {
-      marker.prop = IDP_CopyProperty_ex(marker.prop, flag);
+    if (marker.system_properties != nullptr) {
+      marker.system_properties = IDP_CopyProperty_ex(marker.system_properties, flag);
     }
-    if (marker.userprop != nullptr) {
-      marker.userprop = IDP_CopyProperty_ex(marker.userprop, flag);
+    if (marker.properties != nullptr) {
+      marker.properties = IDP_CopyProperty_ex(marker.properties, flag);
     }
   }
 }

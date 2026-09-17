@@ -32,13 +32,13 @@ namespace blender {
 static IDProperty **rna_TimelineMarker_idprops(PointerRNA *ptr)
 {
   TimeMarker *marker = static_cast<TimeMarker *>(ptr->data);
-  return &marker->userprop;
+  return &marker->properties;
 }
 
 static IDProperty **rna_TimelineMarker_system_idprops(PointerRNA *ptr)
 {
   TimeMarker *marker = static_cast<TimeMarker *>(ptr->data);
-  return &marker->prop;
+  return &marker->system_properties;
 }
 
 static void rna_TimelineMarker_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA * /*ptr*/)

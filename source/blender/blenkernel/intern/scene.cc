@@ -389,11 +389,11 @@ static void scene_copy_data(Main *bmain,
 static void scene_free_markers(Scene *scene, bool do_id_user)
 {
   for (TimeMarker &marker : scene->markers.items_mutable()) {
-    if (marker.prop != nullptr) {
-      IDP_FreeProperty_ex(marker.prop, do_id_user);
+    if (marker.system_properties != nullptr) {
+      IDP_FreeProperty_ex(marker.system_properties, do_id_user);
     }
-    if (marker.userprop != nullptr) {
-      IDP_FreeProperty_ex(marker.userprop, do_id_user);
+    if (marker.properties != nullptr) {
+      IDP_FreeProperty_ex(marker.properties, do_id_user);
     }
     MEM_delete(&marker);
   }
@@ -968,11 +968,12 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
   for (TimeMarker &marker : scene->markers) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, marker.camera, IDWALK_CB_NOP);
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
-        data, IDP_foreach_property(marker.prop, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+        data,
+        IDP_foreach_property(marker.system_properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
           BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
         }));
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
-        data, IDP_foreach_property(marker.userprop, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+        data, IDP_foreach_property(marker.properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
           BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
         }));
   }
