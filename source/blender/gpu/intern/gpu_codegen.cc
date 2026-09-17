@@ -14,6 +14,7 @@
 
 #include "BLI_span.hh"
 #include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_cryptomatte.hh"
@@ -58,6 +59,10 @@ static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
       return stream << "attr_load_layer(" << input->layer_attr->hash_code << ")";
     case GPU_SOURCE_STRUCT:
       return stream << (input->is_zone_io ? "zone" : "strct") << input->id;
+    case GPU_SOURCE_SHADING_DATA:
+      return stream << "sd";
+    case GPU_SOURCE_KERNEL_GLOBALS:
+      return stream << "kg";
     case GPU_SOURCE_TEX:
       return stream << input->texture->sampler_name;
     case GPU_SOURCE_TEX_TILED_MAPPING:
@@ -357,7 +362,7 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
 
     if (from != to) {
       /* Special case that needs luminance coefficients as argument. */
-      if (from == GPU_VEC4 && to == GPU_FLOAT) {
+      if (from == GPU_VEC4 && ELEM(to, GPU_FLOAT, GPU_INT, GPU_BOOL)) {
         float coefficients[3];
         IMB_colormanagement_get_luminance_coefficients(coefficients);
         eval_ss << ", " << Span<float>(coefficients, 3);
@@ -379,6 +384,10 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     switch (input.source) {
       case GPU_SOURCE_FUNCTION_CALL:
         eval_ss << type() << " " << &input << "; " << input.function_call << &input << ");\n";
+        break;
+      case GPU_SOURCE_SHADING_DATA:
+      case GPU_SOURCE_KERNEL_GLOBALS:
+        /* Defined as inputs to the node-tree eval function. */
         break;
       case GPU_SOURCE_STRUCT:
         eval_ss << input.type << " " << &input << " = CLOSURE_DEFAULT;\n";
@@ -409,7 +418,15 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     if (output.is_zone_io) {
       break;
     }
-    eval_ss << output.type << " " << &output << ";\n";
+    switch (output.type) {
+      case GPU_SHADING_DATA:
+      case GPU_KERNEL_GLOBALS:
+        /* Defined as inputs to the node-tree eval function. */
+        break;
+      default:
+        eval_ss << output.type << " " << &output << ";\n";
+        break;
+    }
   }
 
   /* Function call. */
@@ -439,7 +456,17 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
     if (output.is_zone_io) {
       break;
     }
-    eval_ss << &output;
+    switch (output.type) {
+      case GPU_KERNEL_GLOBALS:
+        eval_ss << "kg";
+        break;
+      case GPU_SHADING_DATA:
+        eval_ss << "sd";
+        break;
+      default:
+        eval_ss << &output;
+        break;
+    }
     if (output.next && !output.next->is_zone_io) {
       eval_ss << ", ";
     }
@@ -623,7 +650,8 @@ void GPUCodegen::generate_graphs()
       /* Tag only the nodes needed for the current function */
       gpu_nodes_tag(&graph, func_link.outlink, GPU_NODE_TAG_FUNCTION);
       GPUGraphOutput graph = graph_serialize(GPU_NODE_TAG_FUNCTION, func_link.outlink);
-      eval_ss << "float " << func_link.name << "() {\n" << graph.serialized << "}\n\n";
+      eval_ss << "float " << func_link.name << "(KernelGlobals kg, ShadingData sd) {\n"
+              << graph.serialized << "}\n\n";
       output.material_functions.append({eval_ss.str(), graph.dependencies});
     }
     /* Leave the function tags as they were before serialization */
