@@ -109,13 +109,36 @@ struct CameraVelocity {
   }
 
   /**
-   * Given a view space view vector \a vV, compute the previous and next motion vectors for
-   * background pixels.
+   * Face-local variant of `surface_velocity()` for `RenderBuffers::vector_local_tx`.
+   */
+  float4 surface_velocity_local(const ViewMatrices &view, float3 P_prv, float3 P, float3 P_nxt) const
+  {
+    if (!is_panoramic(camera_curr.type)) {
+      return surface_velocity(P_prv, P, P_nxt);
+    }
+    float4x4 face_mat = view.viewmat * camera_curr.viewinv;
+    float4x4 viewmat_prev = face_mat * camera_prev.viewmat;
+    float4x4 viewmat_next = face_mat * camera_next.viewmat;
+
+    float2 curr_ndc = project_point(view.winmat, transform_point(view.viewmat, P)).xy;
+    float2 prev_ndc = project_point(view.winmat, transform_point(viewmat_prev, P_prv)).xy;
+    float2 next_ndc = project_point(view.winmat, transform_point(viewmat_next, P_nxt)).xy;
+
+    if (any(isnan(prev_ndc)) || any(isinf(prev_ndc))) {
+      prev_ndc = curr_ndc;
+    }
+    if (any(isnan(next_ndc)) || any(isinf(next_ndc))) {
+      next_ndc = curr_ndc;
+    }
+    return float4(prev_ndc - curr_ndc, curr_ndc - next_ndc) * 0.5f;
+  }
+
+  /**
+   * Given a world space view vector V, compute the previous and next motion vectors for background pixels.
    * Returns uv space motion vectors in pairs (motion_prev.xy, motion_next.xy).
    */
-  float4 background_velocity(float3 vV) const
+  float4 background_velocity(float3 V) const
   {
-    float3 V = transform_direction(camera_curr.viewinv, vV);
     float2 prev_uv, curr_uv, next_uv;
     const bool panoramic = is_panoramic(camera_curr.type);
     if (panoramic) {
@@ -147,15 +170,51 @@ struct CameraVelocity {
     return motion;
   }
 
+  /* World-space view direction. Must use `view`, which is this cubeface for panoramic camera. */
+  float3 background_world_direction(const ViewMatrices &view, float2 uv) const
+  {
+    /* Use view vector to avoid imprecision if camera is far from origin. */
+    float3 vV = -view.view_incident_vector(view.point_screen_to_view(float3(uv, 1.0f)));
+    return transform_direction(view.viewinv, vV);
+  }
+
+  /**
+   * Face-local variant of `resolve()` for `RenderBuffers::vector_local_tx`.
+   */
+  float4 resolve_local(const ViewMatrices &view, float4 vector_local, float2 uv, float depth) const
+  {
+    if (vector_local.x != VELOCITY_INVALID) {
+      return velocity::unpack(vector_local);
+    }
+    if (depth == 1.0f) {
+      float2 curr_ndc = uv * 2.0f - 1.0f;
+      float4x4 face_mat = view.viewmat * camera_curr.viewinv;
+      float4x4 viewmat_prev = face_mat * camera_prev.viewmat;
+      float4x4 viewmat_next = face_mat * camera_next.viewmat;
+      float3 V = background_world_direction(view, uv);
+      float2 prev_ndc = project_point(view.winmat, transform_direction(viewmat_prev, V)).xy;
+      float2 next_ndc = project_point(view.winmat, transform_direction(viewmat_next, V)).xy;
+
+      if (any(isnan(prev_ndc)) || any(isinf(prev_ndc))) {
+        prev_ndc = curr_ndc;
+      }
+      if (any(isnan(next_ndc)) || any(isinf(next_ndc))) {
+        next_ndc = curr_ndc;
+      }
+      return float4(prev_ndc - curr_ndc, curr_ndc - next_ndc) * 0.5f;
+    }
+
+    float3 P = view.point_screen_to_world(float3(uv, depth));
+    return surface_velocity_local(view, P, P, P);
+  }
+
   float4 resolve(const draw::View &views, float4 vector, float2 uv, float depth) const
   {
     const ViewMatrices view = views.get(0);
     if (vector.x == VELOCITY_INVALID) {
       bool is_background = (depth == 1.0f);
       if (is_background) {
-        /* NOTE: Use view vector to avoid imprecision if camera is far from origin. */
-        float3 vV = -view.view_incident_vector(view.point_screen_to_view(float3(uv, 1.0f)));
-        return background_velocity(vV);
+        return background_velocity(background_world_direction(view, uv));
       }
       /* Static geometry. No translation in world space. */
       float3 P = view.point_screen_to_world(float3(uv, depth));

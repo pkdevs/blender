@@ -157,6 +157,7 @@ void MotionBlurModule::sync()
     sub.bind_ubo("motion_blur_buf", data_);
     sub.bind_texture("depth_tx", &render_buffers.depth_tx);
     sub.bind_image("velocity_img", &render_buffers.vector_tx);
+    sub.bind_image("velocity_local_img", &render_buffers.vector_local_tx);
     sub.bind_image("out_tiles_img", &tiles_tx_);
     sub.dispatch(&dispatch_flatten_size_);
     sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH);
@@ -178,6 +179,7 @@ void MotionBlurModule::sync()
     sub.bind_ssbo("tile_indirection_buf", tile_indirection_buf_);
     sub.bind_texture("depth_tx", &render_buffers.depth_tx, no_filter);
     sub.bind_texture("velocity_tx", &render_buffers.vector_tx, no_filter);
+    sub.bind_texture("velocity_local_tx", &render_buffers.vector_local_tx, no_filter);
     sub.bind_texture("in_color_tx", &input_color_tx_, no_filter);
     sub.bind_image("in_tiles_img", &tiles_tx_);
     sub.bind_image("out_color_img", &output_color_tx_);
@@ -230,6 +232,17 @@ void MotionBlurModule::render(View &view, gpu::Texture **input_tx, gpu::Texture 
   /* Second motion vector is stored inverted. */
   data_.motion_scale.y = -data_.motion_scale.y;
   data_.target_size_inv = 1.0f / float2(extent);
+
+  if (inst_.camera.is_panoramic()) {
+    float overscan = inst_.camera.data_get().panoramic_view_overscan;
+    const float safety_factor = 0.7f;
+    data_.panoramic_max_offset_px = (1.0f - 1.0f / overscan) * 0.5f * float(extent.x) *
+                                    safety_factor;
+  }
+  else {
+    data_.panoramic_max_offset_px = 1.0e6f;
+  }
+
   data_.push_update();
 
   input_color_tx_ = *input_tx;

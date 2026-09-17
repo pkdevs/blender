@@ -35,6 +35,9 @@ class RenderBuffers {
 
   // TextureFromPool mist_tx; /* Derived from depth_tx during accumulation. */
   TextureFromPool vector_tx;
+  /** Motion in this cubeface's local NDC space for motion blur
+   * 1x1 dummy for non-panoramic camera. */
+  TextureFromPool vector_local_tx;
   TextureFromPool raycast_depth_tx;
   TextureFromPool object_id_tx;
   TextureFromPool prepass_normal_tx;

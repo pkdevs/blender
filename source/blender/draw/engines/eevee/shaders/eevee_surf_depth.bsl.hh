@@ -42,6 +42,8 @@ template<> struct SurfaceDepthFragOut<true> {
   [[frag_color(PREPASS_FRAG_OUT_NORMAL)]] float4 normal;
   [[frag_color(PREPASS_FRAG_OUT_OB_ID)]] uint object_id;
   [[frag_color(PREPASS_FRAG_OUT_VELOCITY)]] float4 velocity;
+  /** See `RenderBuffers::vector_local_tx` for why this exists alongside `velocity`. */
+  [[frag_color(PREPASS_FRAG_OUT_VELOCITY_LOCAL)]] float4 velocity_local;
 };
 
 template<bool with_velocity>
@@ -113,9 +115,15 @@ void surf_depth([[resource_table]] KernelGlobals &kg,
 
   if constexpr (with_velocity) {
     if (pipe.use_velocity) [[static_branch]] {
-      frag_out.velocity = geo_vel.camera.surface_velocity(
-          interp.P + motion.prev, interp.P, interp.P + motion.next);
-      frag_out.velocity = velocity::pack(frag_out.velocity);
+      [[resource_table]] const CameraVelocity &cam_vel = geo_vel.camera;
+      float3 P_prv = interp.P + motion.prev;
+      float3 P_nxt = interp.P + motion.next;
+      frag_out.velocity = velocity::pack(cam_vel.surface_velocity(P_prv, interp.P, P_nxt));
+      /* `velocity_local` is the motion in this cubeface's local space for motion
+       * blur - see `RenderBuffers::vector_local_tx`. Only applicable for panoramic camera. */
+      const ViewMatrices view = views.get(0);
+      frag_out.velocity_local = velocity::pack(
+          cam_vel.surface_velocity_local(view, P_prv, interp.P, P_nxt));
     }
   }
 

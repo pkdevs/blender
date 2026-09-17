@@ -76,7 +76,8 @@ template<enum TextureWriteFormat velocity_format> struct Resources {
   [[uniform(0)]] const MotionBlurData &motion_blur_buf;
   [[sampler(0)]] sampler2DDepth depth_tx;
   [[image(0, read_write, velocity_format)]] image2D velocity_img;
-  [[image(1, write, SFLOAT_16_16_16_16)]] image2D out_tiles_img;
+  [[image(1, read_write, velocity_format)]] image2D velocity_local_img;
+  [[image(2, write, SFLOAT_16_16_16_16)]] image2D out_tiles_img;
 
   [[shared]] uint payload_prev;
   [[shared]] uint payload_next;
@@ -148,26 +149,52 @@ void flatten_comp([[resource_table]] Resources<velocity_format> &srt,
    * Unfortunately, we cannot convert to pixel space here since it is also used by TAA and the
    * motion blur needs to remain optional. */
   imageStore(srt.velocity_img, int2(global_id.xy), velocity::pack(motion));
-  /* Clip velocity to viewport bounds (in NDC space). */
-  float2 line_clip;
-  line_clip.x = line_unit_square_intersect_dist_safe(uv * 2.0f - 1.0f, motion.xy * 2.0f);
-  line_clip.y = line_unit_square_intersect_dist_safe(uv * 2.0f - 1.0f, -motion.zw * 2.0f);
-  motion *= min(line_clip, float2(1.0f)).xxyy;
-  /* Convert to pixel space. Note this is only for velocity tiles. */
-  motion *= render_size.xyxy;
-  /* Rescale to shutter relative motion for viewport. */
-  motion *= srt.motion_blur_buf.motion_scale.xxyy;
 
-  uint sample_payload_prev = pack_payload(motion.xy, local_id.xy);
-  if (local_payload_prev < sample_payload_prev) {
-    local_payload_prev = sample_payload_prev;
-    local_max_motion_prev = motion.xy;
+  /* See `RenderBuffers::vector_local_tx`. */
+  const ViewMatrices view = views.get(0);
+  float4 motion_local = motion;
+  if (is_panoramic(cam_vel.camera_curr.type)) {
+    float4 vector_local = imageLoad(srt.velocity_local_img, texel);
+#ifdef FLATTEN_RG
+    vector_local = vector_local.xyxy;
+#endif
+    motion_local = cam_vel.resolve_local(view, vector_local, uv, depth);
+    imageStore(srt.velocity_local_img, int2(global_id.xy), velocity::pack(motion_local));
   }
 
-  uint sample_payload_next = pack_payload(motion.zw, local_id.xy);
+  /* Clip velocity to viewport bounds (in NDC space). */
+  float2 line_clip;
+  line_clip.x = line_unit_square_intersect_dist_safe(uv * 2.0f - 1.0f, motion_local.xy * 2.0f);
+  line_clip.y = line_unit_square_intersect_dist_safe(uv * 2.0f - 1.0f, -motion_local.zw * 2.0f);
+  motion_local *= min(line_clip, float2(1.0f)).xxyy;
+  /* Convert to pixel space. Note this is only for velocity tiles. */
+  motion_local *= render_size.xyxy;
+  /* Rescale to shutter relative motion for viewport. */
+  motion_local *= srt.motion_blur_buf.motion_scale.xxyy;
+
+  /* Bound before packing into tiles, same radius as the gather pass's own clamp (see
+   * gather_blur()) - otherwise a large reprojected value here corrupts the uint conversion in
+   * pack_payload() below, well before the gather pass gets a chance to clamp it. */
+  float max_offset = srt.motion_blur_buf.panoramic_max_offset_px;
+  float prev_len = length(motion_local.xy);
+  if (prev_len > max_offset) {
+    motion_local.xy *= max_offset / prev_len;
+  }
+  float next_len = length(motion_local.zw);
+  if (next_len > max_offset) {
+    motion_local.zw *= max_offset / next_len;
+  }
+
+  uint sample_payload_prev = pack_payload(motion_local.xy, local_id.xy);
+  if (local_payload_prev < sample_payload_prev) {
+    local_payload_prev = sample_payload_prev;
+    local_max_motion_prev = motion_local.xy;
+  }
+
+  uint sample_payload_next = pack_payload(motion_local.zw, local_id.xy);
   if (local_payload_next < sample_payload_next) {
     local_payload_next = sample_payload_next;
-    local_max_motion_next = motion.zw;
+    local_max_motion_next = motion_local.zw;
   }
 
   /* Compare the local payload with the other threads. */
@@ -332,10 +359,13 @@ struct Accumulator {
 };
 
 struct Resources {
+  [[resource_table]] srt_t<CameraVelocity> camera;
+
   [[uniform(0)]] const MotionBlurData &motion_blur_buf;
   [[sampler(0)]] sampler2DDepth depth_tx;
   [[sampler(1)]] sampler2D velocity_tx;
-  [[sampler(2)]] sampler2D in_color_tx;
+  [[sampler(2)]] sampler2D velocity_local_tx;
+  [[sampler(3)]] sampler2D in_color_tx;
   [[image(0, read, SFLOAT_16_16_16_16)]] const image2D in_tiles_img;
   [[image(1, write, SFLOAT_16_16_16_16)]] image2D out_color_img;
 
@@ -345,6 +375,13 @@ struct Resources {
   {
     /* We can load velocity without velocity_resolve() since we resolved during the flatten pass.
      */
+    [[resource_table]] const CameraVelocity &cam_vel = camera;
+    if (is_panoramic(cam_vel.camera_curr.type)) {
+      /* See `RenderBuffers::vector_local_tx`. */
+      float4 velocity = velocity::unpack(texture(velocity_local_tx, uv));
+      return velocity * float2(textureSize(velocity_local_tx, 0)).xyxy *
+             motion_blur_buf.motion_scale.xxyy;
+    }
     float4 velocity = velocity::unpack(texture(velocity_tx, uv));
     return velocity * float2(textureSize(velocity_tx, 0)).xyxy * motion_blur_buf.motion_scale.xxyy;
   }
@@ -399,6 +436,12 @@ struct Resources {
     float4 sample_vectors = motion_blur_sample_velocity(sample_uv);
     float2 sample_motion = (next) ? sample_vectors.zw : sample_vectors.xy;
     float sample_motion_len = length(sample_motion);
+    /* Clamp to the same radius as the sampling offset (see gather_blur()). */
+    float max_offset = motion_blur_buf.panoramic_max_offset_px;
+    if (sample_motion_len > max_offset) {
+      sample_motion *= max_offset / sample_motion_len;
+      sample_motion_len = max_offset;
+    }
     float sample_depth = reverse_z::read(textureLod(depth_tx, sample_uv, 0.0f).r);
     float4 sample_color = textureLod(in_color_tx, sample_uv, 0.0f);
 
@@ -426,6 +469,18 @@ struct Resources {
   {
     float center_motion_len = length(center_motion);
     float max_motion_len = length(max_motion);
+
+    /* Cap `center_motion`/`max_motion` so `gather_sample()`'s `sample_uv` offset doesn't reach
+     * past this cubeface's overscan margin into the neighboring face. */
+    float max_offset = motion_blur_buf.panoramic_max_offset_px;
+    if (center_motion_len > max_offset) {
+      center_motion *= max_offset / center_motion_len;
+      center_motion_len = max_offset;
+    }
+    if (max_motion_len > max_offset) {
+      max_motion *= max_offset / max_motion_len;
+      max_motion_len = max_offset;
+    }
 
     /* Tile boundaries randomization can fetch a tile where there is less motion than this pixel.
      * Fix this by overriding the max_motion. */
