@@ -1163,6 +1163,7 @@ void SourceProcessor::parse_library_functions(Parser &parser)
             curr = curr.next();
           }
           /* Parse the type */
+          Token type_tok = curr;
           string type = string(curr.str());
           curr = curr.next();
           /* Skip optional parenthesis. */
@@ -1179,8 +1180,45 @@ void SourceProcessor::parse_library_functions(Parser &parser)
             qualifier = "in";
           }
 
-          fn.arguments.emplace_back(
-              ArgumentFormat{metadata::Qualifier(hash(qualifier)), metadata::Type(hash(type))});
+          metadata::Qualifier qualifier_enum = metadata::Qualifier(hash(qualifier));
+          metadata::Type type_enum = metadata::Type(hash(type));
+
+          switch (qualifier_enum) {
+            case metadata::Qualifier::in:
+            case metadata::Qualifier::out:
+            case metadata::Qualifier::inout:
+              break;
+            default:
+              report_error(arg.front(), "Unknown qualifier '" + qualifier + "'");
+              break;
+          }
+
+          switch (type_enum) {
+            case metadata::Type::float1:
+            case metadata::Type::float2:
+            case metadata::Type::float3:
+            case metadata::Type::float4:
+            case metadata::Type::float3x3:
+            case metadata::Type::float4x4:
+            case metadata::Type::int1:
+            case metadata::Type::int2:
+            case metadata::Type::int3:
+            case metadata::Type::int4:
+            case metadata::Type::bool1:
+            case metadata::Type::sampler1DArray:
+            case metadata::Type::sampler2DArray:
+            case metadata::Type::sampler2D:
+            case metadata::Type::sampler3D:
+            case metadata::Type::Closure:
+            case metadata::Type::KernelGlobals:
+            case metadata::Type::ShadingData:
+              break;
+            default:
+              report_error(type_tok, "Invalid type for node function '" + type + "'");
+              break;
+          }
+
+          fn.arguments.emplace_back(ArgumentFormat{qualifier_enum, type_enum});
         });
 
         metadata_.functions.emplace_back(fn);
@@ -1212,7 +1250,7 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
                      "Array arguments are not supported in node functions.");
       }
 
-      Type type = Type(hash(string(arg.type().str())));
+      Type type = Type(hash(string(arg.type().identifier().str())));
       Qualifier qualifier;
       if (arg.is_reference() && !arg.is_const()) {
         qualifier = Qualifier(hash("inout"));
@@ -1220,6 +1258,33 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
       else {
         qualifier = Qualifier(hash("in"));
       }
+
+      [&](Type type) {
+        switch (type) {
+          case metadata::Type::float1:
+          case metadata::Type::float2:
+          case metadata::Type::float3:
+          case metadata::Type::float4:
+          case metadata::Type::float3x3:
+          case metadata::Type::float4x4:
+          case metadata::Type::int1:
+          case metadata::Type::int2:
+          case metadata::Type::int3:
+          case metadata::Type::int4:
+          case metadata::Type::bool1:
+          case metadata::Type::sampler1DArray:
+          case metadata::Type::sampler2DArray:
+          case metadata::Type::sampler2D:
+          case metadata::Type::sampler3D:
+          case metadata::Type::Closure:
+          case metadata::Type::KernelGlobals:
+          case metadata::Type::ShadingData:
+            return;
+        }
+        report_error(arg.type().identifier(),
+                     "Invalid type for node function '" + string(arg.type().identifier().str()) +
+                         "'");
+      }(type);
 
       fn.arguments.emplace_back(qualifier, type);
     }
