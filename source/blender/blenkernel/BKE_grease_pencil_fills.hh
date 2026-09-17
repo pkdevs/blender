@@ -24,7 +24,6 @@ struct ShapeData {
   const GroupedSpan<int> shapes() const
   {
     return GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
-    ;
   };
 };
 
