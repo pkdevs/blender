@@ -1706,7 +1706,6 @@ static wmOperatorStatus node_comment_edit_invoke(bContext *C, wmOperator *op, co
   storage.flag &= ~NodeCommentFlag::Render;
   WM_event_add_notifier(C, NC_NODE | NA_EDITED, nullptr);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
-  ED_region_activate_rna_prop(C, &region, node, "text");
   return OPERATOR_FINISHED;
 }
 

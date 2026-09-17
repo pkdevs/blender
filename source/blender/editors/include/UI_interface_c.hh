@@ -77,6 +77,7 @@ struct wmOperator;
 struct wmOperatorType;
 struct wmRegionListenerParams;
 struct wmWindow;
+struct TextboxState;
 namespace ed::asset {
 struct AssetFilterSettings;
 }
@@ -1387,6 +1388,25 @@ Button *uiDefButR_prop(Block *block,
                        float min,
                        float max,
                        std::optional<StringRef> tip);
+/**
+ * Height of the text-box with the given state.
+ */
+int textbox_but_height(const TextboxState &state);
+
+/**
+ * Create a multi-line text-box for editing an RNA property.
+ *
+ * \param hit_inset_x: Horizontal inset of the hit box which allows implementing horizontal
+ *   resizing behavior at a higher level.
+ */
+Button *uiDefButTextBoxR(Block *block,
+                         PointerRNA *ptr,
+                         StringRefNull propname,
+                         TextboxState *state,
+                         int x,
+                         int y,
+                         short width,
+                         float hit_inset_x = 0.0f);
 Button *uiDefButO(Block *block,
                   ButtonType type,
                   StringRefNull opname,

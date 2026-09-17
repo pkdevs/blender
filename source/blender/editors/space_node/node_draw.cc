@@ -3624,48 +3624,61 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
-static void comment_node_prepare_for_draw(SpaceNode &snode,
-                                          bNodeTree &ntree,
-                                          bNode &node,
-                                          ui::Block &block)
+static void comment_node_prepare_for_draw(
+    const bContext &C, SpaceNode &snode, bNodeTree &ntree, bNode &node, ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
   const StringRef text = storage.text;
 
   const float2 loc = node_to_view(node.location);
-  /* Different paddings are used here to compensate for padding applied elsewhere. */
-  const int pad_left = is_render ? 0.2 * UI_UNIT_X : 0;
-  const int pad_right = is_render ? 0.25 * UI_UNIT_X : 0;
-  const int pad_top = is_render ? 0.15 * UI_UNIT_Y : 0;
-  const int pad_bottom = is_render ? 0.2 * UI_UNIT_Y : 0;
-
-  ui::Layout &layout = ui::block_layout(&block,
-                                        ui::LayoutDirection::Vertical,
-                                        ui::LayoutType::Panel,
-                                        loc.x + pad_left,
-                                        loc.y - pad_top,
-                                        node.width * UI_SCALE_FAC - pad_left - pad_right,
-                                        0,
-                                        0,
-                                        ui::style_get_dpi());
   PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &node);
+
+  float bottom_y;
   if (is_render) {
+    /* Different paddings are used here to compensate for padding applied elsewhere. */
+    const int pad_left = 0.2 * UI_UNIT_X;
+    const int pad_right = 0.25 * UI_UNIT_X;
+    const int pad_top = 0.15 * UI_UNIT_Y;
+    const int pad_bottom = 0.2 * UI_UNIT_Y;
+
+    ui::Layout &layout = ui::block_layout(&block,
+                                          ui::LayoutDirection::Vertical,
+                                          ui::LayoutType::Panel,
+                                          loc.x + pad_left,
+                                          loc.y - pad_top,
+                                          node.width * UI_SCALE_FAC - pad_left - pad_right,
+                                          0,
+                                          0,
+                                          ui::style_get_dpi());
     layout.label_markdown(text);
+    block_align_end(&block);
+    bottom_y = ui::block_layout_resolve(&block).y - pad_bottom;
   }
   else {
     /* The hit-inset is necessary to make the textbox horizontally resizable. */
     const float hit_inset_x = NODE_RESIZE_MARGIN * math::max(snode.runtime->aspect, 1.0f);
-    layout.textbox_with_state(
-        &node_ptr, "text", &storage.textbox_state_node, std::nullopt, hit_inset_x);
+    const int but_h = ui::textbox_but_height(storage.textbox_state_node);
+    ui::Button *but = uiDefButTextBoxR(&block,
+                                       &node_ptr,
+                                       "text",
+                                       &storage.textbox_state_node,
+                                       loc.x,
+                                       loc.y - but_h,
+                                       int(node.width * UI_SCALE_FAC),
+                                       hit_inset_x);
+    /* Same approach to detecting when a text property is not active anymore is used elsewhere
+     * (e.g. #outliner_buttons) */
+    if (!ui::button_active_only(&C, CTX_wm_region(&C), &block, but)) {
+      storage.flag |= NodeCommentFlag::Render;
+      WM_event_add_notifier(&C, NC_NODE | ND_DISPLAY, nullptr);
+    }
+    bottom_y = loc.y - but_h;
   }
 
-  block_align_end(&block);
-  const float bottom_y = ui::block_layout_resolve(&block).y;
   const float icon_pad = 0.25f * U.widget_unit;
-  float height = std::max<float>(
-      !is_render || !text.trim().is_empty() ? loc.y - bottom_y + pad_bottom : 0,
-      NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
+  float height = std::max<float>(!is_render || !text.trim().is_empty() ? loc.y - bottom_y : 0,
+                                 NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
   node.runtime->draw_bounds.xmin = loc.x;
   node.runtime->draw_bounds.xmax = loc.x + node.width * UI_SCALE_FAC;
@@ -3735,7 +3748,7 @@ static void node_update_nodetree(const bContext &C,
       reroute_node_prepare_for_draw(node);
     }
     else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(*snode, ntree, node, block);
+      comment_node_prepare_for_draw(C, *snode, ntree, node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {
