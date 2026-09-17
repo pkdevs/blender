@@ -516,6 +516,7 @@ class JoltSolverStep {
       JoltRigidBodies *old_rigid_bodies = state_.rigid_bodies_by_key.lookup_ptr(data_key);
       JoltRigidBodies new_rigid_bodies = this->update_rigid_bodies(geo_data, old_rigid_bodies);
 
+      new_rigid_bodies_by_key.add_new(data_key, std::move(new_rigid_bodies));
       if (old_rigid_bodies) {
         bodies_to_remove.reserve(bodies_to_remove.size() + old_rigid_bodies->bodies_by_id.size());
         for (JoltRigidBody &body : old_rigid_bodies->bodies_by_id.values()) {
