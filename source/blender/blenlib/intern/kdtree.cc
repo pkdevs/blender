@@ -545,7 +545,7 @@ template<typename T> class TreeBuilder {
     const int count = end - start;
     BLI_assert(count <= 2 * PARTITION_BLOCK_SIZE);
 
-    BuildPoint buffer[2 * PARTITION_BLOCK_SIZE];
+    std::array<BuildPoint, 2 * PARTITION_BLOCK_SIZE> buffer;
     /* Points below the split fill the buffer from the front, the others from the back. Only the
      * position depends on the comparison, so there is nothing to mispredict. */
     int l = 0, r = count;
