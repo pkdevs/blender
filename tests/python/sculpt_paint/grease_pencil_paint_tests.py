@@ -61,10 +61,10 @@ class GreasePencilPaintTests(unittest.TestCase):
 
     def test_stroke_generates_correct_drawing(self):
         self.prepare()
-#        context_override = bpy.context.copy()
-#        set_view3d_context_override(context_override)
-#        with bpy.context.temp_override(**context_override):
-        bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
+        context_override = bpy.context.copy()
+        set_view3d_context_override(context_override)
+        with bpy.context.temp_override(**context_override):
+            bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
 
         # bpy.ops.wm.save_mainfile()
 
