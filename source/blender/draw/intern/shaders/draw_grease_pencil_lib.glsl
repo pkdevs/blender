@@ -114,7 +114,7 @@ float gpencil_stroke_segment_mask(float2 p1,
   float radius = r1;
   float l = sqrt(len_sq1);
   float a = r2 - r1;
-  float cos_theta = a / l;
+  float cos_theta = -a / l;
 
   float joint = 1.0f;
 
@@ -135,13 +135,14 @@ float gpencil_stroke_segment_mask(float2 p1,
         0.0f)
     {
       float c = cos_theta;
+      float c2 = c * c;
 
       float te = (a * p.x + r1 * l) / p.y;
       te = te * te;
 
       float T_a = a * a + te;
-      float T_b = -2.0f * l * a / c - te / (c * c);
-      float T_c = l * l / (c * c);
+      float T_b = 2.0f * l * a / c - te / c2;
+      float T_c = l * l / c2;
 
       dist = (-T_b - sqrt(T_b * T_b - 4.0f * T_a * T_c)) / (2.0f * T_a);
       dist = sqrt(dist);
