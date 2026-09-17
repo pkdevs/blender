@@ -6,7 +6,7 @@
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_armature_shape_wire)
 
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 #include "select_lib.glsl"
 
 float edge_step(float dist)
@@ -26,7 +26,7 @@ void main()
 
   frag_color = mix(float4(final_color.rgb, alpha), float4(0), mix_w);
   frag_color.a *= 1.0f - mix_w;
-  line_output = float4(0);
+  line_output = float4(0.0f);
 
   select_id_output(select_id);
 }

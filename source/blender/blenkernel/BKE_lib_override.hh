@@ -269,7 +269,8 @@ bool BKE_lib_override_library_proxy_convert(Main *bmain,
 void BKE_lib_override_library_main_proxy_convert(Main *bmain, BlendFileReadReport *reports);
 
 enum LibOverride_HierarchyRoot_ValidateOptions {
-  /** Only fix cases where a non-isolated liboverride has a null hierarchy root pointer. Ignore
+  /**
+   * Only fix cases where a non-isolated liboverride has a null hierarchy root pointer. Ignore
    * cases where the root pointer is valid, but is not a suitable root.
    *
    * Typically used during readfile process, before resyncing liboverrides, as in that case keeping
@@ -277,7 +278,8 @@ enum LibOverride_HierarchyRoot_ValidateOptions {
    * reconstruction when linked reference data hierarchy has been modified.
    */
   ONLY_PROCESS_NULL_ROOT_POINTERS = 1 << 0,
-  /** Do report nullptr hierarchy roots as errors.
+  /**
+   * Do report nullptr hierarchy roots as errors.
    *
    * This is typically only done at readfile time, where this is a fairly bad error.
    *
@@ -368,6 +370,16 @@ void BKE_lib_override_library_delete(Main *bmain, ID *id_root);
  * cases.
  */
 void BKE_lib_override_library_make_local(Main *bmain, ID *id);
+
+/**
+ * Ensure that all subdata that can be either local or from liboverride reference, are now flagged
+ * as local.
+ *
+ * Mainly affects NLA' tracks, modifiers, and contraints.
+ *
+ * This is typically used after making a library override local, and removing the override.
+ */
+void BKE_lib_override_flag_subdata_local(ID &id);
 
 /**
  * Find override property from given RNA path, if it exists.

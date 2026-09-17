@@ -11,7 +11,7 @@
 #pragma once
 
 #include "eevee_renderpass.bsl.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
 
 namespace eevee::forward {
 
@@ -68,6 +68,11 @@ void resolve_frag([[resource_table]] const ForwardResolve &srt,
     frag_out.radiance.b = channel_b.x;
     frag_out.radiance.a = channel_a.x;
   }
+
+  /* Since Forward.Transparent is additive, overlapping high emissive values can reach the float16
+   * limit and end up stored as INF, so here we just clamp it to representable values. */
+  const float half_max = 65504.0f;
+  frag_out.radiance = min(frag_out.radiance, half_max);
 
   render_passes.store_color(texel,
                             uni.uniform_buf.render_pass.transparent_id,

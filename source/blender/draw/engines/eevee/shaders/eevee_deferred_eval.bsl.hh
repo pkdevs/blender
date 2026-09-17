@@ -16,10 +16,11 @@
 #include "eevee_light_eval.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_renderpass.bsl.hh"
+#include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_subsurface_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_shared_exponent_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_shared_exponent.bsl.hh"
 
 namespace eevee::deferred {
 
@@ -33,6 +34,7 @@ void fullscreen_vert([[vertex_id]] const int vert_id,
                      [[out]] VertOut &v_out)
 {
   fullscreen_vertex(vert_id, out_position, v_out.screen_uv);
+  out_position = reverse_z::transform(out_position);
 }
 
 struct FragOut {
@@ -76,27 +78,16 @@ struct LightEval {
   [[specialization_constant(6)]] int shadow_ray_step_count;
 
   /* Chaining to next pass. */
-  [[image(2, write, DEFERRED_RADIANCE_FORMAT)]] uimage2D direct_radiance_1_img;
-  [[image(3, write, DEFERRED_RADIANCE_FORMAT)]] uimage2D direct_radiance_2_img;
-  [[image(4, write, DEFERRED_RADIANCE_FORMAT)]] uimage2D direct_radiance_3_img;
+  [[image(2, write, DEFERRED_RADIANCE_FORMAT)]] uimage2DArray direct_radiance_imgs;
   /* Optimized out if use_split_indirect is false. */
-  [[image(5, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_1_img;
-  [[image(6, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_2_img;
-  [[image(7, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_3_img;
+  [[image(3, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_1_img;
+  [[image(4, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_2_img;
+  [[image(5, write, RAYTRACE_RADIANCE_FORMAT)]] image2D indirect_radiance_3_img;
 
   void write_radiance_direct(uchar layer_index, int2 texel, float3 radiance)
   {
-    /* TODO(fclem): Layered texture. */
     uint data = rgb9e5_encode(radiance);
-    if (layer_index == 0u) {
-      imageStore(direct_radiance_1_img, texel, uint4(data));
-    }
-    else if (layer_index == 1u) {
-      imageStore(direct_radiance_2_img, texel, uint4(data));
-    }
-    else if (layer_index == 2u) {
-      imageStore(direct_radiance_3_img, texel, uint4(data));
-    }
+    imageStore(direct_radiance_imgs, int3(texel, layer_index), uint4(data));
   }
 
   void write_radiance_indirect(uchar layer_index, int2 texel, float3 radiance)
@@ -463,19 +454,27 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
   }
 
   {
-    float inv_weight = safe_rcp(reflect_weight);
-    cl_reflect.N *= inv_weight;
-    cl_reflect.data *= inv_weight;
+    if (reflect_weight > 1e-6) {
+      float inv_weight = 1.0f / reflect_weight;
+      cl_reflect.N *= inv_weight;
+      cl_reflect.data *= inv_weight;
+    }
+    else {
+      /* This is needed in order to avoid NaN during the lighting evaluation. */
+      cl_reflect.N = gbuf.surface_N();
+      cl_reflect.data.xy = float2(1.0f);
+    }
   }
   {
-    if (refract_weight > 0.0f) {
+    if (refract_weight > 1e-6) {
       float inv_weight = 1.0f / refract_weight;
       cl_refract.N *= inv_weight;
       cl_refract.data *= inv_weight;
     }
-    else { /* This is needed in order to avoid NaN during the lighting evaluation. */
-      cl_refract.N = float3(1.0f, 0.0f, 0.0f);
-      cl_refract.data.y = 1.0f;
+    else {
+      /* This is needed in order to avoid NaN during the lighting evaluation. */
+      cl_refract.N = gbuf.surface_N();
+      cl_refract.data.xy = float2(1.0f);
     }
   }
 

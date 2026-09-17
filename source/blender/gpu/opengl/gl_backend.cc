@@ -13,13 +13,13 @@
 
 #include "BKE_global.hh"
 #if defined(WIN32)
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 #include "BLI_array.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_subprocess.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "CLG_log.h"
@@ -312,6 +312,11 @@ void GLBackend::platform_init()
       std::cout << "Error: The OpenGL implementation doesn't support ARB_clip_control\n";
       support_level = GPU_SUPPORT_LEVEL_UNSUPPORTED;
     }
+
+    if (!epoxy_has_gl_extension("GL_ARB_get_texture_sub_image")) {
+      std::cout << "Error: The OpenGL implementation doesn't support ARB_get_texture_sub_image\n";
+      support_level = GPU_SUPPORT_LEVEL_UNSUPPORTED;
+    }
   }
 
   /* Compute shaders have some issues with those versions (see #94936). */
@@ -419,6 +424,8 @@ static void detect_workarounds()
     GLContext::texture_filter_anisotropic_support = false;
     /* Turn off extensions. */
     GLContext::layered_rendering_support = false;
+    GLContext::vertex_shader_viewport_index_support = false;
+    GLContext::vertex_shader_layer_support = false;
     /* Turn off vendor specific extensions. */
     GLContext::native_barycentric_support = false;
     GLContext::framebuffer_fetch_support = false;
@@ -526,6 +533,8 @@ static void detect_workarounds()
        * these devices use driver 30.x.x.x */
       if (ver0 == 30) {
         GCaps.texture_pool_workaround = true;
+        /* sRGB texture writes through non-sRGB texture view fails on these devices. */
+        GCaps.srgb_write_view_support = false;
       }
     }
   }
@@ -542,25 +551,44 @@ static void detect_workarounds()
     GLContext::multi_bind_image_support = false;
   }
 
-  /* #107642, #120273 Windows Intel iGPU (multiple generations) incorrectly report that
-   * they support image binding. But when used it results into `GL_INVALID_OPERATION` with
-   * `internal format of texture N is not supported`. */
-  if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_WIN, GPU_DRIVER_OFFICIAL)) {
-    GLContext::multi_bind_image_support = false;
-  }
-
   if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
     GCaps.texture_pool_workaround = true;
   }
 
-  /* Disable texture pool on any Intel driver; glTextureView is inconsistently
-   * broken on Intel HD and newer integrated cards, and output of the vendor string doesn't
-   * differentiate e.g. an Arc V140 from an Arc B750 :( */
+#ifdef _WIN32
   if ((GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_ANY, GPU_DRIVER_ANY) ||
        GPU_type_matches(GPU_DEVICE_INTEL_UHD, GPU_OS_ANY, GPU_DRIVER_ANY)))
   {
-    GCaps.texture_pool_workaround = true;
+    int driver_version_minor = 0, driver_version_major = 0;
+    GPUIntelGpuArch gpu_arch = GPUIntelGpuArch::Gen9AndOlder;
+    if (epoxy_has_gl_extension("GL_EXT_memory_object_win32")) {
+      uint64_t device_luid = 0;
+      glGetUnsignedBytevEXT(GL_DEVICE_LUID_EXT, reinterpret_cast<GLubyte *>(&device_luid));
+      uint32_t device_id = 0;
+      if (BLI_windows_get_directx_intel_driver_info(
+              device_luid, &driver_version_minor, &driver_version_major, &device_id))
+      {
+        gpu_arch = GPU_platform_get_intel_arch(device_id);
+      }
+    }
+
+    /* #107642, #120273 The legacy Intel 7-10th Gen Processsor iGPU driver incorrectly reports that
+     * image binding is supported. But when used it results in `GL_INVALID_OPERATION` with
+     * `internal format of texture N is not supported`. 101.5972 is the oldest checked driver where
+     * it was manually confirmed that this issue is no longer present on newer driver versions. */
+    if (driver_version_major < 101 || (driver_version_major == 101 && driver_version_minor < 5972))
+    {
+      GLContext::multi_bind_image_support = false;
+    }
+
+    /* glTextureView was fixed for Intel Xe2+ with driver version 101.8801. */
+    if (gpu_arch <= GPUIntelGpuArch::Gen12 || driver_version_major < 101 ||
+        (driver_version_major == 101 && driver_version_minor < 8801))
+    {
+      GCaps.texture_pool_workaround = true;
+    }
   }
+#endif
 
   /* Disable texture pool on closed source AMD driver; glTextureView
    * breaks frame-buffers for several formats. This is not an issue on Mesa. */
@@ -584,9 +612,10 @@ GLint GLContext::max_ssbo_binds = 0;
 
 bool GLContext::debug_layer_support = false;
 bool GLContext::direct_state_access_support = false;
-bool GLContext::explicit_location_support = false;
 bool GLContext::framebuffer_fetch_support = false;
 bool GLContext::layered_rendering_support = false;
+bool GLContext::vertex_shader_viewport_index_support = false;
+bool GLContext::vertex_shader_layer_support = false;
 bool GLContext::native_barycentric_support = false;
 bool GLContext::multi_bind_support = false;
 bool GLContext::multi_bind_image_support = false;
@@ -599,7 +628,6 @@ bool GLContext::derivative_control_support = false;
 
 bool GLContext::debug_layer_workaround = false;
 bool GLContext::unused_fb_slot_workaround = false;
-bool GLContext::generate_mipmap_workaround = false;
 
 void GLBackend::capabilities_init()
 {
@@ -623,6 +651,10 @@ void GLBackend::capabilities_init()
                             epoxy_has_gl_extension("GL_ATI_meminfo");
   GCaps.geometry_shader_support = true;
   GCaps.hdr_viewport_support = false;
+  GCaps.multi_viewport_support = true;
+  GCaps.vertex_pipeline_stores_and_atomics_support = true;
+
+  GCaps.srgb_write_view_support = true;
 
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &GCaps.max_work_group_count[0]);
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &GCaps.max_work_group_count[1]);
@@ -661,11 +693,13 @@ void GLBackend::capabilities_init()
                                    epoxy_has_gl_extension("GL_KHR_debug") ||
                                    epoxy_has_gl_extension("GL_ARB_debug_output");
   GLContext::direct_state_access_support = epoxy_has_gl_extension("GL_ARB_direct_state_access");
-  GLContext::explicit_location_support = epoxy_gl_version() >= 43;
   GLContext::framebuffer_fetch_support = epoxy_has_gl_extension("GL_EXT_shader_framebuffer_fetch");
   GLContext::texture_barrier_support = epoxy_has_gl_extension("GL_ARB_texture_barrier");
   GLContext::layered_rendering_support = epoxy_has_gl_extension(
       "GL_ARB_shader_viewport_layer_array");
+  GLContext::vertex_shader_viewport_index_support = epoxy_has_gl_extension(
+      "GL_AMD_vertex_shader_viewport_index");
+  GLContext::vertex_shader_layer_support = epoxy_has_gl_extension("GL_AMD_vertex_shader_layer");
   GLContext::native_barycentric_support = epoxy_has_gl_extension(
       "GL_AMD_shader_explicit_vertex_parameter");
   GLContext::multi_bind_support = GLContext::multi_bind_image_support = epoxy_has_gl_extension(
@@ -764,6 +798,8 @@ void GLBackend::log_extensions()
              " - [%c] Direct state access\n"
              " - [%c] Anisotropic Texture Filtering\n"
              " - [%c] Layered rendering\n"
+             " - [%c] Vertex shader viewport index\n"
+             " - [%c] Vertex shader layer array\n"
              " - [%c] Native barycentric coordinates\n"
              " - [%c] Framebuffer fetch\n"
              " - [%c] Texture barrier\n"
@@ -773,6 +809,8 @@ void GLBackend::log_extensions()
              GLContext::direct_state_access_support ? 'X' : ' ',
              GLContext::texture_filter_anisotropic_support ? 'X' : ' ',
              GLContext::layered_rendering_support ? 'X' : ' ',
+             GLContext::vertex_shader_viewport_index_support ? 'X' : ' ',
+             GLContext::vertex_shader_layer_support ? 'X' : ' ',
              GLContext::native_barycentric_support ? 'X' : ' ',
              GLContext::framebuffer_fetch_support ? 'X' : ' ',
              GLContext::texture_barrier_support ? 'X' : ' ',
@@ -791,14 +829,12 @@ void GLBackend::log_workarounds()
   CLOG_DEBUG(&LOG,
              "OpenGL Workarounds\n"
              " - [%c] Debug layer workaround\n"
-             " - [%c] Generate mipmap workaround\n"
              " - [%c] Unused framebuffer slot workaround\n"
              " - [%c] Depth blitting workaround\n"
              " - [%c] Stencil classify buffer workaround\n"
              " - [%c] High-quality normals\n"
              " - [%c] Use main context\n",
              GLContext::debug_layer_workaround ? 'X' : ' ',
-             GLContext::generate_mipmap_workaround ? 'X' : ' ',
              GLContext::unused_fb_slot_workaround ? 'X' : ' ',
              GCaps.depth_blitting_workaround ? 'X' : ' ',
              GCaps.stencil_clasify_buffer_workaround ? 'X' : ' ',

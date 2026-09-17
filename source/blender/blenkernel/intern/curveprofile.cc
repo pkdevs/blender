@@ -13,10 +13,10 @@
 #include "DNA_curve_types.h"
 #include "DNA_curveprofile_types.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_curveprofile.h"
@@ -85,7 +85,11 @@ CurveProfile *BKE_curveprofile_copy(const CurveProfile *profile)
 
 void BKE_curveprofile_blend_write(BlendWriter *writer, const CurveProfile *profile)
 {
-  writer->write_struct(profile);
+  writer->write_struct(profile, [&](BlendStructWriter<CurveProfile> &struct_writer) {
+    if (!writer->is_undo()) {
+      struct_writer.shallow_data.changed_timestamp = 0;
+    }
+  });
   writer->write_struct_array(profile->path_len, profile->path);
 }
 

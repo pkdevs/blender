@@ -31,9 +31,22 @@ BLOCKLIST_VULKAN = [
     "image_log.blend",
 ]
 
+# Block list for AMD official driver. On buildbot this driver can fail and the artifacts are likely
+# caused by incorrect index buffer synchronization or vertex shader execution.
+BLOCKLIST_AMD_VK = [
+    ".*"
+]
+
+BLOCKLIST_NON_RT = [
+    "shadows_rt.blend",
+]
+
 
 def setup():
     import bpy
+
+    # The setting will be ignored if the system/backend doesn't support ray queries.
+    bpy.context.preferences.system.use_rt_shadows = not bpy.context.scene.get("Workbench_disable_rt", False)
 
     for scene in bpy.data.scenes:
         if scene.get("Workbench_skip_setup", False):
@@ -68,10 +81,11 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--factory-startup",
         "--enable-autoexec",
         "--debug-memory",
+        "--console-crash-handler",
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     arguments.extend([
         filepath,
@@ -106,6 +120,16 @@ def main():
     if args.gpu_backend == "vulkan":
         blocklist += BLOCKLIST_VULKAN
 
+    gpu_info = render_report.get_gpu_device_info(args.blender, args.gpu_backend)
+    gpu_vendor = gpu_info["DEVICE_TYPE"]
+
+    if os.getenv("BLENDER_TEST_IGNORE_VENDOR_BLOCKLIST") is None:
+        if gpu_vendor == "AMD" and args.gpu_backend == "vulkan":
+            blocklist += BLOCKLIST_AMD_VK
+
+    if not gpu_info["RAY_QUERY_SUPPORT"]:
+        blocklist += BLOCKLIST_NON_RT
+
     report = WorkbenchReport("Workbench", args.outdir, args.oiiotool, variation=args.gpu_backend, blocklist=blocklist)
     if args.gpu_backend == "vulkan":
         report.set_compare_engine('workbench', 'opengl')
@@ -119,6 +143,9 @@ def main():
         report.set_fail_threshold(0.050)
     if test_dir_name.startswith('openvdb'):
         report.set_fail_threshold(0.04)
+    if test_dir_name.startswith('hair') and gpu_vendor == "AMD" and args.gpu_backend == "opengl":
+        report.set_fail_threshold(0.11)
+        report.set_fail_percent(3.0)
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
 

@@ -301,6 +301,7 @@ components:
         "author": { type: string }
         "description": { type: string }
         "license": { type: string }
+        "webpage": { type: string }
         "copyright": { type: string }
         "properties": { $ref: "#/components/schemas/CustomPropertiesV1" }
 
@@ -361,7 +362,7 @@ components:
           type: string
           description: First version of Blender that should NOT show this asset.
       required:
-        - "from"
+        - "min"
 
     CatalogV1:
       type: object

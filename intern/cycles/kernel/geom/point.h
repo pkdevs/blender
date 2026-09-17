@@ -36,12 +36,12 @@ ccl_device T point_attribute(KernelGlobals kg,
 
 ccl_device float3 point_position(KernelGlobals kg, const ccl_private ShaderData *sd)
 {
-  if (sd->type & PRIMITIVE_POINT) {
+  if (sd->type & PRIMITIVE_ANY_POINT) {
     /* World space center. */
     const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
     float3 P = (sd->type & PRIMITIVE_MOTION) ?
                    make_float3(motion_point(kg, sd->object, sd->prim, sd->time)) :
-                   make_float3(kernel_data_fetch(attributes_float4, position_offset + sd->prim));
+                   make_float3(kernel_data_fetch(points, position_offset + sd->prim));
 
     if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
       object_position_transform(kg, sd, &P);
@@ -57,10 +57,10 @@ ccl_device float3 point_position(KernelGlobals kg, const ccl_private ShaderData 
 
 ccl_device float point_radius(KernelGlobals kg, const ccl_private ShaderData *sd)
 {
-  if (sd->type & PRIMITIVE_POINT) {
+  if (sd->type & PRIMITIVE_ANY_POINT) {
     /* World space radius. */
     const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
-    const float r = kernel_data_fetch(attributes_float4, position_offset + sd->prim).w;
+    const float r = kernel_data_fetch(points, position_offset + sd->prim).w;
 
     if (sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED) {
       return r;
@@ -79,7 +79,7 @@ ccl_device float point_radius(KernelGlobals kg, const ccl_private ShaderData *sd
 
 ccl_device float point_random(KernelGlobals kg, const ccl_private ShaderData *sd)
 {
-  if (sd->type & PRIMITIVE_POINT) {
+  if (sd->type & PRIMITIVE_ANY_POINT) {
     const AttributeDescriptor desc = find_attribute(kg, sd, ATTR_STD_POINT_RANDOM);
     return is_attribute_found(desc) ? point_attribute<float>(kg, sd, desc) : 0.0f;
   }
@@ -92,7 +92,7 @@ ccl_device float point_random(KernelGlobals kg, const ccl_private ShaderData *sd
 ccl_device float3 point_motion_center_location(KernelGlobals kg, const ccl_private ShaderData *sd)
 {
   const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
-  return make_float3(kernel_data_fetch(attributes_float4, position_offset + sd->prim));
+  return make_float3(kernel_data_fetch(points, position_offset + sd->prim));
 }
 
 #endif /* __POINTCLOUD__ */

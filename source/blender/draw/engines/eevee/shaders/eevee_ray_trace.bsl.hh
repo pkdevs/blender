@@ -13,8 +13,8 @@
 #include "eevee_ray_trace_screen_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
-#include "eevee_spherical_harmonics.bsl.hh"
 #include "eevee_uniform.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
 
 namespace eevee::raytrace {
 
@@ -118,7 +118,7 @@ void trace([[resource_table]] Resources &srt,
   ray_view.origin = transform_point(view.viewmat, ray.origin);
   ray_view.direction = transform_direction(view.viewmat, ray.direction);
   /* Extend the ray to cover the whole view. */
-  ray_view.max_time = 1000.0f;
+  ray_view.max_time = abs(view.far() - view.near());
 
   ScreenTraceHitData hit;
   hit.valid = false;

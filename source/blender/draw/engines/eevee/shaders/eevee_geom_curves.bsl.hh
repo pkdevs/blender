@@ -7,9 +7,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-VERTEX_SHADER_CREATE_INFO(eevee_nodetree)
-VERTEX_SHADER_CREATE_INFO(eevee_clip_plane)
-
 #include "draw_curves_lib.glsl"
 #include "draw_model.bsl.hh"
 #include "draw_view_infos.hh"
@@ -17,7 +14,7 @@ VERTEX_SHADER_CREATE_INFO(eevee_clip_plane)
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
-#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed becaused of fragment shader. */
+#include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */
 #include "eevee_shadow_shared.hh"
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_velocity.bsl.hh"
@@ -39,6 +36,7 @@ struct GeomCurve {
 };
 
 [[vertex]] [[clip_control]] void geom_curves(
+    [[resource_table]] KernelGlobals &kg,
     [[resource_table]] const PipelineConstants &pipe,
     [[resource_table]] const GeomCurve & /*srt*/,
     [[resource_table]] const Uniform &uni,
@@ -52,8 +50,7 @@ struct GeomCurve {
     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
     [[vertex_id]] const int vert_id,
     [[position]] float4 &out_position,
-    /* Note: Removed manually if not needed. Otherwise, can generate geometry shader fallback. */
-    [[viewport_index]] int &out_viewport)
+    [[viewport_index, condition(is_shadow_pipe &&use_multi_viewport)]] int &out_viewport)
 {
   draw::ID id = res_id.get(inst_index);
   uint view_id = 0;
@@ -74,7 +71,9 @@ struct GeomCurve {
     auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
-    out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    if (pipe.use_multi_viewport) [[static_branch]] {
+      out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
+    }
   }
 
   init_interface(id.raw_id);
@@ -100,7 +99,7 @@ struct GeomCurve {
   curve_interp_flat.strand_id = ws_pt.curve_id;
 
   if (pipe.use_velocity) [[static_branch]] {
-    /* clang-format off */ /* Multiline define messes up line index. */
+    /* clang-format off */ /* Multi-line define messes up line index. */
     [[resource_table]] const GeometryVelocity &geo_vel = resource_table_get(eevee::GeometryVelocity);
     /* clang-format on */
     auto &motion = interface_get(eevee_velocity_iface_info, motion);
@@ -123,10 +122,10 @@ struct GeomCurve {
   float3 lP_root = curves::get_curve_root_pos(ws_pt.point_id, ws_pt.curve_segment);
   float3 lP_orco = lP_root * ob_infos.orco_mul + ob_infos.orco_add;
 
-  init_globals(uni, view, true);
+  ShadingData sd = init_globals(uni, view, true, float4(0));
   attrib_load(CurvesPoint{ws_pt.curve_id, ws_pt.point_id, ws_pt.curve_segment, lP_orco});
 
-  interp.P += nodetree_displacement();
+  interp.P += nodetree_displacement(kg, sd);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
     /* Since curves always face the view, camera and shadow orientation don't match.

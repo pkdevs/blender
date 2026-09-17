@@ -34,12 +34,15 @@ KERNEL_DATA_ARRAY(DecomposedTransform, camera_motion)
 /* triangles */
 KERNEL_DATA_ARRAY(uint, tri_shader)
 KERNEL_DATA_ARRAY(packed_uint3, tri_vindex)
+KERNEL_DATA_ARRAY(packed_float3, tri_verts)
 
 /* curves */
 KERNEL_DATA_ARRAY(KernelCurve, curves)
+KERNEL_DATA_ARRAY(float4, curve_keys)
 KERNEL_DATA_ARRAY(KernelCurveSegment, curve_segments)
 
 /* pointclouds */
+KERNEL_DATA_ARRAY(float4, points)
 KERNEL_DATA_ARRAY(uint, points_shader)
 
 /* attributes */
@@ -50,6 +53,8 @@ KERNEL_DATA_ARRAY(packed_float3, attributes_float3)
 KERNEL_DATA_ARRAY(float4, attributes_float4)
 KERNEL_DATA_ARRAY(uchar4, attributes_uchar4)
 KERNEL_DATA_ARRAY(packed_normal, attributes_normal)
+KERNEL_DATA_ARRAY(Quaternion, attributes_quaternion)
+KERNEL_DATA_ARRAY(PackedSphericalHarmonicsRest, attributes_spherical_harmonics_rest)
 
 /* lights */
 KERNEL_DATA_ARRAY(KernelLightDistribution, light_distribution)

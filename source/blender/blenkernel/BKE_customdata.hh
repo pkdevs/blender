@@ -12,11 +12,11 @@
 #include <optional>
 
 #include "BLI_generic_virtual_array.hh"
-#include "BLI_implicit_sharing.h"
+#include "BLI_implicit_sharing.hh"
 #include "BLI_memory_counter_fwd.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_volume_enums.hh"
@@ -446,7 +446,7 @@ void CustomData_bmesh_interp(
 void CustomData_swap_corners(CustomData *data, int index, const int *corner_indices);
 
 /**
- * Custom data layers can be shared through implicit sharing (`BLI_implicit_sharing.h`). This
+ * Custom data layers can be shared through implicit sharing (`BLI_implicit_sharing.hh`). This
  * function makes sure that the layer is unshared if it was shared, which makes it mutable.
  */
 void CustomData_ensure_data_is_mutable(CustomDataLayer *layer, int totelem);
@@ -608,8 +608,9 @@ void CustomData_external_remove(CustomData *data, ID *id, eCustomDataType type, 
 bool CustomData_external_test(CustomData *data, eCustomDataType type);
 
 void CustomData_external_write(
-    CustomData *data, ID *id, eCustomDataMask mask, int totelem, int free);
-void CustomData_external_read(CustomData *data, ID *id, eCustomDataMask mask, int totelem);
+    CustomData *data, StringRefNull basepath, ID *id, eCustomDataMask mask, int totelem, int free);
+void CustomData_external_read(
+    CustomData *data, StringRefNull basepath, ID *id, eCustomDataMask mask, int totelem);
 void CustomData_external_reload(CustomData *data, ID *id, eCustomDataMask mask, int totelem);
 
 /* Mesh-to-mesh transfer data. */

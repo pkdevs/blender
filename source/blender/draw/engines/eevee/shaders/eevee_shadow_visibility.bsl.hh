@@ -12,11 +12,9 @@
 
 #include "draw_view_infos.hh"
 
-COMPUTE_SHADER_CREATE_INFO(draw_view_culling)
-
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 #include "eevee_defines.hh"
 #include "eevee_shadow_shared.hh"

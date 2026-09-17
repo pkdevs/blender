@@ -2,12 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edobj
+ */
+
 #include <sstream>
 
 #include "BLI_fileops.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -56,7 +60,7 @@ namespace ed::object::bake_simulation {
 
 static bool simulate_to_frame_poll(bContext *C)
 {
-  if (!ED_operator_object_active(C)) {
+  if (!ED_operator_object_active_editable(C)) {
     return false;
   }
   return true;
@@ -191,7 +195,8 @@ static wmOperatorStatus simulate_to_frame_modal(bContext *C,
                                                 wmOperator * /*op*/,
                                                 const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CALCULATE_SIMULATION_NODES))
+  if (!WM_jobs_has_running(
+          CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_CALCULATE_SIMULATION_NODES))
   {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
@@ -911,7 +916,8 @@ static wmOperatorStatus bake_simulation_modal(bContext *C,
                                               wmOperator * /*op*/,
                                               const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES))
+  {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
   return OPERATOR_PASS_THROUGH;
@@ -1060,7 +1066,8 @@ static wmOperatorStatus bake_single_node_modal(bContext *C,
                                                wmOperator * /*op*/,
                                                const wmEvent * /*event*/)
 {
-  if (!WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_BAKE_GEOMETRY_NODES))
+  {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
   return OPERATOR_PASS_THROUGH;

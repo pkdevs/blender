@@ -522,6 +522,7 @@ class DOPESHEET_MT_cache(Menu):
         col.prop(st, "cache_softbody")
         col.prop(st, "cache_particles")
         col.prop(st, "cache_cloth")
+        col.prop(st, "cache_compositor")
         col.prop(st, "cache_simulation_nodes")
         col.prop(st, "cache_smoke")
         col.prop(st, "cache_dynamicpaint")
@@ -642,8 +643,9 @@ class DOPESHEET_MT_action(Menu):
         layout = self.layout
         layout.operator("anim.merge_animation")
         layout.operator("anim.separate_slots")
-        layout.operator("anim.replace_action")
+        layout.operator("anim.replace_action", text="Replace Action...")
         layout.operator("anim.replace_action_new")
+        layout.operator("anim.replace_action_duplicate")
 
         layout.separator()
         layout.operator("anim.slot_channels_move_to_new_action")
@@ -784,7 +786,7 @@ class DOPESHEET_PT_action_slot(Panel):
         except (KeyError, IndexError, AttributeError) as ex:
             idtype_label = str(ex)
 
-        split = layout.split(factor=0.4)
+        split = layout.split(factor=layout.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Type")
         split.alignment = 'LEFT'

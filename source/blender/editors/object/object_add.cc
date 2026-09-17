@@ -33,17 +33,17 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rand.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -86,11 +86,13 @@
 #include "BKE_mball.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.hh"
+#include "BKE_mesh_wrapper.hh"
 #include "BKE_modifier.hh"
 #include "BKE_nla.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
+#include "BKE_paint.hh"
 #include "BKE_particle.h"
 #include "BKE_pointcloud.hh"
 #include "BKE_report.hh"
@@ -409,10 +411,10 @@ static void view_align_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *pt
   RNA_struct_system_idprops_unset(ptr, "rotation");
 }
 
-void add_unit_props_size(wmOperatorType *ot)
+void add_unit_props_size(wmOperatorType *ot, float default_value)
 {
   RNA_def_float_distance(
-      ot->srna, "size", 2.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Size", "", 0.001, 100.00);
+      ot->srna, "size", default_value, 0.0, OBJECT_ADD_SIZE_MAXF, "Size", "", 0.001, 100.00);
 }
 
 void add_unit_props_radius_ex(wmOperatorType *ot, float default_value)
@@ -635,13 +637,8 @@ Object *add_type_with_obdata(bContext *C,
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  {
-    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-    Object *obedit = BKE_view_layer_edit_object_get(view_layer);
-    if (obedit != nullptr) {
-      editmode_exit_ex(bmain, scene, obedit, EM_FREEDATA);
-    }
-  }
+  /* Ensure we leave edit-mode for all objects (NOOP outside of edit-mode). */
+  editmode_exit_multi_ex(bmain, scene, view_layer, EM_FREEDATA);
 
   /* deselects all, sets active object */
   Object *ob;
@@ -896,7 +893,7 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
         GreasePencilLatticeModifierData *lmd = reinterpret_cast<GreasePencilLatticeModifierData *>(
             modifier_add(
                 op->reports, bmain, scene, ob, nullptr, eModifierType_GreasePencilLattice));
-        if (UNLIKELY(lmd == nullptr)) {
+        if (lmd == nullptr) [[unlikely]] {
           continue;
         }
 
@@ -905,7 +902,7 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
       else {
         LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(
             modifier_add(op->reports, bmain, scene, ob, nullptr, eModifierType_Lattice));
-        if (UNLIKELY(lmd == nullptr)) {
+        if (lmd == nullptr) [[unlikely]] {
           continue;
         }
 
@@ -1338,7 +1335,7 @@ static wmOperatorStatus object_add_text_exec(bContext *C, wmOperator *op)
   }
 
   obedit = add_type(C, OB_FONT, nullptr, loc, rot, enter_editmode, local_view_bits);
-  BKE_object_obdata_size_init(obedit, RNA_float_get(op->ptr, "radius"));
+  BKE_object_obdata_size_init(obedit, RNA_float_get(op->ptr, "size"));
 
   return OPERATOR_FINISHED;
 }
@@ -1358,7 +1355,7 @@ void OBJECT_OT_text_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  add_unit_props_radius(ot);
+  add_unit_props_size(ot, 1.0f);
   add_generic_props(ot, true);
 }
 
@@ -2079,16 +2076,23 @@ void OBJECT_OT_collection_instance_add(wmOperatorType *ot)
 static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  LayerCollection *active_collection = CTX_data_layer_collection(C);
+  Collection *active_collection = BKE_collection_parent_editable_find_recursive(
+      CTX_data_view_layer(C), CTX_data_collection(C));
   std::optional<CollectionAddInfo> add_info = collection_add_info_get_from_op(C, op);
   if (!add_info) {
     return OPERATOR_CANCELLED;
   }
 
   if (RNA_boolean_get(op->ptr, "use_instance")) {
-    BKE_collection_child_remove(bmain, active_collection->collection, add_info->collection);
-    DEG_id_tag_update(&active_collection->collection->id, ID_RECALC_SYNC_TO_EVAL);
-    DEG_relations_tag_update(bmain);
+    /* In case no active editable collection is found, link/append code will have added imported
+     * collections/objects to a new collection (see code in
+     * `loose_data_instantiate_ensure_active_collection`). There is no easy way to retrieve these
+     * currently from here, so just leave the data in these for now - this is not a situation that
+     * should happen in 'normal expected use-cases' anyway. */
+    if (active_collection) {
+      BKE_collection_child_remove(bmain, active_collection, add_info->collection);
+      DEG_id_tag_update(&active_collection->id, ID_RECALC_SYNC_TO_EVAL);
+    }
 
     Object *ob = add_type(C,
                           OB_EMPTY,
@@ -2101,6 +2105,7 @@ static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
     ob->empty_drawsize = U.collection_instance_empty_size;
     ob->transflag |= OB_DUPLICOLLECTION;
     id_us_plus(&add_info->collection->id);
+    DEG_relations_tag_update(bmain);
   }
   else if (ID_IS_EDITABLE(&add_info->collection->id)) {
     ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -2356,7 +2361,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   if (!asset_id) {
     return nullptr;
   }
-  if (GS(asset_id->name) != ID_NT) {
+  if (asset_id->id_type() != ID_NT) {
     return nullptr;
   }
   bNodeTree *node_group = id_cast<bNodeTree *>(asset_id);
@@ -2366,7 +2371,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   id_us_plus(&node_group->id);
   nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;
   BKE_modifier_unique_name(&object.modifiers, &nmd->modifier);
-  MOD_nodes_update_interface(&object, nmd);
+  MOD_nodes_update_interface(bmain, &object, nmd);
   DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
   return nmd;
 }
@@ -2590,7 +2595,7 @@ static wmOperatorStatus object_delete_exec(bContext *C, wmOperator *op)
   }
   CTX_DATA_END;
 
-  if (has_volume_lightprobe && WM_jobs_test(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
+  if (has_volume_lightprobe && WM_jobs_has_running(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
     WM_jobs_stop_type(wm, scene, WM_JOB_TYPE_LIGHT_BAKE);
     BKE_report(op->reports,
                RPT_WARNING,
@@ -3600,6 +3605,8 @@ static Object *convert_mesh_to_mesh(Base &base, ObjectConversionInfo &info, Base
   const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
   Mesh *new_mesh = mesh_eval ? BKE_mesh_copy_for_eval(*mesh_eval) :
                                BKE_mesh_new_nomain(0, 0, 0, 0);
+  BKE_mesh_wrapper_ensure_mdata(new_mesh);
+
   BKE_object_material_from_eval_data(info.bmain, newob, &new_mesh->id);
   /* Anonymous attributes shouldn't be available on the applied geometry. */
   new_mesh->attributes_for_write().remove_anonymous();
@@ -3752,7 +3759,8 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
     array_utils::copy(faces_span, offsets);
     attributes.add<bool>("cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
 
-    VArray<int> mesh_materials = *mesh_eval.attributes().lookup_or_default(
+    const bke::AttributeAccessor mesh_attributes = mesh_eval.attributes();
+    VArray<int> mesh_materials = *mesh_attributes.lookup_or_default(
         "material_index", bke::AttrDomain::Face, 0);
     bke::SpanAttributeWriter<int> material_indices =
         attributes.lookup_or_add_for_write_only_span<int>("material_index",
@@ -3778,6 +3786,13 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
     bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
         "hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
     hide_stroke.finish();
+
+    bke::gather_attributes(mesh_attributes,
+                           bke::AttrDomain::Point,
+                           bke::AttrDomain::Point,
+                           bke::attribute_filter_from_skip_ref({"position"}),
+                           corner_verts,
+                           attributes);
   }
 
   Mesh *mesh_copied = BKE_mesh_copy_for_eval(mesh_eval);
@@ -3837,7 +3852,8 @@ static Object *convert_mesh_to_grease_pencil(Base &base,
                               bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
 
   Object *ob_eval = DEG_get_evaluated(info.depsgraph, ob);
-  const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
+  Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
+  BKE_mesh_wrapper_ensure_mdata(mesh_eval);
 
   VectorSet<FillColorRecord> fill_colors;
   Array<int> material_remap;
@@ -4178,9 +4194,7 @@ static Object *convert_font_to_curve_legacy_generic(Object *ob,
     /* other users */
     Object *ob1 = nullptr;
     if (ID_REAL_USERS(&cu->id) > 1) {
-      for (ob1 = static_cast<Object *>(info.bmain->objects.first); ob1;
-           ob1 = static_cast<Object *>(ob1->id.next))
-      {
+      for (ob1 = info.bmain->objects.first(); ob1; ob1 = static_cast<Object *>(ob1->id.next)) {
         if (ob1->data == ob->data && ob1 != ob) {
           ob1->type = OB_CURVES_LEGACY;
           DEG_id_tag_update(&ob1->id,
@@ -4223,14 +4237,16 @@ static Object *convert_font_to_curves(Base &base, ObjectConversionInfo &info, Ba
   Curves *curves_nomain = bke::curve_legacy_to_curves(*legacy_curve_id);
 
   Curves *curves_id = BKE_curves_add(info.bmain, BKE_id_name(legacy_curve_id->id));
-  curves_id->geometry.wrap() = curves_nomain->geometry.wrap();
 
-  bke::curves_copy_parameters(*curves_nomain, *curves_id);
+  if (curves_nomain) {
+    curves_id->geometry.wrap() = curves_nomain->geometry.wrap();
+    bke::curves_copy_parameters(*curves_nomain, *curves_id);
+
+    BKE_id_free(nullptr, curves_nomain);
+  }
 
   curve_ob->data = id_cast<ID *>(curves_id);
   curve_ob->type = OB_CURVES;
-
-  BKE_id_free(nullptr, curves_nomain);
 
   return curve_ob;
 }
@@ -4312,17 +4328,21 @@ static Object *convert_font_to_grease_pencil(Base &base,
 
   bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(layer, current_frame);
 
-  bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
+  if (curves_nomain) {
+    bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
 
-  drawing->strokes_for_write() = std::move(curves);
-  /* Default radius (1.0 unit) is too thick for converted strokes. */
-  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
-  attributes.remove("radius");
-  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
+    drawing->strokes_for_write() = std::move(curves);
+    /* Default radius (1.0 unit) is too thick for converted strokes. */
+    bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+    attributes.remove("radius");
+    attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  if (use_fill) {
-    create_grease_pencil_fills(*drawing);
+    const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+    if (use_fill) {
+      create_grease_pencil_fills(*drawing);
+    }
+
+    BKE_id_free(nullptr, curves_nomain);
   }
 
   curve_ob->data = id_cast<ID *>(grease_pencil);
@@ -4338,8 +4358,6 @@ static Object *convert_font_to_grease_pencil(Base &base,
    * curves id (and that seems to only happen if "Keep Original" is enabled, and only with this
    * specific conversion combination), not sure why. Ref: #138793 / #146252 */
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
-
-  BKE_id_free(nullptr, curves_nomain);
 
   return curve_ob;
 }
@@ -4427,18 +4445,21 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
 
   bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(layer, current_frame);
 
-  bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
+  /* An empty curve (no splines) converts to a #Curves of nullptr, leave the drawing empty. */
+  if (curves_nomain) {
+    bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
 
-  drawing->strokes_for_write() = std::move(curves);
-  /* Default radius (1.0 unit) is too thick for converted strokes. */
-  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
-  attributes.remove("radius");
-  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
-  drawing->tag_positions_changed();
+    drawing->strokes_for_write() = std::move(curves);
+    /* Default radius (1.0 unit) is too thick for converted strokes. */
+    bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+    attributes.remove("radius");
+    attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
+    drawing->tag_positions_changed();
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  if (use_fill) {
-    create_grease_pencil_fills(*drawing);
+    const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+    if (use_fill) {
+      create_grease_pencil_fills(*drawing);
+    }
   }
 
   newob->data = id_cast<ID *>(grease_pencil);
@@ -4455,7 +4476,9 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
    * specific conversion combination), not sure why. Ref: #138793 / #146252 */
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
 
-  BKE_id_free(nullptr, curves_nomain);
+  if (curves_nomain) {
+    BKE_id_free(nullptr, curves_nomain);
+  }
 
   return newob;
 }
@@ -4734,8 +4757,9 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
       }
     }
 
-    /* Ensure new object has consistent material data with its new obdata. */
     if (newob) {
+      BKE_sculptsession_free_pbvh(*newob);
+      /* Ensure new object has consistent material data with its new obdata. */
       BKE_object_materials_sync_length(bmain, newob, newob->data);
     }
 

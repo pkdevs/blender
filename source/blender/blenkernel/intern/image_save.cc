@@ -9,12 +9,12 @@
 #include <cerrno>
 #include <cstring>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -698,14 +698,12 @@ bool BKE_image_save(
 
   if (ok) {
     if (ima->flag & IMA_AUTOSAVE_TEMPPACK) {
-      BKE_image_free_packedfiles(ima);
-      ima->flag &= ~IMA_AUTOSAVE_TEMPPACK;
+      BKE_image_clear_autosave(ima);
     }
   }
 
   if (colorspace_changed) {
     BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_COLORMANAGE);
-    BKE_image_partial_update_mark_full_update(ima);
   }
 
   return ok;
@@ -912,7 +910,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
   }
 
   /* First add views since IMB_exr_add_channels checks number of views. */
-  const RenderView *first_rview = static_cast<const RenderView *>(rr->views.first);
+  const RenderView *first_rview = rr->views.first();
   if (first_rview && (first_rview->next || first_rview->name[0])) {
     for (RenderView &rview : rr->views) {
       if (!view || STREQ(view, rview.name)) {
@@ -1158,9 +1156,7 @@ bool BKE_image_render_write(ReportList *reports,
   /* mono, legacy code */
   else if (is_mono || (image_format.views_format == R_IMF_VIEWS_INDIVIDUAL)) {
     int view_id = 0;
-    for (const RenderView *rv = static_cast<const RenderView *>(rr->views.first); rv;
-         rv = rv->next, view_id++)
-    {
+    for (const RenderView *rv = rr->views.first(); rv; rv = rv->next, view_id++) {
       char filepath[FILE_MAX];
       if (is_mono) {
         STRNCPY(filepath, filepath_basis);

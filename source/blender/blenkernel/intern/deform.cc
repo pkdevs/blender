@@ -23,12 +23,12 @@
 #include "DNA_modifier_enums.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "PRF_profile.hh"
 
@@ -644,7 +644,7 @@ static int *object_defgroup_unlocked_flip_map_ex(const Object *ob,
     map[i] = -1;
   }
 
-  for (dg = static_cast<bDeformGroup *>(defbase->first), i = 0; dg; dg = dg->next, i++) {
+  for (dg = defbase->first(), i = 0; dg; dg = dg->next, i++) {
     if (map[i] == -1) { /* may be calculated previously */
 
       /* in case no valid value is found, use this */
@@ -884,11 +884,11 @@ void BKE_defvert_add_index_notest(MDeformVert *dvert, const int defgroup, const 
 
 void BKE_defvert_remove_group(MDeformVert *dvert, MDeformWeight *dw)
 {
-  if (UNLIKELY(!dvert || !dw)) {
+  if (!dvert || !dw) [[unlikely]] {
     return;
   }
   /* Ensure `dw` is part of `dvert` (security check). */
-  if (UNLIKELY(uintptr_t(dw - dvert->dw) >= uintptr_t(dvert->totweight))) {
+  if (uintptr_t(dw - dvert->dw) >= uintptr_t(dvert->totweight)) [[unlikely]] {
     /* Assert as an invalid `dw` (while supported) isn't likely to do what the caller expected. */
     BLI_assert_unreachable();
     return;
@@ -944,7 +944,7 @@ bool BKE_defvert_is_weight_zero(const MDeformVert *dvert, const int defgroup_tot
   for (int i = dvert->totweight; i != 0; i--, dw++) {
     if (dw->weight != 0.0f) {
       /* check the group is in-range, happens on rare situations */
-      if (LIKELY(dw->def_nr < defgroup_tot)) {
+      if (dw->def_nr < defgroup_tot) [[likely]] {
         return false;
       }
     }
@@ -1117,7 +1117,7 @@ void BKE_defvert_extract_vgroup_to_edgeweights(const MDeformVert *dvert,
                                                const bool invert_vgroup,
                                                float *r_weights)
 {
-  if (UNLIKELY(!dvert || defgroup == -1)) {
+  if (!dvert || defgroup == -1) [[unlikely]] {
     std::fill_n(r_weights, edges.size(), 0.0f);
     return;
   }
@@ -1144,7 +1144,7 @@ void BKE_defvert_extract_vgroup_to_loopweights(const MDeformVert *dvert,
                                                const bool invert_vgroup,
                                                float *r_weights)
 {
-  if (UNLIKELY(!dvert || defgroup == -1)) {
+  if (!dvert || defgroup == -1) [[unlikely]] {
     std::fill_n(r_weights, corner_verts.size(), 0.0f);
     return;
   }
@@ -1170,7 +1170,7 @@ void BKE_defvert_extract_vgroup_to_faceweights(const MDeformVert *dvert,
                                                const bool invert_vgroup,
                                                float *r_weights)
 {
-  if (UNLIKELY(!dvert || defgroup == -1)) {
+  if (!dvert || defgroup == -1) [[unlikely]] {
     std::fill_n(r_weights, faces.size(), 0.0f);
     return;
   }
@@ -1310,7 +1310,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
       }
       else if (use_delete && idx_dst > idx_src) {
         while (idx_dst-- > idx_src) {
-          BKE_object_defgroup_remove(ob_dst, static_cast<bDeformGroup *>(dst_defbase->last));
+          BKE_object_defgroup_remove(ob_dst, dst_defbase->last());
         }
       }
       if (r_map) {
@@ -1340,7 +1340,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 
       if (use_delete) {
         /* Remove all unused dst vgroups first, simpler in this case. */
-        for (dg_dst = static_cast<bDeformGroup *>(dst_defbase->first); dg_dst;) {
+        for (dg_dst = dst_defbase->first(); dg_dst;) {
           bDeformGroup *dg_dst_next = dg_dst->next;
 
           if (BKE_id_defgroup_name_index(&mesh_src.id, dg_dst->name) == -1) {
@@ -1350,8 +1350,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
         }
       }
 
-      for (idx_src = 0, dg_src = static_cast<bDeformGroup *>(src_list->first);
-           idx_src < num_layers_src;
+      for (idx_src = 0, dg_src = src_list->first(); idx_src < num_layers_src;
            idx_src++, dg_src = dg_src->next)
       {
         if (!use_layers_src[idx_src]) {

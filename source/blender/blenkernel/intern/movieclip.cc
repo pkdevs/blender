@@ -31,13 +31,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -167,7 +167,7 @@ static void write_movieTracks(BlendWriter *writer, ListBaseT<MovieTrackingTrack>
 {
   MovieTrackingTrack *track;
 
-  track = static_cast<MovieTrackingTrack *>(tracks->first);
+  track = tracks->first();
   while (track) {
     writer->write_struct(track);
 
@@ -209,7 +209,9 @@ static void movieclip_blend_write(BlendWriter *writer, ID *id, const void *id_ad
 
   MovieTracking *tracking = &clip->tracking;
 
-  writer->write_id_struct(id_address, clip);
+  writer->write_id_struct(id_address, clip, [](BlendStructWriter<MovieClip> &struct_writer) {
+    struct_writer.shallow_data.runtime = {};
+  });
   BKE_id_blend_write(writer, &clip->id);
 
   for (MovieTrackingObject &object : tracking->objects) {
@@ -309,6 +311,7 @@ IDTypeInfo IDType_ID_MC = {
     .foreach_cache = movie_clip_foreach_cache,
     .foreach_path = movie_clip_foreach_path,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = movieclip_blend_write,
@@ -906,9 +909,7 @@ MovieClip *BKE_movieclip_file_add_exists_ex(Main *bmain, const char *filepath, b
   BLI_path_abs(filepath_abs, BKE_main_blendfile_path(bmain));
 
   /* first search an identical filepath */
-  for (clip = static_cast<MovieClip *>(bmain->movieclips.first); clip;
-       clip = static_cast<MovieClip *>(clip->id.next))
-  {
+  for (clip = bmain->movieclips.first(); clip; clip = static_cast<MovieClip *>(clip->id.next)) {
     STRNCPY(filepath_test, clip->filepath);
     BLI_path_abs(filepath_test, ID_BLEND_PATH(bmain, &clip->id));
 
@@ -1556,14 +1557,12 @@ static void free_buffers(MovieClip *clip)
   }
 
   MovieClip_RuntimeGPUTexture *tex;
-  for (tex = static_cast<MovieClip_RuntimeGPUTexture *>(clip->runtime.gputextures.first); tex;
+  for (tex = clip->runtime.gputextures.first(); tex;
        tex = static_cast<MovieClip_RuntimeGPUTexture *>(tex->next))
   {
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      if (tex->gputexture[i] != nullptr) {
-        GPU_texture_free(tex->gputexture[i]);
-        tex->gputexture[i] = nullptr;
-      }
+    if (tex->gputexture != nullptr) {
+      GPU_texture_free(tex->gputexture);
+      tex->gputexture = nullptr;
     }
   }
   clip->runtime.gputextures.free_no_destruct();
@@ -1911,13 +1910,11 @@ void BKE_movieclip_eval_update(Depsgraph *depsgraph, Main *bmain, MovieClip *cli
 /** \name GPU textures
  * \{ */
 
-static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip,
-                                                   MovieClipUser *cuser,
-                                                   eGPUTextureTarget textarget)
+static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip, MovieClipUser *cuser)
 {
   /* Check if we have an existing entry for that clip user. */
   MovieClip_RuntimeGPUTexture *tex;
-  for (tex = static_cast<MovieClip_RuntimeGPUTexture *>(clip->runtime.gputextures.first); tex;
+  for (tex = clip->runtime.gputextures.first(); tex;
        tex = static_cast<MovieClip_RuntimeGPUTexture *>(tex->next))
   {
     if (memcmp(&tex->user, cuser, sizeof(MovieClipUser)) == 0) {
@@ -1928,16 +1925,11 @@ static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip,
   /* If not, allocate a new one. */
   if (tex == nullptr) {
     tex = MEM_new<MovieClip_RuntimeGPUTexture>(__func__);
-
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      tex->gputexture[i] = nullptr;
-    }
-
     memcpy(&tex->user, cuser, sizeof(MovieClipUser));
     BLI_addtail(&clip->runtime.gputextures, tex);
   }
 
-  return &tex->gputexture[textarget];
+  return &tex->gputexture;
 }
 
 gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuser)
@@ -1946,7 +1938,7 @@ gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuse
     return nullptr;
   }
 
-  gpu::Texture **tex = movieclip_get_gputexture_ptr(clip, cuser, TEXTARGET_2D);
+  gpu::Texture **tex = movieclip_get_gputexture_ptr(clip, cuser);
   if (*tex) {
     return *tex;
   }
@@ -1960,9 +1952,12 @@ gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuse
   }
 
   /* This only means RGBA16F instead of RGBA32F. */
-  const bool high_bitdepth = false;
-  const bool store_premultiplied = ibuf->float_data() ? false : true;
-  *tex = IMB_create_gpu_texture(clip->id.name + 2, ibuf, high_bitdepth, store_premultiplied, true);
+  GPUTextureCreateFlags flags = GPUTextureCreateFlags::EnableMipmaps |
+                                GPUTextureCreateFlags::LimitSize;
+  if (!ibuf->float_data()) {
+    flags |= GPUTextureCreateFlags::Premultiplied;
+  }
+  *tex = IMB_create_gpu_texture(clip->id.name + 2, ibuf, flags);
 
   /* Do not generate mips for movieclips... too slow. */
   GPU_texture_mipmap_mode(*tex, false, true);
@@ -1982,12 +1977,9 @@ void BKE_movieclip_free_gputexture(MovieClip *clip)
   while (clip->runtime.gputextures.count() > MOVIECLIP_NUM_GPUTEXTURES) {
     MovieClip_RuntimeGPUTexture *tex = static_cast<MovieClip_RuntimeGPUTexture *>(
         BLI_pophead(&clip->runtime.gputextures));
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      /* Free GLSL image binding. */
-      if (tex->gputexture[i]) {
-        GPU_texture_free(tex->gputexture[i]);
-        tex->gputexture[i] = nullptr;
-      }
+    /* Free GLSL image binding. */
+    if (tex->gputexture) {
+      GPU_texture_free(tex->gputexture);
     }
     MEM_delete(tex);
   }

@@ -6,8 +6,8 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -400,8 +400,6 @@ void VIEW3D_GGT_navigate(wmGizmoGroupType *gzgt)
   gzgt->setup = WIDGETGROUP_navigate_setup;
   gzgt->draw_prepare = WIDGETGROUP_navigate_draw_prepare;
   gzgt->draw_background = ED_gizmo_button2d_group_background;
-  gzgt->background_color = {0.0f, 0.0f, 0.0f, 0.3f};
-  gzgt->outline_color = {0.0f, 0.0f, 0.0f, 0.4f};
 }
 
 /** \} */

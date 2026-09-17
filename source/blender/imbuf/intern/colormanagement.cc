@@ -6,6 +6,7 @@
  * \ingroup imbuf
  */
 
+#include "BLI_utility_mixins.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_colormanagement_intern.hh"
 
@@ -32,19 +33,19 @@
 #include "BLI_color.hh"
 #include "BLI_colorspace.hh"
 #include "BLI_fileops.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_color.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLI_vector_set.hh"
 
 #include "BKE_appdir.hh"
@@ -122,14 +123,24 @@ float3x3 global_scene_linear_to_xyz_default = float3x3::zero();
  */
 static pthread_mutex_t processor_lock = BLI_MUTEX_INITIALIZER;
 
-static struct GlobalGPUState {
+static struct GlobalGPUState : NonCopyable {
   GlobalGPUState() = default;
 
   ~GlobalGPUState()
   {
+    reset();
+  }
+
+  void reset()
+  {
+    gpu_shader_bound = false;
     if (curve_mapping) {
       BKE_curvemapping_free(curve_mapping);
+      curve_mapping = nullptr;
     }
+    orig_curve_mapping = nullptr;
+    use_curve_mapping = false;
+    curve_mapping_timestamp = 0;
   }
 
   /* GPU shader currently bound. */
@@ -348,7 +359,7 @@ void colormanagement_init()
 
 void colormanagement_exit()
 {
-  global_gpu_state = GlobalGPUState();
+  global_gpu_state.reset();
   global_color_picking_state = GlobalColorPickingState();
 
   colormanage_free_config();
@@ -531,6 +542,9 @@ void colormanage_imbuf_make_linear(ImBuf *ibuf,
   const ColorSpace *colorspace = g_config()->get_color_space(from_colorspace);
 
   if (colorspace && colorspace->is_data()) {
+    if (ibuf->float_data()) {
+      ibuf->float_buffer.colorspace = colorspace;
+    }
     return;
   }
 
@@ -550,6 +564,9 @@ void colormanage_imbuf_make_linear(ImBuf *ibuf,
       }
     }
 
+    /* Clear colorspace to indicate it's scene linear. */
+    ibuf->float_buffer.colorspace = nullptr;
+
     if (from_colorspace[0] == '\0') {
       return;
     }
@@ -567,7 +584,6 @@ void colormanage_imbuf_make_linear(ImBuf *ibuf,
                                        ibuf->channels,
                                        &cm_processor,
                                        predivide);
-    ibuf->float_buffer.colorspace = nullptr;
   }
 }
 
@@ -981,6 +997,11 @@ bool IMB_colormanagement_space_is_srgb(const ColorSpace *colorspace)
   return (colorspace && colorspace->is_srgb());
 }
 
+bool IMB_colormanagement_space_is_scene_linear_srgb(const ColorSpace *colorspace)
+{
+  return IMB_colormanagement_space_is_srgb(colorspace) && colorspace::scene_linear_is_rec709;
+}
+
 bool IMB_colormanagement_space_name_is_data(const char *name)
 {
   const ColorSpace *colorspace = g_config()->get_color_space(name);
@@ -1063,7 +1084,7 @@ Vector<char> IMB_colormanagement_space_to_icc_profile(const ColorSpace *colorspa
   }
 
   char icc_filename[FILE_MAX];
-  STRNCPY(icc_filename, (interop_id + ".icc").c_str());
+  STRNCPY(icc_filename, (ocio::interop_id_drop_namespace(interop_id) + ".icc").c_str());
   BLI_path_make_safe_filename(icc_filename);
 
   char icc_filepath[FILE_MAX];
@@ -1086,13 +1107,15 @@ Vector<char> IMB_colormanagement_space_to_icc_profile(const ColorSpace *colorspa
 /* Primaries */
 static const int CICP_PRI_REC709 = 1;
 static const int CICP_PRI_REC2020 = 9;
+static const int CICP_PRI_XYZD65 = 10;
 static const int CICP_PRI_P3D65 = 12;
 /* Transfer functions */
 static const int CICP_TRC_BT709 = 1;
 static const int CICP_TRC_G22 = 4;
+static const int CICP_TRC_LINEAR = 8;
 static const int CICP_TRC_SRGB = 13;
 static const int CICP_TRC_PQ = 16;
-static const int CICP_TRC_G26 = 17;
+static const int CICP_TRC_SMPTE428 = 17;
 static const int CICP_TRC_HLG = 18;
 /* Matrix */
 static const int CICP_MATRIX_RGB = 0;
@@ -1138,22 +1161,34 @@ bool IMB_colormanagement_space_to_cicp(const ColorSpace *colorspace,
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (interop_id == "g26_p3d65_display") {
-    /* BT.709 matrix may seem odd, but follows Color Interop Forum recommendation. */
-    cicp[0] = CICP_PRI_P3D65;
-    cicp[1] = CICP_TRC_G26;
-    cicp[2] = (rgb_matrix) ? CICP_MATRIX_RGB : CICP_MATRIX_BT709;
+  if (interop_id == "pq_xyzd65_display") {
+    cicp[0] = CICP_PRI_XYZD65;
+    cicp[1] = CICP_TRC_PQ;
+    cicp[2] = CICP_MATRIX_RGB;
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (interop_id == "g22_rec709_display") {
+  if (interop_id == "g26_xyzd65_display") {
+    cicp[0] = CICP_PRI_XYZD65;
+    cicp[1] = CICP_TRC_SMPTE428;
+    cicp[2] = CICP_MATRIX_RGB;
+    cicp[3] = CICP_RANGE_FULL;
+    return true;
+  }
+  if (interop_id == "g26_p3d65_display") {
+    /* One might think the same transfer function as g26_xyzd65_display can be
+     * used here. But actually it's that one has headroom scaling, and this one
+     * does not. And there is no CICP for regular gamma 2.6. */
+    return false;
+  }
+  if (ELEM(interop_id, "g22_rec709_display", "g22_rec709_scene")) {
     cicp[0] = CICP_PRI_REC709;
     cicp[1] = CICP_TRC_G22;
     cicp[2] = (rgb_matrix) ? CICP_MATRIX_RGB : CICP_MATRIX_BT709;
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (interop_id == "blender:g24_rec2020_display") {
+  if (ELEM(interop_id, "blender:g24_rec2020_display", "g24_rec2020_scene")) {
     /* There is no gamma 2.4 TRC, but BT.709 is close. */
     cicp[0] = CICP_PRI_REC2020;
     cicp[1] = CICP_TRC_BT709;
@@ -1161,7 +1196,7 @@ bool IMB_colormanagement_space_to_cicp(const ColorSpace *colorspace,
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (interop_id == "g24_rec709_display") {
+  if (ELEM(interop_id, "g24_rec709_display", "g24_rec709_scene")) {
     /* There is no gamma 2.4 TRC, but BT.709 is close. */
     cicp[0] = CICP_PRI_REC709;
     cicp[1] = CICP_TRC_BT709;
@@ -1169,7 +1204,7 @@ bool IMB_colormanagement_space_to_cicp(const ColorSpace *colorspace,
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (ELEM(interop_id, "srgb_p3d65_display", "srgbe_p3d65_display")) {
+  if (ELEM(interop_id, "srgb_p3d65_display", "srgbe_p3d65_display", "srgb_p3d65_scene")) {
     /* For video we use BT.709 to match default sRGB writing, even though it is wrong.
      * But we have been writing sRGB like this forever, and there is the so called
      * "Quicktime gamma shift bug" that complicates things. */
@@ -1179,10 +1214,38 @@ bool IMB_colormanagement_space_to_cicp(const ColorSpace *colorspace,
     cicp[3] = CICP_RANGE_FULL;
     return true;
   }
-  if (interop_id == "srgb_rec709_display") {
+  if (ELEM(interop_id, "srgb_rec709_display", "srgb_rec709_scene")) {
     /* Don't write anything for backwards compatibility. Is fine for PNG
      * and video but may reconsider when JXL or AVIF get added. */
     return false;
+  }
+  if (ELEM(interop_id, "lin_rec709_display", "lin_rec709_scene")) {
+    cicp[0] = CICP_PRI_REC709;
+    cicp[1] = CICP_TRC_LINEAR;
+    cicp[2] = (rgb_matrix) ? CICP_MATRIX_RGB : CICP_MATRIX_BT709;
+    cicp[3] = CICP_RANGE_FULL;
+    return true;
+  }
+  if (ELEM(interop_id, "lin_p3d65_display", "lin_p3d65_scene")) {
+    cicp[0] = CICP_PRI_P3D65;
+    cicp[1] = CICP_TRC_LINEAR;
+    cicp[2] = (rgb_matrix) ? CICP_MATRIX_RGB : CICP_MATRIX_BT709;
+    cicp[3] = CICP_RANGE_FULL;
+    return true;
+  }
+  if (ELEM(interop_id, "lin_rec2020_display", "lin_rec2020_scene")) {
+    cicp[0] = CICP_PRI_REC2020;
+    cicp[1] = CICP_TRC_LINEAR;
+    cicp[2] = (rgb_matrix) ? CICP_MATRIX_RGB : CICP_MATRIX_REC2020_NCL;
+    cicp[3] = CICP_RANGE_FULL;
+    return true;
+  }
+  if (interop_id == "lin_ciexyzd65_scene") {
+    cicp[0] = CICP_PRI_XYZD65;
+    cicp[1] = CICP_TRC_LINEAR;
+    cicp[2] = CICP_MATRIX_RGB;
+    cicp[3] = CICP_RANGE_FULL;
+    return true;
   }
 
   return false;
@@ -1204,8 +1267,11 @@ const ColorSpace *IMB_colormanagement_space_from_cicp(const int cicp[4],
   else if (cicp[0] == CICP_PRI_P3D65 && cicp[1] == CICP_TRC_PQ) {
     interop_id = "pq_p3d65_display";
   }
-  else if (cicp[0] == CICP_PRI_P3D65 && cicp[1] == CICP_TRC_G26) {
-    interop_id = "g26_p3d65_display";
+  else if (cicp[0] == CICP_PRI_XYZD65 && cicp[1] == CICP_TRC_PQ) {
+    interop_id = "pq_xyzd65_display";
+  }
+  else if (cicp[0] == CICP_PRI_XYZD65 && cicp[1] == CICP_TRC_SMPTE428) {
+    interop_id = "g26_xyzd65_display";
   }
   else if (cicp[0] == CICP_PRI_REC709 && cicp[1] == CICP_TRC_G22) {
     interop_id = "g22_rec709_display";
@@ -1228,6 +1294,18 @@ const ColorSpace *IMB_colormanagement_space_from_cicp(const int cicp[4],
   }
   else if (cicp[0] == CICP_PRI_REC709 && cicp[1] == CICP_TRC_SRGB) {
     interop_id = "srgb_rec709_display";
+  }
+  else if (cicp[0] == CICP_PRI_REC709 && cicp[1] == CICP_TRC_LINEAR) {
+    interop_id = "lin_rec709_display";
+  }
+  else if (cicp[0] == CICP_PRI_P3D65 && cicp[1] == CICP_TRC_LINEAR) {
+    interop_id = "lin_p3d65_display";
+  }
+  else if (cicp[0] == CICP_PRI_REC2020 && cicp[1] == CICP_TRC_LINEAR) {
+    interop_id = "lin_rec2020_display";
+  }
+  else if (cicp[0] == CICP_PRI_XYZD65 && cicp[1] == CICP_TRC_LINEAR) {
+    interop_id = "lin_ciexyzd65_scene";
   }
 
   return interop_id.is_empty() ? nullptr : g_config()->get_color_space_by_interop_id(interop_id);
@@ -1996,11 +2074,11 @@ void IMB_colormanagement_imbuf_to_byte_texture(uchar *out_buffer,
                                                const ImBuf *ibuf,
                                                const bool store_premultiplied)
 {
-  /* Byte buffer storage, only for sRGB, scene linear and data texture since other
-   * color space conversions can't be done on the GPU. */
+  /* Byte buffer storage, only for scene linear + sRGB, scene linear and data texture
+   * since other color space conversions can't currently be done on the GPU. */
   BLI_assert(ibuf->byte_data());
   BLI_assert(ibuf->float_data() == nullptr);
-  BLI_assert(IMB_colormanagement_space_is_srgb(ibuf->byte_buffer.colorspace) ||
+  BLI_assert(IMB_colormanagement_space_is_scene_linear_srgb(ibuf->byte_buffer.colorspace) ||
              IMB_colormanagement_space_is_scene_linear(ibuf->byte_buffer.colorspace) ||
              IMB_colormanagement_space_is_data(ibuf->byte_buffer.colorspace));
 
@@ -2251,14 +2329,6 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
 {
   ImBuf *colormanaged_ibuf = ibuf;
 
-  /* Update byte buffer if exists but invalid. */
-  if (ibuf->float_data() && ibuf->byte_data() &&
-      (ibuf->userflags & (IB_DISPLAY_BUFFER_INVALID | IB_RECT_INVALID)) != 0)
-  {
-    IMB_byte_from_float(ibuf);
-    ibuf->userflags &= ~(IB_RECT_INVALID | IB_DISPLAY_BUFFER_INVALID);
-  }
-
   /* Detect if we are writing to a file format that needs a linear float buffer. */
   const bool linear_float_output = BKE_imtype_requires_linear_float(image_format->imtype);
 
@@ -2266,6 +2336,12 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
    * with color management conversions applied. This may be for either applying the
    * display transform for renders, or a user specified color space for the file. */
   const bool byte_output = BKE_image_format_is_byte(image_format);
+
+  /* Create temporary byte image buffer if we are saving byte as float. */
+  if (byte_output && ibuf->float_data() && ibuf->byte_data()) {
+    colormanaged_ibuf = imbuf_ensure_editable(ibuf, colormanaged_ibuf, allocate_result);
+    IMB_free_byte_pixels(colormanaged_ibuf);
+  }
 
   /* If we're saving from RGBA to RGB buffer then it's not so much useful to just ignore alpha --
    * it leads to bad artifacts especially when saving byte images.
@@ -2330,7 +2406,7 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* Linear render or regular file output: conversion between two color spaces. */
 
     /* Detect which color space we need to convert between. */
-    const char *from_colorspace = imbuf_colorspace_name(ibuf, byte_output);
+    const char *from_colorspace = imbuf_colorspace_name(colormanaged_ibuf, byte_output);
     const char *to_colorspace = image_format->linear_colorspace_settings.name;
 
     /* to_colorspace may need to modified to compensate for 100 vs 203 nits conventions. */
@@ -2345,9 +2421,10 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* TODO: can we check with OCIO if color spaces are the same but have different names? */
     if (to_colorspace[0] == '\0' || STREQ(from_colorspace, to_colorspace)) {
       /* No conversion needed, but may still need to allocate byte buffer for output. */
-      if (byte_output && !ibuf->byte_data()) {
-        ibuf->byte_buffer.colorspace = ibuf->float_buffer.colorspace;
-        IMB_byte_from_float(ibuf);
+      if (byte_output && !colormanaged_ibuf->byte_data()) {
+        colormanaged_ibuf = imbuf_ensure_editable(ibuf, colormanaged_ibuf, allocate_result);
+        colormanaged_ibuf->byte_buffer.colorspace = colormanaged_ibuf->float_buffer.colorspace;
+        IMB_byte_from_float(colormanaged_ibuf);
       }
     }
     else {

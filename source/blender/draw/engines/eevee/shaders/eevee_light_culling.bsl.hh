@@ -11,9 +11,9 @@
 #include "eevee_light_iter.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
 #include "eevee_light_shared.hh"
-#include "gpu_shader_debug_gradients_lib.glsl"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
+#include "gpu_shader_debug_gradients.bsl.hh"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
 
 namespace eevee::light::culling {
 
@@ -87,7 +87,7 @@ void cull_main([[resource_table]] Cull &srt,
           return;
         }
       }
-      ATTR_FALLTHROUGH;
+      [[fallthrough]];
     }
     case LIGHT_RECT:
     case LIGHT_ELLIPSE:
@@ -314,9 +314,11 @@ struct CullingTile {
     v11 = normalize(v11);
     float3 center = normalize(v00 + v01 + v10 + v11);
     float angle_cosine = dot(center, v00);
-    angle_cosine = max(angle_cosine, dot(center, v01));
-    angle_cosine = max(angle_cosine, dot(center, v10));
-    angle_cosine = max(angle_cosine, dot(center, v11));
+    angle_cosine = min(angle_cosine, dot(center, v01));
+    angle_cosine = min(angle_cosine, dot(center, v10));
+    angle_cosine = min(angle_cosine, dot(center, v11));
+    /* Widen by moving to next representable float to account for float rounding. */
+    angle_cosine = uintBitsToFloat(floatBitsToUint(angle_cosine) - 1u);
     return float4(center, angle_cosine);
   }
 
@@ -429,7 +431,7 @@ void tile_main([[resource_table]] const draw::View &views,
           break;
         }
         /* Fall-through to the hemispheric case. */
-        ATTR_FALLTHROUGH;
+        [[fallthrough]];
       }
       case LIGHT_RECT:
       case LIGHT_ELLIPSE: {
@@ -504,7 +506,7 @@ struct WithCullCtx {
 
   void eval_local([[resource_table]] LightRenderData & /*lrd*/, uint l_idx, LightData light)
   {
-    LightVector lv = light_vector_get(light, false, P);
+    LightVector lv = LightVector::get(light, false, P);
     if (light_attenuation_surface(light, false, lv) > LIGHT_ATTENUATION_THRESHOLD) {
       light_bits |= 1u << l_idx;
     }
