@@ -311,6 +311,14 @@ std::string Source::serialize_infos() const
   for (auto dependency : create_infos_dependencies) {
     ss << "#include \"" << dependency << "\"\n";
   }
+
+  for (auto builtin : builtins) {
+    if (builtin == Builtin::runtime_generated) {
+      /* Do not serialize create infos for runtime generated files. */
+      return ss.str();
+    }
+  }
+
   ss << "\n";
   for (auto define : create_infos_defines) {
     ss << define;
