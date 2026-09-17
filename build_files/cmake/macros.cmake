@@ -1648,7 +1648,7 @@ function(compile_sources_as_cpp
 
       cmake_path(SET _file_from NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/${glsl_file}")
       cmake_path(SET _file_to   NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${_glsl_file_cc}")
-      file(WRITE "${_file_to}" "#include \"${_file_from}\"\n")
+      file(GENERATE OUTPUT "${_file_to}" CONTENT "#include \"${_file_from}\"\n")
       list(APPEND sources ${_file_to})
       # Mark the original file as header only, so no attempt will be made at compiling it
       # regardless of extention.
