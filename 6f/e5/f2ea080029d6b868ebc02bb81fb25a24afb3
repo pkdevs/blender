@@ -1,1 +1,2 @@
 Referenced by issue #163916, High GPU usage when opening the Lights tab in the Preferences
+Referenced by commit c648e54c932c2c1325ba97f6bb2b6864321334ff, Fix #163916: Eternal draw-loop in the Lights tab in the Preferences
