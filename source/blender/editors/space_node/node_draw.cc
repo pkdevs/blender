@@ -4181,6 +4181,7 @@ static void node_draw_comment(const bContext &C,
                               bNode &node,
                               ui::Block &block)
 {
+  const SpaceNode &snode = *CTX_wm_space_node(&C);
   const rctf &rct = node.runtime->draw_bounds;
   const View2D &v2d = region.v2d;
 
@@ -4197,6 +4198,8 @@ static void node_draw_comment(const bContext &C,
                  &block);
     return;
   }
+
+  node_draw_shadow(snode, node, BASIS_RAD, 1.0f);
 
   const NodeComment &storage = *static_cast<const NodeComment *>(node.storage);
   const bool is_edit = bool(storage.flag & NodeCommentFlag::Edit);
