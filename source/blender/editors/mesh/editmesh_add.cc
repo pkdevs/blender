@@ -9,6 +9,7 @@
 #include <cstdarg>
 
 #include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_sys_types.hh"
 
 #include "BLT_translation.hh"
@@ -18,7 +19,6 @@
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.h"
 #include "BKE_paint.hh"
-#include "BLI_math_vector_c.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
