@@ -61,24 +61,27 @@ class GreasePencilPaintTests(unittest.TestCase):
 
     def test_stroke_generates_correct_drawing(self):
         self.prepare()
-        context_override = bpy.context.copy()
-        set_view3d_context_override(context_override)
-        with bpy.context.temp_override(**context_override):
-            bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
+#        context_override = bpy.context.copy()
+#        set_view3d_context_override(context_override)
+#        with bpy.context.temp_override(**context_override):
+        bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
 
         # bpy.ops.wm.save_mainfile()
 
-        # Remove the 'init_time' attribute before comparing, because it will differ by definition
+        # Remove the 'init_time' and 'delta_time' attributes before comparing, because they will
+        # differ by definition.
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], "init_time")
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], "init_time")
-        # Remove hte ".selection" attribute, because it the domain it exists on depends on the last mode
-        # the gp object was in
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], "delta_time")
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], "delta_time")
+
+        # Remove the ".selection" attribute, because the domain it exists on depends on the last mode
+        # the Grease Pencil object was in.
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], ".selection")
         delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], ".selection")
         comparison = bpy.data.grease_pencils['expected'].unit_test_compare(
             grease_pencil=bpy.data.grease_pencils['test'], threshold=0.001)
 
-        # compare with expected
         self.assertTrue(comparison == 'Same', comparison)
         self.cleanup()
 
