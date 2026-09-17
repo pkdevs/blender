@@ -526,6 +526,12 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
           tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
         }
       }
+      else if (sync_types->object || sync_types->edit_bone || sync_types->pose_bone ||
+               sync_types->seq_strip)
+      {
+        // When syncing from non-collection sources, deselect all collections
+        tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
+      }
     }
     else {
       tselem->flag &= ~(TSE_SELECTED | TSE_ACTIVE);
