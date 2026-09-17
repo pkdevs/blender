@@ -2400,6 +2400,7 @@ def km_node_editor(params):
         ("node.group_ungroup", {"type": 'G', "value": 'PRESS', "ctrl": True, "alt": True}, None),
         ("node.group_separate", {"type": 'P', "value": 'PRESS'}, None),
         ("node.comment_edit", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
+        ("node.comment_edit", {"type": 'RET', "value": 'PRESS'}, None),
         ("node.comment_edit", {"type": 'F2', "value": 'PRESS'},
          {"properties": [("use_active", True)]}),
         ("node.group_enter_exit", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),

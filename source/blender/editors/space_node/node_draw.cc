@@ -1703,21 +1703,6 @@ static void node_toggle_button_cb(bContext *C, void *node_argv, void *op_argv)
   WM_operator_name_call(C, opname, wm::OpCallContext::InvokeDefault, nullptr, nullptr);
 }
 
-static void node_comment_edit_button_cb(bContext *C, void *node_argv, void * /*arg*/)
-{
-  SpaceNode &snode = *CTX_wm_space_node(C);
-  bNodeTree &node_tree = *snode.edittree;
-  bNode &node = *node_tree.node_by_id(POINTER_AS_INT(node_argv));
-
-  node_select_single(*C, node);
-
-  PointerRNA props_ptr = WM_operator_properties_create("NODE_OT_comment_edit");
-  RNA_boolean_set(&props_ptr, "use_active", true);
-  WM_operator_name_call(
-      C, "NODE_OT_comment_edit", wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
-  WM_operator_properties_free(&props_ptr);
-}
-
 static void node_draw_shadow(const SpaceNode &snode,
                              const bNode &node,
                              const float radius,
@@ -3624,6 +3609,21 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
+static void node_comment_edit_button_cb(bContext *C, void *node_argv, void * /*arg*/)
+{
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &node_tree = *snode.edittree;
+  bNode &node = *node_tree.node_by_id(POINTER_AS_INT(node_argv));
+
+  node_select_single(*C, node);
+
+  PointerRNA props_ptr = WM_operator_properties_create("NODE_OT_comment_edit");
+  RNA_boolean_set(&props_ptr, "use_active", true);
+  WM_operator_name_call(
+      C, "NODE_OT_comment_edit", wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
+  WM_operator_properties_free(&props_ptr);
+}
+
 static void comment_node_prepare_for_draw(
     const bContext &C, SpaceNode &snode, bNodeTree &ntree, bNode &node, ui::Block &block)
 {
@@ -3676,7 +3676,7 @@ static void comment_node_prepare_for_draw(
     bottom_y = loc.y - but_h;
   }
 
-  const float icon_pad = 0.25f * U.widget_unit;
+  const float icon_pad = 0.15f * U.widget_unit;
   float height = std::max<float>(!is_render || !text.trim().is_empty() ? loc.y - bottom_y : 0,
                                  NODE_HEADER_ICON_SIZE + 2 * icon_pad + 0.1 * U.widget_unit);
 
