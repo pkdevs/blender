@@ -711,7 +711,7 @@ void KDTreeNew<T>::build(const Span<T> points,
 
   TreeBuilder<T> builder(points, tree_indices, leaf_size, allocator);
   root_ = builder.build(source, bounds_);
-  indices_ = tree_indices.data();
+  tree_indices_ = tree_indices.data();
   size_ = size;
 
 #ifndef NDEBUG

@@ -122,7 +122,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * Indices into #points_, in the order the tree visits them. Written by the build, read by
    * every search afterwards, and owned by whichever allocator the build used.
    */
-  const int *indices_ = nullptr;
+  const int *tree_indices_ = nullptr;
   /** Bounds of every point in the tree, which a search starts from. */
   Bounds<T> bounds_ = Bounds<T>(T(0));
   Node *root_ = nullptr;
@@ -199,7 +199,7 @@ template<typename T> class KDTreeNew : NonMovable, NonCopyable {
    * is built. It changes when unrelated points move and when the build is tuned, so results that
    * have to stay the same as geometry is edited or animated should not depend on it.
    */
-  Span<int> indices() const;
+  Span<int> tree_indices() const;
 
   /**
    * Find the point closest to \a position.
@@ -485,7 +485,7 @@ inline int calc_duplicates(const KDTreeNew<T> &tree,
                            const typename T::base_type range,
                            const MutableSpan<int> duplicates)
 {
-  return calc_duplicates(tree, range, tree.indices(), duplicates);
+  return calc_duplicates(tree, range, tree.tree_indices(), duplicates);
 }
 
 }  // namespace kdtree
@@ -505,9 +505,9 @@ template<typename T> const T *KDTreeNew<T>::points() const
   return points_;
 }
 
-template<typename T> Span<int> KDTreeNew<T>::indices() const
+template<typename T> Span<int> KDTreeNew<T>::tree_indices() const
 {
-  return Span<int>(indices_, size_);
+  return Span<int>(tree_indices_, size_);
 }
 
 template<typename T>
@@ -623,7 +623,7 @@ bool KDTreeNew<T>::search_node(Query &query,
   requires kdtree::QueryType<Query, value_type>
 {
   if (node->children == nullptr) {
-    const int *indices = indices_;
+    const int *indices = tree_indices_;
     const T *points = points_;
     for (int i = node->leaf.start; i < node->leaf.end; i++) {
       const int index = indices[i];
