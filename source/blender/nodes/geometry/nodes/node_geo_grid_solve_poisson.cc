@@ -477,8 +477,7 @@ static void node_register()
   geo_node_type_base(&ntype, "GeometryNodeGridSolvePoisson"_ustr);
   ntype.ui_name = "Grid Solve Poisson";
   ntype.ui_description =
-      "Solve the Poisson equation for a scalar field. Computes a grid whose Laplacian equals "
-      "the "
+      "Solve the Poisson equation for a scalar field. Computes a grid whose Laplacian equals the "
       "input scalar grid.";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.default_width = bke::NodeWidth::_200;
