@@ -179,7 +179,7 @@ float gpencil_stroke_segment_mask(float2 p1,
       float2 bevel_tan = orthogonal(tan_norm0 - tan_norm1);
 
       dist = abs(dot(pos1, bevel_tan) / dot(tan_norm1, bevel_tan));
-      dist *= radius;
+      dist /= r1;
     }
     else {
       /* Continue the main line to get a sharp corner. */
@@ -194,7 +194,7 @@ float gpencil_stroke_segment_mask(float2 p1,
       float2 bevel_tan = orthogonal(tan_norm2 - tan_norm1);
 
       dist = abs(dot(pos2, bevel_tan) / dot(tan_norm1, bevel_tan));
-      dist *= radius;
+      dist /= r2;
     }
     else {
       /* Continue the main line to get a sharp corner. */
