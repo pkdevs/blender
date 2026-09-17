@@ -237,6 +237,7 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode);
 
 namespace bke::brush {
 float normal_weight_get(const Brush &brush, bool invert);
+float tip_rotation_get(const Paint &paint, const Brush &brush);
 }
 
 /* debugging only */

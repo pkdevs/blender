@@ -693,11 +693,10 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
     float local_mat[4][4];
     float local_mat_inv[4][4];
 
-    const bool needs_rake = bke::brush::supports_rake(*brush);
     /* TODO: For brushes that does not support rake, we should allow users to set a starting
      * rotation. Should be implemented after moving Rake and Rotation settings from the texture
      * datablock. */
-    const float tip_rotation = needs_rake ? pcontext.paint->runtime->brush_rotation : 0.0f;
+    const float tip_rotation = bke::brush::tip_rotation_get(*pcontext.paint, *brush);
     calc_brush_local_mat(0,
                          tip_rotation,
                          pcontext.vc,

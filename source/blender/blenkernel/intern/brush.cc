@@ -2142,6 +2142,10 @@ bool supports_tilt(const Brush &brush)
               SCULPT_BRUSH_TYPE_PLANE,
               SCULPT_BRUSH_TYPE_CLAY_STRIPS);
 }
+float tip_rotation_get(const Paint &paint, const Brush &brush)
+{
+  return supports_rake(brush) ? paint.runtime->brush_rotation : 0.0f;
+}
 }  // namespace bke::brush
 
 /** \} */

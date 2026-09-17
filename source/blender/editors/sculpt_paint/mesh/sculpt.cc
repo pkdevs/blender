@@ -3306,7 +3306,7 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
     return {all_leaf_nodes(pbvh, memory), std::nullopt, std::nullopt};
   }
   if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_PLANE) {
-    return brushes::plane::calc_node_mask(depsgraph, ob, brush, memory);
+    return brushes::plane::calc_node_mask(depsgraph, sd.paint, ob, brush, memory);
   }
   if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS) {
     return brushes::clay_strips::calc_node_mask(depsgraph, ob, brush, memory);
@@ -3361,8 +3361,7 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
     /* TODO: For brushes that does not support rake, we should allow users to set a starting
      * rotation. Should be implemented after moving Rake and Rotation settings from the texture
      * datablock. */
-    const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation :
-                                                                  0.0f;
+    const float tip_rotation = bke::brush::tip_rotation_get(sd.paint, brush);
     float4x4 brush_local_mat;
     float4x4 brush_local_mat_inv;
     calc_brush_local_mat(
@@ -6472,7 +6471,7 @@ void ensure_cache(Object &object)
 
 }  // namespace islands
 
-void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, float mat[4][4])
+void cube_tip_init(const Sculpt &sd, const Object &ob, const Brush &brush, float mat[4][4])
 {
   SculptSession &ss = *ob.runtime->sculpt_session;
   float scale[4][4];
@@ -6482,7 +6481,7 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   /* TODO: For brushes that does not support rake, we should allow users to set a starting
    * rotation. Should be implemented after moving Rake and Rotation settings from the texture
    * datablock. */
-  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
+  const float tip_rotation = bke::brush::tip_rotation_get(sd.paint, brush);
   zero_m4(mat);
   calc_brush_local_mat(0.0,
                        tip_rotation,

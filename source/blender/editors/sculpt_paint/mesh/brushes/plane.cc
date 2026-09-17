@@ -434,7 +434,7 @@ void do_plane_brush(const Depsgraph &depsgraph,
 
   float4x4 mat;
   float4x4 mat_inv;
-  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
+  const float tip_rotation = bke::brush::tip_rotation_get(sd.paint, brush);
   calc_brush_local_mat(0,
                        tip_rotation,
                        *ss.cache->vc,
@@ -525,6 +525,7 @@ void do_plane_brush(const Depsgraph &depsgraph,
 
 namespace plane {
 CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
+                                  const Paint &paint,
                                   Object &ob,
                                   const Brush &brush,
                                   IndexMaskMemory &memory)
@@ -555,7 +556,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
   const float3 tip_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE ?
                                 ss.cache->view_normal_symm :
                                 plane_normal;
-  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
+  const float tip_rotation = bke::brush::tip_rotation_get(paint, brush);
 
   float4x4 brush_local_mat;
   float4x4 brush_local_mat_inv;
