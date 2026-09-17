@@ -116,7 +116,7 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
   while (true) {
     const uint node_type = kernel_data_fetch(svm_nodes, offset++);
 
-    /* Note that every case must always read its ful node struct regardless of enabled features,
+    /* NOTE: Every case must always read its full node struct regardless of enabled features,
      * so that the offset advances past the SVM node data. */
     switch (node_type) {
       SVM_CASE(NODE_END)
