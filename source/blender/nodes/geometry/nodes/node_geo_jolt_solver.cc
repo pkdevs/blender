@@ -23,6 +23,7 @@
 #  include <Jolt/Jolt.h>
 
 #  include <Jolt/Core/JobSystemSingleThreaded.h>
+#  include <Jolt/Core/JobSystemThreadPool.h>
 #  include <Jolt/Physics/Body/BodyActivationListener.h>
 #  include <Jolt/Physics/Body/BodyCreationSettings.h>
 #  include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
@@ -185,8 +186,6 @@ struct JoltState {
 
   Map<DataKey, JoltRigidBodies> rigid_bodies_by_key;
   geometry::jolt::CollisionShapeCache collision_shape_cache;
-
-  ~JoltState() = default;
 
   void ensure_initialize()
   {
@@ -415,7 +414,9 @@ class JoltSolverStep {
 
     this->update_jolt_state_from_instances();
     JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
-    JPH::JobSystemSingleThreaded job_system;
+    /* TODO: Integrate with TBB. */
+    JPH::JobSystemThreadPool job_system(
+        JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1);
     state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
     this->update_instances_from_jolt_state();
 
