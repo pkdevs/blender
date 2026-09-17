@@ -7811,7 +7811,16 @@ static void SCREEN_OT_region_blend(wmOperatorType *ot)
 static bool space_type_set_or_cycle_poll(bContext *C)
 {
   ScrArea *area = CTX_wm_area(C);
-  return (area && !ELEM(area->spacetype, SPACE_TOPBAR, SPACE_STATUSBAR));
+  if (area && ELEM(area->spacetype, SPACE_TOPBAR, SPACE_STATUSBAR)) {
+    return false;
+  }
+  if (area && area->spacetype == SPACE_FILE) {
+    const SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
+    if (sfile->op) {
+      return false;
+    }
+  }
+  return area;
 }
 
 static wmOperatorStatus space_type_set_or_cycle_exec(bContext *C, wmOperator *op)

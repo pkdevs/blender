@@ -142,6 +142,12 @@ static void rna_Area_type_set(PointerRNA *ptr, int value)
   }
 
   ScrArea *area = static_cast<ScrArea *>(ptr->data);
+  if (area->spacetype == SPACE_FILE) {
+    const SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
+    if (sfile->op) {
+      return;
+    }
+  }
   /* Empty areas are locked. */
   if ((value == SPACE_EMPTY) || (area->spacetype == SPACE_EMPTY)) {
     return;
@@ -275,6 +281,12 @@ static void rna_Area_ui_type_set(PointerRNA *ptr, int value)
   /* Empty areas are locked. */
   if ((space_type == SPACE_EMPTY) || (area->spacetype == SPACE_EMPTY)) {
     return;
+  }
+  if (area->spacetype == SPACE_FILE) {
+    const SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
+    if (sfile->op) {
+      return;
+    }
   }
   SpaceType *st = BKE_spacetype_from_id(space_type);
 
