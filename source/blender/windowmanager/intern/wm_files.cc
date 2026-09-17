@@ -1270,9 +1270,10 @@ void wm_homefile_read_ex(bContext *C,
     SET_FLAG_FROM_TEST(G.f, (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0, G_FLAG_SCRIPT_AUTOEXEC);
   }
 
-  /* Cleared below when switching templates so the template's UI loads,
-   * restored after the load (#150661). */
-  const bool load_ui_at_entry = (G.fileflags & G_FILE_NO_UI) == 0;
+  /* Remember the Load UI preference before switching templates below clears #G_FILE_NO_UI to
+   * show the template's own UI, so it can be restored once the template has loaded.
+   * Stored in the flag's own sense because #SET_FLAG_FROM_TEST sets the flag when true. */
+  const bool no_ui_at_entry = (G.fileflags & G_FILE_NO_UI) != 0;
 
   if (use_data) {
     if (reset_app_template) {
@@ -1517,11 +1518,11 @@ void wm_homefile_read_ex(bContext *C,
   }
 
   if (use_data && !use_userdef) {
-    /* Restore the Load UI state that was cleared to force loading the UI of the template
-     * being switched to. Leaving it cleared would make later file loads ignore the Load UI
-     * preference for the rest of the session (#150661). When preferences are loaded,
-     * #wm_init_userdef already re-syncs this flag from the preferences. */
-    SET_FLAG_FROM_TEST(G.fileflags, load_ui_at_entry, G_FILE_NO_UI);
+    /* Put the Load UI preference back now the template's UI has been loaded. Leaving the flag
+     * cleared would persist for the rest of the session and make every later file load replace
+     * the current UI, ignoring the preference Load UI. Skipped when preferences were loaded
+     * because #wm_init_userdef re-syncs the flag from them. */
+    SET_FLAG_FROM_TEST(G.fileflags, no_ui_at_entry, G_FILE_NO_UI);
   }
 
   if (use_userdef) {
