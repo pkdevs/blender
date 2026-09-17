@@ -87,6 +87,13 @@ class PointCloud : public Geometry {
   /* Recalculate point radius to bound Gaussian splats. */
   void update_gsplat_radii();
 
+  /* Create attributes that are required but missing  for rendering the point cloud as a 3D
+   * gaussian splat. This includes radiance base, scale, and rotation. The attributes are filled
+   * with default values:
+   * - Radiance base is a alf-opaque, neutral grey color.
+   * - Scale is a small value, mainly obtained empirically with the goal to provide a way to get
+   *   an idea of the shape of the 3D Gaussian splat without requiring too much render time.
+   * - Rotation is defaulted to identity quaternion. */
   void create_missing_gsplat_attributes();
 
   NODE_SOCKET_API(RenderAs, render_as)

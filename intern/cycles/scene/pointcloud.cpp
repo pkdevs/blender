@@ -371,18 +371,22 @@ void PointCloud::create_missing_gsplat_attributes()
 {
   const size_t numpoints = num_points();
 
+  /* Values matches defaults on in Blender EEVEE. */
+  static const float4 DEFAULT_RADIANCE_BASE = make_float4(0.0f, 0.0f, 0.0f, 0.5f);
+  static const float3 DEFAULT_SCALE = make_float3(1e-3f, 1e-3f, 1e-3f);
+
   if (Attribute *attr_radiance_base = attributes.find(ATTR_STD_GSPLAT_RADIANCE_BASE);
       !attr_radiance_base)
   {
     attr_radiance_base = attributes.add(ATTR_STD_GSPLAT_RADIANCE_BASE);
     float4 *radiance_base = attr_radiance_base->data_for_write<float4>();
-    std::fill_n(radiance_base, numpoints, make_float4(0.0f, 0.0f, 0.0f, 0.5f));
+    std::fill_n(radiance_base, numpoints, DEFAULT_RADIANCE_BASE);
   }
 
   if (Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE); !attr_scale) {
     attr_scale = attributes.add(ATTR_STD_GSPLAT_SCALE);
     packed_float3 *scale = attr_scale->data_for_write<packed_float3>();
-    std::fill_n(scale, numpoints, make_float3(1e-3f, 1e-3f, 1e-3f));
+    std::fill_n(scale, numpoints, DEFAULT_SCALE);
   }
 
   if (Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION); !attr_rotation) {
