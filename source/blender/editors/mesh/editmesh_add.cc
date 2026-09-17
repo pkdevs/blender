@@ -11,12 +11,13 @@
 #include "BLI_math_matrix_c.hh"
 #include "BLI_sys_types.hh"
 
+#include "BLI_math_euler.hh"
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 #include "BKE_paint.hh"
 
 #include "DNA_mesh_types.h"
@@ -31,6 +32,11 @@
 #include "ED_sculpt.hh"
 
 #include "GEO_join_geometries.hh"
+#include "GEO_mesh_primitive_cuboid.hh"
+#include "GEO_mesh_primitive_cylinder_cone.hh"
+#include "GEO_mesh_primitive_ico_sphere.hh"
+#include "GEO_mesh_primitive_uv_sphere.hh"
+#include "GEO_transform.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -127,6 +133,37 @@ static void init_facesets(const Mesh *object_mesh, Mesh *primitive_mesh)
   primitive_face_sets.finish();
 }
 
+static void make_prim_transform_geometry(
+    const Object *obedit, Mesh *primitive, const float3 loc, const float3 rot, const float3 scale)
+{
+  const float4x4 world = math::from_loc_rot_scale<float4x4>(
+      loc, math::to_quaternion(math::EulerXYZ(rot)), scale);
+  const float4x4 local = math::invert(obedit->object_to_world()) * world;
+
+  bke::mesh_transform(*primitive, local, false);
+}
+
+static void make_prim_finish_geometry(bContext *C, Object *ob, Mesh *primitive_mesh)
+{
+  Mesh *object_mesh = id_cast<Mesh *>(ob->data);
+
+  init_facesets(object_mesh, primitive_mesh);
+
+  bke::GeometrySet joined = geometry::join_geometries(
+      {bke::GeometrySet::from_mesh(object_mesh, bke::GeometryOwnershipType::ReadOnly),
+       bke::GeometrySet::from_mesh(primitive_mesh, bke::GeometryOwnershipType::ReadOnly)},
+      {});
+
+  Mesh *result = joined.get_component_for_write<bke::MeshComponent>().release();
+
+  BKE_id_free(CTX_data_main(C), primitive_mesh);
+  BKE_mesh_nomain_to_mesh(result, object_mesh, ob);
+
+  BKE_sculptsession_free_pbvh(*ob);
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_DATA, object_mesh);
+}
+
 static void make_prim_finish_sculpt(bContext *C, Object *ob, BMesh *bm)
 {
   Mesh *object_mesh = id_cast<Mesh *>(ob->data);
@@ -184,8 +221,9 @@ static void make_prim_finish(bContext *C,
 }
 
 /**
- * Shared dispatch for the primitive-add operators. The variadic arguments are the BMesh operator
- * format string and its arguments.
+ * Shared dispatch for the primitive-add operators that do not have/use the equivalent geometry
+ * functions. This includes the following primitives: Plane, Circle, Grid, Quad Sphere, and Monkey.
+ * The variadic arguments are the BMesh operator format string and its arguments.
  *
  * In sculpt mode the geometry is built on a temporary BMesh and joined into the active mesh,
  * otherwise it's created in the edit-mesh and selected. Returns false on failure, in which case
@@ -307,15 +345,33 @@ static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
                           local_view_bits,
                           &creation_data);
 
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_cube matrix=%m4 size=%f calc_uvs=%b",
-                               creation_data.mat,
-                               RNA_float_get(op->ptr, "size"),
-                               calc_uvs))
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    const float size = RNA_float_get(op->ptr, "size");
+
+    static constexpr int corners = 2;
+
+    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
+    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
+    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
+                                                            std::nullopt :
+                                                            std::make_optional(uv_map_name)) :
+                                                       std::nullopt;
+
+    Mesh *primitive = geometry::create_cuboid_mesh(
+        float3(size, size, size), corners, corners, corners, uv_map);
+
+    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
+    make_prim_finish_geometry(C, obedit, primitive);
+  }
+  else if (!make_prim_from_bmo_args(C,
+                                    op,
+                                    obedit,
+                                    &creation_data,
+                                    calc_uvs,
+                                    "create_cube matrix=%m4 size=%f calc_uvs=%b",
+                                    creation_data.mat,
+                                    RNA_float_get(op->ptr, "size"),
+                                    calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
@@ -446,21 +502,46 @@ static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
                           local_view_bits,
                           &creation_data);
 
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
-                               "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
-                               RNA_int_get(op->ptr, "vertices"),
-                               RNA_float_get(op->ptr, "radius"),
-                               RNA_float_get(op->ptr, "radius"),
-                               cap_end,
-                               cap_tri,
-                               RNA_float_get(op->ptr, "depth"),
-                               creation_data.mat,
-                               calc_uvs))
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    const float radius = RNA_float_get(op->ptr, "radius");
+    geometry::ConeAttributeOutputs attributes;
+
+    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
+    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
+    attributes.uv_map_id = calc_uvs ? (uv_map_name.is_empty() ? std::nullopt :
+                                                                std::make_optional(uv_map_name)) :
+                                      std::nullopt;
+
+    const int side_segments = 1;
+    const int fill_segments = 1;
+    Mesh *primitive = geometry::create_cylinder_or_cone_mesh(
+        radius,
+        radius,
+        RNA_float_get(op->ptr, "depth"),
+        RNA_int_get(op->ptr, "vertices"),
+        side_segments,
+        fill_segments,
+        static_cast<geometry::ConeFillType>(end_fill_type),
+        attributes);
+
+    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
+    make_prim_finish_geometry(C, obedit, primitive);
+  }
+  else if (!make_prim_from_bmo_args(C,
+                                    op,
+                                    obedit,
+                                    &creation_data,
+                                    calc_uvs,
+                                    "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
+                                    "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
+                                    RNA_int_get(op->ptr, "vertices"),
+                                    RNA_float_get(op->ptr, "radius"),
+                                    RNA_float_get(op->ptr, "radius"),
+                                    cap_end,
+                                    cap_tri,
+                                    RNA_float_get(op->ptr, "depth"),
+                                    creation_data.mat,
+                                    calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
@@ -518,22 +599,48 @@ static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
                           scale,
                           local_view_bits,
                           &creation_data);
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    geometry::ConeAttributeOutputs attributes{};
 
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
-                               "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
-                               RNA_int_get(op->ptr, "vertices"),
-                               RNA_float_get(op->ptr, "radius1"),
-                               RNA_float_get(op->ptr, "radius2"),
-                               cap_end,
-                               cap_tri,
-                               RNA_float_get(op->ptr, "depth"),
-                               creation_data.mat,
-                               calc_uvs))
+    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
+    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
+    attributes.uv_map_id = calc_uvs ? (uv_map_name.is_empty() ? std::nullopt :
+                                                                std::make_optional(uv_map_name)) :
+                                      std::nullopt;
+
+    const int side_segments = 1;
+    const int fill_segments = 1;
+
+    /* The radius ordering in create_cylinder_or_cone_mesh is reversed
+     * relative to the corresponding BMO call. */
+    Mesh *primitive = geometry::create_cylinder_or_cone_mesh(
+        RNA_float_get(op->ptr, "radius2"),
+        RNA_float_get(op->ptr, "radius1"),
+        RNA_float_get(op->ptr, "depth"),
+        RNA_int_get(op->ptr, "vertices"),
+        side_segments,
+        fill_segments,
+        static_cast<geometry::ConeFillType>(end_fill_type),
+        attributes);
+
+    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
+    make_prim_finish_geometry(C, obedit, primitive);
+  }
+  else if (!make_prim_from_bmo_args(C,
+                                    op,
+                                    obedit,
+                                    &creation_data,
+                                    calc_uvs,
+                                    "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
+                                    "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
+                                    RNA_int_get(op->ptr, "vertices"),
+                                    RNA_float_get(op->ptr, "radius1"),
+                                    RNA_float_get(op->ptr, "radius2"),
+                                    cap_end,
+                                    cap_tri,
+                                    RNA_float_get(op->ptr, "depth"),
+                                    creation_data.mat,
+                                    calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
@@ -806,18 +913,34 @@ static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
                           local_view_bits,
                           &creation_data);
 
-  if (!make_prim_from_bmo_args(
-          C,
-          op,
-          obedit,
-          &creation_data,
-          calc_uvs,
-          "create_uvsphere u_segments=%i v_segments=%i radius=%f matrix=%m4 calc_uvs=%b",
-          RNA_int_get(op->ptr, "segments"),
-          RNA_int_get(op->ptr, "ring_count"),
-          RNA_float_get(op->ptr, "radius"),
-          creation_data.mat,
-          calc_uvs))
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
+    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
+    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
+                                                            std::nullopt :
+                                                            std::make_optional(uv_map_name)) :
+                                                       std::nullopt;
+
+    Mesh *primitive = geometry::create_uv_sphere_mesh(RNA_float_get(op->ptr, "radius"),
+                                                      RNA_int_get(op->ptr, "segments"),
+                                                      RNA_int_get(op->ptr, "ring_count"),
+                                                      uv_map);
+
+    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
+    make_prim_finish_geometry(C, obedit, primitive);
+  }
+  else if (!make_prim_from_bmo_args(
+               C,
+               op,
+               obedit,
+               &creation_data,
+               calc_uvs,
+               "create_uvsphere u_segments=%i v_segments=%i radius=%f matrix=%m4 calc_uvs=%b",
+               RNA_int_get(op->ptr, "segments"),
+               RNA_int_get(op->ptr, "ring_count"),
+               RNA_float_get(op->ptr, "radius"),
+               creation_data.mat,
+               calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
@@ -872,17 +995,31 @@ static wmOperatorStatus add_primitive_icosphere_exec(bContext *C, wmOperator *op
                           scale,
                           local_view_bits,
                           &creation_data);
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
+    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
+    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
+                                                            std::nullopt :
+                                                            std::make_optional(uv_map_name)) :
+                                                       std::nullopt;
 
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_icosphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
-                               RNA_int_get(op->ptr, "subdivisions"),
-                               RNA_float_get(op->ptr, "radius"),
-                               creation_data.mat,
-                               calc_uvs))
+    Mesh *primitive = geometry::create_ico_sphere_mesh(
+        RNA_int_get(op->ptr, "subdivisions"), RNA_float_get(op->ptr, "radius"), uv_map);
+
+    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
+    make_prim_finish_geometry(C, obedit, primitive);
+  }
+  else if (!make_prim_from_bmo_args(
+               C,
+               op,
+               obedit,
+               &creation_data,
+               calc_uvs,
+               "create_icosphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
+               RNA_int_get(op->ptr, "subdivisions"),
+               RNA_float_get(op->ptr, "radius"),
+               creation_data.mat,
+               calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
