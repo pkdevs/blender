@@ -17,7 +17,7 @@
 #  pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 #include "intern/GHOST_Context.hh"
 #include "intern/GHOST_ContextMTL.hh"
 #include "intern/GHOST_Window.hh"
@@ -50,6 +50,7 @@ class MTLContext;
 class MTLCommandBufferManager;
 class MTLUniformBuf;
 class MTLStorageBuf;
+class MTLTopLevelAS;
 
 /* Caching of resource bindings for active MTLRenderCommandEncoder.
  * In Metal, resource bindings are local to the MTLCommandEncoder,
@@ -151,11 +152,6 @@ struct MTLContextDepthStencilState {
   bool depth_write_enable;
   bool depth_test_enabled;
   MTLCompareFunction depth_function;
-  float depth_bias;
-  float depth_slope_scale;
-  bool depth_bias_enabled_for_points;
-  bool depth_bias_enabled_for_lines;
-  bool depth_bias_enabled_for_tris;
 
   /* Stencil State. */
   bool stencil_test_enabled;
@@ -217,26 +213,23 @@ struct MTLContextDepthStencilState {
   {
     std::size_t boolean_bitmask = (this->depth_write_enable ? 1 : 0) |
                                   ((this->depth_test_enabled ? 1 : 0) << 1) |
-                                  ((this->depth_bias_enabled_for_points ? 1 : 0) << 2) |
-                                  ((this->depth_bias_enabled_for_lines ? 1 : 0) << 3) |
-                                  ((this->depth_bias_enabled_for_tris ? 1 : 0) << 4) |
-                                  ((this->stencil_test_enabled ? 1 : 0) << 5) |
-                                  ((this->has_depth_target ? 1 : 0) << 6) |
-                                  ((this->has_stencil_target ? 1 : 0) << 7);
+                                  ((this->stencil_test_enabled ? 1 : 0) << 2) |
+                                  ((this->has_depth_target ? 1 : 0) << 3) |
+                                  ((this->has_stencil_target ? 1 : 0) << 4);
 
-    std::size_t stencilop_bitmask = ((std::size_t)this->stencil_op_front_stencil_fail) |
-                                    ((std::size_t)this->stencil_op_front_depth_fail << 3) |
-                                    ((std::size_t)this->stencil_op_front_depthstencil_pass << 6) |
-                                    ((std::size_t)this->stencil_op_back_stencil_fail << 9) |
-                                    ((std::size_t)this->stencil_op_back_depth_fail << 12) |
-                                    ((std::size_t)this->stencil_op_back_depthstencil_pass << 15);
+    std::size_t stencilop_bitmask = (std::size_t(this->stencil_op_front_stencil_fail)) |
+                                    (std::size_t(this->stencil_op_front_depth_fail) << 3) |
+                                    (std::size_t(this->stencil_op_front_depthstencil_pass) << 6) |
+                                    (std::size_t(this->stencil_op_back_stencil_fail) << 9) |
+                                    (std::size_t(this->stencil_op_back_depth_fail) << 12) |
+                                    (std::size_t(this->stencil_op_back_depthstencil_pass) << 15);
 
-    std::size_t main_hash = (std::size_t)this->depth_function;
+    std::size_t main_hash = std::size_t(this->depth_function);
     if (this->has_stencil_target) {
-      main_hash += (std::size_t)(this->stencil_read_mask & 0xFF) << 8;
-      main_hash += (std::size_t)(this->stencil_write_mask & 0xFF) << 16;
+      main_hash += std::size_t(this->stencil_read_mask & 0xFF) << 8;
+      main_hash += std::size_t(this->stencil_write_mask & 0xFF) << 16;
     }
-    main_hash ^= (std::size_t)this->stencil_func << 16;
+    main_hash ^= std::size_t(this->stencil_func) << 16;
     main_hash ^= stencilop_bitmask;
 
     std::size_t final_hash = (main_hash << 8) | boolean_bitmask;
@@ -251,45 +244,42 @@ struct MTLContextTextureUtils {
    * use a compute shader to write to depth, so we must instead render to a depth target.
    * These processes use vertex/fragment shaders to render texture data from an intermediate
    * source, in order to prime the depth buffer. */
-  blender::Map<DepthTextureUpdateRoutineSpecialisation, gpu::Shader *> depth_2d_update_shaders;
+  Map<DepthTextureUpdateRoutineSpecialisation, gpu::Shader *> depth_2d_update_shaders;
   gpu::Shader *fullscreen_blit_shader = nullptr;
 
   /* Texture Read/Update routines */
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
-      texture_1d_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>> texture_1d_read_compute_psos;
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_1d_array_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
-      texture_2d_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>> texture_2d_read_compute_psos;
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_2d_array_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
-      texture_3d_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>> texture_3d_read_compute_psos;
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_cube_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_cube_array_read_compute_psos;
-  blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_buffer_read_compute_psos;
 
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_1d_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_1d_array_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_2d_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_2d_array_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_3d_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_cube_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_cube_array_update_compute_psos;
-  blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
+  Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
       texture_buffer_update_compute_psos;
 
-  template<typename T> void free_cached_pso_map(blender::Map<T, id<MTLComputePipelineState>> &map)
+  template<typename T> void free_cached_pso_map(Map<T, id<MTLComputePipelineState>> &map)
   {
     for (typename blender::MutableMapItem<T, id<MTLComputePipelineState>> item : map.items()) {
       [item.value release];
@@ -383,6 +373,11 @@ struct MTLStorageBufferBinding {
   MTLStorageBuf *ssbo = nullptr;
 };
 
+struct MTLAccelerationStructureBinding {
+  bool bound = false;
+  MTLTopLevelAS *tlas = nullptr;
+};
+
 struct MTLContextGlobalShaderPipelineState {
   /* Whether the pipeline state has been modified since application.
    * `dirty_flags` is a bitmask of the types of state which have been updated.
@@ -400,6 +395,8 @@ struct MTLContextGlobalShaderPipelineState {
   std::array<MTLUniformBufferBinding, MTL_MAX_UBO> ubo_bindings = {};
   /* Storage buffer. */
   std::array<MTLStorageBufferBinding, MTL_MAX_SSBO> ssbo_bindings = {};
+  /* Acceleration structure (single slot). */
+  std::array<MTLAccelerationStructureBinding, 1> acceleration_structure_bindings = {};
   /* Context Texture bindings. */
   std::array<MTLTextureBinding, MTL_MAX_SAMPLER_SLOTS> texture_bindings = {};
   std::array<MTLSamplerBinding, MTL_MAX_SAMPLER_SLOTS> sampler_bindings = {};
@@ -441,9 +438,6 @@ struct MTLContextGlobalShaderPipelineState {
   int scissor_y;
   int scissor_width;
   int scissor_height;
-
-  /* Image data access state. */
-  uint unpack_row_length;
 
   /* Render parameters. */
   float point_size = 1.0f;
@@ -488,12 +482,14 @@ class MTLCommandBufferManager {
     MTL_NO_COMMAND_ENCODER = 0,
     MTL_RENDER_COMMAND_ENCODER = 1,
     MTL_BLIT_COMMAND_ENCODER = 2,
-    MTL_COMPUTE_COMMAND_ENCODER = 3
+    MTL_COMPUTE_COMMAND_ENCODER = 3,
+    MTL_ACCELERATION_STRUCTURE_COMMAND_ENCODER = 4
   } active_command_encoder_type_ = MTL_NO_COMMAND_ENCODER;
 
   id<MTLRenderCommandEncoder> active_render_command_encoder_ = nil;
   id<MTLBlitCommandEncoder> active_blit_command_encoder_ = nil;
   id<MTLComputeCommandEncoder> active_compute_command_encoder_ = nil;
+  id<MTLAccelerationStructureCommandEncoder> active_acceleration_structure_command_encoder_ = nil;
 
   /* State associated with active RenderCommandEncoder. */
   MTLRenderPassState render_pass_state_;
@@ -562,6 +558,7 @@ class MTLCommandBufferManager {
                                                                   bool *r_new_pass);
   id<MTLBlitCommandEncoder> ensure_begin_blit_encoder();
   id<MTLComputeCommandEncoder> ensure_begin_compute_encoder();
+  id<MTLAccelerationStructureCommandEncoder> ensure_begin_acceleration_structure_encoder();
 
   /* Workload Synchronization. */
   bool insert_memory_barrier(GPUBarrier barrier_bits,
@@ -659,7 +656,7 @@ class MTLContext : public Context {
   gpu::MTLTexture *default_fbo_gputexture_ = nullptr;
 
   /* Depth-stencil state cache. */
-  blender::Map<MTLContextDepthStencilState, id<MTLDepthStencilState>> depth_stencil_state_cache;
+  Map<MTLContextDepthStencilState, id<MTLDepthStencilState>> depth_stencil_state_cache;
 
   /* Compute and specialization caches. */
   MTLContextTextureUtils texture_utils_;
@@ -680,7 +677,7 @@ class MTLContext : public Context {
    * re-generation. `samplers_` stores the current list of bound sampler objects.
    * `cached_sampler_buffers_` is a cache of encoded argument buffers which can be re-used. */
   MTLSamplerArray samplers_;
-  blender::Map<MTLSamplerArray, gpu::MTLBuffer *> cached_sampler_buffers_;
+  Map<MTLSamplerArray, gpu::MTLBuffer *> cached_sampler_buffers_;
 
   /* Frame. */
   bool is_inside_frame_ = false;
@@ -720,7 +717,7 @@ class MTLContext : public Context {
 
  public:
   /* GPUContext interface. */
-  MTLContext(void *ghost_window, void *ghost_context);
+  MTLContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context);
   ~MTLContext();
 
   static void check_error(const char *info);
@@ -804,7 +801,7 @@ class MTLContext : public Context {
    * `ensure_render_pipeline_state` will return false if the state is
    * invalid and cannot be applied. This should cancel a draw call. */
   bool ensure_render_pipeline_state(MTLPrimitiveType prim_type);
-  void ensure_depth_stencil_state(MTLPrimitiveType prim_type);
+  void ensure_depth_stencil_state();
 
   id<MTLBuffer> get_null_buffer();
   id<MTLBuffer> get_null_attribute_buffer();
@@ -903,7 +900,7 @@ class MTLContext : public Context {
     return samplers_;
   }
 
-  blender::Map<MTLSamplerArray, gpu::MTLBuffer *> &get_sampler_arg_buf_cache()
+  Map<MTLSamplerArray, gpu::MTLBuffer *> &get_sampler_arg_buf_cache()
   {
     return cached_sampler_buffers_;
   }
@@ -930,8 +927,8 @@ class MTLContext : public Context {
   }
 
  private:
-  void set_ghost_context(GHOST_ContextHandle ghostCtxHandle);
-  void set_ghost_window(GHOST_WindowHandle ghostWinHandle);
+  void set_ghost_context(GHOST_IContext *ghostCtxHandle);
+  void set_ghost_window(GHOST_IWindow *ghostWinHandle);
 };
 
 /* GHOST Context callbacks. */

@@ -156,6 +156,17 @@ class Camera : public Node {
   NODE_SOCKET_API(float, fov_pre)
   NODE_SOCKET_API(float, fov_post)
 
+  BoundBox2D viewplane_pre;
+  BoundBox2D viewplane_post;
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, top)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, top)
+
   /* computed camera parameters */
   ProjectionTransform screentoworld;
   ProjectionTransform rastertoworld;
@@ -196,8 +207,8 @@ class Camera : public Node {
   map<ustring, pair<vector<uint8_t>, TypeDesc>> script_params;
 
  private:
-  int width;
-  int height;
+  int width = 1024;
+  int height = 512;
 
  public:
   /* functions */
@@ -207,6 +218,8 @@ class Camera : public Node {
   void compute_auto_viewplane();
 
   void update(Scene *scene);
+
+  void update_interactive_motion();
 
   void device_update(Device *device, DeviceScene *dscene, Scene *scene);
   void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
@@ -223,9 +236,9 @@ class Camera : public Node {
   int motion_step(const float time) const;
   bool use_motion() const;
 
-  uint get_kernel_features() const;
+  uint64_t get_kernel_features() const;
 
-  bool set_screen_size(const int width_, int height_);
+  bool set_screen_size(int width, int height);
 
   void set_osl_camera(Scene *scene,
                       OSLCameraParamQuery &params,

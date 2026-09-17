@@ -9,8 +9,11 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
+#include "BLI_map.hh"
 
 #include "bmesh_class.hh"
+
+namespace blender {
 
 struct BMEditSelection {
   struct BMEditSelection *next, *prev;
@@ -210,15 +213,20 @@ struct GHash *BM_select_history_map_create(BMesh *bm);
 /**
  * Map arguments may all be the same pointer.
  */
-void BM_select_history_merge_from_targetmap(
-    BMesh *bm, GHash *vert_map, GHash *edge_map, GHash *face_map, bool use_chain);
+void BM_select_history_merge_from_targetmap(BMesh *bm,
+                                            Map<void *, void *> *vert_map,
+                                            Map<void *, void *> *edge_map,
+                                            Map<void *, void *> *face_map,
+                                            bool use_chain);
 
 #define BM_SELECT_HISTORY_BACKUP(bm) \
   { \
-    ListBase _bm_prev_selected = (bm)->selected; \
+    ListBaseT<BMEditSelection> _bm_prev_selected = (bm)->selected; \
     BLI_listbase_clear(&(bm)->selected)
 
 #define BM_SELECT_HISTORY_RESTORE(bm) \
   (bm)->selected = _bm_prev_selected; \
   } \
   (void)0
+
+}  // namespace blender

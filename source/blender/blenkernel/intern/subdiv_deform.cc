@@ -12,7 +12,7 @@
 
 #include "DNA_mesh_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_subdiv.hh"
 #include "BKE_subdiv_eval.hh"
@@ -51,12 +51,12 @@ static void subdiv_mesh_prepare_accumulator(SubdivDeformContext *ctx, int num_ve
   if (!ctx->have_displacement) {
     return;
   }
-  ctx->accumulated_counters = MEM_calloc_arrayN<int>(num_vertices, __func__);
+  ctx->accumulated_counters = MEM_new_array_zeroed<int>(num_vertices, __func__);
 }
 
 static void subdiv_mesh_context_free(SubdivDeformContext *ctx)
 {
-  MEM_SAFE_FREE(ctx->accumulated_counters);
+  MEM_SAFE_DELETE(ctx->accumulated_counters);
 }
 
 /** \} */
@@ -103,7 +103,7 @@ static bool subdiv_mesh_topology_info(const ForeachContext *foreach_context,
                                       const int /*num_edges*/,
                                       const int /*num_loops*/,
                                       const int /*num_faces*/,
-                                      const int * /*subdiv_face_offset*/)
+                                      const Span<int> /*subdiv_face_offset*/)
 {
   SubdivDeformContext *subdiv_context = static_cast<SubdivDeformContext *>(
       foreach_context->user_data);

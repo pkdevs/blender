@@ -96,7 +96,7 @@ ccl_device_forceinline void integrator_split_shadow_catcher(
 {
   /* Test if we hit a shadow catcher object, and potentially split the path to continue tracing two
    * paths from here. */
-  const int object_flags = intersection_get_object_flags(kg, isect);
+  const uint object_flags = intersection_get_object_flags(kg, isect);
   if (!kernel_shadow_catcher_is_path_split_bounce(kg, state, object_flags)) {
     return;
   }
@@ -147,11 +147,11 @@ ccl_device_forceinline void integrator_split_shadow_catcher(
   const int shader = intersection_get_shader(kg, isect);
   const int flags = kernel_data_fetch(shaders, shader).flags;
   const bool use_caustics = kernel_data.integrator.use_caustics &&
-                            (object_flags & SD_OBJECT_CAUSTICS);
+                            (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
   const bool use_raytrace_kernel = (flags & SD_HAS_RAYTRACE);
 
   if (use_caustics) {
-    integrator_path_init_sorted(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader);
+    integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE);
   }
   else if (use_raytrace_kernel) {
     integrator_path_init_sorted(
@@ -173,15 +173,14 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_shadow_catche
   integrator_state_read_isect(state, &isect);
 
   const int shader = intersection_get_shader(kg, &isect);
-  const int flags = kernel_data_fetch(shaders, shader).flags;
-  const int object_flags = intersection_get_object_flags(kg, &isect);
+  const int shader_flags = kernel_data_fetch(shaders, shader).flags;
+  const uint object_flags = intersection_get_object_flags(kg, &isect);
   const bool use_caustics = kernel_data.integrator.use_caustics &&
-                            (object_flags & SD_OBJECT_CAUSTICS);
-  const bool use_raytrace_kernel = (flags & SD_HAS_RAYTRACE);
+                            (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
+  const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
   if (use_caustics) {
-    integrator_path_next_sorted(
-        kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader);
+    integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE);
   }
   else if (use_raytrace_kernel) {
     integrator_path_next_sorted(
@@ -251,7 +250,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
   if (hit) {
     /* Hit a surface, continue with light or surface kernel. */
     if (isect->type & PRIMITIVE_LAMP) {
-      integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT);
+      integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
     }
     else {
       /* Hit a surface, continue with surface kernel unless terminated. */
@@ -259,13 +258,12 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
       const int flags = kernel_data_fetch(shaders, shader).flags;
 
       if (!integrator_intersect_terminate(kg, state, flags)) {
-        const int object_flags = intersection_get_object_flags(kg, isect);
+        const uint object_flags = intersection_get_object_flags(kg, isect);
         const bool use_caustics = kernel_data.integrator.use_caustics &&
-                                  (object_flags & SD_OBJECT_CAUSTICS);
+                                  (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
         const bool use_raytrace_kernel = (flags & SD_HAS_RAYTRACE);
         if (use_caustics) {
-          integrator_path_next_sorted(
-              kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader);
+          integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE);
         }
         else if (use_raytrace_kernel) {
           integrator_path_next_sorted(
@@ -311,21 +309,20 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_volume(
   if (isect->prim != PRIM_NONE) {
     /* Hit a surface, continue with light or surface kernel. */
     if (isect->type & PRIMITIVE_LAMP) {
-      integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT);
+      integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
       return;
     }
 
     /* Hit a surface, continue with surface kernel unless terminated. */
     const int shader = intersection_get_shader(kg, isect);
-    const int flags = kernel_data_fetch(shaders, shader).flags;
-    const int object_flags = intersection_get_object_flags(kg, isect);
+    const int shader_flags = kernel_data_fetch(shaders, shader).flags;
+    const uint object_flags = intersection_get_object_flags(kg, isect);
     const bool use_caustics = kernel_data.integrator.use_caustics &&
-                              (object_flags & SD_OBJECT_CAUSTICS);
-    const bool use_raytrace_kernel = (flags & SD_HAS_RAYTRACE);
+                              (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
+    const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
     if (use_caustics) {
-      integrator_path_next_sorted(
-          kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader);
+      integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE);
     }
     else if (use_raytrace_kernel) {
       integrator_path_next_sorted(
@@ -394,6 +391,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
   }
 
   /* Setup mnee flag to signal last intersection with a caster */
+  const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
 #ifdef __MNEE__
@@ -404,8 +402,8 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
      * receiver */
     bool from_caustic_caster = false;
     bool from_caustic_receiver = false;
-    if (!(path_flag & PATH_RAY_CAMERA) && last_isect_object != OBJECT_NONE) {
-      const int object_flags = kernel_data_fetch(object_flag, last_isect_object);
+    if (!(path_visibility & PATH_RAY_VISIBILITY_CAMERA) && last_isect_object != OBJECT_NONE) {
+      const uint object_flags = kernel_data_fetch(object_flag, last_isect_object);
       from_caustic_receiver = (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
       from_caustic_caster = (object_flags & SD_OBJECT_CAUSTICS_CASTER);
     }
@@ -427,8 +425,15 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
     /* NOTE: if we make lights visible to camera rays, we'll need to initialize
      * these in the path_state_init. */
     const int last_type = INTEGRATOR_STATE(state, isect, type);
-    hit = lights_intersect(
-              kg, state, &ray, &isect, last_isect_prim, last_isect_object, last_type, path_flag) ||
+    hit = lights_intersect(kg,
+                           state,
+                           &ray,
+                           &isect,
+                           last_isect_prim,
+                           last_isect_object,
+                           last_type,
+                           path_visibility,
+                           path_flag) ||
           hit;
   }
 

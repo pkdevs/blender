@@ -16,16 +16,30 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
+
+namespace blender {
+
 struct ImBuf;
 struct Strip;
 struct Scene;
 
-namespace blender::seq {
+namespace seq {
 
-void final_image_cache_put(
-    Scene *scene, float timeline_frame, int view_id, int display_channel, ImBuf *image);
+void final_image_cache_put(Scene *scene,
+                           float timeline_frame,
+                           int view_id,
+                           int display_channel,
+                           int2 image_size,
+                           bool is_render,
+                           ImBuf *image);
 
-ImBuf *final_image_cache_get(Scene *scene, float timeline_frame, int view_id, int display_channel);
+ImBuf *final_image_cache_get(Scene *scene,
+                             float timeline_frame,
+                             int view_id,
+                             int display_channel,
+                             int2 image_size,
+                             bool is_render);
 
 void final_image_cache_invalidate_frame_range(Scene *scene,
                                               const float timeline_frame_start,
@@ -38,4 +52,5 @@ bool final_image_cache_evict(Scene *scene);
 
 size_t final_image_cache_get_image_count(const Scene *scene);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

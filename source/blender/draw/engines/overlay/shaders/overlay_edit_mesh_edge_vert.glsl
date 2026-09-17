@@ -15,8 +15,8 @@ VERTEX_SHADER_CREATE_INFO(overlay_edit_mesh_edge)
 #include "draw_view_lib.glsl"
 #include "gpu_shader_attribute_load_lib.glsl"
 #include "gpu_shader_index_load_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 #include "overlay_edit_mesh_common_lib.glsl"
 #include "overlay_edit_mesh_lib.glsl"
 
@@ -90,7 +90,10 @@ void do_vertex(const uint strip_index,
   strip_EmitVertex(strip_index, out_vertex_id, out_primitive_id, geom_out);
 }
 
-void geometry_main(VertOut geom_in[2], uint out_vert_id, uint out_prim_id, uint out_invocation_id)
+void geometry_main(VertOut geom_in[2],
+                   uint out_vert_id,
+                   uint out_prim_id,
+                   uint /*out_invocation_id*/)
 {
   float2 ss_pos[2];
 

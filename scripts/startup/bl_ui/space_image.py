@@ -169,10 +169,19 @@ class IMAGE_MT_select(Menu):
         layout.menu("IMAGE_MT_select_linked")
 
         layout.separator()
-
-        layout.operator("uv.select_pinned", text="Select Pinned")
         layout.operator("uv.select_split")
-        layout.operator("uv.select_overlap")
+        layout.menu("IMAGE_MT_select_all_by_trait")
+
+
+class IMAGE_MT_select_all_by_trait(Menu):
+    bl_label = "Select All by Trait"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("uv.select_tile", text="Tile")
+        layout.operator("uv.select_pinned", text="Pinned")
+        layout.operator("uv.select_overlap", text="Overlap")
+        layout.operator("uv.select_by_winding", text="Winding")
 
 
 class IMAGE_MT_select_linked(Menu):
@@ -223,8 +232,8 @@ class IMAGE_MT_image(Menu):
             del _ghost_backend
 
         if has_image_clipboard:
-            layout.operator("image.clipboard_copy", text="Copy")
-            layout.operator("image.clipboard_paste", text="Paste")
+            layout.operator("image.clipboard_copy", text="Copy", icon='COPYDOWN')
+            layout.operator("image.clipboard_paste", text="Paste", icon='PASTEDOWN')
             layout.separator()
 
         if ima:
@@ -244,7 +253,6 @@ class IMAGE_MT_image(Menu):
             layout.operator("image.resize", text="Resize")
             layout.menu("IMAGE_MT_image_transform")
 
-        if ima and not show_render:
             if ima.packed_file:
                 if ima.filepath:
                     layout.separator()
@@ -410,9 +418,9 @@ class IMAGE_MT_uvs_unwrap(Menu):
         layout.separator()
 
         layout.operator_context = 'INVOKE_DEFAULT'
-        layout.operator("uv.smart_project")
-        layout.operator("uv.lightmap_pack")
-        layout.operator("uv.follow_active_quads")
+        layout.operator("uv.smart_project", text="Smart UV Project...")
+        layout.operator("uv.lightmap_pack", text="Lightmap Pack...")
+        layout.operator("uv.follow_active_quads", text="Follow Active Quads...")
 
         layout.separator()
 
@@ -488,8 +496,8 @@ class IMAGE_MT_uvs(Menu):
 
         layout.separator()
 
-        layout.operator("uv.copy")
-        layout.operator("uv.paste")
+        layout.operator("uv.copy", icon='COPYDOWN')
+        layout.operator("uv.paste", icon='PASTEDOWN')
 
         layout.separator()
 
@@ -616,10 +624,10 @@ class IMAGE_MT_pivot_pie(Menu):
 
         sima = context.space_data
 
-        pie.prop_enum(sima, "pivot_point", value='CENTER')
+        pie.prop_enum(sima, "pivot_point", value='BOUNDING_BOX_CENTER')
         pie.prop_enum(sima, "pivot_point", value='CURSOR')
         pie.prop_enum(sima, "pivot_point", value='INDIVIDUAL_ORIGINS')
-        pie.prop_enum(sima, "pivot_point", value='MEDIAN')
+        pie.prop_enum(sima, "pivot_point", value='MEDIAN_POINT')
 
 
 class IMAGE_MT_uvs_snap_pie(Menu):
@@ -934,7 +942,7 @@ class IMAGE_HT_header(Header):
 
         if show_uvedit:
             mesh = context.edit_object.data
-            layout.prop_search(mesh.uv_layers, "active", mesh, "uv_layers", text="")
+            layout.prop_search(mesh.uv_layers, "active", mesh, "uv_layers", text="", icon='GROUP_UVS')
 
         if ima:
             seq_scene = context.sequencer_scene
@@ -1247,7 +1255,7 @@ class IMAGE_PT_paint_settings(Panel, ImagePaintPanel):
 
     @classmethod
     def poll(cls, context):
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
         return settings and settings.brush is not None
 
     def draw(self, context):
@@ -1256,7 +1264,7 @@ class IMAGE_PT_paint_settings(Panel, ImagePaintPanel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
 
         if brush:
@@ -1272,7 +1280,7 @@ class IMAGE_PT_paint_settings_advanced(Panel, ImagePaintPanel):
 
     @classmethod
     def poll(cls, context):
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
         return settings and settings.brush is not None
 
     def draw(self, context):
@@ -1281,7 +1289,7 @@ class IMAGE_PT_paint_settings_advanced(Panel, ImagePaintPanel):
         layout.use_property_split = True
         layout.use_property_decorate = False  # No animation.
 
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
         if brush:
             brush_settings_advanced(layout.column(), context, settings, brush, self.is_popover)
@@ -1600,6 +1608,13 @@ class IMAGE_PT_gizmo_display(Panel):
         colsub = col.column()
         colsub.prop(view, "show_gizmo_navigate", text="Navigate")
 
+        image = view.image
+        show_compositor_gizmos = (image is not None and image.type == 'COMPOSITING' and
+                                  view.ui_mode in ('VIEW', 'MASK'))
+        if show_compositor_gizmos:
+            colsub = col.column()
+            colsub.prop(view, "show_gizmo_active_node")
+
 
 class IMAGE_PT_overlay(Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -1616,12 +1631,6 @@ class IMAGE_PT_overlay_guides(Panel):
     bl_region_type = 'HEADER'
     bl_label = "Guides"
     bl_parent_id = "IMAGE_PT_overlay"
-
-    @classmethod
-    def poll(cls, context):
-        sima = context.space_data
-
-        return sima.show_uvedit
 
     def draw(self, context):
         layout = self.layout
@@ -1731,8 +1740,14 @@ class IMAGE_PT_overlay_uv_display(Panel):
         overlay = sima.overlay
 
         layout.active = overlay.show_overlays
-        layout.prop(uvedit, "show_uv")
-        layout.prop(uvedit, "uv_face_opacity")
+
+        col = layout.column()
+        row = col.row(align=True)
+        row.prop(uvedit, "show_uv", text="")
+        sub = row.row()
+        sub.active = uvedit.show_uv
+        sub.prop(uvedit, "uv_face_opacity", text="Faces")
+        sub.prop(uvedit, "uv_edge_opacity", text="Edges")
 
 
 class IMAGE_PT_overlay_image(Panel):
@@ -1826,6 +1841,7 @@ classes = (
     IMAGE_MT_view,
     IMAGE_MT_view_zoom,
     IMAGE_MT_select,
+    IMAGE_MT_select_all_by_trait,
     IMAGE_MT_select_linked,
     IMAGE_MT_image,
     IMAGE_MT_image_transform,

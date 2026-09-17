@@ -4,20 +4,23 @@
 
 #pragma once
 
-#include "BLI_string_ref.hh"
-
 #include "DNA_node_types.h"
 
-#include "NOD_derived_node_tree.hh"
+#include "BKE_node.hh"
+
+#include "NOD_warning.hh"
 
 #include "COM_context.hh"
 #include "COM_operation.hh"
 #include "COM_result.hh"
-#include "COM_scheduler.hh"
+
+namespace blender {
+class ComputeContext;
+}  // namespace blender
 
 namespace blender::compositor {
 
-using namespace nodes::derived_node_tree_types;
+struct Schedule;
 
 /* ------------------------------------------------------------------------------------------------
  * Node Operation
@@ -31,12 +34,14 @@ using namespace nodes::derived_node_tree_types;
 class NodeOperation : public Operation {
  private:
   /* The node that this operation represents. */
-  DNode node_;
+  const bNode &node_;
+  /* The compute context where this node operation is executing. */
+  const ComputeContext *compute_context_ = nullptr;
 
  public:
   /* Populate the output results based on the node outputs and populate the input descriptors based
    * on the node inputs. */
-  NodeOperation(Context &context, DNode node);
+  NodeOperation(Context &context, const bNode &node);
 
   /* Calls the evaluate method of the operation, but also measures the execution time and stores it
    * in the context's profile data. */
@@ -48,19 +53,19 @@ class NodeOperation : public Operation {
    * output corresponding to each result. The node execution schedule is given as an input. */
   void compute_results_reference_counts(const Schedule &schedule);
 
- protected:
-  /* Compute a node preview using the result returned from the get_preview_result method. */
-  void compute_preview() override;
+  /* Setter and getter for compute_context_. */
+  void set_compute_context(const ComputeContext &compute_context);
+  const ComputeContext &get_compute_context() const;
 
-  /* Returns a reference to the derived node that this operation represents. */
-  const DNode &node() const;
+ protected:
+  /* Add a warning of the given type and message to the node. */
+  void add_warning(nodes::NodeWarningType type, std::string message);
+
+  /* Log the values for the inputs and outputs of the node as well as its image preview. */
+  void log_data() override;
 
   /* Returns a reference to the node that this operation represents. */
-  const bNode &bnode() const;
-
-  /* Returns true if the output identified by the given identifier is needed and should be
-   * computed, otherwise returns false. */
-  bool should_compute_output(StringRef identifier);
+  const bNode &node() const;
 
  private:
   /* Get the result which will be previewed in the node, this is chosen as the first linked output

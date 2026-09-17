@@ -8,16 +8,23 @@
  * \ingroup sequencer
  */
 
+#include "BKE_sound_types.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
+#include "DNA_session_uid_types.h"
 
-#include "BLI_enum_flags.hh"
+#include <optional>
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendWriter;
 struct Depsgraph;
 struct Editing;
+struct IDProperty;
 struct Main;
 struct MetaStack;
 struct Scene;
@@ -25,32 +32,106 @@ struct SeqTimelineChannel;
 struct Strip;
 struct SequencerToolSettings;
 
-namespace blender::seq {
+namespace seq {
+
+class CompositorCache;
+struct FinalImageCache;
+struct IntraFrameCache;
+struct MediaPresence;
+struct MovieReaderCache;
+struct PrefetchJob;
+struct PreviewCache;
+struct SourceImageCache;
+struct StripLookup;
+struct ThumbnailCache;
 
 constexpr int MAX_CHANNELS = 128;
 
-/* RNA enums, just to be more readable */
-enum {
-  SIDE_MOUSE = -1,
-  SIDE_NONE = 0,
-  SIDE_LEFT,
-  SIDE_RIGHT,
-  SIDE_BOTH,
-  SIDE_NO_CHANGE,
+enum class Side : int {
+  Mouse = -1,
+  None = 0,
+  Left,
+  Right,
+  Both,
+  NoChange,
 };
 
-/* strip_duplicate' flags */
+/** Strip_duplicate flags */
 enum class StripDuplicate : uint8_t {
-  /* Note: Technically, the selected strips are duplicated when `All` is not set. */
+  /** NOTE: Technically, the selected strips are duplicated when `All` is not set. */
   Selected = 0,
-  /* Ensure strips have a unique name. */
+  /** Ensure strips have a unique name. */
   UniqueName = (1 << 0),
-  /* Duplicate strips and the IDs they reference. */
+  /** Duplicate strips and the IDs they reference. */
   Data = (1 << 1),
-  /* If this is set, duplicate all strips. If not set, duplicate selected strips. */
+  /** If this is set, duplicate all strips. If not set, duplicate selected strips. */
   All = (1 << 3),
 };
 ENUM_OPERATORS(StripDuplicate);
+
+enum class StripRuntimeFlag {
+  None = 0,
+  ClampedLH = (1 << 0),
+  ClampedRH = (1 << 1),
+  Overlap = (1 << 2),
+  MarkForDelete = (1 << 4),
+  /** For #SEQUENCER_OT_duplicate_move macro. */
+  IgnoreChannelLock = (1 << 5),
+  /** Set during #SEQUENCER_OT_slip. */
+  ShowOffsets = (1 << 6),
+};
+ENUM_OPERATORS(StripRuntimeFlag);
+
+struct StripRuntime {
+  ~StripRuntime();
+
+  SessionUID session_uid = {};
+  StripRuntimeFlag flag = StripRuntimeFlag::None;
+  AUD_SequenceEntry scene_sound;
+  AUD_Sound sound_time_stretch;
+  float sound_time_stretch_fps = 0.0f;
+
+  /** A null pointer can mean either not loaded yet or that the movie has no metadata. */
+  IDProperty *movie_metadata = nullptr;
+  bool movie_metadata_is_loaded = false;
+
+  /** To detect the removal of a sound modifier. */
+  int sound_modifiers_count = 0;
+
+  void clear_sound_time_stretch();
+  void remove_scene_sound(Scene *scene);
+};
+
+struct EditingRuntime {
+  EditingRuntime();
+  ~EditingRuntime();
+
+  StripLookup *strip_lookup = nullptr;
+  MediaPresence *media_presence = nullptr;
+  ThumbnailCache *thumbnail_cache = nullptr;
+  IntraFrameCache *intra_frame_cache = nullptr;
+  SourceImageCache *source_image_cache = nullptr;
+  FinalImageCache *final_image_cache = nullptr;
+  MovieReaderCache *movie_reader_cache = nullptr;
+  PreviewCache *preview_cache = nullptr;
+  PrefetchJob *prefetch_job = nullptr;
+  CompositorCache *compositor_cache = nullptr;
+
+  /**
+   * Frame index that was rendered with a temporary,
+   * unkeyed value of an animated property.
+   */
+  std::optional<float> temporary_animation_frame;
+
+  /**
+   * Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
+   * blade tool.
+   */
+  int transform_preview_frame = 0;
+  bool show_transform_preview = false;
+
+  CompositorCache &ensure_compositor_cache();
+};
 
 SequencerToolSettings *tool_settings_init();
 SequencerToolSettings *tool_settings_ensure(Scene *scene);
@@ -72,8 +153,8 @@ void editing_free(Scene *scene, bool do_id_user);
  * \param ed: sequence editor data
  * \return pointer to active seqbase. returns NULL if ed is NULL
  */
-ListBase *active_seqbase_get(const Editing *ed);
-Strip *strip_alloc(ListBase *lb, int timeline_frame, int channel, int type);
+ListBaseT<Strip> *active_seqbase_get(const Editing *ed);
+Strip *strip_alloc(ListBaseT<Strip> *lb, int timeline_frame, int channel, StripType type);
 void strip_free(Scene *scene, Strip *strip);
 /**
  * Get #MetaStack that corresponds to current level that is being viewed
@@ -84,7 +165,7 @@ MetaStack *meta_stack_active_get(const Editing *ed);
 /**
  * Open Meta strip content for editing.
  *
- * \param ed: sequence editor data
+ * \param scene: Scene containing the sequence editor data.
  * \param dst: meta strip or NULL for top level view
  */
 void meta_stack_set(const Scene *scene, Strip *dst);
@@ -97,23 +178,23 @@ Strip *meta_stack_pop(Editing *ed);
 Strip *strip_duplicate_recursive(Main *bmain,
                                  const Scene *scene_src,
                                  Scene *scene_dst,
-                                 ListBase *new_seq_list,
+                                 ListBaseT<Strip> *seqbase_dst,
                                  Strip *strip,
                                  StripDuplicate dupe_flag);
 void seqbase_duplicate_recursive(Main *bmain,
                                  const Scene *scene_src,
                                  Scene *scene_dst,
-                                 ListBase *nseqbase,
-                                 const ListBase *seqbase,
+                                 ListBaseT<Strip> *seqbase_dst,
+                                 const ListBaseT<Strip> *seqbase_src,
                                  StripDuplicate dupe_flag,
-                                 int flag);
+                                 int copy_flag);
 bool is_valid_strip_channel(const Strip *strip);
 
 /**
  * Read and Write functions for `.blend` file data.
  */
-void blend_write(BlendWriter *writer, ListBase *seqbase);
-void blend_read(BlendDataReader *reader, ListBase *seqbase);
+void blend_write(BlendWriter *writer, ListBaseT<Strip> *seqbase);
+void blend_read(BlendDataReader *reader, ListBaseT<Strip> *seqbase);
 
 void doversion_250_sound_proxy_update(Main *bmain, Editing *ed);
 
@@ -124,7 +205,7 @@ void doversion_250_sound_proxy_update(Main *bmain, Editing *ed);
  * This does NOT include actual rendering of the strips, but rather makes them up-to-date for
  * animation playback and makes them ready for the sequencer's rendering pipeline to render them.
  */
-void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBase *seqbase);
+void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase);
 
 /**
  * Find a strip with a given name.
@@ -156,7 +237,7 @@ Span<Strip *> lookup_strips_by_scene(Editing *ed, const Scene *key);
 Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *ed);
 
 /**
- * Find all strips using provided compositor node tree as a modifier
+ * Find all strips using provided compositor node tree
  *
  * \param ed: Editing that owns lookup hash
  * \param key: Node tree pointer
@@ -164,6 +245,13 @@ Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *
  * \return Span of strips
  */
 Span<Strip *> lookup_strips_by_compositor_node_group(Editing *ed, const bNodeTree *key);
+
+/**
+ * Find effect strips, that use strip `key` as one of inputs.
+ * If lookup hash doesn't exist, it will be created. If hash is tagged as invalid, it will be
+ * rebuilt.
+ */
+Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key);
 
 /**
  * Find which meta strip the given timeline channel belongs to. Returns nullptr if it is a global
@@ -190,4 +278,10 @@ void strip_lookup_free(Editing *ed);
  */
 void strip_lookup_invalidate(const Editing *ed);
 
-}  // namespace blender::seq
+/** Return movie metadata copied into the strip runtime, reading the source lazily if needed. */
+IDProperty *movie_metadata_ensure(Scene &scene, Strip &strip);
+/** Discard metadata copied from the movie source. */
+void movie_metadata_invalidate(Strip &strip);
+
+}  // namespace seq
+}  // namespace blender

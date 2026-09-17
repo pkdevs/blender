@@ -10,11 +10,13 @@
 
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
 
 #include "bmesh.hh"
 #include "bmesh_structure.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
@@ -419,9 +421,9 @@ void BM_face_uvselect_set_shared(BMesh *bm, BMFace *f, bool select, const int cd
 void BM_mesh_uvselect_set_elem_shared(BMesh *bm,
                                       bool select,
                                       const int cd_loop_uv_offset,
-                                      const blender::Span<BMLoop *> loop_verts,
-                                      const blender::Span<BMLoop *> loop_edges,
-                                      const blender::Span<BMFace *> faces)
+                                      const Span<BMLoop *> loop_verts,
+                                      const Span<BMLoop *> loop_edges,
+                                      const Span<BMFace *> faces)
 {
   /* TODO: this could be optimized to reduce traversal of connected UV's for every element. */
 
@@ -999,9 +1001,9 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          const bool select,
                                          const BMUVSelectPickParams &params,
-                                         const blender::VectorList<BMVert *> &verts,
-                                         const blender::VectorList<BMEdge *> &edges,
-                                         const blender::VectorList<BMFace *> &faces)
+                                         const VectorList<BMVert *> &verts,
+                                         const VectorList<BMEdge *> &edges,
+                                         const VectorList<BMFace *> &faces)
 {
   const bool check_verts = !verts.is_empty();
   const bool check_edges = !edges.is_empty();
@@ -1026,9 +1028,9 @@ void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         blender::Span<BMVert *> verts,
-                                         blender::Span<BMEdge *> edges,
-                                         blender::Span<BMFace *> faces)
+                                         Span<BMVert *> verts,
+                                         Span<BMEdge *> edges,
+                                         Span<BMFace *> faces)
 {
   const bool check_verts = !verts.is_empty();
   const bool check_edges = !edges.is_empty();
@@ -1918,19 +1920,7 @@ void BM_mesh_uvselect_sync_to_mesh(BMesh *bm)
       if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
         continue;
       }
-
-      BMLoop *l_iter, *l_first;
-      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-      bool face_select = true;
-      do {
-        if (!BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV) ||
-            !BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE))
-        {
-          face_select = false;
-          break;
-        }
-      } while ((l_iter = l_iter->next) != l_first);
-      if (face_select) {
+      if (BM_elem_flag_test(f, BM_ELEM_SELECT_UV)) {
         BM_face_select_set(bm, f, true);
       }
     }
@@ -2518,3 +2508,5 @@ bool BM_mesh_uvselect_is_valid(BMesh *bm,
 }
 
 /** \} */
+
+}  // namespace blender

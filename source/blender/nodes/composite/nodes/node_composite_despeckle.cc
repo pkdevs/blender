@@ -2,16 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "UI_resources.hh"
 
 #include "GPU_shader.hh"
 
@@ -20,33 +14,33 @@
 
 #include "node_composite_util.hh"
 
-/* **************** FILTER  ******************** */
-
 namespace blender::nodes::node_composite_despeckle_cc {
 
-static void cmp_node_despeckle_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Color Threshold")
+  b.add_input<decl::Float>("Color Threshold"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .description(
           "Pixels are despeckled only if their color difference from the average color of their "
           "neighbors exceeds this threshold");
-  b.add_input<decl::Float>("Neighbor Threshold")
+  b.add_input<decl::Float>("Neighbor Threshold"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -92,19 +86,20 @@ class DespeckleOperation : public NodeOperation {
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &factor_image = get_input("Fac");
-    factor_image.bind_as_texture(shader, "factor_tx");
+    gpu::Texture *factor_texture = factor_image.bind_as_texture_or_single_value(shader,
+                                                                                "factor_tx");
 
     const Domain domain = compute_domain();
     Result &output_image = get_result("Image");
     output_image.allocate_texture(domain);
     output_image.bind_as_image(shader, "output_img");
 
-    compute_dispatch_threads_at_least(shader, domain.size);
+    compute_dispatch_threads_at_least(shader, domain.data_size);
 
     GPU_shader_unbind();
     output_image.unbind_as_image();
     input_image.unbind_as_texture();
-    factor_image.unbind_as_texture();
+    factor_image.unbind_as_texture_or_single_value(factor_texture);
   }
 
   void execute_cpu()
@@ -128,7 +123,7 @@ class DespeckleOperation : public NodeOperation {
                                 float3(1.0f, 0.0f, 1.0f),
                                 float3(corner_weight, 1.0f, corner_weight));
 
-    parallel_for(domain.size, [&](const int2 texel) {
+    parallel_for(domain.data_size, [&](const int2 texel) {
       float4 center_color = float4(input.load_pixel<Color>(texel));
 
       /* Go over the pixels in the 3x3 window around the center pixel and compute the total sum of
@@ -185,40 +180,38 @@ class DespeckleOperation : public NodeOperation {
 
   float get_color_threshold()
   {
-    return math::max(0.0f, this->get_input("Color Threshold").get_single_value_default(0.5f));
+    return math::max(0.0f, this->get_input("Color Threshold").get_single_value_default<float>());
   }
 
   float get_neighbor_threshold()
   {
     return math::clamp(
-        this->get_input("Neighbor Threshold").get_single_value_default(0.5f), 0.0f, 1.0f);
+        this->get_input("Neighbor Threshold").get_single_value_default<float>(), 0.0f, 1.0f);
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new DespeckleOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_despeckle_cc
-
-static void register_node_type_cmp_despeckle()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_despeckle_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeDespeckle", CMP_NODE_DESPECKLE);
+  cmp_node_type_base(&ntype, "CompositorNodeDespeckle"_ustr, CMP_NODE_DESPECKLE);
   ntype.ui_name = "Despeckle";
   ntype.ui_description =
       "Smooth areas of an image in which noise is noticeable, while leaving complex areas "
       "untouched";
   ntype.enum_name_legacy = "DESPECKLE";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_despeckle_declare;
+  ntype.declare = node_declare;
   ntype.flag |= NODE_PREVIEW;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_despeckle)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_despeckle_cc

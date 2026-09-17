@@ -6,7 +6,7 @@
 #include <numeric>
 
 #include "BLI_array.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_fftw.hh"
 #include "BLI_index_range.hh"
@@ -40,8 +40,8 @@ void convolve(Context &context,
    * kernel size and vice versa to avoid the kernel affecting the pixels at the other side of
    * image. The kernel size is limited by the image size since it will have no effect on the image
    * during convolution. */
-  const int2 image_size = input.domain().size;
-  const int2 kernel_size = kernel.domain().size;
+  const int2 image_size = input.domain().data_size;
+  const int2 kernel_size = kernel.domain().data_size;
   const int2 needed_padding_amount = math::max(kernel_size, image_size);
   const int2 needed_spatial_size = image_size + needed_padding_amount - 1;
   const int2 spatial_size = fftw::optimal_size_for_real_transform(needed_spatial_size);
@@ -134,22 +134,28 @@ void convolve(Context &context,
     fftwf_destroy_plan(backward_plan);
   });
 
-  /* Download GPU results to CPU for GPU contexts. */
-  Result input_cpu = context.use_gpu() ? input.download_to_cpu() : input;
-  Result kernel_cpu = context.use_gpu() ? kernel.download_to_cpu() : kernel;
+  Result convolve_input = context.create_result(input.type());
+  Result convolve_kernel = context.create_result(kernel.type());
 
-  BLI_SCOPED_DEFER([&]() {
-    if (context.use_gpu()) {
-      input_cpu.release();
-      kernel_cpu.release();
-    }
-  });
+  if (context.use_gpu()) {
+    Result input_cpu = input.download_to_cpu();
+    convolve_input.share_data(input_cpu);
+    input_cpu.release();
+
+    Result kernel_cpu = kernel.download_to_cpu();
+    convolve_kernel.share_data(kernel_cpu);
+    kernel_cpu.release();
+  }
+  else {
+    convolve_input.share_data(input);
+    convolve_kernel.share_data(kernel);
+  }
 
   /* Zero pad the image to the required spatial domain size, storing each channel in planar
    * format for better cache locality, that is, RRRR...GGGG...BBBB...AAAA. */
   threading::memory_bandwidth_bound_task(spatial_pixels_count * sizeof(float), [&]() {
     parallel_for(spatial_size, [&](const int2 texel) {
-      const Color pixel_color = input_cpu.load_pixel_zero<Color>(texel);
+      const Color pixel_color = convolve_input.load_pixel_zero<Color>(texel);
       for (const int channel : IndexRange(input_channels_count)) {
         float *buffer = image_spatial_domain_channels[channel];
         const int64_t index = texel.y * int64_t(spatial_size.x) + texel.x;
@@ -157,6 +163,8 @@ void convolve(Context &context,
       }
     });
   });
+
+  convolve_input.release();
 
   /* Use doubles to sum the kernel since floats are not stable with threaded summation. We always
    * use a double4 even for float kernels for generality, in that case, only the first component
@@ -174,14 +182,16 @@ void convolve(Context &context,
                                     mod_i(centered_texel.y, spatial_size.y));
 
     const float4 kernel_value = is_color_kernel ?
-                                    float4(kernel_cpu.load_pixel_zero<Color>(wrapped_texel)) :
-                                    float4(kernel_cpu.load_pixel_zero<float>(wrapped_texel));
+                                    float4(convolve_kernel.load_pixel_zero<Color>(wrapped_texel)) :
+                                    float4(convolve_kernel.load_pixel_zero<float>(wrapped_texel));
     for (const int channel : IndexRange(kernel_channels_count)) {
       float *buffer = kernel_spatial_domain_channels[channel];
       buffer[texel.x + texel.y * int64_t(spatial_size.x)] = kernel_value[channel];
     }
     sum_by_thread.local() += double4(kernel_value);
   });
+
+  convolve_kernel.release();
 
   /* The computed kernel is not normalized and should be normalized, but instead of normalizing the
    * kernel during computation, we normalize it in the frequency domain when convolving the kernel
@@ -237,7 +247,7 @@ void convolve(Context &context,
   });
 
   Result output_cpu = context.create_result(input.type());
-  output_cpu.allocate_texture(input.domain(), true, ResultStorageType::CPU);
+  output_cpu.allocate_texture(input.domain(), true, ResultStorageType::CPUImage);
 
   /* Copy the result to the output. */
   threading::memory_bandwidth_bound_task(input.size_in_bytes(), [&]() {
@@ -253,12 +263,13 @@ void convolve(Context &context,
 
   if (context.use_gpu()) {
     Result output_gpu = output_cpu.upload_to_gpu(true);
-    output.steal_data(output_gpu);
-    output_cpu.release();
+    output.share_data(output_gpu);
+    output_gpu.release();
   }
   else {
-    output.steal_data(output_cpu);
+    output.share_data(output_cpu);
   }
+  output_cpu.release();
 #else
   UNUSED_VARS(kernel, normalize_kernel);
   output.allocate_texture(input.domain());
@@ -266,7 +277,7 @@ void convolve(Context &context,
     GPU_texture_copy(output, input);
   }
   else {
-    parallel_for(output.domain().size, [&](const int2 texel) {
+    parallel_for(output.domain().data_size, [&](const int2 texel) {
       output.store_pixel(texel, input.load_pixel<float4>(texel));
     });
   }

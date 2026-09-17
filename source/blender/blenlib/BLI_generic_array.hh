@@ -7,10 +7,10 @@
 /** \file
  * \ingroup bli
  *
- * This is a generic counterpart to #blender::Array, used when the type is not known at runtime.
+ * This is a generic counterpart to #Array, used when the type is not known at runtime.
  *
  * `GArray` should generally only be used for passing data around in dynamic contexts.
- * It does not support a few things that #blender::Array supports:
+ * It does not support a few things that #Array supports:
  *  - Small object optimization / inline buffer.
  *  - Exception safety and various more specific constructors.
  */
@@ -29,8 +29,10 @@ template<
     typename Allocator = GuardedAllocator>
 class GArray {
  protected:
-  /** The type of the data in the array, will be null after the array is default constructed,
-   * but a value should be assigned before any other interaction with the array. */
+  /**
+   * The type of the data in the array, will be null after the array is default constructed,
+   * but a value should be assigned before any other interaction with the array.
+   */
   const CPPType *type_ = nullptr;
   void *data_ = nullptr;
   int64_t size_ = 0;
@@ -51,12 +53,21 @@ class GArray {
    * Create and allocate a new array, with elements default constructed
    * (which does not do anything for trivial types).
    */
-  GArray(const CPPType &type, int64_t size, Allocator allocator = {}) : GArray(type, allocator)
+  GArray(const CPPType &type, int64_t size, Allocator allocator = {})
+      : GArray(type, size, NoInitialization{}, allocator)
+  {
+    type_->default_construct_n(data_, size_);
+  }
+
+  GArray(const CPPType &type,
+         const int64_t size,
+         NoInitialization /*not_init_tag*/,
+         Allocator allocator = {})
+      : GArray(type, allocator)
   {
     BLI_assert(size >= 0);
     size_ = size;
     data_ = this->allocate(size_);
-    type_->default_construct_n(data_, size_);
   }
 
   /**

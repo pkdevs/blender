@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * GPU generated indirection buffer. Updated on topology change.
  * One thread processes one curve.
  */
@@ -13,7 +15,7 @@ COMPUTE_SHADER_CREATE_INFO(draw_curves_topology)
 
 #include "gpu_shader_attribute_load_lib.glsl"
 #include "gpu_shader_offset_indices_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 void main()
 {
@@ -27,7 +29,7 @@ void main()
     is_curve_cyclic = gpu_attr_load_bool(curves_cyclic_buf, curve_id);
   }
 
-  IndexRange points = offset_indices::load_range_from_buffer(evaluated_offsets_buf, curve_id);
+  IndexRange points = offset_indices::load_range_from_buffer(evaluated_offsets_buf, int(curve_id));
   int index_start = points.start();
   int num_segment = points.size();
 
@@ -43,7 +45,7 @@ void main()
   index_start += int(is_ribbon_topology ? curve_id : -curve_id);
 
   for (int i = 0; i < indirection_index_count; i++) {
-    int value = int((i == 0) ? curve_id : -i);
+    int value = (i == 0) ? int(curve_id) : -i;
 
     bool is_restart = false;
     bool is_cyclic_last_segment = false;

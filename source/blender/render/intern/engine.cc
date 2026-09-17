@@ -10,16 +10,19 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "BKE_compositor.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
+#include "DNA_layer_types.h"
 #include "DNA_object_types.h"
 
 #include "BKE_camera.h"
+#include "BKE_compositor.hh"
 #include "BKE_global.hh"
 #include "BKE_node.hh"
 #include "BKE_report.hh"
@@ -51,9 +54,11 @@
 #include "render_result.h"
 #include "render_types.h"
 
+namespace blender {
+
 /* Render Engine Types */
 
-ListBase R_engines = {nullptr, nullptr};
+ListBaseT<RenderEngineType> R_engines = {nullptr, nullptr};
 
 static CLG_LogRef LOG = {"render"};
 
@@ -76,7 +81,7 @@ void RE_engines_exit()
     DRW_gpu_context_disable();
   }
 
-  for (type = static_cast<RenderEngineType *>(R_engines.first); type; type = next) {
+  for (type = R_engines.first(); type; type = next) {
     next = type->next;
 
     BLI_remlink(&R_engines, type);
@@ -86,7 +91,7 @@ void RE_engines_exit()
         type->rna_ext.free(type->rna_ext.data);
       }
 
-      MEM_freeN(type);
+      MEM_delete(type);
     }
   }
 }
@@ -108,6 +113,11 @@ RenderEngineType *RE_engines_find(const char *idname)
   return type;
 }
 
+bool RE_engines_is_registered(const char *idname)
+{
+  return BLI_findstring(&R_engines, idname, offsetof(RenderEngineType, idname)) != nullptr;
+}
+
 bool RE_engine_is_external(const Render *re)
 {
   return (re->engine && re->engine->type && re->engine->type->render);
@@ -117,7 +127,7 @@ bool RE_engine_is_external(const Render *re)
 
 RenderEngine *RE_engine_create(RenderEngineType *type)
 {
-  RenderEngine *engine = MEM_callocN<RenderEngine>("RenderEngine");
+  RenderEngine *engine = MEM_new_zeroed<RenderEngine>("RenderEngine");
   engine->type = type;
 
   BLI_mutex_init(&engine->update_render_passes_mutex);
@@ -170,7 +180,7 @@ void RE_engine_free(RenderEngine *engine)
   BLI_mutex_end(&engine->blender_gpu_context_mutex);
   BLI_mutex_end(&engine->update_render_passes_mutex);
 
-  MEM_freeN(engine);
+  MEM_delete(engine);
 }
 
 /* Bake Render Results */
@@ -188,7 +198,7 @@ static RenderResult *render_result_from_bake(
   }
 
   /* Create render result with specified size. */
-  RenderResult *rr = MEM_callocN<RenderResult>(__func__);
+  RenderResult *rr = MEM_new<RenderResult>(__func__);
 
   rr->rectx = w;
   rr->recty = h;
@@ -200,7 +210,7 @@ static RenderResult *render_result_from_bake(
   BKE_scene_ppm_get(&engine->re->r, rr->ppm);
 
   /* Add single baking render layer. */
-  RenderLayer *rl = MEM_callocN<RenderLayer>("bake render layer");
+  RenderLayer *rl = MEM_new<RenderLayer>("bake render layer");
   STRNCPY(rl->name, layername);
   rl->rectx = w;
   rl->recty = h;
@@ -222,9 +232,10 @@ static RenderResult *render_result_from_bake(
   /* Fill render passes from bake pixel array, to be read by the render engine. */
   for (int ty = 0; ty < h; ty++) {
     size_t offset = ty * w;
-    float *primitive = primitive_pass->ibuf->float_buffer.data + 3 * offset;
-    float *seed = (seed_pass != nullptr) ? (seed_pass->ibuf->float_buffer.data + offset) : nullptr;
-    float *differential = differential_pass->ibuf->float_buffer.data + 4 * offset;
+    float *primitive = primitive_pass->ibuf->float_data_for_write() + 3 * offset;
+    float *seed = (seed_pass != nullptr) ? (seed_pass->ibuf->float_data_for_write() + offset) :
+                                           nullptr;
+    float *differential = differential_pass->ibuf->float_data_for_write() + 4 * offset;
 
     size_t bake_offset = (y + ty) * image->width + x;
     const BakePixel *bake_pixel = pixels + bake_offset;
@@ -262,7 +273,7 @@ static RenderResult *render_result_from_bake(
 
 static void render_result_to_bake(RenderEngine *engine, RenderResult *rr)
 {
-  RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first);
+  RenderLayer *rl = rr->layers.first();
   RenderPass *rpass = RE_pass_find_by_name(rl, RE_PASSNAME_COMBINED, "");
   if (!rpass) {
     return;
@@ -296,12 +307,14 @@ static void render_result_to_bake(RenderEngine *engine, RenderResult *rr)
     const size_t offset = ty * w;
     const size_t bake_offset = (y + ty) * image->width + x;
 
-    const float *pass_rect = rpass->ibuf->float_buffer.data + offset * channels_num;
+    const float *pass_rect = rpass->ibuf->float_data() + offset * channels_num;
     const BakePixel *bake_pixel = pixels + bake_offset;
     float *bake_result = result + bake_offset * channels_num;
 
     for (int tx = 0; tx < w; tx++) {
-      if (bake_pixel->object_id == engine->bake.object_id) {
+      if (bake_pixel->object_id == engine->bake.object_id && bake_pixel->primitive_id != -1 &&
+          !bake_pixel->is_margin)
+      {
         memcpy(bake_result, pass_rect, channels_size);
       }
       pass_rect += channels_num;
@@ -389,8 +402,8 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
     re_ensure_passes_allocated_thread_safe(re);
     render_result_merge(re->result, result);
     result->renlay = static_cast<RenderLayer *>(
-        result->layers.first); /* weak, draws first layer always */
-    re->display->display_update(result, nullptr);
+        result->layers.first()); /* weak, draws first layer always */
+    re->display->display_update(result);
   }
 }
 
@@ -428,7 +441,7 @@ void RE_engine_end_result(
   }
 
   if (re->engine && (re->engine->flag & RE_ENGINE_HIGHLIGHT_TILES)) {
-    blender::render::TilesHighlight *tile_highlight = re->get_tile_highlight();
+    render::TilesHighlight *tile_highlight = re->get_tile_highlight();
 
     if (tile_highlight) {
       if (highlight) {
@@ -449,8 +462,8 @@ void RE_engine_end_result(
     /* draw */
     if (!re->display->test_break()) {
       result->renlay = static_cast<RenderLayer *>(
-          result->layers.first); /* weak, draws first layer always */
-      re->display->display_update(result, nullptr);
+          result->layers.first()); /* weak, draws first layer always */
+      re->display->display_update(result);
     }
   }
 
@@ -510,7 +523,7 @@ void RE_engine_update_progress(RenderEngine *engine, float progress)
 {
   Render *re = engine->re;
 
-  if (re) {
+  if (re && !re->display_shared) {
     CLAMP(progress, 0.0f, 1.0f);
     re->display->progress(progress);
   }
@@ -531,10 +544,10 @@ void RE_engine_report(RenderEngine *engine, int type, const char *msg)
   Render *re = engine->re;
 
   if (re) {
-    BKE_report(engine->re->reports, (eReportType)type, msg);
+    BKE_report(engine->re->reports, eReportType(type), msg);
   }
   else if (engine->reports) {
-    BKE_report(engine->reports, (eReportType)type, msg);
+    BKE_report(engine->reports, eReportType(type), msg);
   }
 }
 
@@ -545,7 +558,7 @@ void RE_engine_set_error_message(RenderEngine *engine, const char *msg)
     RenderResult *rr = RE_AcquireResultRead(re);
     if (rr) {
       if (rr->error != nullptr) {
-        MEM_freeN(rr->error);
+        MEM_delete(rr->error);
       }
       rr->error = BLI_strdup(msg);
     }
@@ -607,10 +620,12 @@ void RE_engine_get_camera_model_matrix(RenderEngine *engine,
    * leaving stereo to be handled by the engine. */
   Render *re = engine->re;
   if (use_spherical_stereo || re == nullptr) {
-    BKE_camera_multiview_model_matrix(nullptr, camera, nullptr, (float (*)[4])r_modelmat);
+    BKE_camera_multiview_model_matrix(
+        nullptr, camera, nullptr, reinterpret_cast<float (*)[4]>(r_modelmat));
   }
   else {
-    BKE_camera_multiview_model_matrix(&re->r, camera, re->viewname, (float (*)[4])r_modelmat);
+    BKE_camera_multiview_model_matrix(
+        &re->r, camera, re->viewname, reinterpret_cast<float (*)[4]>(r_modelmat));
   }
 }
 
@@ -622,13 +637,13 @@ bool RE_engine_get_spherical_stereo(RenderEngine *engine, Object *camera)
 
 const rcti *RE_engine_get_current_tiles(Render *re, int *r_total_tiles)
 {
-  blender::render::TilesHighlight *tiles_highlight = re->get_tile_highlight();
+  render::TilesHighlight *tiles_highlight = re->get_tile_highlight();
   if (!tiles_highlight) {
     *r_total_tiles = 0;
     return nullptr;
   };
 
-  blender::Span<rcti> highlighted_tiles = tiles_highlight->get_all_highlighted_tiles();
+  Span<rcti> highlighted_tiles = tiles_highlight->get_all_highlighted_tiles();
 
   *r_total_tiles = highlighted_tiles.size();
   return highlighted_tiles.data();
@@ -837,10 +852,6 @@ bool RE_bake_engine(Render *re,
   RE_engine_free(engine);
   re->engine = nullptr;
 
-  if (BKE_reports_contain(re->reports, RPT_ERROR)) {
-    G.is_break = true;
-  }
-
   return true;
 }
 
@@ -852,8 +863,14 @@ static bool possibly_using_gpu_compositor(const Render *re)
     return false;
   }
 
+  /* Note a secondary Render instance from a Render Layers node has a null pipeline scene,
+   * but no compositing is performed for it so we can return false. */
   const Scene *scene = re->pipeline_scene_eval;
-  return (scene->compositing_node_group && (scene->r.scemode & R_DOCOMP));
+  if (!scene) {
+    return false;
+  }
+
+  return bke::compositor::is_enabled(*scene, bke::compositor::ExecutionMode::Render);
 }
 
 static void engine_render_view_layer(Render *re,
@@ -894,10 +911,10 @@ static void engine_render_view_layer(Render *re,
        * context initialization. For the non-background renders the GPU context is already
        * initialized for the Blender interface and no workaround is needed.
        *
-       * Technically it is enough to only call WM_init_gpu() here, but it expects to only be called
-       * once, and from here it is not possible to know whether GPU sub-system is initialized or
-       * not. So instead temporarily enable the render context, which will take care of the GPU
-       * context initialization.
+       * Technically it is enough to only call WM_init_gpu_offscreen() here, but it expects
+       * to only be called once, and from here it is not possible to know whether GPU
+       * sub-system is initialized or not. So instead temporarily enable the render context,
+       * which will take care of the GPU context initialization.
        *
        * For demo file and tracking progress of possible fixes on driver side refer to #120007. */
       DRW_render_context_enable(engine->re);
@@ -938,7 +955,7 @@ static void engine_render_view_layer(Render *re,
 
   /* Optionally composite grease pencil over render result.
    * Only do it if the passes are allocated (and the engine will not override the grease pencil
-   * when reading its result from EXR file and writing to the Blender side. */
+   * when reading its result from EXR file and writing to the Blender side). */
   if (engine->has_grease_pencil && use_grease_pencil && re->result->passes_allocated) {
     /* NOTE: External engine might have been requested to free its
      * dependency graph, which is only allowed if there is no grease
@@ -962,7 +979,7 @@ static void engine_render_add_result_pass_cb(void *user_data,
                                              const char *chanid,
                                              eNodeSocketDatatype /*type*/)
 {
-  RenderResult *rr = (RenderResult *)user_data;
+  RenderResult *rr = static_cast<RenderResult *>(user_data);
   RE_create_render_pass(rr, name, channels, chanid, view_layer->name, RR_ALL_VIEWS, false);
 }
 
@@ -1008,12 +1025,15 @@ bool RE_engine_render(Render *re, bool do_all)
   /* Lock drawing in UI during data phase. */
   re->display->draw_lock();
 
-  if ((type->flag & RE_USE_GPU_CONTEXT) && !GPU_backend_supported()) {
-    /* Clear UI drawing locks. */
-    re->display->draw_unlock();
-    BKE_report(re->reports, RPT_ERROR, "Cannot initialize the GPU");
-    G.is_break = true;
-    return true;
+  if (type->flag & RE_USE_GPU_CONTEXT) {
+    WM_init_gpu_backend();
+    if (!GPU_backend_supported()) {
+      /* Clear UI drawing locks. */
+      re->display->draw_unlock();
+      BKE_report(re->reports, RPT_ERROR, "Cannot initialize the GPU");
+      G.is_break = true;
+      return true;
+    }
   }
 
   /* Create engine. */
@@ -1122,8 +1142,7 @@ bool RE_engine_render(Render *re, bool do_all)
   /* Clear tile data */
   engine->flag &= ~RE_ENGINE_RENDERING;
 
-  render_result_free_list(&engine->fullresult,
-                          static_cast<RenderResult *>(engine->fullresult.first));
+  render_result_free_list(&engine->fullresult, engine->fullresult.first());
 
   /* re->engine becomes zero if user changed active render engine during render */
   if (!engine_keep_depsgraph(engine) || !re->engine) {
@@ -1261,7 +1280,7 @@ void RE_engine_tile_highlight_set(
     return;
   }
 
-  blender::render::TilesHighlight *tile_highlight = engine->re->get_tile_highlight();
+  render::TilesHighlight *tile_highlight = engine->re->get_tile_highlight();
   if (!tile_highlight) {
     /* The renderer itself does not support tiles highlight. */
     return;
@@ -1288,7 +1307,7 @@ void RE_engine_tile_highlight_clear_all(RenderEngine *engine)
     return;
   }
 
-  blender::render::TilesHighlight *tile_highlight = engine->re->get_tile_highlight();
+  render::TilesHighlight *tile_highlight = engine->re->get_tile_highlight();
   if (!tile_highlight) {
     /* The renderer itself does not support tiles highlight. */
     return;
@@ -1431,4 +1450,47 @@ void RE_engine_gpu_context_unlock(RenderEngine *engine)
   }
 }
 
+void RE_engine_view_pause_set(RenderEngine *engine, const bool pause)
+{
+  SET_FLAG_FROM_TEST(engine->flag, pause, RE_ENGINE_VIEW_PAUSED);
+}
+
+bool RE_engine_view_pause_get(const RenderEngine *engine)
+{
+  return (engine->flag & RE_ENGINE_VIEW_PAUSED) != 0;
+}
+
+void RE_engine_view_auto_pause_set(RenderEngine *engine, const bool pause)
+{
+  SET_FLAG_FROM_TEST(engine->flag, pause, RE_ENGINE_VIEW_PAUSED_AUTO);
+}
+
+bool RE_engine_view_pause_notify(RenderEngine *engine, const bContext *context)
+{
+  const bool is_paused = (engine->flag & (RE_ENGINE_VIEW_PAUSED | RE_ENGINE_VIEW_PAUSED_AUTO)) !=
+                         0;
+  const bool was_paused = (engine->flag & RE_ENGINE_VIEW_PAUSED_NOTIFIED) != 0;
+
+  if (is_paused == was_paused) {
+    return false;
+  }
+
+  SET_FLAG_FROM_TEST(engine->flag, is_paused, RE_ENGINE_VIEW_PAUSED_NOTIFIED);
+
+  if (is_paused) {
+    if (engine->type->view_pause) {
+      engine->type->view_pause(engine, context);
+    }
+  }
+  else {
+    if (engine->type->view_resume) {
+      engine->type->view_resume(engine, context);
+    }
+  }
+
+  return true;
+}
+
 /** \} */
+
+}  // namespace blender

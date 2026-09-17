@@ -6,11 +6,12 @@
  * \ingroup edcurves
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_array_utils.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -25,6 +26,7 @@
 
 #include "BKE_attribute.h"
 #include "BKE_attribute_math.hh"
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
@@ -75,6 +77,11 @@
 
 namespace blender::ed::curves {
 
+static eHandleDisplay view3d_handle_type_or_default(const View3D *v3d)
+{
+  return v3d ? v3d->overlay.handle_display : CURVE_HANDLE_SELECTED;
+}
+
 bool object_has_editable_curves(const Main &bmain, const Object &object)
 {
   if (object.type != OB_CURVES) {
@@ -97,12 +104,12 @@ VectorSet<Curves *> get_unique_editable_curves(const bContext &C)
 
   Object *object = CTX_data_active_object(&C);
   if (object && object_has_editable_curves(bmain, *object)) {
-    unique_curves.add_new(static_cast<Curves *>(object->data));
+    unique_curves.add_new(id_cast<Curves *>(object->data));
   }
 
   CTX_DATA_BEGIN (&C, Object *, object, selected_objects) {
     if (object_has_editable_curves(bmain, *object)) {
-      unique_curves.add(static_cast<Curves *>(object->data));
+      unique_curves.add(id_cast<Curves *>(object->data));
     }
   }
   CTX_DATA_END;
@@ -125,7 +132,7 @@ static bool curves_poll_impl(bContext *C,
     }
   }
   if (check_surface) {
-    Curves &curves = *static_cast<Curves *>(object->data);
+    Curves &curves = *id_cast<Curves *>(object->data);
     if (curves.surface == nullptr || curves.surface->type != OB_MESH) {
       CTX_wm_operator_poll_msg_set(C, "Curves must have a mesh surface object set");
       return false;
@@ -169,7 +176,7 @@ static bool editable_curves_point_domain_poll(bContext *C)
   if (!curves::editable_curves_poll(C)) {
     return false;
   }
-  const Curves *curves_id = static_cast<const Curves *>(CTX_data_active_object(C)->data);
+  const Curves *curves_id = id_cast<const Curves *>(CTX_data_active_object(C)->data);
   if (bke::AttrDomain(curves_id->selection_domain) != bke::AttrDomain::Point) {
     CTX_wm_operator_poll_msg_set(C, "Only available in point selection mode");
     return false;
@@ -258,7 +265,7 @@ static void try_convert_single_object(Object &curves_ob,
   if (curves_ob.type != OB_CURVES) {
     return;
   }
-  Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
+  Curves &curves_id = *id_cast<Curves *>(curves_ob.data);
   CurvesGeometry &curves = curves_id.geometry.wrap();
   if (curves_id.surface == nullptr) {
     return;
@@ -267,9 +274,9 @@ static void try_convert_single_object(Object &curves_ob,
   if (surface_ob.type != OB_MESH) {
     return;
   }
-  Mesh &surface_me = *static_cast<Mesh *>(surface_ob.data);
+  Mesh &surface_me = *id_cast<Mesh *>(surface_ob.data);
 
-  bke::BVHTreeFromMesh surface_bvh = surface_me.bvh_corner_tris();
+  const bke::bvh::Tree &surface_bvh = surface_me.bvh_tris();
 
   const Span<float3> positions_cu = curves.positions();
   const Span<int> tri_faces = surface_me.corner_tri_faces();
@@ -281,7 +288,7 @@ static void try_convert_single_object(Object &curves_ob,
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
   IndexMaskMemory memory;
   const IndexMask multi_point_curves = IndexMask::from_predicate(
-      curves.curves_range(), GrainSize(4096), memory, [&](const int curve_i) {
+      curves.curves_range(), memory, [&](const int curve_i) {
         return points_by_curve[curve_i].size() > 1;
       });
 
@@ -292,9 +299,9 @@ static void try_convert_single_object(Object &curves_ob,
   }
 
   ParticleSystem *particle_system = nullptr;
-  LISTBASE_FOREACH (ParticleSystem *, psys, &surface_ob.particlesystem) {
-    if (STREQ(psys->name, curves_ob.id.name + 2)) {
-      particle_system = psys;
+  for (ParticleSystem &psys : surface_ob.particlesystem) {
+    if (STREQ(psys.name, curves_ob.id.name + 2)) {
+      particle_system = &psys;
       break;
     }
   }
@@ -312,8 +319,7 @@ static void try_convert_single_object(Object &curves_ob,
   settings.totpart = 0;
   psys_changed_type(&surface_ob, particle_system);
 
-  MutableSpan<ParticleData> particles{MEM_calloc_arrayN<ParticleData>(hair_num, __func__),
-                                      hair_num};
+  MutableSpan<ParticleData> particles{MEM_new_array<ParticleData>(hair_num, __func__), hair_num};
 
   /* The old hair system still uses #MFace, so make sure those are available on the mesh. */
   BKE_mesh_tessface_calc(&surface_me);
@@ -331,7 +337,8 @@ static void try_convert_single_object(Object &curves_ob,
   /* Prepare transformation matrices. */
   const bke::CurvesSurfaceTransforms transforms{curves_ob, &surface_ob};
 
-  const MFace *mfaces = (const MFace *)CustomData_get_layer(&surface_me.fdata_legacy, CD_MFACE);
+  const MFace *mfaces = static_cast<const MFace *>(
+      CustomData_get_layer(&surface_me.fdata_legacy, CD_MFACE));
   const Span<float3> positions = surface_me.vert_positions();
 
   multi_point_curves.foreach_index([&](const int curve_i, const int new_hair_i) {
@@ -340,13 +347,11 @@ static void try_convert_single_object(Object &curves_ob,
     const float3 &root_pos_cu = positions_cu[points.first()];
     const float3 root_pos_su = math::transform_point(transforms.curves_to_surface, root_pos_cu);
 
-    BVHTreeNearest nearest;
-    nearest.dist_sq = FLT_MAX;
-    BLI_bvhtree_find_nearest(
-        surface_bvh.tree, root_pos_su, &nearest, surface_bvh.nearest_callback, &surface_bvh);
-    BLI_assert(nearest.index >= 0);
+    const std::optional<bke::bvh::ClosestPointResult> nearest = surface_bvh.closest_point(
+        root_pos_su);
+    BLI_assert(nearest.has_value());
 
-    const int tri_i = nearest.index;
+    const int tri_i = nearest->index;
     const int face_i = tri_faces[tri_i];
 
     const int mface_i = find_mface_for_root_position(
@@ -357,7 +362,8 @@ static void try_convert_single_object(Object &curves_ob,
 
     ParticleData &particle = particles[new_hair_i];
     const int num_keys = points.size();
-    MutableSpan<HairKey> hair_keys{MEM_calloc_arrayN<HairKey>(num_keys, __func__), num_keys};
+    MutableSpan<HairKey> hair_keys{
+        MEM_new_array_zeroed<HairKey>(num_keys, "try_convert_single_object hair_keys"), num_keys};
 
     particle.hair = hair_keys.data();
     particle.totkey = hair_keys.size();
@@ -522,7 +528,7 @@ static wmOperatorStatus curves_convert_from_particle_system_exec(bContext *C, wm
   Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(C);
   Object *ob_from_orig = object::context_active_object(C);
   ParticleSystem *psys_orig = static_cast<ParticleSystem *>(
-      CTX_data_pointer_get_type(C, "particle_system", &RNA_ParticleSystem).data);
+      CTX_data_pointer_get_type(C, "particle_system", RNA_ParticleSystem).data);
   if (psys_orig == nullptr) {
     psys_orig = psys_get_current(ob_from_orig);
   }
@@ -531,11 +537,11 @@ static wmOperatorStatus curves_convert_from_particle_system_exec(bContext *C, wm
   }
   Object *ob_from_eval = DEG_get_evaluated(&depsgraph, ob_from_orig);
   ParticleSystem *psys_eval = nullptr;
-  LISTBASE_FOREACH (ModifierData *, md, &ob_from_eval->modifiers) {
-    if (md->type != eModifierType_ParticleSystem) {
+  for (ModifierData &md : ob_from_eval->modifiers) {
+    if (md.type != eModifierType_ParticleSystem) {
       continue;
     }
-    ParticleSystemModifierData *psmd = reinterpret_cast<ParticleSystemModifierData *>(md);
+    ParticleSystemModifierData *psmd = reinterpret_cast<ParticleSystemModifierData *>(&md);
     if (!STREQ(psmd->psys->name, psys_orig->name)) {
       continue;
     }
@@ -543,7 +549,7 @@ static wmOperatorStatus curves_convert_from_particle_system_exec(bContext *C, wm
   }
 
   Object *ob_new = BKE_object_add(&bmain, &scene, &view_layer, OB_CURVES, psys_eval->name);
-  Curves *curves_id = static_cast<Curves *>(ob_new->data);
+  Curves *curves_id = id_cast<Curves *>(ob_new->data);
   BKE_object_apply_mat4(ob_new, ob_from_orig->object_to_world().ptr(), true, false);
   curves_id->geometry.wrap() = particles_to_curves(*ob_from_eval, *psys_eval);
 
@@ -555,7 +561,7 @@ static wmOperatorStatus curves_convert_from_particle_system_exec(bContext *C, wm
 
 static bool curves_convert_from_particle_system_poll(bContext *C)
 {
-  return blender::ed::object::context_active_object(C) != nullptr;
+  return ed::object::context_active_object(C) != nullptr;
 }
 
 }  // namespace convert_from_particle_system
@@ -585,10 +591,10 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
                                                bool *r_invalid_uvs,
                                                bool *r_missing_uvs)
 {
-  Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
+  Curves &curves_id = *id_cast<Curves *>(curves_ob.data);
   CurvesGeometry &curves = curves_id.geometry.wrap();
 
-  const Mesh &surface_mesh = *static_cast<const Mesh *>(surface_ob.data);
+  const Mesh &surface_mesh = *id_cast<const Mesh *>(surface_ob.data);
   const Span<float3> surface_positions = surface_mesh.vert_positions();
   const Span<int> corner_verts = surface_mesh.corner_verts();
   const Span<int3> surface_corner_tris = surface_mesh.corner_tris();
@@ -607,7 +613,7 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
 
   switch (attach_mode) {
     case AttachMode::Nearest: {
-      bke::BVHTreeFromMesh surface_bvh = surface_mesh.bvh_corner_tris();
+      const bke::bvh::Tree &surface_bvh = surface_mesh.bvh_tris();
 
       threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange curves_range) {
         for (const int curve_i : curves_range) {
@@ -617,20 +623,14 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
           const float3 old_first_point_pos_su = math::transform_point(transforms.curves_to_surface,
                                                                       old_first_point_pos_cu);
 
-          BVHTreeNearest nearest;
-          nearest.index = -1;
-          nearest.dist_sq = FLT_MAX;
-          BLI_bvhtree_find_nearest(surface_bvh.tree,
-                                   old_first_point_pos_su,
-                                   &nearest,
-                                   surface_bvh.nearest_callback,
-                                   &surface_bvh);
-          const int tri_index = nearest.index;
-          if (tri_index == -1) {
+          const std::optional<bke::bvh::ClosestPointResult> nearest = surface_bvh.closest_point(
+              old_first_point_pos_su);
+          if (!nearest) {
             continue;
           }
+          const int tri_index = nearest->index;
 
-          const float3 new_first_point_pos_su = nearest.co;
+          const float3 new_first_point_pos_su = nearest->position;
           const float3 new_first_point_pos_cu = math::transform_point(transforms.surface_to_curves,
                                                                       new_first_point_pos_su);
           const float3 pos_diff_cu = new_first_point_pos_cu - old_first_point_pos_cu;
@@ -656,7 +656,7 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
         *r_missing_uvs = true;
         break;
       }
-      using geometry::ReverseUVSampler;
+      using blender::geometry::ReverseUVSampler;
       ReverseUVSampler reverse_uv_sampler{surface_uv_map, surface_corner_tris};
 
       threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange curves_range) {
@@ -709,7 +709,7 @@ static wmOperatorStatus snap_curves_to_surface_exec(bContext *C, wmOperator *op)
     if (curves_ob->type != OB_CURVES) {
       continue;
     }
-    Curves &curves_id = *static_cast<Curves *>(curves_ob->data);
+    Curves &curves_id = *id_cast<Curves *>(curves_ob->data);
     if (curves_id.surface == nullptr) {
       continue;
     }
@@ -804,7 +804,8 @@ static wmOperatorStatus curves_set_selection_domain_exec(bContext *C, wmOperator
     for (const StringRef selection_name : get_curves_selection_attribute_names(curves)) {
       if (const GVArray src = *attributes.lookup(selection_name, domain)) {
         const CPPType &type = src.type();
-        void *dst = MEM_malloc_arrayN(attributes.domain_size(domain), type.size, __func__);
+        void *dst = MEM_new_array_uninitialized(
+            attributes.domain_size(domain), type.size, __func__);
         src.materialize(dst);
 
         attributes.remove(selection_name);
@@ -813,7 +814,7 @@ static wmOperatorStatus curves_set_selection_domain_exec(bContext *C, wmOperator
                             bke::cpp_type_to_attribute_type(type),
                             bke::AttributeInitMoveArray(dst)))
         {
-          MEM_freeN(dst);
+          MEM_delete_void(dst);
         }
       }
     }
@@ -932,17 +933,17 @@ static wmOperatorStatus select_random_exec(bContext *C, wmOperator *op)
 
 static void select_random_ui(bContext * /*C*/, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
 
-  layout->prop(op->ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout->prop(op->ptr, "probability", UI_ITEM_R_SLIDER, IFACE_("Probability"), ICON_NONE);
+  layout.prop(op->ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "probability", ui::ITEM_R_SLIDER, IFACE_("Probability"), ICON_NONE);
 }
 
 static void CURVES_OT_select_random(wmOperatorType *ot)
 {
   ot->name = "Select Random";
   ot->idname = __func__;
-  ot->description = "Randomizes existing selection or create new random selection";
+  ot->description = "Randomize existing selection or create new random selection";
 
   ot->exec = select_random_exec;
   ot->poll = curves::editable_curves_poll;
@@ -1009,14 +1010,14 @@ static wmOperatorStatus select_ends_exec(bContext *C, wmOperator *op)
 
 static void select_ends_ui(bContext * /*C*/, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
 
-  layout->use_property_split_set(true);
+  layout.use_property_split_set(true);
 
-  uiLayout *col = &layout->column(true);
-  col->use_property_decorate_set(false);
-  col->prop(op->ptr, "amount_start", UI_ITEM_NONE, IFACE_("Amount Start"), ICON_NONE);
-  col->prop(op->ptr, "amount_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
+  ui::Layout &col = layout.column(true);
+  col.use_property_decorate_set(false);
+  col.prop(op->ptr, "amount_start", UI_ITEM_NONE, IFACE_("Amount Start"), ICON_NONE);
+  col.prop(op->ptr, "amount_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
 }
 
 static void CURVES_OT_select_ends(wmOperatorType *ot)
@@ -1137,12 +1138,12 @@ namespace split {
 static wmOperatorStatus split_exec(bContext *C, wmOperator * /*op*/)
 {
   View3D *v3d = CTX_wm_view3d(C);
+  const eHandleDisplay handle_display = view3d_handle_type_or_default(v3d);
   VectorSet<Curves *> unique_curves = get_unique_editable_curves(*C);
   for (Curves *curves_id : unique_curves) {
     CurvesGeometry &curves = curves_id->geometry.wrap();
     IndexMaskMemory memory;
-    const IndexMask points_to_split = retrieve_all_selected_points(
-        curves, v3d->overlay.handle_display, memory);
+    const IndexMask points_to_split = retrieve_all_selected_points(curves, handle_display, memory);
     if (points_to_split.is_empty()) {
       continue;
     }
@@ -1192,7 +1193,7 @@ static wmOperatorStatus surface_set_exec(bContext *C, wmOperator *op)
 
   Object &new_surface_ob = *CTX_data_active_object(C);
 
-  Mesh &new_surface_mesh = *static_cast<Mesh *>(new_surface_ob.data);
+  Mesh &new_surface_mesh = *id_cast<Mesh *>(new_surface_ob.data);
   const StringRef new_uv_map_name = new_surface_mesh.active_uv_map_name();
 
   CTX_DATA_BEGIN (C, Object *, selected_ob, selected_objects) {
@@ -1200,9 +1201,9 @@ static wmOperatorStatus surface_set_exec(bContext *C, wmOperator *op)
       continue;
     }
     Object &curves_ob = *selected_ob;
-    Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
+    Curves &curves_id = *id_cast<Curves *>(curves_ob.data);
 
-    MEM_SAFE_FREE(curves_id.surface_uv_map);
+    MEM_SAFE_DELETE(curves_id.surface_uv_map);
     if (!new_uv_map_name.is_empty()) {
       curves_id.surface_uv_map = BLI_strdupn(new_uv_map_name.data(), new_uv_map_name.size());
     }
@@ -1383,8 +1384,7 @@ static wmOperatorStatus exec(bContext *C, wmOperator * /*op*/)
 
     bke::SpanAttributeWriter<bool> cyclic = attributes.lookup_or_add_for_write_span<bool>(
         "cyclic", bke::AttrDomain::Curve);
-    selection.foreach_index(GrainSize(4096),
-                            [&](const int i) { cyclic.span[i] = !cyclic.span[i]; });
+    array_utils::invert_booleans(cyclic.span, selection);
     cyclic.finish();
 
     if (!cyclic.span.contains(true)) {
@@ -1405,7 +1405,7 @@ static void CURVES_OT_cyclic_toggle(wmOperatorType *ot)
 {
   ot->name = "Toggle Cyclic";
   ot->idname = __func__;
-  ot->description = "Make active curve closed/opened loop";
+  ot->description = "Make active curve closed/open loop";
 
   ot->exec = cyclic_toggle::exec;
   ot->poll = editable_curves_in_edit_mode_poll;
@@ -1428,13 +1428,13 @@ static wmOperatorStatus exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    geometry::ConvertCurvesOptions options;
+    blender::geometry::ConvertCurvesOptions options;
     options.convert_bezier_handles_to_poly_points = use_handles;
     options.convert_bezier_handles_to_catmull_rom_points = use_handles;
     options.keep_bezier_shape_as_nurbs = use_handles;
     options.keep_catmull_rom_shape_as_nurbs = use_handles;
 
-    curves = geometry::convert_curves(curves, selection, dst_type, {}, options);
+    curves = blender::geometry::convert_curves(curves, selection, dst_type, {}, options);
 
     DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, curves_id);
@@ -1538,7 +1538,7 @@ static wmOperatorStatus exec(bContext *C, wmOperator *op)
       }
     });
 
-    curves = geometry::subdivide_curves(
+    curves = blender::geometry::subdivide_curves(
         curves, curves.curves_range(), VArray<int>::from_span(segment_cuts), {});
 
     DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
@@ -1588,9 +1588,10 @@ static void append_primitive_curve(bContext *C,
   object::add_generic_get_opts(C, &op, 'Z', location, rotation, scale, nullptr, nullptr, nullptr);
   const float4x4 transform = math::from_loc_rot_scale<float4x4>(
       location, math::EulerXYZ(rotation), scale);
-  geometry::transform_geometry(new_geometry, transform);
+  blender::geometry::transform_geometry(new_geometry, transform);
 
-  bke::GeometrySet joined_geometry = geometry::join_geometries({old_geometry, new_geometry}, {});
+  bke::GeometrySet joined_geometry = blender::geometry::join_geometries(
+      {old_geometry, new_geometry}, {});
   Curves *joined_curves_id = joined_geometry.get_curves_for_write();
   CurvesGeometry &dst_curves = curves_id.geometry.wrap();
   dst_curves = std::move(joined_curves_id->geometry.wrap());
@@ -1642,7 +1643,7 @@ static CurvesGeometry generate_circle_primitive(const float radius)
 static wmOperatorStatus exec(bContext *C, wmOperator *op)
 {
   Object *object = CTX_data_edit_object(C);
-  Curves *active_curves_id = static_cast<Curves *>(object->data);
+  Curves *active_curves_id = id_cast<Curves *>(object->data);
 
   const float radius = RNA_float_get(op->ptr, "radius");
   append_primitive_curve(C, *active_curves_id, generate_circle_primitive(radius), *op);
@@ -1702,7 +1703,7 @@ static CurvesGeometry generate_bezier_primitive(const float radius)
 static wmOperatorStatus exec(bContext *C, wmOperator *op)
 {
   Object *object = CTX_data_edit_object(C);
-  Curves *active_curves_id = static_cast<Curves *>(object->data);
+  Curves *active_curves_id = id_cast<Curves *>(object->data);
 
   const float radius = RNA_float_get(op->ptr, "radius");
   append_primitive_curve(C, *active_curves_id, generate_bezier_primitive(radius), *op);
@@ -1779,6 +1780,7 @@ static wmOperatorStatus exec(bContext *C, wmOperator *op)
     });
 
     curves.calculate_bezier_auto_handles();
+    curves.calculate_bezier_aligned_handles();
     curves.tag_topology_changed();
 
     DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
@@ -1822,7 +1824,7 @@ static void CURVES_OT_handle_type_set(wmOperatorType *ot)
 {
   ot->name = "Set Handle Type";
   ot->idname = __func__;
-  ot->description = "Set the handle type for bezier curves";
+  ot->description = "Set the handle type for Bézier curves";
 
   ot->invoke = WM_menu_invoke;
   ot->exec = set_handle_type::exec;

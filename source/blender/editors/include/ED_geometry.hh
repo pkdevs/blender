@@ -15,20 +15,22 @@
 
 #include "BKE_screen.hh"
 
+namespace blender {
+
 struct ReportList;
 struct PointerRNA;
 struct PropertyRNA;
 class AttributeOwner;
-namespace blender::bke {
+namespace bke {
 enum class AttrDomain : int8_t;
 enum class AttrType : int16_t;
 class MutableAttributeAccessor;
-}  // namespace blender::bke
-namespace blender::nodes::geo_eval_log {
-class GeoNodesLog;
+}  // namespace bke
+namespace nodes::eval_log {
+class NodesEvalLog;
 }
 
-namespace blender::ed::geometry {
+namespace ed::geometry {
 
 /* -------------------------------------------------------------------- */
 /** \name Attribute Value RNA Property Helpers
@@ -51,6 +53,13 @@ bool attribute_set_poll(bContext &C, const ID &object_data);
 void operatortypes_geometry();
 
 /**
+ * Re-register all operator types for node tool assets and local node groups. This process
+ * unregisters old operators.
+ */
+void register_node_group_operators(const bContext &C);
+void ui_template_node_operator_registration_errors(ui::Layout &layout, StringRefNull idname_py);
+
+/**
  * Convert an attribute with the given name to a new type and domain.
  * The attribute must already exist.
  *
@@ -65,7 +74,7 @@ bool convert_attribute(AttributeOwner &owner,
 
 struct GeoOperatorLog {
   std::string node_group_name;
-  std::unique_ptr<nodes::geo_eval_log::GeoNodesLog> log;
+  std::unique_ptr<nodes::eval_log::NodesEvalLog> log;
 
   GeoOperatorLog() = default;
   ~GeoOperatorLog();
@@ -76,11 +85,10 @@ const GeoOperatorLog &node_group_operator_static_eval_log();
 MenuType node_group_operator_assets_menu();
 MenuType node_group_operator_assets_menu_unassigned();
 
-void clear_operator_asset_trees();
-
-void ui_template_node_operator_asset_menu_items(uiLayout &layout,
+void ui_template_node_operator_asset_menu_items(ui::Layout &layout,
                                                 const bContext &C,
-                                                StringRef catalog_path);
-void ui_template_node_operator_asset_root_items(uiLayout &layout, const bContext &C);
+                                                StringRef path);
+void ui_template_node_operator_asset_root_items(ui::Layout &layout, const bContext &C);
 
-}  // namespace blender::ed::geometry
+}  // namespace ed::geometry
+}  // namespace blender

@@ -986,9 +986,18 @@ class WM_OT_context_modal_mouse(Operator):
     def modal(self, context, event):
         event_type = event.type
 
+        # Factor for precision tweaking (match GIZMO_PRECISION_FAC in `gizmo_library_utils.cc`).
+        context_modal_mouse_precision_fac = 0.05
+
         if event_type == 'MOUSEMOVE':
-            delta = event.mouse_x - self.initial_x
-            self._values_delta(delta)
+            total_offset = event.mouse_x - self.initial_x
+            step_delta = event.mouse_x - self._prev_x
+            if event.shift:
+                self._precision_offset += step_delta
+            effective_offset = total_offset - self._precision_offset * (1.0 - context_modal_mouse_precision_fac)
+            self._prev_x = event.mouse_x
+            self._values_delta(effective_offset)
+            delta = effective_offset
             header_text = self.header_text
             if header_text:
                 if len(self._values) == 1:
@@ -1024,6 +1033,8 @@ class WM_OT_context_modal_mouse(Operator):
             return {'CANCELLED'}
         else:
             self.initial_x = event.mouse_x
+            self._prev_x = event.mouse_x
+            self._precision_offset = 0.0
 
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
@@ -1094,19 +1105,23 @@ class WM_OT_url_open_preset(Operator):
         items=WM_OT_url_open_preset._wm_url_open_preset_type_items,
     )
 
-    def _url_from_bug(self, _context):
+    @staticmethod
+    def _url_from_bug():
         from _bpy_internal.system_info.url_prefill_runtime import url_from_blender
         return url_from_blender()
 
-    def _url_from_release_notes(self, _context):
+    @staticmethod
+    def _url_from_release_notes():
         return "https://www.blender.org/download/releases/{:d}-{:d}/".format(*bpy.app.version[:2])
 
-    def _url_from_manual(self, _context):
+    @staticmethod
+    def _url_from_manual():
         return "https://docs.blender.org/manual/{:s}/{:d}.{:d}/".format(
             bpy.utils.manual_language_code(), *bpy.app.version[:2],
         )
 
-    def _url_from_api(self, _context):
+    @staticmethod
+    def _url_from_api():
         return "https://docs.blender.org/api/{:d}.{:d}/".format(*bpy.app.version[:2])
 
     # This list is: (enum_item, url) pairs.
@@ -1141,15 +1156,18 @@ class WM_OT_url_open_preset(Operator):
          "https://extensions.blender.org/"),
     ]
 
-    def execute(self, context):
-        url = None
-        type = self.type
-        for (item_id, _, _), url in self.preset_items:
-            if item_id == type:
+    @staticmethod
+    def lookup_url_from_type(ty):
+        for (item_id, _, _), url in WM_OT_url_open_preset.preset_items:
+            if item_id == ty:
                 if callable(url):
-                    url = url(self, context)
-                break
+                    return url()
+                return url
+        return None
 
+    def execute(self, _context):
+        url = WM_OT_url_open_preset.lookup_url_from_type(self.type)
+        assert url is not None, "Unexpected enum not found (internal error)"
         return bpy.ops.wm.url_open(url=url)
 
 
@@ -1585,22 +1603,35 @@ class WM_OT_properties_edit(Operator):
         name="Value",
         description="Python value for unsupported custom property types",
     )
-
+    enum_items = None
     # Helper method to avoid repetitive code to retrieve a single value from sequences and non-sequences.
+
     @staticmethod
     def _convert_new_value_single(old_value, new_type):
+        import idprop
+        # Can't convert from strings/data-block/nested data types.
+        if isinstance(old_value, (str, bytes, bpy.types.ID, idprop.types.IDPropertyGroup, type(None))):
+            return new_type()
+
         if hasattr(old_value, "__len__") and len(old_value) > 0:
             return new_type(old_value[0])
+
         return new_type(old_value)
 
     # Helper method to create a list of a given value and type, using a sequence or non-sequence old value.
     @staticmethod
     def _convert_new_value_array(old_value, new_type, new_len):
+        import idprop
+        # Can't convert from strings/data-block/nested data types.
+        if isinstance(old_value, (str, bytes, bpy.types.ID, idprop.types.IDPropertyGroup, type(None))):
+            return [new_type()] * new_len
+
         if hasattr(old_value, "__len__"):
             new_array = [new_type()] * new_len
             for i in range(min(len(old_value), new_len)):
                 new_array[i] = new_type(old_value[i])
             return new_array
+
         return [new_type(old_value)] * new_len
 
     # Convert an old property for a string, avoiding unhelpful string representations for custom list types.
@@ -1659,8 +1690,18 @@ class WM_OT_properties_edit(Operator):
     # For `DATA_BLOCK` types, return the `id_type` or an empty string for non data-block types.
     @staticmethod
     def get_property_id_type(item, property_name):
-        ui_data = item.id_properties_ui(property_name)
-        rna_data = ui_data.as_dict()
+        # FIXME: the Python API has no convenient way to detect if UI properties are supported.
+        # It *may* also return None, support both with exception handling.
+        try:
+            ui_data = item.id_properties_ui(property_name)
+        except TypeError:
+            ui_data = None
+
+        if ui_data is not None:
+            rna_data = ui_data.as_dict()
+        else:
+            rna_data = {}
+
         # For non `DATA_BLOCK` types, the `id_type` wont exist.
         return rna_data.get("id_type", "")
 
@@ -1694,6 +1735,7 @@ class WM_OT_properties_edit(Operator):
             self.soft_min_int = rna_data["soft_min"]
             self.soft_max_int = rna_data["soft_max"]
             self.step_int = rna_data["step"]
+            self.enum_items = rna_data.get("items", None)
             self.use_soft_limits = (
                 self.min_int != self.soft_min_int or
                 self.max_int != self.soft_max_int
@@ -1726,19 +1768,11 @@ class WM_OT_properties_edit(Operator):
         elif prop_type_new == 'BOOL':
             return self._convert_new_value_single(item[name_old], bool)
         elif prop_type_new == 'INT_ARRAY':
-            prop_type_old = self.get_property_type(item, name_old)
-            if prop_type_old in {'INT', 'FLOAT', 'INT_ARRAY', 'FLOAT_ARRAY', 'BOOL_ARRAY'}:
-                return self._convert_new_value_array(item[name_old], int, self.array_length)
+            return self._convert_new_value_array(item[name_old], int, self.array_length)
         elif prop_type_new == 'FLOAT_ARRAY':
-            prop_type_old = self.get_property_type(item, name_old)
-            if prop_type_old in {'INT', 'FLOAT', 'FLOAT_ARRAY', 'INT_ARRAY', 'BOOL_ARRAY'}:
-                return self._convert_new_value_array(item[name_old], float, self.array_length)
+            return self._convert_new_value_array(item[name_old], float, self.array_length)
         elif prop_type_new == 'BOOL_ARRAY':
-            prop_type_old = self.get_property_type(item, name_old)
-            if prop_type_old in {'INT', 'FLOAT', 'FLOAT_ARRAY', 'INT_ARRAY', 'BOOL_ARRAY'}:
-                return self._convert_new_value_array(item[name_old], bool, self.array_length)
-            else:
-                return [False] * self.array_length
+            return self._convert_new_value_array(item[name_old], bool, self.array_length)
         elif prop_type_new == 'STRING':
             return self.convert_custom_property_to_string(item, name_old)
         elif prop_type_new == 'DATA_BLOCK':
@@ -1784,6 +1818,7 @@ class WM_OT_properties_edit(Operator):
                 step=self.step_int,
                 default=self.default_int[0] if prop_type_new == 'INT' else self.default_int[:self.array_length],
                 description=self.description,
+                items=self.enum_items,
             )
         elif prop_type_new in {'BOOL', 'BOOL_ARRAY'}:
             ui_data = item.id_properties_ui(name)
@@ -2212,7 +2247,7 @@ class WM_OT_sysinfo(Operator):
     """Generate system information, saved into a text file"""
 
     bl_idname = "wm.sysinfo"
-    bl_label = "Save System Info"
+    bl_label = "Save System Info..."
 
     filepath: StringProperty(
         subtype='FILE_PATH',
@@ -2781,11 +2816,12 @@ class WM_OT_batch_rename(Operator):
             None,
             ('BONE', "Bones", "", 'BONE_DATA', 14),
             ('NODE', "Nodes", "", 'NODETREE', 15),
-            ('SEQUENCE_STRIP', "Sequence Strips", "", 'SEQ_SEQUENCER', 16),
+            ('SEQUENCE_STRIP', "Sequence Strips", "", 'SEQ_STRIP', 16),
             ('ACTION_CLIP', "Action Clips", "", 'ACTION', 17),
             None,
             ('SCENE', "Scenes", "", 'SCENE_DATA', 18),
-            ('BRUSH', "Brushes", "", 'BRUSH_DATA', 19),
+            ('MARKER', "Markers", "", 'TIME', 19),
+            ('BRUSH', "Brushes", "", 'BRUSH_DATA', 20),
         ),
         translation_context=i18n_contexts.id_id,
         description="Type of data to rename",
@@ -2838,6 +2874,23 @@ class WM_OT_batch_rename(Operator):
             if (action := action_from_any_id(id)) is not None
             if action.is_editable
         ))
+
+    @staticmethod
+    def _markers_from_context(context, space_type, only_selected):
+        from contextlib import nullcontext
+        if space_type == 'SEQUENCE_EDITOR':
+            context_manager = context.temp_override(scene=context.sequencer_scene)
+        else:
+            context_manager = nullcontext()
+
+        with context_manager:
+            return context.selected_markers if only_selected else context.markers
+
+    @staticmethod
+    def _markers_label(markers):
+        if markers and markers[0].id_data.id_type == 'ACTION':
+            return iface_("Pose Marker(s)")
+        return iface_("Timeline Marker(s)")
 
     @classmethod
     def _data_from_context(cls, context, data_type, only_selected, *, check_context=False):
@@ -3009,6 +3062,13 @@ class WM_OT_batch_rename(Operator):
                     ),
                     "name",
                     iface_("Scene(s)"),
+                )
+            elif data_type == 'MARKER':
+                markers = cls._markers_from_context(context, space_type, only_selected)
+                data = (
+                    markers,
+                    "name",
+                    cls._markers_label(markers)
                 )
             elif data_type == 'BRUSH':
                 data = (
@@ -3651,25 +3711,66 @@ class WM_OT_drop_blend_file(Operator):
         subtype='FILE_PATH',
         options={'SKIP_SAVE'},
     )
+    use_scripts: BoolProperty(
+        name="Trusted Source",
+        options={'SKIP_SAVE'},
+        description="Allow .blend file to execute scripts automatically, default available from system preferences"
+    )
+
+    @classmethod
+    def _is_autoexec(cls, filepath):
+        """
+        Return true when `filepath` is in a directory which isn't excluded.
+        """
+        return bpy.path.is_autoexec(filepath, canonicalize=True, strip_filename=True)
+
+    def draw(self, context):
+        layout = self.layout
+        filepath = self.filepath
+
+        layout.label(text=bpy.path.basename(filepath), icon='QUESTION')
+
+        col = layout.column()
+        col.operator_context = 'INVOKE_DEFAULT'
+        # Return activates "Open", the primary action of this popup.
+        col.active_default = True
+        props = col.operator("wm.open_mainfile", text="Open", icon='FILE_FOLDER')
+        props.filepath = filepath
+        props.display_file_selector = False
+        props.use_scripts = self.use_scripts
+
+        col = layout.column()
+        if not context.preferences.filepaths.use_scripts_auto_execute or self._is_autoexec(filepath):
+            col.prop(self, "use_scripts")
+        else:
+            col.enabled = False
+            col.prop(self, "use_scripts", text="Trusted Source [Untrusted Path]")
+
+        layout.separator(type='LINE')
+
+        col = layout.column()
+        col.operator_context = 'INVOKE_DEFAULT'
+        # Use the confirm template so pressing these closes the popup,
+        # the popup is kept open otherwise (see `BLOCK_KEEP_OPEN`).
+        col.template_popup_confirm(
+            "wm.link", text="Link...", icon='LINK_BLEND', cancel_text="",
+        ).filepath = filepath
+        col.template_popup_confirm(
+            "wm.append", text="Append...", icon='APPEND_BLEND', cancel_text="",
+        ).filepath = filepath
+
+    def execute(self, context):
+        # Needed so the popup draws this operators UI.
+        return {'CANCELLED'}
 
     def invoke(self, context, _event):
-        context.window_manager.popup_menu(self.draw_menu, title=bpy.path.basename(self.filepath), icon='QUESTION')
-        return {'FINISHED'}
-
-    def draw_menu(self, menu, _context):
-        layout = menu.layout
-
-        col = layout.column()
-        col.operator_context = 'INVOKE_DEFAULT'
-        props = col.operator("wm.open_mainfile", text="Open", icon='FILE_FOLDER')
-        props.filepath = self.filepath
-        props.display_file_selector = False
-
-        layout.separator()
-        col = layout.column()
-        col.operator_context = 'INVOKE_DEFAULT'
-        col.operator("wm.link", text="Link...", icon='LINK_BLEND').filepath = self.filepath
-        col.operator("wm.append", text="Append...", icon='APPEND_BLEND').filepath = self.filepath
+        # Match the file selector, which defaults to the preferences.
+        self.use_scripts = (
+            context.preferences.filepaths.use_scripts_auto_execute and
+            self._is_autoexec(self.filepath)
+        )
+        # The popup shows this operators own UI, keeping it alive while it's open.
+        return context.window_manager.invoke_popup(self, auto_keymap=True)
 
 
 classes = (

@@ -6,6 +6,8 @@
  * \ingroup bke
  */
 
+#include "BKE_attribute_math.hh"
+#include "BKE_mesh.hh"
 #include "BKE_subdiv.hh"
 
 #include "DNA_mesh_types.h"
@@ -104,9 +106,9 @@ Subdiv *new_from_converter(const Settings *settings, OpenSubdiv_Converter *conve
   OpenSubdiv_TopologyRefinerSettings topology_refiner_settings;
   topology_refiner_settings.level = settings->level;
   topology_refiner_settings.is_adaptive = settings->is_adaptive;
-  blender::opensubdiv::TopologyRefinerImpl *osd_topology_refiner = nullptr;
+  opensubdiv::TopologyRefinerImpl *osd_topology_refiner = nullptr;
   if (converter->getNumVertices(converter) != 0) {
-    osd_topology_refiner = blender::opensubdiv::TopologyRefinerImpl::createFromConverter(
+    osd_topology_refiner = opensubdiv::TopologyRefinerImpl::createFromConverter(
         converter, topology_refiner_settings);
   }
   else {
@@ -217,7 +219,7 @@ Span<int> face_ptex_offset_get(Subdiv *subdiv)
   if (!subdiv->cache_.face_ptex_offset.is_empty()) {
     return subdiv->cache_.face_ptex_offset;
   }
-  const blender::opensubdiv::TopologyRefinerImpl *topology_refiner = subdiv->topology_refiner;
+  const opensubdiv::TopologyRefinerImpl *topology_refiner = subdiv->topology_refiner;
   if (topology_refiner == nullptr) {
     return Span<int>();
   }

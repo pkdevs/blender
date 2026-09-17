@@ -5,7 +5,6 @@
 #include "usd_instancing_utils.hh"
 
 #include "usd.hh"
-#include "usd_hash_types.hh"
 #include "usd_utils.hh"
 
 #include "BLI_map.hh"
@@ -20,9 +19,12 @@
 #include <string>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* We need an ordered map so we use std::map. */
 using PathMap = std::map<pxr::SdfPath, pxr::SdfPath>;
@@ -185,4 +187,5 @@ void process_scene_graph_instances(const USDExportParams &export_params, pxr::Us
   }
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

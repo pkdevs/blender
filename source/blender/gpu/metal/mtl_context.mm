@@ -11,6 +11,7 @@
 #include "mtl_immediate.hh"
 #include "mtl_memory.hh"
 #include "mtl_primitive.hh"
+#include "mtl_ray_tracing.hh"
 #include "mtl_shader.hh"
 #include "mtl_shader_generate.hh"
 #include "mtl_shader_interface.hh"
@@ -30,12 +31,11 @@
 #include "GPU_vertex_buffer.hh"
 #include "intern/gpu_matrix_private.hh"
 
-#include "BLI_time.h"
+#include "BLI_time.hh"
 
 #include <fstream>
 #include <string>
 
-using namespace blender;
 using namespace blender::gpu;
 
 /* Fire off a single dispatch per encoder. Can make debugging view clearer for texture resources
@@ -64,6 +64,8 @@ using namespace blender::gpu;
 
 namespace blender::gpu {
 
+static CLG_LogRef LOG = {"gpu.metal"};
+
 /* Global memory manager. */
 std::mutex MTLContext::global_memory_manager_reflock;
 int MTLContext::global_memory_manager_refcount = 0;
@@ -78,9 +80,9 @@ int64_t MTLContext::frame_latency[MTL_FRAME_AVERAGE_COUNT] = {0};
 /** \name GHOST Context interaction.
  * \{ */
 
-void MTLContext::set_ghost_context(GHOST_ContextHandle ghostCtxHandle)
+void MTLContext::set_ghost_context(GHOST_IContext *ghostCtxHandle)
 {
-  GHOST_Context *ghost_ctx = reinterpret_cast<GHOST_Context *>(ghostCtxHandle);
+  GHOST_Context *ghost_ctx = static_cast<GHOST_Context *>(ghostCtxHandle);
   BLI_assert(ghost_ctx != nullptr);
 
   /* Release old MTLTexture handle */
@@ -168,10 +170,10 @@ void MTLContext::set_ghost_context(GHOST_ContextHandle ghostCtxHandle)
   }
 }
 
-void MTLContext::set_ghost_window(GHOST_WindowHandle ghostWinHandle)
+void MTLContext::set_ghost_window(GHOST_IWindow *ghostWinHandle)
 {
-  GHOST_Window *ghostWin = reinterpret_cast<GHOST_Window *>(ghostWinHandle);
-  this->set_ghost_context((GHOST_ContextHandle)(ghostWin ? ghostWin->getContext() : nullptr));
+  GHOST_Window *ghostWin = static_cast<GHOST_Window *>(ghostWinHandle);
+  this->set_ghost_context(ghostWin ? ghostWin->getContext() : nullptr);
 }
 
 /** \} */
@@ -181,7 +183,7 @@ void MTLContext::set_ghost_window(GHOST_WindowHandle ghostWinHandle)
  * \{ */
 
 /* Placeholder functions */
-MTLContext::MTLContext(void *ghost_window, void *ghost_context)
+MTLContext::MTLContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
     : memory_manager(*this), main_command_buffer(*this)
 {
   /* Init debug. */
@@ -205,17 +207,9 @@ MTLContext::MTLContext(void *ghost_window, void *ghost_context)
   default_fbo_mtltexture_ = nil;
   default_fbo_gputexture_ = nullptr;
 
-  /** Fetch GHOSTContext and fetch Metal device/queue. */
   ghost_window_ = ghost_window;
-  if (ghost_window_ && ghost_context == nullptr) {
-    /* NOTE(Metal): Fetch ghost_context from ghost_window if it is not provided.
-     * Regardless of whether windowed or not, we need access to the GhostContext
-     * for presentation, and device/queue access. */
-    GHOST_Window *ghostWin = reinterpret_cast<GHOST_Window *>(ghost_window_);
-    ghost_context = (ghostWin ? ghostWin->getContext() : nullptr);
-  }
-  BLI_assert(ghost_context);
   this->ghost_context_ = static_cast<GHOST_ContextMTL *>(ghost_context);
+  /** Fetch Metal device/queue. */
   this->queue = (id<MTLCommandQueue>)this->ghost_context_->metalCommandQueue();
   this->device = (id<MTLDevice>)this->ghost_context_->metalDevice();
   BLI_assert(this->queue);
@@ -408,15 +402,18 @@ void MTLContext::activate()
 {
   /* Make sure no other context is already bound to this thread. */
   BLI_assert(is_active_ == false);
+  /* Make sure the active GHOST context matches the one this GPU Context was created for. */
+  BLI_assert(ghost_context_ == GHOST_IContext::getActiveDrawingContext());
+
   is_active_ = true;
   thread_ = pthread_self();
 
   /* Re-apply ghost window/context for resizing */
   if (ghost_window_) {
-    this->set_ghost_window((GHOST_WindowHandle)ghost_window_);
+    this->set_ghost_window(ghost_window_);
   }
   else if (ghost_context_) {
-    this->set_ghost_context((GHOST_ContextHandle)ghost_context_);
+    this->set_ghost_context(ghost_context_);
   }
 
   /* Reset UBO bind state. */
@@ -736,7 +733,7 @@ template<typename CommandEncoderT>
 static void bind_sampler_argument_buffer(
     CommandEncoderT enc,
     MTLSamplerArray &sampler_array,
-    blender::Map<MTLSamplerArray, gpu::MTLBuffer *> &sampler_buffers_cache,
+    Map<MTLSamplerArray, gpu::MTLBuffer *> &sampler_buffers_cache,
     MTLShaderInterface &shader_interface,
     id<MTLFunction> mtl_function,
     MTLBindingCache<CommandEncoderT> &bindings)
@@ -908,7 +905,7 @@ static void ensure_push_constant(MTLContext &ctx,
 }
 
 /* Bind UBOs and SSBOs to an active render command encoder using the rendering state of the
- * current context -> Active shader, Bound UBOs).
+ * current context -> Active shader, Bound UBOs.
  * NOTE: `ensure_buffer_bindings` must be called after `ensure_texture_bindings` to allow
  * for binding of buffer-backed texture's data buffer and metadata. */
 template<typename CommandEncoderT>
@@ -956,6 +953,22 @@ static void ensure_buffer_bindings(MTLContext &ctx,
                     slot);
     }
   }
+
+  /* Bind acceleration structures for any shader stage that declares one. */
+  for (const uint slot : bits::iter_1_indices(shader_interface.enabled_accel_mask())) {
+    MTLAccelerationStructureBinding &bind =
+        ctx.pipeline_state.acceleration_structure_bindings[slot];
+    if (bind.tlas) {
+      enc.set_acceleration_structure(bind.tlas->acceleration_structure(),
+                                     MTL_ACCELERATION_STRUCTURE_SLOT + slot);
+      bind.tlas->make_resident(enc);
+    }
+    else {
+      MTL_LOG_ERROR("Shader %s: Missing acceleration structure bind at slot(%d).",
+                    shader.name_get().c_str(),
+                    slot);
+    }
+  }
 }
 
 void MTLContext::pipeline_state_init()
@@ -991,18 +1004,10 @@ void MTLContext::pipeline_state_init()
   this->pipeline_state.cull_mode = GPU_CULL_NONE;
   this->pipeline_state.front_face = GPU_COUNTERCLOCKWISE;
 
-  /* DATA and IMAGE access state. */
-  this->pipeline_state.unpack_row_length = 0;
-
   /* Depth State. */
   this->pipeline_state.depth_stencil_state.depth_write_enable = false;
   this->pipeline_state.depth_stencil_state.depth_test_enabled = false;
   this->pipeline_state.depth_stencil_state.depth_function = MTLCompareFunctionAlways;
-  this->pipeline_state.depth_stencil_state.depth_bias = 0.0;
-  this->pipeline_state.depth_stencil_state.depth_slope_scale = 0.0;
-  this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_points = false;
-  this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_lines = false;
-  this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_tris = false;
 
   /* Stencil State. */
   this->pipeline_state.depth_stencil_state.stencil_test_enabled = false;
@@ -1174,6 +1179,12 @@ bool MTLContext::ensure_render_pipeline_state(MTLPrimitiveType mtl_prim_type)
     return false;
   }
 
+  /* Support legacy point size state. */
+  MTLStateManager &state_manager = *static_cast<MTLStateManager *>(this->state_manager);
+  if (mtl_prim_type == MTLPrimitiveTypePoint && state_manager.mutable_state.point_size < 0) {
+    GPU_shader_uniform_1f(shader, "size", -state_manager.mutable_state.point_size);
+  }
+
   /* Bind Render Pipeline State. */
   BLI_assert(psi->pso);
   if (rps.bound_pso != psi->pso) {
@@ -1270,23 +1281,23 @@ bool MTLContext::ensure_render_pipeline_state(MTLPrimitiveType mtl_prim_type)
 
       /* Some scissor assignments exceed the bounds of the viewport due to implicitly added
        * padding to the width/height - Clamp width/height. */
-      BLI_assert(scissor.x >= 0 && scissor.x < render_fb->get_default_width());
-      BLI_assert(scissor.y >= 0 && scissor.y < render_fb->get_default_height());
-      scissor.width = (uint)min_ii(scissor.width,
-                                   max_ii(render_fb->get_default_width() - (int)(scissor.x), 0));
-      scissor.height = (uint)min_ii(scissor.height,
-                                    max_ii(render_fb->get_default_height() - (int)(scissor.y), 0));
+      BLI_assert(scissor.x >= 0 && scissor.x < render_fb->get_attachment_width());
+      BLI_assert(scissor.y >= 0 && scissor.y < render_fb->get_attachment_height());
+      scissor.width = (uint)min_ii(
+          scissor.width, max_ii(render_fb->get_attachment_width() - (int)(scissor.x), 0));
+      scissor.height = (uint)min_ii(
+          scissor.height, max_ii(render_fb->get_attachment_height() - (int)(scissor.y), 0));
       BLI_assert(scissor.width > 0 &&
-                 (scissor.x + scissor.width <= render_fb->get_default_width()));
-      BLI_assert(scissor.height > 0 && (scissor.height <= render_fb->get_default_height()));
+                 (scissor.x + scissor.width <= render_fb->get_attachment_width()));
+      BLI_assert(scissor.height > 0 && (scissor.height <= render_fb->get_attachment_height()));
     }
     else {
-      /* Scissor is disabled, reset to default size as scissor state may have been previously
+      /* Scissor is disabled, reset to attachment size as scissor state may have been previously
        * assigned on this encoder.
        * NOTE: If an attachment-less framebuffer is used, fetch specified width/height rather
-       * than active attachment width/height as provided by get_default_w/h(). */
-      uint default_w = render_fb->get_default_width();
-      uint default_h = render_fb->get_default_height();
+       * than active attachment width/height as provided by get_attachment_w/h(). */
+      uint default_w = render_fb->get_attachment_width();
+      uint default_h = render_fb->get_attachment_height();
       bool is_attachmentless = (default_w == 0) && (default_h == 0);
       scissor.x = 0;
       scissor.y = 0;
@@ -1350,7 +1361,7 @@ bool MTLContext::ensure_render_pipeline_state(MTLPrimitiveType mtl_prim_type)
 }
 
 /* Encode latest depth-stencil state. */
-void MTLContext::ensure_depth_stencil_state(MTLPrimitiveType prim_type)
+void MTLContext::ensure_depth_stencil_state()
 {
   /* Check if we need to update state. */
   if (!(this->pipeline_state.dirty_flags & MTL_PIPELINE_STATE_DEPTHSTENCIL_FLAG)) {
@@ -1461,23 +1472,7 @@ void MTLContext::ensure_depth_stencil_state(MTLPrimitiveType prim_type)
     }
 
     if (hasDepthTarget) {
-      bool doBias = false;
-      switch (prim_type) {
-        case MTLPrimitiveTypeTriangle:
-        case MTLPrimitiveTypeTriangleStrip:
-          doBias = this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_tris;
-          break;
-        case MTLPrimitiveTypeLine:
-        case MTLPrimitiveTypeLineStrip:
-          doBias = this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_lines;
-          break;
-        case MTLPrimitiveTypePoint:
-          doBias = this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_points;
-          break;
-      }
-      [rec setDepthBias:(doBias) ? this->pipeline_state.depth_stencil_state.depth_bias : 0
-             slopeScale:(doBias) ? this->pipeline_state.depth_stencil_state.depth_slope_scale : 0
-                  clamp:0];
+      [rec setDepthBias:0 slopeScale:0 clamp:0];
     }
   }
 }
@@ -1863,7 +1858,7 @@ void MTLContext::sampler_state_cache_init()
                                    MTLSamplerMipFilterNotMipmapped;
         descriptor.lodMinClamp = -1000;
         descriptor.lodMaxClamp = 1000;
-        float aniso_filter = max_ff(16, U.anisotropic_filter);
+        float aniso_filter = min_ff(float(GPU_anisotropic_samples_get(filtering)), 16.0f);
         descriptor.maxAnisotropy = (filtering & GPU_SAMPLER_FILTERING_MIPMAP) ? aniso_filter : 1;
         descriptor.compareFunction = MTLCompareFunctionAlways;
         descriptor.supportArgumentBuffers = true;
@@ -1964,7 +1959,9 @@ id<MTLComputePipelineState> MTLContextComputeUtils::get_buffer_clear_pso()
       if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
           NSNotFound)
       {
-        NSLog(@"Compile Error - Metal Shader Library error %@ ", error);
+        CLOG_ERROR(&LOG,
+                   "Compile Error - Metal Shader Library error %s",
+                   [[error localizedDescription] UTF8String]);
         BLI_assert(false);
         return nil;
       }
@@ -1980,7 +1977,9 @@ id<MTLComputePipelineState> MTLContextComputeUtils::get_buffer_clear_pso()
     buffer_clear_pso_ = [ctx->device newComputePipelineStateWithFunction:temp_compute_function
                                                                    error:&error];
     if (error || buffer_clear_pso_ == nil) {
-      NSLog(@"Failed to prepare compute_buffer_clear MTLComputePipelineState %@", error);
+      CLOG_ERROR(&LOG,
+                 "Failed to prepare compute_buffer_clear MTLComputePipelineState %s",
+                 [[error localizedDescription] UTF8String]);
       BLI_assert(false);
       return nil;
     }
@@ -2090,7 +2089,7 @@ void present(MTLRenderPassDescriptor *blit_descriptor,
     [cmdbuf waitUntilCompleted];
     NSError *error = [cmdbuf error];
     if (error != nil) {
-      NSLog(@"%@", error);
+      CLOG_ERROR(&LOG, "Command buffer error: %s", [[error localizedDescription] UTF8String]);
       BLI_assert(false);
     }
   }

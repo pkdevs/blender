@@ -14,7 +14,7 @@
 
 #include "BKE_asset.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -38,16 +38,18 @@
 
 #include <fmt/format.h>
 
+namespace blender {
+
 using namespace blender::asset_system;
 
-namespace blender::ed::asset_browser {
+namespace ed::asset_browser {
 
 class AssetCatalogTreeViewAllItem;
 
 class AssetCatalogTreeView : public ui::AbstractTreeView {
   asset_system::AssetLibrary *asset_library_;
   /** The asset catalog tree this tree-view represents. */
-  const asset_system::AssetCatalogTree *catalog_tree_;
+  std::shared_ptr<const asset_system::AssetCatalogTree> catalog_tree_;
   FileAssetSelectParams *params_;
   SpaceFile &space_file_;
 
@@ -84,8 +86,8 @@ class AssetCatalogTreeViewItem : public ui::BasicTreeViewItem {
 
   void on_activate(bContext &C) override;
 
-  void build_row(uiLayout &row) override;
-  void build_context_menu(bContext &C, uiLayout &column) const override;
+  void build_row(ui::Layout &row) override;
+  void build_context_menu(bContext &C, ui::Layout &column) const override;
 
   bool supports_renaming() const override;
   bool rename(const bContext &C, StringRefNull new_name) override;
@@ -106,7 +108,7 @@ class AssetCatalogDragController : public ui::AbstractViewItemDragController {
 
   std::optional<eWM_DragDataType> get_drag_type() const override;
   void *create_drag_data() const override;
-  void on_drag_start(bContext &C) override;
+  void on_drag_start(bContext &C, ui::AbstractViewItem &item) override;
 };
 
 class AssetCatalogDropTarget : public ui::TreeViewItemDropTarget {
@@ -151,7 +153,7 @@ class AssetCatalogDropTarget : public ui::TreeViewItemDropTarget {
 class AssetCatalogTreeViewAllItem : public ui::BasicTreeViewItem {
   using BasicTreeViewItem::BasicTreeViewItem;
 
-  void build_row(uiLayout &row) override;
+  void build_row(ui::Layout &row) override;
 
   struct DropTarget : public ui::TreeViewItemDropTarget {
     DropTarget(AssetCatalogTreeViewAllItem &item);
@@ -186,7 +188,11 @@ AssetCatalogTreeView::AssetCatalogTreeView(asset_system::AssetLibrary *library,
     : asset_library_(library), params_(params), space_file_(space_file)
 {
   if (library) {
-    catalog_tree_ = &library->catalog_service().catalog_tree();
+    /* Take shared ownership of the catalog service so it can't be freed by a concurrent catalog
+     * reload job (running on a separate thread) while we're reading the catalog tree from it. */
+    std::shared_ptr<asset_system::AssetCatalogService> catalog_service =
+        library->catalog_service_ptr();
+    catalog_tree_ = catalog_service ? catalog_service->catalog_tree() : nullptr;
   }
   else {
     catalog_tree_ = nullptr;
@@ -205,7 +211,14 @@ void AssetCatalogTreeView::build_tree()
     });
   }
 
-  add_unassigned_item();
+  /* Hide the unassigned catalog for the Essentials library, it should be empty in releases. Still
+   * show it when "Unassigned" _is_ active. */
+  const bool is_essentials = params_->asset_library_ref.type == ASSET_LIBRARY_ESSENTIALS;
+  const bool shows_unassigned_item = params_->asset_catalog_visibility ==
+                                     FILE_SHOW_ASSETS_WITHOUT_CATALOG;
+  if (!is_essentials || shows_unassigned_item) {
+    add_unassigned_item();
+  }
 }
 
 ui::BasicTreeViewItem &AssetCatalogTreeView::build_catalog_items_recursive(
@@ -277,7 +290,7 @@ void AssetCatalogTreeViewItem::on_activate(bContext & /*C*/)
   tree_view.activate_catalog_by_id(catalog_item_.get_catalog_id());
 }
 
-void AssetCatalogTreeViewItem::build_row(uiLayout &row)
+void AssetCatalogTreeViewItem::build_row(ui::Layout &row)
 {
   /* Show "*" to the left for consistency with unsaved files in the title bar. */
   const std::string label_override = catalog_item_.has_unsaved_changes() ? ("* " + label_) :
@@ -288,15 +301,17 @@ void AssetCatalogTreeViewItem::build_row(uiLayout &row)
     return;
   }
 
-  uiButViewItem *view_item_but = view_item_button();
+  ui::ButtonViewItem *view_item_but = view_item_button();
   PointerRNA *props;
 
-  props = UI_but_extra_operator_icon_add(
-      (uiBut *)view_item_but, "ASSET_OT_catalog_new", wm::OpCallContext::InvokeDefault, ICON_ADD);
+  props = button_extra_operator_icon_add(reinterpret_cast<ui::Button *>(view_item_but),
+                                         "ASSET_OT_catalog_new",
+                                         wm::OpCallContext::InvokeDefault,
+                                         ICON_ADD);
   RNA_string_set(props, "parent_path", catalog_item_.catalog_path().c_str());
 }
 
-void AssetCatalogTreeViewItem::build_context_menu(bContext &C, uiLayout &column) const
+void AssetCatalogTreeViewItem::build_context_menu(bContext &C, ui::Layout &column) const
 {
   PointerRNA props;
 
@@ -322,7 +337,7 @@ void AssetCatalogTreeViewItem::build_context_menu(bContext &C, uiLayout &column)
   if (!mt) {
     return;
   }
-  UI_menutype_draw(&C, mt, &column);
+  ui::menutype_draw(&C, mt, &column);
 }
 
 bool AssetCatalogTreeViewItem::supports_renaming() const
@@ -421,8 +436,8 @@ std::string AssetCatalogDropTarget::drop_tooltip_asset_list(const wmDrag &drag) 
 {
   BLI_assert(drag.type == WM_DRAG_ASSET_LIST);
 
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
-  const bool is_multiple_assets = !BLI_listbase_is_single(asset_drags);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
+  const bool is_multiple_assets = !asset_drags->is_single();
 
   /* Don't try to be smart by dynamically adding the 's' for the plural. Just makes translation
    * harder, so use full literals. */
@@ -475,21 +490,21 @@ bool AssetCatalogDropTarget::drop_assets_into_catalog(bContext *C,
                                                       StringRefNull simple_name)
 {
   BLI_assert(drag.type == WM_DRAG_ASSET_LIST);
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
   if (!asset_drags) {
     return false;
   }
 
   bool did_update = false;
-  LISTBASE_FOREACH (wmDragAssetListItem *, asset_item, asset_drags) {
-    if (asset_item->is_external) {
+  for (wmDragAssetListItem &asset_item : *asset_drags) {
+    if (asset_item.is_external) {
       /* Only internal assets can be modified! */
       continue;
     }
 
     did_update = true;
     BKE_asset_metadata_catalog_id_set(
-        asset_item->asset_data.local_id->asset_data, catalog_id, simple_name.c_str());
+        asset_item.asset_data.local_id->asset_data, catalog_id, simple_name.c_str());
 
     /* Trigger re-run of filtering to update visible assets. */
     filelist_tag_needs_filtering(tree_view.space_file_.files);
@@ -518,12 +533,11 @@ AssetCatalog *AssetCatalogDropTarget::get_drag_catalog(
 
 bool AssetCatalogDropTarget::has_droppable_asset(const wmDrag &drag, const char **r_disabled_hint)
 {
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
 
-  *r_disabled_hint = nullptr;
   /* There needs to be at least one asset from the current file. */
-  LISTBASE_FOREACH (const wmDragAssetListItem *, asset_item, asset_drags) {
-    if (!asset_item->is_external) {
+  for (const wmDragAssetListItem &asset_item : *asset_drags) {
+    if (!asset_item.is_external) {
       return true;
     }
   }
@@ -562,13 +576,12 @@ std::optional<eWM_DragDataType> AssetCatalogDragController::get_drag_type() cons
 
 void *AssetCatalogDragController::create_drag_data() const
 {
-  wmDragAssetCatalog *drag_catalog = (wmDragAssetCatalog *)MEM_callocN(sizeof(*drag_catalog),
-                                                                       __func__);
+  wmDragAssetCatalog *drag_catalog = MEM_new<wmDragAssetCatalog>(__func__);
   drag_catalog->drag_catalog_id = catalog_item_.get_catalog_id();
   return drag_catalog;
 }
 
-void AssetCatalogDragController::on_drag_start(bContext & /*C*/)
+void AssetCatalogDragController::on_drag_start(bContext & /*C*/, ui::AbstractViewItem & /*item*/)
 {
   AssetCatalogTreeView &tree_view_ = this->get_view<AssetCatalogTreeView>();
   tree_view_.activate_catalog_by_id(catalog_item_.get_catalog_id());
@@ -576,18 +589,18 @@ void AssetCatalogDragController::on_drag_start(bContext & /*C*/)
 
 /* ---------------------------------------------------------------------- */
 
-void AssetCatalogTreeViewAllItem::build_row(uiLayout &row)
+void AssetCatalogTreeViewAllItem::build_row(ui::Layout &row)
 {
   ui::BasicTreeViewItem::build_row(row);
 
   PointerRNA *props;
 
-  UI_but_extra_operator_icon_add(reinterpret_cast<uiBut *>(this->view_item_button()),
+  button_extra_operator_icon_add(reinterpret_cast<ui::Button *>(this->view_item_button()),
                                  "ASSET_OT_catalogs_save",
                                  wm::OpCallContext::InvokeDefault,
                                  ICON_FILE_TICK);
 
-  props = UI_but_extra_operator_icon_add(reinterpret_cast<uiBut *>(this->view_item_button()),
+  props = button_extra_operator_icon_add(reinterpret_cast<ui::Button *>(this->view_item_button()),
                                          "ASSET_OT_catalog_new",
                                          wm::OpCallContext::InvokeDefault,
                                          ICON_ADD);
@@ -673,8 +686,8 @@ bool AssetCatalogTreeViewUnassignedItem::DropTarget::can_drop(const wmDrag &drag
 std::string AssetCatalogTreeViewUnassignedItem::DropTarget::drop_tooltip(
     const ui::DragInfo &drag_info) const
 {
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag_info.drag_data);
-  const bool is_multiple_assets = !BLI_listbase_is_single(asset_drags);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag_info.drag_data);
+  const bool is_multiple_assets = !asset_drags->is_single();
 
   return is_multiple_assets ? TIP_("Move assets out of any catalog") :
                               TIP_("Move asset out of any catalog");
@@ -712,7 +725,7 @@ void file_delete_asset_catalog_filter_settings(AssetCatalogFilterSettings **filt
 bool file_set_asset_catalog_filter_settings(
     AssetCatalogFilterSettings *filter_settings,
     eFileSel_Params_AssetCatalogVisibility catalog_visibility,
-    const ::bUUID &catalog_id)
+    const bUUID &catalog_id)
 {
   bool needs_update = false;
 
@@ -763,21 +776,23 @@ bool file_is_asset_visible_in_catalog_filter_settings(
 
 void file_create_asset_catalog_tree_view_in_layout(const bContext *C,
                                                    asset_system::AssetLibrary *asset_library,
-                                                   uiLayout *layout,
+                                                   ui::Layout &layout,
                                                    SpaceFile *space_file,
                                                    FileAssetSelectParams *params)
 {
-  uiBlock *block = layout->block();
+  ui::Block *block = layout.block();
 
-  ui::block_layout_set_current(block, layout);
+  ui::block_layout_set_current(block, &layout);
 
-  ui::AbstractTreeView *tree_view = UI_block_add_view(
+  ui::AbstractTreeView *tree_view = block_add_view(
       *block,
       "asset catalog tree view",
       std::make_unique<ed::asset_browser::AssetCatalogTreeView>(
           asset_library, params, *space_file));
   tree_view->set_context_menu_title("Catalog");
-  ui::TreeViewBuilder::build_tree_view(*C, *tree_view, *layout);
+  ui::TreeViewBuilder::build_tree_view(*C, *tree_view, layout);
 }
 
-}  // namespace blender::ed::asset_browser
+}  // namespace ed::asset_browser
+
+}  // namespace blender

@@ -9,7 +9,9 @@
 #  include "draw_object_infos_infos.hh"
 #  include "draw_view_infos.hh"
 #  include "overlay_common_infos.hh"
+#endif
 
+#ifdef GLSL_CPP_STUBS
 #  define USE_MAC
 #  define SHOW_RANGE
 #endif
@@ -42,6 +44,8 @@ PUSH_CONSTANT(int3, adaptive_cell_offset)
 PUSH_CONSTANT(int, in_select_id)
 VERTEX_OUT(overlay_volume_velocity_iface)
 FRAGMENT_OUT(0, float4, frag_color)
+FRAGMENT_OUT(1, float4, line_output)
+DEFINE("LINE_OUTPUT")
 VERTEX_SOURCE("overlay_volume_velocity_vert.glsl")
 FRAGMENT_SOURCE("overlay_varying_color.glsl")
 GPU_SHADER_CREATE_END()
@@ -108,6 +112,8 @@ PUSH_CONSTANT(int3, adaptive_cell_offset)
 PUSH_CONSTANT(int, in_select_id)
 VERTEX_OUT(overlay_volume_gridlines_iface)
 FRAGMENT_OUT(0, float4, frag_color)
+FRAGMENT_OUT(1, float4, line_output)
+DEFINE("LINE_OUTPUT")
 VERTEX_SOURCE("overlay_volume_gridlines_vert.glsl")
 FRAGMENT_SOURCE("overlay_varying_color.glsl")
 GPU_SHADER_CREATE_END()

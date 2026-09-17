@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BLI_math_vector.hh"
 
 #include "BKE_geometry_fields.hh"
@@ -9,7 +13,9 @@
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 
 /* -------------------------------------------------------------------- */
 /** \name Geometry Component Implementation
@@ -166,9 +172,9 @@ VArray<float3> mesh_normals_varray(const Mesh &mesh,
 
 /** \} */
 
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::bke {
+namespace bke {
 
 /* -------------------------------------------------------------------- */
 /** \name Attribute Access
@@ -187,4 +193,5 @@ std::optional<MutableAttributeAccessor> MeshComponent::attributes_for_write()
 
 /** \} */
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

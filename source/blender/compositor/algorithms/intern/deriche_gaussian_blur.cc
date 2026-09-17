@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -13,6 +13,7 @@
 #include "COM_utilities.hh"
 
 #include "COM_algorithm_deriche_gaussian_blur.hh"
+#include "COM_algorithm_pad.hh"
 #include "COM_deriche_gaussian_coefficients.hh"
 
 namespace blender::compositor {
@@ -36,7 +37,7 @@ static void sum_causal_and_non_causal_results_gpu(Context &context,
   output.allocate_texture(transposed_domain);
   output.bind_as_image(shader, "output_img");
 
-  compute_dispatch_threads_at_least(shader, domain.size);
+  compute_dispatch_threads_at_least(shader, domain.data_size);
 
   GPU_shader_unbind();
   causal_input.unbind_as_texture();
@@ -53,7 +54,7 @@ static void sum_causal_and_non_causal_results_cpu(const Result &causal_input,
   const Domain transposed_domain = domain.transposed();
   output.allocate_texture(transposed_domain);
 
-  parallel_for(domain.size, [&](const int2 texel) {
+  parallel_for(domain.data_size, [&](const int2 texel) {
     /* The Deriche filter is a parallel interconnection filter, meaning its output is the sum of
      * its causal and non causal filters. */
     float4 filter_output = float4(causal_input.load_pixel<Color>(texel)) +
@@ -126,7 +127,7 @@ static void blur_pass_gpu(Context &context,
 
   /* The second dispatch dimension is two dispatches, one for the causal filter and one for the non
    * causal one. */
-  compute_dispatch_threads_at_least(shader, int2(domain.size.y, 2), int2(128, 2));
+  compute_dispatch_threads_at_least(shader, int2(domain.data_size.y, 2), int2(128, 2));
 
   GPU_shader_unbind();
   input.unbind_as_texture();
@@ -158,7 +159,7 @@ static void blur_pass_cpu(Context &context,
 
   /* The first dispatch dimension is two dispatches, one for the causal filter and one for the non
    * causal one. */
-  const int2 parallel_for_size = int2(2, domain.size.y);
+  const int2 parallel_for_size = int2(2, domain.data_size.y);
   /* Blur the input horizontally by applying a fourth order IIR filter approximating a Gaussian
    * filter using Deriche's design method. This is based on the following paper:
    *
@@ -171,7 +172,7 @@ static void blur_pass_cpu(Context &context,
   parallel_for(parallel_for_size, [&](const int2 invocation) {
     /* The code runs parallel across rows but serially across columns. */
     int y = invocation.y;
-    int width = input.domain().size.x;
+    int width = input.domain().data_size.x;
 
     /* The second dispatch dimension is two dispatches, one for the causal filter and one for the
      * non causal one. */
@@ -257,10 +258,18 @@ static void blur_pass(Context &context, const Result &input, Result &output, con
   non_causal_result.release();
 }
 
+/* Computes the inverse of compute_sigma_from_radius in recursive_gaussian_blur.cc, see that
+ * function for more information. */
+static float2 compute_radius_from_sigma(const float2 sigma)
+{
+  return sigma * 3.0f;
+}
+
 void deriche_gaussian_blur(Context &context,
                            const Result &input,
                            Result &output,
-                           const float2 &sigma)
+                           const float2 &sigma,
+                           const bool extend_bounds)
 {
   BLI_assert_msg(math::reduce_max(sigma) >= 3.0f,
                  "Deriche filter is slower and less accurate than direct convolution for sigma "
@@ -269,10 +278,32 @@ void deriche_gaussian_blur(Context &context,
                  "Deriche filter is not accurate nor numerically stable for sigma values larger "
                  "than 32. Use Van Vliet filter instead.");
 
-  Result horizontal_pass_result = context.create_result(ResultType::Color);
-  blur_pass(context, input, horizontal_pass_result, sigma.x);
-  blur_pass(context, horizontal_pass_result, output, sigma.y);
-  horizontal_pass_result.release();
+  if (extend_bounds) {
+    const int2 padding_size = int2(math::ceil(compute_radius_from_sigma(sigma)));
+    Result padded_input = context.create_result(input.type());
+    pad(context, input, padded_input, int2(padding_size.x, 0), PaddingMethod::Zero);
+
+    Result horizontal_pass_result = context.create_result(input.type());
+    blur_pass(context, padded_input, horizontal_pass_result, sigma.x);
+    padded_input.release();
+
+    Result padded_horizontal_pass_result = context.create_result(input.type());
+    pad(context,
+        horizontal_pass_result,
+        padded_horizontal_pass_result,
+        int2(padding_size.y, 0),
+        PaddingMethod::Zero);
+    horizontal_pass_result.release();
+
+    blur_pass(context, padded_horizontal_pass_result, output, sigma.y);
+    padded_horizontal_pass_result.release();
+  }
+  else {
+    Result horizontal_pass_result = context.create_result(input.type());
+    blur_pass(context, input, horizontal_pass_result, sigma.x);
+    blur_pass(context, horizontal_pass_result, output, sigma.y);
+    horizontal_pass_result.release();
+  }
 }
 
 }  // namespace blender::compositor

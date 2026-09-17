@@ -6,18 +6,19 @@
  * \ingroup depsgraph
  */
 
-#include "BLI_session_uid.h"
+#include "BLI_session_uid.hh"
 
 #include "intern/eval/deg_eval_runtime_backup_sequencer.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "BKE_sound.hh"
 
 #include "SEQ_iterator.hh"
+#include "SEQ_sequencer.hh"
 
 namespace blender::deg {
 
@@ -25,12 +26,12 @@ SequencerBackup::SequencerBackup(const Depsgraph *depsgraph) : depsgraph(depsgra
 
 static bool strip_init_cb(Strip *strip, void *user_data)
 {
-  SequencerBackup *sb = (SequencerBackup *)user_data;
+  SequencerBackup *sb = static_cast<SequencerBackup *>(user_data);
   StripBackup strip_backup(sb->depsgraph);
   strip_backup.init_from_strip(strip);
   if (!strip_backup.isEmpty()) {
-    const SessionUID &session_uid = strip->runtime.session_uid;
-    BLI_assert(BLI_session_uid_is_generated(&session_uid));
+    const SessionUID &session_uid = strip->runtime->session_uid;
+    BLI_assert(session_uid.is_generated());
     sb->strips_backup.add(session_uid, strip_backup);
   }
   return true;
@@ -45,9 +46,9 @@ void SequencerBackup::init_from_scene(Scene *scene)
 
 static bool strip_restore_cb(Strip *strip, void *user_data)
 {
-  SequencerBackup *sb = (SequencerBackup *)user_data;
-  const SessionUID &session_uid = strip->runtime.session_uid;
-  BLI_assert(BLI_session_uid_is_generated(&session_uid));
+  SequencerBackup *sb = static_cast<SequencerBackup *>(user_data);
+  const SessionUID &session_uid = strip->runtime->session_uid;
+  BLI_assert(session_uid.is_generated());
   StripBackup *strip_backup = sb->strips_backup.lookup_ptr(session_uid);
   if (strip_backup != nullptr) {
     strip_backup->restore_to_strip(strip);
@@ -64,6 +65,7 @@ void SequencerBackup::restore_to_scene(Scene *scene)
   for (StripBackup &strip_backup : strips_backup.values()) {
     if (strip_backup.scene_sound != nullptr) {
       BKE_sound_remove_scene_sound(scene, strip_backup.scene_sound);
+      strip_backup.scene_sound.reset();
     }
   }
 }

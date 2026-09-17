@@ -2,15 +2,20 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw_engine
+ */
+
 #include "workbench_private.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_hash.h"
-#include "BLI_math_color.h"
+#include "BLI_ghash.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_math_color_c.hh"
 
 #include "IMB_colormanagement.hh"
 
 /* get_image */
+#include "BKE_image_gpu.hh"
 #include "BKE_node_legacy_types.hh"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -19,7 +24,7 @@
 
 namespace blender::workbench {
 
-Material::Material(::Object &ob, bool random)
+Material::Material(blender::Object &ob, bool random)
 {
   if (random) {
     uint hash = BLI_ghashutil_strhash_p_murmur(ob.id.name);
@@ -36,11 +41,11 @@ Material::Material(::Object &ob, bool random)
   packed_data = Material::pack_data(0.0f, 0.4f, ob.color[3]);
 }
 
-MaterialTexture::MaterialTexture(Object *ob, int material_index)
+MaterialTexture::MaterialTexture(Manager &manager, Object *ob, int material_index)
 {
-  const ::bNode *node = nullptr;
+  const blender::bNode *node = nullptr;
 
-  ::Image *image = nullptr;
+  blender::Image *image = nullptr;
   ImageUser *user = nullptr;
   ED_object_get_active_image(ob, material_index + 1, &image, &user, &node, nullptr);
   if (!node || !image) {
@@ -83,15 +88,21 @@ MaterialTexture::MaterialTexture(Object *ob, int material_index)
       BLI_assert_msg(0, "Node type not supported by workbench");
   }
 
-  gpu = BKE_image_get_gpu_material_texture(image, user, true);
+  gpu = BKE_image_acquire_gpu_material_texture(image, user, true, false);
+  manager.hold_texture(gpu.texture);
+  manager.hold_texture(gpu.tile_mapping);
   premultiplied = image->alpha_mode == IMA_ALPHA_PREMUL;
   alpha_cutoff = !ELEM(image->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED);
   name = image->id.name;
 }
 
-MaterialTexture::MaterialTexture(::Image *image, ImageUser *user /* = nullptr */)
+MaterialTexture::MaterialTexture(Manager &manager,
+                                 blender::Image *image,
+                                 ImageUser *user /* = nullptr */)
 {
-  gpu = BKE_image_get_gpu_material_texture(image, user, true);
+  gpu = BKE_image_acquire_gpu_material_texture(image, user, true, false);
+  manager.hold_texture(gpu.texture);
+  manager.hold_texture(gpu.tile_mapping);
   premultiplied = image->alpha_mode == IMA_ALPHA_PREMUL;
   alpha_cutoff = !ELEM(image->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED);
   name = image->id.name;

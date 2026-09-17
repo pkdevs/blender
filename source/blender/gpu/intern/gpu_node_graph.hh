@@ -10,16 +10,22 @@
 
 #pragma once
 
+#include <variant>
+
 #include "DNA_listBase.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_ghash.h"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 
 #include "GPU_material.hh"
 
+namespace blender {
+
 struct GPUNode;
 struct GPUOutput;
-struct ListBase;
+struct GPUInput;
 
 enum GPUDataSource {
   GPU_SOURCE_OUTPUT,
@@ -72,25 +78,27 @@ struct GPUNode {
   /* Internal flag to mark nodes during pruning */
   GPUNodeTag tag;
 
-  ListBase inputs;
-  ListBase outputs;
+  ListBaseT<GPUInput> inputs;
+  ListBaseT<GPUOutput> outputs;
 
   /* Zones. */
   int zone_index;
   bool is_zone_end;
 };
 
-struct GPUNodeLink {
-  GPUNodeStack *socket;
+using GPUNodeLinkData = std::variant<const float *, const int *, const bool *>;
 
-  GPUNodeLinkType link_type;
-  int users; /* Refcount */
+struct GPUNodeLink {
+  GPUNodeStack *socket = nullptr;
+
+  GPUNodeLinkType link_type = GPU_NODE_LINK_NONE;
+  int users = 0; /* Refcount */
 
   union {
     /* GPU_NODE_LINK_CONSTANT | GPU_NODE_LINK_UNIFORM */
-    const float *data;
+    GPUNodeLinkData data = static_cast<const float *>(nullptr);
     /* GPU_NODE_LINK_COLORBAND */
-    blender::gpu::Texture **colorband;
+    gpu::Texture **colorband;
     /* GPU_NODE_LINK_OUTPUT */
     GPUOutput *output;
     /* GPU_NODE_LINK_ATTR */
@@ -123,21 +131,29 @@ struct GPUOutput {
   bool is_duplicate;
 };
 
+using GPUInputConstantData =
+    std::variant<float, float2, float3, float4, float3x3, float4x4, int, int2, int3, int4, bool>;
+
+Span<float> gpu_constant_to_float_span(const GPUInputConstantData &data, const GPUType type);
+Span<int> gpu_constant_to_int_span(const GPUInputConstantData &data, const GPUType type);
+bool gpu_constant_to_bool(const GPUInputConstantData &data);
+
 struct GPUInput {
-  GPUInput *next, *prev;
+  GPUInput *next = nullptr;
+  GPUInput *prev = nullptr;
 
-  GPUNode *node;
-  GPUType type; /* data-type. */
-  GPUNodeLink *link;
-  int id; /* unique id as created by code generator */
+  GPUNode *node = nullptr;
+  GPUType type = GPU_NONE; /* data-type. */
+  GPUNodeLink *link = nullptr;
+  int id = 0; /* unique id as created by code generator */
 
-  GPUDataSource source; /* data source */
+  GPUDataSource source = GPU_SOURCE_OUTPUT; /* data source */
 
   /* Content based on GPUDataSource */
   union {
     /* GPU_SOURCE_CONSTANT | GPU_SOURCE_UNIFORM */
-    float vec[16]; /* vector data */
-                   /* GPU_SOURCE_TEX | GPU_SOURCE_TEX_TILED_MAPPING */
+    GPUInputConstantData constant_data{};
+    /* GPU_SOURCE_TEX | GPU_SOURCE_TEX_TILED_MAPPING */
     GPUMaterialTexture *texture;
     /* GPU_SOURCE_ATTR */
     GPUMaterialAttribute *attr;
@@ -150,9 +166,9 @@ struct GPUInput {
   };
 
   /* True for Zone Items. */
-  bool is_zone_io;
+  bool is_zone_io = false;
   /* This variable is shared with other socket/s and doesn't need to be declared. */
-  bool is_duplicate;
+  bool is_duplicate = false;
 };
 
 struct GPUNodeGraphOutputLink {
@@ -169,7 +185,7 @@ struct GPUNodeGraphFunctionLink {
 
 struct GPUNodeGraph {
   /* Nodes */
-  ListBase nodes;
+  ListBaseT<GPUNode> nodes;
 
   /* Main Outputs. */
   GPUNodeLink *outlink_surface;
@@ -177,21 +193,21 @@ struct GPUNodeGraph {
   GPUNodeLink *outlink_displacement;
   GPUNodeLink *outlink_thickness;
   /* List of GPUNodeGraphOutputLink */
-  ListBase outlink_aovs;
+  ListBaseT<GPUNodeGraphOutputLink> outlink_aovs;
   /* List of GPUNodeGraphFunctionLink */
-  ListBase material_functions;
+  ListBaseT<GPUNodeGraphFunctionLink> material_functions;
   /* List of GPUNodeGraphOutputLink */
-  ListBase outlink_compositor;
+  ListBaseT<GPUNodeGraphOutputLink> outlink_compositor;
 
   /* Requested attributes and textures. */
-  ListBase attributes;
-  ListBase textures;
+  ListBaseT<GPUMaterialAttribute> attributes;
+  ListBaseT<GPUMaterialTexture> textures;
 
   /* The list of uniform attributes. */
   GPUUniformAttrList uniform_attrs;
 
   /* The list of layer attributes. */
-  ListBase layer_attrs;
+  ListBaseT<GPULayerAttr> layer_attrs;
 };
 
 /* Node Graph */
@@ -210,7 +226,8 @@ void gpu_node_graph_finalize_uniform_attrs(GPUNodeGraph *graph);
  *
  * NOTE: Graph optimizations will produce a shader which needs to be re-compiled
  * more frequently, however, the default material pass will always exist to fall
- * back on. */
+ * back on.
+ */
 void gpu_node_graph_optimize(GPUNodeGraph *graph);
 
 /**
@@ -228,12 +245,14 @@ GPUNodeGraph *gpu_material_node_graph(GPUMaterial *material);
 /**
  * Returns the address of the future pointer to coba_tex.
  */
-blender::gpu::Texture **gpu_material_ramp_texture_row_set(GPUMaterial *mat,
-                                                          int size,
-                                                          const float *pixels,
-                                                          float *r_row);
+gpu::Texture **gpu_material_ramp_texture_row_set(GPUMaterial *mat,
+                                                 int size,
+                                                 const float *pixels,
+                                                 float *r_row);
 /**
  * Returns the address of the future pointer to sky_tex
  */
-blender::gpu::Texture **gpu_material_sky_texture_layer_set(
+gpu::Texture **gpu_material_sky_texture_layer_set(
     GPUMaterial *mat, int width, int height, const float *pixels, float *row);
+
+}  // namespace blender

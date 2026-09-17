@@ -13,9 +13,11 @@
 #include <Alembic/AbcGeom/OPolyMesh.h>
 #include <Alembic/AbcGeom/OSubD.h>
 
+namespace blender {
+
 struct ModifierData;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* Writer for Alembic geometry. Does not assume the object is a mesh object. */
 class ABCGenericMeshWriter : public ABCAbstractWriter {
@@ -27,6 +29,10 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
 
   Alembic::AbcGeom::OSubD abc_subdiv_;
   Alembic::AbcGeom::OSubDSchema abc_subdiv_schema_;
+
+  Alembic::AbcGeom::OCompoundProperty abc_custom_data_container_;
+  Alembic::AbcGeom::OInt32Property abc_subdiv_render_levels_;
+  Alembic::AbcGeom::OInt32Property abc_subdiv_viewport_levels_;
 
   /* Determines whether a poly mesh or a subdivision surface is exported.
    * The value is set by an export option but only true if there is a subdivision modifier on the
@@ -58,7 +64,6 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   template<typename Schema> void write_face_sets(Object *object, Mesh *mesh, Schema &schema);
 
   void write_arb_geo_params(Mesh *mesh);
-  bool get_velocities(Mesh *mesh, std::vector<Imath::V3f> &vels);
   void get_geo_groups(Object *object,
                       Mesh *mesh,
                       std::map<std::string, std::vector<int32_t>> &geo_groups);
@@ -73,4 +78,5 @@ class ABCMeshWriter : public ABCGenericMeshWriter {
   Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

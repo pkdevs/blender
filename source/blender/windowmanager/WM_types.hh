@@ -93,23 +93,10 @@
 
 #pragma once
 
-struct ID;
-struct ImBuf;
-struct bContext;
-struct bContextStore;
-struct GreasePencil;
-struct GreasePencilLayerTreeNode;
-struct ReportList;
-struct wmDrag;
-struct wmDropBox;
-struct wmEvent;
-struct wmOperator;
-struct wmWindowManager;
-
 #include <memory>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_vector.hh"
 
@@ -130,16 +117,37 @@ struct wmWindowManager;
 /* Include external gizmo API's. */
 #include "gizmo/WM_gizmo_api.hh"  // IWYU pragma: export
 
-namespace blender::asset_system {
+struct CLG_LogRef;
+
+namespace blender {
+
+struct ID;
+struct ImBuf;
+struct bContext;
+struct bContextStore;
+struct GreasePencil;
+struct GreasePencilLayerTreeNode;
+struct ReportList;
+struct wmDrag;
+struct wmDropBox;
+struct wmEvent;
+struct wmOperator;
+struct wmOperatorTypeMacro;
+struct wmWindowManager;
+
+namespace asset_system {
 class AssetRepresentation;
 }
-using AssetRepresentationHandle = blender::asset_system::AssetRepresentation;
+
+namespace ui {
+struct View2DEdgePanData;
+}
 
 using wmGenericUserDataFreeFn = void (*)(void *data);
 
 struct wmGenericUserData {
   void *data;
-  /** When NULL, use #MEM_freeN. */
+  /** When NULL, use #MEM_delete_void. */
   wmGenericUserDataFreeFn free_fn;
   bool use_free;
 };
@@ -214,11 +222,16 @@ enum {
    * - As tools in the toolbar.
    *
    * Even so, accessing from the menu should behave usefully.
+   * \note Operators which set this flag will be skipped by the repeat last
+   * action operator.
    */
   OPTYPE_DEPENDS_ON_CURSOR = (1 << 11),
 
   /** Handle events before modal operators without this flag. */
   OPTYPE_MODAL_PRIORITY = (1 << 12),
+
+  /** Operator is registered from a local node group or a node group asset. */
+  OPTYPE_NODE_TOOL = (1 << 13),
 };
 
 /** For #WM_cursor_grab_enable wrap axis. */
@@ -233,7 +246,7 @@ enum eWM_CursorWrapAxis {
  * Context to call operator in for #WM_operator_name_call.
  * rna_ui.cc contains EnumPropertyItem's of these, keep in sync.
  */
-namespace blender::wm {
+namespace wm {
 enum class OpCallContext : int8_t {
   /* If there's invoke, call it, otherwise exec. */
   InvokeDefault,
@@ -253,11 +266,11 @@ enum class OpCallContext : int8_t {
 }
 
 #define WM_OP_CONTEXT_HAS_AREA(type) \
-  (CHECK_TYPE_INLINE(type, blender::wm::OpCallContext), \
-   !ELEM(type, blender::wm::OpCallContext::InvokeScreen, blender::wm::OpCallContext::ExecScreen))
+  (CHECK_TYPE_INLINE(type, wm::OpCallContext), \
+   !ELEM(type, wm::OpCallContext::InvokeScreen, wm::OpCallContext::ExecScreen))
 #define WM_OP_CONTEXT_HAS_REGION(type) \
   (WM_OP_CONTEXT_HAS_AREA(type) && \
-   !ELEM(type, blender::wm::OpCallContext::InvokeArea, blender::wm::OpCallContext::ExecArea))
+   !ELEM(type, wm::OpCallContext::InvokeArea, wm::OpCallContext::ExecArea))
 
 /** Property tags for #RNA_OperatorProperties. */
 enum eOperatorPropTags {
@@ -405,6 +418,9 @@ struct wmNotifier {
 /* Changes to the active viewer path. */
 #define NC_VIEWER_PATH (28 << 24)
 
+/* Changes that affects UI drawing. */
+#define NC_UI (29 << 24)
+
 /* Data type, 256 entries is enough, it can overlap. */
 #define NOTE_DATA 0x00FF0000
 
@@ -427,6 +443,8 @@ struct wmNotifier {
 #define ND_SKETCH (7 << 16)
 #define ND_WORKSPACE_SET (8 << 16)
 #define ND_WORKSPACE_DELETE (9 << 16)
+/* Notifies if frames changes as part of animation playback. */
+#define ND_ANIMATION_PLAYBACK (10 << 16)
 
 /* NC_SCENE Scene. */
 #define ND_SCENEBROWSE (1 << 16)
@@ -455,9 +473,31 @@ struct wmNotifier {
 /* NC_OBJECT Object. */
 #define ND_TRANSFORM (18 << 16)
 #define ND_OB_SHADING (19 << 16)
+/**
+ * For non-structural pose-mode changes like transforms.
+ * \note renaming, selecting, bone collections have their own dedicated notifiers,
+ * also see #ND_BONE_SELECT.
+ */
 #define ND_POSE (20 << 16)
 #define ND_BONE_ACTIVE (21 << 16)
+/**
+ * Intended for selection and visibility changes in pose/armature edit modes.
+ * Historically this was also used for most edit-mode changes (also "structural" like adding,
+ * deleting, subdividing, filling, ..., bones). Also covers hiding/revealing (in pose-mode and
+ * edit-mode). Note this causes a full (possibly slow) rebuild of the Outliner tree. For such
+ * changes, new code should use #ND_ARMATURE_STRUCTURE.
+ */
 #define ND_BONE_SELECT (22 << 16)
+/**
+ * Indicate a change to the structure of the armature; this has implications for both the armature
+ * object and the armature data.
+ *
+ * The value is set to #ND_BONE_SELECT as a transitional state, as currently that notifier is
+ * already used to signify such structural changes. In the future, those uses of #ND_BONE_SELECT
+ * should be replaced with #ND_ARMATURE_STRUCTURE, making the selection notifier only relevant for
+ * selection again. See #153774.
+ */
+#define ND_ARMATURE_STRUCTURE ND_BONE_SELECT
 #define ND_DRAW (23 << 16)
 #define ND_MODIFIER (24 << 16)
 #define ND_KEYS (25 << 16)
@@ -472,6 +512,8 @@ struct wmNotifier {
 /* For updating motion paths in 3dview. */
 #define ND_DRAW_ANIMVIZ (33 << 16)
 #define ND_BONE_COLLECTION (34 << 16)
+/* For sequencer prefetch indicator redraw. */
+#define ND_SEQUENCER_PREFETCH (35 << 16)
 
 /* NC_MATERIAL Material. */
 #define ND_SHADING (30 << 16)
@@ -555,6 +597,11 @@ struct wmNotifier {
  */
 #define ND_ASSET_CATALOGS (4 << 16)
 
+/* Changes in theme preferences that affects UI text drawing. */
+#define ND_UI_FONT (1 << 16)
+
+#define ND_UI_LANG (2 << 16)
+
 /* Subtype, 256 entries too. */
 #define NOTE_SUBTYPE 0x0000FF00
 
@@ -592,10 +639,11 @@ struct wmNotifier {
 #define NA_ACTIVATED 7
 #define NA_PAINTING 8
 #define NA_JOB_FINISHED 9
+#define NA_DOWNLOAD_FINISHED 10
 
 /* ************** Gesture Manager data ************** */
 
-namespace blender::wm::gesture {
+namespace wm::gesture {
 constexpr float POLYLINE_CLICK_RADIUS = 15.0f;
 }
 
@@ -631,7 +679,9 @@ struct wmGesture {
   /** Optional, draw the active side of the straight-line gesture. */
   bool draw_active_side;
   /** Latest mouse position relative to area. Currently only used by lasso drawing code. */
-  blender::int2 mval;
+  int2 mval;
+  /** Mouse position the gesture started at in view space. Used by edge panning. */
+  float2 init_mval_view;
 
   /**
    * For modal operators which may be running idle, waiting for an event to activate the gesture.
@@ -645,14 +695,20 @@ struct wmGesture {
   uint wait_for_input : 1;
   /** Use for gestures that can be moved, like box selection. */
   uint move : 1;
-  /** For gestures that support snapping, stores if snapping is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support snapping,
+   * stores if snapping is enabled using the modal keymap toggle.
+   */
   uint use_snap : 1;
-  /** For gestures that support flip, stores if flip is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support flip,
+   * stores if flip is enabled using the modal keymap toggle.
+   */
   uint use_flip : 1;
-  /** For gestures that support smoothing, stores if smoothing is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support smoothing,
+   * stores if smoothing is enabled using the modal keymap toggle.
+   */
   uint use_smooth : 1;
 
   /**
@@ -666,6 +722,7 @@ struct wmGesture {
 
   /** Free pointer to use for operator allocations (if set, its freed on exit). */
   wmGenericUserData user_data;
+  ui::View2DEdgePanData *edge_pan_data;
 };
 
 /* ************** wmEvent ************************ */
@@ -709,7 +766,7 @@ struct wmTabletData {
    * X axis range: -1.0 (left) to +1.0 (right).
    * Y axis range: -1.0 (away from user) to +1.0 (toward user).
    */
-  blender::float2 tilt;
+  float2 tilt;
   /** Interpret mouse motion as absolute as typical for tablets. */
   char is_motion_absolute;
 };
@@ -799,7 +856,7 @@ struct wmEvent {
    *
    * - #EVT_ACTIONZONE_AREA / #EVT_ACTIONZONE_FULLSCREEN / #EVT_ACTIONZONE_FULLSCREEN:
    *   Uses #sActionzoneData.
-   * - #EVT_DROP: uses #ListBase of #wmDrag (also #wmEvent::custom == #EVT_DATA_DRAGDROP).
+   * - #EVT_DROP: uses #ListBaseT<wmDrag> (also #wmEvent::custom == #EVT_DATA_DRAGDROP).
    *   Typically set to #wmWindowManger::drags.
    * - #EVT_FILESELECT: uses #wmOperator.
    * - #EVT_XR_ACTION: uses #wmXrActionData (also #wmEvent::custom == #EVT_DATA_XR).
@@ -874,7 +931,8 @@ struct wmNDOFMotionData {
    */
   /** Translation. */
   float tvec[3];
-  /** Rotation.
+  /**
+   * Rotation.
    * <pre>
    * axis = (rx,ry,rz).normalized.
    * amount = (rx,ry,rz).magnitude [in revolutions, 1.0 = 360 deg]
@@ -1040,6 +1098,12 @@ struct wmJobWorkerStatus {
 };
 
 struct wmOperatorType {
+
+  /** Subclassed to store data for additional information for specific operator types. */
+  struct TypeData {
+    virtual ~TypeData() = default;
+  };
+
   /** Text for UI, undo (should not exceed #OP_MAX_TYPENAME). */
   const char *name = nullptr;
   /** Unique identifier (must not exceed #OP_MAX_TYPENAME). */
@@ -1145,18 +1209,21 @@ struct wmOperatorType {
    * menus, enum search... etc. Example: Enum 'type' for a Delete menu.
    *
    * When assigned a string/number property,
-   * immediately edit the value when used in a popup. see: #UI_BUT_ACTIVATE_ON_INIT.
+   * immediately edit the value when used in a popup. see: #BUT_ACTIVATE_ON_INIT.
    */
   PropertyRNA *prop = nullptr;
 
   /** #wmOperatorTypeMacro. */
-  ListBase macro = {};
+  ListBaseT<wmOperatorTypeMacro> macro = {};
 
   /** Pointer to modal keymap. Do not free! */
   wmKeyMap *modalkeymap = nullptr;
 
   /** Python needs the operator type as well. */
   bool (*pyop_poll)(bContext *C, wmOperatorType *ot) ATTR_WARN_UNUSED_RESULT = nullptr;
+
+  /** Extra information used statically for this operator type. */
+  std::unique_ptr<TypeData> custom_data;
 
   /** RNA integration. */
   ExtensionRNA rna_ext = {};
@@ -1175,7 +1242,7 @@ struct wmOperatorType {
 struct wmOperatorCallParams {
   wmOperatorType *optype;
   PointerRNA *opptr;
-  blender::wm::OpCallContext opcontext;
+  wm::OpCallContext opcontext;
 };
 
 #ifdef WITH_INPUT_IME
@@ -1201,19 +1268,34 @@ struct wmIMEData {
 
 /* **************** Paint Cursor ******************* */
 
+using wmPaintCursorPoll = bool (*)(bContext *C);
 using wmPaintCursorDraw = void (*)(bContext *C,
-                                   const blender::int2 &xy,
-                                   const blender::float2 &tilt,
+                                   const int2 &xy,
+                                   const float2 &tilt,
                                    void *customdata);
+
+struct wmPaintCursor {
+  wmPaintCursor *next, *prev;
+
+  void *customdata;
+
+  wmPaintCursorPoll poll;
+  wmPaintCursorDraw draw;
+
+  short space_type;
+  short region_type;
+};
 
 /* *************** Drag and drop *************** */
 
 enum eWM_DragDataType : int8_t {
   WM_DRAG_ID,
   WM_DRAG_ASSET,
-  /** The user is dragging multiple assets. This is only supported in few specific cases, proper
-   * multi-item support for dragging isn't supported well yet. Therefore this is kept separate from
-   * #WM_DRAG_ASSET. */
+  /**
+   * The user is dragging multiple assets. This is only supported in few specific cases, proper
+   * multi-item support for dragging isn't supported well yet.
+   * Therefore this is kept separate from #WM_DRAG_ASSET.
+   */
   WM_DRAG_ASSET_LIST,
   WM_DRAG_RNA,
   WM_DRAG_PATH,
@@ -1251,7 +1333,7 @@ struct wmDragID {
 };
 
 struct wmDragAsset {
-  const AssetRepresentationHandle *asset;
+  const asset_system::AssetRepresentation *asset;
   AssetImportSettings import_settings;
 };
 
@@ -1279,9 +1361,9 @@ struct wmDragAssetListItem {
 };
 
 struct wmDragPath {
-  blender::Vector<std::string> paths;
+  Vector<std::string> paths;
   /** File type of each path in #paths. */
-  blender::Vector<int> file_types; /* #eFileSel_File_Types. */
+  Vector<int> file_types; /* #eFileSel_File_Types. */
   /** Bit flag of file types in #paths. */
   int file_types_bit_flag; /* #eFileSel_File_Types. */
   std::string tooltip;
@@ -1329,8 +1411,7 @@ struct wmDragActiveDropState {
    * operator poll fails. Typically the message the operator set with
    * #CTX_wm_operator_poll_msg_set().
    */
-  const char *disabled_info;
-  bool free_disabled_info;
+  std::optional<std::string> disabled_info;
 
   std::string tooltip;
 };
@@ -1353,9 +1434,9 @@ struct wmDrag {
   eWM_DragFlags flags;
 
   /** List of wmDragIDs, all are guaranteed to have the same ID type. */
-  ListBase ids;
+  ListBaseT<wmDragID> ids;
   /** List of `wmDragAssetListItem`s. */
-  ListBase asset_items;
+  ListBaseT<wmDragAssetListItem> asset_items;
 };
 
 /**
@@ -1363,7 +1444,7 @@ struct wmDrag {
  * Allocation and free is on startup and exit.
  *
  * The operator is polled and invoked with the current context
- * (#blender::wm::OpCallContext::InvokeDefault), there is no way to override that (by design, since
+ * (#wm::OpCallContext::InvokeDefault), there is no way to override that (by design, since
  * drop-boxes should act on the exact mouse position). So the drop-boxes are supposed to check the
  * required area and region context in their poll.
  */
@@ -1373,16 +1454,20 @@ struct wmDropBox {
   /** Test if the dropbox is active. */
   bool (*poll)(bContext *C, wmDrag *drag, const wmEvent *event);
 
-  /** Called when the drag action starts. Can be used to prefetch data for previews.
+  /**
+   * Called when the drag action starts. Can be used to prefetch data for previews.
    * \note The dropbox that will be called eventually is not known yet when starting the drag.
-   * So this callback is called on every dropbox that is registered in the current screen. */
+   * So this callback is called on every dropbox that is registered in the current screen.
+   */
   void (*on_drag_start)(bContext *C, wmDrag *drag);
 
   /** Called when poll returns true the first time. Typically used to setup some drawing data. */
   void (*on_enter)(wmDropBox *drop, wmDrag *drag);
 
-  /** Called when poll returns false the first time or when the drag event ends (successful drop or
-   * canceled). Typically used to cleanup resources or end drawing. */
+  /**
+   * Called when poll returns false the first time or when the drag event ends (successful drop or
+   * canceled). Typically used to cleanup resources or end drawing.
+   */
   void (*on_exit)(wmDropBox *drop, wmDrag *drag);
 
   /** Before exec, this copies drag info to #wmDrop properties. */
@@ -1404,11 +1489,18 @@ struct wmDropBox {
   /**
    * Called with the draw buffer (#GPUViewport) set up for drawing into the region's view.
    * \note Only setups the drawing buffer for drawing in view, not the GPU transform matrices.
-   * The callback has to do that itself, with for example #UI_view2d_view_ortho.
+   * The callback has to do that itself, with for example #view2d_view_ortho.
    * \param xy: Cursor location in window coordinates (#wmEvent.xy compatible).
    */
   void (*draw_in_view)(bContext *C, wmWindow *win, wmDrag *drag, const int xy[2]);
 
+  /**
+   * Used by tree views to scroll when the mouse is near the edge.
+   * Called for every event while the dropbox is active (hovered and poll succeeds).
+   * For #wmEventType::TIMER events, only the ones created from this #wmDropBox.timer are passed to
+   * it.
+   */
+  void (*on_event_while_hover)(bContext *C, wmDropBox &dropbox, const wmEvent *event);
   /** Custom data for drawing. */
   void *draw_data;
 
@@ -1429,6 +1521,7 @@ struct wmDropBox {
   IDProperty *properties;
   /** RNA pointer to access properties. */
   PointerRNA *ptr;
+  wmTimer *timer;
 };
 
 /**
@@ -1463,7 +1556,6 @@ struct RecentFile {
 };
 
 /* Logging. */
-struct CLG_LogRef;
 /* `wm_init_exit.cc`. */
 
 extern CLG_LogRef *WM_LOG_OPERATORS;
@@ -1471,3 +1563,5 @@ extern CLG_LogRef *WM_LOG_EVENTS;
 extern CLG_LogRef *WM_LOG_TOOL_GIZMO;
 extern CLG_LogRef *WM_LOG_MSGBUS_PUB;
 extern CLG_LogRef *WM_LOG_MSGBUS_SUB;
+
+}  // namespace blender

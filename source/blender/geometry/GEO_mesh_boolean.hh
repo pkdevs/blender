@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 
 #include "BLI_array.hh"
@@ -9,9 +13,11 @@
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry::boolean {
+namespace geometry::boolean {
 
 /** Specifies which solver to use. */
 enum class Solver {
@@ -32,12 +38,17 @@ enum class Operation {
   Difference = 2,
 };
 
-enum class BooleanError {
+enum class BooleanErrorType {
   NoError = 0,
   NonManifold = 1,
   ResultTooBig = 2,
   SolverNotAvailable = 3,
   UnknownError = 4,
+};
+
+struct BooleanError {
+  BooleanErrorType type = BooleanErrorType::NoError;
+  Vector<int> non_manifold_mesh_indices;
 };
 
 /**
@@ -50,8 +61,10 @@ struct BooleanOpParameters {
   Operation boolean_mode;
   /** Can we assume there are no self-intersections in any of the operands? */
   bool no_self_intersections = true;
-  /** Can we assume there are no nested components (e.g., a box inside a box) in any of the
-   * components? */
+  /**
+   * Can we assume there are no nested components (e.g., a box inside a box) in any of the
+   * components?
+   */
   bool no_nested_components = true;
   /** Can we assume the argument meshes are watertight volume enclosing? */
   bool watertight = true;
@@ -63,7 +76,7 @@ struct BooleanOpParameters {
  * If is only one operand, the non-float versions will do self-intersection and remove
  * internal faces.
  * If there are more than two meshes, the first mesh is operand 0 and the rest of the
- * meshes are operand 1 (i.e., as if all of operands 1, ... are joined into one mesh.
+ * meshes are operand 1 (i.e., as if all of operands 1, ... are joined into one mesh).
  * The exact solvers assume that the meshes are PWN (piecewise winding number,
  * which approximately means that the meshes are enclosed watertight volumes,
  * and all edges are manifold, though there are allowable exceptions to that last condition).
@@ -81,7 +94,8 @@ struct BooleanOpParameters {
  * \param solver: which solver to use
  * \param r_intersecting_edges: Vector to store indices of edges on the resulting mesh in. These
  * 'new' edges are the result of the intersections.
- * \param r_error: Return place for error code to be stored.
+ * \param r_error: Return place for error to be stored.
+ * \return the resulting mesh or null on failure.
  */
 Mesh *mesh_boolean(Span<const Mesh *> meshes,
                    Span<float4x4> transforms,
@@ -91,4 +105,5 @@ Mesh *mesh_boolean(Span<const Mesh *> meshes,
                    Vector<int> *r_intersecting_edges,
                    BooleanError *r_error);
 
-}  // namespace blender::geometry::boolean
+}  // namespace geometry::boolean
+}  // namespace blender

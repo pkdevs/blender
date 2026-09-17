@@ -12,6 +12,8 @@
 #include "DNA_material_types.h"
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 struct DEGEditorUpdateContext;
 struct Depsgraph;
 struct ID;
@@ -28,6 +30,7 @@ struct ViewLayer;
 struct World;
 struct wmWindow;
 struct wmWindowManager;
+class StringRef;
 
 /* `render_ops.cc` */
 
@@ -51,6 +54,14 @@ void ED_render_scene_update(const DEGEditorUpdateContext *update_ctx, bool updat
  * Update 3D viewport render or draw engine on changes to the scene or view settings.
  */
 void ED_render_view3d_update(Depsgraph *depsgraph, wmWindow *window, ScrArea *area, bool updated);
+/**
+ * Pause or resume all 3D viewport render engines during final render or bake.
+ */
+void ED_render_view3d_auto_pause(Main *bmain, bool pause);
+/**
+ * Notify 3D viewport render engines of 3D pause state changes.
+ */
+void ED_render_view3d_pause_notify(Main *bmain);
 
 Scene *ED_render_job_get_scene(const bContext *C);
 Scene *ED_render_job_get_current_scene(const bContext *C);
@@ -82,7 +93,7 @@ bool ED_preview_use_image_size(const PreviewImage *preview, eIconSizes size);
 /**
  * Check if \a id is supported by the automatic preview render.
  */
-bool ED_preview_id_is_supported(const ID *id, const char **r_disabled_hint = nullptr);
+bool ED_preview_id_render_is_supported(const ID *id, const char **r_disabled_hint = nullptr);
 
 void ED_preview_set_visibility(Main *pr_main,
                                Scene *scene,
@@ -110,12 +121,35 @@ void ED_preview_icon_render(
 void ED_preview_icon_job(
     const bContext *C, PreviewImage *prv_img, ID *id, enum eIconSizes icon_size, bool delay);
 
-void ED_preview_restart_queue_free();
-void ED_preview_restart_queue_add(ID *id, enum eIconSizes size);
-void ED_preview_restart_queue_work(const bContext *C);
+/**
+ * ID previews may be generated in a parallel job. The operation that generates the preview
+ * likely does an undo push before the preview is actually done and stored in the ID. The
+ * restart system exists to make sure previews remain up to date.
+ *
+ * When undoing back to the moment the preview generation was triggered, this function
+ * schedules the preview for regeneration.
+ */
+void ED_preview_restart_work(const bContext *C);
 
 void ED_preview_kill_jobs(wmWindowManager *wm, Main *bmain);
+void ED_preview_kill_jobs_for_undo(wmWindowManager *wm, Main *bmain);
 void ED_preview_kill_jobs_for_id(wmWindowManager *wm, const ID *id);
+
+/**
+ * Inform the preview system that a preview was requested for download. Should be called right
+ * before a download request is done, so the downloading status is made known to the preview
+ * system.
+ *
+ * This needs to be called regardless of the loading/loaded status of the preview; it doesn't
+ * matter whether or not it was already loaded, or will be requested to be loaded, from disk.
+ */
+void ED_preview_online_download_requested(StringRef preview_full_filepath);
+/**
+ * Inform the preview system that a preview has finished downloading (successfully or not) meaning
+ * the preview may be available on disk (and if it doesn't exist on disk, it won't appear without
+ * requesting a download again).
+ */
+void ED_preview_online_download_finished(wmWindowManager *wm, StringRef preview_full_filepath);
 
 void ED_preview_draw(
     const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *ui_preview, rcti *rect);
@@ -129,3 +163,5 @@ void ED_previews_tag_dirty_by_id(const Main &bmain, const ID &id);
 void ED_render_clear_mtex_copybuf();
 
 void ED_render_internal_init();
+
+}  // namespace blender

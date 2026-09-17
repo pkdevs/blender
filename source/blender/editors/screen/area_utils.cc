@@ -12,14 +12,16 @@
 
 #include "BKE_screen.hh"
 
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "WM_message.hh"
 
 #include "ED_screen.hh"
 
 #include "UI_interface.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Generic Tool System Region Callbacks
@@ -71,7 +73,7 @@ int ED_region_generic_tools_region_snap_size(const ARegion *region, int size, in
 int ED_region_generic_panel_region_snap_size(const ARegion *region, int size, int axis)
 {
   if (axis == 0) {
-    if (!UI_panel_category_is_visible(region)) {
+    if (!ui::panel_category_tabs_is_visible(region)) {
       return size;
     }
 
@@ -84,3 +86,5 @@ int ED_region_generic_panel_region_snap_size(const ARegion *region, int size, in
 }
 
 /** \} */
+
+}  // namespace blender

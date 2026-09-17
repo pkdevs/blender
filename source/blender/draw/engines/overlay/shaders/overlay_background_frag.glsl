@@ -6,7 +6,7 @@
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_background)
 
-#include "gpu_shader_math_constants_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
 
 float dither()
 {
@@ -37,7 +37,8 @@ void main()
 
   if (vignette_enabled) {
     const float dist = length(screen_uv - 0.5f);
-    alpha = smoothstep(vignette_aperture, vignette_aperture + vignette_falloff, dist);
+    const float falloff = 0.15f;
+    alpha = smoothstep(vignette_aperture, vignette_aperture + falloff, dist);
     depth = 0.0f;
   }
   else {

@@ -2,16 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
+
+namespace blender {
 
 struct Mesh;
 struct PointCloud;
-namespace blender::bke {
+namespace bke {
 class CurvesGeometry;
 class Instances;
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::geometry {
+namespace geometry {
 
 bool use_debug_randomization();
 
@@ -23,4 +29,6 @@ void debug_randomize_point_order(PointCloud *pointcloud);
 void debug_randomize_curve_order(bke::CurvesGeometry *curves);
 void debug_randomize_instance_order(bke::Instances *instances);
 
-};  // namespace blender::geometry
+};  // namespace geometry
+
+}  // namespace blender

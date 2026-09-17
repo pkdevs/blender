@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup depsgraph
+ */
+
 #include "pipeline_all_objects.h"
 
 #include "intern/builder/deg_builder_nodes.h"
@@ -42,7 +46,7 @@ class AllObjectsRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-AllObjectsBuilderPipeline::AllObjectsBuilderPipeline(::Depsgraph *graph)
+AllObjectsBuilderPipeline::AllObjectsBuilderPipeline(blender::Depsgraph *graph)
     : ViewLayerBuilderPipeline(graph)
 {
 }

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_subdiv_modifier.hh"
 
 #include "MEM_guardedalloc.h"
@@ -18,6 +22,8 @@
 
 #include "GPU_capabilities.hh"
 #include "GPU_context.hh"
+
+namespace blender {
 
 using namespace blender::bke;
 
@@ -43,7 +49,7 @@ bool BKE_subsurf_modifier_runtime_init(SubsurfModifierData *smd, const bool use_
 {
   subdiv::Settings settings = BKE_subsurf_modifier_settings_init(smd, use_render_params);
 
-  SubsurfRuntimeData *runtime_data = (SubsurfRuntimeData *)smd->modifier.runtime;
+  SubsurfRuntimeData *runtime_data = static_cast<SubsurfRuntimeData *>(smd->modifier.runtime);
   if (settings.level == 0) {
     /* Modifier is effectively disabled, but still update settings if runtime data
      * was already allocated. */
@@ -58,7 +64,7 @@ bool BKE_subsurf_modifier_runtime_init(SubsurfModifierData *smd, const bool use_
 
   /* Allocate runtime data if it did not exist yet. */
   if (runtime_data == nullptr) {
-    runtime_data = MEM_callocN<SubsurfRuntimeData>(__func__);
+    runtime_data = MEM_new_zeroed<SubsurfRuntimeData>(__func__);
     smd->modifier.runtime = runtime_data;
   }
   runtime_data->settings = settings;
@@ -145,3 +151,5 @@ int BKE_subsurf_modifier_eval_required_mode(bool is_final_render, bool is_edit_m
 
   return eModifierMode_Realtime | (is_edit_mode ? int(eModifierMode_Editmode) : 0);
 }
+
+}  // namespace blender

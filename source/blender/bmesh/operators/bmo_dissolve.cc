@@ -12,8 +12,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_stack.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_stack_c.hh"
 #include "BLI_vector.hh"
 
 #include "bmesh.hh"
@@ -21,7 +21,7 @@
 
 #include "intern/bmesh_operators_private.hh"
 
-using blender::Vector;
+namespace blender {
 
 /* ***_ISGC: mark for garbage-collection */
 
@@ -65,7 +65,8 @@ static bool UNUSED_FUNCTION(check_hole_in_region)(BMesh *bm, BMFace *f)
            BMW_MASK_NOP,
            FACE_MARK,
            BMW_FLAG_NOP,
-           BMW_NIL_LAY);
+           BMW_NIL_LAY,
+           BMW_DELIMIT_NONE);
 
   for (f2 = static_cast<BMFace *>(BMW_begin(&regwalker, f)); f2;
        f2 = static_cast<BMFace *>(BMW_step(&regwalker)))
@@ -259,7 +260,8 @@ void bmo_dissolve_faces_exec(BMesh *bm, BMOperator *op)
              FACE_MARK,
              /* no need to check BMW_FLAG_TEST_HIDDEN, faces are already marked by the bmo. */
              BMW_FLAG_NOP,
-             BMW_NIL_LAY);
+             BMW_NIL_LAY,
+             BMW_DELIMIT_NONE);
 
     /* Check there are at least two faces before creating the array. */
     BMFace *faces_init[2];
@@ -296,12 +298,12 @@ void bmo_dissolve_faces_exec(BMesh *bm, BMOperator *op)
 
     BMFace *f_new = BM_faces_join(bm, faces.data(), faces_len, true, &f_double);
 
-    if (LIKELY(f_new)) {
+    if (f_new) [[likely]] {
 
       /* All the joined faces are gone and the fresh f_new represents their union. */
       totface_target -= faces_len - 1;
 
-      if (UNLIKELY(f_double)) {
+      if (f_double) [[unlikely]] {
         /* `BM_faces_join()` succeeded, but there is a double. Keep the pre-existing face
          * and retain its custom-data. Remove the newly made merge result. */
         BM_face_kill(bm, f_new);
@@ -388,7 +390,7 @@ static BMVert *bmo_find_end_of_chain(BMesh *bm, BMEdge *e, BMVert *v, const shor
     /* While this should never happen in the context this function is called.
      * Avoid an eternal loop even in the case of degenerate geometry. */
     BLI_assert(v != v_init);
-    if (UNLIKELY(v == v_init)) {
+    if (v == v_init) [[unlikely]] {
       return nullptr;
     }
   }
@@ -474,6 +476,8 @@ void bmo_dissolve_edges_exec(BMesh *bm, BMOperator *op)
 
   const bool use_face_split = BMO_slot_bool_get(op->slots_in, "use_face_split");
 
+  const bool use_preserve_quads = BMO_slot_bool_get(op->slots_in, "use_preserve_quads");
+
   if (use_face_split || use_verts) {
     BMO_slot_buffer_flag_enable(bm, op->slots_in, "edges", BM_EDGE, EDGE_TAG);
   }
@@ -541,7 +545,7 @@ void bmo_dissolve_edges_exec(BMesh *bm, BMOperator *op)
          * will still be dissolved, even if they happen to make an "un-triangulate" case.
          * This is not done when face split is active, because face split often creates triangle
          * pairs on edges that touch boundaries, resulting in the boundary vert not dissolving. */
-        if (f_pair[0]->len == 3 && f_pair[1]->len == 3 &&
+        if (use_preserve_quads && f_pair[0]->len == 3 && f_pair[1]->len == 3 &&
             bmo_vert_tagged_edges_count_at_most(bm, v_edge, EDGE_TAG, 2) == 1)
         {
           continue;
@@ -809,9 +813,9 @@ void bmo_dissolve_limit_exec(BMesh *bm, BMOperator *op)
                                angle_limit,
                                do_dissolve_boundaries,
                                delimit,
-                               (BMVert **)BMO_SLOT_AS_BUFFER(vinput),
+                               reinterpret_cast<BMVert **> BMO_SLOT_AS_BUFFER(vinput),
                                vinput->len,
-                               (BMEdge **)BMO_SLOT_AS_BUFFER(einput),
+                               reinterpret_cast<BMEdge **> BMO_SLOT_AS_BUFFER(einput),
                                einput->len,
                                FACE_NEW);
 
@@ -961,3 +965,5 @@ void bmo_dissolve_degenerate_exec(BMesh *bm, BMOperator *op)
 }
 
 /** \} */
+
+}  // namespace blender

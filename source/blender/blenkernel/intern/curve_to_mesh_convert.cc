@@ -2,6 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
+#include <limits>
+#include <numbers>
+
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_math_matrix.hh"
@@ -192,35 +199,83 @@ static float4x4 build_point_matrix(const float3 &location,
   return matrix;
 }
 
-static void fill_mesh_positions(const int main_point_num,
-                                const int profile_point_num,
-                                const Span<float3> main_positions,
+static float4x4 build_point_matrix_miter_scale(const float3 &location_prev,
+                                               const float3 &location,
+                                               const float3 &location_next,
+                                               const float3 &tangent,
+                                               const float3 &normal,
+                                               const float miter_scale_limit)
+{
+  float length_in;
+  float length_out;
+  const float3 dir_in = math::normalize_and_get_length(location - location_prev, length_in);
+  const float3 dir_out = math::normalize_and_get_length(location_next - location, length_out);
+  if (length_in < 1e-10f || length_out < 1e-10f) {
+    return build_point_matrix(location, tangent, normal);
+  }
+  const float cos_turn = math::dot(dir_in, dir_out);
+  if (cos_turn >= 1.0f || cos_turn == -1.0f) {
+    return build_point_matrix(location, tangent, normal);
+  }
+  float4x4 matrix = build_point_matrix(location, tangent, normal);
+  const float scale = math::min(math::sqrt(2.0f / (1.0f + cos_turn)), miter_scale_limit);
+  const float3 bisector = math::normalize(dir_out - dir_in);
+  matrix.x_axis() += (scale - 1.0f) * math::dot(matrix.x_axis(), bisector) * bisector;
+  matrix.y_axis() += (scale - 1.0f) * math::dot(matrix.y_axis(), bisector) * bisector;
+  return matrix;
+}
+
+static float4x4 build_point_matrix(const Span<float3> main_positions,
+                                   const Span<float3> tangents,
+                                   const Span<float3> normals,
+                                   const Span<float> scales,
+                                   const bool main_cyclic,
+                                   const std::optional<float> miter_scale_limit,
+                                   const int i_ring)
+{
+  const bool is_end = !main_cyclic && (i_ring == 0 || i_ring == main_positions.size() - 1);
+  float4x4 point_matrix;
+  if (!miter_scale_limit || is_end) {
+    point_matrix = build_point_matrix(main_positions[i_ring], normals[i_ring], tangents[i_ring]);
+  }
+  else {
+    const int i_ring_prev = i_ring == 0 ? main_positions.size() - 1 : i_ring - 1;
+    const int i_ring_next = i_ring == main_positions.size() - 1 ? 0 : i_ring + 1;
+    point_matrix = build_point_matrix_miter_scale(main_positions[i_ring_prev],
+                                                  main_positions[i_ring],
+                                                  main_positions[i_ring_next],
+                                                  normals[i_ring],
+                                                  tangents[i_ring],
+                                                  *miter_scale_limit);
+  }
+  if (!scales.is_empty()) {
+    point_matrix = math::scale(point_matrix, float3(scales[i_ring]));
+  }
+  return point_matrix;
+}
+
+static void fill_mesh_positions(const Span<float3> main_positions,
                                 const Span<float3> profile_positions,
                                 const Span<float3> tangents,
                                 const Span<float3> normals,
                                 const Span<float> scales,
+                                const bool main_cyclic,
+                                const std::optional<float> miter_scale_limit,
                                 MutableSpan<float3> mesh_positions)
 {
-  if (profile_point_num == 1) {
-    for (const int i_ring : IndexRange(main_point_num)) {
-      float4x4 point_matrix = build_point_matrix(
-          main_positions[i_ring], normals[i_ring], tangents[i_ring]);
-      if (!scales.is_empty()) {
-        point_matrix = math::scale(point_matrix, float3(scales[i_ring]));
-      }
+  if (profile_positions.size() == 1) {
+    for (const int i_ring : main_positions.index_range()) {
+      const float4x4 point_matrix = build_point_matrix(
+          main_positions, tangents, normals, scales, main_cyclic, miter_scale_limit, i_ring);
       mesh_positions[i_ring] = math::transform_point(point_matrix, profile_positions.first());
     }
   }
   else {
-    for (const int i_ring : IndexRange(main_point_num)) {
-      float4x4 point_matrix = build_point_matrix(
-          main_positions[i_ring], normals[i_ring], tangents[i_ring]);
-      if (!scales.is_empty()) {
-        point_matrix = math::scale(point_matrix, float3(scales[i_ring]));
-      }
-
-      const int ring_vert_start = i_ring * profile_point_num;
-      for (const int i_profile : IndexRange(profile_point_num)) {
+    for (const int i_ring : main_positions.index_range()) {
+      const float4x4 point_matrix = build_point_matrix(
+          main_positions, tangents, normals, scales, main_cyclic, miter_scale_limit, i_ring);
+      const int ring_vert_start = i_ring * profile_positions.size();
+      for (const int i_profile : profile_positions.index_range()) {
         mesh_positions[ring_vert_start + i_profile] = math::transform_point(
             point_matrix, profile_positions[i_profile]);
       }
@@ -355,14 +410,14 @@ static ResultOffsets calculate_result_offsets(const CurvesInfo &info, const bool
 }
 
 static AttrDomain get_attribute_domain_for_mesh(const AttributeAccessor &mesh_attributes,
-                                                const StringRef attribute_id)
+                                                const StringRef name)
 {
   /* Only use a different domain if it is builtin and must only exist on one domain. */
-  if (!mesh_attributes.is_builtin(attribute_id)) {
+  if (!mesh_attributes.is_builtin(name)) {
     return AttrDomain::Point;
   }
 
-  std::optional<AttributeMetaData> meta_data = mesh_attributes.lookup_meta_data(attribute_id);
+  std::optional<AttributeMetaData> meta_data = mesh_attributes.lookup_meta_data(name);
   if (!meta_data) {
     return AttrDomain::Point;
   }
@@ -372,25 +427,25 @@ static AttrDomain get_attribute_domain_for_mesh(const AttributeAccessor &mesh_at
 
 static bool should_add_attribute_to_mesh(const AttributeAccessor &curve_attributes,
                                          const AttributeAccessor &mesh_attributes,
-                                         const StringRef id,
+                                         const StringRef name,
                                          const AttributeMetaData &meta_data,
                                          const AttributeFilter &attribute_filter)
 {
 
-  if (id == "position") {
-    /* The position attribute has special non-generic evaluation. */
+  if (ELEM(name, "position", ".edge_verts", ".corner_vert", ".corner_edge")) {
+    /* These attributes have non-generic evaluation. */
     return false;
   }
-  if (id == "custom_normal") {
+  if (name == "custom_normal") {
     /* The custom normal attribute is builtin on both meshes and curves, but has a different
      * meaning and shouldn't be directly propagated. */
     return false;
   }
   /* Don't propagate built-in curves attributes that are not built-in on meshes. */
-  if (curve_attributes.is_builtin(id) && !mesh_attributes.is_builtin(id)) {
+  if (curve_attributes.is_builtin(name) && !mesh_attributes.is_builtin(name)) {
     return false;
   }
-  if (attribute_filter.allow_skip(id)) {
+  if (attribute_filter.allow_skip(name)) {
     return false;
   }
   if (meta_data.data_type == AttrType::String) {
@@ -493,6 +548,7 @@ static void foreach_curve_combination(const CurvesInfo &info,
 static void build_mesh_positions(const CurvesInfo &curves_info,
                                  const ResultOffsets &offsets,
                                  const VArray<float> &scales,
+                                 const std::optional<float> miter_scale_limit,
                                  Vector<std::byte> &eval_buffer,
                                  Mesh &mesh)
 {
@@ -528,13 +584,13 @@ static void build_mesh_positions(const CurvesInfo &curves_info,
     eval_scales = evaluate_attribute(scales, curves_info.main, eval_buffer).typed<float>();
   }
   foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
-    fill_mesh_positions(info.main_points.size(),
-                        info.profile_points.size(),
-                        main_positions.slice(info.main_points),
+    fill_mesh_positions(main_positions.slice(info.main_points),
                         profile_positions.slice(info.profile_points),
                         tangents.slice(info.main_points),
                         normals.slice(info.main_points),
                         eval_scales.is_empty() ? eval_scales : eval_scales.slice(info.main_points),
+                        info.main_cyclic,
+                        miter_scale_limit,
                         positions.slice(info.vert_range));
   });
 }
@@ -577,7 +633,7 @@ static void copy_main_point_data_to_mesh_faces(const Span<T> src,
 }
 
 static bool try_sharing_point_data(const CurvesGeometry &main,
-                                   const StringRef id,
+                                   const StringRef name,
                                    const GAttributeReader &src,
                                    MutableAttributeAccessor mesh_attributes)
 {
@@ -588,7 +644,7 @@ static bool try_sharing_point_data(const CurvesGeometry &main,
     return false;
   }
   return mesh_attributes.add(
-      id,
+      name,
       AttrDomain::Point,
       bke::cpp_type_to_attribute_type(src.varray.type()),
       AttributeInitShared(src.varray.get_internal_span().data(), *src.sharing_info));
@@ -609,7 +665,7 @@ static bool try_direct_evaluate_point_data(const CurvesGeometry &main,
 }
 
 static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_info,
-                                                     const StringRef id,
+                                                     const StringRef name,
                                                      const ResultOffsets &offsets,
                                                      const AttrDomain dst_domain,
                                                      const GAttributeReader &src_attribute,
@@ -617,12 +673,12 @@ static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_in
                                                      MutableAttributeAccessor mesh_attributes)
 {
   if (dst_domain == AttrDomain::Point) {
-    if (try_sharing_point_data(curves_info.main, id, src_attribute, mesh_attributes)) {
+    if (try_sharing_point_data(curves_info.main, name, src_attribute, mesh_attributes)) {
       return;
     }
   }
   GSpanAttributeWriter dst_attribute = mesh_attributes.lookup_or_add_for_write_only_span(
-      id, dst_domain, bke::cpp_type_to_attribute_type(src_attribute.varray.type()));
+      name, dst_domain, bke::cpp_type_to_attribute_type(src_attribute.varray.type()));
   if (!dst_attribute) {
     return;
   }
@@ -633,8 +689,7 @@ static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_in
     }
   }
   const GSpan src_all = evaluate_attribute(*src_attribute, curves_info.main, eval_buffer);
-  attribute_math::convert_to_static_type(src_attribute.varray.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(src_attribute.varray.type(), [&]<typename T>() {
     const Span<T> src = src_all.typed<T>();
     MutableSpan<T> dst = dst_attribute.span.typed<T>();
     switch (dst_domain) {
@@ -716,8 +771,7 @@ static void copy_profile_point_domain_attribute_to_mesh(const CurvesInfo &curves
                                                         const GSpan src_all,
                                                         GMutableSpan dst_all)
 {
-  attribute_math::convert_to_static_type(src_all.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(src_all.type(), [&]<typename T>() {
     const Span<T> src = src_all.typed<T>();
     MutableSpan<T> dst = dst_all.typed<T>();
     switch (dst_domain) {
@@ -793,8 +847,7 @@ static void copy_curve_domain_attribute_to_mesh(const ResultOffsets &mesh_offset
       BLI_assert_unreachable();
       return;
   }
-  attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(src.type(), [&]<typename T>() {
     copy_indices_to_offset_ranges(src.typed<T>(), curve_indices, offsets, dst.typed<T>());
   });
 }
@@ -837,8 +890,20 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
                           const CurvesGeometry &profile,
                           const VArray<float> &scales,
                           const bool fill_caps,
+                          const std::optional<float> miter_limit_angle,
                           const AttributeFilter &attribute_filter)
 {
+  /* Convert the limit turn angle to the maximum allowed miter scale factor (`1 / cos(angle / 2)`).
+   * At or past a 180 degree turn there is effectively no clamp. */
+  const std::optional<float> miter_scale_limit = [&]() -> std::optional<float> {
+    if (!miter_limit_angle) {
+      return std::nullopt;
+    }
+    return *miter_limit_angle >= std::numbers::pi_v<float> ?
+               std::numeric_limits<float>::max() :
+               1.0f / math::cos(*miter_limit_angle / 2.0f);
+  }();
+
   const CurvesInfo curves_info = get_curves_info(main, profile);
 
   const ResultOffsets offsets = calculate_result_offsets(curves_info, fill_caps);
@@ -849,7 +914,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
   /* Add the position attribute later so it can be shared in some cases. */
   Mesh *mesh = BKE_mesh_new_nomain(
       0, offsets.edge.last(), offsets.face.last(), offsets.loop.last());
-  CustomData_free_layer_named(&mesh->vert_data, "position");
+  mesh->attribute_storage.wrap().remove("position");
   mesh->verts_num = offsets.vert.last();
 
   MutableSpan<int2> edges = mesh->edges_for_write();
@@ -895,7 +960,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
   /* Make sure curve attributes can be interpolated. */
   main.ensure_can_interpolate_to_evaluated();
 
-  build_mesh_positions(curves_info, offsets, scales, eval_buffer, *mesh);
+  build_mesh_positions(curves_info, offsets, scales, miter_scale_limit, eval_buffer, *mesh);
 
   mesh->tag_overlapping_none();
   if (!offsets.any_single_point_main) {
@@ -946,6 +1011,13 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     const AttrType type = iter.data_type;
     const GAttributeReader src = iter.get();
     const AttrDomain dst_domain = get_attribute_domain_for_mesh(mesh_attributes, iter.name);
+    const CommonVArrayInfo info = src.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const GPointer value(src.varray.type(), info.data);
+      if (mesh_attributes.add(iter.name, dst_domain, type, bke::AttributeInitValue(value))) {
+        return;
+      }
+    }
 
     if (src_domain == AttrDomain::Point) {
       copy_main_point_domain_attribute_to_mesh(
@@ -981,8 +1053,15 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     const AttrDomain src_domain = iter.domain;
     const AttrType type = iter.data_type;
     const GVArray src = *iter.get();
-
     const AttrDomain dst_domain = get_attribute_domain_for_mesh(mesh_attributes, iter.name);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const GPointer value(src.type(), info.data);
+      if (mesh_attributes.add(iter.name, dst_domain, type, bke::AttributeInitValue(value))) {
+        return;
+      }
+    }
+
     GSpanAttributeWriter dst = mesh_attributes.lookup_or_add_for_write_only_span(
         iter.name, dst_domain, type);
     if (!dst) {
@@ -1020,7 +1099,7 @@ static CurvesGeometry get_curve_single_vert()
 Mesh *curve_to_wire_mesh(const CurvesGeometry &curve, const AttributeFilter &attribute_filter)
 {
   static const CurvesGeometry vert_curve = get_curve_single_vert();
-  return curve_to_mesh_sweep(curve, vert_curve, {}, false, attribute_filter);
+  return curve_to_mesh_sweep(curve, vert_curve, {}, false, std::nullopt, attribute_filter);
 }
 
 }  // namespace blender::bke

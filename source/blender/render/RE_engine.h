@@ -14,10 +14,14 @@
 #include "RE_bake.h"
 #include "RNA_types.hh"
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
-struct BakeTargets;
+namespace blender {
+
 struct BakePixel;
+struct BakeTargets;
+struct bNode;
+struct bNodeTree;
 struct Depsgraph;
 struct GPUContext;
 struct Main;
@@ -33,8 +37,6 @@ struct ReportList;
 struct Scene;
 struct ViewLayer;
 struct ViewRender;
-struct bNode;
-struct bNodeTree;
 
 /* External Engine */
 
@@ -51,6 +53,9 @@ enum RenderEngineTypeFlag {
   RE_USE_CUSTOM_FREESTYLE = (1 << 8),
   RE_USE_NO_IMAGE_SAVE = (1 << 9),
   RE_USE_MATERIALX = (1 << 10),
+  /** The `view_draw` callback writes depth to the active viewport framebuffer.
+   * This depth information should be used instead of doing our own depth pass. */
+  RE_WRITE_VIEWPORT_DEPTH = (1 << 11),
 };
 
 /** #RenderEngine.flag */
@@ -62,9 +67,15 @@ enum RenderEngineFlag {
   RE_ENGINE_RENDERING = (1 << 4),
   RE_ENGINE_HIGHLIGHT_TILES = (1 << 5),
   RE_ENGINE_CAN_DRAW = (1 << 6),
+  /** Viewport render paused by the user. */
+  RE_ENGINE_VIEW_PAUSED = (1 << 7),
+  /** Viewport render auto paused during final render or bake. */
+  RE_ENGINE_VIEW_PAUSED_AUTO = (1 << 8),
+  /** Pause state the engine was last notified about. */
+  RE_ENGINE_VIEW_PAUSED_NOTIFIED = (1 << 9),
 };
 
-extern ListBase R_engines;
+extern ListBaseT<RenderEngineType> R_engines;
 
 struct RenderEngineType {
   struct RenderEngineType *next, *prev;
@@ -103,6 +114,8 @@ struct RenderEngineType {
   void (*view_draw)(struct RenderEngine *engine,
                     const struct bContext *context,
                     struct Depsgraph *depsgraph);
+  void (*view_pause)(struct RenderEngine *engine, const struct bContext *context);
+  void (*view_resume)(struct RenderEngine *engine, const struct bContext *context);
 
   void (*update_script_node)(struct RenderEngine *engine,
                              struct bNodeTree *ntree,
@@ -135,7 +148,7 @@ struct RenderEngine {
   unsigned int layer_override;
 
   struct Render *re;
-  ListBase fullresult;
+  ListBaseT<RenderResult> fullresult;
   char text[/*IMA_MAX_RENDER_TEXT_SIZE*/ 512];
 
   int resolution_x, resolution_y;
@@ -160,7 +173,7 @@ struct RenderEngine {
   void *update_render_passes_data;
 
   /* GPU context. */
-  void *system_gpu_context; /* WindowManager GPU context -> GHOSTContext. */
+  GHOST_IContext *system_gpu_context; /* WindowManager GPU context -> GHOSTContext. */
   ThreadMutex blender_gpu_context_mutex;
   bool use_drw_render_context;
   struct GPUContext *blender_gpu_context;
@@ -268,13 +281,19 @@ void RE_engine_gpu_context_disable(struct RenderEngine *engine);
 void RE_engine_gpu_context_lock(struct RenderEngine *engine);
 void RE_engine_gpu_context_unlock(struct RenderEngine *engine);
 
+void RE_engine_view_pause_set(struct RenderEngine *engine, bool pause);
+bool RE_engine_view_pause_get(const struct RenderEngine *engine);
+void RE_engine_view_auto_pause_set(struct RenderEngine *engine, bool pause);
+bool RE_engine_view_pause_notify(struct RenderEngine *engine, const struct bContext *context);
+
 /* Engine Types */
 
-void RE_engines_init(void);
-void RE_engines_exit(void);
+void RE_engines_init();
+void RE_engines_exit();
 void RE_engines_register(RenderEngineType *render_type);
 
 RenderEngineType *RE_engines_find(const char *idname);
+bool RE_engines_is_registered(const char *idname);
 
 const rcti *RE_engine_get_current_tiles(struct Render *re, int *r_total_tiles);
 struct RenderData *RE_engine_get_render_data(struct Render *re);
@@ -287,3 +306,5 @@ void RE_engine_free_blender_memory(struct RenderEngine *engine);
 void RE_engine_tile_highlight_set(
     struct RenderEngine *engine, int x, int y, int width, int height, bool highlight);
 void RE_engine_tile_highlight_clear_all(struct RenderEngine *engine);
+
+}  // namespace blender

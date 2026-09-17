@@ -25,7 +25,7 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
@@ -422,7 +422,7 @@ int BezierCurveShader::shade(Stroke &stroke) const
   else {
     nExtraVertex = newsize - originalSize;
     if (nExtraVertex != 0) {
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         cout << "Bezier Shader : Stroke " << stroke.getId() << " have not been resampled" << endl;
       }
     }
@@ -431,14 +431,12 @@ int BezierCurveShader::shade(Stroke &stroke) const
   // assigns the new coordinates:
   p = CurveVertices.begin();
   vector<Vec2d>::iterator last = p;
-  int n;
   StrokeInternal::StrokeVertexIterator it, itend;
-  for (n = 0,
-      it = stroke.strokeVerticesBegin(),
+  for (it = stroke.strokeVerticesBegin(),
       itend = stroke.strokeVerticesEnd(),
       pend = CurveVertices.end();
        (it != itend) && (p != pend);
-       ++it, ++p, ++n)
+       ++it, ++p)
   {
     it->setX(p->x());
     it->setY(p->y());
@@ -454,11 +452,11 @@ int BezierCurveShader::shade(Stroke &stroke) const
   // nExtraVertex should stay unassigned
   vector<StrokeAttribute> attributes;
   vector<StrokeVertex *> verticesToRemove;
-  for (int i = 0; i < nExtraVertex; ++i, ++it, ++n) {
+  for (int i = 0; i < nExtraVertex; ++i, ++it) {
     verticesToRemove.push_back(&(*it));
     if (it.isEnd()) {
       // XXX Shocking! :P Shouldn't we break in this case???
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         cout << "messed up!" << endl;
       }
     }

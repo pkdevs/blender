@@ -20,15 +20,17 @@
 #include "UI_abstract_view.hh"
 #include "UI_resources.hh"
 
+namespace blender {
+
 struct bContext;
-struct uiBlock;
-struct uiLayout;
 struct View2D;
 
-namespace blender::ui {
+namespace ui {
 
 class AbstractGridView;
 class GridViewItemDropTarget;
+
+struct Layout;
 
 /* ---------------------------------------------------------------------- */
 /** \name Grid-View Item Type
@@ -49,7 +51,7 @@ class AbstractGridViewItem : public AbstractViewItem {
  public:
   /* virtual */ ~AbstractGridViewItem() override = default;
 
-  virtual void build_grid_tile(const bContext &C, uiLayout &layout) const = 0;
+  virtual void build_grid_tile(const bContext &C, Layout &layout) const = 0;
 
   /* virtual */ std::optional<std::string> debug_name() const override;
 
@@ -65,7 +67,7 @@ class AbstractGridViewItem : public AbstractViewItem {
   virtual std::unique_ptr<GridViewItemDropTarget> create_drop_target();
 
  private:
-  void add_grid_tile_button(uiBlock &block);
+  void add_grid_tile_button(Block &block);
 };
 
 /** \} */
@@ -93,6 +95,7 @@ class AbstractGridView : public AbstractView {
    * #update_from_old(). */
   Map<StringRef, AbstractGridViewItem *> item_map_;
   GridViewStyle style_;
+  int cols_per_row_ = 0;
 
  public:
   AbstractGridView();
@@ -121,6 +124,17 @@ class AbstractGridView : public AbstractView {
   int get_item_count_filtered() const;
 
   void set_tile_size(int tile_width, int tile_height);
+  AbstractViewItem *find_active_or_visible_item() const override;
+  AbstractViewItem *navigate_left(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_right(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_up(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_down(AbstractViewItem *from) override;
+
+  void scroll_active_into_view(bContext *C, bool scroll_active_to_center = false) override;
+  void page_scroll(bContext *C, PageScrollDirection direction) override;
+
+  IndexRange get_visible_range(const View2D &v2d,
+                               const AbstractGridViewItem *force_visible_item) const;
 
  protected:
   virtual void build_items() = 0;
@@ -171,11 +185,11 @@ class GridViewItemDropTarget : public DropTargetInterface {
 
 class GridViewBuilder {
  public:
-  GridViewBuilder(uiBlock &block);
+  GridViewBuilder(Block &block);
 
   void build_grid_view(const bContext &C,
                        AbstractGridView &grid_view,
-                       uiLayout &layout,
+                       Layout &layout,
                        std::optional<StringRef> search_string = {});
 };
 
@@ -209,9 +223,9 @@ class PreviewGridItem : public AbstractGridViewItem {
 
   PreviewGridItem(StringRef identifier, StringRef label, int preview_icon_id);
 
-  void build_grid_tile(const bContext &C, uiLayout &layout) const override;
+  void build_grid_tile(const bContext &C, Layout &layout) const override;
 
-  void build_grid_tile_button(uiLayout &layout,
+  void build_grid_tile_button(Layout &layout,
                               BIFIconID override_preview_icon_id = ICON_NONE) const;
 
   /**
@@ -251,4 +265,5 @@ template<class ViewType> ViewType &GridViewItemDropTarget::get_view() const
   return dynamic_cast<ViewType &>(view_);
 }
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

@@ -25,6 +25,8 @@ bool use_optix_denoiser(Device *denoiser_device, const DenoiseParams &params);
 
 bool use_gpu_oidn_denoiser(Device *denoiser_device, const DenoiseParams &params);
 
+bool use_dlss_denoiser(Device *denoiser_device, const DenoiseParams &params);
+
 DenoiseParams get_effective_denoise_params(Device *denoiser_device,
                                            Device *cpu_fallback_device,
                                            const DenoiseParams &params,
@@ -58,6 +60,8 @@ class Denoiser {
   void set_params(const DenoiseParams &params);
   const DenoiseParams &get_params() const;
 
+  static bool is_device_supported(DenoiserType type, const DeviceInfo &denoise_device_info);
+
   /* Recommended type for viewport denoising. */
   static DenoiserType automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info);
 
@@ -90,9 +94,11 @@ class Denoiser {
    * Returns true when all passes are denoised. Will return false if there is a denoiser error (for
    * example, caused by misconfigured denoiser) or when user requested to cancel rendering. */
   virtual bool denoise_buffer(const BufferParams &buffer_params,
+                              const BufferParams &denoised_buffer_params,
                               RenderBuffers *render_buffers,
-                              const int num_samples,
-                              bool allow_inplace_modification) = 0;
+                              int num_samples,
+                              bool allow_inplace_modification,
+                              float2 pixel_jitter = {}) = 0;
 
   /* Get a device which is used to perform actual denoising.
    *
@@ -123,10 +129,6 @@ class Denoiser {
 
  protected:
   Denoiser(Device *denoiser_device, const DenoiseParams &params);
-
-  /* Get device type mask which is used to filter available devices when new device needs to be
-   * created. */
-  virtual uint get_device_type_mask() const = 0;
 
   Device *denoiser_device_;
   bool denoise_kernels_are_loaded_;

@@ -69,7 +69,13 @@ def rna_idprop_value_item_type(value):
 
 
 def rna_idprop_ui_prop_default_set(item, prop, value):
-    ui_data = item.id_properties_ui(prop)
+    # NOTE: the internal check to know if a property supports UI is not exposed.
+    # Use an exception here and assert this isn't catching unrelated errors.
+    try:
+        ui_data = item.id_properties_ui(prop)
+    except TypeError as ex:
+        assert ex.args and ("does not support UI data" in ex.args[0])
+        return
     ui_data.update(default=value)
 
 
@@ -200,7 +206,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
         elif to_list:
             value = to_list()
 
-        split = layout.split(factor=0.4, align=True)
+        split = layout.split(factor=layout.property_split_factor, align=True)
         label_row = split.row()
         label_row.alignment = 'RIGHT'
         label_row.label(text=key, translate=False)

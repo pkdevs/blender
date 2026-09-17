@@ -6,8 +6,6 @@
  * \ingroup spseq
  */
 
-#include <cstdlib>
-
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
@@ -25,6 +23,7 @@ void sequencer_operatortypes()
 {
   /* `sequencer_edit.cc` */
   WM_operatortype_append(SEQUENCER_OT_split);
+  WM_operatortype_append(SEQUENCER_OT_box_blade);
   WM_operatortype_append(SEQUENCER_OT_slip);
   WM_operatortype_append(SEQUENCER_OT_mute);
   WM_operatortype_append(SEQUENCER_OT_unmute);
@@ -38,6 +37,7 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_swap_inputs);
   WM_operatortype_append(SEQUENCER_OT_duplicate);
   WM_operatortype_append(SEQUENCER_OT_delete);
+  WM_operatortype_append(SEQUENCER_OT_ripple_delete);
   WM_operatortype_append(SEQUENCER_OT_offset_clear);
   WM_operatortype_append(SEQUENCER_OT_images_separate);
   WM_operatortype_append(SEQUENCER_OT_meta_toggle);
@@ -108,6 +108,7 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_select_lasso);
   WM_operatortype_append(SEQUENCER_OT_select_circle);
   WM_operatortype_append(SEQUENCER_OT_select_grouped);
+  WM_operatortype_append(SEQUENCER_OT_select_by_type);
 
   /* `sequencer_add.cc` */
   WM_operatortype_append(SEQUENCER_OT_scene_strip_add);
@@ -117,14 +118,16 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_movie_strip_add);
   WM_operatortype_append(SEQUENCER_OT_sound_strip_add);
   WM_operatortype_append(SEQUENCER_OT_image_strip_add);
+  WM_operatortype_append(SEQUENCER_OT_text_strip_add);
   WM_operatortype_append(SEQUENCER_OT_effect_strip_add);
   WM_operatortype_append(SEQUENCER_OT_add_scene_strip_from_scene_asset);
 
-  /* sequencer_modifiers.c */
+  /* sequencer_modifier.cc */
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_add);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_remove);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_move);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_copy);
+  WM_operatortype_append(SEQUENCER_OT_strip_modifier_duplicate);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_move_to_index);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_set_active);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_equalizer_redefine);
@@ -140,6 +143,8 @@ void sequencer_operatortypes()
 
   /* `sequencer_channels_edit.cc` */
   WM_operatortype_append(SEQUENCER_OT_rename_channel);
+
+  sequencer_strip_modifier_add_asset_register();
 }
 
 void sequencer_keymap(wmKeyConfig *keyconf)

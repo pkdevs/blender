@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "BLI_math_bits.h"
+#include "BLI_math_bits.hh"
 #include "GPU_batch.hh"
 #include "GPU_vertex_format.hh"
 
@@ -119,7 +119,7 @@ struct MTLVertexDescriptor {
 
   uint64_t hash() const
   {
-    uint64_t hash = (uint64_t)(this->max_attribute_value ^ this->num_vert_buffers);
+    uint64_t hash = uint64_t(this->max_attribute_value ^ this->num_vert_buffers);
     for (const int a : IndexRange(this->max_attribute_value + 1)) {
       hash ^= this->attributes[a].hash() << a;
     }
@@ -178,6 +178,7 @@ struct MTLRenderPipelineStateDescriptor {
   MTLPixelFormat color_attachment_format[GPU_FB_MAX_COLOR_ATTACHMENT];
   MTLPixelFormat depth_attachment_format;
   MTLPixelFormat stencil_attachment_format;
+  uint8_t color_attachment_mask = 0xFF;
 
   /* Render Pipeline State affecting PSO creation. */
   bool blending_enabled;
@@ -221,6 +222,7 @@ struct MTLRenderPipelineStateDescriptor {
         (dest_rgb_blend_factor != other.dest_rgb_blend_factor) ||
         (src_alpha_blend_factor != other.src_alpha_blend_factor) ||
         (src_rgb_blend_factor != other.src_rgb_blend_factor) ||
+        (color_attachment_mask != other.color_attachment_mask) ||
         (vertex_descriptor.prim_topology_class != other.vertex_descriptor.prim_topology_class) ||
         (point_size != other.point_size))
     {
@@ -253,8 +255,7 @@ struct MTLRenderPipelineStateDescriptor {
     hash ^= uint64_t(this->num_color_attachments) << 16;     /* up to 6 (3 bits). */
     hash ^= uint64_t(this->depth_attachment_format) << 18;   /* up to 555 (9 bits). */
     hash ^= uint64_t(this->stencil_attachment_format) << 20; /* up to 555 (9 bits). */
-    hash ^= uint64_t(
-        *((uint64_t *)&this->vertex_descriptor.prim_topology_class)); /* Up to 3 (2 bits). */
+    hash ^= (*((uint64_t *)&this->vertex_descriptor.prim_topology_class)); /* Up to 3 (2 bits). */
 
     /* Only include elements in Hash if they are needed - avoids variable null assignments
      * influencing hash. */
@@ -266,6 +267,7 @@ struct MTLRenderPipelineStateDescriptor {
       hash ^= uint64_t(this->dest_rgb_blend_factor) << 37;   /* Up to 18 (5 bits). */
       hash ^= uint64_t(this->src_alpha_blend_factor) << 42;  /* Up to 18 (5 bits). */
       hash ^= uint64_t(this->src_rgb_blend_factor) << 47;    /* Up to 18 (5 bits). */
+      hash ^= uint64_t(this->color_attachment_mask) << 47;   /* 8 bit bit-mask. */
 
       for (const uint c : IndexRange(GPU_FB_MAX_COLOR_ATTACHMENT)) {
         hash ^= uint64_t(this->color_attachment_format[c]) << (c + 52); /* Up to 555 (9 bits). */

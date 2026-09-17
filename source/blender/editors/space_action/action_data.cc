@@ -10,8 +10,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -46,6 +46,8 @@
 
 #include "action_intern.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Utilities
  * \{ */
@@ -55,10 +57,10 @@ AnimData *ED_actedit_animdata_from_context(const bContext *C, ID **r_adt_id_owne
   { /* Support use from the layout.template_action() UI template. */
     PointerRNA ptr = {};
     PropertyRNA *prop = nullptr;
-    UI_context_active_but_prop_get_templateID(C, &ptr, &prop);
+    ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
     /* template_action() sets a RNA_AnimData pointer, whereas other code may set
      * other pointer types. This code here only deals with the former. */
-    if (prop && ptr.type == &RNA_AnimData) {
+    if (prop && ptr.type == RNA_AnimData) {
       if (!RNA_property_editable(&ptr, prop)) {
         return nullptr;
       }
@@ -75,7 +77,7 @@ AnimData *ED_actedit_animdata_from_context(const bContext *C, ID **r_adt_id_owne
     return nullptr;
   }
 
-  SpaceAction *saction = (SpaceAction *)space_data;
+  SpaceAction *saction = reinterpret_cast<SpaceAction *>(space_data);
   Object *ob = CTX_data_active_object(C);
   AnimData *adt = nullptr;
 
@@ -118,7 +120,7 @@ static bAction *action_create_new(bContext *C, bAction *oldact)
    */
   if (oldact && GS(oldact->id.name) == ID_AC) {
     /* make a copy of the existing action */
-    action = (bAction *)BKE_id_copy(CTX_data_main(C), &oldact->id);
+    action = id_cast<bAction *>(BKE_id_copy(CTX_data_main(C), &oldact->id));
   }
   else {
     /* just make a new (empty) action */
@@ -152,7 +154,7 @@ static bool action_new_poll(bContext *C)
   { /* Support use from the layout.template_action() UI template. */
     PointerRNA ptr = {};
     PropertyRNA *prop = nullptr;
-    UI_context_active_but_prop_get_templateID(C, &ptr, &prop);
+    ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
     if (prop) {
       return RNA_property_editable(&ptr, prop);
     }
@@ -164,7 +166,7 @@ static bool action_new_poll(bContext *C)
   /* NOTE: unlike for pushdown,
    * this operator needs to be run when creating an action from nothing... */
   if (ED_operator_action_active(C)) {
-    SpaceAction *saction = (SpaceAction *)CTX_wm_space_data(C);
+    SpaceAction *saction = reinterpret_cast<SpaceAction *>(CTX_wm_space_data(C));
     Object *ob = CTX_data_active_object(C);
 
     /* For now, actions are only for the active object, and on object and shape-key levels... */
@@ -204,27 +206,27 @@ static wmOperatorStatus action_new_exec(bContext *C, wmOperator * /*op*/)
   AnimData *adt = nullptr;
   ID *adt_id_owner = nullptr;
   /* hook into UI */
-  UI_context_active_but_prop_get_templateID(C, &ptr, &prop);
+  ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
 
   if (prop) {
     /* The operator was called from a button. */
     PointerRNA oldptr;
 
     oldptr = RNA_property_pointer_get(&ptr, prop);
-    oldact = (bAction *)oldptr.owner_id;
+    oldact = id_cast<bAction *>(oldptr.owner_id);
 
     /* stash the old action to prevent it from being lost */
-    if (ptr.type == &RNA_AnimData) {
+    if (ptr.type == RNA_AnimData) {
       adt = static_cast<AnimData *>(ptr.data);
       adt_id_owner = ptr.owner_id;
     }
-    else if (ptr.type == &RNA_SpaceDopeSheetEditor) {
+    else if (ptr.type == RNA_SpaceDopeSheetEditor) {
       adt = ED_actedit_animdata_from_context(C, &adt_id_owner);
     }
   }
   else {
     adt = ED_actedit_animdata_from_context(C, &adt_id_owner);
-    oldact = adt->action;
+    oldact = adt ? adt->action : nullptr;
   }
   {
     bAction *action = nullptr;
@@ -308,7 +310,7 @@ static wmOperatorStatus action_pushdown_exec(bContext *C, wmOperator * /*op*/)
 
   /* Do the deed... */
   if (adt && adt->action) {
-    blender::animrig::Action &action = adt->action->wrap();
+    animrig::Action &action = adt->action->wrap();
 
     /* action can be safely added */
     BKE_nla_action_pushdown({*adt_id_owner, *adt}, ID_IS_OVERRIDE_LIBRARY(adt_id_owner));
@@ -360,7 +362,7 @@ static wmOperatorStatus action_stash_exec(bContext *C, wmOperator *op)
       BKE_report(op->reports, RPT_ERROR, "Action+Slot has already been stashed");
     }
 
-    if (!blender::animrig::unassign_action({*adt_id_owner, *adt})) {
+    if (!animrig::unassign_action({*adt_id_owner, *adt})) {
       BKE_report(op->reports, RPT_ERROR, "Could not unassign the active Action");
     }
   }
@@ -420,7 +422,7 @@ static bool action_stash_create_poll(bContext *C)
        * (which may not be totally valid yet if the action editor was used and things are
        * now in an inconsistent state)
        */
-      SpaceAction *saction = (SpaceAction *)CTX_wm_space_data(C);
+      SpaceAction *saction = reinterpret_cast<SpaceAction *>(CTX_wm_space_data(C));
       Scene *scene = CTX_data_scene(C);
 
       if (!(scene->flag & SCE_NLA_EDIT_ON)) {
@@ -444,7 +446,7 @@ static wmOperatorStatus action_stash_create_exec(bContext *C, wmOperator *op)
   if (adt->action == nullptr) {
     /* just create a new action */
     bAction *action = action_create_new(C, nullptr);
-    if (!blender::animrig::assign_action(action, {*adt_id_owner, *adt})) {
+    if (!animrig::assign_action(action, {*adt_id_owner, *adt})) {
       BKE_reportf(
           op->reports, RPT_ERROR, "Could not assign a new Action to %s", adt_id_owner->name + 2);
     }
@@ -457,7 +459,7 @@ static wmOperatorStatus action_stash_create_exec(bContext *C, wmOperator *op)
       /* Create new action not based on the old one
        * (since the "new" operator already does that). */
       new_action = action_create_new(C, nullptr);
-      if (!blender::animrig::assign_action(new_action, {*adt_id_owner, *adt})) {
+      if (!animrig::assign_action(new_action, {*adt_id_owner, *adt})) {
         BKE_reportf(
             op->reports, RPT_ERROR, "Could not assign a new Action to %s", adt_id_owner->name + 2);
       }
@@ -465,7 +467,7 @@ static wmOperatorStatus action_stash_create_exec(bContext *C, wmOperator *op)
     else {
       /* action has already been added - simply warn about this, and clear */
       BKE_report(op->reports, RPT_ERROR, "Action+Slot has already been stashed");
-      if (!blender::animrig::unassign_action({*adt_id_owner, *adt})) {
+      if (!animrig::unassign_action({*adt_id_owner, *adt})) {
         BKE_reportf(
             op->reports, RPT_ERROR, "Could not un-assign Action from %s", adt_id_owner->name + 2);
       }
@@ -536,18 +538,18 @@ void ED_animedit_unlink_action(
       NlaTrack *nlt, *nlt_next;
       NlaStrip *strip, *nstrip;
 
-      for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first); nlt; nlt = nlt_next) {
+      for (nlt = adt->nla_tracks.first(); nlt; nlt = nlt_next) {
         nlt_next = nlt->next;
 
         if (strstr(nlt->name, DATA_("[Action Stash]"))) {
-          for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = nstrip) {
+          for (strip = nlt->strips.first(); strip; strip = nstrip) {
             nstrip = strip->next;
 
             if (strip->act == act) {
               /* Remove this strip, and the track too if it doesn't have anything else */
               BKE_nlastrip_remove_and_free(&nlt->strips, strip, true);
 
-              if (nlt->strips.first == nullptr) {
+              if (nlt->strips.first_ == nullptr) {
                 BLI_assert(nstrip == nullptr);
                 BKE_nlatrack_remove_and_free(&adt->nla_tracks, nlt, true);
               }
@@ -572,10 +574,10 @@ void ED_animedit_unlink_action(
   }
   else {
     /* Clear AnimData -> action via RNA, so that it triggers message bus updates. */
-    PointerRNA ptr = RNA_pointer_create_discrete(id, &RNA_AnimData, adt);
+    PointerRNA ptr = RNA_pointer_create_discrete(id, RNA_AnimData, adt);
     PropertyRNA *prop = RNA_struct_find_property(&ptr, "action");
 
-    RNA_property_pointer_set(&ptr, prop, PointerRNA_NULL, nullptr);
+    RNA_property_pointer_set(&ptr, prop, {}, nullptr);
     RNA_property_update(C, &ptr, prop);
   }
 }
@@ -647,3 +649,5 @@ void ACTION_OT_unlink(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

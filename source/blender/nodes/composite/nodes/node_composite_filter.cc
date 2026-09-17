@@ -2,13 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
+
+#include "BKE_node_runtime.hh"
 
 #include "RNA_types.hh"
 
@@ -39,23 +37,25 @@ static const EnumPropertyItem type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static void cmp_node_filter_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Menu>("Type")
+  b.add_input<decl::Menu>("Type"_ustr)
       .default_value(CMP_NODE_FILTER_SOFT)
       .static_items(type_items)
       .optional_label();
@@ -66,16 +66,16 @@ class SocketSearchOp {
   CMPNodeFilterMethod filter_type = CMP_NODE_FILTER_SOFT;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("CompositorNodeFilter");
-    bNodeSocket &type_socket = *blender::bke::node_find_socket(node, SOCK_IN, "Type");
+    bNode &node = params.add_node("CompositorNodeFilter"_ustr);
+    bNodeSocket &type_socket = *bke::node_find_socket(node, SOCK_IN, "Type"_ustr);
     type_socket.default_value_typed<bNodeSocketValueMenu>()->value = this->filter_type;
-    params.update_and_connect_available_socket(node, "Image");
+    params.update_and_connect_available_socket(node, "Image"_ustr);
   }
 };
 
 static void gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const eNodeSocketDatatype from_socket_type = eNodeSocketDatatype(params.other_socket().type);
+  const eNodeSocketDatatype from_socket_type = params.other_socket().type;
   if (!params.node_tree().typeinfo->validate_link(from_socket_type, SOCK_RGBA)) {
     return;
   }
@@ -124,7 +124,7 @@ class FilterOperation : public NodeOperation {
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &factor = get_input("Fac");
-    factor.bind_as_texture(shader, "factor_tx");
+    gpu::Texture *factor_texture = factor.bind_as_texture_or_single_value(shader, "factor_tx");
 
     const Domain domain = compute_domain();
 
@@ -132,10 +132,10 @@ class FilterOperation : public NodeOperation {
     output_image.allocate_texture(domain);
     output_image.bind_as_image(shader, "output_img");
 
-    compute_dispatch_threads_at_least(shader, domain.size);
+    compute_dispatch_threads_at_least(shader, domain.data_size);
 
     input_image.unbind_as_texture();
-    factor.unbind_as_texture();
+    factor.unbind_as_texture_or_single_value(factor_texture);
     output_image.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -160,7 +160,7 @@ class FilterOperation : public NodeOperation {
     output.allocate_texture(domain);
 
     if (this->is_edge_filter()) {
-      parallel_for(domain.size, [&](const int2 texel) {
+      parallel_for(domain.data_size, [&](const int2 texel) {
         /* Compute the dot product between the 3x3 window around the pixel and the edge detection
          * kernel in the X direction and Y direction. The Y direction kernel is computed by
          * transposing the given X direction kernel. */
@@ -190,7 +190,7 @@ class FilterOperation : public NodeOperation {
       });
     }
     else {
-      parallel_for(domain.size, [&](const int2 texel) {
+      parallel_for(domain.data_size, [&](const int2 texel) {
         /* Compute the dot product between the 3x3 window around the pixel and the kernel. */
         float4 color = float4(0.0f);
         for (int j = 0; j < 3; j++) {
@@ -280,36 +280,32 @@ class FilterOperation : public NodeOperation {
 
   CMPNodeFilterMethod get_type()
   {
-    const Result &input = this->get_input("Type");
-    const MenuValue default_menu_value = MenuValue(CMP_NODE_FILTER_SOFT);
-    const MenuValue menu_value = input.get_single_value_default(default_menu_value);
-    return static_cast<CMPNodeFilterMethod>(menu_value.value);
+    return CMPNodeFilterMethod(
+        this->get_input("Type").get_single_value_default<MenuValue>().value);
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new FilterOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_filter_cc
-
-static void register_node_type_cmp_filter()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_filter_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeFilter", CMP_NODE_FILTER);
+  cmp_node_type_base(&ntype, "CompositorNodeFilter"_ustr, CMP_NODE_FILTER);
   ntype.ui_name = "Filter";
   ntype.ui_description = "Apply common image enhancement filters";
   ntype.enum_name_legacy = "FILTER";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_filter_declare;
+  ntype.declare = node_declare;
   ntype.flag |= NODE_PREVIEW;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-  ntype.gather_link_search_ops = file_ns::gather_link_searches;
+  ntype.get_compositor_operation = get_compositor_operation;
+  ntype.gather_link_search_ops = gather_link_searches;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_filter)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_filter_cc

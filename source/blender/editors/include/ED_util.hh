@@ -10,11 +10,13 @@
 
 #include "WM_types.hh"
 
+namespace blender {
+
 struct Main;
 struct bContext;
 class WorkspaceStatus;
 
-namespace blender::bke::id {
+namespace bke::id {
 class IDRemapper;
 }
 
@@ -27,16 +29,13 @@ void ED_editors_init(bContext *C);
  */
 void ED_editors_exit(Main *bmain, bool do_undo_system);
 
-bool ED_editors_flush_edits_for_object_ex(Main *bmain,
-                                          Object *ob,
-                                          bool for_render,
-                                          bool check_needs_flush);
+bool ED_editors_flush_edits_for_object_ex(Main *bmain, Object *ob, bool check_needs_flush);
 bool ED_editors_flush_edits_for_object(Main *bmain, Object *ob);
 
 /**
  * Flush any temp data from object editing to DNA before writing files, rendering, copying, etc.
  */
-bool ED_editors_flush_edits_ex(Main *bmain, bool for_render, bool check_needs_flush);
+bool ED_editors_flush_edits_ex(Main *bmain, bool check_needs_flush);
 bool ED_editors_flush_edits(Main *bmain);
 
 /**
@@ -45,22 +44,20 @@ bool ED_editors_flush_edits(Main *bmain);
  * \param new_id: may be NULL to unlink \a old_id.
  */
 void ED_spacedata_id_remap_single(ScrArea *area, SpaceLink *sl, ID *old_id, ID *new_id);
-void ED_spacedata_id_remap(ScrArea *area,
-                           SpaceLink *sl,
-                           const blender::bke::id::IDRemapper &mappings);
+void ED_spacedata_id_remap(ScrArea *area, SpaceLink *sl, const bke::id::IDRemapper &mappings);
 
 /**
  * Helper for context sensitive operations: Returns the "id" context member wrapped in a
  * #PointerRNA vector. Useful when the API uses vectors to also support acting on multiple IDs,
  * e.g. as returned by #ED_operator_get_ids_from_context_as_vec().
  */
-blender::Vector<PointerRNA> ED_operator_single_id_from_context_as_vec(const bContext *C);
+Vector<PointerRNA> ED_operator_single_id_from_context_as_vec(const bContext *C);
 /**
  * Helper for context sensitive operations: Returns the "selected_ids" context member or, if none,
  * the "id" context member as a #PointerRNA vector. Batch operations can use this to get all IDs to
  * act on, including a fallback to the active ID if there's no selection.
  */
-blender::Vector<PointerRNA> ED_operator_get_ids_from_context_as_vec(const bContext *C);
+Vector<PointerRNA> ED_operator_get_ids_from_context_as_vec(const bContext *C);
 
 void ED_operatortypes_edutils();
 
@@ -77,16 +74,14 @@ void ED_region_draw_mouse_line_cb(const bContext *C, ARegion *region, void *arg_
 void ED_region_image_metadata_draw(
     int x, int y, const ImBuf *ibuf, const rctf *frame, float zoomx, float zoomy);
 
-void ED_region_image_overlay_info_text_draw(const int render_size_x,
-                                            const int render_size_y,
+void ED_region_overlay_info_text_draw(const int render_size_x,
+                                      const int render_size_y,
+                                      const int viewer_size_x,
+                                      const int viewer_size_y,
+                                      const int draw_offset_x,
+                                      const int draw_offset_y);
 
-                                            const int viewer_size_x,
-                                            const int viewer_size_y,
-
-                                            const int draw_offset_x,
-                                            const int draw_offset_y);
-
-void ED_region_image_render_region_draw(
+void ED_region_render_region_draw(
     int x, int y, const rcti *frame, float zoomx, float zoomy, float passepartout_alpha);
 
 /* Slider */
@@ -145,6 +140,14 @@ void ED_slider_unit_set(tSlider *slider, const char *unit);
  * To clear, set to an empty string. */
 void ED_slider_property_label_set(tSlider *slider, const char *property_label);
 
+/* Composition Guides */
+enum eCompositionGuideFlags : short;
+
+void ED_draw_composition_guides(uint shdr_pos,
+                                eCompositionGuideFlags flag,
+                                const rctf *rect,
+                                const float color[4]);
+
 /* ************** XXX OLD CRUFT WARNING ************* */
 
 /**
@@ -162,3 +165,5 @@ void unpack_menu(bContext *C,
                  const char *abs_name,
                  const char *folder,
                  PackedFile *pf);
+
+}  // namespace blender

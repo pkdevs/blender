@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
-from ....tree import VExportNode
 from ....cache import cached
 from ...keyframes import Keyframe
 from ..sampling_cache import get_cache_data
@@ -29,6 +28,7 @@ def gather_object_sampled_keyframes(
 
     while frame <= end_frame:
         key = Keyframe(None, frame, channel)
+        key.set_id_type("OBJECT")
 
         mat = get_cache_data(
             'matrix',

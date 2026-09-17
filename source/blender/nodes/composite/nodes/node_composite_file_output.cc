@@ -2,19 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include <cstring>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_pointer.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -57,8 +53,6 @@
 
 #include "node_composite_util.hh"
 
-namespace path_templates = blender::bke::path_templates;
-
 namespace blender::nodes::node_composite_file_output_cc {
 
 NODE_STORAGE_FUNCS(NodeCompositorFileOutput)
@@ -87,42 +81,45 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   for (const int i : IndexRange(storage.items_count)) {
     const NodeCompositorFileOutputItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
+    const eNodeSocketDatatype socket_type = item.socket_type;
     const std::string identifier = FileOutputItemsAccessor::socket_identifier_for_item(item);
     BaseSocketDeclarationBuilder *declaration = nullptr;
     if (socket_type == SOCK_VECTOR) {
-      declaration = &b.add_input<decl::Vector>(item.name, identifier)
+      declaration = &b.add_input<decl::Vector>(UString(item.name), UString(identifier))
                          .dimensions(item.vector_socket_dimensions);
     }
     else {
-      declaration = &b.add_input(socket_type, item.name, identifier);
+      declaration = &b.add_input(socket_type, UString(item.name), UString(identifier));
     }
     declaration->structure_type(StructureType::Dynamic)
         .compositor_realization_mode(realization_mode)
-        .socket_name_ptr(&node_tree->id, FileOutputItemsAccessor::item_srna, &item, "name");
+        .socket_name_ptr(&node_tree->id, *FileOutputItemsAccessor::item_srna, &item, "name");
   }
 
-  b.add_input<decl::Extend>("", "__extend__");
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<FileOutputItemsAccessor>());
 }
 
-static void node_init(const bContext *C, PointerRNA *node_pointer)
+static void node_init(bNodeTree *node_tree, bNode *node)
 {
-  bNode *node = node_pointer->data_as<bNode>();
-  NodeCompositorFileOutput *data = MEM_callocN<NodeCompositorFileOutput>(__func__);
+  NodeCompositorFileOutput *data = MEM_new<NodeCompositorFileOutput>(__func__);
   node->storage = data;
   data->save_as_render = true;
-  data->file_name = BLI_strdup("file_name");
+  data->use_file_extension = true;
+  data->file_name = BLI_strdup("{blend_name}");
 
   BKE_image_format_init(&data->format);
-  BKE_image_format_media_type_set(
-      &data->format, node_pointer->owner_id, MEDIA_TYPE_MULTI_LAYER_IMAGE);
+  BKE_image_format_media_type_set(&data->format, &node_tree->id, MEDIA_TYPE_MULTI_LAYER_IMAGE);
   BKE_image_format_update_color_space_for_type(&data->format);
+}
 
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
+{
+  bNode *node = node_ptr->data_as<bNode>();
+  NodeCompositorFileOutput &data = node_storage(*node);
   Scene *scene = CTX_data_scene(C);
-  if (scene) {
-    const RenderData *render_data = &scene->r;
-    STRNCPY(data->directory, render_data->pic);
-  }
+  const RenderData *render_data = &scene->r;
+  STRNCPY(data.directory, render_data->pic);
 }
 
 static void node_free_storage(bNode *node)
@@ -130,8 +127,8 @@ static void node_free_storage(bNode *node)
   socket_items::destruct_array<FileOutputItemsAccessor>(*node);
   NodeCompositorFileOutput &data = node_storage(*node);
   BKE_image_format_free(&data.format);
-  MEM_SAFE_FREE(data.file_name);
-  MEM_freeN(&data);
+  MEM_SAFE_DELETE(data.file_name);
+  MEM_delete(&data);
 }
 
 static void node_copy_storage(bNodeTree * /*destination_node_tree*/,
@@ -139,8 +136,8 @@ static void node_copy_storage(bNodeTree * /*destination_node_tree*/,
                               const bNode *source_node)
 {
   const NodeCompositorFileOutput &source_storage = node_storage(*source_node);
-  NodeCompositorFileOutput *destination_storage = MEM_dupallocN<NodeCompositorFileOutput>(
-      __func__, source_storage);
+  NodeCompositorFileOutput *destination_storage = MEM_new<NodeCompositorFileOutput>(
+      __func__, dna::shallow_copy(source_storage));
   destination_storage->file_name = BLI_strdup_null(source_storage.file_name);
   BKE_image_format_copy(&destination_storage->format, &source_storage.format);
   destination_node->storage = destination_storage;
@@ -153,7 +150,7 @@ static bool node_insert_link(bke::NodeInsertLinkParams &params)
       params.ntree, params.node, params.node, params.link);
 }
 
-static void node_operators()
+static void node_register_operators()
 {
   socket_items::ops::make_common_operators<FileOutputItemsAccessor>();
 }
@@ -162,24 +159,27 @@ static void node_operators()
  * suffix, if not empty, will be added to the file name. If the given view is not empty, its file
  * suffix will be appended to the name. The frame number, scene, and node are provides for variable
  * substitution in the path. If there are any errors processing the path, they will be returned. */
-static Vector<path_templates::Error> compute_image_path(const StringRefNull directory,
-                                                        const StringRefNull file_name,
-                                                        const StringRefNull file_name_suffix,
-                                                        const char *view,
-                                                        const int frame_number,
-                                                        const ImageFormatData &format,
-                                                        const Scene &scene,
-                                                        const bNode &node,
-                                                        const bool is_animation_render,
-                                                        char *r_image_path)
+static Vector<bke::path_templates::Error> compute_image_path(const StringRefNull directory,
+                                                             const StringRefNull file_name,
+                                                             const StringRefNull file_name_suffix,
+                                                             const char *view,
+                                                             const int frame_number,
+                                                             const ImageFormatData &format,
+                                                             const Main &bmain,
+                                                             const Scene &scene,
+                                                             const bNode &node,
+                                                             const bool is_animation_render,
+                                                             char *r_image_path)
 {
   char base_path[FILE_MAX] = "";
   STRNCPY(base_path, directory.c_str());
   const std::string full_file_name = file_name + file_name_suffix;
   BLI_path_append(base_path, FILE_MAX, full_file_name.c_str());
 
-  path_templates::VariableMap template_variables;
-  BKE_add_template_variables_general(template_variables, &node.owner_tree().id);
+  bke::path_templates::VariableMap template_variables;
+  BKE_blender_project_read_callback(&bmain, [&](const bke::BlenderProject *project) {
+    BKE_add_template_variables_general(template_variables, &node.owner_tree().id, project);
+  });
   BKE_add_template_variables_for_render_path(template_variables, scene);
   BKE_add_template_variables_for_node(template_variables, node);
 
@@ -195,34 +195,37 @@ static Vector<path_templates::Error> compute_image_path(const StringRefNull dire
                                       &template_variables,
                                       frame_number,
                                       &format,
-                                      scene.r.scemode & R_EXTENSION,
+                                      bool(node_storage(node).use_file_extension),
                                       is_animation_render,
                                       BKE_scene_multiview_view_suffix_get(&scene.r, view));
 }
 
-static void node_layout(uiLayout *layout, bContext * /*context*/, PointerRNA *node_pointer)
+static void node_draw_buttons(ui::Layout &layout, bContext * /*context*/, PointerRNA *node_pointer)
 {
-  layout->prop(node_pointer, "directory", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
-  layout->prop(node_pointer, "file_name", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout.prop(node_pointer, "directory", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout.prop(node_pointer, "file_name", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
-static void format_layout(uiLayout *layout,
+static void format_layout(ui::Layout *layout,
                           bContext *context,
                           PointerRNA *format_pointer,
                           PointerRNA *node_or_item_pointer)
 {
-  uiLayout *column = &layout->column(true);
-  column->use_property_split_set(true);
-  column->use_property_decorate_set(false);
-  column->prop(
-      node_or_item_pointer, "save_as_render", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  ui::Layout &col = layout->column(true);
+  col.use_property_split_set(true);
+  col.use_property_decorate_set(false);
+  col.prop(node_or_item_pointer,
+           "save_as_render",
+           ui::ITEM_R_SPLIT_EMPTY_NAME,
+           std::nullopt,
+           ICON_NONE);
   const bool save_as_render = RNA_boolean_get(node_or_item_pointer, "save_as_render");
   uiTemplateImageSettings(layout, context, format_pointer, save_as_render);
 
   if (!save_as_render) {
-    uiLayout *column = &layout->column(true);
-    column->use_property_split_set(true);
-    column->use_property_decorate_set(false);
+    ui::Layout *column = &layout->column(true);
+    col.use_property_split_set(true);
+    col.use_property_decorate_set(false);
 
     PointerRNA linear_settings_ptr = RNA_pointer_get(format_pointer, "linear_colorspace_settings");
     column->prop(&linear_settings_ptr, "name", UI_ITEM_NONE, IFACE_("Color Space"), ICON_NONE);
@@ -235,39 +238,42 @@ static void format_layout(uiLayout *layout,
   }
 }
 
-static void output_path_layout(uiLayout *layout,
+static void output_path_layout(ui::Layout &layout,
                                const StringRefNull directory,
                                const StringRefNull file_name,
                                const StringRefNull file_name_suffix,
                                const char *view,
                                const ImageFormatData &format,
+                               const Main &bmain,
                                const Scene &scene,
                                const bNode &node)
 {
 
   char image_path[FILE_MAX];
-  const Vector<path_templates::Error> path_errors = compute_image_path(directory,
-                                                                       file_name,
-                                                                       file_name_suffix,
-                                                                       view,
-                                                                       scene.r.cfra,
-                                                                       format,
-                                                                       scene,
-                                                                       node,
-                                                                       false,
-                                                                       image_path);
+  const Vector<bke::path_templates::Error> path_errors = compute_image_path(directory,
+                                                                            file_name,
+                                                                            file_name_suffix,
+                                                                            view,
+                                                                            scene.r.cfra,
+                                                                            format,
+                                                                            bmain,
+                                                                            scene,
+                                                                            node,
+                                                                            false,
+                                                                            image_path);
 
   if (path_errors.is_empty()) {
-    layout->label(image_path, ICON_FILE_IMAGE);
+    layout.label(image_path, ICON_FILE_IMAGE);
   }
   else {
-    for (const path_templates::Error &error : path_errors) {
-      layout->label(BKE_path_template_error_to_string(error, image_path).c_str(), ICON_ERROR);
+    for (const bke::path_templates::Error &error : path_errors) {
+      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(),
+                   ICON_STATUS_ERROR);
     }
   }
 }
 
-static void output_paths_layout(uiLayout *layout,
+static void output_paths_layout(ui::Layout &layout,
                                 bContext *context,
                                 const StringRefNull file_name_suffix,
                                 const bNode &node,
@@ -276,42 +282,44 @@ static void output_paths_layout(uiLayout *layout,
   const NodeCompositorFileOutput &storage = node_storage(node);
   const StringRefNull directory = storage.directory;
   const std::string file_name = storage.file_name ? storage.file_name : "";
+  const Main &main = *CTX_data_main(context);
   const Scene &scene = *CTX_data_scene(context);
 
-  if (bool(scene.r.scemode & R_MULTIVIEW) && format.views_format == R_IMF_VIEWS_MULTIVIEW) {
-    LISTBASE_FOREACH (SceneRenderView *, view, &scene.r.views) {
-      if (!BKE_scene_multiview_is_render_view_active(&scene.r, view)) {
+  if (bool(scene.r.scemode & R_MULTIVIEW) && format.views_format == R_IMF_VIEWS_INDIVIDUAL) {
+    for (SceneRenderView &view : scene.r.views) {
+      if (!BKE_scene_multiview_is_render_view_active(&scene.r, &view)) {
         continue;
       }
 
       output_path_layout(
-          layout, directory, file_name, file_name_suffix, view->name, format, scene, node);
+          layout, directory, file_name, file_name_suffix, view.name, format, main, scene, node);
     }
   }
   else {
-    output_path_layout(layout, directory, file_name, file_name_suffix, "", format, scene, node);
+    output_path_layout(
+        layout, directory, file_name, file_name_suffix, "", format, main, scene, node);
   }
 }
 
-static void item_layout(uiLayout *layout,
+static void item_layout(ui::Layout &layout,
                         bContext *context,
                         PointerRNA *node_pointer,
                         PointerRNA *item_pointer,
                         const bool is_multi_layer)
 {
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
-  layout->prop(item_pointer, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  layout.prop(item_pointer, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (RNA_enum_get(item_pointer, "socket_type") == SOCK_VECTOR) {
-    layout->prop(item_pointer, "vector_socket_dimensions", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(item_pointer, "vector_socket_dimensions", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   if (is_multi_layer) {
     return;
   }
 
-  layout->prop(
-      item_pointer, "override_node_format", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  layout.prop(
+      item_pointer, "override_node_format", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
   const bool override_node_format = RNA_boolean_get(item_pointer, "override_node_format");
 
   PointerRNA node_format_pointer = RNA_pointer_get(node_pointer, "format");
@@ -319,49 +327,54 @@ static void item_layout(uiLayout *layout,
   PointerRNA *format_pointer = override_node_format ? &item_format_pointer : &node_format_pointer;
 
   if (override_node_format) {
-    if (uiLayout *panel = layout->panel(context, "item_format", false, IFACE_("Item Format"))) {
+    if (ui::Layout *panel = layout.panel(context, "item_format", false, IFACE_("Item Format"))) {
       format_layout(panel, context, format_pointer, item_pointer);
     }
   }
 }
 
-static void node_layout_ex(uiLayout *layout, bContext *context, PointerRNA *node_pointer)
+static void node_draw_buttons_extended(ui::Layout &layout,
+                                       bContext *context,
+                                       PointerRNA *node_pointer)
 {
-  node_layout(layout, context, node_pointer);
+  node_draw_buttons(layout, context, node_pointer);
 
   PointerRNA format_pointer = RNA_pointer_get(node_pointer, "format");
   const bool is_multi_layer = RNA_enum_get(&format_pointer, "file_format") ==
                               R_IMF_IMTYPE_MULTILAYER;
-  layout->prop(&format_pointer, "media_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-  if (uiLayout *panel = layout->panel(context, "node_format", false, IFACE_("Node Format"))) {
+  layout.prop(&format_pointer, "media_type", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(context, "node_format", false, IFACE_("Node Format"))) {
     format_layout(panel, context, &format_pointer, node_pointer);
   }
 
   const char *panel_name = is_multi_layer ? IFACE_("Layers") : IFACE_("Images");
-  if (uiLayout *panel = layout->panel(context, "file_output_items", false, panel_name)) {
+  if (ui::Layout *panel = layout.panel(context, "file_output_items", false, panel_name)) {
     bNodeTree &tree = *reinterpret_cast<bNodeTree *>(node_pointer->owner_id);
     bNode &node = *node_pointer->data_as<bNode>();
     socket_items::ui::draw_items_list_with_operators<FileOutputItemsAccessor>(
         context, panel, tree, node);
     socket_items::ui::draw_active_item_props<FileOutputItemsAccessor>(
         tree, node, [&](PointerRNA *item_pointer) {
-          item_layout(panel, context, node_pointer, item_pointer, is_multi_layer);
+          item_layout(*panel, context, node_pointer, item_pointer, is_multi_layer);
         });
   }
 
-  if (uiLayout *panel = layout->panel(context, "output_paths", true, IFACE_("Output Paths"))) {
+  if (ui::Layout *panel = layout.panel(context, "output_paths", true, IFACE_("Output Paths"))) {
     const bNode &node = *node_pointer->data_as<bNode>();
     const ImageFormatData &node_format = *format_pointer.data_as<ImageFormatData>();
 
+    panel->prop(
+        node_pointer, "use_file_extension", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
     if (is_multi_layer) {
-      output_paths_layout(panel, context, "", node, node_format);
+      output_paths_layout(*panel, context, "", node, node_format);
     }
     else {
       const NodeCompositorFileOutput &storage = node_storage(node);
       for (const int i : IndexRange(storage.items_count)) {
         const NodeCompositorFileOutputItem &item = storage.items[i];
         const auto &format = item.override_node_format ? item.format : storage.format;
-        output_paths_layout(panel, context, item.name, node, format);
+        output_paths_layout(*panel, context, item.name, node, format);
       }
     }
   }
@@ -370,7 +383,7 @@ static void node_layout_ex(uiLayout *layout, bContext *context, PointerRNA *node
 static void node_blend_write(const bNodeTree & /*tree*/, const bNode &node, BlendWriter &writer)
 {
   const NodeCompositorFileOutput &data = node_storage(node);
-  BLO_write_string(&writer, data.file_name);
+  writer.write_string(data.file_name);
   BKE_image_format_blend_write(&writer, const_cast<ImageFormatData *>(&data.format));
   socket_items::blend_write<FileOutputItemsAccessor>(&writer, node);
 }
@@ -390,9 +403,38 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     NodeExtraInfoRow row;
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_("The File Output node is only supported for scene compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
   }
+}
+
+static void node_gather_link_searches(GatherLinkSearchOpParams &params)
+{
+  const bNodeSocket &origin_socket = params.other_socket();
+  if (origin_socket.in_out != SOCK_OUT) {
+    return;
+  }
+  const eNodeSocketDatatype origin_socket_type = origin_socket.type;
+  if (!FileOutputItemsAccessor::supports_socket_type(origin_socket_type, NTREE_COMPOSIT)) {
+    return;
+  }
+  params.add_item("File Output", [](LinkSearchOpParams &params) {
+    bNode &node = params.add_node("CompositorNodeOutputFile"_ustr);
+    const eNodeSocketDatatype socket_type = params.socket.type;
+    if (socket_type == SOCK_VECTOR) {
+      socket_items::add_item_with_socket_type_and_name<FileOutputItemsAccessor>(
+          params.node_tree,
+          node,
+          socket_type,
+          params.socket.name,
+          params.socket.default_value_typed<bNodeSocketValueVector>()->dimensions);
+    }
+    else {
+      socket_items::add_item_with_socket_type_and_name<FileOutputItemsAccessor>(
+          params.node_tree, node, socket_type, params.socket.name);
+    }
+    params.update_and_connect_available_socket(node, UString(params.socket.name));
+  });
 }
 
 using namespace blender::compositor;
@@ -417,7 +459,7 @@ class FileOutputOperation : public NodeOperation {
 
   void execute_single_layer()
   {
-    const NodeCompositorFileOutput &storage = node_storage(this->bnode());
+    const NodeCompositorFileOutput &storage = node_storage(this->node());
     for (const int i : IndexRange(storage.items_count)) {
       const NodeCompositorFileOutputItem &item = storage.items[i];
       const std::string identifier = FileOutputItemsAccessor::socket_identifier_for_item(item);
@@ -433,10 +475,10 @@ class FileOutputOperation : public NodeOperation {
        * be stored in views. An exception to this is stereo images, which needs to have the same
        * structure as non-EXR images. */
       const auto &format = item.override_node_format ? item.format :
-                                                       node_storage(this->bnode()).format;
+                                                       node_storage(this->node()).format;
       const bool save_as_render = item.override_node_format ?
                                       item.save_as_render :
-                                      node_storage(this->bnode()).save_as_render;
+                                      node_storage(this->node()).save_as_render;
       const bool is_exr = format.imtype == R_IMF_IMTYPE_OPENEXR;
       const int views_count = BKE_scene_multiview_num_views_get(
           &this->context().get_render_data());
@@ -446,13 +488,13 @@ class FileOutputOperation : public NodeOperation {
       }
 
       char image_path[FILE_MAX];
-      Vector<path_templates::Error> path_errors = this->get_image_path(
+      Vector<bke::path_templates::Error> path_errors = this->get_image_path(
           format, item.name, "", image_path);
       if (!path_errors.is_empty()) {
         continue;
       }
 
-      const int2 size = result.domain().size;
+      const int2 size = result.domain().data_size;
       FileOutput &file_output = this->context().render_context()->get_file_output(
           image_path, format, size, save_as_render);
 
@@ -477,13 +519,13 @@ class FileOutputOperation : public NodeOperation {
     const char *path_view = has_views ? "" : this->context().get_view_name().data();
 
     char image_path[FILE_MAX];
-    Vector<path_templates::Error> path_errors = this->get_image_path(
+    Vector<bke::path_templates::Error> path_errors = this->get_image_path(
         format, layer_name, path_view, image_path);
     if (!path_errors.is_empty()) {
       return;
     }
 
-    const int2 size = result.domain().size;
+    const int2 size = result.domain().data_size;
     FileOutput &file_output = this->context().render_context()->get_file_output(
         image_path, format, size, true);
 
@@ -503,12 +545,12 @@ class FileOutputOperation : public NodeOperation {
   void execute_multi_layer()
   {
     /* We only write images, not single values. */
-    const int2 size = this->compute_domain().size;
+    const int2 size = this->compute_domain().data_size;
     if (size == int2(1)) {
       return;
     }
 
-    const ImageFormatData format = node_storage(this->bnode()).format;
+    const ImageFormatData format = node_storage(this->node()).format;
     const bool store_views_in_single_file = this->is_multi_view_exr();
     const char *view = this->context().get_view_name().data();
 
@@ -516,7 +558,7 @@ class FileOutputOperation : public NodeOperation {
      * sure the file name does not contain a view suffix. */
     char image_path[FILE_MAX];
     const char *write_view = store_views_in_single_file ? "" : view;
-    Vector<path_templates::Error> path_errors = this->get_image_path(
+    Vector<bke::path_templates::Error> path_errors = this->get_image_path(
         format, "", write_view, image_path);
     if (!path_errors.is_empty()) {
       return;
@@ -530,7 +572,7 @@ class FileOutputOperation : public NodeOperation {
     const char *pass_view = store_views_in_single_file ? view : "";
     file_output.add_view(pass_view);
 
-    const NodeCompositorFileOutput &storage = node_storage(bnode());
+    const NodeCompositorFileOutput &storage = node_storage(node());
     for (const int i : IndexRange(storage.items_count)) {
       const NodeCompositorFileOutputItem &item = storage.items[i];
       const std::string identifier = FileOutputItemsAccessor::socket_identifier_for_item(item);
@@ -548,26 +590,23 @@ class FileOutputOperation : public NodeOperation {
                            const char *pass_name,
                            const char *view_name)
   {
-    /* For single values, we fill a buffer that covers the domain of the operation with the value
-     * of the result. */
-    const int2 size = result.is_single_value() ? this->compute_domain().size :
-                                                 result.domain().size;
-
-    /* The image buffer in the file output will take ownership of this buffer and freeing it will
-     * be its responsibility. */
-    float *buffer = nullptr;
+    Result data = this->context().create_result(result.type());
     if (result.is_single_value()) {
-      buffer = this->inflate_result(result, size);
+      /* For single values, we fill a buffer that covers the domain of the operation with the value
+       * of the result. */
+      data.allocate_texture(this->compute_domain(), true, ResultStorageType::CPUImage);
+      const GPointer single_value = result.single_value();
+      const int64_t pixel_count = int64_t(data.domain().data_size.x) * data.domain().data_size.y;
+      single_value.type()->fill_assign_n(
+          single_value.get(), data.cpu_data_for_write().data(), pixel_count);
+    }
+    else if (this->context().use_gpu()) {
+      Result result_cpu = result.download_to_cpu();
+      data.share_data(result_cpu);
+      result_cpu.release();
     }
     else {
-      if (this->context().use_gpu()) {
-        GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-        buffer = static_cast<float *>(GPU_texture_read(result, GPU_DATA_FLOAT, 0));
-      }
-      else {
-        /* Copy the result into a new buffer. */
-        buffer = static_cast<float *>(MEM_dupallocN(result.cpu_data().data()));
-      }
+      data.share_data(result);
     }
 
     switch (result.type()) {
@@ -576,140 +615,97 @@ class FileOutputOperation : public NodeOperation {
          * specify that all uppercase RGBA channels will be compressed, and Cryptomatte should not
          * be compressed. */
         if (result.meta_data.is_cryptomatte_layer()) {
-          file_output.add_pass(pass_name, view_name, "rgba", buffer);
+          file_output.add_pass(pass_name, view_name, "rgba", data);
         }
         else {
-          file_output.add_pass(pass_name, view_name, "RGBA", buffer);
+          file_output.add_pass(pass_name, view_name, "RGBA", data);
         }
         break;
       case ResultType::Float3:
-        /* Float3 results might be stored in 4-component textures due to hardware limitations, so
-         * we need to convert the buffer to a 3-component buffer on the host. */
-        if (this->context().use_gpu() && GPU_texture_component_len(GPU_texture_format(result))) {
-          file_output.add_pass(pass_name, view_name, "XYZ", float4_to_float3_image(size, buffer));
-        }
-        else {
-          file_output.add_pass(pass_name, view_name, "XYZ", buffer);
-        }
+        file_output.add_pass(pass_name, view_name, "XYZ", data);
         break;
       case ResultType::Float4:
-        file_output.add_pass(pass_name, view_name, "XYZW", buffer);
+        file_output.add_pass(pass_name, view_name, "XYZW", data);
         break;
       case ResultType::Float:
-        file_output.add_pass(pass_name, view_name, "V", buffer);
+        file_output.add_pass(pass_name, view_name, "V", data);
         break;
       case ResultType::Float2:
-        file_output.add_pass(pass_name, view_name, "XY", buffer);
+        file_output.add_pass(pass_name, view_name, "XY", data);
         break;
       case ResultType::Int2:
+      case ResultType::Int3:
+      case ResultType::Int4:
       case ResultType::Int:
       case ResultType::Bool:
+      case ResultType::Float4x4:
       case ResultType::Menu:
+      case ResultType::Quaternion:
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
+      case ResultType::Bundle:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
     }
-  }
 
-  /* Allocates and fills an image buffer of the specified size with the value of the given single
-   * value result. */
-  float *inflate_result(const Result &result, const int2 size)
-  {
-    BLI_assert(result.is_single_value());
-
-    const int64_t length = int64_t(size.x) * size.y;
-    const int64_t buffer_size = length * result.channels_count();
-    float *buffer = MEM_malloc_arrayN<float>(buffer_size, "File Output Inflated Buffer.");
-
-    switch (result.type()) {
-      case ResultType::Float:
-      case ResultType::Float2:
-      case ResultType::Float3:
-      case ResultType::Float4:
-      case ResultType::Color: {
-        const GPointer single_value = result.single_value();
-        single_value.type()->fill_assign_n(single_value.get(), buffer, length);
-        return buffer;
-      }
-      case ResultType::Int:
-      case ResultType::Int2:
-      case ResultType::Bool:
-      case ResultType::Menu:
-      case ResultType::String:
-        /* Not supported. */
-        BLI_assert_unreachable();
-        return nullptr;
-    }
-
-    BLI_assert_unreachable();
-    return nullptr;
+    data.release();
   }
 
   /* Read the data stored the given result and add a view of the given name and read buffer. */
   void add_view_for_result(FileOutput &file_output, const Result &result, const char *view_name)
   {
-    /* The image buffer in the file output will take ownership of this buffer and freeing it will
-     * be its responsibility. */
-    float *buffer = nullptr;
+    Result data = this->context().create_result(result.type());
     if (this->context().use_gpu()) {
-      GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-      buffer = static_cast<float *>(GPU_texture_read(result, GPU_DATA_FLOAT, 0));
+      Result result_cpu = result.download_to_cpu();
+      data.share_data(result_cpu);
+      result_cpu.release();
     }
     else {
-      /* Copy the result into a new buffer. */
-      buffer = static_cast<float *>(MEM_dupallocN(result.cpu_data().data()));
+      data.share_data(result);
     }
 
-    const int2 size = result.domain().size;
     switch (result.type()) {
       case ResultType::Color:
-        file_output.add_view(view_name, 4, buffer);
+        file_output.add_view(view_name, data);
         break;
       case ResultType::Float4:
-        file_output.add_view(view_name, 4, buffer);
+        file_output.add_view(view_name, data);
         break;
       case ResultType::Float3:
-        /* Float3 results might be stored in 4-component textures due to hardware limitations, so
-         * we need to convert the buffer to a 3-component buffer on the host. */
-        if (this->context().use_gpu() && GPU_texture_component_len(GPU_texture_format(result))) {
-          file_output.add_view(view_name, 3, float4_to_float3_image(size, buffer));
-        }
-        else {
-          file_output.add_view(view_name, 3, buffer);
-        }
+        file_output.add_view(view_name, data);
         break;
       case ResultType::Float:
-        file_output.add_view(view_name, 1, buffer);
+        file_output.add_view(view_name, data);
         break;
       case ResultType::Float2:
       case ResultType::Int2:
       case ResultType::Int:
+      case ResultType::Int3:
+      case ResultType::Int4:
       case ResultType::Bool:
+      case ResultType::Float4x4:
       case ResultType::Menu:
+      case ResultType::Quaternion:
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
+      case ResultType::Bundle:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
     }
-  }
 
-  /* Given a float4 image, return a newly allocated float3 image that ignores the last channel. The
-   * input image is freed. */
-  float *float4_to_float3_image(int2 size, float *float4_image)
-  {
-    float *float3_image = MEM_malloc_arrayN<float>(3 * size_t(size.x) * size_t(size.y),
-                                                   "File Output Vector Buffer.");
-
-    parallel_for(size, [&](const int2 texel) {
-      for (int i = 0; i < 3; i++) {
-        const int64_t pixel_index = int64_t(texel.y) * size.x + texel.x;
-        float3_image[pixel_index * 3 + i] = float4_image[pixel_index * 4 + i];
-      }
-    });
-
-    MEM_freeN(float4_image);
-    return float3_image;
+    data.release();
   }
 
   /* Add Cryptomatte meta data to the file if they exist for the given result of the given layer
@@ -741,22 +737,27 @@ class FileOutputOperation : public NodeOperation {
           bke::cryptomatte::BKE_cryptomatte_meta_data_key(cryptomatte_layer_name, "conversion"),
           result.meta_data.cryptomatte.conversion);
     }
+
+    for (const auto &item : result.meta_data.fields.items()) {
+      file_output.add_meta_data(item.key, item.value);
+    }
   }
 
-  Vector<path_templates::Error> get_image_path(const ImageFormatData &format,
-                                               const char *file_name_suffix,
-                                               const char *view,
-                                               char *r_image_path)
+  Vector<bke::path_templates::Error> get_image_path(const ImageFormatData &format,
+                                                    const char *file_name_suffix,
+                                                    const char *view,
+                                                    char *r_image_path)
   {
-    const Vector<path_templates::Error> path_errors = compute_image_path(
+    const Vector<bke::path_templates::Error> path_errors = compute_image_path(
         this->get_directory(),
         this->get_file_name(),
         file_name_suffix,
         view,
         this->context().get_frame_number(),
         format,
+        this->context().get_main(),
         this->context().get_scene(),
-        this->bnode(),
+        this->node(),
         this->is_animation_render(),
         r_image_path);
 
@@ -770,18 +771,18 @@ class FileOutputOperation : public NodeOperation {
 
   bool is_multi_layer()
   {
-    return node_storage(this->bnode()).format.imtype == R_IMF_IMTYPE_MULTILAYER;
+    return node_storage(this->node()).format.imtype == R_IMF_IMTYPE_MULTILAYER;
   }
 
   StringRefNull get_file_name()
   {
-    const char *file_name = node_storage(this->bnode()).file_name;
+    const char *file_name = node_storage(this->node()).file_name;
     return file_name ? file_name : "";
   }
 
   StringRefNull get_directory()
   {
-    return node_storage(this->bnode()).directory;
+    return node_storage(this->node()).directory;
   }
 
   /* If true, save views in a multi-view EXR file, otherwise, save each view in its own file. */
@@ -791,7 +792,7 @@ class FileOutputOperation : public NodeOperation {
       return false;
     }
 
-    return node_storage(this->bnode()).format.views_format == R_IMF_VIEWS_MULTIVIEW;
+    return node_storage(this->node()).format.views_format == R_IMF_VIEWS_MULTIVIEW;
   }
 
   bool is_multi_view_scene()
@@ -821,34 +822,35 @@ class FileOutputOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new FileOutputOperation(context, node);
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeOutputFile", CMP_NODE_OUTPUT_FILE);
+  cmp_node_type_base(&ntype, "CompositorNodeOutputFile"_ustr, CMP_NODE_OUTPUT_FILE);
   ntype.ui_name = "File Output";
   ntype.ui_description = "Write image file to disk";
   ntype.enum_name_legacy = "OUTPUT_FILE";
   ntype.nclass = NODE_CLASS_OUTPUT;
   ntype.declare = node_declare;
-  ntype.draw_buttons = node_layout;
-  ntype.draw_buttons_ex = node_layout_ex;
+  ntype.draw_buttons = node_draw_buttons;
+  ntype.draw_buttons_ex = node_draw_buttons_extended;
   ntype.insert_link = node_insert_link;
-  ntype.register_operators = node_operators;
-  ntype.initfunc_api = node_init;
-  blender::bke::node_type_storage(
-      ntype, "NodeCompositorFileOutput", node_free_storage, node_copy_storage);
+  ntype.register_operators = node_register_operators;
+  ntype.initfunc = node_init;
+  ntype.initfunc_api = node_init_api;
+  bke::node_type_storage(ntype, "NodeCompositorFileOutput", node_free_storage, node_copy_storage);
   ntype.blend_write_storage_content = node_blend_write;
   ntype.blend_data_read_storage_content = node_blend_read;
   ntype.get_extra_info = node_extra_info;
+  ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
@@ -856,11 +858,11 @@ NOD_REGISTER_NODE(node_register)
 
 namespace blender::nodes {
 
-StructRNA *FileOutputItemsAccessor::item_srna = &RNA_NodeCompositorFileOutputItem;
+StructRNA **FileOutputItemsAccessor::item_srna = &RNA_NodeCompositorFileOutputItem;
 
 void FileOutputItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
-  BLO_write_string(writer, item.name);
+  writer->write_string(item.name);
   BKE_image_format_blend_write(writer, const_cast<ImageFormatData *>(&item.format));
 }
 
@@ -874,7 +876,7 @@ std::string FileOutputItemsAccessor::validate_name(const StringRef name)
 {
   char file_name[FILE_MAX] = "";
   STRNCPY(file_name, name.data());
-  BLI_path_make_safe_filename(file_name);
+  BLI_path_make_safe(file_name);
   return file_name;
 }
 

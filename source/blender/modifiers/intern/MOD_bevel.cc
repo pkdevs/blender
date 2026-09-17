@@ -8,13 +8,12 @@
 
 #include <algorithm>
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "DNA_curveprofile_types.h"
-#include "DNA_defaults.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
@@ -43,21 +42,25 @@
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 
+// #define DEBUG_TIME
+#ifdef DEBUG_TIME
+#  include "BLI_timeit.hh"
+#endif
+
+namespace blender {
+
 static void init_data(ModifierData *md)
 {
-  BevelModifierData *bmd = (BevelModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(bmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(bmd, DNA_struct_default_get(BevelModifierData), modifier);
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(bmd, modifier);
 
   bmd->custom_profile = BKE_curveprofile_add(PROF_PRESET_LINE);
 }
 
 static void copy_data(const ModifierData *md_src, ModifierData *md_dst, const int flag)
 {
-  const BevelModifierData *bmd_src = (const BevelModifierData *)md_src;
-  BevelModifierData *bmd_dst = (BevelModifierData *)md_dst;
+  const BevelModifierData *bmd_src = reinterpret_cast<const BevelModifierData *>(md_src);
+  BevelModifierData *bmd_dst = reinterpret_cast<BevelModifierData *>(md_dst);
 
   BKE_modifier_copydata_generic(md_src, md_dst, flag);
   bmd_dst->custom_profile = BKE_curveprofile_copy(bmd_src->custom_profile);
@@ -65,7 +68,7 @@ static void copy_data(const ModifierData *md_src, ModifierData *md_dst, const in
 
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
-  BevelModifierData *bmd = (BevelModifierData *)md;
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
 
   /* Ask for vertex-groups if we need them. */
   if (bmd->defgrp_name[0] != '\0') {
@@ -74,12 +77,11 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 }
 
 static std::string ensure_weight_attribute_meta_data(Mesh &mesh,
-                                                     const blender::StringRef name,
-                                                     const blender::bke::AttrDomain domain,
+                                                     const StringRef name,
+                                                     const bke::AttrDomain domain,
                                                      bool &r_attr_converted)
 {
-  using namespace blender;
-  if (!blender::bke::allow_procedural_attribute_access(name)) {
+  if (!bke::allow_procedural_attribute_access(name)) {
     return "";
   }
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
@@ -108,10 +110,13 @@ static std::string ensure_weight_attribute_meta_data(Mesh &mesh,
  */
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
-  using namespace blender;
   if (mesh->verts_num == 0) {
     return mesh;
   }
+#ifdef DEBUG_TIME
+  printf("BEVEL MODIFIER starts\n");
+  const timeit::TimePoint start_time = timeit::Clock::now();
+#endif
   Mesh *result;
   BMesh *bm;
   BMIter iter;
@@ -120,7 +125,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   float weight, weight2;
   int vgroup = -1;
   const MDeformVert *dvert = nullptr;
-  BevelModifierData *bmd = (BevelModifierData *)md;
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
   const float threshold = cosf(bmd->bevel_angle + 0.000000175f);
   const bool do_clamp = !(bmd->flags & MOD_BEVEL_OVERLAP_OK);
   const int offset_type = bmd->val_flags;
@@ -225,6 +230,11 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     }
   }
 
+#ifdef DEBUG_TIME
+  const timeit::TimePoint bmeshes_made_time = timeit::Clock::now();
+  const float t1_ms = (bmeshes_made_time - start_time).count() / 1.0e6f;
+  printf("BEVEL MODIFIER bmeshes made, %.1f ms\n", t1_ms);
+#endif
   BM_mesh_bevel(bm,
                 value,
                 offset_type,
@@ -250,6 +260,12 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
                 bweight_offset_vert,
                 bweight_offset_edge);
 
+#ifdef DEBUG_TIME
+  const timeit::TimePoint bevel_time = timeit::Clock::now();
+  const float t2_ms = (bevel_time - bmeshes_made_time).count() / 1.0e6f;
+  printf("BEVEL MODIFIER bevel, %.1f ms\n", t2_ms);
+#endif
+
   result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, mesh);
 
   /* Make sure we never allocated these. */
@@ -265,38 +281,45 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     result->attributes_for_write().remove(edge_weight_name);
   }
 
-  blender::geometry::debug_randomize_mesh_order(result);
+#ifdef DEBUG_TIME
+  const timeit::TimePoint end_time = timeit::Clock::now();
+  const float t3_ms = (end_time - bevel_time).count() / 1.0e6f;
+  const float t4_ms = (end_time - start_time).count() / 1.0e6f;
+  printf("BEVEL MODIFIER back to mesh, %.1f ms\n", t3_ms);
+  printf("BEVEL MODIFIER total, %.1f ms\n", t4_ms);
+#endif
+
+  geometry::debug_randomize_mesh_order(result);
 
   return result;
 }
 
 static void free_data(ModifierData *md)
 {
-  BevelModifierData *bmd = (BevelModifierData *)md;
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
   BKE_curveprofile_free(bmd->custom_profile);
 }
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  BevelModifierData *bmd = (BevelModifierData *)md;
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
   return (bmd->value == 0.0f);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *col, *sub;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   bool edge_bevel = RNA_enum_get(ptr, "affect") != MOD_BEVEL_AFFECT_VERTICES;
 
-  layout->prop(ptr, "affect", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "affect", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  layout->use_property_split_set(true);
+  layout.use_property_split_set(true);
 
-  col = &layout->column(false);
+  ui::Layout *col = &layout.column(false);
   col->prop(ptr, "offset_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (RNA_enum_get(ptr, "offset_type") == BEVEL_AMT_PERCENT) {
     col->prop(ptr, "width_pct", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -305,24 +328,24 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
     col->prop(ptr, "width", UI_ITEM_NONE, IFACE_("Amount"), ICON_NONE);
   }
 
-  layout->prop(ptr, "segments", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "segments", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  layout->separator();
+  layout.separator();
 
-  col = &layout->column(false);
+  col = &layout.column(false);
   col->prop(ptr, "limit_method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   int limit_method = RNA_enum_get(ptr, "limit_method");
   if (limit_method == MOD_BEVEL_ANGLE) {
-    sub = &col->column(false);
-    sub->active_set(edge_bevel);
-    col->prop(ptr, "angle_limit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    ui::Layout &sub = col->column(false);
+    sub.active_set(edge_bevel);
+    sub.prop(ptr, "angle_limit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else if (limit_method == MOD_BEVEL_WEIGHT) {
     const char *prop_name = edge_bevel ? "edge_weight" : "vertex_weight";
     col->prop(ptr, prop_name, UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else if (limit_method == MOD_BEVEL_VGROUP) {
-    modifier_vgroup_ui(col, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
+    modifier_vgroup_ui(*col, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
   }
 
   modifier_error_message_draw(layout, ptr);
@@ -330,8 +353,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
 static void profile_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *row;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
@@ -340,84 +362,82 @@ static void profile_panel_draw(const bContext * /*C*/, Panel *panel)
   int miter_outer = RNA_enum_get(ptr, "miter_outer");
   bool edge_bevel = RNA_enum_get(ptr, "affect") != MOD_BEVEL_AFFECT_VERTICES;
 
-  layout->prop(ptr, "profile_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "profile_type", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  layout->use_property_split_set(true);
+  layout.use_property_split_set(true);
 
   if (ELEM(profile_type, MOD_BEVEL_PROFILE_SUPERELLIPSE, MOD_BEVEL_PROFILE_CUSTOM)) {
-    row = &layout->row(false);
-    row->active_set(
+    ui::Layout &row = layout.row(false);
+    row.active_set(
         profile_type == MOD_BEVEL_PROFILE_SUPERELLIPSE ||
         (profile_type == MOD_BEVEL_PROFILE_CUSTOM && edge_bevel &&
          !((miter_inner == MOD_BEVEL_MITER_SHARP) && (miter_outer == MOD_BEVEL_MITER_SHARP))));
-    row->prop(ptr,
-              "profile",
-              UI_ITEM_R_SLIDER,
-              (profile_type == MOD_BEVEL_PROFILE_SUPERELLIPSE) ? IFACE_("Shape") :
-                                                                 IFACE_("Miter Shape"),
-              ICON_NONE);
+    row.prop(ptr,
+             "profile",
+             ui::ITEM_R_SLIDER,
+             (profile_type == MOD_BEVEL_PROFILE_SUPERELLIPSE) ? IFACE_("Shape") :
+                                                                IFACE_("Miter Shape"),
+             ICON_NONE);
 
     if (profile_type == MOD_BEVEL_PROFILE_CUSTOM) {
-      uiLayout *sub = &layout->column(false);
-      sub->use_property_decorate_set(false);
-      uiTemplateCurveProfile(sub, ptr, "custom_profile");
+      ui::Layout &sub = layout.column(false);
+      sub.use_property_decorate_set(false);
+      template_curve_profile(&sub, ptr, "custom_profile");
     }
   }
 }
 
 static void geometry_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *row;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
   bool edge_bevel = RNA_enum_get(ptr, "affect") != MOD_BEVEL_AFFECT_VERTICES;
 
-  layout->use_property_split_set(true);
+  layout.use_property_split_set(true);
 
-  row = &layout->row(false);
+  ui::Layout *row = &layout.row(false);
   row->active_set(edge_bevel);
   row->prop(ptr, "miter_outer", UI_ITEM_NONE, IFACE_("Miter Outer"), ICON_NONE);
-  row = &layout->row(false);
+  row = &layout.row(false);
   row->active_set(edge_bevel);
   row->prop(ptr, "miter_inner", UI_ITEM_NONE, IFACE_("Inner"), ICON_NONE);
   if (RNA_enum_get(ptr, "miter_inner") == BEVEL_MITER_ARC) {
-    row = &layout->row(false);
+    row = &layout.row(false);
     row->active_set(edge_bevel);
     row->prop(ptr, "spread", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
-  layout->separator();
+  layout.separator();
 
-  row = &layout->row(false);
+  row = &layout.row(false);
   row->active_set(edge_bevel);
   row->prop(ptr, "vmesh_method", UI_ITEM_NONE, IFACE_("Intersections"), ICON_NONE);
-  layout->prop(ptr, "use_clamp_overlap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  row = &layout->row(false);
+  layout.prop(ptr, "use_clamp_overlap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  row = &layout.row(false);
   row->active_set(edge_bevel);
   row->prop(ptr, "loop_slide", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void shading_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *col;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
   bool edge_bevel = RNA_enum_get(ptr, "affect") != MOD_BEVEL_AFFECT_VERTICES;
 
-  layout->use_property_split_set(true);
+  layout.use_property_split_set(true);
 
-  layout->prop(ptr, "harden_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "harden_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  col = &layout->column(true, IFACE_("Mark"));
-  col->active_set(edge_bevel);
-  col->prop(ptr, "mark_seam", UI_ITEM_NONE, IFACE_("Seam"), ICON_NONE);
-  col->prop(ptr, "mark_sharp", UI_ITEM_NONE, IFACE_("Sharp"), ICON_NONE);
+  ui::Layout &col = layout.column(true, IFACE_("Mark"));
+  col.active_set(edge_bevel);
+  col.prop(ptr, "mark_seam", UI_ITEM_NONE, IFACE_("Seam"), ICON_NONE);
+  col.prop(ptr, "mark_sharp", UI_ITEM_NONE, IFACE_("Sharp"), ICON_NONE);
 
-  layout->prop(ptr, "material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout->prop(ptr, "face_strength_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "face_strength_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -433,9 +453,9 @@ static void panel_register(ARegionType *region_type)
 
 static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)
 {
-  const BevelModifierData *bmd = (const BevelModifierData *)md;
+  const BevelModifierData *bmd = reinterpret_cast<const BevelModifierData *>(md);
 
-  BLO_write_struct(writer, BevelModifierData, bmd);
+  writer->write_struct(bmd);
 
   if (bmd->custom_profile) {
     BKE_curveprofile_blend_write(writer, bmd->custom_profile);
@@ -444,7 +464,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
 
 static void blend_read(BlendDataReader *reader, ModifierData *md)
 {
-  BevelModifierData *bmd = (BevelModifierData *)md;
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
 
   BLO_read_struct(reader, CurveProfile, &bmd->custom_profile);
   if (bmd->custom_profile) {
@@ -485,3 +505,5 @@ ModifierTypeInfo modifierType_Bevel = {
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

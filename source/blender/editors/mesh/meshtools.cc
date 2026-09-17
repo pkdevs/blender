@@ -13,8 +13,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
@@ -59,10 +59,7 @@
 
 #include "mesh_intern.hh"
 
-using blender::float3;
-using blender::int2;
-using blender::MutableSpan;
-using blender::Span;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Join as Shapes
@@ -70,17 +67,16 @@ using blender::Span;
  * Add vertex positions of selected meshes as shape keys to the active mesh.
  * \{ */
 
-static std::string create_mirrored_name(const blender::StringRefNull object_name,
-                                        const bool mirror)
+static std::string create_mirrored_name(const StringRefNull object_name, const bool mirror)
 {
   if (!mirror) {
     return object_name;
   }
   if (object_name.endswith(".L")) {
-    return blender::StringRef(object_name).drop_suffix(2) + ".R";
+    return StringRef(object_name).drop_suffix(2) + ".R";
   }
   if (object_name.endswith(".R")) {
-    return blender::StringRef(object_name).drop_suffix(2) + ".L";
+    return StringRef(object_name).drop_suffix(2) + ".L";
   }
   return object_name;
 }
@@ -90,11 +86,10 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
                                                   const bool mirror,
                                                   ReportList *reports)
 {
-  using namespace blender;
   Main *bmain = CTX_data_main(C);
   Object &active_object = *CTX_data_active_object(C);
   Depsgraph &depsgraph = *CTX_data_ensure_evaluated_depsgraph(C);
-  Mesh &active_mesh = *static_cast<Mesh *>(active_object.data);
+  Mesh &active_mesh = *id_cast<Mesh *>(active_object.data);
 
   struct ObjectInfo {
     StringRefNull name;
@@ -127,7 +122,7 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
       }
     }
     /* Fall back to the original mesh. */
-    const Mesh &mesh_orig = *static_cast<const Mesh *>(ob_iter->data);
+    const Mesh &mesh_orig = *id_cast<const Mesh *>(ob_iter->data);
     if (topology_count_matches(mesh_orig, active_mesh)) {
       compatible_objects.append({BKE_id_name(ob_iter->id), mesh_orig});
       continue;
@@ -152,14 +147,6 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  if (!active_mesh.key) {
-    /* Initialize basis shape key with existing mesh. */
-    active_mesh.key = BKE_key_add(bmain, &active_mesh.id);
-    active_mesh.key->type = KEY_RELATIVE;
-    BKE_keyblock_convert_from_mesh(
-        &active_mesh, active_mesh.key, BKE_keyblock_add(active_mesh.key, nullptr));
-  }
-
   if (mirror) {
     for (const ObjectInfo &info : compatible_objects) {
       if (!info.name.endswith(".L") && !info.name.endswith(".R")) {
@@ -167,6 +154,14 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
         return OPERATOR_CANCELLED;
       }
     }
+  }
+
+  if (!active_mesh.key) {
+    /* Initialize basis shape key with existing mesh. */
+    active_mesh.key = BKE_key_add(bmain, &active_mesh.id);
+    active_mesh.key->type = KEY_RELATIVE;
+    BKE_keyblock_convert_from_mesh(
+        &active_mesh, active_mesh.key, BKE_keyblock_add(active_mesh.key, nullptr));
   }
 
   int mirror_count = 0;
@@ -195,7 +190,7 @@ wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
   if (!ensure_keys_exist) {
     if (keys_changed == 0) {
       BKE_report(reports, RPT_ERROR, "No name matches between selected objects and shape keys");
-      return OPERATOR_CANCELLED;
+      return OPERATOR_FINISHED;
     }
     BKE_reportf(reports, RPT_INFO, "Updated %d shape key(s)", keys_changed);
   }
@@ -226,33 +221,33 @@ static MirrTopoStore_t mesh_topo_store = {nullptr, -1, -1, false};
 BLI_INLINE void mesh_mirror_topo_table_get_meshes(Object *ob,
                                                   Mesh *mesh_eval,
                                                   Mesh **r_mesh_mirror,
-                                                  BMEditMesh **r_em_mirror)
+                                                  BMesh **r_bm_mirror)
 {
   Mesh *mesh_mirror = nullptr;
-  BMEditMesh *em_mirror = nullptr;
+  BMesh *bm_mirror = nullptr;
 
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   if (mesh_eval != nullptr) {
     mesh_mirror = mesh_eval;
   }
-  else if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-    em_mirror = em;
+  else if (mesh->runtime->edit_mesh) {
+    bm_mirror = BKE_editmesh_bmesh_get_for_write(ob);
   }
   else {
     mesh_mirror = mesh;
   }
 
   *r_mesh_mirror = mesh_mirror;
-  *r_em_mirror = em_mirror;
+  *r_bm_mirror = bm_mirror;
 }
 
 void ED_mesh_mirror_topo_table_begin(Object *ob, Mesh *mesh_eval)
 {
   Mesh *mesh_mirror;
-  BMEditMesh *em_mirror;
-  mesh_mirror_topo_table_get_meshes(ob, mesh_eval, &mesh_mirror, &em_mirror);
+  BMesh *bm_mirror;
+  mesh_mirror_topo_table_get_meshes(ob, mesh_eval, &mesh_mirror, &bm_mirror);
 
-  ED_mesh_mirrtopo_init(em_mirror, mesh_mirror, &mesh_topo_store, false);
+  ED_mesh_mirrtopo_init(bm_mirror, mesh_mirror, &mesh_topo_store, false);
 }
 
 void ED_mesh_mirror_topo_table_end(Object * /*ob*/)
@@ -265,10 +260,10 @@ void ED_mesh_mirror_topo_table_end(Object * /*ob*/)
 static bool ed_mesh_mirror_topo_table_update(Object *ob, Mesh *mesh_eval)
 {
   Mesh *mesh_mirror;
-  BMEditMesh *em_mirror;
-  mesh_mirror_topo_table_get_meshes(ob, mesh_eval, &mesh_mirror, &em_mirror);
+  BMesh *bm_mirror;
+  mesh_mirror_topo_table_get_meshes(ob, mesh_eval, &mesh_mirror, &bm_mirror);
 
-  if (ED_mesh_mirrtopo_recalc_check(em_mirror, mesh_mirror, &mesh_topo_store)) {
+  if (ED_mesh_mirrtopo_recalc_check(bm_mirror, mesh_mirror, &mesh_topo_store)) {
     ED_mesh_mirror_topo_table_begin(ob, mesh_eval);
   }
   return true;
@@ -278,7 +273,7 @@ static bool ed_mesh_mirror_topo_table_update(Object *ob, Mesh *mesh_eval)
 
 static int mesh_get_x_mirror_vert_spatial(Object *ob, Mesh *mesh_eval, int index)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   const Span<float3> positions = mesh_eval ? mesh_eval->vert_positions() : mesh->vert_positions();
 
   float vec[3];
@@ -287,7 +282,7 @@ static int mesh_get_x_mirror_vert_spatial(Object *ob, Mesh *mesh_eval, int index
   vec[1] = positions[index][1];
   vec[2] = positions[index][2];
 
-  return ED_mesh_mirror_spatial_table_lookup(ob, nullptr, mesh_eval, vec);
+  return ED_mesh_mirror_spatial_table_lookup(ob, mesh_eval, vec);
 }
 
 static int mesh_get_x_mirror_vert_topo(Object *ob, Mesh *mesh, int index)
@@ -307,7 +302,7 @@ int mesh_get_x_mirror_vert(Object *ob, Mesh *mesh_eval, int index, const bool us
   return mesh_get_x_mirror_vert_spatial(ob, mesh_eval, index);
 }
 
-static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMEditMesh *em, const float co[3])
+static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMesh *bm, const float co[3])
 {
   float vec[3];
   int i;
@@ -321,14 +316,14 @@ static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMEditMesh *em, c
   vec[1] = co[1];
   vec[2] = co[2];
 
-  i = ED_mesh_mirror_spatial_table_lookup(ob, em, nullptr, vec);
+  i = ED_mesh_mirror_spatial_table_lookup(ob, nullptr, vec);
   if (i != -1) {
-    return BM_vert_at_index(em->bm, i);
+    return BM_vert_at_index(bm, i);
   }
   return nullptr;
 }
 
-static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMEditMesh *em, BMVert *eve, int index)
+static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMesh *bm, BMVert *eve, int index)
 {
   intptr_t poinval;
   if (!ed_mesh_mirror_topo_table_update(ob, nullptr)) {
@@ -340,14 +335,14 @@ static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMEditMesh *em, BMVe
     BMVert *v;
 
     index = 0;
-    BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
       if (v == eve) {
         break;
       }
       index++;
     }
 
-    if (index == em->bm->totvert) {
+    if (index == bm->totvert) {
       return nullptr;
     }
   }
@@ -355,30 +350,30 @@ static BMVert *editbmesh_get_x_mirror_vert_topo(Object *ob, BMEditMesh *em, BMVe
   poinval = mesh_topo_store.index_lookup[index];
 
   if (poinval != -1) {
-    return (BMVert *)(poinval);
+    return reinterpret_cast<BMVert *>(poinval);
   }
   return nullptr;
 }
 
 BMVert *editbmesh_get_x_mirror_vert(
-    Object *ob, BMEditMesh *em, BMVert *eve, const float co[3], int index, const bool use_topology)
+    Object *ob, BMesh *bm, BMVert *eve, const float co[3], int index, const bool use_topology)
 {
   if (use_topology) {
-    return editbmesh_get_x_mirror_vert_topo(ob, em, eve, index);
+    return editbmesh_get_x_mirror_vert_topo(ob, bm, eve, index);
   }
-  return editbmesh_get_x_mirror_vert_spatial(ob, em, co);
+  return editbmesh_get_x_mirror_vert_spatial(ob, bm, co);
 }
 
 int ED_mesh_mirror_get_vert(Object *ob, int index)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
   int index_mirr;
 
-  if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob)) {
     BMVert *eve, *eve_mirr;
-    eve = BM_vert_at_index(em->bm, index);
-    eve_mirr = editbmesh_get_x_mirror_vert(ob, em, eve, eve->co, index, use_topology);
+    eve = BM_vert_at_index(bm, index);
+    eve_mirr = editbmesh_get_x_mirror_vert(ob, bm, eve, eve->co, index, use_topology);
     index_mirr = eve_mirr ? BM_elem_index_get(eve_mirr) : -1;
   }
   else {
@@ -391,7 +386,7 @@ int ED_mesh_mirror_get_vert(Object *ob, int index)
 #if 0
 
 static float *editmesh_get_mirror_uv(
-    BMEditMesh *em, int axis, float *uv, float *mirrCent, float *face_cent)
+    BMesh *bm, int axis, float *uv, float *mirrCent, float *face_cent)
 {
   float vec[2];
   float cent_vec[2];
@@ -422,7 +417,7 @@ static float *editmesh_get_mirror_uv(
     BMIter iter;
     BMFace *efa;
 
-    BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
       BM_face_uv_calc_center_median(efa, cd_loop_uv_offset, cent);
 
       if ((fabsf(cent[0] - cent_vec[0]) < 0.001f) && (fabsf(cent[1] - cent_vec[1]) < 0.001f)) {
@@ -494,33 +489,32 @@ static int mirror_facerotation(const MFace *a, const MFace *b)
 
 static bool mirror_facecmp(const void *a, const void *b)
 {
-  return (mirror_facerotation((MFace *)a, (MFace *)b) == -1);
+  return (mirror_facerotation(static_cast<MFace *>(const_cast<void *>(a)),
+                              static_cast<MFace *>(const_cast<void *>(b))) == -1);
 }
 
-int *mesh_get_x_mirror_faces(Object *ob, BMEditMesh *em, Mesh *mesh_eval)
+int *mesh_get_x_mirror_faces(Object *ob, Mesh *mesh_eval)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   MFace mirrormf;
   const MFace *mf, *hashmf;
   GHash *fhash;
   int *mirrorverts, *mirrorfaces;
-
-  BLI_assert(em == nullptr); /* Does not work otherwise, currently... */
 
   const bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
   const int totvert = mesh_eval ? mesh_eval->verts_num : mesh->verts_num;
   const int totface = mesh_eval ? mesh_eval->totface_legacy : mesh->totface_legacy;
   int a;
 
-  mirrorverts = MEM_calloc_arrayN<int>(totvert, "MirrorVerts");
-  mirrorfaces = MEM_calloc_arrayN<int>(2 * totface, "MirrorFaces");
+  mirrorverts = MEM_new_array_zeroed<int>(totvert, "MirrorVerts");
+  mirrorfaces = MEM_new_array_zeroed<int>(2 * totface, "MirrorFaces");
 
   const Span<float3> vert_positions = mesh_eval ? mesh_eval->vert_positions() :
                                                   mesh->vert_positions();
-  const MFace *mface = (const MFace *)CustomData_get_layer(
-      &(mesh_eval ? mesh_eval : mesh)->fdata_legacy, CD_MFACE);
+  const MFace *mface = static_cast<const MFace *>(
+      CustomData_get_layer(&(mesh_eval ? mesh_eval : mesh)->fdata_legacy, CD_MFACE));
 
-  ED_mesh_mirror_spatial_table_begin(ob, em, mesh_eval);
+  ED_mesh_mirror_spatial_table_begin(ob, mesh_eval);
 
   for (const int i : vert_positions.index_range()) {
     mirrorverts[i] = mesh_get_x_mirror_vert(ob, mesh_eval, i, use_topology);
@@ -557,7 +551,7 @@ int *mesh_get_x_mirror_faces(Object *ob, BMEditMesh *em, Mesh *mesh_eval)
   }
 
   BLI_ghash_free(fhash, nullptr, nullptr);
-  MEM_freeN(mirrorverts);
+  MEM_delete(mirrorverts);
 
   return mirrorfaces;
 }
@@ -566,7 +560,7 @@ int *mesh_get_x_mirror_faces(Object *ob, BMEditMesh *em, Mesh *mesh_eval)
 
 bool ED_mesh_pick_face(bContext *C, Object *ob, const int mval[2], uint dist_px, uint *r_index)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   BLI_assert(mesh && GS(mesh->id.name) == ID_ME);
 
@@ -603,7 +597,7 @@ static void ed_mesh_pick_face_vert__mpoly_find(
     ARegion *region,
     const float mval[2],
     /* mesh data (evaluated) */
-    const blender::IndexRange face,
+    const IndexRange face,
     const Span<float3> vert_positions,
     const int *corner_verts,
     /* return values */
@@ -629,7 +623,7 @@ bool ED_mesh_pick_face_vert(
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   uint face_index;
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   BLI_assert(mesh && GS(mesh->id.name) == ID_ME);
 
@@ -648,11 +642,11 @@ bool ED_mesh_pick_face_vert(
     float len_best = FLT_MAX;
 
     const Span<float3> vert_positions = mesh_eval->vert_positions();
-    const blender::OffsetIndices faces = mesh_eval->faces();
+    const OffsetIndices faces = mesh_eval->faces();
     const Span<int> corner_verts = mesh_eval->corner_verts();
 
-    const int *index_mp_to_orig = (const int *)CustomData_get_layer(&mesh_eval->face_data,
-                                                                    CD_ORIGINDEX);
+    const int *index_mp_to_orig = static_cast<const int *>(
+        CustomData_get_layer(&mesh_eval->face_data, CD_ORIGINDEX));
 
     /* tag all verts using this face */
     if (index_mp_to_orig) {
@@ -682,8 +676,8 @@ bool ED_mesh_pick_face_vert(
 
     /* Map the `dm` to `mesh`, setting the `r_index` if possible. */
     if (v_idx_best != ORIGINDEX_NONE) {
-      const int *index_mv_to_orig = (const int *)CustomData_get_layer(&mesh_eval->vert_data,
-                                                                      CD_ORIGINDEX);
+      const int *index_mv_to_orig = static_cast<const int *>(
+          CustomData_get_layer(&mesh_eval->vert_data, CD_ORIGINDEX));
       if (index_mv_to_orig) {
         v_idx_best = index_mv_to_orig[v_idx_best];
       }
@@ -701,7 +695,7 @@ bool ED_mesh_pick_face_vert(
 bool ED_mesh_pick_edge(bContext *C, Object *ob, const int mval[2], uint dist_px, uint *r_index)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   BLI_assert(mesh && GS(mesh->id.name) == ID_ME);
 
@@ -748,7 +742,7 @@ bool ED_mesh_pick_edge(bContext *C, Object *ob, const int mval[2], uint dist_px,
  * \return boolean true == Found
  */
 struct VertPickData {
-  blender::VArraySpan<bool> hide_vert;
+  VArraySpan<bool> hide_vert;
   const float *mval_f; /* [2] */
   ARegion *region;
 
@@ -780,8 +774,7 @@ static void ed_mesh_pick_vert__mapFunc(void *user_data,
 bool ED_mesh_pick_vert(
     bContext *C, Object *ob, const int mval[2], uint dist_px, bool use_zbuf, uint *r_index)
 {
-  using namespace blender;
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   BLI_assert(mesh && GS(mesh->id.name) == ID_ME);
 
@@ -852,9 +845,9 @@ bool ED_mesh_pick_vert(
 MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve)
 {
   if (ob->mode & OB_MODE_EDIT && ob->type == OB_MESH) {
-    Mesh *mesh = static_cast<Mesh *>(ob->data);
-    if (!BLI_listbase_is_empty(&mesh->vertex_group_names)) {
-      BMesh *bm = mesh->runtime->edit_mesh->bm;
+    Mesh *mesh = id_cast<Mesh *>(ob->data);
+    if (!mesh->vertex_group_names.is_empty()) {
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
       const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
 
       if (cd_dvert_offset != -1) {
@@ -878,7 +871,7 @@ MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve)
 
 MDeformVert *ED_mesh_active_dvert_get_ob(Object *ob, int *r_index)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   int index = BKE_mesh_mselect_active_get(mesh, ME_VSEL);
   if (r_index) {
     *r_index = index;
@@ -915,8 +908,7 @@ void EDBM_mesh_stats_multi(const Span<Object *> objects, int totelem[3], int tot
   }
 
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
     if (totelem) {
       totelem[0] += bm->totvert;
       totelem[1] += bm->totedge;
@@ -934,16 +926,15 @@ void EDBM_mesh_elem_index_ensure_multi(const Span<Object *> objects, const char 
 {
   int elem_offset[4] = {0, 0, 0, 0};
   for (Object *obedit : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     BM_mesh_elem_index_ensure_ex(bm, htype, elem_offset);
   }
 }
 static wmOperatorStatus mesh_reorder_vertices_spatial_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = blender::ed::object::context_active_object(C);
+  Object *ob = ed::object::context_active_object(C);
 
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   Scene *scene = CTX_data_scene(C);
 
   if (ob->mode == OB_MODE_SCULPT && mesh->flag & ME_SCULPT_DYNAMIC_TOPOLOGY) {
@@ -957,13 +948,13 @@ static wmOperatorStatus mesh_reorder_vertices_spatial_exec(bContext *C, wmOperat
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    blender::ed::sculpt_paint::undo::geometry_begin(*scene, *ob, op);
+    ed::sculpt_paint::undo::geometry_begin(*scene, *ob, op);
   }
 
-  blender::bke::mesh_apply_spatial_organization(*mesh);
+  bke::mesh_apply_spatial_organization(*mesh);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    blender::ed::sculpt_paint::undo::geometry_end(*ob);
+    ed::sculpt_paint::undo::geometry_end(*ob);
   }
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -976,7 +967,7 @@ static wmOperatorStatus mesh_reorder_vertices_spatial_exec(bContext *C, wmOperat
 
 static bool mesh_reorder_vertices_spatial_poll(bContext *C)
 {
-  Object *ob = blender::ed::object::context_active_object(C);
+  Object *ob = ed::object::context_active_object(C);
   if (!ob || ob->type != OB_MESH) {
     return false;
   }
@@ -997,3 +988,5 @@ void MESH_OT_reorder_vertices_spatial(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender
