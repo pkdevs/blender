@@ -457,14 +457,20 @@ static void average_pixels(const int start,
           &tree, pixel_positions[start + i], nearest_pixels, 8);
       int num = 0;
       float4 accum(0);
+      //printf("Found %d\n", nearest_count);
       for (int k = 0; k < nearest_count; k++) {
         if (nearest_pixels[k].dist < FLT_EPSILON) {
           continue;
         }
+        float4 neighbor = image_pixels[nearest_pixels[k].index];
+        int index = nearest_pixels[k].index;
+        //printf("%d (%d, %d)-> %f %f %f %f\n", nearest_pixels[k].index, index % 64, index / 64, neighbor.x, neighbor.y, neighbor.z, neighbor.w);
         accum += image_pixels[nearest_pixels[k].index];
         num++;
       }
       scratch_pixels[img_x + i] = accum / float(num);
+      float4 val = scratch_pixels[img_x + i];
+      //printf("%f %f %f %f\n", val.x, val.y, val.z, val.w);
     }
   }
   else {
@@ -1482,6 +1488,9 @@ KDTree<float3> *build_kd_tree(Object &ob,
   Span<PixelNode> pixel_nodes = pixel_data.nodes;
   uint32_t skipped_pixels = 0;
   uint32_t total_pixels = 0;
+#if 0
+  Array<bool> used_pixels(64 * 64, false);
+#endif
   for (const PixelNode &pixel_node : pixel_nodes) {
     for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
       if (tile_data.tile_number != tile_number) {
@@ -1536,6 +1545,9 @@ KDTree<float3> *build_kd_tree(Object &ob,
                    position.z);
 #endif
             kdtree_insert(tree, pixel, position);
+#if 0
+            used_pixels[pixel] = true;
+#endif
           }
 
           tri_row_offset += tri_row_size;
@@ -1544,7 +1556,23 @@ KDTree<float3> *build_kd_tree(Object &ob,
       }
     }
   }
+#if 0
   printf("%d / %d\n", skipped_pixels, total_pixels);
+  int count = 0;
+  for (int y = 0; y < 64; y++) {
+    printf("<");
+    for (int x = 0; x < 64; x++) {
+      if (used_pixels[count]) {
+        printf("X");
+      }
+      else {
+        printf("O");
+      }
+      count++;
+    }
+    printf(">\n");
+  }
+#endif
   BKE_image_release_ibuf(data.image, tile_buffer, nullptr);
   kdtree_balance(tree);
   return tree;

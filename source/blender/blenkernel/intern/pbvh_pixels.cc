@@ -357,7 +357,7 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
               tri_indices.append(tri);
               pixel_to_position.append(
                   calc_pixel_to_position_map(mesh_data, tri, uvs, inv_w, inv_h));
-              original_tris.append(!is_original);
+              original_tris.append(is_original);
             });
       }
     }
