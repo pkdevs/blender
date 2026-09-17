@@ -287,6 +287,8 @@ NODE_DEFINE(ImageTextureNode)
   SOCKET_BOOLEAN(animated, "Animated", false);
 
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_UV);
+  SOCKET_IN_COLOR(missing, "Missing", IMAGE_MISSING_RGB);
+  SOCKET_IN_FLOAT(missing_alpha, "Missing Alpha", 1.0f);
 
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_FLOAT(alpha, "Alpha");
@@ -464,6 +466,8 @@ void ImageTextureNode::compile(SVMCompiler &compiler)
                       SVMNodeTexImage{
                           .id = handle.kernel_id(),
                           .projection = uint(projection),
+                          .missing = compiler.input_float3("Missing"),
+                          .missing_alpha = compiler.input_float("Missing Alpha"),
                           .flags = uint8_t(flags),
                           .co = vector_offset,
                           .out_offset = compiler.output("Color"),
@@ -476,6 +480,8 @@ void ImageTextureNode::compile(SVMCompiler &compiler)
                       SVMNodeTexImageBox{
                           .id = handle.kernel_id(),
                           .blend = projection_blend,
+                          .missing = compiler.input_float3("Missing"),
+                          .missing_alpha = compiler.input_float("Missing Alpha"),
                           .flags = uint8_t(flags),
                           .co = vector_offset,
                           .out_offset = compiler.output("Color"),
@@ -566,6 +572,8 @@ NODE_DEFINE(EnvironmentTextureNode)
   SOCKET_BOOLEAN(animated, "Animated", false);
 
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_POSITION);
+  SOCKET_IN_COLOR(missing, "Missing", IMAGE_MISSING_RGB);
+  SOCKET_IN_FLOAT(missing_alpha, "Missing Alpha", 1.0f);
 
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_FLOAT(alpha, "Alpha");
@@ -644,6 +652,8 @@ void EnvironmentTextureNode::compile(SVMCompiler &compiler)
                     SVMNodeTexEnvironment{
                         .id = handle.kernel_id(),
                         .projection = projection,
+                        .missing = compiler.input_float3("Missing"),
+                        .missing_alpha = compiler.input_float("Missing Alpha"),
                         .flags = uint8_t(flags),
                         .co = vector_offset,
                         .out_offset = compiler.output("Color"),
@@ -4026,6 +4036,8 @@ void GeometryNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = int(ATTR_STD_POINTINESS),
+                            .missing = SVMInputFloat3{{0}, {0}, {0}},
+                            .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                             .out_offset = compiler.output("Pointiness"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT,
                             .bump_offset = bump_offset,
@@ -4046,6 +4058,8 @@ void GeometryNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = int(ATTR_STD_RANDOM_PER_ISLAND),
+                            .missing = SVMInputFloat3{{0}, {0}, {0}},
+                            .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                             .out_offset = compiler.output("Random Per Island"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT,
                             .bump_offset = bump_offset,
@@ -4180,6 +4194,8 @@ void TextureCoordinateNode::compile(SVMCompiler &compiler)
                           NODE_ATTR,
                           SVMNodeAttr{
                               .attr = int(compiler.attribute(ATTR_STD_GENERATED)),
+                              .missing = SVMInputFloat3{{0}, {0}, {0}},
+                              .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                               .out_offset = compiler.output("Generated"),
                               .output_type = NODE_ATTR_OUTPUT_FLOAT3,
                               .bump_offset = bump_offset,
@@ -4225,6 +4241,8 @@ void TextureCoordinateNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = int(compiler.attribute(ATTR_STD_UV)),
+                            .missing = SVMInputFloat3{{0}, {0}, {0}},
+                            .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                             .out_offset = compiler.output("UV"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT3,
                             .bump_offset = bump_offset,
@@ -4413,6 +4431,8 @@ void UVMapNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = attr,
+                            .missing = SVMInputFloat3{{0}, {0}, {0}},
+                            .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                             .out_offset = compiler.output("UV"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT3,
                             .bump_offset = bump_offset,
@@ -4998,6 +5018,8 @@ void HairInfoNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = int(compiler.attribute(ATTR_STD_CURVE_INTERCEPT)),
+                          .missing = SVMInputFloat3{{0}, {0}, {0}},
+                          .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                           .out_offset = compiler.output("Intercept"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT,
                       });
@@ -5009,6 +5031,8 @@ void HairInfoNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = int(compiler.attribute(ATTR_STD_CURVE_LENGTH)),
+                          .missing = SVMInputFloat3{{0}, {0}, {0}},
+                          .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                           .out_offset = compiler.output("Length"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT,
                       });
@@ -5040,6 +5064,8 @@ void HairInfoNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = int(compiler.attribute(ATTR_STD_CURVE_RANDOM)),
+                          .missing = SVMInputFloat3{{0}, {0}, {0}},
+                          .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                           .out_offset = compiler.output("Random"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT,
                       });
@@ -5107,6 +5133,8 @@ void PointInfoNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = int(compiler.attribute(ATTR_STD_POINT_RANDOM)),
+                          .missing = SVMInputFloat3{{0}, {0}, {0}},
+                          .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
                           .out_offset = compiler.output("Random"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT,
                       });
@@ -6258,6 +6286,8 @@ NODE_DEFINE(AttributeNode)
   NodeType *type = NodeType::add("attribute", create, NodeType::SHADER);
 
   SOCKET_STRING(attribute, "Attribute", ustring());
+  SOCKET_IN_COLOR(missing, "Missing", zero_float3());
+  SOCKET_IN_FLOAT(missing_alpha, "Missing Alpha", 1.0f);
 
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_VECTOR(vector, "Vector");
@@ -6310,6 +6340,8 @@ void AttributeNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = attr,
+                            .missing = compiler.input_float3("Missing"),
+                            .missing_alpha = compiler.input_float("Missing Alpha"),
                             .out_offset = compiler.output("Color"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT3,
                             .bump_offset = bump_offset,
@@ -6323,6 +6355,8 @@ void AttributeNode::compile(SVMCompiler &compiler)
                         NODE_ATTR,
                         SVMNodeAttr{
                             .attr = attr,
+                            .missing = compiler.input_float3("Missing"),
+                            .missing_alpha = compiler.input_float("Missing Alpha"),
                             .out_offset = compiler.output("Vector"),
                             .output_type = NODE_ATTR_OUTPUT_FLOAT3,
                             .bump_offset = bump_offset,
@@ -6338,6 +6372,8 @@ void AttributeNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = attr,
+                          .missing = compiler.input_float3("Missing"),
+                          .missing_alpha = compiler.input_float("Missing Alpha"),
                           .out_offset = compiler.output("Fac"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT,
                           .bump_offset = bump_offset,
@@ -6352,6 +6388,8 @@ void AttributeNode::compile(SVMCompiler &compiler)
                       NODE_ATTR,
                       SVMNodeAttr{
                           .attr = attr,
+                          .missing = compiler.input_float3("Missing"),
+                          .missing_alpha = compiler.input_float("Missing Alpha"),
                           .out_offset = compiler.output("Alpha"),
                           .output_type = NODE_ATTR_OUTPUT_FLOAT_ALPHA,
                           .bump_offset = bump_offset,
@@ -8495,6 +8533,8 @@ void RaycastNode::compile(SVMCompiler &compiler)
         NODE_ATTR,
         SVMNodeAttr{
             .attr = int(compiler.attribute_standard(attribute_output.attribute_name)),
+            .missing = SVMInputFloat3{{0}, {0}, {0}},
+            .missing_alpha = SVMInputFloat{__float_as_uint(1.0f)},
             .out_offset = compiler.output(shader_output),
             .output_type = get_node_attribute_output_type(attribute_output.attribute_output_type),
             .bump_offset = NODE_BUMP_OFFSET_CENTER,

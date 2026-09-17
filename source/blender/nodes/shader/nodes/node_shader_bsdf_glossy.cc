@@ -32,11 +32,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>("Retroreflectivity"_ustr)
-      .default_value(0.0f)
-      .min(0.0f)
-      .max(1.0f)
-      .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
@@ -59,8 +54,8 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {
-  if (!in[5].link) {
-    GPU_link(mat, "world_normals_get", &in[5].link);
+  if (!in[4].link) {
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[4].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
@@ -71,7 +66,14 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
 
   float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
 
-  return GPU_stack_link(mat, node, "node_bsdf_glossy", in, out, GPU_constant(&use_multi_scatter));
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bsdf_glossy",
+                        in,
+                        out,
+                        GPU_constant(&use_multi_scatter),
+                        GPU_kernel_globals(),
+                        GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -84,8 +86,6 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem color = get_input_value("Color", NodeItem::Type::Color3);
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem anisotropy = get_input_value("Anisotropy", NodeItem::Type::Color3);
-  NodeItem retroreflectivity =
-      get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem tangent = get_input_link("Tangent", NodeItem::Type::Vector3);
 
@@ -101,8 +101,7 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tangent", tangent},
                       {"ior", ior_out},
                       {"extinction", extinction_out},
-                      {"roughness", roughness},
-                      {"retroreflective", retroreflectivity}});
+                      {"roughness", roughness}});
 }
 #endif
 NODE_SHADER_MATERIALX_END
