@@ -131,13 +131,13 @@ template<typename T> class TreeBuilder {
     Node *allocate(const int num)
     {
       if (used + num > batch.size()) {
-        batch = allocator->allocate_array<Node>(batch_size);
-        used = 0;
+        this->batch = this->allocator->allocate_array<Node>(batch_size);
+        this->used = 0;
         /* Only the first batch is sized for the tree, the rest are full size. */
-        batch_size = BATCH_SIZE_MAX;
+        this->batch_size = BATCH_SIZE_MAX;
       }
-      Node *nodes = &batch[used];
-      used += num;
+      Node *nodes = &this->batch[used];
+      this->used += num;
       return nodes;
     }
   };
