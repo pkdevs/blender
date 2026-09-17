@@ -14,6 +14,7 @@
 
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_zones.hh"
 
 #include "COM_context.hh"
 #include "COM_domain.hh"
@@ -26,12 +27,14 @@
 #include "COM_node_tree_input_node_operation.hh"
 #include "COM_node_tree_output_node_operation.hh"
 #include "COM_pixel_operation.hh"
+#include "COM_repeat_zone_operation.hh"
 #include "COM_result.hh"
 #include "COM_scheduler.hh"
 #include "COM_shader_operation.hh"
 #include "COM_single_value_node_input_operation.hh"
 #include "COM_undefined_node_operation.hh"
 #include "COM_utilities.hh"
+#include "COM_zone_tree_operation.hh"
 
 namespace blender::compositor {
 
@@ -48,6 +51,8 @@ NodeTreeEvaluator::NodeTreeEvaluator(Context &context,
 
 void NodeTreeEvaluator::evaluate()
 {
+  this->compute_zone_external_input_reference_counts();
+
   for (const bNode *node : this->schedule().nodes) {
     if (this->context().is_canceled()) {
       this->cancel_evaluation();
@@ -60,10 +65,17 @@ void NodeTreeEvaluator::evaluate()
 
     if (is_pixel_node(*node)) {
       this->add_node_to_pixel_compile_unit(*node);
+      continue;
     }
-    else {
-      this->evaluate_node(*node);
+
+    const bke::bNodeTreeZones &zones = *node->owner_tree().zones();
+    const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
+    if (node_zone && node_zone != this->schedule().zone) {
+      this->evaluate_zone(*node_zone);
+      continue;
     }
+
+    this->evaluate_node(*node);
   }
 }
 
@@ -83,6 +95,20 @@ Result &NodeTreeEvaluator::get_result_from_output_socket(const bNodeSocket &outp
     return pixel_operation->get_result(identifier);
   }
 
+  /* The output belongs to a zone output node that was compiled into a zone operation. */
+  ZoneOperation *zone_operation = zone_operations_.lookup_default(&node, nullptr);
+  if (zone_operation) {
+    return zone_operation->get_result(output.identifier);
+  }
+
+  /* If the output is in a different zone, then we retrieve the result from the ZoneTreeOperation
+   * operation using its special identifier. */
+  const bke::bNodeTreeZones &zones = *output.owner_tree().zones();
+  const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node.identifier);
+  if (node_zone != this->schedule().zone) {
+    return this->operation().get_input(ZoneTreeOperation::get_external_input_identifier(output));
+  }
+
   BLI_assert_unreachable();
   return node_operation->get_result(output.identifier);
 }
@@ -97,6 +123,59 @@ const Schedule &NodeTreeEvaluator::schedule()
   return schedule_;
 }
 
+void NodeTreeEvaluator::compute_zone_external_input_reference_counts()
+{
+  /* Not evaluating a zone, nothing to do. */
+  if (!this->schedule().zone) {
+    return;
+  }
+
+  Set<const bNodeSocket *> visited_outputs_;
+  for (const bNodeLink *link : this->schedule().zone->border_links) {
+    const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
+    if (!output) {
+      continue;
+    }
+
+    if (visited_outputs_.contains(output)) {
+      continue;
+    }
+    visited_outputs_.add_new(output);
+
+    Set<const bke::bNodeTreeZone *> zones_counted;
+    const bke::bNodeTreeZones &zones = *output->owner_tree().zones();
+    const int reference_count = number_of_inputs_linked_to_output_conditioned(
+        *output, [&](const bNodeSocket &input) {
+          if (this->schedule().unneeded_inputs.contains(&input)) {
+            return false;
+          }
+
+          if (this->schedule().nodes.contains(&input.owner_node())) {
+            return true;
+          }
+
+          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_socket(input);
+          for (const bke::bNodeTreeZone *zone = input_zone; zone; zone = zone->parent_zone) {
+            if (!zone || zone->parent_zone != this->schedule().zone) {
+              continue;
+            }
+
+            if (this->schedule().nodes.contains(zone->output_node()) &&
+                !zones_counted.contains(zone))
+            {
+              zones_counted.add_new(zone);
+              return true;
+            }
+          }
+
+          return false;
+        });
+
+    Result &result = this->get_result_from_output_socket(*output);
+    result.set_reference_count(result.reference_count() + reference_count);
+  }
+}
+
 NodeOperation *NodeTreeEvaluator::create_node_operation(const bNode &node)
 {
   const char *disabled_hint = nullptr;
@@ -108,11 +187,11 @@ NodeOperation *NodeTreeEvaluator::create_node_operation(const bNode &node)
     return get_group_node_operation(this->context(), node);
   }
 
-  if (node.is_group_output()) {
+  if (node.is_group_output() || bke::all_zone_output_node_types().contains(node.type_legacy)) {
     return get_node_tree_output_node_operation(this->context(), node, this->operation());
   }
 
-  if (node.is_group_input()) {
+  if (node.is_group_input() || bke::all_zone_input_node_types().contains(node.type_legacy)) {
     return get_node_tree_input_node_operation(this->context(), node, this->operation());
   }
 
@@ -264,6 +343,62 @@ void NodeTreeEvaluator::map_pixel_operation_inputs_to_their_results(PixelOperati
     operations_stream_.append(std::unique_ptr<ImplicitInputOperation>(input_operation));
 
     input_operation->evaluate();
+  }
+}
+
+ZoneOperation *NodeTreeEvaluator::create_zone_operation(const bke::bNodeTreeZone &zone)
+{
+  if (zone.output_node()->is_type("GeometryNodeRepeatOutput"_ustr)) {
+    return new RepeatZoneOperation(this->context(), zone, compute_context_);
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+void NodeTreeEvaluator::evaluate_zone(const bke::bNodeTreeZone &zone)
+{
+  ZoneOperation *operation = this->create_zone_operation(zone);
+
+  zone_operations_.add_new(zone.output_node(), operation);
+
+  this->map_zone_operation_inputs_to_their_results(operation);
+
+  operations_stream_.append(std::unique_ptr<Operation>(operation));
+
+  operation->compute_results_reference_counts(this->schedule());
+
+  operation->evaluate();
+}
+
+void NodeTreeEvaluator::map_zone_operation_inputs_to_their_results(ZoneOperation *operation)
+{
+  for (const bNodeSocket *input : operation->zone().input_node()->input_sockets()) {
+    if (!is_socket_available(input)) {
+      continue;
+    }
+
+    const bNodeSocket *output = get_output_linked_to_input(*input);
+    if (!output || !this->schedule().nodes.contains(&output->owner_node()) ||
+        this->schedule().unneeded_inputs.contains(input))
+    {
+      this->map_unlinked_input(*input, operation);
+      continue;
+    }
+
+    Result &input_result = this->get_result_from_output_socket(*output);
+    operation->map_input_to_result(input->identifier, &input_result);
+  }
+
+  for (const bNodeLink *link : operation->zone().border_links) {
+    const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
+    if (!output) {
+      continue;
+    }
+
+    std::string input_identifier = ZoneTreeOperation::get_external_input_identifier(*output);
+    Result *input_result = &this->get_result_from_output_socket(*output);
+    operation->map_input_to_result(input_identifier, input_result);
   }
 }
 

@@ -10,6 +10,7 @@
 
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_zones.hh"
 
 #include "GPU_debug.hh"
 
@@ -91,15 +92,37 @@ void NodeOperation::evaluate()
 
 void NodeOperation::compute_results_reference_counts(const Schedule &schedule)
 {
+  const bke::bNodeTreeZones &zones = *this->node().owner_tree().zones();
   for (const bNodeSocket *output : this->node().output_sockets()) {
     if (!is_socket_available(output)) {
       continue;
     }
 
+    Set<const bke::bNodeTreeZone *> zones_counted;
+    const bke::bNodeTreeZone *output_zone = zones.get_zone_by_socket(*output);
     const int reference_count = number_of_inputs_linked_to_output_conditioned(
         *output, [&](const bNodeSocket &input) {
-          return schedule.nodes.contains(&input.owner_node()) &&
-                 !schedule.unneeded_inputs.contains(&input);
+          if (schedule.unneeded_inputs.contains(&input)) {
+            return false;
+          }
+
+          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_socket(input);
+          if (output_zone == input_zone && schedule.nodes.contains(&input.owner_node())) {
+            return true;
+          }
+
+          for (const bke::bNodeTreeZone *zone = input_zone; zone; zone = zone->parent_zone) {
+            if (!zone || zone->parent_zone != output_zone) {
+              continue;
+            }
+
+            if (schedule.nodes.contains(zone->output_node()) && !zones_counted.contains(zone)) {
+              zones_counted.add_new(zone);
+              return true;
+            }
+          }
+
+          return false;
         });
 
     this->get_result(output->identifier).set_reference_count(reference_count);

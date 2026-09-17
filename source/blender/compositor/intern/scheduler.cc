@@ -515,9 +515,9 @@ static NeededBuffers compute_number_of_needed_buffers(const Context &context,
       /* If any of the links is not between two pixel nodes, it means that the node outputs
        * a buffer through this output and so we increment the number of output buffers. */
       if (!is_pixel_node(node) ||
-          is_output_linked_to_input_conditioned(*output, [&](const bNodeSocket &input) {
-            return !is_pixel_node(input.owner_node());
-          }))
+          is_output_linked_to_input_conditioned(
+              *output,
+              [&](const bNodeSocket &input) { return !is_pixel_node(input.owner_node()); }))
       {
         number_of_output_buffers++;
       }
@@ -588,22 +588,22 @@ static Vector<const bNode *> find_zone_dependency_nodes(const Context &context,
 {
   VectorSet<const bNode *> dependency_nodes;
   for (const bNodeLink *link : zone.border_links) {
-    if (!link->is_available()) {
+    const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
+    if (!output) {
       continue;
     }
 
     /* The dependency node was already scheduled, so skip it. */
-    const bNodeSocket &output = *get_output_linked_to_input(*link->tosock);
-    if (schedule.nodes.contains(&output.owner_node())) {
+    if (schedule.nodes.contains(&output->owner_node())) {
       continue;
     }
 
     /* Only consider nodes in the same zone being scheduled. */
-    if (zone.owner->get_zone_by_socket(output) != zone.parent_zone) {
+    if (zone.owner->get_zone_by_socket(*output) != zone.parent_zone) {
       continue;
     }
 
-    dependency_nodes.add(link->fromnode);
+    dependency_nodes.add(&output->owner_node());
   }
 
   Vector<const bNode *> zone_input_dependency_nodes = find_node_dependency_nodes(
@@ -655,6 +655,7 @@ Schedule compute_schedule(const Context &context,
                           const bke::bNodeTreeZone *zone)
 {
   Schedule schedule;
+  schedule.zone = zone;
 
   /* Validate node group. */
   node_group.ensure_topology_cache();

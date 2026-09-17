@@ -31,6 +31,8 @@ struct Schedule {
   /* Holds the set of all inputs sockets that needn't be computed because the node does not need
    * them, for instance, the unneeded inputs of a Switch node. */
   Set<const bNodeSocket *> unneeded_inputs;
+  /* If not nullptr, the schedule is for the given zone, otherwise it is for the node tree. */
+  const bke::bNodeTreeZone *zone = nullptr;
 };
 
 /* A function that returns the result associated with the given socket if it is known statically
