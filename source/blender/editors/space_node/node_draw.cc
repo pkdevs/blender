@@ -3624,8 +3624,10 @@ static void node_comment_edit_button_cb(bContext *C, void *node_argv, void * /*a
   WM_operator_properties_free(&props_ptr);
 }
 
-static void comment_node_prepare_for_draw(
-    const bContext &C, SpaceNode &snode, bNodeTree &ntree, bNode &node, ui::Block &block)
+static void comment_node_prepare_for_draw(const bContext &C,
+                                          bNodeTree &ntree,
+                                          bNode &node,
+                                          ui::Block &block)
 {
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const bool is_render = bool(storage.flag & NodeCommentFlag::Render);
@@ -3656,8 +3658,6 @@ static void comment_node_prepare_for_draw(
     bottom_y = ui::block_layout_resolve(&block).y - pad_bottom;
   }
   else {
-    /* The hit-inset is necessary to make the textbox horizontally resizable. */
-    const float hit_inset_x = NODE_RESIZE_MARGIN * math::max(snode.runtime->aspect, 1.0f);
     const int but_h = ui::textbox_but_height(storage.textbox_state_node);
     ui::Button *but = uiDefButTextBoxR(&block,
                                        &node_ptr,
@@ -3665,8 +3665,7 @@ static void comment_node_prepare_for_draw(
                                        &storage.textbox_state_node,
                                        loc.x,
                                        loc.y - but_h,
-                                       int(node.width * UI_SCALE_FAC),
-                                       hit_inset_x);
+                                       int(node.width * UI_SCALE_FAC));
     /* Same approach to detecting when a text property is not active anymore is used elsewhere
      * (e.g. #outliner_buttons) */
     if (!ui::button_active_only(&C, CTX_wm_region(&C), &block, but)) {
@@ -3733,7 +3732,7 @@ static void node_update_nodetree(const bContext &C,
       reroute_node_prepare_for_draw(node);
     }
     else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(C, *snode, ntree, node, block);
+      comment_node_prepare_for_draw(C, ntree, node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {

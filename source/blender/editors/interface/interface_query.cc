@@ -259,31 +259,14 @@ static bool but_isect_pie_seg(const Block *block, const Button *but)
   return angle_but_cos > angle_adjacent_cos;
 }
 
-static rctf button_hit_rect(const Button *but)
-{
-  rctf rect = but->rect;
-  if (but->type == ButtonType::TextBox) {
-    const float hit_inset_x = static_cast<const ButtonTextBox *>(but)->hit_inset_x;
-    rect.xmin += hit_inset_x;
-    rect.xmax -= hit_inset_x;
-    if (rect.xmin > rect.xmax) {
-      const float mid = BLI_rctf_cent_x(&but->rect);
-      rect.xmin = rect.xmax = mid;
-    }
-  }
-  return rect;
-}
-
 bool button_contains_pt(const Button *but, float mx, float my)
 {
-  const rctf rect = button_hit_rect(but);
-  return BLI_rctf_isect_pt(&rect, mx, my);
+  return BLI_rctf_isect_pt(&but->rect, mx, my);
 }
 
 bool button_contains_rect(const Button *but, const rctf *rect)
 {
-  const rctf hit_rect = button_hit_rect(but);
-  return BLI_rctf_isect(&hit_rect, rect, nullptr);
+  return BLI_rctf_isect(&but->rect, rect, nullptr);
 }
 
 bool button_contains_point_px(const Button *but, const ARegion *region, const int xy[2])

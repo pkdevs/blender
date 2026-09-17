@@ -1395,9 +1395,6 @@ int textbox_but_height(const TextboxState &state);
 
 /**
  * Create a multi-line text-box for editing an RNA property.
- *
- * \param hit_inset_x: Horizontal inset of the hit box which allows implementing horizontal
- *   resizing behavior at a higher level.
  */
 Button *uiDefButTextBoxR(Block *block,
                          PointerRNA *ptr,
@@ -1405,8 +1402,7 @@ Button *uiDefButTextBoxR(Block *block,
                          TextboxState *state,
                          int x,
                          int y,
-                         short width,
-                         float hit_inset_x = 0.0f);
+                         short width);
 Button *uiDefButO(Block *block,
                   ButtonType type,
                   StringRefNull opname,

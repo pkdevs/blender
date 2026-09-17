@@ -408,12 +408,6 @@ struct ButtonTextBox : public Button {
   /** Placeholder wrap cache from last draw. */
   std::unique_ptr<TextWrapCache> placeholder_wrap_cache;
 
-  /**
-   * Decreases the hitbox size horizontally. This allows implementing horizontal resizing of the
-   * textbox at a higher level (e.g. by changing the width of a node).
-   */
-  float hit_inset_x = 0.0f;
-
   void line_scroll_set(int line_scroll);
   int line_scroll() const;
   int visible_lines() const;

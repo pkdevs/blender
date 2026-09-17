@@ -364,8 +364,7 @@ Button *uiDefButTextBoxR(Block *block,
                          TextboxState *state,
                          const int x,
                          const int y,
-                         const short width,
-                         const float hit_inset_x)
+                         const short width)
 {
   BLI_assert(state);
 
@@ -394,7 +393,6 @@ Button *uiDefButTextBoxR(Block *block,
 
   ButtonTextBox *textbox = static_cast<ButtonTextBox *>(but);
   textbox->state = state;
-  textbox->hit_inset_x = hit_inset_x;
 
   if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
     button_flag_enable(but, BUT_TEXTEDIT_UPDATE);
