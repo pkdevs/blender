@@ -371,7 +371,7 @@ void PointCloud::create_missing_gsplat_attributes()
 {
   const size_t numpoints = num_points();
 
-  /* Values matches defaults on in Blender EEVEE. */
+  /* Values matches defaults in Blender EEVEE. */
   static const float4 DEFAULT_RADIANCE_BASE = make_float4(0.0f, 0.0f, 0.0f, 0.5f);
   static const float3 DEFAULT_SCALE = make_float3(1e-3f, 1e-3f, 1e-3f);
 
