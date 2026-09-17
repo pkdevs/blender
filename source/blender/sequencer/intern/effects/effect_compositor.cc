@@ -182,16 +182,16 @@ static SeqResult do_compositor_effect(const RenderData *context,
                                         fac,
                                         *strip);
 
+    GpuContextState gpu_state = GpuContextState::Unsupported;
     if (com_context.use_gpu()) {
-      com_context.set_gpu_supported(render_begin_gpu(*context));
+      gpu_state = render_begin_gpu(*context);
+      com_context.set_gpu_supported(gpu_state != GpuContextState::Unsupported);
     }
     com_cache.recreate_if_needed(
         com_context.use_gpu(), com_context.get_precision(), context->gpu_context);
     com_context.evaluate();
     com_context.cache_manager().reset();
-    if (com_context.use_gpu()) {
-      render_end_gpu(*context);
-    }
+    render_end_gpu(*context, gpu_state);
     out.translation += com_context.get_result_translation();
     out.is_opaque_before_transform = !out.image->can_contain_alpha();
   }
@@ -249,6 +249,13 @@ void compositor_effect_nodes_update_interface(Main &bmain, Scene &sequencer_scen
     comp->system_properties =
         bke::idprop::create_group("SequencerCompositorEffectProperties").release();
   }
+
+  /* In case the node group is missing, do not update the properties to avoid the values reverting
+   * to their default value if the node group later becomes available. */
+  if (!comp->node_group || ID_MISSING(comp->node_group)) {
+    return;
+  }
+
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &sequencer_scene.id, RNA_SequencerCompositorEffectProperties, comp);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *comp->system_properties);

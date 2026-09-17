@@ -66,10 +66,10 @@ struct ThumbnailCache {
     std::string path;
     /* Used for strips that are IDs. We store the session UID so it stays valid
      * across undo/redo. */
-    unsigned int id_session_uid = 0;
+    uint id_session_uid = 0;
     /* Hash of any extra data that needs to be part of source key (e.g. camera for scene
      * strips). */
-    unsigned int extra_bits = 0;
+    uint extra_bits = 0;
 
     bool is_valid() const
     {
@@ -429,7 +429,7 @@ void ThumbGenerationJob::ensure_job(const bContext *C, ThumbnailCache *cache)
                               win,
                               scene,
                               "Generating strip thumbnails...",
-                              eWM_JobFlag(0),
+                              WM_JOB_BACKGROUND,
                               WM_JOB_TYPE_SEQ_DRAW_THUMBNAIL);
   if (!WM_jobs_is_running(wm_job)) {
     ThumbGenerationJob *tj = MEM_new<ThumbGenerationJob>("ThumbGenerationJob", scene, cache);
@@ -889,7 +889,7 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
           int paths_count = 1;
           if (strip->type == STRIP_TYPE_IMAGE) {
             /* Image strip has array of file names. */
-            paths_count = int(MEM_allocN_len(elem) / sizeof(*elem));
+            paths_count = strip->data->stripdata_num;
           }
           char filepath[FILE_MAX];
           const char *basepath = ID_BLEND_PATH_FROM_GLOBAL(&scene->id);
