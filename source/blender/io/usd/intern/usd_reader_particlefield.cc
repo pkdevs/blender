@@ -8,6 +8,7 @@
 #include "IO_validate.hh"
 
 #include "BLI_span.hh"
+#include "BLI_task.hh"
 
 #include "BKE_geometry_set.hh"
 #include "BKE_main.hh"
@@ -216,17 +217,19 @@ void USDParticleFieldReader::read_geometry(bke::GeometrySet &geometry_set,
   Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
 
   const int num_sh_dimensions = usd_coeff_element_size - 1;
-  for (int64_t i = 0; i < positions.size(); i++) {
-    const int64_t sh_offset = (i * usd_coeff_element_size);
+  threading::parallel_for(positions.index_range(), 16384, [&](IndexRange range) {
+    for (const int64_t i : range) {
+      const int64_t sh_offset = (i * usd_coeff_element_size);
 
-    radiance[i] = float4(usd_coeffs[sh_offset], usd_opacities[i]);
-    scale[i] = usd_scales[i];
-    rotation[i] = math::normalize(usd_orientations[i]);
+      radiance[i] = float4(usd_coeffs[sh_offset], usd_opacities[i]);
+      scale[i] = usd_scales[i];
+      rotation[i] = math::normalize(usd_orientations[i]);
 
-    for (int dimension = 0; dimension < num_sh_dimensions; dimension++) {
-      sh_attrs[dimension][i] = usd_coeffs[sh_offset + dimension + 1];
+      for (int dimension = 0; dimension < num_sh_dimensions; dimension++) {
+        sh_attrs[dimension][i] = usd_coeffs[sh_offset + dimension + 1];
+      }
     }
-  }
+  });
 
   accessor.finish();
 
