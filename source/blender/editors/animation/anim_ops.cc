@@ -1886,7 +1886,6 @@ void ED_operatortypes_anim()
   WM_operatortype_append(ed::animrig::POSELIB_OT_asset_delete);
 
   WM_operatortype_append(ed::animrig::ANIM_OT_world_space_copy);
-  WM_operatortype_append(ed::animrig::ANIM_OT_world_space_copy_current);
   WM_operatortype_append(ed::animrig::ANIM_OT_world_space_paste);
 }
 

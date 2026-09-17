@@ -126,7 +126,6 @@ void POSELIB_OT_screenshot_preview(wmOperatorType *ot);
  * \{ */
 
 void ANIM_OT_world_space_copy(wmOperatorType *ot);
-void ANIM_OT_world_space_copy_current(wmOperatorType *ot);
 void ANIM_OT_world_space_paste(wmOperatorType *ot);
 
 /** \} */

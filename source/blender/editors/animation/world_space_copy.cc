@@ -522,7 +522,16 @@ static void copy_world_space(Main &bmain,
   BLI_assert(copybuffer.is_valid());
   copybuffer.write_as_copypaste_buffer(filepath, reports);
   if (added_names.size() == transformables.size()) {
-    BKE_reportf(&reports, RPT_INFO, "Copied %d entries into clipboard", int(added_names.size()));
+    const char *transformable_type_name = transformables[0].type() ==
+                                                  AnimTransformable::Type::OBJECT ?
+                                              "objects" :
+                                              "bones";
+    BKE_reportf(&reports,
+                RPT_INFO,
+                "Copied %d %s across %d frames to the clipboard",
+                int(added_names.size()),
+                transformable_type_name,
+                range.max - range.min);
   }
 }
 
@@ -788,18 +797,27 @@ static void paste_world_space(Main &bmain,
                         transform_fcurves.scale,
                         *transform_fcurves.channelbag);
   }
+
+  const char *transformable_type_name = transformables[0].type() ==
+                                                AnimTransformable::Type::OBJECT ?
+                                            "objects" :
+                                            "bones";
   if (sorted_transformables.size() == clipboard_data.size()) {
     BKE_reportf(&reports,
                 RPT_INFO,
-                "Pasted all %d entries from clipboard",
-                int(sorted_transformables.size()));
+                "Pasted all %d %s over %d frames",
+                int(sorted_transformables.size()),
+                transformable_type_name,
+                range.max - range.min);
   }
   else {
     BKE_reportf(&reports,
                 RPT_INFO,
-                "Pasted %d/%d entries from clipboard",
+                "Pasted %d/%d %s over %d frames",
                 int(sorted_transformables.size()),
-                int(clipboard_data.size()));
+                int(clipboard_data.size()),
+                transformable_type_name,
+                range.max - range.min);
   }
   DEG_graph_free(depsgraph);
 }
@@ -838,12 +856,12 @@ static wmOperatorStatus world_space_copy_exec(bContext *C, wmOperator *op)
   Bounds<int> bounds;
   switch (range_mode) {
     case CopyRange::CUSTOM:
-      bounds = {RNA_int_get(op->ptr, "start"), RNA_int_get(op->ptr, "end")};
+      bounds = {RNA_int_get(op->ptr, "start"), RNA_int_get(op->ptr, "end") + 1};
       break;
     case CopyRange::PLAYBACK_RANGE: {
       Scene *scene = CTX_data_scene(C);
       ScenePlaybackRange range = BKE_scene_get_playback_range(scene);
-      bounds = {range.start_frame, range.end_frame};
+      bounds = {range.start_frame, range.end_frame + 1};
       break;
     }
 
@@ -890,31 +908,6 @@ void ANIM_OT_world_space_copy(wmOperatorType *ot)
       ot->srna, "start", 0, -INT_MAX, INT_MAX, "Start", "Start frame to copy from", 0, INT_MAX);
   RNA_def_int(
       ot->srna, "end", 250, -INT_MAX, INT_MAX, "End", "End frame to copy from", 0, INT_MAX);
-}
-
-static wmOperatorStatus world_space_copy_current_exec(bContext *C, wmOperator *op)
-{
-  Vector<AnimTransformable> transformables = selected_transformables_from_context(*C);
-  Scene *scene = CTX_data_scene(C);
-  const int current_frame = scene->r.cfra;
-  Bounds<int> range = {current_frame, current_frame + 1};
-  copy_world_space(
-      *CTX_data_main(C), *scene, *CTX_data_view_layer(C), *op->reports, transformables, range);
-  return OPERATOR_FINISHED;
-}
-
-void ANIM_OT_world_space_copy_current(wmOperatorType *ot)
-{
-  ot->name = "Copy World Space Current";
-  ot->idname = "ANIM_OT_world_space_copy_current";
-  ot->description =
-      "Copy the transforms of selected elements of the current frame to the clipboard";
-
-  ot->exec = world_space_copy_current_exec;
-  ot->poll = world_space_copy_poll;
-
-  /* No undo possible since this creates data outside the current blend file. */
-  ot->flag = OPTYPE_REGISTER;
 }
 
 static bool has_constraints(const Span<AnimTransformable> transformables)
