@@ -469,7 +469,7 @@ class Cameras : Overlay {
           }
         }
         data.depth *= -1.0f; /* Hides the back of the camera wires (see shader). */
-        call_buffers_.frame_buf.append(data, select_id);
+        // call_buffers_.frame_buf.append(data, select_id);
       }
     }
     else {
