@@ -224,6 +224,89 @@ enum {
   /** Launched with `--offline-mode` (overrides #USER_INTERNET_ALLOW when set). */
   G_FLAG_INTERNET_OVERRIDE_PREF_OFFLINE = (1 << 12),
 
+  /**
+   * Automatic Script Execution
+   * ==========================
+   *
+   * This flag defines when auto-execution from a blend-file is allowed,
+   * this amounts to trusting the file, exposed as "Trusted Source" in the UI.
+   *
+   * From a user perspective trust is controlled in the following way.
+   *
+   * Preferences
+   * -----------
+   *
+   * Two preferences set the default trust:
+   * - "Auto Run Python Scripts", note the flag is inverted: #USER_SCRIPT_AUTOEXEC_DISABLE.
+   * - "Excluded Paths" (#UserDef.autoexec_paths),
+   *   only used when "Auto Run Python Scripts" is enabled,
+   *   with it disabled everything defaults to untrusted & any path may be trusted by opting in.
+   *
+   * Opening a File Interactively
+   * ----------------------------
+   *
+   * Cases where we can prompt the user for a "Trusted Source":
+   * - File Selector.
+   * - Drag & Drop.
+   *
+   * Expected behavior:
+   * - When "Auto Run Python Scripts" is disabled, you may opt-in to trust.
+   * - When "Auto Run Python Scripts" is enabled, you may opt-out of trusting.
+   * - When it's enabled and the blend-file's directory is in "Excluded Paths",
+   *   trust is off and cannot be enabled.
+   *
+   * Opening a File Non-Interactively
+   * --------------------------------
+   *
+   * Cases where there isn't the chance to prompt for trust:
+   * - From the command line (including double clicking a blend-file in the file manager).
+   * - Opening via "Open Recent".
+   *
+   * Expected behavior:
+   * - The default is the same as opening interactively.
+   * - Files opened later are unaffected, unlike the command-line override.
+   *
+   * Recovering a File
+   * -----------------
+   *
+   * Cases where the path the recovered file will have isn't known:
+   * - "Recover Last Session".
+   * - "Recover Auto Save".
+   *
+   * Expected behavior:
+   * - Never trusted, neither the preference nor the excluded paths apply,
+   *   unless the command line overrides the preference.
+   * - You may opt-in from "Recover Auto Save"'s file selector,
+   *   "Recover Last Session" has no file selector so there is no chance to opt-in.
+   *
+   * Command Line Override
+   * ---------------------
+   *
+   * #Global.autoexec_override sets trust for the whole session,
+   * see `--enable-autoexec` / `--disable-autoexec`. It replaces the default in each case above,
+   * the preference & excluded paths no longer apply.
+   *
+   * Opting in/out via the "Trusted Source" option when loading a file still works,
+   * but loading a file after that defaults to the override value for the trust setting.
+   *
+   * Blocked Execution
+   * -----------------
+   *
+   * Whenever loading a file blocks a script,
+   * a warning is shown with an "Allow Execution" option, see #wm_test_autorun_warning.
+   * This applies to any file load & is the only chance to opt-in when opening non-interactively.
+   *
+   * Other Notes
+   * -----------
+   *
+   * - On macOS double clicking on the blend-file is handled by the running Blender itself,
+   *   see #GHOST_kEventOpenMainFile, other systems start a new instance.
+   * - Reverting a file keeps the trust of the current session.
+   * - Scripts calling `wm.open_mainfile` without "use_scripts"
+   *   use the trust of the file already open.
+   * - FIXME: opening a project blend-file, see `PROJECT_OT_OpenBlendInProject`,
+   *   uses the trust of the file already open, needs investigation.
+   */
   G_FLAG_SCRIPT_AUTOEXEC = (1 << 13),
   G_FLAG_SCRIPT_AUTOEXEC_FAIL = (1 << 15),
   G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET = (1 << 16),
