@@ -20,6 +20,7 @@ namespace attribute_names {
 
 constexpr StringRefNull position = "position";
 constexpr StringRefNull velocity = "velocity";
+constexpr StringRefNull instance_transform = "instance_transform";
 constexpr StringRefNull rotation = "rotation";
 constexpr StringRefNull angular_velocity = "angular_velocity";
 constexpr StringRefNull external_force = "external_force";

@@ -17,6 +17,8 @@
 
 #include "BLI_math_matrix.hh"
 
+#include "BKE_instances.hh"
+
 #include "NOD_geo_tag_filter.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_simulation.hh"
@@ -175,6 +177,14 @@ class BodyActivationListenerImpl : public JPH::BodyActivationListener {
   void OnBodyDeactivated(const JPH::BodyID & /*body_id*/, uint64_t /*body_user_data*/) override {}
 };
 
+struct JoltRigidBody {
+  JPH::Body *body;
+};
+
+struct JoltRigidBodies {
+  Map<int, JoltRigidBody> bodies_by_id;
+};
+
 struct JoltState {
   bool is_initialized = false;
 
@@ -185,7 +195,7 @@ struct JoltState {
   ContactListenerImpl contact_listener;
   JPH::PhysicsSystem system;
 
-  // Map<std::string, JoltRigidBodies> rigid_bodies_by_path;
+  Map<DataKey, JoltRigidBodies> rigid_bodies_by_key;
   // CollisionShapeCache collision_shape_cache;
 
   ~JoltState() = default;
@@ -256,9 +266,10 @@ struct GeometryData {
   AttrDomain domain;
   int size;
 
-  bke::SpanAttributeWriter<float3> position_attr;
+  Span<int> instance_ids;
+
+  bke::SpanAttributeWriter<float4x4> transform_attr;
   bke::SpanAttributeWriter<float3> velocity_attr;
-  bke::SpanAttributeWriter<math::Quaternion> rotation_attr;
   bke::SpanAttributeWriter<float3> angular_velocity_attr;
 
   GeometryData(const bke::MutableAttributeAccessor attributes) : attributes(attributes) {}
@@ -267,7 +278,9 @@ struct GeometryData {
 struct Geometries {
   Vector<simulation::GeometrySetData> geometry_sets;
 
+  /* Unique geometry components used by the simulation. */
   VectorSet<DataKey> data_keys;
+  /* Data for each data key. */
   Vector<GeometryData *> data;
 };
 
@@ -348,11 +361,10 @@ class JoltSolverStep {
     //   this->create_chunk_constraints__pin_rotations(tls, chunk_i);
     // });
 
-    // result_ = this->do_simulation();
-
     JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
     JPH::JobSystemSingleThreaded job_system;
     state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
+    this->update_simulated_bodies();
 
     // this->write_back__pin_positions();
     // this->write_back__rod_stretch_shear();
@@ -376,15 +388,16 @@ class JoltSolverStep {
     for (const int geo_bundle_i : geometries_.geometry_sets.index_range()) {
       GeometrySetData &geo_set_data = geometries_.geometry_sets[geo_bundle_i];
       GeometrySet &geometry = geo_set_data.geometry;
-      for (bke::GeometryComponent::Type type : {bke::GeometryComponent::Type::Instance}) {
-        if (!geometry.has(type)) {
-          continue;
-        }
-        bke::GeometryComponent &component = geometry.get_component_for_write(type);
-        geometries_.data_keys.add_new({geo_bundle_i, type, std::nullopt});
+      if (geometry.has_instances()) {
+        geometries_.data_keys.add_new(
+            {geo_bundle_i, bke::GeometryComponent::Type::Instance, std::nullopt});
+
+        bke::Instances &instances = *geometry.get_instances_for_write();
         GeometryData &geo_data = tls.scope.construct<GeometryData>(
-            *component.attributes_for_write());
+            instances.attributes_for_write());
         geo_data.domain = AttrDomain::Instance;
+        geo_data.instance_ids = instances.unique_ids();
+
         geometries_.data.append(&geo_data);
       }
     }
@@ -393,25 +406,59 @@ class JoltSolverStep {
       GeometryData &geo_data = *geometries_.data[data_key_i];
       const AttrDomain domain = geo_data.domain;
       geo_data.size = geo_data.attributes.domain_size(domain);
+
       // geo_data.temp_positions.reinitialize(geo_data.size);
       // geo_data.temp_rotations.reinitialize(geo_data.size);
-      geo_data.position_attr = simulation::ensure_attribute<float3>(
-          geo_data.attributes, attribute_names::position, domain);
+
+      geo_data.transform_attr = simulation::ensure_attribute<float4x4>(
+          geo_data.attributes, attribute_names::instance_transform, domain);
       geo_data.velocity_attr = simulation::ensure_attribute<float3>(
           geo_data.attributes, attribute_names::velocity, domain);
+      geo_data.angular_velocity_attr = simulation::ensure_attribute<float3>(
+          geo_data.attributes, attribute_names::angular_velocity, domain);
+
       // geo_data.external_force_attr = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::external_force, domain, float3(0, 0, 0));
       // geo_data.masses = this->lookup_attribute_default<float>(
       //     data_key_i, attribute_names::mass, domain, 1.0f);
-
-      geo_data.rotation_attr = simulation::ensure_attribute<math::Quaternion>(
-          geo_data.attributes, attribute_names::rotation, domain);
-      geo_data.angular_velocity_attr = simulation::ensure_attribute<float3>(
-          geo_data.attributes, attribute_names::angular_velocity, domain);
       // geo_data.external_torque_attr = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
       // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
+    }
+  }
+
+  void update_simulated_bodies()
+  {
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      const DataKey &data_key = geometries_.data_keys[data_key_i];
+      const JoltRigidBodies *rigid_bodies = state_.rigid_bodies_by_key.lookup_ptr(data_key);
+      if (!rigid_bodies) {
+        continue;
+      }
+
+      GeometryData &geo_data = *geometries_.data[data_key_i];
+
+      for (const int instance_i : geo_data.instance_ids.index_range()) {
+        const int instance_id = geo_data.instance_ids[instance_i];
+        const JoltRigidBody *rigid_body = rigid_bodies->bodies_by_id.lookup_ptr(instance_id);
+        if (!rigid_body) {
+          continue;
+        }
+        const JPH::Body &jolt_body = *rigid_body->body;
+
+        float4x4 &transform = geo_data.transform_attr.span[instance_i];
+        const JPH::Vec3 jolt_position = jolt_body.GetPosition();
+        const JPH::Quat jolt_rotation = jolt_body.GetRotation();
+
+        const float3 position = convert_vec3(jolt_position);
+        const math::Quaternion rotation = convert_quat(jolt_rotation);
+
+        /* Scale is not simulated to Jolt, so keep the scale of the original geometry. */
+        const float3 scale = math::to_scale(transform);
+
+        transform = math::from_loc_rot_scale<float4x4>(position, rotation, scale);
+      }
     }
   }
 
@@ -420,9 +467,8 @@ class JoltSolverStep {
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       GeometryData &geo_data = *geometries_.data[data_key_i];
 
-      geo_data.position_attr.finish();
+      geo_data.transform_attr.finish();
       geo_data.velocity_attr.finish();
-      geo_data.rotation_attr.finish();
       geo_data.angular_velocity_attr.finish();
     }
   }
