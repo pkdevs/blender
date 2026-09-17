@@ -886,9 +886,6 @@ static wmOperatorStatus add_primitive_icosphere_exec(bContext *C, wmOperator *op
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
