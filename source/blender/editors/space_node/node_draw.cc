@@ -4237,9 +4237,12 @@ static void node_draw(const bContext &C,
                       bNode &node,
                       ui::Block &block)
 {
-  if (node.is_frame() || node.is_type("NodeComment"_ustr)) {
+  if (node.is_frame()) {
     /* Should have been drawn before already. */
     BLI_assert_unreachable();
+  }
+  else if (node.is_type("NodeComment"_ustr)) {
+    node_draw_comment(C, tree_draw_ctx, region, node, block);
   }
   else if (node.is_reroute()) {
     reroute_node_draw(C, tree_draw_ctx, region, snode, ntree, node, block);
@@ -4505,29 +4508,6 @@ static void node_draw_zones_and_frames(const ARegion &region,
   GPU_blend(GPU_BLEND_NONE);
 }
 
-/**
- * Comments separately so that they can't overlap other nodes. For small comments that wouldn't be
- * a problem. However, large comments can easily hide entire nodes behind them which isn't obvious.
- */
-static void draw_comments(const bContext &C,
-                          TreeDrawContext &tree_draw_ctx,
-                          ARegion &region,
-                          bNodeTree &ntree,
-                          Span<ui::Block *> blocks)
-{
-  Vector<bNode *> comment_nodes = ntree.nodes_by_type("NodeComment"_ustr);
-  std::ranges::sort(comment_nodes, [](const bNode *a, const bNode *b) {
-    auto to_key = [](const bNode &n) {
-      const NodeComment &storage = *static_cast<const NodeComment *>(n.storage);
-      return std::make_pair(!bool(storage.flag & NodeCommentFlag::Render), n.ui_order);
-    };
-    return to_key(*a) < to_key(*b);
-  });
-  for (bNode *node : comment_nodes) {
-    node_draw_comment(C, tree_draw_ctx, region, *node, *blocks[node->index()]);
-  }
-}
-
 static void draw_frame_overlays(const bContext &C,
                                 TreeDrawContext &tree_draw_ctx,
                                 const ARegion &region,
@@ -4752,10 +4732,6 @@ static void node_draw_nodetree(const bContext &C,
       /* Those nodes are drawn before already. */
       continue;
     }
-    if (node.is_type("NodeComment"_ustr)) {
-      /* Comments are drawn before links and nodes already. */
-      continue;
-    }
 
     node_draw(C, tree_draw_ctx, region, snode, ntree, node, *blocks[node.index()]);
   }
@@ -4905,7 +4881,6 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
 
   node_update_nodetree(C, tree_draw_ctx, ntree, nodes, blocks);
   node_draw_zones_and_frames(region, *snode, ntree);
-  draw_comments(C, tree_draw_ctx, region, ntree, blocks);
   node_draw_nodetree(C, tree_draw_ctx, region, *snode, ntree, nodes, blocks);
 }
 
