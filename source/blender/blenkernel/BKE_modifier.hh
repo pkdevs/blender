@@ -18,6 +18,8 @@
 #include "DNA_listBase.h"
 #include "DNA_modifier_types.h" /* Needed for all enum type definitions. */
 
+#include "BKE_report.hh"
+
 namespace blender {
 
 namespace bke {
@@ -593,6 +595,11 @@ ModifierData *BKE_modifiers_get_virtual_modifierlist(const Object *ob, VirtualMo
  * Ensure modifier correctness when changing `ob->data`.
  */
 void BKE_modifiers_test_object(Object *ob);
+
+/**
+ * Ensure modifier has its owner not assigned to properties flagged PROP_ID_SELF_CHECK.
+ */
+void BKE_modifier_test_object_selfcheck(Object *ob, ModifierData *md, ReportList *reports);
 
 /**
  * Here for #do_versions.

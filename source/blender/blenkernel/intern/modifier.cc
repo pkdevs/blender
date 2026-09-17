@@ -68,6 +68,9 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
+#include "RNA_access.hh"
+#include "RNA_prototypes.hh"
+
 /* may move these, only for BKE_modifier_path_relbase */
 #include "BKE_main.hh"
 /* end */
@@ -884,6 +887,36 @@ void BKE_modifiers_add_at_end_if_possible(Object *ob, ModifierData *new_md)
   }
 
   BLI_insertlinkbefore(&ob->modifiers, next_md, new_md);
+}
+
+void BKE_modifier_test_object_selfcheck(Object *ob, ModifierData *md, ReportList *reports)
+{
+  PointerRNA ptr_mod = RNA_pointer_create_discrete(&ob->id, RNA_Modifier, md);
+  PropertyRNA *iterprop = RNA_struct_iterator_property(ptr_mod.type);
+  RNA_PROP_BEGIN (&ptr_mod, itemptr, iterprop) {
+    PropertyRNA *prop = static_cast<PropertyRNA *>(itemptr.data);
+
+    if (RNA_property_type(prop) != PROP_POINTER) {
+      continue;
+    }
+    if ((RNA_property_flag(prop) & PROP_ID_SELF_CHECK) == 0) {
+      continue;
+    }
+
+    const PointerRNA idptr = RNA_property_pointer_get(&ptr_mod, prop);
+    if (idptr && RNA_struct_is_ID(idptr.type)) {
+      if (idptr.data_as<ID>() == &ob->id) {
+        RNA_property_pointer_set(&ptr_mod, prop, {}, nullptr);
+        BKE_reportf(reports,
+                    RPT_WARNING,
+                    "%s.%s on '%s' does not support assignment to itself",
+                    RNA_struct_identifier(ptr_mod.type),
+                    RNA_property_identifier(prop),
+                    ob->id.name + 2);
+      }
+    }
+  }
+  RNA_PROP_END;
 }
 
 void BKE_modifiers_test_object(Object *ob)

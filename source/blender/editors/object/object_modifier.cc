@@ -560,7 +560,7 @@ bool modifier_move_to_index(ReportList *reports,
 
 void modifier_link(bContext *C, Object *ob_dst, Object *ob_src)
 {
-  BKE_object_link_modifiers(ob_dst, ob_src);
+  BKE_object_link_modifiers(ob_dst, ob_src, CTX_wm_reports(C));
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob_dst);
   DEG_id_tag_update(&ob_dst->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 
@@ -599,7 +599,7 @@ ModifierData *modifier_copy_to_object(Main *bmain,
     }
   }
 
-  ModifierData *md_dst = BKE_object_copy_modifier(bmain, scene, ob_dst, ob_src, md);
+  ModifierData *md_dst = BKE_object_copy_modifier(bmain, scene, ob_dst, ob_src, md, reports);
   if (!md_dst) {
     BKE_reportf(reports,
                 RPT_ERROR,

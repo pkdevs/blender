@@ -1665,7 +1665,7 @@ static wmOperatorStatus make_links_data_exec(bContext *C, wmOperator *op)
             DEG_id_tag_update(&ob_dst->id, ID_RECALC_SYNC_TO_EVAL);
             break;
           case MAKE_LINKS_MODIFIERS:
-            BKE_object_link_modifiers(ob_dst, ob_src);
+            BKE_object_link_modifiers(ob_dst, ob_src, CTX_wm_reports(C));
             DEG_id_tag_update(&ob_dst->id,
                               ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
             break;

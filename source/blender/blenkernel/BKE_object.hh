@@ -22,6 +22,8 @@
 #include "DNA_object_enums.h"
 #include "DNA_userdef_enums.h"
 
+#include "BKE_report.hh"
+
 namespace blender {
 
 struct Base;
@@ -110,8 +112,12 @@ ModifierData *BKE_object_active_modifier(const Object *ob);
  * which particle system to use or add in `ob_dst`, and it's placement in the stack, etc. If used
  * more than once, this function should preferably be called in stack order.
  */
-ModifierData *BKE_object_copy_modifier(
-    Main *bmain, const Scene *scene, Object *ob_dst, const Object *ob_src, const ModifierData *md);
+ModifierData *BKE_object_copy_modifier(Main *bmain,
+                                       const Scene *scene,
+                                       Object *ob_dst,
+                                       const Object *ob_src,
+                                       const ModifierData *md,
+                                       ReportList *reports);
 /**
  * Copy the whole stack of modifiers from one object into another.
  *
@@ -122,11 +128,9 @@ ModifierData *BKE_object_copy_modifier(
  * \param do_copy_all: If true, even modifiers that should not support copying (like Hook one)
  * will be duplicated.
  */
-bool BKE_object_modifier_stack_copy(Object *ob_dst,
-                                    const Object *ob_src,
-                                    bool do_copy_all,
-                                    int flag_subdata);
-void BKE_object_link_modifiers(Object *ob_dst, const Object *ob_src);
+bool BKE_object_modifier_stack_copy(
+    Object *ob_dst, const Object *ob_src, bool do_copy_all, int flag_subdata, ReportList *reports);
+void BKE_object_link_modifiers(Object *ob_dst, const Object *ob_src, ReportList *reports);
 void BKE_object_free_modifiers(Object *ob, int flag);
 void BKE_object_free_shaderfx(Object *ob, int flag);
 

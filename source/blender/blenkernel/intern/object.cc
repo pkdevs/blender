@@ -248,7 +248,7 @@ static void object_copy_data(Main *bmain,
   ob_dst->modifiers.clear_no_delete();
   ob_dst->greasepencil_modifiers.clear_no_delete();
   /* NOTE: Also takes care of soft-body and particle systems copying. */
-  BKE_object_modifier_stack_copy(ob_dst, ob_src, true, flag_subdata);
+  BKE_object_modifier_stack_copy(ob_dst, ob_src, true, flag_subdata, nullptr);
   BLI_assert(BKE_modifiers_persistent_uids_are_valid(*ob_dst));
 
   ob_dst->pc_ids.clear_no_delete();
@@ -1543,7 +1543,8 @@ ModifierData *BKE_object_copy_modifier(Main *bmain,
                                        const Scene *scene,
                                        Object *ob_dst,
                                        const Object *ob_src,
-                                       const ModifierData *md_src)
+                                       const ModifierData *md_src,
+                                       ReportList *reports)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md_src->type);
   if (!object_modifier_type_copy_check(md_src->type)) {
@@ -1614,6 +1615,7 @@ ModifierData *BKE_object_copy_modifier(Main *bmain,
     }
 
     BKE_modifier_copydata(md_src, md_dst);
+    BKE_modifier_test_object_selfcheck(ob_dst, md_dst, reports);
 
     switch (md_dst->type) {
       case eModifierType_Fluid:
@@ -1647,7 +1649,8 @@ ModifierData *BKE_object_copy_modifier(Main *bmain,
 bool BKE_object_modifier_stack_copy(Object *ob_dst,
                                     const Object *ob_src,
                                     const bool do_copy_all,
-                                    const int flag_subdata)
+                                    const int flag_subdata,
+                                    ReportList *reports)
 {
   if (!ob_dst->modifiers.is_empty() || !ob_dst->greasepencil_modifiers.is_empty()) {
     BLI_assert_msg(
@@ -1665,6 +1668,7 @@ bool BKE_object_modifier_stack_copy(Object *ob_dst,
     }
 
     ModifierData *md_dst = BKE_modifier_copy_ex(&md_src, flag_subdata);
+    BKE_modifier_test_object_selfcheck(ob_dst, md_dst, reports);
     BLI_addtail(&ob_dst->modifiers, md_dst);
   }
 
@@ -1679,11 +1683,11 @@ bool BKE_object_modifier_stack_copy(Object *ob_dst,
   return true;
 }
 
-void BKE_object_link_modifiers(Object *ob_dst, const Object *ob_src)
+void BKE_object_link_modifiers(Object *ob_dst, const Object *ob_src, ReportList *reports)
 {
   BKE_object_free_modifiers(ob_dst, 0);
 
-  BKE_object_modifier_stack_copy(ob_dst, ob_src, false, 0);
+  BKE_object_modifier_stack_copy(ob_dst, ob_src, false, 0, reports);
 }
 
 /**
