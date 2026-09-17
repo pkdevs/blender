@@ -151,8 +151,8 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
     }
   }
 
-  segment::carver::CurveBooleanOpParameters op_params;
-  op_params.boolean_mode = segment::carver::Operation::Difference;
+  boolean::CurveBooleanOpParameters op_params;
+  op_params.boolean_mode = boolean::Operation::Difference;
   op_params.keep_caps = keep_caps;
   op_params.skip_clipping_attributes = true;
   op_params.separate_islands = true;
@@ -160,14 +160,14 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-  bke::CurvesGeometry carved_strokes = segment::carver::curve_boolean_with_planes(op_params,
-                                                                                  input_curves,
-                                                                                  project_fn,
-                                                                                  shapes,
-                                                                                  curve_planes,
-                                                                                  clipping_shapes,
-                                                                                  layer_to_world,
-                                                                                  region);
+  bke::CurvesGeometry carved_strokes = boolean::curve_boolean_with_planes(op_params,
+                                                                          input_curves,
+                                                                          project_fn,
+                                                                          shapes,
+                                                                          curve_planes,
+                                                                          clipping_shapes,
+                                                                          layer_to_world,
+                                                                          region);
 
   carved_strokes.attributes_for_write().remove(".positions_2d");
 

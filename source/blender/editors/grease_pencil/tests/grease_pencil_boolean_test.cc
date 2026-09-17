@@ -28,7 +28,7 @@
 
 namespace blender::ed::greasepencil::tests {
 
-using namespace blender::ed::greasepencil::segment::carver;
+using namespace blender::ed::greasepencil::boolean;
 
 static void CSS_setup_style(std::ofstream &f)
 {

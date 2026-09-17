@@ -42,6 +42,8 @@ set(SRC
   intern/grease_pencil_utils.cc
   intern/grease_pencil_vertex_paint.cc
   intern/grease_pencil_weight_paint.cc
+
+  intern/grease_pencil_segments_intern.hh
 )
 
 set(LIB

@@ -27,7 +27,11 @@
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
 
-namespace blender::ed::greasepencil::segment::carver {
+#include "grease_pencil_segments_intern.hh"
+
+namespace blender::ed::greasepencil::boolean {
+
+using namespace segment;
 
 /* Calculate the winding order of a point when compared against a triangle. */
 static float point_in_tri_winding(const float2 pt,
@@ -302,19 +306,19 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
 }
 
 /* Check the left and right of a curve `k` */
-void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
-                                    const int curve_k,
-                                    const bool is_subj,
-                                    const int subj_shape_i,
-                                    const Span<float2> points,
-                                    const GroupedSpan<int> shapes,
-                                    const OffsetIndices<int> points_by_curve,
-                                    const IndexMask &clipping_shapes,
-                                    const Span<Segment> all_segments,
-                                    const OffsetIndices<int> segments_by_curve,
-                                    const VArray<bool> &is_fill,
-                                    MutableSpan<bool> all_inside_left,
-                                    MutableSpan<bool> all_inside_right)
+static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
+                                           const int curve_k,
+                                           const bool is_subj,
+                                           const int subj_shape_i,
+                                           const Span<float2> points,
+                                           const GroupedSpan<int> shapes,
+                                           const OffsetIndices<int> points_by_curve,
+                                           const IndexMask &clipping_shapes,
+                                           const Span<Segment> all_segments,
+                                           const OffsetIndices<int> segments_by_curve,
+                                           const VArray<bool> &is_fill,
+                                           MutableSpan<bool> all_inside_left,
+                                           MutableSpan<bool> all_inside_right)
 {
   const IndexRange segments = segments_by_curve[curve_k];
 
@@ -357,9 +361,9 @@ void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
  * Note: Previously unchanged curves may have their fill id changed, if their parent curve id is
  * changed.
  */
-void separate_fill_islands(bke::CurvesGeometry &dst,
-                           const Span<bool> unchanged_curves,
-                           const ProjectionFunc project_fn)
+static void separate_fill_islands(bke::CurvesGeometry &dst,
+                                  const Span<bool> unchanged_curves,
+                                  const ProjectionFunc project_fn)
 {
   const OffsetIndices<int> points_by_curve = dst.points_by_curve();
   bke::MutableAttributeAccessor attributes = dst.attributes_for_write();
@@ -1283,4 +1287,4 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   return dst_curves;
 }
 
-}  // namespace blender::ed::greasepencil::segment::carver
+}  // namespace blender::ed::greasepencil::boolean
