@@ -236,7 +236,7 @@ static wmOperatorStatus add_primitive_plane_exec(bContext *C, wmOperator *op)
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
 
   WM_operator_view3d_unit_defaults(C, op);
-  blender::ed::object::add_generic_get_opts(
+  ed::object::add_generic_get_opts(
       C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
@@ -365,7 +365,7 @@ static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
   cap_tri = (cap_end == 2);
 
   WM_operator_view3d_unit_defaults(C, op);
-  blender::ed::object::add_generic_get_opts(
+  ed::object::add_generic_get_opts(
       C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
@@ -580,7 +580,7 @@ static wmOperatorStatus add_primitive_grid_exec(bContext *C, wmOperator *op)
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
 
   WM_operator_view3d_unit_defaults(C, op);
-  blender::ed::object::add_generic_get_opts(
+  ed::object::add_generic_get_opts(
       C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
@@ -650,7 +650,7 @@ static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
 
   WM_operator_view3d_unit_defaults(C, op);
-  blender::ed::object::add_generic_get_opts(
+  ed::object::add_generic_get_opts(
       C, op, 'Y', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
 
   obedit = make_prim_init(C,
