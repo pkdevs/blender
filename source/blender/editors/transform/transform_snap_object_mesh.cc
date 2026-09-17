@@ -32,7 +32,7 @@ namespace blender::ed::transform {
 bke::BVHTreeFromMesh &SnapTargetTreesMesh::corner_tris()
 {
   if (!corner_tris_) {
-    corner_tris_ = is_filtered ? mesh_.bvh_corner_tris_no_hidden() : mesh_.bvh_corner_tris();
+    corner_tris_ = skip_hidden_ ? mesh_.bvh_corner_tris_no_hidden() : mesh_.bvh_corner_tris();
   }
   return *corner_tris_;
 }
@@ -40,7 +40,7 @@ bke::BVHTreeFromMesh &SnapTargetTreesMesh::corner_tris()
 bke::BVHTreeFromMesh &SnapTargetTreesMesh::loose_edges()
 {
   if (!loose_edges_) {
-    loose_edges_ = is_filtered ? mesh_.bvh_loose_no_hidden_edges() : mesh_.bvh_loose_edges();
+    loose_edges_ = skip_hidden_ ? mesh_.bvh_loose_no_hidden_edges() : mesh_.bvh_loose_edges();
   }
   return *loose_edges_;
 }
@@ -48,7 +48,7 @@ bke::BVHTreeFromMesh &SnapTargetTreesMesh::loose_edges()
 bke::BVHTreeFromMesh &SnapTargetTreesMesh::loose_verts()
 {
   if (!loose_verts_) {
-    loose_verts_ = is_filtered ? mesh_.bvh_loose_no_hidden_verts() : mesh_.bvh_loose_verts();
+    loose_verts_ = skip_hidden_ ? mesh_.bvh_loose_no_hidden_verts() : mesh_.bvh_loose_verts();
   }
   return *loose_verts_;
 }
@@ -495,14 +495,12 @@ eSnapMode snap_edge_points_mesh(SnapObjectContext *sctx,
   return elem;
 }
 
-static eSnapMode mesh_snap_mode_supported(const Mesh *mesh, const SnapTargetTrees &trees)
+static eSnapMode mesh_snap_mode_supported(const Mesh *mesh)
 {
-  /* When the trees only contain a subset of the mesh's elements, we cannot obtain the number of
-   * snappable loose verts without building #SnapTargetTrees::loose_verts. Therefore, consider
-   * #SCE_SNAP_TO_POINT supported even if the mesh has no loose vertices in this case. */
-  eSnapMode snap_mode_supported = (trees.is_filtered || !mesh->loose_verts().is_empty()) ?
-                                      SCE_SNAP_TO_POINT :
-                                      SCE_SNAP_TO_NONE;
+  /* Whether anything can be snapped to with #SCE_SNAP_TO_POINT isn't known until
+   * #SnapTargetTrees::loose_verts is built, and that doesn't directly correspond to
+   * #Mesh::loose_verts(). */
+  eSnapMode snap_mode_supported = SCE_SNAP_TO_POINT;
   if (mesh->faces_num) {
     snap_mode_supported |= SCE_SNAP_TO_FACE | SCE_SNAP_TO_FACE_MIDPOINT |
                            SCE_SNAP_INDIVIDUAL_NEAREST | SNAP_TO_EDGE_ELEMENTS;
@@ -534,7 +532,7 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
     }
   }
 
-  snap_to &= mesh_snap_mode_supported(mesh_eval, trees) &
+  snap_to &= mesh_snap_mode_supported(mesh_eval) &
              (SNAP_TO_EDGE_ELEMENTS | SCE_SNAP_TO_POINT | SCE_SNAP_TO_FACE_MIDPOINT);
   if (snap_to == SCE_SNAP_TO_NONE) {
     return SCE_SNAP_TO_NONE;

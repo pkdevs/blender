@@ -42,13 +42,6 @@ namespace ed::transform {
 /** Lazy access to the BVH trees of the mesh elements that can be snapped to. */
 class SnapTargetTrees {
  public:
-  /**
-   * Whether elements the mesh itself considers present may be missing from the trees. When true,
-   * the number of snappable loose vertices isn't known until #loose_verts has been built.
-   */
-  const bool is_filtered;
-
-  explicit SnapTargetTrees(const bool is_filtered) : is_filtered(is_filtered) {}
   virtual ~SnapTargetTrees() = default;
 
   /** Triangles of the snappable faces, using indices into #Mesh::corner_tris. */
@@ -59,19 +52,17 @@ class SnapTargetTrees {
   virtual bke::BVHTreeFromMesh &loose_verts() = 0;
 };
 
-/**
- * The trees cached on an evaluated mesh. Here the hide attributes are the only thing that keeps
- * elements out of the trees, so #SnapTargetTrees::is_filtered doubles as "skip hidden elements".
- */
+/** The trees cached on an evaluated mesh, skipping hidden elements when requested. */
 class SnapTargetTreesMesh : public SnapTargetTrees {
   const Mesh &mesh_;
+  bool skip_hidden_;
   std::optional<bke::BVHTreeFromMesh> corner_tris_;
   std::optional<bke::BVHTreeFromMesh> loose_edges_;
   std::optional<bke::BVHTreeFromMesh> loose_verts_;
 
  public:
   SnapTargetTreesMesh(const Mesh &mesh, const bool skip_hidden)
-      : SnapTargetTrees(skip_hidden), mesh_(mesh)
+      : mesh_(mesh), skip_hidden_(skip_hidden)
   {
   }
 

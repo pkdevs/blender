@@ -89,8 +89,8 @@ static void calc_target_elems(const Mesh &mesh,
     });
     const Span<int> corner_verts = mesh.corner_verts();
     target_faces = IndexMask::from_predicate(target_faces, memory, [&](const int face) {
-      return std::ranges::any_of(corner_verts.slice(faces[face]),
-                                 [&](const int vert) { return select_vert[vert]; });
+      return std::ranges::none_of(corner_verts.slice(faces[face]),
+                                  [&](const int vert) { return select_vert[vert]; });
     });
   }
 
@@ -123,8 +123,6 @@ class SnapTargetTreesEditMesh : public SnapTargetTrees {
   std::optional<bke::BVHTreeFromMesh> loose_verts_;
 
  public:
-  SnapTargetTreesEditMesh() : SnapTargetTrees(true) {}
-
   /** Discard what was built before when the mesh or the set of snappable elements changed. */
   void set_source(const Mesh &mesh, const SnapEditMeshTarget target)
   {
