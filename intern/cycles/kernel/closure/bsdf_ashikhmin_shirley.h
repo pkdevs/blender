@@ -31,7 +31,8 @@ ccl_device int bsdf_ashikhmin_shirley_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID;
 
-  /* If retroreflective, weighted sample between the regular and retroreflective lobes */
+  /* Decide whether to retroreflect based on random probability
+   * bsdf->retroreflectivity is the probability, converted to a boolean here */
   bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
                             lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 

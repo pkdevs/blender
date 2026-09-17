@@ -1003,8 +1003,8 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   const float pdf_reflect = average(coeff.reflectance) / average(coeff.sum());
   const bool do_refract = (rand.z >= pdf_reflect);
 
-  /* For retroreflection, recompute H, cos_HI and coeff with reflected wi. */
-  /* This happens after do_refract is computed to avoid changing refraction rays. */
+  /* For retroreflection, recompute H, cos_HI and coeff with reflected wi.
+   * This happens after do_refract is computed to avoid changing refraction rays. */
   float3 wi = wi_in;
   if (!do_refract && bsdf->retroreflectivity) {
     wi = reflect(-wi_in, N);
@@ -1223,7 +1223,8 @@ ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->energy_scale = 1.0f;
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_ID;
 
-  /* If retroreflective, weighted sample between the regular and retroreflective lobes */
+  /* Decide whether to retroreflect based on random probability
+   * bsdf->retroreflectivity is the probability, converted to a boolean here */
   bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
                             lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
@@ -1252,7 +1253,8 @@ ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->energy_scale = 1.0f;
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
 
-  /* If retroreflective, weighted sample between the regular and retroreflective lobes */
+  /* Decide whether to retroreflect based on random probability
+   * bsdf->retroreflectivity is the probability, converted to a boolean here */
   bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
                             lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
@@ -1308,7 +1310,8 @@ ccl_device int bsdf_microfacet_beckmann_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_ID;
 
-  /* If retroreflective, weighted sample between the regular and retroreflective lobes */
+  /* Decide whether to retroreflect based on random probability
+   * bsdf->retroreflectivity is the probability, converted to a boolean here */
   bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
                             lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
@@ -1335,7 +1338,8 @@ ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID;
 
-  /* If retroreflective, weighted sample between the regular and retroreflective lobes */
+  /* Decide whether to retroreflect based on random probability
+   * bsdf->retroreflectivity is the probability, converted to a boolean here */
   bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
                             lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
