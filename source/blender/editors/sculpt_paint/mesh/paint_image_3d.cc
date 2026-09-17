@@ -1595,6 +1595,9 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index(
       [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+
+  /* TODO: This isn't sufficient - the "scratch" data has to be regenerated every step, see the
+   * `ScratchData` structs */
   node_mask.foreach_index(
       [&](const int i) { allocate_scratch_buffers(image_data, nodes[i], pixel_nodes[i]); });
 

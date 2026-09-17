@@ -19,6 +19,41 @@ namespace blender::ed::sculpt_paint::image {
 /** \name 3D Texture Paint (Experimental)
  * \{ */
 
+/**
+ * Uniquely identifies scratch data for a given stroke step.
+ *
+ * Similar to image_undo.cc, however since this is explicitly only scoped to a single UDIM being
+ * used, we don't need to identify the image or image buffer here.
+ */
+struct ScratchDataKey {
+  bke::image::TileNumber tile_number;
+  short tile_x;
+  short tile_y;
+
+  uint64_t hash() const
+  {
+    return get_default_hash(tile_number, tile_x, tile_y);
+  }
+
+  bool operator==(const ScratchDataKey &other) const
+  {
+    return tile_number == other.tile_number && tile_x == other.tile_x && tile_y == other.tile_y;
+  }
+};
+
+/** Data that is allocated / deallocated on a per-tile basis for each stroke step. */
+struct ScratchDataTile {
+  /** Assumed to be scene-linear */
+  Vector<float4, 0> pixel_data;
+  Vector<float, 0> factors;
+};
+
+struct ScratchData {
+  Map<ScratchDataKey, ScratchDataTile> tiles;
+  /* TODO: Might be able to do something smarter here and use a flat array */
+  Map<bke::image::TileNumber, Array<uint32_t>> data_created;
+};
+
 struct TileColorspaceProcessor : NonCopyable {
   ColormanageProcessor buffer_to_linear_processor = {};
   ColormanageProcessor linear_to_buffer_processor = {};
@@ -36,6 +71,7 @@ struct ImageData : NonCopyable {
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
 
+  /* TODO: Remove these entries */
   /* Used for algorithms which need a state prior to the stroke (e.g. Blur).
    * Assumed to store scene linear float data. */
   Map<bke::image::TileNumber, ImBuf *> scratch_image_buffers = {};
