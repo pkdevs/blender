@@ -141,7 +141,10 @@ DRWContext::DRWContext(Mode mode_,
   this->region = (region) ? region : ((C) ? CTX_wm_region(C) : nullptr);
   {
     wmWindow *win = C ? CTX_wm_window(C) : nullptr;
-    this->is_region_topmost_active = win && win->runtime->topmost_active_region == this->region;
+    /* Check if the current region is the topmost active, but dim cursor when there is an active
+     * IME composition. */
+    this->is_region_topmost_active = win && win->runtime->topmost_active_region == this->region &&
+                                     !win->runtime->ime_data_is_composing;
   }
 
   this->space_data = (C) ? CTX_wm_space_data(C) : nullptr;

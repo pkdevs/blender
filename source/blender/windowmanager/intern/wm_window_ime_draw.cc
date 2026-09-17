@@ -29,6 +29,7 @@
 #  include "GPU_state.hh"
 
 #  include "ED_ime.hh"
+#  include "ED_screen.hh"
 #  include "UI_resources.hh"
 
 #  include "WM_api.hh"
@@ -45,7 +46,8 @@ static void cursor_overlay_draw(const wmIMEData &ime_data,
                                 const rcti &cursor_rect,
                                 const int font_size,
                                 const int region_size[2],
-                                const float pixelsize)
+                                const float pixelsize,
+                                const bool is_cursor_blink)
 {
   BLI_assert(!ime_data.composite.empty());
   const char *str = ime_data.composite.c_str();
@@ -127,7 +129,7 @@ static void cursor_overlay_draw(const wmIMEData &ime_data,
   }
 
   /* Draw the cursor within the composite. */
-  if (!ime_data.composite.empty() && (ime_data.cursor_pos != -1)) {
+  if (!ime_data.composite.empty() && (ime_data.cursor_pos != -1) && !is_cursor_blink) {
     const int cursor_width = 2 * border;
     const int cursor_x = box.xmin +
                          std::min(column_from_byte_offset_fn(ime_data.cursor_pos) * char_width,
@@ -150,7 +152,12 @@ void region_overlay_draw(wmWindow *win,
     return;
   }
   const int region_size[2] = {region->winx, region->winy};
-  cursor_overlay_draw(*ime_data, cursor.rect, cursor.font_size, region_size, pixelsize);
+  cursor_overlay_draw(*ime_data,
+                      cursor.rect,
+                      cursor.font_size,
+                      region_size,
+                      pixelsize,
+                      region->runtime->text_cursor_overlay->is_blink());
 }
 
 }  // namespace blender::ed::ime

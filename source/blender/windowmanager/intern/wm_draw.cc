@@ -41,6 +41,7 @@
 #include "GHOST_Rect.hh"
 #include "GHOST_Types.hh"
 
+#include "ED_ime.hh"
 #include "ED_node.hh"
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
@@ -432,8 +433,8 @@ static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool is_
     return;
   }
   const wmWindow *win = CTX_wm_window(C);
-  wmViewport(&region.winrct);
-  GPU_matrix_push_projection();
+  GPU_viewport(region.winrct.xmin, region.winrct.ymin, region.winx, region.winy);
+  wmOrtho2_region_pixelspace(&region);
   GPU_blend(GPU_BLEND_ALPHA);
   const uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
@@ -459,7 +460,6 @@ static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool is_
     immEnd();
   }
   immUnbindProgram();
-  GPU_matrix_pop_projection();
   wmWindowViewport(win);
   GPU_blend(GPU_BLEND_NONE);
 }
@@ -1215,7 +1215,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 #if 0
   GPU_clear_color(0, 0, 0, 0);
 #endif
-  const ARegion *active_region = win->runtime->topmost_active_region;
+  const ARegion *topmost_active_region = win->runtime->topmost_active_region;
 
   /* Blit non-overlapping area regions. */
   ED_screen_areas_iter (win, screen, area) {
@@ -1240,7 +1240,16 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       const bool do_paint_cursor = (wm->runtime->paintcursors.first() &&
                                     &region == screen->active_region);
       const bool do_draw_overlay = (region.runtime->type && region.runtime->type->draw_overlay);
-      if (!(do_paint_cursor || do_draw_overlay || region.runtime->text_cursor_overlay)) {
+      const bool do_draw_text_cursor = region.runtime->text_cursor_overlay.has_value();
+#ifdef WITH_INPUT_IME
+      /* Only try to draw IME composition if the region is the topmost active. */
+      const bool do_draw_ime = (topmost_active_region == &region) &&
+                               win->runtime->ime_data_is_composing &&
+                               win->runtime->ime_owner == bke::wmIMEOwnerType::Region;
+#else
+      constexpr bool do_draw_ime = false;
+#endif
+      if (!(do_paint_cursor || do_draw_overlay || do_draw_text_cursor || do_draw_ime)) {
         continue;
       }
 
@@ -1252,7 +1261,22 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (do_paint_cursor) {
         wm_paintcursor_draw(C, area, &region);
       }
-      wm_region_draw_cursor_overlay(C, region, active_region == &region);
+#ifdef WITH_INPUT_IME
+      if (do_draw_ime) {
+        ui::theme::theme_set(area ? area->spacetype : 0, region.runtime->type->regionid);
+        ARegionIMECursor ime_cursor;
+        WM_window_IME_region_refresh(win, area, &region, true, &ime_cursor);
+        GPU_viewport(region.winrct.xmin, region.winrct.ymin, region.winx, region.winy);
+        wmOrtho2_region_pixelspace(&region);
+        ed::ime::region_overlay_draw(win, &region, U.pixelsize, ime_cursor);
+        wmWindowViewport(win);
+      }
+#endif
+      if ((!do_draw_ime || win->runtime->ime_owner == bke::wmIMEOwnerType::Button) &&
+          do_draw_text_cursor)
+      {
+        wm_region_draw_cursor_overlay(C, region, topmost_active_region == &region);
+      }
       CTX_wm_region_set(C, nullptr);
       CTX_wm_area_set(C, nullptr);
     }
@@ -1287,7 +1311,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       continue;
     }
     wm_draw_region_blend(&region, 0, true);
-    wm_region_draw_cursor_overlay(C, region, active_region == &region);
+    wm_region_draw_cursor_overlay(C, region, topmost_active_region == &region);
   }
 
   /* Always draw, not only when screen tagged. */
