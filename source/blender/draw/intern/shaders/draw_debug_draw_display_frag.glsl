@@ -2,12 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * Display debug edge list.
  */
 
 #include "draw_debug_infos.hh"
-#include "gpu_shader_math_constants_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
 
 FRAGMENT_SHADER_CREATE_INFO(draw_debug_draw_display)
 
@@ -30,7 +32,7 @@ float4 pack_line_data(float2 frag_co, float2 edge_start, float2 edge_pos)
     float sin_theta = perp.x;
     float dist = dot(perp, frag_co - edge_start);
 
-    /* Leave 0.1f boundary around dist to differentiate cleared or intentially blocked pixels. */
+    /* Leave 0.1f boundary around dist to differentiate cleared or intentionally blocked pixels. */
     return float4(sin_theta * 0.5f + 0.5f, dist * 0.4f + 0.5f, 0.0f, 1.0f);
   }
   else {

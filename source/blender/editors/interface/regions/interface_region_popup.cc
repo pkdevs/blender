@@ -684,7 +684,7 @@ Block *popup_block_refresh(bContext *C, PopupBlockHandle *handle, ARegion *butre
   const BlockHandleCreateFunc handle_create_func = handle->popup_create_vars.handle_create_func;
   void *arg = handle->popup_create_vars.arg;
 
-  Block *block_old = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block_old = region->runtime->uiblocks.first();
 
   handle->refresh = (block_old != nullptr);
 
@@ -1049,6 +1049,10 @@ void popup_block_free(bContext *C, PopupBlockHandle *handle)
   popup_block_remove(C, handle);
 
   MEM_delete(handle);
+
+#ifdef WITH_INPUT_IME
+  WM_window_IME_region_refresh(CTX_wm_window(C), CTX_wm_area(C), CTX_wm_region(C));
+#endif
 }
 
 struct AlertData {

@@ -141,7 +141,9 @@ bool BKE_object_material_slot_used(Object *object, short actcol);
 void BKE_object_material_active_index_sanitize(Object *ob);
 
 /* Remove unused material slots and keep the active material index valid. */
-void BKE_object_material_remove_unused(Main *bmain, Object *ob);
+int BKE_object_material_remove_unused(Main *bmain, Object *ob);
+/* Remove all material slots and keep the active material index valid. */
+int BKE_object_material_remove_all(Main *bmain, Object *ob);
 
 int BKE_object_material_index_get(Object *ob, const Material *ma);
 /**
@@ -262,6 +264,7 @@ Material *BKE_material_default_holdout();
 Material *BKE_material_default_surface();
 Material *BKE_material_default_volume();
 Material *BKE_material_default_gpencil();
+Material *BKE_material_default_gsplat();
 
 void BKE_material_defaults_free_gpu();
 
