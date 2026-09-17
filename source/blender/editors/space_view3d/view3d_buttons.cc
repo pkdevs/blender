@@ -172,7 +172,7 @@ struct TransformCoordsOrig {
    *
    * Callers must visit coordinates in the same order every update.
    */
-  void apply(const float4x4 &mat, float co[3]);
+  void apply(const float4x4 &mat, float3 &co);
 };
 
 /* temporary struct for storing transform properties */
@@ -336,43 +336,45 @@ static bool median_bounds_is_set(const Bounds<float3> &bounds)
 }
 
 /**
- * Accumulate `co` into `r_location` and expand `r_bounds` to include it.
+ * Accumulate `co` into `location` and expand `bounds` to include it.
  *
  * A naive approach would be to accumulate the bounds in local space then transform them,
  * however transforming a bounding box grows it when the object is rotated,
  * so transform each point as it's added.
  *
- * \param matrix: The object to world matrix, null to keep the bounds in object space.
+ * \param matrix: Maps `co` into the space the bounds are measured in,
+ * null to keep them in object space.
  * \param co: The point in object space (grease pencil layers must convert first).
  */
-static void median_bounds_add(float r_location[3],
-                              Bounds<float3> &r_bounds,
-                              const float matrix[4][4],
+static void median_bounds_add(float location[3],
+                              Bounds<float3> &bounds,
+                              const float4x4 *matrix,
                               const float co[3])
 {
-  add_v3_v3(r_location, co);
+  add_v3_v3(location, co);
 
   float3 co_test(co);
   if (matrix) {
-    mul_m4_v3(matrix, co_test);
+    co_test = math::transform_point(*matrix, co_test);
   }
-  math::min_max(co_test, r_bounds.min, r_bounds.max);
+  math::min_max(co_test, bounds.min, bounds.max);
 }
 
 /** First update, `co` hasn't been scaled yet so store it. */
-static void dims_apply_store(TransformCoordsOrig &coords_orig, const float4x4 &mat, float co[3])
+static void dims_apply_store(TransformCoordsOrig &coords_orig, const float4x4 &mat, float3 &co)
 {
-  coords_orig.coords[coords_orig.coords_index++] = float3(co);
-  mul_m4_v3(mat.ptr(), co);
+  const float3 co_orig = co;
+  coords_orig.coords[coords_orig.coords_index++] = co_orig;
+  co = math::transform_point(mat, co_orig);
 }
 
 /** Later updates, `co` is what the last update scaled it to, so replace it. */
-static void dims_apply_restore(TransformCoordsOrig &coords_orig, const float4x4 &mat, float co[3])
+static void dims_apply_restore(TransformCoordsOrig &coords_orig, const float4x4 &mat, float3 &co)
 {
-  copy_v3_v3(co, math::transform_point(mat, coords_orig.coords[coords_orig.coords_index++]));
+  co = math::transform_point(mat, coords_orig.coords[coords_orig.coords_index++]);
 }
 
-void TransformCoordsOrig::apply(const float4x4 &mat, float co[3])
+void TransformCoordsOrig::apply(const float4x4 &mat, float3 &co)
 {
   this->is_stored ? dims_apply_restore(*this, mat, co) : dims_apply_store(*this, mat, co);
 }
@@ -383,13 +385,17 @@ void TransformCoordsOrig::apply(const float4x4 &mat, float co[3])
  * The scale is about the transform pivot (see #calc_pivot_pos) to match an interactive scale.
  * A size only says how big the selection becomes, the pivot decides where it grows from.
  *
- * \param matrix: The object to world matrix when the dimensions are in global space, otherwise
- * null. Must match the matrix passed to #median_bounds_add.
+ * "Individual Origins" is the exception, #calc_pivot_pos resolves it to the median.
+ * Scaling each island about its own center leaves the selection a size other than the one
+ * entered, so a single pivot is required here.
+ *
+ * \param matrix: The matrix the dimensions were measured with, see #median_bounds_add.
+ * The same matrix must be used, the scale is per-axis in that space.
  * \return the scale in local space, ready to apply to element coordinates.
- * None when the dimensions are in global space and the object matrix can't be inverted.
+ * None when the measured space can't be mapped back into object space.
  */
-static std::optional<float4x4> median_dims_scale_matrix_calc(const Object *ob,
-                                                             const float matrix[4][4],
+static std::optional<float4x4> median_dims_scale_matrix_calc(const Object &ob,
+                                                             const float4x4 *matrix,
                                                              const float3 &pivot_world,
                                                              const float3 &dims_orig,
                                                              const float3 &dims_new)
@@ -405,28 +411,24 @@ static std::optional<float4x4> median_dims_scale_matrix_calc(const Object *ob,
     scale[axis] = scale_axis;
   }
 
-  float3 pivot = pivot_world;
-  if (matrix == nullptr) {
-    /* The pivot is always in global space, the dimensions are not.
-     * A pseudo inverse maps the pivot even when the object has a zero scaled axis,
-     * the scale never leaves local space so a true inverse isn't needed. */
-    pivot = math::transform_point(math::pseudo_invert(ob->object_to_world()), pivot);
-  }
-
-  const float4x4 mat = math::from_loc_scale<float4x4>(pivot - (scale * pivot), scale);
-  if (matrix == nullptr) {
-    return mat;
-  }
-
+  const float4x4 object_to_measure = matrix ? *matrix : float4x4::identity();
   bool is_invertible;
-  const float4x4 world_to_object = math::invert(ob->object_to_world(), is_invertible);
+  const float4x4 measure_to_object = math::invert(object_to_measure, is_invertible);
   if (!is_invertible) {
     /* A zero scale on any axis, the zero matrix #math::invert returns would collapse
      * the selection onto the object origin. */
     return std::nullopt;
   }
-  /* The scale is in global space, wrap it to apply to local coordinates. */
-  return world_to_object * mat * ob->object_to_world();
+
+  /* The pivot is always in global space, the dimensions are not.
+   * A pseudo inverse maps the pivot even when the object has a zero scaled axis,
+   * it only positions the scale so a true inverse isn't needed. */
+  const float3 pivot = math::transform_point(
+      object_to_measure * math::pseudo_invert(ob.object_to_world()), pivot_world);
+
+  /* Scale about the pivot in the measured space, wrapped to apply to object coordinates. */
+  const float4x4 mat = math::from_loc_scale<float4x4>(pivot - (scale * pivot), scale);
+  return measure_to_object * mat * object_to_measure;
 }
 
 /* Helper function to compute a median changed value,
@@ -570,7 +572,7 @@ struct CurvesPointSelectionStatus {
 static CurvesPointSelectionStatus init_curves_point_selection_status(
     const bke::CurvesGeometry &curves,
     const float4x4 *grease_pencil_layer_to_object,
-    const float bounds_matrix[4][4])
+    const float4x4 *bounds_matrix)
 {
   using namespace ed::curves;
 
@@ -1200,8 +1202,8 @@ static void v3d_editvertex_buts(
   tot = totedgedata = totcurvedata = totlattdata = totcurvebweight = 0;
 
   /* Measure the bounds in the space the dimensions are shown in, null for local. */
-  const float (*bounds_matrix)[4] = (v3d->flag & V3D_GLOBAL_STATS) ? ob->object_to_world().ptr() :
-                                                                     nullptr;
+  const float4x4 *bounds_matrix = (v3d->flag & V3D_GLOBAL_STATS) ? &ob->object_to_world() :
+                                                                   nullptr;
   Bounds<float3> select_bounds = median_bounds_init();
 
   if (ob->type == OB_MESH) {
@@ -1928,7 +1930,7 @@ static void v3d_editvertex_buts(
       }
       if (coords_orig) {
         dims_mat = median_dims_scale_matrix_calc(
-            ob, bounds_matrix, coords_orig->pivot, coords_orig->dims, dims_new);
+            *ob, bounds_matrix, coords_orig->pivot, coords_orig->dims, dims_new);
         if (dims_mat) {
           /* Keep median edits made in the same drag, see #TransformCoordsOrig::location_offset. */
           coords_orig->location_offset += float3(median_basis.generic.location);
@@ -1945,7 +1947,7 @@ static void v3d_editvertex_buts(
     /* Scaling takes the coordinate from the drag start, the median is folded into `dims_mat`. */
     auto apply_coord_fn = [&](float co[3]) {
       if (dims_mat) {
-        coords_orig->apply(*dims_mat, co);
+        coords_orig->apply(*dims_mat, *reinterpret_cast<float3 *>(co));
       }
       else if (apply_vcos) {
         apply_raw_diff_v3(
@@ -1991,7 +1993,7 @@ static void v3d_editvertex_buts(
             if (bezt->f2 & SELECT) {
               if (dims_mat) {
                 for (const int i : IndexRange(3)) {
-                  coords_orig->apply(*dims_mat, bezt->vec[i]);
+                  coords_orig->apply(*dims_mat, *reinterpret_cast<float3 *>(bezt->vec[i]));
                 }
               }
               else if (apply_vcos) {
