@@ -114,6 +114,8 @@ struct PFace {
   uint flag;
 };
 
+constexpr static int P_NGON_STACK_NUM = 32;
+
 enum PVertFlag {
   PVERT_PIN = 1,
   PVERT_SELECT = 2,
@@ -1387,7 +1389,7 @@ static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, const PE
       continue;
     }
 
-    Vector<PEdge *, 32> border_edges;
+    Vector<PEdge *, P_NGON_STACK_NUM> border_edges;
     int nedges = 0;
     PEdge *be = e;
     do {
@@ -1407,14 +1409,12 @@ static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, const PE
         continue;
       }
 
-      Vector<const float *, 32> co;
-      Vector<PHashKey, 32> stored_indexes;
-      co.reserve(nedges);
-      stored_indexes.reserve(nedges);
+      Array<const float *, P_NGON_STACK_NUM> co(nedges);
+      Array<PHashKey, P_NGON_STACK_NUM> stored_indexes(nedges);
       for (int i = 0; i < nedges; i++) {
         PVert *bv = border_edges[i]->vert;
-        co.append_unchecked(bv->co);
-        stored_indexes.append_unchecked(bv->u.key);
+        co[i] = bv->co;
+        stored_indexes[i] = bv->u.key;
         bv->u.id = i;
       }
 
@@ -3976,7 +3976,7 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
     /* Protect against (manifold) geometry which has a non-manifold triangulation.
      * See #102543. */
 
-    Vector<int, 32> permute;
+    Vector<int, P_NGON_STACK_NUM> permute;
     permute.reserve(nverts);
     for (int i = 0; i < nverts; i++) {
       permute.append_unchecked(i);
