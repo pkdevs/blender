@@ -1806,6 +1806,14 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
             row.prop(path_cmp, "use_glob", text="", icon='FILTER')
             row.operator("preferences.autoexec_path_remove", text="", icon='X', emboss=False).index = i
 
+        if paths.use_scripts_auto_execute:
+            layout.label_multiline(
+                text=(
+                    "Opening blend files from the internet and other untrusted sources is unsafe with Auto-Run. Use with caution."
+                ),
+                icon='STATUS_WARNING',
+            )
+
 
 class USERPREF_UL_extension_repos(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
