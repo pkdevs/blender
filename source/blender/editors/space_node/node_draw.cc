@@ -3706,21 +3706,6 @@ static void comment_node_prepare_for_draw(
       button_func_set(
           but, node_comment_edit_button_cb, POINTER_FROM_INT(node.identifier), nullptr);
     }
-    else {
-      uiDefIconButR(&block,
-                    ui::ButtonType::IconToggle,
-                    ICON_HIDE_OFF,
-                    but_x,
-                    but_y,
-                    NODE_HEADER_ICON_SIZE,
-                    NODE_HEADER_ICON_SIZE,
-                    &node_ptr,
-                    "render",
-                    -1,
-                    0,
-                    0,
-                    std::nullopt);
-    }
     block_emboss_set(&block, ui::EmbossType::Emboss);
   }
 }

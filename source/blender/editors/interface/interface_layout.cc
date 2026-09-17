@@ -2817,8 +2817,7 @@ void Layout::textbox(const bContext *C,
 void Layout::textbox_with_state(PointerRNA *ptr,
                                 StringRefNull propname,
                                 TextboxState *textbox_state,
-                                std::optional<StringRefNull> placeholder,
-                                const float hit_inset_x)
+                                std::optional<StringRefNull> placeholder)
 {
 
   Block *block = this->block();
@@ -2837,7 +2836,7 @@ void Layout::textbox_with_state(PointerRNA *ptr,
 
   int w, h;
   item_rna_size(block->curlayout, "", ICON_NONE, ptr, prop, -1, false, false, &w, &h);
-  Button *but = uiDefButTextBoxR(block, ptr, propname, textbox_state, 0, 0, w, hit_inset_x);
+  Button *but = uiDefButTextBoxR(block, ptr, propname, textbox_state, 0, 0, w);
   if (placeholder) {
     button_placeholder_set(but, *placeholder);
   }
