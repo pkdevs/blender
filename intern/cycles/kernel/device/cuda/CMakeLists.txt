@@ -33,13 +33,34 @@ endfunction()
 
 function(cuda_get_arch_supported nvcc_executable arch out_is_supported)
   if("${arch}" MATCHES "^compute_[0-9]+$")
-    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-arch" OUTPUT_VARIABLE NVCC_OUT)
+    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-arch"
+                    OUTPUT_VARIABLE NVCC_OUT
+                    ERROR_VARIABLE NVCC_OUT
+                    RESULTS_VARIABLE NVCC_RESULT
+                    ERROR_QUIET)
   elseif("${arch}" MATCHES "^sm_[0-9]+$")
-    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-code" OUTPUT_VARIABLE NVCC_OUT)
+    execute_process(COMMAND "${nvcc_executable}" "--list-gpu-code"
+                    OUTPUT_VARIABLE NVCC_OUT
+                    ERROR_VARIABLE NVCC_OUT
+                    RESULTS_VARIABLE NVCC_RESULT
+                    ERROR_QUIET)
   else()
     message(WARNING "Unknown CUDA architecture ${arch}")
     # Leave the actual check to the toolkit.
     set(${out_is_supported} TRUE PARENT_SCOPE)
+    return()
+  endif()
+
+  # CUDA 10 does not support --list-gpu-arch and --list-gpu-code command line arguments,
+  # Detect it by the exit code, and replicate logic of the supported architectures.
+  if(NOT ${NVCC_RESULT} EQUAL 0)
+    string(REPLACE "compute_" "" sm_version "${arch}")
+    string(REPLACE "sm_" "" sm_version "${sm_version}")
+    if(${sm_version} GREATER_EQUAL 30 AND ${sm_version} LESS_EQUAL 75)
+      set(${out_is_supported} TRUE PARENT_SCOPE)
+    else()
+      set(${out_is_supported} FALSE PARENT_SCOPE)
+    endif()
     return()
   endif()
 
