@@ -80,6 +80,7 @@ else()
   set(IGC_TARGET Linux64)
 endif()
 
+string(REPLACE "-DCMAKE_CXX_STANDARD=20" " " IGC_CMAKE_FLAGS "${DEFAULT_CMAKE_FLAGS}")
 set(IGC_EXTRA_ARGS
   -DIGC_OPTION__ARCHITECTURE_TARGET=${IGC_TARGET}
   -DIGC_OPTION__ARCHITECTURE_HOST=${IGC_TARGET}
@@ -97,11 +98,11 @@ ExternalProject_Add(external_igc
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/igc
-    ${DEFAULT_CMAKE_FLAGS}
+    ${IGC_CMAKE_FLAGS}
     ${IGC_EXTRA_ARGS}
 
   # IGC is pretty set in its way where sub projects ought to live, for some it offers
-  # hooks to supply alternatives folders, other are just hard-coded with no way to configure
+  # hooks to supply alternative folders, other are just hard-coded with no way to configure
   # we symlink everything here, since it's less work than trying to convince the cmake
   # scripts to accept alternative locations.
   PATCH_COMMAND
@@ -135,7 +136,6 @@ add_dependencies(
   external_igc_vcintrinsics
   external_igc_llvm
   external_igc_opencl_clang
-  external_igc_vcintrinsics
   external_igc_spirv_headers
   external_igc_spirv_tools
   external_igc_spirv_translator

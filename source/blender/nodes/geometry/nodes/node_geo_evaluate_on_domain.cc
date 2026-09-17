@@ -26,15 +26,18 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom2);
-    b.add_input(data_type, "Value").supports_field();
-    b.add_output(data_type, "Value").field_source_reference_all().align_with_previous();
+    b.add_input(data_type, "Value"_ustr).structure_type(StructureType::Field);
+    b.add_output(data_type, "Value"_ustr)
+        .structure_type(StructureType::Field)
+        .propagate_references()
+        .align_with_previous();
   }
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
-  layout->prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -45,14 +48,14 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const blender::bke::bNodeType &node_type = params.node_type();
+  const bke::bNodeType &node_type = params.node_type();
   const std::optional<eCustomDataType> type = bke::socket_type_to_custom_data_type(
-      eNodeSocketDatatype(params.other_socket().type));
+      params.other_socket().type);
   if (type && *type != CD_PROP_STRING) {
     params.add_item(IFACE_("Value"), [node_type, type](LinkSearchOpParams &params) {
       bNode &node = params.add_node(node_type);
       node.custom2 = *type;
-      params.update_and_connect_available_socket(node, "Value");
+      params.update_and_connect_available_socket(node, "Value"_ustr);
     });
   }
 }
@@ -62,9 +65,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bNode &node = params.node();
   const AttrDomain domain = AttrDomain(node.custom1);
 
-  GField src_field = params.extract_input<GField>("Value");
-  GField dst_field{std::make_shared<bke::EvaluateOnDomainInput>(std::move(src_field), domain)};
-  params.set_output<GField>("Value", std::move(dst_field));
+  GField src_field = params.extract_input<GField>("Value"_ustr);
+  params.set_output<GField>(
+      "Value"_ustr, GField::from_input<bke::EvaluateOnDomainInput>(std::move(src_field), domain));
 }
 
 static void node_rna(StructRNA *srna)
@@ -89,9 +92,9 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeFieldOnDomain", GEO_NODE_EVALUATE_ON_DOMAIN);
+  geo_node_type_base(&ntype, "GeometryNodeFieldOnDomain"_ustr, GEO_NODE_EVALUATE_ON_DOMAIN);
   ntype.ui_name = "Evaluate on Domain";
   ntype.ui_description =
       "Retrieve values from a field on a different domain besides the domain from the context";
@@ -102,7 +105,7 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

@@ -3,20 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "util/system.h"
+#include "util/log.h"
 #include "util/string.h"
 
+#include <algorithm>
+#include <cstring>
+
 #ifdef _WIN32
+#  include <cstdio>
 #  if (!defined(FREE_WINDOWS))
 #    include <intrin.h>
 #  endif
 #  include "util/windows.h"
 #elif defined(__APPLE__)
+#  include <cstdint>
 #  include <sys/ioctl.h>
+#  include <sys/resource.h>
 #  include <sys/sysctl.h>
 #  include <sys/types.h>
 #  include <unistd.h>
 #else
+#  include <cstdint>
 #  include <sys/ioctl.h>
+#  include <sys/resource.h>
 #  include <unistd.h>
 #endif
 
@@ -86,6 +95,7 @@ string system_cpu_brand_string()
 
     /* Make it a bit more presentable. */
     brand = string_remove_trademark(brand);
+    brand = string_remove_gpu_from_cpu_name(brand);
 
     return brand;
   }
@@ -137,6 +147,7 @@ int system_cpu_bits()
 struct CPUCapabilities {
   bool sse42;
   bool avx2;
+  bool f16c;
 };
 
 static CPUCapabilities &system_cpu_capabilities()
@@ -183,6 +194,8 @@ static CPUCapabilities &system_cpu_capabilities()
         const bool avx = (xcr_feature_mask & 0x6) == 0x6;
         const bool f16c = (result[2] & ((int)1 << 29)) != 0;
 
+        caps.f16c = avx && f16c;
+
         __cpuid(result, 0x00000007);
         bool bmi1 = (result[1] & ((int)1 << 3)) != 0;
         bool bmi2 = (result[1] & ((int)1 << 8)) != 0;
@@ -207,9 +220,15 @@ bool system_cpu_support_sse42()
 
 bool system_cpu_support_avx2()
 {
+  /* F16C is considered part of AVX2 for our purpose, as all physical CPUs with
+   * AVX2 support also support it so there is no point having a separate kernel.
+   *
+   * Some cases where it might be missing is Rosetta or virtual machines, so we
+   * check for it just to be safe. */
   CPUCapabilities &caps = system_cpu_capabilities();
-  return caps.avx2;
+  return caps.avx2 && caps.f16c;
 }
+
 #else
 
 bool system_cpu_support_sse42()
@@ -252,6 +271,41 @@ uint64_t system_self_process_id()
 #else
   return getpid();
 #endif
+}
+
+size_t system_max_open_files()
+{
+#if defined(_WIN32)
+  return _getmaxstdio();
+#else
+  struct rlimit limit = {};
+  return (getrlimit(RLIMIT_NOFILE, &limit) == 0) ? limit.rlim_cur : SIZE_MAX;
+#endif
+}
+
+void system_max_open_files_ensure()
+{
+  /* The Windows maximum is 8192 open files. */
+  constexpr int max_open_files = 8192;
+  bool ok = true;
+
+#if defined(_WIN32)
+  if (_getmaxstdio() < max_open_files) {
+    ok = _setmaxstdio(max_open_files) == max_open_files;
+  }
+#else
+  struct rlimit limit = {};
+  ok = getrlimit(RLIMIT_NOFILE, &limit) == 0;
+  if (ok && limit.rlim_cur < rlim_t(max_open_files)) {
+    limit.rlim_cur = std::min(rlim_t(max_open_files), limit.rlim_max);
+    ok = setrlimit(RLIMIT_NOFILE, &limit) == 0;
+  }
+#endif
+
+  if (!ok) {
+    LOG_DEBUG << "Failed to ensure max open files is at least " << max_open_files << ": "
+              << strerror(errno);
+  }
 }
 
 CCL_NAMESPACE_END

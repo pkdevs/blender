@@ -19,6 +19,7 @@
 
 #include "mtl_backend.hh"
 #include "mtl_context.hh"
+#include "mtl_debug.hh"
 #include "mtl_texture.hh"
 
 /* Utility file for secondary functionality which supports mtl_texture.mm. */
@@ -27,6 +28,8 @@ extern char datatoc_compute_texture_update_msl[];
 extern char datatoc_compute_texture_read_msl[];
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 /* -------------------------------------------------------------------- */
 /** \name Texture Utility Functions
@@ -256,8 +259,7 @@ bool mtl_format_supports_blending(MTLPixelFormat format)
 
 id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_update_impl(
     TextureUpdateRoutineSpecialisation specialization_params,
-    blender::Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>>
-        &specialization_cache,
+    Map<TextureUpdateRoutineSpecialisation, id<MTLComputePipelineState>> &specialization_cache,
     GPUTextureType texture_type)
 {
   /* Check whether the Kernel exists. */
@@ -304,7 +306,9 @@ id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_update_impl(
       if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
           NSNotFound)
       {
-        NSLog(@"Compile Error - Metal Shader Library error %@ ", error);
+        CLOG_ERROR(&LOG,
+                   "Compile Error - Metal Shader Library error %s",
+                   [[error localizedDescription] UTF8String]);
         BLI_assert(false);
         return nil;
       }
@@ -321,7 +325,9 @@ id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_update_impl(
         newComputePipelineStateWithFunction:temp_compute_function
                                       error:&error];
     if (error || compute_pso == nil) {
-      NSLog(@"Failed to prepare texture_update MTLComputePipelineState %@", error);
+      CLOG_ERROR(&LOG,
+                 "Failed to prepare texture_update MTLComputePipelineState %s",
+                 [[error localizedDescription] UTF8String]);
       BLI_assert(false);
     }
 
@@ -484,7 +490,7 @@ void gpu::MTLTexture::update_sub_depth_2d(
   GPU_texture_filter_mode(r32_tex_tmp, false);
   GPU_texture_extend_mode(r32_tex_tmp, GPU_SAMPLER_EXTEND_MODE_EXTEND);
   gpu::MTLTexture *mtl_tex = static_cast<gpu::MTLTexture *>(r32_tex_tmp);
-  mtl_tex->update_sub(mip, offset, extent, type, data);
+  mtl_tex->update_sub(mip, offset, extent, type, data, 0);
 
   gpu::FrameBuffer *restore_fb = GPU_framebuffer_active_get();
   gpu::FrameBuffer *depth_fb_temp = GPU_framebuffer_create("depth_intermediate_copy_fb");
@@ -544,8 +550,7 @@ void gpu::MTLTexture::update_sub_depth_2d(
 
 id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_read_impl(
     TextureReadRoutineSpecialisation specialization_params,
-    blender::Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>>
-        &specialization_cache,
+    Map<TextureReadRoutineSpecialisation, id<MTLComputePipelineState>> &specialization_cache,
     GPUTextureType texture_type)
 {
   /* Check whether the Kernel exists. */
@@ -622,7 +627,9 @@ id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_read_impl(
       if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
           NSNotFound)
       {
-        NSLog(@"Compile Error - Metal Shader Library error %@ ", error);
+        CLOG_ERROR(&LOG,
+                   "Compile Error - Metal Shader Library error %s",
+                   [[error localizedDescription] UTF8String]);
         BLI_assert(false);
         return nil;
       }
@@ -639,7 +646,9 @@ id<MTLComputePipelineState> gpu::MTLTexture::mtl_texture_read_impl(
         newComputePipelineStateWithFunction:temp_compute_function
                                       error:&error];
     if (error || compute_pso == nil) {
-      NSLog(@"Failed to prepare texture_read MTLComputePipelineState %@", error);
+      CLOG_ERROR(&LOG,
+                 "Failed to prepare texture_read MTLComputePipelineState %s",
+                 [[error localizedDescription] UTF8String]);
       BLI_assert(false);
       return nil;
     }

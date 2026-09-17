@@ -1,7 +1,14 @@
 /* SPDX-FileCopyrightText: 2021 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup io
+ */
+
 #pragma once
+
+namespace blender {
 
 /* The CacheArchiveHandle struct is only used for anonymous pointers,
  * to interface between C and C++ code. This is currently used
@@ -17,3 +24,5 @@ struct CacheArchiveHandle {
 struct CacheReader {
   int unused;
 };
+
+}  // namespace blender

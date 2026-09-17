@@ -2,15 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_assert.h"
-#include "BLI_math_interp.hh"
+#include "BLI_assert.hh"
+#include "BLI_bounds.hh"
+#include "BLI_bounds_types.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "COM_domain.hh"
+#include "BLT_translation.hh"
+
 #include "GPU_texture.hh"
-#include <utility>
+
+#include "COM_domain.hh"
 
 namespace blender::compositor {
 
@@ -48,12 +51,57 @@ Domain Domain::identity()
 
 bool Domain::is_equal(const Domain &a, const Domain &b, const float epsilon)
 {
-  return a.data_size == b.data_size && math::is_equal(a.transformation, b.transformation, epsilon);
+  return a.data_size == b.data_size && a.display_size == b.display_size &&
+         a.data_offset == b.data_offset &&
+         math::is_equal(a.transformation, b.transformation, epsilon);
+}
+
+Domain Domain::realize_transformation(const bool realize_translation) const
+{
+  /* If the domain is only infinitesimally rotated or scaled, only realize the translation if
+   * needed, otherwise, return as is. */
+  const float3x3 translation = math::from_location<float3x3>(this->transformation.location());
+  if (math::is_equal(float2x2(this->transformation), float2x2::identity(), 10e-6f)) {
+    Domain realized_domain = *this;
+    realized_domain.transformation = realize_translation ? float3x3::identity() : translation;
+    return realized_domain;
+  }
+
+  /* Eliminate the translation component of the transformation. Translation is ignored since it has
+   * no effect on the size of the domain and will be restored later if needed. */
+  const float3x3 transformation = float3x3(float2x2(this->transformation));
+
+  /* Translate the input such that it is centered in the virtual compositing space. */
+  const float2 center_translation = -float2(this->display_size) / 2.0f;
+  const float3x3 centered_transformation = math::translate(transformation, center_translation);
+
+  /* Compute display window after transformation. */
+  const Bounds<float2> display_window = {float2(0.0f), float2(this->display_size)};
+  const Bounds<float2> new_display_window = bounds::transform_bounds(centered_transformation,
+                                                                     display_window);
+  const Bounds<int2> new_integer_display_window = {int2(math::floor(new_display_window.min)),
+                                                   int2(math::ceil(new_display_window.max))};
+
+  /* Compute data window after transformation. */
+  const Bounds<float2> data_window = {float2(this->data_offset),
+                                      float2(this->data_offset + this->data_size)};
+  const Bounds<float2> new_data_window = bounds::transform_bounds(centered_transformation,
+                                                                  data_window);
+  const Bounds<int2> new_integer_data_window = {int2(math::floor(new_data_window.min)),
+                                                int2(math::ceil(new_data_window.max))};
+
+  Domain realized_domain = *this;
+  realized_domain.display_size = math::max(int2(1), new_integer_display_window.size());
+  realized_domain.data_size = math::max(int2(1), new_integer_data_window.size());
+  realized_domain.data_offset = new_integer_data_window.min - new_integer_display_window.min;
+  realized_domain.transformation = realize_translation ? float3x3::identity() : translation;
+  return realized_domain;
 }
 
 bool operator==(const Domain &a, const Domain &b)
 {
-  return a.data_size == b.data_size && a.transformation == b.transformation;
+  return a.data_size == b.data_size && a.display_size == b.display_size &&
+         a.data_offset == b.data_offset && a.transformation == b.transformation;
 }
 
 bool operator!=(const Domain &a, const Domain &b)
@@ -61,30 +109,48 @@ bool operator!=(const Domain &a, const Domain &b)
   return !(a == b);
 }
 
-math::InterpWrapMode map_extension_mode_to_wrap_mode(const ExtensionMode &mode)
+StringRefNull to_string(const Interpolation &interpolation)
 {
-  switch (mode) {
-    case ExtensionMode::Clip:
-      return math::InterpWrapMode::Border;
-    case ExtensionMode::Repeat:
-      return math::InterpWrapMode::Repeat;
-    case ExtensionMode::Extend:
-      return math::InterpWrapMode::Extend;
+  switch (interpolation) {
+    case Interpolation::Nearest:
+      return N_("Nearest");
+    case Interpolation::Bilinear:
+      return N_("Bilinear");
+    case Interpolation::Bicubic:
+      return N_("Bicubic");
+    case Interpolation::Anisotropic:
+      return N_("Anisotropic");
   }
+
   BLI_assert_unreachable();
-  return math::InterpWrapMode::Border;
+  return "None";
 }
 
-GPUSamplerExtendMode map_extension_mode_to_extend_mode(const ExtensionMode &mode)
+StringRefNull to_string(const Extension &extension)
+{
+  switch (extension) {
+    case Extension::Extend:
+      return N_("Extend");
+    case Extension::Repeat:
+      return N_("Repeat");
+    case Extension::Clip:
+      return N_("Clip");
+  }
+
+  BLI_assert_unreachable();
+  return "None";
+}
+
+GPUSamplerExtendMode map_extension_mode_to_extend_mode(const Extension &mode)
 {
   switch (mode) {
-    case blender::compositor::ExtensionMode::Clip:
+    case compositor::Extension::Clip:
       return GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER;
 
-    case blender::compositor::ExtensionMode::Extend:
+    case compositor::Extension::Extend:
       return GPU_SAMPLER_EXTEND_MODE_EXTEND;
 
-    case blender::compositor::ExtensionMode::Repeat:
+    case compositor::Extension::Repeat:
       return GPU_SAMPLER_EXTEND_MODE_REPEAT;
   }
 

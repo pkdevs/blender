@@ -13,8 +13,13 @@
 
 #include "BLI_enum_flags.hh"
 #include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
+#include "BLI_vector.hh"
 
 #include "IMB_imbuf_types.hh"
+
+namespace blender {
 
 struct ImBuf;
 struct rctf;
@@ -23,6 +28,10 @@ struct rcti;
 struct ImageFormatData;
 struct Stereo3dFormat;
 
+namespace imbuf::partial_update {
+struct Changes;
+}
+
 /**
  * Module init/exit.
  */
@@ -30,57 +39,96 @@ void IMB_init();
 void IMB_exit();
 
 /**
+ * Module GPU context management.
+ */
+void IMB_ensure_gpu_context();
+void IMB_activate_gpu_context();
+void IMB_deactivate_gpu_context();
+
+/**
  * Load image.
  */
 ImBuf *IMB_load_image_from_memory(const unsigned char *mem,
-                                  const size_t size,
-                                  const int flags,
+                                  size_t size,
+                                  ImBufFlags flags,
                                   const char *descr,
                                   const char *filepath = nullptr,
                                   char r_colorspace[IM_MAX_SPACE] = nullptr);
 
-ImBuf *IMB_load_image_from_file_descriptor(const int file,
-                                           const int flags,
+ImBuf *IMB_load_image_from_file_descriptor(int file,
+                                           ImBufFlags flags,
                                            const char *filepath = nullptr,
                                            char r_colorspace[IM_MAX_SPACE] = nullptr);
 
 ImBuf *IMB_load_image_from_filepath(const char *filepath,
-                                    const int flags,
+                                    ImBufFlags flags,
                                     char r_colorspace[IM_MAX_SPACE] = nullptr);
 
 /**
  * Save image.
  */
-bool IMB_save_image(ImBuf *ibuf, const char *filepath, const int flags);
+bool IMB_save_image(ImBuf *ibuf, const char *filepath, ImBufFlags flags);
+Vector<uint8_t> IMB_save_image_to_buffer(ImBuf *ibuf, ImBufFlags flags);
 
 /**
  * Test image file.
  */
 bool IMB_test_image(const char *filepath);
-bool IMB_test_image_type_matches(const char *filepath, int filetype);
-int IMB_test_image_type_from_memory(const unsigned char *buf, size_t buf_size);
-int IMB_test_image_type(const char *filepath);
+bool IMB_test_image_type_matches(const char *filepath, eImbFileType filetype);
+eImbFileType IMB_test_image_type_from_memory(const unsigned char *buf, size_t buf_size);
+eImbFileType IMB_test_image_type(const char *filepath);
+
+/**
+ * Return true if the file type is supported (compiled in).
+ */
+bool IMB_ftype_is_supported(eImbFileType ftype);
+
+/**
+ * Return the string identifier for a file type, or nullptr if not found.
+ */
+const char *IMB_ftype_to_id(eImbFileType ftype);
+
+/**
+ * Return the file type enum value for a string identifier, or #IMB_FTYPE_NONE if not found.
+ */
+eImbFileType IMB_ftype_from_id(const char *id);
+
+/**
+ * Return the null-terminated list of extensions for a file type, or nullptr if not found.
+ */
+const char **IMB_ftype_file_extensions(eImbFileType ftype);
+
+/**
+ * Return the read capability flags for a file type.
+ */
+eImFileTypeCapability IMB_ftype_capability_read(eImbFileType ftype);
+
+/**
+ * Return the write capability flags for a file type.
+ */
+eImFileTypeCapability IMB_ftype_capability_write(eImbFileType ftype);
 
 /**
  * Load thumbnail image.
  */
 enum class IMBThumbLoadFlags {
   Zero = 0,
-  /** Normally files larger than 100MB are not loaded for thumbnails, except when this flag is set.
+  /**
+   * Normally files larger than 100MB are not loaded for thumbnails, except when this flag is set.
    */
   LoadLargeFiles = (1 << 0),
 };
 ENUM_OPERATORS(IMBThumbLoadFlags);
 
 ImBuf *IMB_thumb_load_image(const char *filepath,
-                            const size_t max_thumb_size,
+                            size_t max_thumb_size,
                             char colorspace[IM_MAX_SPACE],
-                            const IMBThumbLoadFlags load_flags = IMBThumbLoadFlags::Zero);
+                            IMBThumbLoadFlags load_flags = IMBThumbLoadFlags::Zero);
 
 /**
  * Allocate and free image buffer.
  */
-ImBuf *IMB_allocImBuf(unsigned int x, unsigned int y, unsigned char planes, unsigned int flags);
+ImBuf *IMB_allocImBuf(unsigned int x, unsigned int y, ImBufFlags flags);
 void IMB_freeImBuf(ImBuf *ibuf);
 
 /**
@@ -88,8 +136,7 @@ void IMB_freeImBuf(ImBuf *ibuf);
  *
  * Use in cases when temporary image buffer is allocated on stack.
  */
-bool IMB_initImBuf(
-    ImBuf *ibuf, unsigned int x, unsigned int y, unsigned char planes, unsigned int flags);
+bool IMB_initImBuf(ImBuf *ibuf, unsigned int x, unsigned int y, ImBufFlags flags);
 
 /**
  * Create a copy of a pixel buffer and wrap it to a new ImBuf
@@ -111,43 +158,20 @@ ImBuf *IMB_allocFromBuffer(const uint8_t *byte_buffer,
                            unsigned int channels);
 
 /**
- * Assign the content of the corresponding buffer with the given data and ownership.
- * The current content of the buffer is released corresponding to its ownership configuration.
+ * Assign the GPU texture of the buffer to the given texture. The current GPU texture is released.
  *
  * \note Does not modify the topology (width, height, number of channels).
  */
-void IMB_assign_byte_buffer(ImBuf *ibuf, uint8_t *buffer_data, ImBufOwnership ownership);
-void IMB_assign_float_buffer(ImBuf *ibuf, float *buffer_data, ImBufOwnership ownership);
+void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture);
 
 /**
- * Assign the content and the color space of the corresponding buffer the data from the given
- * buffer.
+ * Reads the GPU data texture of the image buffer if it exists and assigns the data to the float
+ * buffer. This is only done if the buffer has the IB_HOST_BUFFER_INVALID flag is set, which is
+ * then reset after the function executes.
  *
- * \note Does not modify the topology (width, height, number of channels).
- *
- * \note The ownership of the data in the source buffer is ignored.
+ * \warning Not thread-safe, so callee should worry about thread locks.
  */
-void IMB_assign_byte_buffer(ImBuf *ibuf, const ImBufByteBuffer &buffer, ImBufOwnership ownership);
-void IMB_assign_float_buffer(ImBuf *ibuf,
-                             const ImBufFloatBuffer &buffer,
-                             ImBufOwnership ownership);
-void IMB_assign_dds_data(ImBuf *ibuf, const DDSData &data, ImBufOwnership ownership);
-
-/**
- * Make corresponding buffers available for modification.
- * Is achieved by ensuring that the given ImBuf is the only owner of the underlying buffer data.
- */
-void IMB_make_writable_byte_buffer(ImBuf *ibuf);
-void IMB_make_writable_float_buffer(ImBuf *ibuf);
-
-/**
- * Steal the buffer data pointer: the ImBuf is no longer an owner of this data.
- * \note If the ImBuf does not own the data the behavior is undefined.
- * \note Stealing encoded buffer resets the encoded size.
- */
-uint8_t *IMB_steal_byte_buffer(ImBuf *ibuf);
-float *IMB_steal_float_buffer(ImBuf *ibuf);
-uint8_t *IMB_steal_encoded_buffer(ImBuf *ibuf);
+void IMB_ensure_host_buffer(ImBuf *ibuf);
 
 /**
  * Increase reference count to imbuf
@@ -201,7 +225,6 @@ enum IMB_BlendMode {
   IMB_BLEND_COLOR = 23,
   IMB_BLEND_INTERPOLATE = 24,
 
-  IMB_BLEND_COPY = 1000,
   IMB_BLEND_COPY_RGB = 1001,
   IMB_BLEND_COPY_ALPHA = 1002,
 };
@@ -214,11 +237,46 @@ void IMB_blend_color_float(float dst[4],
                            const float src1[4],
                            const float src2[4],
                            IMB_BlendMode mode);
+void IMB_blend_color_float(MutableSpan<float4> dst,
+                           Span<float4> src1,
+                           Span<float4> src2,
+                           IMB_BlendMode mode);
 
 /**
- * In-place image crop.
+ * Copy a rectangle of pixel data from one image buffer to another. The source and destination
+ * buffers are described by the pointers and corresponding 2D sizes. They must not reference the
+ * same memory.
  */
-void IMB_rect_crop(ImBuf *ibuf, const rcti *crop);
+void IMB_copy_rect(float *dst,
+                   const int2 &dst_size,
+                   const float *src,
+                   const int2 &src_size,
+                   int channels,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
+void IMB_copy_rect(uchar *dst,
+                   const int2 &dst_size,
+                   const uchar *src,
+                   const int2 &src_size,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
+
+/**
+ * In-place image crop. `rect` is *inclusive*.
+ */
+void IMB_crop(ImBuf *ibuf, const int2 &rect_pos, const int2 &rect_size);
+
+/**
+ * Copy a rectangle of pixel data from one image buffer to another. Data outside of the destination
+ * rectangle is not written to.
+ */
+void IMB_copy_rect(ImBuf *dst,
+                   const ImBuf *src,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
 
 /**
  * In-place size setting (caller must fill in buffer contents).
@@ -233,31 +291,6 @@ void IMB_rectclip(ImBuf *dbuf,
                   int *srcy,
                   int *width,
                   int *height);
-void IMB_rectcpy(ImBuf *dbuf,
-                 const ImBuf *sbuf,
-                 int destx,
-                 int desty,
-                 int srcx,
-                 int srcy,
-                 int width,
-                 int height);
-void IMB_rectblend(ImBuf *dbuf,
-                   const ImBuf *obuf,
-                   const ImBuf *sbuf,
-                   unsigned short *dmask,
-                   const unsigned short *curvemask,
-                   const unsigned short *texmask,
-                   float mask_max,
-                   int destx,
-                   int desty,
-                   int origx,
-                   int origy,
-                   int srcx,
-                   int srcy,
-                   int width,
-                   int height,
-                   IMB_BlendMode mode,
-                   bool accumulate);
 void IMB_rectblend_threaded(ImBuf *dbuf,
                             const ImBuf *obuf,
                             const ImBuf *sbuf,
@@ -275,6 +308,29 @@ void IMB_rectblend_threaded(ImBuf *dbuf,
                             int height,
                             IMB_BlendMode mode,
                             bool accumulate);
+/**
+ * \param dbuf_byte_data: Result of `dbuf->byte_data_for_write()`.
+ * \param dbuf_float_data: Result of `dbuf->float_data_for_write()`.
+ */
+void IMB_rectblend(ImBuf *dbuf,
+                   uint8_t *dbuf_byte_data,
+                   float *dbuf_float_data,
+                   const ImBuf *obuf,
+                   const ImBuf *sbuf,
+                   unsigned short *dmask,
+                   const unsigned short *curvemask,
+                   const unsigned short *texmask,
+                   float mask_max,
+                   int destx,
+                   int desty,
+                   int origx,
+                   int origy,
+                   int srcx,
+                   int srcy,
+                   int width,
+                   int height,
+                   IMB_BlendMode mode,
+                   bool accumulate);
 
 enum eIMBInterpolationFilterMode {
   IMB_FILTER_NEAREST,
@@ -315,25 +371,48 @@ enum class IMBScaleFilter {
   Box,
 };
 
+void IMB_scale_box(const float *src_buffer,
+                   int2 src_size,
+                   int channels,
+                   float *dst_buffer,
+                   int2 dst_size,
+                   bool threaded,
+                   int src_stride = 0);
+void IMB_scale_box(const uchar *src_buffer,
+                   int2 src_size,
+                   int channels,
+                   uchar *dst_buffer,
+                   int2 dst_size,
+                   bool threaded,
+                   int src_stride = 0);
+
 /**
  * Scale/resize image to new dimensions.
  * Return true if \a ibuf is modified.
  */
-bool IMB_scale(ImBuf *ibuf,
-               unsigned int newx,
-               unsigned int newy,
-               IMBScaleFilter filter,
-               bool threaded = true);
+bool IMB_scale(ImBuf *ibuf, int2 new_size, IMBScaleFilter filter, bool threaded = true);
+inline bool IMB_scale(
+    ImBuf *ibuf, unsigned int newx, unsigned int newy, IMBScaleFilter filter, bool threaded = true)
+{
+  return IMB_scale(ibuf, int2(newx, newy), filter, threaded);
+}
 
 /**
  * Scale/resize image to new dimensions, into a newly created result image.
  * Metadata of input image (if any) is copied into the result image.
  */
 ImBuf *IMB_scale_into_new(const ImBuf *ibuf,
-                          unsigned int newx,
-                          unsigned int newy,
+                          int2 new_size,
                           IMBScaleFilter filter,
                           bool threaded = true);
+inline ImBuf *IMB_scale_into_new(const ImBuf *ibuf,
+                                 unsigned int newx,
+                                 unsigned int newy,
+                                 IMBScaleFilter filter,
+                                 bool threaded = true)
+{
+  return IMB_scale_into_new(ibuf, int2(newx, newy), filter, threaded);
+}
 
 /**
  * Test if color-space conversions of pixels in buffer need to take into account alpha.
@@ -346,100 +425,71 @@ bool IMB_alpha_affects_rgb(const ImBuf *ibuf);
 void IMB_byte_from_float(ImBuf *ibuf);
 void IMB_float_from_byte_ex(ImBuf *dst, const ImBuf *src, const rcti *region_to_update);
 void IMB_float_from_byte(ImBuf *ibuf);
-/**
- * No profile conversion.
- */
 void IMB_color_to_bw(ImBuf *ibuf);
 void IMB_saturation(ImBuf *ibuf, float sat);
 
-/* Converting pixel buffers. */
-
 /**
- * Float to byte pixels, output 4-channel RGBA.
+ * Convert float pixels to byte pixels.
+ * \param dest: Destination, always 4 channel RGBA, non-premultiplied.
+ * \param src: Source.
+ * \param src_channels: Source channels (1, 3, 4).
+ * \param dither: Amount of dithering to apply to destination.
+ * \param predivide: Is source alpha premultiplied.
+ * \param width: Width in pixels.
+ * \param height: Height in pixels.
+ * \param stride: Row stride in pixels.
  */
-void IMB_buffer_byte_from_float(unsigned char *rect_to,
-                                const float *rect_from,
-                                int channels_from,
+void IMB_buffer_byte_from_float(unsigned char *dest,
+                                const float *src,
+                                int src_channels,
                                 float dither,
-                                int profile_to,
-                                int profile_from,
                                 bool predivide,
                                 int width,
                                 int height,
-                                int stride_to,
-                                int stride_from,
+                                int stride,
                                 int start_y = 0);
 /**
- * Float to byte pixels, output 4-channel RGBA.
+ * Same as #IMB_buffer_byte_from_float, but only writes destination
+ * pixels where corresponding mask value is #FILTER_MASK_USED.
  */
-void IMB_buffer_byte_from_float_mask(unsigned char *rect_to,
-                                     const float *rect_from,
-                                     int channels_from,
+void IMB_buffer_byte_from_float_mask(unsigned char *dest,
+                                     const float *src,
+                                     int src_channels,
                                      float dither,
-                                     bool predivide,
                                      int width,
                                      int height,
-                                     int stride_to,
-                                     int stride_from,
-                                     char *mask);
+                                     const char *mask);
 /**
- * Byte to float pixels, input and output 4-channel RGBA.
+ * Convert byte pixels to float pixels.
+ * \param dest: Destination, always 4 channel RGBA, non-premultiplied.
+ * \param src: Source, always 4 channel RGBA, non-premultiplied.
+ * \param width: Width in pixels.
+ * \param height: Height in pixels.
+ * \param dest_stride: Destination row stride in pixels.
+ * \param src_stride: Source row stride in pixels.
  */
-void IMB_buffer_float_from_byte(float *rect_to,
-                                const unsigned char *rect_from,
-                                int profile_to,
-                                int profile_from,
-                                bool predivide,
-                                int width,
-                                int height,
-                                int stride_to,
-                                int stride_from);
+void IMB_buffer_float_from_byte(
+    float *dest, const unsigned char *src, int width, int height, int dest_stride, int src_stride);
+
 /**
- * Float to float pixels, output 4-channel RGBA.
+ * Convert 1/3/4 channel float pixels to 4 channel (RGBA) float pixels.
+ * \param dest: Destination, always 4 channel.
+ * \param src: Source.
+ * \param src_channels: Source channels (1, 3, 4).
+ * \param width: Width in pixels.
+ * \param height: Height in pixels.
  */
-void IMB_buffer_float_from_float(float *rect_to,
-                                 const float *rect_from,
-                                 int channels_from,
-                                 int profile_to,
-                                 int profile_from,
-                                 bool predivide,
-                                 int width,
-                                 int height,
-                                 int stride_to,
-                                 int stride_from);
-void IMB_buffer_float_from_float_threaded(float *rect_to,
-                                          const float *rect_from,
-                                          int channels_from,
-                                          int profile_to,
-                                          int profile_from,
-                                          bool predivide,
-                                          int width,
-                                          int height,
-                                          int stride_to,
-                                          int stride_from);
+void IMB_buffer_float_rgba_from_float(
+    float *dest, const float *src, int src_channels, int width, int height);
+
 /**
- * Float to float pixels, output 4-channel RGBA.
+ * Same as #IMB_buffer_float_rgba_from_float, but only writes destination
+ * pixels where corresponding mask value is #FILTER_MASK_USED.
  */
-void IMB_buffer_float_from_float_mask(float *rect_to,
-                                      const float *rect_from,
-                                      int channels_from,
-                                      int width,
-                                      int height,
-                                      int stride_to,
-                                      int stride_from,
-                                      char *mask);
-/**
- * Byte to byte pixels, input and output 4-channel RGBA.
- */
-void IMB_buffer_byte_from_byte(unsigned char *rect_to,
-                               const unsigned char *rect_from,
-                               int profile_to,
-                               int profile_from,
-                               bool predivide,
-                               int width,
-                               int height,
-                               int stride_to,
-                               int stride_from);
+void IMB_buffer_float_rgba_from_float_mask(
+    float *dest, const float *src, int src_channels, int width, int height, const char *mask);
+
+void IMB_buffer_float_rgba_srgb_to_linear(float *buffer, int width, int height);
 
 void IMB_alpha_under_color_float(float *rect_float, int x, int y, float backcol[3]);
 void IMB_alpha_under_color_byte(unsigned char *rect, int x, int y, const float backcol[3]);
@@ -471,7 +521,6 @@ void IMB_rectfill(ImBuf *drect, const float col[4]);
  * of the rectangular area to be filled, (x2, y2) is the end point. Note that values are allowed to
  * be loosely ordered, which means that x2 is allowed to be lower than x1, as well as y2 is allowed
  * to be lower than y1. No matter the order the area between x1 and x2, and y1 and y2 is filled.
- * \param colorspace: color-space reference for display space.
  */
 void IMB_rectfill_area(
     ImBuf *ibuf, const float scene_linear_color[4], int x1, int y1, int x2, int y2);
@@ -502,15 +551,13 @@ void IMB_free_byte_pixels(ImBuf *ibuf);
  * Allocate storage for float type pixels.
  * If the image already contains float data storage, it is freed first.
  */
-bool IMB_alloc_float_pixels(ImBuf *ibuf,
-                            const unsigned int channels,
-                            bool initialize_pixels = true);
+bool IMB_alloc_float_pixels(ImBuf *ibuf, unsigned int channels, bool initialize_pixels = true);
 /**
  * Deallocate image float storage.
  */
 void IMB_free_float_pixels(ImBuf *ibuf);
 
-/** Deallocate all CPU side data storage (byte, float, encoded). */
+/** Deallocate all CPU side data storage (byte, float). */
 void IMB_free_all_data(ImBuf *ibuf);
 
 /**
@@ -556,20 +603,41 @@ void IMB_transform(const ImBuf *src,
                    ImBuf *dst,
                    eIMBTransformMode mode,
                    eIMBInterpolationFilterMode filter,
-                   const blender::float3x3 &transform_matrix,
+                   const float3x3 &transform_matrix,
                    const rctf *src_crop);
 
-blender::gpu::Texture *IMB_create_gpu_texture(const char *name,
-                                              ImBuf *ibuf,
-                                              bool use_high_bitdepth,
-                                              bool use_premult);
+enum class GPUTextureCreateFlags : uint8_t {
+  /** Indicates that full float textures should be used instead of half float textures. */
+  HighBitDepth = 1 << 0,
+  /** Store the data premultiplied. */
+  Premultiplied = 1 << 1,
+  /** Scale the texture to the maximum size allowed by the \see U.glreslimit user preference. */
+  LimitSize = 1 << 2,
+  /** Allow generation of mipmaps. */
+  EnableMipmaps = 1 << 3,
+};
+ENUM_OPERATORS(GPUTextureCreateFlags)
 
-blender::gpu::TextureFormat IMB_gpu_get_texture_format(const ImBuf *ibuf,
-                                                       bool high_bitdepth,
-                                                       bool use_grayscale);
+/**
+ * Creates a GPU texture from the given image buffer and name.
+ */
+gpu::Texture *IMB_create_gpu_texture(const char *name, ImBuf *ibuf, GPUTextureCreateFlags flags);
 
-bool IMB_gpu_get_compressed_format(const ImBuf *ibuf,
-                                   blender::gpu::TextureFormat *r_texture_format);
+/* Acquire the GPU texture of the image buffer, creating it if it does not exist yet (with
+ * #IMB_create_gpu_texture), and return an owned reference to it.
+ *
+ * If #try_only is true, the texture is not created and null is returned when it does not exist
+ * yet. */
+gpu::Texture *IMB_acquire_gpu_texture(const char *name,
+                                      ImBuf *ibuf,
+                                      GPUTextureCreateFlags texture_create_flags,
+                                      bool try_only = false);
+
+gpu::TextureFormat IMB_gpu_get_texture_format(const ImBuf *ibuf,
+                                              bool high_bitdepth,
+                                              bool use_grayscale);
+
+bool IMB_gpu_get_compressed_format(const ImBuf *ibuf, gpu::TextureFormat *r_texture_format);
 
 /**
  * Ensures that values stored in the float rect can safely loaded into half float gpu textures.
@@ -582,28 +650,41 @@ void IMB_gpu_clamp_half_float(ImBuf *image_buffer);
  * The `ibuf` is only here to detect the storage type. The produced texture will have undefined
  * content. It will need to be populated by using #IMB_update_gpu_texture_sub().
  */
-blender::gpu::Texture *IMB_touch_gpu_texture(const char *name,
-                                             ImBuf *ibuf,
-                                             int w,
-                                             int h,
-                                             int layers,
-                                             bool use_high_bitdepth,
-                                             bool use_grayscale);
+gpu::Texture *IMB_touch_gpu_texture(const char *name,
+                                    ImBuf *ibuf,
+                                    int w,
+                                    int h,
+                                    int layers,
+                                    bool use_high_bitdepth,
+                                    bool use_grayscale);
 
 /**
- * Will update a #blender::gpu::Texture using the content of the #ImBuf. Only one layer will be
+ * Will update a #gpu::Texture using the content of the #ImBuf. Only one layer will be
  * updated. Will resize the ibuf if needed. Z is the layer to update. Unused if the texture is 2D.
  */
-void IMB_update_gpu_texture_sub(blender::gpu::Texture *tex,
+void IMB_update_gpu_texture_sub(gpu::Texture *tex,
                                 ImBuf *ibuf,
                                 int x,
                                 int y,
                                 int z,
                                 int w,
                                 int h,
-                                bool use_high_bitdepth,
                                 bool use_grayscale,
                                 bool use_premult);
+
+/**
+ * Update GPU texture from host buffer, changing just the subset that was modified.
+ *
+ * When #layer is specified, the corresponding layered texture is updated at the
+ * specified #tile_offset and #tile_size, for multiple tiles packed into one layer.
+ */
+void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
+                                          ImBuf *ibuf,
+                                          bool store_premultiplied,
+                                          const imbuf::partial_update::Changes &changes,
+                                          int layer = -1,
+                                          int2 tile_offset = int2(0),
+                                          int2 tile_size = int2(0));
 
 void IMB_stereo3d_write_dimensions(
     char mode, bool is_squeezed, size_t width, size_t height, size_t *r_width, size_t *r_height);
@@ -620,3 +701,5 @@ void IMB_ImBufFromStereo3d(const Stereo3dFormat *s3d,
                            ImBuf *ibuf_stereo3d,
                            ImBuf **r_ibuf_left,
                            ImBuf **r_ibuf_right);
+
+}  // namespace blender

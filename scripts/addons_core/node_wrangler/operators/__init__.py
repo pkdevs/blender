@@ -4,7 +4,6 @@
 
 import bpy
 
-from .add_attribute_node import *
 from .add_image_sequence import *
 from .add_principled_setup import *
 from .add_reroutes import *
@@ -35,7 +34,6 @@ from .swap_links import *
 #### ------------------------------ REGISTRATION ------------------------------ ####
 
 classes = (
-    NODE_OT_add_attribute_node,
     NODE_OT_add_image_sequence,
     NODE_OT_add_principled_setup,
     NODE_OT_add_reroutes,
@@ -69,9 +67,11 @@ classes = (
     NODE_MT_lazy_connect_inputs,
 )
 
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+
 
 def unregister():
     for cls in reversed(classes):

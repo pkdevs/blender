@@ -11,7 +11,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_animdata.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "BKE_camera.h"
 #include "BKE_fcurve.hh"
@@ -191,7 +191,7 @@ void USDCameraReader::create_object(Main *bmain)
   Camera *camera = BKE_camera_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_CAMERA, name_.c_str());
-  object_->data = camera;
+  object_->data = id_cast<ID *>(camera);
 }
 
 void USDCameraReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
@@ -215,11 +215,11 @@ void USDCameraReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
                                usd_horiz_offset.ValueMightBeTimeVarying() ||
                                usd_vert_offset.ValueMightBeTimeVarying();
 
-  Camera *camera = (Camera *)object_->data;
+  Camera *camera = id_cast<Camera *>(object_->data);
 
   bAction *action = nullptr;
   if (is_time_varying) {
-    action = blender::animrig::id_action_ensure(bmain, &camera->id);
+    action = animrig::id_action_ensure(bmain, &camera->id);
   }
 
   animrig::Channelbag empty{};
@@ -271,7 +271,8 @@ void USDCameraReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
    */
   if (read_attribute_values(usd_fstop, time, data)) {
     camera->dof.aperture_fstop = scale_default(data.initial_value, 1, camera->dof.aperture_fstop);
-    camera->dof.flag |= data.initial_value.value_or(0.0f) != 0.0f ? CAM_DOF_ENABLED : 0;
+    camera->dof.flag |= data.initial_value.value_or(0.0f) != 0.0f ? CAM_DOF_ENABLED :
+                                                                    eCamera_DOF_Flag{};
 
     if (!data.samples.is_empty()) {
       FCurve *curve1 = create_fcurve(channelbag, {"dof.aperture_fstop", 0}, data.samples.size());
@@ -337,7 +338,9 @@ void USDCameraReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
 
   /* Recalculate any animation curve handles. */
   for (FCurve *fcu : channelbag.fcurves()) {
-    BKE_fcurve_handles_recalc(fcu);
+    if (fcu) {
+      BKE_fcurve_handles_recalc(*fcu);
+    }
   }
 
   USDXformReader::read_object_data(bmain, time);

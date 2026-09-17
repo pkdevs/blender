@@ -21,12 +21,12 @@
 #include "GPU_matrix.hh"
 #include "GPU_state.hh"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -69,7 +69,12 @@ static void projection_matrix_calc(const TransInfo *t, float r_pmtx[3][3])
   mul_m3_m3m3(r_pmtx, t->spacemtx, mat);
 }
 
-/* ************************** CONSTRAINTS ************************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Constraints
+ * \{ */
+
 #define CONSTRAIN_EPSILON 0.0001f
 
 static void constraint_plane_normal_calc(const TransInfo *t, float r_plane_no[3])
@@ -748,12 +753,11 @@ static void drawLine(
     col[0] = col[1] = col[2] = 220;
   }
   else {
-    UI_GetThemeColor3ubv(TH_GRID, col);
+    ui::theme::get_color_3ubv(TH_GRID, col);
   }
-  UI_make_axis_color(col, axis, col2);
+  ui::theme::make_axis_color(col, axis, col2);
 
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   float viewport[4];
   GPU_viewport_size_get_f(viewport);
@@ -809,7 +813,7 @@ void drawConstraint(TransInfo *t)
       }
 
       const uint shdr_pos = GPU_vertformat_attr_add(
-          immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+          immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
       immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -882,7 +886,7 @@ void drawPropCircle(TransInfo *t)
     }
 
     uint pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+        immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
     immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
@@ -916,8 +920,7 @@ void drawPropRange(TransInfo *t)
     return;
   }
 
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 

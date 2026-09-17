@@ -2,13 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "draw_object_infos_infos.hh"
 
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_matrix_conversion_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_matrix_conversion.bsl.hh"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
 
 /**
  * Library to create hairs dynamically from control points.
@@ -16,15 +20,6 @@
  * but does more ALU work per vertex. This also reduces the amount
  * of data the CPU has to precompute and transfer for each update.
  */
-
-/* Avoid including hair functionality for shaders and materials which do not require hair.
- * Required to prevent compilation failure for missing shader inputs and uniforms when hair library
- * is included via other libraries. These are only specified in the ShaderCreateInfo when needed.
- */
-#ifdef CURVES_SHADER
-#  ifndef DRW_HAIR_INFO
-#    error Ensure createInfo includes draw_hair.
-#  endif
 
 namespace curves {
 
@@ -96,7 +91,7 @@ Indirection indirection_get(Segment segment)
   }
   else if (indirection_value <= -cyclic_endpoint_pivot) {
     /* This is the last segment of a cyclic curve. The indirection value is the offset to the start
-     * of the curve offsetted by cyclic_endpoint_pivot. */
+     * of the curve offset by cyclic_endpoint_pivot. */
     ind.curve_segment = -indirection_value - cyclic_endpoint_pivot;
     ind.is_cyclic_point = true;
   }
@@ -282,5 +277,3 @@ float3 get_curve_root_pos(const int point_id, const int curve_segment)
 }
 
 }  // namespace curves
-
-#endif

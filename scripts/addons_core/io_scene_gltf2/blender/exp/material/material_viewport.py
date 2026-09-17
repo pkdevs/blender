@@ -5,6 +5,7 @@
 from ....io.com import gltf2_io
 from .material_utils import gather_extras, gather_name
 
+
 def export_viewport_material(blender_material, export_settings):
 
     pbr_metallic_roughness = gltf2_io.MaterialPBRMetallicRoughness(
@@ -17,7 +18,7 @@ def export_viewport_material(blender_material, export_settings):
         extras=None
     )
 
-    return gltf2_io.Material(
+    material = gltf2_io.Material(
         alpha_cutoff=None,
         alpha_mode=None,
         double_sided=None,
@@ -30,3 +31,8 @@ def export_viewport_material(blender_material, export_settings):
         occlusion_texture=None,
         pbr_metallic_roughness=pbr_metallic_roughness
     )
+
+    if export_settings['gltf_extras'] and export_settings['gltf_export_anim_pointer']:
+        export_settings['KHR_animation_pointer']['extras']['materials'][id(blender_material)]['glTF_extras'] = material
+
+    return material

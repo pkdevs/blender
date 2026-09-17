@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -9,6 +13,6 @@
 namespace blender {
 
 template<typename T, typename... Args>
-inline uint64_t get_default_hash(const T &v, const Args &...args);
+constexpr uint64_t get_default_hash(const T &v, const Args &...args);
 
-}
+}  // namespace blender

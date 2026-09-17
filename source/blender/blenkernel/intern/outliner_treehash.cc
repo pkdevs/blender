@@ -11,8 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_mempool.h"
-#include "BLI_utildefines.h"
+#include "BLI_mempool.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_outliner_types.h"
@@ -27,7 +27,7 @@ namespace blender::bke::outliner::treehash {
 
 class TseGroup {
  public:
-  blender::Vector<TreeStoreElem *> elems;
+  Vector<TreeStoreElem *> elems;
   /* Index of last used #TreeStoreElem item, to speed up search for another one. */
   int lastused = 0;
   /* Counter used to reduce the amount of 'rests' of `lastused` index, otherwise search for unused
@@ -178,7 +178,7 @@ TreeStoreElem *TreeHash::lookup_unused(const short type, const short nr, ID *id)
     /* Once at the end of the array of items, in most cases it just means that all items are
      * used, so only check the whole array once every TSEGROUP_LASTUSED_RESET_VALUE times. */
     if (offset >= size) {
-      if (LIKELY(group->lastused_reset_count <= TSEGROUP_LASTUSED_RESET_VALUE)) {
+      if (group->lastused_reset_count <= TSEGROUP_LASTUSED_RESET_VALUE) [[likely]] {
         group->lastused_reset_count++;
         group->lastused = group->elems.size() - 1;
         break;

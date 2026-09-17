@@ -10,16 +10,14 @@
 
 #pragma once
 
-#ifndef __cplusplus
-#  error This is a C++ header.
-#endif
-
 #include "BLI_map.hh"
 
 #include "BKE_armature.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_armature_types.h"
+
+namespace blender {
 
 struct bArmature;
 struct Bone;
@@ -168,7 +166,7 @@ bool ANIM_armature_bonecoll_is_editable(const bArmature *armature, const BoneCol
  *
  * TODO: add ASCII-art illustration of left & right movement.
  *
- * \see blender::animrig::armature_bonecoll_move_to_parent() to move bone
+ * \see animrig::armature_bonecoll_move_to_parent() to move bone
  * collections between different parents.
  */
 bool ANIM_armature_bonecoll_move_to_index(bArmature *armature, int from_index, int to_index);
@@ -191,7 +189,7 @@ int ANIM_armature_bonecoll_move_before_after_index(bArmature *armature,
  * \note This function is limited to moving between siblings of the bone
  * collection at `from_index`.
  *
- * \see blender::animrig::armature_bonecoll_move_to_parent() to move bone
+ * \see animrig::armature_bonecoll_move_to_parent() to move bone
  * collections between different parents.
  */
 bool ANIM_armature_bonecoll_move(bArmature *armature, BoneCollection *bcoll, int step);
@@ -199,27 +197,33 @@ bool ANIM_armature_bonecoll_move(bArmature *armature, BoneCollection *bcoll, int
 BoneCollection *ANIM_armature_bonecoll_get_by_name(bArmature *armature,
                                                    const char *name) ATTR_WARN_UNUSED_RESULT;
 
-/** Scan the bone collections to find the one with the given name.
+/**
+ * Scan the bone collections to find the one with the given name.
  *
  * \return the index of the bone collection, or -1 if not found.
  */
 int ANIM_armature_bonecoll_get_index_by_name(bArmature *armature,
                                              const char *name) ATTR_WARN_UNUSED_RESULT;
 
-void ANIM_armature_bonecoll_name_set(bArmature *armature, BoneCollection *bcoll, const char *name);
+void ANIM_armature_bonecoll_name_set(Main &bmain,
+                                     bArmature *armature,
+                                     BoneCollection *bcoll,
+                                     const char *name);
 
 /**
  * Show this bone collection.
  *
  * This marks the bone collection as 'visible'. Whether it is effectively
- * visible also depends on the visibility state of its ancestors. */
+ * visible also depends on the visibility state of its ancestors.
+ */
 void ANIM_bonecoll_show(bArmature *armature, BoneCollection *bcoll);
 
 /**
  * Hide this bone collection.
  *
  * This marks the bone collection as 'hidden'. This also effectively hides its descendants,
- * regardless of their visibility state. */
+ * regardless of their visibility state.
+ */
 void ANIM_bonecoll_hide(bArmature *armature, BoneCollection *bcoll);
 
 /**
@@ -268,6 +272,10 @@ void ANIM_armature_bonecoll_is_expanded_set(BoneCollection *bcoll, bool is_expan
  */
 bool ANIM_armature_bonecoll_assign(BoneCollection *bcoll, Bone *bone);
 bool ANIM_armature_bonecoll_assign_editbone(BoneCollection *bcoll, EditBone *ebone);
+/**
+ *  Keep existing membership on the destination but assign additional ones from source.
+ */
+void ANIM_armature_bonecoll_assign_from_other_editbone(EditBone *dst, EditBone *src);
 bool ANIM_armature_bonecoll_assign_and_move(BoneCollection *bcoll, Bone *bone);
 bool ANIM_armature_bonecoll_assign_and_move_editbone(BoneCollection *bcoll, EditBone *ebone);
 bool ANIM_armature_bonecoll_unassign(BoneCollection *bcoll, Bone *bone);
@@ -309,13 +317,13 @@ bool ANIM_bone_in_visible_collection(const bArmature *armature, const Bone *bone
  * Returns true when the edit-bone's collection is visible.
  *
  * \note This alone is not enough to check bone visibility since the user may have hidden the bone.
- * Use `blender::animrig::bone_is_visible` to check bone visibility.
+ * Use `animrig::bone_is_visible` to check bone visibility.
  */
 bool ANIM_bonecoll_is_visible_editbone(const bArmature *armature, const EditBone *ebone);
 
 inline bool ANIM_bonecoll_is_visible_pchan(const bArmature *armature, const bPoseChannel *pchan)
 {
-  return ANIM_bone_in_visible_collection(armature, pchan->bone);
+  return ANIM_bone_in_visible_collection(armature, pchan->bone_get(*armature));
 }
 
 inline bool ANIM_bonecoll_is_visible_actbone(const bArmature *armature)
@@ -330,13 +338,13 @@ void ANIM_armature_bonecoll_show_from_bone(bArmature *armature, const Bone *bone
 void ANIM_armature_bonecoll_show_from_ebone(bArmature *armature, const EditBone *ebone);
 void ANIM_armature_bonecoll_show_from_pchan(bArmature *armature, const bPoseChannel *pchan);
 
-namespace blender::animrig {
+namespace animrig {
 
 /**
  * Return the index of the given collection in the armature's collection array,
  * or -1 if not found.
  */
-int armature_bonecoll_find_index(const bArmature *armature, const ::BoneCollection *bcoll);
+int armature_bonecoll_find_index(const bArmature *armature, const BoneCollection *bcoll);
 
 /**
  * Return the index of the given bone collection's parent, or -1 if it has no parent.
@@ -351,7 +359,7 @@ int armature_bonecoll_find_parent_index(const bArmature *armature, int bcoll_ind
  *
  * This requires a scan of the array, hence the function is called 'find' and not 'get'.
  */
-int armature_bonecoll_child_number_find(const bArmature *armature, const ::BoneCollection *bcoll);
+int armature_bonecoll_child_number_find(const bArmature *armature, const BoneCollection *bcoll);
 
 /**
  * Move this bone collection to a new child number.
@@ -362,7 +370,7 @@ int armature_bonecoll_child_number_find(const bArmature *armature, const ::BoneC
  * \see armature_bonecoll_child_number_find
  */
 int armature_bonecoll_child_number_set(bArmature *armature,
-                                       ::BoneCollection *bcoll,
+                                       BoneCollection *bcoll,
                                        int new_child_number);
 
 bool armature_bonecoll_is_root(const bArmature *armature, int bcoll_index);
@@ -426,9 +434,9 @@ int armature_bonecoll_move_to_parent(bArmature *armature,
  * The destination parameters are pointers to those components, so they can
  * be modified.  The destination array should be empty and unallocated.
  *
- * \param bcoll_array_dst,bcoll_array_dst_num: the destination BoneCollection
+ * \param bcoll_array_dst, bcoll_array_dst_num: the destination BoneCollection
  * array and array size.
- * \param bcoll_array_src,bcoll_array_src_num: the source BoneCollection array
+ * \param bcoll_array_src, bcoll_array_src_num: the source BoneCollection array
  * and array size.
  * \param do_id_user: when true, increments the user count of IDs that
  * the BoneCollections' custom properties point to, if any.
@@ -437,7 +445,7 @@ int armature_bonecoll_move_to_parent(bArmature *armature,
  * pointers-to-the-duplicate-collections. This can be used to remap
  * collection pointers in other data, such as EditBones.
  */
-blender::Map<BoneCollection *, BoneCollection *> ANIM_bonecoll_array_copy_no_membership(
+Map<BoneCollection *, BoneCollection *> ANIM_bonecoll_array_copy_no_membership(
     BoneCollection ***bcoll_array_dst,
     int *bcoll_array_dst_num,
     BoneCollection **bcoll_array_src,
@@ -464,4 +472,5 @@ void ANIM_bonecoll_array_free(BoneCollection ***bcoll_array,
                               int *bcoll_array_num,
                               bool do_id_user);
 
-}  // namespace blender::animrig
+}  // namespace animrig
+}  // namespace blender

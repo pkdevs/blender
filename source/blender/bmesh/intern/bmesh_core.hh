@@ -8,9 +8,15 @@
  * \ingroup bmesh
  */
 
+#include "DNA_listBase.h"
+
 #include "BKE_customdata.hh"
 
 #include "bmesh_class.hh"
+
+struct BMLoopList;
+
+namespace blender {
 
 /**
  * When copying between different BMesh objects,
@@ -128,6 +134,10 @@ bool BM_edge_splice(BMesh *bm, BMEdge *e_dst, BMEdge *e_src);
  * \warning This doesn't work for collapsing edges,
  * where \a v and \a vtarget are connected by an edge
  * (assert checks for this case).
+ *
+ * \note To check if collapsing would create duplicate geometry, see:
+ * - #BM_vert_splice_check_double_edge.
+ * - #BM_vert_splice_check_double_face.
  */
 bool BM_vert_splice(BMesh *bm, BMVert *v_dst, BMVert *v_src);
 /**
@@ -135,7 +145,49 @@ bool BM_vert_splice(BMesh *bm, BMVert *v_dst, BMVert *v_src);
  *
  * \note assume caller will handle case where verts share an edge.
  */
-bool BM_vert_splice_check_double(BMVert *v_a, BMVert *v_b);
+bool BM_vert_splice_check_double_edge(BMVert *v_a, BMVert *v_b);
+/**
+ * Check if splicing vertices would create any double faces.
+ *
+ * \return true if calling #BM_vert_splice on the vertex pair would create a duplicate face.
+ */
+bool BM_vert_splice_check_double_face(BMVert *v_a, BMVert *v_b);
+/**
+ * Check if collapsing `v_collapse`.would create duplicate faces.
+ *
+ * \param v_collapse: A vertex with exactly two connected edges (see #BM_vert_is_edge_pair).
+ *
+ * \return true if calling #BM_vert_collapse on `v_collapse` would create a duplicate face.
+ */
+bool BM_vert_collapse_check_double_face(BMVert *v_collapse);
+/**
+ * Check if splitting a face between `l_a->v` & `l_b->v` would create
+ * a duplicate face on either side of the split.
+ *
+ * \note Arguments `(l_a, l_b, f_len)` are equivalent to `(l_b, l_a, (l_a->f->len - f_len) + 2)`,
+ * that is to say - the side of the face checked isn't important.
+ */
+bool BM_face_split_check_double_face(BMLoop *l_a, BMLoop *l_b, int f_len);
+/**
+ * Check two faces share the same vertices over a partial span of their loops,
+ * comparing `l_a` -> `l_a_end` against `l_b` -> `l_b_end` (inclusive).
+ * Both spans must have the same topological length,
+ * and `l_a` & `l_b` must belong to different faces.
+ *
+ * Useful to check whether collapsing, splicing or splitting would create a duplicate face.
+ */
+bool BM_face_pair_overlap_check_subset_same_winding(const BMLoop *l_a,
+                                                    const BMLoop *l_a_end,
+                                                    const BMLoop *l_b,
+                                                    const BMLoop *l_b_end);
+/**
+ * A version of #BM_face_pair_overlap_check_subset_same_winding that walks `l_b` -> `l_b_end`
+ * in the reverse direction (for a candidate face of opposite winding).
+ */
+bool BM_face_pair_overlap_check_subset_swap_winding(const BMLoop *l_a,
+                                                    const BMLoop *l_a_end,
+                                                    const BMLoop *l_b,
+                                                    const BMLoop *l_b_end);
 
 /**
  * \brief Loop Reverse
@@ -171,7 +223,7 @@ void bmesh_face_swap_data(BMFace *f_a, BMFace *f_b);
  *
  * \param bm: The bmesh.
  * \param faces: An array of faces to join.
- * \param totfaces: The length of the face array to join.
+ * \param totface: The length of the face array to join.
  * \param do_del: if true, remove the original faces, internal edges, and internal verts such that
  *    they are replaced by the new face.
  * \param r_double: A pointer to a BMFace* that is controls processing of doubled faces.
@@ -291,7 +343,7 @@ BMFace *bmesh_kernel_split_face_make_edge(BMesh *bm,
                                           BMLoop *l_v2,
                                           BMLoop **r_l,
 #ifdef USE_BMESH_HOLES
-                                          ListBase *holes,
+                                          ListBaseT<BMLoopList> *holes,
 #endif
                                           BMEdge *example,
                                           bool no_double);
@@ -432,3 +484,5 @@ BMVert *bmesh_kernel_unglue_region_make_vert_multi(BMesh *bm, BMLoop **larr, int
  * isolated by calling #bmesh_kernel_edge_separate to segregate it radially.
  */
 BMVert *bmesh_kernel_unglue_region_make_vert_multi_isolated(BMesh *bm, BMLoop *l_sep);
+
+}  // namespace blender

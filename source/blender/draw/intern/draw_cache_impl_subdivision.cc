@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #include "draw_context_private.hh"
 #include "draw_subdivision.hh"
 
@@ -20,7 +24,7 @@
 #include "BKE_subdiv_mesh.hh"
 #include "BKE_subdiv_modifier.hh"
 
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
 #include "BLI_mutex.hh"
 #include "BLI_virtual_array.hh"
 
@@ -231,8 +235,8 @@ static bool draw_subdiv_cache_need_face_data(const DRWSubdivCache &cache)
 static void draw_subdiv_cache_free_material_data(DRWSubdivCache &cache)
 {
   GPU_VERTBUF_DISCARD_SAFE(cache.face_mat_offset);
-  MEM_SAFE_FREE(cache.mat_start);
-  MEM_SAFE_FREE(cache.mat_end);
+  MEM_SAFE_DELETE(cache.mat_start);
+  MEM_SAFE_DELETE(cache.mat_end);
 }
 
 static void draw_subdiv_free_edit_mode_cache(DRWSubdivCache &cache)
@@ -250,10 +254,10 @@ void draw_subdiv_cache_free(DRWSubdivCache &cache)
   GPU_VERTBUF_DISCARD_SAFE(cache.face_ptex_offset_buffer);
   GPU_VERTBUF_DISCARD_SAFE(cache.subdiv_face_offset_buffer);
   GPU_VERTBUF_DISCARD_SAFE(cache.extra_coarse_face_data);
-  MEM_SAFE_FREE(cache.subdiv_loop_subdiv_vert_index);
-  MEM_SAFE_FREE(cache.subdiv_loop_subdiv_edge_index);
-  MEM_SAFE_FREE(cache.subdiv_loop_face_index);
-  MEM_SAFE_FREE(cache.subdiv_face_offset);
+  MEM_SAFE_DELETE(cache.subdiv_loop_subdiv_vert_index);
+  MEM_SAFE_DELETE(cache.subdiv_loop_subdiv_edge_index);
+  MEM_SAFE_DELETE(cache.subdiv_loop_face_index);
+  cache.subdiv_face_offset = {};
   GPU_VERTBUF_DISCARD_SAFE(cache.subdiv_vert_face_adjacency_offsets);
   GPU_VERTBUF_DISCARD_SAFE(cache.subdiv_vert_face_adjacency);
   cache.resolution = 0;
@@ -489,7 +493,7 @@ static bool draw_subdiv_topology_info_cb(const bke::subdiv::ForeachContext *fore
                                          const int num_edges,
                                          const int num_loops,
                                          const int num_faces,
-                                         const int *subdiv_face_offset)
+                                         const Span<int> subdiv_face_offset)
 {
   /* num_loops does not take into account meshes with only loose geometry, which might be meshes
    * used as custom bone shapes, so let's check the num_verts also. */
@@ -506,7 +510,7 @@ static bool draw_subdiv_topology_info_cb(const bke::subdiv::ForeachContext *fore
     cache->num_subdiv_loops = uint(num_loops);
     cache->num_subdiv_verts = uint(num_verts);
     cache->num_subdiv_quads = uint(num_faces);
-    cache->subdiv_face_offset = static_cast<int *>(MEM_dupallocN(subdiv_face_offset));
+    cache->subdiv_face_offset = subdiv_face_offset;
   }
 
   cache->may_have_loose_geom = num_verts != 0 || num_edges != 0;
@@ -542,14 +546,14 @@ static bool draw_subdiv_topology_info_cb(const bke::subdiv::ForeachContext *fore
       *cache->edges_draw_flag, get_origindex_format(), GPU_USAGE_DYNAMIC);
   GPU_vertbuf_data_alloc(*cache->edges_draw_flag, cache->num_subdiv_loops);
 
-  cache->subdiv_loop_subdiv_vert_index = MEM_malloc_arrayN<int>(cache->num_subdiv_loops,
-                                                                "subdiv_loop_subdiv_vert_index");
+  cache->subdiv_loop_subdiv_vert_index = MEM_new_array_uninitialized<int>(
+      cache->num_subdiv_loops, "subdiv_loop_subdiv_vert_index");
 
-  cache->subdiv_loop_subdiv_edge_index = MEM_malloc_arrayN<int>(cache->num_subdiv_loops,
-                                                                "subdiv_loop_subdiv_edge_index");
+  cache->subdiv_loop_subdiv_edge_index = MEM_new_array_uninitialized<int>(
+      cache->num_subdiv_loops, "subdiv_loop_subdiv_edge_index");
 
-  cache->subdiv_loop_face_index = MEM_malloc_arrayN<int>(cache->num_subdiv_loops,
-                                                         "subdiv_loop_face_index");
+  cache->subdiv_loop_face_index = MEM_new_array_uninitialized<int>(cache->num_subdiv_loops,
+                                                                   "subdiv_loop_face_index");
 
   /* Initialize context pointers and temporary buffers. */
   ctx->patch_coords = cache->patch_coords->data<CompressedPatchCoord>().data();
@@ -567,21 +571,21 @@ static bool draw_subdiv_topology_info_cb(const bke::subdiv::ForeachContext *fore
       CustomData_get_layer(&ctx->coarse_mesh->edge_data, CD_ORIGINDEX));
 
   if (cache->num_subdiv_verts) {
-    ctx->vert_origindex_map = MEM_malloc_arrayN<int>(cache->num_subdiv_verts,
-                                                     "subdiv_vert_origindex_map");
+    ctx->vert_origindex_map = MEM_new_array_uninitialized<int>(cache->num_subdiv_verts,
+                                                               "subdiv_vert_origindex_map");
     for (int i = 0; i < num_verts; i++) {
       ctx->vert_origindex_map[i] = -1;
     }
   }
 
   if (cache->num_subdiv_edges) {
-    ctx->edge_origindex_map = MEM_malloc_arrayN<int>(cache->num_subdiv_edges,
-                                                     "subdiv_edge_origindex_map");
+    ctx->edge_origindex_map = MEM_new_array_uninitialized<int>(cache->num_subdiv_edges,
+                                                               "subdiv_edge_origindex_map");
     for (int i = 0; i < num_edges; i++) {
       ctx->edge_origindex_map[i] = -1;
     }
-    ctx->edge_draw_flag_map = MEM_calloc_arrayN<int>(cache->num_subdiv_edges,
-                                                     "subdiv_edge_draw_flag_map");
+    ctx->edge_draw_flag_map = MEM_new_array_zeroed<int>(cache->num_subdiv_edges,
+                                                        "subdiv_edge_draw_flag_map");
   }
 
   return true;
@@ -735,7 +739,8 @@ static void build_vert_face_adjacency_maps(DRWSubdivCache &cache)
   cache.subdiv_vert_face_adjacency = gpu_vertbuf_create_from_format(get_origindex_format(),
                                                                     cache.num_subdiv_loops);
   MutableSpan<int> adjacent_faces = cache.subdiv_vert_face_adjacency->data<int>();
-  int *tmp_set_faces = MEM_calloc_arrayN<int>(cache.num_subdiv_verts, "tmp subdiv vertex offset");
+  int *tmp_set_faces = MEM_new_array_zeroed<int>(cache.num_subdiv_verts,
+                                                 "tmp subdiv vertex offset");
 
   for (int i = 0; i < cache.num_subdiv_loops / 4; i++) {
     for (int j = 0; j < 4; j++) {
@@ -746,7 +751,7 @@ static void build_vert_face_adjacency_maps(DRWSubdivCache &cache)
     }
   }
 
-  MEM_freeN(tmp_set_faces);
+  MEM_delete(tmp_set_faces);
 }
 
 static bool draw_subdiv_build_cache(DRWSubdivCache &cache,
@@ -783,7 +788,7 @@ static bool draw_subdiv_build_cache(DRWSubdivCache &cache,
     /* Either the traversal failed, or we have an empty mesh, either way we cannot go any further.
      * The subdiv_face_offset cannot then be reliably stored in the cache, so free it directly.
      */
-    MEM_SAFE_FREE(cache.subdiv_face_offset);
+    cache.subdiv_face_offset = {};
     return false;
   }
 
@@ -814,8 +819,8 @@ static bool draw_subdiv_build_cache(DRWSubdivCache &cache,
       }
     }
 
-    cache.subdiv_face_offset_buffer = draw_subdiv_build_origindex_buffer(cache.subdiv_face_offset,
-                                                                         faces.size());
+    cache.subdiv_face_offset_buffer = draw_subdiv_build_origindex_buffer(
+        cache.subdiv_face_offset.data(), faces.size());
 
     cache.face_ptex_offset_buffer = draw_subdiv_build_origindex_buffer(cache.face_ptex_offset);
 
@@ -853,9 +858,9 @@ static bool draw_subdiv_build_cache(DRWSubdivCache &cache,
   }
 
   /* Cleanup. */
-  MEM_SAFE_FREE(cache_building_context.vert_origindex_map);
-  MEM_SAFE_FREE(cache_building_context.edge_origindex_map);
-  MEM_SAFE_FREE(cache_building_context.edge_draw_flag_map);
+  MEM_SAFE_DELETE(cache_building_context.vert_origindex_map);
+  MEM_SAFE_DELETE(cache_building_context.edge_origindex_map);
+  MEM_SAFE_DELETE(cache_building_context.edge_draw_flag_map);
 
   return true;
 }
@@ -1520,8 +1525,8 @@ static void draw_subdiv_cache_ensure_mat_offsets(DRWSubdivCache &cache,
   const int number_of_quads = cache.num_subdiv_loops / 4;
 
   if (mat_len == 1) {
-    cache.mat_start = MEM_callocN<int>("subdiv mat_end");
-    cache.mat_end = MEM_callocN<int>("subdiv mat_end");
+    cache.mat_start = MEM_new_zeroed<int>("subdiv mat_end");
+    cache.mat_end = MEM_new_zeroed<int>("subdiv mat_end");
     cache.mat_start[0] = 0;
     cache.mat_end[0] = number_of_quads;
     return;
@@ -1532,8 +1537,8 @@ static void draw_subdiv_cache_ensure_mat_offsets(DRWSubdivCache &cache,
       "material_index", bke::AttrDomain::Face, 0);
 
   /* Count number of subdivided polygons for each material. */
-  int *mat_start = MEM_calloc_arrayN<int>(mat_len, "subdiv mat_start");
-  int *subdiv_face_offset = cache.subdiv_face_offset;
+  int *mat_start = MEM_new_array_zeroed<int>(mat_len, "subdiv mat_start");
+  int *subdiv_face_offset = cache.subdiv_face_offset.data();
 
   /* TODO: parallel_reduce? */
   for (int i = 0; i < mesh_eval->faces_num; i++) {
@@ -1554,8 +1559,9 @@ static void draw_subdiv_cache_ensure_mat_offsets(DRWSubdivCache &cache,
   }
 
   /* Compute per face offsets. */
-  int *mat_end = static_cast<int *>(MEM_dupallocN(mat_start));
-  int *per_face_mat_offset = MEM_malloc_arrayN<int>(mesh_eval->faces_num, "per_face_mat_offset");
+  int *mat_end = MEM_dupalloc(mat_start);
+  int *per_face_mat_offset = MEM_new_array_uninitialized<int>(mesh_eval->faces_num,
+                                                              "per_face_mat_offset");
 
   for (int i = 0; i < mesh_eval->faces_num; i++) {
     const uint mat_index = uint(material_indices[i]) < mat_len ? uint(material_indices[i]) : 0;
@@ -1574,7 +1580,7 @@ static void draw_subdiv_cache_ensure_mat_offsets(DRWSubdivCache &cache,
   cache.mat_start = mat_start;
   cache.mat_end = mat_end;
 
-  MEM_freeN(per_face_mat_offset);
+  MEM_delete(per_face_mat_offset);
 }
 
 /**
@@ -1612,7 +1618,7 @@ static bool draw_subdiv_create_requested_buffers(Object &ob,
   BMesh *bm = nullptr;
   if (mesh.runtime->edit_mesh) {
     mesh_eval = BKE_object_get_editmesh_eval_final(&ob);
-    bm = mesh.runtime->edit_mesh->bm;
+    bm = BKE_editmesh_bmesh_get_for_write(&mesh);
   }
 
 #ifdef WITH_OPENSUBDIV
@@ -1706,7 +1712,7 @@ static bool draw_subdiv_create_requested_buffers(Object &ob,
 
 void DRW_subdivide_loose_geom(DRWSubdivCache &subdiv_cache, const MeshBufferCache &cache)
 {
-  const Span<int> loose_edges = cache.loose_geom.edges;
+  const IndexMask &loose_edges = cache.loose_geom.edges;
   if (loose_edges.is_empty()) {
     return;
   }
@@ -1734,18 +1740,15 @@ void DRW_subdivide_loose_geom(DRWSubdivCache &subdiv_cache, const MeshBufferCach
   subdiv_cache.loose_edge_positions.reinitialize(loose_edges.size() * resolution);
   MutableSpan<float3> edge_positions = subdiv_cache.loose_edge_positions;
 
-  threading::parallel_for(loose_edges.index_range(), 1024, [&](const IndexRange range) {
-    for (const int i : range) {
-      const int coarse_edge = loose_edges[i];
-      MutableSpan positions = edge_positions.slice(i * resolution, resolution);
-      for (const int j : positions.index_range()) {
-        positions[j] = bke::subdiv::mesh_interpolate_position_on_edge(coarse_positions,
-                                                                      coarse_edges,
-                                                                      vert_to_edge_map,
-                                                                      coarse_edge,
-                                                                      is_simple,
-                                                                      j * inv_resolution_1);
-      }
+  loose_edges.foreach_index([&](const int coarse_edge, const int i) {
+    MutableSpan positions = edge_positions.slice(i * resolution, resolution);
+    for (const int j : positions.index_range()) {
+      positions[j] = bke::subdiv::mesh_interpolate_position_on_edge(coarse_positions,
+                                                                    coarse_edges,
+                                                                    vert_to_edge_map,
+                                                                    coarse_edge,
+                                                                    is_simple,
+                                                                    j * inv_resolution_1);
     }
   });
 }
@@ -1758,7 +1761,7 @@ void DRW_subdivide_loose_geom(DRWSubdivCache &subdiv_cache, const MeshBufferCach
  * This is kind of garbage collection.
  */
 static LinkNode *gpu_subdiv_free_queue = nullptr;
-static blender::Mutex gpu_subdiv_queue_mutex;
+static Mutex gpu_subdiv_queue_mutex;
 
 void DRW_create_subdivision(Object &ob,
                             Mesh &mesh,

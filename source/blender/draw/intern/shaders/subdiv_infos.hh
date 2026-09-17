@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #ifdef GPU_SHADER
 #  pragma once
-#  include "BLI_utildefines_variadic.h"
+#  include "BLI_utildefines_variadic.hh"
 
 #  include "gpu_shader_compat.hh"
 
@@ -26,76 +30,6 @@ DEFINE("SUBDIV_POLYGON_OFFSET")
 STORAGE_BUF(SUBDIV_FACE_OFFSET_BUF_SLOT, read, uint, subdiv_face_offset[])
 ADDITIONAL_INFO(subdiv_base)
 GPU_SHADER_CREATE_END()
-
-/* -------------------------------------------------------------------- */
-/** \name Patch evaluation
- * \{ */
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_basis)
-#ifdef __APPLE__
-/* Match definition from OPenSubdiv which defines OSD_PATCH_BASIS_METAL as 1. Matching it here
- * avoids possible re-definition warning at runtime. */
-DEFINE_VALUE("OSD_PATCH_BASIS_METAL", "1")
-#else
-DEFINE("OSD_PATCH_BASIS_GLSL")
-#endif
-DEFINE("OPENSUBDIV_GLSL_COMPUTE_USE_1ST_DERIVATIVES")
-TYPEDEF_SOURCE("osd_patch_basis.glsl")
-COMPUTE_SOURCE("subdiv_patch_evaluation_comp.glsl")
-STORAGE_BUF(PATCH_EVALUATION_SOURCE_VERTEX_BUFFER_BUF_SLOT, read, float, srcVertexBuffer[])
-STORAGE_BUF(PATCH_EVALUATION_INPUT_PATCH_HANDLES_BUF_SLOT,
-            read,
-            PatchHandle,
-            input_patch_handles[])
-STORAGE_BUF(PATCH_EVALUATION_QUAD_NODES_BUF_SLOT, read, QuadNode, quad_nodes[])
-STORAGE_BUF(PATCH_EVALUATION_PATCH_COORDS_BUF_SLOT, read, BlenderPatchCoord, patch_coords[])
-STORAGE_BUF(PATCH_EVALUATION_PATCH_ARRAY_BUFFER_BUF_SLOT, read, OsdPatchArray, patchArrayBuffer[])
-STORAGE_BUF(PATCH_EVALUATION_PATCH_INDEX_BUFFER_BUF_SLOT, read, int, patchIndexBuffer[])
-STORAGE_BUF(PATCH_EVALUATION_PATCH_PARAM_BUFFER_BUF_SLOT, read, OsdPatchParam, patchParamBuffer[])
-ADDITIONAL_INFO(subdiv_base)
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_fdots)
-DEFINE("FDOTS_EVALUATION")
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_FDOTS_VERTEX_BUFFER_BUF_SLOT, write, FDotVert, output_verts[])
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_INDICES_BUF_SLOT, write, uint, output_indices[])
-STORAGE_BUF(PATCH_EVALUATION_EXTRA_COARSE_FACE_DATA_BUF_SLOT, read, uint, extra_coarse_face_data[])
-ADDITIONAL_INFO(subdiv_patch_evaluation_basis)
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_verts)
-DO_STATIC_COMPILATION()
-DEFINE("VERTS_EVALUATION")
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_POS_BUF_SLOT, write, Position, positions[])
-ADDITIONAL_INFO(subdiv_patch_evaluation_basis)
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_fvar)
-DO_STATIC_COMPILATION()
-ADDITIONAL_INFO(subdiv_patch_evaluation_basis)
-DEFINE("FVAR_EVALUATION")
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_FVAR_BUF_SLOT, write, packed_float2, output_fvar[])
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_fdots_normals)
-DO_STATIC_COMPILATION()
-DEFINE("FDOTS_NORMALS")
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_NORMALS_BUF_SLOT, write, FDotNor, output_nors[])
-ADDITIONAL_INFO(subdiv_patch_evaluation_fdots)
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(subdiv_patch_evaluation_verts_orcos)
-DO_STATIC_COMPILATION()
-ADDITIONAL_INFO(subdiv_patch_evaluation_verts)
-DEFINE("ORCO_EVALUATION")
-STORAGE_BUF(PATCH_EVALUATION_SOURCE_EXTRA_VERTEX_BUFFER_BUF_SLOT,
-            read,
-            float,
-            srcExtraVertexBuffer[])
-STORAGE_BUF(PATCH_EVALUATION_OUTPUT_ORCOS_BUF_SLOT, write, float4, output_orcos[])
-GPU_SHADER_CREATE_END()
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Loop Normals
@@ -272,7 +206,7 @@ DO_STATIC_COMPILATION()
 STORAGE_BUF(STRETCH_ANGLE_POS_BUF_SLOT, read, Position, positions[])
 STORAGE_BUF(STRETCH_ANGLE_UVS_BUF_SLOT, read, packed_float2, uvs[])
 STORAGE_BUF(STRETCH_ANGLE_UV_STRETCHES_BUF_SLOT, write, UVStretchAngle, uv_stretches[])
-COMPUTE_SOURCE("subdiv_vbo_edituv_strech_angle_comp.glsl")
+COMPUTE_SOURCE("subdiv_vbo_edituv_stretch_angle_comp.glsl")
 ADDITIONAL_INFO(subdiv_base)
 GPU_SHADER_CREATE_END()
 
@@ -280,7 +214,7 @@ GPU_SHADER_CREATE_INFO(subdiv_edituv_stretch_area)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(STRETCH_AREA_COARSE_STRETCH_AREA_BUF_SLOT, read, float, coarse_stretch_area[])
 STORAGE_BUF(STRETCH_AREA_SUBDIV_STRETCH_AREA_BUF_SLOT, write, float, subdiv_stretch_area[])
-COMPUTE_SOURCE("subdiv_vbo_edituv_strech_area_comp.glsl")
+COMPUTE_SOURCE("subdiv_vbo_edituv_stretch_area_comp.glsl")
 ADDITIONAL_INFO(subdiv_polygon_offset_base)
 GPU_SHADER_CREATE_END()
 

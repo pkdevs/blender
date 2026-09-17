@@ -10,7 +10,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 
 #include "BKE_appdir.hh"
@@ -35,8 +35,10 @@
 #include "view3d_navigate.hh"
 
 #ifdef WIN32
-#  include "BLI_math_base.h" /* M_PI */
+#  include "BLI_math_base_c.hh" /* M_PI */
 #endif
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities
@@ -85,8 +87,8 @@ static wmOperatorStatus view3d_copybuffer_exec(bContext *C, wmOperator *op)
   int num_copied = 0;
 
   /* Count & mark the active as done (when set). */
-  LISTBASE_FOREACH (Object *, ob, &copybuffer.bmain.objects) {
-    ob->flag &= ~OB_FLAG_ACTIVE_CLIPBOARD;
+  for (Object &ob : copybuffer.bmain.objects) {
+    ob.flag &= ~OB_FLAG_ACTIVE_CLIPBOARD;
     num_copied += 1;
   }
 
@@ -101,7 +103,7 @@ static wmOperatorStatus view3d_copybuffer_exec(bContext *C, wmOperator *op)
 
   char filepath[FILE_MAX];
   view3d_copybuffer_filepath_get(filepath, sizeof(filepath));
-  copybuffer.write(filepath, *op->reports);
+  copybuffer.write_as_copypaste_buffer(filepath, *op->reports);
 
   BKE_reportf(op->reports, RPT_INFO, "Copied %d selected object(s)", num_copied);
 
@@ -132,7 +134,7 @@ static wmOperatorStatus view3d_pastebuffer_exec(bContext *C, wmOperator *op)
   int flag = 0;
 
   if (RNA_boolean_get(op->ptr, "autoselect")) {
-    flag |= FILE_AUTOSELECT | BLO_LIBLINK_APPEND_SET_OB_ACTIVE_CLIPBOARD;
+    flag |= FILE_AUTOSELECT | int(BLO_LIBLINK_APPEND_SET_OB_ACTIVE_CLIPBOARD);
   }
   if (RNA_boolean_get(op->ptr, "active_collection")) {
     flag |= FILE_ACTIVE_COLLECTION;
@@ -147,6 +149,7 @@ static wmOperatorStatus view3d_pastebuffer_exec(bContext *C, wmOperator *op)
   }
 
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, nullptr);
   ED_outliner_select_sync_from_object_tag(C);
 
   BKE_reportf(op->reports, RPT_INFO, "%d object(s) pasted", num_pasted);
@@ -189,6 +192,8 @@ void view3d_operatortypes()
   WM_operatortype_append(VIEW3D_OT_move);
   WM_operatortype_append(VIEW3D_OT_zoom);
   WM_operatortype_append(VIEW3D_OT_zoom_camera_1_to_1);
+  WM_operatortype_append(VIEW3D_OT_view_roll_set);
+  WM_operatortype_append(VIEW3D_OT_view_flip);
   WM_operatortype_append(VIEW3D_OT_dolly);
 #ifdef WITH_INPUT_NDOF
   WM_operatortype_append(VIEW3D_OT_ndof_orbit_zoom);
@@ -255,7 +260,11 @@ void view3d_operatortypes()
   WM_operatortype_append(VIEW3D_OT_ruler_add);
   WM_operatortype_append(VIEW3D_OT_ruler_remove);
 
-  blender::ed::transform::transform_operatortypes();
+#ifdef WITH_XR_OPENXR
+  WM_operatortype_append(VIEW3D_OT_vr_location_scouting_capture_review);
+#endif
+
+  ed::transform::transform_operatortypes();
 }
 
 void view3d_keymap(wmKeyConfig *keyconf)
@@ -272,6 +281,9 @@ void view3d_keymap(wmKeyConfig *keyconf)
   viewzoom_modal_keymap(keyconf);
   viewdolly_modal_keymap(keyconf);
   viewplace_modal_keymap(keyconf);
+  vr_location_scouting_capture_review_modal_keymap(keyconf);
 }
 
 /** \} */
+
+}  // namespace blender

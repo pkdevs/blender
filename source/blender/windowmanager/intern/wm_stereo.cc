@@ -14,7 +14,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -22,7 +22,8 @@
 
 #include "BLT_translation.hh"
 
-#include "GHOST_C-api.h"
+#include "GHOST_IWindow.hh"
+#include "GHOST_Types.hh"
 
 #include "ED_screen.hh"
 
@@ -38,18 +39,19 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+namespace blender {
+
 void wm_stereo3d_draw_sidebyside(wmWindow *win, int view)
 {
   bool cross_eyed = (win->stereo3d_format->flag & S3D_SIDEBYSIDE_CROSSEYED) != 0;
 
   GPUVertFormat *format = immVertexFormat();
-  uint texcoord = GPU_vertformat_attr_add(
-      format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint texcoord = GPU_vertformat_attr_add(format, "texCoord", gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_IMAGE);
 
-  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  const int2 win_size = WM_window_native_pixel_size(win);
 
   int soffx = win_size[0] / 2;
   if (view == STEREO_LEFT_ID) {
@@ -91,13 +93,12 @@ void wm_stereo3d_draw_sidebyside(wmWindow *win, int view)
 void wm_stereo3d_draw_topbottom(wmWindow *win, int view)
 {
   GPUVertFormat *format = immVertexFormat();
-  uint texcoord = GPU_vertformat_attr_add(
-      format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint texcoord = GPU_vertformat_attr_add(format, "texCoord", gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_IMAGE);
 
-  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  const int2 win_size = WM_window_native_pixel_size(win);
 
   int soffy;
   if (view == STEREO_LEFT_ID) {
@@ -141,12 +142,12 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 {
   const bScreen *screen = WM_window_get_active_screen(win);
   const Scene *scene = WM_window_get_active_scene(win);
+  const GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
 
   /* Some 3d methods change the window arrangement, thus they shouldn't
    * toggle on/off just because there is no 3d elements being drawn. */
   if (wm_stereo3d_is_fullscreen_required(eStereoDisplayMode(win->stereo3d_format->display_mode))) {
-    return GHOST_GetWindowState(static_cast<GHOST_WindowHandle>(win->ghostwin)) ==
-           GHOST_kWindowStateFullScreen;
+    return ghost_window->getState() == GHOST_kWindowStateFullScreen;
   }
 
   if ((skip_stereo3d_check == false) && (ED_screen_stereo3d_required(screen, scene) == false)) {
@@ -156,8 +157,7 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
   /* Some 3d methods change the window arrangement, thus they shouldn't
    * toggle on/off just because there is no 3d elements being drawn. */
   if (wm_stereo3d_is_fullscreen_required(eStereoDisplayMode(win->stereo3d_format->display_mode))) {
-    return GHOST_GetWindowState(static_cast<GHOST_WindowHandle>(win->ghostwin)) ==
-           GHOST_kWindowStateFullScreen;
+    return ghost_window->getState() == GHOST_kWindowStateFullScreen;
   }
 
   return true;
@@ -201,19 +201,19 @@ static bool wm_stereo3d_set_properties(bContext * /*C*/, wmOperator *op)
 
   prop = RNA_struct_find_property(op->ptr, "display_mode");
   if (RNA_property_is_set(op->ptr, prop)) {
-    s3d->display_mode = RNA_property_enum_get(op->ptr, prop);
+    s3d->display_mode = eStereoDisplayMode(RNA_property_enum_get(op->ptr, prop));
     is_set = true;
   }
 
   prop = RNA_struct_find_property(op->ptr, "anaglyph_type");
   if (RNA_property_is_set(op->ptr, prop)) {
-    s3d->anaglyph_type = RNA_property_enum_get(op->ptr, prop);
+    s3d->anaglyph_type = eStereo3dAnaglyphType(RNA_property_enum_get(op->ptr, prop));
     is_set = true;
   }
 
   prop = RNA_struct_find_property(op->ptr, "interlace_type");
   if (RNA_property_is_set(op->ptr, prop)) {
-    s3d->interlace_type = RNA_property_enum_get(op->ptr, prop);
+    s3d->interlace_type = eStereo3dInterlaceType(RNA_property_enum_get(op->ptr, prop));
     is_set = true;
   }
 
@@ -246,7 +246,7 @@ static void wm_stereo3d_set_init(bContext *C, wmOperator *op)
 {
   wmWindow *win = CTX_wm_window(C);
 
-  Stereo3dData *s3dd = MEM_callocN<Stereo3dData>(__func__);
+  Stereo3dData *s3dd = MEM_new<Stereo3dData>(__func__);
   op->customdata = s3dd;
 
   /* Store the original win stereo 3d settings in case of cancel. */
@@ -259,7 +259,7 @@ wmOperatorStatus wm_stereo3d_set_exec(bContext *C, wmOperator *op)
   wmWindow *win_src = CTX_wm_window(C);
   wmWindow *win_dst = nullptr;
   const bool is_fullscreen = WM_window_is_fullscreen(win_src);
-  char prev_display_mode = win_src->stereo3d_format->display_mode;
+  eStereoDisplayMode prev_display_mode = win_src->stereo3d_format->display_mode;
   bool ok = true;
 
   if (G.background) {
@@ -325,7 +325,7 @@ wmOperatorStatus wm_stereo3d_set_exec(bContext *C, wmOperator *op)
     }
   }
 
-  MEM_freeN(s3dd);
+  MEM_delete(s3dd);
   op->customdata = nullptr;
 
   if (ok) {
@@ -356,30 +356,29 @@ wmOperatorStatus wm_stereo3d_set_invoke(bContext *C, wmOperator *op, const wmEve
 void wm_stereo3d_set_draw(bContext * /*C*/, wmOperator *op)
 {
   Stereo3dData *s3dd = static_cast<Stereo3dData *>(op->customdata);
-  uiLayout *layout = op->layout;
-  uiLayout *col;
+  ui::Layout &layout = *op->layout;
 
   PointerRNA stereo3d_format_ptr = RNA_pointer_create_discrete(
-      nullptr, &RNA_Stereo3dDisplay, &s3dd->stereo3d_format);
+      nullptr, RNA_Stereo3dDisplay, &s3dd->stereo3d_format);
 
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  col = &layout->column(false);
-  col->prop(&stereo3d_format_ptr, "display_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &col = layout.column(false);
+  col.prop(&stereo3d_format_ptr, "display_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   switch (s3dd->stereo3d_format.display_mode) {
     case S3D_DISPLAY_ANAGLYPH: {
-      col->prop(&stereo3d_format_ptr, "anaglyph_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      col.prop(&stereo3d_format_ptr, "anaglyph_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     }
     case S3D_DISPLAY_INTERLACE: {
-      col->prop(&stereo3d_format_ptr, "interlace_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      col->prop(&stereo3d_format_ptr, "use_interlace_swap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      col.prop(&stereo3d_format_ptr, "interlace_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      col.prop(&stereo3d_format_ptr, "use_interlace_swap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     }
     case S3D_DISPLAY_SIDEBYSIDE: {
-      col->prop(
+      col.prop(
           &stereo3d_format_ptr, "use_sidebyside_crosseyed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       /* Fall-through. */
     }
@@ -393,15 +392,17 @@ void wm_stereo3d_set_draw(bContext * /*C*/, wmOperator *op)
 
 bool wm_stereo3d_set_check(bContext * /*C*/, wmOperator * /*op*/)
 {
-  /* The check function guarantees that the menu is updated to show the
-   * sub-options when an enum change (e.g., it shows the anaglyph options
-   * when anaglyph is on, and the interlace options when this is on. */
+  /* The check function guarantees that the menu is updated to show the sub-options when an enum
+   * changes (e.g. it shows the anaglyph options when anaglyph is on,
+   * and the interlace options when this is on). */
   return true;
 }
 
 void wm_stereo3d_set_cancel(bContext * /*C*/, wmOperator *op)
 {
   Stereo3dData *s3dd = static_cast<Stereo3dData *>(op->customdata);
-  MEM_freeN(s3dd);
+  MEM_delete(s3dd);
   op->customdata = nullptr;
 }
+
+}  // namespace blender

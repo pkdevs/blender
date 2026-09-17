@@ -12,31 +12,32 @@
 #include "DNA_image_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "IMB_imbuf_types.hh"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 
 #include "DRW_render.hh"
 
-#include "image_enums.hh"
+#include "image_shader_shared.hh"
 #include "image_space.hh"
 
 namespace blender::image_engine {
 
 struct ShaderParameters {
-  ImageDrawFlags flags = ImageDrawFlags::DEFAULT;
+  eImageDrawFlags flags = IMAGE_DRAW_FLAG_DEFAULT;
   float4 shuffle;
   float2 far_near;
   bool use_premul_alpha = false;
 
   void update(AbstractSpaceAccessor *space,
               const Scene *scene,
-              ::Image *image,
+              blender::Image *image,
               ImBuf *image_buffer)
   {
-    flags = ImageDrawFlags::DEFAULT;
+    flags = IMAGE_DRAW_FLAG_DEFAULT;
     shuffle = float4(1.0f);
     far_near = float2(100.0f, 0.0f);
 

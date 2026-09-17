@@ -104,7 +104,7 @@ void MTLImmediate::end()
     /* Reset vertex descriptor to default state. */
     desc.reset_vertex_descriptor();
     desc.vertex_descriptor.total_attributes = interface.attr_len_;
-    desc.vertex_descriptor.max_attribute_value = interface.attr_len_ - 1;
+    desc.vertex_descriptor.max_attribute_value = 0;
     desc.vertex_descriptor.num_vert_buffers = 1;
 
     for (int i = 0; i < desc.vertex_descriptor.total_attributes; i++) {
@@ -157,6 +157,9 @@ void MTLImmediate::end()
       /* Using attribute offset in vertex format, as this will be correct */
       pso_attr.offset = attr->offset;
       pso_attr.buffer_index = imm_buffer_slot;
+
+      desc.vertex_descriptor.max_attribute_value = i;
+
       BLI_assert(pso_attr.format != MTLVertexFormatInvalid);
     }
 
@@ -241,8 +244,8 @@ void MTLImmediate::end()
               index_buffer_mtl = allocation.metal_buffer;
               index_buffer_offset = allocation.buffer_offset;
 
-              /* Set depth stencil state (requires knowledge of primitive type). */
-              context_->ensure_depth_stencil_state(MTLPrimitiveTypeTriangle);
+              /* Set depth stencil state (TODO: Move it back upstream, is legacy of depth bias). */
+              context_->ensure_depth_stencil_state();
 
               /* Draw. */
               [rec drawIndexedPrimitives:MTLPrimitiveTypeTriangle
@@ -267,8 +270,8 @@ void MTLImmediate::end()
         MTLPrimitiveType primitive_type = metal_primitive_type_;
         int vertex_count = this->vertex_idx;
 
-        /* Set depth stencil state (requires knowledge of primitive type). */
-        context_->ensure_depth_stencil_state(primitive_type);
+        /* Set depth stencil state (TODO: Move it back upstream, is legacy of depth bias). */
+        context_->ensure_depth_stencil_state();
 
         if (this->shader->is_polyline) {
           this->polyline_draw_workaround(current_allocation_.buffer_offset);

@@ -19,16 +19,14 @@
 #include "BKE_armature.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_object.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-
-#include "CLG_log.h"
-#include "testing/testing.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include <functional>
 #include <optional>
@@ -42,7 +40,7 @@ const float FRAME_STEP = 0.005;
 static void build_fcurve(FCurve &fcurve)
 {
   fcurve.totvert = 3;
-  fcurve.bezt = MEM_calloc_arrayN<BezTriple>(fcurve.totvert, "BezTriples");
+  fcurve.bezt = MEM_new_array_zeroed<BezTriple>(fcurve.totvert, "BezTriples");
   fcurve.bezt[0].vec[1][0] = 10.0f;
   fcurve.bezt[0].vec[1][1] = 1.0f;
   fcurve.bezt[1].vec[1][0] = 20.0f;
@@ -99,7 +97,9 @@ static void check_keylist_find_next_range(const AnimKeylist *keylist,
   check_keylist_find_range(keylist, ED_keylist_find_next, frame_from, frame_to, expected_frame);
 }
 
-TEST(keylist, find_next)
+class KeyListTest : public bke::BlenderGTestBase {};
+
+TEST_F(KeyListTest, find_next)
 {
   AnimKeylist *keylist = create_test_keylist();
 
@@ -119,7 +119,7 @@ static void check_keylist_find_prev_range(const AnimKeylist *keylist,
   check_keylist_find_range(keylist, ED_keylist_find_prev, frame_from, frame_to, expected_frame);
 }
 
-TEST(keylist, find_prev)
+TEST_F(KeyListTest, find_prev)
 {
   AnimKeylist *keylist = create_test_keylist();
 
@@ -139,7 +139,7 @@ static void check_keylist_find_exact_range(const AnimKeylist *keylist,
   check_keylist_find_range(keylist, ED_keylist_find_exact, frame_from, frame_to, expected_frame);
 }
 
-TEST(keylist, find_exact)
+TEST_F(KeyListTest, find_exact)
 {
   AnimKeylist *keylist = create_test_keylist();
 
@@ -154,7 +154,7 @@ TEST(keylist, find_exact)
   ED_keylist_free(keylist);
 }
 
-TEST(keylist, find_closest)
+TEST_F(KeyListTest, find_closest)
 {
   AnimKeylist *keylist = create_test_keylist();
 
@@ -188,32 +188,18 @@ TEST(keylist, find_closest)
   ED_keylist_free(keylist);
 }
 
-class KeylistSummaryTest : public testing::Test {
+class KeylistSummaryTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
-  blender::animrig::Action *action;
+  animrig::Action *action;
   Object *cube;
   Object *armature;
   bArmature *armature_data;
   Bone *bone1;
   Bone *bone2;
 
-  SpaceAction saction = {nullptr};
+  SpaceAction saction = {};
   bAnimContext ac = {nullptr};
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -224,8 +210,8 @@ class KeylistSummaryTest : public testing::Test {
     cube = BKE_object_add_only_object(bmain, OB_EMPTY, "Küüübus");
 
     armature_data = BKE_armature_add(bmain, "ARArmature");
-    bone1 = reinterpret_cast<Bone *>(MEM_callocN(sizeof(Bone), "KeylistSummaryTest"));
-    bone2 = reinterpret_cast<Bone *>(MEM_callocN(sizeof(Bone), "KeylistSummaryTest"));
+    bone1 = MEM_new<Bone>("KeylistSummaryTest");
+    bone2 = MEM_new<Bone>("KeylistSummaryTest");
     STRNCPY_UTF8(bone1->name, "Bone.001");
     STRNCPY_UTF8(bone2->name, "Bone.002");
     BLI_addtail(&armature_data->bonebase, bone1);
@@ -233,7 +219,7 @@ class KeylistSummaryTest : public testing::Test {
     BKE_armature_bone_hash_make(armature_data);
 
     armature = BKE_object_add_only_object(bmain, OB_ARMATURE, "OBArmature");
-    armature->data = armature_data;
+    armature->data = id_cast<ID *>(armature_data);
     BKE_pose_ensure(bmain, armature, armature_data, false);
 
     /*

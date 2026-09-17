@@ -20,9 +20,10 @@
 
 #pragma once
 
-namespace blender::gpu {
+namespace blender {
+namespace gpu {
 class Shader;
-}  // namespace blender::gpu
+}  // namespace gpu
 
 enum GPUBuiltinShader {
   /** Glyph drawing shader used by the BLF module. */
@@ -31,22 +32,18 @@ enum GPUBuiltinShader {
   GPU_SHADER_KEYFRAME_SHAPE,
   /** Draw solid mesh with a single distant light using a clamped simple dot product. */
   GPU_SHADER_SIMPLE_LIGHTING,
-  /** Draw an icon, leaving a semi-transparent rectangle on top of the icon. */
-  GPU_SHADER_ICON,
   /** Draw a texture with a uniform color multiplied. */
   GPU_SHADER_2D_IMAGE_RECT_COLOR,
   /** Draw a texture with a desaturation factor. */
   GPU_SHADER_2D_IMAGE_DESATURATE_COLOR,
   /** Draw a group of texture rectangle with an associated color multiplied. */
-  GPU_SHADER_ICON_MULTI,
+  GPU_SHADER_ICON_MULTI, /* TODO(fclem): Rename to GPU_SHADER_ICON. */
   /** Draw a two color checker based on screen position (not UV coordinates). */
   GPU_SHADER_2D_CHECKER,
   /** Draw diagonal stripes with two alternating colors. */
   GPU_SHADER_2D_DIAG_STRIPES,
   /** Draw dashed lines with custom dash length and uniform color. */
   GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR,
-  /** Draw triangles / lines / points with only depth output. */
-  GPU_SHADER_3D_DEPTH_ONLY,
   /** Merge viewport overlay texture with the render output. */
   GPU_SHADER_2D_IMAGE_OVERLAYS_MERGE,
   GPU_SHADER_2D_IMAGE_OVERLAYS_STEREO_MERGE,
@@ -56,12 +53,19 @@ enum GPUBuiltinShader {
   GPU_SHADER_GPENCIL_STROKE,
   /** Draw rounded area borders with silky smooth anti-aliasing without any over-draw. */
   GPU_SHADER_2D_AREA_BORDERS,
+  /**
+   * Draw the area that rounded corners cut away from the corners of a rectangle. Instanced, with
+   * one instance per corner.
+   */
+  GPU_SHADER_2D_ROUNDED_CORNER_MASK,
   /** Multi usage widget shaders for drawing buttons and other UI elements. */
   GPU_SHADER_2D_WIDGET_BASE,
   GPU_SHADER_2D_WIDGET_BASE_INST,
   GPU_SHADER_2D_WIDGET_SHADOW,
-  /** Draw a node socket given it's bounding rectangle. All socket shapes are supported through
-   * a single shader. */
+  /**
+   * Draw a node socket given it's bounding rectangle. All socket shapes are supported through
+   * a single shader.
+   */
   GPU_SHADER_2D_NODE_SOCKET,
   GPU_SHADER_2D_NODE_SOCKET_INST,
   /** Draw a node link given an input quadratic Bezier curve. */
@@ -70,10 +74,10 @@ enum GPUBuiltinShader {
   /** Draw round points with per vertex size and color. */
   GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR,
   /** Draw round points with a uniform size. Disabling blending will disable AA. */
-  GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA,
+  GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA, /* TODO Remove */
   GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA,
   /** Draw round points with a uniform size and an outline. Disabling blending will disable AA. */
-  GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA,
+  GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA, /* TODO Rename to 3D. */
 
   /** Draw geometry with uniform color. Has an additional clip plane parameter. */
   GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR,
@@ -91,13 +95,26 @@ enum GPUBuiltinShader {
   /** Draw sequencer zebra pattern (overexposed regions). */
   GPU_SHADER_SEQUENCER_ZEBRA,
 
-  /** Draw xr raycast as a ruled spline surface. */
-  GPU_SHADER_XR_RAYCAST,
-
   /** Compute shaders to generate 2d index buffers (mainly for curve drawing). */
   GPU_SHADER_INDEXBUF_POINTS,
   GPU_SHADER_INDEXBUF_LINES,
   GPU_SHADER_INDEXBUF_TRIS,
+
+  /** Compute shaders to generate mipmaps. */
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8_LAYERED,
 
   /**
    * ----------------------- Shaders exposed through pyGPU module -----------------------
@@ -137,7 +154,7 @@ enum GPUBuiltinShader {
 
   /**
    * Draw a sRGB color space texture in 3D.
-   * Texture color space is assumed to match the framebuffer.
+   * Texture color space is assumed to match the frame-buffer.
    * Take a 3D position and a 2D texture coordinate for each vertex.
    *
    * \param image: uniform sampler2D
@@ -186,10 +203,12 @@ enum GPUShaderConfig {
 };
 #define GPU_SHADER_CFG_LEN (GPU_SHADER_CFG_CLIPPED + 1)
 
-blender::gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader shader,
-                                                                GPUShaderConfig sh_cfg);
-blender::gpu::Shader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader);
+gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader shader,
+                                                       GPUShaderConfig sh_cfg);
+gpu::Shader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader);
 
 void GPU_shader_builtin_warm_up();
 
 void GPU_shader_free_builtin_shaders();
+
+}  // namespace blender

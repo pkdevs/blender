@@ -2,8 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * Shared code between host and client codebases.
+/** \file
+ * \ingroup eevee
+ *
+ * Shared code between host and client code-bases.
  */
 
 #pragma once
@@ -28,7 +30,7 @@ namespace blender::eevee {
  * covering twice as much area as the previous one.
  * \{ */
 
-enum eCubeFace : uint32_t {
+enum [[host_shared]] eCubeFace : uint32_t {
   /* Ordering by culling order. If cone aperture is shallow, we cull the later view. */
   Z_NEG = 0u,
   X_POS = 1u,
@@ -38,10 +40,10 @@ enum eCubeFace : uint32_t {
   Z_POS = 5u,
 };
 
-enum eShadowProjectionType : uint32_t {
-  SHADOW_PROJECTION_CUBEFACE = 0u,
-  SHADOW_PROJECTION_CLIPMAP = 1u,
-  SHADOW_PROJECTION_CASCADE = 2u,
+enum [[host_shared]] eShadowProjectionType : uint32_t {
+  SHADOW_PROJECTION_CUBEFACE,
+  SHADOW_PROJECTION_CLIPMAP,
+  SHADOW_PROJECTION_CASCADE,
 };
 
 static inline int2 shadow_cascade_grid_offset(int2 base_offset, int level_relative)
@@ -52,7 +54,7 @@ static inline int2 shadow_cascade_grid_offset(int2 base_offset, int level_relati
 /**
  * Small descriptor used for the tile update phase. Updated by CPU & uploaded to GPU each redraw.
  */
-struct ShadowTileMapData {
+struct [[host_shared]] ShadowTileMapData {
   /** Cached, used for rendering. */
   float4x4 viewmat;
   /** Precomputed matrix, not used for rendering but for tagging. */
@@ -64,19 +66,19 @@ struct ShadowTileMapData {
   /** Shift between previous and current grid_offset. Allows update tagging. */
   int2 grid_shift;
   /** True for punctual lights. */
-  eShadowProjectionType projection_type;
+  enum eShadowProjectionType projection_type;
   /** Multiple of SHADOW_TILEDATA_PER_TILEMAP. Offset inside the tile buffer. */
   int tiles_index;
   /** Index of persistent data in the persistent data buffer. */
   int clip_data_index;
   /** Light type this tilemap is from. */
-  eLightType light_type;
+  enum eLightType light_type;
   /** Entire tilemap (all tiles) needs to be tagged as dirty. */
   bool32_t is_dirty;
   /** Effective minimum resolution after update throttle. */
   int effective_lod_min;
   float _pad2;
-  /** Near and far clip distances for punctual. */
+  /** Near and far clip distances for punctual (positive). */
   float clip_near;
   float clip_far;
   /** Half of the tilemap size in world units. Used to compute window matrix. */
@@ -87,13 +89,12 @@ struct ShadowTileMapData {
   uint2 shadow_set_membership;
   uint2 _pad3;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowTileMapData, 16)
 
 /**
  * Lightweight version of ShadowTileMapData that only contains data used for rendering the
  * shadow.
  */
-struct ShadowRenderView {
+struct [[host_shared]] ShadowRenderView {
   /**
    * Is either:
    * - positive radial distance for point lights.
@@ -116,13 +117,12 @@ struct ShadowRenderView {
   uint2 shadow_set_membership;
   uint2 _pad0;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowRenderView, 16)
 
 /**
  * Per tilemap data persistent on GPU.
  * Kept separately for easier clearing on GPU.
  */
-struct ShadowTileMapClip {
+struct [[host_shared]] ShadowTileMapClip {
   /** Clip distances that were used to render the pages. */
   float clip_near_stored;
   float clip_far_stored;
@@ -131,15 +131,14 @@ struct ShadowTileMapClip {
   int clip_near;
   int clip_far;
   /* Transform the shadow is rendered with. Used to detect updates on GPU. */
-  Transform object_to_world;
+  struct Transform object_to_world;
   /* Integer offset of the center of the 16x16 tiles from the origin of the tile space. */
   int2 grid_offset;
   int _pad0;
   int _pad1;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowTileMapClip, 16)
 
-struct ShadowPagesInfoData {
+struct [[host_shared]] ShadowPagesInfoData {
   /** Number of free pages in the free page buffer. */
   int page_free_count;
   /** Number of page allocations needed for this cycle. */
@@ -155,9 +154,8 @@ struct ShadowPagesInfoData {
   int _pad1;
   int _pad2;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
 
-struct ShadowStatistics {
+struct [[host_shared]] ShadowStatistics {
   /** Statistics that are read back to CPU after a few frame (to avoid stall). */
   /**
    * WARNING: Excepting `view_needed_count` it is uncertain if these are accurate.
@@ -175,7 +173,6 @@ struct ShadowStatistics {
   int _pad1;
   int _pad2;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowStatistics, 16)
 
 /** Decoded tile data structure. */
 struct ShadowTileData {
@@ -191,38 +188,46 @@ struct ShadowTileData {
   bool is_allocated;
   /** True if the tile has been staged for rendering. This will remove the `do_update` flag. */
   bool is_rendered;
-  /** True if the tile is inside the pages_cached_buf (mutually exclusive with `is_allocated`).
-   */
+  /** True if the tile is inside the pages_cached_buf (mutually exclusive with `is_allocated`). */
   bool is_cached;
 };
 /** \note Stored packed as a uint. */
 #define ShadowTileDataPacked uint
 
-enum eShadowFlag : uint32_t {
+enum [[host_shared]] eShadowFlag : uint32_t {
   SHADOW_NO_DATA = 0u,
   SHADOW_IS_CACHED = (1u << 27u),
   SHADOW_IS_ALLOCATED = (1u << 28u),
   SHADOW_DO_UPDATE = (1u << 29u),
   SHADOW_IS_RENDERED = (1u << 30u),
-  SHADOW_IS_USED = (1u << 31u)
+  SHADOW_IS_USED = (1u << 31u),
+  /* Reuse the same flag for tagging update before LOD propagation.
+   * Assume usage tagging is done afterwards. */
+  SHADOW_TAG_UPDATE = (1u << 31u)
 };
 
-/* NOTE: Trust the input to be in valid range (max is [3,3,255]).
- * If it is in valid range, it should pack to 12bits so that `shadow_tile_pack()` can use it.
+/* NOTE: Trust the input to be in valid range (max is [7,7,127]).
+ * If it is in valid range, it should pack to 14bits so that `shadow_tile_pack()` can use it.
  * But sometime this is used to encode invalid pages uint3(-1) and it needs to output uint(-1).
  */
 static inline uint shadow_page_pack(uint3 page)
 {
-  return (page.x << 0u) | (page.y << 2u) | (page.z << 4u);
+  return (page.x << 0u) | (page.y << 3u) | (page.z << 6u);
 }
 static inline uint3 shadow_page_unpack(uint data)
 {
   uint3 page;
-  BLI_STATIC_ASSERT(SHADOW_PAGE_PER_ROW <= 4 && SHADOW_PAGE_PER_COL <= 4, "Update page packing")
-  page.x = (data >> 0u) & 3u;
-  page.y = (data >> 2u) & 3u;
-  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE <= 4096, "Update page packing")
-  page.z = (data >> 4u) & 255u;
+  page.x = (data >> 0u) & 7u;
+  page.y = (data >> 3u) & 7u;
+  page.z = (data >> 6u) & 127u;
+#ifndef GPU_SHADER
+  BLI_STATIC_ASSERT(SHADOW_PAGE_PER_ROW <= 8 && SHADOW_PAGE_PER_COL <= 8 &&
+                        SHADOW_PAGE_MAX_LAYER <= 128,
+                    "Update page packing")
+  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE ==
+                        (SHADOW_PAGE_PER_ROW * SHADOW_PAGE_PER_COL * SHADOW_PAGE_MAX_LAYER),
+                    "Update page packing")
+#endif
   return page;
 }
 
@@ -230,11 +235,13 @@ static inline ShadowTileData shadow_tile_unpack(ShadowTileDataPacked data)
 {
   ShadowTileData tile;
   tile.page = shadow_page_unpack(data);
-  /* -- 12 bits -- */
-  /* Unused bits. */
-  /* -- 15 bits -- */
-  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE <= 4096, "Update page packing")
-  tile.cache_index = (data >> 15u) & 4095u;
+/* -- 13 bits -- */
+/* Unused bits. */
+/* -- 14 bits -- */
+#ifndef GPU_SHADER
+  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE <= 8192, "Update page packing")
+#endif
+  tile.cache_index = (data >> 14u) & 8191u;
   /* -- 27 bits -- */
   tile.is_used = (data & SHADOW_IS_USED) != 0;
   tile.is_cached = (data & SHADOW_IS_CACHED) != 0;
@@ -250,7 +257,10 @@ static inline ShadowTileDataPacked shadow_tile_pack(ShadowTileData tile)
   /* NOTE: Page might be set to invalid values for tracking invalid usages.
    * So we have to mask the result. */
   data = shadow_page_pack(tile.page) & uint(SHADOW_MAX_PAGE - 1);
-  data |= (tile.cache_index & 4095u) << 15u;
+#ifndef GPU_SHADER
+  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE <= 8192, "Update page packing")
+#endif
+  data |= (tile.cache_index & 8191u) << 14u;
   data |= (tile.is_used ? uint(SHADOW_IS_USED) : 0);
   data |= (tile.is_allocated ? uint(SHADOW_IS_ALLOCATED) : 0);
   data |= (tile.is_cached ? uint(SHADOW_IS_CACHED) : 0);
@@ -283,7 +293,9 @@ struct ShadowSamplingTile {
  * Result fits into SHADOW_TILEMAP_MAX_CLIPMAP_LOD * 2 bits. */
 static inline uint shadow_lod_offset_pack(uint2 ofs)
 {
+#ifndef GPU_SHADER
   BLI_STATIC_ASSERT(SHADOW_TILEMAP_MAX_CLIPMAP_LOD <= 8, "Update page packing")
+#endif
   return ofs.x | (ofs.y << SHADOW_TILEMAP_MAX_CLIPMAP_LOD);
 }
 static inline uint2 shadow_lod_offset_unpack(uint data)
@@ -296,9 +308,12 @@ static inline ShadowSamplingTile shadow_sampling_tile_unpack(ShadowSamplingTileP
 {
   ShadowSamplingTile tile;
   tile.page = shadow_page_unpack(data);
-  /* -- 12 bits -- */
+  /* -- 13 bits -- */
   /* Max value is actually SHADOW_TILEMAP_MAX_CLIPMAP_LOD but we mask the bits. */
-  tile.lod = (data >> 12u) & 15u;
+  tile.lod = (data >> 13u) & 7u;
+#ifndef GPU_SHADER
+  BLI_STATIC_ASSERT(SHADOW_TILEMAP_MAX_CLIPMAP_LOD <= 8u, "Update lod packing")
+#endif
   /* -- 16 bits -- */
   tile.lod_offset = shadow_lod_offset_unpack(data >> 16u);
   /* -- 32 bits -- */
@@ -324,8 +339,10 @@ static inline ShadowSamplingTilePacked shadow_sampling_tile_pack(ShadowSamplingT
     tile.lod_offset.x = 1;
   }
   uint data = shadow_page_pack(tile.page);
+  BLI_STATIC_ASSERT(SHADOW_MAX_PAGE <= 8192, "Update page packing")
   /* Max value is actually SHADOW_TILEMAP_MAX_CLIPMAP_LOD but we mask the bits. */
-  data |= (tile.lod & 15u) << 12u;
+  BLI_STATIC_ASSERT(SHADOW_TILEMAP_MAX_CLIPMAP_LOD <= 8u, "Update lod packing")
+  data |= (tile.lod & 7u) << 13u;
   data |= shadow_lod_offset_pack(tile.lod_offset) << 16u;
   return data;
 }

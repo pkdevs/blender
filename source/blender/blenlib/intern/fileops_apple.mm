@@ -10,8 +10,10 @@
 
 #import <Foundation/Foundation.h>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
+
+namespace blender {
 
 int BLI_delete_soft(const char *filepath, const char **r_error_message)
 {
@@ -31,3 +33,5 @@ int BLI_delete_soft(const char *filepath, const char **r_error_message)
     return deleteSuccessful ? 0 : -1;
   }
 }
+
+}  // namespace blender

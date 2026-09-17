@@ -88,9 +88,10 @@ class BONE_PT_transform(BoneButtonsPanel, Panel):
                 row.prop(pchan, "rotation_euler", text="Rotation")
                 row.use_property_decorate = False
                 row.prop(pchan, "lock_rotation", text="", emboss=False, icon='DECORATE_UNLOCKED')
+
             row = layout.row(align=True)
             row.prop(pchan, "rotation_mode", text="Mode")
-            row.label(text="", icon='BLANK1')
+            row.operator_menu_enum("anim.rotation_mode_convert", "mode", icon='DOWNARROW_HLT', text="")
 
             col = layout.column()
             row = col.row(align=True)
@@ -176,7 +177,7 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
 
         row = col.row(align=True)
         row.use_property_split = False
-        split = row.split(factor=0.4)
+        split = row.split(factor=row.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Scale")
         split2 = split.split(factor=0.7)
@@ -196,7 +197,7 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
 
         row = col.row(align=True)
         row.use_property_split = False
-        split = row.split(factor=0.4)
+        split = row.split(factor=row.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Scale")
         split2 = split.split(factor=0.7)
@@ -448,7 +449,7 @@ class BONE_PT_inverse_kinematics(BoneButtonsPanel, Panel):
         bone = context.bone
         pchan = ob.pose.bones[bone.name]
 
-        active = pchan.is_in_ik_chain
+        active = pchan.is_in_ik_chain or ob.pose.use_auto_ik
 
         col = layout.column()
         col.prop(pchan, "ik_stretch", slider=True)

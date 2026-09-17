@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_inpaint_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_inpaint_compute_region)
+
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()
@@ -11,7 +15,8 @@ void main()
   float4 color = texture_load(input_tx, texel);
 
   /* An opaque pixel, not part of the inpainting region, write the original color. */
-  if (color.a == 1.0f) {
+  constexpr float alpha_threshold = 1.0f - 1e-3f;
+  if (color.a >= alpha_threshold) {
     imageStore(output_img, texel, color);
     return;
   }

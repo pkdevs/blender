@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
-  .
+  INTERFACE .
 )
 
 set(INC_SYS
@@ -11,26 +11,16 @@ set(INC_SYS
 set(LIB
 )
 
-add_library(bf_intern_atomic INTERFACE)
+set(SRC
+  atomic_ops.h
+  intern/atomic_ops_ext.h
+  intern/atomic_ops_msvc.h
+  intern/atomic_ops_unix.h
+  intern/atomic_ops_utils.h
+)
 
-target_include_directories(bf_intern_atomic INTERFACE .)
+blender_add_lib(bf_intern_atomic "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::intern::atomic ALIAS bf_intern_atomic)
-
-# CMake 3.19+ allows one to populate the interface library with
-# source files to show in the IDE, for people on older CMake versions
-# these headers will be visible in the bf_intern_guardedalloc project
-# where they historically have been.
-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.19")
-  set(SRC
-    atomic_ops.h
-    intern/atomic_ops_ext.h
-    intern/atomic_ops_msvc.h
-    intern/atomic_ops_unix.h
-    intern/atomic_ops_utils.h
-  )
-  target_sources(bf_intern_atomic PRIVATE ${SRC})
-  blender_source_group(bf_intern_atomic ${SRC})
-endif()
 
 if(WITH_GTESTS)
   set(TEST_SRC

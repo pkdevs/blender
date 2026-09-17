@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Pre-compiled headers, see: D2606. */
+/** \file
+ * \ingroup freestyle
+ *
+ * Pre-compiled headers, see: D2606.
+ */
 
 #include <Python.h>
 
@@ -16,7 +20,6 @@
 #include <map>
 #include <math.h>
 #include <memory>
-#include <pthread.h>
 #include <set>
 #include <sstream>
 #include <stack>

@@ -11,11 +11,11 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_endian_switch.h"
-#include "BLI_fileops.h"
-#include "BLI_math_base.h"
+#include "BLI_endian_switch.hh"
+#include "BLI_fileops.hh"
+#include "BLI_math_base_c.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLT_translation.hh"
@@ -23,6 +23,8 @@
 #include "DNA_modifier_types.h"
 
 #include "MOD_meshcache_util.hh" /* own include */
+
+namespace blender {
 
 struct MDDHead {
   int frame_tot;
@@ -41,7 +43,7 @@ static bool meshcache_read_mdd_head(FILE *fp,
 
   /* NOTE: this is endianness-sensitive. */
   /* MDD is big-endian, its values need to be switched on little-endian systems. */
-  BLI_endian_switch_int32_array((int *)mdd_head, 2);
+  BLI_endian_switch_int32_array(reinterpret_cast<int *>(mdd_head), 2);
 
   if (mdd_head->verts_tot != verts_tot) {
     *r_err_str = RPT_("Vertex count mismatch");
@@ -118,7 +120,7 @@ static bool meshcache_read_mdd_range_from_time(FILE *fp,
     return false;
   }
 
-  if (UNLIKELY(f_time_prev == FLT_MAX)) {
+  if (f_time_prev == FLT_MAX) [[unlikely]] {
     frame = 0.0f;
   }
   else {
@@ -310,3 +312,5 @@ bool MOD_meshcache_read_mdd_times(const char *filepath,
   fclose(fp);
   return ok;
 }
+
+}  // namespace blender

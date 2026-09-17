@@ -13,7 +13,6 @@ set(INC
 )
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -36,6 +35,7 @@ set(SRC
   bpy_capi_utils.cc
   bpy_cli_command.cc
   bpy_driver.cc
+  bpy_driver_bytecode.cc
   bpy_geometry_set.cc
   bpy_gizmo_wrap.cc
   bpy_inline_shader_nodes.cc
@@ -64,6 +64,7 @@ set(SRC
   bpy_rna_text.cc
   bpy_rna_types_capi.cc
   bpy_rna_ui.cc
+  bpy_rna_wm.cc
   bpy_traceback.cc
   bpy_utils_previews.cc
   bpy_utils_units.cc
@@ -87,6 +88,7 @@ set(SRC
   bpy_capi_utils.hh
   bpy_cli_command.hh
   bpy_driver.hh
+  bpy_driver_bytecode.hh
   bpy_geometry_set.hh
   bpy_gizmo_wrap.hh
   bpy_inline_shader_nodes.hh
@@ -94,6 +96,7 @@ set(SRC
   bpy_library.hh
   bpy_msgbus.hh
   bpy_operator.hh
+  bpy_operator_function.hh
   bpy_operator_wrap.hh
   bpy_path.hh
   bpy_props.hh
@@ -109,6 +112,7 @@ set(SRC
   bpy_rna_text.hh
   bpy_rna_types_capi.hh
   bpy_rna_ui.hh
+  bpy_rna_wm.hh
   bpy_traceback.hh
   bpy_utils_previews.hh
   bpy_utils_units.hh
@@ -136,10 +140,11 @@ set(LIB
   bf_python_gpu
   PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::nodes
-
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
   PRIVATE bf::windowmanager
+
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::optional::ffmpeg
+  PRIVATE bf::dependencies::optional::sdl
 )
 
 # Only to check if `buildinfo` is available.
@@ -160,8 +165,7 @@ endif()
 # Without this, the absolute path on the builder is used, causing HTTPS access to fail.
 # For example `urllib.request.urlopen("https://projects.blender.org")` fails
 # (or any other HTTPS site). see: #102300 for details.
-# NOTE: that this isn't necessary on WIN32.
-if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND (APPLE OR WITH_INSTALL_PORTABLE) AND (NOT WIN32))
+if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND WITH_INSTALL_PORTABLE)
   # - `PYTHON_SSL_CERT_FILE` absolute path to the PEM file.
   find_python_module_file("certifi/cacert.pem" PYTHON_SSL_CERT_FILE _python_ssl_cert_file_relative)
   mark_as_advanced(PYTHON_SSL_CERT_FILE)
@@ -186,30 +190,12 @@ if(WITH_AUDASPACE)
   add_definitions(-DWITH_AUDASPACE)
   if(WITH_PYTHON_NUMPY)
     add_definitions(-DWITH_AUDASPACE_PY)
-    list(APPEND INC_SYS
-      ${AUDASPACE_C_INCLUDE_DIRS}
-      ${AUDASPACE_PY_INCLUDE_DIRS}
-    )
-    if(NOT WITH_SYSTEM_AUDASPACE)
-      list(APPEND LIB audaspace audaspace-py)
-    else()
-      list(APPEND LIB ${AUDASPACE_C_LIBRARIES} ${AUDASPACE_PY_LIBRARIES})
-    endif()
+    list(APPEND LIB bf::dependencies::optional::audaspace)
   endif()
 endif()
 
 if(WITH_BULLET)
   add_definitions(-DWITH_BULLET)
-endif()
-
-if(WITH_CODEC_FFMPEG)
-  list(APPEND INC_SYS
-    ${FFMPEG_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFMPEG_LIBRARIES}
-  )
-  add_definitions(-DWITH_FFMPEG)
 endif()
 
 if(WITH_CODEC_SNDFILE)
@@ -230,8 +216,8 @@ if(WITH_CYCLES_OSL)
   add_definitions(-DWITH_CYCLES_OSL)
 endif()
 
-if(WITH_CYCLES_EMBREE)
-  add_definitions(-DWITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
+  add_definitions(-DWITH_EMBREE)
 endif()
 
 if(WITH_FREESTYLE)
@@ -243,10 +229,6 @@ endif()
 
 if(WITH_IMAGE_CINEON)
   add_definitions(-DWITH_IMAGE_CINEON)
-endif()
-
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_IMAGE_OPENEXR)
 endif()
 
 if(WITH_IMAGE_OPENJPEG)
@@ -271,16 +253,9 @@ endif()
 
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
-endif()
-
-if(WITH_SDL)
-  list(APPEND INC_SYS
-    ${SDL_INCLUDE_DIR}
+  list(APPEND INC
+    ../../../../intern/opensubdiv
   )
-  list(APPEND LIB
-    ${SDL_LIBRARY}
-  )
-  add_definitions(-DWITH_SDL)
 endif()
 
 if(WITH_JACK)
@@ -349,13 +324,6 @@ if(WITH_USD)
   )
 endif()
 
-if(WITH_OPENSUBDIV)
-  add_definitions(-DWITH_OPENSUBDIV)
-  list(APPEND INC
-    ../../../../intern/opensubdiv
-  )
-endif()
-
 if(WITH_XR_OPENXR)
   add_definitions(-DWITH_XR_OPENXR)
 endif()
@@ -370,6 +338,10 @@ endif()
 
 if(WITH_HARU)
   add_definitions(-DWITH_HARU)
+endif()
+
+if(WITH_SDL)
+  add_definitions(-DWITH_SDL)
 endif()
 
 if(WITH_HYDRA)

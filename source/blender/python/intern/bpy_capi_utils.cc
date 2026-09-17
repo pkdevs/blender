@@ -19,6 +19,8 @@
 
 #include "../generic/py_capi_utils.hh"
 
+namespace blender {
+
 short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool clear)
 {
   char *report_str;
@@ -31,7 +33,7 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 
   if (report_str) {
     PyErr_SetString(exception, report_str);
-    MEM_freeN(report_str);
+    MEM_delete(report_str);
   }
 
   return (report_str == nullptr) ? 0 : -1;
@@ -40,7 +42,7 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 void BPy_reports_write_stdout(const ReportList *reports, const char *header)
 {
   const Report *report;
-  for (report = static_cast<const Report *>(reports->list.first); report; report = report->next) {
+  for (report = reports->list.first(); report; report = report->next) {
     if (report->type < reports->printlevel) {
       continue;
     }
@@ -135,3 +137,5 @@ bool BPy_errors_to_report(ReportList *reports)
 {
   return BPy_errors_to_report_ex(reports, nullptr, true, true);
 }
+
+}  // namespace blender

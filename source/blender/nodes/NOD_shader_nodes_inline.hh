@@ -2,14 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_vector.hh"
 
+#include "DNA_node_types.h"
+
+#include "NOD_warning.hh"
+
+namespace blender {
+
 struct bNodeTree;
 struct bNode;
 
-namespace blender::nodes {
+namespace nodes {
 
 struct InlineShaderNodeTreeParams {
   /**
@@ -20,12 +30,16 @@ struct InlineShaderNodeTreeParams {
    */
   bool allow_preserving_repeat_zones = false;
 
+  /* Allow processing only the outputs relevant to specific engines. */
+  NodeShaderOutputTarget target_engine_ = SHD_OUTPUT_ALL;
+
   struct ErrorMessage {
     /* In theory, more contextual information could be added here like the entire context path to
      * that node. In practice, we can't report errors with that level of detail in shader nodes
      * yet. */
     const bNode *node;
     std::string message;
+    NodeWarningType type;
   };
   Vector<ErrorMessage> r_error_messages;
 };
@@ -34,4 +48,5 @@ bool inline_shader_node_tree(const bNodeTree &src_tree,
                              bNodeTree &dst_tree,
                              InlineShaderNodeTreeParams &params);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

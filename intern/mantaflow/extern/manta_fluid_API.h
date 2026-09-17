@@ -6,14 +6,9 @@
  * \ingroup intern_mantaflow
  */
 
-#ifndef MANTA_API_H
-#define MANTA_API_H
-
 #include <cstddef>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct MANTA;
 
@@ -67,8 +62,8 @@ bool manta_needs_realloc(struct MANTA *fluid, struct FluidModifierData *fmd);
 void manta_update_pointers(struct MANTA *fluid, struct FluidModifierData *fmd, bool flush);
 
 /* Fluid accessors */
-size_t manta_get_index(int x, int max_x, int y, int max_y, int z /*, int max_z */);
-size_t manta_get_index2d(int x, int max_x, int y /*, int max_y, int z, int max_z */);
+size_t manta_get_index(int x, int max_x, int y, int max_y, int z /* , int max_z */);
+size_t manta_get_index2d(int x, int max_x, int y /* , int max_y, int z, int max_z */);
 float *manta_get_velocity_x(struct MANTA *fluid);
 float *manta_get_velocity_y(struct MANTA *fluid);
 float *manta_get_velocity_z(struct MANTA *fluid);
@@ -200,8 +195,4 @@ float manta_liquid_get_snd_particle_velocity_x_at(struct MANTA *liquid, int i);
 float manta_liquid_get_snd_particle_velocity_y_at(struct MANTA *liquid, int i);
 float manta_liquid_get_snd_particle_velocity_z_at(struct MANTA *liquid, int i);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* MANTA_API_H_ */
+}  // namespace blender

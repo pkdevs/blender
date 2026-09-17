@@ -15,8 +15,8 @@
 #  include "DNA_meshdata_types.h"
 #endif
 
-#include "BLI_linklist.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
@@ -45,7 +45,7 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Path Select Struct & Properties
@@ -182,7 +182,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
                                           BMVert *v_dst)
 {
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   int cd_offset = -1;
   switch (op_params->edge_mode) {
@@ -201,14 +201,17 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
       break;
   }
 
-  UserData user_data = {bm, static_cast<Mesh *>(obedit->data), cd_offset, op_params};
+  UserData user_data = {bm, id_cast<Mesh *>(obedit->data), cd_offset, op_params};
   LinkNode *path = nullptr;
   bool is_path_ordered = false;
 
   if (v_act && (v_act != v_dst)) {
     if (op_params->use_fill) {
-      path = BM_mesh_calc_path_region_vert(
-          bm, (BMElem *)v_act, (BMElem *)v_dst, verttag_filter_cb, &user_data);
+      path = BM_mesh_calc_path_region_vert(bm,
+                                           reinterpret_cast<BMElem *>(v_act),
+                                           reinterpret_cast<BMElem *>(v_dst),
+                                           verttag_filter_cb,
+                                           &user_data);
     }
     else {
       is_path_ordered = true;
@@ -234,7 +237,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
 
     node = path;
     do {
-      if (!verttag_test_cb((BMVert *)node->link, &user_data)) {
+      if (!verttag_test_cb(static_cast<BMVert *>(node->link), &user_data)) {
         all_set = false;
         break;
       }
@@ -246,7 +249,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
       if ((is_path_ordered == false) ||
           WM_operator_properties_checker_interval_test(&op_params->interval_params, depth))
       {
-        verttag_set_cb((BMVert *)node->link, !all_set, &user_data);
+        verttag_set_cb(static_cast<BMVert *>(node->link), !all_set, &user_data);
         if (is_path_ordered) {
           v_dst_last = static_cast<BMVert *>(node->link);
         }
@@ -260,8 +263,8 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
     verttag_set_cb(v_dst, is_act, &user_data); /* switch the face option */
   }
 
-  EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {
     /* even if this is selected it may not be in the selection list */
@@ -277,7 +280,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
   params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
-  EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+  EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 }
 
 /** \} */
@@ -345,7 +348,7 @@ static void edgetag_set_cb(BMEdge *e, bool val, void *user_data_v)
 
 static void edgetag_ensure_cd_flag(Mesh *mesh, const char edge_mode)
 {
-  BMesh *bm = mesh->runtime->edit_mesh->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
 
   switch (edge_mode) {
     case EDGE_MODE_TAG_CREASE:
@@ -377,7 +380,9 @@ static void mouse_mesh_shortest_path_edge(
     Scene *scene, Object *obedit, const PathSelectParams *op_params, BMEdge *e_act, BMEdge *e_dst)
 {
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+
+  edgetag_ensure_cd_flag(id_cast<Mesh *>(obedit->data), op_params->edge_mode);
 
   int cd_offset = -1;
   switch (op_params->edge_mode) {
@@ -397,16 +402,17 @@ static void mouse_mesh_shortest_path_edge(
       break;
   }
 
-  UserData user_data = {bm, static_cast<Mesh *>(obedit->data), cd_offset, op_params};
+  UserData user_data = {bm, id_cast<Mesh *>(obedit->data), cd_offset, op_params};
   LinkNode *path = nullptr;
   bool is_path_ordered = false;
 
-  edgetag_ensure_cd_flag(static_cast<Mesh *>(obedit->data), op_params->edge_mode);
-
   if (e_act && (e_act != e_dst)) {
     if (op_params->use_fill) {
-      path = BM_mesh_calc_path_region_edge(
-          bm, (BMElem *)e_act, (BMElem *)e_dst, edgetag_filter_cb, &user_data);
+      path = BM_mesh_calc_path_region_edge(bm,
+                                           reinterpret_cast<BMElem *>(e_act),
+                                           reinterpret_cast<BMElem *>(e_dst),
+                                           edgetag_filter_cb,
+                                           &user_data);
     }
     else {
       is_path_ordered = true;
@@ -432,7 +438,7 @@ static void mouse_mesh_shortest_path_edge(
 
     node = path;
     do {
-      if (!edgetag_test_cb((BMEdge *)node->link, &user_data)) {
+      if (!edgetag_test_cb(static_cast<BMEdge *>(node->link), &user_data)) {
         all_set = false;
         break;
       }
@@ -444,7 +450,7 @@ static void mouse_mesh_shortest_path_edge(
       if ((is_path_ordered == false) ||
           WM_operator_properties_checker_interval_test(&op_params->interval_params, depth))
       {
-        edgetag_set_cb((BMEdge *)node->link, !all_set, &user_data);
+        edgetag_set_cb(static_cast<BMEdge *>(node->link), !all_set, &user_data);
         if (is_path_ordered) {
           e_dst_last = static_cast<BMEdge *>(node->link);
         }
@@ -455,7 +461,6 @@ static void mouse_mesh_shortest_path_edge(
   }
   else {
     const bool is_act = !edgetag_test_cb(e_dst, &user_data);
-    edgetag_ensure_cd_flag(static_cast<Mesh *>(obedit->data), op_params->edge_mode);
     edgetag_set_cb(e_dst, is_act, &user_data); /* switch the edge option */
   }
 
@@ -470,8 +475,8 @@ static void mouse_mesh_shortest_path_edge(
     }
   }
 
-  EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {
     /* even if this is selected it may not be in the selection list */
@@ -489,7 +494,7 @@ static void mouse_mesh_shortest_path_edge(
   params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
-  EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+  EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 
   if (op_params->edge_mode == EDGE_MODE_TAG_SEAM) {
     ED_uvedit_live_unwrap(scene, {obedit});
@@ -526,7 +531,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
                                           BMFace *f_dst)
 {
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   int cd_offset = -1;
   switch (op_params->edge_mode) {
@@ -545,14 +550,17 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
       break;
   }
 
-  UserData user_data = {bm, static_cast<Mesh *>(obedit->data), cd_offset, op_params};
+  UserData user_data = {bm, id_cast<Mesh *>(obedit->data), cd_offset, op_params};
   LinkNode *path = nullptr;
   bool is_path_ordered = false;
 
   if (f_act) {
     if (op_params->use_fill) {
-      path = BM_mesh_calc_path_region_face(
-          bm, (BMElem *)f_act, (BMElem *)f_dst, facetag_filter_cb, &user_data);
+      path = BM_mesh_calc_path_region_face(bm,
+                                           reinterpret_cast<BMElem *>(f_act),
+                                           reinterpret_cast<BMElem *>(f_dst),
+                                           facetag_filter_cb,
+                                           &user_data);
     }
     else {
       is_path_ordered = true;
@@ -580,7 +588,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
 
     node = path;
     do {
-      if (!facetag_test_cb((BMFace *)node->link, &user_data)) {
+      if (!facetag_test_cb(static_cast<BMFace *>(node->link), &user_data)) {
         all_set = false;
         break;
       }
@@ -592,7 +600,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
       if ((is_path_ordered == false) ||
           WM_operator_properties_checker_interval_test(&op_params->interval_params, depth))
       {
-        facetag_set_cb((BMFace *)node->link, !all_set, &user_data);
+        facetag_set_cb(static_cast<BMFace *>(node->link), !all_set, &user_data);
         if (is_path_ordered) {
           f_dst_last = static_cast<BMFace *>(node->link);
         }
@@ -606,8 +614,8 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
     facetag_set_cb(f_dst, is_act, &user_data); /* switch the face option */
   }
 
-  EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em);
+  EDBM_selectmode_flush(bm, em->selectmode);
+  EDBM_uvselect_clear(bm);
 
   if (op_params->track_active) {
     /* even if this is selected it may not be in the selection list */
@@ -619,7 +627,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
     }
     BM_mesh_active_face_set(bm, f_dst_last);
 
-    blender::ed::object::material_active_index_set(obedit, f_dst_last->mat_nr);
+    ed::object::material_active_index_set(obedit, f_dst_last->mat_nr);
     em->mat_nr = f_dst_last->mat_nr;
   }
 
@@ -627,7 +635,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
   params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
-  EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+  EDBM_update(id_cast<Mesh *>(obedit->data), &params);
 }
 
 /** \} */
@@ -648,20 +656,32 @@ static bool edbm_shortest_path_pick_ex(Scene *scene,
     /* pass */
   }
   else if (ele_src->head.htype == BM_VERT) {
-    mouse_mesh_shortest_path_vert(scene, obedit, op_params, (BMVert *)ele_src, (BMVert *)ele_dst);
+    mouse_mesh_shortest_path_vert(scene,
+                                  obedit,
+                                  op_params,
+                                  reinterpret_cast<BMVert *>(ele_src),
+                                  reinterpret_cast<BMVert *>(ele_dst));
     ok = true;
   }
   else if (ele_src->head.htype == BM_EDGE) {
-    mouse_mesh_shortest_path_edge(scene, obedit, op_params, (BMEdge *)ele_src, (BMEdge *)ele_dst);
+    mouse_mesh_shortest_path_edge(scene,
+                                  obedit,
+                                  op_params,
+                                  reinterpret_cast<BMEdge *>(ele_src),
+                                  reinterpret_cast<BMEdge *>(ele_dst));
     ok = true;
   }
   else if (ele_src->head.htype == BM_FACE) {
-    mouse_mesh_shortest_path_face(scene, obedit, op_params, (BMFace *)ele_src, (BMFace *)ele_dst);
+    mouse_mesh_shortest_path_face(scene,
+                                  obedit,
+                                  op_params,
+                                  reinterpret_cast<BMFace *>(ele_src),
+                                  reinterpret_cast<BMFace *>(ele_dst));
     ok = true;
   }
 
   if (ok) {
-    DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_SELECT);
+    DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
     WM_main_add_notifier(NC_GEOM | ND_SELECT, obedit->data);
   }
 
@@ -676,13 +696,13 @@ static BMElem *edbm_elem_find_nearest(ViewContext *vc, const char htype)
   float dist = ED_view3d_select_dist_px();
 
   if ((em->selectmode & SCE_SELECT_VERTEX) && (htype == BM_VERT)) {
-    return (BMElem *)EDBM_vert_find_nearest(vc, &dist);
+    return reinterpret_cast<BMElem *>(EDBM_vert_find_nearest(vc, &dist));
   }
   if ((em->selectmode & SCE_SELECT_EDGE) && (htype == BM_EDGE)) {
-    return (BMElem *)EDBM_edge_find_nearest(vc, &dist);
+    return reinterpret_cast<BMElem *>(EDBM_edge_find_nearest(vc, &dist));
   }
   if ((em->selectmode & SCE_SELECT_FACE) && (htype == BM_FACE)) {
-    return (BMElem *)EDBM_face_find_nearest(vc, &dist);
+    return reinterpret_cast<BMElem *>(EDBM_face_find_nearest(vc, &dist));
   }
 
   return nullptr;
@@ -693,7 +713,7 @@ static BMElem *edbm_elem_active_elem_or_face_get(BMesh *bm)
   BMElem *ele = BM_mesh_active_elem_get(bm);
 
   if ((ele == nullptr) && bm->act_face && BM_elem_flag_test(bm->act_face, BM_ELEM_SELECT)) {
-    ele = (BMElem *)bm->act_face;
+    ele = reinterpret_cast<BMElem *>(bm->act_face);
   }
 
   return ele;
@@ -715,16 +735,17 @@ static wmOperatorStatus edbm_shortest_path_pick_invoke(bContext *C,
 
   ViewContext vc = em_setup_viewcontext(C);
   copy_v2_v2_int(vc.mval, event->mval);
-  BKE_view_layer_synced_ensure(vc.scene, vc.view_layer);
+  BKE_view_layer_synced_ensure(*vc.bmain, vc.scene, vc.view_layer);
   Base *basact = BKE_view_layer_active_base_get(vc.view_layer);
   BMEditMesh *em = vc.em;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(vc.obedit);
 
   view3d_operator_needs_gpu(C);
 
   {
     int base_index = -1;
     Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode(
-        vc.scene, vc.view_layer, vc.v3d);
+        *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
     if (EDBM_unified_findnearest(&vc, bases, &base_index, &eve, &eed, &efa)) {
       basact = bases[base_index];
       ED_view3d_viewcontext_init_object(&vc, basact->object);
@@ -733,7 +754,7 @@ static wmOperatorStatus edbm_shortest_path_pick_invoke(bContext *C,
   }
 
   /* If nothing is selected, let's select the picked vertex/edge/face. */
-  if ((vc.em->bm->totvertsel == 0) && (eve || eed || efa)) {
+  if ((bm->totvertsel == 0) && (eve || eed || efa)) {
     /* TODO(dfelinto): right now we try to find the closest element twice.
      * The ideal is to refactor EDBM_select_pick so it doesn't
      * have to pick the nearest vert/edge/face again. */
@@ -748,7 +769,7 @@ static wmOperatorStatus edbm_shortest_path_pick_invoke(bContext *C,
   path_select_params_from_op(op, vc.scene->toolsettings, &op_params);
 
   BMElem *ele_src, *ele_dst;
-  if (!(ele_src = edbm_elem_active_elem_or_face_get(em->bm)) ||
+  if (!(ele_src = edbm_elem_active_elem_or_face_get(bm)) ||
       !(ele_dst = edbm_elem_find_nearest(&vc, ele_src->head.htype)))
   {
     /* special case, toggle edge tags even when we don't have a path */
@@ -770,14 +791,14 @@ static wmOperatorStatus edbm_shortest_path_pick_invoke(bContext *C,
     return OPERATOR_PASS_THROUGH;
   }
 
-  BKE_view_layer_synced_ensure(vc.scene, vc.view_layer);
+  BKE_view_layer_synced_ensure(*vc.bmain, vc.scene, vc.view_layer);
   if (BKE_view_layer_active_base_get(vc.view_layer) != basact) {
-    blender::ed::object::base_activate(C, basact);
+    ed::object::base_activate(C, basact);
   }
 
   /* to support redo */
-  BM_mesh_elem_index_ensure(em->bm, ele_dst->head.htype);
-  int index = EDBM_elem_to_index_any(em, ele_dst);
+  BM_mesh_elem_index_ensure(bm, ele_dst->head.htype);
+  int index = EDBM_elem_to_index_any(bm, ele_dst);
 
   RNA_int_set(op->ptr, "index", index);
 
@@ -788,8 +809,7 @@ static wmOperatorStatus edbm_shortest_path_pick_exec(bContext *C, wmOperator *op
 {
   Scene *scene = CTX_data_scene(C);
   Object *obedit = CTX_data_edit_object(C);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   const int index = RNA_int_get(op->ptr, "index");
   if (index < 0 || index >= (bm->totvert + bm->totedge + bm->totface)) {
@@ -797,8 +817,8 @@ static wmOperatorStatus edbm_shortest_path_pick_exec(bContext *C, wmOperator *op
   }
 
   BMElem *ele_src, *ele_dst;
-  if (!(ele_src = edbm_elem_active_elem_or_face_get(em->bm)) ||
-      !(ele_dst = EDBM_elem_from_index_any(em, index)))
+  if (!(ele_src = edbm_elem_active_elem_or_face_get(bm)) ||
+      !(ele_dst = EDBM_elem_from_index_any(bm, index)))
   {
     return OPERATOR_CANCELLED;
   }
@@ -848,25 +868,26 @@ void MESH_OT_shortest_path_pick(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_shortest_path_select_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   bool found_valid_elements = false;
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     BMIter iter;
     BMEditSelection *ese_src, *ese_dst;
     BMElem *ele_src = nullptr, *ele_dst = nullptr, *ele;
 
-    if ((em->bm->totvertsel == 0) && (em->bm->totedgesel == 0) && (em->bm->totfacesel == 0)) {
+    if ((bm->totvertsel == 0) && (bm->totedgesel == 0) && (bm->totfacesel == 0)) {
       continue;
     }
 
     /* first try to find vertices in edit selection */
-    ese_src = static_cast<BMEditSelection *>(bm->selected.last);
+    ese_src = bm->selected.last();
     if (ese_src && (ese_dst = ese_src->prev) && (ese_src->htype == ese_dst->htype)) {
       ele_src = ese_src->ele;
       ele_dst = ese_dst->ele;
@@ -949,7 +970,7 @@ void MESH_OT_shortest_path_select(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Select Shortest Path";
   ot->idname = "MESH_OT_shortest_path_select";
-  ot->description = "Selected shortest path between two vertices/edges/faces";
+  ot->description = "Select shortest path between two vertices/edges/faces";
 
   /* API callbacks. */
   ot->exec = edbm_shortest_path_select_exec;
@@ -964,3 +985,5 @@ void MESH_OT_shortest_path_select(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

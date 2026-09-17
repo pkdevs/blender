@@ -24,15 +24,19 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
+
+#include "IO_validate.hh"
+
+namespace blender {
 
 /* NOTE: for now only UVs and Vertex Colors are supported for streaming.
  * Although Alembic only allows for a single UV layer per {I|O}Schema, and does
@@ -51,7 +55,7 @@ using Alembic::Abc::V2fArraySample;
 using Alembic::AbcGeom::OC4fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 using Alembic::AbcGeom::OV3fGeomParam;
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* ORCO, Generated Coordinates, and Reference Points ("Pref") are all terms for the same thing.
  * Other applications (Maya, Houdini) write these to a property called "Pref". */
@@ -314,28 +318,33 @@ using Alembic::AbcGeom::IV2fGeomParam;
 using Alembic::AbcGeom::IV3fGeomParam;
 
 static void read_uvs(const CDStreamConfig &config,
-                     void *data,
+                     MutableSpan<float2> uv_map,
                      const AbcUvScope uv_scope,
                      const Alembic::AbcGeom::V2fArraySamplePtr &uvs,
                      const UInt32ArraySamplePtr &indices)
 {
   const OffsetIndices faces = config.mesh->faces();
   const int *corner_verts = config.corner_verts;
-  float2 *uv_map = static_cast<float2 *>(data);
-
-  uint uv_index, loop_index, rev_loop_index;
+  const int64_t indices_size = int64_t(indices->size());
+  const int64_t uvs_size = int64_t(uvs->size());
 
   BLI_assert(uv_scope != ABC_UV_SCOPE_NONE);
   const bool do_uvs_per_loop = (uv_scope == ABC_UV_SCOPE_LOOP);
 
-  for (const int i : faces.index_range()) {
+  for (const int64_t i : faces.index_range()) {
     const IndexRange face = faces[i];
-    uint rev_loop_offset = face.start() + face.size() - 1;
+    const int64_t rev_loop_offset = face.start() + face.size() - 1;
 
-    for (int f = 0; f < face.size(); f++) {
-      rev_loop_index = rev_loop_offset - f;
-      loop_index = do_uvs_per_loop ? face.start() + f : corner_verts[rev_loop_index];
-      uv_index = (*indices)[loop_index];
+    for (int64_t f = 0; f < face.size(); f++) {
+      const int64_t rev_loop_index = rev_loop_offset - f;
+      const int64_t loop_index = do_uvs_per_loop ? face.start() + f : corner_verts[rev_loop_index];
+      if (!validate::index_in_range(loop_index, indices_size)) {
+        continue;
+      }
+      const int64_t uv_index = (*indices)[loop_index];
+      if (!validate::index_in_range(uv_index, uvs_size)) {
+        continue;
+      }
       const Imath::V2f &uv = (*uvs)[uv_index];
 
       float2 &loopuv = uv_map[rev_loop_index];
@@ -345,14 +354,14 @@ static void read_uvs(const CDStreamConfig &config,
   }
 }
 
-static size_t mcols_out_of_bounds_check(const size_t color_index,
-                                        const size_t array_size,
-                                        const std::string &iobject_full_name,
-                                        const PropertyHeader &prop_header,
-                                        bool &r_is_out_of_bounds,
-                                        bool &r_bounds_warning_given)
+static int64_t mcols_out_of_bounds_check(const int64_t color_index,
+                                         const int64_t array_size,
+                                         const std::string &iobject_full_name,
+                                         const PropertyHeader &prop_header,
+                                         bool &r_is_out_of_bounds,
+                                         bool &r_bounds_warning_given)
 {
-  if (color_index < array_size) {
+  if (validate::index_in_range(color_index, array_size)) {
     return color_index;
   }
 
@@ -412,14 +421,14 @@ static void read_custom_data_mcols(const std::string &iobject_full_name,
   BLI_assert(c3f_ptr || c4f_ptr);
 
   /* Read the vertex colors */
-  void *cd_data = config.add_customdata_cb(
-      config.mesh, prop_header.getName().c_str(), CD_PROP_BYTE_COLOR);
-  MCol *cfaces = static_cast<MCol *>(cd_data);
+  bke::MutableAttributeAccessor attributes = config.mesh->attributes_for_write();
+  bke::SpanAttributeWriter attr = attributes.lookup_or_add_for_write_span<ColorGeometry4b>(
+      prop_header.getName(), bke::AttrDomain::Corner);
   const OffsetIndices faces = config.mesh->faces();
   const int *corner_verts = config.corner_verts;
 
-  size_t face_index = 0;
-  size_t color_index;
+  int64_t face_index = 0;
+  int64_t color_index;
   bool bounds_warning_given = false;
 
   /* The colors can go through two layers of indexing. Often the 'indices'
@@ -428,16 +437,14 @@ static void read_custom_data_mcols(const std::string &iobject_full_name,
    * is why we have to check for indices->size() > 0 */
   bool use_dual_indexing = is_facevarying && indices->size() > 0;
 
-  for (const int i : faces.index_range()) {
+  for (const int64_t i : faces.index_range()) {
     const IndexRange face = faces[i];
-    MCol *cface = &cfaces[face.start() + face.size()];
-    const int *face_verts = &corner_verts[face.start() + face.size()];
+    int64_t corner = face.start() + face.size();
 
-    for (int j = 0; j < face.size(); j++, face_index++) {
-      cface--;
-      face_verts--;
+    for (int64_t j = 0; j < face.size(); j++, face_index++) {
+      corner--;
 
-      color_index = is_facevarying ? face_index : *face_verts;
+      color_index = is_facevarying ? face_index : corner_verts[corner];
       if (use_dual_indexing) {
         color_index = (*indices)[color_index];
       }
@@ -453,10 +460,10 @@ static void read_custom_data_mcols(const std::string &iobject_full_name,
           continue;
         }
         const Imath::C3f &color = (*c3f_ptr)[color_index];
-        cface->a = unit_float_to_uchar_clamp(color[0]);
-        cface->r = unit_float_to_uchar_clamp(color[1]);
-        cface->g = unit_float_to_uchar_clamp(color[2]);
-        cface->b = 255;
+        attr.span[corner].r = unit_float_to_uchar_clamp(color[0]);
+        attr.span[corner].g = unit_float_to_uchar_clamp(color[1]);
+        attr.span[corner].b = unit_float_to_uchar_clamp(color[2]);
+        attr.span[corner].a = 255;
       }
       else {
         bool is_mcols_out_of_bounds = false;
@@ -470,13 +477,15 @@ static void read_custom_data_mcols(const std::string &iobject_full_name,
           continue;
         }
         const Imath::C4f &color = (*c4f_ptr)[color_index];
-        cface->a = unit_float_to_uchar_clamp(color[0]);
-        cface->r = unit_float_to_uchar_clamp(color[1]);
-        cface->g = unit_float_to_uchar_clamp(color[2]);
-        cface->b = unit_float_to_uchar_clamp(color[3]);
+        attr.span[corner].r = unit_float_to_uchar_clamp(color[0]);
+        attr.span[corner].g = unit_float_to_uchar_clamp(color[1]);
+        attr.span[corner].b = unit_float_to_uchar_clamp(color[2]);
+        attr.span[corner].a = unit_float_to_uchar_clamp(color[3]);
       }
     }
   }
+
+  attr.finish();
 }
 
 static void read_custom_data_uvs(const ICompoundProperty &prop,
@@ -501,28 +510,31 @@ static void read_custom_data_uvs(const ICompoundProperty &prop,
     return;
   }
 
-  void *cd_data = config.add_customdata_cb(
-      config.mesh, prop_header.getName().c_str(), CD_PROP_FLOAT2);
+  bke::MutableAttributeAccessor attributes = config.mesh->attributes_for_write();
+  bke::SpanAttributeWriter uv_map = attributes.lookup_or_add_for_write_span<float2>(
+      prop_header.getName(), bke::AttrDomain::Corner);
 
-  read_uvs(config, cd_data, uv_scope, sample.getVals(), uvs_indices);
+  read_uvs(config, uv_map.span, uv_scope, sample.getVals(), uvs_indices);
+
+  uv_map.finish();
 }
 
 void read_velocity(const V3fArraySamplePtr &velocities,
                    const CDStreamConfig &config,
                    const float velocity_scale)
 {
-  const int num_velocity_vectors = int(velocities->size());
-  if (num_velocity_vectors != config.mesh->verts_num) {
+  if (velocities->size() != config.mesh->verts_num) {
     /* Files containing videogrammetry data may be malformed and export velocity data on missing
      * frames (most likely by copying the last valid data). */
     return;
   }
+  const int64_t num_velocity_vectors = config.mesh->verts_num;
 
   bke::MutableAttributeAccessor attributes = config.mesh->attributes_for_write();
   bke::SpanAttributeWriter attr = attributes.lookup_or_add_for_write_span<float3>(
       "velocity", bke::AttrDomain::Point);
   MutableSpan<float3> velocity = attr.span;
-  for (int i = 0; i < num_velocity_vectors; i++) {
+  for (int64_t i = 0; i < num_velocity_vectors; i++) {
     const Imath::V3f &vel_in = (*velocities)[i];
     copy_zup_from_yup(velocity[i], vel_in.getValue());
     mul_v3_fl(velocity[i], velocity_scale);
@@ -631,4 +643,5 @@ AbcUvScope get_uv_scope(const Alembic::AbcGeom::GeometryScope scope,
   return ABC_UV_SCOPE_NONE;
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

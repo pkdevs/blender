@@ -2,20 +2,18 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Operator
 from bpy.props import BoolProperty
 from bpy_extras.node_utils import connect_sockets
 
 from ..utils.constants import (
     rl_outputs,
- )
+)
 from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_active,
     nw_check_selected,
-    get_nodes_links,
 )
 
 
@@ -38,7 +36,8 @@ class NODE_OT_link_active_to_selected(Operator, NWBase):
                 and nw_check_selected(cls, context, min=2))
 
     def execute(self, context):
-        nodes, links = get_nodes_links(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         replace = self.replace
         use_node_name = self.use_node_name
         use_outputs_names = self.use_outputs_names
@@ -88,10 +87,10 @@ class NODE_OT_link_active_to_selected(Operator, NWBase):
                     if dst_name not in src_name:
                         valid = False
                     if valid:
-                        for input in node.inputs:
-                            if input.type == out.type or node.type == 'REROUTE':
-                                if replace or not input.is_linked:
-                                    connect_sockets(out, input)
+                        for input_socket in node.inputs:
+                            if input_socket.type == out.type or node.type == 'REROUTE':
+                                if replace or not input_socket.is_linked:
+                                    connect_sockets(out, input_socket)
                                     if not use_node_name and not use_outputs_names:
                                         doit = False
                                     break

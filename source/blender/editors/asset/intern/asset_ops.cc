@@ -6,8 +6,14 @@
  * \ingroup edasset
  */
 
+#include <algorithm>
+#include <iostream>
+
+#include <fmt/format.h>
+
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
+#include "AS_remote_library.hh"
 
 #include "BKE_asset_edit.hh"
 #include "BKE_blendfile.hh"
@@ -22,15 +28,16 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_fnmatch.h"
+#include "BLI_fnmatch.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "ED_asset.hh"
 #include "ED_screen.hh"
 /* XXX needs access to the file list, should all be done via the asset system in future. */
+#include "ED_asset_menu_utils.hh"
 #include "ED_fileselect.hh"
 #include "ED_render.hh"
 #include "ED_util.hh"
@@ -45,6 +52,7 @@
 #include "IMB_imbuf.hh"
 #include "IMB_thumbs.hh"
 
+#include "RNA_types.hh"
 #include "WM_api.hh"
 
 #include "DNA_space_types.h"
@@ -94,12 +102,12 @@ static IDVecStats asset_operation_get_id_vec_stats_from_ids(const Span<PointerRN
 
 static const char *asset_operation_unsupported_type_msg(const bool is_single)
 {
-  const char *msg_single =
-      "Data-block does not support asset operations - must be "
-      "a " ED_ASSET_TYPE_IDS_NON_EXPERIMENTAL_UI_STRING;
-  const char *msg_multiple =
-      "No data-block selected that supports asset operations - select at least "
-      "one " ED_ASSET_TYPE_IDS_NON_EXPERIMENTAL_UI_STRING;
+  const char *msg_single = N_(
+      "Data-block does not support asset operations - must be a "
+      "Brush, Collection, Node Group, Object, Pose Action, Scene, or World");
+  const char *msg_multiple = N_(
+      "No data-block selected that supports asset operations - select at least one "
+      "Brush, Collection, Node Group, Object, Pose Action, Scene, or World");
   return is_single ? msg_single : msg_multiple;
 }
 
@@ -291,7 +299,9 @@ void AssetClearHelper::reportResults(const bContext *C, ReportList &reports) con
   if (!wasSuccessful()) {
     /* Dedicated error message for when there is an active asset detected, but it's not an ID local
      * to this file. Helps users better understanding what's going on. */
-    if (AssetRepresentationHandle *active_asset = CTX_wm_asset(C); !active_asset->is_local_id()) {
+    if (asset_system::AssetRepresentation *active_asset = CTX_wm_asset(C);
+        !active_asset->is_local_id())
+    {
       BKE_report(&reports,
                  RPT_ERROR,
                  "No asset data-blocks from the current file selected (assets must be stored in "
@@ -437,14 +447,157 @@ static bool asset_library_refresh_poll(bContext *C)
          list::has_asset_browser_storage_for_library(library, C);
 }
 
-static wmOperatorStatus asset_library_refresh_exec(bContext *C, wmOperator * /*unused*/)
+static void do_asset_library_refresh(bContext *C)
 {
   const AssetLibraryReference *library = CTX_wm_asset_library_ref(C);
   /* Handles both global asset list storage and asset browsers. */
   list::clear(library, C);
   WM_event_add_notifier(C, NC_ASSET | ND_ASSET_LIST_READING, nullptr);
+}
+
+struct AssetLibraryAndRef {
+  const asset_system::AssetLibrary *library;
+  AssetLibraryReference reference;
+};
+
+/**
+ * Get the AssetLibrary and its AssetLibraryReference from the context.
+ *
+ * This abstracts away the various null pointers and empty optionals that can occur, and maps them
+ * all to a single optional.
+ */
+static std::optional<AssetLibraryAndRef> asset_library_from_context(bContext *C)
+{
+  /* Find the asset library, depending on where we were invoked from. */
+  if (ED_operator_asset_browsing_active(C)) {
+    const asset_system::AssetLibrary *asset_lib = ED_fileselect_active_asset_library_get(
+        CTX_wm_space_file(C));
+    if (!asset_lib) {
+      return {};
+    }
+    const std::optional<AssetLibraryReference> library_ref = asset_lib->library_reference();
+    if (!library_ref) {
+      return {};
+    }
+
+    return {{asset_lib, *library_ref}};
+  }
+
+  const AssetLibraryReference *library_ref = CTX_wm_asset_library_ref(C);
+  if (!library_ref) {
+    return {};
+  }
+  const asset_system::AssetLibrary *asset_lib = ed::asset::list::library_get_once_available(
+      *library_ref);
+  if (!asset_lib) {
+    return {};
+  }
+
+  return {{asset_lib, *library_ref}};
+}
+
+static wmOperatorStatus asset_library_reload_listing_exec(bContext *C, wmOperator *op)
+{
+  /* This is also checked in the poll function, but this exec function is also called from the
+   * generic asset_library_fresh_exec() function, where it is not. */
+  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
+    BKE_report(op->reports, RPT_ERROR, "Online access is disabled in the Preferences");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Find the asset library, depending on where we were invoked from. */
+  const std::optional<AssetLibraryAndRef> asset_lib_and_ref = asset_library_from_context(C);
+  if (!asset_lib_and_ref ||
+      !asset_system::is_or_contains_remote_libraries(asset_lib_and_ref->reference))
+  {
+    BKE_report(
+        op->reports, RPT_ERROR, "This asset library does not have a remote listing to download");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Re-download the asset listing on shift-click. */
+  asset_lib_and_ref->library->force_remote_listing_download();
+
+  /* Always end with a regular refresh, as a "forced refresh" like this should be an additional
+   * thing on top of regular refreshing (otherwise it would be weird to use the refresh button for
+   * this). */
+  do_asset_library_refresh(C);
 
   return OPERATOR_FINISHED;
+}
+
+static bool asset_library_reload_listing_poll(bContext *C)
+{
+  const std::optional<AssetLibraryAndRef> asset_lib_and_ref = asset_library_from_context(C);
+  if (!asset_lib_and_ref ||
+      !asset_system::is_or_contains_remote_libraries(asset_lib_and_ref->reference))
+  {
+    CTX_wm_operator_poll_msg_set(C, "This is not a remote library");
+    return false;
+  }
+
+  /* Check the flag after checking for the remote library to have an online component.
+   * Because if there is not, then enabling the online access in the preferences
+   * isn't going to do anything. */
+  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
+    CTX_wm_operator_poll_msg_set(C, "Online access is disabled in the Preferences");
+    return false;
+  }
+
+  return true;
+}
+
+static void ASSET_OT_library_reload_listing(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Reload Remote Asset Library Listing";
+  ot->description =
+      "Re-download the asset listing of a remote library. Only supported when the active "
+      "asset library is remote or has a remote component (the Essentials library)";
+  ot->idname = "ASSET_OT_library_reload_listing";
+
+  /* API callbacks. */
+  ot->exec = asset_library_reload_listing_exec;
+  ot->poll = asset_library_reload_listing_poll;
+}
+
+static wmOperatorStatus asset_library_refresh_exec(bContext *C, wmOperator *op)
+{
+  if (RNA_boolean_get(op->ptr, "use_remote_listing")) {
+    /* Delegate to the ASSET_OT_library_reload_listing operator. */
+    return asset_library_reload_listing_exec(C, op);
+  }
+
+  /* Just a plain refresh of the asset browser. */
+  do_asset_library_refresh(C);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus asset_library_refresh_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent *event)
+{
+  if (event->modifier & KM_SHIFT && RNA_boolean_get(op->ptr, "use_shift_for_remote_listing")) {
+    RNA_boolean_set(op->ptr, "use_remote_listing", true);
+  }
+  return asset_library_refresh_exec(C, op);
+}
+
+static std::string asset_library_refresh_get_description(bContext * /*C*/,
+                                                         wmOperatorType *ot,
+                                                         PointerRNA *ptr)
+{
+  if (RNA_boolean_get(ptr, "use_remote_listing")) {
+    return "Re-download the asset listing of a remote library. Only supported when the active "
+           "asset library is remote or has a remote component (the Essentials library)";
+  }
+
+  if (RNA_boolean_get(ptr, "use_shift_for_remote_listing")) {
+    return "Reread assets and asset catalogs from the asset library on disk.\n"
+           "Shift-click: re-download the asset listing of a remote library";
+  }
+
+  return ot->description;
 }
 
 static void ASSET_OT_library_refresh(wmOperatorType *ot)
@@ -455,8 +608,28 @@ static void ASSET_OT_library_refresh(wmOperatorType *ot)
   ot->idname = "ASSET_OT_library_refresh";
 
   /* API callbacks. */
+  ot->invoke = asset_library_refresh_invoke;
   ot->exec = asset_library_refresh_exec;
   ot->poll = asset_library_refresh_poll;
+  ot->get_description = asset_library_refresh_get_description;
+
+  PropertyRNA *prop;
+  prop = RNA_def_boolean(
+      ot->srna,
+      "use_remote_listing",
+      false,
+      "Remote Listing",
+      "Re-download the asset listing of a remote library. Only supported when the active asset "
+      "library is remote or has a remote component (the Essentials library)");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_boolean(ot->srna,
+                         "use_shift_for_remote_listing",
+                         false,
+                         "Use Shift for Remote Listing",
+                         "When this operator is invoked and the Shift key is pressed, download "
+                         "the remote asset library listing");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
 
 /* -------------------------------------------------------------------- */
@@ -843,6 +1016,7 @@ static void ASSET_OT_bundle_install(wmOperatorType *ot)
 
   ot->prop = RNA_def_property(ot->srna, "asset_library_reference", PROP_ENUM, PROP_NONE);
   RNA_def_property_flag(ot->prop, PROP_HIDDEN);
+  RNA_def_property_enum_default(ot->prop, ASSET_LIBRARY_LOCAL);
   RNA_def_enum_funcs(ot->prop, rna_asset_library_reference_itemf);
 
   WM_operator_properties_filesel(ot,
@@ -877,7 +1051,7 @@ static bool is_contained_in_selected_asset_library(wmOperator *op, const char *f
   if (!lib) {
     return false;
   }
-  return BLI_path_contains(lib->dirpath, filepath);
+  return BLI_path_contains(lib->resolved_dirpath, filepath);
 }
 
 /**
@@ -899,7 +1073,7 @@ static bool set_filepath_for_asset_lib(const Main *bmain, wmOperator *op)
   }
 
   char file_path[FILE_MAX];
-  BLI_path_join(file_path, sizeof(file_path), lib->dirpath, blend_filename);
+  BLI_path_join(file_path, sizeof(file_path), lib->resolved_dirpath, blend_filename);
   RNA_string_set(op->ptr, "filepath", file_path);
 
   return true;
@@ -1030,7 +1204,7 @@ static inline void square_points_clamp_to_window(const int2 &p1, int2 &p2, const
   const int max_size_y = (dir_y > 0) ? win_size.y - p1.y - 1 : p1.y;
 
   /* Clamp the square size so it does not exceed window bounds. */
-  square_size = std::min(square_size, std::min(max_size_x, max_size_y));
+  square_size = std::min({square_size, max_size_x, max_size_y});
 
   /* Update p2 to form a clamped square in the same direction as the drag. */
   p2.x = p1.x + dir_x * square_size;
@@ -1077,7 +1251,8 @@ static void generate_previewimg_from_buffer(ID *id, const ImBuf *image_buffer)
 
     ImBuf *scaled_imbuf = IMB_scale_into_new(
         image_buffer, width, height, IMBScaleFilter::Nearest, false);
-    preview_image->rect[size_type] = (uint *)MEM_dupallocN(scaled_imbuf->byte_buffer.data);
+    preview_image->rect[size_type] = reinterpret_cast<uint *>(
+        MEM_dupalloc(scaled_imbuf->byte_data()));
     preview_image->w[size_type] = width;
     preview_image->h[size_type] = height;
     preview_image->flag[size_type] |= PRV_USER_EDITED;
@@ -1104,16 +1279,17 @@ static ImBuf *take_screenshot_crop(bContext *C, const rcti &crop_rect)
 
   /* Validate rectangle. */
   if (!BLI_rcti_is_valid(&safe_rect)) {
-    MEM_freeN(dumprect);
+    MEM_delete(dumprect);
     return nullptr;
   }
 
-  ImBuf *image_buffer = IMB_allocImBuf(dumprect_size[0], dumprect_size[1], 24, 0);
-  /* Using IB_TAKE_OWNERSHIP because the crop does kind of take ownership already it seems. At
-   * least freeing the memory after would cause a crash if ownership isn't taken. */
-  IMB_assign_byte_buffer(image_buffer, dumprect, IB_TAKE_OWNERSHIP);
+  ImBuf *image_buffer = IMB_allocImBuf(dumprect_size[0], dumprect_size[1], ImBufFlags::Zero);
+  image_buffer->color_mode = ImColorMode::RGB;
+  image_buffer->assign_byte_data(dumprect);
 
-  IMB_rect_crop(image_buffer, &safe_rect);
+  IMB_crop(image_buffer,
+           int2(safe_rect.xmin, safe_rect.ymin),
+           int2(BLI_rcti_size_x(&safe_rect) + 1, BLI_rcti_size_y(&safe_rect) + 1));
   return image_buffer;
 }
 
@@ -1155,7 +1331,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
   bool render_offscreen = false;
   if (area_p1 == area_p2 && area_p1 != nullptr && area_p1->spacetype == SPACE_VIEW3D) {
     Scene *scene = CTX_data_scene(C);
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     /* For #ED_view3d_draw_offscreen_imbuf only EEVEE only produces a good result. See #141732. */
     if (eDrawType(v3d->shading.type) == OB_RENDER) {
       const char *engine_name = scene->r.engine;
@@ -1169,7 +1345,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
     }
   }
   if (render_offscreen) {
-    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first);
+    View3D *v3d = static_cast<View3D *>(area_p1->spacedata.first_);
     ARegion *region = BKE_area_find_region_type(area_p1, RGN_TYPE_WINDOW);
     if (!region) {
       /* Unlikely to be hit, but just being cautious. */
@@ -1184,12 +1360,13 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
                                                   region,
                                                   region->winx,
                                                   region->winy,
-                                                  IB_byte_data,
+                                                  ImBufFlags::ByteData,
                                                   R_ALPHAPREMUL,
                                                   nullptr,
                                                   false,
                                                   nullptr,
                                                   nullptr,
+                                                  false,
                                                   err_out);
 
     /* Convert crop rect into the space relative to the area. */
@@ -1197,10 +1374,12 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
                             p2.x - area_p1->totrct.xmin,
                             p1.y - area_p1->totrct.ymin,
                             p2.y - area_p1->totrct.ymin};
-    IMB_rect_crop(image_buffer, &crop_rect);
+    IMB_crop(image_buffer,
+             int2(crop_rect.xmin, crop_rect.ymin),
+             int2(BLI_rcti_size_x(&crop_rect) + 1, BLI_rcti_size_y(&crop_rect) + 1));
   }
   else {
-    const rcti crop_rect = {p1.x, p2.x, p1.y, p2.y};
+    const rcti crop_rect = {p1.x, p2.x + 1, p1.y, p2.y + 1};
     image_buffer = take_screenshot_crop(C, crop_rect);
     if (!image_buffer) {
       BKE_report(op->reports, RPT_ERROR, "Invalid screenshot area selection");
@@ -1208,7 +1387,7 @@ static wmOperatorStatus screenshot_preview_exec(bContext *C, wmOperator *op)
     }
   }
 
-  const AssetRepresentationHandle *asset_handle = CTX_wm_asset(C);
+  const asset_system::AssetRepresentation *asset_handle = CTX_wm_asset(C);
   BLI_assert_msg(asset_handle != nullptr, "This is ensured by poll");
   AssetWeakReference asset_reference = asset_handle->make_weak_reference();
 
@@ -1263,19 +1442,19 @@ static void screenshot_preview_draw(const wmWindow *window, void *operator_data)
   float4 mask_color = {1, 1, 1, 0.25};
   const int2 win_size = WM_window_native_pixel_size(window);
   const rctf mask_rect_bottom = {0, float(win_size.x), 0, screenshot_rect.ymin};
-  UI_draw_roundbox_aa(&mask_rect_bottom, true, 0, mask_color);
+  ui::draw_roundbox_aa(&mask_rect_bottom, true, 0, mask_color);
   const rctf mask_rect_top = {0, float(win_size.x), screenshot_rect.ymax, float(win_size.y)};
-  UI_draw_roundbox_aa(&mask_rect_top, true, 0, mask_color);
+  ui::draw_roundbox_aa(&mask_rect_top, true, 0, mask_color);
   const rctf mask_rect_left = {
       0, screenshot_rect.xmin, screenshot_rect.ymin, screenshot_rect.ymax};
-  UI_draw_roundbox_aa(&mask_rect_left, true, 0, mask_color);
+  ui::draw_roundbox_aa(&mask_rect_left, true, 0, mask_color);
   const rctf mask_rect_right = {
       screenshot_rect.xmax, float(win_size.x), screenshot_rect.ymin, screenshot_rect.ymax};
-  UI_draw_roundbox_aa(&mask_rect_right, true, 0, mask_color);
+  ui::draw_roundbox_aa(&mask_rect_right, true, 0, mask_color);
 
   float4 color;
-  UI_GetThemeColor4fv(TH_EDITOR_BORDER, color);
-  UI_draw_roundbox_aa(&screenshot_rect, false, 0, color);
+  ui::theme::get_color_4fv(TH_EDITOR_BORDER, color);
+  ui::draw_roundbox_aa(&screenshot_rect, false, 0, color);
 }
 
 static void screenshot_preview_exit(bContext *C, wmOperator *op)
@@ -1284,7 +1463,7 @@ static void screenshot_preview_exit(bContext *C, wmOperator *op)
   WM_cursor_modal_restore(win);
   ScreenshotOperatorData *data = static_cast<ScreenshotOperatorData *>(op->customdata);
   WM_draw_cb_exit(win, data->draw_handle);
-  MEM_freeN(data);
+  MEM_delete(data);
   ED_workspace_status_text(C, nullptr);
 }
 
@@ -1435,7 +1614,7 @@ static wmOperatorStatus screenshot_preview_invoke(bContext *C,
   wmWindow *win = CTX_wm_window(C);
   WM_cursor_modal_set(win, WM_CURSOR_CROSS);
 
-  op->customdata = MEM_callocN(sizeof(ScreenshotOperatorData), __func__);
+  op->customdata = MEM_new_zeroed<ScreenshotOperatorData>(__func__);
   ScreenshotOperatorData *data = static_cast<ScreenshotOperatorData *>(op->customdata);
   data->draw_handle = WM_draw_cb_activate(win, screenshot_preview_draw, data);
   data->is_mouse_down = false;
@@ -1458,7 +1637,7 @@ static bool screenshot_preview_poll(bContext *C)
     return false;
   }
 
-  const AssetRepresentationHandle *asset_handle = CTX_wm_asset(C);
+  const asset_system::AssetRepresentation *asset_handle = CTX_wm_asset(C);
   if (!asset_handle) {
     CTX_wm_operator_poll_msg_set(C, "No selected asset");
     return false;
@@ -1466,9 +1645,7 @@ static bool screenshot_preview_poll(bContext *C)
   if (asset_handle->is_local_id()) {
     return WM_operator_winactive(C);
   }
-
-  std::string lib_path = asset_handle->full_library_path();
-  if (StringRef(lib_path).endswith(BLENDER_ASSET_FILE_SUFFIX)) {
+  if (asset_handle->is_potentially_editable_asset_blend()) {
     return true;
   }
 
@@ -1518,6 +1695,146 @@ static void ASSET_OT_screenshot_preview(wmOperatorType *ot)
 
 /* -------------------------------------------------------------------- */
 
+static Vector<const asset_system::AssetRepresentation *> selected_or_active_assets(
+    const bContext *C)
+{
+  /* Convert RNA pointers to their data. */
+  Vector<PointerRNA> asset_pointers = CTX_data_collection_get(C, "selected_assets");
+  Vector<const asset_system::AssetRepresentation *> assets(asset_pointers.size());
+  for (int i : asset_pointers.index_range()) {
+    assets[i] = static_cast<asset_system::AssetRepresentation *>(asset_pointers[i].data);
+  }
+
+  if (!assets.is_empty()) {
+    /* There were selected assets, so return those. */
+    return assets;
+  }
+
+  /* No selected assets, so return the active asset.  */
+  if (const asset_system::AssetRepresentation *active_asset = CTX_wm_asset(C)) {
+    assets.append(active_asset);
+  }
+
+  return assets;
+}
+
+static bool assets_download_any_poll(bContext *C)
+{
+  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
+    CTX_wm_operator_poll_msg_set(
+        C, "Internet access is disabled (can be enabled in the Preferences, System tab)");
+    return false;
+  }
+
+#ifndef WITH_PYTHON
+  UNUSED_VARS(C);
+  CTX_wm_operator_poll_msg_set(C, "Asset downloading requires Python");
+  return false;
+#endif
+
+  return true;
+}
+
+static bool assets_download_poll(bContext *C)
+{
+  if (!assets_download_any_poll(C)) {
+    return false;
+  }
+
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+  if (assets.is_empty()) {
+    CTX_wm_operator_poll_msg_set(C, "No asset selected or active");
+    return false;
+  }
+
+  const bool has_downloadable_asset = [&]() {
+    for (const asset_system::AssetRepresentation *asset : assets) {
+      if (asset->needs_download()) {
+        return true;
+      }
+    }
+    return false;
+  }();
+
+  if (!has_downloadable_asset) {
+    CTX_wm_operator_poll_msg_set(C, "None of the selected assets requires downloading");
+    return false;
+  }
+
+  return true;
+}
+
+static wmOperatorStatus assets_download_exec(bContext *C, wmOperator *op)
+{
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+
+  for (const asset_system::AssetRepresentation *asset : assets) {
+    if (asset->needs_download()) {
+      asset_system::remote_library_request_asset_download(*C, *asset, op->reports);
+    }
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void ASSET_OT_assets_download(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Download Assets";
+  ot->description = "Download the selected asset(s)";
+  ot->idname = "ASSET_OT_assets_download";
+
+  /* API callbacks. */
+  ot->exec = assets_download_exec;
+  ot->poll = assets_download_poll;
+}
+
+/* -------------------------------------------------------------------- */
+
+static wmOperatorStatus asset_download_exec(bContext *C, wmOperator *op)
+{
+  const asset_system::AssetRepresentation *asset =
+      operator_asset_reference_props_get_asset_from_all_library(*C, *op->ptr, op->reports);
+
+  if (!asset) {
+    const std::string asset_relpath = RNA_string_get(op->ptr, "relative_asset_identifier");
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Asset could not be found (relative identifier: '%s')",
+                asset_relpath.c_str());
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!asset->needs_download()) {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "Asset '%s' doesn't need downloading", asset->get_name().c_str());
+    return OPERATOR_CANCELLED;
+  }
+  asset_system::remote_library_request_asset_download(*C, *asset, op->reports);
+
+  return OPERATOR_FINISHED;
+}
+
+/**
+ * Variant of #ASSET_OT_assets_download that only downloads a single specific asset given in the
+ * operator properties.
+ */
+static void ASSET_OT_asset_download(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Download Asset";
+  ot->description = "Make the asset available without internet access";
+  ot->idname = "ASSET_OT_asset_download";
+
+  /* API callbacks. */
+  ot->exec = asset_download_exec;
+  ot->poll = assets_download_any_poll;
+
+  operator_asset_reference_props_register(*ot->srna);
+}
+
+/* -------------------------------------------------------------------- */
+
 void operatortypes_asset()
 {
   WM_operatortype_append(ASSET_OT_mark);
@@ -1534,8 +1851,12 @@ void operatortypes_asset()
   WM_operatortype_append(ASSET_OT_bundle_install);
 
   WM_operatortype_append(ASSET_OT_library_refresh);
+  WM_operatortype_append(ASSET_OT_library_reload_listing);
 
   WM_operatortype_append(ASSET_OT_screenshot_preview);
+
+  WM_operatortype_append(ASSET_OT_assets_download);
+  WM_operatortype_append(ASSET_OT_asset_download);
 }
 
 }  // namespace blender::ed::asset

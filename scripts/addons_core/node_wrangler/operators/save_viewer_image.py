@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty, EnumProperty
 from bpy_extras.io_utils import ExportHelper
@@ -29,19 +28,20 @@ class NODE_OT_save_viewer_image(Operator, ExportHelper):
     filename_ext: EnumProperty(
         name="Format",
         description="Choose the file format to save to",
-        items=(('.bmp', "BMP", ""),
-               ('.rgb', 'IRIS', ""),
-               ('.png', 'PNG', ""),
-               ('.jpg', 'JPEG', ""),
-               ('.jp2', 'JPEG2000', ""),
-               ('.tga', 'TARGA', ""),
-               ('.cin', 'CINEON', ""),
-               ('.dpx', 'DPX', ""),
-               ('.exr', 'OPEN_EXR', ""),
-               ('.hdr', 'HDR', ""),
-               ('.tif', 'TIFF', ""),
-               ('.webp', 'WEBP', ""),
-              ),
+        items=(
+            ('.bmp', "BMP", ""),
+            ('.rgb', 'IRIS', ""),
+            ('.png', 'PNG', ""),
+            ('.jpg', 'JPEG', ""),
+            ('.jp2', 'JPEG2000', ""),
+            ('.tga', 'TARGA', ""),
+            ('.cin', 'CINEON', ""),
+            ('.dpx', 'DPX', ""),
+            ('.exr', 'OPEN_EXR', ""),
+            ('.hdr', 'HDR', ""),
+            ('.tif', 'TIFF', ""),
+            ('.webp', 'WEBP', ""),
+        ),
         default='.png',
     )
 

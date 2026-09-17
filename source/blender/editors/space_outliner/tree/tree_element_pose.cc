@@ -10,17 +10,21 @@
 #include "DNA_object_types.h"
 #include "DNA_outliner_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 
 #include "../outliner_intern.hh"
 
+#include "tree_display.hh"
+#include "tree_element_constraint.hh"
 #include "tree_element_pose.hh"
+
+namespace blender {
 
 struct bConstraint;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 TreeElementPoseBase::TreeElementPoseBase(TreeElement &legacy_te, Object &object)
     : AbstractTreeElement(legacy_te), object_(object)
@@ -29,42 +33,46 @@ TreeElementPoseBase::TreeElementPoseBase(TreeElement &legacy_te, Object &object)
   legacy_te.name = IFACE_("Pose");
 }
 
+ID *TreeElementPoseBase::owner_id(Object &object)
+{
+  return &object.id;
+}
+
 void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
 {
-  bArmature *arm = static_cast<bArmature *>(object_.data);
+  bArmature *arm = id_cast<bArmature *>(object_.data);
 
   /* channels undefined in editmode, but we want the 'tenla' pose icon itself */
   if ((arm->edbo == nullptr) && (object_.mode & OB_MODE_POSE)) {
     int const_index = 1000; /* ensure unique id for bone constraints */
-    int a;
-    LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &object_.pose->chanbase, a) {
-      TreeElement *ten = add_element(
-          &legacy_te_.subtree, &object_.id, pchan, &legacy_te_, TSE_POSE_CHANNEL, a);
-      pchan->temp = (void *)ten;
 
-      if (!BLI_listbase_is_empty(&pchan->constraints)) {
+    for (const auto [a, pchan] : object_.pose->chanbase.enumerate()) {
+      TreeElement *ten = add_element<TreeElementPoseChannel>({.index = a}, object_, pchan);
+      pchan.temp = static_cast<void *>(ten);
+
+      if (!pchan.constraints.is_empty()) {
         // Object *target;
-        TreeElement *tenla1 = add_element(
-            &ten->subtree, &object_.id, nullptr, ten, TSE_CONSTRAINT_BASE, 0);
+        TreeElement *tenla1 = add_element<TreeElementConstraintBase>({.parent = ten}, object_);
         // char *str;
 
-        LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
-          add_element(&tenla1->subtree, &object_.id, con, tenla1, TSE_CONSTRAINT, const_index);
+        for (bConstraint &con : pchan.constraints) {
+          add_element<TreeElementConstraint>(
+              {.parent = tenla1, .index = const_index}, object_, con);
           /* possible add all other types links? */
         }
         const_index++;
       }
     }
     /* make hierarchy */
-    TreeElement *ten = static_cast<TreeElement *>(legacy_te_.subtree.first);
+    TreeElement *ten = legacy_te_.subtree.first();
     while (ten) {
       TreeElement *nten = ten->next, *par;
       TreeStoreElem *tselem = TREESTORE(ten);
       if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = (bPoseChannel *)ten->directdata;
+        bPoseChannel *pchan = static_cast<bPoseChannel *>(ten->directdata);
         if (pchan->parent) {
           BLI_remlink(&legacy_te_.subtree, ten);
-          par = (TreeElement *)pchan->parent->temp;
+          par = static_cast<TreeElement *>(pchan->parent->temp);
           BLI_addtail(&par->subtree, ten);
           ten->parent = par;
         }
@@ -86,4 +94,10 @@ TreeElementPoseChannel::TreeElementPoseChannel(TreeElement &legacy_te,
   legacy_te.directdata = &pchan_;
 }
 
-}  // namespace blender::ed::outliner
+ID *TreeElementPoseChannel::owner_id(Object &object, bPoseChannel & /*pchan*/)
+{
+  return &object.id;
+}
+
+}  // namespace ed::outliner
+}  // namespace blender

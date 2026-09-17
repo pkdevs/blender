@@ -2,7 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup io
+ */
+
 #pragma once
+
+namespace blender {
 
 struct EnumPropertyItem;
 struct Main;
@@ -22,3 +28,5 @@ extern const EnumPropertyItem io_transform_axis[];
 
 void io_ui_forward_axis_update(Main *main, Scene *scene, PointerRNA *ptr);
 void io_ui_up_axis_update(Main *main, Scene *scene, PointerRNA *ptr);
+
+}  // namespace blender

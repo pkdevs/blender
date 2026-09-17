@@ -8,17 +8,19 @@
 
 #include <cstring>
 
+#include "DNA_space_types.h"
 #include "DNA_text_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
+#include "BKE_text.h"
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -38,24 +40,28 @@
 #include "text_format.hh"
 #include "text_intern.hh" /* Own include. */
 
-/* ******************** default callbacks for text space ***************** */
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Default Callbacks for Text Space
+ * \{ */
 
 static SpaceLink *text_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
   ARegion *region;
   SpaceText *stext;
 
-  stext = MEM_callocN<SpaceText>("inittext");
+  stext = MEM_new<SpaceText>("inittext");
   stext->spacetype = SPACE_TEXT;
 
-  stext->lheight = 12;
+  stext->line_height = 12;
   stext->tabnumber = 4;
   stext->margin_column = 80;
   stext->showsyntax = true;
   stext->showlinenrs = true;
   stext->flags |= ST_FIND_WRAP;
 
-  stext->runtime = MEM_new<SpaceText_Runtime>(__func__);
+  stext->runtime = MEM_new<ed::text::SpaceText_Runtime>(__func__);
 
   /* Header. */
   region = BKE_area_region_new();
@@ -84,13 +90,13 @@ static SpaceLink *text_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   BLI_addtail(&stext->regionbase, region);
   region->regiontype = RGN_TYPE_WINDOW;
 
-  return (SpaceLink *)stext;
+  return reinterpret_cast<SpaceLink *>(stext);
 }
 
 /* Doesn't free the space-link itself. */
 static void text_free(SpaceLink *sl)
 {
-  SpaceText *stext = (SpaceText *)sl;
+  SpaceText *stext = reinterpret_cast<SpaceText *>(sl);
   space_text_free_caches(stext);
   MEM_delete(stext->runtime);
   stext->text = nullptr;
@@ -101,19 +107,63 @@ static void text_init(wmWindowManager * /*wm*/, ScrArea * /*area*/) {}
 
 static SpaceLink *text_duplicate(SpaceLink *sl)
 {
-  SpaceText *stextn = static_cast<SpaceText *>(MEM_dupallocN(sl));
+  SpaceText *stextn = MEM_dupalloc(reinterpret_cast<SpaceText *>(sl));
 
   /* Add its own runtime data. */
-  stextn->runtime = MEM_new<SpaceText_Runtime>(__func__);
+  stextn->runtime = MEM_new<ed::text::SpaceText_Runtime>(__func__);
 
-  return (SpaceLink *)stextn;
+  return reinterpret_cast<SpaceLink *>(stextn);
 }
+
+#ifdef WITH_INPUT_IME
+static std::optional<ARegionIMECursorState> text_main_region_cursor_ime(wmWindow * /*win*/,
+                                                                        const ScrArea *area,
+                                                                        const ARegion *region,
+                                                                        ARegionIMECursor *r_cursor)
+{
+  SpaceText *st = area->spacedata.first_as<SpaceText>();
+  /* Pending while scrolling, since the position is valid again once it ends.
+   * This must *not* cancel the composition. */
+  if (st->flags & ST_SCROLL_SELECT) {
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  /* Font metrics are cached during draw; zero means the region hasn't been drawn yet. */
+  if (st->runtime->line_height_px == 0) {
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  const std::optional<int2> cursor_xy = space_text_cursor_region_xy_get(st, region);
+  if (!cursor_xy) {
+    return std::nullopt;
+  }
+  const int x = (*cursor_xy)[0];
+  const int y = (*cursor_xy)[1];
+
+  /* Report the glyph extent, not the line cell: the preview sits its baseline a descender
+   * above `ymin` (see #region_overlay_draw) while the editor draws text one line height
+   * below the cell top, both use the same font & size so the descender matches. */
+  const int line_height = st->runtime->line_height_px;
+  const int baseline_y = y - line_height;
+  const int ymin = baseline_y + st->runtime->descender_px;
+
+  r_cursor->rect = {
+      .xmin = x,
+      .xmax = x,
+      .ymin = ymin,
+      .ymax = ymin + line_height,
+  };
+  r_cursor->font_size = line_height;
+  return ARegionIMECursorState::PositionSet;
+}
+
+#endif
 
 static void text_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
   const wmNotifier *wmn = params->notifier;
-  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  SpaceText *st = area->spacedata.first_as<SpaceText>();
 
   /* context changes. */
   switch (wmn->category) {
@@ -245,15 +295,19 @@ static int /*eContextResult*/ text_context(const bContext *C,
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
 
-/********************* main region ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Main Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_main_region_init(wmWindowManager *wm, ARegion *region)
 {
   wmKeyMap *keymap;
-  ListBase *lb;
+  ListBaseT<wmDropBox> *lb;
 
-  UI_view2d_region_reinit(&region->v2d, V2D_COMMONVIEW_STANDARD, region->winx, region->winy);
+  view2d_region_reinit(&region->v2d, ui::V2D_COMMONVIEW_STANDARD, region->winx, region->winy);
 
   /* Own keymap. */
   keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Text Generic", SPACE_TEXT, RGN_TYPE_WINDOW);
@@ -274,26 +328,26 @@ static void text_main_region_draw(const bContext *C, ARegion *region)
   // View2D *v2d = &region->v2d;
 
   /* Clear and setup matrix. */
-  UI_ThemeClearColor(TH_BACK);
+  ui::theme::frame_buffer_clear(TH_BACK);
 
-  // UI_view2d_view_ortho(v2d);
+  // view2d_view_ortho(v2d);
 
   /* Data. */
   draw_text_main(st, region);
 
   /* Reset view matrix. */
-  // UI_view2d_view_restore(C);
+  // view2d_view_restore(C);
 
   /* Scroll-bars? */
 }
 
 static void text_cursor(wmWindow *win, ScrArea *area, ARegion *region)
 {
-  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  SpaceText *st = area->spacedata.first_as<SpaceText>();
   int wmcursor = WM_CURSOR_TEXT_EDIT;
 
   if (st->text && BLI_rcti_isect_pt(&st->runtime->scroll_region_handle,
-                                    win->eventstate->xy[0] - region->winrct.xmin,
+                                    win->runtime->eventstate->xy[0] - region->winrct.xmin,
                                     st->runtime->scroll_region_handle.ymin))
   {
     wmcursor = WM_CURSOR_DEFAULT;
@@ -302,7 +356,11 @@ static void text_cursor(wmWindow *win, ScrArea *area, ARegion *region)
   WM_cursor_set(win, wmcursor);
 }
 
-/* ************* dropboxes ************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Drop Boxes
+ * \{ */
 
 static bool text_drop_path_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
@@ -349,7 +407,7 @@ static void text_drop_string_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *dro
 /* This region dropbox definition. */
 static void text_dropboxes()
 {
-  ListBase *lb = WM_dropboxmap_find("Text", SPACE_TEXT, RGN_TYPE_WINDOW);
+  ListBaseT<wmDropBox> *lb = WM_dropboxmap_find("Text", SPACE_TEXT, RGN_TYPE_WINDOW);
 
   WM_dropbox_add(lb, "TEXT_OT_open", text_drop_path_poll, text_drop_path_copy, nullptr, nullptr);
   WM_dropbox_add(lb, "TEXT_OT_insert", text_drop_id_poll, text_drop_id_copy, nullptr, nullptr);
@@ -357,9 +415,11 @@ static void text_dropboxes()
       lb, "TEXT_OT_insert", text_drop_string_poll, text_drop_string_copy, nullptr, nullptr);
 }
 
-/* ************* end drop *********** */
+/** \} */
 
-/****************** header region ******************/
+/* -------------------------------------------------------------------- */
+/** \name Header Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
@@ -372,7 +432,11 @@ static void text_header_region_draw(const bContext *C, ARegion *region)
   ED_region_header(C, region);
 }
 
-/****************** properties region ******************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Properties Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_properties_region_init(wmWindowManager *wm, ARegion *region)
@@ -394,9 +458,9 @@ static void text_properties_region_draw(const bContext *C, ARegion *region)
 
 static void text_id_remap(ScrArea * /*area*/,
                           SpaceLink *slink,
-                          const blender::bke::id::IDRemapper &mappings)
+                          const bke::id::IDRemapper &mappings)
 {
-  SpaceText *stext = (SpaceText *)slink;
+  SpaceText *stext = reinterpret_cast<SpaceText *>(slink);
   mappings.apply(reinterpret_cast<ID **>(&stext->text), ID_REMAP_APPLY_ENSURE_REAL);
 }
 
@@ -409,16 +473,22 @@ static void text_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
 
 static void text_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLink *sl)
 {
-  SpaceText *st = (SpaceText *)sl;
-  st->runtime = MEM_new<SpaceText_Runtime>(__func__);
+  SpaceText *st = reinterpret_cast<SpaceText *>(sl);
+  st->runtime = MEM_new<ed::text::SpaceText_Runtime>(__func__);
 }
 
 static void text_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  BLO_write_struct(writer, SpaceText, sl);
+  writer->write_struct_cast<SpaceText>(sl, [](BlendStructWriter<SpaceText> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
+  });
 }
 
-/********************* registration ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Registration
+ * \{ */
 
 void ED_spacetype_text()
 {
@@ -444,18 +514,22 @@ void ED_spacetype_text()
   st->blend_write = text_space_blend_write;
 
   /* Regions: main window. */
-  art = MEM_callocN<ARegionType>("spacetype text region");
+  art = MEM_new_zeroed<ARegionType>("spacetype text region");
   art->regionid = RGN_TYPE_WINDOW;
   art->init = text_main_region_init;
   art->draw = text_main_region_draw;
   art->cursor = text_cursor;
   art->event_cursor = true;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = text_main_region_cursor_ime;
+#endif
 
   BLI_addhead(&st->regiontypes, art);
 
   /* Regions: properties. */
-  art = MEM_callocN<ARegionType>("spacetype text region");
+  art = MEM_new_zeroed<ARegionType>("spacetype text region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_COMPACT_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI;
 
@@ -465,7 +539,7 @@ void ED_spacetype_text()
   BLI_addhead(&st->regiontypes, art);
 
   /* Regions: header. */
-  art = MEM_callocN<ARegionType>("spacetype text region");
+  art = MEM_new_zeroed<ARegionType>("spacetype text region");
   art->regionid = RGN_TYPE_HEADER;
   art->prefsizey = HEADERY;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_HEADER;
@@ -475,7 +549,7 @@ void ED_spacetype_text()
   BLI_addhead(&st->regiontypes, art);
 
   /* Regions: footer. */
-  art = MEM_callocN<ARegionType>("spacetype text region");
+  art = MEM_new_zeroed<ARegionType>("spacetype text region");
   art->regionid = RGN_TYPE_FOOTER;
   art->prefsizey = HEADERY;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
@@ -493,3 +567,7 @@ void ED_spacetype_text()
   ED_text_format_register_pov();
   ED_text_format_register_pov_ini();
 }
+
+/** \} */
+
+}  // namespace blender

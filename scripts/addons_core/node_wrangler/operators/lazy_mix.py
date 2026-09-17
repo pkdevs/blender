@@ -9,7 +9,6 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_not_empty,
-    get_nodes_links,
     node_at_pos,
 )
 from ..utils.draw import (
@@ -31,7 +30,8 @@ class NODE_OT_lazy_mix(Operator, NWBase):
 
     def modal(self, context, event):
         context.area.tag_redraw()
-        nodes, links = get_nodes_links(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         cont = True
 
         node1 = None
@@ -83,7 +83,7 @@ class NODE_OT_lazy_mix(Operator, NWBase):
             self.report({'WARNING'}, "Active editor should be a node editor for the operator to run")
             return {'CANCELLED'}
 
-        # the arguments we pass the the callback
+        # the arguments we pass the callback
         args = (self, context, 'MIX')
         # Add the region OpenGL drawing callback
         # draw in view space with 'POST_VIEW' and 'PRE_VIEW'

@@ -8,6 +8,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -19,32 +20,17 @@
 
 #include "ED_anim_api.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionFilterTest : public testing::Test {
+class ActionFilterTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Action *action;
   Object *cube;
   Object *suzanne;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -99,7 +85,7 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
   ASSERT_NE(nullptr, fcu_cube_loc_y);
 
   /* Mock an bAnimContext for the Animation editor, with the above Animation showing. */
-  SpaceAction saction = {nullptr};
+  SpaceAction saction = {};
   saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
@@ -118,14 +104,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     slot_suzanne.set_expanded(false);
 
     /* This should produce 2 slots and no FCurves. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(2, num_entries);
-    EXPECT_EQ(2, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(2, anim_data.count());
 
     ASSERT_GE(num_entries, 1)
         << "Missing 1st ANIMTYPE_ACTION_SLOT entry, stopping to prevent crash";
@@ -155,14 +141,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     slot_suzanne.set_expanded(false);
 
     /* This should produce 2 slots and 2 FCurves. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(4, num_entries);
-    EXPECT_EQ(4, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(4, anim_data.count());
 
     /* First should be Cube slot. */
     ASSERT_GE(num_entries, 1) << "Missing 1st ale, stopping to prevent crash";
@@ -202,14 +188,14 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
     fcu_cube_loc_y->flag |= FCURVE_SELECTED;
 
     /* This should produce 1 slot and 1 FCurve. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_SEL | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
                                 ANIMFILTER_LIST_CHANNELS);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(2, num_entries);
-    EXPECT_EQ(2, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(2, anim_data.count());
 
     /* First should be Cube's selected FCurve. */
     const bAnimListElem *ale = static_cast<bAnimListElem *>(BLI_findlink(&anim_data, 0));
@@ -256,7 +242,7 @@ TEST_F(ActionFilterTest, layered_action_active_fcurves)
   fcurve_other->flag &= ~FCURVE_ACTIVE;
 
   /* Mock an bAnimContext for the Action editor. */
-  SpaceAction saction = {nullptr};
+  SpaceAction saction = {};
   saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
@@ -272,13 +258,13 @@ TEST_F(ActionFilterTest, layered_action_active_fcurves)
 
   {
     /* This should produce just the active F-Curve. */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                                 ANIMFILTER_FCURVESONLY | ANIMFILTER_ACTIVE);
     const int num_entries = ANIM_animdata_filter(
         &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
     EXPECT_EQ(1, num_entries);
-    EXPECT_EQ(1, BLI_listbase_count(&anim_data));
+    EXPECT_EQ(1, anim_data.count());
 
     const bAnimListElem *first_ale = static_cast<bAnimListElem *>(BLI_findlink(&anim_data, 0));
     EXPECT_EQ(ANIMTYPE_FCURVE, first_ale->type);

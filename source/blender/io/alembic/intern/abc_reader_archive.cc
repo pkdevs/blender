@@ -16,7 +16,7 @@
 #include "BKE_main.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #ifdef WIN32
 #  include "utfconv.hh"
@@ -25,13 +25,16 @@
 #include <fstream>
 #include <vector>
 
+namespace blender {
+
+using Alembic::Abc::chrono_t;
 using Alembic::Abc::ErrorHandler;
 using Alembic::Abc::Exception;
 using Alembic::Abc::IArchive;
 using Alembic::Abc::kWrapExisting;
 using Alembic::Abc::MetaData;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 static IArchive open_archive(const std::string &filename,
                              const std::vector<std::istream *> &input_streams)
@@ -157,4 +160,15 @@ bool ArchiveReader::is_blender_archive_version_prior_44()
   return false;
 }
 
-}  // namespace blender::io::alembic
+TimeInfo ArchiveReader::getTimeInfo()
+{
+  chrono_t min_time = std::numeric_limits<chrono_t>::max();
+  chrono_t max_time = -std::numeric_limits<chrono_t>::max();
+
+  Alembic::Abc::GetArchiveStartAndEndTime(m_archive, min_time, max_time);
+
+  return {min_time, max_time};
+}
+
+}  // namespace io::alembic
+}  // namespace blender

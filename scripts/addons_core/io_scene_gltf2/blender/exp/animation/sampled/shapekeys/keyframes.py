@@ -7,7 +7,6 @@ import typing
 import numpy as np
 from ......blender.com.data_path import get_sk_exported
 from ....cache import cached
-from ....tree import VExportNode
 from ...keyframes import Keyframe
 from ...fcurves.channels import get_channel_groups
 from ...fcurves.keyframes import gather_non_keyed_values
@@ -16,9 +15,10 @@ from ..sampling_cache import get_cache_data
 
 
 @cached
-def gather_sk_sampled_keyframes(obj_uuid,
+def gather_sk_sampled_keyframes(id_type,
+                                obj_uuid,
                                 action_name,
-                                slot_identifier, #TODOSLOT
+                                slot_identifier,  # TODOSLOT
                                 export_settings):
 
     start_frame = export_settings['ranges'][obj_uuid][action_name]['start']
@@ -41,11 +41,11 @@ def gather_sk_sampled_keyframes(obj_uuid,
 
                 # If we are here because of a shapekey animation, we need to get the fcurves
                 if action_name in bpy.data.actions:
-                    channel_group, _, _ = get_channel_groups(
+                    channel_group, _, _, _ = get_channel_groups(
                         obj_uuid, bpy.data.actions[action_name], bpy.data.actions[action_name].slots[slot_identifier], export_settings, no_sample_option=True)
                 elif blender_obj.data.shape_keys.animation_data and blender_obj.data.shape_keys.animation_data.action:
-                    channel_group, _, _ = get_channel_groups(
-                        obj_uuid, blender_obj.data.shape_keys.animation_data.action, blender_obj.data.shape_keys.animation_data.action.slots[slot_identifier], export_settings, no_sample_option=True)
+                    channel_group, _, _, _ = get_channel_groups(obj_uuid, blender_obj.data.shape_keys.animation_data.action,
+                                                                blender_obj.data.shape_keys.animation_data.action.slots[slot_identifier], export_settings, no_sample_option=True)
                 else:
                     channel_group = {}
                     channels = [None] * len(get_sk_exported(blender_obj.data.shape_keys.key_blocks))
@@ -60,10 +60,11 @@ def gather_sk_sampled_keyframes(obj_uuid,
                 channels = chan['properties']['value']
                 break
 
-            non_keyed_values = gather_non_keyed_values(obj_uuid, channels, None, False, export_settings)
+            non_keyed_values = gather_non_keyed_values(id_type, obj_uuid, channels, None, False, export_settings)
 
             while frame <= end_frame:
                 key = Keyframe(channels, frame, None)
+                key.set_id_type("KEY")
                 key.value = [c.evaluate(frame) for c in channels if c is not None]
                 # Complete key with non keyed values, if needed
                 if len([c for c in channels if c is not None]) != key.get_target_len():
@@ -75,11 +76,12 @@ def gather_sk_sampled_keyframes(obj_uuid,
         else:
             # So, drivers will be evaluated, on the custom property
 
-            non_keyed_values = gather_non_keyed_values(obj_uuid, channels, None, False, export_settings)
+            non_keyed_values = gather_non_keyed_values(id_type, obj_uuid, channels, None, False, export_settings)
 
             # The bake tool will store the value of the custom property
             while frame <= end_frame:
                 key = Keyframe([None] * (len(get_sk_exported(blender_obj.data.shape_keys.key_blocks))), frame, 'value')
+                key.set_id_type("KEY")
                 key.value_total = get_cache_data(
                     'sk',
                     obj_uuid,
@@ -99,6 +101,7 @@ def gather_sk_sampled_keyframes(obj_uuid,
 
         while frame <= end_frame:
             key = Keyframe([None] * (len(get_sk_exported(blender_obj.data.shape_keys.key_blocks))), frame, 'value')
+            key.set_id_type("KEY")
             key.value_total = get_cache_data(
                 'sk',
                 obj_uuid,

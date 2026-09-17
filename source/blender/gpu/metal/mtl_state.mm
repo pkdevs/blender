@@ -6,8 +6,8 @@
  * \ingroup gpu
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_bits.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_bits.hh"
 
 #include "GPU_framebuffer.hh"
 
@@ -91,17 +91,12 @@ void MTLStateManager::set_state(const GPUState &state)
   if (changed.culling_test != 0) {
     set_backface_culling((GPUFaceCullTest)state.culling_test);
   }
-  if (changed.logic_op_xor != 0) {
-    set_logic_op(state.logic_op_xor);
-  }
+
   if (changed.invert_facing != 0) {
     set_facing(state.invert_facing);
   }
   if (changed.provoking_vert != 0) {
     set_provoking_vert((GPUProvokingVertex)state.provoking_vert);
-  }
-  if (changed.shadow_bias != 0) {
-    set_shadow_bias(state.shadow_bias);
   }
 
   /* TODO remove (Following GLState). */
@@ -349,11 +344,6 @@ void MTLStateManager::set_clip_distances(const int new_dist_len, const int old_d
   }
 }
 
-void MTLStateManager::set_logic_op(const bool /*enable*/)
-{
-  /* NOTE(Metal): Logic Operations not directly supported. */
-}
-
 void MTLStateManager::set_facing(const bool invert)
 {
   /* Check Current Context. */
@@ -391,32 +381,6 @@ void MTLStateManager::set_provoking_vert(const GPUProvokingVertex /*vert*/)
    * For example, wireframe rendering and edit-mesh shaders utilize an SSBO-based
    * vertex pulling mechanism which considers the inverse convention for flat
    * shading, to ensure consistent results with OpenGL. */
-}
-
-void MTLStateManager::set_shadow_bias(const bool enable)
-{
-  /* Check Current Context. */
-  BLI_assert(context_);
-  MTLContextGlobalShaderPipelineState &pipeline_state = context_->pipeline_state;
-  MTLContextDepthStencilState &ds_state = pipeline_state.depth_stencil_state;
-
-  /* Apply State. */
-  if (enable) {
-    ds_state.depth_bias_enabled_for_lines = true;
-    ds_state.depth_bias_enabled_for_tris = true;
-    ds_state.depth_bias = 2.0f;
-    ds_state.depth_slope_scale = 1.0f;
-  }
-  else {
-    ds_state.depth_bias_enabled_for_lines = false;
-    ds_state.depth_bias_enabled_for_tris = false;
-    ds_state.depth_bias = 0.0f;
-    ds_state.depth_slope_scale = 0.0f;
-  }
-
-  /* Mark Dirty - Ensure context updates depth-stencil state between draws. */
-  pipeline_state.dirty_flags |= MTL_PIPELINE_STATE_DEPTHSTENCIL_FLAG;
-  pipeline_state.dirty = true;
 }
 
 void MTLStateManager::set_blend(const GPUBlend value)
@@ -515,6 +479,13 @@ void MTLStateManager::set_blend(const GPUBlend value)
       dst_rgb = MTLBlendFactorOneMinusSourceAlpha;
       src_alpha = MTLBlendFactorZero;
       dst_alpha = MTLBlendFactorOneMinusSourceAlpha;
+      break;
+    }
+    case GPU_BLEND_TRANSPARENCY: {
+      src_rgb = MTLBlendFactorOne;
+      dst_rgb = MTLBlendFactorSourceAlpha;
+      src_alpha = MTLBlendFactorZero;
+      dst_alpha = MTLBlendFactorSourceAlpha;
       break;
     }
   }
@@ -625,13 +596,6 @@ void MTLFence::wait()
 /** \name Texture State Management
  * \{ */
 
-void MTLStateManager::texture_unpack_row_length_set(uint len)
-{
-  /* Set source image row data stride when uploading image data to the GPU. */
-  MTLContext *ctx = MTLContext::get();
-  ctx->pipeline_state.unpack_row_length = len;
-}
-
 void MTLStateManager::texture_bind(Texture *tex_, GPUSamplerState sampler_type, int unit)
 {
   BLI_assert(tex_);
@@ -684,7 +648,14 @@ void MTLStateManager::image_bind(Texture *tex_, int unit)
   MTLContext *ctx = MTLContext::get();
   if (unit >= 0) {
     ctx->texture_bind(mtl_tex, unit, true);
-    image_formats[unit] = TextureWriteFormat(tex_->format_get());
+    /* An sRGB texture bound as a storage image is written as UNORM: the hardware does the sRGB
+     * encode/decode. TextureWriteFormat has no sRGB entry, use UNORM instead to avoid adding
+     * a bunch of complexity elsewhere. */
+    TextureFormat format = tex_->format_get();
+    if (format == TextureFormat::SRGBA_8_8_8_8) {
+      format = TextureFormat::UNORM_8_8_8_8;
+    }
+    image_formats[unit] = TextureWriteFormat(format);
   }
 }
 

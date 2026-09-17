@@ -20,11 +20,11 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -37,11 +37,18 @@
 #include "ED_screen.hh"
 #include "ED_select_utils.hh"
 
+#include "UI_view2d.hh"
+
 #include "RNA_access.hh"
 
-using blender::Array;
-using blender::float2;
-using blender::int2;
+#define GESTURE_EDGE_PAN_INSIDE_PAD 2
+#define GESTURE_EDGE_PAN_OUTSIDE_PAD 0
+#define GESTURE_EDGE_PAN_SPEED_RAMP 1.0f
+#define GESTURE_EDGE_PAN_MAX_SPEED 26.0f
+#define GESTURE_EDGE_PAN_DELAY 0.5f
+#define GESTURE_EDGE_PAN_ZOOM_INFLUENCE 0.0f
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Gesture Utilities
@@ -91,6 +98,16 @@ static void gesture_modal_state_to_operator(wmOperator *op, int modal_state)
       }
       break;
   }
+}
+
+static void gesture_init_mval_set(wmGesture *gesture, const int2 mval)
+{
+  if (gesture->edge_pan_data == nullptr) {
+    return;
+  }
+  const View2D *v2d = gesture->edge_pan_data->v2d;
+  gesture->init_mval_view = float2(ui::view2d_region_to_view_x(v2d, mval.x),
+                                   ui::view2d_region_to_view_y(v2d, mval.y));
 }
 
 static int UNUSED_FUNCTION(gesture_modal_state_from_operator)(wmOperator *op)
@@ -183,6 +200,20 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
   {
     wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
     gesture->wait_for_input = wait_for_input;
+    if (ui::view2d_edge_pan_poll(C)) {
+      gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
+      ui::view2d_edge_pan_init(C,
+                               gesture->edge_pan_data,
+                               GESTURE_EDGE_PAN_INSIDE_PAD,
+                               GESTURE_EDGE_PAN_OUTSIDE_PAD,
+                               GESTURE_EDGE_PAN_SPEED_RAMP,
+                               GESTURE_EDGE_PAN_MAX_SPEED,
+                               GESTURE_EDGE_PAN_DELAY,
+                               GESTURE_EDGE_PAN_ZOOM_INFLUENCE);
+
+      const rcti *rect = static_cast<const rcti *>(gesture->customdata);
+      gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
+    }
   }
 
   /* Add modal handler. */
@@ -235,14 +266,25 @@ wmOperatorStatus WM_gesture_box_modal(bContext *C, wmOperator *op, const wmEvent
   else {
     switch (event->type) {
       case MOUSEMOVE: {
+        if (gesture->edge_pan_data) {
+          const View2D *v2d = gesture->edge_pan_data->v2d;
+          ui::view2d_edge_pan_apply_event(C, gesture->edge_pan_data, event);
+          if (!gesture->move) {
+            rect->xmin = ui::view2d_view_to_region_x(v2d, gesture->init_mval_view.x);
+            rect->ymin = ui::view2d_view_to_region_y(v2d, gesture->init_mval_view.y);
+          }
+        }
+
         if (gesture->type == WM_GESTURE_CROSS_RECT && gesture->is_active == false) {
           rect->xmin = rect->xmax = event->xy[0] - gesture->winrct.xmin;
           rect->ymin = rect->ymax = event->xy[1] - gesture->winrct.ymin;
+          gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
         }
         else if (gesture->move) {
           BLI_rcti_translate(rect,
                              (event->xy[0] - gesture->winrct.xmin) - rect->xmax,
                              (event->xy[1] - gesture->winrct.ymin) - rect->ymax);
+          gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
         }
         else {
           rect->xmax = event->xy[0] - gesture->winrct.xmin;
@@ -578,8 +620,8 @@ wmOperatorStatus WM_gesture_lasso_modal(bContext *C, wmOperator *op, const wmEve
 
         if (gesture->points == gesture->points_alloc) {
           gesture->points_alloc *= 2;
-          gesture->customdata = MEM_reallocN(gesture->customdata,
-                                             sizeof(float[2]) * gesture->points_alloc);
+          gesture->customdata = MEM_realloc_uninitialized(
+              gesture->customdata, sizeof(float[2]) * gesture->points_alloc);
         }
 
         {
@@ -588,7 +630,7 @@ wmOperatorStatus WM_gesture_lasso_modal(bContext *C, wmOperator *op, const wmEve
           const float2 last_position(lasso[gesture->points - 1][0], lasso[gesture->points - 1][1]);
 
           const float2 delta = current_mouse_position - last_position;
-          const float dist_squared = blender::math::length_squared(delta);
+          const float dist_squared = math::length_squared(delta);
 
           /* Move the lasso. */
           if (gesture->move) {
@@ -599,8 +641,7 @@ wmOperatorStatus WM_gesture_lasso_modal(bContext *C, wmOperator *op, const wmEve
           }
           else if (gesture->use_smooth) {
             if (dist_squared > square_f(radius)) {
-              float2 result = blender::math::interpolate(
-                  current_mouse_position, last_position, factor);
+              float2 result = math::interpolate(current_mouse_position, last_position, factor);
 
               lasso[gesture->points][0] = result.x;
               lasso[gesture->points][1] = result.y;
@@ -713,7 +754,7 @@ void WM_OT_lasso_gesture(wmOperatorType *ot)
   ot->flag = OPTYPE_DEPENDS_ON_CURSOR;
 
   prop = RNA_def_property(ot->srna, "path", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_struct_runtime(ot->srna, prop, &RNA_OperatorMousePath);
+  RNA_def_property_struct_runtime(ot->srna, prop, RNA_OperatorMousePath);
 }
 #endif
 
@@ -847,7 +888,7 @@ wmOperatorStatus WM_gesture_polyline_modal(bContext *C, wmOperator *op, const wm
 
         const float dist = len_v2v2(cur, orig);
 
-        if (dist < blender::wm::gesture::POLYLINE_CLICK_RADIUS * UI_SCALE_FAC &&
+        if (dist < wm::gesture::POLYLINE_CLICK_RADIUS * UI_SCALE_FAC &&
             gesture_polyline_can_apply(*gesture, true))
         {
           return gesture_polyline_apply(C, op, true);
@@ -877,8 +918,8 @@ wmOperatorStatus WM_gesture_polyline_modal(bContext *C, wmOperator *op, const wm
                              (event->xy[1] - gesture->winrct.ymin));
         if (gesture->points == gesture->points_alloc) {
           gesture->points_alloc *= 2;
-          gesture->customdata = MEM_reallocN(gesture->customdata,
-                                             sizeof(short[2]) * gesture->points_alloc);
+          gesture->customdata = MEM_realloc_uninitialized(
+              gesture->customdata, sizeof(short[2]) * gesture->points_alloc);
         }
         short (*border)[2] = static_cast<short int (*)[2]>(gesture->customdata);
 
@@ -1278,3 +1319,5 @@ void WM_OT_straightline_gesture(wmOperatorType *ot)
 #endif
 
 /** \} */
+
+}  // namespace blender

@@ -2,8 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * Shared code between host and client codebases.
+/** \file
+ * \ingroup eevee
+ *
+ * Shared code between host and client code-bases.
  */
 
 #pragma once
@@ -23,20 +25,21 @@ namespace blender::eevee {
 #define SSS_TRANSMIT_LUT_BIAS (0.5f / float(SSS_TRANSMIT_LUT_SIZE))
 #define SSS_TRANSMIT_LUT_STEP_RES 64.0f
 
-struct SubsurfaceData {
+struct [[host_shared]] SubsurfaceData {
   /** xy: 2D sample position [-1..1], zw: sample_bounds. */
   /* NOTE(fclem) Using float4 for alignment. */
   float4 samples[SSS_SAMPLE_MAX];
   /** Number of samples precomputed in the set. */
   int sample_len;
-  /** WORKAROUND: To avoid invalid integral for components that have very small radius, we clamp
+  /**
+   * WORKAROUND: To avoid invalid integral for components that have very small radius, we clamp
    * the minimal radius. This add bias to the SSS effect but this is the simplest workaround I
-   * could find to ship this without visible artifact. */
+   * could find to ship this without visible artifact.
+   */
   float min_radius;
   int _pad1;
   int _pad2;
 };
-BLI_STATIC_ASSERT_ALIGN(SubsurfaceData, 16)
 
 static inline float3 burley_setup(float3 radius, float3 albedo)
 {

@@ -13,8 +13,8 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_customdata.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -23,6 +23,9 @@
 #include "BKE_particle.h"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::Abc::P3fArraySamplePtr;
@@ -31,7 +34,7 @@ using Alembic::AbcGeom::OCurvesSchema;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 ABCHairWriter::ABCHairWriter(const ABCWriterConstructorArgs &args)
     : ABCAbstractWriter(args), uv_warning_shown_(false)
@@ -124,16 +127,15 @@ void ABCHairWriter::write_hair_sample(const HierarchyContext &context,
   float inv_mat[4][4];
   invert_m4_m4_safe(inv_mat, context.object->object_to_world().ptr());
 
-  MTFace *mtface = (MTFace *)CustomData_get_layer_for_write(
-      &mesh->fdata_legacy, CD_MTFACE, mesh->totface_legacy);
-  const MFace *mface = (const MFace *)CustomData_get_layer(&mesh->fdata_legacy, CD_MFACE);
+  MTFace *mtface = static_cast<MTFace *>(
+      CustomData_get_layer_for_write(&mesh->fdata_legacy, CD_MTFACE, mesh->totface_legacy));
+  const MFace *mface = static_cast<const MFace *>(
+      CustomData_get_layer(&mesh->fdata_legacy, CD_MFACE));
   const Span<float3> positions = mesh->vert_positions();
   const Span<float3> vert_normals = mesh->vert_normals();
 
   if ((!mtface || !mface) && !uv_warning_shown_) {
-    std::fprintf(stderr,
-                 "Warning, no UV set found for underlying geometry of %s.\n",
-                 context.object->id.name + 2);
+    CLOG_WARN(&LOG, "No UV set found for underlying geometry of %s", context.object->id.name + 2);
     uv_warning_shown_ = true;
   }
 
@@ -185,7 +187,7 @@ void ABCHairWriter::write_hair_sample(const HierarchyContext &context,
         }
       }
       else {
-        std::fprintf(stderr, "Particle to faces overflow (%d/%d)\n", num, mesh->totface_legacy);
+        CLOG_WARN(&LOG, "Particle to faces overflow (%d/%d)", num, mesh->totface_legacy);
       }
     }
     else if (part->from == PART_FROM_VERT && mtface) {
@@ -249,9 +251,10 @@ void ABCHairWriter::write_hair_child_sample(const HierarchyContext &context,
   float inv_mat[4][4];
   invert_m4_m4_safe(inv_mat, context.object->object_to_world().ptr());
 
-  const MFace *mface = (const MFace *)CustomData_get_layer(&mesh->fdata_legacy, CD_MFACE);
-  MTFace *mtface = (MTFace *)CustomData_get_layer_for_write(
-      &mesh->fdata_legacy, CD_MTFACE, mesh->totface_legacy);
+  const MFace *mface = static_cast<const MFace *>(
+      CustomData_get_layer(&mesh->fdata_legacy, CD_MFACE));
+  MTFace *mtface = static_cast<MTFace *>(
+      CustomData_get_layer_for_write(&mesh->fdata_legacy, CD_MTFACE, mesh->totface_legacy));
   const Span<float3> positions = mesh->vert_positions();
   const Span<float3> vert_normals = mesh->vert_normals();
 
@@ -326,4 +329,5 @@ void ABCHairWriter::write_hair_child_sample(const HierarchyContext &context,
   }
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

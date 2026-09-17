@@ -230,11 +230,11 @@ class pyViewMapGradientVectorF0D(UnaryFunction0DVec2f):
     """
     Returns the gradient vector for a pixel.
 
-    .. method:: __init__(self, level)
+    .. method:: __init__(level)
 
        Builds a pyViewMapGradientVectorF0D object.
 
-       :arg level: the level at which to compute the gradient
+       :param level: the level at which to compute the gradient
        :type level: int
     """
 

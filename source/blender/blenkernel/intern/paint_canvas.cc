@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+/** \file
+ * \ingroup bke
+ */
+
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
@@ -19,7 +23,9 @@
 
 #include <sstream>
 
-namespace blender::bke::paint::canvas {
+namespace blender {
+
+namespace bke::paint::canvas {
 static TexPaintSlot *get_active_slot(Object *ob)
 {
   Material *mat = BKE_object_material_get(ob, ob->actcol);
@@ -37,60 +43,45 @@ static TexPaintSlot *get_active_slot(Object *ob)
   return slot;
 }
 
-}  // namespace blender::bke::paint::canvas
+}  // namespace bke::paint::canvas
 
 using namespace blender::bke::paint::canvas;
 
-bool BKE_paint_canvas_image_get(PaintModeSettings *settings,
-                                Object *ob,
-                                Image **r_image,
-                                ImageUser **r_image_user)
+std::optional<CanvasImageData> BKE_paint_canvas_image_get(const ImagePaintSettings &settings,
+                                                          Object &object)
 {
-  *r_image = nullptr;
-  *r_image_user = nullptr;
-
-  switch (settings->canvas_source) {
-    case PAINT_CANVAS_SOURCE_COLOR_ATTRIBUTE:
-      break;
-
-    case PAINT_CANVAS_SOURCE_IMAGE:
-      *r_image = settings->canvas_image;
-      *r_image_user = &settings->image_user;
-      break;
-
-    case PAINT_CANVAS_SOURCE_MATERIAL: {
-      TexPaintSlot *slot = get_active_slot(ob);
-      if (slot == nullptr) {
-        break;
-      }
-
-      *r_image = slot->ima;
-      *r_image_user = slot->image_user;
-      break;
+  if (settings.mode == PAINT_CANVAS_SOURCE_MATERIAL) {
+    TexPaintSlot *slot = get_active_slot(&object);
+    if (slot == nullptr || slot->ima == nullptr) {
+      return std::nullopt;
     }
+    return std::make_optional<CanvasImageData>({slot->ima, slot->image_user});
   }
-  return *r_image != nullptr;
+  if (settings.mode == PAINT_CANVAS_SOURCE_IMAGE) {
+    if (settings.canvas == nullptr) {
+      return std::nullopt;
+    }
+    return std::make_optional<CanvasImageData>({settings.canvas, ImageUser{}});
+  }
+  return std::nullopt;
 }
 
-static bool has_uv_map_attribute(const Mesh &mesh, const blender::StringRef name)
+static bool has_uv_map_attribute(const Mesh &mesh, const StringRef name)
 {
-  using namespace blender;
   return bke::mesh::is_uv_map(mesh.attributes().lookup_meta_data(name));
 }
 
-std::optional<blender::StringRef> BKE_paint_canvas_uvmap_name_get(
-    const PaintModeSettings *settings, Object *ob)
+std::optional<StringRef> BKE_paint_canvas_uvmap_name_get(const ImagePaintSettings &settings,
+                                                         Object *ob)
 {
-  switch (settings->canvas_source) {
-    case PAINT_CANVAS_SOURCE_COLOR_ATTRIBUTE:
-      return std::nullopt;
+  switch (settings.mode) {
     case PAINT_CANVAS_SOURCE_IMAGE: {
       /* Use active uv map of the object. */
       if (ob->type != OB_MESH) {
         return std::nullopt;
       }
 
-      const Mesh *mesh = static_cast<Mesh *>(ob->data);
+      const Mesh *mesh = id_cast<Mesh *>(ob->data);
       if (!has_uv_map_attribute(*mesh, mesh->active_uv_map_name())) {
         return std::nullopt;
       }
@@ -111,7 +102,7 @@ std::optional<blender::StringRef> BKE_paint_canvas_uvmap_name_get(
         return std::nullopt;
       }
 
-      const Mesh *mesh = static_cast<Mesh *>(ob->data);
+      const Mesh *mesh = id_cast<Mesh *>(ob->data);
       if (!has_uv_map_attribute(*mesh, slot->uvname)) {
         return std::nullopt;
       }
@@ -121,27 +112,37 @@ std::optional<blender::StringRef> BKE_paint_canvas_uvmap_name_get(
   return std::nullopt;
 }
 
-char *BKE_paint_canvas_key_get(PaintModeSettings *settings, Object *ob)
+std::string BKE_paint_canvas_key_get(ImagePaintSettings &settings, Object *ob)
 {
   std::stringstream ss;
   ss << "UV_MAP:" << BKE_paint_canvas_uvmap_name_get(settings, ob).value_or("");
 
-  Image *image;
-  ImageUser *image_user;
-  if (BKE_paint_canvas_image_get(settings, ob, &image, &image_user)) {
+  if (std::optional<CanvasImageData> canvas_image_data = BKE_paint_canvas_image_get(settings, *ob))
+  {
+    Image *image = canvas_image_data->first;
+    ImageUser tile_user;
+
+    if (std::holds_alternative<ImageUser *>(canvas_image_data->second)) {
+      tile_user = *std::get<ImageUser *>(canvas_image_data->second);
+    }
+    else {
+      tile_user = std::get<ImageUser>(canvas_image_data->second);
+    }
+
     ss << ",SEAM_MARGIN:" << image->seam_margin;
-    ImageUser tile_user = *image_user;
-    LISTBASE_FOREACH (ImageTile *, image_tile, &image->tiles) {
-      tile_user.tile = image_tile->tile_number;
+    for (ImageTile &image_tile : image->tiles) {
+      tile_user.tile = image_tile.tile_number;
       ImBuf *image_buffer = BKE_image_acquire_ibuf(image, &tile_user, nullptr);
       if (!image_buffer) {
         continue;
       }
-      ss << ",TILE_" << image_tile->tile_number;
+      ss << ",TILE_" << image_tile.tile_number;
       ss << "(" << image_buffer->x << "," << image_buffer->y << ")";
       BKE_image_release_ibuf(image, image_buffer, nullptr);
     }
   }
 
-  return BLI_strdup(ss.str().c_str());
+  return ss.str();
 }
+
+}  // namespace blender

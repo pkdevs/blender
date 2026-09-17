@@ -5,15 +5,18 @@
 /** \file
  * \ingroup gpu
  *
- * Parsing of and code generation using GLSL shaders in gpu/shaders/material. */
+ * Parsing of and code generation using GLSL shaders in gpu/shaders/material.
+ */
 
 #pragma once
 
 #include "BLI_set.hh"
 #include "GPU_material.hh"
 
+namespace blender {
+
 #define MAX_FUNCTION_NAME 64
-#define MAX_PARAMETER 36
+#define MAX_PARAMETER 37
 
 enum GPUFunctionQual {
   FUNCTION_QUAL_IN,
@@ -31,5 +34,6 @@ struct GPUFunction {
 };
 
 GPUFunction *gpu_material_library_get_function(const char *name);
-void gpu_material_library_use_function(blender::Set<blender::StringRefNull> &used_libraries,
-                                       const char *name);
+void gpu_material_library_use_function(Set<StringRefNull> &used_libraries, const char *name);
+
+}  // namespace blender

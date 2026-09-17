@@ -12,7 +12,7 @@
 
 #include "BLI_map.hh"
 #include "BLI_span.hh"
-#include "BLI_time.h"
+#include "BLI_time.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_capabilities.hh"
@@ -24,7 +24,8 @@
 #include <mutex>
 #include <string>
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu::shader;
 
 static bool gpu_pass_validate(GPUCodegenCreateInfo *create_info);
@@ -37,8 +38,8 @@ struct GPUPass {
   static inline std::atomic<uint64_t> compilation_counts = 0;
 
   GPUCodegenCreateInfo *create_info = nullptr;
-  BatchHandle compilation_handle = 0;
-  std::atomic<blender::gpu::Shader *> shader = nullptr;
+  AsyncCompilationHandle compilation_handle = 0;
+  std::atomic<gpu::Shader *> shader = nullptr;
   std::atomic<GPUPassStatus> status = GPU_PASS_QUEUED;
   /* Orphaned GPUPasses gets freed by the garbage collector. */
   std::atomic<int> refcount = 1;
@@ -48,8 +49,10 @@ struct GPUPass {
 
   uint64_t compilation_timestamp = 0;
 
-  /** Hint that an optimized variant of this pass should be created.
-   *  Based on a complexity heuristic from pass code generation. */
+  /**
+   * Hint that an optimized variant of this pass should be created.
+   * Based on a complexity heuristic from pass code generation.
+   */
   bool should_optimize = false;
   bool is_optimization_pass = false;
 
@@ -74,8 +77,7 @@ struct GPUPass {
     GPUShaderCreateInfo *base_info = reinterpret_cast<GPUShaderCreateInfo *>(create_info);
 
     if (deferred_compilation) {
-      compilation_handle = GPU_shader_batch_create_from_infos(
-          Span<GPUShaderCreateInfo *>(&base_info, 1), compilation_priority());
+      compilation_handle = GPU_shader_async_compilation(base_info, compilation_priority());
     }
     else {
       shader = GPU_shader_create_from_info(base_info);
@@ -86,7 +88,7 @@ struct GPUPass {
   ~GPUPass()
   {
     if (compilation_handle) {
-      GPU_shader_batch_cancel(compilation_handle);
+      GPU_shader_async_compilation_cancel(compilation_handle);
     }
     else {
       BLI_assert(create_info == nullptr || (is_optimization_pass && status == GPU_PASS_QUEUED));
@@ -105,13 +107,13 @@ struct GPUPass {
     BLI_assert_msg(create_info, "GPUPass::finalize_compilation() called more than once.");
 
     if (compilation_handle) {
-      shader = GPU_shader_batch_finalize(compilation_handle).first();
+      shader = GPU_shader_async_compilation_finalize(compilation_handle);
     }
 
     compilation_timestamp = ++compilation_counts;
 
     if (!shader && !gpu_pass_validate(create_info)) {
-      fprintf(stderr, "blender::gpu::Shader: error: too many samplers in shader.\n");
+      fprintf(stderr, "gpu::Shader: error: too many samplers in shader.\n");
     }
 
     status = shader ? GPU_PASS_SUCCESS : GPU_PASS_FAILED;
@@ -129,7 +131,7 @@ struct GPUPass {
   void update_compilation(double timestamp)
   {
     if (compilation_handle) {
-      if (GPU_shader_batch_is_ready(compilation_handle)) {
+      if (GPU_shader_async_compilation_is_ready(compilation_handle)) {
         finalize_compilation();
       }
     }
@@ -138,8 +140,7 @@ struct GPUPass {
     {
       BLI_assert(is_optimization_pass);
       GPUShaderCreateInfo *base_info = reinterpret_cast<GPUShaderCreateInfo *>(create_info);
-      compilation_handle = GPU_shader_batch_create_from_infos(
-          Span<GPUShaderCreateInfo *>(&base_info, 1), compilation_priority());
+      compilation_handle = GPU_shader_async_compilation(base_info, compilation_priority());
     }
   }
 
@@ -172,7 +173,7 @@ bool GPU_pass_should_optimize(GPUPass *pass)
   return (GPU_backend_get_type() == GPU_BACKEND_METAL) && pass->should_optimize;
 }
 
-blender::gpu::Shader *GPU_pass_shader_get(GPUPass *pass)
+gpu::Shader *GPU_pass_shader_get(GPUPass *pass)
 {
   return pass->shader;
 }
@@ -224,12 +225,12 @@ class GPUPassCache {
   ~GPUPassCache()
   {
     /* Pause to prevent new compilations to start while we are cancelling them. */
-    GPU_shader_batch_pause_compilations();
+    GPU_shader_compiler_pause();
     for (int i : IndexRange(GPU_MAT_ENGINE_MAX)) {
       passes_[i][0].clear();
       passes_[i][1].clear();
     }
-    GPU_shader_batch_resume_compilations();
+    GPU_shader_compiler_resume();
   }
 
   void add(eGPUMaterialEngine engine,
@@ -318,7 +319,7 @@ void GPU_pass_cache_update()
 
 void GPU_pass_cache_wait_for_all()
 {
-  GPU_shader_batch_wait_for_all();
+  GPU_shader_compiler_wait_for_all();
   g_cache->update();
 }
 
@@ -343,11 +344,7 @@ static bool gpu_pass_validate(GPUCodegenCreateInfo *create_info)
   }
 
   /* Validate against GPU limit. */
-  if ((samplers_len > GPU_max_textures_frag()) || (samplers_len > GPU_max_textures_vert())) {
-    return false;
-  }
-
-  return (samplers_len * 2 <= GPU_max_textures());
+  return samplers_len <= GPU_max_textures();
 }
 
 GPUPass *GPU_generate_pass(GPUMaterial *material,
@@ -406,3 +403,5 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
 }
 
 /** \} */
+
+}  // namespace blender

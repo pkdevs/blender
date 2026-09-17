@@ -1,6 +1,11 @@
 /* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup balembic
+ */
+
 #pragma once
 
 #include "ABC_alembic.h"
@@ -12,11 +17,13 @@
 
 #include <Alembic/Abc/OObject.h>
 
+namespace blender {
+
 struct Depsgraph;
 struct Main;
 struct Object;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 class ABCAbstractWriter;
 class ABCHierarchyIterator;
@@ -73,4 +80,5 @@ class ABCHierarchyIterator : public AbstractHierarchyIterator {
       const HierarchyContext *context, const ABCWriterConstructorArgs &writer_args);
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

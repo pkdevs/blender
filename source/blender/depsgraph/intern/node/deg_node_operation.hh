@@ -15,15 +15,17 @@
 
 #include "intern/depsgraph_type.hh"
 
+namespace blender {
+
 struct Depsgraph;
 
-namespace blender::deg {
+namespace deg {
 
 struct ComponentNode;
 
 /* Evaluation Operation for atomic operation */
 /* XXX: move this to another header that can be exposed? */
-using DepsEvalOperationCb = std::function<void(::Depsgraph *)>;
+using DepsEvalOperationCb = std::function<void(blender::Depsgraph *)>;
 
 /* Identifiers for common operations (as an enum). */
 enum class OperationCode {
@@ -125,16 +127,16 @@ enum class OperationCode {
   /* Bone. ---------------------------------------------------------------- */
   /* Bone local transforms - entry point */
   BONE_LOCAL,
-  /* Pose-space conversion (includes parent + rest-pose. */
+  /* Pose-space conversion (includes parent + rest-pose). */
   BONE_POSE_PARENT,
   /* Constraints */
   BONE_CONSTRAINTS,
   /* Bone transforms are ready
    *
-   * - "READY"  This (internal, noop is used to signal that all pre-IK
+   * - "READY"  This (internal, noop) is used to signal that all pre-IK
    *            operations are done. Its role is to help mediate situations
    *            where cyclic relations may otherwise form (i.e. one bone in
-   *            chain targeting another in same chain,
+   *            chain targeting another in same chain),
    *
    * - "DONE"   This noop is used to signal that the bone's final pose
    *            transform can be read by others. */
@@ -143,6 +145,8 @@ enum class OperationCode {
   BONE_DONE,
   /* B-Bone segment shape computation (after DONE) */
   BONE_SEGMENTS,
+  /* Getting the visibility doesn't need evaluation of the pose. */
+  BONE_VISIBILITY,
 
   /* Particle System. ----------------------------------------------------- */
   PARTICLE_SYSTEM_INIT,
@@ -203,6 +207,9 @@ enum class OperationCode {
 
   SEQUENCES_EVAL,
 
+  /* Compositor. ---------------------------------------------------------- */
+  COMPOSITOR_EVAL,
+
   /* instancing system. --------------------------------------------------- */
 
   /* Operation on an instancer object. Relations from instanced objects go here. */
@@ -261,7 +268,7 @@ struct OperationNode : public Node {
 
   bool is_noop() const
   {
-    return (bool)evaluate == false;
+    return bool(evaluate) == false;
   }
 
   OperationNode *get_entry_operation() override
@@ -299,4 +306,5 @@ struct OperationNode : public Node {
 
 void deg_register_operation_depsnodes();
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

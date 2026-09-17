@@ -10,6 +10,8 @@
 
 #include "DNA_scene_types.h"
 
+namespace blender {
+
 struct FFMpegCodecData;
 struct ImageFormatData;
 struct RenderData;
@@ -43,10 +45,12 @@ bool MOV_codec_supports_crf(IMB_Ffmpeg_Codec_ID codec_id);
  * Which pixel bit depths are supported by a given FFMPEG video CodecID.
  * Returns bit-mask of `R_IMF_CHAN_DEPTH_` flags.
  */
-int MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id);
+eImageFormatDepth MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id);
 
 /**
  * Given desired output image format type, sets up required FFMPEG
  * related settings in render data.
  */
 void MOV_validate_output_settings(RenderData *rd, const ImageFormatData *imf);
+
+}  // namespace blender

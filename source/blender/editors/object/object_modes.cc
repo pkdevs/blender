@@ -13,8 +13,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -27,8 +27,8 @@
 #include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -146,6 +146,8 @@ bool mode_compat_test(const Object *ob, eObjectMode mode)
         return true;
       }
       break;
+    default:
+      break;
   }
 
   return false;
@@ -155,7 +157,7 @@ bool mode_compat_set(bContext *C, Object *ob, eObjectMode mode, ReportList *repo
 {
   bool ok;
   if (!ELEM(ob->mode, mode, OB_MODE_OBJECT)) {
-    const char *opstring = object_mode_op_string(eObjectMode(ob->mode));
+    const char *opstring = object_mode_op_string(ob->mode);
 
     WM_operator_name_call(C, opstring, wm::OpCallContext::ExecRegionWin, nullptr, nullptr);
     ok = ELEM(ob->mode, mode, OB_MODE_OBJECT);
@@ -184,10 +186,11 @@ bool mode_compat_set(bContext *C, Object *ob, eObjectMode mode, ReportList *repo
 bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *reports)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob == nullptr) {
     return (mode == OB_MODE_OBJECT);
@@ -201,8 +204,14 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
     return false;
   }
 
-  const char *opstring = object_mode_op_string((mode == OB_MODE_OBJECT) ? eObjectMode(ob->mode) :
-                                                                          mode);
+  const char *opstring = object_mode_op_string((mode == OB_MODE_OBJECT) ? ob->mode : mode);
+  if (opstring == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Unable to set invalid object mode %d",
+                int((mode == OB_MODE_OBJECT) ? ob->mode : mode));
+    return false;
+  }
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
 
   if (!use_undo) {
@@ -217,12 +226,13 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
     /* Give more specific error messages for cases that are known to fail (like linked and packed
      * object-data). */
     if (ob->data && !ID_IS_EDITABLE(ob->data)) {
-      const ID &obdata_id = *static_cast<ID *>(ob->data);
+      const ID &obdata_id = *ob->data;
       char obdata_idtype_name_lower[MAX_ID_NAME];
-      STRNCPY(obdata_idtype_name_lower, BKE_idtype_idcode_to_name(GS(obdata_id.name)));
-      BLI_str_tolower_ascii(obdata_idtype_name_lower, strlen(obdata_idtype_name_lower));
+      const size_t obdata_idtype_name_lower_len = STRNCPY_RLEN(
+          obdata_idtype_name_lower, BKE_idtype_idcode_to_name(GS(obdata_id.name)));
+      BLI_str_tolower_ascii(obdata_idtype_name_lower, obdata_idtype_name_lower_len);
 
-      if (ID_IS_PACKED(static_cast<ID *>(ob->data))) {
+      if (ID_IS_PACKED(ob->data)) {
         BKE_reportf(reports,
                     RPT_ERROR,
                     "The '%s' %s data-block is packed and not editable. Use \"Make Local\" to "
@@ -272,23 +282,28 @@ static bool ed_object_mode_generic_exit_ex(
     }
   }
   else if (ob->mode & OB_MODE_VERTEX_PAINT) {
-    if (ob->sculpt && (ob->sculpt->mode_type == OB_MODE_VERTEX_PAINT)) {
+    if (ob->runtime->sculpt_session &&
+        (ob->runtime->sculpt_session->mode_type == OB_MODE_VERTEX_PAINT))
+    {
       if (only_test) {
         return true;
       }
-      ED_object_vpaintmode_exit_ex(*ob);
+      ED_object_vpaintmode_exit_ex(*scene, *ob);
     }
   }
   else if (ob->mode & OB_MODE_WEIGHT_PAINT) {
-    if (ob->sculpt && (ob->sculpt->mode_type == OB_MODE_WEIGHT_PAINT)) {
+    if (ob->runtime->sculpt_session &&
+        (ob->runtime->sculpt_session->mode_type == OB_MODE_WEIGHT_PAINT))
+    {
       if (only_test) {
         return true;
       }
-      ED_object_wpaintmode_exit_ex(*ob);
+      ED_object_wpaintmode_exit_ex(*scene, *ob);
     }
   }
   else if (ob->mode & OB_MODE_SCULPT) {
-    if (ob->sculpt && (ob->sculpt->mode_type == OB_MODE_SCULPT)) {
+    if (ob->runtime->sculpt_session && (ob->runtime->sculpt_session->mode_type == OB_MODE_SCULPT))
+    {
       if (only_test) {
         return true;
       }
@@ -354,7 +369,7 @@ static void ed_object_posemode_set_for_weight_paint_ex(bContext *C,
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   if (ob_arm != nullptr) {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     const Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
     if (base_arm && BASE_VISIBLE(v3d, base_arm)) {
       if (is_mode_set) {
@@ -404,7 +419,8 @@ void mode_generic_exit(Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *
 
 bool mode_generic_has_data(Depsgraph *depsgraph, const Object *ob)
 {
-  return ed_object_mode_generic_exit_ex(nullptr, depsgraph, nullptr, (Object *)ob, true);
+  return ed_object_mode_generic_exit_ex(
+      nullptr, depsgraph, nullptr, const_cast<Object *>(ob), true);
 }
 
 /** \} */
@@ -434,10 +450,7 @@ static void object_transfer_mode_reposition_view_pivot(ARegion *region,
   if (!ED_view3d_autodist_simple(region, mval, global_loc, 0, nullptr)) {
     return;
   }
-  bke::PaintRuntime *paint_runtime = paint->runtime;
-  copy_v3_v3(paint_runtime->average_stroke_accum, global_loc);
-  paint_runtime->average_stroke_counter = 1;
-  paint_runtime->last_stroke_valid = true;
+  bke::paint::stroke_set_location(*paint, float3(global_loc));
 }
 
 constexpr float mode_transfer_flash_length = 0.55f;
@@ -493,6 +506,7 @@ static bool object_transfer_mode_to_base(bContext *C,
                                          Object *ob_dst,
                                          const eObjectMode mode_dst)
 {
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   /* Undo is handled manually here, such that the entry in the user-visible undo history is named
@@ -505,9 +519,9 @@ static bool object_transfer_mode_to_base(bContext *C,
 
   const bool mode_transferred = mode_set_ex(C, OB_MODE_OBJECT, true, op->reports);
   if (mode_transferred) {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Base *base_dst = BKE_view_layer_base_find(view_layer, ob_dst);
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
     BKE_view_layer_base_select_and_set_active(view_layer, base_dst);
 
     /* Not entirely clear why, but this extra undo step (the two calls to #mode_set_ex should
@@ -534,7 +548,7 @@ static wmOperatorStatus object_transfer_mode_invoke(bContext *C,
   Scene *scene = CTX_data_scene(C);
   ARegion *region = CTX_wm_region(C);
   Object *ob_src = CTX_data_active_object(C);
-  const eObjectMode mode_src = eObjectMode(ob_src->mode);
+  const eObjectMode mode_src = ob_src->mode;
 
   Base *base_dst = ED_view3d_give_base_under_cursor(C, event->mval);
   if (!base_dst) {
@@ -585,7 +599,7 @@ static wmOperatorStatus object_transfer_mode_invoke(bContext *C,
   ED_outliner_select_sync_from_object_tag(C);
 
   WM_toolsystem_update_from_context_view3d(C);
-  if (mode_src & OB_MODE_ALL_PAINT) {
+  if (mode_src & OB_MODE_ALL_PAINT_MESH) {
     Paint *paint = BKE_paint_get_active_from_context(C);
     object_transfer_mode_reposition_view_pivot(region, paint, event->mval);
   }

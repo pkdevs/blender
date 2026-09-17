@@ -12,10 +12,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_linklist_stack.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -46,7 +46,7 @@
 
 #include "uvedit_intern.hh"
 
-using blender::Vector;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name UV Loop Rip Data Struct
@@ -90,7 +90,7 @@ BLI_STATIC_ASSERT(sizeof(ULData) <= sizeof(int), "");
 
 BLI_INLINE ULData *UL(BMLoop *l)
 {
-  return (ULData *)&l->head.index;
+  return reinterpret_cast<ULData *>(&l->head.index);
 }
 
 /** \} */
@@ -230,7 +230,7 @@ static void bm_loop_calc_uv_angle_from_dir(BMLoop *l,
                                            int *r_edge_index)
 {
   /* Calculate 3 directions, return the shortest angle. */
-  blender::float2 dir_test[3];
+  float2 dir_test[3];
   const float *luv = BM_ELEM_CD_GET_FLOAT_P(l, cd_loop_uv_offset);
   const float *luv_prev = BM_ELEM_CD_GET_FLOAT_P(l->prev, cd_loop_uv_offset);
   const float *luv_next = BM_ELEM_CD_GET_FLOAT_P(l->next, cd_loop_uv_offset);
@@ -283,7 +283,7 @@ static void bm_loop_calc_uv_angle_from_dir(BMLoop *l,
 
 struct UVRipSingle {
   /** Walk around the selected UV point, store #BMLoop. */
-  blender::Set<BMLoop *> *loops;
+  Set<BMLoop *> *loops;
 };
 
 /**
@@ -305,9 +305,9 @@ static UVRipSingle *uv_rip_single_from_loop(BMLoop *l_init_orig,
                                             const float aspect_y,
                                             const int cd_loop_uv_offset)
 {
-  UVRipSingle *rip = MEM_callocN<UVRipSingle>(__func__);
+  UVRipSingle *rip = MEM_new_zeroed<UVRipSingle>(__func__);
   const float *co_center = BM_ELEM_CD_GET_FLOAT_P(l_init_orig, cd_loop_uv_offset);
-  rip->loops = MEM_new<blender::Set<BMLoop *>>(__func__);
+  rip->loops = MEM_new<Set<BMLoop *>>(__func__);
 
   /* Track the closest loop, start walking from this so in the event we have multiple
    * disconnected fans, we can rip away loops connected to this one. */
@@ -321,7 +321,7 @@ static UVRipSingle *uv_rip_single_from_loop(BMLoop *l_init_orig,
   float dir_co[2];
   sub_v2_v2v2(dir_co, co_center, co);
   dir_co[1] /= aspect_y;
-  if (UNLIKELY(normalize_v2(dir_co) == 0.0)) {
+  if (normalize_v2(dir_co) == 0.0) [[unlikely]] {
     dir_co[1] = 1.0f;
   }
 
@@ -422,7 +422,7 @@ static UVRipSingle *uv_rip_single_from_loop(BMLoop *l_init_orig,
 static void uv_rip_single_free(UVRipSingle *rip)
 {
   MEM_delete(rip->loops);
-  MEM_freeN(rip);
+  MEM_delete(rip);
 }
 
 /** \} */
@@ -433,25 +433,25 @@ static void uv_rip_single_free(UVRipSingle *rip)
 
 struct UVRipPairs {
   /** Walk along the UV selection, store #BMLoop. */
-  GSet *loops;
+  Set<BMLoop *> *loops;
 };
 
 static void uv_rip_pairs_add(UVRipPairs *rip, BMLoop *l)
 {
   ULData *ul = UL(l);
-  BLI_assert(!BLI_gset_haskey(rip->loops, l));
+  BLI_assert(!rip->loops->contains(l));
   BLI_assert(ul->in_rip_pairs == false);
   ul->in_rip_pairs = true;
-  BLI_gset_add(rip->loops, l);
+  rip->loops->add(l);
 }
 
 static void uv_rip_pairs_remove(UVRipPairs *rip, BMLoop *l)
 {
   ULData *ul = UL(l);
-  BLI_assert(BLI_gset_haskey(rip->loops, l));
+  BLI_assert(rip->loops->contains(l));
   BLI_assert(ul->in_rip_pairs == true);
   ul->in_rip_pairs = false;
-  BLI_gset_remove(rip->loops, l, nullptr);
+  rip->loops->remove(l);
 }
 
 /**
@@ -480,7 +480,7 @@ static float uv_rip_pairs_calc_uv_angle(BMLoop *l_init,
           dir_prev[1] /= aspect_y;
           dir_next[1] /= aspect_y;
           const float luv_angle = angle_v2v2(dir_prev, dir_next);
-          if (LIKELY(isfinite(luv_angle))) {
+          if (isfinite(luv_angle)) [[likely]] {
             angle_of_side += luv_angle;
           }
         }
@@ -556,8 +556,8 @@ static UVRipPairs *uv_rip_pairs_from_loop(BMLoop *l_init,
                                           const float aspect_y,
                                           const int cd_loop_uv_offset)
 {
-  UVRipPairs *rip = MEM_callocN<UVRipPairs>(__func__);
-  rip->loops = BLI_gset_ptr_new(__func__);
+  UVRipPairs *rip = MEM_new_zeroed<UVRipPairs>(__func__);
+  rip->loops = MEM_new<Set<BMLoop *>>(__func__);
 
   /* We can rely on this stack being small, as we're walking down two sides of an edge loop,
    * so the stack won't be much larger than the total number of fans at any one vertex. */
@@ -676,8 +676,8 @@ static UVRipPairs *uv_rip_pairs_from_loop(BMLoop *l_init,
 
 static void uv_rip_pairs_free(UVRipPairs *rip)
 {
-  BLI_gset_free(rip->loops, nullptr);
-  MEM_freeN(rip);
+  MEM_delete(rip->loops);
+  MEM_delete(rip);
 }
 
 /**
@@ -695,9 +695,7 @@ static bool uv_rip_pairs_calc_center_and_direction(UVRipPairs *rip,
   for (int i = 0; i < 2; i++) {
     zero_v2(r_dir_side[i]);
   }
-  GSetIterator gs_iter;
-  GSET_ITER (gs_iter, rip->loops) {
-    BMLoop *l = static_cast<BMLoop *>(BLI_gsetIterator_getKey(&gs_iter));
+  for (BMLoop *l : *rip->loops) {
     int side = UL(l)->side;
     const float *luv = BM_ELEM_CD_GET_FLOAT_P(l, cd_loop_uv_offset);
     add_v2_v2(r_center, luv);
@@ -715,7 +713,7 @@ static bool uv_rip_pairs_calc_center_and_direction(UVRipPairs *rip,
     }
     side_total[side] += 1;
   }
-  center_total += BLI_gset_len(rip->loops);
+  center_total += rip->loops->size();
 
   for (int i = 0; i < 2; i++) {
     normalize_v2(r_dir_side[i]);
@@ -735,12 +733,12 @@ static bool uv_rip_pairs_calc_center_and_direction(UVRipPairs *rip,
 /**
  * \return true when a change was made.
  */
-static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const float aspect_y)
+static bool uv_rip_object(
+    Scene *scene, Object *obedit, const float co[2], const float aspect_y, ReportList *reports)
 {
   const ToolSettings *ts = scene->toolsettings;
 
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     uvedit_select_prepare_sync_select(scene, bm);
@@ -760,7 +758,8 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
 
   bool changed = false;
 
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  /* Store per-face visibility in #BM_ELEM_TAG; every loop below must check it first */
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     BM_elem_flag_set(efa, BM_ELEM_TAG, uvedit_face_visible_test(scene, efa));
     BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
       ULData *ul = UL(l);
@@ -770,7 +769,7 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
   bm->elem_index_dirty |= BM_LOOP;
 
   bool is_select_all_any = false;
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
       bool is_all = true;
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
@@ -802,7 +801,7 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
   }
 
   /* Remove #ULData.is_select_vert_single when connected to selected edges. */
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (UL(l)->is_select_vert_single) {
@@ -819,7 +818,10 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
    * We could also extract an edge loop from the boundary
    * however in practice it's not that useful, see #78751. */
   if (is_select_all_any) {
-    BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      if (!BM_elem_flag_test(efa, BM_ELEM_TAG)) {
+        continue;
+      }
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (!UL(l)->is_select_all) {
           if (uvedit_loop_vert_select_get(ts, bm, l)) {
@@ -836,11 +838,14 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
     return changed;
   }
 
+  bool vert_selected = false;
+  bool edge_selected = false;
   /* Extract loop pairs or single loops. */
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (UL(l)->is_select_edge) {
+          edge_selected = true;
           if (!UL(l)->in_rip_pairs) {
             UVRipPairs *rip = uv_rip_pairs_from_loop(l, aspect_y, offsets.uv);
             float center[2];
@@ -855,9 +860,7 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
               side_from_cursor = (dot_v2v2(dir_side[0], dir_cursor) -
                                   dot_v2v2(dir_side[1], dir_cursor)) < 0.0f;
             }
-            GSetIterator gs_iter;
-            GSET_ITER (gs_iter, rip->loops) {
-              BMLoop *l_iter = static_cast<BMLoop *>(BLI_gsetIterator_getKey(&gs_iter));
+            for (BMLoop *l_iter : *rip->loops) {
               ULData *ul = UL(l_iter);
               if (ul->side == side_from_cursor) {
                 uvedit_uv_select_disable(scene, bm, l_iter);
@@ -870,6 +873,7 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
           }
         }
         else if (UL(l)->is_select_vert_single) {
+          vert_selected = true;
           UVRipSingle *rip = uv_rip_single_from_loop(l, co, aspect_y, offsets.uv);
           /* We only ever use one side. */
           const int side_from_cursor = 0;
@@ -887,6 +891,16 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
       }
     }
   }
+
+  if (edge_selected && !changed) {
+    BKE_report(reports, RPT_ERROR, "Edge must have connected edges");
+    return false;
+  }
+  if (vert_selected && !changed) {
+    BKE_report(reports, RPT_ERROR, "Vertex must have connected vertices");
+    return false;
+  }
+
   if (changed) {
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       BM_mesh_uvselect_flush_from_loop_verts(bm);
@@ -907,6 +921,7 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
 static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
 {
   SpaceImage *sima = CTX_wm_space_image(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -943,7 +958,7 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
   const float aspect_y = aspx / aspy;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     /* While this is almost always true, any mis-match (from multiple scenes for example).
@@ -952,16 +967,15 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
   }
 
   for (Object *obedit : objects) {
-    if (uv_rip_object(scene, obedit, co, aspect_y)) {
+    if (uv_rip_object(scene, obedit, co, aspect_y, op->reports)) {
       changed_multi = true;
       uvedit_live_unwrap_update(sima, scene, obedit);
-      DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
+      DEG_id_tag_update(obedit->data, 0);
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
     }
   }
 
   if (!changed_multi) {
-    BKE_report(op->reports, RPT_ERROR, "Rip failed");
     return OPERATOR_CANCELLED;
   }
   return OPERATOR_FINISHED;
@@ -972,7 +986,7 @@ static wmOperatorStatus uv_rip_invoke(bContext *C, wmOperator *op, const wmEvent
   ARegion *region = CTX_wm_region(C);
   float co[2];
 
-  UI_view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
+  ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
   RNA_float_set_array(op->ptr, "location", co);
 
   return uv_rip_exec(C, op);
@@ -981,7 +995,7 @@ static wmOperatorStatus uv_rip_invoke(bContext *C, wmOperator *op, const wmEvent
 void UV_OT_rip(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "UV Rip";
+  ot->name = "Rip UVs";
   ot->description = "Rip selected vertices or a selected region";
   ot->idname = "UV_OT_rip";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
@@ -992,7 +1006,7 @@ void UV_OT_rip(wmOperatorType *ot)
   ot->poll = ED_operator_uvedit;
 
   /* translation data */
-  blender::ed::transform::properties_register(ot, P_MIRROR_DUMMY);
+  ed::transform::properties_register(ot, P_MIRROR_DUMMY);
 
   /* properties */
   RNA_def_float_vector(
@@ -1009,3 +1023,5 @@ void UV_OT_rip(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

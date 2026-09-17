@@ -7,6 +7,7 @@
  */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <sstream>
 
 #include "CLG_log.h"
@@ -22,42 +23,73 @@
 #include "gpu_shader_dependency_private.hh"
 
 #include "GPU_capabilities.hh"
+#include "gpu_capabilities_private.hh"
 
 #include "BLI_math_matrix_types.hh"
 
-#include "GHOST_C-api.h"
+namespace blender {
 
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
+namespace gpu {
 
 void VKExtensions::log() const
 {
   CLOG_DEBUG(&LOG,
              "Device features\n"
-             " - [%c] shader output viewport index\n"
-             " - [%c] shader output layer\n"
              " - [%c] fragment shader barycentric\n"
              " - [%c] wide lines\n"
+             " - [%c] multi draw indirect\n"
+             " - [%c] shader clip distance\n"
              "Device extensions\n"
              " - [%c] dynamic rendering local read\n"
              " - [%c] dynamic rendering unused attachments\n"
+             " - [%c] extended dynamic state\n"
              " - [%c] external memory\n"
+             " - [%c] graphics pipeline library\n"
+             " - [%c] host image copy\n"
+             " - [%c] line rasterization\n"
              " - [%c] maintenance4\n"
              " - [%c] memory priority\n"
              " - [%c] pageable device local memory\n"
-             " - [%c] shader stencil export",
-             shader_output_viewport_index ? 'X' : ' ',
-             shader_output_layer ? 'X' : ' ',
+             " - [%c] provoking vertex\n"
+             " - [%c] shader stencil export\n"
+             " - [%c] shader output viewport index and layer\n"
+             " - [%c] spirv 1.4\n"
+             " - [%c] ray queries\n"
+             " - [%c] vertex input dynamic state\n"
+             " - [%c] vertex pipeline stores and atomics",
              fragment_shader_barycentric ? 'X' : ' ',
              wide_lines ? 'X' : ' ',
+             multi_draw_indirect ? 'X' : ' ',
+             shader_clip_distance ? 'X' : ' ',
              dynamic_rendering_local_read ? 'X' : ' ',
              dynamic_rendering_unused_attachments ? 'X' : ' ',
+             extended_dynamic_state ? 'X' : ' ',
              external_memory ? 'X' : ' ',
+             graphics_pipeline_library ? 'X' : ' ',
+             host_image_copy ? 'X' : ' ',
+             line_rasterization ? 'X' : ' ',
              maintenance4 ? 'X' : ' ',
              memory_priority ? 'X' : ' ',
              pageable_device_local_memory ? 'X' : ' ',
-             GPU_stencil_export_support() ? 'X' : ' ');
+             provoking_vertex ? 'X' : ' ',
+             GPU_stencil_export_support() ? 'X' : ' ',
+             shader_viewport_index_layer ? 'X' : ' ',
+             spirv_1_4 ? 'X' : ' ',
+             GPU_ray_query_support() ? 'X' : ' ',
+             vertex_input_dynamic_state ? 'X' : ' ',
+             GPU_vertex_pipeline_stores_and_atomics_support() ? 'X' : ' ');
+}
+
+void VKWorkarounds::log() const
+{
+  CLOG_DEBUG(&LOG,
+             "Activated workarounds\n"
+             " - [%c] Not 16/32 bit aligned image formats\n"
+             " - [%c] No texture pool",
+             not_aligned_pixel_formats ? 'X' : ' ',
+             GCaps.texture_pool_workaround ? 'X' : ' ');
 }
 
 void VKDevice::reinit()
@@ -72,7 +104,7 @@ void VKDevice::deinit()
     return;
   }
 
-  deinit_submission_pool();
+  deinit_submission_thread();
 
   dummy_buffer.free();
   samplers_.free();
@@ -88,7 +120,7 @@ void VKDevice::deinit()
     thread_data_.clear();
   }
   pipelines.write_to_disk();
-  pipelines.free_data();
+  pipelines.free_data(*this);
   descriptor_set_layouts_.deinit();
   vma_pools.deinit(*this);
   mem_allocator_ = VK_NULL_HANDLE;
@@ -113,11 +145,11 @@ void VKDevice::deinit()
   is_initialized_ = false;
 }
 
-void VKDevice::init(void *ghost_context)
+void VKDevice::init(GHOST_IContext *ghost_context)
 {
   BLI_assert(!is_initialized());
   GHOST_VulkanHandles handles = {};
-  GHOST_GetVulkanHandles((GHOST_ContextHandle)ghost_context, &handles);
+  ghost_context->getVulkanHandles(handles);
   vk_instance_ = handles.instance;
   vk_physical_device_ = handles.physical_device;
   vk_device_ = handles.device;
@@ -126,13 +158,14 @@ void VKDevice::init(void *ghost_context)
   mem_allocator_ = handles.vma_allocator;
   queue_mutex_ = static_cast<std::mutex *>(handles.queue_mutex);
 
+  volkLoadDeviceTable(&functions, vk_device_);
+
   init_physical_device_extensions();
   init_physical_device_properties();
   init_physical_device_memory_properties();
   init_physical_device_features();
   VKBackend::platform_init(*this);
   VKBackend::capabilities_init(*this);
-  init_functions();
   init_debug_callbacks();
   vma_pools.init(*this);
   pipelines.init();
@@ -147,35 +180,8 @@ void VKDevice::init(void *ghost_context)
   resources.use_dynamic_rendering_local_read = extensions_.dynamic_rendering_local_read;
   orphaned_data.timeline_ = 0;
 
-  init_submission_pool();
+  init_submission_thread();
   is_initialized_ = true;
-}
-
-void VKDevice::init_functions()
-{
-#define LOAD_FUNCTION(name) (PFN_##name) vkGetInstanceProcAddr(vk_instance_, STRINGIFY(name))
-  /* VK_KHR_dynamic_rendering */
-  functions.vkCmdBeginRendering = LOAD_FUNCTION(vkCmdBeginRenderingKHR);
-  functions.vkCmdEndRendering = LOAD_FUNCTION(vkCmdEndRenderingKHR);
-
-  /* VK_EXT_debug_utils */
-  functions.vkCmdBeginDebugUtilsLabel = LOAD_FUNCTION(vkCmdBeginDebugUtilsLabelEXT);
-  functions.vkCmdEndDebugUtilsLabel = LOAD_FUNCTION(vkCmdEndDebugUtilsLabelEXT);
-  functions.vkSetDebugUtilsObjectName = LOAD_FUNCTION(vkSetDebugUtilsObjectNameEXT);
-  functions.vkCreateDebugUtilsMessenger = LOAD_FUNCTION(vkCreateDebugUtilsMessengerEXT);
-  functions.vkDestroyDebugUtilsMessenger = LOAD_FUNCTION(vkDestroyDebugUtilsMessengerEXT);
-
-  if (extensions_.external_memory) {
-#ifdef _WIN32
-    /* VK_KHR_external_memory_win32 */
-    functions.vkGetMemoryWin32Handle = LOAD_FUNCTION(vkGetMemoryWin32HandleKHR);
-#elif not defined(__APPLE__)
-    /* VK_KHR_external_memory_fd */
-    functions.vkGetMemoryFd = LOAD_FUNCTION(vkGetMemoryFdKHR);
-#endif
-  }
-
-#undef LOAD_FUNCTION
 }
 
 void VKDevice::init_debug_callbacks()
@@ -200,6 +206,18 @@ void VKDevice::init_physical_device_properties()
     vk_physical_device_properties.pNext = &vk_physical_device_maintenance4_properties_;
   }
 
+  if (supports_extension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME)) {
+    vk_physical_device_graphics_pipeline_library_properties_.pNext =
+        vk_physical_device_properties.pNext;
+    vk_physical_device_properties.pNext =
+        &vk_physical_device_graphics_pipeline_library_properties_;
+  }
+  if (supports_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)) {
+    vk_physical_device_acceleration_structure_properties_.pNext =
+        vk_physical_device_properties.pNext;
+    vk_physical_device_properties.pNext = &vk_physical_device_acceleration_structure_properties_;
+  }
+
   vkGetPhysicalDeviceProperties2(vk_physical_device_, &vk_physical_device_properties);
   vk_physical_device_properties_ = vk_physical_device_properties.properties;
 }
@@ -218,11 +236,10 @@ void VKDevice::init_physical_device_features()
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   vk_physical_device_vulkan_11_features_.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-  vk_physical_device_vulkan_12_features_.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 
   features.pNext = &vk_physical_device_vulkan_11_features_;
-  vk_physical_device_vulkan_11_features_.pNext = &vk_physical_device_vulkan_12_features_;
+  vk_physical_device_vulkan_11_features_.pNext =
+      &vk_physical_device_acceleration_structure_features_;
 
   vkGetPhysicalDeviceFeatures2(vk_physical_device_, &features);
   vk_physical_device_features_ = features.features;
@@ -253,30 +270,36 @@ void VKDevice::init_dummy_buffer()
                       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                       VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
                       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                      1.0f);
-  debug::object_label(dummy_buffer.vk_handle(), "DummyBuffer");
+                      1.0f,
+                      false,
+                      "DummyBuffer");
   /* Default dummy buffer. Set the 4th element to 1 to fix missing orcos. */
   float data[16] = {
       0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   dummy_buffer.update_immediately(static_cast<void *>(data));
 }
 
-shader::GeneratedSource VKDevice::extensions_define(StringRefNull stage_define) const
+uint32_t VKDevice::glsl_patch_version_get(bool use_ray_query) const
+{
+  const bool requires_460 = use_ray_query;
+  return requires_460 ? 460u : 450u;
+}
+
+shader::GeneratedSource VKDevice::extensions_define(StringRefNull stage_define,
+                                                    bool use_ray_query) const
 {
   std::stringstream ss;
 
-  ss << "#version 450\n";
-  {
-    /* Required extension. */
-    ss << "#extension GL_ARB_shader_draw_parameters : enable\n";
-    ss << "#define GPU_ARB_shader_draw_parameters\n";
-    ss << "#define gpu_BaseInstance (gl_BaseInstanceARB)\n";
-  }
+  ss << "#version " << glsl_patch_version_get(use_ray_query) << "\n";
   ss << "#define GPU_ARB_clip_control\n";
+  ss << "#define GPU_ARB_derivative_control\n";
 
   ss << "#define gl_VertexID gl_VertexIndex\n";
+  /* usage of gpu_BaseInstance is deprecated to support more Android devices. Prefer to use
+   * gpu_InstanceIndex. */
+  ss << "#define gpu_BaseInstance (0)\n";
   ss << "#define gpu_InstanceIndex (gl_InstanceIndex)\n";
-  ss << "#define gl_InstanceID (gpu_InstanceIndex - gpu_BaseInstance)\n";
+  ss << "#define gl_InstanceID (gpu_InstanceIndex)\n";
 
   ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
   if (GPU_stencil_export_support()) {
@@ -288,35 +311,44 @@ shader::GeneratedSource VKDevice::extensions_define(StringRefNull stage_define) 
     ss << "#define gpu_BaryCoord gl_BaryCoordEXT\n";
     ss << "#define gpu_BaryCoordNoPersp gl_BaryCoordNoPerspEXT\n";
   }
+  if (use_ray_query) {
+    ss << "#extension GL_EXT_ray_query : enable\n";
+  }
+  if (!extensions_.provoking_vertex) {
+    ss << "#define GPU_PROVOKING_VERTEX_LAST\n";
+  }
   ss << stage_define;
 
   return shader::GeneratedSource{"gpu_shader_glsl_extension.glsl", {}, ss.str()};
 }
 
-std::string VKDevice::glsl_vertex_patch_get() const
+std::string VKDevice::glsl_vertex_patch_get(bool use_ray_query) const
 {
-  shader::GeneratedSourceList sources{extensions_define("#define GPU_VERTEX_SHADER\n")};
+  shader::GeneratedSourceList sources{
+      extensions_define("#define GPU_VERTEX_SHADER\n", use_ray_query)};
   return fmt::to_string(fmt::join(
       gpu_shader_dependency_get_resolved_source("gpu_shader_compat_glsl.glsl", sources), ""));
 }
 
 std::string VKDevice::glsl_geometry_patch_get() const
 {
-  shader::GeneratedSourceList sources{extensions_define("#define GPU_GEOMETRY_SHADER\n")};
+  shader::GeneratedSourceList sources{extensions_define("#define GPU_GEOMETRY_SHADER\n", false)};
   return fmt::to_string(fmt::join(
       gpu_shader_dependency_get_resolved_source("gpu_shader_compat_glsl.glsl", sources), ""));
 }
 
-std::string VKDevice::glsl_fragment_patch_get() const
+std::string VKDevice::glsl_fragment_patch_get(bool use_ray_query) const
 {
-  shader::GeneratedSourceList sources{extensions_define("#define GPU_FRAGMENT_SHADER\n")};
+  shader::GeneratedSourceList sources{
+      extensions_define("#define GPU_FRAGMENT_SHADER\n", use_ray_query)};
   return fmt::to_string(fmt::join(
       gpu_shader_dependency_get_resolved_source("gpu_shader_compat_glsl.glsl", sources), ""));
 }
 
-std::string VKDevice::glsl_compute_patch_get() const
+std::string VKDevice::glsl_compute_patch_get(bool use_ray_query) const
 {
-  shader::GeneratedSourceList sources{extensions_define("#define GPU_COMPUTE_SHADER\n")};
+  shader::GeneratedSourceList sources{
+      extensions_define("#define GPU_COMPUTE_SHADER\n", use_ray_query)};
   return fmt::to_string(fmt::join(
       gpu_shader_dependency_get_resolved_source("gpu_shader_compat_glsl.glsl", sources), ""));
 }
@@ -370,10 +402,12 @@ GPUDriverType VKDevice::driver_type() const
     case VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS:
     case VK_DRIVER_ID_NVIDIA_PROPRIETARY:
     case VK_DRIVER_ID_QUALCOMM_PROPRIETARY:
+    /* NOTE: Marking AMDVLK as an official driver to make distinction between Mesa and AMD open
+     * source. AMDVLK is being replaced by Mesa in the official driver stack. */
+    case VK_DRIVER_ID_AMD_OPEN_SOURCE:
       return GPU_DRIVER_OFFICIAL;
 
     case VK_DRIVER_ID_MOLTENVK:
-    case VK_DRIVER_ID_AMD_OPEN_SOURCE:
     case VK_DRIVER_ID_MESA_RADV:
     case VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA:
     case VK_DRIVER_ID_MESA_NVK:
@@ -514,41 +548,7 @@ void VKDevice::memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) co
 /** \name Debugging/statistics
  * \{ */
 
-void VKDevice::debug_print(std::ostream &os, const VKDiscardPool &discard_pool)
-{
-  if (discard_pool.images_.is_empty() && discard_pool.buffers_.is_empty() &&
-      discard_pool.image_views_.is_empty() && discard_pool.buffer_views_.is_empty() &&
-      discard_pool.shader_modules_.is_empty() && discard_pool.pipeline_layouts_.is_empty() &&
-      discard_pool.descriptor_pools_.is_empty())
-  {
-    return;
-  }
-  os << "  Discardable resources: ";
-  if (!discard_pool.images_.is_empty()) {
-    os << "VkImage=" << discard_pool.images_.size() << " ";
-  }
-  if (!discard_pool.image_views_.is_empty()) {
-    os << "VkImageView=" << discard_pool.image_views_.size() << " ";
-  }
-  if (!discard_pool.buffers_.is_empty()) {
-    os << "VkBuffer=" << discard_pool.buffers_.size() << " ";
-  }
-  if (!discard_pool.buffer_views_.is_empty()) {
-    os << "VkBufferViews=" << discard_pool.buffer_views_.size() << " ";
-  }
-  if (!discard_pool.shader_modules_.is_empty()) {
-    os << "VkShaderModule=" << discard_pool.shader_modules_.size() << " ";
-  }
-  if (!discard_pool.pipeline_layouts_.is_empty()) {
-    os << "VkPipelineLayout=" << discard_pool.pipeline_layouts_.size() << " ";
-  }
-  if (!discard_pool.descriptor_pools_.is_empty()) {
-    os << "VkDescriptorPool=" << discard_pool.descriptor_pools_.size();
-  }
-  os << "\n";
-}
-
-void VKDevice::debug_print()
+void VKDevice::debug_print() const
 {
   BLI_assert_msg(BLI_thread_is_main(),
                  "VKDevice::debug_print can only be called from the main thread.");
@@ -558,6 +558,9 @@ void VKDevice::debug_print()
   os << "Pipelines\n";
   os << " Graphics: " << pipelines.graphics_.size() << "\n";
   os << " Compute: " << pipelines.compute_.size() << "\n";
+  os << " VertexInLib: " << pipelines.vertex_input_libs_.size() << "\n";
+  os << " ShaderLib: " << pipelines.shaders_libs_.size() << "\n";
+  os << " FragmentOutLib: " << pipelines.fragment_output_libs_.size() << "\n";
   os << "Descriptor sets\n";
   os << " VkDescriptorSetLayouts: " << descriptor_set_layouts_.size() << "\n";
   for (const VKThreadData *thread_data : thread_data_) {
@@ -568,14 +571,14 @@ void VKDevice::debug_print()
     os << " Rendering_depth: " << thread_data->rendering_depth << "\n";
   }
   os << "Discard pool\n";
-  debug_print(os, orphaned_data);
+  os << orphaned_data << "\n";
   os << "Discard pool (render)\n";
-  debug_print(os, orphaned_data_render);
+  os << orphaned_data_render << "\n";
   os << "\n";
 
   for (const std::reference_wrapper<VKContext> &context : contexts_) {
     os << " VKContext \n";
-    debug_print(os, context.get().discard_pool);
+    os << context.get().discard_pool << "\n";
   }
 
   int total_mem_kb;
@@ -586,4 +589,5 @@ void VKDevice::debug_print()
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

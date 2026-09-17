@@ -37,13 +37,14 @@
 #include "bpy_app_icons.hh"
 #include "bpy_app_timers.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
 #include "BKE_global.hh"
 #include "BKE_main.hh"
 
+#include "GPU_init_exit.hh"
 #include "GPU_shader.hh"
 
 #include "UI_interface_icons.hh"
@@ -60,6 +61,8 @@
 #include "../generic/py_capi_rna.hh"
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
+
+namespace blender {
 
 #ifdef BUILD_DATE
 extern "C" char build_date[];
@@ -120,27 +123,27 @@ static PyStructSequence_Field app_info_fields[] = {
 
     /* buildinfo */
     {"build_date",
-     "The date this blender instance was built\n"
+     "The date this Blender instance was built\n"
      "\n"
      ":type: bytes\n"},
     {"build_time",
-     "The time this blender instance was built\n"
+     "The time this Blender instance was built\n"
      "\n"
      ":type: bytes\n"},
     {"build_commit_timestamp",
-     "The unix timestamp of commit this blender instance was built\n"
+     "The unix timestamp of the commit this Blender instance was built from\n"
      "\n"
      ":type: int\n"},
     {"build_commit_date",
-     "The date of commit this blender instance was built\n"
+     "The date of the commit this Blender instance was built from\n"
      "\n"
      ":type: bytes\n"},
     {"build_commit_time",
-     "The time of commit this blender instance was built\n"
+     "The time of the commit this Blender instance was built from\n"
      "\n"
      ":type: bytes\n"},
     {"build_hash",
-     "The commit hash this blender instance was built with\n"
+     "The commit hash this Blender instance was built with\n"
      "\n"
      ":type: bytes\n"},
     {"build_branch",
@@ -357,6 +360,12 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
     /* Wrap. */
+    bpy_app_autoexec_doc,
+    "Boolean, True when auto-execution is allowed (read-only).\n"
+    "\n"
+    ":type: bool\n");
+PyDoc_STRVAR(
+    /* Wrap. */
     bpy_app_autoexec_fail_doc,
     "Boolean, True when auto-execution of scripts failed (read-only).\n"
     "\n"
@@ -410,7 +419,7 @@ static int bpy_app_global_flag_set__only_disable(PyObject * /*self*/,
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_app_debug_value_doc,
-    "Short, number which can be set to non-zero values for testing purposes.\n"
+    "Integer value which can be set to non-zero values for testing purposes.\n"
     "\n"
     ":type: int\n");
 static PyObject *bpy_app_debug_value_get(PyObject * /*self*/, void * /*closure*/)
@@ -448,6 +457,23 @@ static PyObject *bpy_app_tempdir_get(PyObject * /*self*/, void * /*closure*/)
 
 PyDoc_STRVAR(
     /* Wrap. */
+    bpy_app_cachedir_doc,
+    "String, the cache directory used by blender (read-only).\n"
+    "\n"
+    "In rare cases the default cache directory may not be available;\n"
+    "in this case a temporary directory is used.\n"
+    "\n"
+    ":type: str\n");
+static PyObject *bpy_app_cachedir_get(PyObject * /*self*/, void * /*closure*/)
+{
+  char cache_path[FILE_MAX];
+  BKE_appdir_folder_caches(cache_path, sizeof(cache_path));
+  BLI_assert_msg(cache_path[0], "BKE_appdir_folder_caches must never return an empty path");
+  return PyC_UnicodeFromBytes(cache_path);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
     bpy_app_driver_dict_doc,
     "Dictionary for drivers namespace, editable in-place, reset on file load (read-only).\n"
     "\n"
@@ -466,14 +492,20 @@ static PyObject *bpy_app_driver_dict_get(PyObject * /*self*/, void * /*closure*/
 
 PyDoc_STRVAR(
     /* Wrap. */
-    bpy_app_preview_render_size_doc,
-    "Reference size for icon/preview renders (read-only).\n"
+    bpy_app_render_icon_size_doc,
+    "Reference size for icon renders (read-only).\n"
     "\n"
     ":type: int\n");
-static PyObject *bpy_app_preview_render_size_get(PyObject * /*self*/, void *closure)
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_app_render_preview_size_doc,
+    "Reference size for preview renders (read-only).\n"
+    "\n"
+    ":type: int\n");
+static PyObject *bpy_app_render_preview_or_icon_size_get(PyObject * /*self*/, void *closure)
 {
   return PyLong_FromLong(
-      long(UI_icon_preview_to_render_size(eIconSizes(POINTER_AS_INT(closure)))));
+      long(ui::icon_preview_to_render_size(eIconSizes(POINTER_AS_INT(closure)))));
 }
 
 PyDoc_STRVAR(
@@ -539,76 +571,88 @@ static int bpy_app_binary_path_set(PyObject * /*self*/, PyObject *value, void * 
 }
 
 static PyGetSetDef bpy_app_getsets[] = {
-    {"debug", bpy_app_debug_get, bpy_app_debug_set, bpy_app_debug_doc, (void *)G_DEBUG},
+    {"debug",
+     bpy_app_debug_get,
+     bpy_app_debug_set,
+     bpy_app_debug_doc,
+     reinterpret_cast<void *>(G_DEBUG)},
     {"debug_freestyle",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_FREESTYLE},
+     reinterpret_cast<void *>(G_DEBUG_FREESTYLE)},
     {"debug_python",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_PYTHON},
+     reinterpret_cast<void *>(G_DEBUG_PYTHON)},
     {"debug_events",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_EVENTS},
+     reinterpret_cast<void *>(G_DEBUG_EVENTS)},
     {"debug_handlers",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_HANDLERS},
-    {"debug_wm", bpy_app_debug_get, bpy_app_debug_set, bpy_app_debug_doc, (void *)G_DEBUG_WM},
+     reinterpret_cast<void *>(G_DEBUG_HANDLERS)},
+    {"debug_wm",
+     bpy_app_debug_get,
+     bpy_app_debug_set,
+     bpy_app_debug_doc,
+     reinterpret_cast<void *>(G_DEBUG_WM)},
     {"debug_depsgraph",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH)},
     {"debug_depsgraph_build",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH_BUILD},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH_BUILD)},
     {"debug_depsgraph_eval",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH_EVAL},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH_EVAL)},
     {"debug_depsgraph_tag",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH_TAG},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH_TAG)},
     {"debug_depsgraph_time",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH_TIME},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH_TIME)},
     {"debug_depsgraph_pretty",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_DEPSGRAPH_PRETTY},
+     reinterpret_cast<void *>(G_DEBUG_DEPSGRAPH_PRETTY)},
     {"debug_simdata",
      bpy_app_debug_get,
      bpy_app_debug_set,
      bpy_app_debug_doc,
-     (void *)G_DEBUG_SIMDATA},
-    {"debug_io", bpy_app_debug_get, bpy_app_debug_set, bpy_app_debug_doc, (void *)G_DEBUG_IO},
+     reinterpret_cast<void *>(G_DEBUG_SIMDATA)},
+    {"debug_io",
+     bpy_app_debug_get,
+     bpy_app_debug_set,
+     bpy_app_debug_doc,
+     reinterpret_cast<void *>(G_DEBUG_IO)},
 
     {"use_event_simulate",
      bpy_app_global_flag_get,
      bpy_app_global_flag_set__only_disable,
      bpy_app_global_flag_doc,
-     (void *)G_FLAG_EVENT_SIMULATE},
+     reinterpret_cast<void *>(G_FLAG_EVENT_SIMULATE)},
 
     {"use_userpref_skip_save_on_exit",
      bpy_app_global_flag_get,
      bpy_app_global_flag_set,
      bpy_app_global_flag_doc,
-     (void *)G_FLAG_USERPREF_NO_SAVE_ON_EXIT},
+     reinterpret_cast<void *>(G_FLAG_USERPREF_NO_SAVE_ON_EXIT)},
 
     {"debug_value",
      bpy_app_debug_value_get,
@@ -616,41 +660,47 @@ static PyGetSetDef bpy_app_getsets[] = {
      bpy_app_debug_value_doc,
      nullptr},
     {"tempdir", bpy_app_tempdir_get, nullptr, bpy_app_tempdir_doc, nullptr},
+    {"cachedir", bpy_app_cachedir_get, nullptr, bpy_app_cachedir_doc, nullptr},
     {"driver_namespace", bpy_app_driver_dict_get, nullptr, bpy_app_driver_dict_doc, nullptr},
 
     {"render_icon_size",
-     bpy_app_preview_render_size_get,
+     bpy_app_render_preview_or_icon_size_get,
      nullptr,
-     bpy_app_preview_render_size_doc,
-     (void *)ICON_SIZE_ICON},
+     bpy_app_render_icon_size_doc,
+     reinterpret_cast<void *>(ICON_SIZE_ICON)},
     {"render_preview_size",
-     bpy_app_preview_render_size_get,
+     bpy_app_render_preview_or_icon_size_get,
      nullptr,
-     bpy_app_preview_render_size_doc,
-     (void *)ICON_SIZE_PREVIEW},
+     bpy_app_render_preview_size_doc,
+     reinterpret_cast<void *>(ICON_SIZE_PREVIEW)},
 
     {"online_access",
      bpy_app_global_flag_get,
      nullptr,
      bpy_app_internet_offline_doc,
-     (void *)G_FLAG_INTERNET_ALLOW},
+     reinterpret_cast<void *>(G_FLAG_INTERNET_ALLOW)},
     {"online_access_override",
      bpy_app_global_flag_get,
      nullptr,
      bpy_app_internet_offline_override_doc,
-     (void *)G_FLAG_INTERNET_OVERRIDE_PREF_ANY},
+     reinterpret_cast<void *> G_FLAG_INTERNET_OVERRIDE_PREF_ANY},
 
     /* security */
+    {"autoexec",
+     bpy_app_global_flag_get,
+     nullptr,
+     bpy_app_autoexec_doc,
+     reinterpret_cast<void *>(G_FLAG_SCRIPT_AUTOEXEC)},
     {"autoexec_fail",
      bpy_app_global_flag_get,
      nullptr,
      bpy_app_autoexec_fail_doc,
-     (void *)G_FLAG_SCRIPT_AUTOEXEC_FAIL},
+     reinterpret_cast<void *>(G_FLAG_SCRIPT_AUTOEXEC_FAIL)},
     {"autoexec_fail_quiet",
      bpy_app_global_flag_get,
      nullptr,
      bpy_app_autoexec_fail_quiet_doc,
-     (void *)G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET},
+     reinterpret_cast<void *>(G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET)},
     {"autoexec_fail_message",
      bpy_app_autoexec_fail_message_get,
      nullptr,
@@ -673,11 +723,11 @@ static PyGetSetDef bpy_app_getsets[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_app_is_job_running_doc,
-    ".. staticmethod:: is_job_running(job_type)\n"
+    ".. function:: is_job_running(job_type)\n"
     "\n"
     "   Check whether a job of the given type is running.\n"
     "\n"
-    "   :arg job_type: job type in :ref:`rna_enum_wm_job_type_items`.\n"
+    "   :param job_type: job type in :ref:`rna_enum_wm_job_type_items`.\n"
     "   :type job_type: str\n"
     "   :return: Whether a job of the given type is currently running.\n"
     "   :rtype: bool\n");
@@ -689,7 +739,6 @@ static PyObject *bpy_app_is_job_running(PyObject * /*self*/, PyObject *args, PyO
 
   static const char *_keywords[] = {"job_type", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O&" /* `job_type` */
       ":is_job_running",
       _keywords,
@@ -700,13 +749,13 @@ static PyObject *bpy_app_is_job_running(PyObject * /*self*/, PyObject *args, PyO
   {
     return nullptr;
   }
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
   if (job_type_enum.value == WM_JOB_TYPE_SHADER_COMPILATION) {
     /* Shader compilation no longer uses the WM_job API, so we handle this as a special case
      * to avoid breaking the Python API. */
-    return PyBool_FromLong(GPU_shader_batch_is_compiling());
+    return PyBool_FromLong(GPU_is_init() && GPU_shader_compiler_has_pending_work());
   }
-  return PyBool_FromLong(WM_jobs_has_running_type(wm, job_type_enum.value));
+  return PyBool_FromLong(WM_jobs_has_running(wm, nullptr, eWM_JobType(job_type_enum.value)));
 }
 
 char *(*BPY_python_app_help_text_fn)(bool all) = nullptr;
@@ -714,11 +763,11 @@ char *(*BPY_python_app_help_text_fn)(bool all) = nullptr;
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_app_help_text_doc,
-    ".. staticmethod:: help_text(*, all=False)\n"
+    ".. function:: help_text(*, all=False)\n"
     "\n"
     "   Return the help text as a string.\n"
     "\n"
-    "   :arg all: Return all arguments, "
+    "   :param all: Return all arguments, "
     "even those which aren't available for the current platform.\n"
     "   :type all: bool\n"
     "   :return: Help text.\n"
@@ -728,8 +777,7 @@ static PyObject *bpy_app_help_text(PyObject * /*self*/, PyObject *args, PyObject
   bool all = false;
   static const char *_keywords[] = {"all", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `all` */
       ":help_text",
       _keywords,
@@ -741,7 +789,7 @@ static PyObject *bpy_app_help_text(PyObject * /*self*/, PyObject *args, PyObject
 
   char *buf = BPY_python_app_help_text_fn(all);
   PyObject *result = PyUnicode_FromString(buf);
-  MEM_freeN(buf);
+  MEM_delete(buf);
   return result;
 }
 
@@ -757,7 +805,7 @@ static PyObject *bpy_app_help_text(PyObject * /*self*/, PyObject *args, PyObject
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_app_memory_usage_undo_doc,
-    ".. staticmethod:: memory_usage_undo()\n"
+    ".. function:: memory_usage_undo()\n"
     "\n"
     "   Get undo memory usage information.\n"
     "\n"
@@ -776,15 +824,15 @@ static PyObject *bpy_app_memory_usage_undo(PyObject * /*self*/, PyObject * /*arg
 
 static PyMethodDef bpy_app_methods[] = {
     {"is_job_running",
-     (PyCFunction)bpy_app_is_job_running,
+     reinterpret_cast<PyCFunction>(bpy_app_is_job_running),
      METH_VARARGS | METH_KEYWORDS | METH_STATIC,
      bpy_app_is_job_running_doc},
     {"help_text",
-     (PyCFunction)bpy_app_help_text,
+     reinterpret_cast<PyCFunction>(bpy_app_help_text),
      METH_VARARGS | METH_KEYWORDS | METH_STATIC,
      bpy_app_help_text_doc},
     {"memory_usage_undo",
-     (PyCFunction)bpy_app_memory_usage_undo,
+     static_cast<PyCFunction>(bpy_app_memory_usage_undo),
      METH_NOARGS | METH_STATIC,
      bpy_app_memory_usage_undo_doc},
     {nullptr, nullptr, 0, nullptr},
@@ -832,7 +880,7 @@ PyObject *BPY_app_struct()
   BlenderAppType.tp_init = nullptr;
   BlenderAppType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppType.tp_hash = (hashfunc)Py_HashPointer;
+  BlenderAppType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   /* Kind of a hack on top of #PyStructSequence. */
   py_struct_seq_getset_init();
@@ -840,3 +888,5 @@ PyObject *BPY_app_struct()
 
   return ret;
 }
+
+}  // namespace blender

@@ -27,7 +27,7 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 using namespace std;
 
@@ -152,7 +152,7 @@ void GeomCleaner::SortAndCompressIndexedVertexArray(const float *iVertices,
   chrono.start();
   GeomCleaner::SortIndexedVertexArray(
       iVertices, iVSize, iIndices, iISize, &tmpVertices, &tmpIndices);
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     printf("Sorting: %lf sec.\n", chrono.stop());
   }
 
@@ -161,7 +161,7 @@ void GeomCleaner::SortAndCompressIndexedVertexArray(const float *iVertices,
   GeomCleaner::CompressIndexedVertexArray(
       tmpVertices, iVSize, tmpIndices, iISize, oVertices, oVSize, oIndices);
   real duration = chrono.stop();
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     printf("Merging: %lf sec.\n", duration);
   }
 
@@ -174,7 +174,7 @@ void GeomCleaner::SortAndCompressIndexedVertexArray(const float *iVertices,
 struct GeomCleanerHasher {
 #define _MUL 950706376UL
 #define _MOD 2147483647UL
-  inline size_t operator()(const Vec3r &p) const
+  size_t operator()(const Vec3r &p) const
   {
     size_t res = ulong(p[0] * _MUL) % _MOD;
     res = (res + ulong(p[1]) * _MUL) % _MOD;

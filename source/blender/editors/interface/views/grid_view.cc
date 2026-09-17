@@ -21,6 +21,7 @@
 
 #include "RNA_access.hh"
 
+#include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
 #include "UI_view2d.hh"
 #include "interface_intern.hh"
@@ -31,9 +32,7 @@ namespace blender::ui {
 
 /* ---------------------------------------------------------------------- */
 
-AbstractGridView::AbstractGridView() : style_(UI_preview_tile_size_x(), UI_preview_tile_size_y())
-{
-}
+AbstractGridView::AbstractGridView() : style_(preview_tile_size_x(), preview_tile_size_y()) {}
 
 AbstractGridViewItem &AbstractGridView::add_item(std::unique_ptr<AbstractGridViewItem> item)
 {
@@ -125,6 +124,232 @@ void AbstractGridView::set_tile_size(int tile_width, int tile_height)
   style_.tile_height = tile_height;
 }
 
+static std::optional<int> find_filtered_item_index(const AbstractGridViewItem &item)
+{
+  BLI_assert(item.is_filtered_visible());
+
+  const AbstractGridView &view = item.get_view();
+  std::optional<int> index;
+
+  int i = 0;
+  view.foreach_filtered_item([&](AbstractGridViewItem &iter_item) {
+    if (&item == &iter_item) {
+      index = i;
+    }
+    i++;
+  });
+
+  return index;
+}
+
+AbstractViewItem *AbstractGridView::find_active_or_visible_item() const
+{
+  AbstractViewItem *active_item = nullptr;
+  AbstractViewItem *first_visible_item = nullptr;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    if (item.is_active()) {
+      active_item = &item;
+    }
+    if (!first_visible_item) {
+      first_visible_item = &item;
+    }
+  });
+  return active_item ? active_item : first_visible_item;
+}
+
+AbstractViewItem *AbstractGridView::navigate_left(AbstractViewItem *from)
+{
+  AbstractViewItem *next_item = nullptr;
+  bool found_active = false;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    found_active |= (&item == from);
+    if (!found_active) {
+      next_item = &item;
+    }
+  });
+
+  return found_active ? next_item : from;
+}
+
+AbstractViewItem *AbstractGridView::navigate_right(AbstractViewItem *from)
+{
+  AbstractViewItem *next_item = nullptr;
+  bool found_active = false;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    if (found_active) {
+      /* Store the element next to the active. */
+      next_item = &item;
+      found_active = false;
+    }
+    found_active = (&item == from);
+  });
+
+  return next_item ? next_item : from;
+}
+
+AbstractViewItem *AbstractGridView::navigate_up(AbstractViewItem *from)
+{
+  const std::optional<int> from_index = find_filtered_item_index(
+      dynamic_cast<const AbstractGridViewItem &>(*from));
+
+  const int next_item_index = std::clamp(
+      *from_index - cols_per_row_, 0, get_item_count_filtered() - 1);
+
+  int i = 0;
+  AbstractViewItem *next_item = nullptr;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    if (i == next_item_index) {
+      next_item = &item;
+    }
+    i++;
+  });
+  return next_item ? next_item : from;
+}
+
+AbstractViewItem *AbstractGridView::navigate_down(AbstractViewItem *from)
+{
+  const std::optional<int> from_index = find_filtered_item_index(
+      dynamic_cast<const AbstractGridViewItem &>(*from));
+
+  const int next_item_index = std::clamp(
+      *from_index + cols_per_row_, 0, get_item_count_filtered() - 1);
+
+  int i = 0;
+  AbstractViewItem *next_item = nullptr;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    if (i == next_item_index) {
+      next_item = &item;
+    }
+    i++;
+  });
+
+  return next_item ? next_item : from;
+}
+
+void AbstractGridView::page_scroll(bContext *C, PageScrollDirection direction)
+{
+  ARegion *region = CTX_wm_region(C);
+  View2D &v2d = region->v2d;
+
+  const IndexRange &visible_range = this->get_visible_range(v2d, nullptr);
+  const int first_idx_in_view = visible_range.first();
+
+  const int cur_height = BLI_rctf_size_y(&v2d.cur);
+  const int view_height = BLI_rcti_size_y(&v2d.mask);
+  const int tot_height = BLI_rctf_size_y(&v2d.tot);
+  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+  const int tot_rows = std::max(tot_height / style_.tile_height, 1);
+
+  switch (direction) {
+    case PageScrollDirection::Up: {
+      const int target_row = std::max(0, (first_idx_in_view / cols_per_row_) - count_rows_in_view);
+      v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Down: {
+      const int target_row = std::min(tot_rows,
+                                      (first_idx_in_view / cols_per_row_) + count_rows_in_view);
+      v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Top: {
+      v2d.cur.ymax = v2d.tot.ymax;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Bottom: {
+      v2d.cur.ymin = v2d.tot.ymin;
+      v2d.cur.ymax = v2d.cur.ymin + cur_height;
+      break;
+    }
+  }
+}
+
+IndexRange AbstractGridView::get_visible_range(
+    const View2D &v2d, const AbstractGridViewItem *force_visible_item) const
+{
+  BLI_assert(v2d.flag & V2D_IS_INIT);
+
+  int first_idx_in_view = 0;
+
+  const float scroll_ofs_y = std::abs(v2d.cur.ymax - v2d.tot.ymax);
+  if (!IS_EQF(scroll_ofs_y, 0)) {
+    const int scrolled_away_rows = int(scroll_ofs_y) / style_.tile_height;
+
+    first_idx_in_view = scrolled_away_rows * cols_per_row_;
+  }
+
+  const int view_height = BLI_rcti_size_y(&v2d.mask);
+  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+  const int max_items_in_view = (count_rows_in_view + 1) * cols_per_row_;
+  BLI_assert(max_items_in_view > 0);
+
+  IndexRange visible_items(first_idx_in_view, max_items_in_view);
+
+  /* Ensure #visible_items contains #force_visible_item, adjust if necessary. */
+  if (force_visible_item && force_visible_item->is_filtered_visible()) {
+    if (std::optional<int> item_idx = find_filtered_item_index(*force_visible_item)) {
+      if (!visible_items.contains(*item_idx)) {
+        /* Move range so the first row contains #force_visible_item. */
+        return IndexRange((item_idx == 0) ? 0 : *item_idx % cols_per_row_, max_items_in_view);
+      }
+    }
+  }
+
+  return visible_items;
+}
+
+void AbstractGridView::scroll_active_into_view(bContext *C, bool scroll_active_to_center)
+{
+  int index = 0;
+  this->foreach_filtered_item([&](AbstractViewItem &item) {
+    if (item.is_active()) {
+      Button *but = reinterpret_cast<Button *>(item.view_item_button());
+      ARegion *region = CTX_wm_region(C);
+      rctf rect;
+      View2D &v2d = region->v2d;
+      if (but) {
+        rctf region_rect;
+        block_to_region_rctf(region, but->block, &region_rect, &but->rect);
+
+        view2d_region_to_view_rctf(&v2d, &region_rect, &rect);
+      }
+
+      const IndexRange &visible_range = this->get_visible_range(v2d, nullptr);
+      int first_idx_in_view = visible_range.first();
+      int last_idx_in_view = visible_range.last();
+
+      if (but) {
+        /* When button is slightly outside the view, clamp region to button's height, see: !159566
+         */
+        first_idx_in_view += rect.ymax > v2d.cur.ymax ? cols_per_row_ : 0;
+        last_idx_in_view -= rect.ymin < v2d.cur.ymin ? cols_per_row_ : 0;
+      }
+
+      const int view_height = BLI_rcti_size_y(&v2d.mask);
+      const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+
+      if (index < first_idx_in_view) {
+        int target_row = index / cols_per_row_;
+        target_row -= scroll_active_to_center ? count_rows_in_view / 2 : 0;
+        const int cur_height = BLI_rctf_size_y(&v2d.cur);
+        v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+        v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      }
+      else if (index >= last_idx_in_view) {
+        int target_row = (index / cols_per_row_) + 1;
+        target_row += scroll_active_to_center ? count_rows_in_view / 2 : 0;
+        const int cur_height = BLI_rctf_size_y(&v2d.cur);
+        v2d.cur.ymin = v2d.tot.ymax - target_row * style_.tile_height - 2 * U.pixelsize;
+        v2d.cur.ymax = v2d.cur.ymin + cur_height;
+      }
+    }
+    index++;
+  });
+}
+
 GridViewStyle::GridViewStyle(int width, int height) : tile_width(width), tile_height(height) {}
 
 /* ---------------------------------------------------------------------- */
@@ -137,11 +362,20 @@ bool AbstractGridViewItem::matches(const AbstractViewItem &other) const
   return identifier_ == other_grid_item.identifier_;
 }
 
-void AbstractGridViewItem::add_grid_tile_button(uiBlock &block)
+void AbstractGridViewItem::add_grid_tile_button(Block &block)
 {
   const GridViewStyle &style = this->get_view().get_style();
-  view_item_but_ = (uiButViewItem *)uiDefBut(
-      &block, ButType::ViewItem, "", 0, 0, style.tile_width, style.tile_height, nullptr, 0, 0, "");
+  view_item_but_ = static_cast<ButtonViewItem *>(uiDefBut(&block,
+                                                          ButtonType::ViewItem,
+                                                          "",
+                                                          0,
+                                                          0,
+                                                          style.tile_width,
+                                                          style.tile_height,
+                                                          nullptr,
+                                                          0,
+                                                          0,
+                                                          ""));
 
   view_item_but_->view_item = this;
 }
@@ -153,7 +387,7 @@ std::optional<std::string> AbstractGridViewItem::debug_name() const
 
 AbstractGridView &AbstractGridViewItem::get_view() const
 {
-  if (UNLIKELY(!view_)) {
+  if (!view_) [[unlikely]] {
     throw std::runtime_error(
         "Invalid state, item must be added through AbstractGridView::add_item()");
   }
@@ -207,13 +441,13 @@ class BuildOnlyVisibleButtonsHelper {
                                 const AbstractGridViewItem *force_visible_item);
 
   bool is_item_visible(int item_idx) const;
-  void fill_layout_before_visible(uiBlock &block) const;
-  void fill_layout_after_visible(uiBlock &block) const;
+  void fill_layout_before_visible(Block &block) const;
+  void fill_layout_after_visible(Block &block) const;
 
  private:
   IndexRange get_visible_range(const View2D &v2d,
                                const AbstractGridViewItem *force_visible_item) const;
-  void add_spacer_button(uiBlock &block, int row_count) const;
+  void add_spacer_button(Block &block, int row_count) const;
 };
 
 BuildOnlyVisibleButtonsHelper::BuildOnlyVisibleButtonsHelper(
@@ -224,60 +458,8 @@ BuildOnlyVisibleButtonsHelper::BuildOnlyVisibleButtonsHelper(
     : grid_view_(grid_view), style_(grid_view.get_style()), cols_per_row_(cols_per_row)
 {
   if (v2d.flag & V2D_IS_INIT && grid_view.get_item_count_filtered()) {
-    visible_items_range_ = this->get_visible_range(v2d, force_visible_item);
+    visible_items_range_ = this->grid_view_.get_visible_range(v2d, force_visible_item);
   }
-}
-
-static std::optional<int> find_filtered_item_index(const AbstractGridViewItem &item)
-{
-  BLI_assert(item.is_filtered_visible());
-
-  const AbstractGridView &view = item.get_view();
-  std::optional<int> index;
-
-  int i = 0;
-  view.foreach_filtered_item([&](AbstractGridViewItem &iter_item) {
-    if (&item == &iter_item) {
-      index = i;
-    }
-    i++;
-  });
-
-  return index;
-}
-
-IndexRange BuildOnlyVisibleButtonsHelper::get_visible_range(
-    const View2D &v2d, const AbstractGridViewItem *force_visible_item) const
-{
-  BLI_assert(v2d.flag & V2D_IS_INIT);
-
-  int first_idx_in_view = 0;
-
-  const float scroll_ofs_y = std::abs(v2d.cur.ymax - v2d.tot.ymax);
-  if (!IS_EQF(scroll_ofs_y, 0)) {
-    const int scrolled_away_rows = int(scroll_ofs_y) / style_.tile_height;
-
-    first_idx_in_view = scrolled_away_rows * cols_per_row_;
-  }
-
-  const int view_height = BLI_rcti_size_y(&v2d.mask);
-  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
-  const int max_items_in_view = (count_rows_in_view + 1) * cols_per_row_;
-  BLI_assert(max_items_in_view > 0);
-
-  IndexRange visible_items(first_idx_in_view, max_items_in_view);
-
-  /* Ensure #visible_items contains #force_visible_item, adjust if necessary. */
-  if (force_visible_item && force_visible_item->is_filtered_visible()) {
-    if (std::optional<int> item_idx = find_filtered_item_index(*force_visible_item)) {
-      if (!visible_items.contains(*item_idx)) {
-        /* Move range so the first row contains #force_visible_item. */
-        return IndexRange((item_idx == 0) ? 0 : *item_idx % cols_per_row_, max_items_in_view);
-      }
-    }
-  }
-
-  return visible_items;
 }
 
 bool BuildOnlyVisibleButtonsHelper::is_item_visible(const int item_idx) const
@@ -285,7 +467,7 @@ bool BuildOnlyVisibleButtonsHelper::is_item_visible(const int item_idx) const
   return !visible_items_range_ || visible_items_range_->contains(item_idx);
 }
 
-void BuildOnlyVisibleButtonsHelper::fill_layout_before_visible(uiBlock &block) const
+void BuildOnlyVisibleButtonsHelper::fill_layout_before_visible(Block &block) const
 {
   if (!visible_items_range_ || visible_items_range_->is_empty()) {
     return;
@@ -299,7 +481,7 @@ void BuildOnlyVisibleButtonsHelper::fill_layout_before_visible(uiBlock &block) c
   this->add_spacer_button(block, scrolled_away_rows);
 }
 
-void BuildOnlyVisibleButtonsHelper::fill_layout_after_visible(uiBlock &block) const
+void BuildOnlyVisibleButtonsHelper::fill_layout_after_visible(Block &block) const
 {
   if (!visible_items_range_ || visible_items_range_->is_empty()) {
     return;
@@ -315,7 +497,7 @@ void BuildOnlyVisibleButtonsHelper::fill_layout_after_visible(uiBlock &block) co
   }
 }
 
-void BuildOnlyVisibleButtonsHelper::add_spacer_button(uiBlock &block, const int row_count) const
+void BuildOnlyVisibleButtonsHelper::add_spacer_button(Block &block, const int row_count) const
 {
   /* UI code only supports button dimensions of `signed short` size, the layout height we want to
    * fill may be bigger than that. So add multiple labels of the maximum size if necessary. */
@@ -324,7 +506,7 @@ void BuildOnlyVisibleButtonsHelper::add_spacer_button(uiBlock &block, const int 
         std::numeric_limits<short>::max() / style_.tile_height, remaining_rows);
 
     uiDefBut(&block,
-             ButType::Label,
+             ButtonType::Label,
              "",
              0,
              0,
@@ -341,52 +523,51 @@ void BuildOnlyVisibleButtonsHelper::add_spacer_button(uiBlock &block, const int 
 /* ---------------------------------------------------------------------- */
 
 class GridViewLayoutBuilder {
-  uiBlock &block_;
+  Block &block_;
 
   friend class GridViewBuilder;
 
  public:
-  GridViewLayoutBuilder(uiLayout &layout);
+  GridViewLayoutBuilder(Layout &layout);
 
-  void build_from_view(const bContext &C,
-                       const AbstractGridView &grid_view,
-                       const View2D &v2d) const;
+  void build_from_view(const bContext &C, AbstractGridView &grid_view, const View2D &v2d) const;
 
  private:
-  void build_grid_tile(const bContext &C, uiLayout &grid_layout, AbstractGridViewItem &item) const;
+  void build_grid_tile(const bContext &C, Layout &grid_layout, AbstractGridViewItem &item) const;
 
-  uiLayout *current_layout() const;
+  Layout &current_layout() const;
 };
 
-GridViewLayoutBuilder::GridViewLayoutBuilder(uiLayout &layout) : block_(*layout.block()) {}
+GridViewLayoutBuilder::GridViewLayoutBuilder(Layout &layout) : block_(*layout.block()) {}
 
 void GridViewLayoutBuilder::build_grid_tile(const bContext &C,
-                                            uiLayout &grid_layout,
+                                            Layout &grid_layout,
                                             AbstractGridViewItem &item) const
 {
-  uiLayout *overlap = &grid_layout.overlap();
-  overlap->fixed_size_set(true);
+  Layout &overlap = grid_layout.overlap();
+  overlap.fixed_size_set(true);
 
   item.add_grid_tile_button(block_);
-  item.build_grid_tile(C, overlap->row(false));
+  item.build_grid_tile(C, overlap.row(false));
 }
 
 void GridViewLayoutBuilder::build_from_view(const bContext &C,
-                                            const AbstractGridView &grid_view,
+                                            AbstractGridView &grid_view,
                                             const View2D &v2d) const
 {
-  uiLayout *parent_layout = this->current_layout();
+  Layout &parent_layout = this->current_layout();
 
-  uiLayout &layout = parent_layout->column(true);
+  Layout &layout = parent_layout.column(true);
   const GridViewStyle &style = grid_view.get_style();
 
   /* We might not actually know the width available for the grid view. Let's just assume that
    * either there is a fixed width defined via #uiLayoutSetUnitsX() or that the layout is close to
    * the root level and inherits its width. Might need a more reliable method. */
-  const int guessed_layout_width = (parent_layout->ui_units_x() > 0) ?
-                                       parent_layout->ui_units_x() * UI_UNIT_X :
-                                       parent_layout->width();
+  const int guessed_layout_width = (parent_layout.ui_units_x() > 0) ?
+                                       parent_layout.ui_units_x() * UI_UNIT_X :
+                                       parent_layout.width();
   const int cols_per_row = std::max(guessed_layout_width / style.tile_width, 1);
+  grid_view.cols_per_row_ = cols_per_row;
 
   const AbstractGridViewItem *search_highlight_item = dynamic_cast<const AbstractGridViewItem *>(
       grid_view.search_highlight_item());
@@ -397,7 +578,7 @@ void GridViewLayoutBuilder::build_from_view(const bContext &C,
   build_visible_helper.fill_layout_before_visible(block_);
 
   int item_idx = 0;
-  uiLayout *row = nullptr;
+  Layout *row = nullptr;
   grid_view.foreach_filtered_item([&](AbstractGridViewItem &item) {
     /* Skip if item isn't visible. */
     if (!build_visible_helper.is_item_visible(item_idx)) {
@@ -414,29 +595,29 @@ void GridViewLayoutBuilder::build_from_view(const bContext &C,
     item_idx++;
   });
 
-  block_layout_set_current(&block_, parent_layout);
+  block_layout_set_current(&block_, &parent_layout);
 
   build_visible_helper.fill_layout_after_visible(block_);
 }
 
-uiLayout *GridViewLayoutBuilder::current_layout() const
+Layout &GridViewLayoutBuilder::current_layout() const
 {
-  return block_.curlayout;
+  return *block_.curlayout;
 }
 
 /* ---------------------------------------------------------------------- */
 
-GridViewBuilder::GridViewBuilder(uiBlock & /*block*/) {}
+GridViewBuilder::GridViewBuilder(Block & /*block*/) {}
 
 void GridViewBuilder::build_grid_view(const bContext &C,
                                       AbstractGridView &grid_view,
-                                      uiLayout &layout,
+                                      Layout &layout,
                                       std::optional<StringRef> search_string)
 {
-  uiBlock &block = *layout.block();
+  Block &block = *layout.block();
 
   const ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
-  ui_block_view_persistent_state_restore(*region, block, grid_view);
+  block_view_persistent_state_restore(*region, block, grid_view);
 
   grid_view.build_items();
   grid_view.update_from_old(block);
@@ -457,37 +638,37 @@ PreviewGridItem::PreviewGridItem(StringRef identifier, StringRef label, int prev
 {
 }
 
-void PreviewGridItem::build_grid_tile_button(uiLayout &layout,
+void PreviewGridItem::build_grid_tile_button(Layout &layout,
                                              BIFIconID override_preview_icon_id) const
 {
   const GridViewStyle &style = this->get_view().get_style();
-  uiBlock *block = layout.block();
+  Block *block = layout.block();
 
-  UI_but_func_quick_tooltip_set(this->view_item_button(),
-                                [this](const uiBut * /*but*/) { return label; });
+  button_func_quick_tooltip_set(this->view_item_button(),
+                                [this](const Button * /*but*/) { return label; });
 
-  uiBut *but = uiDefBut(block,
-                        ButType::PreviewTile,
-                        hide_label_ ? "" : label,
-                        0,
-                        0,
-                        style.tile_width,
-                        style.tile_height,
-                        nullptr,
-                        0,
-                        0,
-                        "");
+  Button *but = uiDefBut(block,
+                         ButtonType::PreviewTile,
+                         hide_label_ ? "" : label,
+                         0,
+                         0,
+                         style.tile_width,
+                         style.tile_height,
+                         nullptr,
+                         0,
+                         0,
+                         "");
 
   const BIFIconID icon_id = override_preview_icon_id ? override_preview_icon_id : preview_icon_id;
 
-  ui_def_but_icon(but,
-                  icon_id,
-                  /* NOLINTNEXTLINE: bugprone-suspicious-enum-usage */
-                  UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
+  def_but_icon(but,
+               icon_id,
+               /* NOLINTNEXTLINE: bugprone-suspicious-enum-usage */
+               UI_HAS_ICON | BUT_ICON_PREVIEW);
   but->emboss = EmbossType::None;
 }
 
-void PreviewGridItem::build_grid_tile(const bContext & /*C*/, uiLayout &layout) const
+void PreviewGridItem::build_grid_tile(const bContext & /*C*/, Layout &layout) const
 {
   this->build_grid_tile_button(layout);
 }

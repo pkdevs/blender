@@ -11,13 +11,13 @@
 #include "BKE_appdir.hh"
 #include "BKE_global.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_system.h"
+#include "BLI_system.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "GPU_capabilities.hh"
@@ -37,7 +37,9 @@
 #include <stdio.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -45,12 +47,13 @@
 #include <stdio.h>
 #include <string>
 
+namespace blender {
+
 #ifdef WIN32
 #  define popen _popen
 #  define pclose _pclose
 #endif
 
-using namespace blender;
 using namespace blender::gpu;
 using namespace blender::gpu::shader;
 
@@ -74,9 +77,9 @@ GLShader::~GLShader()
 #endif
 }
 
-void GLShader::init(const shader::ShaderCreateInfo &info, bool is_batch_compilation)
+void GLShader::init(const shader::ShaderCreateInfo &info, bool is_codegen_only)
 {
-  async_compilation_ = is_batch_compilation;
+  is_codegen_only_ = is_codegen_only;
 
   /* Extract the constants names from info and store them locally. */
   for (const SpecializationConstant &constant : info.specialization_constants_) {
@@ -490,14 +493,9 @@ static std::ostream &print_qualifier(std::ostream &os, const Qualifier &qualifie
 
 static void print_resource(std::ostream &os,
                            const ShaderCreateInfo::Resource &res,
-                           bool auto_resource_location)
+                           const ShaderCreateInfo &info)
 {
-  if (auto_resource_location && res.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
-    /* Skip explicit binding location for samplers when not needed, since drivers can usually
-     * handle more sampler declarations this way (as long as they're not actually used by the
-     * shader). See #105661. */
-  }
-  else if (GLContext::explicit_location_support) {
+  {
     os << "layout(binding = " << res.slot;
     if (res.bind_type == ShaderCreateInfo::Resource::BindType::IMAGE) {
       os << ", " << to_string(res.image.format);
@@ -510,65 +508,47 @@ static void print_resource(std::ostream &os,
     }
     os << ") ";
   }
-  else if (res.bind_type == ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER) {
-    os << "layout(std140) ";
-  }
-
-  int64_t array_offset;
-  StringRef name_no_array;
 
   switch (res.bind_type) {
     case ShaderCreateInfo::Resource::BindType::SAMPLER:
       os << "uniform ";
       print_image_type(os, res.sampler.type, res.bind_type);
-      os << res.sampler.name << ";\n";
+      os << res.sampler.name << ";";
       break;
     case ShaderCreateInfo::Resource::BindType::IMAGE:
       os << "uniform ";
       print_qualifier(os, res.image.qualifiers);
       print_image_type(os, res.image.type, res.bind_type);
-      os << res.image.name << ";\n";
+      os << res.image.name << ";";
       break;
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
-      array_offset = res.uniformbuf.name.find_first_of("[");
-      name_no_array = (array_offset == -1) ? res.uniformbuf.name :
-                                             StringRef(res.uniformbuf.name.c_str(), array_offset);
-      os << "uniform " << name_no_array << " { " << res.uniformbuf.type_name << " _"
-         << res.uniformbuf.name << "; };\n";
+      os << "uniform _" << res.uniformbuf.name.str_no_array() << " { ";
+      os << info.buffer_typename(res.uniformbuf.type_name, true) << " " << res.uniformbuf.name
+         << "; };";
       break;
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
-      array_offset = res.storagebuf.name.find_first_of("[");
-      name_no_array = (array_offset == -1) ? res.storagebuf.name :
-                                             StringRef(res.storagebuf.name.c_str(), array_offset);
       print_qualifier(os, res.storagebuf.qualifiers);
-      os << "buffer ";
-      os << name_no_array << " { " << res.storagebuf.type_name << " _" << res.storagebuf.name
-         << "; };\n";
+      os << "buffer _";
+      os << res.storagebuf.name.str_no_array() << " { ";
+      os << info.buffer_typename(res.storagebuf.type_name) << " " << res.storagebuf.name << "; };";
+      break;
+    case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      BLI_assert_unreachable();
       break;
   }
 }
 
-static void print_resource_alias(std::ostream &os, const ShaderCreateInfo::Resource &res)
+static void print_resource(std::ostream &os,
+                           const ShaderCreateInfo::Resource &res,
+                           const ShaderCreateInfo &info,
+                           StringRefNull res_frequency,
+                           StringRefNull &active_info_name)
 {
-  int64_t array_offset;
-  StringRef name_no_array;
-
-  switch (res.bind_type) {
-    case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
-      array_offset = res.uniformbuf.name.find_first_of("[");
-      name_no_array = (array_offset == -1) ? res.uniformbuf.name :
-                                             StringRef(res.uniformbuf.name.c_str(), array_offset);
-      os << "#define " << name_no_array << " (_" << name_no_array << ")\n";
-      break;
-    case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
-      array_offset = res.storagebuf.name.find_first_of("[");
-      name_no_array = (array_offset == -1) ? res.storagebuf.name :
-                                             StringRef(res.storagebuf.name.c_str(), array_offset);
-      os << "#define " << name_no_array << " (_" << name_no_array << ")\n";
-      break;
-    default:
-      break;
+  if (assign_if_different(active_info_name, res.info_name)) {
+    os << "\n#define CREATE_INFO_RES_" << res_frequency << "_" << res.info_name << " \\\n";
   }
+  print_resource(os, res, info);
+  os << " \\\n";
 }
 
 static void print_interface(std::ostream &os,
@@ -595,7 +575,9 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
 {
   std::stringstream ss;
 
-  ss << "\n/* Compilation Constants (pass-through). */\n";
+  ss << "\n#line " << __LINE__ << " \"" << __FILE__ << "\"\n";
+
+  /* Compilation Constants (pass-through). */
   for (const CompilationConstant &sc : info.compilation_constants_) {
     ss << "const ";
     switch (sc.type) {
@@ -613,35 +595,39 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
         break;
     }
   }
-  ss << "\n/* Shared Variables. */\n";
-  for (const ShaderCreateInfo::SharedVariable &sv : info.shared_variables_) {
-    ss << "shared " << to_string(sv.type) << " " << sv.name << ";\n";
+  {
+    StringRefNull active_info = "";
+    for (const ShaderCreateInfo::SharedVariable &sv : info.shared_variables_) {
+      if (assign_if_different(active_info, sv.info_name)) {
+        ss << "\n#define CREATE_INFO_RES_SHARED_VARS_" << sv.info_name << " \\\n";
+      }
+      ss << "shared " << to_string(sv.type) << " " << sv.name << ";";
+      ss << " \\\n";
+    }
+    ss << "\n";
   }
-  /* NOTE: We define macros in GLSL to trigger compilation error if the resource names
-   * are reused for local variables. This is to match other backend behavior which needs accessors
-   * macros. */
-  ss << "\n/* Pass Resources. */\n";
-  for (const ShaderCreateInfo::Resource &res : info.pass_resources_) {
-    print_resource(ss, res, info.auto_resource_location_);
+  {
+    StringRefNull active_info = "";
+    for (const ShaderCreateInfo::Resource &res : info.pass_resources_) {
+      print_resource(ss, res, info, "PASS", active_info);
+    }
+    ss << "\n";
   }
-  for (const ShaderCreateInfo::Resource &res : info.pass_resources_) {
-    print_resource_alias(ss, res);
+  {
+    StringRefNull active_info = "";
+    for (const ShaderCreateInfo::Resource &res : info.batch_resources_) {
+      print_resource(ss, res, info, "BATCH", active_info);
+    }
+    ss << "\n";
   }
-  ss << "\n/* Batch Resources. */\n";
-  for (const ShaderCreateInfo::Resource &res : info.batch_resources_) {
-    print_resource(ss, res, info.auto_resource_location_);
+  {
+    StringRefNull active_info = "";
+    for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
+      print_resource(ss, res, info, "GEOMETRY", active_info);
+    }
+    ss << "\n";
   }
-  for (const ShaderCreateInfo::Resource &res : info.batch_resources_) {
-    print_resource_alias(ss, res);
-  }
-  ss << "\n/* Geometry Resources. */\n";
-  for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
-    print_resource(ss, res, info.auto_resource_location_);
-  }
-  for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
-    print_resource_alias(ss, res);
-  }
-  ss << "\n/* Push Constants. */\n";
+  /* Push Constants. */
   int location = 0;
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
     /* See #131227: Work around legacy Intel bug when using layout locations. */
@@ -655,13 +641,6 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
     }
     ss << ";\n";
   }
-#if 0 /* #95278: This is not be enough to prevent some compilers think it is recursive. */
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    /* #95278: Double macro to avoid some compilers think it is recursive. */
-    ss << "#define " << uniform.name << "_ " << uniform.name << "\n";
-    ss << "#define " << uniform.name << " (" << uniform.name << "_)\n";
-  }
-#endif
   ss << "\n";
   return ss.str();
 }
@@ -671,7 +650,6 @@ std::string GLShader::constants_declare(
 {
   std::stringstream ss;
 
-  ss << "/* Specialization Constants. */\n";
   for (int constant_index : IndexRange(constants_state.types.size())) {
     const StringRefNull name = specialization_constant_names_[constant_index];
     gpu::shader::Type constant_type = constants_state.types[constant_index];
@@ -722,24 +700,20 @@ std::string GLShader::vertex_interface_declare(const ShaderCreateInfo &info) con
   std::stringstream ss;
   std::string post_main;
 
-  ss << "\n/* Inputs. */\n";
+  /* Inputs. */
   for (const ShaderCreateInfo::VertIn &attr : info.vertex_inputs_) {
-    if (GLContext::explicit_location_support &&
-        /* Fix issue with AMDGPU-PRO + workbench_prepass_mesh_vert.glsl being quantized. */
-        GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL) == false)
-    {
-      ss << "layout(location = " << attr.index << ") ";
-    }
+    ss << "layout(location = " << attr.index << ") ";
     ss << "in " << to_string(attr.type) << " " << attr.name << ";\n";
   }
-  ss << "\n/* Interfaces. */\n";
+  /* Interfaces. */
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
     print_interface(ss, "out", *iface);
   }
   const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
                                   !info.geometry_source_.is_empty();
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   if (has_geometry_stage) {
     if (do_layer_output) {
       ss << "out int gpu_Layer;\n";
@@ -756,14 +730,14 @@ std::string GLShader::vertex_interface_declare(const ShaderCreateInfo &info) con
       ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
     }
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::CLIP_CONTROL)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_CONTROL)) {
     if (!has_geometry_stage) {
       /* Assume clip range is set to 0..1 and remap the range just like Vulkan and Metal.
        * If geometry stage is needed, do that remapping inside the geometry shader stage. */
       post_main += "gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;\n";
     }
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD)) {
     if (!GLContext::native_barycentric_support) {
       /* Disabled or unsupported. */
     }
@@ -789,20 +763,21 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   std::stringstream ss;
   std::string pre_main, post_main;
 
-  ss << "\n/* Interfaces. */\n";
-  const Span<StageInterfaceInfo *> in_interfaces = info.geometry_source_.is_empty() ?
-                                                       info.vertex_out_interfaces_ :
-                                                       info.geometry_out_interfaces_;
+  /* Interfaces. */
+  const Span<ShaderCreateInfo::StageInterfaceInfoHandle> in_interfaces =
+      info.geometry_source_.is_empty() ? info.vertex_out_interfaces_.as_span() :
+                                         info.geometry_out_interfaces_.as_span();
+
   for (const StageInterfaceInfo *iface : in_interfaces) {
     print_interface(ss, "in", *iface);
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::LAYER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::LAYER)) {
     ss << "#define gpu_Layer gl_Layer\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD)) {
     if (!GLContext::native_barycentric_support) {
       ss << "flat in vec4 gpu_pos[3];\n";
       ss << "smooth in vec3 gpu_BaryCoord;\n";
@@ -811,7 +786,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
     else if (epoxy_has_gl_extension("GL_AMD_shader_explicit_vertex_parameter")) {
       /* NOTE(fclem): This won't work with geometry shader. Hopefully, we don't need geometry
        * shader workaround if this extension/feature is detected. */
-      ss << "\n/* Stable Barycentric Coordinates. */\n";
+      /* Stable Barycentric Coordinates. */
       ss << "flat in vec4 gpu_pos_flat;\n";
       ss << "__explicitInterpAMD in vec4 gpu_pos;\n";
       /* Globals. */
@@ -835,7 +810,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   }
   ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
 
-  ss << "\n/* Sub-pass Inputs. */\n";
+  /* Sub-pass Inputs. */
   for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
     if (GLContext::framebuffer_fetch_support) {
       /* Declare as inout but do not write to it. */
@@ -851,7 +826,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
 
       /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
        * built-in flag. */
-      bool is_layered_fb = flag_is_set(info.builtins_, BuiltinBits::LAYER);
+      bool is_layered_fb = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
       bool is_layered_input = ELEM(
           input.img_type, ImageType::Uint2DArray, ImageType::Int2DArray, ImageType::Float2DArray);
 
@@ -859,11 +834,11 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       using Resource = ShaderCreateInfo::Resource;
       /* NOTE(fclem): Using the attachment index as resource index might be problematic as it might
        * collide with other resources. */
-      Resource res(Resource::BindType::SAMPLER, input.index);
+      Resource res(info, Resource::BindType::SAMPLER, input.index, nullptr);
       res.sampler.type = input.img_type;
       res.sampler.sampler = GPUSamplerState::default_sampler();
       res.sampler.name = image_name;
-      print_resource(ss, res, false);
+      print_resource(ss, res, info);
 
       char swizzle[] = "xyzw";
       swizzle[to_component_count(input.type)] = '\0';
@@ -884,7 +859,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       pre_main += ss_pre.str();
     }
   }
-  ss << "\n/* Outputs. */\n";
+  /* Outputs. */
   for (const ShaderCreateInfo::FragOut &output : info.fragment_outputs_) {
     ss << "layout(location = " << output.index;
     switch (output.blend) {
@@ -914,7 +889,7 @@ std::string GLShader::geometry_layout_declare(const ShaderCreateInfo &info) cons
   int invocations = info.geometry_layout_.invocations;
 
   std::stringstream ss;
-  ss << "\n/* Geometry Layout. */\n";
+  /* Geometry Layout. */
   ss << "layout(" << to_string(info.geometry_layout_.primitive_in);
   if (invocations != -1) {
     ss << ", invocations = " << invocations;
@@ -927,10 +902,10 @@ std::string GLShader::geometry_layout_declare(const ShaderCreateInfo &info) cons
   return ss.str();
 }
 
-static StageInterfaceInfo *find_interface_by_name(const Span<StageInterfaceInfo *> ifaces,
-                                                  const StringRefNull &name)
+static StageInterfaceInfo *find_interface_by_name(
+    const Span<ShaderCreateInfo::StageInterfaceInfoHandle> ifaces, const StringRefNull &name)
 {
-  for (auto *iface : ifaces) {
+  for (auto [iface, cond] : ifaces) {
     if (iface->instance_name == name) {
       return iface;
     }
@@ -942,7 +917,7 @@ std::string GLShader::geometry_interface_declare(const ShaderCreateInfo &info) c
 {
   std::stringstream ss;
 
-  ss << "\n/* Interfaces. */\n";
+  /* Interfaces. */
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
     bool has_matching_output_iface = find_interface_by_name(info.geometry_out_interfaces_,
                                                             iface->instance_name) != nullptr;
@@ -963,7 +938,7 @@ std::string GLShader::geometry_interface_declare(const ShaderCreateInfo &info) c
 std::string GLShader::compute_layout_declare(const ShaderCreateInfo &info) const
 {
   std::stringstream ss;
-  ss << "\n/* Compute Layout. */\n";
+  /* Compute Layout. */
   ss << "layout(";
   ss << "  local_size_x = " << info.compute_layout_.local_size_x;
   ss << ", local_size_y = " << info.compute_layout_.local_size_y;
@@ -984,10 +959,11 @@ std::string GLShader::workaround_geometry_shader_source_create(
 {
   std::stringstream ss;
 
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   const bool do_barycentric_workaround = !GLContext::native_barycentric_support &&
-                                         flag_is_set(info.builtins_,
+                                         flag_is_set(info.builtins_combined(),
                                                      BuiltinBits::BARYCENTRIC_COORD);
 
   shader::ShaderCreateInfo info_modified = info;
@@ -1033,7 +1009,7 @@ std::string GLShader::workaround_geometry_shader_source_create(
       ss << " vec3(" << int(i == 0) << ", " << int(i == 1) << ", " << int(i == 2) << ");\n";
     }
     ss << "  gl_Position = gl_in[" << i << "].gl_Position;\n";
-    if (flag_is_set(info.builtins_, BuiltinBits::CLIP_CONTROL)) {
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_CONTROL)) {
       /* Assume clip range is set to 0..1 and remap the range just like Vulkan and Metal. */
       ss << "gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;\n";
     }
@@ -1051,16 +1027,19 @@ std::string GLShader::workaround_geometry_shader_source_create(
 
 bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
-  BuiltinBits builtins = info->builtins_;
+  BuiltinBits builtins = info->builtins_combined();
   if (!GLContext::native_barycentric_support &&
       flag_is_set(builtins, BuiltinBits::BARYCENTRIC_COORD))
   {
     return true;
   }
-  if (!GLContext::layered_rendering_support && flag_is_set(builtins, BuiltinBits::LAYER)) {
+  if (!GLContext::layered_rendering_support && !GLContext::vertex_shader_layer_support &&
+      flag_is_set(builtins, BuiltinBits::LAYER))
+  {
     return true;
   }
-  if (!GLContext::layered_rendering_support && flag_is_set(builtins, BuiltinBits::VIEWPORT_INDEX))
+  if (!GLContext::layered_rendering_support && !GLContext::vertex_shader_viewport_index_support &&
+      flag_is_set(builtins, BuiltinBits::VIEWPORT_INDEX))
   {
     return true;
   }
@@ -1093,6 +1072,12 @@ static StringRefNull glsl_patch_vertex_get()
     if (GLContext::layered_rendering_support) {
       ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
     }
+    if (!GLContext::layered_rendering_support && GLContext::vertex_shader_layer_support) {
+      ss << "#extension GL_AMD_vertex_shader_layer: enable\n";
+    }
+    if (!GLContext::layered_rendering_support && GLContext::vertex_shader_viewport_index_support) {
+      ss << "#extension GL_AMD_vertex_shader_viewport_index: enable\n";
+    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
@@ -1122,9 +1107,6 @@ static StringRefNull glsl_patch_geometry_get()
     /* Version need to go first. */
     ss << "#version 430\n";
 
-    if (GLContext::layered_rendering_support) {
-      ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
-    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
@@ -1152,14 +1134,15 @@ static StringRefNull glsl_patch_fragment_get()
     /* Version need to go first. */
     ss << "#version 430\n";
 
-    if (GLContext::layered_rendering_support) {
-      ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
-    }
     if (GLContext::native_barycentric_support) {
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
     if (GLContext::framebuffer_fetch_support) {
       ss << "#extension GL_EXT_shader_framebuffer_fetch: enable\n";
+    }
+    if (GLContext::derivative_control_support) {
+      ss << "#extension GL_ARB_derivative_control: enable\n";
+      ss << "#define GPU_ARB_derivative_control\n";
     }
     if (GPU_stencil_export_support()) {
       ss << "#extension GL_ARB_shader_stencil_export: enable\n";
@@ -1258,7 +1241,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
   sources[SOURCES_INDEX_VERSION] = glsl_patch_get(gl_stage);
   sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS] = constants_source;
 
-  if (async_compilation_) {
+  if (is_codegen_only_) {
     gl_sources[SOURCES_INDEX_VERSION].source = std::string(sources[SOURCES_INDEX_VERSION]);
     gl_sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS].source = std::string(
         sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS]);
@@ -1274,7 +1257,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
     }
   }
 
-  if (async_compilation_) {
+  if (is_codegen_only_) {
     /* Only build the sources. */
     return 0;
   }
@@ -1289,20 +1272,10 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
 
   std::string full_name = this->name_get() + "_" + stage_name_get(gl_stage);
 
-  if (this->name_get() == G.gpu_debug_shader_source_name) {
-    namespace fs = std::filesystem;
-    fs::path shader_dir = fs::current_path() / "Shaders";
-    fs::create_directories(shader_dir);
-    fs::path file_path = shader_dir / (full_name + ".glsl");
-
-    std::ofstream output_source_file(file_path);
-    if (output_source_file) {
-      output_source_file << concat_source;
-      output_source_file.close();
-    }
-    else {
-      std::cerr << "Shader Source Debug: Failed to open file: " << file_path << "\n";
-    }
+  dump_source_to_disk(this->name_get(), full_name, ".glsl", concat_source);
+  if (!this->skip_preprocessor) {
+    concat_source = run_preprocessor(concat_source, G.debug & G_DEBUG_GPU_SHADER_NO_DCE);
+    dump_source_to_disk(this->name_get(), full_name + ".expanded", ".glsl", concat_source);
   }
 
   /* Patch line directives so that we can make error reporting consistent. */
@@ -1352,7 +1325,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
 void GLShader::update_program_and_sources(GLSources &stage_sources,
                                           MutableSpan<StringRefNull> sources)
 {
-  const bool store_sources = has_specialization_constants() || async_compilation_;
+  const bool store_sources = has_specialization_constants() || is_codegen_only_;
   if (store_sources && stage_sources.is_empty()) {
     stage_sources = sources;
   }
@@ -1400,12 +1373,12 @@ bool GLShader::finalize(const shader::ShaderCreateInfo *info)
     std::string source = workaround_geometry_shader_source_create(*info);
     Vector<StringRefNull> sources;
     sources.append("version");
-    sources.append("/* Specialization Constants. */\n");
+    sources.append("");
     sources.append(source);
     geometry_shader_from_glsl(*info, sources);
   }
 
-  if (async_compilation_) {
+  if (is_codegen_only_) {
     return true;
   }
 
@@ -1427,7 +1400,7 @@ bool GLShader::post_finalize(const shader::ShaderCreateInfo *info)
   }
 
   /* Reset for specialization constants variations. */
-  async_compilation_ = false;
+  is_codegen_only_ = false;
 
   if (info != nullptr) {
     interface = new GLShaderInterface(main_program_->program_id, *info);
@@ -1669,7 +1642,7 @@ GLShader::GLProgram &GLShader::program_get(const shader::SpecializationConstants
         GL_COMPUTE_SHADER, {}, compute_sources_, *constants_state);
   }
 
-  if (async_compilation_) {
+  if (is_codegen_only_) {
     program.program_id = glCreateProgram();
     debug::object_label(GL_PROGRAM, program.program_id, name);
     return program;
@@ -1709,7 +1682,7 @@ GLSourcesBaked GLShader::get_sources()
 /** \name GLShaderCompiler
  * \{ */
 
-void GLShaderCompiler::specialize_shader(ShaderSpecialization &specialization)
+void GLShaderCompiler::specialize_shader(const ShaderSpecialization &specialization)
 {
   dynamic_cast<GLShader *>(specialization.shader)->program_get(&specialization.constants);
 }
@@ -1724,11 +1697,19 @@ void GLShaderCompiler::specialize_shader(ShaderSpecialization &specialization)
 
 GLCompilerWorker::GLCompilerWorker()
 {
-  static size_t pipe_id = 0;
-  pipe_id++;
+  using namespace std::chrono;
+  /* This function has to be thread-safe. */
+  static std::atomic<size_t> g_pipe_id = 0;
+  size_t pipe_id = g_pipe_id++;
+
+  /* Use a timestamp on top of the PID.
+   * If a Blender session crashes without unlinking its shared memory, and the PID is reused, we
+   * may run into a name collision otherwise. */
+  static size_t time_id =
+      duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
   std::string name = "BLENDER_SHADER_COMPILER_" + std::to_string(getpid()) + "_" +
-                     std::to_string(pipe_id);
+                     std::to_string(time_id) + "_" + std::to_string(pipe_id);
 
   shared_mem_ = std::make_unique<SharedMemory>(
       name, compilation_subprocess_shared_memory_size, true);
@@ -1833,7 +1814,7 @@ bool GLCompilerWorker::load_program_binary(GLint program)
     return false;
   }
 
-  ShaderBinaryHeader *binary = (ShaderBinaryHeader *)shared_mem_->get_data();
+  ShaderBinaryHeader *binary = static_cast<ShaderBinaryHeader *>(shared_mem_->get_data());
 
   state_ = COMPILATION_FINISHED;
 
@@ -1934,7 +1915,7 @@ Shader *GLSubprocessShaderCompiler::compile_shader(const shader::ShaderCreateInf
   return shader;
 }
 
-void GLSubprocessShaderCompiler::specialize_shader(ShaderSpecialization &specialization)
+void GLSubprocessShaderCompiler::specialize_shader(const ShaderSpecialization &specialization)
 {
   static std::mutex mutex;
 
@@ -1964,9 +1945,9 @@ void GLSubprocessShaderCompiler::specialize_shader(ShaderSpecialization &special
     }
 
     /** WORKAROUND: Set async_compilation to true, so only the sources are generated. */
-    shader->async_compilation_ = true;
+    shader->is_codegen_only_ = true;
     shader->program_get(&specialization.constants);
-    shader->async_compilation_ = false;
+    shader->is_codegen_only_ = false;
     sources = shader->get_sources();
 
     size_t required_size = sources.size();
@@ -1997,3 +1978,5 @@ void GLSubprocessShaderCompiler::specialize_shader(ShaderSpecialization &special
 /** \} */
 
 #endif
+
+}  // namespace blender

@@ -10,9 +10,13 @@
 
 #include "BLI_path_utils.hh"
 
+#include "DEG_depsgraph.hh"
+
 #include "DNA_ID.h"
 
 #include "IO_orientation.hh"
+
+namespace blender {
 
 struct Mesh;
 struct bContext;
@@ -44,6 +48,7 @@ struct PLYExportParams {
   /* File Write Options. */
   bool export_selected_objects = false;
   bool apply_modifiers = true;
+  eEvaluationMode evaluation_mode = DAG_EVAL_RENDER;
   bool export_uv = true;
   bool export_normals = false;
   ePLYVertexColorMode vertex_colors = ePLYVertexColorMode::sRGB;
@@ -73,3 +78,5 @@ void PLY_export(bContext *C, const PLYExportParams &params);
 void PLY_import(bContext *C, const PLYImportParams &params);
 
 Mesh *PLY_import_mesh(const PLYImportParams &params);
+
+}  // namespace blender

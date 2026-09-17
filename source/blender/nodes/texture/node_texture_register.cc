@@ -2,9 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_register.hh"
 
 #include "node_texture_register.hh"
+
+namespace blender {
 
 void register_texture_nodes()
 {
@@ -46,3 +52,5 @@ void register_texture_nodes()
   register_node_type_tex_valtorgb();
   register_node_type_tex_viewer();
 }
+
+}  // namespace blender

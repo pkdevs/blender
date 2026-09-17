@@ -14,8 +14,8 @@
 
 #include "BKE_armature.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "DNA_constraint_types.h"
 #include "DNA_object_types.h"
@@ -40,7 +40,7 @@ bool visualkey_can_use(PointerRNA *ptr, PropertyRNA *prop)
   bool has_rigidbody = false;
   bool has_parent = false;
 
-  if (ELEM(nullptr, ptr, ptr->data, prop)) {
+  if (!ptr || !*ptr || !prop) {
     return false;
   }
 
@@ -49,17 +49,17 @@ bool visualkey_can_use(PointerRNA *ptr, PropertyRNA *prop)
    *   ptr->type is RNA_Object or RNA_PoseBone, which are the RNA wrapping-info for
    *   those structs, allowing us to identify the owner of the data
    */
-  if (ptr->type == &RNA_Object) {
+  if (ptr->type == RNA_Object) {
     Object *ob = static_cast<Object *>(ptr->data);
     RigidBodyOb *rbo = ob->rigidbody_object;
 
-    con = static_cast<bConstraint *>(ob->constraints.first);
+    con = ob->constraints.first();
     has_parent = (ob->parent != nullptr);
 
     /* Active rigidbody objects only, as only those are affected by sim. */
     has_rigidbody = ((rbo) && (rbo->type == RBO_TYPE_ACTIVE));
   }
-  else if (ptr->type == &RNA_PoseBone) {
+  else if (ptr->type == RNA_PoseBone) {
     bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr->data);
 
     if (pchan->constflag & (PCHAN_HAS_IK | PCHAN_INFLUENCED_BY_IK)) {
@@ -69,7 +69,7 @@ bool visualkey_can_use(PointerRNA *ptr, PropertyRNA *prop)
       return true;
     }
 
-    con = static_cast<bConstraint *>(pchan->constraints.first);
+    con = pchan->constraints.first();
     has_parent = (pchan->parent != nullptr);
   }
   else {
@@ -208,7 +208,7 @@ Vector<float> visualkey_get_values(PointerRNA *ptr, PropertyRNA *prop)
    *       those structs, allowing us to identify the owner of the data
    * - assume that array_index will be sane
    */
-  if (ptr->type == &RNA_Object) {
+  if (ptr->type == RNA_Object) {
     Object *ob = static_cast<Object *>(ptr->data);
     /* Loc code is specific... */
     if (strstr(identifier, "location")) {
@@ -219,16 +219,18 @@ Vector<float> visualkey_get_values(PointerRNA *ptr, PropertyRNA *prop)
     copy_m4_m4(tmat, ob->object_to_world().ptr());
     rotmode = ob->rotmode;
   }
-  else if (ptr->type == &RNA_PoseBone) {
+  else if (ptr->type == RNA_PoseBone) {
+    Object *ob = id_cast<Object *>(ptr->owner_id);
     bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr->data);
+    Bone *bone = pchan->bone_get(*ob);
 
-    BKE_armature_mat_pose_to_bone(pchan, pchan->pose_mat, tmat);
+    BKE_armature_mat_pose_to_bone({pchan, bone}, pchan->pose_mat, tmat);
     rotmode = pchan->rotmode;
 
     /* Loc code is specific... */
     if (strstr(identifier, "location")) {
       /* Only use for non-connected bones. */
-      if ((pchan->bone->parent == nullptr) || !(pchan->bone->flag & BONE_CONNECTED)) {
+      if ((bone->parent == nullptr) || !(bone->flag & BONE_CONNECTED)) {
         values.extend({tmat[3], 3});
         return values;
       }

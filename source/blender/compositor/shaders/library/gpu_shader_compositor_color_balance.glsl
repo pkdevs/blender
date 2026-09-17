@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_math_matrix_construct_lib.glsl"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
 
 #define CMP_NODE_COLOR_BALANCE_LGG 0
 #define CMP_NODE_COLOR_BALANCE_ASC_CDL 1
@@ -232,9 +232,10 @@ float4 white_point_variable(const float4 color,
   return float4(balanced, color.w);
 }
 
+[[node]]
 void node_composite_color_balance(const float4 color,
                                   const float factor,
-                                  const float type,
+                                  const int type,
                                   const float base_lift,
                                   const float4 color_lift,
                                   const float base_gamma,
@@ -253,9 +254,9 @@ void node_composite_color_balance(const float4 color,
                                   const float output_tint,
                                   const float4x4 scene_to_xyz,
                                   const float4x4 xyz_to_scene,
-                                  out float4 result)
+                                  float4 &result)
 {
-  switch (int(type)) {
+  switch (type) {
     case CMP_NODE_COLOR_BALANCE_LGG:
       result = lift_gamma_gain(
           color, base_lift, color_lift, base_gamma, color_gamma, base_gain, color_gain);
@@ -278,9 +279,10 @@ void node_composite_color_balance(const float4 color,
   result = float4(mix(color.xyz(), result.xyz(), min(factor, 1.0f)), color.w);
 }
 
+[[node]]
 void node_composite_color_balance_white_point_constant(const float4 color,
                                                        const float factor,
-                                                       const float type,
+                                                       const int type,
                                                        const float base_lift,
                                                        const float4 color_lift,
                                                        const float base_gamma,
@@ -298,7 +300,7 @@ void node_composite_color_balance_white_point_constant(const float4 color,
                                                        const float output_temperature,
                                                        const float output_tint,
                                                        const float4x4 white_point_matrix,
-                                                       out float4 result)
+                                                       float4 &result)
 {
   const float3 balanced = to_float3x3(white_point_matrix) * color.xyz();
   result = float4(mix(color.xyz(), balanced.xyz(), min(factor, 1.0f)), color.w);
