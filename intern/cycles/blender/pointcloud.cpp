@@ -237,13 +237,13 @@ static void export_pointcloud_motion_gsplat_attributes(
                [&](const blocked_range<size_t> &r) {
                  for (size_t i = r.begin(); i != r.end(); i++) {
                    motion_radiance_base[i] = b_radiance_base.is_empty() ?
-                                                 zero_float4() :
+                                                 PointCloud::DEFAULT_GSPLAT_RADIANCE_BASE :
                                                  make_float4(b_radiance_base[i][0],
                                                              b_radiance_base[i][1],
                                                              b_radiance_base[i][2],
                                                              b_radiance_base[i][3]);
                    motion_scale[i] = b_scale.is_empty() ?
-                                         zero_float3() :
+                                         PointCloud::DEFAULT_GSPLAT_SCALE :
                                          make_float3(b_scale[i][0], b_scale[i][1], b_scale[i][2]);
                    motion_rotation[i] = b_rotation.is_empty() ? identity_quaternion() :
                                                                 make_quaternion(b_rotation[i][0],
