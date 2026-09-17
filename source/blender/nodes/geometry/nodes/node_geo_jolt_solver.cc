@@ -187,6 +187,32 @@ struct JoltState {
 
   // Map<std::string, JoltRigidBodies> rigid_bodies_by_path;
   // CollisionShapeCache collision_shape_cache;
+
+  ~JoltState() = default;
+
+  void ensure_initialize()
+  {
+    if (this->is_initialized) {
+      return;
+    }
+
+    /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
+     * time.*/
+    const int max_bodies = 65536;
+    const int num_body_mutexes = 0;
+    const int max_body_pairs = 65536;
+    const int max_contact_constraints = 10240;
+    this->system.Init(max_bodies,
+                      num_body_mutexes,
+                      max_body_pairs,
+                      max_contact_constraints,
+                      this->broad_phase_layer_interface,
+                      this->object_vs_broad_phase_layer_filter,
+                      this->object_layer_pair_filter);
+    this->system.SetBodyActivationListener(&this->body_activation_listener);
+    this->system.SetContactListener(&this->contact_listener);
+    this->is_initialized = true;
+  }
 };
 
 class JoltStateOwner : public BundleItemInternalValueMixin {
@@ -297,25 +323,6 @@ class JoltSolverStep {
   void do_step()
   {
 #ifdef WITH_JOLT
-    if (!state_.is_initialized) {
-      /* Defaults taken from Jolt's Hello World example, may need to be tweaked/dynamic over
-       * time.*/
-      const int max_bodies = 65536;
-      const int num_body_mutexes = 0;
-      const int max_body_pairs = 65536;
-      const int max_contact_constraints = 10240;
-      state_.system.Init(max_bodies,
-                         num_body_mutexes,
-                         max_body_pairs,
-                         max_contact_constraints,
-                         state_.broad_phase_layer_interface,
-                         state_.object_vs_broad_phase_layer_filter,
-                         state_.object_layer_pair_filter);
-      state_.system.SetBodyActivationListener(&state_.body_activation_listener);
-      state_.system.SetContactListener(&state_.contact_listener);
-      state_.is_initialized = true;
-    }
-
     // this->gather_nested_bundle_paths();
     this->gather_from_world__geometries();
     // this->prepare_geometry_chunks();
@@ -464,6 +471,8 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   if (jolt_state_owner->mutex.try_lock()) {
+    jolt_state_owner->state.ensure_initialize();
+
     JoltSolverStep jolt_step(jolt_state_owner->state,
                              world,
                              delta_time,
@@ -482,7 +491,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (!solver_path.empty()) {
     // solver_data.add(Bundle::type_item_name, std::string(XPBDSolverDataBundle::name));
     // solver_data.add_path("residual_error", step.result().total_residual_error);
-    solver_data.add_path("_state", jolt_state_owner);
+    solver_data.add_path("_state", std::move(jolt_state_owner));
     world.add_path_override(solver_path, std::move(solver_data_ptr));
   }
 
