@@ -4449,7 +4449,7 @@ static ui::Block *block_create_autorun_warning(bContext *C, ARegion *region, voi
   const char *title = RPT_(
       "For security reasons, automatic execution of Python scripts "
       "in this file was disabled:");
-  const char *message = RPT_("This may lead to unexpected behavior");
+  const char *message = RPT_("This may lead to unexpected behavior. Allow at your own risk.");
 
   /* Measure strings to find the longest. */
   const uiStyle *style = ui::style_get_dpi();
@@ -4458,7 +4458,7 @@ static ui::Block *block_create_autorun_warning(bContext *C, ARegion *region, voi
   text_width = std::max(text_width,
                         int(BLF_width(style->widget.uifont_id, message, BLF_DRAW_STR_DUMMY_MAX)));
 
-  const int dialog_width = std::max(int(400.0f * UI_SCALE_FAC),
+  const int dialog_width = std::max(int(500.0f * UI_SCALE_FAC),
                                     text_width + int(style->columnspace * 2.5));
   const short icon_size = 40 * UI_SCALE_FAC;
   ui::Layout &layout = *uiItemsAlertBox(
@@ -4508,7 +4508,7 @@ static ui::Block *block_create_autorun_warning(bContext *C, ARegion *region, voi
                            50,
                            UI_UNIT_Y,
                            nullptr,
-                           TIP_("Enable scripts"));
+                           TIP_("Run potentially unsafe scripts in this blend file"));
     button_func_set(but,
                     [block](bContext &C) { wm_block_autorun_warning_enable_scripts(&C, block); });
   }
@@ -4518,7 +4518,7 @@ static ui::Block *block_create_autorun_warning(bContext *C, ARegion *region, voi
   but = uiDefIconTextBut(block,
                          ui::ButtonType::But,
                          ICON_NONE,
-                         IFACE_("Ignore"),
+                         IFACE_("Continue Safely"),
                          0,
                          0,
                          50,
