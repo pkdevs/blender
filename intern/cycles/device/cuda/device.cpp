@@ -115,6 +115,28 @@ void device_cuda_info(vector<DeviceInfo> &devices)
     return;
   }
 
+  /* Get the latest CUDA version supported by driver.
+   * The version is returned as (1000 * major + 10 * minor).
+   * For example, CUDA 9.2 would be represented by 9020. */
+  int driver_cuda_version;
+  result = cuDriverGetVersion(&driver_cuda_version);
+  if (result != CUDA_SUCCESS) {
+    LOG_ERROR << "CUDA cuDriverGetVersion: " << cuewErrorString(result);
+    return;
+  }
+
+  LOG_DEBUG << "CUDA version supported by the driver: " << driver_cuda_version;
+
+  /* Require driver version 580.
+   * This is a bit of indirect logic, but there is no easy way to query the driver
+   * version directly:
+   * - Driver version >= 525 and < 580 support CUDA 12.x
+   * - Driver version >= 80 support CUDA 13.x */
+  if (driver_cuda_version / 1000 < 13) {
+    LOG_INFO << "Driver version 580 or above is required.";
+    return;
+  }
+
   int count = 0;
   result = cuDeviceGetCount(&count);
   if (result != CUDA_SUCCESS) {
