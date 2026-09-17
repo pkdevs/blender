@@ -276,7 +276,7 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
    * - add a new one if it doesn't exist
    * - only add keying set when this operation is run on top of an animatable property
    */
-  auto get_keyingset = [&](void) {
+  auto get_or_create_keyingset = [&](void) {
     KeyingSet *keyingset = nullptr;
     Scene *scene = CTX_data_scene(C);
     if (scene->active_keyingset == 0) {
@@ -318,7 +318,7 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
         index = 0;
       }
 
-      KeyingSet *keyingset = get_keyingset();
+      KeyingSet *keyingset = get_or_create_keyingset();
       if (!keyingset) {
         BKE_report(op->reports, RPT_ERROR, "Cannot add property to built in keying set");
         return OPERATOR_CANCELLED;
