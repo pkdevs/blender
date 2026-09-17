@@ -22,6 +22,7 @@ Blender Convenience Targets
    * developer:     Enable faster builds, error checking and tests, recommended for developers.
    * ninja:         Use ninja build tool for faster builds.
    * ccache:        Use ccache for faster rebuilds.
+   * test_gpu_draw: Enable EEVEE, Workbench, Grease Pencil, Compositor, GPU module and UI tests.
 
    Note: when passing in multiple targets their order is not important.
    For example, for a fast build you can run 'make lite ccache ninja'.
@@ -320,6 +321,10 @@ ifneq "$(filter ccache, $(MAKECMDGOALS))" ""
 	CMAKE_CONFIG_ARGS:=-DWITH_COMPILER_CCACHE=YES $(CMAKE_CONFIG_ARGS)
 endif
 
+ifneq "$(filter test_gpu_draw, $(MAKECMDGOALS))" ""
+	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_test_gpu_draw.cmake" $(CMAKE_CONFIG_ARGS)
+endif
+
 # -----------------------------------------------------------------------------
 # Build tool
 #
@@ -434,6 +439,7 @@ bpy: all
 developer: all
 ninja: all
 ccache: all
+test_gpu_draw: all
 
 
 # -----------------------------------------------------------------------------
@@ -623,8 +629,8 @@ source_archive: .FORCE
 source_archive_complete: .FORCE
 	@cmake \
 	    -S "$(BLENDER_DIR)/build_files/build_environment" -B"$(BUILD_DIR)/source_archive" \
-	    -DCMAKE_BUILD_TYPE_INIT:STRING=$(BUILD_TYPE) -DPACKAGE_USE_UPSTREAM_SOURCES=OFF
-# This assumes CMake is still using a default `PACKAGE_DIR` variable:
+	    -DCMAKE_BUILD_TYPE_INIT:STRING=$(BUILD_TYPE) -DPACKAGE_USE_UPSTREAM_SOURCES=OFF -DPACKAGE_DOWNLOAD_ONLY=ON
+# This assumes the CMake build_environment `PACKAGE_DIR` variable wasn't modified:
 	@$(PYTHON) ./build_files/utils/make_source_archive.py --include-packages "$(BUILD_DIR)/source_archive/packages"
 # We assume that the tests will not change for minor releases so only package them for major versions
 	@$(PYTHON) ./build_files/utils/make_source_archive.py --package-test-data

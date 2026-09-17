@@ -69,7 +69,6 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     -DWITH_ONEAPI
     -O2
     -ffast-math
-    -D__KERNEL_LOCAL_ATOMIC_SORT__
     -o"${cycles_kernel_oneapi_lib}"
     -I"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
   )
@@ -136,7 +135,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
       -DWITH_NANOVDB)
   endif()
 
-  if(WITH_CYCLES_EMBREE AND EMBREE_SYCL_SUPPORT)
+  if(WITH_EMBREE AND EMBREE_SYCL_SUPPORT)
     list(APPEND sycl_compiler_flags
       -DWITH_EMBREE
       -DWITH_EMBREE_GPU

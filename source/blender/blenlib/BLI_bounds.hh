@@ -70,7 +70,7 @@ template<typename T> [[nodiscard]] inline std::optional<Bounds<T>> min_max(const
   if (values.is_empty()) {
     return std::nullopt;
   }
-  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
+  PRF_scope_with_name("bounds::min_max", ProfileCategory::Default);
   const Bounds<T> init{values.first(), values.first()};
   return threading::parallel_reduce(
       values.index_range(),
@@ -96,7 +96,7 @@ template<typename T>
     /* To avoid mask slice/lookup. */
     return min_max(values);
   }
-  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
+  PRF_scope_with_name("bounds::min_max", ProfileCategory::Default);
   const Bounds<T> init{values[mask.first()], values[mask.first()]};
   return threading::parallel_reduce(
       mask.index_range().drop_front(1),
@@ -134,6 +134,39 @@ template<typename T, typename RadiusT>
         for (const int i : range) {
           result.min = math::min(values[i] - radii[i], result.min);
           result.max = math::max(values[i] + radii[i], result.max);
+        }
+        return result;
+      },
+      [](const Bounds<T> &a, const Bounds<T> &b) { return merge(a, b); });
+}
+
+/**
+ * Find the smallest and largest values element-wise in a virtual array.
+ */
+template<typename T> [[nodiscard]] inline std::optional<Bounds<T>> min_max(const VArray<T> &varray)
+{
+  if (varray.is_empty()) {
+    return std::nullopt;
+  }
+  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
+  const CommonVArrayInfo info = varray.common_info();
+  if (info.type == CommonVArrayInfo::Type::Single) {
+    Bounds<T> result = Bounds<T>(varray.first());
+    return result;
+  }
+  if (info.type == CommonVArrayInfo::Type::Span) {
+    const Span<T> span(static_cast<const T *>(info.data), varray.size());
+    return min_max<T>(span);
+  }
+  const Bounds<T> init{varray.first(), varray.first()};
+  return threading::parallel_reduce(
+      varray.index_range(),
+      1024,
+      init,
+      [&](const IndexRange range, const Bounds<T> &init) {
+        Bounds<T> result = init;
+        for (const int i : range) {
+          math::min_max(varray[i], result.min, result.max);
         }
         return result;
       },

@@ -458,6 +458,8 @@ class NODE_MT_gn_material_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeGeometryMaterials")
+        layout.separator()
         self.node_operator(layout, "GeometryNodeReplaceMaterial")
         layout.separator()
         self.node_operator(layout, "GeometryNodeInputMaterialIndex")
@@ -593,6 +595,7 @@ class NODE_MT_gn_input_import_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeImportCSV", label="CSV (.csv)")
         self.node_operator(layout, "GeometryNodeImportOBJ", label="Wavefront (.obj)")
         self.node_operator(layout, "GeometryNodeImportPLY", label="Stanford PLY (.ply)")
+        self.node_operator(layout, "GeometryNodeImportSPZ", label="SPZ (.spz)")
         self.node_operator(layout, "GeometryNodeImportSTL", label="STL (.stl)")
         self.node_operator(layout, "GeometryNodeImportText", label="Text (.txt)")
         self.node_operator(layout, "GeometryNodeImportVDB", label="OpenVDB (.vdb)")
@@ -646,8 +649,13 @@ class NODE_MT_gn_point_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodePointsToSDFGrid")
         self.node_operator(layout, "GeometryNodePointsToVertices")
         self.node_operator(layout, "GeometryNodePointsToVolume")
+        self.node_operator(layout, "GeometryNodeRasterizePoints")
+
         layout.separator()
         self.node_operator(layout, "GeometryNodeSetPointRadius")
+
+        layout.separator()
+        self.node_operator(layout, "GeometryNodePointsSetType")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -869,6 +877,7 @@ class NODE_MT_gn_utilities_list_base(node_add_menu.NodeMenu):
     def draw(self, _context):
         layout = self.layout
         self.node_operator(layout, "GeometryNodeClosureToList")
+        self.node_operator(layout, "GeometryNodeCombineList")
         self.node_operator(layout, "GeometryNodeFieldToList")
         self.node_operator(layout, "GeometryNodeFilterList")
         self.node_operator(layout, "GeometryNodeListGetItem")
@@ -932,6 +941,7 @@ class NODE_MT_gn_utilities_vector_base(node_add_menu.NodeMenu):
         layout = self.layout
 
         self.node_operator(layout, "ShaderNodeCombineXYZ")
+        self.node_operator(layout, "FunctionNodeGetVectorComponent")
         props = self.node_operator(layout, "ShaderNodeMapRange")
         ops = props.settings.add()
         ops.name = "data_type"
@@ -1013,6 +1023,7 @@ class NODE_MT_gn_volume_sample_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeGridDivergence")
         self.node_operator(layout, "GeometryNodeGridGradient")
         self.node_operator(layout, "GeometryNodeGridLaplacian")
+        self.node_operator(layout, "GeometryNodeGridSolvePoisson")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
