@@ -1118,20 +1118,20 @@ static void keymap_but_cb(bContext * /*C*/, void *but_v, void * /*key_v*/)
       &but->rnapoin, "hyper", (hotkey_but->modifier_key & KM_HYPER) ? KM_MOD_HELD : KM_NOTHING);
 }
 
-struct PathTemplateVariableSearchArg {
+struct PropVariableSearchArg {
   PointerRNA rnapoin;
   PropertyRNA *rnaprop;
 };
 
-static void prop_path_template_variable_search_arg_free_fn(void *ptr)
+static void prop_variable_search_arg_free_fn(void *ptr)
 {
-  MEM_delete(static_cast<PathTemplateVariableSearchArg *>(ptr));
+  MEM_delete(static_cast<PropVariableSearchArg *>(ptr));
 }
 
-static void prop_path_template_variable_search_update_fn(
+static void prop_variable_search_update_fn(
     const bContext *C, void *arg, const char *str, SearchItems *items, bool /*is_first*/)
 {
-  PathTemplateVariableSearchArg *search_arg = static_cast<PathTemplateVariableSearchArg *>(arg);
+  PropVariableSearchArg *search_arg = static_cast<PropVariableSearchArg *>(arg);
 
   const StringRefNull text = str;
   const int64_t cursor = search_items_cursor_pos(items);
@@ -1174,19 +1174,19 @@ static void prop_path_template_variable_search_update_fn(
   search_items_set_replace_range(items, int(replace_start), int(replace_end));
 }
 
-static void prop_path_template_variable_search_set(Button *but)
+static void prop_variable_search_set(Button *but)
 {
-  PathTemplateVariableSearchArg *search_arg = MEM_new<PathTemplateVariableSearchArg>(__func__);
+  PropVariableSearchArg *search_arg = MEM_new<PropVariableSearchArg>(__func__);
   search_arg->rnapoin = but->rnapoin;
   search_arg->rnaprop = but->rnaprop;
 
   button_func_search_set_results_are_suggestions(but, true);
   button_func_search_set(but,
                          nullptr,
-                         prop_path_template_variable_search_update_fn,
+                         prop_variable_search_update_fn,
                          search_arg,
                          true,
-                         prop_path_template_variable_search_arg_free_fn,
+                         prop_variable_search_arg_free_fn,
                          nullptr,
                          nullptr);
 
@@ -1381,7 +1381,7 @@ static Button *item_with_label(Layout *layout,
 
   if (but != nullptr && is_template_variable_search_candidate) {
     BLI_assert(but->type == ButtonType::SearchMenu);
-    prop_path_template_variable_search_set(but);
+    prop_variable_search_set(but);
   }
 
   /* Highlight in red on path template validity errors. */

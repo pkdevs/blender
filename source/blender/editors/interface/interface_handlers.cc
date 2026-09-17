@@ -3938,6 +3938,13 @@ static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData 
   }
 }
 
+/** Refresh the edit hint and redraw, since a changed hint changes what's drawn. */
+static void button_edit_hint_refresh_and_redraw(bContext *C, Button *but, HandleButtonData *data)
+{
+  button_edit_hint_refresh(C, but, data);
+  ED_region_tag_redraw(data->region);
+}
+
 static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 {
   TextEdit &text_edit = data->text_edit;
@@ -4308,8 +4315,7 @@ static int do_but_textedit(
 #else
         searchbox_event(C, data->searchbox, but, data->region, event);
 #endif
-        button_edit_hint_refresh(C, but, data);
-        ED_region_tag_redraw(data->region);
+        button_edit_hint_refresh_and_redraw(C, but, data);
       }
       do_but_extra_operator_icons_mousemove(but, data, event);
 
@@ -4338,8 +4344,7 @@ static int do_but_textedit(
           ButtonSearch *but_search = static_cast<ButtonSearch *>(but);
           if (but_search->results_are_suggestions && searchbox_has_active_item(data->searchbox)) {
             searchbox_hide(data->searchbox);
-            button_edit_hint_refresh(C, but, data);
-            ED_region_tag_redraw(data->region);
+            button_edit_hint_refresh_and_redraw(C, but, data);
             retval = WM_UI_HANDLER_BREAK;
             break;
           }
@@ -4499,8 +4504,7 @@ static int do_but_textedit(
           mouse_motion_keynav_init(&data->searchbox_keynav_state, event);
 #endif
           searchbox_event(C, data->searchbox, but, data->region, event);
-          button_edit_hint_refresh(C, but, data);
-          ED_region_tag_redraw(data->region);
+          button_edit_hint_refresh_and_redraw(C, but, data);
           break;
         }
         if (textbox && event->type == EVT_DOWNARROWKEY) {
@@ -4528,8 +4532,7 @@ static int do_but_textedit(
           mouse_motion_keynav_init(&data->searchbox_keynav_state, event);
 #endif
           searchbox_event(C, data->searchbox, but, data->region, event);
-          button_edit_hint_refresh(C, but, data);
-          ED_region_tag_redraw(data->region);
+          button_edit_hint_refresh_and_redraw(C, but, data);
           break;
         }
         if (textbox && event->type == EVT_UPARROWKEY) {
