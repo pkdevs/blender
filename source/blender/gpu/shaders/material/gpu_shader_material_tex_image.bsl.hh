@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "gpu_shader_bicubic_sampler_lib.glsl"
+#include "gpu_shader_bicubic_sampler.bsl.hh"
 #include "gpu_shader_material_interface.bsl.hh"
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_tiled_image_lookup_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_tiled_image_lookup.bsl.hh"
 
 [[node]]
 void point_texco_remap_square(float3 vin, float3 &vout)
@@ -61,11 +61,12 @@ void point_map_to_tube(float3 vin, float3 &vout)
 }
 
 [[node]]
-void node_tex_image_linear(float3 co, sampler2D ima, float4 &color, float &alpha)
+void node_tex_image_linear(
+    float3 co, sampler2D ima, [[resource_table]] KernelGlobals &kg, float4 &color, float &alpha)
 {
-#ifdef GPU_FRAGMENT_SHADER
-  float2 dx = gpu_dfdx(co.xy) * texture_lod_bias_get();
-  float2 dy = gpu_dfdy(co.xy) * texture_lod_bias_get();
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  float2 dx = gpu_dfdx(co.xy) * texture_lod_bias_get(kg);
+  float2 dy = gpu_dfdy(co.xy) * texture_lod_bias_get(kg);
 
   color = textureGrad(ima, co.xy, dx, dy);
 #else
@@ -76,15 +77,24 @@ void node_tex_image_linear(float3 co, sampler2D ima, float4 &color, float &alpha
 }
 
 [[node]]
-void node_tex_image_cubic(float3 co, sampler2D ima, float4 &color, float &alpha)
+void node_tex_image_cubic(float3 co,
+                          sampler2D ima,
+                          [[resource_table]] KernelGlobals & /*kg*/,
+                          float4 &color,
+                          float &alpha)
 {
   color = texture_bicubic(ima, co.xy);
   alpha = color.a;
 }
 
 [[node]]
-void tex_box_sample_linear(
-    float3 texco, float3 N, sampler2D ima, float4 &color1, float4 &color2, float4 &color3)
+void tex_box_sample_linear(float3 texco,
+                           float3 N,
+                           sampler2D ima,
+                           [[resource_table]] KernelGlobals & /*kg*/,
+                           float4 &color1,
+                           float4 &color2,
+                           float4 &color3)
 {
   /* X projection */
   float2 uv = texco.yz;
@@ -107,8 +117,13 @@ void tex_box_sample_linear(
 }
 
 [[node]]
-void tex_box_sample_cubic(
-    float3 texco, float3 N, sampler2D ima, float4 &color1, float4 &color2, float4 &color3)
+void tex_box_sample_cubic(float3 texco,
+                          float3 N,
+                          sampler2D ima,
+                          [[resource_table]] KernelGlobals &kg,
+                          float4 &color1,
+                          float4 &color2,
+                          float4 &color3)
 {
   float alpha;
   /* X projection */
@@ -116,19 +131,19 @@ void tex_box_sample_cubic(
   if (N.x < 0.0f) {
     uv.x = 1.0f - uv.x;
   }
-  node_tex_image_cubic(uv.xyy, ima, color1, alpha);
+  node_tex_image_cubic(uv.xyy, ima, kg, color1, alpha);
   /* Y projection */
   uv = texco.xz;
   if (N.y > 0.0f) {
     uv.x = 1.0f - uv.x;
   }
-  node_tex_image_cubic(uv.xyy, ima, color2, alpha);
+  node_tex_image_cubic(uv.xyy, ima, kg, color2, alpha);
   /* Z projection */
   uv = texco.yx;
   if (N.z > 0.0f) {
     uv.x = 1.0f - uv.x;
   }
-  node_tex_image_cubic(uv.xyy, ima, color3, alpha);
+  node_tex_image_cubic(uv.xyy, ima, kg, color3, alpha);
 }
 
 [[node]]

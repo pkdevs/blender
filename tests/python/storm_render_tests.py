@@ -50,6 +50,8 @@ BLOCKLIST_HYDRA = [
     "many_lights.blend",
     # The result differs between platforms
     "principled_bsdf_dispersion.blend",
+    # No Gaussian splat rendering in hydra.
+    "gsplat_.*.blend",
 ]
 
 BLOCKLIST_USD = [
@@ -70,6 +72,8 @@ BLOCKLIST_USD = [
     "osl_camera_.*.blend",
     # The result in incorrect
     "principled_bsdf_dispersion.blend",
+    # No Gaussian splat rendering in hydra.
+    "gsplat_.*.blend",
 ]
 
 # Metal support in Storm is no as good as OpenGL, though this needs to be
@@ -106,6 +110,8 @@ BLOCKLIST_AMD = BLOCKLIST_METAL + [
     "volume_tricubic_interpolation.blend",
     "holdout.blend",
     "principled_bsdf_anisotropic_transmission.blend",
+    # Upper left sphere renders incorrectly.
+    "principled_bsdf_coated_transmission.blend",
 ]
 
 # Minor difference in texture coordinate for white noise hash.
