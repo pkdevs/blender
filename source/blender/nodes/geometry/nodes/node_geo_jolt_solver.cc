@@ -2,20 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifdef WITH_JOLT
-
-#  include <Jolt/Jolt.h>
-
-#  include <Jolt/Core/JobSystemSingleThreaded.h>
-#  include <Jolt/Physics/Body/BodyActivationListener.h>
-#  include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
-#  include <Jolt/Physics/Collision/ContactListener.h>
-#  include <Jolt/Physics/Collision/ObjectLayer.h>
-#  include <Jolt/Physics/PhysicsSystem.h>
-
-#endif
-
 #include "BLI_math_matrix.hh"
+#include "BLI_math_quaternion_types.hh"
+#include "BLI_math_rotation.hh"
 
 #include "BKE_instances.hh"
 
@@ -26,6 +15,22 @@
 #include "node_geometry_util.hh"
 
 #include "GEO_jolt.hh"
+
+#include <fmt/format.h>
+
+#ifdef WITH_JOLT
+
+#  include <Jolt/Jolt.h>
+
+#  include <Jolt/Core/JobSystemSingleThreaded.h>
+#  include <Jolt/Physics/Body/BodyActivationListener.h>
+#  include <Jolt/Physics/Body/BodyCreationSettings.h>
+#  include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#  include <Jolt/Physics/Collision/ContactListener.h>
+#  include <Jolt/Physics/Collision/ObjectLayer.h>
+#  include <Jolt/Physics/PhysicsSystem.h>
+
+#endif
 
 namespace blender::nodes::node_geo_jolt_solver_cc {
 
@@ -66,23 +71,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 }
 
 #ifdef WITH_JOLT
-
-static JPH::Vec3 convert_vec3(const float3 &v)
-{
-  return JPH::Vec3(v.x, v.y, v.z);
-}
-static float3 convert_vec3(const JPH::Vec3 &v)
-{
-  return float3(v.GetX(), v.GetY(), v.GetZ());
-}
-static JPH::Quat convert_quat(const math::Quaternion &q)
-{
-  return JPH::Quat(q.x, q.y, q.z, q.w);
-}
-static math::Quaternion convert_quat(const JPH::Quat &q)
-{
-  return math::Quaternion(q.GetW(), q.GetX(), q.GetY(), q.GetZ());
-}
 
 namespace ObjectLayers {
 static constexpr JPH::ObjectLayer non_moving(0);
@@ -196,7 +184,7 @@ struct JoltState {
   JPH::PhysicsSystem system;
 
   Map<DataKey, JoltRigidBodies> rigid_bodies_by_key;
-  // CollisionShapeCache collision_shape_cache;
+  geometry::jolt::CollisionShapeCache collision_shape_cache;
 
   ~JoltState() = default;
 
@@ -266,11 +254,19 @@ struct GeometryData {
   AttrDomain domain;
   int size;
 
+  Span<bke::InstanceReference> references;
+  Span<int> reference_handles;
   Span<int> instance_ids;
 
   bke::SpanAttributeWriter<float4x4> transform_attr;
   bke::SpanAttributeWriter<float3> velocity_attr;
   bke::SpanAttributeWriter<float3> angular_velocity_attr;
+
+  VArray<int> collision_shape_types;
+  VArray<int> motion_types;
+  VArray<float> frictions;
+  VArray<float> bouncinesses;
+  VArray<float> densities;
 
   GeometryData(const bke::MutableAttributeAccessor attributes) : attributes(attributes) {}
 };
@@ -283,6 +279,59 @@ struct Geometries {
   /* Data for each data key. */
   Vector<GeometryData *> data;
 };
+
+enum class CollisionShapeType {
+  Box,
+  Sphere,
+  ConvexHull,
+};
+
+static std::optional<CollisionShapeType> parse_collision_shape_type(const int type)
+{
+  switch (type) {
+    case 0:
+      return CollisionShapeType::Box;
+    case 1:
+      return CollisionShapeType::Sphere;
+    case 2:
+      return CollisionShapeType::ConvexHull;
+  }
+  return std::nullopt;
+}
+
+static std::optional<JPH::EMotionType> parse_motion_type(const int type)
+{
+  switch (type) {
+    case 0:
+      return JPH::EMotionType::Dynamic;
+    case 1:
+      return JPH::EMotionType::Static;
+    case 2:
+      return JPH::EMotionType::Kinematic;
+    default:
+      return std::nullopt;
+  }
+}
+
+static JPH::ShapeSettings::ShapeResult make_collision_shape(
+    const CollisionShapeType type,
+    const geometry::jolt::CollisionShapeParams &params,
+    geometry::jolt::CollisionShapeCache &cache)
+{
+  switch (type) {
+    case CollisionShapeType::Box: {
+      return cache.get_or_create_box(params);
+    }
+    case CollisionShapeType::Sphere: {
+      return cache.get_or_create_sphere(params);
+    }
+    case CollisionShapeType::ConvexHull: {
+      return cache.get_or_create_convex_hull(params);
+    }
+  }
+  BLI_assert_unreachable();
+  return {};
+}
 
 class JoltSolverStep {
  private:
@@ -312,6 +361,9 @@ class JoltSolverStep {
   std::string geometry_tag_filter_;
 
   Geometries geometries_;
+
+  Mutex warnings_mutex_;
+  VectorSet<std::pair<NodeWarningType, std::string>> warnings_;
 
  public:
   JoltSolverStep(JoltState &state,
@@ -361,10 +413,11 @@ class JoltSolverStep {
     //   this->create_chunk_constraints__pin_rotations(tls, chunk_i);
     // });
 
+    this->update_jolt_state_from_instances();
     JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
     JPH::JobSystemSingleThreaded job_system;
     state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
-    this->update_simulated_bodies();
+    this->update_instances_from_jolt_state();
 
     // this->write_back__pin_positions();
     // this->write_back__rod_stretch_shear();
@@ -397,6 +450,8 @@ class JoltSolverStep {
             instances.attributes_for_write());
         geo_data.domain = AttrDomain::Instance;
         geo_data.instance_ids = instances.unique_ids();
+        geo_data.references = instances.references();
+        geo_data.reference_handles = instances.reference_handles();
 
         geometries_.data.append(&geo_data);
       }
@@ -425,10 +480,186 @@ class JoltSolverStep {
       //     data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
       // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
+
+      geo_data.collision_shape_types = this->lookup_attribute_default<int>(
+          data_key_i, attribute_names::collision_shape_type, geo_data.domain, 0);
+      geo_data.motion_types = this->lookup_attribute_default<int>(
+          data_key_i, attribute_names::motion_type, geo_data.domain, 0.0f);
+      geo_data.frictions = this->lookup_attribute_default<float>(
+          data_key_i, attribute_names::static_friction, geo_data.domain, 0.5f);
+      geo_data.bouncinesses = this->lookup_attribute_default<float>(
+          data_key_i, attribute_names::bounciness, geo_data.domain, 0.5f);
+      geo_data.densities = this->lookup_attribute_default<float>(
+          data_key_i, attribute_names::density, geo_data.domain, 1.0f);
     }
   }
 
-  void update_simulated_bodies()
+  void update_jolt_state_from_instances()
+  {
+    state_.collision_shape_cache.reset_used();
+
+    /* XXX In the earlier implementation the instance transforms had to be updated first because
+     * field evaluation could depend on current state.
+     * It should not be necessary any more because geometry attributes are transferred from the
+     * cache to the new world input outside of the solver. */
+    // update_instances_from_jolt_state();
+
+    Map<DataKey, JoltRigidBodies> new_rigid_bodies_by_key;
+    JPH::BodyInterface &body_interface = state_.system.GetBodyInterfaceNoLock();
+
+    Vector<JPH::BodyID> bodies_to_remove;
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      const DataKey &data_key = geometries_.data_keys[data_key_i];
+      const GeometryData &geo_data = *geometries_.data[data_key_i];
+
+      JoltRigidBodies *old_rigid_bodies = state_.rigid_bodies_by_key.lookup_ptr(data_key);
+      JoltRigidBodies new_rigid_bodies = this->update_rigid_bodies(geo_data, old_rigid_bodies);
+
+      if (old_rigid_bodies) {
+        bodies_to_remove.reserve(bodies_to_remove.size() + old_rigid_bodies->bodies_by_id.size());
+        for (JoltRigidBody &body : old_rigid_bodies->bodies_by_id.values()) {
+          bodies_to_remove.append_unchecked(body.body->GetID());
+        }
+      }
+    }
+
+    /* Remove old rigid bodies. */
+    body_interface.RemoveBodies(bodies_to_remove.data(), bodies_to_remove.size());
+    body_interface.DestroyBodies(bodies_to_remove.data(), bodies_to_remove.size());
+
+    state_.rigid_bodies_by_key = std::move(new_rigid_bodies_by_key);
+    state_.collision_shape_cache.remove_unused();
+
+    // update_gravity(params, state, behaviors);
+    // update_forces(state, behaviors);
+  }
+
+  JoltRigidBodies update_rigid_bodies(const GeometryData &geo_data,
+                                      JoltRigidBodies *old_rigid_bodies)
+  {
+    JPH::BodyInterface &body_interface = state_.system.GetBodyInterfaceNoLock();
+
+    // const bke::Instances *instances = behavior.simulated_geometry.get_instances();
+    // if (!instances) {
+    //   return;
+    // }
+    // const int instances_num = instances->instances_num();
+    // const int references_num = instances->references_num();
+    // const Span<int> instance_ids = instances->almost_unique_ids();
+    // const Span<float4x4> transforms = instances->transforms();
+    // const Span<bke::InstanceReference> references = instances->references();
+    // const Span<int> handles = instances->reference_handles();
+
+    // bke::InstancesFieldContext field_context{*instances};
+    // fn::FieldEvaluator field_evaluator{field_context, instances_num};
+    // field_evaluator.add(behavior.collision_shape_type_field);
+    // field_evaluator.add(behavior.motion_type_field);
+    // field_evaluator.add(behavior.friction_field);
+    // field_evaluator.add(behavior.bounciness_field);
+    // field_evaluator.add(behavior.density_field);
+    // field_evaluator.evaluate();
+    // const VArray<int> collision_shape_types = field_evaluator.get_evaluated<int>(0);
+    // const VArray<int> motion_types = field_evaluator.get_evaluated<int>(1);
+    // const VArray<float> frictions = field_evaluator.get_evaluated<float>(2);
+    // const VArray<float> bouncinesses = field_evaluator.get_evaluated<float>(3);
+    // const VArray<float> densities = field_evaluator.get_evaluated<float>(4);
+
+    Array<GeometrySet> reference_geometry_sets(geo_data.references.size());
+    for (const int i : geo_data.references.index_range()) {
+      const bke::InstanceReference &reference = geo_data.references[i];
+      GeometrySet reference_geometry;
+      reference.to_geometry_set(reference_geometry);
+      reference_geometry_sets[i] = std::move(reference_geometry);
+    }
+
+    JoltRigidBodies rigid_bodies;
+    for (const int instance_i : geo_data.instance_ids.index_range()) {
+      const int reference_i = geo_data.reference_handles[instance_i];
+      const int instance_id = geo_data.instance_ids[instance_i];
+      if (!reference_geometry_sets.index_range().contains(reference_i)) {
+        continue;
+      }
+      const std::optional<CollisionShapeType> collision_shape_type = parse_collision_shape_type(
+          geo_data.collision_shape_types[instance_i]);
+      if (!collision_shape_type) {
+        continue;
+      }
+      const std::optional<JPH::EMotionType> motion_type = parse_motion_type(
+          geo_data.motion_types[instance_i]);
+      if (!motion_type) {
+        continue;
+      }
+      const GeometrySet &reference_geometry = reference_geometry_sets[reference_i];
+      const std::optional<Bounds<float3>> bounds =
+          reference_geometry.compute_boundbox_without_instances(true);
+      if (!bounds) {
+        continue;
+      }
+      const float4x4 &instance_transform = geo_data.transform_attr.span[instance_i];
+      float3 instance_position;
+      math::Quaternion instance_rotation;
+      float3 instance_scale;
+      math::to_loc_rot_scale_safe<true>(
+          instance_transform, instance_position, instance_rotation, instance_scale);
+
+      float density = geo_data.densities[instance_i];
+      if (density <= 0.0f) {
+        density = 1.0f;
+      }
+
+      const geometry::jolt::CollisionShapeParams collision_shape_params{
+          reference_geometry, instance_scale, density};
+      JPH::ShapeSettings::ShapeResult collision_shape = make_collision_shape(
+          *collision_shape_type, collision_shape_params, state_.collision_shape_cache);
+      if (!collision_shape.IsValid()) {
+        continue;
+      }
+
+      const float friction = geo_data.frictions[instance_i];
+      const float bounciness = geo_data.bouncinesses[instance_i];
+
+      std::optional<JoltRigidBody> rigid_body;
+      if (old_rigid_bodies) {
+        if (std::optional<JoltRigidBody> old_rigid_body = old_rigid_bodies->bodies_by_id.pop_try(
+                instance_id))
+        {
+          rigid_body = old_rigid_body;
+        }
+      }
+      if (!rigid_body) {
+        JPH::BodyCreationSettings jolt_body_settings{
+            collision_shape.Get(),
+            geometry::jolt::convert_dvec3(instance_position),
+            geometry::jolt::convert_quat(instance_rotation),
+            *motion_type,
+            *motion_type == JPH::EMotionType::Dynamic ? ObjectLayers::moving :
+                                                        ObjectLayers::non_moving};
+
+        JPH::Body *jolt_body = body_interface.CreateBody(jolt_body_settings);
+        body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
+        rigid_body = JoltRigidBody{jolt_body};
+      }
+
+      body_interface.SetShape(
+          rigid_body->body->GetID(), collision_shape.Get(), true, JPH::EActivation::Activate);
+      rigid_body->body->SetFriction(friction);
+      rigid_body->body->SetRestitution(bounciness);
+
+      if (motion_type == JPH::EMotionType::Kinematic) {
+        body_interface.SetPositionAndRotationWhenChanged(
+            rigid_body->body->GetID(),
+            geometry::jolt::convert_dvec3(instance_position),
+            geometry::jolt::convert_quat(instance_rotation),
+            JPH::EActivation::Activate);
+      }
+
+      rigid_bodies.bodies_by_id.add(instance_id, std::move(*rigid_body));
+    }
+
+    return rigid_bodies;
+  }
+
+  void update_instances_from_jolt_state()
   {
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       const DataKey &data_key = geometries_.data_keys[data_key_i];
@@ -448,11 +679,11 @@ class JoltSolverStep {
         const JPH::Body &jolt_body = *rigid_body->body;
 
         float4x4 &transform = geo_data.transform_attr.span[instance_i];
-        const JPH::Vec3 jolt_position = jolt_body.GetPosition();
+        const JPH::DVec3 jolt_position = jolt_body.GetPosition();
         const JPH::Quat jolt_rotation = jolt_body.GetRotation();
 
-        const float3 position = convert_vec3(jolt_position);
-        const math::Quaternion rotation = convert_quat(jolt_rotation);
+        const float3 position = geometry::jolt::convert_dvec3(jolt_position);
+        const math::Quaternion rotation = geometry::jolt::convert_quat(jolt_rotation);
 
         /* Scale is not simulated to Jolt, so keep the scale of the original geometry. */
         const float3 scale = math::to_scale(transform);
@@ -471,6 +702,68 @@ class JoltSolverStep {
       geo_data.velocity_attr.finish();
       geo_data.angular_velocity_attr.finish();
     }
+  }
+
+  template<typename T>
+  VArray<T> lookup_attribute_default(const int data_key_i,
+                                     const StringRef attribute_name,
+                                     const AttrDomain domain,
+                                     const T &default_value)
+  {
+    GeometryData &geo_data = *geometries_.data[data_key_i];
+    VArray<T> varray = *geo_data.attributes.lookup<T>(attribute_name, domain);
+    if (!varray) {
+      this->report(
+          NodeWarningType::Info,
+          fmt::format(
+              "Attribute \"{}\" not found in \"{}\", using fallback value",
+              attribute_name,
+              geometries_.geometry_sets[geometries_.data_keys[data_key_i].geo_bundle_i].path));
+      return VArray<T>::from_single(default_value, geo_data.attributes.domain_size(domain));
+    }
+    return varray;
+  }
+
+  template<typename T>
+  VArray<T> lookup_attribute_required(const int data_key_i,
+                                      const StringRef attribute_name,
+                                      const AttrDomain domain)
+  {
+    GeometryData &geo_data = *geometries_.data[data_key_i];
+    VArray<T> varray = *geo_data.attributes.lookup<T>(attribute_name, domain);
+    if (!varray) {
+      this->report(
+          NodeWarningType::Error,
+          fmt::format(
+              "Attribute \"{}\" not found on \"{}\", some functionality is disabled",
+              attribute_name,
+              geometries_.geometry_sets[geometries_.data_keys[data_key_i].geo_bundle_i].path));
+    }
+    return varray;
+  }
+
+  template<typename T>
+  VArray<T> lookup_attribute_optional(const int data_key_i,
+                                      const StringRef attribute_name,
+                                      const AttrDomain domain)
+  {
+    GeometryData &geo_data = *geometries_.data[data_key_i];
+    VArray<T> varray = *geo_data.attributes.lookup<T>(attribute_name, domain);
+    if (!varray) {
+      this->report(
+          NodeWarningType::Info,
+          fmt::format(
+              "Optional attribute \"{}\" not found on \"{}\"",
+              attribute_name,
+              geometries_.geometry_sets[geometries_.data_keys[data_key_i].geo_bundle_i].path));
+    }
+    return varray;
+  }
+
+  void report(NodeWarningType type, std::string warning)
+  {
+    std::lock_guard<Mutex> lock(warnings_mutex_);
+    warnings_.add({type, std::move(warning)});
   }
 };
 
@@ -527,6 +820,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                              interpolation_end,
                              geometry_tag_filter,
                              simulation_to_world);
+    jolt_step.do_step();
     jolt_state_owner->mutex.unlock();
   }
   else {
