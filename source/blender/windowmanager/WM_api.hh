@@ -903,7 +903,6 @@ void WM_event_add_notifier_ex(wmWindowManager *wm,
                               void *reference);
 void WM_event_add_notifier(const bContext *C, unsigned int type, void *reference);
 void WM_main_add_notifier(unsigned int type, void *reference);
-void WM_event_reset_cursor_blink_notifier(const bContext &C);
 /**
  * Clear notifiers by reference, Used so listeners don't act on freed data.
  */

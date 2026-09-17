@@ -429,7 +429,7 @@ static void text_update_edited(bContext *C, Object *obedit, const eEditFontMode 
   ed::object::material_active_index_set(obedit, cu->curinfo.mat_nr);
 
   DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
 }
 
@@ -590,7 +590,7 @@ static wmOperatorStatus paste_from_file(bContext *C, ReportList *reports, const 
   size_t filelen;
   wmOperatorStatus retval;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   strp = BLI_file_read_text_as_mem(filepath, 1, &filelen);
   if (strp == nullptr) {
@@ -681,7 +681,7 @@ static void text_insert_unicode_confirm(bContext *C, void *arg_block, void *arg_
   ui::Block *block = static_cast<ui::Block *>(arg_block);
   char *edit_string = static_cast<char *>(arg_string);
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (edit_string[0] == 0) {
     /* Blank text is probably purposeful closure. */
@@ -908,7 +908,7 @@ static void txt_add_object(bContext *C,
   cu->pos = cu->len_char32;
   *s = '\0';
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   WM_event_add_notifier(C, NC_OBJECT | NA_ADDED, obedit);
 }
 
@@ -993,7 +993,7 @@ static wmOperatorStatus set_style(bContext *C, const eCharInfoFlag style, const 
 
   DEG_id_tag_update(obedit->data, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   return OPERATOR_FINISHED;
 }
@@ -1039,7 +1039,7 @@ static wmOperatorStatus toggle_style_exec(bContext *C, wmOperator *op)
   int clear, selstart, selend;
 
   const eCharInfoFlag style = eCharInfoFlag(RNA_enum_get(op->ptr, "style"));
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   cu->curinfo.flag ^= style;
   if (BKE_vfont_select_get(cu, &selstart, &selend)) {
     clear = (cu->curinfo.flag & style) == eCharInfoFlag{};
@@ -1079,7 +1079,7 @@ static wmOperatorStatus font_select_all_exec(bContext *C, wmOperator * /*op*/)
   Curve *cu = id_cast<Curve *>(obedit->data);
   EditFont *ef = cu->editfont;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (ef->len) {
     ef->selstart = 1;
@@ -1174,7 +1174,7 @@ static wmOperatorStatus cut_text_exec(bContext *C, wmOperator * /*op*/)
   Curve *cu = id_cast<Curve *>(obedit->data);
   int selstart, selend;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (!BKE_vfont_select_get(cu, &selstart, &selend)) {
     return OPERATOR_CANCELLED;
@@ -1233,7 +1233,7 @@ static wmOperatorStatus paste_text_exec(bContext *C, wmOperator *op)
   size_t len_utf8;
   char32_t *text_buf;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   /* Store both clipboards as UTF8 for comparison,
    * Give priority to the internal `vfont` clipboard with its #CharInfo text styles
@@ -1378,7 +1378,7 @@ static wmOperatorStatus move_cursor(bContext *C, int type, const bool select)
   EditFont *ef = cu->editfont;
   int cursmove = -1;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if ((select) && (ef->selstart == 0)) {
     ef->selstart = ef->selend = ef->pos + 1;
@@ -1581,7 +1581,7 @@ static wmOperatorStatus change_spacing_exec(bContext *C, wmOperator *op)
   int selstart, selend;
   bool changed = false;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   const bool has_select = BKE_vfont_select_get(cu, &selstart, &selend);
   if (has_select) {
@@ -1648,7 +1648,7 @@ static wmOperatorStatus change_character_exec(bContext *C, wmOperator *op)
   EditFont *ef = cu->editfont;
   int character, delta = RNA_int_get(op->ptr, "delta");
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (ef->pos <= 0) {
     return OPERATOR_CANCELLED;
@@ -1763,7 +1763,7 @@ static wmOperatorStatus delete_exec(bContext *C, wmOperator *op)
   int range[2] = {0, 0};
   bool has_select = false;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (ef->len == 0) {
     return OPERATOR_CANCELLED;
@@ -1905,7 +1905,7 @@ static wmOperatorStatus insert_text_exec(bContext *C, wmOperator *op)
   char32_t *inserted_text;
   int a, len;
 
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (!RNA_struct_property_is_set(op->ptr, "text")) {
     return OPERATOR_CANCELLED;
@@ -2072,7 +2072,7 @@ static int font_cursor_text_index_from_event(bContext *C, Object *obedit, const 
 
 static void font_cursor_set_apply(bContext *C, const wmEvent *event)
 {
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = DEG_get_evaluated(depsgraph, CTX_data_active_object(C));
   Curve *cu = id_cast<Curve *>(ob->data);
@@ -2376,7 +2376,7 @@ static const EnumPropertyItem case_items[] = {
 
 static wmOperatorStatus set_case(bContext *C, int ccase)
 {
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   int selstart, selend;
@@ -2430,7 +2430,7 @@ void FONT_OT_case_set(wmOperatorType *ot)
 
 static wmOperatorStatus toggle_case_exec(bContext *C, wmOperator * /*op*/)
 {
-  WM_event_reset_cursor_blink_notifier(*C);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   EditFont *ef = cu->editfont;

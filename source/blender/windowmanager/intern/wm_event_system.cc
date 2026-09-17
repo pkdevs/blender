@@ -408,11 +408,6 @@ void WM_main_add_notifier(uint type, void *reference)
   WM_event_add_notifier_ex(wm, nullptr, type, reference);
 }
 
-void WM_event_reset_cursor_blink_notifier(const bContext &C)
-{
-  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(&C));
-}
-
 void WM_main_remove_notifier_reference(const void *reference)
 {
   Main *bmain = G_MAIN;
@@ -4253,7 +4248,7 @@ void wm_event_do_handlers(bContext *C)
     if (wm->runtime->break_events_handling) {
       break;
     }
-
+    /* Update topmost active region if the window gets tagged. */
     BLI_SCOPED_DEFER([&win]() {
       if (win.runtime->topmost_active_region_refresh) {
         win.runtime->topmost_active_region = [](const wmWindow &win) -> const ARegion * {

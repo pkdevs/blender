@@ -219,7 +219,7 @@ static void text_editing_update(const bContext *C)
 {
   Strip *strip = seq::select_active_get(CTX_data_sequencer_scene(C));
   seq::relations_invalidate_cache_raw(CTX_data_sequencer_scene(C), strip);
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_sequencer_scene(C));
 }
 
@@ -360,7 +360,7 @@ static wmOperatorStatus sequencer_text_edit_cut_exec(bContext *C, wmOperator * /
   }
 
   text_edit_copy(data);
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   delete_selected_text(data);
 
   text_editing_update(C);
@@ -621,7 +621,7 @@ static wmOperatorStatus sequencer_text_cursor_move_exec(bContext *C, wmOperator 
     text_selection_cancel(data);
   }
 
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_sequencer_scene(C));
   return OPERATOR_FINISHED;
 }
@@ -691,7 +691,7 @@ static wmOperatorStatus sequencer_text_delete_exec(bContext *C, wmOperator *op)
   const seq::TextVarsRuntime *runtime = data->runtime;
   const int type = RNA_enum_get(op->ptr, "type");
 
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   if (text_has_selection(data)) {
     delete_selected_text(data);
@@ -781,7 +781,7 @@ static wmOperatorStatus sequencer_text_insert_exec(bContext *C, wmOperator *op)
   const Strip *strip = seq::select_active_get(CTX_data_sequencer_scene(C));
   TextVars *data = static_cast<TextVars *>(strip->effectdata);
 
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
 
   char str[512];
   RNA_string_get(op->ptr, "string", str);
@@ -898,7 +898,7 @@ static int find_closest_cursor_offset(const TextVars *data, float2 mouse_loc)
 
 static void cursor_set_by_mouse_position(const bContext *C, const wmEvent *event)
 {
-  WM_event_reset_cursor_blink_notifier(*C);
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   const Scene *scene = CTX_data_sequencer_scene(C);
   const Strip *strip = seq::select_active_get(scene);
   TextVars *data = static_cast<TextVars *>(strip->effectdata);
@@ -1017,7 +1017,7 @@ static wmOperatorStatus sequencer_text_edit_mode_toggle_exec(bContext *C, wmOper
   Strip *strip = seq::select_active_get(CTX_data_sequencer_scene(C));
   if ((strip->flag & SEQ_FLAG_TEXT_EDITING_ACTIVE) != 0) {
     strip->flag &= ~SEQ_FLAG_TEXT_EDITING_ACTIVE;
-    WM_event_reset_cursor_blink_notifier(*C);
+    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   }
   else {
     strip->flag |= SEQ_FLAG_TEXT_EDITING_ACTIVE;
