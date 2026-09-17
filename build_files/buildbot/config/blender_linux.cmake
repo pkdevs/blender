@@ -53,7 +53,8 @@ set(HIP_ROOT_DIR "${BUILDBOT_HIP_TOOLKITS_ROOT_DIR}/rocm-${HIP_VERSION}" CACHE P
 buildbot_assert_path_exists("${HIP_ROOT_DIR}" "HIP root directory")
 
 # OptiX configuration.
-if(EXISTS "/opt/nvidia/optix-sdk-${OPTIX_VERSION}")
+if(EXISTS "${BUILDBOT_OPTIX_TOOLKITS_ROOT_DIR}/optix-sdk-${OPTIX_VERSION}")
+  # New deployment style.
   set(OPTIX_ROOT_DIR "${BUILDBOT_OPTIX_TOOLKITS_ROOT_DIR}/optix-sdk-${OPTIX_VERSION}"
       CACHE PATH "" FORCE)
 else()
