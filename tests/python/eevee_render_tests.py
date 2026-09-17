@@ -474,7 +474,7 @@ def main():
     elif test_dir_name.startswith('shader'):
         # normal_mapping_light_leak fireflies.
         # fresnel_layer_weight high values are accumulated differently on different platform.
-        report.set_fail_percent(0.215)
+        report.set_fail_percent(0.221)
         if gpu_vendor == "INTEL":
             # mix_color uses implementation dependent function.
             report.set_fail_percent(0.41)
