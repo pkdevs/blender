@@ -18,6 +18,7 @@
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.h"
 #include "BKE_paint.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -72,13 +73,11 @@ static Object *make_prim_init(bContext *C,
     case CTX_MODE_SCULPT:
       obedit = CTX_data_active_object(C);
       ed::sculpt_paint::undo::geometry_begin(*scene, *obedit, op);
+      ed::object::new_primitive_matrix(C, obedit, loc, rot, scale, r_creation_data->mat);
       break;
     case CTX_MODE_EDIT_MESH:
       obedit = CTX_data_edit_object(C);
-      if (obedit->type != OB_MESH) {
-        obedit = ed::object::add_type(C, OB_MESH, idname, loc, rot, false, local_view_bits);
-        ed::object::editmode_enter_ex(bmain, scene, obedit, 0);
-      }
+      ed::object::new_primitive_matrix(C, obedit, loc, rot, scale, r_creation_data->mat);
       break;
     default:
       /* Permit adding objects in a variety of modes, even those which are not typically associated
@@ -86,10 +85,12 @@ static Object *make_prim_init(bContext *C,
        * and as a result, the operators are often used in user created scripts. */
       obedit = ed::object::add_type(C, OB_MESH, idname, loc, rot, false, local_view_bits);
       ed::object::editmode_enter_ex(bmain, scene, obedit, 0);
+      if (scale) {
+        copy_v3_v3(obedit->scale, scale);
+      }
+      ed::object::new_primitive_matrix(C, obedit, loc, rot, nullptr, r_creation_data->mat);
       break;
   }
-
-  ed::object::new_primitive_matrix(C, obedit, loc, rot, scale, r_creation_data->mat);
 
   return obedit;
 }
@@ -229,20 +230,20 @@ static wmOperatorStatus add_primitive_plane_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
   Object *obedit;
-  float loc[3], rot[3];
+  float loc[3], rot[3], scale[3];
   bool enter_editmode;
   ushort local_view_bits;
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
 
   WM_operator_view3d_unit_defaults(C, op);
   blender::ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
+      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Plane"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -261,11 +262,6 @@ static wmOperatorStatus add_primitive_plane_exec(bContext *C, wmOperator *op)
   {
     return OPERATOR_CANCELLED;
   }
-
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
-
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
   return OPERATOR_FINISHED;
 }
@@ -306,7 +302,7 @@ static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cube"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -323,9 +319,6 @@ static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   /* BMESH_TODO make plane side this: M_SQRT2 - plane (diameter of 1.41 makes it unit size) */
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
@@ -362,7 +355,7 @@ static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
   Object *obedit;
-  float loc[3], rot[3];
+  float loc[3], rot[3], scale[3];
   bool enter_editmode;
   ushort local_view_bits;
   int cap_end, cap_tri;
@@ -373,13 +366,13 @@ static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
 
   WM_operator_view3d_unit_defaults(C, op);
   blender::ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
+      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Circle"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -400,9 +393,6 @@ static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -451,7 +441,7 @@ static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cylinder"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -474,9 +464,6 @@ static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -527,7 +514,7 @@ static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cone"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -550,9 +537,6 @@ static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -590,20 +574,20 @@ static wmOperatorStatus add_primitive_grid_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
   Object *obedit;
-  float loc[3], rot[3];
+  float loc[3], rot[3], scale[3];
   bool enter_editmode;
   ushort local_view_bits;
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
 
   WM_operator_view3d_unit_defaults(C, op);
   blender::ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
+      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
   obedit = make_prim_init(C,
                           op,
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Grid"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -623,9 +607,6 @@ static wmOperatorStatus add_primitive_grid_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -662,7 +643,7 @@ static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
   Object *obedit;
-  float loc[3], rot[3];
+  float loc[3], rot[3], scale[3];
   float dia;
   bool enter_editmode;
   ushort local_view_bits;
@@ -670,14 +651,14 @@ static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
 
   WM_operator_view3d_unit_defaults(C, op);
   blender::ed::object::add_generic_get_opts(
-      C, op, 'Y', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
+      C, op, 'Y', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
 
   obedit = make_prim_init(C,
                           op,
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Suzanne"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
   dia = RNA_float_get(op->ptr, "size") / 2.0f;
@@ -695,9 +676,6 @@ static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -823,7 +801,7 @@ static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Sphere"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
@@ -843,9 +821,6 @@ static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  copy_v3_v3(obedit->scale, scale);
-  DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM);
-  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, obedit);
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -893,7 +868,7 @@ static wmOperatorStatus add_primitive_icosphere_exec(bContext *C, wmOperator *op
                           CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Icosphere"),
                           loc,
                           rot,
-                          nullptr,
+                          scale,
                           local_view_bits,
                           &creation_data);
 
