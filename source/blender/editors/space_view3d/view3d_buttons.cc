@@ -1518,7 +1518,7 @@ static void v3d_editvertex_buts(
 
     /* A single point has no size, the buttons would repeat the location above. */
     if (tot > 1) {
-      const char *dims_tip = N_(
+      const StringRef dims_tip = TIP_(
           "Size of the selection, editing scales it about the transform pivot point");
       uiDefBut(block,
                ui::ButtonType::Label,
@@ -1545,7 +1545,7 @@ static void v3d_editvertex_buts(
                         &tfp->ve_dims[i],
                         0.0f,
                         lim,
-                        TIP_(dims_tip));
+                        dims_tip);
         button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
         button_number_step_size_set(but, 10);
         button_number_precision_set(but, 3);
