@@ -1718,7 +1718,7 @@ void NODE_OT_comment_edit(wmOperatorType *ot)
   ot->invoke = node_comment_edit_invoke;
   ot->poll = ED_operator_node_editable;
 
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER;
 
   PropertyRNA *prop = RNA_def_boolean(ot->srna,
                                       "use_active",
