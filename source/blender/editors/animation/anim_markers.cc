@@ -2223,7 +2223,7 @@ static wmOperatorStatus markers_clipboard_copy_exec(bContext *C, wmOperator *op)
   /* If the area is the dopesheet, AND it is configured to show pose/action markers, cancel. */
   ScrArea *area = CTX_wm_area(C);
   if (area->spacetype == SPACE_ACTION) {
-    const SpaceAction *saction = static_cast<SpaceAction *>(area->spacedata.first);
+    const SpaceAction *saction = area->spacedata.first_as<SpaceAction>();
     if (saction->flag & SACTION_POSEMARKERS_SHOW) {
       BKE_report(op->reports, RPT_ERROR, "Copying pose markers is not supported.");
       return OPERATOR_CANCELLED;
@@ -2278,7 +2278,7 @@ static wmOperatorStatus markers_clipboard_paste_exec(bContext *C, wmOperator *op
   /* If the area is the dopesheet, AND it is configured to show pose/action markers, cancel. */
   ScrArea *area = CTX_wm_area(C);
   if (area->spacetype == SPACE_ACTION) {
-    const SpaceAction *saction = static_cast<SpaceAction *>(area->spacedata.first);
+    const SpaceAction *saction = area->spacedata.first_as<SpaceAction>();
     if (saction->flag & SACTION_POSEMARKERS_SHOW) {
       BKE_report(op->reports, RPT_ERROR, "Pasting pose markers is not supported.");
       return OPERATOR_CANCELLED;
@@ -2298,10 +2298,10 @@ static wmOperatorStatus markers_clipboard_paste_exec(bContext *C, wmOperator *op
 
   char filepath[FILE_MAX];
   markers_copybuffer_filepath_get(filepath, sizeof(filepath));
-  Main *bmain_src = BKE_main_new();
-  if (!BKE_copybuffer_read(bmain_src, filepath, op->reports, FILTER_ID_SCE)) {
+  Main *bmain_dst = CTX_data_main(C);
+  Main *bmain_src = BKE_copybuffer_read(*bmain_dst, filepath, op->reports, FILTER_ID_SCE);
+  if (!bmain_src) {
     BKE_report(op->reports, RPT_ERROR, "No data to paste");
-    BKE_main_free(bmain_src);
     return OPERATOR_CANCELLED;
   }
 
@@ -2340,9 +2340,7 @@ static wmOperatorStatus markers_clipboard_paste_exec(bContext *C, wmOperator *op
     offset = scene_dst->r.cfra - min_marker_frame;
   }
 
-  deselect_markers(&scene_dst->markers);
-
-  Main *bmain_dst = CTX_data_main(C);
+  ED_markers_select_all(&scene_dst->markers, SEL_DESELECT);
 
   /* Copy markers across scenes. */
   int overlapping_count = 0;
