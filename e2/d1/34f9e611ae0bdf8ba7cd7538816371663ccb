@@ -1,2 +1,3 @@
 Referenced by pull request #161137, Fix: File Browser draws empty-list message in wrong color
 Referenced by commit 5b0fdfbb54a076158cdc709dd940281398ca6644, Fix: File Browser draws empty-list message in wrong color
+Referenced by commit 20a730de80ec56c52e121fc0ddc528c9970c4ec2, Fix #163729: UI: Wrong list item text selection opacity
