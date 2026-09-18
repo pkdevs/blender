@@ -2645,20 +2645,35 @@ void SEQUENCER_OT_delete(wmOperatorType *ot)
 /** \name Ripple Delete Strips Operator
  * \{ */
 
-void operator_properties_ripple(wmOperatorType *ot)
+void operator_properties_ripple(wmOperatorType *ot, const eSeqRippleFlag options)
 {
   PropertyRNA *prop;
 
-  prop = RNA_def_boolean(ot->srna,
-                         "all_channels",
-                         true,
-                         "All Channels",
-                         "Ripple strips on other channels too, else only strips on the same "
-                         "channels as the edited strips");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  if ((options & SEQ_RIPPLE_ALL_CHANNELS) != 0) {
+    prop = RNA_def_boolean(ot->srna,
+                           "all_channels",
+                           true,
+                           "All Channels",
+                           "Ripple strips on other channels too, else only strips on the same "
+                           "channels as the edited strips");
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
 
-  prop = RNA_def_boolean(ot->srna, "markers", true, "Markers", "Ripple markers along with strips");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  if ((options & SEQ_RIPPLE_MARKERS) != 0) {
+    prop = RNA_def_boolean(
+        ot->srna, "markers", true, "Markers", "Ripple markers along with strips");
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+
+  if ((options & SEQ_RIPPLE_INSERT) != 0) {
+    prop = RNA_def_boolean(ot->srna,
+                           "insert",
+                           false,
+                           "Insert",
+                           "Split strips at the leftmost edited handle and push the remainder "
+                           "aside, else ripple only as far as needed to resolve the overlap");
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
 }
 
 static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
@@ -2875,7 +2890,7 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* Properties. */
-  operator_properties_ripple(ot);
+  operator_properties_ripple(ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS);
   RNA_def_boolean(ot->srna,
                   "non_destructive",
                   true,
@@ -3059,7 +3074,7 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
                int(seq::Side::Left),
                "Side",
                "The side of the strips to trim to the current frame");
-  operator_properties_ripple(ot);
+  operator_properties_ripple(ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS);
 }
 
 /** \} */

@@ -12,6 +12,8 @@
 
 namespace blender {
 
+enum eSeqRippleFlag : int;
+
 struct Scene;
 struct Strip;
 struct SpaceSeq;
@@ -98,7 +100,7 @@ rctf sequencer_clamped_view_bounds_get(const bContext *C, ARegion *region);
 /*
  * Default properties for operators that make use of rippling features.
  */
-void operator_properties_ripple(wmOperatorType *ot);
+void operator_properties_ripple(wmOperatorType *ot, eSeqRippleFlag options);
 
 }  // namespace ed::vse
 }  // namespace blender

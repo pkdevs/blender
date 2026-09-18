@@ -1420,15 +1420,8 @@ static void TRANSFORM_OT_seq_slide(wmOperatorType *ot)
                       "How to resolve overlap after transformation");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(ot->srna,
-                         "insert",
-                         false,
-                         "Insert",
-                         "Split strips at the leftmost edited handle and push the remainder "
-                         "aside, else ripple only as far as needed to resolve the overlap");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-
-  vse::operator_properties_ripple(ot);
+  vse::operator_properties_ripple(
+      ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_INSERT);
 
   WM_operatortype_props_advanced_begin(ot);
 
