@@ -50,30 +50,27 @@ ccl_device float svm_bevel_cubic_pdf(const float radius, const float r)
 /* solve 10x^2 - 20x^3 + 15x^4 - 4x^5 - xi == 0 */
 ccl_device_forceinline float svm_bevel_cubic_quintic_root_find(const float xi)
 {
-  /* newton-raphson iteration, usually succeeds in 2-4 iterations, except
-   * outside 0.02 ... 0.98 where it can go up to 10, so overall performance
-   * should not be too bad */
-  const float tolerance = 1e-6f;
-  const int max_iteration_count = 10;
-  float x = 0.25f;
-  int i;
-
-  for (i = 0; i < max_iteration_count; i++) {
-    const float x2 = x * x;
-    const float x3 = x2 * x;
-    const float nx = (1.0f - x);
-
-    const float f = 10.0f * x2 - 20.0f * x3 + 15.0f * x2 * x2 - 4.0f * x2 * x3 - xi;
-    const float f_ = 20.0f * (x * nx) * (nx * nx);
-
-    if (fabsf(f) < tolerance || f_ == 0.0f) {
-      break;
-    }
-
-    x = saturatef(x - f / f_);
+  if (xi <= 0.61f)
+  {
+  	float u = sqrtf(xi);
+  	float a = 0.52293523f * xi;
+  	float p0 = 0.31621687f - 0.37009434f * u;
+  	float p1 = 0.07118445f + 0.00864205f * u;
+  	float num = u * (p1 * xi + p0);
+  	float den = (1.0f - 1.48709055f * u) + a;
+  	return num / den;
   }
-
-  return x;
+  else
+  {
+  	float u2 = sqrtf(1.0f - xi);
+  	float u = sqrtf(u2);
+  	float a = 0.47608821f * u2;
+  	float p0 = 0.66872886f - 0.86577602f * u;
+  	float p1 = 0.23169941f + 0.00989255f * u;
+  	float num = u * (p1 * u2 + p0);
+  	float den = (1.0f - 1.42862751f * u) + a;
+  	return 1.0f - (num / den);
+  }
 }
 
 ccl_device void svm_bevel_cubic_sample(const float radius,
