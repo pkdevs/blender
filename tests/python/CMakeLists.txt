@@ -1701,6 +1701,11 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    bl_texture_paint_undo
+    --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/texture_paint_undo_test.py
+  )
+
+  add_blender_test(
     bl_sculpt_brush_curve_presets
     --python ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/brush_strength_curves_test.py
     --
@@ -1753,7 +1758,6 @@ if(WITH_UI_TESTS)
     test_transform.view3d_mesh_edit_snap_to_self
     test_transform.view3d_mesh_edit_snap_to_self_shape_key
     test_undo.compositor_make_group
-    test_undo.image_editor_paint_undo_after_memfile_step
     test_undo.text_editor_edit_mode_mix
     test_undo.text_editor_simple
     test_undo.view3d_edit_mode_multi_window
@@ -1775,8 +1779,6 @@ if(WITH_UI_TESTS)
     test_undo.view3d_simple
     test_undo.view3d_texture_paint_complex
     test_undo.view3d_texture_paint_simple
-    test_undo.view3d_texture_paint_undo_after_memfile_step
-    test_undo.view3d_texture_paint_undo_redo_after_pack_and_generate
     test_workspace.sanity_check_general
     test_workspace.sanity_check_2d_animation
     test_workspace.sanity_check_sculpting
