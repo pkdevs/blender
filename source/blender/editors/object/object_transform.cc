@@ -947,13 +947,11 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
               });
 
               const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
-              const float3x3 matrix_without_translation = float3x3(matrix);
-
               curves.transform(matrix);
               curves.calculate_bezier_auto_handles();
 
               bke::greasepencil::apply_grease_pencil_transform_to_shape_keys(
-                  key, curves, curves.points_range(), matrix_without_translation, scalef);
+                  key, curves, curves.points_range(), matrix.view<3, 3>(), scalef);
             });
       }
     }

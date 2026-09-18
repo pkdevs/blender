@@ -163,14 +163,13 @@ static bke::CurvesGeometry create_mirror_copies(const Object &ob,
         }
 
         const float4x4 &matrix = transforms[index + 1];
-        const float3x3 matrix_without_translation = float3x3(matrix);
 
-        IndexMask selection = IndexRange::from_begin_size(base_curves.points_num() +
-                                                              mirror_curves.points_num() * index,
-                                                          mirror_curves.points_num());
+        const IndexMask selection = IndexRange::from_begin_size(
+            base_curves.points_num() + mirror_curves.points_num() * index,
+            mirror_curves.points_num());
 
         bke::greasepencil::apply_grease_pencil_transform_to_shape_keys(
-            key, output, selection, matrix_without_translation, 1.0f);
+            key, output, selection, matrix.view<3, 3>(), 1.0f);
 
         index++;
       }
