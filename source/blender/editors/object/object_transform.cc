@@ -653,60 +653,6 @@ static bool apply_objects_internal_need_single_user(bContext *C)
   return (ID_REAL_USERS(ob->data) > CTX_DATA_COUNT(C, selected_editable_objects));
 }
 
-static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
-                                                        bke::CurvesGeometry &curves,
-                                                        const float3x3 &matrix,
-                                                        const float scalef)
-{
-  if (!key) {
-    return;
-  }
-
-  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-    /* Skip the base key frame. */
-    if (&keyblock == key->refkey) {
-      continue;
-    }
-
-    const Vector<std::string> names = bke::greasepencil::shapekey_attribute_names_position(
-        keyblock.name);
-
-    for (const StringRef name : names) {
-      bke::SpanAttributeWriter<float3> key_data = attributes.lookup_for_write_span<float3>(name);
-
-      if (!key_data) {
-        continue;
-      }
-
-      threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
-        for (const int i : range) {
-          key_data.span[i] = math::transform_point(matrix, key_data.span[i]);
-        }
-      });
-
-      key_data.finish();
-    }
-
-    /* Apply scale to radius shape keys. */
-    bke::SpanAttributeWriter<float> key_radius = attributes.lookup_for_write_span<float>(
-        bke::greasepencil::shapekey_attribute_name_radius(keyblock.name));
-
-    if (!key_radius) {
-      continue;
-    }
-
-    threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
-      for (const int i : range) {
-        key_radius.span[i] *= scalef;
-      }
-    });
-
-    key_radius.finish();
-  }
-}
-
 static wmOperatorStatus apply_objects_internal(bContext *C,
                                                ReportList *reports,
                                                bool apply_loc,
@@ -1006,8 +952,8 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
               curves.transform(matrix);
               curves.calculate_bezier_auto_handles();
 
-              apply_grease_pencil_transform_to_shape_keys(
-                  key, curves, matrix_without_translation, scalef);
+              bke::greasepencil::apply_grease_pencil_transform_to_shape_keys(
+                  key, curves, curves.points_range(), matrix_without_translation, scalef);
             });
       }
     }

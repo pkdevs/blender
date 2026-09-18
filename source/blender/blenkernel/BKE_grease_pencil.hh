@@ -1039,6 +1039,12 @@ void shapekey_set_applied_generic_position(const Key *key,
                                            const Span<float3> new_data,
                                            bke::MutableAttributeAccessor &attributes);
 
+void apply_grease_pencil_transform_to_shape_keys(const Key *key,
+                                                 bke::CurvesGeometry &curves,
+                                                 const IndexMask selection,
+                                                 const float3x3 &matrix,
+                                                 const float scalef);
+
 }  // namespace greasepencil
 
 class GreasePencilRuntime {
