@@ -167,7 +167,7 @@ static struct GlobalColorPickingState {
 /** \name Initialization / De-initialization
  * \{ */
 
-static bool colormanage_role_color_space_name_get(ocio::Config &config,
+static bool colormanage_role_color_space_name_get(const ocio::Config &config,
                                                   char *colorspace_name,
                                                   const char *role,
                                                   const char *backup_role,
@@ -197,13 +197,13 @@ static bool colormanage_role_color_space_name_get(ocio::Config &config,
   return true;
 }
 
-static void colormanage_update_matrices()
+static void colormanage_update_matrices(const ocio::Config &config)
 {
   /* Load luminance coefficients. */
-  colorspace::luma_coefficients = g_config()->get_default_luma_coefs();
+  colorspace::luma_coefficients = config.get_default_luma_coefs();
 
   /* Load standard color spaces. */
-  colorspace::xyz_to_scene_linear = g_config()->get_xyz_to_scene_linear_matrix();
+  colorspace::xyz_to_scene_linear = config.get_xyz_to_scene_linear_matrix();
   colorspace::scene_linear_to_xyz = math::invert(colorspace::xyz_to_scene_linear);
 
   colorspace::scene_linear_to_rec709 = ocio::XYZ_TO_REC709 * colorspace::scene_linear_to_xyz;
@@ -222,7 +222,7 @@ static void colormanage_update_matrices()
       colorspace::scene_linear_to_rec709, float3x3::identity(), 0.0001f);
 }
 
-static bool colormanage_load_config(ocio::Config &config)
+static bool colormanage_load_config(const ocio::Config &config)
 {
   bool ok = true;
 
@@ -244,18 +244,18 @@ static bool colormanage_load_config(ocio::Config &config)
   colormanage_role_color_space_name_get(
       config, global_role_aces_interchange, OCIO_ROLE_ACES_INTERCHANGE, nullptr, true);
 
-  if (g_config()->get_num_displays() == 0) {
+  if (config.get_num_displays() == 0) {
     CLOG_ERROR(&LOG, "Could not find any displays");
     ok = false;
   }
   /* NOTE: The look "None" is expected to be hard-coded to exist in the OpenColorIO integration. */
-  if (g_config()->get_num_looks() == 0) {
+  if (config.get_num_looks() == 0) {
     CLOG_ERROR(&LOG, "Could not find any looks");
     ok = false;
   }
 
-  for (const int display_index : IndexRange(g_config()->get_num_displays())) {
-    const ocio::Display *display = g_config()->get_display_by_index(display_index);
+  for (const int display_index : IndexRange(config.get_num_displays())) {
+    const ocio::Display *display = config.get_display_by_index(display_index);
     const int num_views = display->get_num_views();
     if (num_views <= 0) {
       CLOG_ERROR(&LOG, "Could not find any views for display %s", display->name().c_str());
@@ -269,7 +269,7 @@ static bool colormanage_load_config(ocio::Config &config)
     }
   }
 
-  colormanage_update_matrices();
+  colormanage_update_matrices(config);
 
   /* Defaults that don't change with file working space. */
   STRNCPY(global_role_scene_linear_default, global_role_scene_linear);
@@ -388,20 +388,22 @@ bool IMB_colormanagement_switch_config(const char *filepath)
   std::optional<std::string> old_ocio_env;
   colormanage_set_ocio_env(filepath, old_ocio_env);
 
-  /* Switch in place.*/
-  if (!g_config()->switch_to_from_environment()) {
-    CLOG_ERROR(&LOG, "Failed to load OpenColorIO config from '%s'", filepath);
-    colormanage_restore_ocio_env(old_ocio_env);
-    return false;
-  }
+  const auto validate = [](const ocio::Config &config) { return colormanage_load_config(config); };
+
+  /* Switch in place. */
+  const bool switched = g_config()->switch_to_from_environment(validate);
 
   /* Reset cached state that depends on the configuration. */
   global_color_picking_state = GlobalColorPickingState();
   g_all_view_names().clear();
 
-  /* Reload roles, matrices and view names from the new configuration. */
-  if (!colormanage_load_config(*g_config())) {
-    CLOG_ERROR(&LOG, "Incomplete OpenColorIO config '%s'", filepath);
+  /* Reload roles, matrices and view names from the new configuration, or the
+   * old configuration if validation failed. */
+  colormanage_load_config(*g_config());
+
+  if (!switched) {
+    CLOG_ERROR(&LOG, "Failed to load OpenColorIO config from '%s'", filepath);
+    colormanage_restore_ocio_env(old_ocio_env);
     return false;
   }
 
@@ -2962,7 +2964,7 @@ bool IMB_colormanagement_working_space_set_from_name(const char *name)
 
   global_color_picking_state.cpu_processor_from.reset();
   global_color_picking_state.cpu_processor_to.reset();
-  colormanage_update_matrices();
+  colormanage_update_matrices(*g_config());
 
   return true;
 }

@@ -73,7 +73,8 @@ class LibOCIOConfig : public Config {
   void set_scene_linear_role(StringRefNull name) override;
 
   /* Config switching API. */
-  bool switch_to_from_environment() override;
+  bool switch_to_from_environment(FunctionRef<bool(const Config &)> validate) override;
+  bool switch_to(Config &new_config, FunctionRef<bool(const Config &)> validate) override;
 
   /* Display API. */
   const Display *get_default_display() const override;
@@ -112,20 +113,21 @@ class LibOCIOConfig : public Config {
 
   explicit LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config);
 
-  void reinitialize(const OCIO_NAMESPACE::ConstConfigRcPtr &new_ocio_config);
+  void reinitialize(LibOCIOConfig &new_config);
 
   /* Initialize BLender-side representation of color spaces, displays, etc. from the current
    * OpenColorIO configuration. */
-  void initialize_active_color_spaces(ColorSpacesRetained &retained);
-  void initialize_inactive_color_spaces(ColorSpacesRetained &retained);
-  void initialize_hdr_color_spaces(ColorSpacesRetained &retained);
+  void initialize_active_color_spaces();
+  void initialize_sorted_color_space_index();
+  void initialize_inactive_color_spaces();
+  void initialize_hdr_color_spaces();
   void initialize_looks();
   void initialize_displays();
 
-  std::unique_ptr<LibOCIOColorSpace> create_color_space(
-      int index,
-      const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space,
-      ColorSpacesRetained &retained);
+  /* Move #new_color_spaces into #color_spaces, reusing retained color spaces if possible. */
+  void reuse_color_spaces(Vector<std::unique_ptr<LibOCIOColorSpace>> &new_color_spaces,
+                          Vector<std::unique_ptr<LibOCIOColorSpace>> &color_spaces,
+                          ColorSpacesRetained &retained);
 
   bool has_color_space_name(const char *name) const;
 };

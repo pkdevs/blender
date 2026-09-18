@@ -77,6 +77,11 @@ class LibOCIOColorSpace : public ColorSpace {
 
   void switch_scene_linear_config(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config);
 
+  const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space() const
+  {
+    return ocio_color_space_;
+  }
+
   void clear_caches();
 
   MEM_CXX_CLASS_ALLOC_FUNCS("LibOCIOColorSpace");
