@@ -142,9 +142,6 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   }
 
   const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-  if (curves.is_empty()) {
-    return;
-  }
 
   /* Alembic only supports 1 curve type / periodicity combination per object. Enforce this here.
    * See: Alembic source code for OCurves.h as no documentation explicitly exists for this. */
