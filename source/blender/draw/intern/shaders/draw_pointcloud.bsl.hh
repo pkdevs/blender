@@ -125,6 +125,10 @@ struct PointCloud {
   }
 };
 
+}  // namespace draw
+
+namespace draw::pointcloud {
+
 float get_customdata_float(const int point_id, const samplerBuffer cd_buf)
 {
   return texelFetch(cd_buf, point_id).r;
@@ -151,4 +155,4 @@ float2 get_barycentric()
   return float2(0.0f);
 }
 
-}  // namespace draw
+}  // namespace draw::pointcloud
