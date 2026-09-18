@@ -1036,6 +1036,7 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
 
   const bke::AttributeAccessor src_attributes = src.attributes();
   const VArray<bool> src_cyclic = src.cyclic();
+  const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
   bke::CurvesGeometry dst_curves(dst_points_by_curve.total_size(), dst_points_by_curve.size());
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
@@ -1047,6 +1048,23 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
     const Span<bool> range_is_clipping = r_is_point_clipping.as_span().slice(points);
 
     const IndexMask clipping_ranges = IndexMask::from_bools(range_is_clipping, memory);
+
+    /* If the curve is entirely clipping, then take the point data from some point of the source
+     * curve. */
+    if (clipping_ranges == points.index_range()) {
+      const int src_curve_i = dst_to_src_curves[curve_i];
+      const IndexRange src_points = src_points_by_curve[src_curve_i];
+
+      /* Take the attribute data from the middle point of the source curve. */
+      const int mid_point_index = int((src_points.first() + src_points.last()) / 2);
+
+      for (const int point_i : points) {
+        clipping_point_to_interpolate.append(
+            {int(point_i), mid_point_index, mid_point_index, 0.0f});
+      }
+      continue;
+    }
+
     clipping_ranges.foreach_range([&](const IndexRange &range) {
       const IndexRange full_range = range.shift(points.first());
       int range_first = int(full_range.first() - 1);
@@ -1075,8 +1093,6 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
   dst_cyclic.copy_from(cyclic);
   unchanged_curves_mask.foreach_index(
       [&](const int i) { dst_cyclic[i] = src_cyclic[dst_to_src_curves[i]]; });
-
-  const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
 
   /* Copy/Interpolate point attributes. */
   for (auto &attribute : bke::retrieve_attributes_for_transfer(
