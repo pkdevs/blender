@@ -101,15 +101,16 @@ class SEQUENCER_HT_header(Header):
             row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene")
 
         if sequencer_tool_settings and st.view_type == 'PREVIEW':
-            layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
+            layout.prop(sequencer_tool_settings, "pivot_point", text="")
 
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
-            row.prop_with_popover(
-                sequencer_tool_settings,
-                "overlap_mode",
-                text="",
-                panel="SEQUENCER_PT_edit_mode",
+            row.prop(sequencer_tool_settings, "overlap_mode", expand=True)
+            sub = row.row(align=True)
+            sub.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
+            sub.popover(
+                    text="",
+                    panel="SEQUENCER_PT_edit_mode",
             )
 
         if tool_settings:
@@ -2028,7 +2029,7 @@ class SEQUENCER_PT_edit_mode(Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Edit Mode"
-    bl_ui_units_x = 12
+    bl_ui_units_x = 9
 
     @classmethod
     def poll(cls, context):
@@ -2038,14 +2039,10 @@ class SEQUENCER_PT_edit_mode(Panel):
         layout = self.layout
         sequencer_tool_settings = context.sequencer_scene.tool_settings.sequencer_tool_settings
 
-        layout.row().prop(sequencer_tool_settings, "overlap_mode", expand=True)
-
-        layout.separator()
-
-        col = layout.column()
+        col = layout.column(heading="Ripple")
         col.use_property_split = True
-        col.use_property_decorate = False
         col.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
+
         col.prop(sequencer_tool_settings, "ripple_insert")
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
