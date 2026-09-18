@@ -1062,185 +1062,436 @@ TEST(straight_skeleton, Flipper)
   }
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Multi-segment tests
+ * \{ */
+
+/**
+ * Full straight skeleton of the L-shaped polygon subdivided into 5 equal-width bands.
+ * offset = infinity so effective_offset = max_collapse_time.
+ * Verifies that all 5 bands are produced, all face_band values are in [0, 4],
+ * and the total face area equals the polygon area (12.0).
+ */
+TEST(straight_skeleton, LShape_FiveSegments)
+{
+  const char *spec = R"(6 0 1
+0.0 0.0
+4.0 0.0
+4.0 2.0
+2.0 2.0
+2.0 4.0
+0.0 4.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "LShape_FiveSegments";
+  input.segments = 5;
+  /* input.offset defaults to infinity: effective_offset = max_collapse_time. */
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* All face_band values must be in [0, 4]. */
+  bool bands_seen[5] = {false, false, false, false, false};
+  for (const int fi : output.face_offsets.index_range()) {
+    const int b = output.face_band[fi];
+    EXPECT_GE(b, 0);
+    EXPECT_LT(b, 5);
+    if (b >= 0 && b < 5) {
+      bands_seen[b] = true;
+    }
+  }
+  for (const int b : IndexRange(5)) {
+    EXPECT_TRUE(bands_seen[b]) << "Band " << b << " has no faces.";
+  }
+
+  /* Total area must equal the L-shape area. */
+  EXPECT_NEAR(total_faces_area(output), 12.0, 1e-5);
+}
+
+/**
+ * Full straight skeleton of the notched polygon subdivided into 5 equal-width bands.
+ * offset = infinity so effective_offset = max_collapse_time.
+ * Verifies that all 5 bands are produced and the total area equals the polygon area (71.1).
+ */
+TEST(straight_skeleton, NotchedPolygonFull_FiveSegments)
+{
+  const char *spec = R"(7 0 1
+0.0 0.0
+7.0 2.0
+14.0 7.0
+0.0 9.0
+0.2 5.5
+1.5 4.5
+0.2 3.5
+0 1 2 3 4 5 6
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "NotchedPolygonFull_FiveSegments";
+  input.segments = 5;
+  /* input.offset defaults to infinity: effective_offset = max_collapse_time. */
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* All face_band values must be in [0, 4]. */
+  bool bands_seen[5] = {false, false, false, false, false};
+  for (const int fi : output.face_offsets.index_range()) {
+    const int b = output.face_band[fi];
+    EXPECT_GE(b, 0);
+    EXPECT_LT(b, 5);
+    if (b >= 0 && b < 5) {
+      bands_seen[b] = true;
+    }
+  }
+  for (const int b : IndexRange(5)) {
+    EXPECT_TRUE(bands_seen[b]) << "Band " << b << " has no faces.";
+  }
+
+  /* Total area must equal the notched polygon area. */
+  EXPECT_NEAR(total_faces_area(output), 71.1, 1e-3);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Offset tests
+ * \{ */
+
+/**
+ * Partial offset of a 10x10 square at distance 1.
+ * Produces 4 side-strip trapezoids and 1 inner square (5 faces total).
+ */
 TEST(straight_skeleton, OffsetSquarePartial)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
-  Vector<double2> new_verts;
-  Vector<double> new_verts_offset;
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
 
-  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
-      verts.as_span(), polygons, 1.0, new_verts, new_verts_offset);
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
 
-  EXPECT_EQ(out_faces.size(), 5);
-  EXPECT_EQ(new_verts.size(), 4);
-  for (const double off : new_verts_offset) {
-    EXPECT_NEAR(off, 1.0, 1e-8);
-  }
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 1.0;
+  input.segments = 1;
+  input.label = "OffsetSquarePartial";
 
-  auto get_pos = [&](int idx) -> double2 {
-    if (idx < int(verts.size())) {
-      return verts[idx];
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* 4 side-strip trapezoids + 1 inner square. */
+  EXPECT_EQ(output.face_offsets.size(), 5);
+
+  /* Cut vertices at the offset boundary should be at vert_time == offset == 1.0.
+   * (The skeleton apex at t = 5 also has vert_orig == -1, so filter by vert_time.) */
+  bool found_cut_vert = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 1.0) < 1e-6) {
+      found_cut_vert = true;
     }
-    return new_verts[idx - int(verts.size())];
-  };
-
-  double total_area = 0.0;
-  for (const Vector<int> &face : out_faces) {
-    double area = 0.0;
-    const int m = int(face.size());
-    for (const int i : IndexRange(m)) {
-      const double2 p1 = get_pos(face[i]);
-      const double2 p2 = get_pos(face[(i + 1) % m]);
-      area += (p1.x * p2.y - p2.x * p1.y);
-    }
-    total_area += 0.5 * area;
   }
-  EXPECT_NEAR(total_area, 100.0, 1e-6);
+  EXPECT_TRUE(found_cut_vert);
+
+  /* Total area must equal the square area. */
+  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
+
+  /* All faces are in band 0. */
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_band[fi], 0);
+  }
 }
 
+/**
+ * Offset of a 10x10 square exactly to its collapse point (t = 5).
+ * The inner polygon degenerates to the single apex vertex.
+ * Produces 4 triangular side-strip faces (each vertex is the apex).
+ */
 TEST(straight_skeleton, OffsetSquareCollapse)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
-  Vector<double2> new_verts;
-  Vector<double> new_verts_offset;
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
 
-  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
-      verts.as_span(), polygons, 5.0, new_verts, new_verts_offset);
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
 
-  EXPECT_EQ(out_faces.size(), 4);
-  EXPECT_EQ(new_verts.size(), 1);
-  EXPECT_NEAR(new_verts[0].x, 5.0, 1e-6);
-  EXPECT_NEAR(new_verts[0].y, 5.0, 1e-6);
-  EXPECT_NEAR(new_verts_offset[0], 5.0, 1e-6);
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 5.0;
+  input.segments = 1;
+  input.label = "OffsetSquareCollapse";
 
-  auto get_pos = [&](int idx) -> double2 {
-    if (idx < int(verts.size())) {
-      return verts[idx];
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* 4 side-strip triangles (apex at center). */
+  EXPECT_EQ(output.face_offsets.size(), 4);
+
+  /* The apex vertex is at (5, 5) with vert_time == 5. */
+  bool found_apex = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1) {
+      EXPECT_NEAR(output.vert[vi].x, 5.0, 1e-6);
+      EXPECT_NEAR(output.vert[vi].y, 5.0, 1e-6);
+      EXPECT_NEAR(output.vert_time[vi], 5.0, 1e-6);
+      found_apex = true;
     }
-    return new_verts[idx - int(verts.size())];
-  };
-
-  double total_area = 0.0;
-  for (const Vector<int> &face : out_faces) {
-    double area = 0.0;
-    const int m = int(face.size());
-    for (const int i : IndexRange(m)) {
-      const double2 p1 = get_pos(face[i]);
-      const double2 p2 = get_pos(face[(i + 1) % m]);
-      area += (p1.x * p2.y - p2.x * p1.y);
-    }
-    total_area += 0.5 * area;
   }
-  EXPECT_NEAR(total_area, 100.0, 1e-6);
+  EXPECT_TRUE(found_apex);
+
+  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
 }
 
+/**
+ * Offset of a 10x10 square with an excess offset (10 > max_collapse_time = 5).
+ * Should be silently clamped to t = 5, giving the same result as OffsetSquareCollapse.
+ */
 TEST(straight_skeleton, OffsetSquareExcess)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
-  Vector<double2> new_verts;
-  Vector<double> new_verts_offset;
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
 
-  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
-      verts.as_span(), polygons, 10.0, new_verts, new_verts_offset);
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
 
-  EXPECT_EQ(out_faces.size(), 4);
-  EXPECT_EQ(new_verts.size(), 1);
-  EXPECT_NEAR(new_verts[0].x, 5.0, 1e-6);
-  EXPECT_NEAR(new_verts[0].y, 5.0, 1e-6);
-  EXPECT_NEAR(new_verts_offset[0], 5.0, 1e-6);
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 10.0; /* Exceeds max_collapse_time = 5, clamped. */
+  input.segments = 1;
+  input.label = "OffsetSquareExcess";
 
-  auto get_pos = [&](int idx) -> double2 {
-    if (idx < int(verts.size())) {
-      return verts[idx];
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Same as OffsetSquareCollapse: 4 triangular strips to the apex. */
+  EXPECT_EQ(output.face_offsets.size(), 4);
+
+  bool found_apex = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1) {
+      EXPECT_NEAR(output.vert[vi].x, 5.0, 1e-6);
+      EXPECT_NEAR(output.vert[vi].y, 5.0, 1e-6);
+      EXPECT_NEAR(output.vert_time[vi], 5.0, 1e-6);
+      found_apex = true;
     }
-    return new_verts[idx - int(verts.size())];
-  };
-
-  double total_area = 0.0;
-  for (const Vector<int> &face : out_faces) {
-    double area = 0.0;
-    const int m = int(face.size());
-    for (const int i : IndexRange(m)) {
-      const double2 p1 = get_pos(face[i]);
-      const double2 p2 = get_pos(face[(i + 1) % m]);
-      area += (p1.x * p2.y - p2.x * p1.y);
-    }
-    total_area += 0.5 * area;
   }
-  EXPECT_NEAR(total_area, 100.0, 1e-6);
+  EXPECT_TRUE(found_apex);
+
+  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
 }
 
+/**
+ * Offset of a 20x10 rectangle at distance 2 (less than min half-width 5).
+ * Produces 4 side-strip trapezoids + 1 inner rectangle (5 faces total).
+ * All new vertices are at vert_time == 2.
+ */
 TEST(straight_skeleton, OffsetRectangle)
 {
   Array<double2> verts = {{0.0, 0.0}, {20.0, 0.0}, {20.0, 10.0}, {0.0, 10.0}};
-  Vector<Vector<int>> polygons = {{0, 1, 2, 3}};
-  Vector<double2> new_verts;
-  Vector<double> new_verts_offset;
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
 
-  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
-      verts.as_span(), polygons, 2.0, new_verts, new_verts_offset);
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
 
-  EXPECT_EQ(out_faces.size(), 5);
-  EXPECT_EQ(new_verts.size(), 4);
-  for (const double off : new_verts_offset) {
-    EXPECT_NEAR(off, 2.0, 1e-8);
-  }
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 2.0;
+  input.segments = 1;
+  input.label = "OffsetRectangle";
 
-  auto get_pos = [&](int idx) -> double2 {
-    if (idx < int(verts.size())) {
-      return verts[idx];
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_EQ(output.face_offsets.size(), 5);
+
+  /* Cut vertices at the offset boundary should have vert_time ≈ 2.0.
+   * (Interior skeleton nodes with vert_orig == -1 exist at higher times.) */
+  bool found_cut_vert = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 2.0) < 1e-6) {
+      found_cut_vert = true;
     }
-    return new_verts[idx - int(verts.size())];
-  };
-
-  double total_area = 0.0;
-  for (const Vector<int> &face : out_faces) {
-    double area = 0.0;
-    const int m = int(face.size());
-    for (const int i : IndexRange(m)) {
-      const double2 p1 = get_pos(face[i]);
-      const double2 p2 = get_pos(face[(i + 1) % m]);
-      area += (p1.x * p2.y - p2.x * p1.y);
-    }
-    total_area += 0.5 * area;
   }
-  EXPECT_NEAR(total_area, 200.0, 1e-6);
+  EXPECT_TRUE(found_cut_vert);
+
+  EXPECT_NEAR(total_faces_area(output), 200.0, 1e-6);
 }
 
+/**
+ * Offset of an L-shaped polygon at distance 0.5.
+ * Produces 6 side-strip faces + 1 inner L-shape polygon (7 faces total).
+ */
 TEST(straight_skeleton, OffsetLShape)
 {
-  Array<double2> verts = {{0.0, 0.0}, {4.0, 0.0}, {4.0, 2.0}, {2.0, 2.0}, {2.0, 4.0}, {0.0, 4.0}};
-  Vector<Vector<int>> polygons = {{0, 1, 2, 3, 4, 5}};
-  Vector<double2> new_verts;
-  Vector<double> new_verts_offset;
+  Array<double2> verts = {
+      {0.0, 0.0}, {4.0, 0.0}, {4.0, 2.0}, {2.0, 2.0}, {2.0, 4.0}, {0.0, 4.0}};
+  Array<int> face_offsets_buf = {0, 6};
+  Array<int> face_verts = {0, 1, 2, 3, 4, 5};
 
-  const Vector<Vector<int>> out_faces = straight_skeleton_offset_calc(
-      verts.as_span(), polygons, 0.5, new_verts, new_verts_offset);
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
 
-  EXPECT_EQ(out_faces.size(), 7); /* 6 side-strips + 1 inner L-shape */
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 0.5;
+  input.segments = 1;
+  input.label = "OffsetLShape";
 
-  auto get_pos = [&](int idx) -> double2 {
-    if (idx < int(verts.size())) {
-      return verts[idx];
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_EQ(output.face_offsets.size(), 7); /* 6 side-strips + 1 inner L-shape. */
+
+  EXPECT_NEAR(total_faces_area(output), 12.0, 1e-6);
+}
+
+/**
+ * Two-segment offset of a 10x10 square with offset = 2.
+ * effective_offset = 2 (< max_collapse = 5).
+ * Band 0: t in [0, 1]  — 4 side-strip trapezoids + 1 inner square.
+ * Band 1: t in [1, 2]  — 4 side-strip trapezoids + 1 inner square.
+ * Total: 10 faces.  Total area = 100 (the whole square).
+ */
+TEST(straight_skeleton, OffsetSquare_TwoBands)
+{
+  Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
+
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
+
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.offset = 2.0;
+  input.segments = 2;
+  input.label = "OffsetSquare_TwoBands";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Band 0 (t=0..1): 4 side-strip trapezoids.
+   * Band 1 (t=1..2): 4 side-strip trapezoids + 1 inner square.
+   * Total = 9 faces. */
+  EXPECT_EQ(output.face_offsets.size(), 9);
+
+  /* Check band assignments. */
+  int band0_count = 0;
+  int band1_count = 0;
+  for (const int fi : output.face_offsets.index_range()) {
+    const int b = output.face_band[fi];
+    EXPECT_TRUE(b == 0 || b == 1);
+    if (b == 0) {
+      band0_count++;
     }
-    return new_verts[idx - int(verts.size())];
-  };
-
-  double total_area = 0.0;
-  for (const Vector<int> &face : out_faces) {
-    double area = 0.0;
-    const int m = int(face.size());
-    for (const int i : IndexRange(m)) {
-      const double2 p1 = get_pos(face[i]);
-      const double2 p2 = get_pos(face[(i + 1) % m]);
-      area += (p1.x * p2.y - p2.x * p1.y);
+    else {
+      band1_count++;
     }
-    total_area += 0.5 * area;
   }
-  EXPECT_NEAR(total_area, 12.0, 1e-6);
+  EXPECT_EQ(band0_count, 4);
+  EXPECT_EQ(band1_count, 5);
+
+  /* Band-boundary vertices at t = 1 (midpoint). */
+  bool found_mid = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 1.0) < 1e-6) {
+      found_mid = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_mid);
+
+  /* Total area should cover the whole square. */
+  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
+}
+
+/**
+ * Full-skeleton with segments = 2 on a 10x10 square.
+ * offset = infinity, segments = 2.
+ * effective_offset = max_collapse_time = 5.
+ * Band 0: t in [0, 2.5]  — 4 side-strip faces + 1 inner square at 2.5.
+ * Band 1: t in [2.5, 5]  — 4 narrower side-strip faces + apex.
+ * Total: 10 faces.  Total area = 100.
+ */
+TEST(straight_skeleton, FullSkeletonWithSegments)
+{
+  Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  Array<int> face_offsets_buf = {0, 4};
+  Array<int> face_verts = {0, 1, 2, 3};
+
+  InputStorage storage;
+  storage.vert = verts;
+  storage.face_offsets_buf = face_offsets_buf;
+  storage.face_vert_indices.extend(face_verts.as_span());
+
+  StraightSkeletonInput input;
+  input.vert = storage.vert.as_span();
+  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
+  input.face_vert_indices = storage.face_vert_indices.as_span();
+  /* Default input.offset = infinity; segments = 2 divides the full skeleton into 2 bands. */
+  input.segments = 2;
+  input.label = "FullSkeletonWithSegments";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Band 0 (t=0..2.5): 4 side-strip trapezoids.
+   * Band 1 (t=2.5..5): 4 side-strip triangles converging to the apex.
+   *   The apex inner polygon degenerates to a point (area ≈ 0) and is silently omitted.
+   * Total = 8 faces. */
+  EXPECT_EQ(output.face_offsets.size(), 8);
+
+  /* Band boundary vertices at t = 2.5 must exist. */
+  bool found_mid = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 2.5) < 1e-6) {
+      found_mid = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_mid);
+
+  /* The skeleton apex at t = 5 is part of the vertex pool (from the full skeleton graph). */
+  bool found_apex = false;
+  for (const int vi : output.vert.index_range()) {
+    if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 5.0) < 1e-6) {
+      found_apex = true;
+    }
+  }
+  EXPECT_TRUE(found_apex);
+
+  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
 }
 
 /** \} */

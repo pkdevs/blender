@@ -29,19 +29,32 @@
  * viewed in the standard orientation (y up).  Clockwise-wound faces will produce an
  * exterior skeleton rather than an interior one.
  *
+ * Offset and Segments
+ * -------------------
+ * #StraightSkeletonInput::offset controls the inward offset distance.  When left at
+ * its default of infinity the complete straight skeleton (full roof tiling) is returned.
+ * When set to a finite value d the roof is clipped at height t = d; if d exceeds the
+ * maximum collapse time it is silently clamped so that no bands are empty.
+ *
+ * #StraightSkeletonInput::segments divides the effective offset range into that many
+ * equal-width bands.  Band 0 is the outermost ring (adjacent to the input boundary);
+ * band k-1 is the innermost ring.  #StraightSkeletonOutput::face_band records which
+ * band each output face belongs to.
+ *
  * Output
  * ------
  * The output describes the faces of the offset mesh: for every input face there will
  * be one or more output faces.  Each output face corresponds to one edge of the
- * input polygon (a "side strip") or to the central skeleton region.
+ * input polygon (a "side strip") or to the central skeleton / inner offset region.
  *
  * Output-to-input mappings are always filled in:
  *   - #StraightSkeletonOutput::vert_orig[v]  - index of the input vertex that
- *     corrseponds to output vertex v, or -1 if v is a new skeleton vertex.
+ *     corresponds to output vertex v, or -1 if v is a new skeleton vertex.
  *   - #StraightSkeletonOutput::edge_orig[e]  - index of the input edge that
  *     corresponds to output edge e, or -1 if e is a new skeleton edge.
  *   - #StraightSkeletonOutput::face_orig[f]  - index of the input face from which
  *     output face f was derived.
+ *   - #StraightSkeletonOutput::face_band[f]  - zero-based band index of output face f.
  *
  * Epsilon
  * -------
@@ -210,6 +223,33 @@ class StraightSkeletonInput {
   /** Coincidence threshold.  Pass 0.0 to use the default (1e-8). */
   double epsilon{0.0};
 
+  /**
+   * Inward offset distance for polygon offsetting.
+   *
+   * - `infinity` (default): the full straight skeleton is computed.  The algorithm
+   *   determines the maximum collapse time automatically and uses it as the effective
+   *   offset for the purposes of band subdivision (see #segments).
+   * - A finite non-negative value `d`: the roof is clipped at height
+   *   `t = min(d, max_collapse_time)`.  Silently clamping to the maximum collapse
+   *   time ensures all bands have uniform width and none are empty.
+   */
+  double offset{std::numeric_limits<double>::infinity()};
+
+  /**
+   * Number of equal-width offset bands to subdivide the effective offset into.
+   *
+   * - `1` (default): a single output at the effective offset.  When #offset is
+   *   infinite this produces the complete roof tiling as one set of faces (band 0).
+   * - `k > 1`: the range `[0, effective_offset]` is divided into `k` bands of equal
+   *   width (`effective_offset / k` each) by instantiating intermediate wavefronts at
+   *   `t_i = effective_offset * i / k` for `i = 1 … k-1`.
+   *   Each band `b` (0-indexed, outermost first) spans `[t_b, t_{b+1}]` and produces
+   *   its own side-strip faces plus the inner polygon at `t_{b+1}`.
+   *   When #offset is infinite, #segments still applies using the computed
+   *   `max_collapse_time` as the effective 100% mark.
+   */
+  int segments{1};
+
   /** Optional identifying label for debug drawings and logging. */
   const char *label{nullptr};
 };
@@ -255,6 +295,15 @@ class StraightSkeletonOutput {
 
   /** For each output face, the index of the input face it was derived from. */
   Array<int> face_orig;
+
+  /**
+   * For each output face, the zero-based band index it belongs to.
+   *
+   * Band 0 is the outermost ring (side-strip faces adjacent to the input boundary at t = 0).
+   * Band `k-1` is the innermost ring (includes the inner polygon at the effective offset).
+   * When #StraightSkeletonInput::segments is 1 every entry is 0.
+   */
+  Array<int> face_band;
 };
 
 /** \} */
@@ -264,38 +313,21 @@ class StraightSkeletonOutput {
  * \{ */
 
 /**
- * Compute the straight skeleton of the polygon mesh described by \a input.
+ * Compute the straight skeleton of the polygon mesh described by \a input,
+ * optionally clipped and subdivided into offset bands.
  *
- * Returns the output faces that tile the interior of the input polygon(s),
- * together with origin mappings back to the input.
+ * When `input.offset` is infinity (the default) and `input.segments` is 1,
+ * the complete roof tiling is returned — one face per input boundary edge plus
+ * the inner skeleton faces.
+ *
+ * When `input.offset` is finite, or `input.segments > 1`, the output is
+ * divided into `input.segments` equal-width bands spanning
+ * `[0, effective_offset]`, where `effective_offset = min(input.offset,
+ * max_collapse_time)`.  Each band produces side-strip faces and an inner
+ * polygon.  #StraightSkeletonOutput::face_band identifies the band (0 =
+ * outermost) for each output face.
  */
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input);
-
-/**
- * Compute the inward straight-skeleton offset (inset) of polygons.
- *
- * \param vert               2D coordinates of the input vertices.
- * \param polygons           Vertex indices of the boundary polygons. CCW-oriented
- *                           polygons are treated as outer boundaries; CW-oriented
- *                           polygons are treated as interior holes.
- * \param offset             Inward offset distance (non-negative).
- * \param r_new_vert         New vertices created by the operation are appended here.
- *                           Face indices in the return value that are >= `vert.size()`
- *                           address `r_new_vert[index - vert.size()]`.
- * \param r_new_vert_offset  For each new vertex in \a r_new_vert, its offset distance
- *                           (creation time in the straight skeleton advancement) is
- *                           stored here, parallel to \a r_new_vert.
- *
- * \return A list of polygonal faces (each face is a list of vertex indices)
- *         that together tile the interior of the outer boundaries minus their holes,
- *         accounting for the offset.  The faces include the side strips
- *         beside each boundary edge as well as the remaining inner region(s).
- */
-Vector<Vector<int>> straight_skeleton_offset_calc(Span<double2> vert,
-                                                  const Vector<Vector<int>> &polygons,
-                                                  double offset,
-                                                  Vector<double2> &r_new_vert,
-                                                  Vector<double> &r_new_vert_offset);
 
 /** \} */
 

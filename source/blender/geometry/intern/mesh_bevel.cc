@@ -7746,7 +7746,7 @@ static std::optional<Mesh *> build_output_mesh(const BevelState &state,
 /** \name Face Bevel via Straight-Skeleton Inset
  *
  * Implements face beveling by delegating each selected face to
- * #blender::straightskeleton::straight_skeleton_offset_calc.
+ * #blender::straightskeleton::straight_skeleton_calc with an inward offset.
  * Original boundary vertices and edges are kept intact; only the original
  * face polygon is replaced by the ring of new side-strip faces plus the
  * new inner face(s) produced by the offset.
@@ -7833,48 +7833,55 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
       }
     }
 
-    Vector<int> loop_indices(corners_num);
+    /* Build the StraightSkeletonInput for this face. */
+    Array<int> face_offsets_buf = {0, corners_num};
+    Vector<int> face_vert_indices(corners_num);
     for (const int i : IndexRange(corners_num)) {
-      loop_indices[i] = i;
+      face_vert_indices[i] = i;
     }
 
-    Vector<Vector<int>> polygons;
-    polygons.append(std::move(loop_indices));
+    straightskeleton::StraightSkeletonInput skel_input;
+    skel_input.vert = verts_2d.as_span();
+    skel_input.face_offsets = OffsetIndices<int>(face_offsets_buf.as_span());
+    skel_input.face_vert_indices = face_vert_indices.as_span();
+    skel_input.offset = inset_amount;
+    /* segments could be exposed as a node parameter in future; default to 1 for now. */
+    skel_input.segments = 1;
 
-    Vector<double2> new_vert_2d;
-    Vector<double> new_vert_offset;
-    const Vector<Vector<int>> out_faces = blender::straightskeleton::straight_skeleton_offset_calc(
-        verts_2d.as_span(), polygons, inset_amount, new_vert_2d, new_vert_offset);
+    const straightskeleton::StraightSkeletonOutput skel_out =
+        straightskeleton::straight_skeleton_calc(skel_input);
 
-    if (out_faces.is_empty()) {
+    if (skel_out.face_offsets.size() == 0) {
       return;
     }
 
     const double face_height = params.face_height.is_empty() ? 0.0 : double(params.face_height[f]);
 
-    /* Map result vertex indices to mesh vertex indices.
-     * Indices < corners_num refer to original boundary vertices (in verts_2d).
-     * Indices >= corners_num refer to newly created vertices in new_vert_2d. */
-    const int new_verts_num = int(new_vert_2d.size());
-    Array<int> result_to_mesh_vert(corners_num + new_verts_num);
+    /* Map skeleton output vertex indices to mesh vertex indices.
+     * Indices < corners_num are original boundary vertices (in verts_2d).
+     * Indices >= corners_num are newly created skeleton / cut vertices. */
+    const int skel_verts_num = int(skel_out.vert.size());
+    Array<int> skel_to_mesh_vert(skel_verts_num, -1);
     for (const int i : IndexRange(corners_num)) {
-      result_to_mesh_vert[i] = corner_verts[face_range[i]];
+      skel_to_mesh_vert[i] = corner_verts[face_range[i]];
     }
 
-    for (const int i : IndexRange(new_verts_num)) {
-      const double vo = new_vert_offset[i];
+    for (const int i : IndexRange(corners_num, skel_verts_num - corners_num)) {
+      const double vo = skel_out.vert_time[i];
       const double h = (inset_amount > 0.0) ? (vo / inset_amount) * face_height : 0.0;
-      const double3 p3d = origin + r0 * new_vert_2d[i].x + r1 * new_vert_2d[i].y + normal * h;
-      result_to_mesh_vert[corners_num + i] = state.emesh.vert_create(float3(p3d), -1);
+      const double3 p3d = origin + r0 * skel_out.vert[i].x + r1 * skel_out.vert[i].y +
+                          normal * h;
+      skel_to_mesh_vert[i] = state.emesh.vert_create(float3(p3d), -1);
     }
 
     /* Emit new output faces (side-strip quads + inner inset face(s)).
      * Use the original face as the attribute representative for all new faces. */
-    for (const Vector<int> &out_face : out_faces) {
-      const int face_verts_num = int(out_face.size());
+    for (const int fi : skel_out.face_offsets.index_range()) {
+      const IndexRange face_r = skel_out.face_offsets[fi];
+      const int face_verts_num = int(face_r.size());
       Array<int> mesh_verts(face_verts_num);
       for (const int i : IndexRange(face_verts_num)) {
-        mesh_verts[i] = result_to_mesh_vert[out_face[i]];
+        mesh_verts[i] = skel_to_mesh_vert[skel_out.face_vert_indices[face_r[i]]];
       }
       state.emesh.face_create(mesh_verts.as_span(), f);
     }

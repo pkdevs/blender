@@ -3992,6 +3992,7 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
 
   const SkeletonGraph &skel = state.skeleton_graph();
 
+  /* Populate vertex and edge arrays from the skeleton graph (common to all modes). */
   StraightSkeletonOutput output;
   const int nodes_num = int(skel.nodes.size());
   output.vert.reinitialize(nodes_num);
@@ -4011,242 +4012,324 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
     output.edge_orig[i] = skel.edges[i].orig_edge;
   }
 
-  /* Construct output faces for input faces. */
-  build_output_faces(input, skel, output);
-
-  return output;
-}
-
-Vector<Vector<int>> straight_skeleton_offset_calc(const Span<double2> vert,
-                                                  const Vector<Vector<int>> &polygons,
-                                                  const double offset,
-                                                  Vector<double2> &r_new_vert,
-                                                  Vector<double> &r_new_vert_offset)
-{
-  r_new_vert.clear();
-  r_new_vert_offset.clear();
-
-  if (polygons.is_empty() || vert.is_empty() || offset <= 0.0) {
-    return polygons;
+  /* Compute the effective offset and number of segments. */
+  double max_collapse_time = 0.0;
+  for (const SkeletonNode &node : skel.nodes) {
+    if (node.time > max_collapse_time) {
+      max_collapse_time = node.time;
+    }
   }
 
-  /* 1. Build StraightSkeletonInput from vert and polygons. */
-  Vector<int> face_indices;
-  Vector<int> face_offsets_data;
-  face_offsets_data.append(0);
-  for (const Vector<int> &poly : polygons) {
-    face_indices.extend(poly.as_span());
-    face_offsets_data.append(face_offsets_data.last() + int(poly.size()));
+  const bool is_full_skeleton = std::isinf(input.offset);
+  const double effective_offset = is_full_skeleton ?
+                                      max_collapse_time :
+                                      std::min(input.offset, max_collapse_time);
+  const int segments = std::max(1, input.segments);
+
+  /* Fast path: full skeleton, single segment — use the existing roof-face traversal. */
+  if (is_full_skeleton && segments == 1) {
+    build_output_faces(input, skel, output);
+    const int face_num = int(output.face_offsets.size());
+    output.face_band.reinitialize(face_num);
+    output.face_band.fill(0);
+    return output;
   }
 
-  StraightSkeletonInput input;
-  input.vert = vert;
-  input.face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
-  input.face_vert_indices = face_indices.as_span();
+  /* General path: offset clipping with one or more bands.
+   *
+   * Band b spans [t_lo, t_hi] where:
+   *   t_lo = effective_offset * b       / segments
+   *   t_hi = effective_offset * (b + 1) / segments
+   *
+   * We first build the full-skeleton output faces (using the skeleton node positions),
+   * then for each band clip those faces with Sutherland-Hodgman and assemble the
+   * side-strip faces and inner polygon.
+   */
 
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  if (output.face_offsets.size() == 0) {
-    return polygons;
+  /* Build full-skeleton output faces as the source geometry to clip from. */
+  StraightSkeletonOutput full_output;
+  /* Share vertex data with the to-be-built output so indices remain valid. */
+  full_output.vert = Array<double2>(output.vert.as_span());
+  full_output.vert_time = Array<double>(output.vert_time.as_span());
+  full_output.vert_orig = Array<int>(output.vert_orig.as_span());
+  build_output_faces(input, skel, full_output);
+
+  if (full_output.face_offsets.size() == 0) {
+    output.face_band.reinitialize(0);
+    return output;
   }
 
-  const int input_verts_num = int(vert.size());
-  const int total_skel_nodes_num = int(output.vert.size());
+  /* The output vert pool is extended dynamically as we create cut vertices.
+   * We use a growing Vector for vert and vert_time during clipping and convert to
+   * Array at the end. */
+  const int orig_verts_num = nodes_num;
+  Vector<double2> out_vert(output.vert.as_span());
+  Vector<double> out_vert_time(output.vert_time.as_span());
+  Vector<int> out_vert_orig(output.vert_orig.as_span());
 
-  /* skel_node_to_output maps output.vert indices:
-   *   - If node i < input_verts_num: maps to i (original boundary vertex).
-   *   - If node i >= input_verts_num: maps to input_verts_num + index in r_new_vert. */
-  Array<int> skel_node_to_output(total_skel_nodes_num, -1);
-  for (const int i : IndexRange(std::min(input_verts_num, total_skel_nodes_num))) {
-    skel_node_to_output[i] = i;
-  }
-
+  /* get_or_create_skel_vert: maps a skeleton-node index to an output vertex index.
+   * For the full-skeleton case every skeleton node is already in the pool 1-to-1. */
   auto get_or_create_skel_vert = [&](const int u) -> int {
-    if (u < input_verts_num) {
-      return u;
-    }
-    if (skel_node_to_output[u] != -1) {
-      return skel_node_to_output[u];
-    }
-    const int new_idx = int(r_new_vert.size());
-    r_new_vert.append(output.vert[u]);
-    r_new_vert_offset.append(output.vert_time[u]);
-    const int out_idx = input_verts_num + new_idx;
-    skel_node_to_output[u] = out_idx;
-    return out_idx;
+    /* All skeleton nodes are already loaded into out_vert[0..orig_verts_num-1]. */
+    BLI_assert(u >= 0 && u < orig_verts_num);
+    return u;
   };
 
-  /* Map each undirected skeleton edge {u, v} crossing offset to its intersection vertex. */
-  Map<OrderedEdge, int> cut_vert_map;
+  /* Map (undirected skeleton edge, cut height) -> output vertex index. */
+  Map<std::pair<OrderedEdge, double>, int> cut_vert_map;
 
-  auto get_or_create_cut_vert = [&](const int u, const int v) -> int {
-    const OrderedEdge edge(u, v);
-    if (const int *existing = cut_vert_map.lookup_ptr(edge)) {
+  /* get_or_create_cut_vert: returns (or creates) the interpolated vertex where
+   * the skeleton edge u<->v crosses height t_cut. */
+  auto get_or_create_cut_vert = [&](const int u, const int v, const double t_cut) -> int {
+    const std::pair<OrderedEdge, double> key = {OrderedEdge(u, v), t_cut};
+    if (const int *existing = cut_vert_map.lookup_ptr(key)) {
       return *existing;
     }
-    const double tu = output.vert_time[u];
-    const double tv = output.vert_time[v];
+    const double tu = out_vert_time[u];
+    const double tv = out_vert_time[v];
     const double dt = tv - tu;
-    const double alpha = (std::abs(dt) > 1e-14) ? std::clamp((offset - tu) / dt, 0.0, 1.0) : 0.5;
-    const double2 pos = output.vert[u] + alpha * (output.vert[v] - output.vert[u]);
-
-    const int new_idx = int(r_new_vert.size());
-    r_new_vert.append(pos);
-    r_new_vert_offset.append(offset);
-    const int out_idx = input_verts_num + new_idx;
-    cut_vert_map.add(edge, out_idx);
-    return out_idx;
+    const double alpha = (std::abs(dt) > 1e-14) ? std::clamp((t_cut - tu) / dt, 0.0, 1.0) : 0.5;
+    const double2 pos = out_vert[u] + alpha * (out_vert[v] - out_vert[u]);
+    const int new_idx = int(out_vert.size());
+    out_vert.append(pos);
+    out_vert_time.append(t_cut);
+    out_vert_orig.append(-1);
+    cut_vert_map.add(key, new_idx);
+    return new_idx;
   };
 
+  auto get_pos = [&](const int idx) -> double2 { return out_vert[idx]; };
+  auto get_vert_t = [&](const int idx) -> double { return out_vert_time[idx]; };
+
+  /* Accumulators for all output faces across all bands. */
   Vector<Vector<int>> result_faces;
-  Vector<int2> inner_directed_edges;
+  Vector<int> result_face_orig;
+  Vector<int> result_face_band;
 
   const double eps = 1e-9;
 
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
-    const int face_verts_num = int(face_r.size());
-    if (face_verts_num < 3) {
-      continue;
-    }
+  for (const int band : IndexRange(segments)) {
+    const double t_lo = effective_offset * double(band) / double(segments);
+    const double t_hi = effective_offset * double(band + 1) / double(segments);
 
-    /* Sutherland-Hodgman clipping against t <= offset. */
-    Vector<int> clipped_verts;
-    Vector<int> cuts_on_face;
+    Vector<int2> inner_directed_edges;
 
-    auto append_vert = [&](const int v) {
-      if (clipped_verts.is_empty() || clipped_verts.last() != v) {
-        clipped_verts.append(v);
+    /* Clip every full-skeleton roof face. */
+    for (const int fi : full_output.face_offsets.index_range()) {
+      const IndexRange face_r = full_output.face_offsets[fi];
+      const int face_verts_num = int(face_r.size());
+      if (face_verts_num < 3) {
+        continue;
       }
-    };
 
-    for (const int j : IndexRange(face_verts_num)) {
-      const int u = output.face_vert_indices[face_r[j]];
-      const int v = output.face_vert_indices[face_r[(j + 1) % face_verts_num]];
+      /* Source vertex indices for this roof face. */
+      const Span<int> src_verts = full_output.face_vert_indices.as_span().slice(face_r);
+      const int orig_fi = full_output.face_orig[fi];
 
-      const double tu = output.vert_time[u];
-      const double tv = output.vert_time[v];
+      /* Sutherland-Hodgman in two passes:
+       *   Pass 1: retain t >= t_lo  (discard vertices below the band floor).
+       *   Pass 2: retain t <= t_hi  (clip vertices above the band ceiling).
+       */
 
-      const bool u_in = (tu <= offset + eps);
-      const bool v_in = (tv <= offset + eps);
-
-      if (u_in && v_in) {
-        append_vert(get_or_create_skel_vert(v));
-      }
-      else if (u_in && !v_in) {
-        /* Exiting region t <= offset */
-        const int cut_v = get_or_create_cut_vert(u, v);
-        append_vert(cut_v);
-        cuts_on_face.append(cut_v);
-      }
-      else if (!u_in && !v_in) {
-        /* Entirely outside */
-      }
-      else {
-        /* Entering region t <= offset (!u_in && v_in) */
-        const int cut_v = get_or_create_cut_vert(u, v);
-        append_vert(cut_v);
-        cuts_on_face.append(cut_v);
-        append_vert(get_or_create_skel_vert(v));
-      }
-    }
-
-    while (clipped_verts.size() >= 2 && clipped_verts.first() == clipped_verts.last()) {
-      clipped_verts.pop_last();
-    }
-
-    if (clipped_verts.size() >= 3) {
-      auto get_pos = [&](const int idx) -> double2 {
-        if (idx < input_verts_num) {
-          return vert[idx];
+      /* --- Pass 1: t >= t_lo --- */
+      Vector<int> pass1;
+      auto append_p1 = [&](const int v_idx) {
+        if (pass1.is_empty() || pass1.last() != v_idx) {
+          pass1.append(v_idx);
         }
-        return r_new_vert[idx - input_verts_num];
       };
-      double area = 0.0;
-      const int m = int(clipped_verts.size());
-      for (const int i : IndexRange(m)) {
-        const double2 p1 = get_pos(clipped_verts[i]);
-        const double2 p2 = get_pos(clipped_verts[(i + 1) % m]);
-        area += (p1.x * p2.y - p2.x * p1.y);
-      }
-      if (area > 1e-12) {
-        result_faces.append(std::move(clipped_verts));
-      }
-    }
 
-    /* On the side-strip face, the top edge along t = offset went from exit to entry.
-     * For the inner face at t = offset, the directed edge goes from entry to exit. */
-    if (cuts_on_face.size() == 2 && cuts_on_face[0] != cuts_on_face[1]) {
-      inner_directed_edges.append(int2(cuts_on_face[1], cuts_on_face[0]));
-    }
-    else if (cuts_on_face.size() > 2) {
-      for (int k = 0; k + 1 < int(cuts_on_face.size()); k += 2) {
-        if (cuts_on_face[k] != cuts_on_face[k + 1]) {
-          inner_directed_edges.append(int2(cuts_on_face[k + 1], cuts_on_face[k]));
+      for (const int j : IndexRange(face_verts_num)) {
+        const int u = src_verts[j];
+        const int v = src_verts[(j + 1) % face_verts_num];
+        const double tu = get_vert_t(u);
+        const double tv = get_vert_t(v);
+        const bool u_in = (tu >= t_lo - eps);
+        const bool v_in = (tv >= t_lo - eps);
+
+        if (u_in && v_in) {
+          append_p1(get_or_create_skel_vert(v));
+        }
+        else if (u_in && !v_in) {
+          append_p1(get_or_create_cut_vert(u, v, t_lo));
+        }
+        else if (!u_in && v_in) {
+          append_p1(get_or_create_cut_vert(u, v, t_lo));
+          append_p1(get_or_create_skel_vert(v));
+        }
+        /* else: both outside — skip. */
+      }
+
+      while (pass1.size() >= 2 && pass1.first() == pass1.last()) {
+        pass1.pop_last();
+      }
+      if (pass1.size() < 3) {
+        continue;
+      }
+
+      /* --- Pass 2: t <= t_hi --- */
+      const int p1_num = int(pass1.size());
+      Vector<int> clipped_verts;
+      Vector<int> cuts_on_face; /* Cut vertices on the t_hi boundary (entry, exit pairs). */
+
+      auto append_p2 = [&](const int v_idx) {
+        if (clipped_verts.is_empty() || clipped_verts.last() != v_idx) {
+          clipped_verts.append(v_idx);
+        }
+      };
+
+      for (const int j : IndexRange(p1_num)) {
+        const int u = pass1[j];
+        const int v = pass1[(j + 1) % p1_num];
+        const double tu = get_vert_t(u);
+        const double tv = get_vert_t(v);
+        const bool u_in = (tu <= t_hi + eps);
+        const bool v_in = (tv <= t_hi + eps);
+
+        if (u_in && v_in) {
+          append_p2(v);
+        }
+        else if (u_in && !v_in) {
+          /* Exiting t <= t_hi. */
+          const int cut_v = get_or_create_cut_vert(u, v, t_hi);
+          append_p2(cut_v);
+          cuts_on_face.append(cut_v);
+        }
+        else if (!u_in && !v_in) {
+          /* Both outside — skip. */
+        }
+        else {
+          /* Entering t <= t_hi. */
+          const int cut_v = get_or_create_cut_vert(u, v, t_hi);
+          append_p2(cut_v);
+          cuts_on_face.append(cut_v);
+          append_p2(v);
         }
       }
-    }
-  }
 
-  if (!inner_directed_edges.is_empty()) {
-    Map<int, int> next_vert_map;
-    for (const int2 &e : inner_directed_edges) {
-      if (e[0] != e[1]) {
-        next_vert_map.add_overwrite(e[0], e[1]);
-      }
-    }
-
-    auto get_pos = [&](const int idx) -> double2 {
-      if (idx < input_verts_num) {
-        return vert[idx];
-      }
-      return r_new_vert[idx - input_verts_num];
-    };
-
-    while (!next_vert_map.is_empty()) {
-      const int start_v = *next_vert_map.keys().begin();
-      Vector<int> cycle;
-      int curr = start_v;
-
-      while (true) {
-        cycle.append(curr);
-        const int *nxt_ptr = next_vert_map.lookup_ptr(curr);
-        if (nxt_ptr == nullptr) {
-          break;
-        }
-        const int nxt = *nxt_ptr;
-        next_vert_map.remove(curr);
-        if (nxt == start_v || !next_vert_map.contains(nxt)) {
-          break;
-        }
-        curr = nxt;
+      while (clipped_verts.size() >= 2 && clipped_verts.first() == clipped_verts.last()) {
+        clipped_verts.pop_last();
       }
 
-      Vector<int> clean_cycle;
-      for (const int v : cycle) {
-        if (clean_cycle.is_empty() || clean_cycle.last() != v) {
-          clean_cycle.append(v);
-        }
-      }
-      while (clean_cycle.size() >= 2 && clean_cycle.first() == clean_cycle.last()) {
-        clean_cycle.pop_last();
-      }
-
-      if (clean_cycle.size() >= 3) {
+      if (clipped_verts.size() >= 3) {
         double area = 0.0;
-        const int m = int(clean_cycle.size());
+        const int m = int(clipped_verts.size());
         for (const int i : IndexRange(m)) {
-          const double2 p1 = get_pos(clean_cycle[i]);
-          const double2 p2 = get_pos(clean_cycle[(i + 1) % m]);
+          const double2 p1 = get_pos(clipped_verts[i]);
+          const double2 p2 = get_pos(clipped_verts[(i + 1) % m]);
           area += (p1.x * p2.y - p2.x * p1.y);
         }
         if (area > 1e-12) {
-          result_faces.append(std::move(clean_cycle));
+          result_faces.append(std::move(clipped_verts));
+          result_face_orig.append(orig_fi);
+          result_face_band.append(band);
+        }
+      }
+
+      /* Collect directed inner edges at t_hi for inner polygon assembly.
+       * The top edge of a side-strip face goes exit -> entry, so the inner
+       * polygon gets entry -> exit directed edges. */
+      if (cuts_on_face.size() == 2 && cuts_on_face[0] != cuts_on_face[1]) {
+        inner_directed_edges.append(int2(cuts_on_face[1], cuts_on_face[0]));
+      }
+      else if (cuts_on_face.size() > 2) {
+        for (int k = 0; k + 1 < int(cuts_on_face.size()); k += 2) {
+          if (cuts_on_face[k] != cuts_on_face[k + 1]) {
+            inner_directed_edges.append(int2(cuts_on_face[k + 1], cuts_on_face[k]));
+          }
+        }
+      }
+    } /* end per-face loop */
+
+    /* Assemble inner polygon(s) at t_hi from the directed cut edges.
+     * Only emit the inner polygon for the final band (band == segments - 1).
+     * For intermediate bands the inner polygon at t_hi is covered by the next band's
+     * side-strip faces, so emitting it here would double-count that area. */
+    if (!inner_directed_edges.is_empty() && band == segments - 1) {
+      Map<int, int> next_vert_map;
+      for (const int2 &e : inner_directed_edges) {
+        if (e[0] != e[1]) {
+          next_vert_map.add_overwrite(e[0], e[1]);
+        }
+      }
+
+      while (!next_vert_map.is_empty()) {
+        const int start_v = *next_vert_map.keys().begin();
+        Vector<int> cycle;
+        int curr = start_v;
+
+        while (true) {
+          cycle.append(curr);
+          const int *nxt_ptr = next_vert_map.lookup_ptr(curr);
+          if (nxt_ptr == nullptr) {
+            break;
+          }
+          const int nxt = *nxt_ptr;
+          next_vert_map.remove(curr);
+          if (nxt == start_v || !next_vert_map.contains(nxt)) {
+            break;
+          }
+          curr = nxt;
+        }
+
+        /* Deduplicate consecutive repeated vertices. */
+        Vector<int> clean_cycle;
+        for (const int v : cycle) {
+          if (clean_cycle.is_empty() || clean_cycle.last() != v) {
+            clean_cycle.append(v);
+          }
+        }
+        while (clean_cycle.size() >= 2 && clean_cycle.first() == clean_cycle.last()) {
+          clean_cycle.pop_last();
+        }
+
+        if (clean_cycle.size() >= 3) {
+          double area = 0.0;
+          const int m = int(clean_cycle.size());
+          for (const int i : IndexRange(m)) {
+            const double2 p1 = get_pos(clean_cycle[i]);
+            const double2 p2 = get_pos(clean_cycle[(i + 1) % m]);
+            area += (p1.x * p2.y - p2.x * p1.y);
+          }
+          if (area > 1e-12) {
+            /* For the inner polygon, use the input face index of the first full-skeleton
+             * face (all faces in a given input face share the same face_orig). */
+            const int inner_fi = full_output.face_orig.is_empty() ? 0 :
+                                                                     full_output.face_orig[0];
+            result_faces.append(std::move(clean_cycle));
+            result_face_orig.append(inner_fi);
+            result_face_band.append(band);
+          }
         }
       }
     }
+  } /* end per-band loop */
+
+  /* Pack result_faces into the output arrays. */
+  const int total_faces = int(result_faces.size());
+  Vector<int> face_indices;
+  Vector<int> face_lens;
+  for (const Vector<int> &f : result_faces) {
+    face_lens.append(int(f.size()));
+    face_indices.extend(f.as_span());
   }
 
-  return result_faces;
+  output.face_offsets_data.reinitialize(total_faces + 1);
+  output.face_offsets_data[0] = 0;
+  for (const int i : IndexRange(total_faces)) {
+    output.face_offsets_data[i + 1] = output.face_offsets_data[i] + face_lens[i];
+  }
+  output.face_offsets = OffsetIndices<int>(output.face_offsets_data.as_span());
+  output.face_vert_indices = Array<int>(face_indices.as_span());
+  output.face_orig = Array<int>(result_face_orig.as_span());
+  output.face_band = Array<int>(result_face_band.as_span());
+
+  /* Replace the vertex arrays with the extended (cut-vertex-inclusive) versions. */
+  output.vert = Array<double2>(out_vert.as_span());
+  output.vert_time = Array<double>(out_vert_time.as_span());
+  output.vert_orig = Array<int>(out_vert_orig.as_span());
+
+  return output;
 }
 
 } /* namespace blender::straightskeleton */
