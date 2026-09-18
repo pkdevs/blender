@@ -44,9 +44,21 @@ set(LIB
 )
 
 if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
+  foreach(_arch compute_50 compute_75)
+    cuda_get_toolkit_for_arch("${_arch}" cuda_toolkit_root_dir cuda_nvcc_executable cuda_version)
+    if(DEFINED cuda_nvcc_executable)
+      set(arch "${_arch}")
+      break()
+    endif()
+  endforeach()
+  if(NOT DEFINED cuda_nvcc_executable)
+    message(FATAL_ERROR "Could not find suitable combination of compute architecture and nvcc compiler")
+  endif()
+  message(STATUS "Cycles OptiX: Using CUDA toolkit ${cuda_toolkit_root_dir} (version ${cuda_version}) for ${arch}")
+
   # Modifies in parent scope:
   # - `optix_ptx`: appended with compressed ptx output.
-  function(cycles_optix_kernel_add name input flags)
+  function(cycles_optix_kernel_add name cuda_nvcc_executable cuda_version input flags)
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${name}.ptx")
     set(output_compressed "${output}.zst")
 
@@ -60,20 +72,6 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
         -D OSL_LIBRARY_VERSION_CODE=${OSL_LIBRARY_VERSION_CODE}
         -D OIIO_VERSION=${OIIO_VERSION})
     endif()
-
-    foreach(_arch compute_50 compute_75)
-      cuda_get_toolkit_for_arch("${_arch}" cuda_toolkit_root_dir cuda_nvcc_executable cuda_version)
-      if(DEFINED cuda_nvcc_executable)
-        set(arch "${_arch}")
-        break()
-      endif()
-    endforeach()
-
-    if(NOT DEFINED cuda_nvcc_executable)
-      message(FATAL_ERROR "Could not find suitable combination of compute architecture and nvcc compiler")
-    endif()
-
-    message(STATUS "Cycles OptiX: Using CUDA toolkit ${cuda_toolkit_root_dir} (version ${cuda_version}) for ${arch}")
 
     cuda_add_common_flags(${cuda_version} ${arch} "${cuda_flags}" cuda_flags)
 
@@ -94,8 +92,6 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
         "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 
-    unset(cuda_nvcc_executable)
-
     add_custom_command(
       OUTPUT ${output_compressed}
       COMMAND "$<TARGET_FILE:zstd_compress>" ${output} ${output_compressed}
@@ -109,47 +105,58 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
 
   cycles_optix_kernel_add(
     kernel_optix
+    "${cuda_nvcc_executable}" "${cuda_version}"
     "kernel.cu"
     "")
   cycles_optix_kernel_add(
     kernel_optix_mnee
+    "${cuda_nvcc_executable}" "${cuda_version}"
     "kernel_mnee.cu"
     "")
   cycles_optix_kernel_add(
     kernel_optix_shader_raytrace
+    "${cuda_nvcc_executable}" "${cuda_version}"
     "kernel_shader_raytrace.cu"
     "--keep-device-functions")
   if(WITH_CYCLES_OSL)
     cycles_optix_kernel_add(
       kernel_optix_osl
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_shader_raytrace
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_shader_raytrace.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_mnee
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_mnee.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_shadow
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_shadow.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_shadow_curve
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_shadow_curve.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_volume
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_volume.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_camera
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "kernel_osl_camera.cu"
       "--relocatable-device-code=true")
     cycles_optix_kernel_add(
       kernel_optix_osl_services
+      "${cuda_nvcc_executable}" "${cuda_version}"
       "../../osl/services_optix.cu"
       "--relocatable-device-code=true")
   endif()
