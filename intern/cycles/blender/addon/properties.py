@@ -2051,7 +2051,9 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 row.prop(device, "use", text=name, translate=False)
 
                 details = ""
-                if device.type == 'OPTIX':
+                if device.type == 'CUDA':
+                    details = rpt_("Requires NVIDIA driver version %s or newer") % cuda_minimum_driver_version
+                elif device.type == 'OPTIX':
                     details = rpt_("Requires NVIDIA driver version %s or newer") % optix_minimum_driver_version
                 elif device.type == 'HIP':
                     if sys.platform[:3] == "win":

@@ -132,9 +132,9 @@ void device_cuda_info(vector<DeviceInfo> &devices)
    * version directly:
    * - Driver version >= 525 and < 580 support CUDA 12.x
    * - Driver version >= 580 support CUDA 13.x */
-  if (driver_cuda_version / 1000 < 13) {
-    LOG_INFO << "Driver version 580 or above is required.";
-    return;
+  const bool meets_driver_requirement = driver_cuda_version / 1000 >= 13;
+  if (!meets_driver_requirement) {
+    LOG_INFO << "CUDA driver version 580 or above is required.";
   }
 
   int count = 0;
@@ -170,6 +170,7 @@ void device_cuda_info(vector<DeviceInfo> &devices)
     info.denoisers = 0;
 
     info.has_gpu_queue = true;
+    info.meets_driver_requirement = meets_driver_requirement;
 
     /* Check if the device has P2P access to any other device in the system. */
     for (int peer_num = 0; peer_num < count && !info.has_peer_memory; peer_num++) {
