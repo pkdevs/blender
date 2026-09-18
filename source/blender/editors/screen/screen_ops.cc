@@ -7816,9 +7816,7 @@ static bool space_type_set_or_cycle_poll(bContext *C)
   }
   if (area && area->spacetype == SPACE_FILE) {
     const SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
-    if (sfile->op) {
-      return false;
-    }
+    return sfile->op == nullptr;
   }
   return area;
 }
