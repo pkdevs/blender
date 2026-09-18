@@ -6,6 +6,7 @@
  * \ingroup modifiers
  */
 
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 
 #include "DNA_modifier_types.h"
@@ -14,6 +15,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_instances.hh"
+#include "BKE_key.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
@@ -94,11 +96,50 @@ static float4x4 get_mirror_matrix(const Object &ob,
   return matrix;
 }
 
+static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
+                                                        bke::CurvesGeometry &curves,
+                                                        const IndexMask selection,
+                                                        const float3x3 &matrix)
+{
+  if (!key) {
+    return;
+  }
+
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+
+    const Vector<std::string> names = bke::greasepencil::shapekey_attribute_names_position(
+        keyblock.name);
+
+    for (const StringRef name : names) {
+      bke::SpanAttributeWriter<float3> key_data = attributes.lookup_for_write_span<float3>(name);
+
+      if (!key_data) {
+        continue;
+      }
+
+      selection.foreach_index([&](const int point_i) {
+        key_data.span[point_i] = math::transform_point(matrix, key_data.span[point_i]);
+      });
+
+      key_data.finish();
+    }
+  }
+}
+
 static bke::CurvesGeometry create_mirror_copies(const Object &ob,
                                                 const GreasePencilMirrorModifierData &mmd,
                                                 const bke::CurvesGeometry &base_curves,
                                                 const bke::CurvesGeometry &mirror_curves)
 {
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob.data);
+  Key *key = grease_pencil.key;
+
   const bool use_mirror_x = (mmd.flag & MOD_GREASE_PENCIL_MIRROR_AXIS_X);
   const bool use_mirror_y = (mmd.flag & MOD_GREASE_PENCIL_MIRROR_AXIS_Y);
   const bool use_mirror_z = (mmd.flag & MOD_GREASE_PENCIL_MIRROR_AXIS_Z);
@@ -142,7 +183,37 @@ static bke::CurvesGeometry create_mirror_copies(const Object &ob,
                                     bke::GeometrySet::from_instances(std::move(instances)),
                                     options)
                                     .geometry;
-  return std::move(result_geo.get_curves_for_write()->geometry.wrap());
+
+  bke::CurvesGeometry output = result_geo.get_curves_for_write()->geometry.wrap();
+
+  if (!key) {
+    return output;
+  }
+
+  int index = 0;
+  for (const int mirror_x : IndexRange(use_mirror_x ? 2 : 1)) {
+    for (const int mirror_y : IndexRange(use_mirror_y ? 2 : 1)) {
+      for (const int mirror_z : IndexRange(use_mirror_z ? 2 : 1)) {
+        if (mirror_x == 0 && mirror_y == 0 && mirror_z == 0) {
+          continue;
+        }
+
+        const float4x4 &matrix = transforms[index + 1];
+        const float3x3 matrix_without_translation = float3x3(matrix);
+
+        IndexMask selection = IndexRange::from_begin_size(base_curves.points_num() +
+                                                              mirror_curves.points_num() * index,
+                                                          mirror_curves.points_num());
+
+        apply_grease_pencil_transform_to_shape_keys(
+            key, output, selection, matrix_without_translation);
+
+        index++;
+      }
+    }
+  }
+
+  return output;
 }
 
 static void modify_drawing(const GreasePencilMirrorModifierData &mmd,
