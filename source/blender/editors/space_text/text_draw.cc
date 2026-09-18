@@ -1214,7 +1214,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
 
     immUniformThemeColor(TH_SHADE2);
     /* Translucent theme colors must blend properly with the background rather than writing
-     * translucency directly to the region, which must remain opaque. */
+     * translucency directly to the region, which must remain opaque. See #163821. */
     GPU_blend(GPU_BLEND_ALPHA);
 
     int x = TXT_BODY_LEFT(st);
