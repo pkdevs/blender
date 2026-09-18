@@ -2203,22 +2203,23 @@ static wmOperatorStatus grease_pencil_erase_lasso_exec(bContext *C, wmOperator *
 
   /* Ensure a drawing at the current frame up front. For erasing, we don't want the auto-key to
    * create an empty keyframe, so we duplicate the previous key. */
-  Layer *active_layer = grease_pencil.get_active_layer();
-  bool inserted_keyframe = false;
-  const bool use_duplicate_previous_key = true;
-  if (active_layer->is_editable()) {
-    ed::greasepencil::ensure_active_keyframe(
-        *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
-  }
-  if (inserted_keyframe) {
-    /* Select new keyframe (deselect others). */
-    for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-      for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-        const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
-        SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
-      }
+  if (Layer *active_layer = grease_pencil.get_active_layer()) {
+    bool inserted_keyframe = false;
+    const bool use_duplicate_previous_key = true;
+    if (active_layer->is_editable()) {
+      ed::greasepencil::ensure_active_keyframe(
+          *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
     }
-    WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    if (inserted_keyframe) {
+      /* Select new keyframe (deselect others). */
+      for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
+        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
+          const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
+          SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
+        }
+      }
+      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    }
   }
 
   const Vector<MutableDrawingInfo> drawings = ed::greasepencil::retrieve_editable_drawings(
@@ -2335,22 +2336,23 @@ static wmOperatorStatus grease_pencil_erase_box_exec(bContext *C, wmOperator *op
 
   /* Ensure a drawing at the current frame up front. For erasing, we don't want the auto-key to
    * create an empty keyframe, so we duplicate the previous key. */
-  Layer *active_layer = grease_pencil.get_active_layer();
-  bool inserted_keyframe = false;
-  const bool use_duplicate_previous_key = true;
-  if (active_layer->is_editable()) {
-    ed::greasepencil::ensure_active_keyframe(
-        *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
-  }
-  if (inserted_keyframe) {
-    /* Select new keyframe (deselect others). */
-    for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-      for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-        const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
-        SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
-      }
+  if (Layer *active_layer = grease_pencil.get_active_layer()) {
+    bool inserted_keyframe = false;
+    const bool use_duplicate_previous_key = true;
+    if (active_layer->is_editable()) {
+      ed::greasepencil::ensure_active_keyframe(
+          *scene, grease_pencil, *active_layer, use_duplicate_previous_key, inserted_keyframe);
     }
-    WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    if (inserted_keyframe) {
+      /* Select new keyframe (deselect others). */
+      for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
+        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
+          const bool select_keyframe = (frame_number == scene->r.cfra) && (layer == active_layer);
+          SET_FLAG_FROM_TEST(frame.flag, select_keyframe, GP_FRAME_SELECTED);
+        }
+      }
+      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    }
   }
 
   const Vector<MutableDrawingInfo> drawings = ed::greasepencil::retrieve_editable_drawings(
