@@ -12,7 +12,6 @@
 #pragma once
 
 #include "eevee_cryptomatte.bsl.hh"
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
@@ -31,8 +30,8 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
     [[resource_table]] const draw::View &views = kg.view;
     [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
     [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
-    auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
-    draw::ID id{interp_flat.resource_id_raw};
+
+    draw::ID id{sd.resource_id_raw};
     const uint resource_id = id.resource_id<1>();
     const float2 frag_co = sd.frag_co.xy;
 
@@ -76,16 +75,13 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
 
     return float4(radiance, saturate(1.0f - average(transmittance)));
   }
-  else {
-    return float4(0);
-  }
+  return float4(0);
 }
 
 namespace eevee {
 
 struct SurfaceHybrid {
   [[legacy_info]] ShaderCreateInfo draw_view_culling;
-  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
 
   /* Everything is stored inside a two layered target, one for each format. This is to fit the
    * limitation of the number of images we can bind on a single shader. */
@@ -128,31 +124,46 @@ struct HybridFragOut {
 
 /* NOTE: This removes the possibility of using gl_FragDepth. */
 [[fragment]] [[early_fragment_tests]]
-void surf_hybrid([[resource_table]] KernelGlobals &kg,
-                 [[resource_table]] PipelineConstants &pipe,
-                 [[resource_table]] SurfaceHybrid &srt,
-                 [[resource_table]] gbuffer::PackParameters &gbuf_params,
-                 [[resource_table]] LightEvalIterator & /*lights*/,
-                 [[resource_table]] LightprobeRenderData & /*lightprobes*/,
-                 [[resource_table]] LightprobePlaneRenderData & /*lightprobe_planes*/,
-                 [[resource_table]] CryptomatteOutput &cryptomatte,
-                 [[resource_table]] RenderPassOutput &render_passes,
-                 [[resource_table]] const draw::View &views,
-                 [[resource_table]] const draw::Infos & /*infos*/,
-                 [[resource_table]] const Uniform &uni,
-                 [[resource_table]] const Sampling &sampling,
-                 [[resource_table]] const UtilityTexture &util_tx,
-                 [[frag_coord]] const float4 frag_co,
-                 [[out]] HybridFragOut &frag_out,
-                 [[front_facing]] const bool front_face)
+void surf_hybrid(
+    [[resource_table]] KernelGlobals &kg,
+    [[resource_table]] PipelineConstants &pipe,
+    [[resource_table]] SurfaceHybrid &srt,
+    [[resource_table]] gbuffer::PackParameters &gbuf_params,
+    [[resource_table]] LightEvalIterator & /*lights*/,
+    [[resource_table]] LightprobeRenderData & /*lightprobes*/,
+    [[resource_table]] LightprobePlaneRenderData & /*lightprobe_planes*/,
+    [[resource_table]] CryptomatteOutput &cryptomatte,
+    [[resource_table]] RenderPassOutput &render_passes,
+    [[resource_table]] const draw::View &views,
+    [[resource_table]] const draw::Infos & /*infos*/,
+    [[resource_table]] const Uniform &uni,
+    [[resource_table]] const Sampling &sampling,
+    [[resource_table]] const UtilityTexture &util_tx,
+    [[in]] const VertOutCommon &interp,
+    [[in]] const VertOutResID &interp_flat,
+    [[in]] [[condition(is_curves)]] const VertOutCurves &curves_interp,
+    [[in]] [[condition(is_curves)]] const VertOutCurvesFlat &curves_interp_flat,
+    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloud &ptcloud_interp,
+    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloudFlat &ptcloud_interp_flat,
+    [[frag_coord]] const float4 frag_co,
+    [[out]] HybridFragOut &frag_out,
+    [[front_facing]] const bool front_face)
 {
-  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, view, front_face, frag_co);
+  ShadingData sd = init_globals(uni, interp, interp_flat, view, front_face, frag_co);
+  if (pipe.is_mesh) [[static_branch]] {
+    init_globals_mesh(interp, sd);
+  }
+  else if (pipe.is_curves) [[static_branch]] {
+    init_globals_curves(interp, curves_interp, curves_interp_flat, sd, view);
+  }
+  else if (pipe.is_pointcloud) [[static_branch]] {
+    init_globals_pointcloud(ptcloud_interp, ptcloud_interp_flat, sd);
+  }
 
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));

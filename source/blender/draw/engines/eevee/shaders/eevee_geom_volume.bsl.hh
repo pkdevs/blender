@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_model.bsl.hh"
@@ -19,8 +18,6 @@ namespace eevee {
 
 struct GeomVolume {
   [[legacy_info]] ShaderCreateInfo draw_volume_infos;
-
-  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
 };
 
 struct GeomVolumeIn {
@@ -36,6 +33,8 @@ struct GeomVolumeIn {
     [[resource_table]] const draw::Model &models,
     [[resource_table]] const draw::Infos &infos,
     [[resource_table]] const draw::Resource &res_id,
+    [[out]] VertOutCommon &interp,
+    [[out]] VertOutResID &interp_flat,
     [[in]] const GeomVolumeIn &vert_in,
     [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
@@ -48,9 +47,7 @@ struct GeomVolumeIn {
   const ViewMatrices view = views.get(view_id);
   const ObjectMatrices obj = models.get(resource_id);
 
-  auto &interp = interface_get(eevee_geom_iface_info, interp);
-
-  init_interface(id.raw_id);
+  init_interface(interp, interp_flat, id.raw_id);
 
   /* TODO(fclem): Find a better way? This is reverting what draw_resource_finalize does. */
   ObjectInfos info = infos.get(resource_id);

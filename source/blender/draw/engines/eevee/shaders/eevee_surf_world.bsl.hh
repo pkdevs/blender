@@ -9,7 +9,6 @@
  */
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "eevee_attributes_world_lib.glsl"
@@ -30,8 +29,6 @@ float4 closure_to_rgba_world([[resource_table]] KernelGlobals &kg, ShadingData &
 namespace eevee {
 
 struct SurfWorld {
-  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
-
   [[push_constant]] float world_opacity_fade;
   [[push_constant]] float world_background_blur;
   [[push_constant]] int4 world_coord_packed;
@@ -51,14 +48,15 @@ void surf_world([[resource_table]] KernelGlobals &kg,
                 [[resource_table]] const UtilityTexture & /*util_tx*/,
                 [[resource_table]] const draw::View &views,
                 [[frag_coord]] const float4 frag_co,
+                [[in]] const VertOutCommon &interp,
+                [[in]] const VertOutResID &interp_flat,
                 [[out]] SurfWorldFragOut &frag_out,
                 [[front_facing]] const bool front_face)
 {
-  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
-
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, view, front_face, frag_co);
+  ShadingData sd = init_globals(uni, interp, interp_flat, view, front_face, frag_co);
+
   /* View position is passed to keep accuracy. */
   sd.N = view.normal_view_to_world(view.view_incident_vector(interp.P));
   sd.Ng = sd.N;

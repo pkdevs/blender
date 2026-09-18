@@ -703,19 +703,24 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                                               const bool use_ao_node)
 {
   using namespace blender::gpu::shader;
+  using gpu::shader::Type;
 
-  info.compilation_constant(
-      gpu::shader::Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
+  info.compilation_constant(Type::bool_t, "is_mesh", geometry_type == MAT_GEOM_MESH);
+  info.compilation_constant(Type::bool_t, "is_curves", geometry_type == MAT_GEOM_CURVES);
+  info.compilation_constant(Type::bool_t, "is_pointcloud", geometry_type == MAT_GEOM_POINTCLOUD);
+  info.compilation_constant(Type::bool_t, "is_gsplat", geometry_type == MAT_GEOM_GSPLAT);
+  info.compilation_constant(Type::bool_t, "is_world", geometry_type == MAT_GEOM_WORLD);
+
+  info.compilation_constant(Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
   if (pipeline_type == MAT_PIPE_SHADOW) {
-    info.compilation_constant(
-        gpu::shader::Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
+    info.compilation_constant(Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
   }
   info.compilation_constant(
-      gpu::shader::Type::bool_t, "is_occupancy_pipe", pipeline_type == MAT_PIPE_VOLUME_OCCUPANCY);
+      Type::bool_t, "is_occupancy_pipe", pipeline_type == MAT_PIPE_VOLUME_OCCUPANCY);
   info.compilation_constant(
-      gpu::shader::Type::bool_t, "use_clip_plane", pipeline_type == MAT_PIPE_PREPASS_PLANAR);
-  info.compilation_constant(gpu::shader::Type::bool_t, "use_ambient_occlusion", use_ao_node);
-  info.compilation_constant(gpu::shader::Type::bool_t,
+      Type::bool_t, "use_clip_plane", pipeline_type == MAT_PIPE_PREPASS_PLANAR);
+  info.compilation_constant(Type::bool_t, "use_ambient_occlusion", use_ao_node);
+  info.compilation_constant(Type::bool_t,
                             "use_forward_lighting",
                             (pipeline_type == MAT_PIPE_FORWARD) ||
                                 ((pipeline_type == MAT_PIPE_DEFERRED) && use_shader_to_rgba));
@@ -730,9 +735,9 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           pipeline_info_name = "eevee_surf_volume_infos_";
           info.name_ += "_world_volume";
           info.define("MAT_VOLUME");
-          info.compilation_constant(gpu::shader::Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(gpu::shader::Type::bool_t, "is_volume_object", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "is_world", true);
+          info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
+          info.compilation_constant(Type::bool_t, "is_volume_object", false);
+          info.compilation_constant(Type::bool_t, "is_world", true);
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
            * pipeline. */
           info.fragment_source("eevee_surf_volume.bsl.hh");
@@ -756,7 +761,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           pipeline_info_name = "eevee_surf_depthTtrue_infos_";
           additional_info_name = "eevee_GeometryVelocity";
           info.name_ += "_depth_velocity";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", true);
+          info.compilation_constant(Type::bool_t, "use_velocity", true);
           info.define("MAT_DEPTH");
           info.define("closure_to_rgba", "closure_to_rgba_depth");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -769,8 +774,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_PREPASS_DEFERRED:
           pipeline_info_name = "eevee_surf_depthTfalse_infos_";
           info.name_ += "_depth";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.define("MAT_DEPTH");
           info.define("closure_to_rgba", "closure_to_rgba_depth");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -782,8 +787,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           pipeline_info_name = "eevee_surf_depthTfalse_infos_";
           additional_info_name = "eevee_clip_plane";
           info.name_ += "_depth_clip";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.define("MAT_DEPTH");
           info.define("closure_to_rgba", "closure_to_rgba_depth");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -794,8 +799,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_SHADOW:
           pipeline_info_name = "eevee_surf_shadow_infos_";
           info.name_ += "_shadow";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.define("DRW_VIEW_LEN", STRINGIFY(SHADOW_VIEW_MAX));
           info.define("MAT_SHADOW");
           info.define("closure_to_rgba", "closure_to_rgba_shadow");
@@ -803,13 +808,12 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
            * pipeline. */
           info.fragment_source("eevee_surf_shadow.bsl.hh");
           info.fragment_function("eevee_surf_shadow");
-          info.additional_info("eevee_shadow_iface_info");
           break;
         case MAT_PIPE_VOLUME_OCCUPANCY:
           pipeline_info_name = "eevee_surf_occupancy_infos_";
           info.name_ += "_occupancy";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.define("MAT_OCCUPANCY");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
            * pipeline. */
@@ -818,13 +822,13 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           break;
         case MAT_PIPE_VOLUME_MATERIAL:
           pipeline_info_name = "eevee_surf_volume_infos_";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(gpu::shader::Type::bool_t,
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
+          info.compilation_constant(Type::bool_t,
                                     "is_volume_object",
                                     geometry_type == eMaterialGeometry::MAT_GEOM_VOLUME);
-          info.compilation_constant(gpu::shader::Type::bool_t, "is_world", false);
+          info.compilation_constant(Type::bool_t, "is_world", false);
           info.name_ += "_volume";
           info.define("MAT_VOLUME");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -835,8 +839,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_CAPTURE:
           pipeline_info_name = "eevee_surf_capture_infos_";
           info.name_ += "_capture";
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.define("MAT_CAPTURE");
           info.define("closure_to_rgba", "closure_to_rgba_capture");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -851,9 +855,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
               info.define("closure_to_rgba", "closure_to_rgba_hybrid");
             }
             info.name_ += "_deferred_hybrid";
-            info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-            info.compilation_constant(
-                gpu::shader::Type::bool_t, "use_lighting_nodes", use_lighting_nodes);
+            info.compilation_constant(Type::bool_t, "use_velocity", false);
+            info.compilation_constant(Type::bool_t, "use_lighting_nodes", use_lighting_nodes);
             /* Until every vertex shader are ported, we need to bridge the gap here by defining the
              * pipeline. */
             info.fragment_source("eevee_surf_hybrid.bsl.hh");
@@ -862,8 +865,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           else {
             pipeline_info_name = "eevee_surf_deferred_infos_";
             info.name_ += "_deferred";
-            info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
-            info.compilation_constant(gpu::shader::Type::bool_t, "use_lighting_nodes", false);
+            info.compilation_constant(Type::bool_t, "use_velocity", false);
+            info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
             /* Until every vertex shader are ported, we need to bridge the gap here by defining the
              * pipeline. */
             info.fragment_source("eevee_surf_deferred.bsl.hh");
@@ -876,7 +879,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_FORWARD:
           pipeline_info_name = "eevee_surf_forward_infos_";
           info.define("closure_to_rgba", "closure_to_rgba_forward");
-          info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
+          info.compilation_constant(Type::bool_t, "use_velocity", false);
           info.compilation_constant(
               gpu::shader::Type::bool_t, "use_lighting_nodes", use_lighting_nodes);
           info.name_ += "_forward";

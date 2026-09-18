@@ -4,8 +4,8 @@
 
 #pragma once
 
+#include "draw_object_infos_infos.hh"
 #include "infos/eevee_common_infos.hh"
-#include "infos/eevee_geom_infos.hh"
 
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
@@ -89,6 +89,8 @@ struct ShadingData {
   /* Global thickness set after nodetree_thickness evaluation. Otherwise set to 0.0f. */
   Thickness thickness;
 
+  uint resource_id_raw;
+
   /* Sampled closure parameters. */
   Reservoir<ClosureUndetermined> closure_bins[CLOSURE_BIN_COUNT];
 
@@ -147,22 +149,20 @@ struct KernelGlobals {
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
 
-  uint resource_id_get(const ShadingData & /*sd*/)
+  uint resource_id_get(const ShadingData &sd)
   {
     [[resource_table]] const eevee::PipelineConstants &pipeline = pipe;
-    auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
-    draw::ID id{interp_flat.resource_id_raw};
+    draw::ID id{sd.resource_id_raw};
     if (pipeline.is_shadow_pipe) {
       return id.resource_id<64>();
     }
     return id.resource_id<1>();
   }
 
-  uint view_id_get(const ShadingData & /*sd*/)
+  uint view_id_get(const ShadingData &sd)
   {
     [[resource_table]] const eevee::PipelineConstants &pipeline = pipe;
-    auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
-    draw::ID id{interp_flat.resource_id_raw};
+    draw::ID id{sd.resource_id_raw};
     if (pipeline.is_shadow_pipe) {
       return id.view_id<64>();
     }
@@ -852,6 +852,7 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals &kg,
                             float3 P,
                             float3 N)
 {
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
   const ViewMatrices view = kg.view_matrices_get(sd);
 
   Coordinates coords = {};
@@ -862,39 +863,40 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals &kg,
     coords.screen.xy = float2(0.5f);
   }
   else {
-#ifdef MAT_GEOM_WORLD
-    coords.camera = view.normal_world_to_view(P);
-    coords.screen.xy = view.point_view_to_screen(interp.P).xy;
-    coords.screen.xy = coords.screen.xy * uni.uniform_buf.camera.uv_scale +
-                       uni.uniform_buf.camera.uv_bias;
-#else
     [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
-    const CameraData cam = uni.uniform_buf.camera;
-    if (is_panoramic(cam.type)) {
-      /* Panoramic camera render through per-face sub-views.
-       * Can't use `view` here because that's only one sub-view, not the camera. */
-      coords.camera = transform_point(cam.viewmat, P);
-      float3 dir = P - cam.viewinv[3].xyz;
-      coords.screen.xy = fract(eevee::camera::uv_from_world(cam, dir) + cam.uv_bias);
+    if (pipe.is_world) [[static_branch]] {
+      coords.camera = view.normal_world_to_view(P);
+      coords.screen.xy = view.point_world_to_screen(P + view.position()).xy;
+      coords.screen.xy = coords.screen.xy * uni.uniform_buf.camera.uv_scale +
+                         uni.uniform_buf.camera.uv_bias;
     }
     else {
-      const ViewMatrices view = kg.view_matrices_get(sd);
-      coords.camera = view.point_world_to_view(P);
-      /* TODO(fclem): Actual camera transform. */
-      coords.screen.xy = view.point_world_to_screen(P).xy;
-      coords.screen.xy = coords.screen.xy * cam.uv_scale + cam.uv_bias;
+      const CameraData cam = uni.uniform_buf.camera;
+      if (is_panoramic(cam.type)) {
+        /* Panoramic camera render through per-face sub-views.
+         * Can't use `view` here because that's only one sub-view, not the camera. */
+        coords.camera = transform_point(cam.viewmat, P);
+        float3 dir = P - cam.viewinv[3].xyz;
+        coords.screen.xy = fract(eevee::camera::uv_from_world(cam, dir) + cam.uv_bias);
+      }
+      else {
+        const ViewMatrices view = kg.view_matrices_get(sd);
+        coords.camera = view.point_world_to_view(P);
+        coords.screen.xy = view.point_world_to_screen(P).xy;
+        coords.screen.xy = coords.screen.xy * cam.uv_scale + cam.uv_bias;
+      }
     }
-#endif
   }
   coords.camera.z = -coords.camera.z;
 
-#ifdef MAT_GEOM_WORLD
-  coords.reflect = N;
-  coords.incoming = -P;
-#else
-  coords.reflect = -reflect(view.world_incident_vector(P), N);
-  coords.incoming = view.world_incident_vector(P);
-#endif
+  if (pipe.is_world) [[static_branch]] {
+    coords.reflect = N;
+    coords.incoming = -P;
+  }
+  else {
+    coords.reflect = -reflect(view.world_incident_vector(P), N);
+    coords.incoming = view.world_incident_vector(P);
+  }
   return coords;
 }
 
@@ -976,18 +978,6 @@ float4 attr_load_color_post(float4 attr)
  *
  * \{ */
 
-float3 gsplat_amend_transmittance(float3 transmittance)
-{
-#ifdef MAT_GEOM_GSPLAT
-  float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
-                                                gsplat_interp_flat.opacity);
-  alpha = saturate(alpha * (256.0f / 255.0f));
-  return float3(1.0f) - alpha * saturate(float3(1.0f) - transmittance);
-#else
-  return transmittance;
-#endif
-}
-
 #if defined(MAT_GEOM_GSPLAT) && !defined(MAT_VOLUME)
 #  define GSPLAT_ATTRIBUTES_LOAD_POST
 #endif
@@ -1032,7 +1022,7 @@ float4 attr_load_uniform([[resource_table]] KernelGlobals &kg,
   return float4(0.0f);
 }
 
-float4 node_attribute_layer_impl([[resource_table]] KernelGlobals &kg, const uint attr_hash)
+float4 node_attribute_layer_impl([[resource_table]] KernelGlobals & /*kg*/, const uint attr_hash)
 {
   const auto &attrs_buf = buffer_get(draw_layer_attributes, drw_layer_attrs);
 
@@ -1229,7 +1219,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
 {
   [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
   if (pipe.use_lighting_nodes) [[static_branch]] {
-    [[resource_table]] const eevee::LightRenderData &lrd = kg.lrd;
+    [[resource_table]] [[maybe_unused]] const eevee::LightRenderData &lrd = kg.lrd;
     [[resource_table]] [[maybe_unused]] eevee::ShadowRenderData &srd = kg.srd;
     [[resource_table]] [[maybe_unused]] draw::Infos &infos = kg.infos;
     [[resource_table]] [[maybe_unused]] eevee::Uniform &uni = kg.uniforms;

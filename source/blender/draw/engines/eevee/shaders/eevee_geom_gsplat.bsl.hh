@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_gsplat_lib.bsl.hh"
@@ -20,15 +19,8 @@
 
 namespace eevee {
 
-struct GeomGSplat {
-  /* WORKAROUND: Until we get condition support for interfaces. */
-  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
-  [[legacy_info]] ShaderCreateInfo eevee_geom_gsplat_iface_info;
-};
-
 [[vertex]] [[clip_control]] void geom_gsplat(
     [[resource_table]] const PipelineConstants &pipe,
-    [[resource_table]] const GeomGSplat & /*srt*/,
     [[resource_table]] const draw::gsplat::ShapeResource &shape,
     [[resource_table]] const Uniform &uni,
     [[instance_index]] const int inst_index,
@@ -37,6 +29,16 @@ struct GeomGSplat {
     [[resource_table]] const draw::Infos &infos,
     [[resource_table]] const draw::Resource &res_id,
     [[resource_table, condition(is_shadow_pipe)]] GeomShadow &shadow,
+    [[resource_table, condition(use_clip_plane)]] const ClipPlane &clip_srt,
+    [[resource_table, condition(use_velocity)]] const GeometryVelocity &geo_vel,
+    [[out]] VertOutCommon &interp,
+    [[out]] VertOutResID &interp_flat,
+    [[out]] VertOutGSplat &gsplat_interp,
+    [[out]] VertOutGSplatFlat &gsplat_interp_flat,
+    [[out, condition(is_shadow_pipe)]] VertOutShadow &shadow_iface,
+    [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
+    [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
+    [[out, condition(use_velocity)]] VertOutVelocity &motion,
     [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
     [[vertex_id]] const int vert_id,
@@ -56,18 +58,12 @@ struct GeomGSplat {
   const ObjectMatrices obj = models.get(resource_id);
   const ObjectInfos ob_infos = infos.get(resource_id);
 
-  auto &interp = interface_get(eevee_geom_iface_info, interp);
-  auto &gsplat_interp = interface_get(eevee_geom_gsplat_iface_info, gsplat_interp);
-  auto &gsplat_interp_flat = interface_get(eevee_geom_gsplat_iface_info, gsplat_interp_flat);
-
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
-
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
   }
 
-  init_interface(id.raw_id);
+  init_interface(interp, interp_flat, id.raw_id);
 
   /* TODO(not_mark): Disabled compute pass for now, due to incompatibility with instancing. */
   /* draw::gsplat::SplatShape gs;
@@ -104,11 +100,6 @@ struct GeomGSplat {
   }
 
   if (pipe.use_velocity) [[static_branch]] {
-    /* clang-format off */ /* Multi-line define messes up line index. */
-    [[resource_table]] const GeometryVelocity &geo_vel =
-    resource_table_get(eevee::GeometryVelocity);
-    /* clang-format on */
-    auto &motion = interface_get(eevee_velocity_iface_info, motion);
     float3 lP = gs.mean;
     float3 prv, nxt;
     geo_vel.local_position_deltas(lP, int(gs.id), prv, nxt, resource_id);
@@ -123,21 +114,18 @@ struct GeomGSplat {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = gs.mean * ob_infos.orco_mul + ob_infos.orco_add;
 
-  [[maybe_unused]] ShadingData sd = init_globals(uni, view, true, float4(0));
+  [[maybe_unused]] ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
+
   attrib_load(PointCloudPoint{gs.mean, int(gs.id), lP_orco});
 
   /* NOTE(not_mark) What does displacement even mean on a gsplat :S */
   /* interp.P += nodetree_displacement(kg, sd); */
 
   if (pipe.use_clip_plane) [[static_branch]] {
-    auto &clip_interp = interface_get(eevee_clip_plane, clip_interp);
-    const auto &clip_plane = buffer_get(eevee_clip_plane, clip_plane);
-    clip_interp.clip_distance = dot(clip_plane.plane, float4(interp.P, 1.0f));
+    clip_interp.clip_distance = dot(clip_srt.clip_plane.plane, float4(interp.P, 1.0f));
   }
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
-
     float3 vs_P = view.point_world_to_view(interp.P);
     ShadowRenderView view = shadow.render_view_buf[view_id];
     shadow_clip.position = shadow_position_vector_get(vs_P, view);
