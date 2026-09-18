@@ -31,7 +31,9 @@ BLOCKLIST_ALL = [
     "shadow_resolution_scale.blend",
     "shader_to_rgb_transparent.blend",
     "subsurface_shader_to_rgb.blend",
-    "lightprobe_planar.blend"
+    "lightprobe_planar.blend",
+    # Temp EEVEE test
+    "vector_math_self_divide.blend",
 ]
 
 # Blocklist for device + build configuration that does not support OSL at all.

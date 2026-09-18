@@ -116,7 +116,9 @@ def main():
     parser = create_argparse()
     args = parser.parse_args()
 
-    blocklist = ["raycast_hit.blend", "raycast_normal.blend", "raycast_position.blend", "raycast_bump.blend"]
+    blocklist = ["raycast_hit.blend", "raycast_normal.blend", "raycast_position.blend", "raycast_bump.blend",
+                 # Temp EEVEE test
+                 "vector_math_self_divide.blend"]
     if args.gpu_backend == "vulkan":
         blocklist += BLOCKLIST_VULKAN
 
