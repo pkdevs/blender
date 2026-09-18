@@ -568,6 +568,7 @@ set(GLSL_SRC
   intern/shaders/draw_fxaa_lib.glsl
   intern/shaders/draw_curves_interpolation_comp.glsl
   intern/shaders/draw_curves_length_intercept_comp.glsl
+  intern/shaders/draw_curves.bsl.hh
   intern/shaders/draw_curves_lib.glsl
   intern/shaders/draw_curves_topology_comp.glsl
   intern/shaders/draw_shape_lib.glsl
