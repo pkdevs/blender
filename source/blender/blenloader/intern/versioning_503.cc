@@ -242,6 +242,7 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
+    bool has_alphabet_sort_method = false;
     bool has_skip_alphabet_sort_method = false;
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
@@ -250,6 +251,9 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
             SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
             if (space_outliner->flag & SO_FLAG_UNUSED_4) {
               has_skip_alphabet_sort_method = true;
+            }
+            else {
+              has_alphabet_sort_method = true;
             }
           }
         }
@@ -285,7 +289,9 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
         for (SpaceLink &space : area.spacedata) {
           if (space.spacetype == SPACE_OUTLINER) {
             SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
-            if (has_skip_alphabet_sort_method && !(space_outliner->flag & SO_FLAG_UNUSED_4)) {
+            if ((has_alphabet_sort_method && has_skip_alphabet_sort_method) &&
+                !(space_outliner->flag & SO_FLAG_UNUSED_4))
+            {
               space_outliner->sort_method = SO_SORT_ALPHA;
             }
             else {
