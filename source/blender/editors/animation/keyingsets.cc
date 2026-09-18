@@ -276,7 +276,7 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
    * - add a new one if it doesn't exist
    * - only add keying set when this operation is run on top of an animatable property
    */
-  auto get_or_create_keyingset = [&](void) {
+  const auto get_or_create_keyingset = [&]() -> KeyingSet * {
     KeyingSet *keyingset = nullptr;
     Scene *scene = CTX_data_scene(C);
     if (scene->active_keyingset == 0) {
@@ -294,7 +294,7 @@ static wmOperatorStatus add_keyingset_button_exec(bContext *C, wmOperator *op)
       scene->active_keyingset = scene->keyingsets.count();
     }
     else if (scene->active_keyingset < 0) {
-      return static_cast<KeyingSet *>(nullptr);
+      return nullptr;
     }
     else {
       keyingset = static_cast<KeyingSet *>(
