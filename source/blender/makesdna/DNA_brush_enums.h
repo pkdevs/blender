@@ -382,7 +382,7 @@ enum eBrushFlags : uint32_t {
   BRUSH_UNUSED_7 = (1 << 25),
   BRUSH_PLANE_TRIM = (1 << 26),
   BRUSH_FRONTFACE = (1 << 27),
-  /* BRUSH_CUSTOM_ICON = (1 << 28), */
+  BRUSH_UNUSED_8 = (1 << 28),
   BRUSH_UNUSED_5 = (1 << 29),
   BRUSH_ABSOLUTE_JITTER = (1 << 30),
   BRUSH_UNUSED_6 = (1u << 31),

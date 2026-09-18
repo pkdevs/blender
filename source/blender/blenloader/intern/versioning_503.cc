@@ -209,7 +209,7 @@ static void clear_previously_deprecated_brush_flags(Brush &brush)
                                        GP_BRUSH_UNUSED_5 | GP_BRUSH_UNUSED_6 | GP_BRUSH_UNUSED_7);
   }
   brush.paint_flags &= ~BRUSH_PAINT_UNUSED_2;
-  brush.flag &= ~BRUSH_UNUSED_7;
+  brush.flag &= ~(BRUSH_UNUSED_7 | BRUSH_UNUSED_8);
 }
 
 void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
