@@ -1,1 +1,2 @@
 Referenced by issue #163253, Hair Slide tool seemingly inoperative in latest main
+Referenced by issue #164087, If disabled compositor effects contain both image nodes and render layer nodes, causes ERROR: Python context internal state bug. this should not happen! when updating image datablock filepaths from frame change handler.
