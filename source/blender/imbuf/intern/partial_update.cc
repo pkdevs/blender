@@ -409,7 +409,7 @@ void IMB_partial_update_mark_region(ImBuf *ibuf, const rcti &region)
 
 void IMB_partial_update_mark_full(ImBuf *ibuf)
 {
-  ibuf->full_update_changeset = IMB_partial_update_changeset_id_next();
+  ibuf->full_update_changeset_id = IMB_partial_update_changeset_id_next();
 
   if (!imb_track_updates(ibuf)) {
     return;

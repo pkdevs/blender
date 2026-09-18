@@ -237,8 +237,10 @@ struct ImBuf {
   imbuf::partial_update::Tracker *partial_update = nullptr;
   Mutex partial_update_mutex;
 
-  /** Changeset ID of the last full update. */
-  std::atomic<int64_t> full_update_changeset = -1;
+  /** Unique changeset ID of the last full update, to track when the undo
+   * system needs to assume the whole image buffer has changed and no partial
+   * undo is possible. */
+  std::atomic<imbuf::ChangesetID> full_update_changeset_id = -1;
 
   /** Resolution in pixels per meter. Multiply by `0.0254` for DPI. */
   double ppm[2] = {0.0, 0.0};
