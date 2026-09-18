@@ -85,7 +85,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
   }
 
   { /* Length */
-    BKE_fcurve_rnapath_set(*fcurve, "location");
+    fcurve->rna_path_set("location");
     const auto test_unit_scalar = [&](int unit_system,
                                       int unit_idx,
                                       float expected_scalar,
@@ -123,7 +123,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
   }
 
   { /* Mass */
-    BKE_fcurve_rnapath_set(*fcurve, "[\"mass\"]");
+    fcurve->rna_path_set("[\"mass\"]");
     const auto test_unit_scalar = [&](int unit_system,
                                       int unit_idx,
                                       float expected_scalar,
@@ -161,7 +161,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
   }
 
   { /* Time */
-    BKE_fcurve_rnapath_set(*fcurve, "[\"time\"]");
+    fcurve->rna_path_set("[\"time\"]");
     const auto test_unit_scalar = [&](int unit_idx,
                                       float expected_scalar,
                                       float expected_restore_scalar) {
