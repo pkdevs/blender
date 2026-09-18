@@ -332,7 +332,7 @@ static std::optional<bool> treesort_child_not_in_collection(const tTreeSort &x1,
 
 static bool treesort_alpha(const tTreeSort &x1, const tTreeSort &x2)
 {
-  int comp = BLI_strcasecmp_natural(x1.name, x2.name);
+  const int comp = BLI_strcasecmp_natural(x1.name, x2.name);
 
   return comp < 0;
 }
@@ -341,19 +341,14 @@ static bool treesort_alpha_ob(const tTreeSort &x1, const tTreeSort &x2)
 {
   const bool a_is_ob = (x1.idcode == ID_OB);
   const bool b_is_ob = (x2.idcode == ID_OB);
-  if (a_is_ob != b_is_ob) {
-    return !a_is_ob;
+
+  if (a_is_ob && b_is_ob) {
+    if (std::optional<bool> comp = treesort_child_not_in_collection(x1, x2)) {
+      return *comp;
+    }
   }
 
-  if (!a_is_ob) {
-    return false;
-  }
-
-  if (std::optional<bool> comp = treesort_child_not_in_collection(x1, x2)) {
-    return *comp;
-  }
-
-  return BLI_strcasecmp_natural(x1.name, x2.name) < 0;
+  return outliner_treesort_tiebreak(a_is_ob, x1.name, b_is_ob, x2.name);
 }
 
 struct OutlinerSortMaps {

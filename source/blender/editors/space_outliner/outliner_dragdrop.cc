@@ -1203,8 +1203,10 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  if (outliner_is_collection_dragged_into_itself(te, id)) {
-    return false;
+  for (const wmDragID &dragged : drag->ids) {
+    if (outliner_is_collection_dragged_into_itself(te, dragged.id)) {
+      return false;
+    }
   }
 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -1217,8 +1219,15 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  /* If dragging an object and custom sort is off, only allow dropping INTO the collection.
-   * If dragging a collection, block dropping it onto itself. */
+  /* Block dropping any dragged collection onto/into itself (checked across the whole drag,
+   * since a mixed object/collection drag can have a dragged collection anywhere in the list). */
+  for (const wmDragID &dragged : drag->ids) {
+    if (GS(dragged.id->name) == ID_GR && dragged.id == &to_collection->id) {
+      return false;
+    }
+  }
+
+  /* If dragging an object and custom sort is off, only allow dropping INTO the collection. */
   if (GS(id->name) == ID_OB) {
     if (space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
@@ -1231,11 +1240,6 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
 
     if (te == collection_te && space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
-    }
-  }
-  else if (GS(id->name) == ID_GR) {
-    if (id == &to_collection->id) {
-      return false;
     }
   }
 
@@ -1367,7 +1371,6 @@ static std::string collection_drop_tooltip(bContext *C,
           return tooltip_between;
         }
         return tooltip_before;
-
       case TE_INSERT_AFTER:
         if (te->next && (target_is_object_row ? is_object_element(te->next) :
                                                 outliner_is_collection_tree_element(te->next)))
@@ -1466,11 +1469,10 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
 
   Vector<std::variant<Object *, Collection *>> items;
   Vector<std::variant<Object *, Collection *>> dragged_items;
-  bool is_custom_sort_move = false;
+  const bool is_custom_sort_move = space_outliner->sort_method == SO_SORT_CUSTOM;
 
   /* Use custom sort for both objects and collections. */
-  if (space_outliner->sort_method == SO_SORT_CUSTOM) {
-    is_custom_sort_move = true;
+  if (is_custom_sort_move) {
     if (is_parented_object) {
       for (TreeElement &te : parent_te->subtree) {
         if (te.idcode == ID_OB) {
@@ -1488,6 +1490,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       }
     }
     auto get_sort_index = [&](const std::variant<Object *, Collection *> &item) -> int {
+      int sort_idx = -1;
       if (std::holds_alternative<Object *>(item)) {
         Object *ob = std::get<Object *>(item);
         CollectionObject *cob = BKE_collection_object_find_in(*data.to, *ob);
@@ -1497,26 +1500,41 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
             cob = BKE_collection_object_find_in(*other_col, *ob);
           }
         }
-        return cob ? (is_parented_object ? cob->parented_sort_index : cob->sort_index) : 0;
+        if (cob) {
+          sort_idx = is_parented_object ? cob->parented_sort_index : cob->sort_index;
+        }
       }
       else {
         CollectionChild *child = BKE_collection_child_find(data.to, std::get<Collection *>(item));
-        return child ? child->sort_index : 0;
+        if (child) {
+          sort_idx = child->sort_index;
+        }
       }
+      return (sort_idx >= 0) ? sort_idx : INT_MAX;
     };
-    std::ranges::stable_sort(items,
-                             [&](const std::variant<Object *, Collection *> &a,
-                                 const std::variant<Object *, Collection *> &b) {
-                               return get_sort_index(a) < get_sort_index(b);
-                             });
+    auto items_sort = [&](const std::variant<Object *, Collection *> &a,
+                          const std::variant<Object *, Collection *> &b) {
+      const int a_idx = get_sort_index(a);
+      const int b_idx = get_sort_index(b);
+      if (a_idx != b_idx) {
+        return a_idx < b_idx;
+      }
+      const bool a_is_ob = std::holds_alternative<Object *>(a);
+      const bool b_is_ob = std::holds_alternative<Object *>(b);
+      return outliner_treesort_tiebreak(a_is_ob,
+                                        a_is_ob ? std::get<Object *>(a)->id.name + 2 : nullptr,
+                                        b_is_ob,
+                                        b_is_ob ? std::get<Object *>(b)->id.name + 2 : nullptr);
+    };
+    std::ranges::stable_sort(items, items_sort);
   }
 
-  if (relative_after) {
+  if (relative_after && !is_custom_sort_move) {
     BLI_listbase_reverse(&drag->ids);
   }
 
   int insert_index = items.size();
-  if (is_custom_sort_move) {
+  if (space_outliner->sort_method == SO_SORT_CUSTOM) {
     auto is_relative = [&](const std::variant<Object *, Collection *> &item) {
       if (is_object_element(data.te)) {
         return std::holds_alternative<Object *>(item) &&
@@ -1668,6 +1686,31 @@ void OUTLINER_OT_collection_drop(wmOperatorType *ot)
 
 #define OUTLINER_DRAG_SCOLL_OUTSIDE_PAD 7 /* In UI units */
 
+/* Gathers selected objects and collections together in tree order for a
+ * custom-sort drag where the two can be reordered relative to each other. A selected collection
+ * drags its whole subtree along, so anything selected underneath it is not also collected as a
+ * separate item. */
+static TreeTraversalAction outliner_collect_selected_objects_and_collections(TreeElement *te,
+                                                                             void *customdata)
+{
+  IDsSelectedData *data = static_cast<IDsSelectedData *>(customdata);
+  TreeStoreElem *tselem = TREESTORE(te);
+
+  if (outliner_is_collection_tree_element(te)) {
+    BLI_addtail(&data->selected_array, BLI_genericNodeN(te));
+    return TRAVERSE_SKIP_CHILDS;
+  }
+
+  if ((tselem->type != TSE_SOME_ID) || (tselem->id == nullptr) || (tselem->id->id_type() != ID_OB))
+  {
+    return TRAVERSE_SKIP_CHILDS;
+  }
+
+  BLI_addtail(&data->selected_array, BLI_genericNodeN(te));
+
+  return TRAVERSE_CONTINUE;
+}
+
 static TreeElement *outliner_item_drag_element_find(SpaceOutliner *space_outliner,
                                                     ARegion *region,
                                                     const wmEvent *event)
@@ -1747,10 +1790,19 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
       tselem->flag |= TSE_SELECTED;
     }
 
-    /* Gather all selected elements. */
+    /* Gather all selected elements. In custom sort mode objects and collections can be
+     * reordered relative to each other, so drag both together, preserving their on-screen
+     * order. Otherwise only drag elements of the same type as the one under the mouse. */
     IDsSelectedData selected{};
-
-    if (GS(data.drag_id->name) == ID_OB) {
+    if (space_outliner->sort_method == SO_SORT_CUSTOM) {
+      outliner_tree_traverse(space_outliner,
+                             &space_outliner->runtime->tree,
+                             0,
+                             TSE_SELECTED,
+                             outliner_collect_selected_objects_and_collections,
+                             &selected);
+    }
+    else if (GS(data.drag_id->name) == ID_OB) {
       outliner_tree_traverse(space_outliner,
                              &space_outliner->runtime->tree,
                              0,
@@ -1771,10 +1823,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
       TreeElement *te_selected = static_cast<TreeElement *>(link.data);
       ID *id;
 
-      if (GS(data.drag_id->name) == ID_OB) {
-        id = TREESTORE(te_selected)->id;
-      }
-      else {
+      if (outliner_is_collection_tree_element(te_selected)) {
         /* Keep collection hierarchies intact when dragging. */
         bool parent_selected = false;
         for (TreeElement *te_parent = te_selected->parent; te_parent;
@@ -1793,6 +1842,9 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
         }
 
         id = &outliner_collection_from_tree_element(te_selected)->id;
+      }
+      else {
+        id = TREESTORE(te_selected)->id;
       }
 
       /* Find parent collection. */
