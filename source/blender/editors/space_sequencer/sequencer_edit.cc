@@ -2785,13 +2785,13 @@ static int ripple_offset_get(const Scene *scene,
   return offset;
 }
 
-static void ripple_delete_range(Scene *scene,
-                                ListBaseT<Strip> *seqbasep,
-                                const ListBaseT<SeqTimelineChannel> *channels,
-                                const rcti &range,
-                                const bool all_channels,
-                                const bool non_destructive,
-                                const bool ripple_markers)
+static int ripple_delete_range(Scene *scene,
+                               ListBaseT<Strip> *seqbasep,
+                               const ListBaseT<SeqTimelineChannel> *channels,
+                               const rcti &range,
+                               const bool all_channels,
+                               const bool non_destructive,
+                               const bool ripple_markers)
 {
   if (!non_destructive) {
     ripple_range_clear(scene, seqbasep, channels, range, all_channels);
@@ -2800,7 +2800,7 @@ static void ripple_delete_range(Scene *scene,
   Vector<Strip *> to_ripple;
   const int offset = ripple_offset_get(scene, seqbasep, channels, range, all_channels, to_ripple);
   if (offset == 0) {
-    return;
+    return 0;
   }
 
   for (Strip *strip : to_ripple) {
@@ -2815,6 +2815,8 @@ static void ripple_delete_range(Scene *scene,
       }
     }
   }
+
+  return offset;
 }
 
 static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op)
@@ -2918,6 +2920,7 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
   ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
   const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
+  const bool non_destructive = RNA_boolean_get(op->ptr, "non_destructive");
   const bool ripple_markers = RNA_boolean_get(op->ptr, "markers");
   const bool trim_left = seq::Side(RNA_enum_get(op->ptr, "side")) == seq::Side::Left;
   const int timeline_frame = scene->r.cfra;
@@ -2947,30 +2950,27 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
 
   seq::prefetch_stop(scene);
 
-  /* Step 1: Calculate amount we will ripple everything left by, and the frame we ripple from. */
-  int offset = 0;
-  int ripple_frame = timeline_frame;
-  rcti selection_bounds;
-  BLI_rcti_init_minmax(&selection_bounds);
+  /* Step 1: Find the range of the timeline that the trim empties out. */
+  rcti range;
+  BLI_rcti_init_minmax(&range);
   for (Strip *strip : to_trim) {
     const rcti strip_bounds = seq::strip_int_bounds_get(scene, strip);
-    BLI_rcti_union(&selection_bounds, &strip_bounds);
-    if (trim_left) {
-      offset = max_ii(offset, timeline_frame - strip->left_handle());
-    }
-    else {
-      offset = max_ii(offset, strip->right_handle(scene) - timeline_frame);
-      ripple_frame = max_ii(ripple_frame, strip->right_handle(scene));
-    }
+    BLI_rcti_union(&range, &strip_bounds);
+  }
+  if (trim_left) {
+    range.xmax = timeline_frame;
+  }
+  else {
+    range.xmin = timeline_frame;
   }
 
   /* Step 2: Trim strips. */
-  Vector<Strip *> strips_to_remove;
+  bool has_removed_strips = false;
   for (Strip *strip : to_trim) {
     const bool trimmed_away = trim_left ? strip->right_handle(scene) <= timeline_frame :
                                           strip->left_handle() >= timeline_frame;
     if (trimmed_away) {
-      strips_to_remove.append(strip);
+      has_removed_strips = true;
       seq::edit_flag_for_removal(scene, strip);
       continue;
     }
@@ -2982,65 +2982,18 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     }
     seq::relations_invalidate_cache(scene, strip);
   }
-  if (!strips_to_remove.is_empty()) {
-    for (Strip *strip : strips_to_remove) {
-      to_trim.remove(strip);
-    }
+  if (has_removed_strips) {
     seq::edit_remove_flagged_strips(scene, seqbasep);
     DEG_relations_tag_update(CTX_data_main(C));
     WM_event_add_notifier(C, NC_SCENE | ND_ANIMCHAN, scene);
   }
 
-  /* Step 3: Offset strips. */
-  Vector<Strip *> offset_strips;
-  Vector<Strip *> flush_strips;
-  for (Strip &strip : *seqbasep) {
-    if (seq::transform_is_locked(channels, &strip)) {
-      continue;
-    }
-    /* Strips trimmed on the right do not ripple, but the ones trimmed on the left do. */
-    if (!trim_left && to_trim.contains(&strip)) {
-      continue;
-    }
-    if (!seq::transform_should_ripple_strip(scene, selection_bounds, &strip, all_channels)) {
-      continue;
-    }
-    if (strip.left_handle() < ripple_frame) {
-      continue;
-    }
-    if (strip.left_handle() == ripple_frame) {
-      flush_strips.append(&strip);
-    }
-    seq::transform_translate_strip(scene, &strip, -offset);
-    seq::relations_invalidate_cache(scene, &strip);
-    offset_strips.append(&strip);
-  }
-
-  if (ripple_markers && !scene->toolsettings->lock_markers) {
-    for (TimeMarker &marker : scene->markers) {
-      if (marker.frame >= ripple_frame) {
-        marker.frame -= offset;
-      }
-    }
-  }
-
-  bool has_overlap = false;
-  for (Strip *strip : offset_strips) {
-    if (seq::transform_test_overlap(scene, seqbasep, strip)) {
-      has_overlap = true;
-      break;
-    }
-  }
-  if (has_overlap) {
-    seq::transform_handle_overlap(scene, seqbasep, offset_strips, ripple_markers);
-  }
+  /* Step 3: Close the gap left behind. */
+  const int offset = ripple_delete_range(
+      scene, seqbasep, channels, range, all_channels, non_destructive, ripple_markers);
 
   if (trim_left) {
-    int new_frame = timeline_frame - offset;
-    for (Strip *strip : flush_strips) {
-      new_frame = max_ii(new_frame, strip->left_handle());
-    }
-    scene->r.cfra = new_frame;
+    scene->r.cfra = timeline_frame - offset;
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
     WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
   }
