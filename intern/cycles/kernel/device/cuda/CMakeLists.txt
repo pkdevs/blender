@@ -122,9 +122,9 @@ function(cuda_get_toolkit_for_arch arch out_root_dir out_nvcc_executable out_ver
     # If there is no preferred information provided, fallback to the list of all
     # toolkits (depending on whether it is sm or compute architecture).
     if(arch MATCHES "^compute_")
-      set(_toolkits_to_test ${_preferred_toolkits_sm})
-    else()
       set(_toolkits_to_test ${_preferred_toolkits_compute})
+    else()
+      set(_toolkits_to_test ${_preferred_toolkits_sm})
     endif()
   endif()
 

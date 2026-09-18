@@ -131,7 +131,7 @@ void device_cuda_info(vector<DeviceInfo> &devices)
    * This is a bit of indirect logic, but there is no easy way to query the driver
    * version directly:
    * - Driver version >= 525 and < 580 support CUDA 12.x
-   * - Driver version >= 80 support CUDA 13.x */
+   * - Driver version >= 580 support CUDA 13.x */
   if (driver_cuda_version / 1000 < 13) {
     LOG_INFO << "Driver version 580 or above is required.";
     return;
