@@ -2655,21 +2655,59 @@ bool BKE_unit_is_adaptive(const UnitSettings &settings, int type)
   return is_unit_adaptive(type, units);
 }
 
-UnitConverterFn BKE_unit_converter_get(const void *usys_pt,
-                                       int index,
-                                       UnitConvertDirection direction)
+/**
+ * Expand a unit into the coefficients of the equivalent linear mapping:
+ * `(value + bias) * scalar == value * scalar + (bias * scalar)`, and its inverse
+ * `value / scalar - bias == value * (1 / scalar) + (-bias)`.
+ */
+static void unit_conversion_coefficients(const bUnitDef &unit,
+                                         UnitConvertDirection direction,
+                                         double *r_scale,
+                                         double *r_offset)
 {
-  const bUnitCollection *usys = static_cast<const bUnitCollection *>(usys_pt);
-  BLI_assert(uint(index) < uint(usys->length));
-  const bUnitDef *unit = &usys->units[index];
-  const double scalar = unit->scalar;
-  const double bias = unit->bias;
-
   if (direction == UnitConvertDirection::UNIT_TO_RAW) {
-    return [scalar, bias](const double value) { return (value + bias) * scalar; };
+    if (r_scale) {
+      *r_scale = unit.scalar;
+    }
+    if (r_offset) {
+      *r_offset = unit.bias * unit.scalar;
+    }
+    return;
   }
 
-  return [scalar, bias](const double value) { return value / scalar - bias; };
+  if (r_scale) {
+    *r_scale = 1.0 / unit.scalar;
+  }
+  if (r_offset) {
+    *r_offset = -unit.bias;
+  }
+}
+
+void BKE_unit_preferred_conversion_get(const UnitSettings &settings,
+                                       int unit_type,
+                                       UnitConvertDirection direction,
+                                       double *r_scale,
+                                       double *r_offset)
+{
+  const PreferredUnits units = preferred_units_from_UnitSettings(settings);
+  const bUnitCollection *usys = unit_get_system(units.system, unit_type);
+
+  if (is_valid_unit_collection(usys)) {
+    const bUnitDef *unit = get_preferred_display_unit_if_used(unit_type, units);
+    if (unit == nullptr) {
+      /* The preferred unit is adaptive, which picks a unit per value at display time. */
+      unit = unit_default(usys);
+    }
+    unit_conversion_coefficients(*unit, direction, r_scale, r_offset);
+    return;
+  }
+
+  if (r_scale) {
+    *r_scale = 1.0;
+  }
+  if (r_offset) {
+    *r_offset = 0.0;
+  }
 }
 
 }  // namespace blender

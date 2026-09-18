@@ -49,6 +49,8 @@
 
 #include "SEQ_time.hh"
 
+#include <utility>
+
 namespace blender {
 
 /* *************************************************** */
@@ -663,64 +665,29 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
 
   const PropertyUnit prop_unit = PropertyUnit(RNA_SUBTYPE_UNIT(RNA_property_subtype(prop)));
 
-  /* Get the scale factor for the selected unit.
-   * Fallback to the base unit when adaptive is selected. */
-  const auto user_unit_scaler_get = [&](const int unit_type, const int user_unit) -> double {
-    const void *usys;
-    int len;
-    BKE_unit_system_get(scene->unit.system, unit_type, &usys, &len);
-    if (usys == nullptr || len == 0) {
-      return 1.0;
-    }
-
-    const int preferred_unit = (user_unit == USER_UNIT_ADAPTIVE) ? BKE_unit_base_get(usys) :
-                                                                   user_unit;
-
-    const UnitConverterFn converter = BKE_unit_converter_get(
-        usys, preferred_unit, UnitConvertDirection::UNIT_TO_RAW);
-    /* Offset */
-    const double y0 = converter(0.0);
-    /* Linear + Offset */
-    const double y1 = converter(1.0);
-    return y1 - y0;
-  };
-
   double unit_scaler = 1.0;
   const int b_unit = RNA_SUBTYPE_UNIT_VALUE(prop_unit);
 
   switch (prop_unit) {
-    case PROP_UNIT_ROTATION: {
-      if (scene->unit.system_rotation == USER_UNIT_ROT_RADIANS) {
-        unit_scaler = 1.0;
-      }
-      else {
-        unit_scaler = DEG2RADF(1.0f);
-      }
+    /* Units not affected by the scene's unit scale. */
+    case PROP_UNIT_ROTATION:
+    case PROP_UNIT_TIME:
+      BKE_unit_preferred_conversion_get(
+          scene->unit, b_unit, UnitConvertDirection::UNIT_TO_RAW, &unit_scaler);
       break;
-    }
-    /* Units supported by BKE_unit_value_scale().
+    /* Units that BKE_unit_value_scale() also scales by the scene's unit scale.
      * Assumption: BKE_unit_value_scale() is linear and zero maps to zero for these
      * unit types, so the scaled value can be used as a scaler factor. */
-    case PROP_UNIT_LENGTH: {
-      unit_scaler = user_unit_scaler_get(b_unit, scene->unit.length_unit);
-      const double scene_scale = BKE_unit_value_scale(scene->unit, b_unit, 1.0);
-      if (scene_scale != 0.0) {
-        unit_scaler /= scene_scale;
-      }
-      break;
-    }
+    case PROP_UNIT_LENGTH:
     case PROP_UNIT_MASS: {
-      unit_scaler = user_unit_scaler_get(b_unit, scene->unit.mass_unit);
+      BKE_unit_preferred_conversion_get(
+          scene->unit, b_unit, UnitConvertDirection::UNIT_TO_RAW, &unit_scaler);
       const double scene_scale = BKE_unit_value_scale(scene->unit, b_unit, 1.0);
       if (scene_scale != 0.0) {
         unit_scaler /= scene_scale;
       }
       break;
     }
-    /* Units not supported by BKE_unit_value_scale(). */
-    case PROP_UNIT_TIME:
-      unit_scaler = user_unit_scaler_get(b_unit, scene->unit.time_unit);
-      break;
     default:
       /* Other units are not scaled. */
       break;

@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "BLI_function_ref.hh"
 #include "BLI_sys_types.h"
 
 namespace blender {
@@ -149,10 +148,17 @@ enum class UnitConvertDirection {
   UNIT_TO_RAW = 1,
 };
 
-using UnitConverterFn = FunctionRef<double(double)>;
-UnitConverterFn BKE_unit_converter_get(const void *usys_pt,
-                                       int index,
-                                       UnitConvertDirection direction);
+/**
+ * Get the linear coefficients that convert between raw values and the unit `settings` prefer for
+ * `unit_type`, i.e. `converted = raw * (*r_scale) + (*r_offset)`. Either output may be null.
+ * When the preferred unit is adaptive, the unit system's base unit is used
+ */
+void BKE_unit_preferred_conversion_get(const UnitSettings &settings,
+                                       int unit_type,
+                                       UnitConvertDirection direction,
+                                       double *r_scale = nullptr,
+                                       double *r_offset = nullptr);
+
 /** Aligned with #PropertyUnit and `bpyunits_ucategories_items` in `bpy_utils_units.cc`. */
 enum {
   B_UNIT_NONE = 0,
