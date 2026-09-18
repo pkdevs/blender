@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_customdata.hh"
 
@@ -123,7 +123,7 @@ static void bmw_VertShellWalker_begin(BMWalker *walker, void *data)
   BMEdge *e;
   BMVert *v;
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -252,7 +252,7 @@ static void bmw_LoopShellWalker_begin(BMWalker *walker, void *data)
   BMIter iter;
   BMHeader *h = static_cast<BMHeader *>(data);
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -416,7 +416,7 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 {
   BMHeader *h = static_cast<BMHeader *>(data);
 
-  if (UNLIKELY(h == nullptr)) {
+  if (h == nullptr) [[unlikely]] {
     return;
   }
 
@@ -727,6 +727,8 @@ static void *bmw_IslandboundWalker_step(BMWalker *walker)
 
   return owalk.curloop;
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Island Walker
@@ -1473,7 +1475,9 @@ static void bmw_EdgeringWalker_begin(BMWalker *walker, void *data)
 
   /* Add both sides so both directions are walked. */
   if (lwalk->l->radial_next != lwalk->l) {
-    if (delimit_ngon ? (lwalk->l->f->len != 4) : (lwalk->l->f->len % 2 != 0)) {
+    /* When `no_calc` is true, the walker hit a delimiting edge and can't step further,
+     * so add the alt walker to traverse the ring in the opposite direction. See #157860. */
+    if (lwalk->no_calc || (delimit_ngon ? (lwalk->l->f->len != 4) : (lwalk->l->f->len % 2 != 0))) {
       BMwEdgeringWalker *lwalk_alt = static_cast<BMwEdgeringWalker *>(BMW_state_add(walker));
       lwalk_alt->l = lwalk->l->radial_next;
       lwalk_alt->wireedge = nullptr;
@@ -1518,7 +1522,7 @@ static void *bmw_EdgeringWalker_step(BMWalker *walker)
     /* Walker won't traverse to a non-manifold edge, but may
      * be started on one, and should not traverse *away* from
      * a non-manifold edge (non-manifold edges are never in an
-     * edge ring with manifold edges. */
+     * edge ring with manifold edges). */
     return e;
   }
 
@@ -1842,7 +1846,7 @@ static void *bmw_NonManifoldedgeWalker_step(BMWalker *walker)
 
     /* If `lwalk.lastv` can't be walked along, start walking in the opposite direction
      * on the initial edge, do this at most one time during this walk operation. */
-    if (UNLIKELY(pass == 1)) {
+    if (pass == 1) [[unlikely]] {
       e = lwalk->start;
       v = lwalk->startv;
     }
@@ -1881,6 +1885,10 @@ static void *bmw_NonManifoldedgeWalker_step(BMWalker *walker)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Walker Type Definitions
+ * \{ */
 
 static const BMWalker bmw_VertShellWalker_Type = {
     /*begin_htype*/ BM_VERT | BM_EDGE,

@@ -9,6 +9,11 @@
 #  include <cstring>
 #  include <iomanip>
 
+#  ifdef WITH_OSL
+#    include <OSL/oslversion.h>
+#    include <OpenImageIO/oiioversion.h>
+#  endif
+
 #  include "device/cuda/device_impl.h"
 
 #  include "util/debug.h"
@@ -39,7 +44,7 @@ bool CUDADevice::have_precompiled_kernels()
   return path_exists(cubins_path);
 }
 
-BVHLayoutMask CUDADevice::get_bvh_layout_mask(uint /*kernel_features*/) const
+BVHLayoutMask CUDADevice::get_bvh_layout_mask(const uint64_t /*kernel_features*/) const
 {
   return BVH_LAYOUT_BVH2;
 }
@@ -99,6 +104,9 @@ CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler,
   cuda_assert(cuDeviceGetAttribute(
       &pitch_alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
 
+  cuda_assert(cuDeviceGetAttribute(
+      &max_shared_mem_bytes, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK, cuDevice));
+
   if (can_map_host) {
     init_host_memory();
   }
@@ -140,7 +148,7 @@ CUDADevice::~CUDADevice()
   cuda_assert(cuDevicePrimaryCtxRelease(cuDevice));
 }
 
-bool CUDADevice::support_device(const uint /*kernel_features*/)
+bool CUDADevice::support_device(const uint64_t /*kernel_features*/)
 {
   int major, minor;
   cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevId);
@@ -213,12 +221,13 @@ bool CUDADevice::use_adaptive_compilation()
 /* Common NVCC flags which stays the same regardless of shading model,
  * kernel sources md5 and only depends on compiler or compilation settings.
  */
-string CUDADevice::compile_kernel_get_common_cflags(const uint kernel_features)
+string CUDADevice::compile_kernel_get_common_cflags(const uint64_t kernel_features)
 {
   const int machine = system_cpu_bits();
   const string source_path = path_get("source");
   const string include_path = source_path;
   string cflags = string_printf(
+      "-std=c++17 "
       "-m%d "
       "--ptxas-options=\"-v\" "
       "--use_fast_math "
@@ -236,6 +245,11 @@ string CUDADevice::compile_kernel_get_common_cflags(const uint kernel_features)
 
 #  ifdef WITH_NANOVDB
   cflags += " -DWITH_NANOVDB";
+#  endif
+
+#  ifdef WITH_OSL
+  cflags += string_printf(
+      " -DOSL_LIBRARY_VERSION_CODE=%d -DOIIO_VERSION=%d", OSL_LIBRARY_VERSION_CODE, OIIO_VERSION);
 #  endif
 
 #  ifdef WITH_CYCLES_DEBUG
@@ -262,11 +276,18 @@ string CUDADevice::compile_kernel(const string &common_cflags, const char *name,
   }
   /* Attempt to use kernel provided with Blender. */
   else if (!use_adaptive_compilation()) {
-    const string cubin = path_get(string_printf("lib/%s_sm_%d%d.cubin.zst", name, major, minor));
-    LOG_INFO << "Testing for pre-compiled kernel " << cubin << ".";
-    if (path_exists(cubin)) {
-      LOG_INFO << "Using precompiled kernel.";
-      return cubin;
+    /* Binaries within a major version are compatible, so find the closest one. */
+    int cubin_minor = minor;
+    while (cubin_minor >= 0) {
+      const string cubin = path_get(
+          string_printf("lib/%s_sm_%d%d.cubin.zst", name, major, cubin_minor));
+      LOG_INFO << "Testing for pre-compiled kernel " << cubin << ".";
+      if (path_exists(cubin)) {
+        LOG_INFO << "Using precompiled kernel.";
+        return cubin;
+      }
+
+      cubin_minor--;
     }
 
     /* The driver can JIT-compile PTX generated for older generations, so find the closest one. */
@@ -402,7 +423,7 @@ string CUDADevice::compile_kernel(const string &common_cflags, const char *name,
   return cubin;
 }
 
-bool CUDADevice::load_kernels(const uint kernel_features)
+bool CUDADevice::load_kernels(const uint64_t kernel_features)
 {
   /* TODO(sergey): Support kernels re-load for CUDA devices adaptive compile.
    *
@@ -460,7 +481,7 @@ bool CUDADevice::load_kernels(const uint kernel_features)
   return (result == CUDA_SUCCESS);
 }
 
-void CUDADevice::reserve_local_memory(const uint kernel_features)
+void CUDADevice::reserve_local_memory(const uint64_t kernel_features)
 {
   /* Together with CU_CTX_LMEM_RESIZE_TO_MAX, this reserves local memory
    * needed for kernel launches, so that we can reliably figure out when
@@ -476,8 +497,6 @@ void CUDADevice::reserve_local_memory(const uint kernel_features)
     /* Use the biggest kernel for estimation. */
     const DeviceKernel test_kernel = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) ?
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE :
-                                     (kernel_features & KERNEL_FEATURE_MNEE) ?
-                                         DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE :
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE;
 
     /* Launch kernel, using just 1 block appears sufficient to reserve memory for all
@@ -682,6 +701,12 @@ void CUDADevice::const_copy_to(const char *name, void *host, const size_t size)
   cuda_assert(cuModuleGetGlobal(&mem, &bytes, cuModule, "kernel_params"));
   assert(bytes == sizeof(KernelParamsCUDA));
 
+  if (strcmp(name, "data") == 0) {
+    /* We need this value for shared memory size when launching integrator_sort_bucket_pass
+     * and integrator_sort_write_pass kernels. */
+    scene_max_shaders_ = static_cast<const KernelData *>(host)->max_shaders;
+  }
+
   /* Update data storage pointers in launch parameters. */
 #  define KERNEL_DATA_ARRAY(data_type, data_name) \
     if (strcmp(name, #data_name) == 0) { \
@@ -784,7 +809,7 @@ void CUDADevice::image_alloc(device_image &mem)
    *
    * Cycles expects to read all image data as normalized float values in
    * kernel/device/gpu/image.h. But storing all data as floats would be very inefficient due to the
-   * huge size of float image. So in the code below, we define different texture types including
+   * huge size of float images. So in the code below, we define different texture types including
    * integer types, with the aim of using CUDA's default promotion behavior of integer data to
    * floating point data in the range [0, 1], as noted in the CUDA documentation on
    * cuTexObjectCreate API Call.

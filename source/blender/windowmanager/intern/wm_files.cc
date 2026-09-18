@@ -22,9 +22,9 @@
 /* Minimal requirements for SHGetSpecialFolderPath on MINGW MSVC has this defined already. */
 #    define _WIN32_IE 0x0400
 #  endif
-/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.h`
+/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.hh`
  * because 'near' is disabled through `BLI_windstuff.h`. */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <shlobj.h>
 #endif
 
@@ -33,26 +33,27 @@
 #include "MEM_CacheLimiterC-Api.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_time.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_time.hh"
 #include "BLI_memory_cache.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timer.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timer.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "BLO_core_blend_header.hh"
 #include "BLO_core_file_reader.hh"
 #include "BLO_readfile.hh"
 
+#include "BLT_date_string.hh"
 #include "BLT_lang.hh"
 #include "BLT_translation.hh"
 
@@ -183,7 +184,7 @@ static CLG_LogRef LOG = {"blend"};
 
 void WM_file_tag_modified()
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
   if (wm->file_saved) {
     wm->file_saved = 0;
     /* Notifier that data changed, for save-over warning or header. */
@@ -214,13 +215,14 @@ bool wm_file_or_session_data_has_unsaved_changes(const Main *bmain, const wmWind
 /**
  * Clear several WM/UI runtime data that would make later complex WM handling impossible.
  *
- * Return data should be cleared by #wm_file_read_setup_wm_finalize. */
+ * Return data should be cleared by #wm_file_read_setup_wm_finalize.
+ */
 static BlendFileReadWMSetupData *wm_file_read_setup_wm_init(bContext *C,
                                                             Main *bmain,
                                                             const bool is_read_homefile)
 {
   BLI_assert(BLI_listbase_count_at_most(&bmain->wm, 2) <= 1);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   BlendFileReadWMSetupData *wm_setup_data = MEM_new_zeroed<BlendFileReadWMSetupData>(__func__);
   wm_setup_data->is_read_homefile = is_read_homefile;
   /* This info is not always known yet when this function is called. */
@@ -390,13 +392,13 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
   wm->runtime->defaultconf = old_wm->runtime->defaultconf;
   wm->runtime->userconf = old_wm->runtime->userconf;
 
-  BLI_listbase_clear(&old_wm->runtime->keyconfigs);
+  old_wm->runtime->keyconfigs.clear_no_delete();
   old_wm->runtime->addonconf = nullptr;
   old_wm->runtime->defaultconf = nullptr;
   old_wm->runtime->userconf = nullptr;
 
   /* Ensure new keymaps are made, and space types are set. */
-  wm->init_flag = 0;
+  wm->init_flag = eWM_InitFlag{};
   wm->runtime->winactive = nullptr;
 
   /* Clearing drawable of old WM before deleting any context to avoid clearing the wrong wm. */
@@ -414,10 +416,8 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
   }
   /* Ensure that at least one window is kept open so we don't lose the context, see #42303. */
   if (!has_match) {
-    wm_file_read_setup_wm_substitute_old_window(old_wm,
-                                                wm,
-                                                static_cast<wmWindow *>(old_wm->windows.first),
-                                                static_cast<wmWindow *>(wm->windows.first));
+    wm_file_read_setup_wm_substitute_old_window(
+        old_wm, wm, old_wm->windows.first(), wm->windows.first());
   }
 
   wm_setup_data->old_wm = nullptr;
@@ -442,7 +442,7 @@ static void wm_file_read_setup_wm_finalize(bContext *C,
 {
   BLI_assert(BLI_listbase_count_at_most(&bmain->wm, 2) <= 1);
   BLI_assert(wm_setup_data != nullptr);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
 
   /* If reading factory startup file, and there was no previous WM, clear the size of the windows
    * in newly read WM so that they get resized to occupy the whole available space on current
@@ -558,7 +558,6 @@ static void wm_init_userdef(Main *bmain)
   BLO_sanitize_experimental_features_userpref_blend(&U);
 
   wm_gpu_backend_override_from_userdef();
-  GPU_backend_type_selection_detect();
 }
 
 /* Return codes. */
@@ -617,11 +616,9 @@ void WM_file_autoexec_init(const char *filepath)
   if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
     return;
   }
-
   if (G.f & G_FLAG_SCRIPT_AUTOEXEC) {
-    char dirpath[FILE_MAX];
-    BLI_path_split_dir_part(filepath, dirpath, sizeof(dirpath));
-    if (BKE_autoexec_match(dirpath)) {
+    /* Recovering a session that was never saved has no path to check. */
+    if ((filepath[0] != '\0') && BKE_autoexec_match(filepath, false, true)) {
       G.f &= ~G_FLAG_SCRIPT_AUTOEXEC;
     }
   }
@@ -629,7 +626,7 @@ void WM_file_autoexec_init(const char *filepath)
 
 void wm_file_read_report(Main *bmain, wmWindow *win)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   ReportList *reports = &wm->runtime->reports;
   bool found = false;
   for (Scene &scene : bmain->scenes) {
@@ -710,7 +707,7 @@ static void wm_file_read_post(bContext *C,
       /* Remove windows which failed to be added via #WM_check. */
       wm_window_ghostwindows_remove_invalid(C, wm);
     }
-    CTX_wm_window_set(C, static_cast<wmWindow *>(wm->windows.first));
+    CTX_wm_window_set(C, wm->windows.first());
   }
 
 #ifdef WITH_PYTHON
@@ -823,7 +820,7 @@ static void wm_file_read_post(bContext *C,
   /* Report any errors.
    * Currently disabled if add-ons aren't yet loaded. */
   if (addons_loaded) {
-    wm_file_read_report(bmain, static_cast<wmWindow *>(wm->windows.first));
+    wm_file_read_report(bmain, wm->windows.first());
   }
 
   if (use_data) {
@@ -869,8 +866,8 @@ static void wm_read_callback_post_wrapper(bContext *C, const char *filepath, con
    * If the window is already set, don't change it. */
   bool has_window = CTX_wm_window(C) != nullptr;
   if (!has_window) {
-    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
-    wmWindow *win = static_cast<wmWindow *>(wm->windows.first);
+    wmWindowManager *wm = bmain->wm.first();
+    wmWindow *win = wm->windows.first();
     CTX_wm_window_set(C, win);
   }
 
@@ -1684,7 +1681,7 @@ static void wm_history_file_update()
     return;
   }
 
-  recent = static_cast<RecentFile *>(G.recent_files.first);
+  recent = G.recent_files.first();
   /* Refresh #BLENDER_HISTORY_FILE of recent opened files, when current file was changed. */
   if (!(recent) || (BLI_path_cmp(recent->filepath, blendfile_path) != 0)) {
 
@@ -1760,12 +1757,12 @@ static uint8_t *blend_file_thumb_fast_downscale(const uint8_t *src_rect,
    * this isn't a concern. */
 
   BLI_assert(dst_size[0] <= src_size[0] && dst_size[1] <= src_size[1]);
-  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4 * dst_size[0] * dst_size[1]),
+  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4) * dst_size[0] * dst_size[1],
                                                            __func__);
 
   /* A row, the width of the destination to accumulate pixel values into
    * before writing into the image. */
-  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0] * 4), __func__);
+  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0]) * 4, __func__);
 
 #  ifndef NDEBUG
   /* Assert that samples are calculated correctly. */
@@ -1894,8 +1891,8 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
       IMB_scale(ibuf, thumb_size_2x.x, thumb_size_2x.y, IMBScaleFilter::Box, false);
 
       /* Thumbnail inside blend should be 128x128. */
-      ImBuf *thumb_ibuf = IMB_dupImBuf(ibuf);
-      IMB_scale(thumb_ibuf, thumb_size.x, thumb_size.y, IMBScaleFilter::Box, false);
+      ImBuf *thumb_ibuf = IMB_scale_into_new(
+          ibuf, thumb_size.x, thumb_size.y, IMBScaleFilter::Box, false);
 
       BlendThumbnail *thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
       IMB_freeImBuf(thumb_ibuf);
@@ -1907,8 +1904,7 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
   }
 
   /* Must be freed by caller. */
@@ -1948,7 +1944,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
   if (screen != nullptr) {
     area = BKE_screen_find_big_area(screen, SPACE_VIEW3D, 0);
     if (area) {
-      v3d = static_cast<View3D *>(area->spacedata.first);
+      v3d = area->spacedata.first_as<View3D>();
       region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
     }
   }
@@ -1971,7 +1967,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
                                                  scene->camera,
                                                  PREVIEW_RENDER_LARGE_HEIGHT * 2,
                                                  PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                                 IB_byte_data,
+                                                 ImBufFlags::ByteData,
                                                  (v3d) ? V3D_OFSDRAW_OVERRIDE_SCENE_SETTINGS :
                                                          V3D_OFSDRAW_NONE,
                                                  R_ALPHAPREMUL,
@@ -1988,7 +1984,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
                                           region,
                                           PREVIEW_RENDER_LARGE_HEIGHT * 2,
                                           PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                          IB_byte_data,
+                                          ImBufFlags::ByteData,
                                           R_ALPHAPREMUL,
                                           nullptr,
                                           true,
@@ -2010,17 +2006,15 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
 
   if (ibuf) {
     /* Dirty oversampling. */
-    ImBuf *thumb_ibuf;
-    thumb_ibuf = IMB_dupImBuf(ibuf);
 
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
 
     /* BLEN_THUMB_SIZE is size of thumbnail inside blend file: 128x128. */
-    IMB_scale(thumb_ibuf, BLEN_THUMB_SIZE, BLEN_THUMB_SIZE, IMBScaleFilter::Box, false);
+    ImBuf *thumb_ibuf = IMB_scale_into_new(
+        ibuf, BLEN_THUMB_SIZE, BLEN_THUMB_SIZE, IMBScaleFilter::Box, false);
     thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
     IMB_freeImBuf(thumb_ibuf);
     /* Thumbnail saved to file-system should be 256x256. */
@@ -2308,13 +2302,19 @@ static bool wm_autosave_write_try(Main *bmain, wmWindowManager *wm)
    * compared to when the #MemFile undo step was used for saving undo-steps. So for now just skip
    * auto-save when we are in a mode where auto-save wouldn't have worked previously anyway. This
    * check can be removed once the performance regressions have been solved. */
-  if (ED_undosys_stack_memfile_get_if_active(wm->runtime->undo_stack) != nullptr) {
-    WM_autosave_write(wm, bmain);
-    return true;
+  if (ED_undosys_autosave_compatible(wm->runtime->undo_stack)) {
+    const bool success = WM_autosave_write(wm, bmain, &wm->runtime->reports);
+    if (!success) {
+      WM_report_banner_show(wm, nullptr);
+    }
+    return success;
   }
   if ((U.uiflag & USER_GLOBALUNDO) == 0) {
-    WM_autosave_write(wm, bmain);
-    return true;
+    const bool success = WM_autosave_write(wm, bmain, &wm->runtime->reports);
+    if (!success) {
+      WM_report_banner_show(wm, nullptr);
+    }
+    return success;
   }
   /* Can't auto-save with MemFile right now, try again later. */
   return false;
@@ -2325,9 +2325,10 @@ bool WM_autosave_is_scheduled(wmWindowManager *wm)
   return wm->autosave_scheduled;
 }
 
-void WM_autosave_write(wmWindowManager *wm, Main *bmain)
+bool WM_autosave_write(wmWindowManager *wm, Main *bmain, ReportList *reports)
 {
   ED_editors_flush_edits(bmain);
+  ED_image_internal_autosave_flush(bmain);
 
   char filepath[FILE_MAX];
   wm_autosave_location(filepath);
@@ -2337,13 +2338,14 @@ void WM_autosave_write(wmWindowManager *wm, Main *bmain)
 
   /* Error reporting into console. */
   BlendFileWriteParams params{};
-  BLO_write_file(bmain, filepath, fileflags, &params, nullptr);
+  const bool success = BLO_write_file(bmain, filepath, fileflags, &params, reports);
 
   /* Restart auto-save timer. */
   wm_autosave_timer_end(wm);
   wm_autosave_timer_begin(wm);
 
-  wm->autosave_scheduled = false;
+  wm->autosave_scheduled = !success;
+  return success;
 }
 
 static void wm_autosave_timer_begin_ex(wmWindowManager *wm, double timestep)
@@ -2419,6 +2421,21 @@ void wm_autosave_delete()
   }
 }
 
+static wmOperatorStatus wm_save_auto_save_exec(bContext *C, wmOperator *op)
+{
+  const bool success = WM_autosave_write(CTX_wm_manager(C), CTX_data_main(C), op->reports);
+  return success ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+}
+
+void WM_OT_save_auto_save(wmOperatorType *ot)
+{
+  ot->name = "Save Autosave";
+  ot->idname = "WM_OT_save_auto_save";
+  ot->description = "Create an autosave in the temp directory for the current file";
+
+  ot->exec = wm_save_auto_save_exec;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2464,11 +2481,39 @@ bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_scripts");
   bool use_scripts_autoexec_check = false;
   if (!RNA_property_is_set(op->ptr, prop)) {
-    /* Use #G_FLAG_SCRIPT_AUTOEXEC rather than the userpref because this means if
-     * the flag has been disabled from the command line, then opening
-     * from the menu won't enable this setting. */
-    bool value = use_prefs ? ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) :
-                             ((G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0);
+    bool value;
+    if (use_prefs) {
+      PropertyRNA *prop_filepath = RNA_struct_find_property(op->ptr, "filepath");
+      char filepath[FILE_MAX] = "";
+      if (prop_filepath) {
+        RNA_property_string_get(op->ptr, prop_filepath, filepath);
+      }
+
+      if (G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) {
+        value = (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
+      }
+      else if (prop_filepath == nullptr) {
+        /* Recovering the last session doesn't provide the path being recovered,
+         * it may be in an excluded path so disable auto-execution, the user may still opt-in. */
+        value = false;
+      }
+      else if (filepath[0] == '\0') {
+        /* The file selector before a file is chosen, excluded paths are checked once it's set. */
+        value = (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0;
+      }
+      else {
+        value = BKE_autoexec_default_trust_source(filepath,
+                                                  {
+                                                      .skip_overrides = false,
+                                                      .canonicalize = true,
+                                                      .strip_filename = true,
+                                                  });
+      }
+    }
+    else {
+      /* Keep the trust of the current session rather than the preference. */
+      value = (G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0;
+    }
 
     RNA_property_boolean_set(op->ptr, prop, value);
     use_scripts_autoexec_check = true;
@@ -2731,7 +2776,7 @@ static wmOperatorStatus wm_userpref_read_exec(bContext *C, wmOperator *op)
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
 
   /* Needed to recalculate UI scaling values (eg, #UserDef.inv_scale_factor). */
-  wm_window_clear_drawable(static_cast<wmWindowManager *>(bmain->wm.first));
+  wm_window_clear_drawable(bmain->wm.first());
 
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
   WM_event_add_notifier(C, NC_UI | ND_UI_FONT, nullptr);
@@ -3202,8 +3247,8 @@ static wmOperatorStatus wm_open_mainfile__select_file_path_exec(bContext *C, wmO
   }
 
   /* If possible, get the name of the most recently used `.blend` file. */
-  if (G.recent_files.first) {
-    RecentFile *recent = static_cast<RecentFile *>(G.recent_files.first);
+  if (G.recent_files.first()) {
+    RecentFile *recent = G.recent_files.first();
     blendfile_path = recent->filepath;
   }
 
@@ -3291,26 +3336,24 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  char date_str[FILELIST_DIRENTRY_DATE_LEN];
-  char time_str[FILELIST_DIRENTRY_TIME_LEN];
-  bool is_today, is_yesterday;
-  BLI_filelist_entry_datetime_to_string(
-      nullptr, int64_t(stats.st_mtime), false, time_str, date_str, &is_today, &is_yesterday);
-  if (is_today || is_yesterday) {
-    STRNCPY(date_str, is_today ? TIP_("Today") : TIP_("Yesterday"));
-  }
+  const tm mod_time = date_string::localtime_safe(stats.st_mtime);
+  const time_t ts_now = time(nullptr);
+  const tm now_tm = date_string::localtime_safe(ts_now);
+  const char *lang = BLT_lang_get();
+  std::string modified_s = blender::date_string::datetime(mod_time,
+                                                          lang,
+                                                          date_string::DateFormat(U.date_format),
+                                                          date_string::TimeFormat(U.time_format),
+                                                          &now_tm,
+                                                          TIP_("Today"),
+                                                          TIP_("Yesterday"));
 
   /* Size. */
   char size_str[FILELIST_DIRENTRY_SIZE_LEN];
   BLI_filelist_entry_size_to_string(nullptr, uint64_t(stats.st_size), false, size_str);
 
-  return fmt::format("{}\n\n{}: {} {}\n{}: {}",
-                     filepath,
-                     TIP_("Modified"),
-                     date_str,
-                     time_str,
-                     TIP_("Size"),
-                     size_str);
+  return fmt::format(
+      "{}\n\n{}: {}\n{}: {}", filepath, TIP_("Modified"), modified_s, TIP_("Size"), size_str);
 }
 
 /* Currently fits in a pointer. */
@@ -3325,18 +3368,13 @@ static bool wm_open_mainfile_check(bContext * /*C*/, wmOperator *op)
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_scripts");
   bool is_untrusted = false;
   char filepath[FILE_MAX];
-  char *lslash;
 
   RNA_string_get(op->ptr, "filepath", filepath);
 
-  /* Get the directory. */
-  lslash = const_cast<char *>(BLI_path_slash_rfind(filepath));
-  if (lslash) {
-    *(lslash + 1) = '\0';
-  }
-
-  if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
-    if (BKE_autoexec_match(filepath) == true) {
+  /* Excluded paths can't be trusted, unless the command line overrides the preference. */
+  if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && ((G.f & G_FLAG_SCRIPT_OVERRIDE_PREF) == 0))
+  {
+    if (BKE_autoexec_match(filepath, true, true)) {
       RNA_property_boolean_set(op->ptr, prop, false);
       is_untrusted = true;
     }
@@ -3672,7 +3710,7 @@ static void wm_block_save_modified_images_cancel(bContext *C, void *arg_block, v
 static void wm_block_save_modified_images_save(bContext *C, void *arg_block, void *arg_data)
 {
   const Main *bmain = CTX_data_main(C);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   wmGenericCallback *callback = WM_generic_callback_steal(
       static_cast<wmGenericCallback *>(arg_data));
 
@@ -3743,7 +3781,7 @@ static ui::Block *block_create_save_modified_images_dialog(bContext *C, ARegion 
 {
   wmGenericCallback *post_action = static_cast<wmGenericCallback *>(arg);
   Main *bmain = CTX_data_main(C);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
 
   ui::Block *block = block_begin(
       C, region, save_modified_images_dialog_name, ui::EmbossType::Emboss);
@@ -3765,10 +3803,10 @@ static ui::Block *block_create_save_modified_images_dialog(bContext *C, ARegion 
   wm_block_image_save_errors(layout, reports);
 
   /* Modified Images Checkbox. */
-  char message[64];
-  SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+  std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                    modified_images_count);
   layout.separator();
-  uiDefButC(block,
+  uiDefButV(block,
             ui::ButtonType::Checkbox,
             message,
             0,
@@ -3899,8 +3937,8 @@ static void save_set_filepath(bContext *C, wmOperator *op)
   if (!RNA_property_is_set(op->ptr, prop)) {
     const char *blendfile_path = BKE_main_blendfile_path(bmain);
     /* If not saved before, get the name of the most recently used `.blend` file. */
-    if ((blendfile_path[0] == '\0') && G.recent_files.first) {
-      RecentFile *recent = static_cast<RecentFile *>(G.recent_files.first);
+    if ((blendfile_path[0] == '\0') && G.recent_files.first()) {
+      RecentFile *recent = G.recent_files.first();
       STRNCPY(filepath, recent->filepath);
     }
     else {
@@ -3966,7 +4004,7 @@ static wmOperatorStatus wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
     ReportList *reports = CTX_wm_reports(C);
     const bool is_successful = ED_image_save_all_modified(C, reports);
     if (!is_successful) {
-      WM_report_banner_show(static_cast<wmWindowManager *>(bmain->wm.first), CTX_wm_window(C));
+      WM_report_banner_show(bmain->wm.first(), CTX_wm_window(C));
     }
   }
   else if (wm_show_save_modified_images_dialog(bmain, op)) {
@@ -4577,8 +4615,7 @@ void wm_test_autorun_warning(bContext *C)
   G.f |= G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET;
 
   wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = (wm->runtime->winactive) ? wm->runtime->winactive :
-                                             static_cast<wmWindow *>(wm->windows.first);
+  wmWindow *win = (wm->runtime->winactive) ? wm->runtime->winactive : wm->windows.first();
 
   if (win) {
     /* We want this warning on the Main window, not a child window even if active. See #118765. */
@@ -4602,8 +4639,7 @@ void wm_test_foreign_file_warning(bContext *C)
   G_MAIN->is_read_invalid = false;
 
   wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = (wm->runtime->winactive) ? wm->runtime->winactive :
-                                             static_cast<wmWindow *>(wm->windows.first);
+  wmWindow *win = (wm->runtime->winactive) ? wm->runtime->winactive : wm->windows.first();
 
   if (win) {
     /* We want this warning on the Main window, not a child window even if active. See #118765. */
@@ -4902,7 +4938,7 @@ static void wm_block_file_close_discard(bContext *C, void *arg_block, void *arg_
 static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_data)
 {
   const Main *bmain = CTX_data_main(C);
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   wmGenericCallback *callback = WM_generic_callback_steal(
       static_cast<wmGenericCallback *>(arg_data));
   bool execute_callback = true;
@@ -5057,13 +5093,13 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
 
   /* Modified Images Checkbox. */
   if (modified_images_count > 0) {
-    char message[64];
-    SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+    std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                      modified_images_count);
     /* Only the first checkbox should get extra separation. */
     if (!has_extra_checkboxes) {
       layout.separator();
     }
-    uiDefButC(block,
+    uiDefButV(block,
               ui::ButtonType::Checkbox,
               message,
               0,
@@ -5086,18 +5122,18 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
     if (!has_extra_checkboxes) {
       layout.separator();
     }
-    ui::Button *but = uiDefButBitC(block,
-                                   ui::ButtonType::Checkbox,
-                                   1,
-                                   "Save modified asset catalogs",
-                                   0,
-                                   0,
-                                   0,
-                                   UI_UNIT_Y,
-                                   &save_catalogs_when_file_is_closed,
-                                   0,
-                                   0,
-                                   "");
+    ui::Button *but = uiDefButBit(block,
+                                  ui::ButtonType::Checkbox,
+                                  1,
+                                  "Save modified asset catalogs",
+                                  0,
+                                  0,
+                                  0,
+                                  UI_UNIT_Y,
+                                  &save_catalogs_when_file_is_closed,
+                                  0,
+                                  0,
+                                  "");
     button_func_set(but,
                     save_catalogs_when_file_is_closed_set_fn,
                     &save_catalogs_when_file_is_closed,

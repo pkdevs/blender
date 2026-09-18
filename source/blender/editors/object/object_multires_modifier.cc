@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edobj
+ */
+
 #include "object_intern.hh"
 
 #include "DNA_mesh_types.h"
@@ -18,7 +22,7 @@
 #include "BKE_report.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -273,7 +277,7 @@ static wmOperatorStatus multires_external_save_exec(bContext *C, wmOperator *op)
 
   CustomData_external_add(&mesh->corner_data, &mesh->id, CD_MDISPS, mesh->corners_num, filepath);
   CustomData_external_write(
-      &mesh->corner_data, &mesh->id, CD_MASK_MESH.lmask, mesh->corners_num, 0);
+      &mesh->corner_data, "", &mesh->id, CD_MASK_MESH.lmask, mesh->corners_num, 0);
 
   return OPERATOR_FINISHED;
 }
@@ -457,11 +461,13 @@ static wmOperatorStatus multires_unsubdivide_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, 1, true);
+  MultiresUnsubdivideInfo info = {};
+  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, 1, true, info);
   if (new_levels == 0) {
     BKE_report(op->reports, RPT_ERROR, "No valid subdivisions found to rebuild a lower level");
     return OPERATOR_CANCELLED;
   }
+  multiresModifier_unsubdivide_report_if_needed(info, op->reports);
 
   DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, object);
@@ -511,11 +517,13 @@ static wmOperatorStatus multires_rebuild_subdiv_exec(bContext *C, wmOperator *op
     return OPERATOR_CANCELLED;
   }
 
-  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, INT_MAX, false);
+  MultiresUnsubdivideInfo info = {};
+  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, INT_MAX, false, info);
   if (new_levels == 0) {
     BKE_report(op->reports, RPT_ERROR, "No valid subdivisions found to rebuild lower levels");
     return OPERATOR_CANCELLED;
   }
+  multiresModifier_unsubdivide_report_if_needed(info, op->reports);
 
   BKE_reportf(op->reports, RPT_INFO, "%d new levels rebuilt", new_levels);
 

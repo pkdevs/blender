@@ -2,19 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#if defined(WITH_OPENCOLORIO)
+#include <cmath>
+#include <memory>
+#include <mutex>
 
-#  include <cmath>
-#  include <memory>
-#  include <mutex>
+#include "libocio_view.hh"
 
-#  include "libocio_view.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_string.hh"
 
-#  include "BLI_math_matrix.hh"
-#  include "BLI_string.h"
-
-#  include "OCIO_matrix.hh"
-#  include "OCIO_scope.hh"
+#include "OCIO_matrix.hh"
+#include "OCIO_scope.hh"
 
 namespace blender::ocio {
 
@@ -40,15 +38,19 @@ namespace blender::ocio {
 /** Scope value at 100 nits (SDR reference white) for HDR displays. */
 static constexpr float SCOPE_SDR_IN_HDR_SCOPE = 0.75f;
 
-/** Maximum HDR luminance in nits that maps to scope value 1.0, same as PQ and
- * beyond what any real world display can do. */
+/**
+ * Maximum HDR luminance in nits that maps to scope value 1.0, same as PQ and
+ * beyond what any real world display can do.
+ */
 static constexpr float SCOPE_HDR_MAX_NITS = 10000.0f;
 
 /** SDR reference white in nits. */
 static constexpr float SCOPE_SDR_WHITE_NITS = 100.0f;
 
-/** Maximum linear light value (nits / SDR white nits).
- * Linear 1.0 = 100 nits = SDR white, linear MAX_LINEAR = 10000 nits. */
+/**
+ * Maximum linear light value (nits / SDR white nits).
+ * Linear 1.0 = 100 nits = SDR white, linear MAX_LINEAR = 10000 nits.
+ */
 static constexpr float SCOPE_MAX_LINEAR = SCOPE_HDR_MAX_NITS / SCOPE_SDR_WHITE_NITS;
 
 /** Constants for the sRGB OETF used for the SDR portion of the scope encoding. */
@@ -56,8 +58,10 @@ static constexpr float SCOPE_SRGB_A = 1.055f;
 static constexpr float SCOPE_SRGB_B = 0.055f;
 static constexpr float SCOPE_SRGB_GAMMA = 2.4f;
 
-/** Constants for the HDR log curve: scope = b * ln(linear - c) + d,
- * computed to ensure C1 continuity with the sRGB OETF at SCOPE_SDR_IN_HDR_SCOPE. */
+/**
+ * Constants for the HDR log curve: scope = b * ln(linear - c) + d,
+ * computed to ensure C1 continuity with the sRGB OETF at SCOPE_SDR_IN_HDR_SCOPE.
+ */
 static constexpr float SCOPE_HDR_B = 0.0368291f;
 static constexpr float SCOPE_HDR_C = 0.8882908f;
 static constexpr float SCOPE_HDR_D = 0.8307242f;
@@ -255,5 +259,3 @@ void LibOCIOView::append_scope_space_transforms(OCIO_NAMESPACE::GroupTransformRc
 }
 
 }  // namespace blender::ocio
-
-#endif

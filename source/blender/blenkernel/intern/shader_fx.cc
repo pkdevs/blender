@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -53,9 +53,9 @@ void BKE_shaderfx_init()
   shaderfx_type_init(shader_fx_types); /* `FX_shader_util.cc`. */
 }
 
-ShaderFxData *BKE_shaderfx_new(int type)
+ShaderFxData *BKE_shaderfx_new(ShaderFxType type)
 {
-  const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(ShaderFxType(type));
+  const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(type);
   ShaderFxData *fx = static_cast<ShaderFxData *>(
       MEM_new_zeroed(fxi->struct_size, fxi->struct_name));
 
@@ -215,21 +215,17 @@ void BKE_shaderfx_copy(ListBaseT<ShaderFxData> *dst, const ListBaseT<ShaderFxDat
   ShaderFxData *fx;
   ShaderFxData *srcfx;
 
-  BLI_listbase_clear(dst);
+  dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
-  for (srcfx = static_cast<ShaderFxData *>(src->first),
-      fx = static_cast<ShaderFxData *>(dst->first);
-       srcfx && fx;
-       srcfx = srcfx->next, fx = fx->next)
-  {
+  for (srcfx = src->first(), fx = dst->first(); srcfx && fx; srcfx = srcfx->next, fx = fx->next) {
     BKE_shaderfx_copydata(srcfx, fx);
   }
 }
 
 ShaderFxData *BKE_shaderfx_findby_type(Object *ob, ShaderFxType type)
 {
-  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first);
+  ShaderFxData *fx = ob->shader_fx.first();
 
   for (; fx; fx = fx->next) {
     if (fx->type == type) {
@@ -242,7 +238,7 @@ ShaderFxData *BKE_shaderfx_findby_type(Object *ob, ShaderFxType type)
 
 void BKE_shaderfx_foreach_ID_link(Object *ob, ShaderFxIDWalkFunc walk, void *user_data)
 {
-  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first);
+  ShaderFxData *fx = ob->shader_fx.first();
 
   for (; fx; fx = fx->next) {
     const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info(ShaderFxType(fx->type));

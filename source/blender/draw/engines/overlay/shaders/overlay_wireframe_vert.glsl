@@ -10,8 +10,8 @@ VERTEX_SHADER_CREATE_INFO(overlay_wireframe)
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_clipping_lib.glsl"
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 #include "overlay_common_lib.glsl"
 #include "select_lib.glsl"
 
@@ -154,8 +154,8 @@ void main()
   }
 
 #if defined(POINTS)
-  final_color = wire_col.rgbb;
-  final_color_inner = rim_col.rgbb;
+  final_color = float4(wire_col * wire_opacity, wire_opacity);
+  final_color_inner = float4(rim_col * wire_opacity, wire_opacity);
 
 #else
   /* Convert to screen position [0..sizeVp]. */

@@ -19,11 +19,11 @@
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -31,6 +31,7 @@
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -100,7 +101,7 @@ void base_active_refresh(Main *bmain, Scene *scene, ViewLayer *view_layer)
 {
   WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-  wmMsgBus *mbus = (static_cast<wmWindowManager *>(bmain->wm.first))->runtime->message_bus;
+  wmMsgBus *mbus = (bmain->wm.first())->runtime->message_bus;
   if (mbus != nullptr) {
     WM_msg_publish_rna_prop(mbus, &scene->id, view_layer, LayerObjects, active);
   }
@@ -278,6 +279,7 @@ bool jump_to_object(bContext *C, Object *ob, const bool /*reveal_hidden*/)
 
     /* Make active if not active. */
     base_activate(C, base);
+    ED_outliner_select_sync_from_object_tag(C);
   }
 
   return true;
@@ -323,6 +325,7 @@ bool jump_to_bone(bContext *C, Object *ob, const char *bone_name, const bool rev
       arm->act_edbone = ebone;
 
       ED_pose_bone_select_tag_update(ob);
+      ED_outliner_select_sync_from_edit_bone_tag(C);
       return true;
     }
   }
@@ -340,9 +343,10 @@ bool jump_to_bone(bContext *C, Object *ob, const char *bone_name, const bool rev
       ED_pose_deselect_all(ob, SEL_DESELECT, true);
       ED_pose_bone_select(ob, pchan, true, true);
 
-      arm->act_bone = pchan->bone;
+      arm->act_bone = pchan->bone_get(*ob);
 
       ED_pose_bone_select_tag_update(ob);
+      ED_outliner_select_sync_from_pose_bone_tag(C);
       return true;
     }
   }
@@ -526,9 +530,8 @@ static bool object_select_all_by_instance_collection(bContext *C, Object *ob)
   return changed;
 }
 
-static bool object_select_all_by_particle(bContext *C, Object *ob)
+static bool object_select_all_by_particle(bContext *C, const ParticleSystem *psys_act)
 {
-  ParticleSystem *psys_act = psys_get_current(ob);
   bool changed = false;
 
   CTX_DATA_BEGIN (C, Base *, base, visible_bases) {
@@ -662,11 +665,12 @@ static wmOperatorStatus object_select_linked_exec(bContext *C, wmOperator *op)
     changed = object_select_all_by_instance_collection(C, ob);
   }
   else if (nr == OBJECT_SELECT_LINKED_PARTICLE) {
-    if (BLI_listbase_is_empty(&ob->particlesystem)) {
+    const ParticleSystem *psys_act = psys_get_current(ob);
+    if (psys_act == nullptr) {
       return OPERATOR_CANCELLED;
     }
 
-    changed = object_select_all_by_particle(C, ob);
+    changed = object_select_all_by_particle(C, psys_act);
   }
   else if (nr == OBJECT_SELECT_LINKED_LIBRARY) {
     /* do nothing */
@@ -812,7 +816,7 @@ static bool select_grouped_collection(bContext *C, Object *ob)
   Collection *collection, *ob_collections[COLLECTION_MENU_MAX];
   int collection_count = 0, i;
 
-  for (collection = static_cast<Collection *>(bmain->collections.first);
+  for (collection = bmain->collections.first();
        collection && (collection_count < COLLECTION_MENU_MAX);
        collection = static_cast<Collection *>(collection->id.next))
   {
@@ -969,7 +973,7 @@ static bool select_grouped_keyingset(bContext *C, Object * /*ob*/, ReportList *r
     return false;
   }
   if (animrig::validate_keyingset(C, nullptr, ks) != animrig::ModifyKeyReturn::SUCCESS) {
-    if (ks->paths.first == nullptr) {
+    if (ks->paths.first_ == nullptr) {
       if ((ks->flag & KEYINGSET_ABSOLUTE) == 0) {
         BKE_report(reports,
                    RPT_ERROR,
@@ -1081,6 +1085,15 @@ static wmOperatorStatus object_select_grouped_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
+static bool object_select_grouped_poll(bContext *C)
+{
+  /* Uses popup menus which won't work in background mode. */
+  if (G.background) {
+    return false;
+  }
+  return objects_selectable_poll(C);
+}
+
 void OBJECT_OT_select_grouped(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1091,7 +1104,7 @@ void OBJECT_OT_select_grouped(wmOperatorType *ot)
   /* API callbacks. */
   ot->invoke = WM_menu_invoke;
   ot->exec = object_select_grouped_exec;
-  ot->poll = objects_selectable_poll;
+  ot->poll = object_select_grouped_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

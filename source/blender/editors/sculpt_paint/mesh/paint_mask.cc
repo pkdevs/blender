@@ -219,18 +219,45 @@ void update_mask_mesh(const Depsgraph &depsgraph,
   Array<bool> node_changed(node_mask.min_array_size(), false);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
+  /* Even if only shared vertices of a node are updated it needs to be marked dirty, The mask
+   * values for the shared vertices are written by the thread processing the owning node, so
+   * cache the values before the main update loop to avoid nondeterministic read/write ordering.
+   */
+  Array<Vector<float>> old_masks(node_mask.min_array_size());
   node_mask.foreach_index(
       [&](const int i) {
         LocalData &tls = all_tls.local();
-        const Span<int> verts = hide::node_visible_verts(nodes[i], hide_vert, tls.visible_verts);
-        tls.mask.resize(verts.size());
-        gather_data_mesh(mask.span.as_span(), verts, tls.mask.as_mutable_span());
-        update_fn(tls.mask, verts);
-        if (array_utils::indexed_data_equal<float>(mask.span, verts, tls.mask)) {
-          return;
+        const Span<int> shared_visible_verts = hide::node_visible_shared_verts(
+            nodes[i], hide_vert, tls.visible_verts);
+        old_masks[i].resize(shared_visible_verts.size());
+        gather_data_mesh(
+            mask.span.as_span(), shared_visible_verts, old_masks[i].as_mutable_span());
+      },
+      exec_mode::grain_size(1));
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        LocalData &tls = all_tls.local();
+        int unique_visible_verts_num = 0;
+        const Span<int> all_visible_verts = hide::node_visible_all_verts(
+            nodes[i], hide_vert, tls.visible_verts, unique_visible_verts_num);
+        const Span<int> unique_verts = all_visible_verts.take_front(unique_visible_verts_num);
+        const Span<int> shared_verts = all_visible_verts.drop_front(unique_visible_verts_num);
+        tls.mask.resize(all_visible_verts.size());
+        gather_data_mesh(mask.span.as_span(), all_visible_verts, tls.mask.as_mutable_span());
+        update_fn(tls.mask, all_visible_verts);
+        if (array_utils::indexed_data_equal<float>(
+                mask.span, unique_verts, tls.mask.as_span().take_front(unique_verts.size())))
+        {
+          if (shared_verts.is_empty() ||
+              old_masks[i].as_span() == tls.mask.as_span().drop_front(unique_verts.size()))
+          {
+            return;
+          }
         }
         undo::push_node(depsgraph, object, &nodes[i], undo::Type::Mask);
-        scatter_data_mesh(tls.mask.as_span(), verts, mask.span);
+        scatter_data_mesh(
+            tls.mask.as_span().take_front(unique_verts.size()), unique_verts, mask.span);
         bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
         node_changed[i] = true;
       },
@@ -413,10 +440,9 @@ static void fill_mask_mesh(const Depsgraph &depsgraph,
 
   Array<bool> node_changed(node_mask.min_array_size(), false);
 
-  threading::EnumerableThreadSpecific<Vector<int>> all_index_data;
   node_mask.foreach_index(
       [&](const int i) {
-        Vector<int> &index_data = all_index_data.local();
+        Vector<int, bke::pbvh::MESH_LEAF_LIMIT> index_data;
         const Span<int> verts = hide::node_visible_verts(nodes[i], hide_vert, index_data);
         if (std::all_of(verts.begin(), verts.end(), [&](int i) { return mask.span[i] == value; }))
         {
@@ -683,7 +709,7 @@ static wmOperatorStatus mask_flood_fill_exec(bContext *C, wmOperator *op)
   const FloodFillMode mode = FloodFillMode(RNA_enum_get(op->ptr, "mode"));
   const float value = RNA_float_get(op->ptr, "value");
 
-  BKE_sculpt_update_object_for_edit(&depsgraph, &object, false);
+  BKE_sculptsession_update_for_edit(&depsgraph, &object, false);
 
   ed::sculpt_paint::mask_overlay_check(*C, *op);
 
@@ -752,7 +778,7 @@ static void gesture_begin(bContext &C, wmOperator &op, gesture::GestureData &ges
 {
   const Scene &scene = *CTX_data_scene(&C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(&C);
-  BKE_sculpt_update_object_for_edit(depsgraph, gesture_data.vc.obact, false);
+  BKE_sculptsession_update_for_edit(depsgraph, gesture_data.vc.obact, false);
   undo::push_begin(scene, *gesture_data.vc.obact, &op);
 }
 
@@ -772,9 +798,15 @@ static float mask_gesture_get_new_value(const float elem, FloodFillMode mode, fl
 
 static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureData &gesture_data)
 {
+  const View3D *v3d = gesture_data.vc.v3d;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  Object &object = *gesture_data.vc.obact;
+  const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (clipping_enabled) {
+    ED_view3d_clipping_local(rv3d, object.object_to_world().ptr());
+  }
   const IndexMask &node_mask = gesture_data.node_mask;
   const MaskOperation &op = *reinterpret_cast<const MaskOperation *>(gesture_data.operation);
-  Object &object = *gesture_data.vc.obact;
   const Depsgraph &depsgraph = *gesture_data.vc.depsgraph;
   switch (bke::object::pbvh_get(object)->type()) {
     case bke::pbvh::Type::Mesh: {
@@ -784,6 +816,9 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           depsgraph, object, node_mask, [&](MutableSpan<float> node_mask, const Span<int> verts) {
             for (const int i : verts.index_range()) {
               const int vert = verts[i];
+              if (clipping_enabled && ED_view3d_clipping_test(rv3d, positions[vert], true)) {
+                continue;
+              }
               if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                 node_mask[i] = mask_gesture_get_new_value(node_mask[i], op.mode, op.value);
               }
@@ -811,6 +846,9 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
               const int vert_start = grid * key.grid_area;
               BKE_subdiv_ccg_foreach_visible_grid_vert(key, grid_hidden, grid, [&](const int i) {
                 const int vert = vert_start + i;
+                if (clipping_enabled && ED_view3d_clipping_test(rv3d, positions[vert], true)) {
+                  return;
+                }
                 if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                   float &mask = masks[vert];
                   if (!any_changed) {
@@ -844,6 +882,9 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           [&](const int i) {
             bool any_changed = false;
             for (BMVert *vert : BKE_pbvh_bmesh_node_unique_verts(&nodes[i])) {
+              if (clipping_enabled && ED_view3d_clipping_test(rv3d, vert->co, true)) {
+                continue;
+              }
               if (gesture::is_affected(gesture_data, vert->co, vert->no)) {
                 const float old_mask = BM_ELEM_CD_GET_FLOAT(vert, offset);
                 if (!any_changed) {

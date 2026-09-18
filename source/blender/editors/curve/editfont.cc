@@ -15,15 +15,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -42,7 +42,7 @@
 #include "BKE_report.hh"
 #include "BKE_vfont.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -913,7 +913,7 @@ void ED_text_to_object(bContext *C, const Text *text, const bool split_lines)
   float offset[3];
   int linenum = 0;
 
-  if (!text || !text->lines.first) {
+  if (!text || !text->lines.first_) {
     return;
   }
 
@@ -944,10 +944,7 @@ void ED_text_to_object(bContext *C, const Text *text, const bool split_lines)
     offset[1] = 0.0f;
     offset[2] = 0.0f;
 
-    txt_add_object(C,
-                   static_cast<const TextLine *>(text->lines.first),
-                   BLI_listbase_count(&text->lines),
-                   offset);
+    txt_add_object(C, text->lines.first(), text->lines.count(), offset);
   }
 
   DEG_relations_tag_update(bmain);
@@ -968,7 +965,7 @@ static const EnumPropertyItem style_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static wmOperatorStatus set_style(bContext *C, const int style, const bool clear)
+static wmOperatorStatus set_style(bContext *C, const eCharInfoFlag style, const bool clear)
 {
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
@@ -996,7 +993,7 @@ static wmOperatorStatus set_style(bContext *C, const int style, const bool clear
 
 static wmOperatorStatus set_style_exec(bContext *C, wmOperator *op)
 {
-  const int style = RNA_enum_get(op->ptr, "style");
+  const eCharInfoFlag style = eCharInfoFlag(RNA_enum_get(op->ptr, "style"));
   const bool clear = RNA_boolean_get(op->ptr, "clear");
 
   return set_style(C, style, clear);
@@ -1032,12 +1029,12 @@ static wmOperatorStatus toggle_style_exec(bContext *C, wmOperator *op)
 {
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
-  int style, clear, selstart, selend;
+  int clear, selstart, selend;
 
-  style = RNA_enum_get(op->ptr, "style");
+  const eCharInfoFlag style = eCharInfoFlag(RNA_enum_get(op->ptr, "style"));
   cu->curinfo.flag ^= style;
   if (BKE_vfont_select_get(cu, &selstart, &selend)) {
-    clear = (cu->curinfo.flag & style) == 0;
+    clear = (cu->curinfo.flag & style) == eCharInfoFlag{};
     return set_style(C, style, clear);
   }
   return OPERATOR_CANCELLED;
@@ -1733,6 +1730,12 @@ static const EnumPropertyItem delete_type_items[] = {
 
 static wmOperatorStatus delete_exec(bContext *C, wmOperator *op)
 {
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_edit_maybe(C)) {
+    return *status;
+  }
+#endif
+
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   EditFont *ef = cu->editfont;
@@ -1931,6 +1934,14 @@ static wmOperatorStatus insert_text_invoke(bContext *C, wmOperator *op, const wm
     }
     return OPERATOR_PASS_THROUGH;
   }
+
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_insert_maybe(
+          C, op, event, "text"))
+  {
+    return *status;
+  }
+#endif
 
   /* Tab typically exit edit-mode, but we allow it to be typed using modifier keys. */
   if (event->type == EVT_TABKEY) {
@@ -2165,7 +2176,8 @@ void FONT_OT_select_word(wmOperatorType *ot)
 
 static wmOperatorStatus textbox_add_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *obedit = CTX_data_active_object(C);
+  Object *obedit = ed::object::context_active_object(C);
+
   Curve *cu = id_cast<Curve *>(obedit->data);
   int i;
 
@@ -2206,7 +2218,7 @@ void FONT_OT_textbox_add(wmOperatorType *ot)
 
 static wmOperatorStatus textbox_remove_exec(bContext *C, wmOperator *op)
 {
-  Object *obedit = CTX_data_active_object(C);
+  Object *obedit = ed::object::context_active_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   int i;
   int index = RNA_int_get(op->ptr, "index");
@@ -2425,7 +2437,11 @@ void FONT_OT_case_toggle(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* **************** Open Font ************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Open Font
+ * \{ */
 
 static void font_ui_template_init(bContext *C, wmOperator *op)
 {
@@ -2547,7 +2563,7 @@ void FONT_OT_open(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Delete Operator
+/** \name Unlink Font Operator
  * \{ */
 
 static wmOperatorStatus font_unlink_exec(bContext *C, wmOperator *op)
@@ -2582,6 +2598,11 @@ void FONT_OT_unlink(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = font_unlink_exec;
 }
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Pick
+ * \{ */
 
 bool ED_curve_editfont_select_pick(
     bContext *C,

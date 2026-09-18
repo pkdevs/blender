@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "mesh_brush_common.hh"
 
-#include "BKE_idtype.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_lib_id.hh"
 
 #include "BLI_array_utils.hh"
 #include "BLI_map.hh"
-
-#include "CLG_log.h"
 
 #include "DNA_mesh_types.h"
 
@@ -21,20 +19,10 @@
 #include "testing/testing.h"
 
 namespace blender::ed::sculpt_paint::tests {
-class MeshTests : public testing::Test {
+
+class MeshBrushCommonTests : public bke::BlenderGTestBase {
  public:
   Mesh *mesh;
-
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void TearDown() override
   {
@@ -44,7 +32,7 @@ class MeshTests : public testing::Test {
   }
 };
 
-TEST_F(MeshTests, calc_vert_neighbors_interior__cube)
+TEST_F(MeshBrushCommonTests, calc_vert_neighbors_interior__cube)
 {
   mesh = geometry::create_cuboid_mesh(float3(1.0, 1.0, 1.0), 2, 2, 2);
 
@@ -84,7 +72,7 @@ TEST_F(MeshTests, calc_vert_neighbors_interior__cube)
   }
 }
 
-TEST_F(MeshTests, calc_vert_neighbors_interior__1D_strip)
+TEST_F(MeshBrushCommonTests, calc_vert_neighbors_interior__1D_strip)
 {
   mesh = geometry::create_grid_mesh(3, 2, 1.0, 1.0, {});
 

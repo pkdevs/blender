@@ -89,7 +89,8 @@ static bool operator_rigidbody_add_poll(bContext *C)
 
 /* ----------------- */
 
-bool ED_rigidbody_object_add(Main *bmain, Scene *scene, Object *ob, int type, ReportList *reports)
+bool ED_rigidbody_object_add(
+    Main *bmain, Scene *scene, Object *ob, eRigidBodyOb_Type type, ReportList *reports)
 {
   return BKE_rigidbody_add_object(bmain, scene, ob, type, reports);
 }
@@ -109,7 +110,7 @@ static wmOperatorStatus rigidbody_object_add_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = ed::object::context_active_object(C);
-  int type = RNA_enum_get(op->ptr, "type");
+  eRigidBodyOb_Type type = eRigidBodyOb_Type(RNA_enum_get(op->ptr, "type"));
   bool changed;
 
   /* apply to active object */
@@ -201,7 +202,7 @@ static wmOperatorStatus rigidbody_objects_add_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  int type = RNA_enum_get(op->ptr, "type");
+  eRigidBodyOb_Type type = eRigidBodyOb_Type(RNA_enum_get(op->ptr, "type"));
   bool changed = false;
 
   /* create rigid body objects and add them to the world's group */
@@ -539,7 +540,7 @@ void RIGIDBODY_OT_mass_calculate(wmOperatorType *ot)
   ot->description = "Automatically calculate mass values for Rigid Body Objects based on volume";
 
   /* callbacks */
-  ot->invoke = WM_menu_invoke; /* XXX */
+  ot->invoke = WM_enum_search_invoke; /* XXX */
   ot->exec = rigidbody_objects_calc_mass_exec;
   ot->poll = operator_rigidbody_active_poll;
   ot->poll_property = mass_calculate_poll_property;

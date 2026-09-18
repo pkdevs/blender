@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "FN_multi_function_builder.hh"
 
 namespace blender::fn::multi_function {
@@ -39,9 +43,11 @@ void CustomMF_GenericConstant::call(const IndexMask &mask,
   type_.fill_construct_indices(value_, output.data(), mask);
 }
 
-uint64_t CustomMF_GenericConstant::hash() const
+void CustomMF_GenericConstant::hash_unique(UniqueHashBytes &hash) const
 {
-  return type_.hash_or_fallback(value_, uintptr_t(this));
+  hash.add(&HASH_ID);
+  type_.hash_unique(value_, hash);
+  hash.add(&type_);
 }
 
 bool CustomMF_GenericConstant::equals(const MultiFunction &other) const

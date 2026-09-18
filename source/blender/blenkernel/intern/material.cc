@@ -11,7 +11,7 @@
 #include <cstring>
 #include <optional>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "CLG_log.h"
 
 #include "MEM_guardedalloc.h"
@@ -34,17 +34,18 @@
 #include "DNA_userdef_types.h"
 #include "DNA_volume_types.h"
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_attribute.h"
+#include "BKE_attribute.hh"
 #include "BKE_brush.hh"
 #include "BKE_curve.hh"
 #include "BKE_curves.hh"
@@ -62,8 +63,10 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_update.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
+#include "BKE_pointcloud.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_scene.hh"
 #include "BKE_vfont.hh"
@@ -139,7 +142,7 @@ static void material_copy_data(Main *bmain,
         MEM_dupalloc(material_src->gp_style));
   }
 
-  BLI_listbase_clear(&material_dst->gpumaterial);
+  material_dst->gpumaterial.clear_no_delete();
 
   /* TODO: Duplicate Engine Settings and set runtime to nullptr. */
 }
@@ -205,7 +208,7 @@ static void material_blend_write(BlendWriter *writer, ID *id, const void *id_add
 
   /* Clean up, important in undo case to reduce false detection of changed datablocks. */
   ma->texpaintslot = nullptr;
-  BLI_listbase_clear(&ma->gpumaterial);
+  ma->gpumaterial.clear_no_delete();
 
   /* Set deprecated #use_nodes for forward compatibility. */
   ma->use_nodes = true;
@@ -217,9 +220,9 @@ static void material_blend_write(BlendWriter *writer, ID *id, const void *id_add
   /* nodetree is integral part of material, no libdata */
   if (ma->nodetree) {
     BLO_Write_IDBuffer temp_embedded_id_buffer{ma->nodetree->id, writer};
-    writer->write_struct_at_address_cast<bNodeTree>(ma->nodetree, temp_embedded_id_buffer.get());
-    bke::node_tree_blend_write(writer,
-                               reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
+    bNodeTree *temp_ntree = reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get());
+    writer->write_embedded_id_struct(ma->nodetree, temp_ntree);
+    bke::node_tree_blend_write(writer, temp_ntree);
   }
 
   BKE_previewimg_blend_write(writer, ma->preview);
@@ -239,7 +242,7 @@ static void material_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_struct(reader, PreviewImage, &ma->preview);
   BKE_previewimg_blend_read(reader, ma->preview);
 
-  BLI_listbase_clear(&ma->gpumaterial);
+  ma->gpumaterial.clear_no_delete();
 
   BLO_read_struct(reader, MaterialGPencilStyle, &ma->gp_style);
 }
@@ -264,6 +267,7 @@ IDTypeInfo IDType_ID_MA = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = material_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = material_blend_write,
@@ -293,6 +297,13 @@ void BKE_gpencil_material_attr_init(Material *ma)
     gp_style->placement_count = 1;
     gp_style->placement_density = 10.0f;
     gp_style->placement_radius_spacing = 100.0f;
+    gp_style->random_size_factor = 0.0f;
+    gp_style->random_strength_factor = 0.0f;
+    gp_style->random_rotation_factor = 0.0f;
+    gp_style->random_hue_factor = 0.0f;
+    gp_style->random_saturation_factor = 0.0f;
+    gp_style->random_value_factor = 0.0f;
+    gp_style->random_noise_scale = 1.0f;
   }
 }
 
@@ -977,12 +988,10 @@ MaterialGPencilStyle *BKE_gpencil_material_settings(Object *ob, short act)
  * When materials are assigned, the active material must be in the range of `1..totcol`.
  * see #139182 for details.
  */
-static void object_material_active_index_sanitize(Object *ob)
+void BKE_object_material_active_index_sanitize(Object *ob)
 {
-  if (ob->totcol && ob->actcol == 0) {
-    ob->actcol = 1;
-  }
-  ob->actcol = std::min(ob->actcol, ob->totcol);
+  const int min_index = (ob->totcol) ? 1 : 0;
+  ob->actcol = std::clamp(ob->actcol, min_index, ob->totcol);
 }
 
 void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, bool do_id_user)
@@ -1047,7 +1056,7 @@ void BKE_object_materials_sync_length(Main *bmain, Object *ob, ID *id)
   else {
     /* Normal case: the use the obdata amount of materials slots to update the object's one. */
     BKE_object_material_resize(bmain, ob, *totcol, false);
-    object_material_active_index_sanitize(ob);
+    BKE_object_material_active_index_sanitize(ob);
   }
 }
 
@@ -1062,12 +1071,10 @@ void BKE_objects_materials_sync_length_all(Main *bmain, ID *id)
 
   BKE_main_lock(bmain);
   int processed_objects = 0;
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
       processed_objects++;
       BLI_assert(processed_objects <= id->us && processed_objects > 0);
       if (processed_objects == id->us) {
@@ -1233,6 +1240,26 @@ void BKE_object_material_assign_single_obdata(Main *bmain, Object *ob, Material 
   object_material_assign(bmain, ob, ma, act, BKE_MAT_ASSIGN_OBDATA, false);
 }
 
+void BKE_material_attr_indices_remap(bke::MutableAttributeAccessor attributes,
+                                     const uint *remap,
+                                     const int remap_num)
+{
+  /* The "material_index" attribute may contain values outside the valid material range
+   * (it's only clamped on read), so skip indices that don't map into the material array. */
+  bke::SpanAttributeWriter<int> material_indices = attributes.lookup_for_write_span<int>(
+      "material_index");
+  if (!material_indices) {
+    return;
+  }
+  for (const int i : material_indices.span.index_range()) {
+    const int index = material_indices.span[i];
+    if (IndexRange(remap_num).contains(index)) {
+      material_indices.span[i] = remap[index];
+    }
+  }
+  material_indices.finish();
+}
+
 void BKE_object_material_remap(Object *ob, const uint *remap)
 {
   Material ***matar = BKE_object_material_array_p(ob);
@@ -1256,6 +1283,20 @@ void BKE_object_material_remap(Object *ob, const uint *remap)
   }
   else if (ob->type == OB_GREASE_PENCIL) {
     BKE_grease_pencil_material_remap(id_cast<GreasePencil *>(ob->data), remap, ob->totcol);
+  }
+  else if (ob->type == OB_CURVES) {
+    BKE_curves_material_remap(id_cast<Curves *>(ob->data), remap, ob->totcol);
+  }
+  else if (ob->type == OB_POINTCLOUD) {
+    BKE_pointcloud_material_remap(id_cast<PointCloud *>(ob->data), remap, ob->totcol);
+  }
+  else if (ob->type == OB_VOLUME) {
+    /* Material support doesn't store "indices".
+     * The way "baked" materials are stored means they store ID's and don't need remapping. */
+  }
+  else if (ob->type == OB_MBALL) {
+    /* While meta-balls have a material array, they only use the first material slot
+     * (no support for mixing materials). */
   }
   else {
     /* add support for this object data! */
@@ -1444,7 +1485,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   /* can happen on face selection in editmode */
-  object_material_active_index_sanitize(ob);
+  BKE_object_material_active_index_sanitize(ob);
 
   /* we delete the actcol */
   mao = (*matarar)[ob->actcol - 1];
@@ -1464,9 +1505,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
 
   const int actcol = ob->actcol;
 
-  for (Object *obt = static_cast<Object *>(bmain->objects.first); obt;
-       obt = static_cast<Object *>(obt->id.next))
-  {
+  for (Object *obt = bmain->objects.first(); obt; obt = static_cast<Object *>(obt->id.next)) {
     if (obt->data == ob->data) {
       /* Can happen when object material lists are used, see: #52953 */
       if (actcol > obt->totcol) {
@@ -1483,7 +1522,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
         obt->matbits[a - 1] = obt->matbits[a];
       }
       obt->totcol--;
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
 
       if (obt->totcol == 0) {
         MEM_delete(obt->mat);
@@ -1503,6 +1542,59 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   return true;
+}
+
+int BKE_object_material_remove_unused(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol && !BKE_object_material_slot_used(ob, slot)) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
+}
+
+int BKE_object_material_remove_all(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
 }
 
 static bNode *nodetree_uv_node_recursive(bNode *node)
@@ -1626,9 +1718,8 @@ static bool fill_texpaint_slots_cb(bNodeTree * /*nodetree*/, bNode *node, void *
       slot->attribute_name = storage->name;
       if (storage->type == SHD_ATTRIBUTE_GEOMETRY) {
         const Mesh *mesh = id_cast<const Mesh *>(fill_data->ob->data);
-        if (mesh->runtime->edit_mesh) {
-          const BMDataLayerLookup attr = BM_data_layer_lookup(*mesh->runtime->edit_mesh->bm,
-                                                              storage->name);
+        if (const BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+          const BMDataLayerLookup attr = BM_data_layer_lookup(*bm, storage->name);
           slot->valid = attr && bke::mesh::is_color_attribute({attr.domain, attr.type});
         }
         else {
@@ -1661,23 +1752,13 @@ static void fill_texpaint_slots_recursive(bNodeTree *nodetree,
   ntree_foreach_texnode_recursive(nodetree, fill_texpaint_slots_cb, &fill_data, slot_filter);
 }
 
-/** Check which type of paint slots should be filled for the given object. */
-static ePaintSlotFilter material_paint_slot_filter(const Object *ob)
-{
-  ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
-  if (ob->mode == OB_MODE_SCULPT && USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
-    slot_filter |= PAINT_SLOT_COLOR_ATTRIBUTE;
-  }
-  return slot_filter;
-}
-
 void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const Object *ob)
 {
   if (!ma) {
     return;
   }
 
-  const ePaintSlotFilter slot_filter = material_paint_slot_filter(ob);
+  const ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
 
   const TexPaintSlot *prev_texpaintslot = ma->texpaintslot;
   const int prev_paint_active_slot = ma->paint_active_slot;
@@ -2062,12 +2143,14 @@ static Material *default_material_holdout = nullptr;
 static Material *default_material_surface = nullptr;
 static Material *default_material_volume = nullptr;
 static Material *default_material_gpencil = nullptr;
+static Material *default_material_gsplat = nullptr;
 
 static Material **default_materials[] = {&default_material_empty,
                                          &default_material_holdout,
                                          &default_material_surface,
                                          &default_material_volume,
                                          &default_material_gpencil,
+                                         &default_material_gsplat,
                                          nullptr};
 
 static Material *material_default_create(Material **ma_p, const char *name)
@@ -2090,16 +2173,16 @@ static void material_default_surface_init(Material **ma_p)
   bNodeTree *ntree = ma->nodetree;
 
   bNode *principled = bke::node_add_static_node(nullptr, *ntree, SH_NODE_BSDF_PRINCIPLED);
-  bNodeSocket *base_color = bke::node_find_socket(*principled, SOCK_IN, "Base Color");
+  bNodeSocket *base_color = bke::node_find_socket(*principled, SOCK_IN, "Base Color"_ustr);
   copy_v3_v3((static_cast<bNodeSocketValueRGBA *>(base_color->default_value))->value, &ma->r);
 
   bNode *output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_MATERIAL);
 
   bke::node_add_link(*ntree,
                      *principled,
-                     *bke::node_find_socket(*principled, SOCK_OUT, "BSDF"),
+                     *bke::node_find_socket(*principled, SOCK_OUT, "BSDF"_ustr),
                      *output,
-                     *bke::node_find_socket(*output, SOCK_IN, "Surface"));
+                     *bke::node_find_socket(*output, SOCK_IN, "Surface"_ustr));
 
   principled->location[0] = -200.0f;
   principled->location[1] = 100.0f;
@@ -2107,6 +2190,7 @@ static void material_default_surface_init(Material **ma_p)
   output->location[1] = 100.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 static void material_default_volume_init(Material **ma_p)
@@ -2119,9 +2203,9 @@ static void material_default_volume_init(Material **ma_p)
 
   bke::node_add_link(*ntree,
                      *principled,
-                     *bke::node_find_socket(*principled, SOCK_OUT, "Volume"),
+                     *bke::node_find_socket(*principled, SOCK_OUT, "Volume"_ustr),
                      *output,
-                     *bke::node_find_socket(*output, SOCK_IN, "Volume"));
+                     *bke::node_find_socket(*output, SOCK_IN, "Volume"_ustr));
 
   principled->location[0] = -200.0f;
   principled->location[1] = 100.0f;
@@ -2129,6 +2213,7 @@ static void material_default_volume_init(Material **ma_p)
   output->location[1] = 100.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 static void material_default_holdout_init(Material **ma_p)
@@ -2141,9 +2226,9 @@ static void material_default_holdout_init(Material **ma_p)
 
   bke::node_add_link(*ntree,
                      *holdout,
-                     *bke::node_find_socket(*holdout, SOCK_OUT, "Holdout"),
+                     *bke::node_find_socket(*holdout, SOCK_OUT, "Holdout"_ustr),
                      *output,
-                     *bke::node_find_socket(*output, SOCK_IN, "Surface"));
+                     *bke::node_find_socket(*output, SOCK_IN, "Surface"_ustr));
 
   holdout->location[0] = 10.0f;
   holdout->location[1] = 300.0f;
@@ -2151,6 +2236,45 @@ static void material_default_holdout_init(Material **ma_p)
   output->location[1] = 300.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
+}
+
+static void material_default_gsplat_init(Material **ma_p)
+{
+  Material *ma = material_default_create(ma_p, "Default Gaussian Splat");
+  bNodeTree *ntree = ma->nodetree;
+
+  bNode *attribute = bke::node_add_static_node(nullptr, *ntree, SH_NODE_ATTRIBUTE);
+  NodeShaderAttribute *storage = static_cast<NodeShaderAttribute *>(attribute->storage);
+  STRNCPY(storage->name, "radiance");
+
+  bNode *emission = bke::node_add_static_node(nullptr, *ntree, SH_NODE_EMISSION);
+  bNodeSocket *color = bke::node_find_socket(*emission, SOCK_IN, "Color"_ustr);
+  copy_v3_v3((static_cast<bNodeSocketValueRGBA *>(color->default_value))->value, &ma->r);
+
+  bNode *output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_MATERIAL);
+
+  bke::node_add_link(*ntree,
+                     *attribute,
+                     *bke::node_find_socket(*attribute, SOCK_OUT, "Color"_ustr),
+                     *emission,
+                     *color);
+
+  bke::node_add_link(*ntree,
+                     *emission,
+                     *bke::node_find_socket(*emission, SOCK_OUT, "Emission"_ustr),
+                     *output,
+                     *bke::node_find_socket(*output, SOCK_IN, "Surface"_ustr));
+
+  attribute->location[0] = -300.0f;
+  attribute->location[1] = 100.0f;
+  emission->location[0] = -50.0f;
+  emission->location[1] = 100.0f;
+  output->location[0] = 200.0f;
+  output->location[1] = 100.0f;
+
+  bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 Material *BKE_material_default_empty()
@@ -2178,11 +2302,16 @@ Material *BKE_material_default_gpencil()
   return default_material_gpencil;
 }
 
+Material *BKE_material_default_gsplat()
+{
+  return default_material_gsplat;
+}
+
 void BKE_material_defaults_free_gpu()
 {
   for (int i = 0; default_materials[i]; i++) {
     Material *ma = *default_materials[i];
-    if (ma && ma->gpumaterial.first) {
+    if (ma && ma->gpumaterial.first()) {
       GPU_material_free(&ma->gpumaterial);
     }
   }
@@ -2203,6 +2332,7 @@ void BKE_materials_init()
   material_default_volume_init(&default_material_volume);
   material_default_holdout_init(&default_material_holdout);
   material_default_gpencil_init(&default_material_gpencil);
+  material_default_gsplat_init(&default_material_gsplat);
 }
 
 void BKE_materials_exit()

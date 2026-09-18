@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -40,10 +40,6 @@ static void node_init(bNodeTree * /*ntree*/, bNode *node)
 
 static void node_draw_buttons(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-#ifndef WITH_OPENCOLORIO
-  layout.label(RPT_("Disabled, built without OpenColorIO"), ICON_ERROR);
-#endif
-
   layout.prop_with_menu(ptr,
                         "from_color_space",
                         ui::ITEM_R_SPLIT_EMPTY_NAME,
@@ -66,6 +62,8 @@ class ConvertColorSpaceOperation : public NodeOperation {
 
   void execute() override
   {
+    BLI_SCOPED_DEFER([&]() { this->populate_meta_data(); });
+
     const Result &input_image = this->get_input("Image");
     if (this->is_identity()) {
       Result &output_image = this->get_result("Image");
@@ -74,15 +72,16 @@ class ConvertColorSpaceOperation : public NodeOperation {
     }
 
     if (input_image.is_single_value()) {
-      execute_single();
+      this->execute_single();
       return;
     }
+
     if (this->context().use_gpu()) {
-      execute_gpu();
+      this->execute_gpu();
+      return;
     }
-    else {
-      execute_cpu();
-    }
+
+    this->execute_cpu();
   }
 
   void execute_gpu()
@@ -137,7 +136,7 @@ class ConvertColorSpaceOperation : public NodeOperation {
       output_image.store_pixel(texel, input_image.load_pixel<Color>(texel));
     });
 
-    color_processor.apply(static_cast<float *>(output_image.cpu_data().data()),
+    color_processor.apply(static_cast<float *>(output_image.cpu_data_for_write().data()),
                           domain.data_size.x,
                           domain.data_size.y,
                           input_image.channels_count(),
@@ -159,6 +158,14 @@ class ConvertColorSpaceOperation : public NodeOperation {
     Result &output_image = get_result("Image");
     output_image.allocate_single_value();
     output_image.set_single_value(color);
+  }
+
+  void populate_meta_data()
+  {
+    Result &output_image = this->get_result("Image");
+    if (IMB_colormanagement_space_name_is_data(node_storage(this->node()).to_color_space)) {
+      output_image.meta_data.is_non_color_data = true;
+    }
   }
 
   bool is_identity()
@@ -195,12 +202,12 @@ static void node_register()
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
   ntype.draw_buttons = node_draw_buttons;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.initfunc = node_init;
   bke::node_type_storage(
       ntype, "NodeConvertColorSpace", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;
-  bke::node_type_size(ntype, 160, 150, NODE_DEFAULT_MAX_WIDTH);
+  ntype.default_width = bke::NodeWidth::_160;
 
   bke::node_register_type(ntype);
 }

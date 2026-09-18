@@ -61,13 +61,11 @@ class Config {
   static std::unique_ptr<Config> create_from_environment();
 
   /**
-   * Create fallback implementation which is always guaranteed to work.
+   * Create the built-in fallback configuration, which is embedded in the code and so is
+   * guaranteed to load.
    *
    * It is used in cases actual OpenColorIO configuration has failed to be created so that Blender
    * interface can be displayed.
-   *
-   * The fallback implementation is also used implicitly when BLender is compiled without
-   * OpenColorIO support.
    */
   static std::unique_ptr<Config> create_fallback();
 
@@ -135,7 +133,7 @@ class Config {
   /**
    * Get colorspace to be used for saving and loading HDR image files, which
    * may need adjustments compared to the colorspace as chosen by the user.
-   **/
+   */
   virtual const ColorSpace *get_color_space_for_hdr_image(StringRefNull name) const = 0;
 
   /** \} */

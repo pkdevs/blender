@@ -8,7 +8,7 @@
  * \ingroup imbuf
  */
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -77,7 +77,6 @@ void IMB_colormanagement_validate_settings(const ColorManagedDisplaySettings *di
 
 const char *IMB_colormanagement_role_colorspace_name_get(int role);
 const char *IMB_colormanagement_srgb_colorspace_name_get();
-void IMB_colormanagement_check_is_data(ImBuf *ibuf, const char *name);
 void IMB_colormanagement_copy_settings(ImBuf *ibuf_src, ImBuf *ibuf_dst);
 void IMB_colormanagement_assign_float_colorspace(ImBuf *ibuf, const char *name);
 void IMB_colormanagement_assign_byte_colorspace(ImBuf *ibuf, const char *name);
@@ -89,8 +88,14 @@ const char *IMB_colormanagement_space_from_filepath_rules(const char *filepath);
 const ColorSpace *IMB_colormanagement_space_get_named(const char *name);
 const ColorSpace *IMB_colormanagement_space_get_named(StringRefNull name);
 bool IMB_colormanagement_space_is_data(const ColorSpace *colorspace);
+
+/** Is colorspace the same as the scene linear working space? */
 bool IMB_colormanagement_space_is_scene_linear(const ColorSpace *colorspace);
+/** Is the colorspace sRGB? */
 bool IMB_colormanagement_space_is_srgb(const ColorSpace *colorspace);
+/* Is the colorspace scene linear + the sRGB transfer function? */
+bool IMB_colormanagement_space_is_scene_linear_srgb(const ColorSpace *colorspace);
+
 bool IMB_colormanagement_space_name_is_data(const char *name);
 bool IMB_colormanagement_space_name_is_scene_linear(const char *name);
 bool IMB_colormanagement_space_name_is_srgb(const char *name);
@@ -328,39 +333,18 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
                                            bool allocate_result,
                                            const ImageFormatData *image_format);
 
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Public Display Buffers Interfaces
- * \{ */
-
 void IMB_colormanagement_display_settings_from_ctx(
     const bContext *C,
     ColorManagedViewSettings **r_view_settings,
     ColorManagedDisplaySettings **r_display_settings);
 
-/**
- * Acquire display buffer for given image buffer using specified view and display settings.
- */
-const uchar *IMB_display_buffer_acquire(ImBuf *ibuf,
-                                        const ColorManagedViewSettings *view_settings,
-                                        const ColorManagedDisplaySettings *display_settings,
-                                        void **cache_handle);
-/**
- * Same as #IMB_display_buffer_acquire but gets view and display settings from context.
- */
-const uchar *IMB_display_buffer_acquire_ctx(const bContext *C, ImBuf *ibuf, void **cache_handle);
-
-void IMB_display_buffer_transform_apply(unsigned char *display_buffer,
-                                        float *linear_buffer,
-                                        int width,
-                                        int height,
-                                        int channels,
-                                        const ColorManagedViewSettings *view_settings,
-                                        const ColorManagedDisplaySettings *display_settings,
-                                        bool predivide);
-
-void IMB_display_buffer_release(void *cache_handle);
+void IMB_colormanagement_scene_linear_to_display_buffer(
+    uint8_t *display_buffer,
+    const float *linear_buffer,
+    int width,
+    int height,
+    const ColorManagedViewSettings *view_settings,
+    const ColorManagedDisplaySettings *display_settings);
 
 /** \} */
 
@@ -394,7 +378,8 @@ int IMB_colormanagement_view_max_nits(const char *display_name, const char *view
 
 /** Get scope display info for waveform/parade/vector-scope. */
 ocio::ScopeInfo IMB_colormanagement_get_scope_info(
-    const ColorManagedDisplaySettings *display_settings, const char *view_name);
+    const ColorManagedDisplaySettings *display_settings,
+    const ColorManagedViewSettings *view_settings);
 
 /** \} */
 
@@ -476,42 +461,6 @@ void IMB_colormanagement_look_items_add(EnumPropertyItem **items,
                                         int *totitem,
                                         const char *view_name);
 void IMB_colormanagement_colorspace_items_add(EnumPropertyItem **items, int *totitem);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Tile-based Buffer Management
- * \{ */
-
-void IMB_partial_display_buffer_update(ImBuf *ibuf,
-                                       const float *linear_buffer,
-                                       const unsigned char *byte_buffer,
-                                       int stride,
-                                       int offset_x,
-                                       int offset_y,
-                                       const ColorManagedViewSettings *view_settings,
-                                       const ColorManagedDisplaySettings *display_settings,
-                                       int xmin,
-                                       int ymin,
-                                       int xmax,
-                                       int ymax);
-
-void IMB_partial_display_buffer_update_threaded(
-    ImBuf *ibuf,
-    const float *linear_buffer,
-    const unsigned char *byte_buffer,
-    int stride,
-    int offset_x,
-    int offset_y,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    int xmin,
-    int ymin,
-    int xmax,
-    int ymax);
-
-void IMB_partial_display_buffer_update_delayed(
-    ImBuf *ibuf, int xmin, int ymin, int xmax, int ymax);
 
 /** \} */
 
@@ -605,7 +554,8 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(
     float dither,
     bool predivide,
     bool do_overlay_merge,
-    ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
+    ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW,
+    float opacity = 1.0f);
 /**
  * Same as setup_glsl_draw, but color management settings are guessing from a given context.
  */

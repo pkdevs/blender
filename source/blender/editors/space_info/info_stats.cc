@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
@@ -26,13 +28,13 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_timecode.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_timecode.hh"
 
 #include "BLT_translation.hh"
 
@@ -63,8 +65,6 @@
 #include "GPU_capabilities.hh"
 
 namespace blender {
-
-ENUM_OPERATORS(eUserpref_StatusBar_Flag)
 
 struct SceneStats {
   uint64_t totvert, totvertsel, totvertsculpt;
@@ -224,24 +224,26 @@ static void stats_object(Object *ob,
     case OB_VOLUME: {
       break;
     }
+    default:
+      break;
   }
 }
 
 static void stats_object_edit(Object *obedit, SceneStats *stats)
 {
   if (obedit->type == OB_MESH) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    const BMesh *bm = BKE_editmesh_bmesh_get(obedit);
 
-    stats->totvert += em->bm->totvert;
-    stats->totvertsel += em->bm->totvertsel;
+    stats->totvert += bm->totvert;
+    stats->totvertsel += bm->totvertsel;
 
-    stats->totedge += em->bm->totedge;
-    stats->totedgesel += em->bm->totedgesel;
+    stats->totedge += bm->totedge;
+    stats->totedgesel += bm->totedgesel;
 
-    stats->totface += em->bm->totface;
-    stats->totfacesel += em->bm->totfacesel;
+    stats->totface += bm->totface;
+    stats->totfacesel += bm->totfacesel;
 
-    stats->tottri += em->looptris.size();
+    stats->tottri += poly_to_tri_count(bm->totface, bm->totloop);
   }
   else if (obedit->type == OB_ARMATURE) {
     /* Armature Edit */
@@ -543,7 +545,7 @@ void ED_info_stats_clear(wmWindowManager *wm, ViewLayer *view_layer)
     const bScreen *screen = WM_window_get_active_screen(&win);
     for (ScrArea &area : screen->areabase) {
       if (area.spacetype == SPACE_VIEW3D) {
-        View3D *v3d = static_cast<View3D *>(area.spacedata.first);
+        View3D *v3d = area.spacedata.first_as<View3D>();
         if (v3d->localvd) {
           ED_view3d_local_stats_free(v3d);
         }
@@ -564,7 +566,7 @@ static bool format_stats(
   SceneStats **stats_p = (v3d_local) ? &v3d_local->runtime.local_stats : &view_layer->stats;
   if (*stats_p == nullptr) {
     /* Don't access dependency graph if interface is marked as locked. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+    wmWindowManager *wm = bmain->wm.first();
     if (wm->runtime->is_interface_locked) {
       return false;
     }
@@ -624,7 +626,7 @@ static void get_stats_string(char *info,
 {
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
-  eObjectMode object_mode = ob ? eObjectMode(ob->mode) : OB_MODE_OBJECT;
+  eObjectMode object_mode = ob ? ob->mode : OB_MODE_OBJECT;
   LayerCollection *layer_collection = BKE_view_layer_active_collection_get(view_layer);
 
   if (object_mode == OB_MODE_OBJECT) {
@@ -781,13 +783,12 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
                                   FRA2TIME(frame_count),
                                   scene->frames_per_second(),
                                   U.timecode_style);
-    ofs += BLI_snprintf_utf8_rlen(info + ofs,
-                                  len - ofs,
-
-                                  IFACE_("Duration: %s (Frame %i/%i)"),
-                                  timecode,
-                                  relative_current_frame,
-                                  frame_count);
+    const std::string scene_duration = fmt::format(
+        fmt::runtime(IFACE_("Duration: {} (Frame {}/{})")),
+        timecode,
+        relative_current_frame,
+        frame_count);
+    ofs += BLI_strncpy_utf8_rlen(info + ofs, scene_duration.c_str(), len - ofs);
   }
 
   /* Memory status. */
@@ -877,7 +878,7 @@ void ED_info_draw_stats(
 
   BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
-  eObjectMode object_mode = ob ? eObjectMode(ob->mode) : OB_MODE_OBJECT;
+  eObjectMode object_mode = ob ? ob->mode : OB_MODE_OBJECT;
   const int font_id = BLF_default();
 
   /* Translated labels for each stat row. */

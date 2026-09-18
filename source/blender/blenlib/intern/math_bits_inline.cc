@@ -12,8 +12,8 @@
 #  include <intrin.h>
 #endif
 
-#include "BLI_assert.h"
-#include "BLI_math_bits.h"
+#include "BLI_assert.hh"
+#include "BLI_math_bits.hh"
 
 namespace blender {
 
@@ -133,7 +133,7 @@ MINLINE int count_bits_i(unsigned int i)
 }
 MINLINE int count_bits_uint64(const uint64_t a)
 {
-  return count_bits_i((uint32_t)a) + count_bits_i((uint32_t)(a >> 32));
+  return count_bits_i(uint32_t(a)) + count_bits_i(uint32_t(a >> 32));
 }
 #endif
 

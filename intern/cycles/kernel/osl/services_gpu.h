@@ -21,6 +21,21 @@ CCL_NAMESPACE_BEGIN
 
 /* Closure */
 
+#if OSL_LIBRARY_VERSION_CODE >= 11500
+
+ccl_device_extern void *rs_allocate_closure(ccl_private ShaderGlobals *sg,
+                                            const size_t size,
+                                            const size_t alignment)
+{
+  ccl_private uint8_t *closure_pool = sg->closure_pool;
+  closure_pool = reinterpret_cast<ccl_private uint8_t *>(
+      (reinterpret_cast<size_t>(closure_pool) + alignment - 1) & (-alignment));
+  sg->closure_pool = closure_pool + size;
+  return closure_pool;
+}
+
+#else
+
 ccl_device_extern ccl_private OSLClosure *osl_mul_closure_color(ccl_private ShaderGlobals *sg,
                                                                 ccl_private OSLClosure *a,
                                                                 const ccl_private float3 *weight)
@@ -137,6 +152,8 @@ ccl_device_extern ccl_private OSLClosure *osl_allocate_weighted_closure_componen
 
   return closure;
 }
+
+#endif
 
 /* Utilities */
 
@@ -332,7 +349,7 @@ ccl_device_extern bool rs_environment(ccl_private ShaderGlobals *sg,
                                       RSDeviceString /*filename*/,
                                       ccl_private void *texture_handle,
                                       ccl_private void * /*texture_thread_info*/,
-                                      ccl_private OSLTextureOptions * /*opt*/,
+                                      ccl_private OSLTextureOptions *opt,
                                       const ccl_private float3 *R,
                                       const ccl_private float3 *dRdx,
                                       const ccl_private float3 *dRdy,
@@ -342,7 +359,8 @@ ccl_device_extern bool rs_environment(ccl_private ShaderGlobals *sg,
                                       ccl_private float * /*dresultdt*/,
                                       ccl_private void * /*errormessage*/)
 {
-  return osl_shared_environment(nullptr, sg, texture_handle, *R, *dRdx, *dRdy, nchannels, result);
+  return osl_shared_environment(
+      nullptr, sg, texture_handle, opt, *R, *dRdx, *dRdy, nchannels, result);
 }
 
 ccl_device_extern bool rs_get_texture_info(ccl_private ShaderGlobals * /*sg*/,
@@ -533,15 +551,20 @@ ccl_device_extern void osl_texture_set_subimagename(ccl_private OSLTextureOption
 {
 }
 
-ccl_device_extern void osl_texture_set_missingcolor_arena(ccl_private OSLTextureOptions * /*opt*/,
-                                                          ccl_private float3 * /*color*/)
+ccl_device_extern void osl_texture_set_missingcolor_arena(ccl_private OSLTextureOptions *opt,
+                                                          ccl_private float *missing)
 {
+  opt->missingcolor = (const float *)missing;
 }
 
-ccl_device_extern void osl_texture_set_missingcolor_alpha(ccl_private OSLTextureOptions * /*opt*/,
-                                                          const int /*nchannels*/,
-                                                          const float /*alpha*/)
+ccl_device_extern void osl_texture_set_missingcolor_alpha(ccl_private OSLTextureOptions *opt,
+                                                          const int alphaindex,
+                                                          const float missingalpha)
 {
+  float *m = (float *)(opt)->missingcolor;
+  if (m) {
+    m[alphaindex] = missingalpha;
+  }
 }
 
 ccl_device_extern void osl_init_trace_options(ccl_private void * /*oec*/,

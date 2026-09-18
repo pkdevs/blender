@@ -12,11 +12,12 @@
 #include "DNA_material_types.h"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_material.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_memblock.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memblock.hh"
 
 #include "GPU_uniform_buffer.hh"
 
@@ -47,7 +48,8 @@ static gpu::Texture *gpencil_image_texture_get(blender::Image *image, bool *r_al
   ImageUser iuser = {nullptr};
   gpu::Texture *gpu_tex = nullptr;
 
-  gpu_tex = BKE_image_get_gpu_texture(image, &iuser);
+  gpu_tex = BKE_image_acquire_gpu_texture(image, &iuser);
+  DRW_manager_get()->hold_texture(gpu_tex);
   *r_alpha_premult = (gpu_tex) ? (image->alpha_mode == IMA_ALPHA_PREMUL) : false;
 
   return gpu_tex;
@@ -270,6 +272,26 @@ MaterialPool *gpencil_material_pool_create(Instance *inst,
           mat_data->stroke_u_scale = gp_style->placement_count;
           break;
       }
+    }
+
+    if (gp_style->flag & GP_MATERIAL_USE_DOTS_RANDOMIZATION) {
+      mat_data->flag |= GP_DOTS_USE_RANDOMIZATION;
+
+      mat_data->random_packed.x = (unit_float_to_ushort_clamp(gp_style->random_size_factor));
+      mat_data->random_packed.x |= (unit_float_to_ushort_clamp(gp_style->random_strength_factor))
+                                   << 16;
+
+      mat_data->random_packed.y = (unit_float_to_ushort_clamp(gp_style->random_rotation_factor));
+      mat_data->random_packed.y |= (unit_float_to_ushort_clamp(gp_style->random_hue_factor)) << 16;
+
+      mat_data->random_packed.z = (unit_float_to_ushort_clamp(gp_style->random_saturation_factor));
+      mat_data->random_packed.z |= (unit_float_to_ushort_clamp(gp_style->random_value_factor))
+                                   << 16;
+
+      mat_data->random_packed.w = float_as_uint(gp_style->random_noise_scale);
+    }
+    else {
+      mat_data->random_packed = uint4(0);
     }
 
     gp_style = gpencil_viewport_material_overrides(inst, ob, color_type, gp_style, lighting_mode);

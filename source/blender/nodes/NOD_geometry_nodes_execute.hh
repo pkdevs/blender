@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_compute_context.hh"
@@ -26,9 +30,9 @@ struct GeometrySet;
 struct IDProperty;
 namespace nodes {
 struct GeoNodesCallData;
-namespace geo_eval_log {
-class GeoNodesLog;
-}  // namespace geo_eval_log
+namespace eval_log {
+class NodesEvalLog;
+}  // namespace eval_log
 }  // namespace nodes
 
 namespace nodes {

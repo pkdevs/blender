@@ -8,16 +8,13 @@
 
 #include "draw_object_infos_infos.hh"
 
-SHADER_LIBRARY_CREATE_INFO(draw_mesh)
-SHADER_LIBRARY_CREATE_INFO(draw_resource_id_varying)
-
 #include "draw_model_lib.glsl"
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
-#include "gpu_shader_math_vector_reduce_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_reduce.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 namespace workbench::volume {
 
@@ -147,7 +144,7 @@ struct Resources {
     if (this->interpolation == 2) [[static_branch]] {
       return sample_tricubic(ima, co);
     }
-    /* Use hardware interpolation*/
+    /* Use hardware interpolation. */
     return texture(ima, co);
   }
 };
@@ -284,10 +281,10 @@ float4 volume_integration([[resource_table]] Resources &srt,
 {
   /* NOTE: Constant array declared inside function scope to reduce shader core thread memory
    * pressure on Apple Silicon. */
-  constexpr float4 dither_mat[4] = float4_array(float4(P(0.0f), P(8.0f), P(2.0f), P(10.0f)),
-                                                float4(P(12.0f), P(4.0f), P(14.0f), P(6.0f)),
-                                                float4(P(3.0f), P(11.0f), P(1.0f), P(9.0f)),
-                                                float4(P(15.0f), P(7.0f), P(13.0f), P(5.0f)));
+  constexpr float4 dither_mat[4] = {float4(P(0.0f), P(8.0f), P(2.0f), P(10.0f)),
+                                    float4(P(12.0f), P(4.0f), P(14.0f), P(6.0f)),
+                                    float4(P(3.0f), P(11.0f), P(1.0f), P(9.0f)),
+                                    float4(P(15.0f), P(7.0f), P(13.0f), P(5.0f))};
   /* Start with full transmittance and no scattered light. */
   float3 final_scattering = float3(0.0f);
   float final_transmittance = 1.0f;
@@ -330,6 +327,8 @@ struct VertOut {
                                 [[out, condition(use_slice)]] VertOut &v_out,
                                 [[position]] float4 &out_position)
 {
+  SHADER_LIBRARY_CREATE_INFO(draw_resource_id_varying);
+
   drw_ResourceID_iface.resource_id = drw_resource_id_raw();
 
   float3 final_pos;

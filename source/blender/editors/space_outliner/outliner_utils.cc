@@ -9,8 +9,8 @@
 #include <algorithm>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_screen_types.h"
@@ -82,9 +82,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
         return &te_iter;
       }
 
-      if (BLI_listbase_is_empty(&te_iter.subtree) ||
-          !TSELEM_OPEN(TREESTORE(&te_iter), space_outliner))
-      {
+      if (te_iter.subtree.is_empty() || !TSELEM_OPEN(TREESTORE(&te_iter), space_outliner)) {
         /* No need for recursion. */
         continue;
       }
@@ -112,7 +110,7 @@ static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *
                                                              float view_co_x,
                                                              bool *r_is_merged_icon)
 {
-  TreeElement *child_te = static_cast<TreeElement *>(parent_te->subtree.first);
+  TreeElement *child_te = parent_te->subtree.first();
 
   while (child_te) {
     const bool over_element = (view_co_x > child_te->xs) && (view_co_x < child_te->xend);
@@ -297,7 +295,7 @@ bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
                             TreeTraversalFunc func,
                             void *customdata)
 {
-  for (TreeElement *te = static_cast<TreeElement *>(tree->first), *te_next; te; te = te_next) {
+  for (TreeElement *te = tree->first(), *te_next; te; te = te_next) {
     TreeTraversalAction func_retval = TRAVERSE_CONTINUE;
     /* in case te is freed in callback */
     TreeStoreElem *tselem = TREESTORE(te);
@@ -495,7 +493,7 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  te = outliner_find_item_at_y(space_outliner, &space_outliner->tree, view_mval[1]);
+  te = outliner_find_item_at_y(space_outliner, &space_outliner->runtime->tree, view_mval[1]);
   if (te) {
     TreeStoreElem *tselem = TREESTORE(te);
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
@@ -517,7 +515,8 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   float view_mval[2];
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  TreeElement *te = outliner_find_item_at_y(space_outliner, &space_outliner->tree, view_mval[1]);
+  TreeElement *te = outliner_find_item_at_y(
+      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
   if (!te) {
     return false;
   }

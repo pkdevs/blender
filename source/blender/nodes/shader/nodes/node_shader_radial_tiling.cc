@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -190,6 +194,13 @@ class RoundedPolygonFunction : public mf::MultiFunction {
                                                    float2(coord[i].x, coord[i].y));
       }
     });
+  }
+
+  void hash_unique(UniqueHashBytes &hash) const override
+  {
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(normalize_r_gon_parameter_);
   }
 
   ExecutionHints get_execution_hints() const override

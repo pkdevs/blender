@@ -8,8 +8,8 @@
 
 #include "BLI_array.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_base.h"
 #include "BLI_math_base.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
@@ -625,6 +625,7 @@ void calc_vert_factors(const Depsgraph &depsgraph,
                        const Span<int> verts,
                        const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
   const Mesh &mesh = *id_cast<const Mesh *>(object.data);
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, object);
@@ -638,8 +639,12 @@ void calc_vert_factors(const Depsgraph &depsgraph,
   if (automasking.settings.flags &
       (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL))
   {
-    if (std::optional<OrigPositionData> orig_data = orig_position_data_lookup_mesh(object, node)) {
-      orig_normals = orig_data->normals;
+    /* Weight & Vertex paint do not get "original" normals */
+    if (object.mode == OB_MODE_SCULPT) {
+      if (std::optional<OrigPositionData> orig_data = orig_position_data_lookup_mesh(object, node))
+      {
+        orig_normals = orig_data->normals;
+      }
     }
   }
 
@@ -715,7 +720,7 @@ void calc_vert_factors(const Depsgraph &depsgraph,
       bool ignore = ss.cache && ss.cache->brush &&
                     ss.cache->brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_DRAW_FACE_SETS &&
                     (automasking.settings.initial_face_set == face_set_none_id ||
-                     face_set::vert_face_set_get(vert_to_face_map, face_sets, vert) ==
+                     face_set::vert_face_set_max_get(vert_to_face_map, face_sets, vert) ==
                          ss.cache->paint_face_set);
 
       if (!ignore && !face_set::vert_has_unique_face_set(vert_to_face_map, face_sets, vert)) {
@@ -746,6 +751,7 @@ void calc_face_factors(const Depsgraph &depsgraph,
                        const Span<int> face_indices,
                        const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
   const Mesh &mesh = *id_cast<const Mesh *>(object.data);
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, object);
@@ -830,7 +836,7 @@ void calc_face_factors(const Depsgraph &depsgraph,
         bool ignore = ss.cache && ss.cache->brush &&
                       ss.cache->brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_DRAW_FACE_SETS &&
                       (automasking.settings.initial_face_set == face_set_none_id ||
-                       face_set::vert_face_set_get(vert_to_face_map, face_sets, vert) ==
+                       face_set::vert_face_set_max_get(vert_to_face_map, face_sets, vert) ==
                            ss.cache->paint_face_set);
 
         if (!ignore && !face_set::vert_has_unique_face_set(vert_to_face_map, face_sets, vert)) {
@@ -861,6 +867,7 @@ void calc_grids_factors(const Depsgraph &depsgraph,
                         const Span<int> grids,
                         const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
   const Mesh &base_mesh = *id_cast<const Mesh *>(object.data);
   const OffsetIndices<int> faces = base_mesh.faces();
@@ -942,9 +949,7 @@ void calc_grids_factors(const Depsgraph &depsgraph,
       }
 
       if (automasking.settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
-        if (automasking.settings.initial_face_set != face_set_none_id &&
-            grid_face_set != automasking.settings.initial_face_set)
-        {
+        if (!ELEM(automasking.settings.initial_face_set, face_set_none_id, grid_face_set)) {
           factors[node_vert] = 0.0f;
           continue;
         }
@@ -1002,6 +1007,7 @@ void calc_vert_factors(const Depsgraph &depsgraph,
                        const Set<BMVert *, 0> &verts,
                        const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   BMesh &bm = *ss.bm;
   const int face_set_offset = CustomData_get_offset_named(
@@ -1088,7 +1094,7 @@ void calc_vert_factors(const Depsgraph &depsgraph,
       bool ignore = ss.cache && ss.cache->brush &&
                     ss.cache->brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_DRAW_FACE_SETS &&
                     (automasking.settings.initial_face_set == face_set_none_id ||
-                     face_set::vert_face_set_get(face_set_offset, *vert) ==
+                     face_set::vert_face_set_max_get(face_set_offset, *vert) ==
                          ss.cache->paint_face_set);
 
       if (!ignore && !face_set::vert_has_unique_face_set(face_set_offset, *vert)) {
@@ -1232,6 +1238,7 @@ static void fill_topology_automasking_factors(const Depsgraph &depsgraph,
                                               Object &ob,
                                               MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* TODO: This method is to be removed when more of the automasking code handles the different
    * pbvh types. */
   SculptSession &ss = *ob.runtime->sculpt_session;
@@ -1258,6 +1265,7 @@ static void fill_topology_automasking_factors(const Depsgraph &depsgraph,
 
 static void init_face_sets_masking(const Paint &paint, Object &ob, MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   const Brush *brush = BKE_paint_brush_for_read(&paint);
 
   if (!is_enabled(paint, ob, brush)) {
@@ -1537,6 +1545,7 @@ static void init_boundary_masking(Object &object,
                                   const int propagation_steps,
                                   MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   switch (bke::object::pbvh_get(object)->type()) {
     case bke::pbvh::Type::Mesh:
       init_boundary_masking_mesh(object, depsgraph, mode, propagation_steps, factors);
@@ -1599,6 +1608,7 @@ static void normal_occlusion_automasking_fill(const Depsgraph &depsgraph,
                                               eAutomasking_flag mode,
                                               MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   const int totvert = vertex_count_get(ob);
   /* No need to build original data since this is only called at the beginning of strokes. */
   switch (bke::object::pbvh_get(ob)->type()) {

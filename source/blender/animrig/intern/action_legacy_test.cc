@@ -5,6 +5,7 @@
 #include "ANIM_action_legacy.hh"
 
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -12,29 +13,14 @@
 
 #include "DNA_anim_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionLegacyTest : public testing::Test {
+class ActionLegacyTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -53,8 +39,8 @@ class ActionLegacyTest : public testing::Test {
 
   FCurve *fcurve_add_legacy(bAction *action, const StringRefNull rna_path, const int array_index)
   {
-    FCurve *fcurve = MEM_new<FCurve>(__func__);
-    BKE_fcurve_rnapath_set(*fcurve, rna_path);
+    FCurve *fcurve = BKE_fcurve_create();
+    fcurve->rna_path_set(rna_path);
     fcurve->array_index = array_index;
     BLI_addtail(&action->curves, fcurve);
     return fcurve;

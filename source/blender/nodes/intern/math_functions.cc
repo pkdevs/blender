@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_math_functions.hh"
 
 #include "FN_multi_function_registry.hh"
@@ -41,6 +45,13 @@ class ClampWrapperFunction : public mf::MultiFunction {
       float &value = results[i];
       CLAMP(value, 0.0f, 1.0f);
     });
+  }
+
+  void hash_unique(UniqueHashBytes &hash) const override
+  {
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    fn_.hash_unique(hash);
   }
 };
 

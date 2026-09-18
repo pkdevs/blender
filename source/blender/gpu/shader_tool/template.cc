@@ -65,6 +65,11 @@ static void parse_template_definition_args(const Scope arg,
         found = true;
       }
     });
+    fn_args.foreach_match("A&A", [&](const vector<Token> &tokens) {
+      if (tokens[0].str() == name_str) {
+        found = true;
+      }
+    });
     all_template_args_in_function_signature &= found;
   }
   else if (type_str == "enum" || type_str == "bool") {
@@ -238,7 +243,7 @@ void SourceProcessor::lower_template_dependent_names(Parser &parser)
 void SourceProcessor::lower_pre_template(Parser &parser)
 {
   /* Lower noop attributes after linting them. */
-  lower_maybe_unused(parser);
+  lower_noop_attributes(parser);
   /* Lint and remove C++ accessor templates before lowering template. */
   lower_srt_accessor_templates(parser);
   lower_union_accessor_templates(parser);

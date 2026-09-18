@@ -4,26 +4,18 @@
 
 #include "OCIO_config.hh"
 
-#include "fallback/fallback_config.hh"
-
-#if defined(WITH_OPENCOLORIO)
-#  include "libocio/libocio_config.hh"
-#endif
+#include "libocio/libocio_config.hh"
 
 namespace blender::ocio {
 
 std::unique_ptr<Config> Config::create_from_environment()
 {
-#if defined(WITH_OPENCOLORIO)
   return LibOCIOConfig::create_from_environment();
-#endif
-
-  return nullptr;
 }
 
 std::unique_ptr<Config> Config::create_fallback()
 {
-  return std::make_unique<FallbackConfig>();
+  return LibOCIOConfig::create_fallback();
 }
 
 }  // namespace blender::ocio

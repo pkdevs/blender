@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <optional>
 #include <regex>
 
@@ -25,7 +29,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes::socket_usage_inference {
@@ -485,11 +489,14 @@ class SocketUsageInferencerImpl {
     const bool is_top_level = context == nullptr;
     if (is_top_level) {
       if (socket == show_input_socket) {
-        this->usage_task__with_dependent_sockets(show_input_socket, {}, {}, context);
+        /* At the top level, the show input is always used. */
+        all_socket_usages_.add_new(socket, true);
       }
       if (socket == message_input_socket) {
-        this->usage_task__with_dependent_sockets(
-            message_input_socket, {}, {&*show_input_socket}, context);
+        /* The message input is used if the show input is true. */
+        const InferenceValue show_inference_value = this->get_socket_value(show_input_socket);
+        const bool show_value = show_inference_value.get_if_primitive<bool>().value_or(true);
+        all_socket_usages_.add_new(socket, show_value);
       }
       return;
     }
@@ -581,28 +588,28 @@ class SocketUsageInferencerImpl {
   {
     const NodeInContext node = socket.owner_node();
     Vector<const bNodeSocket *> dependent_sockets;
-    for (const bNodeLink &internal_link : node->internal_links()) {
-      if (internal_link.fromsock != socket.socket) {
+    for (const bNodeInternalLink &internal_link : node->internal_links()) {
+      if (internal_link.in != socket.socket) {
         continue;
       }
-      dependent_sockets.append(internal_link.tosock);
+      dependent_sockets.append(internal_link.out);
     }
     this->usage_task__with_dependent_sockets(socket, dependent_sockets, {}, socket.context);
   }
 
   /**
    * Utility that handles simple cases where a socket is used if any of its dependent sockets is
-   * used.
+   * used and all of the boolean condition inputs are true.
    */
   void usage_task__with_dependent_sockets(const SocketInContext &socket,
-                                          const Span<const bNodeSocket *> dependent_outputs,
+                                          const Span<const bNodeSocket *> dependent_sockets,
                                           const Span<const bNodeSocket *> condition_inputs,
                                           const ComputeContext *dependent_socket_context)
   {
     /* Check if any of the dependent outputs are used. */
     SocketInContext next_unknown_socket;
     bool any_output_used = false;
-    for (const bNodeSocket *dependent_socket_ptr : dependent_outputs) {
+    for (const bNodeSocket *dependent_socket_ptr : dependent_sockets) {
       const SocketInContext dependent_socket{dependent_socket_context, dependent_socket_ptr};
       const std::optional<bool> is_used = all_socket_usages_.lookup_try(dependent_socket);
       if (!is_used.has_value()) {
@@ -626,7 +633,7 @@ class SocketUsageInferencerImpl {
       this->push_usage_task(next_unknown_socket);
       return;
     }
-    if (!any_output_used && !dependent_outputs.is_empty()) {
+    if (!any_output_used) {
       all_socket_usages_.add_new(socket, false);
       return;
     }
@@ -708,6 +715,21 @@ class SocketUsageInferencerImpl {
         this->disabled_output_task__with_origin_socket(socket, node.input_socket(0));
         break;
       }
+      case GEO_NODE_SWITCH: {
+        this->disabled_output_task__output__generic_switch(
+            socket, switch_node_inference_utils::is_socket_selected__switch);
+        break;
+      }
+      case GEO_NODE_INDEX_SWITCH: {
+        this->disabled_output_task__output__generic_switch(
+            socket, switch_node_inference_utils::is_socket_selected__index_switch);
+        break;
+      }
+      case GEO_NODE_MENU_SWITCH: {
+        this->disabled_output_task__output__generic_switch(
+            socket, switch_node_inference_utils::is_socket_selected__menu_switch);
+        break;
+      }
       default: {
         if (node->is_type("NodeEnableOutput"_ustr)) {
           this->disabled_output_task__output__enable_output_node(socket);
@@ -740,12 +762,11 @@ class SocketUsageInferencerImpl {
   void disabled_output_task__output__muted_node(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
-    for (const bNodeLink &internal_link : node->internal_links()) {
-      if (internal_link.tosock != socket.socket) {
+    for (const bNodeInternalLink &internal_link : node->internal_links()) {
+      if (internal_link.out != socket.socket) {
         continue;
       }
-      this->disabled_output_task__with_origin_socket(socket,
-                                                     {socket.context, internal_link.fromsock});
+      this->disabled_output_task__with_origin_socket(socket, {socket.context, internal_link.in});
       return;
     }
     all_socket_disable_states_.add_new(socket, false);
@@ -774,6 +795,46 @@ class SocketUsageInferencerImpl {
     const SocketInContext origin_socket{&group_context,
                                         &group_output_node->input_socket(socket->index())};
     this->disabled_output_task__with_origin_socket(socket, origin_socket);
+  }
+
+  void disabled_output_task__output__generic_switch(
+      const SocketInContext &socket,
+      const FunctionRef<bool(const SocketInContext &socket, const InferenceValue &condition)>
+          is_selected_socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    BLI_assert(node->input_sockets().size() >= 1);
+    BLI_assert(node->output_sockets().size() >= 1);
+
+    if (socket->type == SOCK_CUSTOM && STREQ(socket->idname, "NodeSocketVirtual")) {
+      all_socket_disable_states_.add_new(socket, false);
+      return;
+    }
+    const SocketInContext condition_socket{socket.context,
+                                           get_first_available_bsocket(node->input_sockets())};
+    const InferenceValue condition_value = this->get_socket_value(condition_socket);
+    if (condition_value.is_unknown()) {
+      all_socket_disable_states_.add_new(socket, false);
+      return;
+    }
+    for (const bNodeSocket *input_socket : node->input_sockets()) {
+      if (!input_socket->is_available()) {
+        continue;
+      }
+      if (input_socket->type == SOCK_CUSTOM && STREQ(input_socket->idname, "NodeSocketVirtual")) {
+        continue;
+      }
+      if (input_socket == condition_socket.socket) {
+        continue;
+      }
+      const SocketInContext origin_socket{socket.context, input_socket};
+      const bool is_selected = is_selected_socket(origin_socket, condition_value);
+      if (is_selected) {
+        this->disabled_output_task__with_origin_socket(socket, origin_socket);
+        return;
+      }
+    }
+    all_socket_disable_states_.add_new(socket, false);
   }
 
   void disabled_output_task__output__enable_output_node(const SocketInContext &socket)
@@ -1092,6 +1153,17 @@ bool SocketUsageParams::menu_input_may_be(const UString identifier, const int en
     return true;
   }
   return value.get_primitive<MenuValue>().value == enum_value;
+}
+
+bool SocketUsageParams::bool_input_may_be(const UString identifier, const bool bool_value) const
+{
+  BLI_assert(this->node.input_by_identifier(identifier)->type == SOCK_BOOLEAN);
+  const InferenceValue value = this->get_input(identifier);
+  if (!value.is_primitive_value()) {
+    /* The value is unknown, so it may be the requested enum value. */
+    return true;
+  }
+  return value.get_primitive<bool>() == bool_value;
 }
 
 void SocketUsageInferencer::mark_top_level_node_outputs_as_used()

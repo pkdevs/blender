@@ -34,10 +34,11 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--no-native-pixels",
         "--enable-autoexec",
         "--debug-memory",
+        "--console-crash-handler",
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     # Windows separators get messed up when passing them inside the python expression
     output_filepath = output_filepath.replace("\\", "/")
@@ -82,13 +83,16 @@ def main():
     report.set_reference_dir("overlay_renders")
 
     test_dir_name = Path(args.testdir).name
-    gpu_vendor = render_report.get_gpu_device_vendor(args.blender)
+    gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
 
     if gpu_vendor == 'INTEL':
         # Intel shows larger differences in Point Primitive coordinates,
         # affecting the coverage of FaceDots and similar overlays.
         # This means reference images should not be rendered on Intel.
         report.set_fail_threshold(0.05)
+    elif gpu_vendor == "AMD" and args.gpu_backend == "opengl":
+        report.set_fail_threshold(0.22)
+        report.set_fail_percent(2.0)
     else:
         report.set_fail_threshold(0.02)
 

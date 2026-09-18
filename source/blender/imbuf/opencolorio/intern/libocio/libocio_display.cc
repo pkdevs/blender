@@ -5,20 +5,18 @@
 #include "libocio_display.hh"
 #include "OCIO_display.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include "BLI_index_range.hh"
 
-#  include "BLI_index_range.hh"
+#include "OCIO_config.hh"
 
-#  include "OCIO_config.hh"
+#include "CLG_log.h"
 
-#  include "CLG_log.h"
+#include "../opencolorio.hh"
 
-#  include "../opencolorio.hh"
-
-#  include "error_handling.hh"
-#  include "libocio_config.hh"
-#  include "libocio_cpu_processor.hh"
-#  include "libocio_display_processor.hh"
+#include "error_handling.hh"
+#include "libocio_config.hh"
+#include "libocio_cpu_processor.hh"
+#include "libocio_display_processor.hh"
 
 namespace blender {
 
@@ -136,8 +134,8 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
         (ocio_display_colorspace) ? static_cast<const LibOCIOColorSpace *>(config.get_color_space(
                                         ocio_display_colorspace->getName())) :
                                     nullptr;
-    StringRefNull display_interop_id = (display_colorspace) ? display_colorspace->interop_id() :
-                                                              "";
+    const StringRef display_interop_id = interop_id_drop_namespace(
+        (display_colorspace) ? display_colorspace->interop_id() : "");
 
     if (!display_interop_id.is_empty()) {
       if (display_interop_id.endswith("_rec709_display") ||
@@ -314,5 +312,3 @@ void LibOCIODisplay::clear_caches()
 
 }  // namespace ocio
 }  // namespace blender
-
-#endif
