@@ -149,7 +149,7 @@ struct KernelGlobals {
 
   uint resource_id_get(const ShadingData & /*sd*/)
   {
-    [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
+    [[resource_table]] const eevee::PipelineConstants &pipeline = pipe;
     auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
     draw::ID id{interp_flat.resource_id_raw};
     if (pipeline.is_shadow_pipe) {
@@ -160,7 +160,7 @@ struct KernelGlobals {
 
   uint view_id_get(const ShadingData & /*sd*/)
   {
-    [[resource_table]] const eevee::PipelineConstants &pipeline = this->pipe;
+    [[resource_table]] const eevee::PipelineConstants &pipeline = pipe;
     auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
     draw::ID id{interp_flat.resource_id_raw};
     if (pipeline.is_shadow_pipe) {
@@ -171,19 +171,19 @@ struct KernelGlobals {
 
   ObjectMatrices object_matrices_get(const ShadingData &sd)
   {
-    [[resource_table]] const draw::Model &models = this->model;
+    [[resource_table]] const draw::Model &models = model;
     return models.get(resource_id_get(sd));
   }
 
   ObjectInfos object_infos_get(const ShadingData &sd)
   {
-    [[resource_table]] const draw::Infos &info = this->infos;
+    [[resource_table]] const draw::Infos &info = infos;
     return info.get(resource_id_get(sd));
   }
 
   ViewMatrices view_matrices_get(const ShadingData &sd)
   {
-    [[resource_table]] const draw::View &views = this->view;
+    [[resource_table]] const draw::View &views = view;
     return views.get(view_id_get(sd));
   }
 };

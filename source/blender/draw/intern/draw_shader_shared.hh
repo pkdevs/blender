@@ -77,9 +77,13 @@ using namespace math;
 /** \name Views
  * \{ */
 
+/* NOTE: Legacy, should be removed after we port everything to BSL. */
+
+/** Global that needs to be set correctly in each shader stage. */
+static uint drw_view_id = 0;
+
 #if !defined(DRW_VIEW_LEN) && !defined(GLSL_CPP_STUBS)
 /* Single-view case (default). */
-#  define drw_view_id 0
 #  define DRW_VIEW_LEN 1
 #  define DRW_VIEW_SHIFT 0
 #  define DRW_VIEW_FROM_RESOURCE_ID
@@ -88,8 +92,6 @@ using namespace math;
 /* Multi-view case. */
 /** This should be already defined at shaderCreateInfo level. */
 // #  define DRW_VIEW_LEN 64
-/** Global that needs to be set correctly in each shader stage. */
-uint drw_view_id = 0;
 /**
  * In order to reduce the memory requirements, the view id is merged with resource id to avoid
  * doubling the memory required only for view indexing.

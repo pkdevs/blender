@@ -210,7 +210,7 @@ struct Resources {
   DofSample spatial_filtering(uint3 local_id) const
   {
     /* Plus (+) shape offsets. */
-    constexpr int2 plus_offsets[4] = {int2(-1, 0), int2(0, -1), int2(1, 0), int2(0, 1)};
+    const int2 plus_offsets[4] = {int2(-1, 0), int2(0, -1), int2(1, 0), int2(0, 1)};
     DofSample center = fetch_input_sample(int2(0), local_id);
     DofSample accum{float4(0.0f), 0.0f};
     float accum_weight = 0.0f;
