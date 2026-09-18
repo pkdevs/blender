@@ -8,7 +8,7 @@
 
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 namespace eevee::light {
 
@@ -136,7 +136,7 @@ struct VisibleLightIterator {
 
   bool next()
   {
-    /* clang-format off */ /* Mult-iline macros would break line count. */
+    /* clang-format off */ /* Multi-line macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
     const LightCullingData &culling = lrd.light_cull_buf;
@@ -203,7 +203,7 @@ struct VisibleLightIterator {
     if (is_directional()) {
       return false;
     }
-    LightVector lv = light_vector_get(light, false, P);
+    LightVector lv = LightVector::get(light, false, P);
     if (light_attenuation_surface(light, false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
       return true;
     }

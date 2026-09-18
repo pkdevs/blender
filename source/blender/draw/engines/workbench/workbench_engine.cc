@@ -402,10 +402,14 @@ class Instance : public DrawEngine {
     resources_.material_buf.append(mat);
     int material_index = resources_.material_buf.size() - 1;
 
-    this->draw_to_mesh_pass(ob_ref, mat.is_transparent(), [&](MeshPass &mesh_pass) {
+    const bool is_gsplat = pointcloud_is_gsplat(ob_ref.object);
+    const bool has_transparency = mat.is_transparent();
+
+    this->draw_to_mesh_pass(ob_ref, has_transparency, [&](MeshPass &mesh_pass) {
       PassMain::Sub &pass =
-          mesh_pass.get_subpass(eGeometryType::POINTCLOUD).sub("Point Cloud SubPass");
-      gpu::Batch *batch = pointcloud_sub_pass_setup(pass, ob_ref.object);
+          is_gsplat ? mesh_pass.get_subpass(eGeometryType::GSPLAT).sub("GSplatSubPass") :
+                      mesh_pass.get_subpass(eGeometryType::POINTCLOUD).sub("PointCloudSubPass");
+      gpu::Batch *batch = pointcloud_sub_pass_setup(pass, ob_ref, handle);
       pass.draw(batch, handle, material_index);
     });
   }
@@ -464,7 +468,7 @@ class Instance : public DrawEngine {
   {
     int2 resolution = scene_state_.resolution;
 
-    /** Always setup in-front depth, since Overlays can be updated without causing a Workbench
+    /* Always setup in-front depth, since Overlays can be updated without causing a Workbench
      * re-sync (See #113580). */
     bool needs_depth_in_front = !transparent_ps_.accumulation_in_front_ps_.is_empty() ||
                                 (!opaque_ps_.gbuffer_in_front_ps_.is_empty() &&
@@ -485,6 +489,9 @@ class Instance : public DrawEngine {
           draw_ctx, manager, View::default_get(), scene_state_, resources_, depth_in_front_tx);
       return;
     }
+
+    /* Hand off gsplat compute workload before draws. */
+    DRW_gsplat_ensure_radiance(manager, view_);
 
     anti_aliasing_ps_.setup_view(view_, scene_state_);
 

@@ -16,11 +16,11 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "eevee_velocity.bsl.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_safe_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_safe.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 namespace eevee::film {
 
@@ -445,8 +445,7 @@ struct Film {
     [[resource_table]] const Uniform &uni = this->uniforms;
 
     /* x = hash, y = accumulated weight. Only keep track of 4 highest weighted samples. */
-    float2 crypto_samples[4] = float2_array(
-        float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f));
+    float2 crypto_samples[4] = {float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f)};
     for (int i = 0; i < samples_len; i++) {
       FilmSample src = sample_get(i, texel_film, panoramic_sample);
       sample_cryptomatte_accum(src, layer_component, cryptomatte_tx, crypto_samples);
@@ -532,7 +531,7 @@ struct Film {
   }
 
   /* Same as `copy_history()` but resets to background instead of copying. Used for
-   * panoramic texels that no subview owns at all (e.g. outside the fisheye lens), so that they
+   * panoramic texels that no sub-view owns at all (e.g. outside the fisheye lens), so that they
    * do not keep displaying stale data. */
   void clear_history(int2 texel_film, float4 &out_color, float &out_depth)
   {
@@ -564,7 +563,7 @@ struct Film {
      * Dilate velocity by using the nearest pixel in a cross pattern.
      * "High Quality Temporal Supersampling" by Brian Karis at SIGGRAPH 2014 (Slide 27)
      */
-    constexpr int2 corners[4] = int2_array(int2(-2, -2), int2(2, -2), int2(-2, 2), int2(2, 2));
+    constexpr int2 corners[4] = {int2(-2, -2), int2(2, -2), int2(-2, 2), int2(2, 2)};
     float min_depth = reverse_z::read(texelFetch(depth_tx, texel_sample, 0).x);
     int2 nearest_texel = texel_sample;
     for (int i = 0; i < 4; i++) {
@@ -662,11 +661,11 @@ struct Film {
   void combined_neighbor_boundbox(int2 texel, float4 &min_c, float4 &max_c)
   {
     /* Plus (+) shape offsets. */
-    constexpr int2 plus_offsets[5] = int2_array(int2(0, 0), /* Center */
-                                                int2(-1, 0),
-                                                int2(0, -1),
-                                                int2(1, 0),
-                                                int2(0, 1));
+    constexpr int2 plus_offsets[5] = {int2(0, 0), /* Center */
+                                      int2(-1, 0),
+                                      int2(0, -1),
+                                      int2(1, 0),
+                                      int2(0, 1)};
 #if 0
     /**
      * Compute Variance of neighborhood as described in:
@@ -709,7 +708,7 @@ struct Film {
      * Round bbox shape by averaging 2 different min/max from 2 different neighborhood. */
     float4 min_c_3x3 = min_c;
     float4 max_c_3x3 = max_c;
-    constexpr int2 corners[4] = int2_array(int2(-1, -1), int2(1, -1), int2(-1, 1), int2(1, 1));
+    constexpr int2 corners[4] = {int2(-1, -1), int2(1, -1), int2(-1, 1), int2(1, 1)};
     for (int i = 0; i < 4; i++) {
       float4 color = texelfetch_as_YCoCg_opacity(combined_tx, texel + corners[i]);
       min_c_3x3 = min(min_c_3x3, color);
@@ -1048,14 +1047,14 @@ struct Film {
       panoramic_sample = sample_get(0, texel_film, panoramic_view_id_get());
       if (panoramic_sample.weight == 0.0f) {
         if (is_zero(panoramic_direction_get(texel_film))) {
-          /* No subview owns this texel under the current projection at all (e.g. outside the
+          /* No sub-view owns this texel under the current projection at all (e.g. outside the
            * fisheye lens). Clear it instead of copying stale data. */
           clear_history(texel_film, out_color, out_depth);
           return;
         }
-        /* TODO: Have a stencil mask of each subview to avoid computing weights for the whole
+        /* TODO: Have a stencil mask of each sub-view to avoid computing weights for the whole
          * screen for each. Using a mesh to draw the region is not recommended due to quad
-         * over-shading and the amount of tesselation needed. Using a mesh to mark the stencil
+         * over-shading and the amount of tessellation needed. Using a mesh to mark the stencil
          * might be beneficial (passthrough fragment shader). */
         copy_history(texel_film, out_color, out_depth);
         return;

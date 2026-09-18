@@ -177,8 +177,8 @@ void ED_buttons_visible_tabs_menu(bContext *C, ui::Layout *layout, void * /*arg*
       "show_properties_tool",
       "show_properties_render",
       "show_properties_output",
-      "show_properties_view_layer",
       "show_properties_scene",
+      "show_properties_view_layer",
       "show_properties_compositor",
       "show_properties_world",
       "show_properties_collection",
@@ -232,8 +232,8 @@ Vector<eSpaceButtons_Context> ED_buttons_tabs_list(const SpaceProperties *sbuts,
 
   add_tab(BCONTEXT_RENDER);
   add_tab(BCONTEXT_OUTPUT);
-  add_tab(BCONTEXT_VIEW_LAYER);
   add_tab(BCONTEXT_SCENE);
+  add_tab(BCONTEXT_VIEW_LAYER);
   add_tab(BCONTEXT_COMPOSITOR);
   add_tab(BCONTEXT_WORLD);
 
@@ -1087,7 +1087,13 @@ static void buttons_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 
 static void buttons_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceProperties>(sl);
+  writer->write_struct_cast<SpaceProperties>(
+      sl, [](BlendStructWriter<SpaceProperties> &struct_writer) {
+        SpaceProperties &shallow_sbuts = struct_writer.shallow_data;
+        shallow_sbuts.path = nullptr;
+        shallow_sbuts.texuser = nullptr;
+        shallow_sbuts.runtime = nullptr;
+      });
 }
 
 /** \} */

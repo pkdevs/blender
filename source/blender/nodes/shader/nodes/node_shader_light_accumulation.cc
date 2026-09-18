@@ -19,7 +19,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
 
-  /** WATCH: If you add more Color sockets, ensure `node_tree_update.cc`
+  /* WATCH: If you add more Color sockets, ensure `node_tree_update.cc`
    * `shader_tree_tag_by_ancestor` and `shader_tree_link_error` are updated accordingly.  */
   b.add_input<decl::Color>("Diffuse Light"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
@@ -51,7 +51,8 @@ static int node_shader_gpu_light_accumulation(GPUMaterial *mat,
 {
   GPU_material_flag_set(mat, GPU_MATFLAG_LIGHTING);
 
-  return GPU_stack_link(mat, node, "node_light_accumulation", in, out);
+  return GPU_stack_link(
+      mat, node, "node_light_accumulation", in, out, GPU_kernel_globals(), GPU_shading_data());
 }
 
 }  // namespace nodes::node_shader_light_accumulation_cc

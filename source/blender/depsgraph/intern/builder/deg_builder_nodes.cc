@@ -59,8 +59,8 @@
 #include "BKE_constraint.h"
 #include "BKE_curve.hh"
 #include "BKE_fcurve_driver.h"
-#include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_modifiers.h"
 #include "BKE_idprop.hh"
 #include "BKE_image.hh"
 #include "BKE_key.hh"
@@ -807,7 +807,7 @@ void DepsgraphNodeBuilder::build_object(int base_index,
   if (object->greasepencil_modifiers.first() != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    BKE_gpencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
+    BKE_grease_pencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Shader FX. */
   if (object->shader_fx.first() != nullptr) {
@@ -1540,7 +1540,8 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
    *    and/or not affected by the sim for instance).
    *
    * 3) "Pull Results" - grab the specific transforms applied for a specific
-   *    object - performed as part of object's transform-stack building. */
+   *    object - performed as part of object's transform-stack building.
+   */
 
   /* Create nodes --------------------------------------------------------- */
 
@@ -1612,8 +1613,7 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
 
 void DepsgraphNodeBuilder::build_particle_systems(Object *object, bool is_object_visible)
 {
-  /**
-   * Particle Systems Nodes
+  /* Particle Systems Nodes
    * ======================
    *
    * There are two types of nodes associated with representing

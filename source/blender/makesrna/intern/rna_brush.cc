@@ -394,7 +394,7 @@ static EnumPropertyItem rna_enum_gpencil_brush_modes_items[] = {
 #  include "BKE_brush.hh"
 #  include "BKE_colorband.hh"
 #  include "BKE_context.hh"
-#  include "BKE_gpencil_legacy.h"
+#  include "BKE_grease_pencil.hh"
 #  include "BKE_icons.hh"
 #  include "BKE_layer.hh"
 #  include "BKE_material.hh"
@@ -403,6 +403,9 @@ static EnumPropertyItem rna_enum_gpencil_brush_modes_items[] = {
 #  include "BKE_preview_image.hh"
 
 #  include "WM_api.hh"
+
+#  define GPENCIL_USE_VERTEX_COLOR(toolsettings) \
+    (((toolsettings)->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR))
 
 namespace blender {
 
@@ -737,9 +740,8 @@ static void rna_Brush_main_tex_update(bContext *C, PointerRNA *ptr)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
   Brush *br = static_cast<Brush *>(ptr->data);
-  BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, br->mtex.tex);
+  bke::paint::invalidate_overlay_tex(*scene, br->mtex.tex);
   rna_Brush_update(bmain, scene, ptr);
 }
 
@@ -747,15 +749,14 @@ static void rna_Brush_secondary_tex_update(bContext *C, PointerRNA *ptr)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
   Brush *br = static_cast<Brush *>(ptr->data);
-  BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, br->mask_mtex.tex);
+  bke::paint::invalidate_overlay_tex(*scene, br->mask_mtex.tex);
   rna_Brush_update(bmain, scene, ptr);
 }
 
 static void rna_Brush_size_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  BKE_paint_invalidate_overlay_all();
+  bke::paint::invalidate_overlay_all(*scene);
   rna_Brush_update(bmain, scene, ptr);
 }
 
@@ -767,13 +768,11 @@ static void rna_Brush_stroke_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 
 static void rna_TextureSlot_brush_angle_update(bContext *C, PointerRNA *ptr)
 {
-  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   MTex *mtex = static_cast<MTex *>(ptr->data);
   /* skip invalidation of overlay for stencil mode */
   if (mtex->brush_map_mode != MTEX_MAP_MODE_STENCIL) {
-    ViewLayer *view_layer = CTX_data_view_layer(C);
-    BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, mtex->tex);
+    bke::paint::invalidate_overlay_tex(*scene, mtex->tex);
   }
 
   rna_TextureSlot_update(C, ptr);
@@ -1060,10 +1059,10 @@ static void rna_BrushGpencilSettings_use_material_pin_update(bContext *C, Pointe
 
   if (brush->gpencil_settings->flag & GP_BRUSH_MATERIAL_PINNED) {
     Material *material = BKE_object_material_get(ob, ob->actcol);
-    BKE_gpencil_brush_material_set(brush, material);
+    BKE_grease_pencil_brush_material_set(brush, material);
   }
   else {
-    BKE_gpencil_brush_material_set(brush, nullptr);
+    BKE_grease_pencil_brush_material_set(brush, nullptr);
   }
 
   rna_BrushGpencilSettings_update(CTX_data_main(C), CTX_data_scene(C), ptr);
@@ -3148,7 +3147,7 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "use_hardness_pressure", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "paint_flags", BRUSH_PAINT_HARDNESS_PRESSURE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BRUSH_HARDNESS_PRESSURE);
   RNA_def_property_ui_icon(prop, ICON_STYLUS_PRESSURE, 0);
   RNA_def_property_ui_text(prop, "Use Pressure for Hardness", "Use pressure to modulate hardness");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
