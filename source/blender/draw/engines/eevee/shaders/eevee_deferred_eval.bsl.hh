@@ -157,6 +157,8 @@ void light_eval_frag([[resource_table]] LightEval &srt,
   ctx.receiver_light_set = 0;
   ctx.terminator_normal_offset = 0.0f;
   ctx.terminator_geometry_offset = 0.0f;
+  ctx.ray_count = srt.shadow_ray_count;
+  ctx.ray_step_count = srt.shadow_ray_step_count;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
     ObjectInfos object_infos = infos.get(object_id);
@@ -331,6 +333,8 @@ void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
   ctx.receiver_light_set = 0;
   ctx.terminator_normal_offset = 0.0f;
   ctx.terminator_geometry_offset = 0.0f;
+  ctx.ray_count = 1;
+  ctx.ray_step_count = 6;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
     ObjectInfos object_infos = infos.get(object_id);
@@ -502,6 +506,8 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
   ctx.receiver_light_set = 0;
   ctx.terminator_normal_offset = 0.0f;
   ctx.terminator_geometry_offset = 0.0f;
+  ctx.ray_count = 1;
+  ctx.ray_step_count = 6;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
     ObjectInfos object_infos = infos.get(object_id);

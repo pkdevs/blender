@@ -80,6 +80,8 @@ void forward_lighting_eval([[resource_table]] KernelGlobals &kg,
     ctx.receiver_light_set = receiver_light_set_get(object_infos);
     ctx.terminator_normal_offset = object_infos.shadow_terminator_normal_offset;
     ctx.terminator_geometry_offset = object_infos.shadow_terminator_geometry_offset;
+    ctx.ray_count = uni.uniform_buf.shadow.ray_count;
+    ctx.ray_step_count = uni.uniform_buf.shadow.step_count;
 
     lights.eval_reflection(ctx, vPz);
 

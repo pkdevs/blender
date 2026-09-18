@@ -1226,21 +1226,15 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals &kg,
 
     color = float4(1.0f);
 
-#if defined(GPU_FRAGMENT_SHADER)
-
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
     LightData light = lrd.light_buf[light_index];
 
     if (light.tilemap_index == LIGHT_NO_SHADOW) {
       return;
     }
 
-#  if defined(SPECIALIZED_SHADOW_PARAMS) || defined(SRT_CONSTANT_shadow_ray_count)
-    int ray_count = shadow_ray_count;
-    int ray_step_count = shadow_ray_step_count;
-#  else
     int ray_count = uni.uniform_buf.shadow.ray_count;
     int ray_step_count = uni.uniform_buf.shadow.step_count;
-#  endif
 
     ObjectInfos object_infos = kg.object_infos_get(sd);
 

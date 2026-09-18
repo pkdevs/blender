@@ -50,6 +50,8 @@ void eval_light([[resource_table]] EvalLight & /*srt*/,
   ctx.receiver_light_set = surfel.receiver_light_set;
   ctx.terminator_normal_offset = 0.0f;
   ctx.terminator_geometry_offset = 0.0f;
+  ctx.ray_count = 1;
+  ctx.ray_step_count = 6;
 
   ClosureUndetermined cl_reflect;
   cl_reflect.N = surfel.normal;
