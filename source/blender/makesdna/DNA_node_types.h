@@ -2051,6 +2051,9 @@ struct bNodeTree {
   /** Get the active group output node. */
   bNode *group_output_node();
   const bNode *group_output_node() const;
+  /** Get all output nodes of the node group, even the inactive ones. */
+  Span<bNode *> group_output_nodes();
+  Span<const bNode *> group_output_nodes() const;
   /** Get all input nodes of the node group. */
   Span<bNode *> group_input_nodes();
   Span<const bNode *> group_input_nodes() const;

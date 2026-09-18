@@ -145,14 +145,15 @@ static int node_copy_local(bNodeTree &from_tree,
       bNodeSocket *to = nullptr;
 
       if (io_map) {
-        if (io_map->contains(link.fromsock->identifier_ustr())) {
+        if (link.fromnode->is_group_input() && io_map->contains(link.fromsock->identifier_ustr()))
+        {
           UString from_socket_identifier{io_map->lookup(link.fromsock->identifier_ustr())};
           if (from_socket_identifier.is_empty()) {
             continue;
           }
           from = bke::node_find_socket(*from_node, SOCK_OUT, from_socket_identifier);
         }
-        if (io_map->contains(link.tosock->identifier_ustr())) {
+        if (link.tonode->is_group_output() && io_map->contains(link.tosock->identifier_ustr())) {
           UString to_socket_identifier{io_map->lookup(link.tosock->identifier_ustr())};
           if (to_socket_identifier.is_empty()) {
             continue;
@@ -214,7 +215,8 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
     copy_tree->id.properties = IDP_New(IDP_GROUP, nullptr, "ID_Properties");
   }
 
-  /* Store the original tree's unique session_uid as an INT property */
+  /* FIXME: Store the original tree's id name as String IDP property. This can cause problems if
+   * trees are renamed or have the same name. */
   IDProperty *id_name_prop = IDP_NewString(node_tree->id.name, "clipboard_source_id_name");
   IDP_AddToGroup(copy_tree->id.properties, id_name_prop);
 
@@ -350,6 +352,27 @@ static bNodeTreeInterfaceItem *add_item_and_panels_recursive(
   }
 }
 
+static bool isUsedInterfaceSocket(const bNodeTreeInterfaceSocket &socket, const bNodeTree &tree)
+{
+  if (socket.flag & NODE_INTERFACE_SOCKET_INPUT) {
+    for (const bNode *input_node : tree.group_input_nodes()) {
+      const bNodeSocket *input{input_node->output_by_identifier(UString(socket.identifier))};
+      if (input->is_directly_linked()) {
+        return true;
+      }
+    }
+  }
+  else if (socket.flag & NODE_INTERFACE_SOCKET_OUTPUT) {
+    for (const bNode *output_node : tree.group_output_nodes()) {
+      const bNodeSocket *output{output_node->input_by_identifier(UString(socket.identifier))};
+      if (output->is_directly_linked()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
@@ -416,21 +439,13 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 
   /* Adds used interface sockets in order. */
   VectorSet<const bNodeTreeInterfaceItem *> used_io_items{};
-  for (const bNodeTreeInterfaceSocket *iface_socket : from_tree->interface_inputs()) {
-    for (const bNode *input_node : from_tree->group_input_nodes()) {
-      const bNodeSocket *input{
-          input_node->output_by_identifier(UString(iface_socket->identifier))};
-      if (input->is_directly_linked()) {
-        used_io_items.add(&iface_socket->item);
+  for (const bNodeTreeInterfaceItem *iface_item : from_tree->interface_items()) {
+    if (auto *iface_socket = bke::node_interface::get_item_as<bNodeTreeInterfaceSocket>(
+            iface_item))
+    {
+      if (isUsedInterfaceSocket(*iface_socket, *from_tree)) {
+        used_io_items.add(iface_item);
       }
-    }
-  }
-  const bNode *output_node{from_tree->group_output_node()};
-  for (const bNodeSocket *output : output_node->input_sockets()) {
-    if (output->is_directly_linked()) {
-      int output_idx{from_tree->interface_output_index_by_identifier(output->identifier)};
-      bNodeTreeInterfaceSocket *iface_socket{from_tree->interface_outputs()[output_idx]};
-      used_io_items.add(&iface_socket->item);
     }
   }
 
