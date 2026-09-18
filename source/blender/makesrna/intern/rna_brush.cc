@@ -394,7 +394,7 @@ static EnumPropertyItem rna_enum_gpencil_brush_modes_items[] = {
 #  include "BKE_brush.hh"
 #  include "BKE_colorband.hh"
 #  include "BKE_context.hh"
-#  include "BKE_gpencil_legacy.h"
+#  include "BKE_grease_pencil.hh"
 #  include "BKE_icons.hh"
 #  include "BKE_layer.hh"
 #  include "BKE_material.hh"
@@ -403,6 +403,9 @@ static EnumPropertyItem rna_enum_gpencil_brush_modes_items[] = {
 #  include "BKE_preview_image.hh"
 
 #  include "WM_api.hh"
+
+#  define GPENCIL_USE_VERTEX_COLOR(toolsettings) \
+    (((toolsettings)->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR))
 
 namespace blender {
 
@@ -1056,10 +1059,10 @@ static void rna_BrushGpencilSettings_use_material_pin_update(bContext *C, Pointe
 
   if (brush->gpencil_settings->flag & GP_BRUSH_MATERIAL_PINNED) {
     Material *material = BKE_object_material_get(ob, ob->actcol);
-    BKE_gpencil_brush_material_set(brush, material);
+    BKE_grease_pencil_brush_material_set(brush, material);
   }
   else {
-    BKE_gpencil_brush_material_set(brush, nullptr);
+    BKE_grease_pencil_brush_material_set(brush, nullptr);
   }
 
   rna_BrushGpencilSettings_update(CTX_data_main(C), CTX_data_scene(C), ptr);
@@ -1904,6 +1907,14 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
                            "Use Stabilizer",
                            "Draw lines with a delay to allow smooth strokes (press Shift key to "
                            "override while drawing)");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_BrushGpencilSettings_update");
+
+  prop = RNA_def_property(srna, "use_cyclic_stroke", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", GP_BRUSH_USE_CYCLIC_STROKE);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_icon(prop, ICON_GP_CYCLIC_STROKE, 0);
+  RNA_def_property_ui_text(prop, "Cyclic", "Create a cyclic stroke");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, 0, "rna_BrushGpencilSettings_update");
 
@@ -3144,7 +3155,7 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "use_hardness_pressure", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "paint_flags", BRUSH_PAINT_HARDNESS_PRESSURE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BRUSH_HARDNESS_PRESSURE);
   RNA_def_property_ui_icon(prop, ICON_STYLUS_PRESSURE, 0);
   RNA_def_property_ui_text(prop, "Use Pressure for Hardness", "Use pressure to modulate hardness");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
