@@ -10,6 +10,11 @@
 namespace eevee {
 
 struct PipelineConstants {
+  [[compilation_constant]] bool is_mesh;
+  [[compilation_constant]] bool is_curves;
+  [[compilation_constant]] bool is_pointcloud;
+  [[compilation_constant]] bool is_gsplat;
+  [[compilation_constant]] bool is_world;
   [[compilation_constant]] bool use_lighting_nodes;
   [[compilation_constant]] bool use_ambient_occlusion;
   [[compilation_constant]] bool use_velocity;

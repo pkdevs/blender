@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
@@ -36,8 +35,6 @@ float4 closure_to_rgba_shadow([[resource_table]] KernelGlobals &kg,
 namespace eevee {
 
 struct SurfShadow {
-  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
-
   [[storage(SHADOW_RENDER_MAP_BUF_SLOT,
             read)]] const uint (&render_map_buf)[SHADOW_RENDER_MAP_SIZE];
 
@@ -45,19 +42,27 @@ struct SurfShadow {
 };
 
 [[fragment]] [[texture_atomic]]
-void surf_shadow([[resource_table]] KernelGlobals &kg,
-                 [[resource_table]] PipelineConstants &pipe,
-                 [[resource_table]] SurfShadow &srt,
-                 [[resource_table]] const Uniform &uni,
-                 [[resource_table]] const draw::View &views,
-                 [[resource_table]] const Sampling &sampling,
-                 [[resource_table]] const UtilityTexture & /*util_tx*/,
-                 [[front_facing]] const bool front_face,
-                 [[frag_coord]] const float4 frag_co)
+void surf_shadow(
+    [[resource_table]] KernelGlobals &kg,
+    [[resource_table]] PipelineConstants &pipe,
+    [[resource_table]] SurfShadow &srt,
+    [[resource_table]] const Uniform &uni,
+    [[resource_table]] const draw::View &views,
+    [[resource_table]] const Sampling &sampling,
+    [[resource_table]] const UtilityTexture & /*util_tx*/,
+    [[in]] const VertOutCommon &interp,
+    [[in]] const VertOutResID &interp_flat,
+    [[in]] const VertOutShadow &shadow_iface,
+    [[in]] const VertOutShadowClipping &shadow_clip,
+    [[in]] [[condition(is_curves)]] const VertOutCurves &curves_interp,
+    [[in]] [[condition(is_curves)]] const VertOutCurvesFlat &curves_interp_flat,
+    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloud &ptcloud_interp,
+    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloudFlat &ptcloud_interp_flat,
+    [[in]] [[condition(is_gsplat)]] const VertOutGSplat &gsplat_interp,
+    [[in]] [[condition(is_gsplat)]] const VertOutGSplatFlat &gsplat_interp_flat,
+    [[front_facing]] const bool front_face,
+    [[frag_coord]] const float4 frag_co)
 {
-  auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
-  auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
-
   float linear_depth = length(shadow_clip.position);
 
   /* Clip to light shape. */
@@ -68,10 +73,24 @@ void surf_shadow([[resource_table]] KernelGlobals &kg,
 
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(shadow_iface.shadow_view_id);
-    ShadingData sd = init_globals(uni, view, front_face, frag_co);
+
+    ShadingData sd = init_globals(uni, interp, interp_flat, view, front_face, frag_co);
+    if (pipe.is_mesh) [[static_branch]] {
+      init_globals_mesh(interp, sd);
+    }
+    else if (pipe.is_curves) [[static_branch]] {
+      init_globals_curves(interp, curves_interp, curves_interp_flat, sd, view);
+    }
+    else if (pipe.is_pointcloud) [[static_branch]] {
+      init_globals_pointcloud(ptcloud_interp, ptcloud_interp_flat, sd);
+    }
 
     nodetree_surface(kg, sd, 0.0f);
-    sd.transmittance = gsplat_amend_transmittance(sd.transmittance);
+
+    if (pipe.is_gsplat) [[static_branch]] {
+      sd.transmittance = gsplat_amend_transmittance(
+          gsplat_interp, gsplat_interp_flat, sd.transmittance);
+    }
 
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float random_threshold = pcg4d(float4(sd.P, noise_offset)).x;
