@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -151,7 +151,7 @@ enum class UnitConvertDirection {
 /**
  * Get the linear coefficients that convert between raw values and the unit `settings` prefer for
  * `unit_type`, i.e. `converted = raw * (*r_scale) + (*r_offset)`. Either output may be null.
- * When the preferred unit is adaptive, the unit system's base unit is used
+ * When the preferred unit is adaptive, the unit system's base unit is used.
  */
 void BKE_unit_preferred_conversion_get(const UnitSettings &settings,
                                        int unit_type,
