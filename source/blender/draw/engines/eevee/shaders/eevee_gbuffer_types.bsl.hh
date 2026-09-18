@@ -410,7 +410,7 @@ struct Header {
   uint3 bin_types() const
   {
     /* NOTE: Need to be adjusted for different global GBUFFER_LAYER_MAX. */
-    constexpr uchar bits_per_bin = uchar(GBUFFER_HEADER_BITS_PER_BIN);
+    constexpr uint bits_per_bin = uint(GBUFFER_HEADER_BITS_PER_BIN);
     uint3 types = (uint3(this->header_) >> (uint3(0u, 1u, 2u) * bits_per_bin)) &
                   ((1u << bits_per_bin) - 1);
     return types;
@@ -418,7 +418,7 @@ struct Header {
 
   GBufferMode bin_type(uchar bin) const
   {
-    constexpr uchar bits_per_bin = uchar(GBUFFER_HEADER_BITS_PER_BIN);
+    constexpr uint bits_per_bin = uint(GBUFFER_HEADER_BITS_PER_BIN);
     return GBufferMode((this->header_ >> (bin * bits_per_bin)) & ((1u << bits_per_bin) - 1));
   }
 
@@ -481,9 +481,10 @@ struct Header {
   {
     /* NOTE: Need to be adjusted for different global GBUFFER_LAYER_MAX. */
     constexpr uint bits_per_layer = uint(GBUFFER_HEADER_BITS_PER_BIN);
-    constexpr uint header_mask = (GBUF_TRANSMISSION_BIT << (bits_per_layer * 0)) |
-                                 (GBUF_TRANSMISSION_BIT << (bits_per_layer * 1)) |
-                                 (GBUF_TRANSMISSION_BIT << (bits_per_layer * 2));
+    /* TODO(@fclem): Compiler should allow uchar to uint cast in constexpr. */
+    /*constexpr */ uint header_mask = (uint(GBUF_TRANSMISSION_BIT) << (bits_per_layer * 0)) |
+                                      (uint(GBUF_TRANSMISSION_BIT) << (bits_per_layer * 1)) |
+                                      (uint(GBUF_TRANSMISSION_BIT) << (bits_per_layer * 2));
     return (this->header_ & header_mask) != 0;
   }
 
