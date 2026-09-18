@@ -22,6 +22,7 @@ struct PipelineConstants {
   [[compilation_constant]] bool use_clip_plane;
   [[compilation_constant]] bool use_sss;
   [[compilation_constant]] bool use_aov_output;
+  [[compilation_constant]] bool use_raycast;
   [[compilation_constant]] bool is_shadow_pipe;
   [[compilation_constant]] bool is_occupancy_pipe;
   [[compilation_constant]] bool use_forward_lighting;

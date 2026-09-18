@@ -700,7 +700,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                                               eMaterialGeometry geometry_type,
                                               const bool use_shader_to_rgba,
                                               const bool use_lighting_nodes,
-                                              const bool use_ao_node)
+                                              const bool use_ao_node,
+                                              const bool use_raycast)
 {
   using namespace blender::gpu::shader;
   using gpu::shader::Type;
@@ -724,6 +725,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                             "use_forward_lighting",
                             (pipeline_type == MAT_PIPE_FORWARD) ||
                                 ((pipeline_type == MAT_PIPE_DEFERRED) && use_shader_to_rgba));
+  info.compilation_constant(Type::bool_t, "use_raycast", use_raycast);
 
   StringRefNull pipeline_info_name;
   StringRefNull additional_info_name;
@@ -1030,11 +1032,8 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   }
   info.compilation_constant(gpu::shader::Type::bool_t, "use_transparency", use_transparency);
 
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST) &&
-      ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD))
-  {
-    info.additional_info("eevee_raycast");
-  }
+  const bool use_raycast = (GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST) &&
+                            ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD));
 
   if (ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD) &&
       GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA) &&
@@ -1066,8 +1065,13 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
    * add_pipeline_create_info. This ensure all resource slot are correctly reserved inside the
    * SlotAllocator. */
 
-  SlotAllocator slots = add_pipeline_create_info(
-      info, pipeline_type, geometry_type, use_shader_to_rgba, use_lighting_nodes, use_ao_node);
+  SlotAllocator slots = add_pipeline_create_info(info,
+                                                 pipeline_type,
+                                                 geometry_type,
+                                                 use_shader_to_rgba,
+                                                 use_lighting_nodes,
+                                                 use_ao_node,
+                                                 use_raycast);
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
     info.define("MAT_SHADER_TO_RGBA");
