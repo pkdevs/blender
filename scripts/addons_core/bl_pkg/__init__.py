@@ -428,6 +428,7 @@ _downloaders: list[_RemoteAssetListingDownloader] = []
 # Called directly from C++ code.
 def remote_asset_library_sync(
     asset_library_url: str,
+    asset_library_auth_token: str,
     asset_library_local_path: Path,
     only_if_older_than_sec=0,
 ) -> None:
@@ -473,6 +474,7 @@ def remote_asset_library_sync(
     # Create the downloader and start downloading.
     downloader = listing_downloader.RemoteAssetListingDownloader(
         asset_library_url,
+        asset_library_auth_token,
         asset_library_local_path,
         on_update_callback=_remote_asset_library_sync_update,
         on_done_callback=_remote_asset_library_sync_done,
@@ -549,13 +551,42 @@ def _remote_asset_library_sync_all_periodic():
     if not bpy.context.preferences.experimental.use_remote_asset_libraries:
         return
 
+    prefs = bpy.context.preferences
+    for asset_lib in prefs.filepaths.asset_libraries:
+        if not asset_lib.enabled:
+            continue
+        if not asset_lib.use_remote_url:
+            continue
+        remote_asset_library_sync(asset_lib.remote_url, asset_lib.auth_token, Path(asset_lib.path),
+                                  only_if_older_than_sec=REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC)
+
+    # The online essentials library is not listed in the 'asset_libraries' list above, because it's not a preference.
+    if prefs.asset_libraries.use_online_essentials:
+        remote_url = bpy.types.AssetLibrary.online_assets_url()
+        cache_path = bpy.types.AssetLibrary.online_assets_cache_path()
+        remote_asset_library_sync(remote_url, "", Path(cache_path),
+                                  only_if_older_than_sec=REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC)
+
+
+def _remote_asset_library_restore_backups() -> None:
+    """Restore any remote asset library listing backup.
+
+    If at startup there is an asset library listing backup, and no other Blender
+    is actively syncing that asset library, it means that Blender quit while
+    the listing was being downloaded, and it's probably incomplete. Better to
+    restore the backup.
+    """
+    if not bpy.context.preferences.experimental.use_remote_asset_libraries:
+        return
+
     for asset_lib in bpy.context.preferences.filepaths.asset_libraries:
         if not asset_lib.enabled:
             continue
         if not asset_lib.use_remote_url:
             continue
-        remote_asset_library_sync(asset_lib.remote_url, Path(asset_lib.path),
-                                  only_if_older_than_sec=REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC)
+
+        from _bpy_internal.assets.remote_library import listing_downloader
+        listing_downloader.restore_backup_if_exists_locked(asset_lib.remote_url, Path(asset_lib.path))
 
 
 # -----------------------------------------------------------------------------
@@ -952,6 +983,8 @@ def register():
     cli_commands.append(bpy.utils.register_cli_command("asset_listing", remote_library.asset_listing_main))
 
     monkeypatch_install()
+
+    _remote_asset_library_restore_backups()
 
     if not bpy.app.background:
         if prefs.view.show_extensions_updates:

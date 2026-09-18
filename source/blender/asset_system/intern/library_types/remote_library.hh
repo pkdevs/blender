@@ -27,6 +27,8 @@ class RemoteAssetLibrary : public AssetLibrary {
                      StringRef remote_url,
                      StringRef name,
                      StringRef root_path);
+  void force_remote_listing_download() const override;
+
   std::optional<eAssetImportMethod> import_method() const override;
   std::optional<StringRefNull> remote_url() const override;
   void refresh_catalogs() override;
@@ -39,6 +41,7 @@ class PreferencesRemoteAssetLibrary : public RemoteAssetLibrary {
  public:
   PreferencesRemoteAssetLibrary(const bUserAssetLibrary &custom_library);
   std::optional<AssetLibraryReference> library_reference() const override;
+  std::optional<StringRefNull> auth_token() const override;
   bool is_enabled() const;
 };
 

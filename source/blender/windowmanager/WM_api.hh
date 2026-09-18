@@ -22,12 +22,13 @@
 
 #include "BLI_array.hh"
 #include "BLI_bounds_types.hh"
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_index_range.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "WM_keymap.hh"
 #include "WM_types.hh"
@@ -46,6 +47,7 @@ struct Main;
 struct MenuType;
 struct PointerRNA;
 struct PropertyRNA;
+struct ARegionIMECursor;
 struct ScrArea;
 struct View3D;
 struct ViewLayer;
@@ -64,6 +66,7 @@ struct wmEventHandler_Op;
 struct wmEventHandler_UI;
 struct wmGenericUserData;
 struct wmGesture;
+struct wmIMEData;
 struct wmJob;
 struct wmJobWorkerStatus;
 struct wmOperator;
@@ -78,7 +81,12 @@ struct wmNDOFMotionData;
 #ifdef WITH_XR_OPENXR
 struct wmXrRuntimeData;
 struct wmXrSessionState;
+struct wmXrViewfinderState;
 #endif
+
+namespace bke {
+enum class wmIMEOwnerType : int8_t;
+}
 
 namespace bke::id {
 class IDRemapper;
@@ -168,7 +176,14 @@ void WM_init_splash_on_startup(bContext *C);
  */
 void WM_init_splash(bContext *C);
 
-void WM_init_gpu();
+/**
+ * Initialization for GPU backend,
+ */
+void WM_init_gpu_backend();
+/**
+ * Create the draw manager offscreen GPU context and initialize the GPU module.
+ */
+void WM_init_gpu_offscreen();
 
 /**
  * Return an identifier for the underlying GHOST implementation.
@@ -325,6 +340,11 @@ int2 WM_window_native_pixel_size(const wmWindow *win);
 
 void WM_window_native_pixel_coords(const wmWindow *win, int *x, int *y);
 /**
+ * Return true when this session draws its own window decorations, whether or not any particular
+ * window currently shows them (see #WM_window_is_csd).
+ */
+bool WM_window_csd_is_active();
+/**
  * Return non-nil if the CSD is used.
  */
 bool WM_window_is_csd(const wmWindow *win);
@@ -344,6 +364,56 @@ void WM_window_screen_rect_calc(const wmWindow *win, rcti *r_rect);
 bool WM_window_is_main_top_level(const wmWindow *win);
 bool WM_window_is_fullscreen(const wmWindow *win);
 bool WM_window_is_maximized(const wmWindow *win);
+
+#ifdef WITH_INPUT_IME
+/**
+ * Start an IME session, placing the candidate window a `x`, `y` (window coordinates).
+ * A zero size is fine when only the corner is meaningful.
+ *
+ * \param owner: Stored as #bke::WindowRuntime::ime_owner.
+ */
+void WM_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bke::wmIMEOwnerType owner);
+/**
+ * Move the candidate window, keeping the session, its owner and any composition.
+ * Callers must only use this on a session they know exists.
+ */
+void WM_window_IME_reposition(wmWindow *win, int x, int y, int w, int h);
+void WM_window_IME_end(wmWindow *win);
+
+/**
+ * Re-evaluate the IME status for regions with IME positioning (a `cursor_ime` callback).
+ * Ensures:
+ * - IME is enabled for regions that accept it.
+ * - IME is disabled if the region no longer accepts it.
+ *
+ * \param keep_composing: Reposition instead of restarting the session, as restarting cancels
+ * the composition. Only true for the draw-time refresh of the region which owns it,
+ * elsewhere canceling is intended, e.g. when the active region changes.
+ * \param r_cursor: Optionally receives the cursor evaluated here, so a caller which needs it too
+ * doesn't run `cursor_ime` twice.
+ * \return true when `r_cursor` was assigned, false when no position was reported.
+ */
+bool WM_window_IME_region_refresh(wmWindow *win,
+                                  const ScrArea *area,
+                                  const ARegion *region,
+                                  bool keep_composing = false,
+                                  ARegionIMECursor *r_cursor = nullptr);
+
+/**
+ * Return the IME data `region` should preview, null when there is nothing to draw:
+ * - Nothing is being composed (or the composite string is empty).
+ * - A text button owns the session, which may be in a popup over this region.
+ * - `region` isn't active, else every editor showing the same data would draw a preview.
+ */
+const wmIMEData *WM_window_IME_data_get(const wmWindow *win, const ARegion *region);
+
+/**
+ * Return #wmIMEData::sel_start to #wmIMEData::sel_end as a byte range in the composite string,
+ * clamped to it, drawn with a thick underline. None when the input method doesn't report a
+ * selection, in practice only Windows does.
+ */
+std::optional<IndexRange> WM_window_IME_composite_select_range(const wmIMEData *ime_data);
+#endif
 
 /**
  * Support for wide gamut and HDR colors.
@@ -585,12 +655,14 @@ void WM_cursor_progress(wmWindow *win, float progress_factor);
 
 wmPaintCursor *WM_paint_cursor_activate(short space_type,
                                         short region_type,
-                                        bool (*poll)(bContext *C),
+                                        wmPaintCursorPoll poll,
                                         wmPaintCursorDraw draw,
                                         void *customdata);
 
 bool WM_paint_cursor_end(wmPaintCursor *handle);
-void WM_paint_cursor_remove_by_type(wmWindowManager *wm, void *draw_fn, void (*free)(void *));
+void WM_paint_cursor_remove_by_type(wmWindowManager *wm,
+                                    wmPaintCursorDraw draw_fn,
+                                    void (*free)(void *));
 void WM_paint_cursor_tag_redraw(wmWindow *win, ARegion *region);
 
 /**
@@ -607,10 +679,14 @@ void WM_cursor_warp(wmWindow *win, int x, int y);
 #define WM_CURSOR_DEFAULT_LOGICAL_SIZE 24
 
 /**
+ * \param hardware_cursor: True when this uses hardware cursor display,
+ * the hardware cursor is post-scaled on macOS (out of our control).
+ * When false, this is a software cursor and the logical size is always returned.
+ *
  * \return the preferred logical size for the cursor
  * (before DPI/Hi-DPI scaling is applied).
  */
-uint WM_cursor_preferred_logical_size();
+uint WM_cursor_preferred_logical_size(bool hardware_cursor);
 
 /* Handlers. */
 
@@ -720,6 +796,15 @@ wmKeyMapItem *WM_event_match_keymap_item_from_handlers(bContext *C,
                                                        const wmEvent *event);
 
 bool WM_event_match(const wmEvent *winevent, const wmKeyMapItem *kmi);
+
+/**
+ * Check if `event_modifier` matches a modifier key press bound to `kmi`.
+ *
+ * Used to detect a modifier already held when a modal operator starts,
+ * since the initial event won't generate a #KM_PRESS event for the modifier itself.
+ */
+bool WM_event_modifier_flag_match_kmi_press(wmEventModifierFlag event_modifier,
+                                            const wmKeyMapItem *kmi);
 
 using wmUIHandlerFunc = int (*)(bContext *C, const wmEvent *event, void *userdata);
 using wmUIHandlerRemoveFunc = void (*)(bContext *C, void *userdata);
@@ -944,6 +1029,35 @@ wmOperatorStatus WM_enum_search_invoke(bContext *C, wmOperator *op, const wmEven
 wmOperatorStatus WM_operator_confirm(bContext *C, wmOperator *op, const wmEvent *event);
 wmOperatorStatus WM_operator_confirm_or_exec(bContext *C, wmOperator *op, const wmEvent *event);
 
+#ifdef WITH_INPUT_IME
+/**
+ * IME support for the invoke function of text insertion operators.
+ *
+ * A null return means the event is not IME related,
+ * the caller must handle the event as usual.
+ * Otherwise the caller must return the resulting status:
+ * - The result of the operators `exec` function when the IME text is committed
+ *   (set as the operators string property \a prop_id).
+ * - #OPERATOR_CANCELLED for other IME events while composing,
+ *   see #bke::WindowRuntime::ime_data_is_composing for details.
+ *
+ * The region is tagged for redraw on every IME event so the editor's composition preview
+ * stays current (including erasing it when composition ends).
+ */
+std::optional<wmOperatorStatus> WM_operator_IME_insert_maybe(bContext *C,
+                                                             wmOperator *op,
+                                                             const wmEvent *event,
+                                                             const char *prop_id);
+/**
+ * Prevent text editing operators (delete... etc) from running while IME composing,
+ * see #bke::WindowRuntime::ime_data_is_composing for details.
+ *
+ * A null return means the operator may run as usual,
+ * otherwise the caller must return the resulting status (#OPERATOR_CANCELLED).
+ */
+std::optional<wmOperatorStatus> WM_operator_IME_edit_maybe(const bContext *C);
+#endif
+
 /**
  * Like WM_operator_confirm, but with more options and can't be used as an invoke directly.
  */
@@ -998,10 +1112,14 @@ wmOperatorStatus WM_operator_props_dialog_popup(
     std::optional<std::string> title = std::nullopt,
     std::optional<std::string> confirm_text = std::nullopt,
     bool cancel_default = false,
-    std::optional<std::string> message = std::nullopt);
+    std::optional<std::string> message = std::nullopt,
+    bool show_icon = false);
 
 wmOperatorStatus WM_operator_redo_popup(bContext *C, wmOperator *op);
-wmOperatorStatus WM_operator_ui_popup(bContext *C, wmOperator *op, int width);
+/**
+ * \param auto_keymap: Assign accelerator keys to buttons.
+ */
+wmOperatorStatus WM_operator_ui_popup(bContext *C, wmOperator *op, int width, bool auto_keymap);
 
 /**
  * Can't be used as an invoke directly, needs message arg (can be NULL).
@@ -1766,7 +1884,7 @@ ID *WM_drag_get_local_ID_or_import_from_asset(const bContext *C, const wmDrag *d
 /**
  * \brief Free asset ID imported for canceled drop.
  *
- * If the asset was imported (linked/appended) using #WM_drag_get_local_ID_or_import_from_asset()`
+ * If the asset was imported (linked/appended) using #WM_drag_get_local_ID_or_import_from_asset
  * (typically via a #wmDropBox.copy() callback), we want the ID to be removed again if the drop
  * operator cancels.
  * This is for use as #wmDropBox.cancel() callback.
@@ -1849,7 +1967,10 @@ enum eWM_JobFlag {
    * wait on previous ones to finish then.
    */
   WM_JOB_EXCL_RENDER = (1 << 1),
+  /* The job reports a progress. */
   WM_JOB_PROGRESS = (1 << 2),
+  /* The job runs in the background and does not block operators undo/redo. */
+  WM_JOB_BACKGROUND = (1 << 3),
 };
 ENUM_OPERATORS(eWM_JobFlag);
 
@@ -1871,10 +1992,12 @@ enum eWM_JobType {
   WM_JOB_TYPE_OBJECT_BAKE,
   WM_JOB_TYPE_FILESEL_READDIR,
   WM_JOB_TYPE_ASSET_LIBRARY_LOAD,
-  /** For the global asset list storage (#ED_asset_list.hh). Use a different job type from
+  /**
+   * For the global asset list storage (#ED_asset_list.hh). Use a different job type from
    * #WM_JOB_TYPE_ASSET_LIBRARY_LOAD (used by the asset browser) so the global storage loading can
    * happen independently of the asset browser loading. They would block each other if the type was
-   * the same. */
+   * the same.
+   */
   WM_JOB_TYPE_ASSET_LIBRARY_GLOBAL_LISTING_LOAD,
   WM_JOB_TYPE_CLIP_BUILD_PROXY,
   WM_JOB_TYPE_CLIP_TRACK_MARKERS,
@@ -1922,7 +2045,7 @@ wmJob *WM_jobs_get(wmWindowManager *wm,
 /**
  * Returns true if job runs, for UI (progress) indicators.
  */
-bool WM_jobs_test(const wmWindowManager *wm, const void *owner, int job_type);
+bool WM_jobs_progress_test(const wmWindowManager *wm, const void *owner, int job_type);
 float WM_jobs_progress(const wmWindowManager *wm, const void *owner);
 const char *WM_jobs_name(const wmWindowManager *wm, const void *owner);
 /**
@@ -2008,8 +2131,15 @@ void WM_jobs_kill_type(wmWindowManager *wm, const void *owner, int job_type);
  */
 void WM_jobs_kill_all_from_owner(wmWindowManager *wm, const void *owner) ATTR_NONNULL();
 
-bool WM_jobs_has_running(const wmWindowManager *wm);
-bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type);
+/**
+ * Checks if the given window manager has any running or suspended jobs of the given type and
+ * owner. If the given owner is nullptr, any owner can be matched. Additionally, jobs with a flag
+ * in the given exclude_flags will be ignored.
+ */
+bool WM_jobs_has_running(const wmWindowManager *window_manager,
+                         const void *owner,
+                         const eWM_JobType type,
+                         const eWM_JobFlag exclude_flags = {});
 
 void WM_job_main_thread_lock_acquire(wmJob *wm_job);
 void WM_job_main_thread_lock_release(wmJob *wm_job);
@@ -2160,7 +2290,7 @@ bool WM_cursor_test_motion_and_update(const int mval[2]) ATTR_NONNULL(1) ATTR_WA
 /**
  * Return true if this event type is a candidate for being flagged as consecutive.
  *
- * See: #WM_EVENT_IS_CONSECUTIVE doc-string.
+ * See: #WM_EVENT_IS_CONSECUTIVE docstring.
  */
 bool WM_event_consecutive_gesture_test(const wmEvent *event);
 /**
@@ -2272,17 +2402,29 @@ bool WM_xr_session_exists(const wmXrData *xr);
  * Check if the session is running, according to the OpenXR definition.
  */
 bool WM_xr_session_is_ready(const wmXrData *xr);
+
 wmXrSessionState *WM_xr_session_state_handle_get(const wmXrData *xr);
+wmXrViewfinderState *WM_xr_session_state_viewfinder_handle_get(const wmXrData *xr);
 
 bContext *WM_xr_session_context_get(const wmXrData *xr);
 bContext *WM_xr_session_context_ensure(wmXrData *xr, const wmWindowManager *wm);
 
 void WM_xr_session_base_pose_reset(wmXrData *xr);
+void WM_xr_session_state_navigation_reset(wmXrSessionState *state);
+
+void WM_xr_session_state_viewfinder_init(wmXrSessionState *state);
+void WM_xr_session_state_viewfinder_reset(wmXrSessionState *state);
+
+void WM_xr_session_state_vignette_activate(wmXrData *xr);
+void WM_xr_session_state_vignette_update(wmXrSessionState *state);
+
 bool WM_xr_session_state_viewer_pose_location_get(const wmXrData *xr, float r_location[3]);
 bool WM_xr_session_state_viewer_pose_rotation_get(const wmXrData *xr, float r_rotation[4]);
 bool WM_xr_session_state_viewer_pose_matrix_info_get(const wmXrData *xr,
                                                      float r_viewmat[4][4],
                                                      float *r_focal_len);
+bool WM_xr_session_state_viewer_scale_get(const wmXrData *xr, float *r_scale);
+
 bool WM_xr_session_state_controller_grip_location_get(const wmXrData *xr,
                                                       unsigned int subaction_idx,
                                                       float r_location[3]);
@@ -2295,16 +2437,52 @@ bool WM_xr_session_state_controller_aim_location_get(const wmXrData *xr,
 bool WM_xr_session_state_controller_aim_rotation_get(const wmXrData *xr,
                                                      unsigned int subaction_idx,
                                                      float r_rotation[4]);
+
 bool WM_xr_session_state_nav_location_get(const wmXrData *xr, float r_location[3]);
 void WM_xr_session_state_nav_location_set(wmXrData *xr, const float location[3]);
 bool WM_xr_session_state_nav_rotation_get(const wmXrData *xr, float r_rotation[4]);
 void WM_xr_session_state_nav_rotation_set(wmXrData *xr, const float rotation[4]);
 bool WM_xr_session_state_nav_scale_get(const wmXrData *xr, float *r_scale);
 void WM_xr_session_state_nav_scale_set(wmXrData *xr, float scale);
-bool WM_xr_session_state_viewer_scale_get(const wmXrData *xr, float *r_scale);
-void WM_xr_session_state_navigation_reset(wmXrSessionState *state);
-void WM_xr_session_state_vignette_activate(wmXrData *xr);
-void WM_xr_session_state_vignette_update(wmXrSessionState *state);
+
+bool WM_xr_session_state_viewfinder_location_get(const wmXrData *xr, float r_location[3]);
+bool WM_xr_session_state_viewfinder_orientation_get(const wmXrData *xr, float r_rotation[4]);
+
+void WM_xr_session_state_viewfinder_trigger_flash(wmXrData *xr);
+void WM_xr_session_state_viewfinder_trigger_focus_indicator(wmXrData *xr, bool hit_success);
+void WM_xr_session_state_viewfinder_reset_view_smoothing(wmXrData *xr);
+
+bool WM_xr_session_state_viewfinder_capture_dof_enabled_get(const wmXrData *xr,
+                                                            bool *r_dof_enabled);
+void WM_xr_session_state_viewfinder_capture_dof_enabled_set(wmXrData *xr, bool dof_enabled);
+bool WM_xr_session_state_viewfinder_capture_lens_focal_get(const wmXrData *xr,
+                                                           float *r_lens_focal);
+void WM_xr_session_state_viewfinder_capture_lens_focal_set(wmXrData *xr, float lens_focal);
+bool WM_xr_session_state_viewfinder_capture_dof_distance_get(const wmXrData *xr,
+                                                             float *r_dof_distance);
+void WM_xr_session_state_viewfinder_capture_dof_distance_set(wmXrData *xr, float dof_distance);
+bool WM_xr_session_state_viewfinder_capture_dof_fstop_get(const wmXrData *xr, float *r_dof_fstop);
+void WM_xr_session_state_viewfinder_capture_dof_fstop_set(wmXrData *xr, float dof_fstop);
+
+bool WM_xr_session_state_viewfinder_playback_show_active_capture_in_space_enabled_get(
+    const wmXrData *xr, bool *r_enabled);
+void WM_xr_session_state_viewfinder_playback_show_active_capture_in_space_enabled_set(
+    wmXrData *xr, bool enabled);
+
+bool WM_xr_session_state_viewfinder_active_mode_get(const wmXrData *xr, eXrViewfinderMode *r_mode);
+void WM_xr_session_state_viewfinder_active_mode_set(wmXrData *xr, eXrViewfinderMode mode);
+bool WM_xr_session_state_viewfinder_active_action_live_get(const wmXrData *xr,
+                                                           eXrViewfinderLiveAction *r_action);
+void WM_xr_session_state_viewfinder_active_action_live_set(wmXrData *xr,
+                                                           eXrViewfinderLiveAction action);
+bool WM_xr_session_state_viewfinder_active_action_playback_get(
+    const wmXrData *xr, eXrViewfinderPlaybackAction *r_action);
+void WM_xr_session_state_viewfinder_active_action_playback_set(wmXrData *xr,
+                                                               eXrViewfinderPlaybackAction action);
+bool WM_xr_session_state_viewfinder_active_action_confirm_get(
+    const wmXrData *xr, eXrViewfinderConfirmAction *r_action);
+void WM_xr_session_state_viewfinder_active_action_confirm_set(wmXrData *xr,
+                                                              eXrViewfinderConfirmAction action);
 
 ARegionType *WM_xr_surface_controller_region_type_get();
 

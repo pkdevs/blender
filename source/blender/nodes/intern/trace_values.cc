@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "BLI_stack.hh"
 
 #include "NOD_geometry_nodes_bundle_signature.hh"
@@ -46,8 +50,7 @@ static bool use_link_for_tracing(const bNodeLink &link)
   }
   const bNodeTree &tree = link.fromnode->owner_tree();
   if (tree.typeinfo->validate_link &&
-      !tree.typeinfo->validate_link(eNodeSocketDatatype(link.fromsock->type),
-                                    eNodeSocketDatatype(link.tosock->type)))
+      !tree.typeinfo->validate_link(link.fromsock->type, link.tosock->type))
   {
     return false;
   }
@@ -93,9 +96,9 @@ static Vector<SocketInContext> find_target_sockets_through_contexts(
     const NodeInContext &node = socket.owner_node();
     if (socket->is_input()) {
       if (node->is_muted()) {
-        for (const bNodeLink &link : node->internal_links()) {
-          if (link.fromsock == socket.socket) {
-            add_if_new({socket.context, link.tosock}, bundle_path);
+        for (const bNodeInternalLink &link : node->internal_links()) {
+          if (link.in == socket.socket) {
+            add_if_new({socket.context, link.out}, bundle_path);
           }
         }
         continue;
@@ -412,9 +415,9 @@ static Vector<SocketInContext> find_origin_sockets_through_contexts(
     }
     else {
       if (node->is_muted()) {
-        for (const bNodeLink &link : node->internal_links()) {
-          if (link.tosock == socket.socket) {
-            add_if_new({socket.context, link.fromsock}, bundle_path);
+        for (const bNodeInternalLink &link : node->internal_links()) {
+          if (link.out == socket.socket) {
+            add_if_new({socket.context, link.in}, bundle_path);
           }
         }
         continue;
@@ -692,6 +695,9 @@ LinkedClosureSignatures gather_linked_target_closure_signatures(
                 const auto &storage = *static_cast<const NodeEvaluateClosure *>(node.storage);
                 define_signature = bool(storage.flag &
                                         NODE_EVALUATE_CLOSURE_FLAG_DEFINE_SIGNATURE);
+              }
+              else if (node.is_type("GeometryNodeClosureToList"_ustr)) {
+                define_signature = true;
               }
               result.items.append(
                   {(*closure_decl->create_signature)(node), define_signature, socket});

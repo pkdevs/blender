@@ -11,12 +11,13 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_asset_edit.hh"
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_attribute_storage.hh"
 #include "BKE_attribute_storage_blend_write.hh"
 #include "BKE_bake_data_block_id.hh"
+#include "BKE_brush.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
@@ -33,31 +34,34 @@
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
+#include "BKE_paint.hh"
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
 #include "BLI_delaunay_2d.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_euler_types.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_memory_utils.hh"
-#include "BLI_polyfill_2d.h"
+#include "BLI_polyfill_2d.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_task.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 #include "BLI_virtual_array.hh"
 
@@ -74,6 +78,8 @@
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
+
+#include "IMB_colormanagement.hh"
 
 #include "RNA_access.hh"
 #include "RNA_path.hh"
@@ -240,7 +246,7 @@ static void grease_pencil_free_data(ID *id)
   free_drawing_array(*grease_pencil);
   MEM_delete(&grease_pencil->root_group());
 
-  BLI_freelistN(&grease_pencil->vertex_group_names);
+  grease_pencil->vertex_group_names.free_no_destruct();
 
   BKE_grease_pencil_batch_cache_free(grease_pencil);
 
@@ -294,17 +300,20 @@ static void grease_pencil_blend_write(BlendWriter *writer, ID *id, const void *i
   bke::AttributeStorage::BlendWriteData attribute_data{writer, scope};
   attribute_storage_blend_write_prepare(
       grease_pencil->attribute_storage.wrap(),
-      !BLO_write_is_undo(writer),
+      !writer->is_undo(),
       [&](const AttrDomain /*domain*/) { return grease_pencil->layers().size(); },
       attribute_data);
   grease_pencil->attribute_storage.dna_attributes = attribute_data.attributes.data();
   grease_pencil->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
-  BLO_write_generated_pointer_tag(writer, grease_pencil->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(grease_pencil->attribute_storage.dna_attributes);
 
   CustomData_reset(&grease_pencil->layers_data_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, grease_pencil);
+  writer->write_id_struct(
+      id_address, grease_pencil, [](BlendStructWriter<GreasePencil> &struct_writer) {
+        struct_writer.generated_ptr(offsetof(GreasePencil, attribute_storage.dna_attributes));
+      });
   BKE_id_blend_write(writer, &grease_pencil->id);
 
   grease_pencil->attribute_storage.wrap().blend_write(*writer, attribute_data);
@@ -365,6 +374,7 @@ IDTypeInfo IDType_ID_GP = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = grease_pencil_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = grease_pencil_blend_write,
@@ -493,84 +503,83 @@ static void update_triangle_and_offsets_cache(const Span<float3> positions,
   threading::EnumerableThreadSpecific<LocalMemArena> all_local_mem_arenas;
   fill_mask.foreach_segment(
       [&](const IndexMaskSegment mask_segment, const int segment_pos) {
-        MemArena *pf_arena = all_local_mem_arenas.local().pf_arena;
-        for (const int index : mask_segment.index_range()) {
-          const int fill_index = mask_segment[index];
-          const int pos = segment_pos + index;
+        threading::isolate_task([&] {
+          MemArena *pf_arena = all_local_mem_arenas.local().pf_arena;
+          for (const int index : mask_segment.index_range()) {
+            const int fill_index = mask_segment[index];
+            const int pos = segment_pos + index;
 
-          IndexMaskMemory memory;
-          const IndexMask base_fill = IndexMask::from_indices(fills[fill_index], memory);
+            IndexMaskMemory memory;
+            const IndexMask base_fill = IndexMask::from_indices(fills[fill_index], memory);
 
-          /* Only get curves that are in the fill and valid. */
-          const IndexMask fill = IndexMask::from_predicate(
-              base_fill, memory, [&](const int64_t curve_i) {
-                const IndexRange points = points_by_curve[curve_i];
-                return points.size() >= 3;
-              });
+            /* Only get curves that are in the fill and valid. */
+            const IndexMask fill = IndexMask::from_predicate(
+                base_fill, memory, [&](const int64_t curve_i) {
+                  const IndexRange points = points_by_curve[curve_i];
+                  return points.size() >= 3;
+                });
 
-          if (fill.is_empty()) {
-            continue;
-          }
-
-          float3x3 axis_mat;
-          axis_dominant_v3_to_m3(axis_mat.ptr(), normals[fill.first()]);
-          const int num_points = offset_indices::sum_group_sizes(points_by_curve, fill);
-
-          float (*projverts)[2] = static_cast<float (*)[2]>(
-              BLI_memarena_alloc(pf_arena, sizeof(*projverts) * size_t(num_points)));
-
-          int *fill_points_by_curve_data = static_cast<int(*)>(BLI_memarena_alloc(
-              pf_arena, sizeof(*fill_points_by_curve_data) * size_t(fill.size() + 1)));
-          const OffsetIndices<int> fill_points_by_curve = offset_indices::gather_selected_offsets(
-              points_by_curve, fill, MutableSpan(fill_points_by_curve_data, fill.size() + 1));
-
-          fill.foreach_index(
-              [&](const int64_t curve_i, const int64_t pos) {
-                const IndexRange fill_points = fill_points_by_curve[pos];
-                const IndexRange points = points_by_curve[curve_i];
-                for (const int i : points.index_range()) {
-                  const int curve_p = points[i];
-                  const int fill_p = fill_points[i];
-                  mul_v2_m3v3(projverts[fill_p], axis_mat.ptr(), positions[curve_p]);
-                }
-              },
-              exec_mode::grain_size(256));
-
-          /* If there is only one stroke then simple poly fill will be used. */
-          if (fill.size() == 1) {
-            triangle_results[pos].resize(num_points - 2);
-            MutableSpan<int3> r_tris = triangle_results[pos];
-
-            BLI_polyfill_calc_arena(projverts,
-                                    num_points,
-                                    0,
-                                    reinterpret_cast<uint32_t (*)[3]>(r_tris.data()),
-                                    pf_arena);
-
-            BLI_memarena_clear(pf_arena);
-            continue;
-          }
-
-          meshintersect::CDT_input<double> input;
-          input.vert.reinitialize(num_points);
-          input.face.reinitialize(fill.size());
-          input.need_ids = true;
-
-          threading::parallel_for(IndexRange(num_points), 512, [&](const IndexRange range) {
-            for (const int i : range) {
-              input.vert[i] = double2(projverts[i]);
+            if (fill.is_empty()) {
+              continue;
             }
-          });
 
-          const Span<float2> projverts_span = Span(reinterpret_cast<float2 *>(projverts),
-                                                   num_points);
+            float3x3 axis_mat;
+            axis_dominant_v3_to_m3(axis_mat.ptr(), normals[fill.first()]);
+            const int num_points = offset_indices::sum_group_sizes(points_by_curve, fill);
 
-          fill.foreach_index(
-              [&](const int64_t curve_i, const int64_t pos) {
-                const IndexRange fill_points = fill_points_by_curve[pos];
-                const IndexRange points = points_by_curve[curve_i];
-                input.face[pos].resize(points.size());
-                MutableSpan<int> face = input.face[pos].as_mutable_span();
+            float (*projverts)[2] = static_cast<float (*)[2]>(
+                BLI_memarena_alloc(pf_arena, sizeof(*projverts) * size_t(num_points)));
+
+            int *fill_points_by_curve_data = static_cast<int(*)>(BLI_memarena_alloc(
+                pf_arena, sizeof(*fill_points_by_curve_data) * size_t(fill.size() + 1)));
+            const OffsetIndices<int> fill_points_by_curve =
+                offset_indices::gather_selected_offsets(
+                    points_by_curve,
+                    fill,
+                    MutableSpan(fill_points_by_curve_data, fill.size() + 1));
+
+            fill.foreach_index(
+                [&](const int64_t curve_i, const int64_t pos) {
+                  const IndexRange fill_points = fill_points_by_curve[pos];
+                  const IndexRange points = points_by_curve[curve_i];
+                  for (const int i : points.index_range()) {
+                    const int curve_p = points[i];
+                    const int fill_p = fill_points[i];
+                    mul_v2_m3v3(projverts[fill_p], axis_mat.ptr(), positions[curve_p]);
+                  }
+                },
+                exec_mode::grain_size(256));
+
+            /* If there is only one stroke then simple poly fill will be used. */
+            if (fill.size() == 1) {
+              triangle_results[pos].resize(num_points - 2);
+              MutableSpan<int3> r_tris = triangle_results[pos];
+
+              BLI_polyfill_calc_arena(projverts,
+                                      num_points,
+                                      0,
+                                      reinterpret_cast<uint32_t (*)[3]>(r_tris.data()),
+                                      pf_arena);
+
+              BLI_memarena_clear(pf_arena);
+              continue;
+            }
+
+            Array<double2, 64> verts(num_points);
+            threading::parallel_for(IndexRange(num_points), 512, [&](const IndexRange range) {
+              for (const int i : range) {
+                verts[i] = double2(projverts[i]);
+              }
+            });
+
+            const Span<float2> projverts_span = Span(reinterpret_cast<float2 *>(projverts),
+                                                     num_points);
+
+            Array<int, 64> face_vert_indices(fill_points_by_curve.total_size());
+            threading::parallel_for(fill.index_range(), 256, [&](const IndexRange range) {
+              for (const int i : range) {
+                const IndexRange fill_points = fill_points_by_curve[i];
+                MutableSpan<int> face = face_vert_indices.as_mutable_span().slice(fill_points);
 
                 array_utils::fill_index_range<int>(face, fill_points.first());
                 const Span<float2> projpoints = projverts_span.slice(fill_points);
@@ -581,34 +590,41 @@ static void update_triangle_and_offsets_cache(const Span<float3> positions,
                 {
                   face.reverse();
                 }
-              },
-              exec_mode::grain_size(256));
+              }
+            });
 
-          meshintersect::CDT_result<double> result = delaunay_2d_calc(input,
-                                                                      CDT_INSIDE_WITH_HOLES);
+            meshintersect::CDT_input<double> input;
+            input.vert = verts;
+            input.face_offsets = fill_points_by_curve;
+            input.face_vert_indices = face_vert_indices;
+            input.needed_ids = CDT_ORIG_VERTS | CDT_ONLY_ONE_ORIG;
 
-          auto vert_to_point = [&](const int vert) {
-            /* If the points is a newly added intersection point return invalid. */
-            if (result.vert_orig[vert].is_empty()) {
-              return -1;
+            meshintersect::CDT_result<double> result = delaunay_2d_calc(input,
+                                                                        CDT_INSIDE_WITH_HOLES);
+
+            auto vert_to_point = [&](const int vert) {
+              /* If the points is a newly added intersection point return invalid. */
+              if (result.vert_orig[vert].is_empty()) {
+                return -1;
+              }
+              /* Just get the first point if there are multiple at the same position. */
+              return int(result.vert_orig[vert].first());
+            };
+
+            for (const int i : result.face.index_range()) {
+              BLI_assert(result.face[i].size() == 3);
+              const int3 tri = int3(vert_to_point(result.face[i][0]),
+                                    vert_to_point(result.face[i][1]),
+                                    vert_to_point(result.face[i][2]));
+              /* Don't add the triangle if any of the point are invalid. */
+              if (tri.x != -1 && tri.y != -1 && tri.z != -1) {
+                triangle_results[pos].append(tri);
+              }
             }
-            /* Just get the first point if there are multiple at the same position. */
-            return int(result.vert_orig[vert].first());
-          };
 
-          for (const int i : result.face.index_range()) {
-            BLI_assert(result.face[i].size() == 3);
-            const int3 tri = int3(vert_to_point(result.face[i][0]),
-                                  vert_to_point(result.face[i][1]),
-                                  vert_to_point(result.face[i][2]));
-            /* Don't add the triangle if any of the point are invalid. */
-            if (tri.x != -1 && tri.y != -1 && tri.z != -1) {
-              triangle_results[pos].append(tri);
-            }
+            BLI_memarena_clear(pf_arena);
           }
-
-          BLI_memarena_clear(pf_arena);
-        }
+        });
       },
       exec_mode::grain_size(32));
 
@@ -682,17 +698,24 @@ static void update_curve_plane_normal_cache(const Span<float3> positions,
 
         /* Calculate normal using Newell's method. */
         float3 normal(0.0f);
+        const float3 first_point = positions[points.first()];
         float3 prev_point = positions[points.last()];
+        float max_extent_sq = 0.0f;
         for (const int point_i : points) {
           const float3 curr_point = positions[point_i];
           add_newell_cross_v3_v3v3(normal, prev_point, curr_point);
+          max_extent_sq = math::max(max_extent_sq, math::length_squared(curr_point - first_point));
           prev_point = curr_point;
         }
 
         float length;
         normal = math::normalize_and_get_length(normal, length);
-        /* Check for degenerate case where the points are on a line. */
-        if (math::is_zero(length)) {
+        /* Check for degenerate case where the points are on a line (Newell's method can introduce
+         * a small error that accumulates with many points, scaling with the squared extent of the
+         * stroke, hence the `max_extent_sq` factor). */
+        if (length <
+            std::numeric_limits<float>::epsilon() * math::max(points.size() * max_extent_sq, 1.0f))
+        {
           for (const int point_i : points.drop_back(1)) {
             float3 segment_vec = positions[point_i] - positions[point_i + 1];
             if (math::length_squared(segment_vec) != 0.0f) {
@@ -1422,7 +1445,7 @@ Layer::Layer()
 
   this->viewlayername = nullptr;
 
-  BLI_listbase_clear(&this->masks);
+  this->masks.clear_no_delete();
   this->active_mask_index = 0;
 
   this->runtime = MEM_new<LayerRuntime>(__func__);
@@ -1476,7 +1499,7 @@ Layer::~Layer()
   for (GreasePencilLayerMask &mask : this->masks.items_mutable()) {
     MEM_delete(reinterpret_cast<LayerMask *>(&mask));
   }
-  BLI_listbase_clear(&this->masks);
+  this->masks.clear_no_delete();
 
   MEM_SAFE_DELETE(this->parsubstr);
   MEM_SAFE_DELETE(this->viewlayername);
@@ -1869,7 +1892,7 @@ LayerGroup::LayerGroup()
 {
   new (&this->base) TreeNode(GP_LAYER_TREE_GROUP);
 
-  BLI_listbase_clear(&this->children);
+  this->children.clear_no_delete();
   this->color_tag = LAYERGROUP_COLOR_NONE;
 
   this->runtime = MEM_new<LayerGroupRuntime>(__func__);
@@ -1941,7 +1964,7 @@ LayerGroup &LayerGroup::operator=(const LayerGroup &other)
 
 bool LayerGroup::is_empty() const
 {
-  return BLI_listbase_is_empty(&this->children);
+  return this->children.is_empty();
 }
 
 TreeNode &LayerGroup::add_node(TreeNode &node)
@@ -1979,19 +2002,19 @@ void LayerGroup::move_node_down(TreeNode &node, const int step)
 void LayerGroup::move_node_top(TreeNode &node)
 {
   BLI_remlink(&this->children, &node);
-  BLI_insertlinkafter(&this->children, this->children.last, &node);
+  BLI_insertlinkafter(&this->children, this->children.last(), &node);
   this->tag_nodes_cache_dirty();
 }
 void LayerGroup::move_node_bottom(TreeNode &node)
 {
   BLI_remlink(&this->children, &node);
-  BLI_insertlinkbefore(&this->children, this->children.first, &node);
+  BLI_insertlinkbefore(&this->children, this->children.first(), &node);
   this->tag_nodes_cache_dirty();
 }
 
 int64_t LayerGroup::num_direct_nodes() const
 {
-  return BLI_listbase_count(&this->children);
+  return this->children.count();
 }
 
 int64_t LayerGroup::num_nodes_total() const
@@ -2010,9 +2033,8 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     /* Take ownership of the children of `link` by replacing the node with the listbase of its
      * children. */
     ListBaseT<GreasePencilLayerTreeNode> link_children = link.as_group().children;
-    GreasePencilLayerTreeNode *first = static_cast<GreasePencilLayerTreeNode *>(
-        link_children.first);
-    GreasePencilLayerTreeNode *last = static_cast<GreasePencilLayerTreeNode *>(link_children.last);
+    GreasePencilLayerTreeNode *first = link_children.first();
+    GreasePencilLayerTreeNode *last = link_children.last();
 
     /* Rewrite the parent pointers. */
     for (GreasePencilLayerTreeNode &child : link_children) {
@@ -2030,11 +2052,11 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     }
 
     /* Update first and/or last link(s). */
-    if (this->children.last == &link) {
-      this->children.last = last;
+    if (this->children.last() == &link) {
+      this->children.last_ = last;
     }
-    if (this->children.first == &link) {
-      this->children.first = first;
+    if (this->children.first() == &link) {
+      this->children.first_ = first;
     }
 
     /* Listbase has been inserted in `this->children` we can clear the pointers in `link`. */
@@ -2436,10 +2458,10 @@ static void grease_pencil_evaluate_modifiers(Depsgraph *depsgraph,
    * for the current frame, so we run the time offset modifiers before all the other ones. */
   ModifierData *tmd = md;
   for (; tmd; tmd = tmd->next) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(tmd->type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(tmd->type);
 
     if (!BKE_modifier_is_enabled(scene, tmd, required_mode) ||
-        ModifierType(tmd->type) != eModifierType_GreasePencilTime)
+        tmd->type != eModifierType_GreasePencilTime)
     {
       continue;
     }
@@ -2453,10 +2475,10 @@ static void grease_pencil_evaluate_modifiers(Depsgraph *depsgraph,
 
   /* Evaluate drawing modifiers. */
   for (; md; md = md->next) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
 
     if (!BKE_modifier_is_enabled(scene, md, required_mode) ||
-        ModifierType(md->type) == eModifierType_GreasePencilTime)
+        md->type == eModifierType_GreasePencilTime)
     {
       continue;
     }
@@ -2893,7 +2915,7 @@ static Material *grease_pencil_object_material_ensure_from_brush_pinned(Main *bm
 {
   Material *ma = (brush->gpencil_settings) ? brush->gpencil_settings->material : nullptr;
 
-  if (ma) {
+  if (ma && BKE_object_material_index_get(ob, ma) < 0) {
     /* Ensure we assign a local datablock if this is an editable asset. */
     ma = reinterpret_cast<Material *>(bke::asset_edit_id_ensure_local(*bmain, ma->id));
   }
@@ -3023,6 +3045,79 @@ bool BKE_grease_pencil_material_index_used(GreasePencil *grease_pencil, int inde
     }
   }
   return false;
+}
+
+void BKE_grease_pencil_brush_material_set(Brush *brush, Material *ma)
+{
+  BLI_assert(brush);
+  BLI_assert(brush->gpencil_settings);
+  if (brush->gpencil_settings->material != ma) {
+    if (brush->gpencil_settings->material) {
+      id_us_min(&brush->gpencil_settings->material->id);
+    }
+    if (ma) {
+      id_us_plus(&ma->id);
+    }
+    brush->gpencil_settings->material = ma;
+    BKE_brush_tag_unsaved_changes(brush);
+  }
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Grease Pencil palette functions
+ * \{ */
+
+void BKE_grease_pencil_palette_ensure(Main *bmain, Scene *scene)
+{
+  const char *hexcol[] = {
+      "FFFFFF", "F2F2F2", "E6E6E6", "D9D9D9", "CCCCCC", "BFBFBF", "B2B2B2", "A6A6A6", "999999",
+      "8C8C8C", "808080", "737373", "666666", "595959", "4C4C4C", "404040", "333333", "262626",
+      "1A1A1A", "000000", "F2FC24", "FFEA00", "FEA711", "FE8B68", "FB3B02", "FE3521", "D00000",
+      "A81F3D", "780422", "2B0000", "F1E2C5", "FEE4B3", "FEDABB", "FEC28E", "D88F57", "BD6340",
+      "A2402B", "63352D", "6B2833", "34120C", "E7CB8F", "D1B38B", "C1B17F", "D7980B", "FFB100",
+      "FE8B00", "FF6A00", "B74100", "5F3E1D", "3B2300", "FECADA", "FE65CB", "FE1392", "DD3062",
+      "C04A6D", "891688", "4D2689", "441521", "2C1139", "241422", "FFFF7D", "FFFF00", "FF7F00",
+      "FF7D7D", "FF7DFF", "FF00FE", "FF007F", "FF0000", "7F0000", "0A0A00", "F6FDFF", "E9F7FF",
+      "CFE6FE", "AAC7FE", "77B3FE", "1E74FD", "0046AA", "2F4476", "003052", "0E0E25", "EEF5F0",
+      "D6E5DE", "ACD8B9", "6CADC6", "42A9AF", "007F7F", "49675C", "2E4E4E", "1D3239", "0F1C21",
+      "D8FFF4", "B8F4F5", "AECCB5", "76C578", "358757", "409B68", "468768", "1F512B", "2A3C37",
+      "122E1D", "EFFFC9", "E6F385", "BCF51C", "D4DC18", "82D322", "5C7F00", "59932B", "297F00",
+      "004320", "1C3322", "00FF7F", "00FF00", "7DFF7D", "7DFFFF", "00FFFF", "7D7DFF", "7F00FF",
+      "0000FF", "3F007F", "00007F"};
+
+  ToolSettings *ts = scene->toolsettings;
+  if (ts->gp_paint->paint.palette != nullptr) {
+    return;
+  }
+
+  /* Try to find the default palette. */
+  const char *palette_id = "Palette";
+  Palette *palette = static_cast<Palette *>(
+      BLI_findstring(&bmain->palettes, palette_id, offsetof(ID, name) + 2));
+
+  if (palette == nullptr) {
+    /* Fall back to the first palette. */
+    palette = bmain->palettes.first();
+  }
+
+  if (palette == nullptr) {
+    /* Fall back to creating a palette. */
+    palette = BKE_palette_add(bmain, palette_id);
+    id_us_min(&palette->id);
+
+    /* Create Colors. */
+    for (int i = 0; i < ARRAY_SIZE(hexcol); i++) {
+      PaletteColor *palcol = BKE_palette_color_add(palette);
+      hex_to_rgb(hexcol[i], palcol->color, palcol->color + 1, palcol->color + 2);
+      IMB_colormanagement_srgb_to_scene_linear_v3(palcol->color, palcol->color);
+    }
+  }
+
+  BLI_assert(palette != nullptr);
+  BKE_paint_palette_set(&ts->gp_paint->paint, palette);
+  BKE_paint_palette_set(&ts->gp_vertexpaint->paint, palette);
 }
 
 /** \} */
@@ -3338,9 +3433,7 @@ bool GreasePencil::remove_frames(bke::greasepencil::Layer &layer, Span<int> fram
     return true;
   }
 #ifndef NDEBUG
-  else {
-    this->validate_drawing_user_counts();
-  }
+  this->validate_drawing_user_counts();
 #endif
   return false;
 }
@@ -4359,7 +4452,12 @@ void GreasePencil::rename_node(Main &bmain,
 
   /* Update layer name dependencies. */
   if (node.is_layer()) {
-    BKE_animdata_fix_paths_rename_all(&this->id, "layers", old_name.c_str(), node.name().c_str());
+    BKE_animdata_fix_paths(this->id,
+                           "layers",
+                           RNA_path_name_to_infix(old_name),
+                           RNA_path_name_to_infix(node.name()),
+                           /*verify_paths=*/true,
+                           bmain);
     /* Update names in layer masks. */
     for (bke::greasepencil::Layer *layer : this->layers_for_write()) {
       for (GreasePencilLayerMask &mask : layer->masks) {
@@ -4490,7 +4588,7 @@ void GreasePencil::remove_group(bke::greasepencil::LayerGroup &group, const bool
   if (&group.as_node() == this->get_active_node()) {
     /* If we keep the children and there is at least one child, make it the active node. */
     if (keep_children && !group.is_empty()) {
-      this->set_active_node(reinterpret_cast<TreeNode *>(group.children.last));
+      this->set_active_node(reinterpret_cast<TreeNode *>(group.children.last()));
     }
     else {
       update_active_node_from_node_to_remove(*this, group.as_node());
@@ -4514,7 +4612,7 @@ void GreasePencil::remove_group(bke::greasepencil::LayerGroup &group, const bool
           BLI_assert_unreachable();
       }
     }
-    BLI_assert(BLI_listbase_is_empty(&group.children));
+    BLI_assert(group.children.is_empty());
   }
 
   /* Unlink then delete active group node. */
@@ -4610,10 +4708,16 @@ static void write_drawing_array(GreasePencil &grease_pencil,
         bke::CurvesGeometry &curves = drawing_copy.geometry.wrap();
 
         bke::CurvesGeometry::BlendWriteData write_data(writer, scope);
-        curves.blend_write_prepare(write_data, !BLO_write_is_undo(writer));
+        curves.blend_write_prepare(write_data, !writer->is_undo());
         drawing_copy.runtime = nullptr;
 
-        writer->write_struct_at_address_cast<GreasePencilDrawing>(drawing_base, &drawing_copy);
+        writer->write_struct_at_address_cast<GreasePencilDrawing>(
+            drawing_base,
+            &drawing_copy,
+            [](BlendStructWriter<GreasePencilDrawing> &struct_writer) {
+              struct_writer.generated_ptr(
+                  offsetof(GreasePencilDrawing, geometry.attribute_storage.dna_attributes));
+            });
         curves.blend_write(*writer, grease_pencil.id, write_data);
         break;
       }

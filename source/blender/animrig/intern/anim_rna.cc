@@ -10,9 +10,9 @@
 
 #include "ANIM_rna.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_object_types.h"
@@ -80,7 +80,33 @@ Vector<float> get_rna_values(PointerRNA *ptr, PropertyRNA *prop)
   return values;
 }
 
-StringRef get_rotation_mode_path(const eRotationModes rotation_mode)
+constexpr const char *pose_bone_path_prefix = "pose.bones[\"";
+
+std::string get_pose_bone_rna_path(const bPoseChannel &pose_bone)
+{
+  char name_esc[sizeof(pose_bone.name) * 2];
+  BLI_str_escape(name_esc, pose_bone.name, sizeof(name_esc));
+  return fmt::format("{}{}\"]", pose_bone_path_prefix, name_esc);
+}
+
+std::optional<std::string> pose_bone_name_from_rna_path(const ParsedRNAPathRef rna_path)
+{
+  /* The path should have at least three elements, "pose", "bones" and a bone name. */
+  if (rna_path.size() < 3) {
+    return std::nullopt;
+  }
+  const rna_path::Member *pose = std::get_if<rna_path::Member>(&rna_path.first());
+  const rna_path::Member *bones = std::get_if<rna_path::Member>(&rna_path[1]);
+  const rna_path::LookupKey *bone_name = std::get_if<rna_path::LookupKey>(&rna_path[2]);
+  if (!pose || pose->identifier != "pose"_ustr || !bones || bones->identifier != "bones"_ustr ||
+      !bone_name || bone_name->key.size() >= MAXBONENAME)
+  {
+    return std::nullopt;
+  }
+  return bone_name->key.string();
+}
+
+StringRefNull get_rotation_mode_path(const eRotationModes rotation_mode)
 {
   switch (rotation_mode) {
     case ROT_MODE_QUAT:
@@ -92,25 +118,32 @@ StringRef get_rotation_mode_path(const eRotationModes rotation_mode)
   }
 }
 
-std::optional<eRotationModes> get_rotation_mode_from_path(const StringRefNull rna_path)
+std::optional<eRotationModes> get_rotation_mode_from_path(const ParsedRNAPathRef rna_path)
 {
   /* Accounting for the difference between objects and bones where the latter is e.g.
-   * `pose.bones["foo"].rotation_euler`. Assumes that rfind returns -1 if the string
-   * is not found. */
-  const int start_of_propname = rna_path.rfind(".") + 1;
-  if (!rna_path.substr(start_of_propname, rna_path.size()).startswith("rotation_")) {
+   * `pose.bones["foo"].rotation_euler`: the property name is always the last item of the
+   * path, regardless of what precedes it. */
+  if (rna_path.is_empty()) {
     return std::nullopt;
   }
-  /* We already know that "rotation_" is in the rna_path, we can skip the full check for
+  const rna_path::Member *property = std::get_if<rna_path::Member>(&rna_path.last());
+  if (!property) {
+    return std::nullopt;
+  }
+  const StringRefNull propname = property->identifier.ref();
+  if (!propname.startswith("rotation_")) {
+    return std::nullopt;
+  }
+  /* We already know that "rotation_" is in the property name, we can skip the full check for
    * "rotation_quaternion", "rotation_euler" or "rotation_axis_angle". */
-  if (rna_path.endswith("quaternion")) {
+  if (propname.endswith("quaternion")) {
     return ROT_MODE_QUAT;
   }
-  else if (rna_path.endswith("euler")) {
+  if (propname.endswith("euler")) {
     /* Cannot determine the rotation order from the path alone. */
     return ROT_MODE_EUL;
   }
-  else if (rna_path.endswith("axis_angle")) {
+  if (propname.endswith("axis_angle")) {
     return ROT_MODE_AXISANGLE;
   }
   return std::nullopt;
@@ -129,7 +162,7 @@ std::optional<eRotationModes> get_rotation_mode_from_rna_pointer(const PointerRN
   return std::nullopt;
 }
 
-bool is_rotation_path(const StringRefNull rna_path)
+bool is_rotation_path(const ParsedRNAPathRef rna_path)
 {
   return get_rotation_mode_from_path(rna_path).has_value();
 }
@@ -260,7 +293,6 @@ Array<float> rna_property_get_as_float(PointerRNA &ptr, PropertyRNA &prop)
       break;
     default:
       /* Unsupported property type. */
-      BLI_assert_unreachable();
       return {};
   }
   return values;

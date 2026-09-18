@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_bundle_type.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 
@@ -34,7 +38,7 @@ FlatBundleTypePtr FlatBundleTypeBuilder::build()
 BundleSignature FlatBundleType::to_bundle_signature() const
 {
   BundleSignature signature;
-  signature.add(Bundle::type_item_name.string(), SOCK_STRING);
+  signature.add(Bundle::type_item_name.ustr().string(), SOCK_STRING);
   for (const Item &item : items_) {
     signature.add(item.name().ref(), item.decl->socket_type);
   }

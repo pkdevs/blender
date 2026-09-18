@@ -38,7 +38,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 SOURCE_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", ".."))
 
-# (id: doc-string) pairs.
+# (id: docstring) pairs.
 VERBOSE_INFO = [
     (
         "compile", (
@@ -817,16 +817,25 @@ class edit_generators:
 
             for use_brackets in (True, False):
 
+                # An operand may contain blank-space (`c == ' '`) but must not begin or end with it,
+                # otherwise it competes with the surrounding `\s+` separators and long multi-line
+                # expressions can end up hanging (only to be rejected).
+                re_operand = r'[^\s\|\(\)](?:[^\|\(\)]*[^\s\|\(\)])?'
+
                 test_equal = (
-                    r'([^\|\(\)]+)'  # group 1 (no (|))
-                    r'\s+==\s+'
-                    r'([^\|\(\)]+)'  # group 2 (no (|))
+                    # group 1 (no (|), no outer blank-space).
+                    '(' + re_operand + ')' +
+                    r'\s+==\s+' +
+                    # group 2 (no (|), no outer blank-space).
+                    '(' + re_operand + ')'
                 )
 
                 test_not_equal = (
-                    r'([^\|\(\)]+)'  # group 1 (no (|))
-                    r'\s+!=\s+'
-                    r'([^\|\(\)]+)'  # group 2 (no (|))
+                    # group 1 (no (|), no outer blank-space).
+                    '(' + re_operand + ')' +
+                    r'\s+!=\s+' +
+                    # group 2 (no (|), no outer blank-space).
+                    '(' + re_operand + ')'
                 )
 
                 if use_brackets:
@@ -2170,7 +2179,7 @@ def run_edits_on_directory(
 def create_parser(edits_all: Sequence[str], edits_all_default: Sequence[str]) -> argparse.ArgumentParser:
     from textwrap import indent
 
-    # Create doc-string for edits.
+    # Create docstring for edits.
     edits_all_docs = []
     for edit in edits_all:
         # `%` -> `%%` is needed for `--help` not to interpret these as formatting arguments.
@@ -2181,7 +2190,7 @@ def create_parser(edits_all: Sequence[str], edits_all_default: Sequence[str]) ->
             )
         )
 
-    # Create doc-string for verbose.
+    # Create docstring for verbose.
     verbose_all_docs = []
     for verbose_id, verbose_doc in VERBOSE_INFO:
         # `%` -> `%%` is needed for `--help` not to interpret these as formatting arguments.

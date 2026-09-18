@@ -28,6 +28,7 @@ set(SRC
   # general includes
   ../include/BIF_glutil.hh
   ../include/ED_anim_api.hh
+  ../include/ED_anim_transformable.hh
   ../include/ED_armature.hh
   ../include/ED_asset.hh
   ../include/ED_asset_menu_utils.hh
@@ -46,6 +47,7 @@ set(SRC
   ../include/ED_grease_pencil.hh
   ../include/ED_id_management.hh
   ../include/ED_image.hh
+  ../include/ED_ime.hh
   ../include/ED_info.hh
   ../include/ED_keyframes_draw.hh
   ../include/ED_keyframes_edit.hh
@@ -80,7 +82,6 @@ set(SRC
   ../include/ED_text.hh
   ../include/ED_time_scrub_ui.hh
   ../include/ED_transform.hh
-  ../include/ED_transformable.hh
   ../include/ED_transform_snap_object_context.hh
   ../include/ED_transverts.hh
   ../include/ED_undo.hh

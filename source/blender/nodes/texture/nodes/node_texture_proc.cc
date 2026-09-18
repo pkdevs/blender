@@ -8,8 +8,8 @@
 
 #include "BKE_material.hh"
 #include "BKE_texture.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "DNA_material_types.h"
 #include "node_texture_util.hh"
 #include "node_util.hh"
@@ -71,7 +71,7 @@ static void texfn(
 
 static int count_outputs(bNode *node)
 {
-  return BLI_listbase_count(&node->outputs);
+  return node->outputs.count();
 }
 
 /* Boilerplate generators */

@@ -8,14 +8,14 @@
 
 #include <fmt/format.h>
 
-#include "BLI_assert.h"
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
 #include "BLI_hash_md5.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BLT_translation.hh"
 
@@ -47,14 +47,19 @@
 #include "AS_asset_representation.hh"
 #include "AS_essentials_library.hh"
 #include "AS_remote_library.hh"
+
 #include "remote_library.hh"
 
-static CLG_LogRef LOG = {"assets.remote_library"};
+static CLG_LogRef LOG = {"asset.remote_library"};
 
 namespace blender::asset_system {
 
 RemoteLibraryDefinitionRef::RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition)
-    : remote_url(library_definition.remote_url), cache_dirpath(library_definition.dirpath)
+    : remote_url(library_definition.remote_url),
+      cache_dirpath(library_definition.dirpath),
+      auth_token(library_definition.auth_token ?
+                     std::optional<StringRefNull>(library_definition.auth_token) :
+                     std::nullopt)
 {
   BLI_assert((library_definition.flag & ASSET_LIBRARY_USE_REMOTE_URL) != 0);
 }
@@ -73,6 +78,12 @@ RemoteAssetLibrary::RemoteAssetLibrary(const eAssetLibraryType library_type,
     : AssetLibrary(library_type, is_read_only, name, root_path), remote_url_(remote_url)
 {
   may_override_import_method_ = false;
+}
+
+void RemoteAssetLibrary::force_remote_listing_download() const
+{
+  remote_library_request_download(
+      RemoteLibraryDefinitionRef{remote_url_, root_path(), auth_token()});
 }
 
 std::optional<eAssetImportMethod> RemoteAssetLibrary::import_method() const
@@ -142,19 +153,99 @@ bool PreferencesRemoteAssetLibrary::is_enabled() const
   return (library_definition->flag & ASSET_LIBRARY_DISABLED) == 0;
 }
 
+std::optional<StringRefNull> PreferencesRemoteAssetLibrary::auth_token() const
+{
+  const bUserAssetLibrary *library_definition = user_library_.user_asset_library();
+  if (library_definition == nullptr) {
+    return std::nullopt;
+  }
+
+  if (library_definition->auth_token == nullptr) {
+    return std::nullopt;
+  }
+
+  StringRefNull token(library_definition->auth_token);
+  if (token.is_empty()) {
+    return std::nullopt;
+  }
+
+  BLI_assert(library_definition->flag & ASSET_LIBRARY_USE_AUTH_TOKEN);
+  return token;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Progress Tracking
  * \{ */
 
+/** See #ProgressTracker::req_to_full_urls. */
+struct RequestIdentifier {
+  std::string library_url;
+  std::string file_request_url;
+
+  uint64_t hash() const
+  {
+    return get_default_hash(library_url, file_request_url);
+  }
+  bool operator==(const RequestIdentifier &other) const
+  {
+    return library_url == other.library_url && file_request_url == other.file_request_url;
+  }
+};
+
+struct FileProgress {
+  int64_t expected_size_in_bytes;
+  int64_t current_size_in_bytes = 0;
+};
+
+struct ProgressData {
+  bool any_asset_file_loading;
+
+  /**
+   * Assets stored in the asset system may only contain a relative URL. The downloader turns this
+   * into an absolute URL, and only uses this internally. So all progress reporting uses the
+   * absolute URL, while the ones known to the asset system may be relative. The downloader returns
+   * the absolute URL in its download function, which we can obtain from the return value of
+   * #remote_library_request_asset_download_file().
+   *
+   * This maps the asset library URL and the potentially relative asset file URL to the absolute
+   * URL used by the downloader.
+   */
+  Map<RequestIdentifier, std::string> req_to_full_urls;
+
+  /**
+   * Absolute URLs (see #req_to_full_urls) of all requested files mapped to their expected size on
+   * disk. Files that are done downloading (successfully or not) are removed and added to
+   * #done_files below.
+   */
+  Map<std::string, FileProgress> requested_files;
+  /**
+   * Absolute URLs of files that are done downloading (successfully or not) mapped to their
+   * expected size on disk. Will be cleared once all current requests are done. This way total
+   * progress reporting can include "done" assets, and progress bars fill up as expected.
+   */
+  Map<std::string, FileProgress> done_files;
+};
+
+enum class DownloadOutcome {
+  Succeeded,
+  Failed,
+};
+
 struct ProgressTracker {
-  static bool any_loading;
+  static ProgressData current;
+
+  static wmTimer *notification_timer;
 
   /** Should be called when a file download is requested. */
-  static void file_requested();
+  static void file_requested(wmWindowManager &wm,
+                             RequestIdentifier &&request,
+                             std::string &&abs_url,
+                             int64_t size_in_bytes);
+  static void file_report_progress(StringRef absolute_file_url, int64_t size_in_bytes);
   /** Should be called when a file download is finished, successfully or not. */
-  static void file_finished(const bContext &C);
+  static void file_finished(StringRef absolute_file_url, DownloadOutcome outcome);
 
   /** Should be called when all downloads finished, successfully or not. */
   static void on_all_finished(wmWindowManager &wm);
@@ -167,69 +258,96 @@ struct ProgressTracker {
   static bool is_any_loading();
 };
 
-bool ProgressTracker::any_loading = false;
+ProgressData ProgressTracker::current = {};
+wmTimer *ProgressTracker::notification_timer = nullptr;
 
-void ProgressTracker::file_requested()
+void ProgressTracker::file_requested(wmWindowManager &wm,
+                                     RequestIdentifier &&request,
+                                     std::string &&abs_url,
+                                     const int64_t size_in_bytes)
 {
-  ProgressTracker::any_loading = true;
+  ProgressTracker::current.requested_files.add(
+      abs_url, FileProgress{.expected_size_in_bytes = size_in_bytes});
+  /* Make the absolute URL known to the progress reporting, so we can query it later using the
+   * potentially relative URL that is known to the asset system. */
+  ProgressTracker::current.req_to_full_urls.add(std::move(request), std::move(abs_url));
+
+  ProgressTracker::current.any_asset_file_loading = true;
+
+  if (!ProgressTracker::notification_timer) {
+    ProgressTracker::notification_timer = WM_event_timer_add_notifier(
+        &wm, nullptr, NC_WM | ND_JOB, 0.1);
+  }
 }
 
-/* Call into Python to ask the downloader if there are any assets currently downloading. */
-static bool downloader_status_any_asset_downloading(const bContext &C)
+void ProgressTracker::file_report_progress(const StringRef absolute_file_url,
+                                           const int64_t size_in_bytes)
 {
-#ifdef WITH_PYTHON
-  constexpr const char *SCRIPT = R"(
-import _bpy_internal.assets.remote_library.asset_downloader as asset_dl
-
-_result = asset_dl.any_asset_downloading()
-  )";
-
-  const std::unique_ptr locals = bke::idprop::create_group("locals");
-
-  std::optional<IDProperty *> any_downloading_idptr =
-      /* TODO Casting away const is annoying. Could pass a context copy instead, but `BPY_run_`
-       * functions don't handle that well yet. */
-      BPY_run_string_exec_with_locals_return_idprop(
-          const_cast<bContext *>(&C), SCRIPT, *locals, "_result");
-  if (!any_downloading_idptr || !*any_downloading_idptr) {
-    CLOG_ERROR(&LOG, "Failed to query downloader status");
-    return false;
+  if (FileProgress *progress = ProgressTracker::current.requested_files.lookup_ptr_as(
+          absolute_file_url))
+  {
+    progress->current_size_in_bytes = size_in_bytes;
   }
-  if ((*any_downloading_idptr)->type != IDP_BOOLEAN) {
-    CLOG_ERROR(&LOG, "Failed to query downloader status: expected boolean result");
-    return false;
-  }
-
-  const bool any_downloading(IDP_bool_get(*any_downloading_idptr));
-  IDP_FreeProperty(*any_downloading_idptr);
-  return any_downloading;
-#else
-  UNUSED_VARS(C);
-  return false;
-#endif
 }
 
-void ProgressTracker::file_finished(const bContext &C)
+void ProgressTracker::file_finished(const StringRef absolute_file_url,
+                                    const DownloadOutcome outcome)
 {
-  /* Whenever a file finishes, update the "any downloading" flag. We call into Python for this, so
-   * by only doing it when a file finishes, we avoid unnecessary calls. */
-  ProgressTracker::any_loading = downloader_status_any_asset_downloading(C);
+  if (FileProgress *progress = ProgressTracker::current.requested_files.lookup_ptr_as(
+          absolute_file_url))
+  {
+    switch (outcome) {
+      case DownloadOutcome::Failed:
+        /* The file is 'done', but shouldn't count towards any download progress any more. */
+        break;
+      case DownloadOutcome::Succeeded:
+        ProgressTracker::current.done_files.add(absolute_file_url, *progress);
+        break;
+    }
 
-  if (!ProgressTracker::any_loading) {
-    ProgressTracker::on_all_finished(*CTX_wm_manager(&C));
+    /* Regardless of the outcome, the file is no longer downloading. */
+    ProgressTracker::current.requested_files.remove_contained_as(absolute_file_url);
   }
 }
 
 void ProgressTracker::on_all_finished(wmWindowManager &wm)
 {
-  ProgressTracker::any_loading = false;
+  /* Clear all progress data. */
+  ProgressTracker::current = {};
+  if (ProgressTracker::notification_timer) {
+    WM_event_timer_remove(&wm, nullptr, ProgressTracker::notification_timer);
+    ProgressTracker::notification_timer = nullptr;
+  }
   /* Add notifier so job UIs redraw, and the progress/cancel buttons disappear. */
   WM_event_add_notifier_ex(&wm, nullptr, NC_WM | ND_JOB, nullptr);
 }
 
 bool ProgressTracker::is_any_loading()
 {
-  return ProgressTracker::any_loading;
+  return ProgressTracker::current.any_asset_file_loading;
+}
+
+float remote_library_total_asset_downloads_progress()
+{
+  int64_t expected_bytes = 0;
+  int64_t current_bytes = 0;
+  for (const FileProgress &progress : ProgressTracker::current.requested_files.values()) {
+    expected_bytes += progress.expected_size_in_bytes;
+    current_bytes += progress.current_size_in_bytes;
+  }
+
+  for (const FileProgress &finished : ProgressTracker::current.done_files.values()) {
+    expected_bytes += finished.expected_size_in_bytes;
+    current_bytes += finished.expected_size_in_bytes;
+  }
+
+  if (!expected_bytes) {
+    return 0.0f;
+  }
+
+  const float progress = float(current_bytes) / expected_bytes;
+  BLI_assert(progress >= -0.0001f && progress <= 1.0001f);
+  return std::clamp(progress, 0.0f, 1.0f);
 }
 
 bool remote_library_has_unfinished_asset_downloads()
@@ -312,18 +430,52 @@ void RemoteLibraryLoadingStatus::ping_new_preview(const bContext &C,
   ED_preview_online_download_finished(CTX_wm_manager(&C), preview_full_filepath);
 }
 
-void RemoteLibraryLoadingStatus::ping_asset_file_download_done(const bContext &C,
-                                                               const StringRef library_url)
+void RemoteLibraryLoadingStatus::ping_asset_file_progress(const StringRef absolute_file_url,
+                                                          const int64_t size_in_bytes)
+{
+  ProgressTracker::file_report_progress(absolute_file_url, size_in_bytes);
+}
+
+static void ping_asset_file_done_impl(const bContext &C,
+                                      const StringRef library_url,
+                                      const StringRef absolute_file_url,
+                                      const StringRef local_file_abspath,
+                                      const DownloadOutcome outcome)
 {
   wmWindowManager *wm = CTX_wm_manager(&C);
 
-  ed::asset::list::on_remote_assets_downloaded(*wm, library_url);
-  ProgressTracker::file_finished(C);
+  ed::asset::list::on_remote_assets_downloaded(*wm, library_url, local_file_abspath);
+  ProgressTracker::file_finished(absolute_file_url, outcome);
 
   /* Redraw drags, they may show some "asset being downloaded" info. */
-  if (!BLI_listbase_is_empty(&wm->runtime->drags)) {
+  if (!wm->runtime->drags.is_empty()) {
     WM_event_add_mousemove(CTX_wm_window(&C));
   }
+}
+
+void RemoteLibraryLoadingStatus::ping_asset_file_download_succeeded(
+    const bContext &C,
+    const StringRef library_url,
+    const StringRef absolute_file_url,
+    const StringRef local_file_abspath)
+{
+  ping_asset_file_done_impl(
+      C, library_url, absolute_file_url, local_file_abspath, DownloadOutcome::Succeeded);
+}
+
+void RemoteLibraryLoadingStatus::ping_asset_file_download_failed(
+    const bContext &C,
+    const StringRef library_url,
+    const StringRef absolute_file_url,
+    const StringRef local_file_abspath)
+{
+  ping_asset_file_done_impl(
+      C, library_url, absolute_file_url, local_file_abspath, DownloadOutcome::Failed);
+}
+
+void RemoteLibraryLoadingStatus::ping_download_queue_done(const bContext &C)
+{
+  ProgressTracker::on_all_finished(*CTX_wm_manager(&C));
 }
 
 void RemoteLibraryLoadingStatus::ping_metafiles_in_place(const StringRef url)
@@ -482,7 +634,7 @@ void remote_library_request_download(const RemoteLibraryDefinitionRef &library_d
   }
 
   BLI_assert_msg(!is_online_essentials_url(library_definition.remote_url) ||
-                     library_definition.cache_dirpath == online_essentials_cache_directory_path(),
+                     is_online_essentials_dirpath(library_definition.cache_dirpath),
                  "The online essentials library must be downloaded to "
                  "online_essentials_cache_directory_path()");
 
@@ -505,12 +657,14 @@ void remote_library_request_download(const RemoteLibraryDefinitionRef &library_d
         "from pathlib import Path\n"
         "\n"
         "bl_pkg.remote_asset_library_sync(\n"
-        "    library_url, Path(library_path),\n"
+        "    library_url, auth_token, Path(library_path)\n"
         ")\n";
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.remote_url, "library_url"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.cache_dirpath, "library_path"));
+    IDP_AddToGroup(locals.get(),
+                   IDP_NewString(library_definition.auth_token.value_or(""), "auth_token"));
 
     /* TODO: report errors in the UI somehow. */
     BPY_run_string_exec_with_locals(nullptr, script, *locals);
@@ -541,14 +695,16 @@ bl_pkg.remote_asset_library_sync_cancel()
 #ifdef WITH_PYTHON
 /**
  * Download a single asset file.
- * \returns an 'ok' flag. If not ok, a report will be added to the report list.
+ * \returns The absolute URL determined and returned by the downloader. In case of error, this will
+ *          be unset and a report will be added to the report list.
  */
-static bool remote_library_request_asset_download_file(const bContext &C,
-                                                       ReportList *reports,
-                                                       const StringRefNull asset_name,
-                                                       const asset_system::AssetLibrary &library,
-                                                       const StringRefNull dst_filepath,
-                                                       const URLWithHash &asset_url)
+static std::optional<std::string> remote_library_request_asset_download_file(
+    const bContext &C,
+    ReportList *reports,
+    const StringRefNull asset_name,
+    const asset_system::AssetLibrary &library,
+    const StringRefNull dst_filepath,
+    const URLWithHash &asset_url)
 {
   BLI_assert(library.remote_url());
 
@@ -558,7 +714,7 @@ static bool remote_library_request_asset_download_file(const bContext &C,
         RPT_WARNING,
         "Asset listing does not indicate where the file should be downloaded to, for asset '%s'",
         asset_name.c_str());
-    return false;
+    return std::nullopt;
   }
 
   /* Protect against maliciously constructed file paths. This code can just check & reject, as the
@@ -569,7 +725,7 @@ static bool remote_library_request_asset_download_file(const bContext &C,
                 RPT_ERROR,
                 "Asset '%s' references a file with an absolute path, which is not allowed",
                 asset_name.c_str());
-    return false;
+    return std::nullopt;
   }
 
   /* Check '..' entries, which can be "../" at the start of the path, or "/../" in the middle of
@@ -587,7 +743,7 @@ static bool remote_library_request_asset_download_file(const bContext &C,
                 RPT_ERROR,
                 "Asset '%s' references a file with '..' in its path, which is not allowed",
                 asset_name.c_str());
-    return false;
+    return std::nullopt;
   }
 
   /* No need to check the URL. If it's empty, the Python code uses
@@ -597,21 +753,48 @@ static bool remote_library_request_asset_download_file(const bContext &C,
       "import _bpy_internal.assets.remote_library.asset_downloader as asset_dl\n"
       "from pathlib import Path\n"
       "\n"
-      "asset_dl.download_asset_file(\n"
-      "    library_url, Path(library_path),\n"
+      "_result = asset_dl.download_asset_file(\n"
+      "    library_url, auth_token, Path(library_path),\n"
       "    asset_url, asset_hash, Path(dst_filepath),\n"
       ")\n";
 
   std::unique_ptr locals = bke::idprop::create_group("locals");
   IDP_AddToGroup(locals.get(), IDP_NewString(*library.remote_url(), "library_url"));
+  IDP_AddToGroup(locals.get(), IDP_NewString(library.auth_token().value_or(""), "auth_token"));
   IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
   IDP_AddToGroup(locals.get(), IDP_NewString(dst_filepath, "dst_filepath"));
   IDP_AddToGroup(locals.get(), IDP_NewString(asset_url.url, "asset_url"));
   IDP_AddToGroup(locals.get(), IDP_NewString(asset_url.hash, "asset_hash"));
 
-  /* TODO Casting away const is annoying. Could pass a context copy instead, but `BPY_run_`
-   * functions don't handle that well yet. */
-  return BPY_run_string_exec_with_locals(const_cast<bContext *>(&C), script, *locals);
+  std::optional<IDProperty *> abs_url_idptr =
+      /* TODO Casting away const is annoying. Could pass a context copy instead, but `BPY_run_`
+       * functions don't handle that well yet. */
+      BPY_run_string_exec_with_locals_return_idprop(
+          const_cast<bContext *>(&C), script, *locals, "_result");
+
+  if (!abs_url_idptr) {
+    /* This can happen when there is a malicious asset listing, for example when asset file entries
+     * are constructed such that they overwrite Blender's local asset listing files. */
+    /* TODO: improve the error reporting. */
+    BKE_reportf(
+        reports,
+        RPT_ERROR,
+        "Could not queue the download of asset '%s', check the system console for more info",
+        asset_name.c_str());
+    return std::nullopt;
+  }
+  BLI_SCOPED_DEFER([&] { IDP_FreeProperty(*abs_url_idptr); });
+  if (!*abs_url_idptr) {
+    CLOG_ERROR(&LOG, "Failed to retrieve URL from downloader");
+    return std::nullopt;
+  }
+  if ((*abs_url_idptr)->type != IDP_STRING) {
+    CLOG_ERROR(&LOG, "Failed to retrieve URL from downloader - expected string return value");
+    return std::nullopt;
+  }
+
+  const std::string abs_url(IDP_string_get(*abs_url_idptr));
+  return abs_url;
 }
 
 #endif
@@ -626,8 +809,8 @@ void remote_library_request_asset_download(const bContext &C,
     return;
   }
 
-  if (!asset.is_online()) {
-    BKE_report(reports, RPT_ERROR, "This is not an online asset and thus cannot be downloaded");
+  if (!asset.needs_download()) {
+    BKE_report(reports, RPT_ERROR, "This asset does not require downloading");
     return;
   }
 
@@ -642,6 +825,8 @@ void remote_library_request_asset_download(const bContext &C,
     return;
   }
 
+  wmWindowManager *wm = CTX_wm_manager(&C);
+
   /* The main file is listed first, and has to be downloaded last. By reversing the list of files,
    * first the dependencies are downloaded, followed by the asset itself. That way, when the main
    * asset file appears on disk, it is ready for use.
@@ -653,18 +838,21 @@ void remote_library_request_asset_download(const bContext &C,
   const StringRefNull asset_name = asset.get_name();
   for (int i = asset_files.size() - 1; i >= 0; i--) {
     const OnlineAssetFile &asset_file = asset_files[i];
-    const bool ok = remote_library_request_asset_download_file(
+    std::optional<std::string> abs_url = remote_library_request_asset_download_file(
         C, reports, asset_name, library, asset_file.path, asset_file.url);
-    if (!ok) {
+    if (!abs_url) {
       /* remote_library_request_asset_download_file() will have reported the error.
        *
        * Better to stop here, because if a dependency download couldn't be triggered, the main file
        * should not be downloaded either. Because, if that would work, we have a half-downloaded
-       * asset that Blender's asset browser doesn't know is broken). */
+       * asset that Blender's asset browser doesn't know is broken. */
       break;
     }
 
-    ProgressTracker::file_requested();
+    ProgressTracker::file_requested(*wm,
+                                    RequestIdentifier{*library_url, asset_file.url.url},
+                                    std::move(*abs_url),
+                                    asset_file.size_in_bytes);
   }
 #else
   UNUSED_VARS(C, asset);
@@ -712,12 +900,14 @@ void remote_library_request_preview_download(const bContext &C,
         "from pathlib import Path\n"
         "\n"
         "asset_dl.download_preview(\n"
-        "    library_url, Path(library_path),\n"
+        "    library_url, library_auth_token, Path(library_path),\n"
         "    preview_url, preview_hash, Path(dst_filepath),\n"
         ")\n";
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(*library_url, "library_url"));
+    IDP_AddToGroup(locals.get(),
+                   IDP_NewString(library.auth_token().value_or(""), "library_auth_token"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_url, "preview_url"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_hash, "preview_hash"));
@@ -755,7 +945,6 @@ asset_dl.cancel_download_all_assets()
 
   std::unique_ptr locals = bke::idprop::create_group("locals");
   BPY_run_string_exec_with_locals(&C, SCRIPT, *locals);
-  ProgressTracker::on_all_finished(*CTX_wm_manager(&C));
 #else
   UNUSED_VARS(C);
 #endif
@@ -866,6 +1055,16 @@ std::string remote_library_asset_preview_path(const AssetRepresentation &asset)
 /* -------------------------------------------------------------------- */
 /** \name Other Free Functions
  * \{ */
+
+std::string remote_library_top_meta_file_path(const RemoteLibraryDefinitionRef &library)
+{
+  char filepath[FILE_MAX];
+  BLI_path_join(filepath,
+                sizeof(filepath),
+                library.cache_dirpath.c_str(),
+                asset_system::REMOTE_LIBRARY_TOP_META_FILE_NAME.c_str());
+  return filepath;
+}
 
 bool remote_library_url_ends_with_top_meta_file_name(const StringRef url)
 {

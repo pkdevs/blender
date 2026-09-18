@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_index_range.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_task.hh"
 
@@ -35,7 +35,7 @@ static void compute_preview_cpu(Context &context, const Result &input, ImBuf *ou
 
   Result input_as_color = context.create_result(ResultType::Color);
   if (input.type() == ResultType::Color) {
-    input_as_color = input;
+    input_as_color.share_data(input);
   }
   else {
     input_as_color.allocate_texture(input.domain());
@@ -61,9 +61,7 @@ static void compute_preview_cpu(Context &context, const Result &input, ImBuf *ou
     }
   });
 
-  if (input.type() != ResultType::Color) {
-    input_as_color.release();
-  }
+  input_as_color.release();
 }
 
 static void compute_preview_gpu(Context &context, const Result &input_result, ImBuf *output)

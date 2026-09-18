@@ -14,11 +14,11 @@
 
 #include <cstdlib>
 
-#include "BLI_fileops.h"
-#include "BLI_mmap.h"
+#include "BLI_fileops.hh"
+#include "BLI_mmap.hh"
 #include "BLI_path_utils.hh" /* For assertions. */
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "CLG_log.h"
 
@@ -265,9 +265,9 @@ ImBuf *IMB_thumb_load_image(const char *filepath,
       char cheight[40];
       SNPRINTF_UTF8(cwidth, "%zu", width);
       SNPRINTF_UTF8(cheight, "%zu", height);
-      IMB_metadata_ensure(&ibuf->metadata);
-      IMB_metadata_set_field(ibuf->metadata, "Thumb::Image::Width", cwidth);
-      IMB_metadata_set_field(ibuf->metadata, "Thumb::Image::Height", cheight);
+      IDProperty *metadata = ibuf->metadata_for_write();
+      IMB_metadata_set_field(metadata, "Thumb::Image::Width", cwidth);
+      IMB_metadata_set_field(metadata, "Thumb::Image::Height", cheight);
     }
   }
 

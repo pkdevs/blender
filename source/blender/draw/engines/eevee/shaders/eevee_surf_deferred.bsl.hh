@@ -13,44 +13,41 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_mesh)
-FRAGMENT_SHADER_CREATE_INFO(eevee_render_pass_out)
-FRAGMENT_SHADER_CREATE_INFO(eevee_cryptomatte_out)
-
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
-#include "draw_view_lib.glsl"   /* IWYU pragma: export. For nodetree functions. */
-#include "eevee_gbuffer_write_lib.glsl"
+#include "draw_view.bsl.hh"     /* IWYU pragma: export. For nodetree functions. */
+#include "eevee_cryptomatte.bsl.hh"
+#include "eevee_gbuffer_write.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
-#include "eevee_sampling_lib.glsl"
-#include "eevee_surf_lib.glsl"
+#include "eevee_sampling_lib.bsl.hh"
+#include "eevee_surf_common.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
 
-float4 closure_to_rgba(Closure /*cl*/)
+float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure /*cl*/)
 {
   float4 out_color;
-  out_color.rgb = g_emission;
-  out_color.a = saturate(1.0f - average(g_transmittance));
+  out_color.rgb = sd.emission;
+  out_color.a = saturate(1.0f - average(sd.transmittance));
 
-  /* Reset for the next closure tree. */
-  float noise = utility_tx_fetch(utility_tx, gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
-  float closure_rand = fract(noise + sampling_rng_1D_get(SAMPLING_CLOSURE));
-  closure_weights_reset(closure_rand);
-
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (!pipe.is_occupancy_pipe) [[static_branch]] {
+    [[resource_table]] const eevee::Sampling &sampling = kg.sampling;
+    [[resource_table]] const UtilityTexture &util_tx = kg.util_tx;
+    /* Reset for the next closure tree. */
+    float noise = util_tx.fetch(sd.frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
+    float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
+    closure_weights_reset(kg, sd, closure_rand);
+  }
+  else {
+    closure_weights_reset(kg, sd, 0.0f);
+  }
   return out_color;
 }
 
 namespace eevee {
 
 struct SurfaceDeferred {
-  /* Added at runtime because of test shaders not having `node_tree`. */
-  // [[legacy_info]] ShaderCreateInfo eevee_render_pass_out;
-  // [[legacy_info]] ShaderCreateInfo eevee_cryptomatte_out;
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-  [[legacy_info]] ShaderCreateInfo eevee_utility_texture;
-  [[legacy_info]] ShaderCreateInfo eevee_sampling_data;
-  [[legacy_info]] ShaderCreateInfo eevee_hiz_data;
   [[legacy_info]] ShaderCreateInfo draw_view_culling;
+  [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
 
   /* Everything is stored inside a two layered target, one for each format. This is to fit the
    * limitation of the number of images we can bind on a single shader. */
@@ -93,130 +90,154 @@ struct DeferredFragOut {
 
 /* NOTE: This removes the possibility of using gl_FragDepth. */
 [[fragment]] [[early_fragment_tests]]
-void surf_deferred([[resource_table]] SurfaceDeferred &srt,
+void surf_deferred([[resource_table]] KernelGlobals &kg,
+                   [[resource_table]] PipelineConstants &pipe,
+                   [[resource_table]] SurfaceDeferred &srt,
+                   [[resource_table]] gbuffer::PackParameters &gbuf_params,
+                   [[resource_table]] RenderPassOutput &render_passes,
+                   [[resource_table]] CryptomatteOutput &cryptomatte,
+                   [[resource_table]] const draw::Infos &infos,
+                   [[resource_table]] const draw::View &views,
+                   [[resource_table]] const Uniform &uni,
+                   [[resource_table]] const Sampling &sampling,
+                   [[resource_table]] const UtilityTexture &util_tx,
                    [[frag_coord]] const float4 frag_co,
-                   [[out]] DeferredFragOut &frag_out)
+                   [[out]] DeferredFragOut &frag_out,
+                   [[front_facing]] const bool front_face)
 {
-  init_globals();
+  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+  draw::ID id{interp_flat.resource_id_raw};
+  const uint resource_id = id.resource_id<1>();
 
-  float noise = utility_tx_fetch(utility_tx, frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
-  float closure_rand = fract(noise + sampling_rng_1D_get(SAMPLING_CLOSURE));
+  const ViewMatrices view = views.get(0);
 
-  fragment_displacement();
+  ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
-  nodetree_surface(closure_rand);
+  float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
+  float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  g_holdout = saturate(g_holdout);
+  fragment_displacement(kg, sd);
 
-  Thickness thickness = Thickness::from(nodetree_thickness(), thickness_mode);
+  nodetree_surface(kg, sd, closure_rand);
+
+  sd.holdout = saturate(sd.holdout);
+
+  Thickness thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
 
   /** Transparency weight is already applied through dithering, remove it from other closures. */
-  float alpha = 1.0f - average(g_transmittance);
+  float alpha = 1.0f - average(sd.transmittance);
   float alpha_rcp = safe_rcp(alpha);
 
   /* Object holdout. */
-  eObjectInfoFlag ob_flag = drw_object_infos().flag;
+  eObjectInfoFlag ob_flag = kg.object_infos_get(sd).flag;
   if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
     /* alpha is set from rejected pixels / dithering. */
-    g_holdout = 1.0f;
+    sd.holdout = 1.0f;
 
     /* Set alpha to 0.0 so that lighting is not computed. */
     alpha_rcp = 0.0f;
   }
 
-  g_emission *= alpha_rcp;
+  sd.emission *= alpha_rcp;
 
   int2 out_texel = int2(frag_co.xy);
 
-#ifdef MAT_SUBSURFACE
-  constexpr bool use_sss = true;
-#else
-  constexpr bool use_sss = false;
-#endif
-
-  ObjectInfos object_infos = drw_infos[drw_resource_id()];
+  ObjectInfos object_infos = infos.get(resource_id);
   bool use_light_linking = receiver_light_set_get(object_infos) != 0;
   bool use_terminator_offset = object_infos.shadow_terminator_normal_offset > 0.0;
 
   /* ----- Render Passes output ----- */
 
-#ifdef MAT_RENDER_PASS_SUPPORT /* Needed because node_tree isn't present in test shaders. */
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
-  if (imageSize(rp_cryptomatte_img).x > 1) {
-    float4 cryptomatte_output = float4(
-        cryptomatte_object_buf[drw_resource_id()], node_tree.crypto_hash, 0.0f);
-    imageStoreFast(rp_cryptomatte_img, out_texel, cryptomatte_output);
+  {
+    const auto &nt = buffer_get(eevee_nodetree, node_tree);
+    cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
+    render_passes.store_color(
+        out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
   }
-  output_renderpass_color(uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
-#endif
 
   /* ----- GBuffer output ----- */
 
   gbuffer::InputClosures gbuf_data;
-  gbuf_data.closure[0] = g_closure_get_resolved(0, alpha_rcp);
-#if CLOSURE_BIN_COUNT > 1
-  gbuf_data.closure[1] = g_closure_get_resolved(1, alpha_rcp);
-#endif
-#if CLOSURE_BIN_COUNT > 2
-  gbuf_data.closure[2] = g_closure_get_resolved(2, alpha_rcp);
-#endif
-  const bool use_object_id = use_sss || use_light_linking || use_terminator_offset;
+  /* Make sure we do not read uninitialized data (see #159161). */
+  if (pipe.closure_bin_count == 0) [[static_branch]] {
+    gbuf_data.closure[0] = ClosureUndetermined{};
+  }
+  for (int i = 0; i < 3; i++) [[unroll]] {
+    if (pipe.closure_bin_count > i) [[static_branch]] {
+      gbuf_data.closure[i] = sd.closure_get_resolved(i, alpha_rcp);
+    }
+  }
+  const bool use_object_id = pipe.use_sss || use_light_linking || use_terminator_offset;
 
-  gbuffer::Packed gbuf = gbuffer::pack(gbuf_data, g_data.Ng, g_data.N, thickness, use_object_id);
+  float3 gbuffer_dither = sampling.rng_3D_get(SAMPLING_GBUFFER_U);
+  gbuffer::Packed gbuf = gbuffer::pack(
+      gbuf_params, gbuf_data, sd.Ng, sd.N, thickness, use_object_id);
 
   /* Output header and first closure using frame-buffer attachment. */
   frag_out.gbuf_header = gbuf.header;
-  frag_out.gbuf_closure1 = gbuf.closure[0];
-  frag_out.gbuf_closure2 = gbuf.closure[1];
+  frag_out.gbuf_closure1 = gbuffer::closure_data_layer_dither_round_to_nearest(
+      gbuf.closure[0], frag_co.xy, 0u, gbuffer_dither);
+  frag_out.gbuf_closure2 = gbuffer::closure_data_layer_dither_round_to_nearest(
+      gbuf.closure[1], frag_co.xy, 1u, gbuffer_dither);
   frag_out.gbuf_normal = gbuf.normal[0];
 
   /* Output remaining closures using image store. */
-#if GBUFFER_LAYER_MAX >= 2 && !defined(GBUFFER_SIMPLE_CLOSURE_LAYOUT)
-  if (flag_test(gbuf.used_layers, CLOSURE_DATA_2)) {
-    srt.write_closure_data(out_texel, 2, gbuf.closure[2]);
+  if (gbuf_params.gbuffer_layer_max >= 2) [[static_branch]] {
+    if (!gbuf_params.gbuffer_simple_layout) [[static_branch]] {
+      if (flag_test(gbuf.used_layers, CLOSURE_DATA_2)) {
+        srt.write_closure_data(out_texel,
+                               2,
+                               gbuffer::closure_data_layer_dither_flush_to_zero(
+                                   gbuf.closure[2], frag_co.xy, 2u, gbuffer_dither));
+      }
+      if (flag_test(gbuf.used_layers, CLOSURE_DATA_3)) {
+        srt.write_closure_data(out_texel,
+                               3,
+                               gbuffer::closure_data_layer_dither_flush_to_zero(
+                                   gbuf.closure[3], frag_co.xy, 3u, gbuffer_dither));
+      }
+    }
+    if (flag_test(gbuf.used_layers, NORMAL_DATA_1)) {
+      srt.write_normal_data(out_texel, 1, gbuf.normal[1]);
+    }
   }
-  if (flag_test(gbuf.used_layers, CLOSURE_DATA_3)) {
-    srt.write_closure_data(out_texel, 3, gbuf.closure[3]);
+  if (gbuf_params.gbuffer_layer_max >= 3) [[static_branch]] {
+    if (flag_test(gbuf.used_layers, CLOSURE_DATA_4)) {
+      srt.write_closure_data(out_texel,
+                             4,
+                             gbuffer::closure_data_layer_dither_flush_to_zero(
+                                 gbuf.closure[4], frag_co.xy, 4u, gbuffer_dither));
+    }
+    if (flag_test(gbuf.used_layers, CLOSURE_DATA_5)) {
+      srt.write_closure_data(out_texel,
+                             5,
+                             gbuffer::closure_data_layer_dither_flush_to_zero(
+                                 gbuf.closure[5], frag_co.xy, 5u, gbuffer_dither));
+    }
+    if (flag_test(gbuf.used_layers, NORMAL_DATA_2)) {
+      srt.write_normal_data(out_texel, 2, gbuf.normal[2]);
+    }
   }
-#endif
-#if GBUFFER_LAYER_MAX >= 3
-  if (flag_test(gbuf.used_layers, CLOSURE_DATA_4)) {
-    srt.write_closure_data(out_texel, 4, gbuf.closure[4]);
-  }
-  if (flag_test(gbuf.used_layers, CLOSURE_DATA_5)) {
-    srt.write_closure_data(out_texel, 5, gbuf.closure[5]);
-  }
-#endif
-
-#if GBUFFER_LAYER_MAX >= 2
-  if (flag_test(gbuf.used_layers, NORMAL_DATA_1)) {
-    srt.write_normal_data(out_texel, 1, gbuf.normal[1]);
-  }
-#endif
-#if GBUFFER_LAYER_MAX >= 3
-  if (flag_test(gbuf.used_layers, NORMAL_DATA_2)) {
-    srt.write_normal_data(out_texel, 2, gbuf.normal[2]);
-  }
-#endif
 
 #if defined(GBUFFER_HAS_REFRACTION) || defined(GBUFFER_HAS_SUBSURFACE) || \
     defined(GBUFFER_HAS_TRANSLUCENT)
   if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
     srt.write_normal_data(
-        out_texel, pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
+        out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
   }
 #endif
 
   if (flag_test(gbuf.used_layers, OBJECT_ID)) {
-    srt.write_header_data(out_texel, 1, drw_resource_id());
+    srt.write_header_data(out_texel, 1, resource_id);
   }
 
   /* ----- Radiance output ----- */
 
   /* Only output emission during the gbuffer pass. */
-  frag_out.radiance = float4(g_emission, 0.0f);
-  frag_out.radiance.rgb *= 1.0f - g_holdout;
-  frag_out.radiance.a = g_holdout;
+  frag_out.radiance = float4(sd.emission, 0.0f);
+  frag_out.radiance.rgb *= 1.0f - sd.holdout;
+  frag_out.radiance.a = sd.holdout;
 }
 
 }  // namespace eevee

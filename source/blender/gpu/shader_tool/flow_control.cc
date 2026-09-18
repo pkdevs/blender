@@ -182,9 +182,6 @@ void SourceProcessor::lower_loop_unroll(Parser &parser)
       int t = 0;
       const Token cond_var = cond[t++];
       const Token cond_type = cond[t++];
-      if (cond_type.next() == '=') {
-        t++; /* Skip equal sign. */
-      }
       const Token cond_sign = (cond[t] == '+' || cond[t] == '-') ? cond[t++] : Token(parser);
       const Token cond_end = cond[t];
       if (cond_var.str() != var_name.str()) {
@@ -207,14 +204,14 @@ void SourceProcessor::lower_loop_unroll(Parser &parser)
       }
       if (iter_type == Increment) {
         iter_incr = +1;
-        if (cond_type == '>') {
+        if (cond_type == GThan || cond_type == GEqual) {
           report_error(for_tok, "Unsupported condition in unrolled loop.");
           return;
         }
       }
       else if (iter_type == Decrement) {
         iter_incr = -1;
-        if (cond_type == '<') {
+        if (cond_type == LThan || cond_type == LEqual) {
           report_error(for_tok, "Unsupported condition in unrolled loop.");
           return;
         }
@@ -230,7 +227,7 @@ void SourceProcessor::lower_loop_unroll(Parser &parser)
           parser.substr_range_inclusive(cond_sign.is_valid() ? cond_sign : cond_end, cond_end));
       /* TODO(fclem): Support arbitrary strides (aka, arbitrary iter statement). */
       int iter_count = abs(end_value - init_value);
-      if (cond_type.next() == '=') {
+      if (cond_type == GEqual || cond_type == LEqual) {
         iter_count += 1;
       }
 
@@ -306,7 +303,7 @@ void SourceProcessor::lower_static_branch(Parser &parser)
       const bool is_constexpr = condition[i].str() == "true" || condition[i].str() == "false";
       const bool constexpr_val = is_constexpr ? (condition[i].str() == "true") ^ (i == 2) : false;
 
-      if (condition[1].str() != "srt_access" && !is_constexpr) {
+      if (condition[i].str() != "srt_access" && !is_constexpr) {
         report_error(if_tok,
                      "Expecting compilation or specialization constant. Make sure SRT arguments "
                      "have the [[resource_table]] attribute.");
@@ -316,7 +313,8 @@ void SourceProcessor::lower_static_branch(Parser &parser)
       Token before_body = body.front().prev();
 
       string test = is_constexpr ? string(constexpr_val ? "1" : "0") :
-                                   "SRT_CONSTANT_" + string(condition[5].str()) + " ";
+                                   string(i == 2 ? "!" : "") + "SRT_CONSTANT_" +
+                                       string(condition[4 + i].str()) + " ";
       if (condition[is_constexpr ? 2 : 7] != condition.back().prev()) {
         test += parser.substr_range_inclusive(condition[is_constexpr ? 2 : 7],
                                               condition.back().prev());

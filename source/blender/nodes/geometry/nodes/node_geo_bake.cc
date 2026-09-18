@@ -15,7 +15,7 @@
 #include "UI_resources.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anonymous_attribute_make.hh"
 #include "BKE_bake_geometry_nodes_modifier.hh"
@@ -66,7 +66,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   for (const int i : IndexRange(storage.items_num)) {
     const NodeGeometryBakeItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
+    const eNodeSocketDatatype socket_type = item.socket_type;
     const UString name(item.name);
     const UString identifier(BakeItemsAccessor::socket_identifier_for_item(item));
     auto &input_decl = b.add_input(socket_type, name, identifier)
@@ -74,12 +74,8 @@ static void node_declare(NodeDeclarationBuilder &b)
                                &ntree->id, *BakeItemsAccessor::item_srna, &item, "name");
     auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
     if (socket_type_supports_attributes(socket_type)) {
-      input_decl.supports_field();
-      if (item.flag & GEO_NODE_BAKE_ITEM_IS_ATTRIBUTE) {
-        output_decl.field_source();
-      }
-      else {
-        output_decl.dependent_field({input_decl.index()});
+      if (!(item.flag & GEO_NODE_BAKE_ITEM_IS_ATTRIBUTE)) {
+        output_decl.inferred_structure_type({input_decl.index()});
       }
     }
     input_decl.structure_type(StructureType::Dynamic);
@@ -89,7 +85,9 @@ static void node_declare(NodeDeclarationBuilder &b)
           .pass_through_input_index(input_decl.index());
     }
   }
-  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<BakeItemsAccessor>());
   b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr)
       .structure_type(StructureType::Dynamic)
       .align_with_previous();
@@ -133,7 +131,7 @@ static void draw_bake_items(const bContext *C, ui::Layout &layout, PointerRNA no
     socket_items::ui::draw_active_item_props<BakeItemsAccessor>(
         tree, node, [&](PointerRNA *item_ptr) {
           const NodeGeometryBakeItem &active_item = storage.items[storage.active_index];
-          const auto socket_type = eNodeSocketDatatype(active_item.socket_type);
+          const eNodeSocketDatatype socket_type = active_item.socket_type;
           panel->use_property_split_set(true);
           panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -266,7 +264,7 @@ class LazyFunctionForBakeNode final : public LazyFunction {
                     bke::bake::BakeDataBlockMap *data_block_map) const
   {
     std::optional<bake::BakeValues> bake_values = this->get_bake_values_from_inputs(
-        params, data_block_map);
+        params, data_block_map, false);
     if (!bake_values) {
       /* Wait for inputs to be computed. */
       return;
@@ -316,8 +314,10 @@ class LazyFunctionForBakeNode final : public LazyFunction {
         prev_bake_values, data_block_map, compute_context);
     Vector<SocketValueVariant> next_values = this->bake_to_output_values(
         next_bake_values, data_block_map, compute_context);
-    for (const int i : bake_items_.index_range()) {
-      geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+    if (mix_factor != 0.0f) {
+      for (const int i : bake_items_.index_range()) {
+        geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+      }
     }
     for (const int i : bake_items_.index_range()) {
       params.set_output(i, std::move(output_values[i]));
@@ -325,7 +325,9 @@ class LazyFunctionForBakeNode final : public LazyFunction {
   }
 
   std::optional<bake::BakeValues> get_bake_values_from_inputs(
-      lf::Params &params, bke::bake::BakeDataBlockMap *data_block_map) const
+      lf::Params &params,
+      bke::bake::BakeDataBlockMap *data_block_map,
+      const bool is_for_cache = true) const
   {
     Array<bke::SocketValueVariant *> input_value_pointers(bake_items_.size());
     for (const int i : bake_items_.index_range()) {
@@ -347,7 +349,8 @@ class LazyFunctionForBakeNode final : public LazyFunction {
       bake_input_value.value = std::move(*input_value_pointers[i]);
     }
 
-    return bake::BakeValues::from_runtime_values(std::move(bake_input_values), data_block_map);
+    return bake::BakeValues::from_runtime_values(
+        std::move(bake_input_values), data_block_map, is_for_cache);
   }
 
   Vector<SocketValueVariant> bake_to_output_values(const bake::BakeValues &bake_values,
@@ -356,7 +359,7 @@ class LazyFunctionForBakeNode final : public LazyFunction {
   {
     Vector<bake::BakeValues::OutputKey> keys;
     for (const NodeGeometryBakeItem &item : bake_items_) {
-      keys.append({item.identifier, eNodeSocketDatatype(item.socket_type)});
+      keys.append({item.identifier, item.socket_type});
     }
     return bake_values.to_runtime_values(keys, compute_context, data_block_map);
   }
@@ -385,7 +388,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
   if (!ctx.is_bakeable_in_current_context) {
     NodeExtraInfoRow row;
     row.text = TIP_("Cannot bake in zone");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     params.rows.append(std::move(row));
   }
   if (ctx.is_baked) {
@@ -447,7 +450,7 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const eNodeSocketDatatype type = eNodeSocketDatatype(params.other_socket().type);
+  const eNodeSocketDatatype type = params.other_socket().type;
   if (!BakeItemsAccessor::supports_socket_type(type, params.node_tree().type)) {
     return;
   }
@@ -517,7 +520,7 @@ bool get_bake_draw_context(const bContext *C, const bNode &node, BakeDrawContext
     return false;
   }
   std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-      ed::space_node::get_modifier_for_node_editor(*r_ctx.snode);
+      ed::space_node::get_geometry_nodes_modifier_for_node_editor(*r_ctx.snode);
   if (!object_and_modifier) {
     return false;
   }

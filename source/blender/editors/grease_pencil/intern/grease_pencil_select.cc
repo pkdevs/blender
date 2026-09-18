@@ -590,7 +590,7 @@ void insert_selected_values(Object *object,
                             const MutableDrawingInfo &info,
                             const bke::AttrDomain domain,
                             const StringRef name,
-                            const int handle_display,
+                            const eHandleDisplay handle_display,
                             Set<T> &r_value_set)
 {
   T default_value;
@@ -641,7 +641,7 @@ static void select_similar_by_value(Scene *scene,
                                     GreasePencil &grease_pencil,
                                     const bke::AttrDomain selection_domain,
                                     const StringRef name,
-                                    const int handle_display,
+                                    const eHandleDisplay handle_display,
                                     float threshold,
                                     DistanceFn distance_fn)
 {
@@ -735,7 +735,7 @@ static wmOperatorStatus select_similar_exec(bContext *C, wmOperator *op)
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
   bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(scene->toolsettings,
                                                                            object);
-  const int handle_display = v3d->overlay.handle_display;
+  const eHandleDisplay handle_display = ed::greasepencil::view3d_handle_type_or_default(v3d);
 
   switch (mode) {
     case SelectSimilarMode::LAYER:
@@ -1021,7 +1021,7 @@ bool ensure_selection_domain(ToolSettings *ts, Object *object)
         }
       }
       else {
-        BLI_assert(ELEM(meta_data->domain, bke::AttrDomain::Auto, bke::AttrDomain::Curve));
+        BLI_assert(meta_data->domain == bke::AttrDomain::Curve);
 
         const IndexMask selected_curves = ed::curves::retrieve_selected_curves(curves, memory);
         const IndexMask selected_mask = bke::greasepencil::selected_mask_to_fills(
@@ -1198,7 +1198,9 @@ static void GREASE_PENCIL_OT_material_select(wmOperatorType *ot)
   RNA_def_property_flag(ot->prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
+namespace {
 enum class StrokeType : int8_t { Stroke, Fill };
+}
 
 static wmOperatorStatus grease_pencil_select_by_stroke_type_exec(bContext *C, wmOperator *op)
 {
@@ -1340,6 +1342,10 @@ bke::AttrDomain ED_grease_pencil_selection_domain_get(const ToolSettings *tool_s
   }
   if (object->mode & OB_MODE_VERTEX_GREASE_PENCIL) {
     return ED_grease_pencil_vertex_selection_domain_get(tool_settings);
+  }
+  if (object->mode & OB_MODE_PAINT_GREASE_PENCIL) {
+    /* Always use curve selection in Draw Mode. */
+    return bke::AttrDomain::Curve;
   }
   return bke::AttrDomain::Point;
 }

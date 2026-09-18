@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anonymous_attribute_make.hh"
 #include "BKE_attribute_math.hh"
@@ -58,7 +58,7 @@ static Vector<SocketValueVariant> get_output_values_from_bake_values(
 {
   Vector<bke::bake::BakeValues::OutputKey> keys;
   for (const NodeSimulationItem &item : simulation_items) {
-    keys.append({item.identifier, eNodeSocketDatatype(item.socket_type)});
+    keys.append({item.identifier, item.socket_type});
   }
   Vector<SocketValueVariant> output_values = bake_values.to_runtime_values(
       keys, compute_context, data_block_map);
@@ -80,7 +80,7 @@ static void draw_simulation_state(const bContext *C,
     socket_items::ui::draw_active_item_props<SimulationItemsAccessor>(
         ntree, output_node, [&](PointerRNA *item_ptr) {
           NodeSimulationItem &active_item = storage.items[storage.active_index];
-          const auto socket_type = eNodeSocketDatatype(active_item.socket_type);
+          const eNodeSocketDatatype socket_type = active_item.socket_type;
           panel->use_property_split_set(true);
           panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -297,7 +297,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   for (const int i : IndexRange(output_storage.items_num)) {
     const NodeSimulationItem &item = output_storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
+    const eNodeSocketDatatype socket_type = item.socket_type;
     if (socket_type == SOCK_GEOMETRY && i > 0) {
       b.add_separator();
     }
@@ -305,19 +305,21 @@ static void node_declare(NodeDeclarationBuilder &b)
     const UString identifier(SimulationItemsAccessor::socket_identifier_for_item(item));
     auto &input_decl = b.add_input(socket_type, name, identifier)
                            .socket_name_ptr(
-                               &node_tree->id, *SimulationItemsAccessor::item_srna, &item, "name");
-    auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-    if (socket_type_supports_attributes(socket_type)) {
-      /* If it's below a geometry input it may be a field evaluated on that geometry. */
-      input_decl.supports_field().structure_type(StructureType::Dynamic);
-      output_decl.dependent_field({input_decl.index()});
-    }
+                               &node_tree->id, *SimulationItemsAccessor::item_srna, &item, "name")
+                           .structure_type(StructureType::Dynamic);
+    auto &output_decl = b.add_output(socket_type, name, identifier)
+                            .align_with_previous()
+                            .propagate_all({input_decl.index()})
+                            .inferred_structure_type({input_decl.index()})
+                            .structure_type(StructureType::Dynamic);
     if (socket_type == SOCK_BUNDLE) {
       dynamic_cast<decl::BundleBuilder &>(output_decl)
           .pass_through_input_index(input_decl.index());
     }
   }
-  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<SimulationItemsAccessor>());
   b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr)
       .structure_type(StructureType::Dynamic)
       .align_with_previous();
@@ -454,11 +456,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
       return;
     }
     std::optional<FoundNestedNodeID> found_id = find_nested_node_id(user_data, node_.identifier);
-    if (!found_id) {
-      this->set_default_outputs(params);
-      return;
-    }
-    if (found_id->is_in_loop || found_id->is_in_closure) {
+    if (!found_id || found_id->is_in_loop || found_id->is_in_closure) {
       if (eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data)) {
         const StringRefNull message = TIP_("Simulation must not be in a loop or closure");
         tree_logger->node_warnings.append(*tree_logger->allocator,
@@ -509,7 +507,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
   {
     Vector<bke::bake::BakeValues::OutputKey> keys;
     for (const NodeSimulationItem &item : simulation_items_) {
-      keys.append({item.identifier, eNodeSocketDatatype(item.socket_type)});
+      keys.append({item.identifier, item.socket_type});
     }
     Vector<SocketValueVariant> output_values = bake_values.to_runtime_values(
         keys, *user_data.compute_context, data_block_map);
@@ -528,11 +526,12 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
   {
     Vector<SocketValueVariant> output_values = get_output_values_from_bake_values(
         simulation_items_, compute_context, data_block_map, std::move(prev_bake_values));
-
     Vector<SocketValueVariant> next_values = get_output_values_from_bake_values(
         simulation_items_, compute_context, data_block_map, std::move(next_bake_values));
-    for (const int i : simulation_items_.index_range()) {
-      geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+    if (mix_factor != 0.0f) {
+      for (const int i : simulation_items_.index_range()) {
+        geometry::mix_socket_values(output_values[i], next_values[i], mix_factor);
+      }
     }
     for (const int i : simulation_items_.index_range()) {
       params.set_output(i, std::move(output_values[i]));
@@ -567,7 +566,7 @@ class LazyFunctionForSimulationOutputNode final : public LazyFunction {
       /* Wait for skip input to be computed. */
       return;
     }
-    const bool skip = skip_variant->get<bool>();
+    const bool skip = skip_variant->copy_as<bool>();
 
     /* Instead of outputting the values directly, convert them to a bake state and then back.
      * This ensures that some geometry processing happens on the data consistently (e.g. removing
@@ -630,7 +629,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   for (const int i : IndexRange(storage.items_num)) {
     const NodeSimulationItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
+    const eNodeSocketDatatype socket_type = item.socket_type;
     if (socket_type == SOCK_GEOMETRY && i > 0) {
       b.add_separator();
     }
@@ -638,19 +637,21 @@ static void node_declare(NodeDeclarationBuilder &b)
     const UString identifier(SimulationItemsAccessor::socket_identifier_for_item(item));
     auto &input_decl = b.add_input(socket_type, name, identifier)
                            .socket_name_ptr(
-                               &tree->id, *SimulationItemsAccessor::item_srna, &item, "name");
-    auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-    if (socket_type_supports_attributes(socket_type)) {
-      /* If it's below a geometry input it may be a field evaluated on that geometry. */
-      input_decl.supports_field().structure_type(StructureType::Dynamic);
-      output_decl.dependent_field({input_decl.index()});
-    }
+                               &tree->id, *SimulationItemsAccessor::item_srna, &item, "name")
+                           .structure_type(StructureType::Dynamic);
+    auto &output_decl = b.add_output(socket_type, name, identifier)
+                            .align_with_previous()
+                            .propagate_all({input_decl.index()})
+                            .inferred_structure_type({input_decl.index()})
+                            .structure_type(StructureType::Dynamic);
     if (socket_type == SOCK_BUNDLE) {
       dynamic_cast<decl::BundleBuilder &>(output_decl)
           .pass_through_input_index(input_decl.index());
     }
   }
-  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<SimulationItemsAccessor>());
   b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr)
       .structure_type(StructureType::Dynamic)
       .align_with_previous();
@@ -707,7 +708,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
   if (!ctx.is_bakeable_in_current_context) {
     NodeExtraInfoRow row;
     row.text = TIP_("Cannot bake in zone");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     params.rows.append(std::move(row));
   }
   if (ctx.is_baked) {
@@ -720,9 +721,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const bNodeSocket &other_socket = params.other_socket();
-  if (!SimulationItemsAccessor::supports_socket_type(eNodeSocketDatatype(other_socket.type),
-                                                     params.node_tree().type))
-  {
+  if (!SimulationItemsAccessor::supports_socket_type(other_socket.type, params.node_tree().type)) {
     return;
   }
   params.add_item_full_name(IFACE_("Simulation"), [](LinkSearchOpParams &params) {
@@ -736,7 +735,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     socket_items::clear<SimulationItemsAccessor>(output_node);
     const UString name(params.socket.name);
     socket_items::add_item_with_socket_type_and_name<SimulationItemsAccessor>(
-        params.node_tree, output_node, eNodeSocketDatatype(params.socket.type), name.c_str());
+        params.node_tree, output_node, params.socket.type, name.c_str());
     update_node_declaration_and_sockets(params.node_tree, input_node);
     update_node_declaration_and_sockets(params.node_tree, output_node);
     if (params.socket.in_out == SOCK_IN) {

@@ -1109,14 +1109,24 @@ def _extensions_enabled():
 
 
 def _extensions_enabled_from_repo_directory_and_pkg_id_sequence(repo_directory_and_pkg_id_sequence):
-    # Calculate which extensions are pending to be enabled,
+    # Calculate which add-ons are pending to be enabled,
     # needed so wheels for extensions can be extracted before any add-on using them is enabled.
+    # Other types are skipped so the result can be compared with `_extensions_enabled`.
+    repo_cache_store = repo_cache_store_ensure()
     extensions_enabled_pending = set()
     repo_directory_to_module_map = _extension_repos_directory_to_module_map()
     for repo_directory, pkg_id_sequence in repo_directory_and_pkg_id_sequence:
         repo_module = repo_directory_to_module_map[repo_directory]
+        pkg_manifest_local = next(iter(repo_cache_store.pkg_manifest_from_local_ensure(
+            error_fn=print,
+            directory_subset={repo_directory},
+        )), None)
+        if pkg_manifest_local is None:
+            continue
         for pkg_id in pkg_id_sequence:
-            extensions_enabled_pending.add((repo_module, pkg_id))
+            item_local = pkg_manifest_local.get(pkg_id)
+            if item_local is not None and item_local.type == "add-on":
+                extensions_enabled_pending.add((repo_module, pkg_id))
     return extensions_enabled_pending
 
 
@@ -3566,7 +3576,7 @@ class EXTENSIONS_OT_package_uninstall(Operator, _ExtCmdMixIn):
 
 # Only exists for an error message.
 class EXTENSIONS_OT_package_uninstall_system(Operator):
-    # Copy `EXTENSIONS_OT_package_uninstall` doc-string.
+    # Copy `EXTENSIONS_OT_package_uninstall` docstring.
     bl_label = "Uninstall"
 
     bl_idname = "extensions.package_uninstall_system"
@@ -3987,8 +3997,9 @@ class EXTENSIONS_OT_userpref_show_online(Operator):
 
 
 class EXTENSIONS_OT_userpref_allow_online(Operator):
-    """Allow internet access. Blender may access configured online extension repositories. """ \
-        """Installed third party add-ons may access the internet for their own functionality"""
+    """Allow Blender to access the internet. Add-ons that follow this setting will only connect to """ \
+        """the internet if enabled. However, Blender cannot prevent third-party add-ons from """ \
+        """violating this rule."""
     bl_idname = "extensions.userpref_allow_online"
     bl_label = ""
     bl_options = {'INTERNAL'}
@@ -4009,8 +4020,9 @@ class EXTENSIONS_OT_userpref_allow_online(Operator):
 # NOTE: this is a wrapper for `extensions.userpref_allow_online`.
 # It exists *only* show a dialog.
 class EXTENSIONS_OT_userpref_allow_online_popup(Operator):
-    """Allow internet access. Blender may access configured online extension repositories. """ \
-        """Installed third party add-ons may access the internet for their own functionality"""
+    """Allow Blender to access the internet. Add-ons that follow this setting will only connect to """ \
+        """the internet if enabled. However, Blender cannot prevent third-party add-ons from """ \
+        """violating this rule."""
     bl_idname = "extensions.userpref_allow_online_popup"
     bl_label = ""
     bl_options = {'INTERNAL'}

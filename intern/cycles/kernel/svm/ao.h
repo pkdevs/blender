@@ -86,7 +86,7 @@ ccl_device float svm_ao(
       }
     }
     else {
-      if (!scene_intersect_shadow(kg, &ray, PATH_RAY_SHADOW_OPAQUE)) {
+      if (!scene_intersect_shadow(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE)) {
         unoccluded++;
       }
     }
@@ -95,7 +95,7 @@ ccl_device float svm_ao(
   return ((float)unoccluded) / num_samples;
 }
 
-template<uint node_feature_mask, typename ConstIntegratorGenericState>
+template<uint64_t node_feature_mask, typename ConstIntegratorGenericState>
 #  if defined(__KERNEL_OPTIX__)
 ccl_device_inline
 #  else

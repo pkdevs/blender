@@ -5,11 +5,10 @@
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree.hh"
+#include "BLI_kdtree_new.hh"
+#include "BLI_linear_allocator.hh"
 
 #include "BKE_geometry_fields.hh"
-
-#include "atomic_ops.h"
 
 #include "node_geometry_util.hh"
 
@@ -17,13 +16,19 @@ namespace blender::nodes::node_geo_cluster_by_distance_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).supports_field().hide_value();
-  b.add_input<decl::Int>("Group ID"_ustr).supports_field().hide_value();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .structure_type(StructureType::Field)
+      .hide_value();
+  b.add_input<decl::Int>("Group ID"_ustr).structure_type(StructureType::Field).hide_value();
   b.add_input<decl::Vector>("Position"_ustr)
-      .implicit_field_on_all(NODE_DEFAULT_INPUT_POSITION_FIELD);
+      .default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD)
+      .structure_type(StructureType::Field);
   b.add_input<decl::Float>("Distance"_ustr).default_value(0.001f).min(0.0f).subtype(PROP_DISTANCE);
 
-  b.add_output<decl::Int>("Cluster ID"_ustr).field_source_reference_all();
+  b.add_output<decl::Int>("Cluster ID"_ustr)
+      .structure_type(StructureType::Field)
+      .propagate_references();
 }
 
 constexpr int NO_CLUSTER_VALUE = -1;
@@ -104,61 +109,48 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
 
     const int groups_num = group_indices.size();
     if (groups_num == 1) {
-      KDTree<float3> *tree = kdtree_new<float3>(mask_to_cluster.size());
-      mask_to_cluster.foreach_index(
-          [&](const int i) { kdtree_insert<float3>(tree, i, positions[i]); });
-      kdtree_balance<float3>(tree);
       index_mask::masked_fill<int>(cluster_ids, NO_CLUSTER_VALUE, mask_to_cluster);
-      kdtree_calc_duplicates_fast<float3>(tree, distance_, true, cluster_ids.data());
-      kdtree_free<float3>(tree);
+      const KDTreeNew<float3> tree(positions, mask_to_cluster);
+      /* Visiting the points in index order keeps the result from depending on the tree's
+       * layout, which changes as points move. See #calc_duplicates. */
+      kdtree::calc_duplicates(tree, distance_, mask_to_cluster, cluster_ids);
       set_no_cluster_value(cluster_ids, mask_to_cluster);
       return VArray<int>::from_container(std::move(cluster_ids));
     }
 
-    Array<int> group_offset_data(groups_num + 1, 0);
-    mask_to_cluster.foreach_index_optimized<int>(
-        [&](const int i) {
-          const int group_i = group_indices.index_of((*group_id_span)[i]);
-          atomic_add_and_fetch_int32(&group_offset_data[group_i], 1);
-        },
-        exec_mode::grain_size(8192));
-    const OffsetIndices<int> group_offsets = offset_indices::accumulate_counts_to_offsets(
-        group_offset_data);
+    const Vector<int> mask_indices = mask_to_cluster.to_indices<int>();
+    Array<int> point_groups(mask_indices.size());
+    threading::parallel_for(mask_indices.index_range(), 8192, [&](const IndexRange range) {
+      for (const int64_t pos : range) {
+        point_groups[pos] = group_indices.index_of((*group_id_span)[mask_indices[pos]]);
+      }
+    });
 
-    Array<int> indices_by_group(group_offsets.total_size());
-    Array<int> group_counts(groups_num, 0);
-    mask_to_cluster.foreach_index_optimized<int>(
-        [&](const int i) {
-          const int group_i = group_indices.index_of((*group_id_span)[i]);
-          const int index_in_group = atomic_fetch_and_add_int32(&group_counts[group_i], 1);
-          indices_by_group[group_offsets[group_i][index_in_group]] = int(i);
-        },
-        exec_mode::grain_size(8192));
-    offset_indices::sort_groups(group_offsets, indices_by_group);
+    Array<int> group_offset_data;
+    Array<int> indices_by_group_data;
+    const GroupedSpan<int> indices_by_group = offset_indices::build_groups_from_indices(
+        point_groups, groups_num, group_offset_data, indices_by_group_data, mask_to_cluster);
+    const OffsetIndices<int> group_offsets = indices_by_group.offsets;
 
     threading::parallel_for(
         IndexRange(groups_num),
         1024,
         [&](const IndexRange range) {
-          Vector<int, 64> group_cluster_ids;
+          AlignedBuffer<4096, 8> tree_buffer;
           for (const int group_i : range) {
-            const Span group = indices_by_group.as_span().slice(group_offsets[group_i]);
-            group_cluster_ids.resize(group.size());
-            group_cluster_ids.fill(NO_CLUSTER_VALUE);
-            KDTree<float3> *tree = kdtree_new<float3>(group.size());
-            for (const int pos : group.index_range()) {
-              kdtree_insert<float3>(tree, pos, positions[group[pos]]);
-            }
-            kdtree_balance<float3>(tree);
-            kdtree_calc_duplicates_fast<float3>(tree, distance_, true, group_cluster_ids.data());
-            kdtree_free<float3>(tree);
-            set_no_cluster_value(group_cluster_ids, group_cluster_ids.index_range());
-            threading::parallel_for(group.index_range(), 4096, [&](const IndexRange range) {
-              for (const int pos : range) {
-                const int i = group[pos];
-                cluster_ids[i] = group[group_cluster_ids[pos]];
+            const Span<int> group = indices_by_group[group_i];
+            /* Groups don't share indices, so the shared array can be written to directly. */
+            cluster_ids.as_mutable_span().fill_indices(group, NO_CLUSTER_VALUE);
+            LinearAllocator<> tree_memory;
+            tree_memory.provide_buffer(tree_buffer);
+            const KDTreeNew<float3> tree(positions, group, tree_memory);
+            /* The group's indices are sorted, so this visits the points in index order. */
+            kdtree::calc_duplicates(tree, distance_, group, cluster_ids);
+            for (const int i : group) {
+              if (cluster_ids[i] == NO_CLUSTER_VALUE) {
+                cluster_ids[i] = i;
               }
-            });
+            }
           }
         },
         threading::accumulated_task_sizes(

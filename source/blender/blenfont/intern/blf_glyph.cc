@@ -25,10 +25,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_geom.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rect.hh"
 
 #include "BLF_api.hh"
 
@@ -37,7 +37,7 @@
 #include "blf_internal.hh"
 #include "blf_internal_types.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #ifndef WITH_HEADLESS
 #  include "nanosvgrast.h"
@@ -45,7 +45,7 @@
 #  include "svg_icons.h"
 #endif /* WITH_HEADLESS */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -507,7 +507,7 @@ static const UnicodeBlock unicode_blocks[] = {
     {0x1800, 0x18AF, 81},     /* Mongolian. */
     {0x1900, 0x194F, 93},     /* Limbu. */
     {0x1950, 0x197F, 94},     /* Tai Le. */
-    {0x1980, 0x19DF, 95},     /* New Tai Lue". */
+    {0x1980, 0x19DF, 95},     /* New Tai Lue. */
     {0x19E0, 0x19FF, 80},     /* Khmer. */
     {0x1A00, 0x1A1F, 96},     /* Buginese. */
     {0x1A20, 0x1AAF, -1},     /* Tai Tham. */

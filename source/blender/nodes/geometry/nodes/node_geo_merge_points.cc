@@ -22,11 +22,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Geometry"_ustr)
       .supported_type({GeometryComponent::Type::PointCloud, GeometryComponent::Type::Mesh})
       .description("Point cloud or mesh to merge points of");
-  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Int>("Merge ID"_ustr)
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
       .hide_value()
-      .implicit_field_on_all(NODE_DEFAULT_INPUT_INDEX_FIELD)
+      .evaluated_geometry_field();
+  b.add_input<decl::Int>("Merge ID"_ustr)
+      .evaluated_geometry_field()
+      .default_input_type(NODE_DEFAULT_INPUT_INDEX_FIELD)
       .description("ID of group of the points to merge");
 }
 
@@ -46,15 +49,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (const PointCloud *pointcloud = geometry_set.get_pointcloud()) {
       const bke::PointCloudFieldContext context(*pointcloud);
       FieldEvaluator evaluator(context, pointcloud->totpoint);
-      evaluator.add(group_id_field);
       evaluator.set_selection(selection_field);
-      Array<int> masked_group_ids(pointcloud->totpoint);
-      evaluator.add_with_destination(group_id_field, masked_group_ids.as_mutable_span());
+      evaluator.add(group_id_field);
       evaluator.evaluate();
       const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
       if (selection.is_empty()) {
         return;
       }
+      const VArraySpan<int> masked_group_ids = evaluator.get_evaluated<int>(0);
       PointCloud *new_points = geometry::merge_points(
           *pointcloud, selection, masked_group_ids, attribute_filter);
       geometry_set.replace_pointcloud(new_points);
@@ -62,15 +64,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (const Mesh *mesh = geometry_set.get_mesh()) {
       const bke::MeshFieldContext context(*mesh, AttrDomain::Point);
       FieldEvaluator evaluator(context, mesh->verts_num);
-      evaluator.add(group_id_field);
       evaluator.set_selection(selection_field);
-      Array<int> masked_group_ids(mesh->verts_num);
-      evaluator.add_with_destination(group_id_field, masked_group_ids.as_mutable_span());
+      evaluator.add(group_id_field);
       evaluator.evaluate();
       const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
       if (selection.is_empty()) {
         return;
       }
+      const VArraySpan<int> masked_group_ids = evaluator.get_evaluated<int>(0);
       Mesh *new_mesh = geometry::mesh_merge_verts(
           *mesh, selection, masked_group_ids, attribute_filter);
       geometry_set.replace_mesh(new_mesh);

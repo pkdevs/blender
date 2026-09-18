@@ -35,6 +35,7 @@ _preview_downloaders: dict[str, AssetDownloader] = {}
 
 def download_asset_file(
         asset_library_url: str,
+        asset_library_auth_token: str,
         asset_library_local_path: Path,
         asset_url: str,
         asset_hash: str,
@@ -44,6 +45,8 @@ def download_asset_file(
     :param asset_library_url: Root URL of the remote asset library. Used as an
         identifier of this library (to create a downloader per library), as well
         as for resolving relative URLs.
+
+    :param asset_library_auth_token: Optional authentication token for bearer authentication.
 
     :param asset_library_local_path: Root path of the local asset cache. Used to
         resolve relative `save_to` paths, but also to find the HTTP metadata
@@ -68,9 +71,12 @@ def download_asset_file(
     except KeyError:
         downloader = AssetDownloader(
             asset_library_url,
+            asset_library_auth_token,
             asset_library_local_path,
             reporter=AssetReporter(asset_library_url=asset_library_url),
             on_queue_empty_callback=on_asset_download_queue_empty,
+            queue_side=http_dl.QueueSide.BACK,  # FIFO queue.
+            num_parallel_downloads=1,
         )
         downloader.start()
         _asset_downloaders[asset_library_url] = downloader
@@ -91,6 +97,7 @@ def download_asset_file(
 
 def download_preview(
         asset_library_url: str,
+        asset_library_auth_token: str,
         asset_library_local_path: Path,
         preview_url: str,
         preview_hash: str,
@@ -100,6 +107,8 @@ def download_preview(
     :param asset_library_url: Root URL of the remote asset library. Used as an
         identifier of this library (to create a downloader per library), as well
         as for resolving relative URLs.
+
+    :param asset_library_auth_token: Authentication tokens optionally required by some servers.
 
     :param asset_library_local_path: Root path of the local asset cache. Used to
         resolve relative `save_to` paths, but also to find the HTTP metadata
@@ -135,9 +144,12 @@ def download_preview(
     except KeyError:
         downloader = AssetDownloader(
             asset_library_url,
+            asset_library_auth_token,
             asset_library_local_path,
             reporter=PreviewReporter(),
             on_queue_empty_callback=None,
+            queue_side=http_dl.QueueSide.FRONT,  # LIFO queue.
+            num_parallel_downloads=5,
         )
         downloader.start()
         _preview_downloaders[asset_library_url] = downloader
@@ -193,8 +205,7 @@ def on_asset_download_queue_empty() -> None:
     """Called by the asset downloader when its download queue emptied."""
     if any_asset_downloading():
         return
-    # TODO: ping Blender that all asset downloads are done.
-    logger.info("Asset downloader: all assets are done downloading")
+    bpy.types.WindowManager.asset_library_status_ping_finished_download_queue()
 
 
 def any_asset_downloading() -> bool:
@@ -252,17 +263,25 @@ class AssetDownloader:
 
     _HTTP_METHOD = "GET"
 
+    _queue_side: http_dl.QueueSide
+    """Previews are queued at the front (LIFO), and assets at the back (FIFO)."""
+
     def __init__(
         self,
         remote_url: str,
+        auth_token: str,
         local_path: Path | str,
         *,
         reporter: http_dl.DownloadReporter,
         on_queue_empty_callback: QueueEmptyCallback | None,
+        queue_side: http_dl.QueueSide,
+        num_parallel_downloads: int,
     ) -> None:
         """Create a downloader for assets of a specific asset library.
 
         :param remote_url: Base URL of the remote asset library server.
+
+        :param auth_token: Optional (may be empty) authentication token.
 
         :param local_path: The directory to download the index files to.
 
@@ -281,21 +300,25 @@ class AssetDownloader:
         # Work around a limitation of Blender, see bug report #139720 for details.
         self.on_timer_event = self.on_timer_event  # type: ignore[method-assign]
 
-        self._http_metadata_provider = http_dl.MetadataProviderFilesystem(
-            cache_location=self._locator.http_metadata_cache_location,
+        http_headers = {'X-Blender': "{:d}.{:d}".format(*bpy.app.version)}
+        if auth_token:
+            http_headers['Authorization'] = "Bearer {:s}".format(auth_token)
+
+        self._downloader_options = http_dl.DownloaderOptions(
+            metadata_provider=http_dl.MetadataProviderFilesystem(
+                cache_location=self._locator.http_metadata_cache_location,
+            ),
+            timeout=300,
+            http_headers=http_headers,
+            num_parallel_downloads=num_parallel_downloads,
         )
 
         self._bg_downloader = None
+        self._queue_side = queue_side
 
     def _create_bg_downloader(self) -> None:
         self._bg_downloader = http_dl.BackgroundDownloader(
-            options=http_dl.DownloaderOptions(
-                metadata_provider=self._http_metadata_provider,
-                timeout=300,
-                http_headers={
-                    'X-Blender': "{:d}.{:d}".format(*bpy.app.version),
-                },
-            ),
+            options=self._downloader_options,
             on_callback_error=self._on_callback_error,
         )
 
@@ -401,6 +424,14 @@ class AssetDownloader:
         remote_url = urllib.parse.urljoin(self._locator.remote_url, asset_url)
         download_to_path = self._locator.local_path / download_to_path
 
+        # Safety measure: refuse to download a file into the listing directory.
+        if self._locator.is_system_path(download_to_path):
+            raise ValueError(
+                ("Asset at {!s} wants to be downloaded to {!s}, which would overwrite local asset system files. " +
+                 "Notify the owner of the asset library about this.").format(
+                    remote_url,
+                    download_to_path))
+
         logger.info("downloading %s to %s", remote_url, download_to_path)
 
         assert self._bg_downloader, "downloads can only be queued when the bgdownloader is available"
@@ -408,6 +439,7 @@ class AssetDownloader:
             remote_url,
             download_to_path,
             http_method=self._HTTP_METHOD,
+            queue_side=self._queue_side,
         )
         return request_descr.url
 
@@ -430,6 +462,13 @@ class AssetDownloader:
         # The downloads themselves don't have to be explicitly cancelled,
         # shutting down the downloader will do that implicitly.
         self.shutdown()
+
+        # By now there is no more queue, so just treat it as 'empty' and let Blender know no downloads will happen any
+        # more (at least not by this downloader).
+        if self._on_queue_empty_callback is not None:
+            # Call the callback _after_ setting the status, so that when
+            # Blender is pinged about this, it can see it's finished.
+            self._on_queue_empty_callback()
 
     def shutdown(self) -> None:
         """Stop the background downloader and call the 'done' callback."""
@@ -472,12 +511,12 @@ class AssetDownloader:
             return 0  # Deactivate the timer.
         except Exception:
             logger.exception(
-                "Unexpected error downloading remote asset library ilisting from %s to %s",
+                "Unexpected error downloading remote asset library listing from %s to %s",
                 self._locator.remote_url,
                 self._locator.local_path)
 
         # Automatically switch between IDLE and DOWNLOADING, but never overwrite
-        # FAILED or FINISHED_SUCCESFULLY.
+        # FAILED or FINISHED_SUCCESSFULLY.
         if self._status in {DownloadStatus.DOWNLOADING, DownloadStatus.IDLE}:
             if self._bg_downloader.num_pending_downloads > 0:
                 self._status = DownloadStatus.DOWNLOADING
@@ -561,7 +600,8 @@ class AssetReporter:
         local_file: Path,
     ) -> None:
         logger.debug("Download unnecessary, file already downloaded: %s", http_req_descr.url)
-        bpy.types.WindowManager.asset_library_status_ping_asset_file_done(self.asset_library_url)
+        bpy.types.WindowManager.asset_library_status_ping_asset_file_succeeded(
+            self.asset_library_url, http_req_descr.url, str(local_file))
 
     def download_error(
         self,
@@ -570,33 +610,16 @@ class AssetReporter:
         error: Exception,
     ) -> None:
         logger.warning("Could not download file %s: %s", http_req_descr, error)
-        # TODO: tell Blender about this error.
-        # The call below is here just to make a pull request a non-functional change.
-        bpy.types.WindowManager.asset_library_status_ping_asset_file_done(self.asset_library_url)
+        bpy.types.WindowManager.asset_library_status_ping_asset_file_failed(
+            self.asset_library_url, http_req_descr.url, str(local_file))
 
     def download_progress(
         self,
         http_req_descr: http_dl.RequestDescription,
         progress: http_dl.DownloadProgress,
     ) -> None:
-        # TODO: ping the window manager, instead of printing to the terminal.
-        downloaded = http_dl.humanize_size(progress.disk_bytes_written)
-        if progress.network_bytes_total is None:
-            logger.debug(
-                "Asset Downloader: downloaded %d = %s of %s",
-                progress.disk_bytes_written,
-                downloaded,
-                http_req_descr.url)
-        else:
-            percentage = 100 * progress.network_bytes_streamed / progress.network_bytes_total
-            if progress.network_bytes_streamed < progress.network_bytes_total:
-                percentage = min(99, percentage)
-            logger.debug(
-                "Asset Downloader: downloaded %d = %s (%.0f%%) of %s",
-                progress.disk_bytes_written, downloaded,
-                percentage,
-                http_req_descr.url,
-            )
+        bpy.types.WindowManager.asset_library_status_ping_asset_file_progress(
+            http_req_descr.url, progress.disk_bytes_written)
 
     def download_finished(
         self,
@@ -604,7 +627,8 @@ class AssetReporter:
         local_file: Path,
     ) -> None:
         logger.info("Download finished: %s to %s", http_req_descr, local_file)
-        bpy.types.WindowManager.asset_library_status_ping_asset_file_done(self.asset_library_url)
+        bpy.types.WindowManager.asset_library_status_ping_asset_file_succeeded(
+            self.asset_library_url, http_req_descr.url, str(local_file))
 
 
 @dataclasses.dataclass
@@ -636,7 +660,9 @@ class PreviewReporter:
         error: Exception,
     ) -> None:
         # TODO: create an empty file in the correct `.../_thumbs/failed` directory.
-        self.download_finished(http_req_descr, local_file)
+
+        # Poke Blender so it knows there's a thumbnail update.
+        bpy.types.WindowManager.asset_library_status_ping_loaded_new_preview(str(local_file))
 
     def download_progress(
         self,

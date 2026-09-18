@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
@@ -98,7 +99,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const eNodeSocketDatatype socket_type = eNodeSocketDatatype(params.other_socket().type);
+  const eNodeSocketDatatype socket_type = params.other_socket().type;
   if (params.in_out() == SOCK_IN) {
     if (socket_type == SOCK_INT) {
       params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
@@ -157,7 +158,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeValueToString"_ustr, FN_NODE_VALUE_TO_STRING);
+  common_node_type_base(&ntype, "FunctionNodeValueToString"_ustr, FN_NODE_VALUE_TO_STRING);
   ntype.ui_name = "Value to String";
   ntype.ui_description = "Generate a string representation of the given input value";
   ntype.enum_name_legacy = "VALUE_TO_STRING";

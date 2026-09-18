@@ -14,10 +14,12 @@
 #include "BLI_generic_span.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 #include "BLI_virtual_array.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender::array_utils {
 
@@ -54,12 +56,12 @@ inline void copy(const VArray<T> &src, MutableSpan<T> dst, const Mode mode = {})
 {
   BLI_assert(src.size() == dst.size());
   if constexpr (!mode.is_parallel) {
-    src.materialize_compressed_to_uninitialized(dst.index_range(), dst);
+    src.materialize_compressed(dst.index_range(), dst);
   }
   else {
     const int64_t grain_size = calc_copy_grain_size(mode, sizeof(T));
     threading::parallel_for(src.index_range(), grain_size, [&](const IndexRange range) {
-      src.materialize_to_uninitialized(range, dst);
+      src.materialize(range, dst);
     });
   }
 }
@@ -188,14 +190,15 @@ inline void gather(const VArray<T> &src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst.size());
   if constexpr (!mode.is_parallel) {
-    src.materialize_compressed_to_uninitialized(indices, dst);
+    src.materialize_compressed(indices, dst);
   }
   else {
     const int64_t grain_size = calc_copy_grain_size(mode, sizeof(T));
     threading::parallel_for(indices.index_range(), grain_size, [&](const IndexRange range) {
-      src.materialize_compressed_to_uninitialized(indices.slice(range), dst.slice(range));
+      src.materialize_compressed(indices.slice(range), dst.slice(range));
     });
   }
 }
@@ -210,6 +213,7 @@ inline void gather(const Span<T> src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst.size());
   dst_mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[indices[i]]; },
                                             exec_mode_tag_for_copy(mode, sizeof(T)));
@@ -237,6 +241,7 @@ inline void gather(const VArray<T> &src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
+  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst_mask.min_array_size());
   const CommonVArrayInfo info = src.common_info();
   switch (info.type) {

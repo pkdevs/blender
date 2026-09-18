@@ -9,6 +9,7 @@
 #include "scene/devicescene.h"
 #include "scene/film.h"
 #include "scene/image.h"
+#include "scene/scene_attributes.h"
 #include "scene/shader.h"
 
 #include "util/param.h"
@@ -27,6 +28,7 @@ class Device;
 class DeviceInfo;
 class Film;
 class Integrator;
+class SceneAttributes;
 class PointLight;
 class SpotLight;
 class AreaLight;
@@ -145,11 +147,13 @@ class Scene : public NodeOwner {
   Film *film;
   Background *background;
   Integrator *integrator;
+  SceneAttributes *scene_attribute;
 
   /* data lists */
   unique_ptr_vector<Background> backgrounds;
   unique_ptr_vector<Film> films;
   unique_ptr_vector<Integrator> integrators;
+  unique_ptr_vector<SceneAttributes> scene_attributes;
   unique_ptr_vector<Camera> cameras;
   unique_ptr_vector<Shader> shaders;
   unique_ptr_vector<Pass> passes;
@@ -176,6 +180,7 @@ class Scene : public NodeOwner {
   Shader *default_light;
   Shader *default_background;
   Shader *default_empty;
+  Shader *default_gsplat;
 
   /* device */
   Device *device;
@@ -263,7 +268,7 @@ class Scene : public NodeOwner {
   void free_memory(bool final);
 
   bool kernels_loaded;
-  uint loaded_kernel_features;
+  uint64_t loaded_kernel_features;
 
   void update_kernel_features();
 
@@ -300,6 +305,7 @@ template<> Camera *Scene::create_node<Camera>();
 template<> Background *Scene::create_node<Background>();
 template<> Film *Scene::create_node<Film>();
 template<> Integrator *Scene::create_node<Integrator>();
+template<> SceneAttributes *Scene::create_node<SceneAttributes>();
 
 template<> void Scene::delete_node(Light *node);
 template<> void Scene::delete_node(Mesh *node);

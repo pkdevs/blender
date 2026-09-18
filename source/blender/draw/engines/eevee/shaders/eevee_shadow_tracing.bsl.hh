@@ -8,20 +8,18 @@
  * Evaluate shadowing using shadow map ray-tracing.
  */
 
-#include "infos/eevee_uniform_infos.hh"
-
-SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
-
 #include "draw_math_geom_lib.glsl"
-#include "draw_view_lib.glsl"
-#include "eevee_light_lib.glsl"
-#include "eevee_sampling_lib.glsl"
+#include "draw_view.bsl.hh"
+#include "eevee_light_lib.bsl.hh"
+#include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_fast_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_ray_utils_lib.glsl"
+#include "eevee_uniform.bsl.hh"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_rotation.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_ray_utils.bsl.hh"
 
 namespace eevee {
 
@@ -126,8 +124,8 @@ bool shadow_map_trace([[resource_table]] ShadowRenderData &srd,
                       float step_offset)
 {
   ShadowMapTracingState state = shadow_map_trace_init(sample_count, step_offset);
-  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false); i++)
-  { /* Saturate to always cover the shading point position when i == sample_count. */
+  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false); i++) {
+    /* Saturate to always cover the shading point position when i == sample_count. */
     state.ray_time = square(saturate(float(i) * state.ray_step_mul + state.ray_step_bias));
 
     ShadowTracingSample samp = shadow_map_trace_sample(srd, state, ray);
@@ -153,10 +151,8 @@ struct ShadowRayDirectional {
 };
 
 /* `lP` is supposed to be in light rotated space. But not translated. */
-ShadowRayDirectional shadow_ray_generate_directional(LightData light,
-                                                     float2 random_2d,
-                                                     float3 lP,
-                                                     float texel_radius)
+ShadowRayDirectional shadow_ray_generate_directional(
+    LightData light, float2 random_2d, float3 lP, float texel_radius, float soft_shadow_scale)
 {
   float clip_near = orderedIntBitsToFloat(light.clip_near);
   /* Assumed to be non-null. */
@@ -169,6 +165,10 @@ ShadowRayDirectional shadow_ray_generate_directional(LightData light,
 
   /* Light shape is 1 unit away from the shading point. */
   float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
+
+  float3 shadow_space_light_direction = transform_direction_transposed(
+      light.object_to_world, float3(light.sun().direction));
+  direction = spherical_interpolate(shadow_space_light_direction, direction, soft_shadow_scale);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */
   direction *= max(texel_radius, dist_to_near_plane / direction.z);
@@ -229,7 +229,10 @@ struct ShadowRayPunctual {
 };
 
 /* Return ray in UV clip space [0..1]. */
-ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d, float3 lP)
+ShadowRayPunctual shadow_ray_generate_punctual(LightData light,
+                                               float2 random_2d,
+                                               float3 lP,
+                                               float soft_shadow_scale)
 {
   if (light.type == LIGHT_RECT) {
     random_2d = random_2d * 2.0f - 1.0f;
@@ -237,6 +240,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
   else {
     random_2d = sample_disk(random_2d);
   }
+  random_2d *= soft_shadow_scale;
 
   float clip_near = intBitsToFloat(light.clip_near);
   float shape_radius = light.spot().local.shadow_radius;
@@ -244,13 +248,11 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
    * issue might reappear at different zoom level. */
   shape_radius = max(0.00002f, shape_radius);
 
-  float3 direction;
+  float3 point_on_light_shape;
   if (is_area_light(light.type)) {
     random_2d *= light.area().size * light.area().shadow_scale;
 
-    float3 point_on_light_shape = float3(random_2d, 0.0f);
-
-    direction = point_on_light_shape - lP;
+    point_on_light_shape = float3(random_2d, 0.0f);
   }
   else {
     float dist;
@@ -264,10 +266,16 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
     }
     random_2d *= shape_radius;
 
-    float3 point_on_light_shape = right * random_2d.x + up * random_2d.y;
-
-    direction = point_on_light_shape - lP;
+    point_on_light_shape = right * random_2d.x + up * random_2d.y;
   }
+
+  /* Avoid numerical issue when random point is exactly on the light center. */
+  if (length_squared(point_on_light_shape) < 1e-8f) {
+    point_on_light_shape = float3(1e-6f);
+  }
+
+  float3 direction = point_on_light_shape - lP;
+
   float3 shadow_position = light.local().local.shadow_position;
   /* Clip the ray to not cross the near plane.
    * Avoid traces that starts on tiles that have not been queried, creating noise. */
@@ -279,7 +287,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
   ShadowRayPunctual ray;
   /* Transform to shadow local space. */
   ray.origin = lP - shadow_position;
-  ray.direction = direction + shadow_position;
+  ray.direction = direction + shadow_position * soft_shadow_scale;
   ray.light_tilemap_index = light.tilemap_index;
   ray.local_ray_up = safe_normalize(cross(cross(ray.origin, ray.direction), ray.direction));
   ray.light = light;
@@ -348,7 +356,11 @@ float3 shadow_pcf_offset(float3 L, float3 Ng, float2 random)
  * This is a smooth (not discretized to the LOD transitions) conservative (always above actual
  * density) estimate value.
  */
-float shadow_texel_radius_at_position(LightData light, const bool is_directional, float3 P)
+float shadow_texel_radius_at_position([[resource_table]] const Uniform &uni,
+                                      [[resource_table]] const draw::View &views,
+                                      LightData light,
+                                      const bool is_directional,
+                                      float3 P)
 {
   /* For direction, footprint of the sampled clipmap (or cascade) at the given position.
    * For punctual, footprint of the tilemap at given position scaled by the LOD level.
@@ -374,14 +386,16 @@ float shadow_texel_radius_at_position(LightData light, const bool is_directional
     }
   }
   else {
+    const ViewMatrices view = views.get(0);
+
     float3 lP = light_world_to_local_point(light, P);
     lP -= light.local().local.shadow_position;
     /* Simplification of `exp2(shadow_punctual_level_fractional)`. */
     scale = shadow_punctual_pixel_ratio(light,
                                         lP,
-                                        drw_view_is_perspective(),
-                                        drw_view_z_distance(P),
-                                        uniform_buf.shadow.film_pixel_radius);
+                                        view.is_perspective(),
+                                        view.z_distance(P),
+                                        uni.uniform_buf.shadow.film_pixel_radius);
     /* This gives the size of pixels at Z = 1. */
     scale = 1.0f / scale;
     scale = min(scale, float(1 << SHADOW_TILEMAP_LOD));
@@ -443,26 +457,31 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
                   const bool is_directional,
                   const bool is_transmission,
                   bool is_translucent_with_thickness,
+                  float2 frag_co,
                   Thickness thickness, /* Only used if is_transmission is true. */
                   float3 P,
                   float3 Ng,
                   float3 N,
                   float terminator_normal_offset,
                   float terminator_geometry_offset,
+                  float soft_shadow_scale,
                   int ray_count,
                   int ray_step_count)
 {
   /* Case of surfel light eval. */
   float3 random_shadow_3d = float3(0.5f);
   float2 random_pcf_2d = float2(0.0f);
-#if defined(EEVEE_SAMPLING_DATA) && !defined(GLSL_CPP_STUBS)
-  if (true) {
-    auto &util_tx = sampler_get(eevee_utility_texture, utility_tx);
-    float3 blue_noise_3d = utility_tx_fetch(util_tx, UTIL_TEXEL, UTIL_BLUE_NOISE_LAYER).rgb;
-    random_shadow_3d = fract(blue_noise_3d + sampling_rng_3D_get(SAMPLING_SHADOW_U));
-    random_pcf_2d = fract(blue_noise_3d.xy + sampling_rng_2D_get(SAMPLING_SHADOW_X));
+
+  [[resource_table]] const Uniform &uni = srd.uniforms;
+  [[resource_table]] const draw::View &views = srd.views;
+
+  if (srd.shadow_random) [[static_branch]] {
+    [[resource_table]] const Sampling sampling = srd.sampling;
+    [[resource_table]] const UtilityTexture util_tx = srd.util_tx;
+    float3 blue_noise_3d = util_tx.fetch(frag_co, UTIL_BLUE_NOISE_LAYER).rgb;
+    random_shadow_3d = fract(blue_noise_3d + sampling.rng_3D_get(SAMPLING_SHADOW_U));
+    random_pcf_2d = fract(blue_noise_3d.xy + sampling.rng_2D_get(SAMPLING_SHADOW_X));
   }
-#endif
 
   float distance_to_shadow;
   /* Direction towards the shadow center (punctual) or direction (direction).
@@ -481,7 +500,7 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
   float3 N_bias = (is_transmission && !is_facing_light) ? reflect(Ng, L) : Ng;
 
   /* Shadow map texel radius at the receiver position. */
-  float texel_radius = shadow_texel_radius_at_position(light, is_directional, P);
+  float texel_radius = shadow_texel_radius_at_position(uni, views, light, is_directional, P);
 
   if (is_transmission && !is_facing_light) {
     /* Ideally, we should bias using the chosen ray direction. In practice, this conflict with our
@@ -516,11 +535,12 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
     bool has_hit;
     if (is_directional) {
       ShadowRayDirectional clip_ray = shadow_ray_generate_directional(
-          light, random_ray_2d, lP, texel_radius);
+          light, random_ray_2d, lP, texel_radius, soft_shadow_scale);
       has_hit = shadow_map_trace(srd, clip_ray, ray_step_count, random_shadow_3d.z);
     }
     else {
-      ShadowRayPunctual clip_ray = shadow_ray_generate_punctual(light, random_ray_2d, lP);
+      ShadowRayPunctual clip_ray = shadow_ray_generate_punctual(
+          light, random_ray_2d, lP, soft_shadow_scale);
       has_hit = shadow_map_trace(srd, clip_ray, ray_step_count, random_shadow_3d.z);
     }
 

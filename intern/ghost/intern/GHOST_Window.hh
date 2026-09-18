@@ -198,9 +198,12 @@ class GHOST_Window : public GHOST_IWindow {
 
   /**
    * Get the drawing context associated with this window.
-   *\return Pointer to the context object.
+   * \return Pointer to the context object.
    */
   GHOST_Context *getContext();
+
+  /** \copydoc #GHOST_IWindow::hasAlpha */
+  bool hasAlpha() const override;
 
   /** \copydoc #GHOST_IWindow::getDefaultFramebuffer */
   unsigned int getDefaultFramebuffer() override;
