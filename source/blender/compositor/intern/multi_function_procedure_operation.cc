@@ -31,6 +31,7 @@
 
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_zones.hh"
 #include "BKE_type_conversions.hh"
 
 #include "NOD_multi_function.hh"
@@ -457,6 +458,7 @@ void MultiFunctionProcedureOperation::assign_output_variables(const bNode &node,
   }
 
   int available_outputs_index = 0;
+  const bke::bNodeTreeZones &zones = *node.owner_tree().zones();
   for (const bNodeSocket *output : node.output_sockets()) {
     if (!is_socket_available(output)) {
       continue;
@@ -468,11 +470,35 @@ void MultiFunctionProcedureOperation::assign_output_variables(const bNode &node,
     /* If any of the nodes linked to the output are not part of the multi-function procedure
      * operation but are part of the execution schedule, then an output result needs to be
      * populated for it. */
+    const Schedule &schedule = node_tree_evaluator_.schedule();
+    const bke::bNodeTreeZone *output_zone = zones.get_zone_by_socket(*output);
     const bool is_operation_output = is_output_linked_to_input_conditioned(
         *output, [&](const bNodeSocket &input) {
-          return node_tree_evaluator_.schedule().nodes.contains(&input.owner_node()) &&
-                 !node_tree_evaluator_.schedule().unneeded_inputs.contains(&input) &&
-                 !node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node());
+          if (node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node())) {
+            return false;
+          }
+
+          if (schedule.unneeded_inputs.contains(&input)) {
+            return false;
+          }
+
+          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_node(
+              input.owner_node().identifier);
+          if (output_zone == input_zone && schedule.nodes.contains(&input.owner_node())) {
+            return true;
+          }
+
+          for (const bke::bNodeTreeZone *zone = input_zone; zone; zone = zone->parent_zone) {
+            if (!zone || zone->parent_zone != output_zone) {
+              continue;
+            }
+
+            if (schedule.nodes.contains(zone->output_node())) {
+              return true;
+            }
+          }
+
+          return false;
         });
 
     /* If the output is used as the node preview, then an output result needs to be populated for

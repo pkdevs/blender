@@ -79,7 +79,8 @@ void ZoneOperation::compute_results_reference_counts(const Schedule &schedule)
             return false;
           }
 
-          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_socket(input);
+          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_node(
+              input.owner_node().identifier);
           if (output_zone == input_zone && schedule.nodes.contains(&input.owner_node())) {
             return true;
           }
