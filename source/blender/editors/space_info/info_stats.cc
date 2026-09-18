@@ -66,6 +66,11 @@
 
 namespace blender {
 
+/**
+ *Due to their implementation, certain modes (i.e. mesh painting & sculpting) typically only work
+ * on a single object at a time, switching between them as necessary, the `active` elements here
+ * are intended there to distinguish between other modes, and selection where necessary.
+ */
 struct SceneStats {
   uint64_t totvert, totvertsel, totvertactive;
   uint64_t totedge, totedgesel;
@@ -425,35 +430,28 @@ static bool stats_is_object_dynamic_topology_sculpt(const Object *ob)
           ob->runtime->sculpt_session->bm);
 }
 
-static void stats_object_sculpt_bvh(const Object *ob, SceneStats *stats)
+static void stats_object_mesh_paint(const Object *ob, SceneStats *stats)
 {
-  switch (ob->type) {
-    case OB_MESH: {
-      const SculptSession *ss = ob->runtime->sculpt_session;
-      const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(*ob);
-      if (ss == nullptr || pbvh == nullptr) {
-        return;
-      }
+  const SculptSession *ss = ob->runtime->sculpt_session;
+  const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(*ob);
+  if (ss == nullptr || pbvh == nullptr) {
+    return;
+  }
 
-      switch (pbvh->type()) {
-        case bke::pbvh::Type::Mesh: {
-          const Mesh &mesh = *id_cast<const Mesh *>(ob->data);
-          stats->totvertactive = mesh.verts_num;
-          stats->totfaceactive = mesh.faces_num;
-          break;
-        }
-        case bke::pbvh::Type::BMesh:
-          stats->totvertactive = ob->runtime->sculpt_session->bm->totvert;
-          stats->tottriactive = ob->runtime->sculpt_session->bm->totface;
-          break;
-        case bke::pbvh::Type::Grids:
-          stats->totvertactive = BKE_sculpt_get_grid_num_verts(*ob);
-          stats->totfaceactive = BKE_sculpt_get_grid_num_faces(*ob);
-          break;
-      }
+  switch (pbvh->type()) {
+    case bke::pbvh::Type::Mesh: {
+      const Mesh &mesh = *id_cast<const Mesh *>(ob->data);
+      stats->totvertactive = mesh.verts_num;
+      stats->totfaceactive = mesh.faces_num;
       break;
     }
-    default:
+    case bke::pbvh::Type::BMesh:
+      stats->totvertactive = ob->runtime->sculpt_session->bm->totvert;
+      stats->tottriactive = ob->runtime->sculpt_session->bm->totface;
+      break;
+    case bke::pbvh::Type::Grids:
+      stats->totvertactive = BKE_sculpt_get_grid_num_verts(*ob);
+      stats->totfaceactive = BKE_sculpt_get_grid_num_faces(*ob);
       break;
   }
 }
@@ -512,7 +510,7 @@ static void stats_update(const Main *bmain,
     FOREACH_OBJECT_END;
   }
   else if (ob && BKE_object_use_sculptsession(ob->mode)) {
-    stats_object_sculpt_bvh(ob, stats);
+    stats_object_mesh_paint(ob, stats);
   }
   else if (ob && ob->mode == OB_MODE_SCULPT_CURVES) {
     const Curves &curves_id = *id_cast<Curves *>(ob->data);
