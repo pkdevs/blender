@@ -103,7 +103,8 @@ struct PixelNode {
     Array<float3x3, 0> pixel_to_position;
 
     /**
-     * Mask indicating whether a triangle is originally part of the mesh or created by border extension.
+     * Mask indicating whether a triangle is originally part of the mesh or created by border
+     * extension.
      */
     BitVector<> original_tris;
   } uv_primitives;

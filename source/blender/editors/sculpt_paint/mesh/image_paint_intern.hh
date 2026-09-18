@@ -49,6 +49,7 @@ struct ScratchDataTile {
 };
 
 struct ScratchData {
+  /* TODO: Maybe this being row-runs would be better for cache performance? */
   Map<ScratchDataKey, ScratchDataTile> tiles;
   /* TODO: Might be able to do something smarter here and use a flat array */
   Map<bke::image::TileNumber, Array<uint32_t>> data_created;
@@ -62,7 +63,6 @@ struct TileColorspaceProcessor : NonCopyable {
 };
 
 using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan<uchar4>>;
-using ScratchBufferType = std::variant<std::monostate, MutableSpan<float4>>;
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
@@ -70,12 +70,6 @@ struct ImageData : NonCopyable {
 
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
-
-  /* TODO: Remove these entries */
-  /* Used for algorithms which need a state prior to the stroke (e.g. Blur).
-   * Assumed to store scene linear float data. */
-  Map<bke::image::TileNumber, ImBuf *> scratch_image_buffers = {};
-  Map<bke::image::TileNumber, ScratchBufferType> scratch_data_buffers = {};
 
   Map<bke::image::TileNumber, TileColorspaceProcessor> processors = {};
 

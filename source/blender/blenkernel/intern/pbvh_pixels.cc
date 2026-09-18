@@ -286,7 +286,10 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
     for (const int face : node.faces()) {
       for (const int tri : bke::mesh::face_triangles_range(mesh_data.faces, face)) {
         foreach_uv_triangle(
-            mesh_data, border_tris, tri, [&](const float2 uvs[3], const int /*island_index*/, const bool /*is_original*/) {
+            mesh_data,
+            border_tris,
+            tri,
+            [&](const float2 uvs[3], const int /*island_index*/, const bool /*is_original*/) {
               float2 uv_min(FLT_MAX);
               float2 uv_max(-FLT_MAX);
               for (int i = 0; i < 3; i++) {
@@ -339,7 +342,10 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
     for (const int face : node.faces()) {
       for (const int tri : bke::mesh::face_triangles_range(mesh_data.faces, face)) {
         foreach_uv_triangle(
-            mesh_data, border_tris, tri, [&](const float2 tri_uvs[3], const int island_index, const bool is_original) {
+            mesh_data,
+            border_tris,
+            tri,
+            [&](const float2 tri_uvs[3], const int island_index, const bool is_original) {
               float2 uvs[3] = {
                   tri_uvs[0] - tile_offset,
                   tri_uvs[1] - tile_offset,
