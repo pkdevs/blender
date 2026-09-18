@@ -34,6 +34,10 @@ namespace imbuf::partial_update {
 struct Tracker;
 }
 
+namespace imbuf {
+using ChangesetID = int64_t;
+}
+
 namespace ocio {
 class ColorSpace;
 }
@@ -152,7 +156,7 @@ struct ImBufGPU {
   ImBufGPUFlag flag = ImBufGPUFlag(0);
 
   /** Changeset tracking for partial update. */
-  std::atomic<int64_t> partial_update_changeset = -1;
+  std::atomic<imbuf::ChangesetID> partial_update_changeset_id = -1;
 
   /** Mutex guarding access to #texture, #lastused, and #flag. */
   blender::Mutex mutex;
