@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_light_shared.hh"
 #include "eevee_lightprobe_sphere.bsl.hh"

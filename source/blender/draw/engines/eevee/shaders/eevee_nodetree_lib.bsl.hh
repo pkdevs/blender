@@ -5,7 +5,6 @@
 #pragma once
 
 #include "draw_object_infos_infos.hh"
-#include "infos/eevee_common_infos.hh"
 
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
@@ -32,6 +31,17 @@
 #include "gpu_shader_math_safe.bsl.hh"
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
+
+namespace eevee {
+
+/* Resource for the raycast node implementation using screen space raytracing. */
+struct Raycast {
+  [[sampler(PREPASS_NORMAL_TEX_SLOT)]] sampler2D prepass_normal_tx;
+  [[sampler(RAYCAST_DEPTH_TEX_SLOT)]] sampler2D raycast_depth_tx;
+  [[sampler(OBJECT_ID_TEX_SLOT)]] usampler2D object_id_tx;
+};
+
+}
 
 struct LightAccumulation {
   packed_float3 diffuse_light;
@@ -138,6 +148,8 @@ struct KernelGlobals {
   [[resource_table]] [[condition(use_ambient_occlusion)]] srt_t<eevee::HiZ> hiz;
 
   [[resource_table]] [[condition(use_aov_output)]] srt_t<eevee::RenderPassOutput> renderpass_out;
+
+  [[resource_table]] [[condition(use_raycast)]] srt_t<eevee::Raycast> raycast;
 
   [[resource_table]] [[condition(
       use_forward_lighting)]] srt_t<eevee::LightEvalIterator> light_eval;
@@ -497,6 +509,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
                   float3 &hit_normal)
 {
   [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
 
   is_hit = false;
   self_hit = false;
@@ -506,67 +519,65 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 
   direction = normalize(direction);
 
-#if defined(MAT_RAYCAST)
-  if (!uni.pipeline_buf.can_raycast) {
-    /* We can't ray-cast on pre-pass for ray-cast visible objects.
-     * We use a UBO property to avoid compiling more shader variants. */
-    return;
-  }
+  if (pipe.use_raycast) [[static_branch]] {
+    if (!uni.pipeline_buf.can_raycast) {
+      /* We can't ray-cast on pre-pass for ray-cast visible objects.
+       * We use a UBO property to avoid compiling more shader variants. */
+      return;
+    }
 
-  float3 ws_start = position;
-  float3 ws_end = position + direction * max_distance;
-  if (!clip_ray(
-          ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
-  {
-    return;
-  }
-
-  {
-    [[resource_table]] const draw::View &views = kg.view;
-    [[resource_table]] const eevee::Sampling &samp = kg.sampling;
-    const auto &raycast_depth_tx = sampler_get(eevee_raycast, raycast_depth_tx);
-    const auto &prepass_normal_tx = sampler_get(eevee_raycast, prepass_normal_tx);
-    const auto &object_id_tx = sampler_get(eevee_raycast, object_id_tx);
-
-    const ViewMatrices view = views.get(0);
+    float3 ws_start = position;
+    float3 ws_end = position + direction * max_distance;
+    if (!clip_ray(
+            ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
+    {
+      return;
+    }
 
     {
-      /* Offset the start to prevent wrong intersection due to depth precision. */
-      float3 vs_start = view.point_world_to_view(ws_start);
-      float start_depth = view.depth_view_to_screen(vs_start.z);
-      float offset_depth = uintBitsToFloat(floatBitsToUint(start_depth) + 2);
-      float offset_delta = abs(view.depth_screen_to_view(offset_depth) - vs_start.z);
-      ws_start += direction * offset_delta;
-    }
+      [[resource_table]] const draw::View &views = kg.view;
+      [[resource_table]] const eevee::Sampling &samp = kg.sampling;
+      [[resource_table]] const eevee::Raycast &raycast = kg.raycast;
 
-    float noise_offset = samp.rng_1D_get(SAMPLING_RAYTRACE_W);
-    float jitter = interleaved_gradient_noise(sd.frag_co.xy, 1.0f, noise_offset);
+      const ViewMatrices view = views.get(0);
 
-    float2 hit_uv = float2(0.0f);
-    uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
+      {
+        /* Offset the start to prevent wrong intersection due to depth precision. */
+        float3 vs_start = view.point_world_to_view(ws_start);
+        float start_depth = view.depth_view_to_screen(vs_start.z);
+        float offset_depth = uintBitsToFloat(floatBitsToUint(start_depth) + 2);
+        float offset_delta = abs(view.depth_screen_to_view(offset_depth) - vs_start.z);
+        ws_start += direction * offset_delta;
+      }
 
-    float result = raytrace_screen_2(views.get(0),
-                                     view.point_world_to_view(ws_start),
-                                     view.point_world_to_view(ws_end),
-                                     view.normal_world_to_view(direction),
-                                     raycast_depth_tx,
-                                     uni.raytrace_buf,
-                                     64,
-                                     jitter,
-                                     object_id_tx,
-                                     self_only ? self_id : 0,
-                                     hit_uv);
-    if (result >= 0.0f) {
-      is_hit = true;
-      hit_position = ws_start + direction * result;
-      hit_distance = distance(position, hit_position);
-      hit_normal = normalize(texture(prepass_normal_tx, hit_uv).xyz * 2.0f - 1.0f);
-      int2 hit_texel = int2(hit_uv * float2(textureSize(object_id_tx, 0)));
-      uint hit_id = texelFetch(object_id_tx, hit_texel, 0).x;
-      self_hit = self_only || (hit_id == self_id);
+      float noise_offset = samp.rng_1D_get(SAMPLING_RAYTRACE_W);
+      float jitter = interleaved_gradient_noise(sd.frag_co.xy, 1.0f, noise_offset);
+
+      float2 hit_uv = float2(0.0f);
+      uint self_id = kg.resource_id_get(sd) & uint(0xFFFF);
+
+      float result = raytrace_screen_2(views.get(0),
+                                       view.point_world_to_view(ws_start),
+                                       view.point_world_to_view(ws_end),
+                                       view.normal_world_to_view(direction),
+                                       raycast.raycast_depth_tx,
+                                       uni.raytrace_buf,
+                                       64,
+                                       jitter,
+                                       raycast.object_id_tx,
+                                       self_only ? self_id : 0,
+                                       hit_uv);
+      if (result >= 0.0f) {
+        is_hit = true;
+        hit_position = ws_start + direction * result;
+        hit_distance = distance(position, hit_position);
+        hit_normal = normalize(texture(raycast.prepass_normal_tx, hit_uv).xyz * 2.0f - 1.0f);
+        int2 hit_texel = int2(hit_uv * float2(textureSize(raycast.object_id_tx, 0)));
+        uint hit_id = texelFetch(raycast.object_id_tx, hit_texel, 0).x;
+        self_hit = self_only || (hit_id == self_id);
+      }
     }
   }
-#endif
 }
 
 #ifndef GPU_METAL
