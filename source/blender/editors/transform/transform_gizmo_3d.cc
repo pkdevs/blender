@@ -558,7 +558,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
    * Is it fine to possibly evaluate dependency graph here? */
   Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int a, totsel = 0;
 
   Object *ob = gizmo_3d_transform_space_object_get(*bmain, scene, view_layer);
@@ -581,9 +581,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
     ob = obedit;
     if (obedit->type == OB_MESH) {
       FOREACH_EDIT_OBJECT_BEGIN (ob_iter, use_mat_local) {
-        BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
-        BMesh *bm = em_iter->bm;
-
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob_iter);
         if (bm->totvertsel == 0) {
           continue;
         }
@@ -659,7 +657,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
               mat_local, obedit->world_to_object().ptr(), ob_iter->object_to_world().ptr());
         }
 
-        Nurb *nu = static_cast<Nurb *>(nurbs->first);
+        Nurb *nu = nurbs->first();
         while (nu) {
           if (nu->type == CU_BEZIER) {
             bezt = nu->bezt;
@@ -903,7 +901,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
       }
     }
   }
-  else if (ob && (ob->mode & OB_MODE_ALL_PAINT)) {
+  else if (ob && (ob->mode & OB_MODE_ALL_PAINT_MESH)) {
     if (ob->mode & OB_MODE_SCULPT) {
       totsel = 1;
       run_coord_with_matrix(
@@ -1002,7 +1000,7 @@ int calc_gizmo_stats(const bContext *C,
   ScrArea *area = CTX_wm_area(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int totsel = 0;
 
   const int pivot_point = scene->toolsettings->transform_pivot_point;
@@ -1311,7 +1309,7 @@ void gizmo_xform_message_subscribe(wmGizmoGroup *gzgroup,
   }
 
   PointerRNA view3d_ptr = RNA_pointer_create_discrete(
-      &screen->id, RNA_SpaceView3D, area->spacedata.first);
+      &screen->id, RNA_SpaceView3D, area->spacedata.first_);
 
   if (type_fn == VIEW3D_GGT_xform_gizmo) {
     GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
@@ -1998,7 +1996,7 @@ static void WIDGETGROUP_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
   Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   TransformBounds tbounds;
 
@@ -2258,7 +2256,7 @@ static bool WIDGETGROUP_gizmo_poll_generic(View3D *v3d)
 static bool WIDGETGROUP_gizmo_poll_context(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }
@@ -2287,7 +2285,7 @@ static bool WIDGETGROUP_gizmo_poll_tool(const bContext *C, wmGizmoGroupType *gzg
   }
 
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }

@@ -75,6 +75,7 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.generic.select_circle
   ops.generic.select_lasso
   ops.generic.select_paint
+  ops.gpencil.carver
   ops.gpencil.draw
   ops.gpencil.draw.eraser
   ops.gpencil.draw.line
@@ -569,6 +570,7 @@ if(WITH_BLENDER)
       mesh_monkey
       mesh_plane
       mesh_torus
+      mesh_quadsphere
       mesh_uvsphere
       meta_ball
       meta_capsule
