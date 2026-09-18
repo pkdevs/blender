@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include "BLI_span.hh"
+#include "BLI_vector.hh"
+
 #include "intern/dna_utils.h"
 
 /**
@@ -79,6 +82,13 @@ std::unique_ptr<SDNA> DNA_sdna_from_data(
 
 /* Access for current Blender versions SDNA. */
 const SDNA *DNA_sdna_current_get();
+
+/**
+ * Encode a compact SDNA blob containing only the structs for which #structs_to_write is true.
+ * #structs_to_write might be modified if some more structs have to be written so that the SDNA is
+ * valid. E.g. some structs always need to be written like ListBase and inlined structs.
+ */
+Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> structs_to_write);
 
 struct DNA_ReconstructInfo;
 /**

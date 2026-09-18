@@ -16,6 +16,7 @@
 
 #include "BLI_map.hh"
 #include "BLI_set.hh"
+#include "BLI_vector_set.hh"
 
 #include "BLO_undofile.hh"
 
@@ -78,6 +79,9 @@ struct WriteDataStableAddressIDs {
 
 struct WriteData {
   const SDNA *sdna;
+  /** A boolean for each struct to write. Indexed by #sdna_struct_id_get. */
+  Array<bool> sdna_structs_to_write;
+
   std::ostream *debug_dst = nullptr;
 
   struct {

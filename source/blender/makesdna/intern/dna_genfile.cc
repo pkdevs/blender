@@ -24,9 +24,13 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_index_range.hh"
+#include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_set.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_utildefines.hh"
+#include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "DNA_genfile.h"
 #include "DNA_print.hh"
@@ -78,9 +82,8 @@ namespace blender {
  * to be found with: `type = DNA_struct_find_with_alias(SDNA *, StringRef)`
  * The value of `type` corresponds with the index within the structs array
  *
- * For the moment: the complete DNA file is included in a .blend file. For
- * the future we can think of smarter methods, like only included the used
- * structs. Only needed to keep a file short though...
+ * When writing .blend files, #DNA_sdna_encode_subset can emit only the structs that were
+ * actually used, which makes .blend files smaller.
  *
  * ALLOWED AND TESTED CHANGES IN STRUCTS:
  *  - Type change (a char to float will be divided by 255).
@@ -702,6 +705,186 @@ const SDNA *DNA_sdna_current_get()
    * and reuse. */
   static std::unique_ptr<SDNA> g_sdna = DNA_sdna_from_data(DNAstr, DNAlen, false, true, nullptr);
   return g_sdna.get();
+}
+
+static void expand_sdna_structs_to_write(const SDNA &sdna, MutableSpan<bool> sdna_structs_to_write)
+{
+  BLI_assert(sdna_structs_to_write.size() == sdna.structs.size());
+
+  sdna_structs_to_write[SDNA_RAW_DATA_STRUCT_INDEX] = true;
+
+  /* These structs are always expected to exist. They are parsed to determine e.g. the pointer size
+   * or offsets into ID. */
+  for (const StringRefNull required_name : {"ListBase", "ID", "Library"}) {
+    const int struct_index = DNA_struct_find_index_without_alias(&sdna, required_name);
+    BLI_assert(struct_index > 0);
+    sdna_structs_to_write[struct_index] = true;
+  }
+
+  /* Recursively handle add all inlined structs. For example, #ARegion contains a #View2D, so the
+   * members of that struct have to be written too. */
+  Vector<int> structs_to_check;
+  for (const int64_t i : sdna_structs_to_write.index_range()) {
+    if (sdna_structs_to_write[i]) {
+      structs_to_check.append(int(i));
+    }
+  }
+
+  while (!structs_to_check.is_empty()) {
+    const SDNA_Struct &sdna_struct = *sdna.structs[structs_to_check.pop_last()];
+    for (const int member_i : IndexRange(sdna_struct.members_num)) {
+      const SDNA_StructMember &member = sdna_struct.members[member_i];
+      if (ispointer(sdna.members[member.member_index])) {
+        continue;
+      }
+      const int substruct_i = DNA_struct_find_index_without_alias(&sdna,
+                                                                  sdna.types[member.type_index]);
+      /* The member may not be a struct but a primitive type such as int or float. */
+      if (substruct_i == -1) {
+        continue;
+      }
+      if (sdna_structs_to_write[substruct_i]) {
+        continue;
+      }
+      sdna_structs_to_write[substruct_i] = true;
+      structs_to_check.append(substruct_i);
+    }
+  }
+}
+
+Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> structs_to_write)
+{
+  expand_sdna_structs_to_write(sdna, structs_to_write);
+
+  /* It's necessary to write stubs for unused structs if there is a used struct afterwards. That's
+   * because the struct id has can't be changed anymore and is given by #sdna_struct_id_get.
+   * Structs after the last used one don't need to be written anymore though. */
+  int64_t structs_num = 0;
+  for (const int64_t i : structs_to_write.index_range()) {
+    if (structs_to_write[i]) {
+      structs_num = i + 1;
+    }
+  }
+  BLI_assert(structs_num > 0);
+
+  /* Gather all member names used by the used structs. */
+  VectorSet<StringRef> used_member_names;
+  for (const int64_t struct_i : IndexRange(structs_num)) {
+    if (!structs_to_write[struct_i]) {
+      continue;
+    }
+    const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
+    for (const int member_i : IndexRange(sdna_struct.members_num)) {
+      used_member_names.add(sdna.members[sdna_struct.members[member_i].member_index]);
+    }
+  }
+  BLI_assert(!used_member_names.is_empty());
+
+  Map<StringRef, short> all_type_sizes;
+  all_type_sizes.reserve(sdna.types_num);
+  for (const int type_i : IndexRange(sdna.types_num)) {
+    all_type_sizes.add_new(sdna.types[type_i], sdna.types_size[type_i]);
+  }
+
+  LinearAllocator<> allocator;
+  VectorSet<StringRef> type_names;
+
+  /* Create a fake type name that's written to the file but is not used at all. */
+  auto make_stub_struct_name = [](const int struct_i) { return fmt::format("#{}", struct_i); };
+  auto is_stub_struct_name = [](const StringRef name) { return name.startswith("#"); };
+
+  for (const int64_t struct_i : IndexRange(structs_num)) {
+    if (structs_to_write[struct_i]) {
+      const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
+      type_names.add(sdna.types[sdna_struct.type_index]);
+      for (const int member_i : IndexRange(sdna_struct.members_num)) {
+        type_names.add(sdna.types[sdna_struct.members[member_i].type_index]);
+      }
+    }
+    else {
+      type_names.add(allocator.copy_string(make_stub_struct_name(struct_i)));
+    }
+  }
+
+  Vector<uint8_t> dst;
+  dst.reserve(1024);
+
+  auto write = [&](const void *data, const int64_t size) {
+    dst.extend(static_cast<const uint8_t *>(data), size);
+  };
+  auto pad_to_4 = [&]() {
+    const int64_t pad = (4 - (dst.size() & 3)) & 3;
+    dst.append_n_times(0, pad);
+  };
+
+  /* Write magic 'SDNA' followed by the individual sections encoding the partial sdna. */
+  write("SDNA", 4);
+  {
+    write("NAME", 4);
+    const int names_num = int(used_member_names.size());
+    write(&names_num, 4);
+    for (const StringRef name : used_member_names) {
+      write(name.data(), name.size() + 1);
+    }
+    pad_to_4();
+  }
+  {
+    write("TYPE", 4);
+    const int types_num = int(type_names.size());
+    write(&types_num, 4);
+    for (const StringRef type_name : type_names) {
+      write(type_name.data(), type_name.size() + 1);
+    }
+    pad_to_4();
+  }
+  {
+    write("TLEN", 4);
+    for (const int type_i : type_names.index_range()) {
+      const StringRef type_name = type_names[type_i];
+      if (is_stub_struct_name(type_name)) {
+        const short size = 0;
+        write(&size, sizeof(size));
+      }
+      else {
+        const short size = all_type_sizes.lookup(type_name);
+        write(&size, sizeof(size));
+      }
+    }
+    pad_to_4();
+  }
+  {
+    write("STRC", 4);
+    const int structs_num_i = int(structs_num);
+    write(&structs_num_i, 4);
+
+    for (const int64_t struct_i : IndexRange(structs_num)) {
+      if (structs_to_write[struct_i]) {
+        /* Write the struct with all its members. */
+        const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
+        const short struct_type_i = type_names.index_of_as(sdna.types[sdna_struct.type_index]);
+        const short members_num = sdna_struct.members_num;
+        write(&struct_type_i, sizeof(struct_type_i));
+        write(&members_num, sizeof(members_num));
+        for (const int member_i : IndexRange(sdna_struct.members_num)) {
+          const SDNA_StructMember &member = sdna_struct.members[member_i];
+          const short member_type_i = type_names.index_of_as(sdna.types[member.type_index]);
+          const short member_name_i = used_member_names.index_of_as(
+              sdna.members[member.member_index]);
+          write(&member_type_i, sizeof(member_type_i));
+          write(&member_name_i, sizeof(member_name_i));
+        }
+      }
+      else {
+        /* Write the struct as stub without any members. */
+        const short struct_type_i = type_names.index_of_as(make_stub_struct_name(struct_i));
+        const short members_num = 0;
+        write(&struct_type_i, sizeof(struct_type_i));
+        write(&members_num, sizeof(members_num));
+      }
+    }
+  }
+
+  return dst;
 }
 
 /* ******************** END READ DNA ********************** */
