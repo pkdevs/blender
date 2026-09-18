@@ -71,6 +71,10 @@ struct ShapePoint {
   float3 N;
 };
 
+}  // namespace draw::curves
+
+namespace draw {
+
 struct Curves {
   [[sampler(0), frequency(BATCH)]] samplerBuffer curves_pos_rad_buf;
   [[sampler(1), frequency(BATCH)]] isamplerBuffer curves_indirection_buf;
@@ -78,10 +82,10 @@ struct Curves {
   [[uniform(DRW_OBJ_DATA_INFO_UBO_SLOT), frequency(BATCH)]] CurvesInfos &drw_curves;
 
   /* Indirection buffer indexing. */
-  Segment segment_get(uint vertex_id) const
+  curves::Segment segment_get(uint vertex_id) const
   {
     const bool is_cylinder = drw_curves.half_cylinder_face_count > 1u;
-    Segment segment;
+    curves::Segment segment;
     segment.id = vertex_id / drw_curves.vertex_per_segment;
     segment.v_idx = vertex_id % drw_curves.vertex_per_segment;
     segment.is_end_of_segment = is_cylinder &&
@@ -96,9 +100,9 @@ struct Curves {
     return segment;
   }
 
-  Indirection indirection_get(Segment segment) const
+  curves::Indirection indirection_get(curves::Segment segment) const
   {
-    Indirection ind;
+    curves::Indirection ind;
     ind.is_cyclic_point = false;
     ind.is_end_of_curve = false;
     ind.curve_id = 0;
@@ -144,7 +148,7 @@ struct Curves {
     return ind;
   }
 
-  int point_id_get(Segment segment, Indirection indirection) const
+  int point_id_get(curves::Segment segment, curves::Indirection indirection) const
   {
     const bool is_cylinder = drw_curves.half_cylinder_face_count > 1u;
     if (is_cylinder) {
@@ -153,7 +157,7 @@ struct Curves {
     return int(segment.id) - indirection.curve_id;
   }
 
-  float azimuthal_offset_get(Segment segment) const
+  float azimuthal_offset_get(curves::Segment segment) const
   {
     float offset;
     const bool is_strand = drw_curves.half_cylinder_face_count == 0u;
@@ -181,12 +185,12 @@ struct Curves {
   }
 
   /* Return data about the curve point. */
-  Point point_get(uint vertex_id) const
+  curves::Point point_get(uint vertex_id) const
   {
-    Segment segment = segment_get(vertex_id);
-    Indirection indirection = indirection_get(segment);
+    curves::Segment segment = segment_get(vertex_id);
+    curves::Indirection indirection = indirection_get(segment);
 
-    Point pt;
+    curves::Point pt;
     pt.point_id = point_id_get(segment, indirection);
     pt.curve_id = indirection.curve_id;
     pt.curve_segment = indirection.curve_segment;
@@ -212,7 +216,7 @@ struct Curves {
     return pt;
   }
 
-  Point object_to_world(Point pt, float4x4 object_to_world) const
+  curves::Point object_to_world(curves::Point pt, float4x4 object_to_world) const
   {
     pt.P = transform_point(object_to_world, pt.P);
     pt.T = normalize(transform_direction(object_to_world, pt.T));
@@ -225,11 +229,11 @@ struct Curves {
    * \arg pt : world space curve point.
    * \arg V : world space view vector (toward viewer) at `pt.P`.
    */
-  ShapePoint shape_point_get(const Point pt, const float3 V) const
+  curves::ShapePoint shape_point_get(const curves::Point pt, const float3 V) const
   {
     const bool is_strand = drw_curves.half_cylinder_face_count == 0u;
 
-    ShapePoint shape;
+    curves::ShapePoint shape;
     /* Shading tangent is inverted because of legacy reason. */
     /* TODO(fclem): Change user code. */
     shape.curve_T = -pt.T;
@@ -249,7 +253,7 @@ struct Curves {
   }
 };
 
-}  // namespace draw::curves
+}  // namespace draw
 
 namespace draw::curves {
 
