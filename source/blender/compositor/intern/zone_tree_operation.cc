@@ -86,6 +86,10 @@ void ZoneTreeOperation::execute()
       this->context(), *zone_.owner->tree, compute_context_, socket_result_fn, &zone_);
   NodeTreeEvaluator node_tree_evaluator(this->context(), schedule, *this, compute_context_);
   node_tree_evaluator.evaluate();
+
+  /* Some of the needed outputs might not be allocated even after execution. This could happen for
+   * instance when  when the evaluation gets canceled before the output is written. */
+  this->allocate_default_remaining_outputs();
 }
 
 std::string ZoneTreeOperation::get_external_input_identifier(const bNodeSocket &output)
