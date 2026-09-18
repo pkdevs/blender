@@ -529,6 +529,7 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
       else {
         tselem->flag &= ~(TSE_ACTIVE | TSE_SELECTED);
       }
+      /* Deselect collections when syncing non collection data-block, see: !164069 */
     }
     else {
       tselem->flag &= ~(TSE_SELECTED | TSE_ACTIVE);
