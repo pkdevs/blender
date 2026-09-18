@@ -201,7 +201,7 @@ static void do_versioning_camera_view_zoom(Main *bmain)
   }
 }
 
-static void clear_previously_deprecated_brush_flags(Brush &brush)
+static void clear_deprecated_brush_flags(Brush &brush)
 {
   if (brush.gpencil_settings) {
     brush.gpencil_settings->flag &= ~GP_BRUSH_UNUSED_1;
@@ -565,7 +565,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
     for (Brush &brush : bmain->brushes) {
-      clear_previously_deprecated_brush_flags(brush);
+      clear_deprecated_brush_flags(brush);
     }
   }
   /**
