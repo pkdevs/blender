@@ -241,7 +241,7 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfGlass", 2, 2, 4);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 21)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
     /* Shift animation data to accommodate the new retroreflectivity input. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 18, 1, 34);
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfAnisotropic", 4, 1, 7);
