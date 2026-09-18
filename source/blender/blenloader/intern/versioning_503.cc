@@ -547,6 +547,15 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 22)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.paint_flags & BRUSH_PAINT_UNUSED_1) {
+        brush.paint_flags &= ~BRUSH_PAINT_UNUSED_1;
+        brush.flag |= BRUSH_HARDNESS_PRESSURE;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
     for (Material &materials : bmain->materials) {
       if (materials.gp_style == nullptr) {
         continue;
@@ -571,7 +580,6 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
     }
   }
-
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
