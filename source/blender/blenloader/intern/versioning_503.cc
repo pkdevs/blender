@@ -241,7 +241,7 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfGlass", 2, 2, 4);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 22)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
     bool has_alphabet_sort_method = false;
     bool has_skip_alphabet_sort_method = false;
     for (bScreen &screen : bmain->screens) {
