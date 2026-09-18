@@ -412,19 +412,20 @@ class JoltSolverStep {
     //   this->create_chunk_constraints__pin_rotations(tls, chunk_i);
     // });
 
-    this->update_jolt_state_from_instances();
+    this->update_jolt_state_from_world();
+
     JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
     /* TODO: Integrate with TBB. */
     JPH::JobSystemThreadPool job_system(
         JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1);
     state_.system.Update(delta_time_, substeps_, &temp_allocator, &job_system);
-    this->update_instances_from_jolt_state();
+    this->update_world_from_jolt_state();
 
     // this->write_back__pin_positions();
     // this->write_back__rod_stretch_shear();
 
     this->finish_common_attribute_writers();
-    // this->write_back_geometries_to_world();
+    this->write_back_geometries_to_world();
 
     // this->write_back__contacts();
 #endif
@@ -495,7 +496,32 @@ class JoltSolverStep {
     }
   }
 
-  void update_jolt_state_from_instances()
+  void update_jolt_state_from_world()
+  {
+    this->update_jolt_state__gravity();
+    this->update_jolt_state__rigid_bodies();
+  }
+
+  void update_jolt_state__gravity()
+  {
+    // TODO
+    // if (behaviors.gravities.size() >= 2) {
+    //   params.error_message_add(NodeWarningType::Warning, "There can't be multiple gravities");
+    //   state.system.SetGravity(JPH::Vec3::sZero());
+    //   return;
+    // }
+    // if (behaviors.gravities.size() == 1) {
+    //   const GravityBehavior &behavior = behaviors.gravities[0];
+    //   const float3 gravity = behavior.gravity;
+    //   state.system.SetGravity(JPH::Vec3(gravity.x, gravity.y, gravity.z));
+    //   return;
+    // }
+
+    const JPH::Vec3 default_gravity(0.0f, 0.0f, -9.81f);
+    state_.system.SetGravity(default_gravity);
+  }
+
+  void update_jolt_state__rigid_bodies()
   {
     state_.collision_shape_cache.reset_used();
 
@@ -514,7 +540,8 @@ class JoltSolverStep {
       const GeometryData &geo_data = *geometries_.data[data_key_i];
 
       JoltRigidBodies *old_rigid_bodies = state_.rigid_bodies_by_key.lookup_ptr(data_key);
-      JoltRigidBodies new_rigid_bodies = this->update_rigid_bodies(geo_data, old_rigid_bodies);
+      JoltRigidBodies new_rigid_bodies = this->update_jolt_state__rigid_bodies_from_instances(
+          geo_data, old_rigid_bodies);
 
       new_rigid_bodies_by_key.add_new(data_key, std::move(new_rigid_bodies));
       if (old_rigid_bodies) {
@@ -531,40 +558,12 @@ class JoltSolverStep {
 
     state_.rigid_bodies_by_key = std::move(new_rigid_bodies_by_key);
     state_.collision_shape_cache.remove_unused();
-
-    // update_gravity(params, state, behaviors);
-    // update_forces(state, behaviors);
   }
 
-  JoltRigidBodies update_rigid_bodies(const GeometryData &geo_data,
-                                      JoltRigidBodies *old_rigid_bodies)
+  JoltRigidBodies update_jolt_state__rigid_bodies_from_instances(const GeometryData &geo_data,
+                                                                 JoltRigidBodies *old_rigid_bodies)
   {
     JPH::BodyInterface &body_interface = state_.system.GetBodyInterfaceNoLock();
-
-    // const bke::Instances *instances = behavior.simulated_geometry.get_instances();
-    // if (!instances) {
-    //   return;
-    // }
-    // const int instances_num = instances->instances_num();
-    // const int references_num = instances->references_num();
-    // const Span<int> instance_ids = instances->almost_unique_ids();
-    // const Span<float4x4> transforms = instances->transforms();
-    // const Span<bke::InstanceReference> references = instances->references();
-    // const Span<int> handles = instances->reference_handles();
-
-    // bke::InstancesFieldContext field_context{*instances};
-    // fn::FieldEvaluator field_evaluator{field_context, instances_num};
-    // field_evaluator.add(behavior.collision_shape_type_field);
-    // field_evaluator.add(behavior.motion_type_field);
-    // field_evaluator.add(behavior.friction_field);
-    // field_evaluator.add(behavior.bounciness_field);
-    // field_evaluator.add(behavior.density_field);
-    // field_evaluator.evaluate();
-    // const VArray<int> collision_shape_types = field_evaluator.get_evaluated<int>(0);
-    // const VArray<int> motion_types = field_evaluator.get_evaluated<int>(1);
-    // const VArray<float> frictions = field_evaluator.get_evaluated<float>(2);
-    // const VArray<float> bouncinesses = field_evaluator.get_evaluated<float>(3);
-    // const VArray<float> densities = field_evaluator.get_evaluated<float>(4);
 
     Array<GeometrySet> reference_geometry_sets(geo_data.references.size());
     for (const int i : geo_data.references.index_range()) {
@@ -661,7 +660,7 @@ class JoltSolverStep {
     return rigid_bodies;
   }
 
-  void update_instances_from_jolt_state()
+  void update_world_from_jolt_state()
   {
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       const DataKey &data_key = geometries_.data_keys[data_key_i];
@@ -703,6 +702,14 @@ class JoltSolverStep {
       geo_data.transform_attr.finish();
       geo_data.velocity_attr.finish();
       geo_data.angular_velocity_attr.finish();
+    }
+  }
+
+  void write_back_geometries_to_world()
+  {
+    for (const int geo_bundle_i : geometries_.geometry_sets.index_range()) {
+      GeometrySetData &geo_set_data = geometries_.geometry_sets[geo_bundle_i];
+      world_.add_path_override(geo_set_data.path, std::move(geo_set_data.geometry));
     }
   }
 
