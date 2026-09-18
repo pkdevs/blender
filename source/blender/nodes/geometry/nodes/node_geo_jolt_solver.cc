@@ -602,6 +602,8 @@ class JoltSolverStep {
       float3 instance_scale;
       math::to_loc_rot_scale_safe<true>(
           instance_transform, instance_position, instance_rotation, instance_scale);
+      const float3 linear_velocity = geo_data.velocity_attr.span[instance_i];
+      const float3 angular_velocity = geo_data.angular_velocity_attr.span[instance_i];
 
       float density = geo_data.densities[instance_i];
       if (density <= 0.0f) {
@@ -635,6 +637,8 @@ class JoltSolverStep {
             *motion_type,
             *motion_type == JPH::EMotionType::Dynamic ? ObjectLayers::moving :
                                                         ObjectLayers::non_moving};
+        jolt_body_settings.mLinearVelocity = geometry::jolt::convert_vec3(linear_velocity);
+        jolt_body_settings.mAngularVelocity = geometry::jolt::convert_vec3(angular_velocity);
 
         JPH::Body *jolt_body = body_interface.CreateBody(jolt_body_settings);
         body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
@@ -680,16 +684,16 @@ class JoltSolverStep {
         const JPH::Body &jolt_body = *rigid_body->body;
 
         float4x4 &transform = geo_data.transform_attr.span[instance_i];
-        const JPH::DVec3 jolt_position = jolt_body.GetPosition();
-        const JPH::Quat jolt_rotation = jolt_body.GetRotation();
-
-        const float3 position = geometry::jolt::convert_dvec3(jolt_position);
-        const math::Quaternion rotation = geometry::jolt::convert_quat(jolt_rotation);
+        float3 &velocity = geo_data.velocity_attr.span[instance_i];
+        float3 &angular_velocity = geo_data.velocity_attr.span[instance_i];
 
         /* Scale is not simulated to Jolt, so keep the scale of the original geometry. */
-        const float3 scale = math::to_scale(transform);
-
-        transform = math::from_loc_rot_scale<float4x4>(position, rotation, scale);
+        transform = math::from_loc_rot_scale<float4x4>(
+            geometry::jolt::convert_dvec3(jolt_body.GetPosition()),
+            geometry::jolt::convert_quat(jolt_body.GetRotation()),
+            math::to_scale(transform));
+        velocity = geometry::jolt::convert_vec3(jolt_body.GetLinearVelocity());
+        angular_velocity = geometry::jolt::convert_vec3(jolt_body.GetAngularVelocity());
       }
     }
   }
