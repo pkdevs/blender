@@ -257,6 +257,16 @@ static bool needs_scene_render_params(const bNodeTree &ntree)
       return true;
     }
   }
+  for (const bNode *node : ntree.nodes_by_type("GeometryNodeInputRenderResolution"_ustr)) {
+    if (node->is_muted()) {
+      continue;
+    }
+    const bNodeSocket &resolution_width = *node->output_by_identifier("Width"_ustr);
+    const bNodeSocket &resolution_height = *node->output_by_identifier("Height"_ustr);
+    if (resolution_width.is_logically_linked() || resolution_height.is_logically_linked()) {
+      return true;
+    }
+  }
   return false;
 }
 

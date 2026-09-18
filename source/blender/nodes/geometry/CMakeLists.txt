@@ -177,6 +177,7 @@ set(SRC
   nodes/node_geo_input_object.cc
   nodes/node_geo_input_position.cc
   nodes/node_geo_input_radius.cc
+  nodes/node_geo_input_render_resolution.cc
   nodes/node_geo_input_scene_time.cc
   nodes/node_geo_input_shortest_edge_paths.cc
   nodes/node_geo_input_spline_cyclic.cc
