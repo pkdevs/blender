@@ -2665,6 +2665,16 @@ void operator_properties_ripple(wmOperatorType *ot, const eSeqRippleFlag options
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
 
+  if ((options & SEQ_RIPPLE_NON_DESTRUCTIVE) != 0) {
+    prop = RNA_def_boolean(ot->srna,
+                           "non_destructive",
+                           true,
+                           "Non-Destructive",
+                           "Never overwrite strips that overlap the edited range, and ripple "
+                           "later strips only as far as they can to close gaps on the timeline");
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+
   if ((options & SEQ_RIPPLE_INSERT) != 0) {
     prop = RNA_def_boolean(ot->srna,
                            "insert",
@@ -2686,6 +2696,7 @@ static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
   const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
   RNA_boolean_set(op->ptr, "all_channels", (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0);
   RNA_boolean_set(op->ptr, "markers", (ripple_flag & SEQ_RIPPLE_MARKERS) != 0);
+  RNA_boolean_set(op->ptr, "non_destructive", (ripple_flag & SEQ_RIPPLE_NON_DESTRUCTIVE) != 0);
 }
 
 /* In the destructive case, we delete or trim all strip contents that occupy the same time
@@ -2852,9 +2863,9 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
   return OPERATOR_FINISHED;
 }
 
-static bool sequencer_ripple_delete_poll_property(const bContext * /*C*/,
-                                                  wmOperator *op,
-                                                  const PropertyRNA *prop)
+static bool sequencer_ripple_edit_poll_property(const bContext * /*C*/,
+                                                wmOperator *op,
+                                                const PropertyRNA *prop)
 {
   const char *prop_id = RNA_property_identifier(prop);
 
@@ -2884,19 +2895,14 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->invoke = sequencer_ripple_delete_invoke;
   ot->exec = sequencer_ripple_delete_exec;
   ot->poll = sequencer_edit_poll;
-  ot->poll_property = sequencer_ripple_delete_poll_property;
+  ot->poll_property = sequencer_ripple_edit_poll_property;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* Properties. */
-  operator_properties_ripple(ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS);
-  RNA_def_boolean(ot->srna,
-                  "non_destructive",
-                  true,
-                  "Non-Destructive",
-                  "Never overwrite strips on other channels that overlap the deleted range, and "
-                  "ripple later strips only as far as they can to close gaps on the timeline");
+  operator_properties_ripple(
+      ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_NON_DESTRUCTIVE);
 }
 
 /** \} */
@@ -3063,6 +3069,7 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
   ot->invoke = sequencer_ripple_trim_invoke;
   ot->exec = sequencer_ripple_trim_exec;
   ot->poll = sequencer_edit_poll;
+  ot->poll_property = sequencer_ripple_edit_poll_property;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -3074,7 +3081,8 @@ void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
                int(seq::Side::Left),
                "Side",
                "The side of the strips to trim to the current frame");
-  operator_properties_ripple(ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS);
+  operator_properties_ripple(
+      ot, SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS | SEQ_RIPPLE_NON_DESTRUCTIVE);
 }
 
 /** \} */

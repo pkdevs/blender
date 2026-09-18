@@ -2029,7 +2029,7 @@ class SEQUENCER_PT_edit_mode(Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Edit Mode"
-    bl_ui_units_x = 9
+    bl_ui_units_x = 11
 
     @classmethod
     def poll(cls, context):
@@ -2044,6 +2044,7 @@ class SEQUENCER_PT_edit_mode(Panel):
         col.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
 
         col.prop(sequencer_tool_settings, "ripple_insert")
+        col.prop(sequencer_tool_settings, "ripple_non_destructive")
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
 

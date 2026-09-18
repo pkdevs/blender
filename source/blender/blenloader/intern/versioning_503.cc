@@ -556,10 +556,10 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 23)) {
     for (Scene &scene : bmain->scenes) {
       SequencerToolSettings *sequencer_tool_settings = seq::tool_settings_ensure(&scene);
-      sequencer_tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS;
+      sequencer_tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
+                                             SEQ_RIPPLE_NON_DESTRUCTIVE;
     }
   }
-
 
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
