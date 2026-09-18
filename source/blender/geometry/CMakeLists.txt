@@ -31,6 +31,7 @@ set(SRC
   intern/mesh_boolean.cc
   intern/mesh_boolean_manifold.cc
   intern/mesh_copy_selection.cc
+  intern/mesh_from_bmesh_operator.cc
   intern/mesh_merge_verts.cc
   intern/mesh_primitive_cuboid.cc
   intern/mesh_primitive_cylinder_cone.cc
@@ -80,6 +81,7 @@ set(SRC
   GEO_mesh_bevel.hh
   GEO_mesh_boolean.hh
   GEO_mesh_copy_selection.hh
+  GEO_mesh_from_bmesh_operator.hh
   GEO_mesh_merge_verts.hh
   GEO_mesh_primitive_cuboid.hh
   GEO_mesh_primitive_cylinder_cone.hh

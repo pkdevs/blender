@@ -674,13 +674,22 @@ Mesh *create_cylinder_or_cone_mesh(const float radius_top,
   /* Handle the case of a line / single point before everything else to avoid
    * the need to check for it later. */
   if (config.top_is_point && config.bottom_is_point) {
+    Mesh *mesh;
     if (config.height == 0.0f) {
-      return create_vertex_mesh();
+      mesh = create_vertex_mesh();
     }
-    const float z_delta = -2.0f * config.height / float(config.side_segments);
-    const float3 start(0.0f, 0.0f, config.height);
-    const float3 delta(0.0f, 0.0f, z_delta);
-    return create_line_mesh(start, delta, config.tot_verts);
+    else {
+      const float z_delta = -2.0f * config.height / float(config.side_segments);
+      const float3 start(0.0f, 0.0f, config.height);
+      const float3 delta(0.0f, 0.0f, z_delta);
+      mesh = create_line_mesh(start, delta, config.tot_verts);
+    }
+    if (attribute_outputs.uv_map_id) {
+      /* There are no corners to map, add the (empty) attribute so callers can rely on it. */
+      mesh->attributes_for_write().add<float2>(
+          *attribute_outputs.uv_map_id, bke::AttrDomain::Corner, bke::AttributeInitConstruct());
+    }
+    return mesh;
   }
 
   Mesh *mesh = BKE_mesh_new_nomain(

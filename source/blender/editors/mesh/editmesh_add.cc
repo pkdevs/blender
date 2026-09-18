@@ -6,17 +6,16 @@
  * \ingroup edmesh
  */
 
-#include <cstdarg>
-
-#include "BLI_math_matrix_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_sys_types.hh"
 
-#include "BLI_math_euler.hh"
 #include "BLT_translation.hh"
 
+#include "BKE_attribute.h"
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
 
@@ -32,11 +31,12 @@
 #include "ED_sculpt.hh"
 
 #include "GEO_join_geometries.hh"
+#include "GEO_mesh_from_bmesh_operator.hh"
 #include "GEO_mesh_primitive_cuboid.hh"
 #include "GEO_mesh_primitive_cylinder_cone.hh"
+#include "GEO_mesh_primitive_grid.hh"
 #include "GEO_mesh_primitive_ico_sphere.hh"
 #include "GEO_mesh_primitive_uv_sphere.hh"
-#include "GEO_transform.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -52,71 +52,21 @@ namespace blender {
 
 /* ********* add primitive operators ************* */
 
-struct MakePrimitiveData {
-  float mat[4][4];
-
-  eContextObjectMode original_mode;
-};
-
-static Object *make_prim_init(bContext *C,
-                              wmOperator *op,
-                              const char *idname,
-                              const float loc[3],
-                              const float rot[3],
-                              const float scale[3],
-                              ushort local_view_bits,
-                              MakePrimitiveData *r_creation_data)
+static void mesh_select_all(Mesh &mesh)
 {
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_scene(C);
-  Object *obedit;
-
-  const enum eContextObjectMode original_mode = CTX_data_mode_enum(C);
-  r_creation_data->original_mode = original_mode;
-
-  switch (original_mode) {
-    case CTX_MODE_SCULPT:
-      obedit = CTX_data_active_object(C);
-      ed::sculpt_paint::undo::geometry_begin(*scene, *obedit, op);
-      break;
-    case CTX_MODE_EDIT_MESH:
-      obedit = CTX_data_edit_object(C);
-      if (obedit->type != OB_MESH) {
-        obedit = ed::object::add_type(C, OB_MESH, idname, loc, rot, false, local_view_bits);
-        ed::object::editmode_enter_ex(bmain, scene, obedit, 0);
-      }
-      break;
-    default:
-      /* Permit adding objects in a variety of modes, even those which are not typically associated
-       * with mesh-editing actions (e.g. Vertex & Texture Paint). This has been the case since 2.7x
-       * and as a result, the operators are often used in user created scripts. */
-      obedit = ed::object::add_type(C, OB_MESH, idname, loc, rot, false, local_view_bits);
-      ed::object::editmode_enter_ex(bmain, scene, obedit, 0);
-      break;
+  bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
+  for (const auto &[name, domain] : {std::pair(".select_vert", bke::AttrDomain::Point),
+                                     std::pair(".select_edge", bke::AttrDomain::Edge),
+                                     std::pair(".select_poly", bke::AttrDomain::Face)})
+  {
+    bke::SpanAttributeWriter<bool> selection = attributes.lookup_or_add_for_write_only_span<bool>(
+        name, domain);
+    selection.span.fill(true);
+    selection.finish();
   }
-
-  ed::object::new_primitive_matrix(C, obedit, loc, rot, scale, r_creation_data->mat);
-
-  return obedit;
 }
 
-static BMesh *make_prim_init_sculpt()
-{
-  const BMAllocTemplate allocsize{.totvert = 0, .totedge = 0, .totloop = 0, .totface = 0};
-
-  BMeshCreateParams bm_create_params{};
-  bm_create_params.use_toolflags = true;
-  BMesh *bm = BM_mesh_create(&allocsize, &bm_create_params);
-
-  return bm;
-}
-
-static void make_prim_finish_sculpt_cancelled(BMesh *bm)
-{
-  BM_mesh_free(bm);
-}
-
-static void init_facesets(const Mesh *object_mesh, Mesh *primitive_mesh)
+static void primitive_face_set_init(const Mesh *object_mesh, Mesh *primitive_mesh)
 {
   bke::AttributeAccessor object_attributes = object_mesh->attributes();
   bke::AttributeReader<int> object_face_sets = object_attributes.lookup<int>(".sculpt_face_set");
@@ -133,176 +83,213 @@ static void init_facesets(const Mesh *object_mesh, Mesh *primitive_mesh)
   primitive_face_sets.finish();
 }
 
-static void make_prim_transform_geometry(
-    const Object *obedit, Mesh *primitive, const float3 loc, const float3 rot, const float3 scale)
+/**
+ * The UV map primitives write into, empty when the mesh has none.
+ */
+static StringRefNull mesh_uv_map_name_for_primitive(const Mesh &mesh)
 {
-  const float4x4 world = math::from_loc_rot_scale<float4x4>(
-      loc, math::to_quaternion(math::EulerXYZ(rot)), scale);
-  const float4x4 local = math::invert(obedit->object_to_world()) * world;
-
-  bke::mesh_transform(*primitive, local, false);
-}
-
-static void make_prim_finish_geometry(bContext *C, Object *ob, Mesh *primitive_mesh)
-{
-  Mesh *object_mesh = id_cast<Mesh *>(ob->data);
-
-  init_facesets(object_mesh, primitive_mesh);
-
-  bke::GeometrySet joined = geometry::join_geometries(
-      {bke::GeometrySet::from_mesh(object_mesh, bke::GeometryOwnershipType::ReadOnly),
-       bke::GeometrySet::from_mesh(primitive_mesh, bke::GeometryOwnershipType::ReadOnly)},
-      {});
-
-  Mesh *result = joined.get_component_for_write<bke::MeshComponent>().release();
-
-  BKE_id_free(CTX_data_main(C), primitive_mesh);
-  BKE_mesh_nomain_to_mesh(result, object_mesh, ob);
-
-  BKE_sculptsession_free_pbvh(*ob);
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_GEOM | ND_DATA, object_mesh);
-}
-
-static void make_prim_finish_sculpt(bContext *C, Object *ob, BMesh *bm)
-{
-  Mesh *object_mesh = id_cast<Mesh *>(ob->data);
-
-  BMeshToMeshParams bm_to_mesh_params{};
-  bm_to_mesh_params.calc_object_remap = false;
-  Mesh *primitive_mesh = BKE_mesh_from_bmesh_nomain(bm, &bm_to_mesh_params, object_mesh);
-  BM_mesh_free(bm);
-
-  init_facesets(object_mesh, primitive_mesh);
-
-  bke::GeometrySet joined = geometry::join_geometries(
-      {bke::GeometrySet::from_mesh(object_mesh, bke::GeometryOwnershipType::ReadOnly),
-       bke::GeometrySet::from_mesh(primitive_mesh, bke::GeometryOwnershipType::ReadOnly)},
-      {});
-
-  Mesh *result = joined.get_component_for_write<bke::MeshComponent>().release();
-
-  BKE_id_free(CTX_data_main(C), primitive_mesh);
-  BKE_mesh_nomain_to_mesh(result, object_mesh, ob);
-
-  BKE_sculptsession_free_pbvh(*ob);
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_GEOM | ND_DATA, object_mesh);
-}
-
-static void make_prim_finish(bContext *C,
-                             Object *obedit,
-                             const MakePrimitiveData *creation_data,
-                             int enter_editmode)
-{
-  if (creation_data->original_mode == CTX_MODE_SCULPT) {
-    ed::sculpt_paint::undo::geometry_end(*obedit);
+  const StringRefNull name = mesh.active_or_default_uv_map_name();
+  if (BKE_editmesh_bmesh_get(&mesh)) {
+    /* The name is read from the BMesh layers so it's never stale,
+     * unlike #Mesh::uv_map_names which doesn't include layers added in edit-mode. */
+    return name;
   }
-  else {
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
-    EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX);
-    /* TODO(@ideasman42): maintain UV sync for newly created data. */
-    EDBM_uvselect_clear(bm);
+  const VectorSet<StringRefNull> uv_map_names = mesh.uv_map_names();
+  if (uv_map_names.contains(name)) {
+    return name;
+  }
+  /* A mesh can have UV maps with no active map set,
+   * the active name may also be stale (referencing a removed UV map). */
+  return uv_map_names.is_empty() ? StringRefNull() : uv_map_names[0];
+}
 
-    /* Only recalculate edit-mode tessellation if we are staying in edit-mode. */
-    EDBMUpdate_Params params{};
-    params.calc_looptris = creation_data->original_mode == CTX_MODE_EDIT_MESH || enter_editmode;
-    params.calc_normals = false;
-    params.is_destructive = true;
-    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
+static void primitive_uv_map_rename_to_object(Mesh &object_mesh, Mesh &primitive_mesh)
+{
+  const VectorSet<StringRefNull> uv_map_names = primitive_mesh.uv_map_names();
+  if (uv_map_names.is_empty()) {
+    return;
+  }
+  BLI_assert(uv_map_names.size() == 1);
+  const std::string primitive_name = uv_map_names[0];
 
-    if (!(creation_data->original_mode == CTX_MODE_EDIT_MESH || enter_editmode)) {
-      ed::object::editmode_exit_ex(
-          CTX_data_main(C), CTX_data_scene(C), obedit, ed::object::EM_FREEDATA);
+  ED_mesh_uv_ensure(&object_mesh, nullptr);
+  const std::string object_name = mesh_uv_map_name_for_primitive(object_mesh);
+  BLI_assert(!object_name.empty());
+
+  if (object_name != primitive_name) {
+    /* Use the ID level rename so any UV pin/select sub-layers are renamed too. */
+    AttributeOwner owner = AttributeOwner::from_id(&primitive_mesh.id);
+    BKE_attribute_rename(owner, primitive_name, object_name, nullptr);
+  }
+}
+
+static void mesh_join_sculpt(Object &ob, Mesh *primitive_mesh)
+{
+  BLI_assert(ob.type == OB_MESH);
+  BLI_assert(primitive_mesh->id.tag & ID_TAG_NO_MAIN);
+  Mesh *object_mesh = id_cast<Mesh *>(ob.data);
+
+  /* Only existing UV maps are written to, see #add_primitive_uv_map. */
+  BLI_assert(primitive_mesh->uv_map_names().is_empty() ||
+             object_mesh->uv_map_names().contains(primitive_mesh->uv_map_names()[0]));
+  primitive_face_set_init(object_mesh, primitive_mesh);
+  /* Match the object's material slots, otherwise joining adds a new slot. */
+  for (const int i : IndexRange(object_mesh->totcol)) {
+    BKE_id_material_eval_assign(&primitive_mesh->id, i + 1, object_mesh->mat[i]);
+  }
+
+  bke::GeometrySet joined = geometry::join_geometries(
+      {bke::GeometrySet::from_mesh(object_mesh, bke::GeometryOwnershipType::ReadOnly),
+       bke::GeometrySet::from_mesh(primitive_mesh, bke::GeometryOwnershipType::ReadOnly)},
+      {});
+
+  Mesh *result = joined.get_component_for_write<bke::MeshComponent>().release();
+
+  BKE_id_free(nullptr, primitive_mesh);
+  BKE_mesh_nomain_to_mesh(result, object_mesh, &ob);
+
+  BKE_sculptsession_free_pbvh(ob);
+}
+
+static void mesh_join_editmesh(Object &ob, Mesh *primitive_mesh)
+{
+  BLI_assert(ob.type == OB_MESH);
+  BLI_assert(primitive_mesh->id.tag & ID_TAG_NO_MAIN);
+  Mesh *object_mesh = id_cast<Mesh *>(ob.data);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(object_mesh);
+  BLI_assert(bm != nullptr);
+
+  primitive_uv_map_rename_to_object(*object_mesh, *primitive_mesh);
+  /* Merging applies the primitive's active & default UV maps to the BMesh, keep the object's. */
+  primitive_mesh->uv_maps_active_set(object_mesh->active_uv_map_name());
+  primitive_mesh->uv_maps_default_set(object_mesh->default_uv_map_name());
+  /* Merging also applies the primitive's active face (0 by default), keep the object's. */
+  primitive_mesh->act_face = -1;
+  /* Selection is applied when merging into the BMesh, so the new geometry ends up selected. */
+  mesh_select_all(*primitive_mesh);
+
+  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+  BMeshFromMeshParams convert_params{};
+  convert_params.calc_face_normal = true;
+  convert_params.calc_vert_normal = true;
+  BM_mesh_bm_from_me(bm, primitive_mesh, &convert_params);
+  BKE_id_free(nullptr, primitive_mesh);
+
+  EDBM_selectmode_flush_ex(bm, SCE_SELECT_VERTEX);
+  /* TODO(@ideasman42): maintain UV sync for newly created data. */
+  EDBM_uvselect_clear(bm);
+
+  EDBMUpdate_Params params{};
+  params.calc_looptris = true;
+  params.calc_normals = false;
+  params.is_destructive = true;
+  EDBM_update(object_mesh, &params);
+}
+
+static void mesh_assign(Object &ob, Mesh *primitive_mesh)
+{
+  BLI_assert(ob.type == OB_MESH);
+  BLI_assert(primitive_mesh->id.tag & ID_TAG_NO_MAIN);
+  Mesh *object_mesh = id_cast<Mesh *>(ob.data);
+
+  /* Primitives are added selected, as expected when entering edit-mode. */
+  mesh_select_all(*primitive_mesh);
+  bke::mesh_ensure_active_uv_map(*primitive_mesh);
+  bke::mesh_ensure_default_uv_map(*primitive_mesh);
+  BKE_mesh_nomain_to_mesh(primitive_mesh, object_mesh, &ob);
+}
+
+static std::optional<std::string> add_primitive_uv_map(const bContext *C, const wmOperator *op)
+{
+  BLI_assert(RNA_struct_find_property(op->ptr, "calc_uvs"));
+  if (!RNA_boolean_get(op->ptr, "calc_uvs")) {
+    return std::nullopt;
+  }
+  if (CTX_data_mode_enum(C) == CTX_MODE_SCULPT) {
+    /* Only write into an existing UV map so meshes without one don't gain a UV map
+     * from adding a primitive, matching the behavior before sculpt mode supported UV's. */
+    const Mesh &mesh = *id_cast<const Mesh *>(CTX_data_active_object(C)->data);
+    const StringRefNull name = mesh_uv_map_name_for_primitive(mesh);
+    if (name.is_empty()) {
+      return std::nullopt;
     }
+    return std::string(name);
   }
-
-  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, obedit);
+  /* Matches the default from #ED_mesh_uv_add. */
+  return std::string(DATA_("UVMap"));
 }
 
 /**
- * Shared dispatch for the primitive-add operators that do not have/use the equivalent geometry
- * functions. This includes the following primitives: Plane, Circle, Grid, Quad Sphere, and Monkey.
- * The variadic arguments are the BMesh operator format string and its arguments.
+ * Add `primitive_mesh` to the active object (in sculpt & edit-mode) or to a new object.
  *
- * In sculpt mode the geometry is built on a temporary BMesh and joined into the active mesh,
- * otherwise it's created in the edit-mesh and selected. Returns false on failure, in which case
- * the calling operator should return #OPERATOR_CANCELLED.
+ * \param primitive_mesh: Ownership is taken, the mesh is always freed.
  */
-static bool make_prim_from_bmo_args(bContext *C,
-                                    wmOperator *op,
-                                    Object *obedit,
-                                    const MakePrimitiveData *creation_data,
-                                    const bool calc_uvs,
-                                    const char *fmt,
-                                    ...)
+static wmOperatorStatus add_primitive_from_mesh(bContext *C,
+                                                wmOperator *op,
+                                                const char *name,
+                                                const char view_align_axis,
+                                                Mesh *primitive_mesh)
 {
-  va_list list;
-  va_start(list, fmt);
+  BLI_assert(primitive_mesh != nullptr);
+  BLI_assert(primitive_mesh->uv_map_names().size() == (add_primitive_uv_map(C, op) ? 1 : 0));
 
-  bool ok;
-  if (creation_data->original_mode == CTX_MODE_SCULPT) {
-    BMesh *bm = make_prim_init_sculpt();
-    ok = BMO_op_vcallf(bm, BMO_FLAG_DEFAULTS, fmt, list);
-    if (ok) {
-      make_prim_finish_sculpt(C, obedit, bm);
-    }
-    else {
-      make_prim_finish_sculpt_cancelled(bm);
-    }
+  float loc[3], rot[3], scale[3];
+  bool enter_editmode;
+  ushort local_view_bits;
+  ed::object::add_generic_get_opts(
+      C, op, view_align_axis, loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
+
+  const eContextObjectMode mode = CTX_data_mode_enum(C);
+  Object *ob;
+  if (mode == CTX_MODE_EDIT_MESH) {
+    /* The mode is derived from the edit-object which may differ from the active object. */
+    ob = CTX_data_edit_object(C);
+  }
+  else if (mode == CTX_MODE_SCULPT) {
+    ob = CTX_data_active_object(C);
   }
   else {
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
-    if (calc_uvs) {
-      ED_mesh_uv_ensure(id_cast<Mesh *>(obedit->data), nullptr);
-    }
-    ok = EDBM_op_vcall_and_selectf(bm, op, "verts.out", false, fmt, list);
+    /* Permit adding objects in a variety of modes, even those which are not typically associated
+     * with mesh-editing actions (e.g. Vertex & Texture Paint). This has been the case since 2.7x
+     * and as a result, the operators are often used in user created scripts. */
+    ob = ed::object::add_type(C, OB_MESH, name, loc, rot, false, local_view_bits);
   }
 
-  va_end(list);
-  return ok;
+  float4x4 matrix;
+  ed::object::new_primitive_matrix(C, ob, loc, rot, scale, matrix.ptr());
+  bke::mesh_transform(*primitive_mesh, matrix, false);
+
+  switch (mode) {
+    case CTX_MODE_SCULPT:
+      ed::sculpt_paint::undo::geometry_begin(*CTX_data_scene(C), *ob, op);
+      mesh_join_sculpt(*ob, primitive_mesh);
+      ed::sculpt_paint::undo::geometry_end(*ob);
+      break;
+    case CTX_MODE_EDIT_MESH:
+      mesh_join_editmesh(*ob, primitive_mesh);
+      break;
+    default:
+      mesh_assign(*ob, primitive_mesh);
+      if (enter_editmode) {
+        ed::object::editmode_enter_ex(CTX_data_main(C), CTX_data_scene(C), ob, 0);
+      }
+      break;
+  }
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+
+  return OPERATOR_FINISHED;
 }
 
 static wmOperatorStatus add_primitive_plane_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Plane"),
-                          loc,
-                          rot,
-                          nullptr,
-                          local_view_bits,
-                          &creation_data);
-
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_grid x_segments=%i y_segments=%i size=%f matrix=%m4 "
-                               "calc_uvs=%b",
-                               0,
-                               0,
-                               RNA_float_get(op->ptr, "size") / 2.0f,
-                               creation_data.mat,
-                               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const float size = RNA_float_get(op->ptr, "size");
+  Mesh *primitive_mesh = geometry::create_grid_mesh(2, 2, size, size, add_primitive_uv_map(C, op));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Plane"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_plane_add(wmOperatorType *ot)
@@ -326,60 +313,12 @@ void MESH_OT_primitive_plane_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cube"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-
-  if (creation_data.original_mode == CTX_MODE_SCULPT) {
-    const float size = RNA_float_get(op->ptr, "size");
-
-    static constexpr int corners = 2;
-
-    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
-    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
-    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
-                                                            std::nullopt :
-                                                            std::make_optional(uv_map_name)) :
-                                                       std::nullopt;
-
-    Mesh *primitive = geometry::create_cuboid_mesh(
-        float3(size, size, size), corners, corners, corners, uv_map);
-
-    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
-    make_prim_finish_geometry(C, obedit, primitive);
-  }
-  else if (!make_prim_from_bmo_args(C,
-                                    op,
-                                    obedit,
-                                    &creation_data,
-                                    calc_uvs,
-                                    "create_cube matrix=%m4 size=%f calc_uvs=%b",
-                                    creation_data.mat,
-                                    RNA_float_get(op->ptr, "size"),
-                                    calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  /* BMESH_TODO make plane side this: M_SQRT2 - plane (diameter of 1.41 makes it unit size) */
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const float size = RNA_float_get(op->ptr, "size");
+  Mesh *primitive_mesh = geometry::create_cuboid_mesh(
+      float3(size), 2, 2, 2, add_primitive_uv_map(C, op));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cube"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_cube_add(wmOperatorType *ot)
@@ -410,49 +349,18 @@ static const EnumPropertyItem fill_type_items[] = {
 
 static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  int cap_end, cap_tri;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
-  cap_end = RNA_enum_get(op->ptr, "fill_type");
-  cap_tri = (cap_end == 2);
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Circle"),
-                          loc,
-                          rot,
-                          nullptr,
-                          local_view_bits,
-                          &creation_data);
-
-  if (!make_prim_from_bmo_args(
-          C,
-          op,
-          obedit,
-          &creation_data,
-          calc_uvs,
-          "create_circle segments=%i radius=%f cap_ends=%b cap_tris=%b matrix=%m4 calc_uvs=%b",
-          RNA_int_get(op->ptr, "vertices"),
-          RNA_float_get(op->ptr, "radius"),
-          cap_end,
-          cap_tri,
-          creation_data.mat,
-          calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const int fill_type = RNA_enum_get(op->ptr, "fill_type");
+  Mesh *primitive_mesh = geometry::create_mesh_from_bmesh_operator(
+      add_primitive_uv_map(C, op),
+      float4x4::identity(),
+      "create_circle segments=%i radius=%f cap_ends=%b cap_tris=%b",
+      RNA_int_get(op->ptr, "vertices"),
+      RNA_float_get(op->ptr, "radius"),
+      fill_type != 0,
+      fill_type == 2);
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Circle"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_circle_add(wmOperatorType *ot)
@@ -480,75 +388,23 @@ void MESH_OT_primitive_circle_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const int end_fill_type = RNA_enum_get(op->ptr, "end_fill_type");
-  const bool cap_end = (end_fill_type != 0);
-  const bool cap_tri = (end_fill_type == 2);
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cylinder"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-
-  if (creation_data.original_mode == CTX_MODE_SCULPT) {
-    const float radius = RNA_float_get(op->ptr, "radius");
-    geometry::ConeAttributeOutputs attributes;
-
-    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
-    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
-    attributes.uv_map_id = calc_uvs ? (uv_map_name.is_empty() ? std::nullopt :
-                                                                std::make_optional(uv_map_name)) :
-                                      std::nullopt;
-
-    const int side_segments = 1;
-    const int fill_segments = 1;
-    Mesh *primitive = geometry::create_cylinder_or_cone_mesh(
-        radius,
-        radius,
-        RNA_float_get(op->ptr, "depth"),
-        RNA_int_get(op->ptr, "vertices"),
-        side_segments,
-        fill_segments,
-        static_cast<geometry::ConeFillType>(end_fill_type),
-        attributes);
-
-    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
-    make_prim_finish_geometry(C, obedit, primitive);
-  }
-  else if (!make_prim_from_bmo_args(C,
-                                    op,
-                                    obedit,
-                                    &creation_data,
-                                    calc_uvs,
-                                    "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
-                                    "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
-                                    RNA_int_get(op->ptr, "vertices"),
-                                    RNA_float_get(op->ptr, "radius"),
-                                    RNA_float_get(op->ptr, "radius"),
-                                    cap_end,
-                                    cap_tri,
-                                    RNA_float_get(op->ptr, "depth"),
-                                    creation_data.mat,
-                                    calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const float radius = RNA_float_get(op->ptr, "radius");
+  const int side_segments = 1;
+  const int fill_segments = 1;
+  geometry::ConeAttributeOutputs attributes;
+  attributes.uv_map_id = add_primitive_uv_map(C, op);
+  Mesh *primitive_mesh = geometry::create_cylinder_or_cone_mesh(
+      radius,
+      radius,
+      RNA_float_get(op->ptr, "depth"),
+      RNA_int_get(op->ptr, "vertices"),
+      side_segments,
+      fill_segments,
+      geometry::ConeFillType(RNA_enum_get(op->ptr, "end_fill_type")),
+      attributes);
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cylinder"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_cylinder_add(wmOperatorType *ot)
@@ -578,76 +434,24 @@ void MESH_OT_primitive_cylinder_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const int end_fill_type = RNA_enum_get(op->ptr, "end_fill_type");
-  const bool cap_end = (end_fill_type != 0);
-  const bool cap_tri = (end_fill_type == 2);
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cone"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-  if (creation_data.original_mode == CTX_MODE_SCULPT) {
-    geometry::ConeAttributeOutputs attributes{};
-
-    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
-    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
-    attributes.uv_map_id = calc_uvs ? (uv_map_name.is_empty() ? std::nullopt :
-                                                                std::make_optional(uv_map_name)) :
-                                      std::nullopt;
-
-    const int side_segments = 1;
-    const int fill_segments = 1;
-
-    /* The radius ordering in create_cylinder_or_cone_mesh is reversed
-     * relative to the corresponding BMO call. */
-    Mesh *primitive = geometry::create_cylinder_or_cone_mesh(
-        RNA_float_get(op->ptr, "radius2"),
-        RNA_float_get(op->ptr, "radius1"),
-        RNA_float_get(op->ptr, "depth"),
-        RNA_int_get(op->ptr, "vertices"),
-        side_segments,
-        fill_segments,
-        static_cast<geometry::ConeFillType>(end_fill_type),
-        attributes);
-
-    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
-    make_prim_finish_geometry(C, obedit, primitive);
-  }
-  else if (!make_prim_from_bmo_args(C,
-                                    op,
-                                    obedit,
-                                    &creation_data,
-                                    calc_uvs,
-                                    "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
-                                    "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
-                                    RNA_int_get(op->ptr, "vertices"),
-                                    RNA_float_get(op->ptr, "radius1"),
-                                    RNA_float_get(op->ptr, "radius2"),
-                                    cap_end,
-                                    cap_tri,
-                                    RNA_float_get(op->ptr, "depth"),
-                                    creation_data.mat,
-                                    calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const int side_segments = 1;
+  const int fill_segments = 1;
+  geometry::ConeAttributeOutputs attributes;
+  attributes.uv_map_id = add_primitive_uv_map(C, op);
+  /* The operator's "radius1" is the bottom radius,
+   * `create_cylinder_or_cone_mesh` takes the top radius first. */
+  Mesh *primitive_mesh = geometry::create_cylinder_or_cone_mesh(
+      RNA_float_get(op->ptr, "radius2"),
+      RNA_float_get(op->ptr, "radius1"),
+      RNA_float_get(op->ptr, "depth"),
+      RNA_int_get(op->ptr, "vertices"),
+      side_segments,
+      fill_segments,
+      geometry::ConeFillType(RNA_enum_get(op->ptr, "end_fill_type")),
+      attributes);
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cone"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_cone_add(wmOperatorType *ot)
@@ -680,44 +484,15 @@ void MESH_OT_primitive_cone_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_grid_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Grid"),
-                          loc,
-                          rot,
-                          nullptr,
-                          local_view_bits,
-                          &creation_data);
-
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_grid x_segments=%i y_segments=%i size=%f matrix=%m4 "
-                               "calc_uvs=%b",
-                               RNA_int_get(op->ptr, "x_subdivisions"),
-                               RNA_int_get(op->ptr, "y_subdivisions"),
-                               RNA_float_get(op->ptr, "size") / 2.0f,
-                               creation_data.mat,
-                               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const float size = RNA_float_get(op->ptr, "size");
+  Mesh *primitive_mesh = geometry::create_grid_mesh(RNA_int_get(op->ptr, "x_subdivisions") + 1,
+                                                    RNA_int_get(op->ptr, "y_subdivisions") + 1,
+                                                    size,
+                                                    size,
+                                                    add_primitive_uv_map(C, op));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Grid"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_grid_add(wmOperatorType *ot)
@@ -749,44 +524,12 @@ void MESH_OT_primitive_grid_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3];
-  float dia;
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Y', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
-
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Suzanne"),
-                          loc,
-                          rot,
-                          nullptr,
-                          local_view_bits,
-                          &creation_data);
-  dia = RNA_float_get(op->ptr, "size") / 2.0f;
-  mul_mat3_m4_fl(creation_data.mat, dia);
-
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_monkey matrix=%m4 calc_uvs=%b",
-                               creation_data.mat,
-                               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  const float dia = RNA_float_get(op->ptr, "size") / 2.0f;
+  Mesh *primitive_mesh = geometry::create_mesh_from_bmesh_operator(
+      add_primitive_uv_map(C, op), math::from_scale<float4x4>(float3(dia)), "create_monkey");
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Suzanne"), 'Y', primitive_mesh);
 }
 
 void MESH_OT_primitive_monkey_add(wmOperatorType *ot)
@@ -825,44 +568,16 @@ static const EnumPropertyItem quadsphere_method_items[] = {
 
 static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Quadsphere"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_quadsphere segments=%i method=%i "
-                               "radius=%f matrix=%m4 calc_uvs=%b",
-                               RNA_int_get(op->ptr, "segments"),
-                               RNA_enum_get(op->ptr, "method"),
-                               RNA_float_get(op->ptr, "radius"),
-                               creation_data.mat,
-                               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  Mesh *primitive_mesh = geometry::create_mesh_from_bmesh_operator(
+      add_primitive_uv_map(C, op),
+      float4x4::identity(),
+      "create_quadsphere segments=%i method=%i radius=%f",
+      RNA_int_get(op->ptr, "segments"),
+      RNA_enum_get(op->ptr, "method"),
+      RNA_float_get(op->ptr, "radius"));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Quadsphere"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
@@ -894,60 +609,13 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Sphere"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-
-  if (creation_data.original_mode == CTX_MODE_SCULPT) {
-    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
-    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
-    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
-                                                            std::nullopt :
-                                                            std::make_optional(uv_map_name)) :
-                                                       std::nullopt;
-
-    Mesh *primitive = geometry::create_uv_sphere_mesh(RNA_float_get(op->ptr, "radius"),
-                                                      RNA_int_get(op->ptr, "segments"),
-                                                      RNA_int_get(op->ptr, "ring_count"),
-                                                      uv_map);
-
-    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
-    make_prim_finish_geometry(C, obedit, primitive);
-  }
-  else if (!make_prim_from_bmo_args(
-               C,
-               op,
-               obedit,
-               &creation_data,
-               calc_uvs,
-               "create_uvsphere u_segments=%i v_segments=%i radius=%f matrix=%m4 calc_uvs=%b",
-               RNA_int_get(op->ptr, "segments"),
-               RNA_int_get(op->ptr, "ring_count"),
-               RNA_float_get(op->ptr, "radius"),
-               creation_data.mat,
-               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  Mesh *primitive_mesh = geometry::create_uv_sphere_mesh(RNA_float_get(op->ptr, "radius"),
+                                                         RNA_int_get(op->ptr, "segments"),
+                                                         RNA_int_get(op->ptr, "ring_count"),
+                                                         add_primitive_uv_map(C, op));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Sphere"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_uv_sphere_add(wmOperatorType *ot)
@@ -977,56 +645,12 @@ void MESH_OT_primitive_uv_sphere_add(wmOperatorType *ot)
 
 static wmOperatorStatus add_primitive_icosphere_exec(bContext *C, wmOperator *op)
 {
-  MakePrimitiveData creation_data;
-  Object *obedit;
-  float loc[3], rot[3], scale[3];
-  bool enter_editmode;
-  ushort local_view_bits;
-  const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
   WM_operator_view3d_unit_defaults(C, op);
-  ed::object::add_generic_get_opts(
-      C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
-  obedit = make_prim_init(C,
-                          op,
-                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Icosphere"),
-                          loc,
-                          rot,
-                          scale,
-                          local_view_bits,
-                          &creation_data);
-  if (creation_data.original_mode == CTX_MODE_SCULPT) {
-    Mesh *object_mesh = id_cast<Mesh *>(obedit->data);
-    const StringRefNull uv_map_name = object_mesh->active_uv_map_name();
-    const std::optional<StringRef> uv_map = calc_uvs ? (uv_map_name.is_empty() ?
-                                                            std::nullopt :
-                                                            std::make_optional(uv_map_name)) :
-                                                       std::nullopt;
-
-    Mesh *primitive = geometry::create_ico_sphere_mesh(
-        RNA_int_get(op->ptr, "subdivisions"), RNA_float_get(op->ptr, "radius"), uv_map);
-
-    make_prim_transform_geometry(obedit, primitive, loc, rot, scale);
-    make_prim_finish_geometry(C, obedit, primitive);
-  }
-  else if (!make_prim_from_bmo_args(
-               C,
-               op,
-               obedit,
-               &creation_data,
-               calc_uvs,
-               "create_icosphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
-               RNA_int_get(op->ptr, "subdivisions"),
-               RNA_float_get(op->ptr, "radius"),
-               creation_data.mat,
-               calc_uvs))
-  {
-    return OPERATOR_CANCELLED;
-  }
-
-  make_prim_finish(C, obedit, &creation_data, enter_editmode);
-
-  return OPERATOR_FINISHED;
+  Mesh *primitive_mesh = geometry::create_ico_sphere_mesh(RNA_int_get(op->ptr, "subdivisions"),
+                                                          RNA_float_get(op->ptr, "radius"),
+                                                          add_primitive_uv_map(C, op));
+  return add_primitive_from_mesh(
+      C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Icosphere"), 'Z', primitive_mesh);
 }
 
 void MESH_OT_primitive_ico_sphere_add(wmOperatorType *ot)

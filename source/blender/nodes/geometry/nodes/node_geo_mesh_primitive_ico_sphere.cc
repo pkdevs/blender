@@ -2,8 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_constants.hh"
-
 #include "GEO_mesh_primitive_ico_sphere.hh"
 
 #include "node_geometry_util.hh"
