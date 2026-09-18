@@ -570,9 +570,9 @@ void curve_populate_trans_data_structs(const TransInfo &t,
         tc.custom.type);
   }
 
-  if (key) {
-    Array<float3> offset_position(curves.points_num(), float3(0.0f));
+  Array<float3> offset_position(curves.points_num(), float3(0.0f));
 
+  if (key) {
     bke::greasepencil::shapekey_add_applied_position(key, attributes, offset_position);
 
     points_to_transform_per_attr[0].foreach_index([&](const int point_i, const int pos) {
@@ -661,7 +661,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             center = mean_center_point_per_curve[curve_i];
           }
           else if (use_local_center) {
-            center = point_positions[domain_i];
+            center = point_positions[domain_i] + offset_position[domain_i];
           }
           else {
             center = *elem;
@@ -710,7 +710,9 @@ void curve_populate_trans_data_structs(const TransInfo &t,
       if (handles_to_transform.size() == 1 && opposite_handles_to_transform.size() <= 1) {
         MutableSpan<TransData> tc_data = all_tc_data.slice(
             position_offsets_in_td[handle_selection_attr]);
-        copy_v3_v3(tc_data[0].center, point_positions[handles_to_transform.first()]);
+        copy_v3_v3(tc_data[0].center,
+                   point_positions[handles_to_transform.first()] +
+                       offset_position[handles_to_transform.first()]);
       }
     };
     update_handle_center(1, 2);
