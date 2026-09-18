@@ -120,7 +120,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions after the overlap
    * has been handled. If there's no overlap delete them here. */
   if (seq_transform_check_overlap_flags(transformed_strips)) {
-    const bool use_sync_markers = ((static_cast<SpaceSeq *>(t->area->spacedata.first))->flag &
+    const bool use_sync_markers = ((t->area->spacedata.first_as<SpaceSeq>())->flag &
                                    SEQ_MARKER_TRANS) != 0;
     seq::transform_handle_overlap(
         scene, seqbasep, transformed_strips, dependant, use_sync_markers);
@@ -149,6 +149,9 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   /* Prevent snaps and change in `values` past `hard_clamp` for all selected
      retiming keys. */
   BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, 0, 0);
+
+  /* Disable axis constraints, retiming keys can only be moved horizontally. */
+  t->flag |= T_NO_CONSTRAINT;
 
   TransData *td = tc->data;
   for (int i = 0; i < tc->data_len; i++, td++) {
