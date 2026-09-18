@@ -3890,7 +3890,7 @@ static int wrap_frame_in_range(const int frame, const ScenePlaybackRange &range)
 /* function to be called outside UI context, or for redo */
 static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -3950,7 +3950,7 @@ static void SCREEN_OT_frame_offset(wmOperatorType *ot)
 /* function to be called outside UI context, or for redo */
 static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -4351,7 +4351,7 @@ static std::optional<int> get_first_marker_in_range(const ScenePlaybackRange pla
 /* function to be called outside UI context, or for redo */
 static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -6950,7 +6950,7 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
   Main *bmain = CTX_data_main(C);
   bScreen *screen = CTX_wm_screen(C);
 
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }

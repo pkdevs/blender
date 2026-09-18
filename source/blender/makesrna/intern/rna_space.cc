@@ -2773,7 +2773,7 @@ static void seq_build_proxy(bContext *C, PointerRNA *ptr)
 
 static void rna_SequenceEditor_render_size_update(bContext *C, PointerRNA *ptr)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (scene == nullptr) {
     return;
   }

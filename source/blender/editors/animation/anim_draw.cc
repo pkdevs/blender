@@ -783,7 +783,7 @@ static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra
 
 void ANIM_center_frame(bContext *C, int smooth_viewtx)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return;
   }

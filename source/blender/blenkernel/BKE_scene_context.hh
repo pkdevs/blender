@@ -21,7 +21,7 @@ namespace bke {
  * In the video sequence editor, this returns the sequencer scene, otherwise it returns the active
  * scene in the window.
  */
-Scene *scene_or_sequencer_scene_from_space_context(const bContext &C);
+Scene *scene_or_sequencer_scene_from_context(const bContext &C);
 
 }  // namespace bke
 }  // namespace blender

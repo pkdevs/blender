@@ -12,7 +12,7 @@
 
 namespace blender::bke {
 
-Scene *scene_or_sequencer_scene_from_space_context(const bContext &C)
+Scene *scene_or_sequencer_scene_from_context(const bContext &C)
 {
   const bool is_sequencer = CTX_wm_space_seq(&C) != nullptr;
   return is_sequencer ? CTX_data_sequencer_scene(&C) : CTX_data_scene(&C);

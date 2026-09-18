@@ -499,7 +499,7 @@ static float apply_frame_snap(bContext *C, FrameChangeModalData &op_data, const 
   ScrArea *area = CTX_wm_area(C);
 
   Vector<SnapTarget> targets;
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return frame;
   }
@@ -557,7 +557,7 @@ static float apply_frame_snap(bContext *C, FrameChangeModalData &op_data, const 
 /* Set the new frame number */
 static void change_frame_apply(bContext *C, wmOperator *op, const bool always_update)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return;
   }
@@ -619,7 +619,7 @@ static wmOperatorStatus change_frame_exec(bContext *C, wmOperator *op)
 static float frame_from_event(bContext *C, const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   float frame;
 
   /* convert from region coordinates to View2D 'tot' space */
@@ -654,7 +654,7 @@ static void change_frame_seq_preview_end(SpaceSeq *sseq)
 
 static bool use_playhead_snapping(bContext *C)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return false;
   }
@@ -919,7 +919,7 @@ static bool anim_set_end_frames_poll(bContext *C)
 
 static wmOperatorStatus anim_set_sfra_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   int frame;
 
   if (scene == nullptr) {
@@ -974,7 +974,7 @@ static void ANIM_OT_start_frame_set(wmOperatorType *ot)
 
 static wmOperatorStatus anim_set_efra_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   int frame;
 
   if (scene == nullptr) {
@@ -1035,7 +1035,7 @@ static void ANIM_OT_end_frame_set(wmOperatorType *ot)
 
 static wmOperatorStatus previewrange_define_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
@@ -1102,7 +1102,7 @@ static void ANIM_OT_previewrange_set(wmOperatorType *ot)
 
 static wmOperatorStatus previewrange_clear_exec(bContext *C, wmOperator * /*op*/)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   ScrArea *curarea = CTX_wm_area(C);
 
   /* sanity checks */
@@ -1197,7 +1197,7 @@ static void ANIM_OT_debug_channel_list(wmOperatorType *ot)
 
 static wmOperatorStatus scene_range_frame_exec(bContext *C, wmOperator * /*op*/)
 {
-  const Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  const Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }

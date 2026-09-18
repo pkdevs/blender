@@ -867,7 +867,7 @@ static bool ed_markers_poll_no_locked_markers(bContext *C)
 /* add TimeMarker at current frame */
 static wmOperatorStatus ed_marker_add_exec(bContext *C, wmOperator * /*op*/)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   ListBaseT<TimeMarker> *markers = is_sequencer ? ED_sequencer_context_get_markers(C) :
                                                   ED_context_get_markers(C);
@@ -970,7 +970,7 @@ static bool ed_marker_move_use_time(MarkerMove *mm)
 
 static void ed_marker_move_update_header(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   MarkerMove *mm = static_cast<MarkerMove *>(op->customdata);
   TimeMarker *marker, *selmarker = nullptr;
   const int ofs = RNA_int_get(op->ptr, "frames");
@@ -1016,7 +1016,7 @@ static void ed_marker_move_update_header(bContext *C, wmOperator *op)
 /* return 0 if not OK */
 static bool ed_marker_move_init(bContext *C, wmOperator *op)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   ListBaseT<TimeMarker> *markers = is_sequencer ? ED_sequencer_context_get_markers(C) :
                                                   ED_context_get_markers(C);
@@ -1116,7 +1116,7 @@ static wmOperatorStatus ed_marker_move_invoke(bContext *C, wmOperator *op, const
 static void ed_marker_move_apply(bContext *C, wmOperator *op)
 {
   bScreen *screen = CTX_wm_screen(C);
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   Object *camera = scene->camera;
   MarkerMove *mm = static_cast<MarkerMove *>(op->customdata);
   TimeMarker *marker;
@@ -1152,7 +1152,7 @@ static void ed_marker_move_cancel(bContext *C, wmOperator *op)
 
 static wmOperatorStatus ed_marker_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   MarkerMove *mm = static_cast<MarkerMove *>(op->customdata);
   View2D *v2d = ui::view2d_fromcontext(C);
   const bool has_numinput = hasNumInput(&mm->num);
@@ -2057,7 +2057,7 @@ static void MARKER_OT_make_links_scene(wmOperatorType *ot)
 static wmOperatorStatus ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
 {
   bScreen *screen = CTX_wm_screen(C);
-  Scene *scene = bke::scene_or_sequencer_scene_from_space_context(*C);
+  Scene *scene = bke::scene_or_sequencer_scene_from_context(*C);
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
