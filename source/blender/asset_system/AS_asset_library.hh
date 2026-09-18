@@ -35,7 +35,17 @@ class IDRemapper;
 namespace asset_system {
 
 struct bUserAssetLibrary_Runtime {
+  /**
+   * The UUID of the asset library. This is used to make deduplication possible when using the
+   * same asset library from different computers.
+   */
   UUID uuid;
+  /**
+   * If the asset library was created with an invalid UUID string, it will be stored here.
+   * The library will be disabled and we will notify the user that it has an invalid UUID.
+   * We store the invalid UUID string so that we don't introduce any data loss when saving the
+   * UUIDs to files. (If it is invalid it is up to the end user to fix it.
+   */
   std::string invalid_uuid;
 };
 
