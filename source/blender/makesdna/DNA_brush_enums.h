@@ -59,6 +59,8 @@ enum eGPDbrush_Flag : int {
   GP_BRUSH_FILL_AUTO_REMOVE_FILL_GUIDES = (1 << 21),
   /* Fill Tool create internal gaps. */
   GP_BRUSH_FILL_INTERNAL_GAPS = (1 << 22),
+  /* Create a cylic stroke. */
+  GP_BRUSH_USE_CYCLIC_STROKE = (1 << 23),
 };
 ENUM_OPERATORS(eGPDbrush_Flag)
 
@@ -313,7 +315,8 @@ enum eAutomasking_flag : int {
 ENUM_OPERATORS(eAutomasking_flag)
 
 enum ePaintBrush_flag : int {
-  BRUSH_PAINT_HARDNESS_PRESSURE = (1 << 0),
+  /* DEPRECATED: see BRUSH_HARDNESS_PRESSURE */
+  BRUSH_PAINT_UNUSED_1 = (1 << 0),
   /* DEPRECATED: replaced by pressure curves. */
   BRUSH_PAINT_HARDNESS_PRESSURE_INVERT = (1 << 1),
   BRUSH_PAINT_FLOW_PRESSURE = (1 << 2),
@@ -352,7 +355,7 @@ enum eBrushStrokeType : int8_t {
 
 /** #Brush.flag */
 enum eBrushFlags : uint32_t {
-  BRUSH_UNUSED_1 = (1 << 0),
+  BRUSH_HARDNESS_PRESSURE = (1 << 0),
   BRUSH_INVERT_TO_SCRAPE_FILL = (1 << 1),
   BRUSH_ALPHA_PRESSURE = (1 << 2),
   BRUSH_SIZE_PRESSURE = (1 << 3),
