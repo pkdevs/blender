@@ -486,8 +486,8 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
   bke::SpanAttributeWriter<float> rotations;
   MutableSpan<float> new_rotations;
   if (use_random && ptd.settings->uv_random > 0.0f) {
-    rotations = curves.attributes_for_write().convert_or_add_for_write_span<float>(
-        "rotation", bke::AttrDomain::Point);
+    rotations = curves.attributes_for_write().ensure_for_write_span<float>("rotation",
+                                                                           bke::AttrDomain::Point);
     new_rotations = rotations.span.slice(curve_points);
   }
 
@@ -584,13 +584,13 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   Set<std::string> curve_attributes_to_skip;
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<int> materials = attributes.convert_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> materials = attributes.ensure_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   materials.span[target_curve_index] = ptd.material_index;
   materials.finish();
   curve_attributes_to_skip.add("material_index");
 
-  bke::SpanAttributeWriter<bool> cyclic = attributes.convert_or_add_for_write_span<bool>(
+  bke::SpanAttributeWriter<bool> cyclic = attributes.ensure_for_write_span<bool>(
       "cyclic", bke::AttrDomain::Curve);
   const bool is_cyclic = ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle);
   cyclic.span[target_curve_index] = is_cyclic;
@@ -598,14 +598,14 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   curve_attributes_to_skip.add("cyclic");
 
   if ((ptd.settings->flag2 & GP_BRUSH_USE_STROKE) == 0) {
-    bke::SpanAttributeWriter<bool> hide_stroke = attributes.convert_or_add_for_write_span<bool>(
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.ensure_for_write_span<bool>(
         "hide_stroke", bke::AttrDomain::Curve);
     hide_stroke.span[target_curve_index] = true;
     curve_attributes_to_skip.add("hide_stroke");
     hide_stroke.finish();
   }
   if (ptd.use_fill) {
-    bke::SpanAttributeWriter<int> fill_id = attributes.convert_or_add_for_write_span<int>(
+    bke::SpanAttributeWriter<int> fill_id = attributes.ensure_for_write_span<int>(
         "fill_id", bke::AttrDomain::Curve);
     /* TODO: Use the first available ID. */
     fill_id.span[target_curve_index] = target_curve_index + 1;
@@ -613,7 +613,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
     fill_id.finish();
   }
 
-  bke::SpanAttributeWriter<float> softness = attributes.convert_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> softness = attributes.ensure_for_write_span<float>(
       "softness", bke::AttrDomain::Curve);
   softness.span[target_curve_index] = ptd.softness;
   softness.finish();
@@ -621,7 +621,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
 
   /* Only set the attribute if the type is not the default or if it already exists. */
   if (ptd.settings->caps_type != GP_STROKE_CAP_TYPE_ROUND || attributes.contains("start_cap")) {
-    bke::SpanAttributeWriter<int8_t> start_caps = attributes.convert_or_add_for_write_span<int8_t>(
+    bke::SpanAttributeWriter<int8_t> start_caps = attributes.ensure_for_write_span<int8_t>(
         "start_cap", bke::AttrDomain::Curve);
     start_caps.span[target_curve_index] = ptd.settings->caps_type;
     start_caps.finish();
@@ -629,7 +629,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   }
 
   if (ptd.settings->caps_type != GP_STROKE_CAP_TYPE_ROUND || attributes.contains("end_cap")) {
-    bke::SpanAttributeWriter<int8_t> end_caps = attributes.convert_or_add_for_write_span<int8_t>(
+    bke::SpanAttributeWriter<int8_t> end_caps = attributes.ensure_for_write_span<int8_t>(
         "end_cap", bke::AttrDomain::Curve);
     end_caps.span[target_curve_index] = ptd.settings->caps_type;
     end_caps.finish();
@@ -637,7 +637,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   }
 
   if (ptd.use_fill && (ptd.fill_opacity < 1.0f || attributes.contains("fill_opacity"))) {
-    bke::SpanAttributeWriter fill_opacities = attributes.convert_or_add_for_write_span<float>(
+    bke::SpanAttributeWriter fill_opacities = attributes.ensure_for_write_span<float>(
         "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f));
     fill_opacities.span[target_curve_index] = ptd.fill_opacity;
     fill_opacities.finish();
@@ -649,7 +649,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
     curve_attributes_to_skip.add("fill_color");
   }
 
-  bke::SpanAttributeWriter<float> u_scale = attributes.convert_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> u_scale = attributes.ensure_for_write_span<float>(
       "u_scale", bke::AttrDomain::Curve);
   u_scale.span[target_curve_index] = 1.0f;
   u_scale.finish();

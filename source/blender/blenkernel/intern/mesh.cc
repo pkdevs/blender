@@ -1876,7 +1876,7 @@ void BKE_mesh_material_remap(Mesh *mesh, const uint *remap, uint remap_len)
   }
   else {
     MutableAttributeAccessor attributes = mesh->attributes_for_write();
-    SpanAttributeWriter<int> material_indices = attributes.convert_or_add_for_write_span<int>(
+    SpanAttributeWriter<int> material_indices = attributes.ensure_for_write_span<int>(
         "material_index", AttrDomain::Face);
     for (const int i : material_indices.span.index_range()) {
       MAT_NR_REMAP(material_indices.span[i]);
@@ -1916,8 +1916,8 @@ void mesh_sharp_edges_set_from_angle(Mesh &mesh, const float angle, const bool k
   if (!keep_sharp_edges) {
     attributes.remove("sharp_edge");
   }
-  SpanAttributeWriter<bool> sharp_edges = attributes.convert_or_add_for_write_span<bool>(
-      "sharp_edge", AttrDomain::Edge);
+  SpanAttributeWriter<bool> sharp_edges = attributes.ensure_for_write_span<bool>("sharp_edge",
+                                                                                 AttrDomain::Edge);
   const VArraySpan<bool> sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
   mesh::edges_sharp_from_angle_set(mesh.faces(),
                                    mesh.corner_verts(),

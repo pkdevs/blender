@@ -1122,9 +1122,8 @@ void LazyFunctionForReduceForeachGeometryElement::handle_generation_items_group(
           src_attribute.get_to_uninitialized(element_i, element_value);
 
           /* Actually create the attribute. */
-          bke::GSpanAttributeWriter dst_attribute =
-              dst_attributes.convert_or_add_for_write_only_span(
-                  name, *propagation_domain, data_type);
+          bke::GSpanAttributeWriter dst_attribute = dst_attributes.ensure_for_write_only_span(
+              name, *propagation_domain, data_type);
           type.fill_assign_n(element_value, dst_attribute.span.data(), dst_attribute.span.size());
           dst_attribute.finish();
 

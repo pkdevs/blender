@@ -106,9 +106,9 @@ static bke::SpanAttributeWriter<float2> get_uv_attribute(Mesh &mesh, const Strin
   }
   AttributeOwner owner = AttributeOwner::from_id(&mesh.id);
   const std::string name = BKE_attribute_calc_unique_name(owner, md_name);
-  /* We use convert_or_add_for_write_span (instead of lookup_or_add...) to signal
+  /* We use ensure_for_write_span (instead of lookup_or_add...) to signal
    * it can't return a null writer. */
-  return attributes.convert_or_add_for_write_span<float2>(name, bke::AttrDomain::Corner);
+  return attributes.ensure_for_write_span<float2>(name, bke::AttrDomain::Corner);
 }
 
 static Mesh *uvprojectModifier_do(UVProjectModifierData *umd,

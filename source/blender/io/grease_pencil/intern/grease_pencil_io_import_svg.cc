@@ -193,13 +193,13 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   curves.update_curve_types();
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<int> materials = attributes.convert_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> materials = attributes.ensure_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   MutableSpan<bool> cyclic = curves.cyclic_for_write();
 
-  bke::SpanAttributeWriter fill_colors = attributes.convert_or_add_for_write_span<ColorGeometry4f>(
+  bke::SpanAttributeWriter fill_colors = attributes.ensure_for_write_span<ColorGeometry4f>(
       "fill_color", bke::AttrDomain::Curve);
-  bke::SpanAttributeWriter<float> fill_opacities = attributes.convert_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> fill_opacities = attributes.ensure_for_write_span<float>(
       "fill_opacity", bke::AttrDomain::Curve);
 
   MutableSpan<float3> positions = curves.positions_for_write();
@@ -207,13 +207,12 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
   MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
   MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
-  bke::SpanAttributeWriter<float> radii = attributes.convert_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> radii = attributes.ensure_for_write_span<float>(
       "radius", bke::AttrDomain::Point);
   bke::SpanAttributeWriter<ColorGeometry4f> vertex_colors =
-      attributes.convert_or_add_for_write_span<ColorGeometry4f>("vertex_color",
-                                                                bke::AttrDomain::Point);
-  bke::SpanAttributeWriter<float> point_opacities =
-      attributes.convert_or_add_for_write_span<float>("opacity", bke::AttrDomain::Point);
+      attributes.ensure_for_write_span<ColorGeometry4f>("vertex_color", bke::AttrDomain::Point);
+  bke::SpanAttributeWriter<float> point_opacities = attributes.ensure_for_write_span<float>(
+      "opacity", bke::AttrDomain::Point);
 
   materials.span.slice(curves_range).fill(material_index);
   const ColorGeometry4f shape_color = convert_svg_color(shape.fill);

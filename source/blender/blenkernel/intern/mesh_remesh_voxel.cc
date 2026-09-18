@@ -469,7 +469,7 @@ static void sample_vertex_attributes(const Span<StringRef> names,
   for (const StringRef name : names) {
     const GVArray src = *src_attributes.lookup(name, AttrDomain::Point);
     const AttrType type = cpp_type_to_attribute_type(src.type());
-    GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
+    GSpanAttributeWriter dst = dst_attributes.ensure_for_write_only_span(
         name, AttrDomain::Point, type);
     mesh_surface_sample::sample_point_attribute(corner_verts,
                                                 corner_tris,

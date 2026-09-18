@@ -1423,20 +1423,18 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
   dst_pointcloud->mat = MEM_dupalloc(first_pointcloud.mat);
   dst_pointcloud->totcol = first_pointcloud.totcol;
 
-  SpanAttributeWriter<float3> positions =
-      dst_attributes.convert_or_add_for_write_only_span<float3>("position",
-                                                                bke::AttrDomain::Point);
+  SpanAttributeWriter<float3> positions = dst_attributes.ensure_for_write_only_span<float3>(
+      "position", bke::AttrDomain::Point);
 
   /* Prepare id attribute. */
   SpanAttributeWriter<int> point_ids;
   if (all_pointclouds_info.create_id_attribute) {
-    point_ids = dst_attributes.convert_or_add_for_write_only_span<int>("id",
-                                                                       bke::AttrDomain::Point);
+    point_ids = dst_attributes.ensure_for_write_only_span<int>("id", bke::AttrDomain::Point);
   }
   SpanAttributeWriter<float> point_radii;
   if (all_pointclouds_info.create_radius_attribute) {
-    point_radii = dst_attributes.convert_or_add_for_write_only_span<float>("radius",
-                                                                           bke::AttrDomain::Point);
+    point_radii = dst_attributes.ensure_for_write_only_span<float>("radius",
+                                                                   bke::AttrDomain::Point);
   }
 
   /* Prepare generic output attributes. */
@@ -1954,7 +1952,7 @@ static void join_mesh_material_indices(const AllMeshesInfo &all_meshes_info,
     return;
   }
 
-  bke::SpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_only_span<int>(
+  bke::SpanAttributeWriter dst_attr = dst_attributes.ensure_for_write_only_span<int>(
       "material_index", bke::AttrDomain::Face);
 
   threading::parallel_for(tasks.index_range(), 100, [&](const IndexRange range) {
@@ -2080,8 +2078,7 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
   /* Prepare id attribute. */
   SpanAttributeWriter<int> vert_ids;
   if (all_meshes_info.create_id_attribute) {
-    vert_ids = dst_attributes.convert_or_add_for_write_only_span<int>("id",
-                                                                      bke::AttrDomain::Point);
+    vert_ids = dst_attributes.ensure_for_write_only_span<int>("id", bke::AttrDomain::Point);
   }
 
   GSpanAttributeWriter custom_normals;
@@ -2090,13 +2087,13 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
       break;
     }
     case bke::mesh::NormalJoinInfo::Output::CornerFan: {
-      custom_normals = dst_attributes.convert_or_add_for_write_only_span(
+      custom_normals = dst_attributes.ensure_for_write_only_span(
           "custom_normal", bke::AttrDomain::Corner, bke::AttrType::Int16_2D);
       break;
     }
     case bke::mesh::NormalJoinInfo::Output::Free: {
       const bke::AttrDomain domain = *all_meshes_info.custom_normal_info.result_domain;
-      custom_normals = dst_attributes.convert_or_add_for_write_only_span(
+      custom_normals = dst_attributes.ensure_for_write_only_span(
           "custom_normal", domain, bke::AttrType::Float3);
       break;
     }
@@ -2533,15 +2530,13 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
   /* Prepare id attribute. */
   SpanAttributeWriter<int> point_ids;
   if (all_curves_info.create_id_attribute) {
-    point_ids = dst_attributes.convert_or_add_for_write_only_span<int>("id",
-                                                                       bke::AttrDomain::Point);
+    point_ids = dst_attributes.ensure_for_write_only_span<int>("id", bke::AttrDomain::Point);
   }
 
   /* Prepare fill id attribute. */
   SpanAttributeWriter<int> fill_ids;
   if (all_curves_info.create_fill_id_attribute) {
-    fill_ids = dst_attributes.convert_or_add_for_write_only_span<int>("fill_id",
-                                                                      bke::AttrDomain::Curve);
+    fill_ids = dst_attributes.ensure_for_write_only_span<int>("fill_id", bke::AttrDomain::Curve);
   }
 
   /* Prepare generic output attributes. */
@@ -2574,21 +2569,20 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
   SpanAttributeWriter<float3> handle_left;
   SpanAttributeWriter<float3> handle_right;
   if (all_curves_info.create_handle_postion_attributes) {
-    handle_left = dst_attributes.convert_or_add_for_write_only_span<float3>(
-        "handle_left", bke::AttrDomain::Point);
-    handle_right = dst_attributes.convert_or_add_for_write_only_span<float3>(
-        "handle_right", bke::AttrDomain::Point);
+    handle_left = dst_attributes.ensure_for_write_only_span<float3>("handle_left",
+                                                                    bke::AttrDomain::Point);
+    handle_right = dst_attributes.ensure_for_write_only_span<float3>("handle_right",
+                                                                     bke::AttrDomain::Point);
   }
 
   SpanAttributeWriter<float> radius;
   if (all_curves_info.create_radius_attribute) {
-    radius = dst_attributes.convert_or_add_for_write_only_span<float>("radius",
-                                                                      bke::AttrDomain::Point);
+    radius = dst_attributes.ensure_for_write_only_span<float>("radius", bke::AttrDomain::Point);
   }
   SpanAttributeWriter<float3> custom_normal;
   if (all_curves_info.create_custom_normal_attribute) {
-    custom_normal = dst_attributes.convert_or_add_for_write_only_span<float3>(
-        "custom_normal", bke::AttrDomain::Point);
+    custom_normal = dst_attributes.ensure_for_write_only_span<float3>("custom_normal",
+                                                                      bke::AttrDomain::Point);
   }
 
   /* Actually execute all tasks. */
@@ -2738,9 +2732,8 @@ static void execute_realize_grease_pencil_task(
 
     /* Remap materials. */
     bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
-    bke::SpanAttributeWriter<int> material_indices =
-        dst_attributes.convert_or_add_for_write_span<int>("material_index",
-                                                          bke::AttrDomain::Curve);
+    bke::SpanAttributeWriter<int> material_indices = dst_attributes.ensure_for_write_span<int>(
+        "material_index", bke::AttrDomain::Curve);
     for (int &material_index : material_indices.span) {
       if (material_index >= 0 && material_index < src_grease_pencil.material_array_num) {
         material_index = grease_pencil_info.material_index_map[material_index];

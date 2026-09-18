@@ -267,7 +267,7 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
     bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     std::string name = BKE_attribute_calc_unique_name(AttributeOwner::from_id(&result->id),
                                                       "UVMap");
-    bke::SpanAttributeWriter<float2> uv_map = attributes.convert_or_add_for_write_span<float2>(
+    bke::SpanAttributeWriter<float2> uv_map = attributes.ensure_for_write_span<float2>(
         name, bke::AttrDomain::Corner);
 
     gogd.uv_map = uv_map.span;

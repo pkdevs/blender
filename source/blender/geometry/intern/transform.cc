@@ -54,7 +54,7 @@ static void translate_pointcloud(PointCloud &pointcloud, const float3 translatio
   }
 
   bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
-  bke::SpanAttributeWriter position = attributes.convert_or_add_for_write_span<float3>(
+  bke::SpanAttributeWriter position = attributes.ensure_for_write_span<float3>(
       "position", bke::AttrDomain::Point);
   translate_positions(position.span, translation);
   position.finish();
@@ -69,7 +69,7 @@ static void translate_pointcloud(PointCloud &pointcloud, const float3 translatio
 static void transform_pointcloud(PointCloud &pointcloud, const float4x4 &transform)
 {
   bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
-  bke::SpanAttributeWriter position = attributes.convert_or_add_for_write_span<float3>(
+  bke::SpanAttributeWriter position = attributes.ensure_for_write_span<float3>(
       "position", bke::AttrDomain::Point);
   math::transform_points(transform, position.span);
   position.finish();

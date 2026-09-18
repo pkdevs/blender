@@ -215,8 +215,8 @@ static void deform_drawing(const GreasePencilNoiseModifierData &mmd,
   }
 
   if (mmd.factor_uvs > 0.0f) {
-    if (bke::SpanAttributeWriter<float> rotations =
-            attributes.convert_or_add_for_write_span<float>("rotation", bke::AttrDomain::Point))
+    if (bke::SpanAttributeWriter<float> rotations = attributes.ensure_for_write_span<float>(
+            "rotation", bke::AttrDomain::Point))
     {
       filtered_strokes.foreach_index(
           [&](const int stroke_i) {

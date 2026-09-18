@@ -3227,8 +3227,7 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
   float time_mult = fds->dx / (DT_DEFAULT * (25.0f / scene->frames_per_second()));
 
   if (use_speedvectors) {
-    velocities = attributes.convert_or_add_for_write_only_span<float3>("velocity",
-                                                                       AttrDomain::Point);
+    velocities = attributes.ensure_for_write_only_span<float3>("velocity", AttrDomain::Point);
   }
 
   /* Loop for vertices and normals. */
@@ -3280,7 +3279,7 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
     }
   }
 
-  bke::SpanAttributeWriter material_indices = attributes.convert_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter material_indices = attributes.ensure_for_write_span<int>(
       "material_index", AttrDomain::Face);
 
   /* Loop for triangles. */

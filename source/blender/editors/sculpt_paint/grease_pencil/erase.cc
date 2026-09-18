@@ -816,11 +816,10 @@ struct EraseOperationExecutor {
     /* Set opacity. */
     bke::MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
 
-    bke::SpanAttributeWriter<float> dst_opacity =
-        dst_attributes.convert_or_add_for_write_span<float>(opacity_attr, bke::AttrDomain::Point);
-    SpanAttributeWriter<bool> opacity_modified =
-        dst_attributes.convert_or_add_for_write_span<bool>(
-            "_eraser_opacity_modified", bke::AttrDomain::Point, bke::AttributeInitValue(false));
+    bke::SpanAttributeWriter<float> dst_opacity = dst_attributes.ensure_for_write_span<float>(
+        opacity_attr, bke::AttrDomain::Point);
+    SpanAttributeWriter<bool> opacity_modified = dst_attributes.ensure_for_write_span<bool>(
+        "_eraser_opacity_modified", bke::AttrDomain::Point, bke::AttributeInitValue(false));
     BLI_assert(opacity_modified);
 
     threading::parallel_for(dst.points_range(), 4096, [&](const IndexRange dst_points_range) {
@@ -836,7 +835,7 @@ struct EraseOperationExecutor {
     dst_opacity.finish();
     opacity_modified.finish();
 
-    SpanAttributeWriter<bool> dst_inserted = dst_attributes.convert_or_add_for_write_span<bool>(
+    SpanAttributeWriter<bool> dst_inserted = dst_attributes.ensure_for_write_span<bool>(
         "_eraser_inserted", bke::AttrDomain::Point);
     BLI_assert(dst_inserted);
     const OffsetIndices<int> &dst_points_by_curve = dst.points_by_curve();

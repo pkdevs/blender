@@ -118,7 +118,7 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
       dst_attributes.add<float>("radius", AttrDomain::Point, bke::AttributeInitValue(*radius));
     }
     else {
-      SpanAttributeWriter attr = dst_attributes.convert_or_add_for_write_only_span<float>(
+      SpanAttributeWriter attr = dst_attributes.ensure_for_write_only_span<float>(
           "radius", AttrDomain::Point);
       array_utils::gather(radii, selection, attr.span);
       attr.finish();

@@ -359,7 +359,7 @@ static void modify_opacity(const GreasePencilTintModifierData &tmd,
 
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<float> opacities = attributes.convert_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> opacities = attributes.ensure_for_write_span<float>(
       "opacity", bke::AttrDomain::Point);
 
   curves_mask.foreach_index(

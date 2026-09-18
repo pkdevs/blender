@@ -1983,8 +1983,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             }
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol && dynamicPaint_outputLayerExists(surface, ob, 0)) {
-              mloopcol = attributes.convert_or_add_for_write_span<ColorGeometry4b>(
-                  surface->output_name, AttrDomain::Corner);
+              mloopcol = attributes.ensure_for_write_span<ColorGeometry4b>(surface->output_name,
+                                                                           AttrDomain::Corner);
             }
 
             SpanAttributeWriter<ColorGeometry4b> mloopcol_wet;
@@ -1996,7 +1996,7 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             }
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol_wet && dynamicPaint_outputLayerExists(surface, ob, 1)) {
-              mloopcol_wet = attributes.convert_or_add_for_write_span<ColorGeometry4b>(
+              mloopcol_wet = attributes.ensure_for_write_span<ColorGeometry4b>(
                   surface->output_name2, AttrDomain::Corner);
             }
 

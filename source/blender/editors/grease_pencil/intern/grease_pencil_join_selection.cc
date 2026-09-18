@@ -409,7 +409,7 @@ void clear_selection_attribute(Span<PointsRange> ranges_selected,
     bke::CurvesGeometry &curves = range.from_drawing->strokes_for_write();
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-    bke::SpanAttributeWriter<bool> selection = attributes.convert_or_add_for_write_span<bool>(
+    bke::SpanAttributeWriter<bool> selection = attributes.ensure_for_write_span<bool>(
         ".selection", selection_domain);
     selection.span.fill(false);
     selection.finish();

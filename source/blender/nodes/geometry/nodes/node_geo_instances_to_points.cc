@@ -64,8 +64,8 @@ static void convert_instances_to_points(GeometrySet &geometry_set,
         "radius", bke::AttrDomain::Point, bke::AttributeInitValue{*radius_single});
   }
   else {
-    bke::SpanAttributeWriter point_radii =
-        dst_attributes.convert_or_add_for_write_only_span<float>("radius", AttrDomain::Point);
+    bke::SpanAttributeWriter point_radii = dst_attributes.ensure_for_write_only_span<float>(
+        "radius", AttrDomain::Point);
     array_utils::gather(radii, selection, point_radii.span);
     point_radii.finish();
   }

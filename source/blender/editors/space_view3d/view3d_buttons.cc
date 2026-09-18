@@ -2556,11 +2556,10 @@ static void handle_curves_aspect_ratio(bContext *C, void * /*arg1*/, void * /*ar
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<float> aspect_ratio =
-            attributes.convert_or_add_for_write_span<float>(
-                "aspect_ratio",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num())));
+        bke::SpanAttributeWriter<float> aspect_ratio = attributes.ensure_for_write_span<float>(
+            "aspect_ratio",
+            bke::AttrDomain::Curve,
+            bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num())));
         index_mask::masked_fill(aspect_ratio.span, modified_state.aspect_ratio, selection);
         aspect_ratio.finish();
       });
@@ -2576,7 +2575,7 @@ static void handle_curves_softness(bContext *C, void * /*arg1*/, void * /*arg2*/
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<float> softness = attributes.convert_or_add_for_write_span<float>(
+        bke::SpanAttributeWriter<float> softness = attributes.ensure_for_write_span<float>(
             "softness", bke::AttrDomain::Curve);
         index_mask::masked_fill(softness.span, modified_state.softness, selection);
         softness.finish();
@@ -2593,7 +2592,7 @@ static void handle_curves_u_scale(bContext *C, void * /*arg1*/, void * /*arg2*/)
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<float> u_scale = attributes.convert_or_add_for_write_span<float>(
+        bke::SpanAttributeWriter<float> u_scale = attributes.ensure_for_write_span<float>(
             "u_scale",
             bke::AttrDomain::Curve,
             bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num())));
@@ -2612,9 +2611,8 @@ static void handle_curves_fill_opacity(bContext *C, void * /*arg1*/, void * /*ar
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        if (bke::SpanAttributeWriter<float> fill_opacity =
-                attributes.convert_or_add_for_write_span<float>(
-                    "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
+        if (bke::SpanAttributeWriter<float> fill_opacity = attributes.ensure_for_write_span<float>(
+                "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
         {
           index_mask::masked_fill(fill_opacity.span, modified_state.fill_opacity, selection);
           fill_opacity.finish();
@@ -2632,12 +2630,11 @@ static void handle_curves_end_cap(bContext *C, void * /*arg1*/, void * /*arg2*/)
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<int8_t> end_cap =
-            attributes.convert_or_add_for_write_span<int8_t>(
-                "end_cap",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(
-                    VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
+        bke::SpanAttributeWriter<int8_t> end_cap = attributes.ensure_for_write_span<int8_t>(
+            "end_cap",
+            bke::AttrDomain::Curve,
+            bke::AttributeInitVArray(
+                VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
         if (end_cap) {
           index_mask::masked_fill(end_cap.span, modified_state.end_cap, selection);
           end_cap.finish();
@@ -2655,12 +2652,11 @@ static void handle_curves_start_cap(bContext *C, void * /*arg1*/, void * /*arg2*
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<int8_t> start_cap =
-            attributes.convert_or_add_for_write_span<int8_t>(
-                "start_cap",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(
-                    VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
+        bke::SpanAttributeWriter<int8_t> start_cap = attributes.ensure_for_write_span<int8_t>(
+            "start_cap",
+            bke::AttrDomain::Curve,
+            bke::AttributeInitVArray(
+                VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
         if (start_cap) {
           index_mask::masked_fill(start_cap.span, modified_state.start_cap, selection);
           start_cap.finish();

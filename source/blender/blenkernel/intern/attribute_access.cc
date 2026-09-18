@@ -552,11 +552,10 @@ GSpanAttributeWriter MutableAttributeAccessor::lookup_or_add_for_write_only_span
   return {};
 }
 
-GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
-    const StringRef name,
-    const AttrDomain domain,
-    const AttrType data_type,
-    const AttributeInit &initializer)
+GAttributeWriter MutableAttributeAccessor::ensure_for_write(const StringRef name,
+                                                            const AttrDomain domain,
+                                                            const AttrType data_type,
+                                                            const AttributeInit &initializer)
 {
   std::optional<AttributeMetaData> meta_data = this->lookup_meta_data(name);
   if (meta_data.has_value()) {
@@ -590,7 +589,7 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
         return this->lookup_for_write(name);
       }
     }
-    /* Transfer failed, convert_or_add_for_write() should not be used for attributes
+    /* Transfer failed, ensure_for_write() should not be used for attributes
      * that can't be overridden. */
 
     BLI_assert_unreachable();
@@ -600,9 +599,9 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
   return this->lookup_for_write(name);
 }
 
-GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only(const StringRef name,
-                                                                         const AttrDomain domain,
-                                                                         const AttrType data_type)
+GAttributeWriter MutableAttributeAccessor::ensure_for_write_only(const StringRef name,
+                                                                 const AttrDomain domain,
+                                                                 const AttrType data_type)
 {
   std::optional<AttributeMetaData> meta_data = this->lookup_meta_data(name);
   if (meta_data.has_value()) {
@@ -614,7 +613,7 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only(const S
     if (this->add_override(name, domain, data_type, AttributeInitConstruct())) {
       return this->lookup_for_write(name);
     }
-    /* Transfer failed, convert_or_add_for_write() should not be used for attributes
+    /* Transfer failed, ensure_for_write() should not be used for attributes
      * that can't be converted. */
     BLI_assert_unreachable();
     return {};
@@ -623,22 +622,22 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only(const S
   return this->lookup_for_write(name);
 }
 
-GSpanAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_span(
+GSpanAttributeWriter MutableAttributeAccessor::ensure_for_write_span(
     const StringRef name,
     const AttrDomain domain,
     const AttrType data_type,
     const AttributeInit &initializer)
 {
-  GAttributeWriter attribute = this->convert_or_add_for_write(
-      name, domain, data_type, initializer);
+  GAttributeWriter attribute = this->ensure_for_write(name, domain, data_type, initializer);
   BLI_assert(attribute);
   return GSpanAttributeWriter{std::move(attribute), true};
 }
 
-GSpanAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only_span(
-    const StringRef name, const AttrDomain domain, const AttrType data_type)
+GSpanAttributeWriter MutableAttributeAccessor::ensure_for_write_only_span(const StringRef name,
+                                                                          const AttrDomain domain,
+                                                                          const AttrType data_type)
 {
-  GAttributeWriter attribute = this->convert_or_add_for_write_only(name, domain, data_type);
+  GAttributeWriter attribute = this->ensure_for_write_only(name, domain, data_type);
   BLI_assert(attribute);
   return GSpanAttributeWriter{std::move(attribute), false};
 }

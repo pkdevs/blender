@@ -481,10 +481,10 @@ static Mesh *normalEditModifier_do(NormalEditModifierData *enmd,
   Array<float3> corner_normals;
 
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
-  bke::SpanAttributeWriter<bool> sharp_edges = attributes.convert_or_add_for_write_span<bool>(
+  bke::SpanAttributeWriter<bool> sharp_edges = attributes.ensure_for_write_span<bool>(
       "sharp_edge", bke::AttrDomain::Edge);
 
-  bke::SpanAttributeWriter custom_nors_dst = attributes.convert_or_add_for_write_span<short2>(
+  bke::SpanAttributeWriter custom_nors_dst = attributes.ensure_for_write_span<short2>(
       "custom_normal", bke::AttrDomain::Corner);
 
   if (use_current_clnors) {

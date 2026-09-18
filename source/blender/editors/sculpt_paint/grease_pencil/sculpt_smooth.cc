@@ -176,8 +176,8 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
           changed = true;
         }
         if (sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_UV) {
-          bke::SpanAttributeWriter<float> rotations =
-              attributes.convert_or_add_for_write_span<float>("rotation", bke::AttrDomain::Point);
+          bke::SpanAttributeWriter<float> rotations = attributes.ensure_for_write_span<float>(
+              "rotation", bke::AttrDomain::Point);
           geometry::smooth_curve_attribute(curves.curves_range(),
                                            points_by_curve,
                                            selection_varray,

@@ -1770,7 +1770,7 @@ static Mesh *meshgl_to_mesh(MeshGL &mgl,
        * face "material_index" property instead of taking it from the joined mesh.
        * This should only happen if the user wants something other than the default
        * "transfer the materials" mode, which has already happened in the joined mesh. */
-      bke::SpanAttributeWriter dst = output_attrs.convert_or_add_for_write_only_span<int>(
+      bke::SpanAttributeWriter dst = output_attrs.ensure_for_write_only_span<int>(
           "material_index", bke::AttrDomain::Face);
       if (material_remaps.is_empty()) {
         const VArraySpan src = *join_attrs.lookup<int>("material_index");

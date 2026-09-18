@@ -801,9 +801,8 @@ static Mesh *imesh_to_mesh(meshintersect::IMesh *im, MeshesToIMeshInfo &mim)
                                  dst_attributes);
 
     if (mim.joined_mesh->attributes().contains("material_index")) {
-      bke::SpanAttributeWriter dst_indices =
-          dst_attributes.convert_or_add_for_write_only_span<int>("material_index",
-                                                                 bke::AttrDomain::Face);
+      bke::SpanAttributeWriter dst_indices = dst_attributes.ensure_for_write_only_span<int>(
+          "material_index", bke::AttrDomain::Face);
       if (mim.material_remaps.is_empty()) {
         const VArraySpan src = *mim.joined_mesh->attributes().lookup<int>("material_index");
         copy_attribute_using_map(src, dst_to_src_face, dst_indices.span);

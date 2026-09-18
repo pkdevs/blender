@@ -477,8 +477,8 @@ static void rna_GreasePencilLayer_pass_index_set(PointerRNA *ptr, int value)
   const int layer_idx = *grease_pencil.get_layer_index(layer);
 
   bke::SpanAttributeWriter<int> layer_passes =
-      grease_pencil.attributes_for_write().convert_or_add_for_write_span<int>(
-          "pass_index", bke::AttrDomain::Layer);
+      grease_pencil.attributes_for_write().ensure_for_write_span<int>("pass_index",
+                                                                      bke::AttrDomain::Layer);
   layer_passes.span[layer_idx] = std::max(0, value);
   layer_passes.finish();
 }
@@ -520,7 +520,7 @@ static void rna_GreasePencilLayer_tint_color_set(PointerRNA *ptr, const float *v
   const int layer_idx = *grease_pencil.get_layer_index(layer);
 
   bke::SpanAttributeWriter<ColorGeometry4f> tint_colors =
-      grease_pencil.attributes_for_write().convert_or_add_for_write_span<ColorGeometry4f>(
+      grease_pencil.attributes_for_write().ensure_for_write_span<ColorGeometry4f>(
           "tint_color",
           bke::AttrDomain::Layer,
           bke::AttributeInitValue(ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f)));
@@ -548,7 +548,7 @@ static void rna_GreasePencilLayer_tint_factor_set(PointerRNA *ptr, const float v
   const int layer_idx = *grease_pencil.get_layer_index(layer);
 
   bke::SpanAttributeWriter<ColorGeometry4f> tint_colors =
-      grease_pencil.attributes_for_write().convert_or_add_for_write_span<ColorGeometry4f>(
+      grease_pencil.attributes_for_write().ensure_for_write_span<ColorGeometry4f>(
           "tint_color",
           bke::AttrDomain::Layer,
           bke::AttributeInitValue(ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f)));
@@ -576,7 +576,7 @@ static void rna_GreasePencilLayer_radius_offset_set(PointerRNA *ptr, const float
   const int layer_idx = *grease_pencil.get_layer_index(layer);
 
   bke::SpanAttributeWriter<float> radius_offsets =
-      grease_pencil.attributes_for_write().convert_or_add_for_write_span<float>(
+      grease_pencil.attributes_for_write().ensure_for_write_span<float>(
           "radius_offset", bke::AttrDomain::Layer, bke::AttributeInitValue(0.0f));
   radius_offsets.span[layer_idx] = value;
   radius_offsets.finish();

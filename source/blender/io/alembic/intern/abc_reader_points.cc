@@ -296,8 +296,7 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
         m_schema, sample_sel, read_params.velocity_name);
     if (velocities && pointcloud->totpoint == int(velocities->size())) {
       bke::SpanAttributeWriter<float3> velocity_writer =
-          attribute_accessor.convert_or_add_for_write_span<float3>("velocity",
-                                                                   bke::AttrDomain::Point);
+          attribute_accessor.ensure_for_write_span<float3>("velocity", bke::AttrDomain::Point);
       MutableSpan<float3> point_velocity = velocity_writer.span;
       for (const int64_t i :
            IndexRange(std::min(point_velocity.size(), int64_t(velocities->size()))))

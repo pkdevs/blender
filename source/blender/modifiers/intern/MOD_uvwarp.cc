@@ -196,7 +196,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const Span<int> corner_verts = mesh->corner_verts();
 
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  bke::SpanAttributeWriter uv_map = attributes.convert_or_add_for_write_span<float2>(
+  bke::SpanAttributeWriter uv_map = attributes.ensure_for_write_span<float2>(
       uvname, bke::AttrDomain::Corner);
   MOD_get_vgroup(ctx->object, mesh, umd->vgroup_name, &dvert, &defgrp_index);
 
