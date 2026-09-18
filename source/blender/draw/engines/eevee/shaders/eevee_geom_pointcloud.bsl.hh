@@ -7,7 +7,7 @@
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_model.bsl.hh"
-#include "draw_pointcloud_lib.glsl"
+#include "draw_pointcloud.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "eevee_attributes_pointcloud_lib.glsl"
 #include "eevee_nodetree_vert_lib.glsl"
@@ -20,8 +20,6 @@
 namespace eevee {
 
 struct GeomPointCloud {
-  [[legacy_info]] ShaderCreateInfo draw_pointcloud;
-
   [[push_constant]] bool ptcloud_backface;
 };
 
@@ -29,6 +27,7 @@ struct GeomPointCloud {
     [[resource_table]] KernelGlobals &kg,
     [[resource_table]] const PipelineConstants &pipe,
     [[resource_table]] const GeomPointCloud & /*srt*/,
+    [[resource_table]] const draw::PointCloud &ptcloud,
     [[resource_table]] const Uniform &uni,
     [[instance_index]] const int inst_index,
     [[resource_table]] const draw::View &views,
@@ -75,9 +74,9 @@ struct GeomPointCloud {
 
   const eObjectInfoFlag ob_flag = ob_infos.flag;
 
-  const pointcloud::Point ls_pt = pointcloud::point_get(uint(vert_id));
-  const pointcloud::Point ws_pt = pointcloud::object_to_world(ls_pt, obj.model);
-  const pointcloud::ShapePoint pt = pointcloud::shape_point_get(
+  const draw::pointcloud::Point ls_pt = ptcloud.point_get(uint(vert_id));
+  const draw::pointcloud::Point ws_pt = draw::pointcloud::object_to_world(ls_pt, obj.model);
+  const draw::pointcloud::ShapePoint pt = draw::pointcloud::shape_point_get(
       ws_pt, view.world_incident_vector(ws_pt.P), view.up(), ob_flag);
 
   pointcloud_interp_flat.id = ws_pt.point_id;

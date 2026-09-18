@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "draw_curves_lib.glsl"
+#include "draw_curves.bsl.hh"
 #include "eevee_geom_types_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 

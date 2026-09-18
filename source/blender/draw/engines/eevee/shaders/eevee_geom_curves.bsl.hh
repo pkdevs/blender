@@ -6,7 +6,7 @@
 
 #include "infos/eevee_nodetree_infos.hh"
 
-#include "draw_curves_lib.glsl"
+#include "draw_curves.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view_infos.hh"
 #include "eevee_attributes_curves_lib.glsl"
@@ -25,15 +25,10 @@
 
 namespace eevee {
 
-struct GeomCurve {
-  [[legacy_info]] ShaderCreateInfo draw_curves;
-  [[legacy_info]] ShaderCreateInfo draw_curves_infos;
-};
-
 [[vertex]] [[clip_control]] void geom_curves(
     [[resource_table]] KernelGlobals &kg,
     [[resource_table]] const PipelineConstants &pipe,
-    [[resource_table]] const GeomCurve & /*srt*/,
+    [[resource_table]] const draw::Curves &curves,
     [[resource_table]] const Uniform &uni,
     [[instance_index]] const int inst_index,
     [[resource_table]] const draw::View &views,
@@ -77,12 +72,12 @@ struct GeomCurve {
 
   init_interface(interp, interp_flat, id.raw_id);
 
-  const curves::Point ls_pt = curves::point_get(uint(vert_id));
-  const curves::Point ws_pt = curves::object_to_world(ls_pt, obj.model);
+  const draw::curves::Point ls_pt = curves.point_get(uint(vert_id));
+  const draw::curves::Point ws_pt = curves.object_to_world(ls_pt, obj.model);
 
   const float3 V = view.world_incident_vector(ws_pt.P);
 
-  const curves::ShapePoint pt = curves::shape_point_get(ws_pt, V);
+  const draw::curves::ShapePoint pt = curves.shape_point_get(ws_pt, V);
   interp.P = pt.P;
   /* Correct normal is derived in fragment shader. */
   interp.N = pt.curve_N;
@@ -114,13 +109,17 @@ struct GeomCurve {
 
   ObjectInfos ob_infos = infos.get(resource_id);
   /* Compute Original Coordinate (ORCO). */
-  float3 lP_root = curves::get_curve_root_pos(ws_pt.point_id, ws_pt.curve_segment);
+  float3 lP_root = curves.get_curve_root_pos(ws_pt.point_id, ws_pt.curve_segment);
   float3 lP_orco = lP_root * ob_infos.orco_mul + ob_infos.orco_add;
 
   ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
   init_globals_curves(interp, curve_interp, curve_interp_flat, sd, view);
 
-  attrib_load(CurvesPoint{ws_pt.curve_id, ws_pt.point_id, ws_pt.curve_segment, lP_orco});
+  attrib_load(CurvesPoint{ws_pt.curve_id,
+                          ws_pt.point_id,
+                          ws_pt.curve_segment,
+                          curves.drw_curves.is_point_attribute,
+                          lP_orco});
 
   interp.P += nodetree_displacement(kg, sd);
 

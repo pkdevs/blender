@@ -9,7 +9,6 @@
 
 #include "infos/eevee_nodetree_infos.hh"
 
-#include "draw_curves_lib.glsl"   /* IWYU pragma: export. For nodetree functions. */
 #include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
 
 #include "eevee_nodetree_frag_lib.glsl"
