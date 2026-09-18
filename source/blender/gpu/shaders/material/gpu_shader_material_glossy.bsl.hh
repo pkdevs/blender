@@ -13,6 +13,7 @@ void node_bsdf_glossy(float4 color,
                       float roughness,
                       float /*anisotropy*/, /* Unsupported. */
                       float /*rotation*/,   /* Unsupported. */
+                      float /*retroreflectivity*/, /* Unsupported. */
                       float3 N,
                       float3 /*T*/, /* Unsupported. */
                       float weight,
