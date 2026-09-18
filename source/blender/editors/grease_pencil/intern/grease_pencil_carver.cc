@@ -169,8 +169,6 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
                                                                           layer_to_world,
                                                                           region);
 
-  carved_strokes.attributes_for_write().remove(".positions_2d");
-
   /* Set the new geometry. */
   drawing.strokes_for_write() = std::move(carved_strokes);
   drawing.tag_topology_changed();
