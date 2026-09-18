@@ -295,6 +295,7 @@ void ED_spacetype_topbar()
   st->create = topbar_create;
   st->free = topbar_free;
   st->init = topbar_init;
+  st->may_change = [](const ScrArea * /*area*/) { return false; };
   st->duplicate = topbar_duplicate;
   st->operatortypes = topbar_operatortypes;
   st->keymap = topbar_keymap;

@@ -126,6 +126,9 @@ struct SpaceType {
   /** Called when the mouse moves out of the area. */
   void (*deactivate)(ScrArea *area);
 
+  /** Checks if this area allows changing type. */
+  bool (*may_change)(const ScrArea *area);
+
   /** Refresh context, called after file-reads, #ED_area_tag_refresh(). */
   void (*refresh)(const bContext *C, ScrArea *area);
 

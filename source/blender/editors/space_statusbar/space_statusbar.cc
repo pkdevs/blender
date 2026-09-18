@@ -141,6 +141,7 @@ void ED_spacetype_statusbar()
   st->create = statusbar_create;
   st->free = statusbar_free;
   st->init = statusbar_init;
+  st->may_change = [](const ScrArea * /*area*/) { return false; };
   st->duplicate = statusbar_duplicate;
   st->operatortypes = statusbar_operatortypes;
   st->keymap = statusbar_keymap;

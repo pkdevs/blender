@@ -2925,7 +2925,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
 {
   wmWindow *win = CTX_wm_window(C);
   SpaceType *st = BKE_spacetype_from_id(type);
-
+  BLI_assert(area->type->may_change == nullptr || area->type->may_change(area));
   if (area->spacetype != type) {
     SpaceLink *slold = area->spacedata.first_as<SpaceLink>();
     /* store area->type->exit callback */
