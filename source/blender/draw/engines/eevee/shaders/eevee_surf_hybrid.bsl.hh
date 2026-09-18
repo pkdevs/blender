@@ -14,7 +14,6 @@
 #include "eevee_cryptomatte.bsl.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-#include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_forward_lib.bsl.hh"
 #include "eevee_gbuffer_write.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"

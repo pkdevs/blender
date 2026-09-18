@@ -27,6 +27,8 @@ struct CurvesPoint {
   int curve_id;
   int point_id;
   int curve_segment;
+  /* One bit per attribute (up to 16). */
+  uint is_point_attribute;
   /* Default derived from local position. */
   float3 orco_default;
 };
