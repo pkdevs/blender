@@ -443,6 +443,16 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   int light_samples = get_int(cscene, "restir_light_samples");
   int bsdf_samples = 1;
 
+  // TODO(Tri): Remove
+  if (view_layer.use_motion_blur && use_temporal_frames) {
+    /* Cycles builds one device-side motion representation per render:
+     * either object_motion_pass (temporal-frame reuse / Vector pass) or
+     * object_motion (motion blur interpolation).
+     * Until temporal-frame reuse gets its own motion-interpolation path... */
+    use_temporal_frames = false;
+    // TODO(Tri): Also show this to the user via RNA/UI warn
+  }
+
   if (light_samples == 1 && bsdf_samples == 1 && 
         !(use_spatial_resampling && restir_unbiased && use_temporal_samples && use_temporal_frames)) {
     use_initial_resampling = false;

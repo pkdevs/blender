@@ -218,11 +218,15 @@ void Scene::device_update(Device *device_, Progress &progress)
       return;
     }
 
+ccl_debug_printf("Scene::device_update(): Before film->update_passes()\n\n");
+
     /* Passes. After shader manager as this depends on the shaders. */
-    film->update_passes(this);
+    film->update_passes(this); // !!!: Sets tags (MOTION_BLUR_MODIFIED)
 
     /* Update kernel features. After shaders and passes since those affect features. */
-    update_kernel_features();
+    update_kernel_features(); // !!!
+
+ccl_debug_printf("Scene::device_update(): After update_kernel_features()\n\n");
 
     /* Load render kernels, before uploading most data to the GPU, and before displacement and
      * background light need to run kernels.
@@ -291,9 +295,12 @@ void Scene::device_update(Device *device_, Progress &progress)
     return;
   }
 
+  // TODO(Tri): Make sure motion table is allocated
+ccl_debug_printf("Scene::device_update(): Before object_manager->device_update()\n\n");
+
   /* Update objects after geometry preprocessing. */
   progress.set_status("Updating Objects");
-  object_manager->device_update(device, &dscene, this, progress);
+  object_manager->device_update(device, &dscene, this, progress); // !!!: After film->update_passes()
 
   if (progress.get_cancel() || device->have_error()) {
     return;
@@ -391,8 +398,10 @@ void Scene::device_update(Device *device_, Progress &progress)
     return;
   }
 
+ccl_debug_printf("Scene::device_update(): Before bake_manager->device_update()\n\n");
+
   progress.set_status("Updating Baking");
-  bake_manager->device_update(device, &dscene, this, progress);
+  bake_manager->device_update(device, &dscene, this, progress); // !!!
 
   if (progress.get_cancel() || device->have_error()) {
     return;
@@ -428,22 +437,19 @@ void Scene::device_update(Device *device_, Progress &progress)
 
 Scene::MotionType Scene::need_motion() const
 {
-  if (integrator->get_motion_blur()) {
-    return MOTION_BLUR;
-  }
+if (integrator->get_motion_blur()) { // !!!: With use_motion_blur, this wins immediately, restir_temporal never even evaluated
+  return MOTION_BLUR;
+}
 
   const bool denoiser_motion = integrator->get_use_denoise() &&
                                (integrator->get_denoiser_passes() &
                                (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
 
-  // const bool restir_temporal = (integrator->get_use_restir() & (1 << 4)) != 0;
   const bool restir_temporal = integrator->get_use_temporal_frames();
-
 
 ccl_debug_printf(
     "Scene::need_motion(): restir=%d background=%d result candidate\n",
-    int(restir_temporal),
-    int(params.background));
+    int(restir_temporal), int(params.background));
 
   if (denoiser_motion ||
       restir_temporal ||
@@ -550,7 +556,7 @@ void Scene::enable_update_stats()
   }
 }
 
-void Scene::update_kernel_features()
+void Scene::update_kernel_features() //
 {
   if (!need_update()) {
     return;
@@ -586,7 +592,7 @@ void Scene::update_kernel_features()
     Geometry *geom = object->get_geometry();
     if (use_motion) {
       if (object->use_motion() || geom->get_use_motion_blur()) {
-        kernel_features |= KERNEL_FEATURE_OBJECT_MOTION;
+        kernel_features |= KERNEL_FEATURE_OBJECT_MOTION; // !!!
       }
     }
     if (object->get_is_shadow_catcher() && !geom->is_light()) {
@@ -641,6 +647,10 @@ void Scene::update_kernel_features()
   kernel_features |= camera->get_kernel_features();
 
   dscene.data.kernel_features = kernel_features;
+
+  // TODO(Tri): Remove
+  dscene.data.integrator.use_object_motion_pass =
+      (need_motion() == Scene::MOTION_PASS || need_motion() == Scene::MOTION_PASS_INTERACTIVE);
 
   /* Currently viewport render is faster with higher max_closures, needs
    * investigating. */

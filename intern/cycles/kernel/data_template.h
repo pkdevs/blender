@@ -172,7 +172,7 @@ KERNEL_STRUCT_END(KernelFilm)
 
 /* Integrator. */
 
-KERNEL_STRUCT_BEGIN(KernelIntegrator, integrator)
+KERNEL_STRUCT_BEGIN(KernelIntegrator, integrator) 
 /* Emission. */
 KERNEL_STRUCT_MEMBER(integrator, int, use_direct_light)
 KERNEL_STRUCT_MEMBER(integrator, int, use_light_mis)
@@ -256,6 +256,10 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_restir)
 KERNEL_STRUCT_MEMBER(integrator, int, use_spatial_resampling)
 KERNEL_STRUCT_MEMBER(integrator, int, use_temporal_samples)
 KERNEL_STRUCT_MEMBER(integrator, int, use_temporal_frames)
+
+// 1 iff ObjectManager built object_motion_pass this render (MOTION_PASS / MOTION_PASS_INTERACTIVE); 
+// 0 if object_motion (MOTION_BLUR) was built instead, or no motion at all.
+KERNEL_STRUCT_MEMBER(integrator, int, use_object_motion_pass)
 
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_radius)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_neighbors)

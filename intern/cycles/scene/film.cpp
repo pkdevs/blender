@@ -737,7 +737,8 @@ ccl_debug_printf("update_passes(): have_motion_pass=%d\n", have_motion_pass);
   }
   if (have_motion_pass != prev_have_motion_pass) {
     scene->geometry_manager->tag_update(scene, GeometryManager::MOTION_PASS_NEEDED);
-    // scene->object_manager->tag_update(scene, ObjectManager::MOTION_BLUR_MODIFIED); // !!!(Tri): Remove?
+    // scene->object_manager->tag_update(scene, ObjectManager::UPDATE_ALL); // !!!(Tri): Remove?
+    scene->object_manager->tag_update(scene, ObjectManager::MOTION_BLUR_MODIFIED);
   }
   if (have_ao_pass != prev_have_ao_pass) {
     scene->integrator->tag_update(scene, Integrator::AO_PASS_MODIFIED);
