@@ -143,7 +143,7 @@ void USDParticleFieldReader::read_object_data(Main *bmain, pxr::UsdTimeCode time
 
 void USDParticleFieldReader::read_geometry(bke::GeometrySet &geometry_set,
                                            USDMeshReadParams params,
-                                           const char **r_err_str)
+                                           const char ** /*r_err_str*/)
 {
   UsdWrappedVec3 usd_positions(
       [&](pxr::UsdAttribute *attr) { return gsplat_prim_.UsesFloatPositions(attr); },
