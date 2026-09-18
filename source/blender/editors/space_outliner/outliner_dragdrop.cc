@@ -1203,8 +1203,10 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  if (outliner_is_collection_dragged_into_itself(te, id)) {
-    return false;
+  for (const wmDragID &dragged : drag->ids) {
+    if (outliner_is_collection_dragged_into_itself(te, dragged.id)) {
+      return false;
+    }
   }
 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -1217,8 +1219,15 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  /* If dragging an object and custom sort is off, only allow dropping INTO the collection.
-   * If dragging a collection, block dropping it onto itself. */
+  /* Block dropping any dragged collection onto/into itself (checked across the whole drag,
+   * since a multi-select drag can have the dragged collection anywhere in the list). */
+  for (const wmDragID &dragged : drag->ids) {
+    if (GS(dragged.id->name) == ID_GR && dragged.id == &to_collection->id) {
+      return false;
+    }
+  }
+
+  /* If dragging an object and custom sort is off, only allow dropping INTO the collection. */
   if (GS(id->name) == ID_OB) {
     if (space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
@@ -1231,11 +1240,6 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
 
     if (te == collection_te && space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
-    }
-  }
-  else if (GS(id->name) == ID_GR) {
-    if (id == &to_collection->id) {
-      return false;
     }
   }
 
@@ -1367,7 +1371,6 @@ static std::string collection_drop_tooltip(bContext *C,
           return tooltip_between;
         }
         return tooltip_before;
-
       case TE_INSERT_AFTER:
         if (te->next && (target_is_object_row ? is_object_element(te->next) :
                                                 outliner_is_collection_tree_element(te->next)))
@@ -1375,7 +1378,6 @@ static std::string collection_drop_tooltip(bContext *C,
           return tooltip_between;
         }
         return tooltip_after;
-
       case TE_INSERT_INTO: {
         if (is_link) {
           return TIP_("Link inside collection");
@@ -1466,11 +1468,10 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
 
   Vector<std::variant<Object *, Collection *>> items;
   Vector<std::variant<Object *, Collection *>> dragged_items;
-  bool is_custom_sort_move = false;
+  const bool is_custom_sort_move = space_outliner->sort_method == SO_SORT_CUSTOM;
 
   /* Use custom sort for both objects and collections. */
-  if (space_outliner->sort_method == SO_SORT_CUSTOM) {
-    is_custom_sort_move = true;
+  if (is_custom_sort_move) {
     if (is_parented_object) {
       for (TreeElement &te : parent_te->subtree) {
         if (te.idcode == ID_OB) {
@@ -1488,6 +1489,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       }
     }
     auto get_sort_index = [&](const std::variant<Object *, Collection *> &item) -> int {
+      int sort_index = -1;
       if (std::holds_alternative<Object *>(item)) {
         Object *ob = std::get<Object *>(item);
         CollectionObject *cob = BKE_collection_object_find_in(*data.to, *ob);
@@ -1497,26 +1499,41 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
             cob = BKE_collection_object_find_in(*other_col, *ob);
           }
         }
-        return cob ? (is_parented_object ? cob->parented_sort_index : cob->sort_index) : 0;
+        if (cob) {
+          sort_index = is_parented_object ? cob->parented_sort_index : cob->sort_index;
+        }
       }
       else {
         CollectionChild *child = BKE_collection_child_find(data.to, std::get<Collection *>(item));
-        return child ? child->sort_index : 0;
+        if (child) {
+          sort_index = child->sort_index;
+        }
       }
+      return (sort_index >= 0) ? sort_index : INT_MAX;
     };
-    std::ranges::stable_sort(items,
-                             [&](const std::variant<Object *, Collection *> &a,
-                                 const std::variant<Object *, Collection *> &b) {
-                               return get_sort_index(a) < get_sort_index(b);
-                             });
+    auto items_sort = [&](const std::variant<Object *, Collection *> &a,
+                          const std::variant<Object *, Collection *> &b) {
+      const int a_index = get_sort_index(a);
+      const int b_index = get_sort_index(b);
+      if (a_index != b_index) {
+        return a_index < b_index;
+      }
+      const bool a_is_ob = std::holds_alternative<Object *>(a);
+      const bool b_is_ob = std::holds_alternative<Object *>(b);
+      return outliner_treesort_tiebreak(a_is_ob,
+                                        a_is_ob ? std::get<Object *>(a)->id.name + 2 : nullptr,
+                                        b_is_ob,
+                                        b_is_ob ? std::get<Object *>(b)->id.name + 2 : nullptr);
+    };
+    std::ranges::stable_sort(items, items_sort);
   }
 
-  if (relative_after) {
+  if (relative_after && !is_custom_sort_move) {
     BLI_listbase_reverse(&drag->ids);
   }
 
   int insert_index = items.size();
-  if (is_custom_sort_move) {
+  if (space_outliner->sort_method == SO_SORT_CUSTOM) {
     auto is_relative = [&](const std::variant<Object *, Collection *> &item) {
       if (is_object_element(data.te)) {
         return std::holds_alternative<Object *>(item) &&
