@@ -1242,6 +1242,8 @@ static void write_userdef(BlendWriter *writer, const UserDef *userdef)
 
     bUserAssetLibrary *copied_item = MEM_new<bUserAssetLibrary>(__func__);
     *copied_item = asset_library_ref;
+    /* It's not neccesary to allocate #bUserAssetLibrary::runtime since this copy is only used to
+     * write data to a blend file.  */
     BLI_addtail(&asset_libraries_filtered, copied_item);
   }
 

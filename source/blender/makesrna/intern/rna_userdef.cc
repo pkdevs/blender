@@ -7091,6 +7091,29 @@ static void rna_def_userdef_keymap(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Key Config", "The name of the active key configuration");
 }
 
+static void rna_def_userdef_asset_library_uuid_common(StructRNA *srna)
+{
+  PropertyRNA *prop;
+  prop = RNA_def_property(srna, "uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_uuid_get",
+                                "rna_userdef_asset_library_uuid_length",
+                                nullptr);
+  RNA_def_property_ui_text(prop, "UUID", "The unique identifier for the asset library");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "invalid_uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_invalid_uuid_get",
+                                "rna_userdef_asset_library_invalid_uuid_length",
+                                nullptr);
+  RNA_def_property_ui_text(
+      prop,
+      "Invalid UUID",
+      "If the UUID is invalid for the asset, the invalid string will be available here.");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
 static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -7168,25 +7191,7 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Project Defined", "Signifies if the asset library is defined by a project");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
-  prop = RNA_def_property(srna, "uuid", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_funcs(prop,
-                                "rna_userdef_asset_library_uuid_get",
-                                "rna_userdef_asset_library_uuid_length",
-                                nullptr);
-  RNA_def_property_ui_text(prop, "UUID", "The unique identifier for the asset library");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
-  prop = RNA_def_property(srna, "invalid_uuid", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_funcs(prop,
-                                "rna_userdef_asset_library_invalid_uuid_get",
-                                "rna_userdef_asset_library_invalid_uuid_length",
-                                nullptr);
-  RNA_def_property_ui_text(
-      prop,
-      "Invalid UUID",
-      "If the UUID is invalid for the asset, the invalid string will be available here.");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  rna_def_userdef_asset_library_uuid_common(srna);
 }
 
 static void rna_def_userdef_preferences_asset_library(BlenderRNA *brna)
@@ -7210,6 +7215,8 @@ static void rna_def_userdef_preferences_asset_library(BlenderRNA *brna)
   RNA_def_property_editable_func(prop, "rna_userdef_asset_library_path_editable");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_refresh");
+
+  rna_def_userdef_asset_library_uuid_common(srna);
 }
 
 static void rna_def_project_asset_library(BlenderRNA *brna)

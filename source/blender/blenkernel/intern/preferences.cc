@@ -72,6 +72,7 @@ bUserAssetLibrary *BKE_preferences_asset_library_add(UserDef *userdef,
                                                      const char *dirpath)
 {
   bUserAssetLibrary *library = MEM_new<bUserAssetLibrary>(__func__);
+  library->runtime = MEM_new<asset_system::bUserAssetLibrary_Runtime>(__func__);
 
   BLI_addtail(&userdef->asset_libraries, library);
   if (userdef->experimental.no_data_block_packing) {
@@ -234,6 +235,7 @@ bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
                                                             const char *auth_token)
 {
   bUserAssetLibrary *library = MEM_new<bUserAssetLibrary>(__func__);
+  library->runtime = MEM_new<asset_system::bUserAssetLibrary_Runtime>(__func__);
 
   library->flag |= ASSET_LIBRARY_USE_REMOTE_URL;
   BLI_addtail(&userdef->asset_libraries, library);
