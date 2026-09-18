@@ -75,17 +75,60 @@ function(cuda_get_arch_supported nvcc_executable arch out_is_supported)
   set(${out_is_supported} FALSE PARENT_SCOPE)
 endfunction()
 
+# The function first tests toolkits with an explicitly provided major version,
+# defined by CUDA<version>_TOOLKIT_ROOT_DIR and  CUDA<version>_NVCC_EXECUTABLE.
+# If there is no explicit preference for the architecture, or if there is no
+# toolkit with such explicit version, a default CUDA toolkit will be attempted
+# to be used.
+# The function tests whether the toolkit is capable of building the given
+# architecture.
 function(cuda_get_toolkit_for_arch arch out_root_dir out_nvcc_executable out_version)
   set(${out_root_dir}        PARENT_SCOPE)
   set(${out_nvcc_executable} PARENT_SCOPE)
   set(${out_version}         PARENT_SCOPE)
 
-  set(_preferred_toolkits 13 12)
-  if(arch MATCHES "^compute_[0-9]+$")
-    list(REVERSE _preferred_toolkits)
+  # List of all known toolkits that could participate in the selection.
+  # These lists will be used if there is no rule for the given architecture.
+  #
+  # For the sm we choose the highest available toolkit to take advantage of the new
+  # compiler, potentially improving performance.
+  # For the compute we choose the oldest toolit to improve compatibility with the
+  # client-side drivers.
+  set(_preferred_toolkits_sm      13 12)
+  set(_preferred_toolkits_compute 12 13)
+
+  # Per-architecture lists of preferred toolkits.
+  # The "_preferred_toolkits_" is the common prefix, followed by either an explicit
+  # architecture version, or by a "mask": an architecture with the least significant
+  # digit replaces with an "x" character. The latter one allows to match an entire
+  # family of architectures. An exact architecture match takes priority over the
+  # mask.
+  set(_preferred_toolkits_sm_5x       13 12)
+  set(_preferred_toolkits_sm_6x       13 12)
+  set(_preferred_toolkits_sm_7x       13 12)
+  set(_preferred_toolkits_sm_8x       13 12)
+  set(_preferred_toolkits_sm_12x      13 12)
+  set(_preferred_toolkits_compute_50  13 12)
+  set(_preferred_toolkits_compute_75  12 13)
+
+  # Try to use preferred toolkits for an exact architecture match.
+  set(_toolkits_to_test ${_preferred_toolkits_${arch}})
+  if(NOT DEFINED _toolkits_to_test)
+    # Try to get information by the architecture mask.
+    string(REGEX REPLACE ".$" "x" _arch_mask "${arch}")
+    set(_toolkits_to_test ${_preferred_toolkits_${_arch_mask}})
+  endif()
+  if(NOT DEFINED _toolkits_to_test)
+    # If there is no preferred information provided, fallback to the list of all
+    # toolkits (depending on whether it is sm or compute architecture).
+    if(arch MATCHES "^compute_")
+      set(_toolkits_to_test ${_preferred_toolkits_sm})
+    else()
+      set(_toolkits_to_test ${_preferred_toolkits_compute})
+    endif()
   endif()
 
-  foreach(major_toolkit_version ${_preferred_toolkits})
+  foreach(major_toolkit_version ${_toolkits_to_test})
     if(DEFINED "CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR")
       if(NOT EXISTS "${CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR}")
         message(WARNING "CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR does not exist: ${CUDA${major_toolkit_version}_TOOLKIT_ROOT_DIR}")
