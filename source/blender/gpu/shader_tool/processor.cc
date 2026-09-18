@@ -787,10 +787,20 @@ void SourceProcessor::parse_includes(Parser &parser)
     }
     string_view dependency_name = str_view_exclusive(tokens[2]);
 
-    if (dependency_name.find("defines.hh") != string::npos) {
+    if (dependency_name.find("defines.hh") != string::npos ||
+        /* WORKAROUND(fclem): Only needed in EEVEE for now. Needs the file to be in the same
+           folder. */
+        (dependency_name.ends_with(".bsl.hh") && filename.ends_with(".bsl.hh") &&
+         dependency_name.starts_with("eevee_") && filename.starts_with("eevee_")))
+    {
       /* Dependencies between create infos are not needed for reflections.
        * Only the dependencies on the defines are needed. */
-      metadata_.create_infos_dependencies.emplace_back(dependency_name);
+      if (dependency_name.ends_with(".bsl.hh")) {
+        metadata_.create_infos_dependencies.emplace_back(string(dependency_name) + ".info");
+      }
+      else {
+        metadata_.create_infos_dependencies.emplace_back(dependency_name);
+      }
     }
 
     if (dependency_name == "BLI_utildefines_variadic.hh") {
