@@ -151,6 +151,7 @@ class RayTraceModule {
   draw::PassSimple trace_planar_ps_ = {"Trace.Planar"};
   draw::PassSimple trace_screen_ps_ = {"Trace.Screen"};
   draw::PassSimple trace_fallback_ps_ = {"Trace.Fallback"};
+  draw::PassSimple panoramic_parallax_capture_ps_ = {"Panoramic.ParallaxCapture"};
   draw::PassSimple denoise_spatial_ps_ = {"DenoiseSpatial"};
   draw::PassSimple denoise_temporal_ps_ = {"DenoiseTemporal"};
   draw::PassSimple denoise_bilateral_ps_ = {"DenoiseBilateral"};
@@ -167,6 +168,8 @@ class RayTraceModule {
   int3 fast_gi_schedule_dispatch_size_ = int3(1);
   /** Dispatch with enough tiles for the tracing resolution. */
   int3 tracing_dispatch_size_ = int3(1);
+  /** Dispatch with enough tiles for one panoramic cubeface parallax layer. */
+  int3 panoramic_parallax_dispatch_size_ = int3(1);
   int3 fast_gi_tracing_dispatch_size_ = int3(1);
   /**
    * 2D tile mask to check which unused adjacent tile we need to clear and which tile we need to
@@ -224,6 +227,17 @@ class RayTraceModule {
   /** Radiance input for screen space tracing. */
   gpu::Texture *screen_radiance_front_tx_ = nullptr;
   gpu::Texture *screen_radiance_back_tx_ = nullptr;
+
+  /**
+   * Radiance (RGB) and radial distance from camera of each of the 6 panoramic cubeface subviews.
+   * 1x1 dummy when the camera is not panoramic.
+   */
+  Texture panoramic_parallax_tx_ = {"panoramic_parallax_tx"};
+  /** Subview color and depth to record. */
+  gpu::Texture *panoramic_parallax_color_tx_ = nullptr;
+  gpu::Texture *panoramic_parallax_depth_tx_ = nullptr;
+  /** Cubeface layer to record. */
+  int panoramic_parallax_face_ = 0;
 
   Texture radiance_dummy_black_tx_ = {"radiance_dummy_black_tx"};
   /** Dummy texture when the tracing is disabled. */
@@ -297,7 +311,18 @@ class RayTraceModule {
    */
   void thickness_parameters_setup(const float4x4 &winmat, const int2 extent);
 
+  /**
+   * Record one panoramic cubeface subview into the cross-face parallax cubemap.
+   */
+  void panoramic_parallax_update(int face_layer,
+                                 gpu::Texture *color_tx,
+                                 gpu::Texture *depth_tx,
+                                 View &view);
+
  private:
+  /** Allocate the cross-face parallax cubemap. */
+  void panoramic_parallax_ensure();
+
   RayTraceResultTexture trace(int closure_index,
                               bool active_layer,
                               RaytraceEEVEE options,

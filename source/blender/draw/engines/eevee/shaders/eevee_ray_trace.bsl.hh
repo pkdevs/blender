@@ -10,6 +10,7 @@
 #include "eevee_gbuffer_read.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"
+#include "eevee_panoramic_lib.bsl.hh"
 #include "eevee_ray_trace_screen_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
@@ -31,6 +32,8 @@ struct Resources {
   [[sampler(2)]] sampler2D radiance_back_tx;
   [[sampler(4)]] sampler2D hiz_front_tx;
   [[sampler(5)]] sampler2D hiz_back_tx;
+  /** Radiance + camera distance of every panoramic cubeface. Dummy if camera is not panoramic. */
+  [[sampler(PANORAMIC_PARALLAX_TEX_SLOT)]] sampler2DArray panoramic_parallax_tx;
 
   [[image(0, read, SFLOAT_16_16_16_16)]] const image2D ray_data_img;
   [[image(1, write, RAYTRACE_RAYTIME_FORMAT)]] image2D ray_time_img;
@@ -174,6 +177,19 @@ void trace([[resource_table]] Resources &srt,
       /* Fetch radiance at hit-point. */
       radiance = raytrace_sample_screen(
           view, srt.radiance_back_tx, uni.raytrace_buf, hit, roughness, hit.ss_hit_P.xy);
+    }
+  }
+
+  if (!hit.valid && is_panoramic(uni.uniform_buf.camera.type)) {
+    /* A panoramic camera is rendered as independent cubeface subviews. But screen tracing
+     * only sees the current subview. So we need to retry against the parallax cubemap which
+     * holds data from every face. */
+    eevee::panoramic::ParallaxTraceResult cube_hit = eevee::panoramic::parallax_trace(
+        uni.uniform_buf.camera, srt.panoramic_parallax_tx, ray.origin, ray.direction, rand_trace);
+    if (cube_hit.valid) {
+      hit.valid = true;
+      hit.time = cube_hit.time;
+      radiance = cube_hit.radiance;
     }
   }
 

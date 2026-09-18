@@ -12,6 +12,7 @@
 #include "eevee_camera_lib.bsl.hh"
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_cryptomatte.bsl.hh"
+#include "eevee_panoramic_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
@@ -34,45 +35,6 @@ float depth_convert_to_scene(const ViewMatrices view,
     return length(view.point_screen_to_view(float3(uv, depth)));
   }
   return -view.depth_screen_to_view(depth);
-}
-
-ePanoramicFace panoramic_face_index(float3 direction)
-{
-  float3 abs_direction = abs(direction);
-  if (abs_direction.x >= abs_direction.y && abs_direction.x >= abs_direction.z) {
-    return (direction.x >= 0.0f) ? PANORAMIC_FACE_POS_X : PANORAMIC_FACE_NEG_X;
-  }
-  if (abs_direction.y >= abs_direction.z) {
-    return (direction.y >= 0.0f) ? PANORAMIC_FACE_POS_Y : PANORAMIC_FACE_NEG_Y;
-  }
-  return (direction.z >= 0.0f) ? PANORAMIC_FACE_POS_Z : PANORAMIC_FACE_NEG_Z;
-}
-
-float2 panoramic_face_uv_from_direction(float3 direction, ePanoramicFace face_id)
-{
-  float2 uv;
-  switch (face_id) {
-    default:
-    case PANORAMIC_FACE_POS_X:
-      uv = float2(-direction.z, -direction.y) * safe_rcp(direction.x);
-      break;
-    case PANORAMIC_FACE_NEG_X:
-      uv = float2(-direction.z, direction.y) * safe_rcp(direction.x);
-      break;
-    case PANORAMIC_FACE_POS_Y:
-      uv = float2(direction.x, direction.z) * safe_rcp(direction.y);
-      break;
-    case PANORAMIC_FACE_NEG_Y:
-      uv = float2(-direction.x, direction.z) * safe_rcp(direction.y);
-      break;
-    case PANORAMIC_FACE_POS_Z:
-      uv = float2(direction.x, -direction.y) * safe_rcp(direction.z);
-      break;
-    case PANORAMIC_FACE_NEG_Z:
-      uv = float2(direction.x, direction.y) * safe_rcp(direction.z);
-      break;
-  }
-  return uv * 0.5f + 0.5f;
 }
 
 float display_depth_amend(float depth)
@@ -221,7 +183,7 @@ struct Film {
     if (length_squared(camera_direction) == 0.0f) {
       return -1;
     }
-    return int(panoramic_face_index(camera_direction));
+    return int(eevee::panoramic::face_index(camera_direction));
   }
 
   bool panoramic_texel_is_owned_by_view(float3 camera_direction, int view_id)
@@ -247,13 +209,12 @@ struct Film {
     /* Now that we're sure view_id is the owner, the pixel must be in [0,1)
      * However, on edges between two faces, rounding error can produce out of bound values,
      * so we need to clamp it. */
-    const float2 face_uv = clamp(panoramic_face_uv_from_direction(camera_direction, view_id),
-                                 float2(0.0f),
-                                 float2(0.999999f));
+    const float2 face_uv = clamp(
+        eevee::panoramic::face_uv_from_direction(camera_direction, view_id),
+        float2(0.0f),
+        float2(0.999999f));
 
-    const float overscan = max(uni.uniform_buf.camera.panoramic_view_overscan, 1.0f);
-    const float2 render_uv = (face_uv - 0.5f) / overscan + 0.5f;
-    return render_uv;
+    return eevee::panoramic::render_uv_from_face_uv(uni.uniform_buf.camera, face_uv);
   }
 
   FilmSample panoramic_sample_get(int2 texel_film, ePanoramicFace view_id)
@@ -282,7 +243,7 @@ struct Film {
     const float4x4 face_mat = view.viewmat * uni.uniform_buf.camera.viewinv;
     const float3 direction = normalize(transpose(to_float3x3(face_mat)) *
                                        float3(0.0f, 0.0f, -1.0f));
-    return panoramic_face_index(direction);
+    return eevee::panoramic::face_index(direction);
   }
 
   FilmSample sample_get(int sample_n, int2 texel_film)

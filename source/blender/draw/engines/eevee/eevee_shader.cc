@@ -199,7 +199,8 @@ ShaderGroups ShaderModule::static_shaders_load(const ShaderGroups request_bits,
     request(MOTION_BLUR_SHADERS, AS_SPAN(shader_list));
   }
   {
-    const eShaderType shader_list[] = {RAY_DENOISE_BILATERAL,
+    const eShaderType shader_list[] = {PANORAMIC_PARALLAX_CAPTURE,
+                                       RAY_DENOISE_BILATERAL,
                                        RAY_DENOISE_SPATIAL,
                                        RAY_DENOISE_TEMPORAL,
                                        RAY_GENERATE,
@@ -463,6 +464,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_raytracing_denoise_temporal";
     case RAY_DENOISE_BILATERAL:
       return "eevee_raytracing_denoise_bilateral";
+    case PANORAMIC_PARALLAX_CAPTURE:
+      return "eevee_panoramic_parallax_capture";
     case RAY_GENERATE:
       return "eevee_ray_generate";
     case RAY_TRACE_FALLBACK:

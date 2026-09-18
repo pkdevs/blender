@@ -171,6 +171,11 @@ void ShadingView::render()
   gpu::Texture *combined_final_tx = render_postfx(rbufs.combined_tx);
   inst_.film.accumulate(jitter_view_, combined_final_tx);
 
+  /* Record this cubeface for the other faces' screen tracing. Has to happen once the face is
+   * shaded and after tracing read the cubemap. */
+  inst_.raytracing.panoramic_parallax_update(
+      int(face_id_), combined_final_tx, rbufs.depth_tx, jitter_view_);
+
   rbufs.release();
   postfx_tx_.release();
 

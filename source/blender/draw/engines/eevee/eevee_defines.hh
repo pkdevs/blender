@@ -144,6 +144,22 @@
 #define RAYTRACE_VARIANCE_FORMAT SFLOAT_16
 #define RAYTRACE_TILEMASK_FORMAT UINT_8
 
+/* Panoramic cross-face parallax cubemap. */
+#define PANORAMIC_PARALLAX_GROUP_SIZE 8
+#define PANORAMIC_PARALLAX_FORMAT SFLOAT_16_16_16_16
+/* Divisor applied to the subview render extent. Kept at 1 (full resolution) unless we want to save
+ * memory.*/
+#define PANORAMIC_PARALLAX_RESOLUTION_DIVISOR 1
+/* Recorded distance of texels that hold no information. */
+#define PANORAMIC_PARALLAX_DIST_INVALID 0.0f
+/* Multiplier on the camera's far clip distance. Comfortably covers a cubeface frustum corner (up
+ * to sqrt(3) times the far plane's distance) plus overscan. */
+#define PANORAMIC_PARALLAX_BACKGROUND_MARGIN 6.0f
+/* Number of steps of the cubemap march. */
+#define PANORAMIC_PARALLAX_TRACE_STEP 96
+/* Contact tolerance of the cubemap march, relative to the recorded distance. */
+#define PANORAMIC_PARALLAX_TRACE_BIAS 0.02f
+
 /* Sub-Surface Scattering. */
 #define SUBSURFACE_GROUP_SIZE RAYTRACE_GROUP_SIZE
 #define SUBSURFACE_RADIANCE_FORMAT UFLOAT_11_11_10
@@ -239,6 +255,8 @@
 #define GBUF_CLOSURE_TEX_SLOT 17
 #define GBUF_NORMAL_TEX_SLOT 18
 #define GBUF_HEADER_TEX_SLOT 19
+/* Cross-face parallax cubemap. Only used by panoramic camera ray-tracing. */
+#define PANORAMIC_PARALLAX_TEX_SLOT 20
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0

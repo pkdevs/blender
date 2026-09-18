@@ -434,6 +434,8 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_occupancy_convert.bsl.hh
   engines/eevee/shaders/eevee_occupancy_lib.bsl.hh
   engines/eevee/shaders/eevee_octahedron_lib.bsl.hh
+  engines/eevee/shaders/eevee_panoramic_parallax_capture.bsl.hh
+  engines/eevee/shaders/eevee_panoramic_lib.bsl.hh
   engines/eevee/shaders/eevee_pipeline.bsl.hh
   engines/eevee/shaders/eevee_ray_denoise.bsl.hh
   engines/eevee/shaders/eevee_ray_generate.bsl.hh

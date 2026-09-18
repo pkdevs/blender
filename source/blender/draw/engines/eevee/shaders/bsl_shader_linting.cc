@@ -77,6 +77,8 @@
 #include "eevee_occupancy_convert.bsl.hh"            /* IWYU pragma: export */
 #include "eevee_occupancy_lib.bsl.hh"                /* IWYU pragma: export */
 #include "eevee_octahedron_lib.bsl.hh"               /* IWYU pragma: export */
+#include "eevee_panoramic_lib.bsl.hh"                /* IWYU pragma: export */
+#include "eevee_panoramic_parallax_capture.bsl.hh"   /* IWYU pragma: export */
 #include "eevee_pipeline.bsl.hh"                     /* IWYU pragma: export */
 #include "eevee_ray_denoise.bsl.hh"                  /* IWYU pragma: export */
 #include "eevee_ray_generate.bsl.hh"                 /* IWYU pragma: export */

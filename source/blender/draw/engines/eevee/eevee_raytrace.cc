@@ -179,6 +179,8 @@ void RayTraceModule::sync()
     pass.bind_texture("radiance_back_tx", &screen_radiance_back_tx_);
     pass.bind_texture("hiz_front_tx", &inst_.hiz_buffer.front.ref_tx_);
     pass.bind_texture("hiz_back_tx", &inst_.hiz_buffer.back.ref_tx_);
+    pass.bind_texture(
+        "panoramic_parallax_tx", &panoramic_parallax_tx_, GPUSamplerState::default_sampler());
     /* Still bind front to hiz_tx for validation layers. */
     pass.bind_resources(inst_.hiz_buffer.front);
     pass.bind_texture("depth_tx", &depth_tx);
@@ -209,6 +211,18 @@ void RayTraceModule::sync()
     pass.bind_resources(inst_.gbuffer);
     pass.dispatch(raytrace_tracing_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+  }
+  {
+    PassSimple &pass = panoramic_parallax_capture_ps_;
+    pass.init();
+    pass.shader_set(inst_.shaders.static_shader_get(PANORAMIC_PARALLAX_CAPTURE));
+    pass.push_constant("face_layer", &panoramic_parallax_face_);
+    pass.bind_texture("combined_tx", &panoramic_parallax_color_tx_);
+    pass.bind_texture("depth_tx", &panoramic_parallax_depth_tx_);
+    pass.bind_image("parallax_img", &panoramic_parallax_tx_);
+    pass.bind_resources(inst_.uniform_data);
+    pass.dispatch(&panoramic_parallax_dispatch_size_);
+    pass.barrier(GPU_BARRIER_TEXTURE_FETCH);
   }
   /* Denoise. */
   {
@@ -472,6 +486,49 @@ void RayTraceModule::thickness_parameters_setup(const float4x4 &winmat, const in
       inst_.uniform_data.data.ao.thickness_near);
 }
 
+void RayTraceModule::panoramic_parallax_ensure()
+{
+  /* The cubemap is only read by the screen tracing shader of a panoramic camera. */
+  const bool is_dummy = !use_raytracing_ || (tracing_method_ != RAYTRACE_EEVEE_METHOD_SCREEN) ||
+                        !inst_.camera.is_panoramic();
+
+  const int2 extent = is_dummy ? int2(1) :
+                                 math::divide_ceil(inst_.film.render_extent_get(),
+                                                   int2(PANORAMIC_PARALLAX_RESOLUTION_DIVISOR));
+
+  const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
+  if (panoramic_parallax_tx_.ensure_2d_array(
+          gpu::TextureFormat::PANORAMIC_PARALLAX_FORMAT, extent, 6, usage))
+  {
+    /* A null distance means no data recorded.*/
+    panoramic_parallax_tx_.clear(float4(0.0f));
+  }
+}
+
+void RayTraceModule::panoramic_parallax_update(int face_layer,
+                                               gpu::Texture *color_tx,
+                                               gpu::Texture *depth_tx,
+                                               View &view)
+{
+  if (!use_raytracing_ || (tracing_method_ != RAYTRACE_EEVEE_METHOD_SCREEN) ||
+      !inst_.camera.is_panoramic())
+  {
+    return;
+  }
+  panoramic_parallax_ensure();
+
+  panoramic_parallax_face_ = face_layer;
+  panoramic_parallax_color_tx_ = color_tx;
+  panoramic_parallax_depth_tx_ = depth_tx;
+
+  const int2 extent = int2(GPU_texture_width(panoramic_parallax_tx_),
+                           GPU_texture_height(panoramic_parallax_tx_));
+  panoramic_parallax_dispatch_size_ = int3(
+      math::divide_ceil(extent, int2(PANORAMIC_PARALLAX_GROUP_SIZE)), 1);
+
+  inst_.manager->submit(panoramic_parallax_capture_ps_, view);
+}
+
 RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
                                       gpu::Texture *screen_radiance_back_tx,
                                       eClosureBits active_closures,
@@ -479,6 +536,9 @@ RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
 {
   using namespace blender::math;
   BLI_assert(use_raytracing_);
+
+  /* Needs to exist before the screen tracing pass is submitted. */
+  panoramic_parallax_ensure();
 
   screen_radiance_front_tx_ = rt_buffer.radiance_feedback_tx.is_valid() ?
                                   rt_buffer.radiance_feedback_tx :
