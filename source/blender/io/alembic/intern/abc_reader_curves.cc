@@ -624,6 +624,7 @@ void AbcCurveReader::read_curves_sample(Curves *curves_id,
             radii[i_point] = alembic_widths[i_curve] / 2.0f;
           }
         }
+        break;
       }
       case Alembic::AbcGeom::kUnknownScope:
         break;
