@@ -373,6 +373,8 @@ static inline Type to_type(const GPUType type)
     case GPU_TEX3D:
     case GPU_CLOSURE:
     case GPU_ATTR:
+    case GPU_KERNEL_GLOBALS:
+    case GPU_SHADING_DATA:
       break;
   }
 
@@ -513,9 +515,11 @@ enum class BuiltinBits {
   /* Disable our own GPU shader preprocessor optimizer in case we can't ensure the
    * input is within spec. */
   NO_PREPROCESSOR = (1 << 23),
-  /** If true, will bypass check that all buffer types have been linted by shader tool
+  /**
+   * If true, will bypass check that all buffer types have been linted by shader tool
    * (e.g. using [[host_shared]]). This is needed for struct that are not parsed or are
-   * not yet supported by the host_shared check (false negative). */
+   * not yet supported by the host_shared check (false negative).
+   */
   NO_BUFFER_TYPE_LINTING = (1 << 24),
   /* Not a builtin but a flag we use to tag shaders that use the debug features. */
   USE_PRINTF = (1 << 25),
@@ -566,14 +570,16 @@ enum class ImageType {
 #  define TYPES_EXPAND(s) \
     AtomicUint##s, AtomicInt##s, usampler##s##Atomic = AtomicUint##s, \
                                  isampler##s##Atomic = AtomicInt##s
-  /** Atomic texture type wrappers.
+  /**
+   * Atomic texture type wrappers.
    * For OpenGL, these map to the equivalent (U)INT_* types.
    * NOTE: Atomic variants MUST be used if the texture bound to this resource has usage flag:
    * `GPU_TEXTURE_USAGE_ATOMIC`, even if atomic texture operations are not used in the given
    * shader.
    * The shader source MUST also utilize the correct atomic sampler handle e.g.
    * `usampler2DAtomic` in conjunction with these types, for passing texture/image resources into
-   * functions. */
+   * functions.
+   */
   TYPES_EXPAND(2D),
   TYPES_EXPAND(2DArray),
   TYPES_EXPAND(3D),
@@ -597,14 +603,16 @@ enum class ImageReadWriteType {
 #  define TYPES_EXPAND(s) \
     AtomicUint##s = int(ImageType::AtomicUint##s), AtomicInt##s = int(ImageType::AtomicInt##s), \
     uimage##s##Atomic = AtomicUint##s, iimage##s##Atomic = AtomicInt##s
-  /** Atomic texture type wrappers.
+  /**
+   * Atomic texture type wrappers.
    * For OpenGL, these map to the equivalent (U)INT_* types.
    * NOTE: Atomic variants MUST be used if the texture bound to this resource has usage flag:
    * `GPU_TEXTURE_USAGE_ATOMIC`, even if atomic texture operations are not used in the given
    * shader.
    * The shader source MUST also utilize the correct atomic sampler handle e.g.
    * `usampler2DAtomic` in conjunction with these types, for passing texture/image resources into
-   * functions. */
+   * functions.
+   */
   TYPES_EXPAND(2D),
   TYPES_EXPAND(2DArray),
   TYPES_EXPAND(3D),
@@ -824,8 +832,10 @@ struct ShaderCreateInfo {
   bool early_fragment_test_ = false;
   /** Allow optimization when fragment shader writes to `gl_FragDepth`. */
   DepthWrite depth_write_ = DepthWrite::UNCHANGED;
-  /** GPU Backend compatibility flag. Temporary requirement until Metal enablement is fully
-   * complete. */
+  /**
+   * GPU Backend compatibility flag. Temporary requirement until Metal enablement is fully
+   * complete.
+   */
   bool metal_backend_only_ = false;
   /**
    * Maximum length of all the resource names including each null terminator.
@@ -1670,6 +1680,9 @@ struct ShaderCreateInfo {
 
   void extend_predicate(Vector<Resource, 0> &resource_vector,
                         ShaderCreateInfo::Resource res_copy,
+                        Span<ConditionFn> additional_conditions) const;
+  void extend_predicate(Vector<PushConst, 0> &resource_vector,
+                        ShaderCreateInfo::PushConst res_copy,
                         Span<ConditionFn> additional_conditions) const;
   void assert_no_overlap(const ShaderCreateInfo &info,
                          const bool test,

@@ -23,13 +23,13 @@
 #  include "BLI_string_utf8.hh"
 
 #  include "BKE_action.hh"
+#  include "BKE_annotations.h"
 #  include "BKE_armature.hh"
 #  include "BKE_brush.hh"
 #  include "BKE_camera.h"
 #  include "BKE_collection.hh"
 #  include "BKE_curve.hh"
 #  include "BKE_curves.h"
-#  include "BKE_gpencil_legacy.h"
 #  include "BKE_grease_pencil.hh"
 #  include "BKE_idtype.hh"
 #  include "BKE_image.hh"
@@ -108,8 +108,8 @@ namespace blender {
 
 static void rna_idname_validate(const char *name, char *r_name)
 {
-  BLI_strncpy(r_name, name, MAX_ID_NAME - 2);
-  BLI_str_utf8_invalid_strip(r_name, strlen(r_name));
+  const size_t r_name_len = BLI_strncpy_rlen(r_name, name, MAX_ID_NAME - 2);
+  BLI_str_utf8_invalid_strip(r_name, r_name_len);
 }
 
 static void rna_Main_ID_remove(Main *bmain,
@@ -135,8 +135,8 @@ static void rna_Main_ID_remove(Main *bmain,
     if (ob->type == OB_LIGHTPROBE &&
         (reinterpret_cast<LightProbe *>(ob->data))->type == LIGHTPROBE_TYPE_VOLUME)
     {
-      wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
-      if (wm && WM_jobs_test(wm, nullptr, WM_JOB_TYPE_LIGHT_BAKE)) {
+      wmWindowManager *wm = bmain->wm.first();
+      if (wm && WM_jobs_has_running(wm, nullptr, WM_JOB_TYPE_LIGHT_BAKE)) {
         BKE_reportf(reports,
                     RPT_ERROR,
                     "Cannot remove volume light probes while light probe baking is running");
@@ -807,7 +807,7 @@ static bGPdata *rna_Main_annotations_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  bGPdata *gpd = BKE_gpencil_data_addnew(bmain, safe_name);
+  bGPdata *gpd = BKE_annotations_data_addnew(bmain, safe_name);
   id_us_min(&gpd->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);

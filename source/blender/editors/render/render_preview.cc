@@ -237,7 +237,7 @@ static Scene *preview_get_scene(Main *pr_main)
     return nullptr;
   }
 
-  return static_cast<Scene *>(pr_main->scenes.first);
+  return pr_main->scenes.first();
 }
 
 const char *ED_preview_collection_name(const ePreviewType pr_type)
@@ -279,10 +279,10 @@ static bool render_engine_supports_ray_visibility(const Scene *sce)
 static void switch_preview_collection_visibility(ViewLayer *view_layer, const ePreviewType pr_type)
 {
   /* Set appropriate layer as visible. */
-  LayerCollection *lc = static_cast<LayerCollection *>(view_layer->layer_collections.first);
+  LayerCollection *lc = view_layer->layer_collections.first();
   const char *collection_name = ED_preview_collection_name(pr_type);
 
-  for (lc = static_cast<LayerCollection *>(lc->layer_collections.first); lc; lc = lc->next) {
+  for (lc = lc->layer_collections.first(); lc; lc = lc->next) {
     if (STREQ(lc->collection->id.name + 2, collection_name)) {
       lc->collection->flag &= ~COLLECTION_HIDE_RENDER;
     }
@@ -475,7 +475,7 @@ static World *preview_get_world(Main *pr_main,
 
   /* No world found return first world. */
   if (result == nullptr) {
-    result = static_cast<World *>(pr_main->worlds.first);
+    result = pr_main->worlds.first();
   }
 
   BLI_assert_msg(result, "Preview file has no world.");
@@ -515,7 +515,7 @@ static Scene *preview_prepare_scene(
 
   sce = preview_get_scene(pr_main);
   if (sce) {
-    ViewLayer *view_layer = static_cast<ViewLayer *>(sce->view_layers.first);
+    ViewLayer *view_layer = sce->view_layers.first();
 
     /* Only enable the combined render-pass. */
     view_layer->passflag = SCE_PASS_COMBINED;
@@ -772,7 +772,7 @@ void ED_preview_draw(
      * if no render result was found and no preview render job is running,
      * or if the job is running and the size of preview changed */
     if ((sbuts != nullptr && sbuts->preview) || (ui_preview->tag & UI_PREVIEW_TAG_DIRTY) ||
-        (!ok && !WM_jobs_test(wm, owner, WM_JOB_TYPE_RENDER_PREVIEW)) ||
+        (!ok && !WM_jobs_has_running(wm, owner, WM_JOB_TYPE_RENDER_PREVIEW)) ||
         (sp && (abs(sp->sizex - newx) >= 2 || abs(sp->sizey - newy) > 2)))
     {
       if (sbuts != nullptr) {
@@ -856,7 +856,7 @@ static Scene *object_preview_scene_create(const ObjectPreviewData *preview_data,
    * viewport displays. */
   scene->r.cfra = preview_data->cfra;
 
-  ViewLayer *view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
+  ViewLayer *view_layer = scene->view_layers.first();
   Depsgraph *depsgraph = DEG_graph_new(
       preview_data->pr_main, scene, view_layer, DAG_EVAL_VIEWPORT);
 
@@ -1165,7 +1165,7 @@ static void shader_preview_texture(ShaderPreview *sp, Tex *tex, Scene *sce, Rend
 
   /* Create buffer in empty RenderView created in the init step. */
   RenderResult *rr = RE_AcquireResultWrite(re);
-  RenderView *rv = static_cast<RenderView *>(rr->views.first);
+  RenderView *rv = rr->views.first();
   ImBuf *rv_ibuf = RE_RenderViewEnsureImBuf(rr, rv);
   rv_ibuf->assign_float_data(MEM_new_array_zeroed<float>(size_t(4) * width * height, __func__));
   RE_ReleaseResult(re);
@@ -1811,7 +1811,7 @@ Set<std::string> &PreviewLoadJob::known_downloaded_previews()
 PreviewLoadJob &PreviewLoadJob::ensure_job(wmWindowManager *wm, wmWindow *win)
 {
   wmJob *wm_job = WM_jobs_get(
-      wm, win, nullptr, "Loading previews...", eWM_JobFlag{}, WM_JOB_TYPE_LOAD_PREVIEW);
+      wm, win, nullptr, "Loading previews...", WM_JOB_BACKGROUND, WM_JOB_TYPE_LOAD_PREVIEW);
 
   if (!WM_jobs_is_running(wm_job)) {
     PreviewLoadJob *job_data = MEM_new<PreviewLoadJob>("PreviewLoadJobData");
@@ -2308,7 +2308,7 @@ void ED_preview_icon_job(
                               CTX_wm_window(C),
                               prv_img,
                               "Generating icon preview...",
-                              WM_JOB_EXCL_RENDER,
+                              WM_JOB_EXCL_RENDER | WM_JOB_BACKGROUND,
                               WM_JOB_TYPE_RENDER_PREVIEW);
 
   ip = MEM_new_zeroed<IconPreview>("icon preview");
@@ -2386,7 +2386,7 @@ void ED_preview_shader_job(const bContext *C,
                        CTX_wm_window(C),
                        owner,
                        "Generating shader preview...",
-                       WM_JOB_EXCL_RENDER,
+                       WM_JOB_EXCL_RENDER | WM_JOB_BACKGROUND,
                        WM_JOB_TYPE_RENDER_PREVIEW);
   sp = MEM_new_zeroed<ShaderPreview>("shader preview");
 

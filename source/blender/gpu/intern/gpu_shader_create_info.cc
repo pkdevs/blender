@@ -183,10 +183,12 @@ void ShaderCreateInfo::finalize(const bool recursive)
     validate_vertex_attributes(&info);
 
     /* Insert with duplicate check. */
-    push_constants_.extend_non_duplicates(info.push_constants_);
     defines_.extend_non_duplicates(info.defines_);
     typedef_sources_.extend_non_duplicates(info.typedef_sources_);
 
+    for (const auto &res : info.push_constants_) {
+      extend_predicate(push_constants_, res, additional_info.conditions);
+    }
     for (const auto &res : info.pass_resources_) {
       extend_predicate(pass_resources_, res, additional_info.conditions);
     }
@@ -279,6 +281,15 @@ void ShaderCreateInfo::finalize(const bool recursive)
 
 void ShaderCreateInfo::extend_predicate(Vector<Resource, 0> &resource_vector,
                                         ShaderCreateInfo::Resource res_copy,
+                                        Span<ConditionFn> additional_conditions) const
+{
+  res_copy.conditions.extend(additional_conditions);
+  /** IMPORTANT: We keep duplicates until we evaluate the conditions. */
+  resource_vector.append(res_copy);
+};
+
+void ShaderCreateInfo::extend_predicate(Vector<ShaderCreateInfo::PushConst, 0> &resource_vector,
+                                        ShaderCreateInfo::PushConst res_copy,
                                         Span<ConditionFn> additional_conditions) const
 {
   res_copy.conditions.extend(additional_conditions);
@@ -656,6 +667,35 @@ using namespace blender::gpu::shader;
 #define GPU_SHADER_NAMED_INTERFACE_END(_inst_name) ;
 #define GPU_SHADER_INTERFACE_END() ;
 #define GPU_SHADER_CREATE_END() ;
+
+/* WORKAROUND(@fclem): Undefine constants defined by system headers to fix warnings.
+ * This is caused by the macros copy system made for compatibility of the Create info system before
+ * BSL 5.3. Can be phased out after BSL 5.3 is default everywhere. */
+#undef M_PI
+#undef M_TAU
+#undef M_PI_2
+#undef M_PI_4
+#undef M_SQRT2
+#undef M_SQRT1_2
+#undef M_SQRT3
+#undef M_SQRT1_3
+#undef M_1_PI
+#undef M_E
+#undef M_LOG2E
+#undef M_LOG10E
+#undef M_LN2
+#undef M_LN10
+#undef NAN_FLT
+#undef UNPACK2
+#undef UNPACK3
+#undef UNPACK4
+#undef SHRT_MAX
+#undef INT_MAX
+#undef USHRT_MAX
+#undef UINT_MAX
+#undef FLT_MAX
+#undef FLT_MIN
+#undef FLT_EPSILON
 
 #ifdef _MSC_VER
 /* Disable optimization for this function with MSVC. It does not like the fact

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'2cef5b8c951a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:38+0000\n"
+"POT-Creation-Date: 2026-09-14 07:47+0000\n"
 "PO-Revision-Date: 2026-05-04 00:12+0000\n"
 "Last-Translator: Alessandro Vecchio <alessandrovecchio1907@gmail.com>\n"
 "Language-Team: Italian <https://translate.blender.org/projects/blender-ui/ui/it/>\n"
@@ -6825,6 +6825,10 @@ msgid "Collection of Color Ramp Elements"
 msgstr "Raccolta di Elementi Rampa Colore"
 
 
+msgid "Identifier"
+msgstr "Identificatore"
+
+
 msgid "Console Input"
 msgstr "Immissione Console"
 
@@ -10487,10 +10491,6 @@ msgstr "Definizione della proprietà scelta nell'RNA"
 
 msgid "Description of the item's purpose"
 msgstr "Descrizione dello scopo dell'elemento"
-
-
-msgid "Identifier"
-msgstr "Identificatore"
 
 
 msgid "Unique name used in the code and scripting"
@@ -24478,52 +24478,76 @@ msgid "Material slot name"
 msgstr "Nome dello slot materiale"
 
 
-msgid "Snap"
-msgstr "Aggancia"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Decadimento Modifica Proporzionale"
-
-
 msgid "Read"
 msgstr "Lettura"
-
-
-msgid "Mask Edit"
-msgstr "Modifica Maschera"
 
 
 msgid "Sample"
 msgstr "Campione"
 
 
-msgid "Automasking"
-msgstr "Automascheramento"
+msgid "Show/Hide"
+msgstr "Mostra/Nascondi"
 
 
 msgid "Write"
 msgstr "Scrittura"
 
 
-msgid "Face Sets Edit"
-msgstr "Modifica Sets di Facce"
+msgid "Clean Up"
+msgstr "Ripulisci"
 
 
 msgid "Primitives"
 msgstr "Primitive"
 
 
-msgid "Vertex Group Locks"
-msgstr "Blocchi del Gruppo di Vertici"
+msgid "Pivot Point"
+msgstr "Punto di Perno"
+
+
+msgid "Snap"
+msgstr "Aggancia"
 
 
 msgid "Instances"
 msgstr "Istanze"
 
 
+msgid "Proportional Editing Falloff"
+msgstr "Decadimento Modifica Proporzionale"
+
+
+msgid "Mask Edit"
+msgstr "Modifica Maschera"
+
+
+msgid "Automasking"
+msgstr "Automascheramento"
+
+
+msgid "Face Sets Edit"
+msgstr "Modifica Sets di Facce"
+
+
+msgid "Vertex Group Locks"
+msgstr "Blocchi del Gruppo di Vertici"
+
+
 msgid "Import"
 msgstr "Importa"
+
+
+msgid "Utilities"
+msgstr "Utilità"
+
+
+msgid "Math"
+msgstr "Matematica"
+
+
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Mirror"
@@ -24540,10 +24564,6 @@ msgstr "Vista Locale"
 
 msgid "Viewpoint"
 msgstr "Punto di vista"
-
-
-msgid "Utilities"
-msgstr "Utilità"
 
 
 msgid "Navigation"
@@ -24564,14 +24584,6 @@ msgstr "Regione Vista"
 
 msgid "Select More/Less"
 msgstr "Seleziona Più/Meno"
-
-
-msgid "Math"
-msgstr "Matematica"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Select Similar"
@@ -24606,6 +24618,14 @@ msgid "Light Probe"
 msgstr "Sensore di Luce"
 
 
+msgid "Linked"
+msgstr "Collegato"
+
+
+msgid "Layout"
+msgstr "Layout"
+
+
 msgid "Add Image"
 msgstr "Aggiungi Immagine"
 
@@ -24626,24 +24646,16 @@ msgid "Track"
 msgstr "Traccia"
 
 
+msgid "Adjust"
+msgstr "Regola"
+
+
 msgid "Quick Effects"
 msgstr "Effetti Veloci"
 
 
-msgid "Show/Hide"
-msgstr "Mostra/Nascondi"
-
-
-msgid "Linked"
-msgstr "Collegato"
-
-
-msgid "Clean Up"
-msgstr "Ripulisci"
-
-
-msgid "Layout"
-msgstr "Layout"
+msgid "Keying"
+msgstr "Keying"
 
 
 msgid "Asset"
@@ -24652,6 +24664,10 @@ msgstr "Risorsa"
 
 msgid "Make Single User"
 msgstr "Rendi Utilizzatore Singolo"
+
+
+msgid "Tracking"
+msgstr "Tracciamento"
 
 
 msgid "Convert"
@@ -24666,24 +24682,12 @@ msgid "Hooks"
 msgstr "Ganci"
 
 
-msgid "Adjust"
-msgstr "Regola"
-
-
 msgid "Face Sets Init"
 msgstr "Init Sets di Facce"
 
 
 msgid "Random Mask"
 msgstr "Maschera Casuale"
-
-
-msgid "Keying"
-msgstr "Keying"
-
-
-msgid "Tracking"
-msgstr "Tracciamento"
 
 
 msgid "Clear Transform"
@@ -24748,10 +24752,6 @@ msgstr "Crenatura"
 
 msgid "Bone Roll"
 msgstr "Rollio Osso"
-
-
-msgid "Pivot Point"
-msgstr "Punto di Perno"
 
 
 msgid "Keyframe Insert Pie"
@@ -24988,10 +24988,6 @@ msgstr "Genera"
 
 msgid "Physics"
 msgstr "Fisica"
-
-
-msgid "ID Data"
-msgstr "Dati ID"
 
 
 msgid "Particle Specials"
@@ -32741,6 +32737,14 @@ msgid "Collection of Node Sockets"
 msgstr "Raccolta di Connettori Nodo"
 
 
+msgid "From Socket"
+msgstr "Dal Connettore"
+
+
+msgid "To Socket"
+msgstr "Al Connettore"
+
+
 msgid "Socket Template"
 msgstr "Modello Connettore"
 
@@ -35392,8 +35396,8 @@ msgstr "Resetta Trasformazione"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Accetta"
+msgid "Select Directory"
+msgstr "Seleziona Cartella"
 
 
 msgid "Directory of the file"
@@ -36120,10 +36124,6 @@ msgstr "Esporta"
 
 
 msgctxt "Operator"
-msgid "Remove Importer"
-msgstr "Rimuovi Importatore"
-
-
 msgid "Remove Importer"
 msgstr "Rimuovi Importatore"
 
@@ -37613,11 +37613,6 @@ msgstr "Seleziona/Deseleziona Tutti I File"
 
 msgid "Select or deselect all files"
 msgstr "Seleziona/Deseleziona tutti i file"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Seleziona Cartella"
 
 
 msgid "Select a bookmarked directory"
@@ -41979,10 +41974,6 @@ msgid "From active node"
 msgstr "Dal nodo attivo"
 
 
-msgid "From Socket"
-msgstr "Dal Connettore"
-
-
 msgctxt "NodeTree"
 msgid "Soft Light"
 msgstr "Luce Morbida"
@@ -45982,6 +45973,10 @@ msgid "Add a new screen"
 msgstr "Aggiunge un nuova disposizione schermo"
 
 
+msgid "Active Section"
+msgstr "Sezione Attiva"
+
+
 msgctxt "Operator"
 msgid "Redo Last"
 msgstr "Riesegue Ultimo"
@@ -49159,6 +49154,14 @@ msgid "View Online Manual"
 msgstr "Mostra Manuale Online"
 
 
+msgid "Trusted Source"
+msgstr "Origine Attendibile"
+
+
+msgid "Allow .blend file to execute scripts automatically, default available from system preferences"
+msgstr "Permette ai file .blend di eseguire automaticamente gli script, il default è disponibile nelle preferenze di sistema"
+
+
 msgid "Include selected frames"
 msgstr "Includi fotogrammi selezionati"
 
@@ -49242,14 +49245,6 @@ msgstr "Carica le impostazioni dell'interfaccia utente nel file .blend"
 
 msgid "State"
 msgstr "Stato"
-
-
-msgid "Trusted Source"
-msgstr "Origine Attendibile"
-
-
-msgid "Allow .blend file to execute scripts automatically, default available from system preferences"
-msgstr "Permette ai file .blend di eseguire automaticamente gli script, il default è disponibile nelle preferenze di sistema"
 
 
 msgid "Set the active operator to its default values"
@@ -51875,10 +51870,6 @@ msgid "Global preferences"
 msgstr "Preferenze globali"
 
 
-msgid "Active Section"
-msgstr "Sezione Attiva"
-
-
 msgid "Application Template"
 msgstr "Modello Applicazione"
 
@@ -52165,14 +52156,6 @@ msgstr "Il numero del fotogramma corrente può essere impostato manualmente ad u
 
 msgid "Use Visual keying automatically for constrained objects"
 msgstr "Utilizza automaticamente un sistema Visuale per gli oggetti vincolati"
-
-
-msgid "Sculpt Texture Paint"
-msgstr "Pittura Texture in modo Scultura"
-
-
-msgid "Use texture painting in Sculpt Mode"
-msgstr "Utilizzare la Pittura Texture in Modalità Scultura"
 
 
 msgid "Animation Player"
@@ -53095,6 +53078,10 @@ msgid "Primitive Float"
 msgstr "Float Primitivo"
 
 
+msgid "Subtype"
+msgstr "Sottotipo"
+
+
 msgid "Animatable"
 msgstr "Animabile"
 
@@ -53745,6 +53732,10 @@ msgstr "Divisione Quadrati"
 
 msgid "Region height"
 msgstr "Altezza regione"
+
+
+msgid "Live search filtering string"
+msgstr "Stringa di filtraggio ricerca"
 
 
 msgid "Type of this region"
@@ -56098,10 +56089,6 @@ msgstr "Mostra dati del file corrente e delle librerie collegate"
 
 msgid "Unused Data"
 msgstr "Dati Inutilizzati"
-
-
-msgid "Live search filtering string"
-msgstr "Stringa di filtraggio ricerca"
 
 
 msgid "Hierarchies"
@@ -60079,10 +60066,6 @@ msgid "{} does not exist"
 msgstr "{} non esiste"
 
 
-msgid "To Socket"
-msgstr "Al Connettore"
-
-
 msgid "No active node."
 msgstr "Nessun nodo attivo."
 
@@ -60377,6 +60360,10 @@ msgstr "Licenza"
 msgctxt "Operator"
 msgid "Blender Website"
 msgstr "Sito web di Blender"
+
+
+msgid "Trusted Source [Untrusted Path]"
+msgstr "Origine Attendibile [Percorso Insicuro]"
 
 
 msgctxt "Operator"
@@ -62299,6 +62286,11 @@ msgstr "Immagini/Sequenza..."
 
 
 msgctxt "Operator"
+msgid "Text"
+msgstr "Testo"
+
+
+msgctxt "Operator"
 msgid "Fade"
 msgstr "Dissolvenza"
 
@@ -62358,11 +62350,6 @@ msgstr "Colore"
 
 
 msgctxt "Operator"
-msgid "Text"
-msgstr "Testo"
-
-
-msgctxt "Operator"
 msgid "Adjustment Layer"
 msgstr "Livello Aggiustamento"
 
@@ -62404,11 +62391,6 @@ msgstr "Ricarica Spezzoni e Aggiusta Lunghezza"
 
 msgid "Resolutions"
 msgstr "Risoluzioni"
-
-
-msgctxt "Operator"
-msgid "Clip"
-msgstr "Filmato"
 
 
 msgid "Add Transition"
@@ -66972,10 +66954,6 @@ msgid "Matte Objects:"
 msgstr "Oggetti Opachi:"
 
 
-msgid "Subtype"
-msgstr "Sottotipo"
-
-
 msgid "Compositing..."
 msgstr "Compositing..."
 
@@ -67078,10 +67056,6 @@ msgstr "Maschera non trovata"
 
 msgid "File '%s' could not be loaded"
 msgstr "Il file '%s' non può essere caricato"
-
-
-msgid "Scene Strip..."
-msgstr "Spezzone Scena..."
 
 
 msgid "Please select two strips"
@@ -68711,12 +68685,12 @@ msgid "BSDF"
 msgstr "BSDF"
 
 
-msgid "IOR"
-msgstr "Indice Di Rifrazione"
-
-
 msgid "Anisotropy"
 msgstr "Anisotropia"
+
+
+msgid "IOR"
+msgstr "Indice Di Rifrazione"
 
 
 msgid "RoughnessU"
@@ -69039,10 +69013,6 @@ msgstr ""
 
 msgid "To make changes to Preferences permanent, use \"Save Preferences\"."
 msgstr "Per rendere permanenti le modifiche alle Preferenze, usa \"Salva Preferenze\"."
-
-
-msgid "Trusted Source [Untrusted Path]"
-msgstr "Origine Attendibile [Percorso Insicuro]"
 
 
 msgid "Any unsaved changes will be lost."
