@@ -278,7 +278,7 @@ struct CodegenContext : NodeErrorHandler {
           ctx.error(node, Diag::OperatorTokenInvalid, to_str(type));
           break;
         case ErrorType::InvalidExpression:
-          ctx.error(node, Diag::InvalidExprTypeChecker);
+          ctx.error(node, Diag::InvalidExprTypeCodegen);
           break;
       }
       return {node, ctx.table.err_cls};
