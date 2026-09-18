@@ -29,6 +29,10 @@ namespace blender {
 struct IDProperty;
 struct bUserMenuItem;
 
+namespace asset_system {
+struct bUserAssetLibrary_Runtime;
+}
+
 /** #UserDef.flag */
 enum eUserPref_Flag : int {
   USER_AUTOSAVE = (1 << 0),
@@ -676,22 +680,12 @@ struct bUserAssetLibrary {
    * #BKE_preferences_remote_asset_library_auth_token_set() only.
    */
   char *auth_token = nullptr;
-  /**
-   * The UUID of the asset library. This is used to make deduplication possible when using the
-   * same asset library from different computers.
-   */
-  bUUID uuid;
-  /**
-   * If the asset library was created with an invalid UUID string, it will be stored here.
-   * The library will be disabled and we will notify the user that it has an invalid UUID.
-   * We store the invalid UUID string so that we don't introduce any data loss when saving the
-   * UUIDs to files. (If it is invalid it is up to the end user to fix it.
-   */
-  char *invalid_uuid = nullptr;
 
   short import_method = ASSET_IMPORT_PACK;  /* eAssetImportMethod */
   short flag = ASSET_LIBRARY_RELATIVE_PATH; /* eAssetLibrary_Flag */
   char _pad0[4] = {};
+
+  asset_system::bUserAssetLibrary_Runtime *runtime = nullptr;
 
 #ifdef __cplusplus
   bool is_enabled() const

@@ -34,6 +34,11 @@ class IDRemapper;
 
 namespace asset_system {
 
+struct bUserAssetLibrary_Runtime {
+  UUID uuid;
+  std::string invalid_uuid;
+};
+
 class AssetRepresentation;
 
 /**

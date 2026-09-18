@@ -6,6 +6,7 @@
  * \ingroup RNA
  */
 
+#include "AS_asset_library.hh"
 #include "DNA_userdef_types.h"
 
 #include "ED_userpref.hh"
@@ -539,7 +540,7 @@ static bUserAssetLibrary *rna_BlenderProject_asset_library_new(const bContext *C
        * notify the user about this in the UI.
        */
       new_library->flag |= ASSET_LIBRARY_DISABLED;
-      new_library->invalid_uuid = BLI_strdup(uuid_str);
+      new_library->runtime->invalid_uuid = uuid_str;
     }
 
     int project_asset_index = -1;
@@ -775,7 +776,8 @@ static void rna_def_project_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_function_ui_description(func, "Add a new Project Asset Library");
   RNA_def_string(func, "name", nullptr, sizeof(bUserAssetLibrary::name), "Name", "");
   RNA_def_string(func, "directory", nullptr, sizeof(bUserAssetLibrary::dirpath), "Directory", "");
-  RNA_def_string(func, "uuid", nullptr, sizeof(bUserAssetLibrary::uuid), "UUID", "");
+  RNA_def_string(
+      func, "uuid", nullptr, sizeof(asset_system::bUserAssetLibrary_Runtime::uuid), "UUID", "");
   /* return type */
   parm = RNA_def_pointer(func, "library", "ProjectAssetLibrary", "", "Newly added asset library");
   RNA_def_function_return(func, parm);

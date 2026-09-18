@@ -6,6 +6,8 @@
  * \ingroup spuserpref
  */
 
+#include "AS_asset_library.hh"
+
 #include "BKE_blender_project.hh"
 #include "BKE_global.hh"
 #include "BKE_screen.hh"
@@ -91,7 +93,9 @@ struct ProjectAssetLibraryListItem : public AssetLibraryListItemCommon {
       row.label("", ICON_ERROR);
     }
 
-    if (library.user_library && !is_remote_library && library.user_library->invalid_uuid) {
+    if (library.user_library && !is_remote_library &&
+        !library.user_library->runtime->invalid_uuid.empty())
+    {
       row.label("", ICON_ERROR);
       row.enabled_set(false);
     }

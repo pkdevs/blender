@@ -514,8 +514,8 @@ static void rna_userdef_asset_library_remote_url_update(bContext *C, PointerRNA 
 static void rna_userdef_asset_library_uuid_get(PointerRNA *ptr, char *value)
 {
   const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
-  if (!library->invalid_uuid) {
-    BLI_uuid_format(value, library->uuid);
+  if (library->runtime->invalid_uuid.empty()) {
+    BLI_uuid_format(value, library->runtime->uuid);
   }
   else {
     value[0] = '\0';
@@ -526,7 +526,24 @@ static int rna_userdef_asset_library_uuid_length(PointerRNA *ptr)
 {
   const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
   /* UUID_STRING_SIZE - 1 as we exclude the null terminator. */
-  return (!library->invalid_uuid) ? UUID_STRING_SIZE - 1 : 0;
+  return (library->runtime->invalid_uuid.empty()) ? UUID_STRING_SIZE - 1 : 0;
+}
+
+static void rna_userdef_asset_library_invalid_uuid_get(PointerRNA *ptr, char *value)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  if (!library->runtime->invalid_uuid.empty()) {
+    strcpy(value, library->runtime->invalid_uuid.c_str());
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_userdef_asset_library_invalid_uuid_length(PointerRNA *ptr)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  return library->runtime->invalid_uuid.length();
 }
 
 static void rna_userdef_asset_libraries_use_online_essentials_update(bContext *C, PointerRNA *ptr)
@@ -7161,7 +7178,10 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
   prop = RNA_def_property(srna, "invalid_uuid", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_sdna(prop, nullptr, "invalid_uuid");
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_invalid_uuid_get",
+                                "rna_userdef_asset_library_invalid_uuid_length",
+                                nullptr);
   RNA_def_property_ui_text(
       prop,
       "Invalid UUID",

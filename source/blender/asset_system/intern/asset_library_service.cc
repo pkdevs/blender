@@ -80,12 +80,8 @@ void AssetLibraryService::destroy()
 }
 
 /**
- * Ensures that #bUserAssetLibrary::uuid is set and matches the value stored in the
- * `.blender_asset_lib.toml` library file. This would assign a new UUID if not value is assigned
- * yet in any of both fields, if just one of them have assined a value it will copy the value into
- * the other.
- * If both the custom library and the `.blender_asset_lib.toml` library file already contains
- * different uuid values it will set the uuid store in the file as #bUserAssetLibrary.invalid_uuid.
+ * Reads the Asset Library identifier (UUID) from the `.blender_asset_lib.toml` library file, this
+ * would assign a new UUID if not value is assigned yet.
  */
 static void user_asset_library_uuid_ensure(bUserAssetLibrary &custom_library)
 {
@@ -113,7 +109,7 @@ except e:
 
 # Assign input uuid when no value is assigned to the library yet
 if "uuid" not in config_dict or config_dict["uuid"] is None:
-    config_dict["uuid"] = uuid
+    config_dict["uuid"] = new_uuid
 
     import tomli_w
     max_len_backup = tomli_w._writer.MAX_LINE_LENGTH
@@ -129,30 +125,26 @@ if "uuid" not in config_dict or config_dict["uuid"] is None:
     finally:
         pass
 
-# Return stored uuid value so the caller can test if #bUserAssetLibrary::uuid and the library uuid matches.
 ret_uuid = config_dict["uuid"]
 )";
-    UUID uuid = !BLI_uuid_is_nil(custom_library.uuid) ? custom_library.uuid :
-                                                        BLI_uuid_generate_random();
+    /* New UUID to assign if the library have not identifier yet. */
+    UUID new_uuid = BLI_uuid_generate_random();
     std::unique_ptr locals = bke::idprop::create_group("locals");
-    IDP_AddToGroup(locals.get(), IDP_NewString(uuid.str(), "uuid"));
+    IDP_AddToGroup(locals.get(), IDP_NewString(new_uuid.str(), "new_uuid"));
     IDP_AddToGroup(locals.get(), IDP_NewString(custom_library.resolved_dirpath, "library_path"));
 
     std::optional<blender::IDProperty *> idprop_optptr =
         BPY_run_string_exec_with_locals_return_idprop(nullptr, script, *locals, "ret_uuid");
 
-    MEM_delete(custom_library.invalid_uuid);
-    custom_library.invalid_uuid = nullptr;
-
     if (!idprop_optptr) {
-      custom_library.invalid_uuid = BLI_strdup("<error-reading-uuid>");
+      custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
       return;
     }
     IDProperty *ret_idprop = *idprop_optptr;
 
     /* Check the returned value. */
     if (ret_idprop == nullptr || ret_idprop->type != IDP_STRING) {
-      custom_library.invalid_uuid = BLI_strdup("<error-reading-uuid>");
+      custom_library.runtime->invalid_uuid = "<error-reading-uuid>";
       IDP_FreeProperty(ret_idprop);
       return;
     }
@@ -160,28 +152,12 @@ ret_uuid = config_dict["uuid"]
     bUUID ret_uuid;
     const char *ret_uuid_str = IDP_string_get(ret_idprop);
     if (!BLI_uuid_parse_string(&ret_uuid, ret_uuid_str)) {
-      custom_library.invalid_uuid = BLI_strdup(ret_uuid_str);
+      custom_library.runtime->invalid_uuid = ret_uuid_str;
       IDP_FreeProperty(ret_idprop);
       return;
     }
     IDP_FreeProperty(ret_idprop);
-
-    /* If the user library already has an uuid, make sure it matches to one assigned in the
-     * `.blender_asset_lib.toml` file. */
-    if (!BLI_uuid_is_nil(custom_library.uuid) && !BLI_uuid_equal(uuid, ret_uuid)) {
-      custom_library.invalid_uuid = BLI_strdup(IDP_string_get(ret_idprop));
-      return;
-    }
-    /* If the user library doesn't have an uuid, set either the new generated uuid or the already
-     * assigned value in the library file. */
-    if (BLI_uuid_is_nil(custom_library.uuid)) {
-      if (U.runtime.is_dirty == false) {
-        U.runtime.is_dirty = true;
-        WM_main_add_notifier(NC_WINDOW, nullptr);
-      }
-      custom_library.uuid = ret_uuid;
-    }
-    BLI_assert(BLI_uuid_equal(custom_library.uuid, ret_uuid));
+    custom_library.runtime->uuid = ret_uuid;
   }
 #endif
 }

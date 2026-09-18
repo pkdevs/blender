@@ -95,14 +95,14 @@ bUserAssetLibrary *BKE_preferences_project_asset_library_add(UserDef *userdef,
 {
   bUserAssetLibrary *library = BKE_preferences_asset_library_add(userdef, name, dirpath);
   library->flag |= ASSET_LIBRARY_PROJECT_DEFINED;
-  library->uuid = uuid.value_or(BLI_uuid_generate_random());
+  library->runtime->uuid = uuid.value_or(BLI_uuid_generate_random());
   return library;
 }
 
 void BKE_preferences_asset_library_remove(UserDef *userdef, bUserAssetLibrary *library)
 {
   MEM_delete(library->auth_token);
-  MEM_delete(library->invalid_uuid);
+  MEM_delete(library->runtime);
   BLI_freelinkN(&userdef->asset_libraries, library);
 }
 
@@ -215,9 +215,7 @@ void BKE_preferences_asset_library_read_data(BlendDataReader *reader, bUserAsset
   if (library->auth_token) {
     BLO_read_string(reader, &library->auth_token);
   }
-  if (library->invalid_uuid) {
-    BLO_read_string(reader, &library->invalid_uuid);
-  }
+  library->runtime = MEM_new<asset_system::bUserAssetLibrary_Runtime>(__func__);
   /* Ensure that the resolved path dir is up to date. */
   STRNCPY(library->resolved_dirpath, AS_asset_library_resolve_path(library->dirpath).c_str());
 }
@@ -227,9 +225,6 @@ void BKE_preferences_asset_library_write_data(BlendWriter *writer,
 {
   if (library->auth_token) {
     writer->write_string(library->auth_token);
-  }
-  if (library->invalid_uuid) {
-    writer->write_string(library->invalid_uuid);
   }
 }
 

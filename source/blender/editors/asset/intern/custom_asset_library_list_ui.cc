@@ -8,6 +8,8 @@
 
 #include <fmt/format.h>
 
+#include "AS_asset_library.hh"
+
 #include "BKE_global.hh"
 
 #include "BLT_translation.hh"
@@ -72,42 +74,24 @@ static void asset_library_identifier_invalid_error_draw(ui::Layout &layout,
     row2.alignment_set(ui::LayoutAlign::Left);
     row2.red_alert_set(false);
     row2.button("Regenerate UUID", 0, [library](blender::bContext & /*C*/) {
-      MEM_delete(library.user_library->invalid_uuid);
-      library.user_library->invalid_uuid = nullptr;
+      library.user_library->runtime->invalid_uuid.clear();
     });
     return;
   }
   ui::Layout &row = layout.row(false);
   row.red_alert_set(true);
-  if (BLI_uuid_is_nil(library.user_library->uuid)) {
+  if (BLI_uuid_is_nil(library.user_library->runtime->uuid)) {
     row.label_multiline(
         "Asset Library has an invalid identifier (invalid UUID). Manually edit the "
         "configuration file.",
         ICON_ERROR,
         ui::UI_STYLE_TEXT_LEFT,
         7);
-  }
-  else {
-    const std::string error_text = fmt::format(
-        "Asset Library identifier (`{}`) does not matches the identifier stored in the "
-        "library files  (`{}`). Either manually edit the library file or update the Asset "
-        "Library identifier.",
-        UUID(library.user_library->uuid).str(),
-        library.user_library->invalid_uuid);
-    row.label_markdown(error_text);
     ui::Layout &row2 = row.row(false);
     row2.alignment_set(ui::LayoutAlign::Left);
     row2.red_alert_set(false);
-    ui::Button *button = row2.button(
-        "Update Asset Library UUID", 0, [library](blender::bContext & /*C*/) -> void {
-          BLI_uuid_parse_string(&library.user_library->uuid, library.user_library->invalid_uuid);
-          MEM_delete(library.user_library->invalid_uuid);
-          library.user_library->invalid_uuid = nullptr;
-        });
-    if (bUUID dummy_uuid; !BLI_uuid_parse_string(&dummy_uuid, library.user_library->invalid_uuid))
-    {
-      ui::button_disable(button, "Stored Library identifier (UUID) is invalid.");
-    }
+    PointerRNA op_ptr = row2.op("WM_OT_path_open", "Open Asset Library folder", ICON_FILE_FOLDER);
+    RNA_string_set(&op_ptr, "filepath", library.user_library->resolved_dirpath);
   }
 }
 
@@ -130,7 +114,9 @@ void draw_active_library_settings(const bContext *C,
   if (library.user_library) {
     PointerRNA library_ptr = RNA_pointer_create_discrete(
         nullptr, RNA_UserAssetLibrary, library.user_library);
-
+    if (!library.user_library->runtime->invalid_uuid.empty()) {
+      asset_library_identifier_invalid_error_draw(layout, library);
+    }
     if (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
       if (USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries)) {
         ui::Layout &row = layout.row(false);
@@ -165,14 +151,8 @@ void draw_active_library_settings(const bContext *C,
                    std::nullopt);
         }
       }
-      if (library.user_library->invalid_uuid) {
-        asset_library_identifier_invalid_error_draw(layout, library);
-      }
     }
     else {
-      if (library.user_library->invalid_uuid) {
-        asset_library_identifier_invalid_error_draw(layout, library);
-      }
 
       layout.prop(&library_ptr, "path", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       layout.prop(&library_ptr, "import_method", UI_ITEM_NONE, IFACE_("Import Method"), ICON_NONE);
