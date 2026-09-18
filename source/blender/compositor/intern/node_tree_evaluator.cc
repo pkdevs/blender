@@ -243,9 +243,7 @@ void NodeTreeEvaluator::map_node_operation_inputs_to_their_results(const bNode &
     }
 
     const bNodeSocket *output = get_output_linked_to_input(*input);
-    if (!output || !this->schedule().nodes.contains(&output->owner_node()) ||
-        this->schedule().unneeded_inputs.contains(input))
-    {
+    if (!output || this->schedule().unneeded_inputs.contains(input)) {
       this->map_unlinked_input(*input, operation);
       continue;
     }
@@ -380,9 +378,7 @@ void NodeTreeEvaluator::map_zone_operation_inputs_to_their_results(ZoneOperation
     }
 
     const bNodeSocket *output = get_output_linked_to_input(*input);
-    if (!output || !this->schedule().nodes.contains(&output->owner_node()) ||
-        this->schedule().unneeded_inputs.contains(input))
-    {
+    if (!output || this->schedule().unneeded_inputs.contains(input)) {
       this->map_unlinked_input(*input, operation);
       continue;
     }
