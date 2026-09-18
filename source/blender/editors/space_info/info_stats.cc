@@ -67,7 +67,7 @@
 namespace blender {
 
 /**
- *Due to their implementation, certain modes (i.e. mesh painting & sculpting) typically only work
+ * Due to their implementation, certain modes (i.e. mesh painting & sculpting) typically only work
  * on a single object at a time, switching between them as necessary, the `active` elements here
  * are intended there to distinguish between other modes, and selection where necessary.
  */
