@@ -2260,40 +2260,34 @@ class StraightSkeletonState {
 
   /** Build the initial kinetic triangulation from \a input.
    * After this call #triangles contains the initial triangulation
-   * with unbounded triangles added for exterior boundary edges.
-   * \param dbg_level If > 0, dump the state to stdout and write an SVG to /tmp. */
-  void build_initial_kinetic_triangulation(const StraightSkeletonInput &input, int dbg_level = 0);
+   * with unbounded triangles added for exterior boundary edges. */
+  void build_initial_kinetic_triangulation(const StraightSkeletonInput &input);
 
   /** Process the next event from the priority queue.
    * Returns true if an event was popped and handled/skipped, false if queue is empty. */
-  bool process_next_event(int dbg_level = 0);
+  bool process_next_event();
 
   /** Process an edge collapse event. */
-  bool process_edge_collapse_event(const TriangleEvent &ev, int dbg_level = 0);
+  bool process_edge_collapse_event(const TriangleEvent &ev);
 
   /** Process a multi-split event (collision of two vertices along an internal spoke). */
-  bool process_multi_split_event(const TriangleEvent &ev, int dbg_level = 0);
+  bool process_multi_split_event(const TriangleEvent &ev);
 
   /** Process a split event (collision of reflex vertex with opposite wavefront edge). */
-  bool process_split_event(const TriangleEvent &ev, int dbg_level = 0);
+  bool process_split_event(const TriangleEvent &ev);
 
   /** Process a cascade of edge collapses driven by an infinitely fast vertex. */
-  void process_infinite_speed_cascade(int v_prime,
-                                      int node_id,
-                                      double event_time,
-                                      int in_cei,
-                                      int out_cei,
-                                      int input_face,
-                                      int dbg_level = 0);
+  void process_infinite_speed_cascade(
+      int v_prime, int node_id, double event_time, int in_cei, int out_cei, int input_face);
 
   /** Run the event loop until \a max_events processed or queue is empty.
    * Returns the total number of events processed or skipped. */
-  int run_event_loop(int max_events = 100, int dbg_level = 0);
+  int run_event_loop(int max_events = 100);
 };
 
-void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSkeletonInput &input,
-                                                                int dbg_level)
+void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSkeletonInput &input)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   input_ = &input;
   current_time_ = 0.0;
   flips_count_ = 0;
@@ -2315,7 +2309,7 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   for (const int ei : input.edge.index_range()) {
     const int u = input.edge[ei][0];
     const int v = input.edge[ei][1];
-    skeleton.add_edge(u, v, ei, -1, 0, 0.0, 0.0, /*is_input_boundary=*/true);
+    skeleton.add_edge(u, v, ei, -1, 0, 0.0, 0.0, true);
   }
 
   /* Add face boundary edges at t = 0. */
@@ -2325,7 +2319,7 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
     for (const int k : IndexRange(face_verts_num)) {
       const int u = input.face_vert_indices[r[k]];
       const int v = input.face_vert_indices[r[(k + 1) % face_verts_num]];
-      skeleton.add_edge(u, v, -1, fi, 0, 0.0, 0.0, /*is_input_boundary=*/true);
+      skeleton.add_edge(u, v, -1, fi, 0, 0.0, 0.0, true);
     }
   }
 
@@ -2477,9 +2471,9 @@ void StraightSkeletonState::process_infinite_speed_cascade(const int v_prime,
                                                            const double event_time,
                                                            const int in_cei,
                                                            const int out_cei,
-                                                           const int input_face,
-                                                           const int dbg_level)
+                                                           const int input_face)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   int curr_v = v_prime;
   int curr_node = node_id;
   double2 curr_pos = kinetic_verts[curr_v].start_pos;
@@ -2786,9 +2780,9 @@ void StraightSkeletonState::process_infinite_speed_cascade(const int v_prime,
   }
 }
 
-bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev,
-                                                        const int dbg_level)
+bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
     return false;
   }
@@ -2978,8 +2972,7 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev,
   edge_collapses_count_++;
 
   if (is_infinitely_fast) {
-    process_infinite_speed_cascade(
-        v_prime, node_id, ev.time, prev_cei, next_cei, ce.input_face, dbg_level);
+    process_infinite_speed_cascade(v_prime, node_id, ev.time, prev_cei, next_cei, ce.input_face);
   }
   else {
     /* Recompute priority queue events for modified triangles. */
@@ -3003,8 +2996,9 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev,
   return true;
 }
 
-bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev, const int dbg_level)
+bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
     return false;
   }
@@ -3320,19 +3314,18 @@ bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev, c
   multi_splits_count_++;
 
   if (inf_1 && in_1 != -1 && out_1 != -1) {
-    process_infinite_speed_cascade(
-        v1_prime, node_id, ev.time, in_1, out_1, kv1.input_face, dbg_level);
+    process_infinite_speed_cascade(v1_prime, node_id, ev.time, in_1, out_1, kv1.input_face);
   }
   if (inf_2 && in_2 != -1 && out_2 != -1) {
-    process_infinite_speed_cascade(
-        v2_prime, node_id, ev.time, in_2, out_2, kv2.input_face, dbg_level);
+    process_infinite_speed_cascade(v2_prime, node_id, ev.time, in_2, out_2, kv2.input_face);
   }
 
   return true;
 }
 
-bool StraightSkeletonState::process_split_event(const TriangleEvent &ev, const int dbg_level)
+bool StraightSkeletonState::process_split_event(const TriangleEvent &ev)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
     return false;
   }
@@ -3600,19 +3593,18 @@ bool StraightSkeletonState::process_split_event(const TriangleEvent &ev, const i
   splits_count_++;
 
   if (inf_1 && cei != -1 && out_v != -1) {
-    process_infinite_speed_cascade(
-        v1_prime, node_id, ev.time, cei, out_v, kv1.input_face, dbg_level);
+    process_infinite_speed_cascade(v1_prime, node_id, ev.time, cei, out_v, kv1.input_face);
   }
   if (inf_2 && in_v != -1 && new_cei != -1) {
-    process_infinite_speed_cascade(
-        v2_prime, node_id, ev.time, in_v, new_cei, kv2.input_face, dbg_level);
+    process_infinite_speed_cascade(v2_prime, node_id, ev.time, in_v, new_cei, kv2.input_face);
   }
 
   return true;
 }
 
-bool StraightSkeletonState::process_next_event(const int dbg_level)
+bool StraightSkeletonState::process_next_event()
 {
+  [[maybe_unused]] const int dbg_level = 0;
   while (!pq.is_empty()) {
     const TriangleEvent ev = pq.pop_min();
     if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
@@ -3688,7 +3680,7 @@ bool StraightSkeletonState::process_next_event(const int dbg_level)
         std::cout << "Processing EDGE_COLLAPSE event on edge " << ev.edge_index << " in tri "
                   << ev.triangle_index << " at time " << ev.time << "\n";
       }
-      if (!process_edge_collapse_event(ev, dbg_level)) {
+      if (!process_edge_collapse_event(ev)) {
         if (dbg_level > 0) {
           std::cout << "  Failed to process edge collapse on edge " << ev.edge_index << "\n";
         }
@@ -3715,7 +3707,7 @@ bool StraightSkeletonState::process_next_event(const int dbg_level)
         std::cout << "Processing MULTI_SPLIT event on spoke edge " << ev.edge_index << " in tri "
                   << ev.triangle_index << " at time " << ev.time << "\n";
       }
-      if (!process_multi_split_event(ev, dbg_level)) {
+      if (!process_multi_split_event(ev)) {
         if (dbg_level > 0) {
           std::cout << "  Failed to process multi-split on edge " << ev.edge_index << "\n";
         }
@@ -3742,7 +3734,7 @@ bool StraightSkeletonState::process_next_event(const int dbg_level)
         std::cout << "Processing SPLIT event on edge " << ev.edge_index << " in tri "
                   << ev.triangle_index << " at time " << ev.time << "\n";
       }
-      if (!process_split_event(ev, dbg_level)) {
+      if (!process_split_event(ev)) {
         if (dbg_level > 0) {
           std::cout << "  Failed to process split on edge " << ev.edge_index << "\n";
         }
@@ -3773,10 +3765,11 @@ bool StraightSkeletonState::process_next_event(const int dbg_level)
   return false;
 }
 
-int StraightSkeletonState::run_event_loop(const int max_events, const int dbg_level)
+int StraightSkeletonState::run_event_loop(const int max_events)
 {
+  [[maybe_unused]] const int dbg_level = 0;
   int events_count = 0;
-  while (events_count < max_events && process_next_event(dbg_level)) {
+  while (events_count < max_events && process_next_event()) {
     events_count++;
   }
   return events_count;
@@ -3786,13 +3779,12 @@ int StraightSkeletonState::run_event_loop(const int max_events, const int dbg_le
 
 EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &input,
                                                  const int max_events,
-                                                 const int dbg_level,
                                                  const bool handle_edge_collapses)
 {
   StraightSkeletonState state(input);
   state.set_handle_edge_collapses(handle_edge_collapses);
-  state.build_initial_kinetic_triangulation(input, dbg_level);
-  const int processed = state.run_event_loop(max_events, dbg_level);
+  state.build_initial_kinetic_triangulation(input);
+  const int processed = state.run_event_loop(max_events);
   EventLoopStats stats;
   stats.events_processed_num = processed;
   stats.flips_num = state.flips_count();
@@ -3804,13 +3796,12 @@ EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &in
 
 Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput &input,
                                                      const int max_events,
-                                                     const int dbg_level,
                                                      const bool handle_edge_collapses)
 {
   StraightSkeletonState state(input);
   state.set_handle_edge_collapses(handle_edge_collapses);
-  state.build_initial_kinetic_triangulation(input, dbg_level);
-  state.run_event_loop(max_events, dbg_level);
+  state.build_initial_kinetic_triangulation(input);
+  state.run_event_loop(max_events);
   Vector<int3> result;
   const TriangleEdges &tri = state.triangulation();
   for (const int ti : IndexRange(tri.triangles_num())) {
@@ -3825,7 +3816,7 @@ Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput
 Array<TriangleEvent> straight_skeleton_initial_events(const StraightSkeletonInput &input)
 {
   StraightSkeletonState state(input);
-  state.build_initial_kinetic_triangulation(input, /*dbg_level=*/0);
+  state.build_initial_kinetic_triangulation(input);
   const TrianglePriorityQueue &pq = state.priority_queue();
 
   Vector<TriangleEvent> active_events;
@@ -3848,7 +3839,7 @@ Array<TriangleEvent> straight_skeleton_initial_events(const StraightSkeletonInpu
 SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input)
 {
   StraightSkeletonState state(input);
-  state.build_initial_kinetic_triangulation(input, /*dbg_level=*/0);
+  state.build_initial_kinetic_triangulation(input);
   return state.skeleton_graph();
 }
 
@@ -3987,8 +3978,8 @@ static void build_output_faces(const StraightSkeletonInput &input,
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
 {
   StraightSkeletonState state(input);
-  state.build_initial_kinetic_triangulation(input, /*dbg_level=*/0);
-  state.run_event_loop(1000, /*dbg_level=*/0);
+  state.build_initial_kinetic_triangulation(input);
+  state.run_event_loop(1000);
 
   const SkeletonGraph &skel = state.skeleton_graph();
 
@@ -4021,9 +4012,8 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
   }
 
   const bool is_full_skeleton = std::isinf(input.offset);
-  const double effective_offset = is_full_skeleton ?
-                                      max_collapse_time :
-                                      std::min(input.offset, max_collapse_time);
+  const double effective_offset = is_full_skeleton ? max_collapse_time :
+                                                     std::min(input.offset, max_collapse_time);
   const int segments = std::max(1, input.segments);
 
   /* Fast path: full skeleton, single segment — use the existing roof-face traversal. */
@@ -4294,8 +4284,7 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
           if (area > 1e-12) {
             /* For the inner polygon, use the input face index of the first full-skeleton
              * face (all faces in a given input face share the same face_orig). */
-            const int inner_fi = full_output.face_orig.is_empty() ? 0 :
-                                                                     full_output.face_orig[0];
+            const int inner_fi = full_output.face_orig.is_empty() ? 0 : full_output.face_orig[0];
             result_faces.append(std::move(clean_cycle));
             result_face_orig.append(inner_fi);
             result_face_band.append(band);

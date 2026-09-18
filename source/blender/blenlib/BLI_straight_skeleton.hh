@@ -185,14 +185,12 @@ struct EventLoopStats {
 /** For testing: run the straight skeleton event loop up to \a max_events. */
 EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &input,
                                                  int max_events = 100,
-                                                 int dbg_level = 0,
                                                  bool handle_edge_collapses = true);
 
 /** For testing: return active triangles (as triples of vertex indices) after running \a
  * max_events. */
 Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput &input,
                                                      int max_events = 100,
-                                                     int dbg_level = 0,
                                                      bool handle_edge_collapses = true);
 
 /** \} */

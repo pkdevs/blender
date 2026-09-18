@@ -7869,8 +7869,7 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
     for (const int i : IndexRange(corners_num, skel_verts_num - corners_num)) {
       const double vo = skel_out.vert_time[i];
       const double h = (inset_amount > 0.0) ? (vo / inset_amount) * face_height : 0.0;
-      const double3 p3d = origin + r0 * skel_out.vert[i].x + r1 * skel_out.vert[i].y +
-                          normal * h;
+      const double3 p3d = origin + r0 * skel_out.vert[i].x + r1 * skel_out.vert[i].y + normal * h;
       skel_to_mesh_vert[i] = state.emesh.vert_create(float3(p3d), -1);
     }
 
