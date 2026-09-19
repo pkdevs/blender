@@ -714,8 +714,12 @@ struct CodegenContext : NodeErrorHandler {
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
         auto *cls = scope.lookup_class(table, ctor.identifier()).unwrap(this);
+        InitializerList list = ctor.initializer_list();
         builder << cls->identifier;
-        builder << ctor.initializer_list();
+        builder << list;
+        if (list.back().next() == ',') {
+          builder << list.back().next();
+        }
       }
       else {
         error(constants_init, Diag::ExpectedResourceTableInitializer);
