@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "gpu_shader_math_quaternion_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_quaternion.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 [[node]]
 void invert_rotation(float4 rotation, float4 &result)
 {
-  result = quaternion_conjugate(Quaternion{UNPACK4(rotation)}).as_float4();
+  result = quaternion_conjugate(Quaternion::from_float4(rotation)).as_float4();
 }

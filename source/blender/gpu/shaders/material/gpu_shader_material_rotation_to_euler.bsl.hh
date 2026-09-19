@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "gpu_shader_math_matrix_construct_lib.glsl"
-#include "gpu_shader_math_rotation_conversion_lib.glsl"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_rotation_conversion.bsl.hh"
 
 [[node]]
 void rotation_to_euler(float4 rotation, float3 &euler)
 {
-  Quaternion quat = Quaternion{UNPACK4(rotation)};
+  Quaternion quat = Quaternion::from_float4(rotation);
   euler = to_euler(from_rotation(quat)).as_float3();
 }

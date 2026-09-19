@@ -5,7 +5,7 @@
 #pragma once
 
 #include "gpu_shader_material_interface.bsl.hh"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 [[node]]
 void node_subsurface_scattering(float4 color,
@@ -17,6 +17,7 @@ void node_subsurface_scattering(float4 color,
                                 float3 N,
                                 float weight,
                                 float random_walk_radius_scale,
+                                ShadingData &sd,
                                 Closure &result)
 {
   color = max(color, float4(0.0f));
@@ -29,5 +30,5 @@ void node_subsurface_scattering(float4 color,
   sss_data.N = N;
   sss_data.sss_radius = max(radius * scale * random_walk_radius_scale, float3(0.0f));
 
-  result = closure_eval(sss_data);
+  result = closure_eval(sd, sss_data);
 }

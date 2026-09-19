@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_rotation_conversion_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_rotation_conversion.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 float3 project_plane_normalized_v3_v3v3(float3 p, float3 v_plane)
 {
@@ -43,7 +43,7 @@ void align_rotation_to_vector_auto_pivot(float4 rotation_in,
     return;
   }
 
-  const Quaternion quat_in = Quaternion{UNPACK4(rotation_in)};
+  const Quaternion quat_in = Quaternion::from_float4(rotation_in);
   const float3 old_axis = transform_point_by_quaternion(quat_in, local_main_axis);
   const float3 new_axis = normalize(input_vector);
 
@@ -85,7 +85,7 @@ void align_rotation_to_vector_fixed_pivot(float4 rotation_in,
     return;
   }
 
-  const Quaternion quat_in = Quaternion{UNPACK4(rotation_in)};
+  const Quaternion quat_in = Quaternion::from_float4(rotation_in);
   const float3 old_axis = transform_point_by_quaternion(quat_in, local_main_axis);
   const float3 pivot_axis = transform_point_by_quaternion(quat_in, local_pivot_axis);
 

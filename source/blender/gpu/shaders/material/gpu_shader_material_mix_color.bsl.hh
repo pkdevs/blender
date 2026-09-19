@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "gpu_shader_common_color_utils.glsl"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_rotation_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_rotation.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
 
 [[node]]
 void node_mix_blend(float fac, float4 col1, float4 col2, float4 &outcol)
@@ -356,5 +356,6 @@ void node_mix_clamp_value(float value, float min, float max, float &outfloat)
 [[node]]
 void node_mix_rotation(float fac, float4 rot1, float4 rot2, float4 &outrot)
 {
-  outrot = interpolate(Quaternion{UNPACK4(rot1)}, Quaternion{UNPACK4(rot2)}, fac).as_float4();
+  outrot =
+      interpolate(Quaternion::from_float4(rot1), Quaternion::from_float4(rot2), fac).as_float4();
 }
