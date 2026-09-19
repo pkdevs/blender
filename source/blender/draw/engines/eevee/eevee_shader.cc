@@ -1000,8 +1000,6 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   if (GPU_material_uniform_attributes(gpumat) != nullptr ||
       GPU_material_flag_get(gpumat, GPU_MATFLAG_LIGHT_ATTRIBUTE))
   {
-    info.additional_info("draw_object_attributes");
-
     /* Search and remove the old object attribute UBO which would creating bind point collision. */
     for (auto &resource_info : info.batch_resources_) {
       if (resource_info.bind_type == ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER &&
