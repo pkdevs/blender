@@ -2695,7 +2695,7 @@ struct CodegenContext : NodeErrorHandler {
         .var_type = type,
         .var_name = name,
         .slot = string(attr.param1.str()),
-        .dual_source = string(attr.param2.str()),
+        .dual_source = string(attr.dual_source_index.str()),
         .raster_order_group = string(attr.raster_order_group.str()),
     };
   }
