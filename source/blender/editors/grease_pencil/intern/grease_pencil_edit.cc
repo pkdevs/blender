@@ -5518,10 +5518,10 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
   GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
   boolean::CurveBooleanOpParameters op_params;
 
-  const bool keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
   op_params.boolean_mode = boolean::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
-  op_params.keep_caps = keep_caps;
+  op_params.keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
   op_params.skip_clipping_attributes = false;
+  op_params.separate_islands = RNA_boolean_get(op->ptr, "separate_islands");
 
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
   bke::greasepencil::Drawing &drawing = drawings[0].drawing;
@@ -5586,6 +5586,8 @@ static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_boolean(ot->srna, "keep_caps", false, "Keep Caps", "The keep same caps");
+  RNA_def_boolean(
+      ot->srna, "separate_islands", true, "Separate Islands", "Separate unconnected fills");
   RNA_def_enum(ot->srna,
                "boolean_mode",
                prop_boolean_modes,
