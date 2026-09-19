@@ -1164,11 +1164,8 @@ struct CodegenContext : NodeErrorHandler {
     match_if('}');
     match_if(';');
 
-    /* Don't do host shared structures. */
-    if (!decl.attributes().contains_attr("host_shared")) {
-      line(body.front());
-      builder.ss << class_default_constructor(decl, cls) + "\n";
-    }
+    line(body.front());
+    builder.ss << class_default_constructor(decl, cls) + "\n";
 
     if (cls.is_union) {
       builder.ss << "\n";
@@ -1545,10 +1542,13 @@ struct CodegenContext : NodeErrorHandler {
   {
     string str;
     for (const auto &[k, var] : scope->variables) {
-      if (var.second->type->is_srt() &&
-          var.second->type->srt_type != ResourceTableType::VERTEX_OUT)
-      {
-        str += " && defined(CREATE_INFO_" + var.second->type->identifier + ")";
+      if (var.second->type->is_srt()) {
+        if (var.second->type->srt_type == ResourceTableType::VERTEX_OUT) {
+          str += " && defined(IFACE_INFO_" + var.second->type->identifier + "_t)";
+        }
+        else {
+          str += " && defined(CREATE_INFO_" + var.second->type->identifier + ")";
+        }
       }
     }
     return str.empty() ? str : str.substr(4);
