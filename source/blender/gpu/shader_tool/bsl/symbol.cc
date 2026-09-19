@@ -38,8 +38,8 @@ struct SymbolParser : NodeErrorHandler {
     }
 
     if (parent.type() == NodeType::FuncDecl) {
-      parse_function_return_type(scope, parent);
-      parse_function_arguments(scope, parent);
+      parse_function_return_type(scope, ast::FuncDecl(parent).return_type());
+      parse_function_arguments(scope, ast::FuncDecl(parent).arguments());
     }
     if (parent.type() == NodeType::ForLoop) {
       parse_loop_arguments(scope, parent);
@@ -179,26 +179,25 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_function_return_type(SymbolScope &scope, FuncDecl decl)
+  void parse_function_return_type(SymbolScope &scope, ast::IdType return_type)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
-    fn_sym->return_type =
-        fn_sym->lookup_class(table, decl.return_type().identifier()).unwrap(this);
+    fn_sym->return_type = fn_sym->lookup_class(table, return_type.identifier()).unwrap(this);
 
     if (fn_sym->is_entry_point() && fn_sym->return_type != table.void_cls) {
-      error(decl.return_type(), Diag::EntryPointVoidReturn);
+      error(return_type, Diag::EntryPointVoidReturn);
     }
   }
 
   /* Create declaration for each function argument so name lookup will work with these.
    * Also create declaration for `this_`. */
-  void parse_function_arguments(SymbolScope &scope, FuncDecl decl)
+  void parse_function_arguments(SymbolScope &scope, FuncArgList arg_list)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
     const bool is_entry_point = fn_sym->is_entry_point();
     const auto entry_point_type = fn_sym->entry_point_type;
 
-    for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
+    for (FuncArg arg : arg_list.children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
       SymbolClass *type = scope.lookup_class(table, arg.type().identifier()).unwrap(this);
@@ -357,7 +356,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolFunction *fn = it->second.second;
         if (fn->fn_type == SymbolFunction::MEMBER) {
           SymbolVariable *var = table.var_arena.alloc(
-              &scope, fn->parent_class(), decl.front(), "this_");
+              &scope, fn->parent_class(), arg_list.front(), "this_");
           scope.variable_emplace(var);
         }
       }
@@ -615,8 +614,25 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_func_forward_decl(SymbolScope &scope, FuncForwardDecl decl)
   {
-    /* Record a function prototype. */
-    scope.function_prototypes.emplace_back(decl);
+    /* Treat the forward declaration as a standard function declaration to parse its signature. */
+    SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, decl);
+    /* Mark as forward declared so it doesn't conflict with or replace the actual definition. */
+    fn->is_defined = false;
+
+    if (scope.poi) {
+      /* Functions inherit the point of instantiation of their class. */
+      fn->poi = scope.poi;
+    }
+    /* Emplace the function into the scope so it becomes available during function lookups. */
+    bool is_overload = scope.function_emplace(fn);
+    if (is_overload && fn->is_entry_point()) {
+      error(decl.identifier(), Diag::RedefinitionOfEntryPointFunction, decl.identifier().str());
+    }
+    /* Parse the return type and arguments to correctly populate matching criteria. */
+    parse_function_return_type(*fn, decl.return_type());
+    parse_function_arguments(*fn, decl.arguments());
+    /* Record as function prototype. */
+    scope.function_prototypes.emplace_back(decl, fn);
   }
 
   SymbolFunction *parse_func_decl(SymbolScope &scope,
@@ -628,21 +644,33 @@ struct SymbolParser : NodeErrorHandler {
   {
     /* Set return type to error type since we need to parse it after template argument
      * instantiation. */
-    SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
-    if (FuncForwardDecl fdecl = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
+    SymbolFunction *fn = nullptr;
+    if (auto [fdecl, fn_ptr] = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
+      fn = fn_ptr;
       /* Modify symbol location if it is forward declared. */
       fn->loc = fdecl.front();
+      fn->is_defined = true;
+      /* Note: We discard the argument parsed by the forward declaration.
+       * They are parsed again by `parse_scope`. */
+      fn->variables.clear();
+      fn->arg_types.clear();
+      fn->arg_defaults.clear();
     }
+    else {
+      fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
+
+      bool is_overload = scope.function_emplace(fn);
+      if (is_overload && fn->is_entry_point()) {
+        error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
+      }
+    }
+
     if (poi) {
       fn->poi = poi;
     }
     else if (scope.poi) {
       /* Functions inherit the point of instantiation of their class. */
       fn->poi = scope.poi;
-    }
-    bool is_overload = scope.function_emplace(fn);
-    if (is_overload && fn->is_entry_point()) {
-      error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
     }
 
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
