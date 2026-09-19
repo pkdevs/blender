@@ -214,6 +214,7 @@ set(SRC
   nodes/node_geo_mesh_to_points.cc
   nodes/node_geo_mesh_to_sdf_grid.cc
   nodes/node_geo_mesh_to_volume.cc
+  nodes/node_geo_mesh_volume.cc
   nodes/node_geo_mesh_topology_corners_of_edge.cc
   nodes/node_geo_mesh_topology_corners_of_face.cc
   nodes/node_geo_mesh_topology_corners_of_vertex.cc
