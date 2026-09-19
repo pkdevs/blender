@@ -903,10 +903,9 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
   Set<bPoseChannel *> starting_bone_selection;
 
   for (Object *ob : objects) {
-    for (bPoseChannel &pchan : ob->pose->chanbase) {
-      if (pchan.flag & POSE_SELECTED) {
-        starting_bone_selection.add(&pchan);
-      }
+    Set<bPoseChannel *> selected_pose_bones = get_selected_pose_bones(*ob);
+    for (bPoseChannel *pchan : selected_pose_bones) {
+      starting_bone_selection.add(pchan);
     }
   }
 
