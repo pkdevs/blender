@@ -982,7 +982,7 @@ float derivative_scale_get([[resource_table]] KernelGlobals &kg)
 #  endif
 #endif
 
-float attr_load_temperature_post(float attr)
+float attr_load_temperature_post([[resource_table]] KernelGlobals &kg, float attr)
 {
 #ifdef GRID_ATTRIBUTES_LOAD_POST
   /* Bring the value into standard range without having to modify the grid values */
@@ -990,7 +990,7 @@ float attr_load_temperature_post(float attr)
 #endif
   return attr;
 }
-float4 attr_load_color_post(float4 attr)
+float4 attr_load_color_post([[resource_table]] KernelGlobals &kg, float4 attr)
 {
 #ifdef GRID_ATTRIBUTES_LOAD_POST
   /* Density is premultiplied for interpolation, divide it out here. */
@@ -1017,7 +1017,7 @@ float4 attr_load_color_post(float4 attr)
 #  define GSPLAT_ATTRIBUTES_LOAD_POST
 #endif
 
-float4 attr_load_radiance_post(float4 attr)
+float4 attr_load_radiance_post([[resource_table]] KernelGlobals & /*kg*/, float4 attr)
 {
 #ifdef GSPLAT_ATTRIBUTES_LOAD_POST
   /* Radiance is packed as 2xfp16, unpack it from this representation. */
