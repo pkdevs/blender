@@ -578,6 +578,7 @@ set(GLSL_SRC
   intern/shaders/draw_gsplat.bsl.hh
   intern/shaders/draw_gsplat_lib.bsl.hh
   intern/shaders/draw_intersect_lib.glsl
+  intern/shaders/draw_intersect.bsl.hh
   intern/shaders/draw_math_geom_lib.glsl
   intern/shaders/draw_model_lib.glsl
   intern/shaders/draw_model.bsl.hh
