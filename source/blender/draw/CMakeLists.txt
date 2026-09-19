@@ -589,6 +589,7 @@ set(GLSL_SRC
   intern/shaders/draw_view_lib.glsl
   intern/shaders/draw_view.bsl.hh
   intern/shaders/draw_view_reconstruction_lib.glsl
+  intern/shaders/draw_viewlayer.bsl.hh
   intern/shaders/draw_visibility_comp.glsl
   intern/shaders/draw_volume.bsl.hh
 
