@@ -835,20 +835,26 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     }
   };
 
-  const vector<string> trig_unary = {"radians",
-                                     "degrees",
-                                     "sin",
-                                     "cos",
-                                     "tan",
-                                     "asin",
-                                     "acos",
-                                     "atan",
-                                     "sinh",
-                                     "cosh",
-                                     "tanh",
-                                     "asinh",
-                                     "acosh",
-                                     "atanh"};
+  const vector<string> trig_unary = {
+      "radians",
+      "degrees",
+      "sin",
+      "cos",
+      "tan",
+      "asin",
+      "acos",
+      "atan",
+      "sinh",
+      "cosh",
+      "tanh",
+      "asinh",
+      "acosh",
+      "atanh",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "sinf",
+      "cosf",
+      "tanf",
+  };
   for (const auto &name : trig_unary) {
     add_unary(name, f_types);
   }
