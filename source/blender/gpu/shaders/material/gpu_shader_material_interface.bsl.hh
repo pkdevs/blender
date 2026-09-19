@@ -34,10 +34,12 @@ enum eObjectInfoFlag : uint32_t {
   OBJECT_NO_INFO = ~OBJECT_HOLDOUT
 };
 
-#define RAY_TYPE_CAMERA 0
-#define RAY_TYPE_SHADOW 1
-#define RAY_TYPE_DIFFUSE 2
-#define RAY_TYPE_GLOSSY 3
+enum RayPipelineType : uint32_t {
+  RAY_TYPE_CAMERA,
+  RAY_TYPE_SHADOW,
+  RAY_TYPE_DIFFUSE,
+  RAY_TYPE_GLOSSY,
+};
 
 /* Expected members of ViewMatrices. */
 struct ViewMatrices {
