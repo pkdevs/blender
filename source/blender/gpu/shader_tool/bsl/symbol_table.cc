@@ -1079,6 +1079,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       functions.push_back({type, "textureGrad", {sampler, coord_type, deriv_type, deriv_type}});
       functions.push_back({icoord_type, "textureSize", {sampler, int_cls}});
       functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
+      functions.push_back({type, "texelFetchExtend", {sampler, icoord_type, int_cls}});
     }
 
     vector<tuple<SymbolClass *, int>> images = {
