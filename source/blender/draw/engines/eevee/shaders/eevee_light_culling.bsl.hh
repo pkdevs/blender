@@ -209,7 +209,7 @@ void zbin_main([[resource_table]] ZBinning &srt,
                [[resource_table]] const draw::View &views,
                [[local_invocation_id]] const uint3 local_id)
 {
-  constexpr uint zbin_iter = CULLING_ZBIN_COUNT / CULLING_ZBIN_GROUP_SIZE;
+  constexpr uint zbin_iter = uint(CULLING_ZBIN_COUNT / CULLING_ZBIN_GROUP_SIZE);
   const uint zbin_local = local_id.x * zbin_iter;
 
   for (uint i = 0u, l = zbin_local; i < zbin_iter; i++, l++) {

@@ -124,7 +124,7 @@ struct Reader {
 #if defined(GPU_NVIDIA) && defined(GPU_OPENGL)
     /* WORKAROUND: Compiler bug where the loads are somehow invalid inside the ray tile
      * classification shader. */
-    layer = min(layer, 9999);
+    layer = min(layer, 9999u);
 #endif
     return texelFetch(gbuf_closure_tx, int3(texel, int(layer)), 0);
   }
@@ -134,7 +134,7 @@ struct Reader {
 #if defined(GPU_NVIDIA) && defined(GPU_OPENGL)
     /* WORKAROUND: Compiler bug where the loads are somehow invalid inside the ray tile
      * classification shader. */
-    layer = min(layer, 9999);
+    layer = min(layer, 9999u);
 #endif
     return texelFetch(gbuf_normal_tx, int3(texel, int(layer)), 0);
   }

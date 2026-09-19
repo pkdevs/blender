@@ -104,7 +104,7 @@ void surf_shadow(
 
   /* Using bitwise ops is way faster than integer ops. */
   constexpr int page_shift = SHADOW_PAGE_LOD;
-  constexpr int page_mask = ~(0xFFFFFFFF << SHADOW_PAGE_LOD);
+  constexpr int page_mask = int(~(0xFFFFFFFFu << SHADOW_PAGE_LOD));
 
   int2 tile_co = texel_co >> page_shift;
   int2 texel_page = texel_co & page_mask;

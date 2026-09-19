@@ -57,7 +57,7 @@ float3 volume_shadow([[resource_table]] const Uniform &uni,
                      LightVector lv,
                      sampler3D extinction_tx)
 {
-  if (uni.uniform_buf.volumes.shadow_steps == 0) {
+  if (uni.uniform_buf.volumes.shadow_steps == 0.0f) {
     return float3(1.0f);
   }
 

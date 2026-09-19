@@ -252,10 +252,20 @@ void closure_weights_reset([[resource_table]] KernelGlobals &kg,
 #endif
 }
 
-#define closure_base_copy(cl, in_cl) \
-  cl.color = in_cl.color; \
-  cl.N = in_cl.N; \
+template<typename T> void closure_base_copy(ClosureUndetermined &cl, T in_cl)
+{
+  cl.color = in_cl.color;
+  cl.N = in_cl.N;
   cl.type = closure_type_get(in_cl);
+}
+
+template void closure_base_copy<ClosureDiffuse>(ClosureUndetermined &, ClosureDiffuse);
+template void closure_base_copy<ClosureSubsurface>(ClosureUndetermined &, ClosureSubsurface);
+template void closure_base_copy<ClosureTranslucent>(ClosureUndetermined &, ClosureTranslucent);
+template void closure_base_copy<ClosureReflection>(ClosureUndetermined &, ClosureReflection);
+template void closure_base_copy<ClosureRefraction>(ClosureUndetermined &, ClosureRefraction);
+template void closure_base_copy<ClosureThinRefraction>(ClosureUndetermined &,
+                                                       ClosureThinRefraction);
 
 /* Single BSDFs. */
 Closure closure_eval(ShadingData &sd, ClosureDiffuse diffuse)
@@ -587,7 +597,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
                                        64,
                                        jitter,
                                        raycast.object_id_tx,
-                                       self_only ? self_id : 0,
+                                       self_only ? self_id : 0u,
                                        hit_uv);
       if (result >= 0.0f) {
         is_hit = true;

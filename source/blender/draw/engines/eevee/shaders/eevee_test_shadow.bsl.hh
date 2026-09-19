@@ -32,7 +32,7 @@ void set_clipmap_base_offset(LightData &light, int2 clipmap_base_offset)
 }
 
 [[compute, local_size(1)]]
-void main()
+void eevee_test_shadows([[resource_table]] [[maybe_unused]] const ShaderTestOutput &srt)
 {
   TEST(eevee_shadow, DirectionalMemberSet)
   {

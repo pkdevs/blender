@@ -763,9 +763,15 @@ class TestAlloc {
 
 static void test_eevee_shadow_alloc()
 {
-  TestAlloc(SHADOW_MAX_PAGE);
-  TestAlloc(1);
-  TestAlloc(0);
+  {
+    TestAlloc test(SHADOW_MAX_PAGE);
+  }
+  {
+    TestAlloc test(1);
+  }
+  {
+    TestAlloc test(0);
+  }
 }
 DRAW_TEST(eevee_shadow_alloc)
 
