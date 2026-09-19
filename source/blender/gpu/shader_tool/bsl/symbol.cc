@@ -511,7 +511,8 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      sym->value = enum_last_val + ConstexprValue(1);
+      /* Note: Add unsigned to not change the type of the ConstexprValue. */
+      sym->value = enum_last_val + ConstexprValue(1u);
     }
 
     if (scope.variable_emplace(sym)) {
