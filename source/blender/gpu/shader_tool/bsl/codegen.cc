@@ -935,7 +935,7 @@ struct CodegenContext : NodeErrorHandler {
       if (local_var.is_valid()) {
         if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
-          return ConstexprError();
+          return ConstexprError(0);
         }
         /* Assign with the correct type cast. */
         switch (op_type) {
@@ -955,7 +955,7 @@ struct CodegenContext : NodeErrorHandler {
       if (local_var.is_valid()) {
         if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
-          return ConstexprError();
+          return ConstexprError(0);
         }
         Node op = local_var.next();
         if (op.type() == NodeType::Op) {
@@ -964,7 +964,7 @@ struct CodegenContext : NodeErrorHandler {
           auto result = table.expr_type_analysis(scope, node).unwrap(this);
           if (!result.is_constexpr()) {
             error(expr, Diag::UnrolledLoopNotConstexpr, var->identifier);
-            return ConstexprError();
+            return ConstexprError(0);
           }
 
 #ifdef _MSC_VER
@@ -987,7 +987,7 @@ struct CodegenContext : NodeErrorHandler {
             case AssignDiv:
               if (contains_zero(result.value)) {
                 error(expr, Diag::ConstexprDivisionByZero);
-                return ConstexprError();
+                return ConstexprError(0);
               }
               return var->value /= result.value;
             default:
@@ -1000,7 +1000,7 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
     error(expr, Diag::UnrolledLoopInvalidExpression, var->identifier);
-    return ConstexprError();
+    return ConstexprError(0);
   }
 
   void for_loop(ForLoop stmt, SymbolScope &scope)

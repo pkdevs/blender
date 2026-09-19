@@ -47,7 +47,7 @@ struct SymbolVariable : Symbol {
   ast::Expr reference_value = {};
 
   /* Value if constexpr. */
-  ConstexprValue value = ConstexprError();
+  ConstexprValue value = ConstexprError(0);
 
   ResourceType res_type = ResourceType::NONE;
 

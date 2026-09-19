@@ -127,8 +127,6 @@ struct ConstexprValue {
 
   std::vector<uint32_t> values = {0};
 
-  ConstexprValue() = default;
-
   explicit ConstexprValue(int32_t s) : type_(INT1), values({uint32_t(s)}) {}
   explicit ConstexprValue(uint32_t s) : type_(UINT1), values({s}) {}
   explicit ConstexprValue(bool s) : type_(BOOL1), values({s}) {}
@@ -285,7 +283,7 @@ struct ConstexprValue {
   {
     const int dst_len = std::max(lhs.comp_len(), rhs.comp_len());
     const int dst_comp = is_bool_result ? BOOL : std::max(lhs.comp_type(), rhs.comp_type());
-    ConstexprValue r;
+    ConstexprValue r{0};
     /* Type promotion. */
     r.type_ = ConstexprValue::Type(dst_comp | dst_len);
     r.values.resize(r.comp_len());
