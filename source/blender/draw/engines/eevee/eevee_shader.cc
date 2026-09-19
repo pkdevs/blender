@@ -742,7 +742,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.define("MAT_VOLUME");
           info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
           info.compilation_constant(Type::bool_t, "is_volume_object", false);
-          info.compilation_constant(Type::bool_t, "is_world", true);
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
            * pipeline. */
           info.fragment_source("eevee_surf_volume.bsl.hh");
@@ -833,7 +832,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.compilation_constant(Type::bool_t,
                                     "is_volume_object",
                                     geometry_type == eMaterialGeometry::MAT_GEOM_VOLUME);
-          info.compilation_constant(Type::bool_t, "is_world", false);
           info.name_ += "_volume";
           info.define("MAT_VOLUME");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
