@@ -187,12 +187,25 @@ struct ContourEdge {
   int input_edge{-1};
   /** Corresponding input face index in input.face_offsets, or -1 if from input.edge or cap. */
   int input_face{-1};
-  /** 0 for Side 0 (forward / inner), 1 for Side 1 (backward / outer), -1 for cap. */
+  /** 0 for Side 0 (forward / inner), 1 for Side 1 (backward / outer), -1 for cap, -2 for seam (zero-length topological connector between adjacent arms at multi-arm vertices). */
   int side{-1};
   /** Next contour edge in the wavefront loop. */
   int next{-1};
   /** Previous contour edge in the wavefront loop. */
   int prev{-1};
+};
+
+struct ArmSlot {
+  /** Original index of the adjacent vertex (the arm points from/to here). */
+  int adj_orig{-1};
+  /** Original index of the source vertex of the directed arm edge. */
+  int arm_source_orig{-1};
+  /** Original index of the destination vertex of the directed arm edge. */
+  int arm_dest_orig{-1};
+  /** Side-0 slot index at this vertex for this arm. */
+  int s0{-1};
+  /** Side-1 slot index at this vertex for this arm. */
+  int s1{-1};
 };
 
 struct ContourSequences {
@@ -201,6 +214,19 @@ struct ContourSequences {
   Map<int2, int> edge_by_verts;
   /** Loops of contour edge indices. */
   Vector<Vector<int>> loops;
+  /** Number of original input vertices. */
+  int orig_verts_num{0};
+  /** Total number of contour vertex slots (>= 2 * orig_verts_num). */
+  int total_slots_num{0};
+  /** Maps each slot index to its original input vertex index.
+   * Slots 0..N-1 map to themselves; slots N..2N-1 map to (slot - N);
+   * fresh slots >= 2N map to the multi-arm vertex they belong to. */
+  Vector<int> slot_orig;
+  /** Maps each slot index to its side (0 or 1). */
+  Vector<int> slot_side;
+  /** Per-vertex CCW-sorted arm slots for multi-arm vertices.
+   * Empty for single-arm (passthrough or degree-1) vertices. */
+  Array<Vector<ArmSlot>> multi_arm_slots;
 };
 
 /** Print a description of \a contours to \a os. */
@@ -697,12 +723,15 @@ static Array<double2> compute_contour_edge_normals(const ContourSequences &conto
                                                    const Span<double2> vert_pos,
                                                    const StraightSkeletonInput &input)
 {
-  const int orig_verts_num = int(input.vert.size());
   const int contour_edges_num = int(contours.edges.size());
   Array<double2> normals(contour_edges_num, double2(0.0, 0.0));
 
   for (const int cei : IndexRange(contour_edges_num)) {
     const ContourEdge &ce = contours.edges[cei];
+    if (ce.side == -2) {
+      /* Seam edge is zero-length; its outward normal is zero. */
+      continue;
+    }
     if (ce.side == -1) {
       /* 0-length cap edge. Outward normal is along or opposite input edge direction. */
       const int ei = ce.input_edge;
@@ -713,7 +742,7 @@ static Array<double2> compute_contour_edge_normals(const ContourSequences &conto
       if (len > 1e-14) {
         d /= len;
       }
-      if ((ce.start % orig_verts_num) == v) {
+      if (contours.slot_orig[ce.start] == v) {
         normals[cei] = d;
       }
       else {
@@ -721,6 +750,9 @@ static Array<double2> compute_contour_edge_normals(const ContourSequences &conto
       }
     }
     else {
+      if (ce.start < 0 || ce.start >= vert_pos.size() || ce.end < 0 || ce.end >= vert_pos.size()) {
+        std::cout << "ERROR: ce.start=" << ce.start << " ce.end=" << ce.end << " vert_pos.size()=" << vert_pos.size() << " ce.side=" << ce.side << "\n";
+      }
       /* Directed edge is start -> end. Inward (left) normal is (-dy, dx) / length. */
       const double2 p_start = vert_pos[ce.start];
       const double2 p_end = vert_pos[ce.end];
@@ -758,9 +790,26 @@ static Array<double2> compute_kinetic_velocities(const ContourSequences &contour
     }
   }
 
+  /* For bisector computation, follow through any zero-length seam edge
+   * (side == -2) to find the adjacent wavefront edge. */
+  auto effective_incoming = [&](const int slot) -> int {
+    const int cei = incoming_edge[slot];
+    if (cei != -1 && contours.edges[cei].side == -2) {
+      return incoming_edge[contours.edges[cei].start];
+    }
+    return cei;
+  };
+  auto effective_outgoing = [&](const int slot) -> int {
+    const int cei = outgoing_edge[slot];
+    if (cei != -1 && contours.edges[cei].side == -2) {
+      return outgoing_edge[contours.edges[cei].end];
+    }
+    return cei;
+  };
+
   for (const int vi : IndexRange(total_verts_num)) {
-    const int in_ei = incoming_edge[vi];
-    const int out_ei = outgoing_edge[vi];
+    const int in_ei = effective_incoming(vi);
+    const int out_ei = effective_outgoing(vi);
     if (in_ei == -1 || out_ei == -1) {
       continue;
     }
@@ -1757,9 +1806,117 @@ static void draw_triangulation_svg(const TriangleEdges &tri,
 static void build_contour_sequences(const StraightSkeletonInput &input,
                                     ContourSequences &r_contours)
 {
-  const int orig_verts_num = int(input.vert.size());
+  const int N = int(input.vert.size());
+  r_contours.orig_verts_num = N;
 
-  /* 1. Closed face boundaries. */
+  Array<int> out_count(N, 0);
+  Array<int> in_count(N, 0);
+  for (const int fi : input.face_offsets.index_range()) {
+    const IndexRange r = input.face_offsets[fi];
+    const int nv = int(r.size());
+    for (const int k : IndexRange(nv)) {
+      const int u = input.face_vert_indices[r[k]];
+      const int v = input.face_vert_indices[r[(k + 1) % nv]];
+      out_count[u]++;
+      in_count[v]++;
+    }
+  }
+  for (const int ei : input.edge.index_range()) {
+    out_count[input.edge[ei][0]]++;
+    in_count[input.edge[ei][1]]++;
+  }
+
+  Array<bool> needs_sep(N, false);
+  for (const int v : IndexRange(N)) {
+    needs_sep[v] = (out_count[v] >= 2 || in_count[v] >= 2);
+  }
+
+  r_contours.slot_orig.resize(2 * N);
+  r_contours.slot_side.resize(2 * N);
+  for (const int i : IndexRange(N)) {
+    r_contours.slot_orig[i] = i;
+    r_contours.slot_side[i] = 0;
+    r_contours.slot_orig[i + N] = i;
+    r_contours.slot_side[i + N] = 1;
+  }
+
+  Map<int2, int2> vert_adj_to_slots;
+  r_contours.multi_arm_slots.reinitialize(N);
+
+  struct ArmInfo {
+    int adj_v;
+    bool outgoing;
+  };
+
+  for (const int v : IndexRange(N)) {
+    if (!needs_sep[v]) {
+      continue;
+    }
+
+    Vector<ArmInfo> arms;
+    for (const int fi : input.face_offsets.index_range()) {
+      const IndexRange r = input.face_offsets[fi];
+      const int nv = int(r.size());
+      for (const int k : IndexRange(nv)) {
+        const int u = input.face_vert_indices[r[k]];
+        const int w = input.face_vert_indices[r[(k + 1) % nv]];
+        if (u == v) {
+          arms.append({w, true});
+        }
+        if (w == v) {
+          arms.append({u, false});
+        }
+      }
+    }
+    for (const int ei : input.edge.index_range()) {
+      const int u = input.edge[ei][0];
+      const int w = input.edge[ei][1];
+      if (u == v) {
+        arms.append({w, true});
+      }
+      if (w == v) {
+        arms.append({u, false});
+      }
+    }
+
+    const double2 pv = input.vert[v];
+    std::sort(arms.begin(), arms.end(), [&](const ArmInfo &a, const ArmInfo &b) {
+      const double2 da = input.vert[a.adj_v] - pv;
+      const double2 db = input.vert[b.adj_v] - pv;
+      return std::atan2(da.y, da.x) < std::atan2(db.y, db.x);
+    });
+
+    for (const ArmInfo &arm : arms) {
+      const int s0_slot = int(r_contours.slot_orig.size());
+      const int s1_slot = s0_slot + 1;
+      r_contours.slot_orig.append(v);
+      r_contours.slot_side.append(0);
+      r_contours.slot_orig.append(v);
+      r_contours.slot_side.append(1);
+
+      vert_adj_to_slots.add_overwrite(int2(v, arm.adj_v), int2(s0_slot, s1_slot));
+
+      ArmSlot as;
+      as.adj_orig = arm.adj_v;
+      as.arm_source_orig = arm.outgoing ? v : arm.adj_v;
+      as.arm_dest_orig = arm.outgoing ? arm.adj_v : v;
+      as.s0 = s0_slot;
+      as.s1 = s1_slot;
+      r_contours.multi_arm_slots[v].append(as);
+    }
+  }
+
+  r_contours.total_slots_num = int(r_contours.slot_orig.size());
+
+  auto get_s0 = [&](const int v, const int adj_v) -> int {
+    if (!needs_sep[v]) return v;
+    return vert_adj_to_slots.lookup(int2(v, adj_v))[0];
+  };
+  auto get_s1 = [&](const int v, const int adj_v) -> int {
+    if (!needs_sep[v]) return v + N;
+    return vert_adj_to_slots.lookup(int2(v, adj_v))[1];
+  };
+
   const Span<int> fvi = input.face_vert_indices;
   for (const int fi : input.face_offsets.index_range()) {
     const IndexRange r = input.face_offsets[fi];
@@ -1769,17 +1926,17 @@ static void build_contour_sequences(const StraightSkeletonInput &input,
       const int v = fvi[r[(k + 1) % face_verts_num]];
 
       ContourEdge ce0;
-      ce0.start = u;
-      ce0.end = v;
+      ce0.start = get_s0(u, v);
+      ce0.end = get_s0(v, u);
       ce0.input_face = fi;
       ce0.side = 0;
       const int idx0 = int(r_contours.edges.size());
       r_contours.edges.append(ce0);
-      r_contours.edge_by_verts.add(int2(u, v), idx0);
+      r_contours.edge_by_verts.add(int2(ce0.start, ce0.end), idx0);
 
       ContourEdge ce1;
-      ce1.start = v + orig_verts_num;
-      ce1.end = u + orig_verts_num;
+      ce1.start = get_s1(v, u);
+      ce1.end = get_s1(u, v);
       ce1.input_face = fi;
       ce1.side = 1;
       const int idx1 = int(r_contours.edges.size());
@@ -1788,23 +1945,22 @@ static void build_contour_sequences(const StraightSkeletonInput &input,
     }
   }
 
-  /* 2. Explicit line segment edges. */
   for (const int ei : input.edge.index_range()) {
     const int u = input.edge[ei][0];
     const int v = input.edge[ei][1];
 
     ContourEdge ce0;
-    ce0.start = u;
-    ce0.end = v;
+    ce0.start = get_s0(u, v);
+    ce0.end = get_s0(v, u);
     ce0.input_edge = ei;
     ce0.side = 0;
     const int idx0 = int(r_contours.edges.size());
     r_contours.edges.append(ce0);
-    r_contours.edge_by_verts.add(int2(u, v), idx0);
+    r_contours.edge_by_verts.add(int2(ce0.start, ce0.end), idx0);
 
     ContourEdge ce1;
-    ce1.start = v + orig_verts_num;
-    ce1.end = u + orig_verts_num;
+    ce1.start = get_s1(v, u);
+    ce1.end = get_s1(u, v);
     ce1.input_edge = ei;
     ce1.side = 1;
     const int idx1 = int(r_contours.edges.size());
@@ -1812,75 +1968,89 @@ static void build_contour_sequences(const StraightSkeletonInput &input,
     r_contours.edge_by_verts.add(int2(ce1.start, ce1.end), idx1);
   }
 
-  /* 3. 0-length cap edges at free ends. */
-  Array<int> degree(orig_verts_num, 0);
-  Array<int> last_edge(orig_verts_num, -1);
+  Array<int> wire_degree(N, 0);
+  Array<int> last_wire_edge(N, -1);
   for (const int ei : input.edge.index_range()) {
     const int u = input.edge[ei][0];
     const int v = input.edge[ei][1];
-    degree[u]++;
-    last_edge[u] = ei;
-    degree[v]++;
-    last_edge[v] = ei;
+    wire_degree[u]++;
+    last_wire_edge[u] = ei;
+    wire_degree[v]++;
+    last_wire_edge[v] = ei;
   }
-  Array<bool> in_face(orig_verts_num, false);
   for (const int vi : input.face_vert_indices) {
-    in_face[vi] = true;
+    wire_degree[vi] += 2;
   }
 
-  for (const int vi : IndexRange(orig_verts_num)) {
-    if (degree[vi] == 1 && !in_face[vi]) {
-      const int ei = last_edge[vi];
-      const int v = input.edge[ei][1];
-      ContourEdge cap;
-      cap.side = -1;
-      cap.input_edge = ei;
-      if (vi == v) {
-        /* Edge arrives at vi: cap goes vi -> vi + N. */
-        cap.start = vi;
-        cap.end = vi + orig_verts_num;
-      }
-      else {
-        /* Edge leaves vi: cap goes vi + N -> vi. */
-        cap.start = vi + orig_verts_num;
-        cap.end = vi;
-      }
-      const int cap_idx = int(r_contours.edges.size());
-      r_contours.edges.append(cap);
-      r_contours.edge_by_verts.add(int2(cap.start, cap.end), cap_idx);
+  for (const int vi : IndexRange(N)) {
+    if (wire_degree[vi] != 1) {
+      continue;
+    }
+    const int ei = last_wire_edge[vi];
+    const int vdest = input.edge[ei][1];
+    const int adj = (vi == vdest) ? input.edge[ei][0] : vdest;
+
+    ContourEdge cap;
+    cap.side = -1;
+    cap.input_edge = ei;
+    if (vi == vdest) {
+      cap.start = get_s0(vi, adj);
+      cap.end = get_s1(vi, adj);
+    }
+    else {
+      cap.start = get_s1(vi, adj);
+      cap.end = get_s0(vi, adj);
+    }
+    const int cap_idx = int(r_contours.edges.size());
+    r_contours.edges.append(cap);
+    r_contours.edge_by_verts.add(int2(cap.start, cap.end), cap_idx);
+  }
+
+  for (const int v : IndexRange(N)) {
+    const Vector<ArmSlot> &arms_ccw = r_contours.multi_arm_slots[v];
+    if (arms_ccw.is_empty()) {
+      continue;
+    }
+    const int k = int(arms_ccw.size());
+    for (const int i : IndexRange(k)) {
+      const ArmSlot &arm_i = arms_ccw[i];
+      const ArmSlot &arm_next = arms_ccw[(i + 1) % k];
+      const int arrival = (arm_next.arm_source_orig == v) ? arm_next.s1 : arm_next.s0;
+      const int departure = (arm_i.arm_source_orig == v) ? arm_i.s0 : arm_i.s1;
+      ContourEdge seam;
+      seam.start = arrival;
+      seam.end = departure;
+      seam.side = -2;
+      const int seam_idx = int(r_contours.edges.size());
+      r_contours.edges.append(seam);
+      r_contours.edge_by_verts.add(int2(seam.start, seam.end), seam_idx);
     }
   }
 
-  /* 4. Link contour edges into loops. */
-  Map<int, Vector<int>> outgoing_map;
+  Map<int, int> outgoing_map;
   for (const int cei : r_contours.edges.index_range()) {
-    outgoing_map.lookup_or_add_default(r_contours.edges[cei].start).append(cei);
+    outgoing_map.add_overwrite(r_contours.edges[cei].start, cei);
   }
 
   for (const int cei : r_contours.edges.index_range()) {
     const int end_v = r_contours.edges[cei].end;
-    const Vector<int> *out = outgoing_map.lookup_ptr(end_v);
-    if (out != nullptr && !out->is_empty()) {
-      r_contours.edges[cei].next = (*out)[0];
-      r_contours.edges[(*out)[0]].prev = cei;
+    const int *next = outgoing_map.lookup_ptr(end_v);
+    if (next != nullptr) {
+      r_contours.edges[cei].next = *next;
+      r_contours.edges[*next].prev = cei;
     }
   }
 
-  /* 5. Extract loops. */
   Array<bool> visited(r_contours.edges.size(), false);
   for (const int i : r_contours.edges.index_range()) {
-    if (visited[i]) {
-      continue;
-    }
+    if (visited[i]) continue;
     Vector<int> loop;
     int curr = i;
     while (!visited[curr]) {
       visited[curr] = true;
       loop.append(curr);
       curr = r_contours.edges[curr].next;
-      if (curr == -1) {
-        break;
-      }
+      if (curr == -1) break;
     }
     r_contours.loops.append(std::move(loop));
   }
@@ -1924,27 +2094,48 @@ static int choose_vertex_duplicate(const int v,
                                    const StraightSkeletonInput &input,
                                    const ContourSequences &contours)
 {
-  const int orig_verts_num = int(input.vert.size());
   const double2 pv = input.vert[v];
+  const double2 p_test = pv + dir;
 
-  /* Find incident Side 0 contour edges. */
+  if (v < 0 || v >= contours.multi_arm_slots.size()) {
+    std::cout << "ERROR in choose_vertex_duplicate: v=" << v << " size=" << contours.multi_arm_slots.size() << " orig_verts_num=" << contours.orig_verts_num << "\n";
+  }
+  const Vector<ArmSlot> &multi_arms = contours.multi_arm_slots[v];
+  if (!multi_arms.is_empty()) {
+    const double angle_dir = std::atan2(dir.y, dir.x);
+    const int k = int(multi_arms.size());
+    int floor_i = k - 1;
+    double best = -std::numeric_limits<double>::infinity();
+    for (const int i : IndexRange(k)) {
+      const double2 da = input.vert[multi_arms[i].adj_orig] - pv;
+      const double ang = std::atan2(da.y, da.x);
+      if (ang <= angle_dir && ang > best) {
+        best = ang;
+        floor_i = i;
+      }
+    }
+    const ArmSlot &arm = multi_arms[floor_i];
+    const double2 p_src = input.vert[arm.arm_source_orig];
+    const double2 p_dst = input.vert[arm.arm_dest_orig];
+    const bool is_side0 = (orient2d(p_src, p_dst, p_test) >= 0);
+    return is_side0 ? arm.s0 : arm.s1;
+  }
+
+  const int orig_verts_num = contours.orig_verts_num;
   int w_out = -1;
   int w_in = -1;
   for (const ContourEdge &ce : contours.edges) {
     if (ce.side == 0) {
       if (ce.start == v) {
-        w_out = ce.end;
+        w_out = contours.slot_orig[ce.end];
       }
       if (ce.end == v) {
-        w_in = ce.start;
+        w_in = contours.slot_orig[ce.start];
       }
     }
   }
 
-  const double2 p_test = pv + dir;
-
   if (w_out != -1 && w_in != -1) {
-    /* Corner (closed face or interior chain vertex). */
     const double2 p_out = input.vert[w_out];
     const double2 p_in = input.vert[w_in];
 
@@ -1954,26 +2145,21 @@ static int choose_vertex_duplicate(const int v,
 
     bool is_side0 = false;
     if (o_turn == 0) {
-      /* Straight line: Side 0 is left of outgoing edge. */
       is_side0 = (o_out >= 0);
     }
     else if (o_turn > 0) {
-      /* Convex corner (interior angle < 180 deg). */
       is_side0 = (o_out >= 0 && o_in >= 0);
     }
     else {
-      /* Reflex corner (interior angle > 180 deg). */
       is_side0 = (o_out >= 0 || o_in >= 0);
     }
     return is_side0 ? v : (v + orig_verts_num);
   }
   else if (w_out != -1) {
-    /* Start of chain (free end): outgoing edge v -> w_out. */
     const double2 p_out = input.vert[w_out];
     return (orient2d(pv, p_out, p_test) >= 0) ? v : (v + orig_verts_num);
   }
   else if (w_in != -1) {
-    /* End of chain (free end): incoming edge w_in -> v. */
     const double2 p_in = input.vert[w_in];
     return (orient2d(p_in, pv, p_test) >= 0) ? v : (v + orig_verts_num);
   }
@@ -1985,7 +2171,7 @@ static void rewire_kinetic_triangulation(const StraightSkeletonInput &input,
                                          TriangleEdges &triangles,
                                          const ContourSequences &contours)
 {
-  const int orig_verts_num = int(input.vert.size());
+  const int orig_verts_num = contours.orig_verts_num;
   const int initial_triangles_num = triangles.triangles_num();
 
   /* 1. Build initial edge set to know which edges existed before rewiring. */
@@ -2005,10 +2191,10 @@ static void rewire_kinetic_triangulation(const StraightSkeletonInput &input,
       const int u = triangles.start_vert(3 * ti);
       const int v = triangles.start_vert(3 * ti + 1);
       if (u >= 0) {
-        hull_verts.add(u % orig_verts_num);
+        hull_verts.add(u < int(contours.slot_orig.size()) ? contours.slot_orig[u] : u);
       }
       if (v >= 0) {
-        hull_verts.add(v % orig_verts_num);
+        hull_verts.add(v < int(contours.slot_orig.size()) ? contours.slot_orig[v] : v);
       }
     }
   }
@@ -2039,7 +2225,7 @@ static void rewire_kinetic_triangulation(const StraightSkeletonInput &input,
   Map<int2, int2> contour_by_orig;
   for (const ContourEdge &ce : contours.edges) {
     if (ce.side >= 0) {
-      contour_by_orig.add(int2(ce.start % orig_verts_num, ce.end % orig_verts_num),
+      contour_by_orig.add(int2(contours.slot_orig[ce.start], contours.slot_orig[ce.end]),
                           int2(ce.start, ce.end));
     }
   }
@@ -2108,7 +2294,8 @@ static void rewire_kinetic_triangulation(const StraightSkeletonInput &input,
       int cap_start = -1;
       int cap_end = -1;
       for (const ContourEdge &ce : contours.edges) {
-        if (ce.side == -1 && (ce.start == u || ce.end == u)) {
+        if (ce.side == -1 &&
+            (contours.slot_orig[ce.start] == u || contours.slot_orig[ce.end] == u)) {
           cap_start = ce.start;
           cap_end = ce.end;
           break;
@@ -2200,12 +2387,6 @@ class StraightSkeletonState {
   StraightSkeletonState(const StraightSkeletonInput &input)
       : epsilon(input.epsilon), input_(&input)
   {
-    const int orig_verts_num = int(input.vert.size());
-    vert_pos.resize(2 * orig_verts_num);
-    for (const int i : IndexRange(orig_verts_num)) {
-      vert_pos[i] = input.vert[i];
-      vert_pos[i + orig_verts_num] = input.vert[i];
-    }
   }
 
   void set_handle_edge_collapses(const bool val)
@@ -2326,6 +2507,13 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   /* 1. Build initial contour sequences from the input geometry (faces, edges, free-end caps). */
   build_contour_sequences(input, contours);
 
+  /* Initialize positions for all contour vertex slots.
+   * Each slot is at the same position as its original input vertex. */
+  vert_pos.resize(contours.total_slots_num);
+  for (const int i : IndexRange(contours.total_slots_num)) {
+    vert_pos[i] = input.vert[contours.slot_orig[i]];
+  }
+
   /* 2. Compute constrained Delaunay triangulation (CDT_FULL covers the convex hull). */
   meshintersect::CDT_input<double> cdt_in;
   cdt_in.vert = input.vert;
@@ -2413,14 +2601,14 @@ void StraightSkeletonState::build_initial_kinetic_triangulation(const StraightSk
   for (const int k : IndexRange(total_verts_num)) {
     KineticVertex &kv = kinetic_verts[k];
     kv.id = k;
-    kv.start_node = k % orig_verts_num;
+    kv.start_node = contours.slot_orig[k];
     kv.start_time = 0.0;
     kv.start_pos = vert_pos[k];
     kv.velocity = vert_vel[k];
     kv.end_node = -1;
     kv.end_time = std::numeric_limits<double>::infinity();
     kv.is_active = true;
-    kv.side = (k < orig_verts_num) ? 0 : 1;
+    kv.side = contours.slot_side[k];
   }
   for (const ContourEdge &ce : contours.edges) {
     if (ce.side >= 0) {
