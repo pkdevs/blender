@@ -244,6 +244,8 @@ DEF_ENUM(rna_enum_attribute_domain_with_auto_items)
 DEF_ENUM(rna_enum_geometry_component_type_items)
 DEF_ENUM(rna_enum_node_combsep_color_items)
 DEF_ENUM(rna_enum_node_socket_data_type_items)
+DEF_ENUM(rna_enum_node_grease_pencil_stroke_type_items)
+DEF_ENUM(rna_enum_node_grease_pencil_merge_mode_items)
 
 DEF_ENUM(rna_enum_node_geometry_curve_handle_side_items)
 DEF_ENUM(rna_enum_node_geometry_mesh_circle_fill_type_items)
@@ -268,6 +270,8 @@ DEF_ENUM(rna_enum_geometry_nodes_gizmo_color_items)
 DEF_ENUM(rna_enum_geometry_nodes_linear_gizmo_draw_style_items)
 
 DEF_ENUM(rna_enum_asset_import_method_items)
+
+DEF_ENUM(rna_enum_pointcloud_type_items)
 
 /* Not available to RNA pre-processing (`makesrna`).
  * Defined in editors for example. */

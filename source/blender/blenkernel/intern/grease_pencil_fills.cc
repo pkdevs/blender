@@ -75,8 +75,7 @@ std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids)
   return fill_cache;
 }
 
-std::pair<Vector<int>, Vector<int>> shapes_from_fill_ids(const VArray<int> &fill_ids,
-                                                         const int num_curves)
+ShapeData shapes_from_fill_ids(const VArray<int> &fill_ids, const int num_curves)
 {
   if (!fill_ids || fill_ids.is_empty()) {
     Vector<int> shape_map(num_curves);
@@ -85,7 +84,11 @@ std::pair<Vector<int>, Vector<int>> shapes_from_fill_ids(const VArray<int> &fill
     array_utils::fill_index_range(shape_map.as_mutable_span());
     array_utils::fill_index_range(shape_offset.as_mutable_span());
 
-    return std::pair<Vector<int>, Vector<int>>(shape_map, shape_offset);
+    ShapeData shape_data;
+    shape_data.shape_map = std::move(shape_map);
+    shape_data.shape_offsets = std::move(shape_offset);
+
+    return shape_data;
   }
 
   BLI_assert(fill_ids.size() == num_curves);
@@ -157,7 +160,11 @@ std::pair<Vector<int>, Vector<int>> shapes_from_fill_ids(const VArray<int> &fill
     }
   });
 
-  return std::pair<Vector<int>, Vector<int>>(shape_map, shape_sizes);
+  ShapeData shape_data;
+  shape_data.shape_map = std::move(shape_map);
+  shape_data.shape_offsets = std::move(shape_sizes);
+
+  return shape_data;
 }
 
 static int get_next_available_fill_id_from_max(const int max_fill_id)

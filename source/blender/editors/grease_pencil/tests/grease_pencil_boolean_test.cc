@@ -28,7 +28,7 @@
 
 namespace blender::ed::greasepencil::tests {
 
-using namespace blender::ed::greasepencil::carver;
+using namespace blender::ed::greasepencil::boolean;
 
 static void CSS_setup_style(std::ofstream &f)
 {
@@ -154,7 +154,7 @@ class SVGMapping {
 
 static void SVG_add_path(std::ofstream &f,
                          const std::string &class_name,
-                         const VArraySpan<float2> &positions,
+                         const Span<float2> &positions,
                          const GroupedSpan<int> shapes,
                          const IndexMask &shape_mask,
                          const OffsetIndices<int> points_by_curve,
@@ -263,6 +263,11 @@ static void draw_divider_end()
   f << "</div>\n";
 }
 
+static float2 project_fn(const float3 position)
+{
+  return float2(position.x, position.y);
+};
+
 static void draw_results(const std::string &label,
                          const std::string &type,
                          const bke::CurvesGeometry &src_curves,
@@ -288,35 +293,38 @@ static void draw_results(const std::string &label,
   const bke::AttributeAccessor src_attributes = src_curves.attributes();
   const bke::AttributeAccessor dst_attributes = dst_curves.attributes();
 
-  const VArray<float2> src_points = *src_attributes.lookup<float2>(".positions_2d",
-                                                                   bke::AttrDomain::Point);
-  const VArray<float2> dst_points = *dst_attributes.lookup<float2>(".positions_2d",
-                                                                   bke::AttrDomain::Point);
+  Array<float2> src_positions_2d(src_curves.points_num());
+  const Span<float3> src_positions = src_curves.positions();
+  for (const int i : src_curves.points_range()) {
+    src_positions_2d[i] = project_fn(src_positions[i]);
+  }
+
+  Array<float2> dst_positions_2d(dst_curves.points_num());
+  const Span<float3> dst_positions = dst_curves.positions();
+  for (const int i : dst_curves.points_range()) {
+    dst_positions_2d[i] = project_fn(dst_positions[i]);
+  }
+
   const VArray<int> src_fill_ids = *src_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
   const VArray<int> dst_fill_ids = *dst_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
 
-  auto [src_shape_map, src_shape_offsets] = shapes_from_fill_ids(src_fill_ids,
-                                                                 src_curves.curves_num());
-  auto [dst_shape_map, dst_shape_offsets] = shapes_from_fill_ids(dst_fill_ids,
-                                                                 dst_curves.curves_num());
+  const ShapeData src_shape_data = shapes_from_fill_ids(src_fill_ids, src_curves.curves_num());
+  const ShapeData dst_shape_data = shapes_from_fill_ids(dst_fill_ids, dst_curves.curves_num());
 
-  const GroupedSpan<int> src_shapes = GroupedSpan<int>(src_shape_offsets.as_span(),
-                                                       src_shape_map.as_span());
-  const GroupedSpan<int> dst_shapes = GroupedSpan<int>(dst_shape_offsets.as_span(),
-                                                       dst_shape_map.as_span());
+  const GroupedSpan<int> src_shapes = src_shape_data.shapes();
+  const GroupedSpan<int> dst_shapes = dst_shape_data.shapes();
 
   IndexMaskMemory memory;
   const IndexMask subject_shapes = clipping_shapes.complement(src_shapes.index_range(), memory);
 
-  BLI_assert(src_points.is_span());
-  const SVGMapping mapping = SVGMapping(*bounds::min_max(src_points.get_internal_span()));
+  const SVGMapping mapping = SVGMapping(*bounds::min_max(src_positions_2d.as_span()));
 
   f << "<div>\n";
   f << "<svg width=\"" << mapping.view_width << "\" height=\"" << mapping.view_height << "\">\n";
 
   SVG_add_path(f,
                type + "-A",
-               src_points,
+               src_positions_2d,
                src_shapes,
                subject_shapes,
                src_points_by_curve,
@@ -324,7 +332,7 @@ static void draw_results(const std::string &label,
                mapping);
   SVG_add_path(f,
                type + "-B",
-               src_points,
+               src_positions_2d,
                src_shapes,
                clipping_shapes,
                src_points_by_curve,
@@ -333,7 +341,7 @@ static void draw_results(const std::string &label,
 
   SVG_add_path(f,
                type + "-C",
-               dst_points,
+               dst_positions_2d,
                dst_shapes,
                dst_shapes.index_range(),
                dst_points_by_curve,
@@ -367,10 +375,10 @@ static bke::CurvesGeometry create_test_curves(const Span<int> offsets,
   fill_id_writer.span.copy_from(fill_ids);
   fill_id_writer.finish();
 
-  bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-  pos_writer.span.copy_from(points);
-  pos_writer.finish();
+  MutableSpan<float3> positions = curves.positions_for_write();
+  for (const int i : curves.points_range()) {
+    positions[i] = float3(points[i], 0.0f);
+  }
 
   return curves;
 }
@@ -378,8 +386,12 @@ static bke::CurvesGeometry create_test_curves(const Span<int> offsets,
 static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
                                         const Array<Vector<float2>> &expected_points)
 {
-  const VArray<float2> positions = *dst_curves.attributes().lookup<float2>(".positions_2d",
-                                                                           bke::AttrDomain::Point);
+  Array<float2> dst_positions_2d(dst_curves.points_num());
+  const Span<float3> dst_positions = dst_curves.positions();
+  for (const int i : dst_curves.points_range()) {
+    dst_positions_2d[i] = project_fn(dst_positions[i]);
+  }
+
   const OffsetIndices<int> points_by_curve = dst_curves.points_by_curve();
 
   EXPECT_EQ(dst_curves.curves_num(), expected_points.size());
@@ -392,8 +404,8 @@ static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
     total_size += expected_points[i].size();
   }
 
-  EXPECT_EQ(positions.size(), total_size);
-  if (positions.size() != total_size) {
+  EXPECT_EQ(dst_positions_2d.size(), total_size);
+  if (dst_positions_2d.size() != total_size) {
     return;
   }
 
@@ -408,7 +420,7 @@ static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
     }
 
     for (const int i : points.index_range()) {
-      const float2 &point = positions[points[i]];
+      const float2 &point = dst_positions_2d[points[i]];
       const float2 &expected_point = expected_sub_points[i];
 
       EXPECT_NEAR(point.x, expected_point.x, 1e-4);
@@ -417,22 +429,23 @@ static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
   }
 }
 
-static bke::CurvesGeometry test_curve_boolean(const ed::greasepencil::carver::Operation opt,
+static bke::CurvesGeometry test_curve_boolean(const Operation opt,
                                               const bke::CurvesGeometry &src_curves,
                                               const Span<int> fill_ids,
                                               const IndexMask &clipping_shapes)
 {
   using namespace bke::greasepencil;
-  carver::CurveBooleanOpParameters op_params;
+  CurveBooleanOpParameters op_params;
   op_params.boolean_mode = opt;
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;
+  op_params.separate_islands = false;
 
-  auto [shape_map, shape_offsets] = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
-                                                         src_curves.curves_num());
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+  const ShapeData shapes_data = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
+                                                     src_curves.curves_num());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
 
-  return curve_boolean(op_params, src_curves, shapes, clipping_shapes);
+  return curve_boolean(op_params, src_curves, project_fn, shapes, clipping_shapes);
 }
 
 class GreasePencilBooleanTest : public bke::BlenderGTestBase {};

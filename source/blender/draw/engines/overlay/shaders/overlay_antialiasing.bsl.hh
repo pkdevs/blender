@@ -13,14 +13,12 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 #include "infos/overlay_common_infos.hh"
 #include "overlay_common_lib.glsl"
 #include "overlay_shader_shared.hh"
-
-SHADER_LIBRARY_CREATE_INFO(draw_globals)
 
 namespace overlay::antialiasing {
 
@@ -214,6 +212,8 @@ struct FragOut {
                             [[resource_table]] Resources &srt,
                             [[out]] FragOut &frag)
 {
+  SHADER_LIBRARY_CREATE_INFO(draw_globals);
+
   const int2 texel = int2(frag_coord.xy);
 
   /* Fetch center pixel. */

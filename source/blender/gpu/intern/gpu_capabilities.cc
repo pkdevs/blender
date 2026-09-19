@@ -164,6 +164,11 @@ bool GPU_hdr_support()
   return GCaps.hdr_viewport_support;
 }
 
+bool GPU_multi_viewport_support()
+{
+  return GCaps.multi_viewport_support;
+}
+
 bool GPU_stencil_export_support()
 {
   return GCaps.stencil_export_support;
@@ -172,6 +177,11 @@ bool GPU_stencil_export_support()
 bool GPU_ray_query_support()
 {
   return GCaps.ray_query_support;
+}
+
+bool GPU_vertex_pipeline_stores_and_atomics_support()
+{
+  return GCaps.vertex_pipeline_stores_and_atomics_support;
 }
 
 int GPU_max_shader_storage_buffer_bindings()

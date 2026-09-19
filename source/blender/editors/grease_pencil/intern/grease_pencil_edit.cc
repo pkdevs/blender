@@ -2581,6 +2581,7 @@ static struct Clipboard {
    * clipboard into another object. */
   Vector<std::pair<uint, int>> materials;
   int materials_in_source_num;
+  ListBaseT<bDeformGroup> defnames;
 } *grease_pencil_clipboard = nullptr;
 
 /** The clone brush accesses the clipboard from multiple threads. Protect from parallel access. */
@@ -2756,6 +2757,8 @@ static wmOperatorStatus grease_pencil_copy_strokes_exec(bContext *C, wmOperator 
     const Material *material = BKE_object_material_get(object, material_index + 1);
     clipboard.materials.append({material ? material->id.session_uid : 0, material_index});
   }
+
+  BKE_defgroup_copy_list(&clipboard.defnames, BKE_id_defgroup_list_get(object->data));
 
   /* Report the numbers. */
   if (selection_domain == bke::AttrDomain::Curve) {
@@ -2984,6 +2987,18 @@ static wmOperatorStatus grease_pencil_paste_strokes_exec(bContext *C, wmOperator
   }
   else {
     BLI_assert_unreachable();
+  }
+
+  if (!clipboard.defnames.is_empty()) {
+    ListBaseT<bDeformGroup> *deflist = BKE_id_defgroup_list_get_mutable(object->data);
+    for (const bDeformGroup &defgroup : clipboard.defnames) {
+      if (BKE_defgroup_name_index(deflist, defgroup.name) != -1) {
+        continue;
+      }
+      bDeformGroup *new_group = BKE_defgroup_duplicate(&defgroup);
+      BLI_addtail(deflist, new_group);
+    }
+    clipboard.defnames.free_no_destruct();
   }
 
   DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
@@ -5072,7 +5087,9 @@ static void GREASE_PENCIL_OT_set_corner_type(wmOperatorType *ot)
 /** \name Set Stroke Mode Operator
  * \{ */
 
+namespace {
 enum class StrokeType : int8_t { Stroke = 0, Fill = 1, Both = 2 };
+}
 
 static wmOperatorStatus grease_pencil_set_stroke_type_exec(bContext *C, wmOperator *op)
 {
@@ -5488,124 +5505,6 @@ static void GREASE_PENCIL_OT_separate_fills(wmOperatorType *ot)
 
 /** \} */
 
-/* -------------------------------------------------------------------- */
-/** \name Stroke Boolean Operator
- * \{ */
-
-static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperator *op)
-{
-  const Scene *scene = CTX_data_scene(C);
-  const ARegion *region = CTX_wm_region(C);
-  const RegionView3D *rv3d = CTX_wm_region_view3d(C);
-  Object *object = CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
-  carver::CurveBooleanOpParameters op_params;
-
-  const bool keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
-  op_params.boolean_mode = carver::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
-  op_params.keep_caps = keep_caps;
-  op_params.skip_clipping_attributes = false;
-  // const bool individual = RNA_boolean_get(op->ptr, "individual");
-
-  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
-  bke::greasepencil::Drawing &drawing = drawings[0].drawing;
-  bke::greasepencil::Drawing drawing_out = drawing;
-
-  bke::CurvesGeometry src = drawing_out.strokes();
-  const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
-  const Span<float3> positions = src.positions();
-  const Span<float3> normals = drawing_out.curve_plane_normals();
-  const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
-  const float4x4 layer_to_world = layer.to_world_space(*object);
-  const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d, layer_to_world);
-
-  /* Compute screen space positions. */
-  Array<float2> screen_space_positions(src.points_num());
-  threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
-    for (const int src_point : src_points) {
-      screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-          region, positions[src_point], projection);
-    }
-  });
-
-  Array<float4> normal_planes(src.curves_num());
-  threading::parallel_for(src.curves_range(), 4096, [&](const IndexRange src_curves) {
-    for (const int src_curve : src_curves) {
-      const float3 &normal = normals[src_curve];
-      const IndexRange points = src_points_by_curve[src_curve];
-      const float3 &point = positions[points.first()];
-      normal_planes[src_curve] = float4(normal, -math::dot(point, normal));
-    }
-  });
-
-  bke::SpanAttributeWriter<float2> pos_writer =
-      src.attributes_for_write().lookup_or_add_for_write_span<float2>(".positions_2d",
-                                                                      bke::AttrDomain::Point);
-
-  pos_writer.span.copy_from(screen_space_positions);
-  pos_writer.finish();
-
-  const VArray<int> fill_ids = *src.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
-
-  auto [shape_map, shape_offsets] = blender::bke::greasepencil::shapes_from_fill_ids(
-      fill_ids, src.curves_num());
-
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
-  const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
-
-  bke::CurvesGeometry dst_strokes = carver::curve_boolean(op_params, src, shapes, clipping_shapes);
-
-  dst_strokes.attributes_for_write().remove(".positions_2d");
-
-  /* Set the new geometry. */
-  drawing.strokes_for_write() = std::move(dst_strokes);
-  drawing.tag_topology_changed();
-
-  if (true) {
-    DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
-  }
-
-  return OPERATOR_FINISHED;
-}
-
-static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
-{
-  static const EnumPropertyItem prop_boolean_modes[] = {
-      {int(carver::Operation::Intersect),
-       "INTERSECT",
-       0,
-       "Intersect",
-       "Create stroke were multiple overlap"},
-      {int(carver::Operation::Union), "UNION", 0, "Union", "Combine multiple strokes into one"},
-      {int(carver::Operation::Difference),
-       "DIFFERENCE",
-       0,
-       "Difference",
-       "Remove one stroke from another"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  ot->name = "Stroke Boolean";
-  ot->idname = "GREASE_PENCIL_OT_stroke_boolean";
-  ot->description = "Apply Boolean operations on the selected strokes";
-
-  ot->exec = grease_pencil_stroke_boolean_exec;
-  ot->poll = editable_grease_pencil_poll;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
-  RNA_def_boolean(ot->srna, "keep_caps", false, "Keep Caps", "The keep same caps");
-  RNA_def_enum(ot->srna,
-               "boolean_mode",
-               prop_boolean_modes,
-               int(carver::Operation::Union),
-               "Boolean Mode",
-               "Mode of the boolean operation");
-}
-
-/** \} */
-
 }  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_edit()
@@ -5654,7 +5553,6 @@ void ED_operatortypes_grease_pencil_edit()
   WM_operatortype_append(GREASE_PENCIL_OT_join_fills);
   WM_operatortype_append(GREASE_PENCIL_OT_separate_fills);
   WM_operatortype_append(GREASE_PENCIL_OT_stroke_carver);
-  WM_operatortype_append(GREASE_PENCIL_OT_stroke_boolean);
 }
 
 /* -------------------------------------------------------------------- */
@@ -5926,14 +5824,15 @@ static void join_object_with_active(Main &bmain,
 
   /* Rename animation paths to layers. */
   BKE_fcurves_main_cb(&bmain, [&](ID *id, FCurve *fcu) {
-    if (id == &grease_pencil_src.id && fcu->rna_path && strstr(fcu->rna_path, "layers[")) {
+    const StringRefNull rna_path = fcu->rna_path();
+    if (id == &grease_pencil_src.id && strstr(rna_path.c_str(), "layers[")) {
       /* Have to use linear search, the layer name map only contains sub-strings of RNA paths. */
       for (auto [name_src, name_dst] : layer_name_map.items()) {
         if (name_dst != name_src) {
-          const char *old_path = fcu->rna_path;
-          fcu->rna_path = BKE_animsys_fix_rna_path_rename(
-              id, fcu->rna_path, "layers", name_src, name_dst);
-          if (old_path != fcu->rna_path) {
+          if (char *new_path = BKE_animsys_fix_rna_path_rename(
+                  id, rna_path.c_str(), "layers", name_src, name_dst))
+          {
+            fcu->rna_path_set_move(new_path);
             /* Stop after first match. */
             break;
           }
@@ -5953,10 +5852,11 @@ static void join_object_with_active(Main &bmain,
           if (dtar->rna_path && strstr(dtar->rna_path, "layers[")) {
             for (auto [name_src, name_dst] : layer_name_map.items()) {
               if (name_dst != name_src) {
-                const char *old_path = fcu->rna_path;
-                dtar->rna_path = BKE_animsys_fix_rna_path_rename(
-                    id, dtar->rna_path, "layers", name_src, name_dst);
-                if (old_path != dtar->rna_path) {
+                if (char *new_path = BKE_animsys_fix_rna_path_rename(
+                        id, dtar->rna_path, "layers", name_src, name_dst))
+                {
+                  MEM_delete(dtar->rna_path);
+                  dtar->rna_path = new_path;
                   break;
                 }
               }

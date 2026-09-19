@@ -473,6 +473,11 @@ def km_property_editor(params):
         ("constraint.copy", {"type": 'D', "value": 'PRESS', "ctrl": True}, None),
         # Strip modifiers
         ("sequencer.strip_modifier_set_active", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        # Scene Compositor Effects
+        ("scene.set_active_compositor_effect", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        ("scene.remove_compositor_effect", {"type": 'BACK_SPACE', "value": 'PRESS'}, None),
+        ("scene.remove_compositor_effect", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("scene.duplicate_compositor_effect", {"type": 'D', "value": 'PRESS', "ctrl": True}, None),
     ])
 
     return keymap
@@ -1192,6 +1197,7 @@ def km_node_editor(params):
          {"properties": [("prev", False)]}),
         ("node.select_same_type_step", {"type": 'LEFT_BRACKET', "value": 'PRESS', "shift": True},
          {"properties": [("prev", True)]}),
+        ("node.comment_edit", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
         ("node.find_node", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("node.group_make", {"type": 'G', "value": 'PRESS', "ctrl": True}, None),
         ("node.group_ungroup", {"type": 'G', "value": 'PRESS', "ctrl": True, "alt": True}, None),
@@ -2705,12 +2711,12 @@ def radial_control_properties(paint, prop, secondary_prop, secondary_rotation=Fa
         "properties": [
             ("data_path_primary", brush_path + "." + prop),
             ("data_path_secondary", unified_path + "." + prop if secondary_prop else ""),
-            ("use_secondary", unified_path + "." + secondary_prop if secondary_prop else ""),
+            ("use_secondary", brush_path + "." + secondary_prop if secondary_prop else ""),
             ("rotation_path", brush_path + "." + rotation),
             ("color_path", brush_path + ".cursor_color_add"),
             ("fill_color_path", brush_path + ".color" if color else ""),
             ("fill_color_override_path", unified_path + ".color" if color else ""),
-            ("fill_color_override_test_path", unified_path + ".use_unified_color" if color else ""),
+            ("fill_color_override_test_path", brush_path + ".use_unified_color" if color else ""),
             ("zoom_path", "space_data.zoom" if zoom else ""),
             ("image_id", brush_path + ""),
             ("secondary_tex", secondary_rotation),
