@@ -10,10 +10,8 @@
  */
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "eevee_lightprobe_shared.hh"
-#include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
 

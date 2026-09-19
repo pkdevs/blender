@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "eevee_lightprobe_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */

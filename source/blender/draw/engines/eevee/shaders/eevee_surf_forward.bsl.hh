@@ -9,11 +9,9 @@
  */
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "draw_view.bsl.hh"
 #include "eevee_forward_lib.bsl.hh"
-#include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"

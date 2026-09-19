@@ -313,8 +313,6 @@ void GPUCodegen::generate_resources()
     ss << "#define NodeTree" << linted_struct_suffix << " NodeTree\n";
     ss << "#define NodeTree" << linted_struct_suffix << "uniform_ NodeTree\n";
     ss << "\n";
-
-    info.uniform_buf(GPU_NODE_TREE_UBO_SLOT, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
   }
 
   if (!graph.uniform_attrs.list.is_empty()) {

@@ -327,8 +327,6 @@ set(GLSL_SRC
   intern/shaders/subdiv_infos.hh
   intern/shaders/subdiv_patch_eval_infos.hh
 
-  engines/eevee/shaders/infos/eevee_nodetree_infos.hh
-
   engines/image/shaders/infos/engine_image_infos.hh
 
   engines/gpencil/shaders/infos/gpencil_infos.hh
@@ -429,11 +427,12 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_ltc_lut_lib.bsl.hh
   engines/eevee/shaders/eevee_material_variants.bsl.hh
   engines/eevee/shaders/eevee_motion_blur.bsl.hh
-  engines/eevee/shaders/eevee_nodetree_closures_lib.glsl
-  engines/eevee/shaders/eevee_nodetree_frag_lib.glsl
+  engines/eevee/shaders/eevee_nodetree.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_closures_lib.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_frag_lib.bsl.hh
   engines/eevee/shaders/eevee_nodetree_lib.bsl.hh
-  engines/eevee/shaders/eevee_nodetree_type_lib.glsl
-  engines/eevee/shaders/eevee_nodetree_vert_lib.glsl
+  engines/eevee/shaders/eevee_nodetree_type.bsl.hh
+  engines/eevee/shaders/eevee_nodetree_vert_lib.bsl.hh
   engines/eevee/shaders/eevee_occupancy_convert.bsl.hh
   engines/eevee/shaders/eevee_occupancy_lib.bsl.hh
   engines/eevee/shaders/eevee_octahedron_lib.bsl.hh
@@ -796,7 +795,6 @@ set(GLSL_INC
   engines/workbench/shaders/infos
   engines/eevee
   engines/eevee/shaders
-  engines/eevee/shaders/infos
   engines/overlay
   engines/overlay/shaders
   engines/overlay/shaders/infos

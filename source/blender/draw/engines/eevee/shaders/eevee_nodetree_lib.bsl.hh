@@ -18,7 +18,8 @@
 #include "eevee_light_iter.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"
-#include "eevee_nodetree_closures_lib.glsl"
+#include "eevee_nodetree.bsl.hh"
+#include "eevee_nodetree_closures_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_ray_trace_screen_lib.bsl.hh"
 #include "eevee_renderpass.bsl.hh"
@@ -31,6 +32,18 @@
 #include "gpu_shader_math_safe.bsl.hh"
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
+
+#ifdef GLSL_CPP_STUBS
+#  define CLOSURE_BIN_COUNT 3
+#endif
+
+/* Maximum number of picked closure. */
+#ifndef CLOSURE_BIN_COUNT
+/* WORKAROUND: Because of stupid create infos relying on define extraction (which bypass the
+ * conditional). This definition would create a redefinition warning from the one defined above. */
+#  undef CLOSURE_BIN_COUNT
+#  define CLOSURE_BIN_COUNT 1
+#endif
 
 namespace eevee {
 
@@ -135,6 +148,8 @@ struct ShadingData {
 };
 
 struct KernelGlobals {
+  [[resource_table]] srt_t<NodeTreeRes> nt;
+
   [[resource_table]] srt_t<draw::View> view;
   [[resource_table]] srt_t<draw::Model> model;
   [[resource_table]] srt_t<draw::Infos> infos;
@@ -581,7 +596,9 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 }
 
 #ifndef GPU_METAL
-float3 nodetree_displacement([[resource_table]] KernelGlobals &kg, ShadingData &sd);
+float3 nodetree_displacement([[resource_table]] NodeTreeRes &nt,
+                             [[resource_table]] KernelGlobals &kg,
+                             ShadingData &sd);
 float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure cl);
 #endif
 
@@ -812,7 +829,7 @@ float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   constexpr float bump_filter_width = 0.1f;
 
   float2 dHd;
-  dF_branch(dot(nodetree_displacement(kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
+  dF_branch(dot(nodetree_displacement(nt, kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
 
   float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get(kg);
   float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get(kg);

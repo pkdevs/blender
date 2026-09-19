@@ -15,7 +15,7 @@
 #include "eevee_light_eval.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"
-#include "eevee_nodetree_closures_lib.glsl"
+#include "eevee_nodetree_closures_lib.bsl.hh"
 #include "eevee_nodetree_lib.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_subsurface_lib.bsl.hh"
@@ -27,6 +27,10 @@
 
 /* Allow static compilation of forward materials. */
 #ifndef CLOSURE_BIN_COUNT
+/* WORKAROUND: Because of stupid create infos relying on define extraction (which bypass the
+ * conditional). This definition would create a redefinition warning from a previously defined one.
+ */
+#  undef CLOSURE_BIN_COUNT
 #  define CLOSURE_BIN_COUNT SRT_CONSTANT_light_closure_eval_count
 #endif
 
