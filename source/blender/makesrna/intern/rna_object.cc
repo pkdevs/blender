@@ -484,7 +484,7 @@ static void rna_Object_active_shape_update(Main *bmain, Scene * /*scene*/, Point
 
         DEG_id_tag_update(&mesh->id, 0);
 
-        BKE_editmesh_looptris_and_normals_calc(em);
+        BKE_editmesh_looptris_and_normals_calc(em, BKE_editmesh_bmesh_get_for_write(mesh));
         break;
       }
       case OB_CURVES_LEGACY:
@@ -2495,6 +2495,7 @@ static void rna_def_object_constraints(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "constraint", "Constraint", "", "New constraint");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Object_constraints_remove");
@@ -2531,6 +2532,7 @@ static void rna_def_object_constraints(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "new_constraint", "Constraint", "", "New constraint");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 }
 
@@ -2730,6 +2732,7 @@ static void rna_def_object_vertex_groups(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add vertex group to object");
   RNA_def_string(func, "name", "Group", 0, "", "Vertex group name"); /* optional */
   parm = RNA_def_pointer(func, "group", "VertexGroup", "", "New vertex group");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Object_vgroup_remove");
@@ -2912,6 +2915,7 @@ static void rna_def_object_visibility(StructRNA *srna)
   prop = RNA_def_property(srna, "visible_camera", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "visibility_flag", OB_HIDE_CAMERA);
   RNA_def_property_ui_text(prop, "Camera Visibility", "Object visibility to camera rays");
+  RNA_def_property_ui_icon(prop, ICON_INDIRECT_ONLY_OFF, 1);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_draw");
 
   prop = RNA_def_property(srna, "visible_diffuse", PROP_BOOLEAN, PROP_NONE);
@@ -2949,6 +2953,7 @@ static void rna_def_object_visibility(StructRNA *srna)
       "Holdout",
       "Render objects as a holdout or matte, creating a hole in the image with zero alpha, to "
       "fill out in compositing with real footage or another render");
+  RNA_def_property_ui_icon(prop, ICON_HOLDOUT_OFF, 1);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_hide_update");
 
   prop = RNA_def_property(srna, "is_shadow_catcher", PROP_BOOLEAN, PROP_NONE);

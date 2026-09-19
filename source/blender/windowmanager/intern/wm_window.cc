@@ -53,6 +53,7 @@
 #include "BKE_icons.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
+#include "BKE_recents.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 #include "BKE_wm_runtime.hh"
@@ -463,42 +464,13 @@ void wm_quit_with_optional_confirmation_prompt(bContext *C, wmWindow *win)
 /** \name Window Close
  * \{ */
 
-static rctf *stored_window_bounds(eSpace_Type space_type)
-{
-  if (space_type == SPACE_IMAGE) {
-    return &U.stored_bounds.image;
-  }
-  if (space_type == SPACE_USERPREF) {
-    return &U.stored_bounds.userpref;
-  }
-  if (space_type == SPACE_GRAPH) {
-    return &U.stored_bounds.graph;
-  }
-  if (space_type == SPACE_INFO) {
-    return &U.stored_bounds.info;
-  }
-  if (space_type == SPACE_OUTLINER) {
-    return &U.stored_bounds.outliner;
-  }
-  if (space_type == SPACE_FILE) {
-    return &U.stored_bounds.file;
-  }
-  if (space_type == SPACE_PROJECT) {
-    return &U.stored_bounds.project;
-  }
-
-  return nullptr;
-}
-
 static bool wm_window_is_last_main_window(wmWindowManager *wm, wmWindow *win)
 {
   if (win->parent) {
     return false;
   }
   wmWindow *win_other;
-  for (win_other = static_cast<wmWindow *>(wm->windows.first); win_other;
-       win_other = win_other->next)
-  {
+  for (win_other = wm->windows.first(); win_other; win_other = win_other->next) {
     if (win_other != win && win_other->parent == nullptr && !WM_window_is_temp_screen(win_other)) {
       return false;
     }
@@ -521,22 +493,19 @@ void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win)
   {
     bScreen *screen = WM_window_get_active_screen(win);
     if (screen && screen->temp && BLI_listbase_is_single(&screen->areabase)) {
-      const ScrArea *area = static_cast<const ScrArea *>(screen->areabase.first);
-      rctf *stored_bounds = stored_window_bounds(eSpace_Type(area->spacetype));
-
-      if (stored_bounds) {
+      if (!win->runtime->recents_storage_key.empty()) {
         /* Get DPI and scale from parent window, if there is one. */
         WM_window_dpi_set_userdef(win->parent ? win->parent : win);
 
         GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
         const float fac = ghost_window->getNativePixelSize() / UI_SCALE_FAC;
 
-        stored_bounds->xmin = float(win->posx) * fac;
-        stored_bounds->xmax = stored_bounds->xmin + float(win->sizex) * fac;
-        stored_bounds->ymin = float(win->posy) * fac;
-        stored_bounds->ymax = stored_bounds->ymin + float(win->sizey) * fac;
-        /* Tag user preferences as dirty. */
-        U.runtime.is_dirty = true;
+        std::vector<float> bounds = {float(win->posx) * fac,
+                                     float(win->posx) * fac + float(win->sizex) * fac,
+                                     float(win->posy) * fac,
+                                     float(win->posy) * fac + float(win->sizey) * fac};
+
+        recents::Section("temp.window.dimensions").set(win->runtime->recents_storage_key, bounds);
       }
     }
   }
@@ -596,21 +565,26 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
  *
  * \param window_filepath_fn: When non `nullopt` the title text does not need to contain
  * the file-path (typically based on #WM_CAPABILITY_WINDOW_PATH).
+ * \param win_title: The title text is appended, the inline buffer avoids allocating in practice.
+ * The text is *not* null terminated, callers that need a C string must terminate it.
  */
-static std::string wm_window_title_text(
-    wmWindowManager *wm,
-    wmWindow *win,
-    std::optional<FunctionRef<void(const char *)>> window_filepath_fn)
+static void wm_window_title_text(wmWindowManager *wm,
+                                 wmWindow *win,
+                                 std::optional<FunctionRef<void(const char *)>> window_filepath_fn,
+                                 fmt::memory_buffer &win_title)
 {
   if (win->parent || WM_window_is_temp_screen(win)) {
     /* Not a main window. */
     bScreen *screen = WM_window_get_active_screen(win);
     const bool is_single = screen && BLI_listbase_is_single(&screen->areabase);
-    ScrArea *area = (screen) ? static_cast<ScrArea *>(screen->areabase.first) : nullptr;
+    ScrArea *area = (screen) ? screen->areabase.first() : nullptr;
     if (is_single && area && area->spacetype != SPACE_EMPTY) {
-      return IFACE_(ED_area_name(area).c_str());
+      win_title.append(StringRef(IFACE_(ED_area_name(area).c_str())));
     }
-    return "Blender";
+    else {
+      win_title.append(StringRef("Blender"));
+    }
+    return;
   }
 
   /* This path may contain invalid UTF8 byte sequences on UNIX systems,
@@ -639,27 +613,29 @@ static std::string wm_window_title_text(
   const bool include_filepath = has_filepath && (filepath != filename) && !native_filepath_display;
 
   /* File saved state. */
-  std::string win_title = wm->file_saved ? "" : "* ";
+  if (!wm->file_saved) {
+    win_title.append(StringRef("* "));
+  }
 
   /* File name. Show the file extension if the full file path is not included in the title. */
   if (include_filepath) {
-    const size_t filename_no_ext_len = BLI_path_extension_or_end(filename) - filename;
-    win_title.append(filename, filename_no_ext_len);
+    const char *filename_no_ext_end = BLI_path_extension_or_end(filename);
+    win_title.append(filename, filename_no_ext_end);
   }
   else if (has_filepath) {
-    win_title.append(filename);
+    win_title.append(StringRef(filename));
   }
   /* New / Unsaved file default title. Shows "Untitled" on macOS following the Apple HIGs. */
   else {
 #ifdef __APPLE__
-    win_title.append(IFACE_("Untitled"));
+    win_title.append(StringRef(IFACE_("Untitled")));
 #else
-    win_title.append(IFACE_("(Unsaved)"));
+    win_title.append(StringRef(IFACE_("(Unsaved)")));
 #endif
   }
 
   if (G_MAIN->recovered) {
-    win_title.append(IFACE_(" (Recovered)"));
+    win_title.append(StringRef(IFACE_(" (Recovered)")));
   }
 
   if (include_filepath) {
@@ -682,20 +658,29 @@ static std::string wm_window_title_text(
         }
         if ((home_dir_len > 0) && BLI_path_ncmp(home_dir, filepath_as_bytes, home_dir_len) == 0) {
           if (filepath_as_bytes[home_dir_len] == SEP) {
-            win_title.append(fmt::format(" [~{}]", filepath + home_dir_len));
+            win_title.append(StringRef(" [~"));
+            win_title.append(StringRef(filepath + home_dir_len));
+            win_title.push_back(']');
             add_filepath = false;
           }
         }
       }
     }
     if (add_filepath) {
-      win_title.append(fmt::format(" [{}]", filepath));
+      win_title.append(StringRef(" ["));
+      win_title.append(StringRef(filepath));
+      win_title.push_back(']');
     }
   }
 
-  win_title.append(fmt::format(" - Blender {}", BKE_blender_version_string()));
+  /* If a project is active, display its name. */
+  if (const bke::BlenderProject *project = BKE_blender_project_get(G_MAIN)) {
+    win_title.append(StringRef(" - "));
+    win_title.append(project->get_name());
+  }
 
-  return win_title;
+  win_title.append(StringRef(" — Blender "));
+  win_title.append(StringRef(BKE_blender_version_string()));
 }
 
 static void wm_window_title_state_refresh(wmWindowManager *wm, wmWindow *win)
@@ -730,8 +715,10 @@ void WM_window_title_refresh(wmWindowManager *wm, wmWindow *win)
                                   ghost_window->setPath(filepath);
                                 }) :
                                 std::nullopt;
-  std::string win_title = wm_window_title_text(wm, win, window_filepath_fn);
-  ghost_window->setTitle(win_title.c_str());
+  fmt::memory_buffer win_title;
+  wm_window_title_text(wm, win, window_filepath_fn, win_title);
+  win_title.push_back('\0');
+  ghost_window->setTitle(win_title.data());
   wm_window_title_state_refresh(wm, win);
 }
 
@@ -843,7 +830,7 @@ void wm_window_titlebar_theme_context_set(const wmWindow *win, const bScreen *sc
   }
   /* For single editor floating windows, use the editor header color. */
   else if (screen && BLI_listbase_is_single(&screen->areabase)) {
-    const ScrArea *main_area = static_cast<ScrArea *>(screen->areabase.first);
+    const ScrArea *main_area = screen->areabase.first();
     ui::theme::theme_set(main_area->spacetype, RGN_TYPE_HEADER);
   }
   /* For floating window with multiple editors/areas, use the default space color. */
@@ -1079,10 +1066,10 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm,
     }
 #endif
 
-    /* Get the window background color from the current theme. Using the top-bar header
+    /* Get the window background color from the current theme. Using the title-bar
      * background theme color to match with the colored title-bar decoration style. */
     float window_bg_color[3];
-    ui::theme::theme_set(SPACE_TOPBAR, RGN_TYPE_HEADER);
+    wm_window_titlebar_theme_context_set(win, nullptr);
     ui::theme::get_color_3fv(TH_BACK, window_bg_color);
 
     /* Until screens get drawn, draw a default background using the window theme color. */
@@ -1158,11 +1145,13 @@ static void wm_window_ghostwindow_ensure(wmWindowManager *wm, wmWindow *win, boo
      * after the window has been created. */
     auto window_filepath_fn = (WM_capabilities_flag() & WM_CAPABILITY_WINDOW_PATH) ?
                                   std::optional([&win_filepath](const char *filepath) {
-                                    STRNCPY_UTF8(win_filepath, filepath);
+                                    STRNCPY(win_filepath, filepath);
                                   }) :
                                   std::nullopt;
-    std::string win_title = wm_window_title_text(wm, win, window_filepath_fn);
-    wm_window_ghostwindow_add(wm, win_title.c_str(), win, is_dialog);
+    fmt::memory_buffer win_title;
+    wm_window_title_text(wm, win, window_filepath_fn, win_title);
+    win_title.push_back('\0');
+    wm_window_ghostwindow_add(wm, win_title.data(), win, is_dialog);
   }
 
   if (win->runtime->ghostwin != nullptr) {
@@ -1343,7 +1332,7 @@ wmWindow *WM_window_open(bContext *C,
     for (wmWindow &win_iter : wm->windows) {
       const bScreen *screen = WM_window_get_active_screen(&win_iter);
       if (screen && screen->temp && BLI_listbase_is_single(&screen->areabase)) {
-        ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+        ScrArea *area = screen->areabase.first();
         if (space_type == (area->butspacetype ? area->butspacetype : area->spacetype)) {
           win = &win_iter;
           break;
@@ -1409,13 +1398,13 @@ wmWindow *WM_window_open(bContext *C,
      * otherwise it will attempt to make the empty area usable via #ED_area_init.
      * While refreshing the window could be postponed this makes the state of the
      * window less predictable to the caller. */
-    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+    ScrArea *area = screen->areabase.first();
     area_setup_fn(screen, area, area_setup_user_data);
     CTX_wm_area_set(C, area);
   }
   else if (space_type != SPACE_EMPTY) {
     /* Ensure it shows the right space-type editor. */
-    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+    ScrArea *area = screen->areabase.first();
     CTX_wm_area_set(C, area);
     ED_area_newspace(C, area, space_type, false);
   }
@@ -1465,23 +1454,28 @@ wmWindow *WM_window_open_temp(bContext *C, const char *title, int space_type, bo
   rcti rect;
   WM_window_dpi_set_userdef(CTX_wm_window(C));
   eWindowAlignment align;
-  rctf *stored_bounds = stored_window_bounds(eSpace_Type(space_type));
-  const bool bounds_valid = (stored_bounds && (BLI_rctf_size_x(stored_bounds) > 150.0f) &&
-                             (BLI_rctf_size_y(stored_bounds) > 100.0f));
-  const bool mm_placement = WM_capabilities_flag() & WM_CAPABILITY_MULTIMONITOR_PLACEMENT;
 
+  const int index = RNA_enum_from_value(rna_enum_space_type_items, space_type);
+  BLI_assert(index != -1);
+  const EnumPropertyItem item = rna_enum_space_type_items[index];
+
+  std::string key = item.identifier;
+  auto bounds = recents::Section("temp.window.dimensions").get<std::vector<float>>(key);
+
+  const bool bounds_valid = (bounds.size() == 4 && (bounds[1] - bounds[0] > 150.0f) &&
+                             (bounds[3] - bounds[2] > 100.0f));
+  const bool mm_placement = WM_capabilities_flag() & WM_CAPABILITY_MULTIMONITOR_PLACEMENT;
   if (bounds_valid && mm_placement) {
-    rect.xmin = int(stored_bounds->xmin * UI_SCALE_FAC);
-    rect.ymin = int(stored_bounds->ymin * UI_SCALE_FAC);
-    rect.xmax = int(stored_bounds->xmax * UI_SCALE_FAC);
-    rect.ymax = int(stored_bounds->ymax * UI_SCALE_FAC);
+    rect.xmin = int(bounds[0] * UI_SCALE_FAC);
+    rect.xmax = int(bounds[1] * UI_SCALE_FAC);
+    rect.ymin = int(bounds[2] * UI_SCALE_FAC);
+    rect.ymax = int(bounds[3] * UI_SCALE_FAC);
     align = WIN_ALIGN_ABSOLUTE;
   }
   else {
     wmWindow *win_cur = CTX_wm_window(C);
-    const int width = int((bounds_valid ? BLI_rctf_size_x(stored_bounds) : 800.0f) * UI_SCALE_FAC);
-    const int height = int((bounds_valid ? BLI_rctf_size_y(stored_bounds) : 600.0f) *
-                           UI_SCALE_FAC);
+    const int width = int((bounds_valid ? int(bounds[1] - bounds[0]) : 800.0f) * UI_SCALE_FAC);
+    const int height = int((bounds_valid ? int(bounds[3] - bounds[2]) : 600.0f) * UI_SCALE_FAC);
     /* Use eventstate, not event from _invoke, so this can be called through exec(). */
     const wmEvent *event = win_cur->runtime->eventstate;
     rect.xmin = event->xy[0];
@@ -1493,7 +1487,9 @@ wmWindow *WM_window_open_temp(bContext *C, const char *title, int space_type, bo
 
   wmWindow *win = WM_window_open(
       C, title, &rect, space_type, false, dialog, true, align, nullptr, nullptr);
-
+  if (win) {
+    win->runtime->recents_storage_key = std::move(key);
+  }
   return win;
 }
 
@@ -1689,7 +1685,7 @@ void wm_window_reset_drawable()
 {
   BLI_assert(BLI_thread_is_main());
   BLI_assert(GPU_framebuffer_active_get() == GPU_framebuffer_back_get());
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
 
   if (wm == nullptr) {
     return;
@@ -2000,7 +1996,7 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
     case GHOST_kEventOpenMainFile: {
       const char *path = static_cast<const char *>(data);
 
-      if (path) {
+      if (path && path[0] != '\0') {
         wmOperatorType *ot = WM_operatortype_find("WM_OT_open_mainfile", false);
         /* Operator needs a valid window in context, ensures it is correctly set. */
         CTX_wm_window_set(C, win);
@@ -2438,7 +2434,7 @@ void wm_test_gpu_backend_fallback(bContext *C)
 
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = static_cast<wmWindow *>((wm->runtime->winactive) ? wm->runtime->winactive :
-                                                                     wm->windows.first);
+                                                                     wm->windows.first());
 
   if (win) {
     /* We want this warning on the Main window, not a child window even if active. See #118765. */
@@ -3374,7 +3370,7 @@ void WM_window_set_active_view_layer(wmWindow *win, ViewLayer *view_layer)
   BLI_assert(BKE_view_layer_find(WM_window_get_active_scene(win), view_layer->name) != nullptr);
   Main *bmain = G_MAIN;
 
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   wmWindow *win_parent = (win->parent) ? win->parent : win;
 
   /* Set view layer in parent and child windows. */
@@ -3541,6 +3537,16 @@ bool WM_window_IME_region_refresh(wmWindow *win,
   if (win->runtime->ime_owner == bke::wmIMEOwnerType::Button) {
     /* A text button owns the session, possibly in a popup over this region,
      * see #textedit_ime_begin. */
+    return false;
+  }
+
+  /* A temporary popup is modal, it takes precedence over the region below it,
+   * otherwise any redraw while the popup is open re-enables the IME, see #ED_region_do_draw.
+   * Tool-tips match too, harmless as an existing session isn't ended. */
+  const bScreen *screen = WM_window_get_active_screen(win);
+  if (!screen->regionbase.is_empty() &&
+      (BKE_screen_find_region_type(screen, RGN_TYPE_TEMPORARY) != nullptr))
+  {
     return false;
   }
 

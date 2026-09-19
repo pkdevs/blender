@@ -113,6 +113,9 @@ enum PathTraceDimension {
   /* Volume density baking. */
   PRNG_BAKE_VOLUME_DENSITY_EVAL = 0,
 
+  /* Sample wavelength for dispersion. */
+  PRNG_WAVELENGTH = 12,
+
   /* High enough number so we don't need to change it when adding new dimensions,
    * low enough so there is no uint16_t overflow with many bounces. */
   PRNG_BOUNCE_NUM = 16,
@@ -282,6 +285,9 @@ enum PathRayFlag : uint32_t {
 
   /* Path and shader is being evaluated for volume extinction. */
   PATH_RAY_EXTINCTION = (1U << 26U),
+
+  /* Path has associated wavelength. */
+  PATH_RAY_SPECTRAL = (1U << 27U),
 };
 
 // 8bit enum, just in case we need to move more variables in it
@@ -697,20 +703,24 @@ enum PrimitiveType {
   PRIMITIVE_POINT = (1 << 3),
   PRIMITIVE_VOLUME = (1 << 4),
   PRIMITIVE_LAMP = (1 << 5),
+  PRIMITIVE_GSPLAT = (1 << 6),
 
-  PRIMITIVE_MOTION = (1 << 6),
+  PRIMITIVE_MOTION = (1 << 7),
   PRIMITIVE_MOTION_TRIANGLE = (PRIMITIVE_TRIANGLE | PRIMITIVE_MOTION),
   PRIMITIVE_MOTION_CURVE_THICK = (PRIMITIVE_CURVE_THICK | PRIMITIVE_MOTION),
   PRIMITIVE_MOTION_CURVE_RIBBON = (PRIMITIVE_CURVE_RIBBON | PRIMITIVE_MOTION),
   PRIMITIVE_MOTION_CURVE_THICK_LINEAR = (PRIMITIVE_CURVE_THICK_LINEAR | PRIMITIVE_MOTION),
   PRIMITIVE_MOTION_POINT = (PRIMITIVE_POINT | PRIMITIVE_MOTION),
+  PRIMITIVE_MOTION_GSPLAT = (PRIMITIVE_GSPLAT | PRIMITIVE_MOTION),
 
   PRIMITIVE_CURVE = (PRIMITIVE_CURVE_THICK | PRIMITIVE_CURVE_RIBBON),
 
   PRIMITIVE_ALL = (PRIMITIVE_TRIANGLE | PRIMITIVE_CURVE | PRIMITIVE_POINT | PRIMITIVE_VOLUME |
-                   PRIMITIVE_LAMP | PRIMITIVE_MOTION),
+                   PRIMITIVE_LAMP | PRIMITIVE_GSPLAT | PRIMITIVE_MOTION),
 
-  PRIMITIVE_NUM_SHAPES = 6,
+  PRIMITIVE_ANY_POINT = (PRIMITIVE_POINT | PRIMITIVE_GSPLAT),
+
+  PRIMITIVE_NUM_SHAPES = 7,
   PRIMITIVE_NUM_BITS = PRIMITIVE_NUM_SHAPES + 1, /* All shapes + motion bit. */
   PRIMITIVE_NUM = PRIMITIVE_NUM_SHAPES * 2,      /* With and without motion. */
 };
@@ -805,6 +815,12 @@ enum AttributeStandard : int {
   ATTR_STD_POINTINESS,
   ATTR_STD_RANDOM_PER_ISLAND,
   ATTR_STD_SHADOW_TRANSPARENCY,
+  ATTR_STD_GSPLAT_RADIANCE_BASE,
+  ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST,
+  ATTR_STD_GSPLAT_RADIANCE,
+  ATTR_STD_GSPLAT_ROTATION,
+  ATTR_STD_GSPLAT_SCALE,
+
   ATTR_STD_NUM,
 
   ATTR_STD_NOT_FOUND = -0x7fffffff
@@ -929,15 +945,19 @@ enum ShaderRuntimeFlag {
   SR_BSDF_HAS_TRANSMISSION = (1 << 11),
   /* Shader has ray portal closure. */
   SR_RAY_PORTAL = (1 << 12),
+  /* BSDF has dispersion. */
+  SR_BSDF_HAS_DISPERSION = (1 << 13),
 
   /* Flags that indicate the presence of closures. */
   SR_CLOSURE_FLAG = (SR_EMISSION | SR_BSDF | SR_BSDF_HAS_EVAL | SR_BSSRDF | SR_HOLDOUT |
                      SR_EXTINCTION | SR_SCATTER | SR_IS_VOLUME_SHADER_EVAL | SR_TRANSPARENT |
-                     SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL)
+                     SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL | SR_BSDF_HAS_DISPERSION)
 };
 
 /* Shader flags that are set after compiling the shaders. */
 enum ShaderDataFlag {
+  /* If the shader is wavelength-dependent. */
+  SD_REQUIRES_WAVELENGTH = (1 << 12),
   /* If Light Path Node is present in the shader graph. */
   SD_HAS_LIGHT_PATH_NODE = (1 << 13),
   /* Has bump mapping from BSDF connected to surface socket. */
@@ -1089,6 +1109,10 @@ struct ccl_align(16) ShaderData {
 
   /* LCG state for closures that require additional random numbers. */
   uint lcg_state;
+#ifdef __SPECTRAL__
+  /* Random number for sampling the wavelength. */
+  float rand_wavelength;
+#endif
 
   /* Closure weights summed directly, so we can evaluate
    * emission and shadow transparency with MAX_CLOSURE 0. */
@@ -1370,7 +1394,7 @@ struct KernelSceneTime {
 
 struct ccl_align(16) KernelData {
   /* Features and limits. */
-  uint kernel_features;
+  uint64_t kernel_features;
   uint max_closures;
   uint max_shaders;
   uint volume_stack_size;
@@ -1417,7 +1441,6 @@ struct KernelObject {
   Transform tfm;
   Transform itfm;
 
-  float volume_density;
   float pass_id;
   float random_number;
   float color[3];
@@ -1430,14 +1453,35 @@ struct KernelObject {
   uint16_t num_geom_steps;
   uint16_t num_tfm_steps;
   int numverts;
-  int numprims;
 
   uint attribute_map_offset;
   uint motion_offset;
 
   /* Cached offset into attribute arrays, as these are accessed often. */
   int position_offset;
-  int normal_offset;
+
+  union {
+    /* Information about mesh and volume objects. */
+    struct {
+      int num_prims;
+
+      float volume_density;
+      float volume_velocity_scale;
+
+      int normal_offset;
+    } mesh_volume;
+
+    /* Information about Gaussian splat objects. */
+    struct {
+      /* Offset for the attributes.
+       * The least significant bit denotes whether the attribute has motion. */
+      int scale_offset_and_flag;
+      int rotation_offset_and_flag;
+      int radiance_base_offset_and_flag;
+
+      int radiance_spherical_harmonics_rest_offset;
+    } gsplat;
+  };
 
   float cryptomatte_object;
   float cryptomatte_asset;
@@ -1451,9 +1495,6 @@ struct KernelObject {
 
   uint visibility;
   int primitive_type;
-
-  /* Volume velocity scale. */
-  float velocity_scale;
 
   /* TODO: separate array to avoid memory overhead when not used. */
   uint64_t light_set_membership;
@@ -1811,9 +1852,12 @@ enum DeviceKernel : int {
   DEVICE_KERNEL_ADAPTIVE_SAMPLING_CONVERGENCE_FILTER_Y,
 
   DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS,
+  DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS_TO_SURFACE,
   DEVICE_KERNEL_FILTER_GUIDING_SET_FAKE_ALBEDO,
   DEVICE_KERNEL_FILTER_COLOR_PREPROCESS,
+  DEVICE_KERNEL_FILTER_COLOR_PREPROCESS_TO_SURFACE,
   DEVICE_KERNEL_FILTER_COLOR_POSTPROCESS,
+  DEVICE_KERNEL_FILTER_COLOR_POSTPROCESS_FROM_SURFACE,
   DEVICE_KERNEL_FILTER_COLOR_FLIP_Y,
 
   DEVICE_KERNEL_VOLUME_GUIDING_FILTER_X,
