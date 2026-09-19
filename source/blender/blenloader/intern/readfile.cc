@@ -4982,7 +4982,8 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
           /* Archive Main library already contains a 'same' ID - but it should have a different
            * deep_hash. Otherwise, a previous call to `library_id_is_yet_read()` should have
            * returned this ID, and this code should not be reached. */
-          BLI_assert(packed_id->deep_hash != *blo_bhead_id_deep_hash(fd, id_bhead));
+          BLI_assert((packed_id->lib->flag & LIBRARY_FLAG_IS_EXTERNAL) ||
+                     packed_id->deep_hash != *blo_bhead_id_deep_hash(fd, id_bhead));
           UNUSED_VARS_NDEBUG(packed_id, id_bhead);
           continue;
         }
@@ -5190,7 +5191,7 @@ static void expand_doit_library(void *fdhandle,
      * This can happen e.g. with some data-block custom property referencing a library, or when
      * linking a collection import referencing its external archive library.
      *
-     * This is a dangerous thing to try in general, as unlike almos any other ID types, libraries
+     * This is a dangerous thing to try in general, as unlike almost any other ID types, libraries
      * are more of a runtime ID than anything (they are always local, only written on disk as file
      * reference & namespace, and are deduplicated on load - such that if a same library is used by
      * several other dependencies, there is still only one ID for it in the final Main).
@@ -5256,6 +5257,16 @@ static void expand_doit_library(void *fdhandle,
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
     const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+    if (is_external_lib) {
+      CLOG_WARN(&LOG,
+                "External libraries are not supported for link/append. ID '%s' belongs to "
+                "external archive '%s'",
+                id_name ? id_name : "<InvalidIDName>",
+                lib->filepath);
+      MEM_delete(lib);
+      return;
+    }
+
     Main *libmain = blo_find_main_for_library_and_idname(
         fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
     MEM_delete(lib);
@@ -5298,6 +5309,15 @@ static void expand_doit_library(void *fdhandle,
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
     const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+    if (is_external_lib) {
+      CLOG_WARN(&LOG,
+                "External libraries are not supported for link/append. ID '%s' belongs to "
+                "external archive '%s'",
+                id_name ? id_name : "<InvalidIDName>",
+                lib->filepath);
+      MEM_delete(lib);
+      return;
+    }
 
     Main *libmain = blo_find_main_for_library_and_idname(
         fd, bheadlib, lib->filepath, fd->relabase, bhead, id_name, is_packed_id, is_external_lib);
