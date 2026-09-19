@@ -1074,33 +1074,41 @@ void light_iter_init([[resource_table]] KernelGlobals &kg,
                      const ShadingData &sd,
                      eevee::light::VisibleLightIterator &iter)
 {
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.use_lighting_nodes) [[static_branch]] {
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
-  const ViewMatrices view = kg.view_matrices_get(sd);
-  const float3 forward = view.forward();
-  const float linear_view_z = dot(forward, sd.P) - dot(forward, view.position());
-  iter.init(kg.lrd, sd.frag_co.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
+    const ViewMatrices view = kg.view_matrices_get(sd);
+    const float3 forward = view.forward();
+    const float linear_view_z = dot(forward, sd.P) - dot(forward, view.position());
+    iter.init(
+        kg.lrd, sd.frag_co.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
 #endif
+  }
 }
 
 bool light_iter_next([[resource_table]] KernelGlobals &kg,
                      eevee::light::VisibleLightIterator &iter)
 {
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.use_lighting_nodes) [[static_branch]] {
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
-  return iter.next(kg.lrd);
-#else
-  return false;
+    return iter.next(kg.lrd);
 #endif
+  }
+  return false;
 }
 
 bool light_iter_should_skip([[resource_table]] KernelGlobals &kg,
                             [[maybe_unused]] eevee::light::VisibleLightIterator &iter,
                             [[maybe_unused]] float3 P)
 {
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.use_lighting_nodes) [[static_branch]] {
 #if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
-  return iter.should_skip(kg.lrd, P);
-#else
-  return true;
+    return iter.should_skip(kg.lrd, P);
 #endif
+  }
+  return true;
 }
 
 #if (defined(GPU_FRAGMENT_SHADER) && defined(SRT_CONSTANT_use_lighting_nodes)) || \
