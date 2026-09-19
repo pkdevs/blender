@@ -36,6 +36,11 @@ struct PackedPixelRow {
   ushort uv_primitive_index;
 };
 
+struct ModifiedRowSpan {
+  int start = 0;
+  int size = 0;
+};
+
 /**
  * Node pixel data containing the pixels for a single UDIM tile.
  */
@@ -62,6 +67,7 @@ struct UDIMTilePixels {
     /* TODO: Flatten this out and index via a GroupedSpan */
     Vector<Vector<float4, 0>, 0> color;
     Vector<Vector<float, 0>, 0> factor;
+    Vector<ModifiedRowSpan, 0> modified_spans;
   } pixel_row_run_scratch_data;
 
   UDIMTilePixels()
@@ -88,12 +94,14 @@ struct UDIMTilePixels {
     BLI_assert(!pixel_row_run_starts.is_empty());
     pixel_row_run_scratch_data.color.reinitialize(pixel_row_run_starts.size());
     pixel_row_run_scratch_data.factor.reinitialize(pixel_row_run_starts.size());
+    pixel_row_run_scratch_data.modified_spans.reinitialize(pixel_row_run_starts.size());
   }
 
   void clear_scratch_data()
   {
     pixel_row_run_scratch_data.color.clear_and_shrink();
     pixel_row_run_scratch_data.factor.clear_and_shrink();
+    pixel_row_run_scratch_data.modified_spans.clear_and_shrink();
   }
 };
 

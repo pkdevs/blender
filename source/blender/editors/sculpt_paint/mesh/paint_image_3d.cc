@@ -397,18 +397,19 @@ BLI_NOINLINE static void paint_blend_pixels_color_managed(
   }
 }
 
-/* TODO: Figure out when to skip NN averaging based on related factor */
 /* TODO: We should store the averaged color in float scene linear only */
 template<typename PixelT>
 static void average_pixels(const int start,
                            const int size,
-                           const int img_x,
+                           const int /*img_x*/,
                            const KDTree<float3> &tree,
                            const Span<float3> pixel_positions,
                            const Span<PixelT> image_pixels,
                            const TileColorspaceProcessor &processors,
                            const MutableSpan<float4> scratch_pixels)
 {
+  BLI_assert(scratch_pixels.size() == size);
+
   constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
   const bool fast_colorspace = is_float ? processors.is_noop : processors.is_srgb_byte;
   if (is_float) {
@@ -422,21 +423,14 @@ static void average_pixels(const int start,
           &tree, pixel_positions[start + i], nearest_pixels, 8);
       int num = 0;
       float4 accum(0);
-      // printf("Found %d\n", nearest_count);
       for (int k = 0; k < nearest_count; k++) {
         if (nearest_pixels[k].dist < FLT_EPSILON) {
           continue;
         }
-        float4 neighbor = image_pixels[nearest_pixels[k].index];
-        int index = nearest_pixels[k].index;
-        // printf("%d (%d, %d)-> %f %f %f %f\n", nearest_pixels[k].index, index % 64, index / 64,
-        // neighbor.x, neighbor.y, neighbor.z, neighbor.w);
         accum += image_pixels[nearest_pixels[k].index];
         num++;
       }
-      scratch_pixels[img_x + i] = accum / float(num);
-      float4 val = scratch_pixels[img_x + i];
-      // printf("%f %f %f %f\n", val.x, val.y, val.z, val.w);
+      scratch_pixels[i] = accum / float(num);
     }
   }
   else {
@@ -520,19 +514,19 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 template<typename PixelT>
 static void paint_blend_pixels(const PaintBlendSettings &settings,
                                const Span<float> factors,
-                               const int start,
-                               const int size,
+                               const Span<float4> colors,
                                const MutableSpan<PixelT> image_pixels,
-                               const Span<float4> scratch_image_pixels,
-                               const int img_x,
-                               const int img_y,
+                               const int start,
                                const TileColorspaceProcessor &processors,
                                Vector<float4> &paint_pixels)
 {
+  BLI_assert(factors.size() == colors.size());
+
   constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
   const bool fast_colorspace = is_float ? processors.is_noop : processors.is_srgb_byte;
   if (!fast_colorspace) {
     /* Slow path with OpenColorIO. */
+#if 0
     paint_blend_pixels_color_managed<PixelT>(settings,
                                              factors,
                                              start,
@@ -543,6 +537,8 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
                                              img_y,
                                              processors,
                                              paint_pixels);
+                                             */
+#endif
     return;
   }
 
@@ -554,21 +550,22 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 
   if constexpr (is_float) {
     /* Scene linear float. */
-    for (int i = 0; i < size; i++) {
-      float4 scene = image_pixels[img_x + i];
+    for (int i = 0; i < factors.size(); i++) {
+      float4 scene = image_pixels[start + i];
 #ifdef DEBUG_PIXEL_NODES
       scene = paint_debug_color(scene, img_y);
 #endif
-      image_pixels[img_x + i] = paint_blend_pixel(scratch_image_pixels[img_x + i],
+      image_pixels[start + i] = paint_blend_pixel(colors[i],
                                                   brush_alpha,
                                                   is_mix,
                                                   blend_mode,
-                                                  factors[start + i],
+                                                  factors[i],
                                                   scene);
     }
   }
   else {
     /* sRGB byte. */
+#if 0
     paint_pixels.resize(size);
     for (int i = 0; i < size; i++) {
       float4 scene;
@@ -595,6 +592,7 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
                                reinterpret_cast<const float (*)[4]>(paint_pixels.data()),
                                size,
                                matrix);
+#endif
   }
 }
 
@@ -964,6 +962,9 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
     const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
         tile_data.tile_number);
 
+    const MutableSpan<ModifiedRowSpan> modified_row_spans =
+        tile_data.pixel_row_run_scratch_data.modified_spans;
+
     threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
 
     /* Parallelize over contiguous runs containing one or more per-triangle pixel rows. */
@@ -983,21 +984,19 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         }
 
         /* Resize temporary data to match run size. */
-        tls.factors.resize(run_size);
         tls.pixel_positions.resize(run_size);
         tls.distances.resize(run_size);
 
-        const MutableSpan<float> factors = tls.factors;
+        /* TODO: Use this rather than the TLS entry */
         const MutableSpan<float3> positions = tls.pixel_positions;
         const MutableSpan<float> distances = tls.distances;
 
         tile_data.pixel_row_run_scratch_data.color[run_i].resize(run_size);
-
-        /* TODO: Use this rather than the TLS entry */
         tile_data.pixel_row_run_scratch_data.factor[run_i].resize(run_size);
 
-        const MutableSpan<float> scratch_factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
-        const MutableSpan<float4> scratch_colors = tile_data.pixel_row_run_scratch_data.color[run_i];
+        const MutableSpan<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
+        const MutableSpan<float4> scratch_colors =
+            tile_data.pixel_row_run_scratch_data.color[run_i];
 
         /* Tracking for active subset of run with nonzero factors. */
         int run_active_begin = -1;
@@ -1079,6 +1078,10 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         const int run_active_size = run_active_end - run_active_begin + 1;
         const int run_active_x = run_x + run_active_begin;
         tls.modified_spans.append({.x = run_active_x, .y = run_y, .size = run_active_size});
+        printf("%d -> %d\n", run_i, run_active_size);
+        modified_row_spans[run_i] = {.start = run_active_x, .size = run_active_size};
+        MutableSpan<float4> scratch_run_buffer = scratch_colors.slice(run_active_begin,
+                                                                      run_active_size);
 
         /* Push undo tiles before we edit the pixels. */
         push_undo_tiles(image_data,
@@ -1098,7 +1101,7 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                                  positions,
                                  std::get<MutableSpan<float4>>(orig_buffer),
                                  *processors,
-                                 std::get<MutableSpan<float4>>(mutable_buffer));
+                                 scratch_run_buffer);
         }
       }
     });
@@ -1133,6 +1136,66 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
   }
 
   pixel_node.flags.dirty |= pixels_updated;
+}
+
+static void do_apply_blur(const Paint &paint,
+                          const Brush &brush,
+                          Object &object,
+                          ImageData &image_data,
+                          bke::pbvh::Node & /*node*/,
+                          PixelNode &pixel_node)
+{
+  SculptSession &ss = *object.runtime->sculpt_session;
+  /* TODO: All this really needs is the brush mode */
+  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
+
+  for (UDIMTilePixels &tile_data : pixel_node.tiles) {
+    ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
+    if (image_buffer == nullptr) {
+      continue;
+    }
+
+    BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
+                                                                       BufferType{});
+    if (std::holds_alternative<std::monostate>(mutable_buffer)) {
+      BLI_assert_unreachable();
+      continue;
+    }
+
+    const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
+        tile_data.tile_number);
+
+    Span<ModifiedRowSpan> modified_spans = tile_data.pixel_row_run_scratch_data.modified_spans;
+
+    IndexMaskMemory memory;
+    const IndexMask tile_mask = IndexMask::from_predicate(
+        modified_spans.index_range(),
+        memory,
+        [&](const int run_i) {
+          return modified_spans[run_i].size != 0;
+        });
+
+    /* TODO: Move this to TLS */
+    Vector<float4> paint_pixels;
+    tile_mask.foreach_index([&](const int run_i) {
+      const ModifiedRowSpan modified_span = modified_spans[run_i];
+      const Span<float4> colors = tile_data.pixel_row_run_scratch_data.color[run_i];
+      const Span<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
+      const ushort2 start_coord = tile_data.pixel_row_run_start_coords[run_i];
+
+      const int start = image_buffer->x * start_coord.y + start_coord.x + modified_span.start;
+
+      if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
+        paint_blend_pixels(blend_settings,
+                           factors,
+                           colors,
+                           std::get<MutableSpan<float4>>(mutable_buffer),
+                           start,
+                           *processors,
+                           paint_pixels);
+      }
+    }, exec_mode::serial);
+  }
 }
 
 /* -------------------------------------------------------------------- */
@@ -1378,19 +1441,18 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index([&](const int i) {
     PixelNode &node = pixel_nodes[i];
-    for (UDIMTilePixels& tile : node.tiles) {
+    for (UDIMTilePixels &tile : node.tiles) {
       tile.reset_scratch_data();
     }
   });
-  /* For N pixel nodes in the mask, with Mi different tiles, each with Oj different pixel_row_run_starts */
 
   /* TODO: Enable parallelization */
   node_mask.foreach_index([&](const int i) {
-    fill_blur_pixels(
-        depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
+    fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
   });
 
-  /* TODO: Write pixel data */
+  node_mask.foreach_index(
+      [&](const int i) { do_apply_blur(paint, brush, ob, image_data, nodes[i], pixel_nodes[i]); });
 
   fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
 
