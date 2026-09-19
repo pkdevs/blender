@@ -525,16 +525,8 @@ int main(int argc,
    * since they impact `BKE_appdir` behavior. */
   BKE_appdir_init();
 
-  /* After parsing number of threads argument.
-   *
-   * Denormal handling is not enabled for the Python module because just writing `import bpy`
-   * should not change the result of unrelated computations. */
-#ifdef WITH_PYTHON_MODULE
-  const bool use_flush_denormals_to_zero = false;
-#else
-  const bool use_flush_denormals_to_zero = true;
-#endif
-  BLI_task_scheduler_init(use_flush_denormals_to_zero);
+  /* After parsing number of threads argument. */
+  BLI_task_scheduler_init(false); /* Don't enable flush-to-zero by default. */
 
   /* Initialize FFTW threading support. */
   fftw::initialize_float();
