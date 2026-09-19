@@ -553,6 +553,7 @@ struct CodegenContext : NodeErrorHandler {
     for (Node node : node.children_range()) {
       switch (node.type()) {
         case NodeType::Preprocessor:
+          jump_to(node.front());
           builder << node;
           break;
         case NodeType::Namespace:
