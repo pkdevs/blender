@@ -5516,63 +5516,36 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Object *object = CTX_data_active_object(C);
   GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
-  carver::CurveBooleanOpParameters op_params;
+  boolean::CurveBooleanOpParameters op_params;
 
   const bool keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
-  op_params.boolean_mode = carver::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
+  op_params.boolean_mode = boolean::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
   op_params.keep_caps = keep_caps;
   op_params.skip_clipping_attributes = false;
-  // const bool individual = RNA_boolean_get(op->ptr, "individual");
 
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
   bke::greasepencil::Drawing &drawing = drawings[0].drawing;
   bke::greasepencil::Drawing drawing_out = drawing;
 
   bke::CurvesGeometry src = drawing_out.strokes();
-  const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
-  const Span<float3> positions = src.positions();
-  const Span<float3> normals = drawing_out.curve_plane_normals();
   const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
   const float4x4 layer_to_world = layer.to_world_space(*object);
   const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d, layer_to_world);
 
-  /* Compute screen space positions. */
-  Array<float2> screen_space_positions(src.points_num());
-  threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
-    for (const int src_point : src_points) {
-      screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-          region, positions[src_point], projection);
-    }
-  });
-
-  Array<float4> normal_planes(src.curves_num());
-  threading::parallel_for(src.curves_range(), 4096, [&](const IndexRange src_curves) {
-    for (const int src_curve : src_curves) {
-      const float3 &normal = normals[src_curve];
-      const IndexRange points = src_points_by_curve[src_curve];
-      const float3 &point = positions[points.first()];
-      normal_planes[src_curve] = float4(normal, -math::dot(point, normal));
-    }
-  });
-
-  bke::SpanAttributeWriter<float2> pos_writer =
-      src.attributes_for_write().lookup_or_add_for_write_span<float2>(".positions_2d",
-                                                                      bke::AttrDomain::Point);
-
-  pos_writer.span.copy_from(screen_space_positions);
-  pos_writer.finish();
+  auto project_fn = [&](const float3 &position) {
+    return ED_view3d_project_float_v2_m4(region, position, projection);
+  };
 
   const VArray<int> fill_ids = *src.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
 
-  auto [shape_map, shape_offsets] = blender::bke::greasepencil::shapes_from_fill_ids(
-      fill_ids, src.curves_num());
+  const bke::greasepencil::ShapeData shapes_data =
+      blender::bke::greasepencil::shapes_from_fill_ids(fill_ids, src.curves_num());
 
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-  bke::CurvesGeometry dst_strokes = carver::curve_boolean(op_params, src, shapes, clipping_shapes);
-
-  dst_strokes.attributes_for_write().remove(".positions_2d");
+  bke::CurvesGeometry dst_strokes = boolean::curve_boolean(
+      op_params, src, project_fn, shapes, clipping_shapes);
 
   /* Set the new geometry. */
   drawing.strokes_for_write() = std::move(dst_strokes);
@@ -5589,13 +5562,13 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
 static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
 {
   static const EnumPropertyItem prop_boolean_modes[] = {
-      {int(carver::Operation::Intersect),
+      {int(boolean::Operation::Intersect),
        "INTERSECT",
        0,
        "Intersect",
        "Create stroke were multiple overlap"},
-      {int(carver::Operation::Union), "UNION", 0, "Union", "Combine multiple strokes into one"},
-      {int(carver::Operation::Difference),
+      {int(boolean::Operation::Union), "UNION", 0, "Union", "Combine multiple strokes into one"},
+      {int(boolean::Operation::Difference),
        "DIFFERENCE",
        0,
        "Difference",
@@ -5616,7 +5589,7 @@ static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "boolean_mode",
                prop_boolean_modes,
-               int(carver::Operation::Union),
+               int(boolean::Operation::Union),
                "Boolean Mode",
                "Mode of the boolean operation");
 }
