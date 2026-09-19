@@ -1122,42 +1122,40 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
     attribute.dst.finish();
   }
 
-  if (skip_clipping_attributes) {
-    src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
-      if (iter.domain != bke::AttrDomain::Point) {
-        return;
-      }
-      if (iter.data_type == bke::AttrType::String) {
-        return;
-      }
-      const GVArraySpan src = *iter.get(bke::AttrDomain::Point);
-      bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-          iter.name, bke::AttrDomain::Point, iter.data_type);
-      if (!dst) {
-        return;
-      }
-      unchanged_curves_mask.foreach_index([&](const int i) {
-        dst.span.slice(dst_points_by_curve[i])
-            .copy_from(src.slice(src_points_by_curve[dst_to_src_curves[i]]));
-      });
-
-      if (iter.name != "position") {
-        GMutableSpan attribute_data = dst.span;
-        bke::attribute_math::to_static_type(attribute_data.type(), [&]<typename T>() {
-          MutableSpan<T> span_data = attribute_data.typed<T>();
-
-          for (const InterpolatePoint &interpolate_point : clipping_point_to_interpolate) {
-            span_data[interpolate_point.dst_point] = bke::attribute_math::mix2<T>(
-                interpolate_point.factor,
-                span_data[interpolate_point.src_point_1],
-                span_data[interpolate_point.src_point_2]);
-          }
-        });
-      }
-
-      dst.finish();
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.domain != bke::AttrDomain::Point) {
+      return;
+    }
+    if (iter.data_type == bke::AttrType::String) {
+      return;
+    }
+    const GVArraySpan src = *iter.get(bke::AttrDomain::Point);
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        iter.name, bke::AttrDomain::Point, iter.data_type);
+    if (!dst) {
+      return;
+    }
+    unchanged_curves_mask.foreach_index([&](const int i) {
+      dst.span.slice(dst_points_by_curve[i])
+          .copy_from(src.slice(src_points_by_curve[dst_to_src_curves[i]]));
     });
-  }
+
+    if (skip_clipping_attributes && iter.name != "position") {
+      GMutableSpan attribute_data = dst.span;
+      bke::attribute_math::to_static_type(attribute_data.type(), [&]<typename T>() {
+        MutableSpan<T> span_data = attribute_data.typed<T>();
+
+        for (const InterpolatePoint &interpolate_point : clipping_point_to_interpolate) {
+          span_data[interpolate_point.dst_point] = bke::attribute_math::mix2<T>(
+              interpolate_point.factor,
+              span_data[interpolate_point.src_point_1],
+              span_data[interpolate_point.src_point_2]);
+        }
+      });
+    }
+
+    dst.finish();
+  });
 
   return dst_curves;
 }
