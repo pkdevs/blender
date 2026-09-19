@@ -40,7 +40,7 @@ float4 closure_to_rgba_forward([[resource_table]] KernelGlobals &kg,
     float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
     closure_weights_reset(kg, sd, closure_rand);
 
-    if (pipe.use_forward_lighting && pipe.use_transparency) {
+    if (pipe.use_forward_lighting && pipe.use_transparency) [[static_branch]] {
       [[resource_table]] eevee::LightprobeRenderData &lightprobes = kg.lightprobes;
       [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
       [[resource_table]] eevee::PreviousLayerHiZ &prev_hiz = kg.previous_layer_hiz;
