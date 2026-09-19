@@ -5516,42 +5516,53 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Object *object = CTX_data_active_object(C);
   GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
-  boolean::CurveBooleanOpParameters op_params;
 
+  boolean::CurveBooleanOpParameters op_params;
   op_params.boolean_mode = boolean::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
   op_params.keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
   op_params.skip_clipping_attributes = false;
   op_params.separate_islands = RNA_boolean_get(op->ptr, "separate_islands");
 
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
-  bke::greasepencil::Drawing &drawing = drawings[0].drawing;
-  bke::greasepencil::Drawing drawing_out = drawing;
 
-  bke::CurvesGeometry src = drawing_out.strokes();
-  const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
-  const float4x4 layer_to_world = layer.to_world_space(*object);
-  const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d, layer_to_world);
+  std::atomic<bool> changed = false;
+  threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
+    bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+    if (curves.is_empty()) {
+      return;
+    }
 
-  auto project_fn = [&](const float3 &position) {
-    return ED_view3d_project_float_v2_m4(region, position, projection);
-  };
+    const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
+    const float4x4 layer_to_world = layer.to_world_space(*object);
+    const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d, layer_to_world);
 
-  const VArray<int> fill_ids = *src.attributes().lookup<int>("fill_id", bke::AttrDomain::Curve);
+    IndexMaskMemory memory;
+    const IndexMask strokes = ed::greasepencil::retrieve_editable_and_selected_strokes(
+        *object, info.drawing, info.layer_index, memory);
+    if (strokes.is_empty()) {
+      return;
+    }
 
-  const bke::greasepencil::ShapeData shapes_data =
-      blender::bke::greasepencil::shapes_from_fill_ids(fill_ids, src.curves_num());
+    auto project_fn = [&](const float3 &position) {
+      return ED_view3d_project_float_v2_m4(region, position, projection);
+    };
 
-  const GroupedSpan<int> shapes = shapes_data.shapes();
-  const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
+    const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id",
+                                                                  bke::AttrDomain::Curve);
 
-  bke::CurvesGeometry dst_strokes = boolean::curve_boolean(
-      op_params, src, project_fn, shapes, clipping_shapes);
+    const bke::greasepencil::ShapeData shapes_data =
+        blender::bke::greasepencil::shapes_from_fill_ids(fill_ids, curves.curves_num());
 
-  /* Set the new geometry. */
-  drawing.strokes_for_write() = std::move(dst_strokes);
-  drawing.tag_topology_changed();
+    const GroupedSpan<int> shapes = shapes_data.shapes();
+    const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-  if (true) {
+    curves = boolean::curve_boolean(op_params, curves, project_fn, shapes, clipping_shapes);
+    changed = true;
+
+    info.drawing.tag_topology_changed();
+  });
+
+  if (changed) {
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
   }
