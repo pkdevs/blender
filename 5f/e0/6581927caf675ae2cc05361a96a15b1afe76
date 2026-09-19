@@ -1,3 +1,4 @@
 Referenced by pull request #163114, Fix #163192: Memory leak on WM_exit after recent commit
 Referenced by issue #163192, Failing tests in linux sanitizer builds mem leak related to `tbb::task_scheduler_observer`
 Referenced by commit 3c69eb17e235cff966b676b4e1f9f75b104ec2f7, Fix #163192: Memory leak on WM_exit after recent commit
+Referenced by issue #164118, UserWarning: The value of the smallest subnormal for <class 'numpy.float32'> type is zero.
