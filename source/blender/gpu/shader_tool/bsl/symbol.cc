@@ -442,6 +442,7 @@ struct SymbolParser : NodeErrorHandler {
           }
         }
         SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
+        var->is_macro = true;
         root->variable_emplace(var);
       }
       /* TODO: Make a warning/error if this just defines a constant in global space without #if
