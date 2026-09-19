@@ -322,7 +322,7 @@ struct CodegenContext : NodeErrorHandler {
       }
 
       if (var->reference_value.is_valid()) {
-        return {string(var->reference_value.str()) + whitespace, var->type, var->array_dimensions};
+        return ctx.expr(var->reference_value, scope);
       }
 
       bool preceded_by_dot = id.front().prev() == '.';
