@@ -7,7 +7,7 @@
 #include "draw_curves.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view_infos.hh"
-#include "eevee_attributes_curves_lib.glsl"
+#include "eevee_attributes_curves_lib.bsl.hh" /* IWYU pragma: export */
 #include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"

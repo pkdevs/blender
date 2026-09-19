@@ -7,7 +7,7 @@
 #include "draw_gsplat_lib.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
-#include "eevee_attributes_pointcloud_lib.glsl"
+#include "eevee_attributes_pointcloud_lib.bsl.hh" /* IWYU pragma: export */
 #include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
