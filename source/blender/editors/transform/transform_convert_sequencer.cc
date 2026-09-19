@@ -835,26 +835,31 @@ static void seq_transform_handle_overlap(Scene *scene,
                                 ts->time_dependent_strips);
 }
 
+/* Restore handles to their deselected state. */
+static void seq_transform_restore_handle_selection(TransDataContainer *tc)
+{
+  VectorSet<Strip *> strips = seq_transform_collection_from_transdata(tc);
+  for (Strip *strip : strips) {
+    strip->flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
+  }
+}
+
 static void special_aftertrans_update__sequencer(bContext *C, TransInfo *t)
 {
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   Scene *scene = CTX_data_sequencer_scene(C);
   SpaceSeq *sseq = t->area->spacedata.first_as<SpaceSeq>();
 
-  /* Restore handles to their deselected state. */
-  if ((sseq->flag & SPACE_SEQ_DESELECT_STRIP_HANDLE) != 0 &&
-      transform_mode_edge_seq_slide_use_restore_handle_selection(t))
-  {
-    VectorSet<Strip *> strips = seq_transform_collection_from_transdata(tc);
-    for (Strip *strip : strips) {
-      strip->flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
-    }
-  }
+  const bool deselect_handles = (sseq->flag & SPACE_SEQ_DESELECT_STRIP_HANDLE) != 0 &&
+                                transform_mode_edge_seq_slide_use_restore_handle_selection(t);
   sseq->flag &= ~SPACE_SEQ_DESELECT_STRIP_HANDLE;
 
   /* #freeSeqData in `transform_conversions.cc` does this
    * keep here so the `else` at the end won't run. */
   if (t->state == TRANS_CANCEL) {
+    if (deselect_handles) {
+      seq_transform_restore_handle_selection(tc);
+    }
     return;
   }
 
@@ -880,6 +885,10 @@ static void special_aftertrans_update__sequencer(bContext *C, TransInfo *t)
                                tc,
                                transform_mode_edge_seq_slide_operator_get(t),
                                (sseq->flag & SEQ_MARKER_TRANS) != 0);
+
+  if (deselect_handles) {
+    seq_transform_restore_handle_selection(tc);
+  }
 }
 
 bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])

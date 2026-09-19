@@ -583,15 +583,66 @@ static void strip_transform_handle_overwrite(Scene *scene,
   edit_remove_flagged_strips(scene, seqbasep);
 }
 
+static Side strip_selected_handles_get(const Strip *strip)
+{
+  const bool left_selected = (strip->flag & SEQ_LEFTSEL) != 0;
+  const bool right_selected = (strip->flag & SEQ_RIGHTSEL) != 0;
+
+  if (left_selected && right_selected) {
+    return Side::Both;
+  }
+  if (left_selected) {
+    return Side::Left;
+  }
+  if (right_selected) {
+    return Side::Right;
+  }
+  return Side::None;
+}
+
+static void transform_shuffle_handle(const Scene *scene,
+                                     ListBaseT<Strip> *seqbasep,
+                                     Strip *strip,
+                                     const Side handle_side)
+{
+  BLI_assert(ELEM(handle_side, Side::Left, Side::Right));
+
+  for (Strip &other : *seqbasep) {
+    if (!transform_test_overlap(scene, strip, &other)) {
+      continue;
+    }
+    /* Repeatedly pull back the handle bounds until no strip blocks anymore.
+     * Note that this is guaranteed to eventually resolve the handle overlap.  */
+    if (handle_side == Side::Left) {
+      strip->left_handle_set(scene, other.right_handle(scene));
+    }
+    else {
+      strip->right_handle_set(scene, other.left_handle());
+    }
+  }
+}
+
 static void strip_transform_handle_shuffle(Scene *scene,
                                            ListBaseT<Strip> *seqbasep,
                                            Span<Strip *> source_strips,
                                            Span<Strip *> time_dependent_strips,
                                            bool use_sync_markers)
 {
-  /* Shuffle non strips with no effects attached. */
-  VectorSet<Strip *> strips_to_shuffle = extract_standalone_strips(source_strips);
+  VectorSet<Strip *> strips_to_shuffle;
 
+  /* First, shuffle any transformed handles back. If neither or both handles are selected, then add
+   * to #strips_to_shuffle for shuffling the strip as a whole.  */
+  for (Strip *strip : extract_standalone_strips(source_strips)) {
+    const Side handle_side = strip_selected_handles_get(strip);
+    if (ELEM(handle_side, Side::Left, Side::Right)) {
+      transform_shuffle_handle(scene, seqbasep, strip, handle_side);
+    }
+    else {
+      strips_to_shuffle.add(strip);
+    }
+  }
+
+  /* Shuffle entire strips. */
   transform_shuffle_horizontal(
       scene, seqbasep, strips_to_shuffle, time_dependent_strips, use_sync_markers);
 }
