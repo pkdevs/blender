@@ -17,7 +17,7 @@
 
 /* Needed includes for shader nodes. */
 #include "draw_volume.bsl.hh"
-#include "eevee_attributes_volume_lib.glsl"
+#include "eevee_attributes_volume_lib.bsl.hh" /* IWYU pragma: export */
 #include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_occupancy_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"

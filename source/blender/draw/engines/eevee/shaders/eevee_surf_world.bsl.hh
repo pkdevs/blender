@@ -9,7 +9,7 @@
  */
 #pragma once
 
-#include "eevee_attributes_world_lib.glsl"
+#include "eevee_attributes_world_lib.bsl.hh" /* IWYU pragma: export */
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_nodetree_frag_lib.bsl.hh"

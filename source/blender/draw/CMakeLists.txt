@@ -357,11 +357,11 @@ set(GLSL_SRC
   engines/workbench/shaders/infos/workbench_prepass_infos.hh
   engines/workbench/shaders/infos/workbench_transparent_resolve_infos.hh
 
-  engines/eevee/shaders/eevee_attributes_curves_lib.glsl
-  engines/eevee/shaders/eevee_attributes_mesh_lib.glsl
-  engines/eevee/shaders/eevee_attributes_pointcloud_lib.glsl
-  engines/eevee/shaders/eevee_attributes_volume_lib.glsl
-  engines/eevee/shaders/eevee_attributes_world_lib.glsl
+  engines/eevee/shaders/eevee_attributes_curves_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_mesh_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_pointcloud_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_volume_lib.bsl.hh
+  engines/eevee/shaders/eevee_attributes_world_lib.bsl.hh
   engines/eevee/shaders/eevee_bxdf.bsl.hh
   engines/eevee/shaders/eevee_bxdf_diffuse.bsl.hh
   engines/eevee/shaders/eevee_bxdf_lut.bsl.hh

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "draw_model.bsl.hh"
-#include "eevee_attributes_mesh_lib.glsl"
+#include "eevee_attributes_mesh_lib.bsl.hh" /* IWYU pragma: export */
 #include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
