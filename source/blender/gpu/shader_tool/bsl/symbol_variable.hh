@@ -66,6 +66,7 @@ struct SymbolVariable : Symbol {
   bool is_static = false;
   bool is_error = false;
   bool is_constexpr = false;
+  bool is_macro = false;
   bool is_const = false;
   bool is_compilation_const = false;
 

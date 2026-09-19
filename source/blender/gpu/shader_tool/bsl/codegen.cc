@@ -2720,7 +2720,7 @@ struct CodegenContext : NodeErrorHandler {
     Node node = expr.child_first();
     if (LocalVar var = node; var.is_valid()) {
       SymbolVariable *sym = cls.lookup_variable(table, var.identifier());
-      if (sym->is_error) {
+      if (sym->is_macro) {
         /* This could be a macro. Don't make an error. */
         return string(expr.str());
       }
