@@ -464,7 +464,7 @@ static void rna_SequenceEditor_update_cache(Main * /*bmain*/, Scene * /*scene*/,
   Editing *ed = scene->ed;
 
   seq::relations_free_imbuf(scene, &ed->seqbase, false);
-  seq::cache_cleanup(scene, seq::CacheCleanup::FinalAndIntra);
+  seq::cache_cleanup(scene, seq::CacheCleanup::SourceImage | seq::CacheCleanup::FinalAndIntra);
 }
 
 static void rna_SequenceEditor_cache_settings_changed(Main * /*bmain*/,
