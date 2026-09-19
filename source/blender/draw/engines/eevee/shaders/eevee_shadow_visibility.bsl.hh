@@ -32,7 +32,7 @@ struct ViewVisibility {
 
   bool shadow_linking_affects_caster(uint view_id, uint resource_id)
   {
-    [[resource_table]] draw::Infos infos = infos_;
+    [[resource_table]] draw::Infos &infos = infos_;
     ObjectInfos object_infos = infos.get(resource_id);
     return bitmask64_test(render_view_buf[view_id].shadow_set_membership,
                           blocker_shadow_set_get(object_infos));
