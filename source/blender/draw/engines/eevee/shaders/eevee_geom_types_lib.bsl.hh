@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "draw_shader_shared.hh"
 #include "gpu_shader_compat.hh"
 
 struct MeshVertex {
@@ -41,4 +42,6 @@ struct VolumePoint {
   float3 lP;
   /* Default derived from local position. */
   float3 orco_default;
+
+  float3 grid_co[DRW_GRID_PER_VOLUME_MAX];
 };

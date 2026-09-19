@@ -14,17 +14,12 @@
 
 namespace eevee {
 
-struct GeomVolume {
-  [[legacy_info]] ShaderCreateInfo draw_volume_infos;
-};
-
 struct GeomVolumeIn {
   [[attribute(0)]] float3 pos;
 };
 
 [[vertex]] [[clip_control]] void geom_volume(
     [[resource_table]] const PipelineConstants & /*pipe*/,
-    [[resource_table]] const GeomVolume & /*srt*/,
     [[resource_table]] const Uniform & /*uni*/,
     [[instance_index]] const int inst_index,
     [[resource_table]] const draw::View &views,
