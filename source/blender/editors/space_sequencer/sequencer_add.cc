@@ -695,7 +695,7 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
    * is the final placement, so resolve overlap more properly instead of hardcoding to shuffle. */
   if (should_move_strips_after_add(op)) {
     for (Strip *strip : strips) {
-      seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
+      seq::transform_shuffle_vertical(ed->current_strips(), strip, scene);
     }
     return;
   }

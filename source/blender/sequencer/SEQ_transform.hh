@@ -25,7 +25,6 @@ enum eSeqRippleFlag : int;
 struct Scene;
 struct Strip;
 struct SeqTimelineChannel;
-struct TimeMarker;
 
 namespace seq {
 
@@ -39,25 +38,11 @@ bool transform_single_image_check(const Strip *strip);
 bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
 bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
 void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta);
-/**
- * \return 0 if there weren't enough space.
- */
-bool transform_seqbase_shuffle_ex(ListBaseT<Strip> *seqbasep,
-                                  Strip *test,
-                                  Scene *evil_scene,
-                                  int channel_delta);
-bool transform_seqbase_shuffle(ListBaseT<Strip> *seqbasep, Strip *test, Scene *evil_scene);
-bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
-                                    Span<Strip *> time_dependent_strips,
-                                    ListBaseT<Strip> *seqbasep,
-                                    Scene *evil_scene,
-                                    ListBaseT<TimeMarker> *markers,
-                                    bool use_sync_markers);
-bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
-                                    ListBaseT<Strip> *seqbasep,
-                                    Scene *evil_scene,
-                                    ListBaseT<TimeMarker> *markers,
-                                    bool use_sync_markers);
+void transform_shuffle_vertical_ex(ListBaseT<Strip> *seqbasep,
+                                   Strip *strip,
+                                   Scene *scene,
+                                   int channel_delta);
+void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep, Strip *strip, Scene *scene);
 
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,

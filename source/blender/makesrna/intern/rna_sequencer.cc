@@ -610,9 +610,7 @@ static void do_strip_frame_change_update(Scene *scene, Strip *strip)
 {
   ListBaseT<Strip> *seqbase = seq::get_seqbase_by_strip(scene, strip);
 
-  if (seq::transform_test_overlap(scene, seqbase, strip)) {
-    seq::transform_seqbase_shuffle(seqbase, strip, scene);
-  }
+  seq::transform_shuffle_vertical(seqbase, strip, scene);
 
   if (strip->type == STRIP_TYPE_SOUND) {
     DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -870,9 +868,7 @@ static void rna_Strip_channel_set(PointerRNA *ptr, int value)
   const int channel_delta = (value >= strip->channel) ? 1 : -1;
   strip->channel_set(value);
 
-  if (seq::transform_test_overlap(scene, seqbase, strip)) {
-    seq::transform_seqbase_shuffle_ex(seqbase, strip, scene, channel_delta);
-  }
+  seq::transform_shuffle_vertical_ex(seqbase, strip, scene, channel_delta);
   seq::relations_invalidate_cache(scene, strip);
 }
 

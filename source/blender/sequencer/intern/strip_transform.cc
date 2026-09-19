@@ -116,153 +116,120 @@ void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta)
   time_update_meta_strip_range(evil_scene, lookup_meta_by_strip(evil_scene->ed, strip));
 }
 
-bool transform_seqbase_shuffle_ex(ListBaseT<Strip> *seqbasep,
-                                  Strip *test,
-                                  Scene *evil_scene,
-                                  int channel_delta)
+static bool strips_overlap_at_offset(const Scene *scene,
+                                     const Strip *strip,
+                                     const Strip *other,
+                                     const int offset)
 {
-  const int orig_channel = test->channel;
-  BLI_assert(ELEM(channel_delta, -1, 1));
-
-  test->channel_set(test->channel + channel_delta);
-
-  const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(editing_get(evil_scene));
-  SeqTimelineChannel *channel = channel_get_by_index(channels, test->channel);
-
-  bool use_fallback_translation = false;
-
-  while (transform_test_overlap(evil_scene, seqbasep, test) || channel->is_muted() ||
-         channel->is_locked())
-  {
-    if ((channel_delta > 0) ? (test->channel + channel_delta >= MAX_CHANNELS) :
-                              (test->channel + channel_delta < 1))
-    {
-      use_fallback_translation = true;
-      break;
-    }
-
-    test->channel_set(test->channel + channel_delta);
-    channel = channel_get_by_index(channels, test->channel);
-  }
-
-  /* Strip can not be moved to next free channel, translate it instead. */
-  if (use_fallback_translation) {
-    int new_frame = test->right_handle(evil_scene);
-
-    for (Strip &strip : *seqbasep) {
-      if (strip.channel == orig_channel) {
-        new_frame = max_ii(new_frame, strip.right_handle(evil_scene));
-      }
-    }
-
-    test->channel_set(orig_channel);
-
-    new_frame = new_frame + (test->start - test->left_handle()); /* adjust by the startdisp */
-    transform_translate_strip(evil_scene, test, new_frame - test->start);
-    return false;
-  }
-
-  return true;
+  BLI_assert(strip != other);
+  return strip->channel == other->channel &&
+         strip->left_handle() + offset < other->right_handle(scene) &&
+         strip->right_handle(scene) + offset > other->left_handle();
 }
 
-bool transform_seqbase_shuffle(ListBaseT<Strip> *seqbasep, Strip *test, Scene *evil_scene)
+static int shuffle_frame_offset_get(const Scene *scene,
+                                    Span<Strip *> strips_to_shuffle,
+                                    ListBaseT<Strip> *seqbasep,
+                                    const Side side)
 {
-  return transform_seqbase_shuffle_ex(seqbasep, test, evil_scene, 1);
-}
+  BLI_assert(ELEM(side, Side::Left, Side::Right));
 
-static bool shuffle_strip_test_overlap(const Scene *scene,
-                                       const Strip *strip1,
-                                       const Strip *strip2,
-                                       const int offset)
-{
-  BLI_assert(strip1 != strip2);
-  return (strip1->channel == strip2->channel &&
-          ((strip1->right_handle(scene) + offset <= strip2->left_handle()) ||
-           (strip1->left_handle() + offset >= strip2->right_handle(scene))) == 0);
-}
-
-static int shuffle_strip_time_offset_get(const Scene *scene,
-                                         Span<Strip *> strips_to_shuffle,
-                                         ListBaseT<Strip> *seqbasep,
-                                         char dir)
-{
   int offset = 0;
-  bool all_conflicts_resolved = false;
+  int offset_prev;
 
-  while (!all_conflicts_resolved) {
-    all_conflicts_resolved = true;
+  do {
+    offset_prev = offset;
     for (Strip *strip : strips_to_shuffle) {
-      for (Strip &strip_other : *seqbasep) {
-        if (strips_to_shuffle.contains(&strip_other)) {
-          continue;
-        }
-        if (relation_is_effect_of_strip(&strip_other, strip)) {
-          continue;
-        }
-        if (!shuffle_strip_test_overlap(scene, strip, &strip_other, offset)) {
+      for (Strip &other : *seqbasep) {
+        if (strips_to_shuffle.contains(&other) || relation_is_effect_of_strip(&other, strip) ||
+            !strips_overlap_at_offset(scene, strip, &other, offset))
+        {
           continue;
         }
 
-        all_conflicts_resolved = false;
-
-        if (dir == 'L') {
-          offset = min_ii(offset, strip_other.left_handle() - strip->right_handle(scene));
-        }
-        else {
-          offset = max_ii(offset, strip_other.right_handle(scene) - strip->left_handle());
-        }
+        offset = (side == Side::Left) ?
+                     min_ii(offset, other.left_handle() - strip->right_handle(scene)) :
+                     max_ii(offset, other.right_handle(scene) - strip->left_handle());
       }
     }
-  }
+  } while (offset != offset_prev);
 
   return offset;
 }
 
-bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
-                                    ListBaseT<Strip> *seqbasep,
-                                    Scene *evil_scene,
-                                    ListBaseT<TimeMarker> *markers,
-                                    const bool use_sync_markers)
+static void transform_shuffle_horizontal(Scene *scene,
+                                         ListBaseT<Strip> *seqbasep,
+                                         Span<Strip *> strips_to_shuffle,
+                                         Span<Strip *> time_dependent_strips,
+                                         const bool use_sync_markers)
 {
-  VectorSet<Strip *> empty_set;
-  return transform_seqbase_shuffle_time(
-      strips_to_shuffle, empty_set, seqbasep, evil_scene, markers, use_sync_markers);
-}
+  const int offset_l = shuffle_frame_offset_get(scene, strips_to_shuffle, seqbasep, Side::Left);
+  const int offset_r = shuffle_frame_offset_get(scene, strips_to_shuffle, seqbasep, Side::Right);
+  const int offset = (-offset_l < offset_r) ? offset_l : offset_r;
 
-bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
-                                    Span<Strip *> time_dependent_strips,
-                                    ListBaseT<Strip> *seqbasep,
-                                    Scene *evil_scene,
-                                    ListBaseT<TimeMarker> *markers,
-                                    const bool use_sync_markers)
-{
-  int offset_l = shuffle_strip_time_offset_get(evil_scene, strips_to_shuffle, seqbasep, 'L');
-  int offset_r = shuffle_strip_time_offset_get(evil_scene, strips_to_shuffle, seqbasep, 'R');
-  int offset = (-offset_l < offset_r) ? offset_l : offset_r;
+  if (offset == 0) {
+    return;
+  }
 
-  if (offset) {
-    for (Strip *strip : strips_to_shuffle) {
-      transform_translate_strip(evil_scene, strip, offset);
-      strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
-    }
+  for (Strip *strip : strips_to_shuffle) {
+    transform_translate_strip(scene, strip, offset);
+  }
+  for (Strip *strip : time_dependent_strips) {
+    offset_animdata(scene, strip, offset);
+  }
 
-    if (!time_dependent_strips.is_empty()) {
-      for (Strip *strip : time_dependent_strips) {
-        offset_animdata(evil_scene, strip, offset);
-      }
-    }
-
-    if (use_sync_markers && !(evil_scene->toolsettings->lock_markers) && (markers != nullptr)) {
-      /* affect selected markers - it's unlikely that we will want to affect all in this way? */
-      for (TimeMarker &marker : *markers) {
-        if (marker.flag & SELECT) {
-          marker.frame += offset;
-        }
+  if (use_sync_markers && !scene->toolsettings->lock_markers) {
+    /* affect selected markers - it's unlikely that we will want to affect all in this way? */
+    for (TimeMarker &marker : scene->markers) {
+      if (marker.flag & SELECT) {
+        marker.frame += offset;
       }
     }
   }
+}
 
-  return offset ? false : true;
+static bool shuffle_channel_is_free(const Scene *scene,
+                                    ListBaseT<Strip> *seqbasep,
+                                    const ListBaseT<SeqTimelineChannel> *channels,
+                                    Strip *strip)
+{
+  const SeqTimelineChannel *channel = channel_get_by_index(channels, strip->channel);
+  return !channel->is_muted() && !channel->is_locked() &&
+         !transform_test_overlap(scene, seqbasep, strip);
+}
+
+void transform_shuffle_vertical_ex(ListBaseT<Strip> *seqbasep,
+                                   Strip *strip,
+                                   Scene *scene,
+                                   const int channel_delta)
+{
+  BLI_assert(ELEM(channel_delta, -1, 1));
+
+  if (!transform_test_overlap(scene, seqbasep, strip)) {
+    return;
+  }
+
+  const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(editing_get(scene));
+  const int orig_channel = strip->channel;
+
+  for (int channel = orig_channel + channel_delta; channel >= 1 && channel <= MAX_CHANNELS;
+       channel += channel_delta)
+  {
+    /* Temporarily override the strip's channel to easily check for overlaps. */
+    strip->channel_set(channel);
+    if (shuffle_channel_is_free(scene, seqbasep, channels, strip)) {
+      return;
+    }
+  }
+
+  /* Strip cannot be moved to next free channel, fallback to horizontal shuffling. */
+  strip->channel_set(orig_channel);
+  transform_shuffle_horizontal(scene, seqbasep, {&strip, 1}, {}, false);
+}
+
+void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep, Strip *strip, Scene *scene)
+{
+  transform_shuffle_vertical_ex(seqbasep, strip, scene, 1);
 }
 
 static VectorSet<Strip *> extract_standalone_strips(Span<Strip *> transformed_strips)
@@ -616,18 +583,17 @@ static void strip_transform_handle_overwrite(Scene *scene,
   edit_remove_flagged_strips(scene, seqbasep);
 }
 
-static void strip_transform_handle_overlap_shuffle(Scene *scene,
-                                                   ListBaseT<Strip> *seqbasep,
-                                                   Span<Strip *> source_strips,
-                                                   Span<Strip *> time_dependent_strips,
-                                                   bool use_sync_markers)
+static void strip_transform_handle_shuffle(Scene *scene,
+                                           ListBaseT<Strip> *seqbasep,
+                                           Span<Strip *> source_strips,
+                                           Span<Strip *> time_dependent_strips,
+                                           bool use_sync_markers)
 {
-  ListBaseT<TimeMarker> *markers = &scene->markers;
-
   /* Shuffle non strips with no effects attached. */
-  VectorSet standalone_strips = extract_standalone_strips(source_strips);
-  transform_seqbase_shuffle_time(
-      standalone_strips, time_dependent_strips, seqbasep, scene, markers, use_sync_markers);
+  VectorSet<Strip *> strips_to_shuffle = extract_standalone_strips(source_strips);
+
+  transform_shuffle_horizontal(
+      scene, seqbasep, strips_to_shuffle, time_dependent_strips, use_sync_markers);
 }
 
 void transform_handle_overlap(Scene *scene,
@@ -661,7 +627,7 @@ void transform_handle_overlap(Scene *scene,
       strip_transform_handle_overwrite(scene, seqbasep, source_strips);
       break;
     case SEQ_OVERLAP_SHUFFLE:
-      strip_transform_handle_overlap_shuffle(
+      strip_transform_handle_shuffle(
           scene, seqbasep, source_strips, time_dependent_strips, use_sync_markers);
       break;
   }
@@ -670,9 +636,7 @@ void transform_handle_overlap(Scene *scene,
    * strip on top of its effect, on top of a locked strip, or inside a transition (split fails).
    */
   for (Strip *strip : source_strips) {
-    if (transform_test_overlap(scene, seqbasep, strip)) {
-      transform_seqbase_shuffle(seqbasep, strip, scene);
-    }
+    transform_shuffle_vertical(seqbasep, strip, scene);
     strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
   }
 }
