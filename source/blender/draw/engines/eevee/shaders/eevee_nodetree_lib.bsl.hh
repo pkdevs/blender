@@ -9,6 +9,7 @@
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
+#include "draw_viewlayer.bsl.hh"
 #include "eevee_bxdf_lut_lib.bsl.hh"
 #include "eevee_camera_lib.bsl.hh"
 #include "eevee_fast_gi.bsl.hh"
@@ -154,6 +155,7 @@ struct KernelGlobals {
   [[resource_table]] srt_t<draw::Model> model;
   [[resource_table]] srt_t<draw::Infos> infos;
   [[resource_table]] srt_t<draw::Attributes> ob_attr;
+  [[resource_table]] srt_t<draw::ViewLayerAttributes> vl_attr;
 
   [[resource_table]] srt_t<eevee::PipelineConstants> pipe;
   [[resource_table]] srt_t<eevee::Uniform> uniforms;
@@ -1048,28 +1050,10 @@ float4 attr_load_uniform([[resource_table]] KernelGlobals &kg,
   return ob_attributes.get(kg.object_infos_get(sd), attr_hash);
 }
 
-float4 node_attribute_layer_impl([[resource_table]] KernelGlobals & /*kg*/, const uint attr_hash)
+float4 node_attribute_layer_impl([[resource_table]] KernelGlobals &kg, const uint attr_hash)
 {
-  const auto &attrs_buf = buffer_get(draw_layer_attributes, drw_layer_attrs);
-
-  /* The first record of the buffer stores the length. */
-  uint left = 0, right = attrs_buf[0].buffer_length;
-
-  while (left < right) {
-    uint mid = (left + right) / 2;
-    uint hash = attrs_buf[mid].hash_code;
-
-    if (hash < attr_hash) {
-      left = mid + 1;
-    }
-    else if (hash > attr_hash) {
-      right = mid;
-    }
-    else {
-      return attrs_buf[mid].data;
-    }
-  }
-  return float4(0);
+  [[resource_table]] const draw::ViewLayerAttributes &vl_attributes = kg.vl_attr;
+  return vl_attributes.get(attr_hash);
 }
 
 void scene_time_uniforms([[resource_table]] KernelGlobals &kg, float &seconds, float &frame)
