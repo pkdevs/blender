@@ -508,7 +508,7 @@ void SymbolTable::register_builtins(LocalScope node)
         sym->is_builtin = true;
         sym->reserve_arguments(fn.arg_types.size());
         for (SymbolClass *arg : fn.arg_types) {
-          sym->add_argument(arg);
+          sym->add_argument(true, arg);
         }
         root->function_emplace(sym, true);
       };

@@ -209,7 +209,7 @@ struct SymbolParser : NodeErrorHandler {
         error(var->loc.tok, Diag::Redefinition, var->identifier);
       }
       /* Register argument type for argument resolution. */
-      fn_sym->add_argument(type, arg.declarator().initial_value().expr());
+      fn_sym->add_argument(arg.type().is_const(), type, arg.declarator().initial_value().expr());
 
       switch (attr.res_type) {
         case ResourceType::BASE_INSTANCE:
@@ -590,7 +590,7 @@ struct SymbolParser : NodeErrorHandler {
       /* Create scalar constructor. */
       SymbolFunction *ctor = table.fun_arena.alloc(
           &scope, decl.front(), cls, cls->original, SymbolFunction::Type::GLOBAL);
-      ctor->add_argument(cls);
+      ctor->add_argument(true, cls);
       ctor->allow_vector_promotion = true;
       scope.function_emplace(ctor, true);
       ctor->identifier = prefix + ctor->identifier;
@@ -654,6 +654,7 @@ struct SymbolParser : NodeErrorHandler {
       /* Note: We discard the argument parsed by the forward declaration.
        * They are parsed again by `parse_scope`. */
       fn->variables.clear();
+      fn->arg_const.clear();
       fn->arg_types.clear();
       fn->arg_defaults.clear();
     }

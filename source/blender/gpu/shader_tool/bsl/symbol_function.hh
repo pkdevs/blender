@@ -29,6 +29,7 @@ struct SymbolFunction : SymbolScope {
 
   ast::FuncDecl decl = {};
 
+  vector<bool> arg_const;
   vector<SymbolClass *> arg_types;
   vector<ast::Expr> arg_defaults;
 
@@ -111,7 +112,7 @@ struct SymbolFunction : SymbolScope {
                                            const vector<SymbolClass *> &arg_types);
 
   void add_overload(SymbolFunction *fn);
-  void add_argument(SymbolClass *type, ast::Expr default_value = {});
+  void add_argument(bool is_const, SymbolClass *type, ast::Expr default_value = {});
 
   void reserve_arguments(int n);
 
