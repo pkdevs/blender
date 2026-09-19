@@ -1541,10 +1541,10 @@ struct CodegenContext : NodeErrorHandler {
     }
   }
 
-  string condition(SymbolScope *scope)
+  string condition(const SymbolScope *scope)
   {
     string str;
-    for (auto &[k, var] : scope->variables) {
+    for (const auto &[k, var] : scope->variables) {
       if (var.second->type->is_srt() &&
           var.second->type->srt_type != ResourceTableType::VERTEX_OUT)
       {
@@ -1554,15 +1554,39 @@ struct CodegenContext : NodeErrorHandler {
     return str.empty() ? str : str.substr(4);
   }
 
-  string condition(SymbolFunction *fn)
+  string condition(const SymbolFunction *fn)
   {
     string str;
+    /* Make functions writing to vertex outputs limited to the vertex shader. */
+    for (int i = 0; i < fn->arg_types.size(); ++i) {
+      if (fn->arg_types[i]->srt_type == ResourceTableType::VERTEX_OUT && !fn->arg_const[i]) {
+        str += " && defined(GPU_VERTEX_SHADER)";
+        break;
+      }
+    }
+
     if (fn->is_entry_point()) {
       str += " && defined(ENTRY_POINT_" + fn->identifier + ")";
+      switch (fn->entry_point_type) {
+        case SymbolFunction::EntryPointType::FRAG:
+          str += " && defined(GPU_FRAGMENT_SHADER)";
+          break;
+        case SymbolFunction::EntryPointType::VERT:
+          str += " && defined(GPU_VERTEX_SHADER)";
+          break;
+        case SymbolFunction::EntryPointType::COMP:
+          str += " && defined(GPU_COMPUTE_SHADER)";
+          break;
+        case SymbolFunction::EntryPointType::NONE:
+          break;
+      }
     }
-    else if (string scope_str = condition(static_cast<SymbolScope *>(fn)); !scope_str.empty()) {
+    else if (string scope_str = condition(static_cast<const SymbolScope *>(fn));
+             !scope_str.empty())
+    {
       str += " && " + scope_str;
     }
+
     return str.empty() ? str : str.substr(4);
   }
 
