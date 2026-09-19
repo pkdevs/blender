@@ -408,6 +408,7 @@ static void average_pixels(const int start,
                            const TileColorspaceProcessor &processors,
                            const MutableSpan<float4> scratch_pixels)
 {
+  PRF_scope(ProfileCategory::Editor);
   BLI_assert(scratch_pixels.size() == size);
 
   constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
@@ -1144,6 +1145,7 @@ static void do_apply_blur(const Paint &paint,
                           bke::pbvh::Node & /*node*/,
                           PixelNode &pixel_node)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   /* TODO: All this really needs is the brush mode */
   const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
