@@ -731,7 +731,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
   info.compilation_constant(Type::bool_t, "use_raycast", use_raycast);
 
   StringRefNull pipeline_info_name;
-  StringRefNull additional_info_name;
   /* Pipeline Info. */
   switch (geometry_type) {
     case MAT_GEOM_WORLD:
@@ -763,7 +762,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_PREPASS_FORWARD_VELOCITY:
         case MAT_PIPE_PREPASS_DEFERRED_VELOCITY:
           pipeline_info_name = "eevee_surf_depthTtrue_infos_";
-          additional_info_name = "eevee_GeometryVelocity";
           info.name_ += "_depth_velocity";
           info.compilation_constant(Type::bool_t, "use_velocity", true);
           info.define("MAT_DEPTH");
@@ -789,7 +787,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           break;
         case MAT_PIPE_PREPASS_PLANAR:
           pipeline_info_name = "eevee_surf_depthTfalse_infos_";
-          additional_info_name = "eevee_clip_plane";
           info.name_ += "_depth_clip";
           info.compilation_constant(Type::bool_t, "use_velocity", false);
           info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
@@ -962,9 +959,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
 
   if (!pipeline_info_name.is_empty()) {
     info.additional_info(pipeline_info_name);
-  }
-  if (!additional_info_name.is_empty()) {
-    info.additional_info(additional_info_name);
   }
   if (!geometry_info_name.is_empty()) {
     info.additional_info(geometry_info_name);
