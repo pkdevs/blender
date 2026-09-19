@@ -78,7 +78,7 @@ struct ExpressionTypeParser
             return scope->lookup_class(*table, var.identifier()).unwrap(err);
           }
           error(call.parameters(), Diag::ExpectedOneTypename);
-          return {table->err_cls, ConstexprError(), false};
+          return {table->err_cls, ConstexprError(0), false};
         }
         if (call.identifier().str() == "interface_get" ||
             call.identifier().str() == "sampler_get" || call.identifier().str() == "buffer_get")
@@ -95,7 +95,7 @@ struct ExpressionTypeParser
             return v;
           }
           error(call.parameters(), Diag::ExpectedOneTypename);
-          return {table->err_cls, ConstexprError(), false};
+          return {table->err_cls, ConstexprError(0), false};
         }
 
         if (is_reference) {
@@ -366,7 +366,7 @@ struct ExpressionTypeParser
   {
     SymbolClass *type = table->get_literal_type(t.str());
 
-    ConstexprValue value;
+    ConstexprValue value(0);
     try {
       std::string str_val(t.str());
 
