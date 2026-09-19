@@ -5557,7 +5557,7 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
     const IndexMask editable_shapes = bke::greasepencil::curves_mask_to_shapes(
         strokes, shapes, memory);
 
-    const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
+    const IndexRange clipping_shapes = IndexRange::from_single(editable_shapes.last());
 
     curves = boolean::curve_boolean(
         op_params, curves, project_fn, shapes, editable_shapes, clipping_shapes);
