@@ -2724,9 +2724,11 @@ struct CodegenContext : NodeErrorHandler {
         /* This could be a macro. Don't make an error. */
         return string(expr.str());
       }
-      int enum_val = sym->value.comp_as<int>(0);
-      if (auto it = table.image_formats.find(enum_val); it != table.image_formats.end()) {
-        return it->second;
+      if (sym->is_constexpr) {
+        int enum_val = sym->value.comp_as<int>(0);
+        if (auto it = table.image_formats.find(enum_val); it != table.image_formats.end()) {
+          return it->second;
+        }
       }
     }
     error(expr, Diag::ExpectedImageFormat);
