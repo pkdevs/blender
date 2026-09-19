@@ -1038,6 +1038,11 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   };
 
   for (auto [type, prefix] : image_types) {
+    SymbolClass *sampler = root->classes[prefix + "samplerBuffer"];
+    functions.push_back({type, "texelFetch", {sampler, i_types[0]}});
+  }
+
+  for (auto [type, prefix] : image_types) {
     vector<tuple<SymbolClass *, int, int>> samplers = {
         /* Name, Coordinate Dimensions. */
         {root->classes[prefix + "sampler1D"], 1, 1},
