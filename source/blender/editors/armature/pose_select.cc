@@ -888,6 +888,18 @@ void POSE_OT_select_parent(wmOperatorType *ot)
 }
 
 /* -------------------------------------- */
+// Should this move to the top with the other helps?
+static bool is_constraint_target_selected(const bConstraintTarget &ct,
+                                          const Set<bPoseChannel *> &starting_bone_selection)
+{
+  if (!ct.tar || ct.subtarget[0] == '\0') {
+    return false;
+  }
+
+  bPoseChannel *target_pchan = BKE_pose_channel_find_name(ct.tar->pose, ct.subtarget);
+
+  return target_pchan && starting_bone_selection.contains(target_pchan);
+}
 
 static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, wmOperator * /*op*/)
 {
@@ -925,28 +937,13 @@ static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, w
           continue;
         }
 
-        bool matched = false;
-
         for (bConstraintTarget &ct : targets) {
-          if (!ct.tar || ct.subtarget[0] == '\0') {
-            continue;
-          }
-
-          bPoseChannel *target_pchan = BKE_pose_channel_find_name(ct.tar->pose, ct.subtarget);
-
-          if (target_pchan && starting_bone_selection.contains(target_pchan)) {
-            matched = true;
+          if (is_constraint_target_selected(ct, starting_bone_selection)) {
+            animrig::bone_select(&pchan);
+            found = true;
             break;
           }
         }
-
-        if (!matched) {
-          continue;
-        }
-
-        animrig::bone_select(&pchan);
-        found = true;
-        break;
       }
     }
 
