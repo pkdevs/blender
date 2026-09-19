@@ -953,7 +953,7 @@ void PathTrace::cancel()
 
   /* Only cancel in the middle of rendering when there is at least one sample in the output.
    * Otherwise interactivity becomes bad. */
-  if (get_num_samples_in_buffer() > 1) {
+  if (get_num_samples_in_buffer() >= 1) {
     render_cancel_.is_requested = true;
   }
 
