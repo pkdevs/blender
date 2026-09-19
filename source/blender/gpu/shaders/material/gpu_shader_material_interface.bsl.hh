@@ -314,15 +314,15 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
 
 /* Attribute node occlusion node. */
 
-float4 attr_load_color_post(float4 attr)
+float4 attr_load_color_post([[resource_table]] KernelGlobals & /*kg*/, float4 attr)
 {
   return attr;
 }
-float attr_load_temperature_post(float attr)
+float attr_load_temperature_post([[resource_table]] KernelGlobals & /*kg*/, float attr)
 {
   return attr;
 }
-float4 attr_load_radiance_post(float4 attr)
+float4 attr_load_radiance_post([[resource_table]] KernelGlobals & /*kg*/, float4 attr)
 {
   return attr;
 }
