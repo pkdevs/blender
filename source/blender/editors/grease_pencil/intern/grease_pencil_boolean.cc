@@ -815,6 +815,7 @@ static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
 static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                      const Span<float2> positions_2d,
                                      const OffsetIndices<int> points_by_curve,
+                                     const IndexMask &editable_shapes,
                                      const IndexMask &clipping_shapes,
                                      const GroupedSpan<int> shapes,
                                      const VArray<int> &fill_ids,
@@ -870,9 +871,12 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
     }
   });
 
+  Array<bool> editable_shapes_bool(shapes.size());
+  editable_shapes.to_bools(editable_shapes_bool);
+
   subject_shapes.foreach_index([&](const int64_t shape_i) {
     /* Only do full calculation with the bounding boxes are intersecting. */
-    if (shapes_bbox_intersecting[shape_i]) {
+    if (shapes_bbox_intersecting[shape_i] && editable_shapes_bool[shape_i]) {
       const BooleanResult result = execute_single_boolean(op_params,
                                                           shape_i,
                                                           positions_2d,
@@ -1175,6 +1179,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
                                   const ProjectionFunc project_fn,
                                   const GroupedSpan<int> shapes,
+                                  const IndexMask &editable_shapes,
                                   const IndexMask &clipping_shapes)
 {
   Array<float2> src_positions_2d(curves.points_num());
@@ -1188,6 +1193,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
   const BooleanResult result = execute_boolean(op_params,
                                                src_positions_2d,
                                                curves.points_by_curve(),
+                                               editable_shapes,
                                                clipping_shapes,
                                                shapes,
                                                fill_ids,
@@ -1231,6 +1237,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
                                               const ProjectionFunc project_fn,
                                               const GroupedSpan<int> shapes,
                                               const Span<float4> curve_planes,
+                                              const IndexMask &editable_shapes,
                                               const IndexMask &clipping_shapes,
                                               const float4x4 &layer_to_world,
                                               const ARegion &region)
@@ -1246,6 +1253,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   const BooleanResult result = execute_boolean(op_params,
                                                src_positions_2d,
                                                curves.points_by_curve(),
+                                               editable_shapes,
                                                clipping_shapes,
                                                shapes,
                                                fill_ids,

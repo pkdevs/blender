@@ -5550,13 +5550,17 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
     const VArray<int> fill_ids = *curves.attributes().lookup<int>("fill_id",
                                                                   bke::AttrDomain::Curve);
 
-    const bke::greasepencil::ShapeData shapes_data =
-        blender::bke::greasepencil::shapes_from_fill_ids(fill_ids, curves.curves_num());
+    const bke::greasepencil::ShapeData shapes_data = bke::greasepencil::shapes_from_fill_ids(
+        fill_ids, curves.curves_num());
 
     const GroupedSpan<int> shapes = shapes_data.shapes();
+    const IndexMask editable_shapes = bke::greasepencil::curves_mask_to_shapes(
+        strokes, shapes, memory);
+
     const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-    curves = boolean::curve_boolean(op_params, curves, project_fn, shapes, clipping_shapes);
+    curves = boolean::curve_boolean(
+        op_params, curves, project_fn, shapes, editable_shapes, clipping_shapes);
     changed = true;
 
     info.drawing.tag_topology_changed();
