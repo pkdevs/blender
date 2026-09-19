@@ -13,7 +13,7 @@
 namespace draw {
 
 struct Volume {
-  [[uniform(DRW_OBJ_DATA_INFO_UBO_SLOT), frequency(BATCH)]] VolumeInfos &drw_volume;
+  [[uniform(DRW_VOLUME_UBO_SLOT), frequency(BATCH)]] VolumeInfos &drw_volume;
 };
 
 }  // namespace draw

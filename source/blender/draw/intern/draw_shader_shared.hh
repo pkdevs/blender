@@ -584,7 +584,7 @@ struct [[host_shared]] GSplatInfos {
 
 struct [[host_shared]] VolumeInfos {
   /** Object to grid-space. */
-  float4x4 grids_xform[DRW_GRID_PER_VOLUME_MAX];
+  float4x4 grids_xform[16 /*DRW_GRID_PER_VOLUME_MAX*/];
   /** \note float4 for alignment. Only float3 needed. */
   float4 color_mul;
   float density_scale;

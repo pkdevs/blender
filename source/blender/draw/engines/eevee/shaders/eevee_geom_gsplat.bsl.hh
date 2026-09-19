@@ -37,8 +37,6 @@ namespace eevee {
     [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
     [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
     [[out, condition(use_velocity)]] VertOutVelocity &motion,
-    [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
-    [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
     [[vertex_id]] const int vert_id,
     [[position]] float4 &out_position,
     /* Note: Removed manually if not needed. Otherwise, can generate geometry shader fallback. */

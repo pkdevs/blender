@@ -113,12 +113,13 @@ ShaderGroups ShaderModule::static_shaders_load(const ShaderGroups request_bits,
   {
     /* These are the slowest shaders by far. Submitting them first make sure they overlap with
      * other shaders compilation. */
-    const eShaderType shader_list[] = {DEFERRED_LIGHT_TRIPLE,
-                                       DEFERRED_LIGHT_SINGLE,
-                                       DEFERRED_LIGHT_DOUBLE,
-                                       DEFERRED_COMBINE,
-                                       DEFERRED_AOV_CLEAR,
-                                       DEFERRED_TILE_CLASSIFY};
+    const eShaderType shader_list[] = {
+        DEFERRED_LIGHT_TRIPLE,
+        DEFERRED_LIGHT_SINGLE,
+        DEFERRED_LIGHT_DOUBLE,
+        DEFERRED_COMBINE,
+        DEFERRED_AOV_CLEAR,
+        GPU_stencil_export_support() ? DEFERRED_TILE_CLASSIFY : DEFERRED_TILE_CLASSIFY_FALLBACK};
     request(DEFERRED_LIGHTING_SHADERS, AS_SPAN(shader_list));
   }
   {
@@ -371,6 +372,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_deferred_thickness_amend";
     case DEFERRED_TILE_CLASSIFY:
       return "eevee_deferred_tile_classify";
+    case DEFERRED_TILE_CLASSIFY_FALLBACK:
+      return "eevee_deferred_tile_classify_fallback";
     case HIZ_DEBUG:
       return "eevee_hiz_debug";
     case HIZ_UPDATE:
@@ -701,7 +704,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                                               const bool use_shader_to_rgba,
                                               const bool use_lighting_nodes,
                                               const bool use_ao_node,
-                                              const bool use_raycast)
+                                              const bool use_raycast,
+                                              const bool use_additional_data)
 {
   using namespace blender::gpu::shader;
   using gpu::shader::Type;
@@ -712,6 +716,10 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
   info.compilation_constant(Type::bool_t, "is_gsplat", geometry_type == MAT_GEOM_GSPLAT);
   info.compilation_constant(Type::bool_t, "is_world", geometry_type == MAT_GEOM_WORLD);
 
+  info.compilation_constant(Type::bool_t, "is_volume_object", geometry_type == MAT_GEOM_VOLUME);
+
+  info.compilation_constant(
+      Type::bool_t, "is_volume_pipe", pipeline_type == MAT_PIPE_VOLUME_MATERIAL);
   info.compilation_constant(Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
   if (pipeline_type == MAT_PIPE_SHADOW) {
     info.compilation_constant(Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
@@ -726,9 +734,9 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                             (pipeline_type == MAT_PIPE_FORWARD) ||
                                 ((pipeline_type == MAT_PIPE_DEFERRED) && use_shader_to_rgba));
   info.compilation_constant(Type::bool_t, "use_raycast", use_raycast);
+  info.compilation_constant(Type::bool_t, "use_additional_data", use_additional_data);
 
   StringRefNull pipeline_info_name;
-  StringRefNull additional_info_name;
   /* Pipeline Info. */
   switch (geometry_type) {
     case MAT_GEOM_WORLD:
@@ -738,8 +746,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.name_ += "_world_volume";
           info.define("MAT_VOLUME");
           info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(Type::bool_t, "is_volume_object", false);
-          info.compilation_constant(Type::bool_t, "is_world", true);
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
            * pipeline. */
           info.fragment_source("eevee_surf_volume.bsl.hh");
@@ -761,7 +767,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_PREPASS_FORWARD_VELOCITY:
         case MAT_PIPE_PREPASS_DEFERRED_VELOCITY:
           pipeline_info_name = "eevee_surf_depthTtrue_infos_";
-          additional_info_name = "eevee_GeometryVelocity";
           info.name_ += "_depth_velocity";
           info.compilation_constant(Type::bool_t, "use_velocity", true);
           info.define("MAT_DEPTH");
@@ -787,7 +792,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           break;
         case MAT_PIPE_PREPASS_PLANAR:
           pipeline_info_name = "eevee_surf_depthTfalse_infos_";
-          additional_info_name = "eevee_clip_plane";
           info.name_ += "_depth_clip";
           info.compilation_constant(Type::bool_t, "use_velocity", false);
           info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
@@ -827,10 +831,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.compilation_constant(Type::bool_t, "use_velocity", false);
           info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(Type::bool_t,
-                                    "is_volume_object",
-                                    geometry_type == eMaterialGeometry::MAT_GEOM_VOLUME);
-          info.compilation_constant(Type::bool_t, "is_world", false);
           info.name_ += "_volume";
           info.define("MAT_VOLUME");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -962,9 +962,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
   if (!pipeline_info_name.is_empty()) {
     info.additional_info(pipeline_info_name);
   }
-  if (!additional_info_name.is_empty()) {
-    info.additional_info(additional_info_name);
-  }
   if (!geometry_info_name.is_empty()) {
     info.additional_info(geometry_info_name);
   }
@@ -1013,6 +1010,18 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     info.define("UNI_ATTR(a)", "float4(0.0)");
   }
 
+  /* WORKAROUND: Remove nodetree decl from the codegen. It is already defined in BSL. */
+  {
+    for (auto &resource_info : info.batch_resources_) {
+      if (resource_info.bind_type == ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER &&
+          resource_info.uniformbuf.name == GPU_UBO_BLOCK_NAME)
+      {
+        info.batch_resources_.remove_first_occurrence_and_reorder(resource_info);
+        break;
+      }
+    }
+  }
+
   bool use_ao_node = (GPU_material_flag_get(gpumat, GPU_MATFLAG_AO) &&
                       ELEM(pipeline_type, MAT_PIPE_FORWARD, MAT_PIPE_DEFERRED) &&
                       geometry_type_has_surface(geometry_type));
@@ -1033,6 +1042,10 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   const bool use_raycast = (GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST) &&
                             ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD));
 
+  const bool use_additional_data = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT) ||
+                                   GPU_material_flag_get(gpumat, GPU_MATFLAG_SUBSURFACE) ||
+                                   GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSLUCENT);
+
   if (ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD) &&
       GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA) &&
       GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT))
@@ -1047,11 +1060,6 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     /* While only needed for the AO node, we always bind the hiz globally for these pipelines.
      * To ensure no user textures will reuse the slot binding, we add the info unconditionally. */
     info.additional_info("eevee_HiZ");
-  }
-
-  const ListBaseT<GPULayerAttr> *attr_list = GPU_material_layer_attributes(gpumat);
-  if (attr_list && !attr_list->is_empty()) {
-    info.additional_info("draw_layer_attributes");
   }
 
   /* Copy vertex inputs. They can be transferred into other type of resources.
@@ -1069,7 +1077,8 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                                  use_shader_to_rgba,
                                                  use_lighting_nodes,
                                                  use_ao_node,
-                                                 use_raycast);
+                                                 use_raycast,
+                                                 use_additional_data);
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
     info.define("MAT_SHADER_TO_RGBA");

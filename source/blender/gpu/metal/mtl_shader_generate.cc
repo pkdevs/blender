@@ -739,7 +739,7 @@ static void generate_acceleration_structure(GeneratedStreams &generated,
 static void generate_resource(GeneratedStreams &generated,
                               const ShaderCreateInfo::Resource &res,
                               const ShaderStage stage,
-                              const ShaderCreateInfo &info,
+                              const ShaderCreateInfo & /*info*/,
                               const bool use_sampler_argument_buffer)
 {
   switch (res.bind_type) {

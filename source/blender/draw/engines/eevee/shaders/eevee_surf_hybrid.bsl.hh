@@ -42,7 +42,7 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
     float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
     closure_weights_reset(kg, sd, closure_rand);
 
-    if (pipe.use_forward_lighting && pipe.use_transparency) {
+    if (pipe.use_forward_lighting && pipe.use_transparency) [[static_branch]] {
       [[resource_table]] eevee::LightprobeRenderData &lightprobes = kg.lightprobes;
       [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
       [[resource_table]] eevee::PreviousLayerHiZ &prev_hiz = kg.previous_layer_hiz;
@@ -317,13 +317,12 @@ void surf_hybrid(
     }
   }
 
-#if defined(GBUFFER_HAS_REFRACTION) || defined(GBUFFER_HAS_SUBSURFACE) || \
-    defined(GBUFFER_HAS_TRANSLUCENT)
-  if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
-    srt.write_normal_data(
-        out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
+  if (pipe.use_additional_data) [[static_branch]] {
+    if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
+      srt.write_normal_data(
+          out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
+    }
   }
-#endif
 
   if (flag_test(gbuf.used_layers, OBJECT_ID)) {
     srt.write_header_data(out_texel, 1, resource_id);

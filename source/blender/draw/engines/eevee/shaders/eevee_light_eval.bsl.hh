@@ -146,7 +146,7 @@ template<bool is_transmission> struct EvalCtx {
     const auto &util_tx = util.utility_tx;
 
     for (uint i = 0u; i < 3; i++) [[unroll]] {
-      if (is_transmission) [[static_branch]] {
+      if constexpr (is_transmission) {
         if (srt.light_closure_eval_count_transmit > i) [[static_branch]] {
           eval_single_closure(util_tx, light, lv, shape, stack.cl[i], V, attenuation, shadow);
         }

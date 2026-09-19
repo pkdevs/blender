@@ -354,7 +354,7 @@ static std::ostream &print_qualifier(std::ostream &os, const Qualifier &qualifie
 static void print_resource(std::ostream &os,
                            const VKDescriptorSet::Location location,
                            const ShaderCreateInfo::Resource &res,
-                           const ShaderCreateInfo &info)
+                           const ShaderCreateInfo & /*info*/)
 {
   os << "layout(binding = " << uint32_t(location);
   if (res.bind_type == ShaderCreateInfo::Resource::BindType::IMAGE) {

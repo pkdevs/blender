@@ -34,10 +34,9 @@ struct VolumeProperties {
 
 struct SurfVolume {
   [[compilation_constant]] bool is_homogenous;
-  [[compilation_constant]] bool is_volume_object;
   [[compilation_constant]] bool is_world;
 
-  [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
+  [[resource_table]] srt_t<draw::Volume> volume;
 
   [[image(VOLUME_OCCUPANCY_SLOT, read, UINT_32)]] uimage3DAtomic occupancy_img;
 
@@ -86,6 +85,7 @@ struct SurfVolume {
                                int3 froxel,
                                float jitter)
   {
+    [[resource_table]] eevee::PipelineConstants &pipe = kg.pipe;
     [[resource_table]] draw::Volume &vol = volume;
 
     float3 uvw = (float3(froxel) + float3(0.5f, 0.5f, 0.5f - jitter)) *
@@ -98,6 +98,8 @@ struct SurfVolume {
     float3 lP_orco = lP * ob_infos.orco_mul + ob_infos.orco_add;
 
     sd.P = wP;
+    sd.N = float3(0.0f);
+    sd.Ng = float3(0.0f);
     sd.ray_length = distance(sd.P, view.position());
 
     VolumePoint volume_pt;
@@ -111,11 +113,9 @@ struct SurfVolume {
 
     nodetree_volume(kg, sd);
 
-    if (is_volume_object) [[static_branch]] {
-      sd.volume_scattering *= vol.drw_volume.density_scale;
-      sd.volume_absorption *= vol.drw_volume.density_scale;
-      sd.emission *= vol.drw_volume.density_scale;
-    }
+    sd.volume_scattering *= vol.drw_volume.density_scale;
+    sd.volume_absorption *= vol.drw_volume.density_scale;
+    sd.emission *= vol.drw_volume.density_scale;
 
     VolumeProperties prop;
     prop.scattering = sd.volume_scattering;
