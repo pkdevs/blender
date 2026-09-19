@@ -50,6 +50,8 @@ namespace blender {
 
 #define MESH_ADD_VERTS_MAXI 10000000
 
+#define MESH_CYLINDER_CONE_LOOP_MAXI 512
+
 /* ********* add primitive operators ************* */
 
 static void mesh_select_all(Mesh &mesh)
@@ -315,8 +317,12 @@ static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
 {
   WM_operator_view3d_unit_defaults(C, op);
   const float size = RNA_float_get(op->ptr, "size");
+
+  static constexpr int corners = 2;
+  const int vertices = RNA_int_get(op->ptr, "subdivisions") + corners;
+
   Mesh *primitive_mesh = geometry::create_cuboid_mesh(
-      float3(size), 2, 2, 2, add_primitive_uv_map(C, op));
+      float3(size), vertices, vertices, vertices, add_primitive_uv_map(C, op));
   return add_primitive_from_mesh(
       C, op, CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Cube"), 'Z', primitive_mesh);
 }
@@ -334,6 +340,9 @@ void MESH_OT_primitive_cube_add(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* props */
+  RNA_def_int(ot->srna, "subdivisions", 0, 0, 1000, "Subdivisions", "", 0, 64);
 
   ed::object::add_unit_props_size(ot);
   ed::object::add_mesh_props(ot);
@@ -390,8 +399,8 @@ static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
 {
   WM_operator_view3d_unit_defaults(C, op);
   const float radius = RNA_float_get(op->ptr, "radius");
-  const int side_segments = 1;
-  const int fill_segments = 1;
+  const int side_segments = RNA_int_get(op->ptr, "rings");
+  const int fill_segments = RNA_int_get(op->ptr, "fill_segments");
   geometry::ConeAttributeOutputs attributes;
   attributes.uv_map_id = add_primitive_uv_map(C, op);
   Mesh *primitive_mesh = geometry::create_cylinder_or_cone_mesh(
@@ -428,6 +437,10 @@ void MESH_OT_primitive_cylinder_add(wmOperatorType *ot)
       ot->srna, "depth", 2.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Depth", "", 0.001, 100.00);
   RNA_def_enum(ot->srna, "end_fill_type", fill_type_items, 1, "Cap Fill Type", "");
 
+  RNA_def_int(ot->srna, "rings", 1, 1, MESH_CYLINDER_CONE_LOOP_MAXI, "Rings", "", 1, 64);
+  RNA_def_int(
+      ot->srna, "fill_segments", 1, 1, MESH_CYLINDER_CONE_LOOP_MAXI, "Fill Segments", "", 1, 64);
+
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);
 }
@@ -435,8 +448,8 @@ void MESH_OT_primitive_cylinder_add(wmOperatorType *ot)
 static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
 {
   WM_operator_view3d_unit_defaults(C, op);
-  const int side_segments = 1;
-  const int fill_segments = 1;
+  const int side_segments = RNA_int_get(op->ptr, "rings");
+  const int fill_segments = RNA_int_get(op->ptr, "fill_segments");
   geometry::ConeAttributeOutputs attributes;
   attributes.uv_map_id = add_primitive_uv_map(C, op);
   /* The operator's "radius1" is the bottom radius,
@@ -477,6 +490,10 @@ void MESH_OT_primitive_cone_add(wmOperatorType *ot)
   RNA_def_float_distance(
       ot->srna, "depth", 2.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Depth", "", 0.001, 100.00);
   RNA_def_enum(ot->srna, "end_fill_type", fill_type_items, 1, "Base Fill Type", "");
+
+  RNA_def_int(ot->srna, "rings", 1, 1, MESH_CYLINDER_CONE_LOOP_MAXI, "Rings", "", 1, 64);
+  RNA_def_int(
+      ot->srna, "fill_segments", 1, 1, MESH_CYLINDER_CONE_LOOP_MAXI, "Fill Segments", "", 1, 64);
 
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);

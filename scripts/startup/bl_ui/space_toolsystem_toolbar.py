@@ -609,6 +609,9 @@ class _defs_view3d_add:
             if show_extra:
                 layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
 
+            props = tool.operator_properties("mesh.primitive_cube_add")
+            layout.prop(props, "subdivisions")
+
             _defs_view3d_add.draw_settings_defaults_init(context.mode, tool, 'CUBE')
 
         return dict(
@@ -633,6 +636,15 @@ class _defs_view3d_add:
             props = tool.operator_properties("mesh.primitive_cone_add")
             layout.prop(props, "vertices")
             layout.prop(props, "end_fill_type")
+
+            layout.prop(props, "rings")
+            layout.prop(props, "fill_segments")
+
+            if not props.is_property_set("end_fill_type"):
+                if context.mode == 'Sculpt':
+                    props.end_fill_type = 'TRIFAN'
+                else:
+                    props.end_fill_type = 'NGON'
 
             if show_extra:
                 layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
@@ -661,6 +673,15 @@ class _defs_view3d_add:
             props = tool.operator_properties("mesh.primitive_cylinder_add")
             layout.prop(props, "vertices")
             layout.prop(props, "end_fill_type")
+
+            layout.prop(props, "rings")
+            layout.prop(props, "fill_segments")
+
+            if not props.is_property_set("end_fill_type"):
+                if context.mode == 'Sculpt':
+                    props.end_fill_type = 'TRIFAN'
+                else:
+                    props.end_fill_type = 'NGON'
 
             if show_extra:
                 layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
