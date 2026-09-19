@@ -8,6 +8,7 @@
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "draw_viewlayer.bsl.hh"
+#include "draw_volume.bsl.hh"
 #include "eevee_bxdf_lut_lib.bsl.hh"
 #include "eevee_camera_lib.bsl.hh"
 #include "eevee_fast_gi.bsl.hh"
@@ -156,6 +157,8 @@ struct KernelGlobals {
   [[resource_table]] srt_t<eevee::PipelineConstants> pipe;
   [[resource_table]] srt_t<eevee::Uniform> uniforms;
   [[resource_table]] srt_t<eevee::Sampling> sampling;
+
+  [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
 
   [[resource_table]] [[condition(!is_occupancy_pipe)]] srt_t<UtilityTexture> util_tx;
 
@@ -613,9 +616,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 }
 
 #ifndef GPU_METAL
-float3 nodetree_displacement([[resource_table]] NodeTreeRes &nt,
-                             [[resource_table]] KernelGlobals &kg,
-                             ShadingData &sd);
+float3 nodetree_displacement([[resource_table]] KernelGlobals &kg, ShadingData &sd);
 float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure cl);
 #endif
 
@@ -846,7 +847,7 @@ float3 displacement_bump([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
   constexpr float bump_filter_width = 0.1f;
 
   float2 dHd;
-  dF_branch(dot(nodetree_displacement(nt, kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
+  dF_branch(dot(nodetree_displacement(kg, sd), sd.N + dF_impl(sd.N)), bump_filter_width, dHd);
 
   float3 dPdx = gpu_dfdx(sd.P) * derivative_scale_get(kg);
   float3 dPdy = gpu_dfdy(sd.P) * derivative_scale_get(kg);
@@ -984,34 +985,31 @@ float derivative_scale_get([[resource_table]] KernelGlobals &kg)
 
 /* Point clouds and curves and splats are not compatible with volume grids.
  * They will fall back to their own attributes loading. */
-#if defined(MAT_VOLUME) && !defined(MAT_GEOM_CURVES) && !defined(MAT_GEOM_POINTCLOUD) && \
-    !defined(MAT_GEOM_GSPLAT)
-#  if defined(VOLUME_INFO_LIB) && !defined(MAT_GEOM_WORLD)
-/* We could just check for GRID_ATTRIBUTES but this avoids for header dependency. */
-#    define GRID_ATTRIBUTES_LOAD_POST
-#  endif
-#endif
 
 float attr_load_temperature_post([[resource_table]] KernelGlobals &kg, float attr)
 {
-#ifdef GRID_ATTRIBUTES_LOAD_POST
-  /* Bring the value into standard range without having to modify the grid values */
-  attr = (attr > 0.01f) ? (attr * drw_volume.temperature_mul + drw_volume.temperature_bias) : 0.0f;
-#endif
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.is_volume_object) [[static_branch]] {
+    [[resource_table]] const draw::Volume &vol = kg.volume;
+    /* Bring the value into standard range without having to modify the grid values */
+    attr = (attr > 0.01f) ?
+               (attr * vol.drw_volume.temperature_mul + vol.drw_volume.temperature_bias) :
+               0.0f;
+  }
   return attr;
 }
 float4 attr_load_color_post([[resource_table]] KernelGlobals &kg, float4 attr)
 {
-#ifdef GRID_ATTRIBUTES_LOAD_POST
-  /* Density is premultiplied for interpolation, divide it out here. */
-  attr.rgb *= safe_rcp(attr.a);
-  attr.rgb *= drw_volume.color_mul.rgb;
-  attr.a = 1.0f;
-#endif
+  [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
+  if (pipe.is_volume_object) [[static_branch]] {
+    [[resource_table]] const draw::Volume &vol = kg.volume;
+    /* Density is premultiplied for interpolation, divide it out here. */
+    attr.rgb *= safe_rcp(attr.a);
+    attr.rgb *= vol.drw_volume.color_mul.rgb;
+    attr.a = 1.0f;
+  }
   return attr;
 }
-
-#undef GRID_ATTRIBUTES_LOAD_POST
 
 /** \} */
 
@@ -1350,7 +1348,7 @@ float node_attribute_light_cutoff_distance_impl([[resource_table]] KernelGlobals
     if (is_sun_light(light.type)) {
       return 1e20f;
     }
-    return inversesqrt(light.local().local.influence_radius_invsqr_surface);
+    return inversesqrt(light.local.local.influence_radius_invsqr_surface);
   }
   return 1.0f;
 }

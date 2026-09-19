@@ -176,10 +176,10 @@ float3 normal_unpack(float2 N_packed)
 }
 
 /* Keep IOR 1.0 stable across 10-bit quantization. */
-#define closure_10bit_unit (1.0f / 1023.0f)
-#define ior_packed_lt_1_scale (511.0f * closure_10bit_unit)
-#define ior_packed_eq_1 (512.0f * closure_10bit_unit)
-#define ior_packed_gt_1_bias (510.0f * closure_10bit_unit)
+static constexpr float closure_10bit_unit = (1.0f / 1023.0f);
+static constexpr float ior_packed_lt_1_scale = (511.0f * closure_10bit_unit);
+static constexpr float ior_packed_eq_1 = (512.0f * closure_10bit_unit);
+static constexpr float ior_packed_gt_1_bias = (510.0f * closure_10bit_unit);
 
 float ior_pack(float ior)
 {
@@ -312,9 +312,9 @@ float3 geometry_normal_unpack(uint data, float3 N)
  * The header contains some common information and layout of the GBuffer content.
  */
 struct Header {
-#define GBUFFER_NORMAL_BITS_SHIFT 12u
-#define GBUFFER_GEOMETRIC_NORMAL_BITS_SHIFT 20u
-#define GBUFFER_HEADER_BITS_PER_BIN 4
+  static constexpr uint GBUFFER_NORMAL_BITS_SHIFT = 12u;
+  static constexpr uint GBUFFER_GEOMETRIC_NORMAL_BITS_SHIFT = 20u;
+  static constexpr int GBUFFER_HEADER_BITS_PER_BIN = 4;
 
  private:
   /**

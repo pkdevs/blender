@@ -52,9 +52,9 @@ void cull_main([[resource_table]] Cull &srt,
       light.color = srt.sunlight_buf[l_idx].color;
       light.object_to_world = srt.sunlight_buf[l_idx].object_to_world;
 
-      LightSunData sun_data = light.sun();
+      LightSunData sun_data = light.sun;
       sun_data.direction = srt.sunlight_buf[l_idx].object_to_world.z_axis();
-      light.sun() = sun_data;
+      light.sun = sun_data;
       /* NOTE: Use the radius from UI instead of auto sun size for now. */
     }
     /* NOTE: We know the index because sun lights are packed at the start of the input buffer. */
@@ -63,7 +63,7 @@ void cull_main([[resource_table]] Cull &srt,
   }
 
   /* Do not select 0 power lights. */
-  if (light.local().local.influence_radius_max < 1e-8f) {
+  if (light.local.local.influence_radius_max < 1e-8f) {
     return;
   }
 
@@ -71,7 +71,7 @@ void cull_main([[resource_table]] Cull &srt,
   switch (light.type) {
     case LIGHT_SPOT_SPHERE:
     case LIGHT_SPOT_DISK: {
-      LightSpotData spot = light.spot();
+      LightSpotData spot = light.spot;
       /* Only for < ~170 degree Cone due to plane extraction precision. */
       if (spot.spot_tan < 10.0f) {
         float3 x_axis = light.x_axis();
@@ -93,7 +93,7 @@ void cull_main([[resource_table]] Cull &srt,
     case LIGHT_OMNI_SPHERE:
     case LIGHT_OMNI_DISK:
       sphere.center = light.position();
-      sphere.radius = light.local().local.influence_radius_max;
+      sphere.radius = light.local.local.influence_radius_max;
       break;
     default:
       break;
@@ -229,7 +229,7 @@ void zbin_main([[resource_table]] ZBinning &srt,
     LightData light = srt.light_buf[index];
     float3 P = light.position();
     /* TODO(fclem): Could have better bounds for spot and area lights. */
-    float radius = light.local().local.influence_radius_max;
+    float radius = light.local.local.influence_radius_max;
     float z_dist = dot(view.forward(), P) - dot(view.forward(), view.position());
     int z_min = culling_z_to_zbin(
         srt.light_cull_buf.zbin_scale, srt.light_cull_buf.zbin_bias, z_dist + radius);
@@ -404,7 +404,7 @@ void tile_main([[resource_table]] const draw::View &views,
     float3 v_right = view.normal_world_to_view(light.x_axis());
     float3 v_up = view.normal_world_to_view(light.y_axis());
     float3 v_back = view.normal_world_to_view(light.z_axis());
-    float radius = light.local().local.influence_radius_max;
+    float radius = light.local.local.influence_radius_max;
 
     if (srt.light_cull_buf.view_is_flipped) {
       v_right = -v_right;
@@ -416,7 +416,7 @@ void tile_main([[resource_table]] const draw::View &views,
     switch (light.type) {
       case LIGHT_SPOT_SPHERE:
       case LIGHT_SPOT_DISK: {
-        LightSpotData spot = light.spot();
+        LightSpotData spot = light.spot;
         /* Only for < ~170 degree Cone due to plane extraction precision. */
         if (spot.spot_tan < 10.0f) {
           Pyramid pyramid = shape_pyramid_non_oblique(

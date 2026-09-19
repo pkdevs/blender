@@ -34,7 +34,6 @@ struct VolumeProperties {
 
 struct SurfVolume {
   [[compilation_constant]] bool is_homogenous;
-  [[compilation_constant]] bool is_volume_object;
   [[compilation_constant]] bool is_world;
 
   [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
@@ -86,6 +85,7 @@ struct SurfVolume {
                                int3 froxel,
                                float jitter)
   {
+    [[resource_table]] eevee::PipelineConstants &pipe = kg.pipe;
     [[resource_table]] draw::Volume &vol = volume;
 
     float3 uvw = (float3(froxel) + float3(0.5f, 0.5f, 0.5f - jitter)) *
@@ -111,7 +111,7 @@ struct SurfVolume {
 
     nodetree_volume(kg, sd);
 
-    if (is_volume_object) [[static_branch]] {
+    if (pipe.is_volume_object) [[static_branch]] {
       sd.volume_scattering *= vol.drw_volume.density_scale;
       sd.volume_absorption *= vol.drw_volume.density_scale;
       sd.emission *= vol.drw_volume.density_scale;

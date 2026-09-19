@@ -18,20 +18,17 @@ struct GeomVolumeIn {
   [[attribute(0)]] float3 pos;
 };
 
-[[vertex]] [[clip_control]] void geom_volume(
-    [[resource_table]] const PipelineConstants & /*pipe*/,
-    [[resource_table]] const Uniform & /*uni*/,
-    [[instance_index]] const int inst_index,
-    [[resource_table]] const draw::View &views,
-    [[resource_table]] const draw::Model &models,
-    [[resource_table]] const draw::Infos &infos,
-    [[resource_table]] const draw::Resource &res_id,
-    [[out]] VertOutCommon &interp,
-    [[out]] VertOutResID &interp_flat,
-    [[in]] const GeomVolumeIn &vert_in,
-    [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
-    [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
-    [[position]] float4 &out_position)
+[[vertex]] [[clip_control]] void geom_volume([[resource_table]] const PipelineConstants & /*pipe*/,
+                                             [[resource_table]] const Uniform & /*uni*/,
+                                             [[instance_index]] const int inst_index,
+                                             [[resource_table]] const draw::View &views,
+                                             [[resource_table]] const draw::Model &models,
+                                             [[resource_table]] const draw::Infos &infos,
+                                             [[resource_table]] const draw::Resource &res_id,
+                                             [[out]] VertOutCommon &interp,
+                                             [[out]] VertOutResID &interp_flat,
+                                             [[in]] const GeomVolumeIn &vert_in,
+                                             [[position]] float4 &out_position)
 {
   const draw::ID id = res_id.get(inst_index);
   const uint view_id = 0;

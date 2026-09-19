@@ -12,7 +12,12 @@
 /* This file must replaced at runtime. The following content is only a possible implementation. */
 #pragma runtime_generated
 
+#include "eevee_thickness_lib.bsl.hh"
 #include "gpu_shader_compat.hh"
+
+/* Replaced by define at runtime. */
+/* TODO(fclem): Find a way to pass material parameters inside the material UBO. */
+ThicknessMode thickness_mode = ThicknessMode::Slab;
 
 struct [[host_shared]] NodeTree {
   float crypto_hash;

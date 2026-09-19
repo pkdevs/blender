@@ -68,12 +68,6 @@ float4 closure_to_rgba_forward([[resource_table]] KernelGlobals &kg,
 
 namespace eevee {
 
-struct SurfaceForward {
-  /* Optionally added depending on the material. */
-  // [[legacy_info]] ShaderCreateInfo eevee_hiz_prev_data;
-  // [[legacy_info]] ShaderCreateInfo eevee_previous_layer_radiance;
-};
-
 struct SurfaceForwardFragOut {
   /* Splitting RGB components into different target to overcome the lack of dual source blending
    * with multiple render targets. */
@@ -89,7 +83,6 @@ struct SurfaceForwardFragOut {
 void surf_forward(
     [[resource_table]] KernelGlobals &kg,
     [[resource_table]] PipelineConstants &pipe,
-    [[resource_table]] SurfaceForward & /*srt*/,
     [[resource_table]] LightEvalIterator & /*lights*/,
     [[resource_table]] LightprobeRenderData & /*lightprobes*/,
     [[resource_table]] LightprobePlaneRenderData & /*lightprobe_planes*/,

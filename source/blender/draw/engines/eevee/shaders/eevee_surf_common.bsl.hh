@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "draw_gsplat_lib.bsl.hh"
 #include "eevee_lightprobe_shared.hh" /* IWYU pragma: export: Needed for resource declaration. */
 #include "eevee_nodetree_lib.bsl.hh"
 #include "eevee_sampling_shared.hh" /* IWYU pragma: export: Needed for resource declaration. */
@@ -193,14 +194,10 @@ float3 gsplat_amend_transmittance([[maybe_unused]] const VertOutGSplat &gsplat_i
                                   [[maybe_unused]] const VertOutGSplatFlat &gsplat_interp_flat,
                                   float3 transmittance)
 {
-#ifdef MAT_GEOM_GSPLAT
   float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
                                                 gsplat_interp_flat.opacity);
   alpha = saturate(alpha * (256.0f / 255.0f));
   return float3(1.0f) - alpha * saturate(float3(1.0f) - transmittance);
-#else
-  return transmittance;
-#endif
 }
 
 }  // namespace eevee
