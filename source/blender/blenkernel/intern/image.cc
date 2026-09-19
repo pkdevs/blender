@@ -5479,7 +5479,7 @@ bool BKE_image_is_float(Image *image)
   }
 
   void *lock;
-  ImBuf *ibuf = BKE_image_acquire_ibuf(const_cast<Image *>(image), nullptr, &lock);
+  ImBuf *ibuf = BKE_image_acquire_ibuf(image, nullptr, &lock);
   if (ibuf == nullptr) {
     return false;
   }
