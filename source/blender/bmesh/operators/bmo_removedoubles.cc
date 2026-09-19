@@ -513,6 +513,7 @@ void bmo_collapse_exec(BMesh *bm, BMOperator *op)
 
   BMO_op_init(bm, &weldop, op->flag, "weld_verts");
   slot_targetmap = BMO_slot_get(weldop.slots_in, "targetmap");
+  BMO_slot_bool_set(weldop.slots_in, "average_vert_data", true);
 
   BMO_slot_buffer_flag_enable(bm, op->slots_in, "edges", BM_EDGE, EDGE_MARK);
 

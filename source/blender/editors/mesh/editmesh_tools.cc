@@ -3686,10 +3686,11 @@ static wmOperatorStatus edbm_remove_doubles_exec(bContext *C, wmOperator *op)
 
       if (!EDBM_op_callf(em,
                          op,
-                         "weld_verts targetmap=%S use_centroid=%b",
+                         "weld_verts targetmap=%S use_centroid=%b average_vert_data=%b",
                          &bmop,
                          "targetmap.out",
-                         use_centroid))
+                         use_centroid,
+                         true))
       {
         BMO_op_finish(em->bm, &bmop);
         continue;
