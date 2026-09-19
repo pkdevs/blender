@@ -577,7 +577,6 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
-
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.

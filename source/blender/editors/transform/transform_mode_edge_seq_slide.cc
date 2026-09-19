@@ -178,24 +178,24 @@ static void seq_slide_status(TransInfo *t)
 
   const eSeqOverlapMode overlap_mode = seq::tool_settings_overlap_mode_get(scene);
   status.modal_keymap(IFACE_("Ripple"),
-                 keymap,
-                 TFM_MODAL_STRIP_OVERLAP_RIPPLE,
-                 overlap_mode == SEQ_OVERLAP_RIPPLE);
+                      keymap,
+                      TFM_MODAL_STRIP_OVERLAP_RIPPLE,
+                      overlap_mode == SEQ_OVERLAP_RIPPLE);
   status.modal_keymap(IFACE_("Overwrite"),
-                 keymap,
-                 TFM_MODAL_STRIP_OVERLAP_OVERWRITE,
-                 overlap_mode == SEQ_OVERLAP_OVERWRITE);
+                      keymap,
+                      TFM_MODAL_STRIP_OVERLAP_OVERWRITE,
+                      overlap_mode == SEQ_OVERLAP_OVERWRITE);
   status.modal_keymap(IFACE_("Shuffle"),
-                 keymap,
-                 TFM_MODAL_STRIP_OVERLAP_SHUFFLE,
-                 overlap_mode == SEQ_OVERLAP_SHUFFLE);
+                      keymap,
+                      TFM_MODAL_STRIP_OVERLAP_SHUFFLE,
+                      overlap_mode == SEQ_OVERLAP_SHUFFLE);
 
   if (overlap_mode == SEQ_OVERLAP_RIPPLE) {
     const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
     status.modal_keymap(IFACE_("Insert"),
-                   keymap,
-                   TFM_MODAL_STRIP_RIPPLE_INSERT,
-                   (ripple_flag & SEQ_RIPPLE_INSERT) != 0);
+                        keymap,
+                        TFM_MODAL_STRIP_RIPPLE_INSERT,
+                        (ripple_flag & SEQ_RIPPLE_INSERT) != 0);
   }
 }
 

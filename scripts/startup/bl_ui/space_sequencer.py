@@ -101,7 +101,7 @@ class SEQUENCER_HT_header(Header):
             row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene")
 
         if sequencer_tool_settings and st.view_type == 'PREVIEW':
-            layout.prop(sequencer_tool_settings, "pivot_point", text="")
+            layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
 
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
@@ -109,8 +109,8 @@ class SEQUENCER_HT_header(Header):
             sub = row.row(align=True)
             sub.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
             sub.popover(
-                    text="",
-                    panel="SEQUENCER_PT_edit_mode",
+                text="",
+                panel="SEQUENCER_PT_edit_mode",
             )
 
         if tool_settings:
