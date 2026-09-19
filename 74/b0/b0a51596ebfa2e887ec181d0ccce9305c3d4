@@ -1,2 +1,3 @@
 Referenced by issue #159955, Render Engine API: Combined pass with 3 channels no longer accepted by load_from_file
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by commit 7d03f96c76fda85d0fc94c06b5be9d24e3959272, Fix: Images: Multilayer EXR sequencer reading issue with 2 channels
