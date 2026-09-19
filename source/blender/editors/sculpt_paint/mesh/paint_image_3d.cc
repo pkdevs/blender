@@ -397,7 +397,9 @@ BLI_NOINLINE static void paint_blend_pixels_color_managed(
   }
 }
 
-/* TODO: We should store the averaged color in float scene linear only */
+/* TODO: Maybe we need to collect all the entries first, in parallel, then convert / average into
+ * scene linear? It's more important for us to paralellize on the gathering rather than the row
+ * proessing here. */
 template<typename PixelT>
 static void average_pixels(const int start,
                            const int size,
