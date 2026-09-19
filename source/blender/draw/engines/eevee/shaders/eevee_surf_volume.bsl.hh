@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include "draw_object_infos_infos.hh"
-
 #ifdef GLSL_CPP_STUBS
 #  define MAT_VOLUME
 #endif
@@ -18,6 +16,7 @@
 #include "eevee_volume_lib.bsl.hh"
 
 /* Needed includes for shader nodes. */
+#include "draw_volume.bsl.hh"
 #include "eevee_attributes_volume_lib.glsl"
 #include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_occupancy_lib.bsl.hh"
@@ -38,7 +37,7 @@ struct SurfVolume {
   [[compilation_constant]] bool is_volume_object;
   [[compilation_constant]] bool is_world;
 
-  [[legacy_info]] ShaderCreateInfo draw_modelmat_common;
+  [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
 
   [[image(VOLUME_OCCUPANCY_SLOT, read, UINT_32)]] uimage3DAtomic occupancy_img;
 
@@ -87,6 +86,8 @@ struct SurfVolume {
                                int3 froxel,
                                float jitter)
   {
+    [[resource_table]] draw::Volume &vol = volume;
+
     float3 uvw = (float3(froxel) + float3(0.5f, 0.5f, 0.5f - jitter)) *
                  uni.uniform_buf.volumes.inv_tex_size;
 
@@ -99,15 +100,21 @@ struct SurfVolume {
     sd.P = wP;
     sd.ray_length = distance(sd.P, view.position());
 
-    attrib_load(VolumePoint{lP, lP_orco});
+    VolumePoint volume_pt;
+    volume_pt.lP = lP;
+    volume_pt.orco_default = lP_orco;
+    for (int i = 0; i < 16 /* DRW_GRID_PER_VOLUME_MAX */; i++) [[unroll]] {
+      volume_pt.grid_co[i] = transform_point(vol.drw_volume.grids_xform[i], lP);
+    }
+
+    attrib_load(volume_pt);
 
     nodetree_volume(kg, sd);
 
     if (is_volume_object) [[static_branch]] {
-      const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
-      sd.volume_scattering *= drw_volume.density_scale;
-      sd.volume_absorption *= drw_volume.density_scale;
-      sd.emission *= drw_volume.density_scale;
+      sd.volume_scattering *= vol.drw_volume.density_scale;
+      sd.volume_absorption *= vol.drw_volume.density_scale;
+      sd.emission *= vol.drw_volume.density_scale;
     }
 
     VolumeProperties prop;
