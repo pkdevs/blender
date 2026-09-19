@@ -651,7 +651,7 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
     return MatchRank::None;
   }
 
-  /* Casting enum or packed types. */
+  /* Casting enum or packed types of the underlying type matches. */
   if (from->builtin_class == to->builtin_class) {
     return MatchRank::Conversion;
   }
@@ -669,7 +669,9 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
   const uint16_t to_len = to_raw & LEN_MASK;
   /* Check standard GLSL compatible convertible base types (int <-> uint <-> float). */
   const bool both_numeric = (from_raw & FLAG_NUMERIC) && (to_raw & FLAG_NUMERIC);
-  const bool is_promotion = (from_raw & FLAG_INTEGER) == (to_raw & FLAG_INTEGER);
+  /* Require both the family (Integer vs Float) and the signedness to match exactly */
+  const uint16_t PROMOTE_MASK = FLAG_INTEGER | FLAG_SIGN;
+  const bool is_promotion = (from_raw & PROMOTE_MASK) == (to_raw & PROMOTE_MASK);
 
   if (from_len == to_len) {
     if (from_len == 1) {
