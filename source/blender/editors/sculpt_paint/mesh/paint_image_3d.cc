@@ -555,12 +555,8 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 #ifdef DEBUG_PIXEL_NODES
       scene = paint_debug_color(scene, img_y);
 #endif
-      image_pixels[start + i] = paint_blend_pixel(colors[i],
-                                                  brush_alpha,
-                                                  is_mix,
-                                                  blend_mode,
-                                                  factors[i],
-                                                  scene);
+      image_pixels[start + i] = paint_blend_pixel(
+          colors[i], brush_alpha, is_mix, blend_mode, factors[i], scene);
     }
   }
   else {
@@ -572,9 +568,9 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
       srgb_to_linearrgb_uchar4(scene, image_pixels[img_x + i]);
       IMB_colormanagement_rec709_to_scene_linear(scene, scene);
 
-#ifdef DEBUG_PIXEL_NODES
+#  ifdef DEBUG_PIXEL_NODES
       scene = paint_debug_color(scene, img_y);
-#endif
+#  endif
       paint_pixels[i] = paint_blend_pixel(scratch_image_pixels[img_x + i],
                                           brush_alpha,
                                           is_mix,
@@ -1078,8 +1074,11 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         const int run_active_size = run_active_end - run_active_begin + 1;
         const int run_active_x = run_x + run_active_begin;
         tls.modified_spans.append({.x = run_active_x, .y = run_y, .size = run_active_size});
-        printf("%d -> %d\n", run_i, run_active_size);
-        modified_row_spans[run_i] = {.start = run_active_x, .size = run_active_size};
+#ifndef NDEBUG
+        BLI_assert(run_active_begin >= 0 && run_active_size > 0 &&
+                   run_active_begin + run_active_size <= run_size);
+#endif
+        modified_row_spans[run_i] = {.start = run_active_begin, .size = run_active_size};
         MutableSpan<float4> scratch_run_buffer = scratch_colors.slice(run_active_begin,
                                                                       run_active_size);
 
@@ -1169,32 +1168,32 @@ static void do_apply_blur(const Paint &paint,
 
     IndexMaskMemory memory;
     const IndexMask tile_mask = IndexMask::from_predicate(
-        modified_spans.index_range(),
-        memory,
-        [&](const int run_i) {
+        modified_spans.index_range(), memory, [&](const int run_i) {
           return modified_spans[run_i].size != 0;
         });
 
     /* TODO: Move this to TLS */
     Vector<float4> paint_pixels;
-    tile_mask.foreach_index([&](const int run_i) {
-      const ModifiedRowSpan modified_span = modified_spans[run_i];
-      const Span<float4> colors = tile_data.pixel_row_run_scratch_data.color[run_i];
-      const Span<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
-      const ushort2 start_coord = tile_data.pixel_row_run_start_coords[run_i];
+    tile_mask.foreach_index(
+        [&](const int run_i) {
+          const ModifiedRowSpan modified_span = modified_spans[run_i];
+          const Span<float4> colors = tile_data.pixel_row_run_scratch_data.color[run_i];
+          const Span<float> factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
+          const ushort2 start_coord = tile_data.pixel_row_run_start_coords[run_i];
 
-      const int start = image_buffer->x * start_coord.y + start_coord.x + modified_span.start;
+          const int start = image_buffer->x * start_coord.y + start_coord.x + modified_span.start;
 
-      if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
-        paint_blend_pixels(blend_settings,
-                           factors,
-                           colors,
-                           std::get<MutableSpan<float4>>(mutable_buffer),
-                           start,
-                           *processors,
-                           paint_pixels);
-      }
-    }, exec_mode::serial);
+          if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
+            paint_blend_pixels(blend_settings,
+                               factors.slice(modified_span.start, modified_span.size),
+                               colors.slice(modified_span.start, modified_span.size),
+                               std::get<MutableSpan<float4>>(mutable_buffer),
+                               start,
+                               *processors,
+                               paint_pixels);
+          }
+        },
+        exec_mode::grain_size(256));
   }
 }
 
@@ -1446,13 +1445,15 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
     }
   });
 
-  /* TODO: Enable parallelization */
-  node_mask.foreach_index([&](const int i) {
-    fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
-  });
+  node_mask.foreach_index(
+      [&](const int i) {
+        fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
+      },
+      exec_mode::grain_size(1));
 
   node_mask.foreach_index(
-      [&](const int i) { do_apply_blur(paint, brush, ob, image_data, nodes[i], pixel_nodes[i]); });
+      [&](const int i) { do_apply_blur(paint, brush, ob, image_data, nodes[i], pixel_nodes[i]); },
+      exec_mode::grain_size(1));
 
   fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
 

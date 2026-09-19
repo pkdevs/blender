@@ -36,6 +36,7 @@ struct PackedPixelRow {
   ushort uv_primitive_index;
 };
 
+/* TODO: Use IndexRange instead */
 struct ModifiedRowSpan {
   int start = 0;
   int size = 0;
@@ -181,6 +182,13 @@ struct PixelNode {
     tiles.clear();
     uv_primitives.tri_indices.reinitialize(0);
     uv_primitives.pixel_to_position.reinitialize(0);
+  }
+
+  void clear_scratch_data()
+  {
+    for (UDIMTilePixels &tile : tiles) {
+      tile.clear_scratch_data();
+    }
   }
 };
 
