@@ -653,7 +653,7 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
 
   /* Casting enum or packed types of the underlying type matches. */
   if (from->builtin_class == to->builtin_class) {
-    return MatchRank::Conversion;
+    return from->is_enum ? MatchRank::Promotion : MatchRank::Conversion;
   }
 
   using namespace builtin;
