@@ -15,45 +15,46 @@
 #define LUT_WORKGROUP_SIZE 16
 
 /* Hierarchical Z down-sampling. */
-static constexpr int HIZ_MIP_COUNT = 7;
+[[maybe_unused]] static constexpr int HIZ_MIP_COUNT = 7;
 /* NOTE: The shader is written to update 5 mipmaps using LDS.
  * Each thread actually update 4 LOD_0 pixels, which means the number of MIPLVL we cover is:
  * `(log2(HIZ_GROUP_SIZE) + 1) + LOD_0 + LAST_GROUP_LVL = HIZ_MIP_COUNT` */
-static constexpr int HIZ_GROUP_SIZE = 16;
+[[maybe_unused]] static constexpr int HIZ_GROUP_SIZE = 16;
 
 /* Avoid too much overhead caused by resizing the light buffers too many time. */
 #define LIGHT_CHUNK 256
 
-static constexpr int CULLING_SELECT_GROUP_SIZE = 256;
-static constexpr int CULLING_SORT_GROUP_SIZE = 256;
-static constexpr int CULLING_ZBIN_GROUP_SIZE = 1024;
-static constexpr int CULLING_TILE_GROUP_SIZE = 256;
+[[maybe_unused]] static constexpr int CULLING_SELECT_GROUP_SIZE = 256;
+[[maybe_unused]] static constexpr int CULLING_SORT_GROUP_SIZE = 256;
+[[maybe_unused]] static constexpr int CULLING_ZBIN_GROUP_SIZE = 1024;
+[[maybe_unused]] static constexpr int CULLING_TILE_GROUP_SIZE = 256;
 
 /* Reflection Probes. */
 /* When changed update parallel sum loop in `eevee_lightprobe_sphere_remap_comp.glsl`. */
-static constexpr int SPHERE_PROBE_REMAP_GROUP_SIZE = 32;
-static constexpr int SPHERE_PROBE_GROUP_SIZE = 16;
-static constexpr int SPHERE_PROBE_SELECT_GROUP_SIZE = 64;
-static constexpr int SPHERE_PROBE_MIPMAP_LEVELS = 5;
-static constexpr int SPHERE_PROBE_SH_GROUP_SIZE = 256;
-static constexpr int SPHERE_PROBE_SH_SAMPLES_PER_GROUP = 64;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_REMAP_GROUP_SIZE = 32;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_GROUP_SIZE = 16;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_SELECT_GROUP_SIZE = 64;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_MIPMAP_LEVELS = 5;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_SH_GROUP_SIZE = 256;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_SH_SAMPLES_PER_GROUP = 64;
 /* Must be power of two for correct partitioning. */
-static constexpr int SPHERE_PROBE_ATLAS_MAX_SUBDIV = 12;
-static constexpr int SPHERE_PROBE_ATLAS_RES = (1 << SPHERE_PROBE_ATLAS_MAX_SUBDIV);
+[[maybe_unused]] static constexpr int SPHERE_PROBE_ATLAS_MAX_SUBDIV = 12;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_ATLAS_RES = (1
+                                                                << SPHERE_PROBE_ATLAS_MAX_SUBDIV);
 /* Maximum number of thread-groups dispatched for remapping a probe to octahedral mapping. */
-static constexpr int SPHERE_PROBE_MAX_HARMONIC =
+[[maybe_unused]] static constexpr int SPHERE_PROBE_MAX_HARMONIC =
     (SPHERE_PROBE_ATLAS_RES / SPHERE_PROBE_REMAP_GROUP_SIZE) *
     (SPHERE_PROBE_ATLAS_RES / SPHERE_PROBE_REMAP_GROUP_SIZE);
 /* Start and end value for mixing sphere probe and volume probes. */
-static constexpr float SPHERE_PROBE_MIX_START_ROUGHNESS = 0.7f;
-static constexpr float SPHERE_PROBE_MIX_END_ROUGHNESS = 0.9f;
+[[maybe_unused]] static constexpr float SPHERE_PROBE_MIX_START_ROUGHNESS = 0.7f;
+[[maybe_unused]] static constexpr float SPHERE_PROBE_MIX_END_ROUGHNESS = 0.9f;
 /* Roughness of the last mip map for sphere probes. */
-static constexpr float SPHERE_PROBE_MIP_MAX_ROUGHNESS = 0.7f;
+[[maybe_unused]] static constexpr float SPHERE_PROBE_MIP_MAX_ROUGHNESS = 0.7f;
 #define SPHERE_PROBE_FORMAT SFLOAT_16_16_16_16
 /**
  * Limited by the UBO size limit `(16384 bytes / sizeof(SphereProbeData))`.
  */
-static constexpr int SPHERE_PROBE_MAX = 128;
+[[maybe_unused]] static constexpr int SPHERE_PROBE_MAX = 128;
 
 /** NOTE: Runtime format only. */
 #define VOLUME_PROBE_FORMAT SFLOAT_16_16_16_16
@@ -63,7 +64,7 @@ static constexpr int SPHERE_PROBE_MAX = 128;
  * Limited by the max layer count supported by a hardware (256).
  * Limited by the UBO size limit `(16384 bytes / sizeof(PlanarProbeData))`.
  */
-static constexpr int PLANAR_PROBE_MAX = 16;
+[[maybe_unused]] static constexpr int PLANAR_PROBE_MAX = 16;
 
 /**
  * IMPORTANT: Some data packing are tweaked for these values.
@@ -74,61 +75,64 @@ static constexpr int PLANAR_PROBE_MAX = 16;
 #if 0
 /* Useful for debugging the tile-copy version of the shadow rendering without making debugging
  * tools unresponsive. */
-static constexpr int SHADOW_TILEMAP_RES = 4;
-static constexpr int SHADOW_TILEMAP_LOD = 2; /* LOG2(SHADOW_TILEMAP_RES) */
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_RES = 4;
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD = 2; /* LOG2(SHADOW_TILEMAP_RES) */
 #else
-static constexpr int SHADOW_TILEMAP_RES = 32;
-static constexpr int SHADOW_TILEMAP_LOD = 5; /* LOG2(SHADOW_TILEMAP_RES) */
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_RES = 32;
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD = 5; /* LOG2(SHADOW_TILEMAP_RES) */
 #endif
-static constexpr int SHADOW_TILEMAP_LOD0_LEN = ((SHADOW_TILEMAP_RES / 1) *
-                                                (SHADOW_TILEMAP_RES / 1));
-static constexpr int SHADOW_TILEMAP_LOD1_LEN = ((SHADOW_TILEMAP_RES / 2) *
-                                                (SHADOW_TILEMAP_RES / 2));
-static constexpr int SHADOW_TILEMAP_LOD2_LEN = ((SHADOW_TILEMAP_RES / 4) *
-                                                (SHADOW_TILEMAP_RES / 4));
-static constexpr int SHADOW_TILEMAP_LOD3_LEN = ((SHADOW_TILEMAP_RES / 8) *
-                                                (SHADOW_TILEMAP_RES / 8));
-static constexpr int SHADOW_TILEMAP_LOD4_LEN = ((SHADOW_TILEMAP_RES / 16) *
-                                                (SHADOW_TILEMAP_RES / 16));
-static constexpr int SHADOW_TILEMAP_LOD5_LEN = ((SHADOW_TILEMAP_RES / 32) *
-                                                (SHADOW_TILEMAP_RES / 32));
-static constexpr int SHADOW_TILEMAP_PER_ROW = 64;
-static constexpr int SHADOW_TILEDATA_PER_TILEMAP =
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD0_LEN = ((SHADOW_TILEMAP_RES / 1) *
+                                                                 (SHADOW_TILEMAP_RES / 1));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD1_LEN = ((SHADOW_TILEMAP_RES / 2) *
+                                                                 (SHADOW_TILEMAP_RES / 2));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD2_LEN = ((SHADOW_TILEMAP_RES / 4) *
+                                                                 (SHADOW_TILEMAP_RES / 4));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD3_LEN = ((SHADOW_TILEMAP_RES / 8) *
+                                                                 (SHADOW_TILEMAP_RES / 8));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD4_LEN = ((SHADOW_TILEMAP_RES / 16) *
+                                                                 (SHADOW_TILEMAP_RES / 16));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_LOD5_LEN = ((SHADOW_TILEMAP_RES / 32) *
+                                                                 (SHADOW_TILEMAP_RES / 32));
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_PER_ROW = 64;
+[[maybe_unused]] static constexpr int SHADOW_TILEDATA_PER_TILEMAP =
     (SHADOW_TILEMAP_LOD0_LEN + SHADOW_TILEMAP_LOD1_LEN + SHADOW_TILEMAP_LOD2_LEN +
      SHADOW_TILEMAP_LOD3_LEN + SHADOW_TILEMAP_LOD4_LEN + SHADOW_TILEMAP_LOD5_LEN);
 /* Maximum number of relative LOD distance we can store. */
-static constexpr int SHADOW_TILEMAP_MAX_CLIPMAP_LOD = 8;
+[[maybe_unused]] static constexpr int SHADOW_TILEMAP_MAX_CLIPMAP_LOD = 8;
 #if 0
 /* Useful for debugging the tile-copy version of the shadow rendering without making debugging
  * tools unresponsive. */
-static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE= 8;
-static constexpr int SHADOW_PAGE_RES= 8;
-static constexpr int SHADOW_PAGE_LOD= 3; /* LOG2(SHADOW_PAGE_RES) */
+[[maybe_unused]] static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE= 8;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_RES= 8;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_LOD= 3; /* LOG2(SHADOW_PAGE_RES) */
 #else
-static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE = 32;
-static constexpr int SHADOW_PAGE_RES = 256;
-static constexpr int SHADOW_PAGE_LOD = 8; /* LOG2(SHADOW_PAGE_RES) */
+[[maybe_unused]] static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE = 32;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_RES = 256;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_LOD = 8; /* LOG2(SHADOW_PAGE_RES) */
 #endif
 /* For testing only. */
 // #define SHADOW_FORCE_LOD0
-static constexpr int SHADOW_MAP_MAX_RES = (SHADOW_PAGE_RES * SHADOW_TILEMAP_RES);
-static constexpr int SHADOW_DEPTH_SCAN_GROUP_SIZE = 8;
-static constexpr int SHADOW_AABB_TAG_GROUP_SIZE = 64;
-static constexpr int SHADOW_MAX_TILEMAP = 4096;
-static constexpr int SHADOW_MAX_TILE = (SHADOW_MAX_TILEMAP * SHADOW_TILEDATA_PER_TILEMAP);
-static constexpr int SHADOW_MAX_PAGE = 8192;
-static constexpr int SHADOW_BOUNDS_GROUP_SIZE = 64;
-static constexpr int SHADOW_CLIPMAP_GROUP_SIZE = 64;
-static constexpr int SHADOW_VIEW_MAX = 64 /* Must match DRW_VIEW_MAX. */;
-static constexpr int SHADOW_RENDER_MAP_SIZE = (SHADOW_VIEW_MAX * SHADOW_TILEMAP_LOD0_LEN);
-static constexpr int SHADOW_ATOMIC = 1;
-static constexpr int SHADOW_PAGE_PER_ROW = 8;
-static constexpr int SHADOW_PAGE_PER_COL = 8;
-static constexpr int SHADOW_PAGE_MAX_LAYER = 128;
-static constexpr int SHADOW_PAGE_PER_LAYER = (SHADOW_PAGE_PER_ROW * SHADOW_PAGE_PER_COL);
-static constexpr int SHADOW_MAX_STEP = 16;
-static constexpr int SHADOW_MAX_RAY = 4;
-static constexpr int SHADOW_ROG_ID = 0;
+[[maybe_unused]] static constexpr int SHADOW_MAP_MAX_RES = (SHADOW_PAGE_RES * SHADOW_TILEMAP_RES);
+[[maybe_unused]] static constexpr int SHADOW_DEPTH_SCAN_GROUP_SIZE = 8;
+[[maybe_unused]] static constexpr int SHADOW_AABB_TAG_GROUP_SIZE = 64;
+[[maybe_unused]] static constexpr int SHADOW_MAX_TILEMAP = 4096;
+[[maybe_unused]] static constexpr int SHADOW_MAX_TILE = (SHADOW_MAX_TILEMAP *
+                                                         SHADOW_TILEDATA_PER_TILEMAP);
+[[maybe_unused]] static constexpr int SHADOW_MAX_PAGE = 8192;
+[[maybe_unused]] static constexpr int SHADOW_BOUNDS_GROUP_SIZE = 64;
+[[maybe_unused]] static constexpr int SHADOW_CLIPMAP_GROUP_SIZE = 64;
+[[maybe_unused]] static constexpr int SHADOW_VIEW_MAX = 64 /* Must match DRW_VIEW_MAX. */;
+[[maybe_unused]] static constexpr int SHADOW_RENDER_MAP_SIZE = (SHADOW_VIEW_MAX *
+                                                                SHADOW_TILEMAP_LOD0_LEN);
+[[maybe_unused]] static constexpr int SHADOW_ATOMIC = 1;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_PER_ROW = 8;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_PER_COL = 8;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_MAX_LAYER = 128;
+[[maybe_unused]] static constexpr int SHADOW_PAGE_PER_LAYER = (SHADOW_PAGE_PER_ROW *
+                                                               SHADOW_PAGE_PER_COL);
+[[maybe_unused]] static constexpr int SHADOW_MAX_STEP = 16;
+[[maybe_unused]] static constexpr int SHADOW_MAX_RAY = 4;
+[[maybe_unused]] static constexpr int SHADOW_ROG_ID = 0;
 
 /* Gbuffer. */
 /** IMPORTANT: Make sure all Gbuffer frame-buffer setup matches this. */
@@ -141,7 +145,7 @@ static constexpr int SHADOW_ROG_ID = 0;
 #define DEFERRED_GBUFFER_ROG_ID 0
 
 /* Ray-tracing. */
-static constexpr int RAYTRACE_GROUP_SIZE = 8;
+[[maybe_unused]] static constexpr int RAYTRACE_GROUP_SIZE = 8;
 /* Keep this as a define to avoid shader variations. */
 #define RAYTRACE_RADIANCE_FORMAT UFLOAT_11_11_10
 #define RAYTRACE_RAYTIME_FORMAT SFLOAT_32
@@ -149,7 +153,7 @@ static constexpr int RAYTRACE_GROUP_SIZE = 8;
 #define RAYTRACE_TILEMASK_FORMAT UINT_8
 
 /* Sub-Surface Scattering. */
-static constexpr int SUBSURFACE_GROUP_SIZE = RAYTRACE_GROUP_SIZE;
+[[maybe_unused]] static constexpr int SUBSURFACE_GROUP_SIZE = RAYTRACE_GROUP_SIZE;
 #define SUBSURFACE_RADIANCE_FORMAT UFLOAT_11_11_10
 #define SUBSURFACE_OBJECT_ID_FORMAT UINT_16
 
@@ -162,22 +166,22 @@ static constexpr int SUBSURFACE_GROUP_SIZE = RAYTRACE_GROUP_SIZE;
 
 /* Irradiance Cache. */
 /** Maximum number of entities inside the cache. */
-static constexpr int IRRADIANCE_GRID_MAX = 64;
+[[maybe_unused]] static constexpr int IRRADIANCE_GRID_MAX = 64;
 
 /* Depth Of Field. */
-static constexpr int DOF_TILES_SIZE = 8;
-static constexpr int DOF_TILES_FLATTEN_GROUP_SIZE = DOF_TILES_SIZE;
-static constexpr int DOF_TILES_DILATE_GROUP_SIZE = 8;
-static constexpr int DOF_BOKEH_LUT_SIZE = 32;
-static constexpr int DOF_MAX_SLIGHT_FOCUS_RADIUS = 5;
-static constexpr int DOF_SLIGHT_FOCUS_SAMPLE_MAX = 16;
-static constexpr int DOF_MIP_COUNT = 4;
-static constexpr int DOF_REDUCE_GROUP_SIZE = (1 << (DOF_MIP_COUNT - 1));
-static constexpr int DOF_DEFAULT_GROUP_SIZE = 32;
-static constexpr int DOF_STABILIZE_GROUP_SIZE = 16;
-static constexpr int DOF_FILTER_GROUP_SIZE = 8;
-static constexpr int DOF_GATHER_GROUP_SIZE = DOF_TILES_SIZE;
-static constexpr int DOF_RESOLVE_GROUP_SIZE = (DOF_TILES_SIZE * 2);
+[[maybe_unused]] static constexpr int DOF_TILES_SIZE = 8;
+[[maybe_unused]] static constexpr int DOF_TILES_FLATTEN_GROUP_SIZE = DOF_TILES_SIZE;
+[[maybe_unused]] static constexpr int DOF_TILES_DILATE_GROUP_SIZE = 8;
+[[maybe_unused]] static constexpr int DOF_BOKEH_LUT_SIZE = 32;
+[[maybe_unused]] static constexpr int DOF_MAX_SLIGHT_FOCUS_RADIUS = 5;
+[[maybe_unused]] static constexpr int DOF_SLIGHT_FOCUS_SAMPLE_MAX = 16;
+[[maybe_unused]] static constexpr int DOF_MIP_COUNT = 4;
+[[maybe_unused]] static constexpr int DOF_REDUCE_GROUP_SIZE = (1 << (DOF_MIP_COUNT - 1));
+[[maybe_unused]] static constexpr int DOF_DEFAULT_GROUP_SIZE = 32;
+[[maybe_unused]] static constexpr int DOF_STABILIZE_GROUP_SIZE = 16;
+[[maybe_unused]] static constexpr int DOF_FILTER_GROUP_SIZE = 8;
+[[maybe_unused]] static constexpr int DOF_GATHER_GROUP_SIZE = DOF_TILES_SIZE;
+[[maybe_unused]] static constexpr int DOF_RESOLVE_GROUP_SIZE = (DOF_TILES_SIZE * 2);
 
 /* Ambient Occlusion. */
 #define AMBIENT_OCCLUSION_PASS_TILE_SIZE 16
@@ -192,7 +196,7 @@ static constexpr int DOF_RESOLVE_GROUP_SIZE = (DOF_TILES_SIZE * 2);
 /* Volumes. */
 #define VOLUME_GROUP_SIZE 4
 #define VOLUME_INTEGRATION_GROUP_SIZE 8
-static constexpr int VOLUME_HIT_DEPTH_MAX = 16;
+[[maybe_unused]] static constexpr int VOLUME_HIT_DEPTH_MAX = 16;
 
 /* Velocity. */
 #define VERTEX_COPY_GROUP_SIZE 64
