@@ -90,6 +90,29 @@ static int point_in_polygon_winding_int(const float2 &point, const Span<float2> 
   return int(twice_winding / 2);
 }
 
+/* Returns true if the point exists for this boolean operation. */
+static bool op_is_contributing(const CurveBooleanOpParameters op_params,
+                               const bool subj,
+                               const bool clip)
+{
+  switch (op_params.boolean_mode) {
+    case Operation::Intersect: {
+      return subj && clip;
+    }
+    case Operation::Difference: {
+      return subj && !clip;
+    }
+    case Operation::Union: {
+      return subj || clip;
+    }
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
+
+  return false;
+}
+
 /**
  * The Winding State is a sparse way to store what curves a point is inside.
  */
@@ -172,22 +195,7 @@ class WindingState {
     const bool subj = this->is_in_shape(subject_shape, shapes);
     const bool clip = this->is_in_shapes(clipping_shapes, shapes);
 
-    switch (op_params.boolean_mode) {
-      case Operation::Intersect: {
-        return subj && clip;
-      }
-      case Operation::Difference: {
-        return subj && !clip;
-      }
-      case Operation::Union: {
-        return subj || clip;
-      }
-      default:
-        BLI_assert_unreachable();
-        break;
-    }
-
-    return false;
+    return op_is_contributing(op_params, subj, clip);
   }
 };
 
@@ -344,8 +352,10 @@ static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_pa
           op_params, shapes, subj_shape_i, clipping_shapes);
     }
     else {
-      all_inside_left[seg_i] = state_L.is_in_shapes(clipping_shapes, shapes);
-      all_inside_right[seg_i] = state_R.is_in_shapes(clipping_shapes, shapes);
+      all_inside_left[seg_i] = op_is_contributing(
+          op_params, true, !state_L.is_in_shapes(clipping_shapes, shapes));
+      all_inside_right[seg_i] = op_is_contributing(
+          op_params, true, !state_R.is_in_shapes(clipping_shapes, shapes));
     }
   }
 }
