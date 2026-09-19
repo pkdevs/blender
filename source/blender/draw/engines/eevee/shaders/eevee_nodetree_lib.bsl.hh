@@ -173,6 +173,12 @@ struct KernelGlobals {
       use_forward_lighting)]] srt_t<eevee::LightprobeRenderData> lightprobes;
   [[resource_table]] [[condition(
       use_forward_lighting)]] srt_t<eevee::LightprobePlaneRenderData> lightprobe_planes;
+  [[resource_table]] [[condition(
+      use_forward_lighting &&
+      use_transparency)]] srt_t<eevee::PreviousLayerHiZ> previous_layer_hiz;
+  [[resource_table]] [[condition(
+      use_forward_lighting &&
+      use_transparency)]] srt_t<eevee::PreviousLayerRadiance> previous_layer_radiance;
 
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::LightRenderData> lrd;
   [[resource_table]] [[condition(use_lighting_nodes)]] srt_t<eevee::ShadowRenderData> srd;
@@ -1074,32 +1080,34 @@ void scene_time_uniforms([[resource_table]] KernelGlobals &kg, float &seconds, f
   frame = uni.uniform_buf.scene.frame;
 }
 
-void light_iter_init([[resource_table]] [[maybe_unused]] KernelGlobals &kg,
-                     [[maybe_unused]] const ShadingData &sd,
-                     [[maybe_unused]] eevee::light::VisibleLightIterator &iter)
+void light_iter_init([[resource_table]] KernelGlobals &kg,
+                     const ShadingData &sd,
+                     eevee::light::VisibleLightIterator &iter)
 {
-#if defined(GPU_FRAGMENT_SHADER)
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   const ViewMatrices view = kg.view_matrices_get(sd);
   const float3 forward = view.forward();
   const float linear_view_z = dot(forward, sd.P) - dot(forward, view.position());
-  iter.init(sd.frag_co.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
+  iter.init(kg.lrd, sd.frag_co.xy, linear_view_z, receiver_light_set_get(kg.object_infos_get(sd)));
 #endif
 }
 
-bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
+bool light_iter_next([[resource_table]] KernelGlobals &kg,
+                     eevee::light::VisibleLightIterator &iter)
 {
-#if defined(GPU_FRAGMENT_SHADER)
-  return iter.next();
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  return iter.next(kg.lrd);
 #else
   return false;
 #endif
 }
 
-bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator &iter,
+bool light_iter_should_skip([[resource_table]] KernelGlobals &kg,
+                            [[maybe_unused]] eevee::light::VisibleLightIterator &iter,
                             [[maybe_unused]] float3 P)
 {
-#if defined(GPU_FRAGMENT_SHADER)
-  return iter.should_skip(P);
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  return iter.should_skip(kg.lrd, P);
 #else
   return true;
 #endif
@@ -1112,8 +1120,8 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
     { \
       eevee::light::VisibleLightIterator iter; \
       light_iter_init(kg, sd, iter); \
-      while (light_iter_next(iter)) { \
-        if (light_iter_should_skip(iter, sd.P)) { \
+      while (light_iter_next(kg, iter)) { \
+        if (light_iter_should_skip(kg, iter, sd.P)) { \
           continue; \
         } \
         light_index = iter.index;
