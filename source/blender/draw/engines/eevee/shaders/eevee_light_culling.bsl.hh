@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "draw_intersect_lib.glsl"
+#include "draw_intersect.bsl.hh"
 #include "draw_shape_lib.glsl"
 #include "draw_view.bsl.hh"
 #include "eevee_hiz.bsl.hh"
@@ -21,8 +21,6 @@ namespace eevee::light::culling {
  * Select the visible items inside the active view and put them inside the sorting buffer.
  */
 struct Cull {
-  [[legacy_info]] ShaderCreateInfo draw_view_culling;
-
   [[uniform(0)]] const LightData (&sunlight_buf)[2];
 
   [[storage(0, read_write)]] LightCullingData &light_cull_buf;
@@ -36,6 +34,7 @@ struct Cull {
 [[compute, local_size(CULLING_SELECT_GROUP_SIZE)]]
 void cull_main([[resource_table]] Cull &srt,
                [[resource_table]] const draw::View &views,
+               [[resource_table]] const draw::ViewCulling &culling,
                [[global_invocation_id]] const uint3 global_id)
 {
   uint l_idx = global_id.x;
@@ -83,7 +82,7 @@ void cull_main([[resource_table]] Cull &srt,
             light.position() - z_axis * spot.local.influence_radius_max,
             x_axis * spot.local.influence_radius_max * spot.spot_tan / spot.spot_size_inv.x,
             y_axis * spot.local.influence_radius_max * spot.spot_tan / spot.spot_size_inv.y);
-        if (!intersect_view(pyramid)) {
+        if (!culling.intersect_view(pyramid, 0)) {
           return;
         }
       }
@@ -104,7 +103,7 @@ void cull_main([[resource_table]] Cull &srt,
 
   /* TODO(fclem): Small light culling / fading? */
 
-  if (intersect_view(sphere)) {
+  if (culling.intersect_view(sphere, 0)) {
     const ViewMatrices view = views.get(0);
     uint index = atomicAdd(srt.light_cull_buf.visible_count, 1u);
 
@@ -337,8 +336,6 @@ struct CullingTile {
 };
 
 struct Tile {
-  [[legacy_info]] ShaderCreateInfo draw_view_culling;
-
   [[storage(0, read)]] const LightCullingData &light_cull_buf;
   [[storage(1, read)]] const LightData (&light_buf)[];
 

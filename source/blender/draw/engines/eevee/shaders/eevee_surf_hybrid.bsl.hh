@@ -69,10 +69,8 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
 namespace eevee {
 
 struct SurfaceHybrid {
-  [[legacy_info]] ShaderCreateInfo draw_view_culling;
-
-  /* Everything is stored inside a two layered target, one for each format. This is to fit the
-   * limitation of the number of images we can bind on a single shader. */
+  /* Everything is stored inside a two layered target, one for each format. This is to fit
+   * resource_table limitation of the number of images we can bind on a single shader. */
   [[image(GBUF_CLOSURE_SLOT, write, UNORM_10_10_10_2)]] image2DArray gbuf_closure_img;
   [[image(GBUF_NORMAL_SLOT, write, UNORM_16_16)]] image2DArray gbuf_normal_img;
   /* Storage for additional infos that are shared across closures. */
