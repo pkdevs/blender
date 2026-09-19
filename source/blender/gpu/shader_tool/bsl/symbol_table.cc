@@ -854,6 +854,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       "sinf",
       "cosf",
       "tanf",
+      "atanf",
   };
   for (const auto &name : trig_unary) {
     add_unary(name, f_types);
@@ -873,7 +874,17 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_ternary("EXPECT_NEAR", f_types);
   add_vec_vec_scalar_ternary("EXPECT_NEAR", f_types);
 
-  const vector<string> exp_unary = {"exp", "log", "exp2", "log2", "sqrt", "inversesqrt"};
+  const vector<string> exp_unary = {
+      "exp",
+      "log",
+      "exp2",
+      "log2",
+      "sqrt",
+      "inversesqrt",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "expf",
+      "sqrtf",
+  };
   for (const auto &name : exp_unary) {
     add_unary(name, f_types);
   }
@@ -887,6 +898,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       "ceil",
       "fract",
       "saturate",
+      /* For C++ compat. Do something about it. Doesn't belong here. */
+      "floorf",
+      "ceilf",
   };
   for (const auto &name : common_float_unary) {
     add_unary(name, f_types);
