@@ -886,6 +886,8 @@ static void special_aftertrans_update__sequencer(bContext *C, TransInfo *t)
                                transform_mode_edge_seq_slide_operator_get(t),
                                (sseq->flag & SEQ_MARKER_TRANS) != 0);
 
+  vse::sync_active_scene_and_time_with_scene_strip(*C);
+
   if (deselect_handles) {
     seq_transform_restore_handle_selection(tc);
   }

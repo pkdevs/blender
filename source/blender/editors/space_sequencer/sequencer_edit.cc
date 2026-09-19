@@ -2994,6 +2994,8 @@ static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
     WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
   }
 
+  vse::sync_active_scene_and_time_with_scene_strip(*C);
+
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
