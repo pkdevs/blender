@@ -651,43 +651,6 @@ static void push_undo_tiles(ImageData &image_data,
   }
 }
 
-static constexpr int scratch_tile_bits = ED_IMAGE_UNDO_TILE_BITS;
-static constexpr int scratch_tile_size = ED_IMAGE_UNDO_TILE_SIZE;
-
-static void allocate_scratch_tiles(ImageData &image_data,
-                                   ScratchData &scratch_data,
-                                   const image::TileNumber tile_number,
-                                   ImBuf &image_buffer,
-                                   MutableSpan<uint32_t> tile_allocated,
-                                   const int img_x_start,
-                                   const int img_x_end,
-                                   const int img_y)
-{
-  const int tile_y = img_y >> scratch_tile_bits;
-  const int tile_x_start = img_x_start >> scratch_tile_bits;
-  const int tile_x_end = img_x_end >> scratch_tile_bits;
-  const int scratch_tiles_x = (image_buffer.x + scratch_tile_size - 1) >> scratch_tile_bits;
-
-  for (int tile_x = tile_x_start; tile_x <= tile_x_end; tile_x++) {
-    const int tile_index = tile_y * scratch_tiles_x + tile_x;
-    std::atomic_ref<uint32_t> allocated(tile_allocated[tile_index]);
-    /* This atomic load is free on x86_64, and cheap on arm64. */
-    if (allocated.load(std::memory_order_acquire)) {
-      continue;
-    }
-    ImageUser tile_user = image_data.image_user_get();
-    tile_user.tile = tile_number;
-
-    ScratchDataKey key{tile_number, short(tile_x), short(tile_y)};
-    ScratchDataTile tile;
-    tile.factors.reinitialize(scratch_tile_size * scratch_tile_size);
-    tile.pixel_data.reinitialize(scratch_tile_size * scratch_tile_size);
-
-    scratch_data.tiles.add_new(key, std::move(tile));
-    allocated.store(1, std::memory_order_release);
-  }
-}
-
 /**
  * Mark the seam tiles covering the given pixel row as modified. Dilated by one tile so a
  * seam whose second source sits one pixel across a tile boundary is still handled.
@@ -955,7 +918,6 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                              const Paint & /*paint*/,
                              const Brush &brush,
                              ImageData &image_data,
-                             ScratchData &scratch_data,
                              const KDTree<float3> &tree,
                              bke::pbvh::Node & /*node*/,
                              PixelNode &pixel_node)
@@ -1001,8 +963,6 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
 
     const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
         tile_data.tile_number);
-    const MutableSpan<uint32_t> scratch_tile_allocated = scratch_data.data_created.lookup(
-        tile_data.tile_number);
 
     threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
 
@@ -1026,9 +986,18 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
         tls.factors.resize(run_size);
         tls.pixel_positions.resize(run_size);
         tls.distances.resize(run_size);
+
         const MutableSpan<float> factors = tls.factors;
         const MutableSpan<float3> positions = tls.pixel_positions;
         const MutableSpan<float> distances = tls.distances;
+
+        tile_data.pixel_row_run_scratch_data.color[run_i].resize(run_size);
+
+        /* TODO: Use this rather than the TLS entry */
+        tile_data.pixel_row_run_scratch_data.factor[run_i].resize(run_size);
+
+        const MutableSpan<float> scratch_factors = tile_data.pixel_row_run_scratch_data.factor[run_i];
+        const MutableSpan<float4> scratch_colors = tile_data.pixel_row_run_scratch_data.color[run_i];
 
         /* Tracking for active subset of run with nonzero factors. */
         int run_active_begin = -1;
@@ -1119,18 +1088,9 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                         run_active_x,
                         run_active_x + run_active_size - 1,
                         run_y);
-        allocate_scratch_tiles(image_data,
-                               scratch_data,
-                               tile_data.tile_number,
-                               *image_buffer,
-                               scratch_tile_allocated,
-                               run_active_x,
-                               run_active_x + run_active_size - 1,
-                               run_y);
 
         /* Blend pixels with computed factors. */
         if (std::holds_alternative<MutableSpan<float4>>(orig_buffer)) {
-          /*
           average_pixels<float4>(run_active_begin,
                                  run_active_size,
                                  run_y * image_buffer->x + run_active_x,
@@ -1139,7 +1099,6 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                                  std::get<MutableSpan<float4>>(orig_buffer),
                                  *processors,
                                  std::get<MutableSpan<float4>>(mutable_buffer));
-                                 */
         }
       }
     });
@@ -1417,15 +1376,18 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
     modified.as_mutable_span().fill(0);
   }
 
-  ScratchData scratch_data;
-  for (const auto &entry : image_data.undo_tile_pushed.items()) {
-    scratch_data.data_created.add_new(entry.key, Array<uint32_t>(entry.value.size()));
-  }
+  node_mask.foreach_index([&](const int i) {
+    PixelNode &node = pixel_nodes[i];
+    for (UDIMTilePixels& tile : node.tiles) {
+      tile.reset_scratch_data();
+    }
+  });
+  /* For N pixel nodes in the mask, with Mi different tiles, each with Oj different pixel_row_run_starts */
 
   /* TODO: Enable parallelization */
   node_mask.foreach_index([&](const int i) {
     fill_blur_pixels(
-        depsgraph, ob, paint, brush, image_data, scratch_data, tree, nodes[i], pixel_nodes[i]);
+        depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
   });
 
   /* TODO: Write pixel data */
