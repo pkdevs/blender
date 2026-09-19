@@ -458,8 +458,9 @@ static bool rna_SequenceEditor_strips_all_lookup_string(PointerRNA *ptr,
   return false;
 }
 
-static void rna_SequenceEditor_update_cache(Main * /*bmain*/, Scene *scene, PointerRNA * /*ptr*/)
+static void rna_SequenceEditor_update_cache(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
+  Scene *scene = id_cast<Scene *>(ptr->owner_id);
   Editing *ed = scene->ed;
 
   seq::relations_free_imbuf(scene, &ed->seqbase, false);
@@ -467,10 +468,10 @@ static void rna_SequenceEditor_update_cache(Main * /*bmain*/, Scene *scene, Poin
 }
 
 static void rna_SequenceEditor_cache_settings_changed(Main * /*bmain*/,
-                                                      Scene *scene,
-                                                      PointerRNA * /*ptr*/)
+                                                      Scene * /*scene*/,
+                                                      PointerRNA *ptr)
 {
-  seq::cache_settings_changed(scene);
+  seq::cache_settings_changed(id_cast<Scene *>(ptr->owner_id));
 }
 
 /* internal use */
