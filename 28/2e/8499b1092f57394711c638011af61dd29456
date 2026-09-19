@@ -1,2 +1,3 @@
 Referenced by issue #82049, Regression: material select button now only works for active object.
 Referenced by issue #73871, Assign selection to material slot for multiple objects
+Referenced by commit ed166765278c3724443f53e00b9560048104c055, Fix: Materials: More unsanitized material slot index issues
