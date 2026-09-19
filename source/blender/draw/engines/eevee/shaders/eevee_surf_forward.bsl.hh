@@ -69,8 +69,6 @@ float4 closure_to_rgba_forward([[resource_table]] KernelGlobals &kg,
 namespace eevee {
 
 struct SurfaceForward {
-  [[legacy_info]] ShaderCreateInfo draw_view_culling;
-
   /* Optionally added depending on the material. */
   // [[legacy_info]] ShaderCreateInfo eevee_hiz_prev_data;
   // [[legacy_info]] ShaderCreateInfo eevee_previous_layer_radiance;

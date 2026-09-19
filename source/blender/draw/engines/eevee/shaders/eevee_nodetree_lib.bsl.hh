@@ -4,9 +4,7 @@
 
 #pragma once
 
-#include "draw_object_infos_infos.hh"
-
-#include "draw_intersect_lib.glsl"
+#include "draw_intersect.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "draw_viewlayer.bsl.hh"
@@ -30,8 +28,6 @@
 #include "eevee_utility_tx.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_base.bsl.hh"
-#include "gpu_shader_math_safe.bsl.hh"
-#include "gpu_shader_math_vector_reduce.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh"
 
 #ifdef GLSL_CPP_STUBS
@@ -168,6 +164,7 @@ struct KernelGlobals {
   [[resource_table]] [[condition(use_aov_output)]] srt_t<eevee::RenderPassOutput> renderpass_out;
 
   [[resource_table]] [[condition(use_raycast)]] srt_t<eevee::Raycast> raycast;
+  [[resource_table]] [[condition(use_raycast)]] srt_t<draw::ViewCulling> view_culling;
 
   [[resource_table]] [[condition(
       use_forward_lighting)]] srt_t<eevee::LightEvalIterator> light_eval;
@@ -544,6 +541,8 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
   direction = normalize(direction);
 
   if (pipe.use_raycast) [[static_branch]] {
+    [[resource_table]] draw::ViewCulling &culling = kg.view_culling;
+
     if (!uni.pipeline_buf.can_raycast) {
       /* We can't ray-cast on pre-pass for ray-cast visible objects.
        * We use a UBO property to avoid compiling more shader variants. */
@@ -552,8 +551,7 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
 
     float3 ws_start = position;
     float3 ws_end = position + direction * max_distance;
-    if (!clip_ray(
-            ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
+    if (!clip_ray(ws_start, ws_end, direction, max_distance, culling.get(0).frustum_planes.planes))
     {
       return;
     }
