@@ -4,13 +4,11 @@
 
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "draw_curves.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_view_infos.hh"
 #include "eevee_attributes_curves_lib.glsl"
-#include "eevee_nodetree_vert_lib.glsl"
+#include "eevee_nodetree_vert_lib.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_shared.hh" /* TODO(fclem): Remove. Needed because of fragment shader. */

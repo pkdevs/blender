@@ -10,12 +10,10 @@
  */
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "draw_view.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_cryptomatte.bsl.hh"
 #include "eevee_gbuffer_write.bsl.hh"
-#include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
@@ -162,8 +160,8 @@ void surf_deferred(
 
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
   {
-    const auto &nt = buffer_get(eevee_nodetree, node_tree);
-    cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
+    [[resource_table]] const NodeTreeRes &nt = kg.nt;
+    cryptomatte.store(out_texel, nt.node_tree.crypto_hash, resource_id);
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
   }

@@ -12,6 +12,8 @@
 /* This file must replaced at runtime. The following content is only a possible implementation. */
 #pragma runtime_generated
 
+#include "gpu_shader_compat.hh"
+
 struct [[host_shared]] NodeTree {
   float crypto_hash;
   float _pad0;

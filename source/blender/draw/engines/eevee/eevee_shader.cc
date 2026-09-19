@@ -1377,7 +1377,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   generated_resource_header += "#endif\n";
   generated_resource_header += "\n";
 
-  info.generated_sources.append({"eevee_nodetree_type_lib.glsl", {}, generated_resource_header});
+  info.generated_sources.append({"eevee_nodetree_type.bsl.hh", {}, generated_resource_header});
   info.generated_sources.append({"gpu_shader_material_interface.bsl.hh", {}, ""});
 
   {
@@ -1401,12 +1401,13 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       dependencies.extend(codegen.displacement.dependencies);
     }
 
-    info.generated_sources.append({"eevee_nodetree_vert_lib.glsl", dependencies, vert_gen.str()});
+    info.generated_sources.append(
+        {"eevee_nodetree_vert_lib.bsl.hh", dependencies, vert_gen.str()});
   }
 
   if (pipeline_type != MAT_PIPE_VOLUME_OCCUPANCY) {
     Vector<StringRefNull> dependencies;
-    dependencies.append("eevee_nodetree_type_lib.glsl");
+    dependencies.append("eevee_nodetree_type.bsl.hh");
     dependencies.append("eevee_geom_types_lib.bsl.hh");
     dependencies.append("eevee_nodetree_lib.bsl.hh");
 
@@ -1480,7 +1481,8 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     dependencies.extend(codegen.volume.dependencies);
     frag_gen << "}\n\n";
 
-    info.generated_sources.append({"eevee_nodetree_frag_lib.glsl", dependencies, frag_gen.str()});
+    info.generated_sources.append(
+        {"eevee_nodetree_frag_lib.bsl.hh", dependencies, frag_gen.str()});
   }
 
   const char *material_name = (info.name_.c_str() + 2);

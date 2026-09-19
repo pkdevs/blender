@@ -10,7 +10,6 @@
 #pragma once
 
 #include "draw_object_infos_infos.hh"
-#include "infos/eevee_nodetree_infos.hh"
 
 #ifdef GLSL_CPP_STUBS
 #  define MAT_VOLUME
@@ -20,7 +19,7 @@
 
 /* Needed includes for shader nodes. */
 #include "eevee_attributes_volume_lib.glsl"
-#include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_nodetree_frag_lib.bsl.hh"
 #include "eevee_occupancy_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"

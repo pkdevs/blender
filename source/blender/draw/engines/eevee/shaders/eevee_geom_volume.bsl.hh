@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_nodetree_infos.hh"
-
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "eevee_pipeline.bsl.hh"
