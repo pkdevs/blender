@@ -22,8 +22,11 @@
 #include "GPU_uniform_buffer.hh"
 
 #include "IMB_imbuf_types.hh"
+#include "IMB_colormanagement.hh"
 
 #include "gpencil_engine_private.hh"
+
+#include "cmath"
 
 namespace blender::draw::gpencil {
 
@@ -457,9 +460,70 @@ void gpencil_light_pool_populate(LightPool *lightpool, Object *ob)
   else {
     gp_light->type = GP_LIGHT_TYPE_POINT;
   }
-  copy_v4_v4(gp_light->position, ob->object_to_world().location());
+
+  /* Calculate power of the light. */
+  float power;
+  if (light.mode & LA_UNNORMALIZED) {
+    if (light.type == LA_SUN) {
+      if (light.sun_angle > 0.0f) {
+        power = 1.0f / (4.0f / ((light.sun_angle * light.sun_angle)) + 1.0f) * M_PI;
+      }
+      else {
+        power = 1.0f;
+      }
+    }
+    else if (light.type == LA_AREA) {
+
+      /* Get light scale. */
+      ObjectRef ob_ref(ob);
+      const float3x3 scalemat = ob_ref.object_to_world().view<3, 3>();
+      const float3 scale = math::to_scale(scalemat);
+
+      switch (light.area_shape) {
+        case 0:
+          power = light.area_size * light.area_size * scale.x * scale.y;
+          break;
+        case 1:
+          power = light.area_size * light.area_sizey * scale.x * scale.y;
+          break;
+        case 2:
+          power = light.area_size * light.area_size * light.area_size * scale.x * scale.y;
+          break; /* Deprecated. */
+        case 3:
+          power = light.area_size * light.area_sizey * light.area_sizez * scale.x * scale.y * scale.z;
+          break; /* Deprecated. */
+        case 4:
+          power = (light.area_size / 2.0f) * (light.area_size / 2.0f) * M_PI * scale.x * scale.y;
+          break;
+        case 5:
+          power = (light.area_size / 2.0f) * (light.area_sizey / 2.0f) * M_PI * scale.x * scale.y;
+          break;
+      }
+    }
+    else {
+      if (light.radius == 0.0f) {
+        power = 4.0f;
+      }
+      else {
+        power = 4.0f * M_PI * light.radius * light.radius;
+      }
+    }
+  }
+  else {
+    power = 1.0f;
+  }
+  power *= light.energy * light_power_get(&light) * (std::pow(2.0f, light.exposure));
+
+  /* Calculate Color. */
   copy_v3_v3(gp_light->light_color, &light.r);
-  mul_v3_fl(gp_light->light_color, light.energy * light_power_get(&light));
+  if (light.mode & LA_USE_TEMPERATURE) {
+    float blackbody[3];
+    IMB_colormanagement_blackbody_temperature_to_rgb(blackbody, light.temperature);
+    mul_v3_v3(gp_light->light_color, blackbody);
+  }
+
+  copy_v4_v4(gp_light->position, ob->object_to_world().location());
+  mul_v3_fl(gp_light->light_color, power);
 
   lightpool->light_used++;
 
