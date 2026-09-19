@@ -42,34 +42,24 @@ float4 closure_to_rgba_hybrid([[resource_table]] KernelGlobals &kg,
     float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
     closure_weights_reset(kg, sd, closure_rand);
 
-#if defined(MAT_TRANSPARENT) && defined(MAT_SHADER_TO_RGBA)
-    { /* Limit resource guard to this scope. */
+    if (pipe.use_forward_lighting && pipe.use_transparency) {
       [[resource_table]] eevee::LightprobeRenderData &lightprobes = kg.lightprobes;
       [[resource_table]] eevee::LightprobeSphereRenderData &lp_spheres = lightprobes.spheres;
+      [[resource_table]] eevee::PreviousLayerHiZ &prev_hiz = kg.previous_layer_hiz;
+      [[resource_table]] eevee::PreviousLayerRadiance &prev_radiance = kg.previous_layer_radiance;
 
       float3 V = -views.get(0).world_incident_vector(sd.P);
       eevee::LightProbeSample samp = lightprobes.load(frag_co, sd.P, sd.N, V);
       float3 radiance_behind = lp_spheres.spherical_sample_normalized_with_parallax(
           samp, sd.P, V, 0.0);
 
-#  ifndef MAT_FIRST_LAYER
-      { /* Limit resource guard to this scope. */
-        /* clang-format off */
-      [[resource_table]] const eevee::PreviousLayerHiZ &prev_hiz = resource_table_get(eevee::PreviousLayerHiZ);
-      [[resource_table]] const eevee::PreviousLayerRadiance &prev_radiance = resource_table_get(eevee::PreviousLayerRadiance);
-        /* clang-format on */
-
-        int2 texel = int2(frag_co.xy);
-
-        if (texelFetchExtend(prev_hiz.hiz_prev_tx, texel, 0).x != 1.0f) {
-          radiance_behind = texelFetch(prev_radiance.previous_layer_radiance_tx, texel, 0).xyz;
-        }
+      int2 texel = int2(frag_co);
+      if (texelFetchExtend(prev_hiz.hiz_prev_tx, texel, 0).x != 1.0f) {
+        radiance_behind = texelFetch(prev_radiance.previous_layer_radiance_tx, texel, 0).xyz;
       }
-#  endif
 
       radiance += radiance_behind * saturate(transmittance);
     }
-#endif
 
     return float4(radiance, saturate(1.0f - average(transmittance)));
   }
