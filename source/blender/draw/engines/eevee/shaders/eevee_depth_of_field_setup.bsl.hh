@@ -276,7 +276,7 @@ struct Resources {
   /* Returns motion in pixel space to retrieve the pixel history. */
   float2 pixel_history_motion_vector(int2 texel_sample, uint3 local_id) const
   {
-    [[resource_table]] const CameraVelocity &cam_vel = this->camera;
+    [[resource_table]] const CameraVelocity &cam_vel = camera;
 
     /**
      * Dilate velocity by using the nearest pixel in a cross pattern.
