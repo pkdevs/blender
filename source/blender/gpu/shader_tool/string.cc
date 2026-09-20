@@ -85,7 +85,7 @@ void SourceProcessor::lower_assert_ast(Parser &parser, [[maybe_unused]] const st
   /* Example: `assert(i < 0)` > `if (!(i < 0)) { printf(...); }` */
   for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
     if (call.identifier().str() != "assert") {
-      return;
+      continue;
     }
 
     string replacement;
