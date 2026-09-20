@@ -103,6 +103,8 @@ void surf_forward(
     [[out]] SurfaceForwardFragOut &frag_out,
     [[front_facing]] const bool front_face)
 {
+  [[resource_table]] const NodeTreeRes &nt = kg.nt;
+
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
@@ -124,7 +126,8 @@ void surf_forward(
 
   fragment_displacement(kg, sd);
 
-  sd.thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
+  sd.thickness = Thickness::from(nodetree_thickness(kg, sd),
+                                 ThicknessMode(nt.node_tree.thickness_mode));
 
   nodetree_surface(kg, sd, closure_rand);
 
