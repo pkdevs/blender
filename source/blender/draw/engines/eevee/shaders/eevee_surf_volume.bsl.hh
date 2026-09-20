@@ -98,6 +98,8 @@ struct SurfVolume {
     float3 lP_orco = lP * ob_infos.orco_mul + ob_infos.orco_add;
 
     sd.P = wP;
+    sd.N = float3(0.0f);
+    sd.Ng = float3(0.0f);
     sd.ray_length = distance(sd.P, view.position());
 
     VolumePoint volume_pt;
