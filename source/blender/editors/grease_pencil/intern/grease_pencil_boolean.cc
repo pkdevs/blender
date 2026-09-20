@@ -535,8 +535,7 @@ static void find_intersections_between_curves(const Span<float2> points_i,
  * This should be optimized with a BVH. */
 static void find_intersections_between_shapes(const Span<float2> points,
                                               const GroupedSpan<int> shapes,
-                                              const IndexMask &shapes_i,
-                                              const IndexMask &shapes_j,
+                                              const IndexMask &shape_mask,
                                               const OffsetIndices<int> points_by_curve,
                                               const VArray<bool> &cyclic,
                                               const bool skip_double,
@@ -544,17 +543,17 @@ static void find_intersections_between_shapes(const Span<float2> points,
                                               Array<Vector<int>> &r_inters_per_curves,
                                               Vector<IntersectionPoint> &r_intersections)
 {
-  shapes_i.foreach_index([&](const int shape_i) {
+  shape_mask.foreach_index([&](const int shape_i) {
     const Span<int> curves_i = shapes[shape_i];
     for (const int curve_i : curves_i) {
 
       const IndexRange points_i = points_by_curve[curve_i];
       const bool cyclic_i = cyclic[curve_i];
 
-      shapes_j.foreach_index([&](const int shape_j) {
+      shape_mask.foreach_index([&](const int shape_j) {
         const Span<int> curves_j = shapes[shape_j];
         for (const int curve_j : curves_j) {
-          if (skip_double && curve_i > curve_j) {
+          if (curve_i > curve_j) {
             return;
           }
           if (!self_intersection && curve_i == curve_j) {
@@ -679,9 +678,6 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 
   Array<Vector<int>> inters_per_curves(points_by_curve.size());
 
-  const IndexMask subj_shapes = IndexRange::from_single(subj_shape_id);
-
-  const bool skip_double = op_params.boolean_mode == Operation::Union;
   const bool self_intersection = false;
 
   IndexMaskMemory memory;
@@ -690,11 +686,9 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 
   find_intersections_between_shapes(points,
                                     shapes,
-                                    subj_shapes,
-                                    clipping_shapes,
+                                    shape_mask,
                                     points_by_curve,
                                     cyclic,
-                                    skip_double,
                                     self_intersection,
                                     inters_per_curves,
                                     intersections);
