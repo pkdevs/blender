@@ -1,0 +1,1 @@
+Referenced by issue #164144, Moving an object from the Scene Collection to another Collection also links all it's indirect children to the Collection
