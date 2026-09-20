@@ -853,8 +853,6 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
 
   const OffsetIndices<int> dst_segments_by_curve = OffsetIndices<int>(results_all.segment_offsets);
 
-  Array<bool> is_src_curve_clipping(points_by_curve.size(), false);
-
   results_all.is_segments_clipping = Array<bool>(results_all.segments.size(), false);
 
   results_all.dst_to_src_curves = Array<int>(dst_segments_by_curve.size());
@@ -862,9 +860,6 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
     const IndexRange segment_range = dst_segments_by_curve[i];
     const int subj_first_curve = results_all.subj_first_curves[i];
     results_all.dst_to_src_curves[i] = subj_first_curve;
-
-    const int curve_i = results_all.segments[segment_range.first()].curve;
-    results_all.dst_to_src_curves[i] = curve_i;
   }
 
   results_all.unchanged_curves = calculate_unchanged_curves(
