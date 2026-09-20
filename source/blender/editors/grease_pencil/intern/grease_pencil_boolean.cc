@@ -282,6 +282,10 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
         return;
       }
 
+      if (!is_fill[curve_j]) {
+        return;
+      }
+
       const IndexRange points_j = points_by_curve[curve_j];
 
       const Span<float2> poly_j = all_positions.slice(points_j);
@@ -316,7 +320,6 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
 /* Check the left and right of a curve `k` */
 static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
                                            const int curve_k,
-                                           const bool is_subj,
                                            const int subj_shape_i,
                                            const Span<float2> points,
                                            const GroupedSpan<int> shapes,
@@ -334,10 +337,9 @@ static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_pa
     return;
   }
 
-  const IndexMask &mask_shapes = is_subj ? clipping_shapes :
-                                           (!is_fill[shapes[subj_shape_i].first()] ?
-                                                IndexRange(0) :
-                                                IndexRange::from_single(subj_shape_i));
+  IndexMaskMemory memory;
+  const IndexMask &mask_shapes = IndexMask::from_union(
+      clipping_shapes, IndexRange::from_single(subj_shape_i), memory);
 
   for (const int seg_i : segments) {
     const Segment &this_segment = all_segments[seg_i];
@@ -737,7 +739,6 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   for (const int curve_i : shapes[subj_shape_id]) {
     get_inside_states_for_segments(op_params,
                                    curve_i,
-                                   true,
                                    subj_shape_id,
                                    points,
                                    shapes,
@@ -754,7 +755,6 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
     for (const int curve_j : curves_j) {
       get_inside_states_for_segments(op_params,
                                      curve_j,
-                                     false,
                                      subj_shape_id,
                                      points,
                                      shapes,
