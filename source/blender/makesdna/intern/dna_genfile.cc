@@ -817,7 +817,7 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   }
 
   Vector<uint8_t> dst;
-  dst.reserve(1024);
+  dst.reserve(32 * 1024);
 
   auto write = [&](const void *data, const int64_t size) {
     dst.extend(static_cast<const uint8_t *>(data), size);
