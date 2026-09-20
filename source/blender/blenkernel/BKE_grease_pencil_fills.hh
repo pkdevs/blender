@@ -62,6 +62,9 @@ IndexMask selected_mask_to_fills(const IndexMask &selected_mask,
 IndexMask curves_mask_to_shapes(const IndexMask &curve_mask,
                                 const GroupedSpan<int> shapes,
                                 IndexMaskMemory &memory);
+IndexMask shapes_mask_to_curves(const IndexMask &shapes_mask,
+                                const GroupedSpan<int> shapes,
+                                IndexMaskMemory &memory);
 void separate_fill_ids(CurvesGeometry &curves, const IndexMask &strokes_to_keep);
 
 }  // namespace blender::bke::greasepencil

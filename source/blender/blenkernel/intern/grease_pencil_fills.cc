@@ -295,6 +295,28 @@ IndexMask curves_mask_to_shapes(const IndexMask &curve_mask,
   return IndexMask::from_indices(selected_shapes.as_span(), memory);
 }
 
+IndexMask shapes_mask_to_curves(const IndexMask &shapes_mask,
+                                const GroupedSpan<int> shapes,
+                                IndexMaskMemory &memory)
+{
+  const int curves_num = shapes.data.size();
+
+  /* If every shape is just one curve then the sames and curves are the same. */
+  if (shapes.size() == curves_num) {
+    return shapes_mask;
+  }
+
+  Vector<int> selected_curves;
+  shapes_mask.foreach_index([&](const int shape_i) {
+    const Span<int> shape = shapes[shape_i];
+    for (const int curve_i : shape) {
+      selected_curves.append(curve_i);
+    }
+  });
+
+  return IndexMask::from_indices(selected_curves.as_span(), memory);
+}
+
 void separate_fill_ids(CurvesGeometry &curves, const IndexMask &strokes_to_keep)
 {
   IndexMaskMemory memory;

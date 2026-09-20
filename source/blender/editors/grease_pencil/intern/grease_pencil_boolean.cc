@@ -943,7 +943,6 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
         return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
       };
 
-      IndexMaskMemory memory;
       const IndexMask shape_mask = IndexMask::from_union(
           clipping_shapes, IndexRange::from_single(shape_i), memory);
 
@@ -990,12 +989,10 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
 
   const OffsetIndices<int> dst_segments_by_curve = OffsetIndices<int>(results_all.segment_offsets);
 
-  Array<bool> is_src_curve_clipping(points_by_curve.size(), false);
-  for (const int curve_i : points_by_curve.index_range()) {
-    if (curve_i == points_by_curve.index_range().last()) {
-      is_src_curve_clipping[curve_i] = true;
-    }
-  }
+  const IndexMask clipping_curves = bke::greasepencil::shapes_mask_to_curves(
+      clipping_shapes, shapes, memory);
+  Array<bool> is_src_curve_clipping(points_by_curve.size());
+  clipping_curves.to_bools(is_src_curve_clipping);
 
   results_all.is_segments_clipping = Array<bool>(results_all.segments.size());
   for (const int seg_i : results_all.segments.index_range()) {
