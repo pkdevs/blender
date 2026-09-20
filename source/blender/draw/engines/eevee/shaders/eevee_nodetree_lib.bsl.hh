@@ -158,7 +158,7 @@ struct KernelGlobals {
   [[resource_table]] srt_t<eevee::Uniform> uniforms;
   [[resource_table]] srt_t<eevee::Sampling> sampling;
 
-  [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
+  [[resource_table]] [[condition(is_volume_pipe)]] srt_t<draw::Volume> volume;
 
   [[resource_table]] [[condition(!is_occupancy_pipe)]] srt_t<UtilityTexture> util_tx;
 
@@ -989,7 +989,7 @@ float derivative_scale_get([[resource_table]] KernelGlobals &kg)
 float attr_load_temperature_post([[resource_table]] KernelGlobals &kg, float attr)
 {
   [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
-  if (pipe.is_volume_object) [[static_branch]] {
+  if (pipe.is_volume_pipe) [[static_branch]] {
     [[resource_table]] const draw::Volume &vol = kg.volume;
     /* Bring the value into standard range without having to modify the grid values */
     attr = (attr > 0.01f) ?
@@ -1001,7 +1001,7 @@ float attr_load_temperature_post([[resource_table]] KernelGlobals &kg, float att
 float4 attr_load_color_post([[resource_table]] KernelGlobals &kg, float4 attr)
 {
   [[resource_table]] const eevee::PipelineConstants &pipe = kg.pipe;
-  if (pipe.is_volume_object) [[static_branch]] {
+  if (pipe.is_volume_pipe) [[static_branch]] {
     [[resource_table]] const draw::Volume &vol = kg.volume;
     /* Density is premultiplied for interpolation, divide it out here. */
     attr.rgb *= safe_rcp(attr.a);

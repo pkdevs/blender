@@ -715,8 +715,11 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
   info.compilation_constant(Type::bool_t, "is_pointcloud", geometry_type == MAT_GEOM_POINTCLOUD);
   info.compilation_constant(Type::bool_t, "is_gsplat", geometry_type == MAT_GEOM_GSPLAT);
   info.compilation_constant(Type::bool_t, "is_world", geometry_type == MAT_GEOM_WORLD);
+
   info.compilation_constant(Type::bool_t, "is_volume_object", geometry_type == MAT_GEOM_VOLUME);
 
+  info.compilation_constant(
+      Type::bool_t, "is_volume_pipe", pipeline_type == MAT_PIPE_VOLUME_MATERIAL);
   info.compilation_constant(Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
   if (pipeline_type == MAT_PIPE_SHADOW) {
     info.compilation_constant(Type::bool_t, "use_multi_viewport", GPU_multi_viewport_support());
