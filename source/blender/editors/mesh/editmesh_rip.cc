@@ -13,6 +13,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
@@ -53,28 +54,32 @@ namespace blender {
  * point and would result in the same distance.
  */
 #define INSET_DEFAULT 0.00001f
-static float edbm_rip_edgedist_squared(ARegion *region,
-                                       const float4x4 &mat,
-                                       const float co1[3],
-                                       const float co2[3],
-                                       const float mvalf[2],
+static float edbm_rip_edgedist_squared(const float3 &ray_start,
+                                       const float3 &ray_dir,
+                                       const float4x4 &obmat,
+                                       const float3 &co1,
+                                       const float3 &co2,
                                        const float inset)
 {
-
-  float2 vec1 = ED_view3d_project_float_v2_m4(region, co1, mat);
-  float2 vec2 = ED_view3d_project_float_v2_m4(region, co2, mat);
+  float3 vec1 = math::transform_point(obmat, co1);
+  float3 vec2 = math::transform_point(obmat, co2);
 
   if (inset != 0.0f) {
-    const float dist_2d = len_v2v2(vec1, vec2);
-    if (dist_2d > FLT_EPSILON) {
-      const float dist = inset / dist_2d;
+    const float dist_3d = math::distance(vec1, vec2);
+    if (dist_3d > FLT_EPSILON) {
+      const float dist = inset / dist_3d;
       BLI_assert(isfinite(dist));
-      interp_v2_v2v2(vec1, vec1, vec2, dist);
-      interp_v2_v2v2(vec2, vec2, vec1, dist);
+      float3 v1 = vec1;
+      float3 v2 = vec2;
+      vec1 = math::interpolate(v1, v2, dist);
+      vec2 = math::interpolate(v2, v1, dist);
     }
   }
 
-  const float dist_sq = dist_squared_to_line_segment_v2(mvalf, vec1, vec2);
+  float3 closest_pt;
+  float depth;
+  const float dist_sq = dist_squared_ray_to_seg_v3(
+      ray_start, ray_dir, vec1, vec2, closest_pt, &depth);
   BLI_assert(isfinite(dist_sq));
 
   return dist_sq;
@@ -96,7 +101,7 @@ static float edbm_rip_linedist(
 /**
  * Calculates a point along the loop tangent which can be used to measure against edges.
  */
-static void edbm_calc_loop_co(BMLoop *l, float l_mid_co[3])
+static void edbm_calc_loop_co(BMLoop *l, float3 &l_mid_co)
 {
   BM_loop_calc_face_tangent(l, l_mid_co);
 
@@ -108,12 +113,8 @@ static void edbm_calc_loop_co(BMLoop *l, float l_mid_co[3])
 }
 
 static float edbm_rip_edge_side_measure(
-    BMEdge *e, BMLoop *e_l, ARegion *region, const float4x4 &projectMat, const float fmval[2])
+    BMEdge *e, BMLoop *e_l, const float3 &ray_start, const float3 &ray_dir, const float4x4 &obmat)
 {
-  float vec[2];
-  float fmval_tweak[2];
-  float score;
-
   BMVert *v1_other;
   BMVert *v2_other;
 
@@ -130,24 +131,28 @@ static float edbm_rip_edge_side_measure(
   v1_other = BM_face_other_vert_loop(e_l->f, e->v2, e->v1)->v;
   v2_other = BM_face_other_vert_loop(e_l->f, e->v1, e->v2)->v;
 
-  float2 cent = ED_view3d_project_float_v2_m4(
-      region, math::midpoint(float3(v1_other->co), float3(v2_other->co)), projectMat);
-  float2 mid = ED_view3d_project_float_v2_m4(
-      region, math::midpoint(float3(e->v1->co), float3(e->v2->co)), projectMat);
+  float3 cent = math::transform_point(obmat,
+                                      math::midpoint(float3(v1_other->co), float3(v2_other->co)));
+  float3 mid = math::transform_point(obmat, math::midpoint(float3(e->v1->co), float3(e->v2->co)));
 
-  float2 e_v1_co = ED_view3d_project_float_v2_m4(region, e->v1->co, projectMat);
-  float2 e_v2_co = ED_view3d_project_float_v2_m4(region, e->v2->co, projectMat);
+  float3 e_v1_co = math::transform_point(obmat, float3(e->v1->co));
+  float3 e_v2_co = math::transform_point(obmat, float3(e->v2->co));
 
-  sub_v2_v2v2(vec, cent, mid);
-  normalize_v2_length(vec, 0.01f);
+  float3 vec = cent - mid;
+  vec = math::normalize(vec) * 0.01f;
+  /* rather than adding to both verts, subtract from the ray start */
+  float3 ray_start_tweak = ray_start - vec;
 
-  /* rather than adding to both verts, subtract from the mouse */
-  sub_v2_v2v2(fmval_tweak, fmval, vec);
+  float score = math::distance(e_v1_co, e_v2_co);
 
-  score = len_v2v2(e_v1_co, e_v2_co);
+  float3 closest_pt;
+  float depth;
+  float3 closest_pt_tweak;
+  float depth_tweak;
 
-  if (dist_squared_to_line_segment_v2(fmval_tweak, e_v1_co, e_v2_co) >
-      dist_squared_to_line_segment_v2(fmval, e_v1_co, e_v2_co))
+  if (dist_squared_ray_to_seg_v3(
+          ray_start_tweak, ray_dir, e_v1_co, e_v2_co, closest_pt_tweak, &depth_tweak) >
+      dist_squared_ray_to_seg_v3(ray_start, ray_dir, e_v1_co, e_v2_co, closest_pt, &depth))
   {
     return score;
   }
@@ -345,9 +350,9 @@ static BMVert *edbm_ripsel_edloop_pair_start_vert(BMEdge *e)
 
 static void edbm_ripsel_deselect_helper(BMesh *bm,
                                         const Span<EdgeLoopPair> eloop_pairs,
-                                        ARegion *region,
-                                        const float4x4 &projectMat,
-                                        const float fmval[2])
+                                        const float3 &ray_start,
+                                        const float3 &ray_dir,
+                                        const float4x4 &obmat)
 {
   for (const EdgeLoopPair &lp : eloop_pairs) {
     BMEdge *e;
@@ -359,12 +364,12 @@ static void edbm_ripsel_deselect_helper(BMesh *bm,
     e = lp.l_a->e;
     v_prev = edbm_ripsel_edloop_pair_start_vert(e);
     for (; e; e = edbm_ripsel_edge_uid_step(e, &v_prev)) {
-      score_a += edbm_rip_edge_side_measure(e, e->l, region, projectMat, fmval);
+      score_a += edbm_rip_edge_side_measure(e, e->l, ray_start, ray_dir, obmat);
     }
     e = lp.l_b->e;
     v_prev = edbm_ripsel_edloop_pair_start_vert(e);
     for (; e; e = edbm_ripsel_edge_uid_step(e, &v_prev)) {
-      score_b += edbm_rip_edge_side_measure(e, e->l, region, projectMat, fmval);
+      score_b += edbm_rip_edge_side_measure(e, e->l, ray_start, ray_dir, obmat);
     }
 
     e = (score_a > score_b) ? lp.l_a->e : lp.l_b->e;
@@ -510,11 +515,12 @@ static void edbm_tagged_loop_pairs_do_fill_faces(BMesh *bm,
 /**
  * This is the main vert ripping function (rip when one vertex is selected)
  */
-static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obedit, bool do_fill)
+static int edbm_rip_invoke__vert(Object *obedit,
+                                 bool do_fill,
+                                 const float3 &ray_start,
+                                 const float3 &ray_dir)
 {
   Array<UnorderedLoopPair> fill_uloop_pairs;
-  ARegion *region = CTX_wm_region(C);
-  RegionView3D *rv3d = CTX_wm_region_view3d(C);
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   BMIter iter, liter;
   BMLoop *l;
@@ -529,7 +535,7 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
   BMEditSelection ese;
   int totboundary_edge = 0;
 
-  const float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
+  const float4x4 obmat = obedit->object_to_world();
 
   /* find selected vert - same some time and check history first */
   if (BM_select_history_active_get(bm, &ese) && ese.htype == BM_VERT) {
@@ -565,7 +571,7 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
       if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
         if ((is_manifold_region == false) || BM_edge_is_manifold(e)) {
           d = edbm_rip_edgedist_squared(
-              region, projectMat, e->v1->co, e->v2->co, fmval, INSET_DEFAULT);
+              ray_start, ray_dir, obmat, e->v1->co, e->v2->co, INSET_DEFAULT);
           if ((e_best == nullptr) || (d < dist_sq)) {
             dist_sq = d;
             e_best = e;
@@ -613,10 +619,10 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
     for (i1 = 0; i1 < 3; i1++) {
       /* consider wire as boundary for this purpose,
        * otherwise we can't a face away from a wire edge */
-      float l_mid_co[3];
+      float3 l_mid_co;
       l = l_all[i1];
       edbm_calc_loop_co(l, l_mid_co);
-      d = edbm_rip_edgedist_squared(region, projectMat, l->v->co, l_mid_co, fmval, INSET_DEFAULT);
+      d = edbm_rip_edgedist_squared(ray_start, ray_dir, obmat, l->v->co, l_mid_co, INSET_DEFAULT);
       if ((e_best == nullptr) || (d < dist_sq)) {
         dist_sq = d;
 
@@ -672,11 +678,11 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
         /* find the best face corner */
         BM_ITER_ELEM (l, &iter, vout[i], BM_LOOPS_OF_VERT) {
           if (!BM_elem_flag_test(l->f, BM_ELEM_HIDDEN)) {
-            float l_mid_co[3];
+            float3 l_mid_co;
 
             edbm_calc_loop_co(l, l_mid_co);
             d = edbm_rip_edgedist_squared(
-                region, projectMat, v->co, l_mid_co, fmval, INSET_DEFAULT);
+                ray_start, ray_dir, obmat, v->co, l_mid_co, INSET_DEFAULT);
 
             if (d < dist_sq) {
               dist_sq = d;
@@ -690,11 +696,11 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
         /* a wire vert, find the best edge */
         BM_ITER_ELEM (e, &iter, vout[i], BM_EDGES_OF_VERT) {
           if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
-            float e_mid_co[3];
+            float3 e_mid_co;
 
             mid_v3_v3v3(e_mid_co, e->v1->co, e->v2->co);
             d = edbm_rip_edgedist_squared(
-                region, projectMat, v->co, e_mid_co, fmval, INSET_DEFAULT);
+                ray_start, ray_dir, obmat, v->co, e_mid_co, INSET_DEFAULT);
 
             if (d < dist_sq) {
               dist_sq = d;
@@ -819,7 +825,7 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
   {
     /* --- select which vert --- */
     BMVert *v_best = nullptr;
-    float l_corner_co[3];
+    float3 l_corner_co;
 
     dist_sq = FLT_MAX;
     BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
@@ -833,7 +839,7 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
           /* check if v_best is null in the _rare_ case there are numeric issues */
           edbm_calc_loop_co(l, l_corner_co);
           d = edbm_rip_edgedist_squared(
-              region, projectMat, l->v->co, l_corner_co, fmval, INSET_DEFAULT);
+              ray_start, ray_dir, obmat, l->v->co, l_corner_co, INSET_DEFAULT);
           if ((v_best == nullptr) || (d < dist_sq)) {
             v_best = v;
             dist_sq = d;
@@ -870,11 +876,12 @@ static int edbm_rip_invoke__vert(bContext *C, const float fmval[2], Object *obed
 /**
  * This is the main edge ripping function
  */
-static int edbm_rip_invoke__edge(bContext *C, const float fmval[2], Object *obedit, bool do_fill)
+static int edbm_rip_invoke__edge(Object *obedit,
+                                 bool do_fill,
+                                 const float3 &ray_start,
+                                 const float3 &ray_dir)
 {
   Array<UnorderedLoopPair> fill_uloop_pairs;
-  ARegion *region = CTX_wm_region(C);
-  RegionView3D *rv3d = CTX_wm_region_view3d(C);
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   BMIter iter, eiter;
   BMLoop *l;
@@ -883,7 +890,7 @@ static int edbm_rip_invoke__edge(bContext *C, const float fmval[2], Object *obed
   const int totvert_orig = bm->totvert;
   const int totedge_orig = bm->totedge;
 
-  const float4x4 projectMat = ED_view3d_ob_project_mat_get(rv3d, obedit);
+  const float4x4 obmat = obedit->object_to_world();
 
   /* important this runs on the original selection, before tampering with tagging */
   Vector<EdgeLoopPair> eloop_pairs = edbm_ripsel_looptag_helper(bm);
@@ -931,8 +938,8 @@ static int edbm_rip_invoke__edge(bContext *C, const float fmval[2], Object *obed
 
         /* find the best face to follow, this way the edge won't point away from
          * the mouse when there are more than 4 (takes the shortest face fan around) */
-        l = (edbm_rip_edge_side_measure(e_best, l_a, region, projectMat, fmval) <
-             edbm_rip_edge_side_measure(e_best, l_b, region, projectMat, fmval)) ?
+        l = (edbm_rip_edge_side_measure(e_best, l_a, ray_start, ray_dir, obmat) <
+             edbm_rip_edge_side_measure(e_best, l_b, ray_start, ray_dir, obmat)) ?
                 l_a :
                 l_b;
 
@@ -975,7 +982,7 @@ static int edbm_rip_invoke__edge(bContext *C, const float fmval[2], Object *obed
    * edge did not split even though it was tagged which would not work
    * as expected (but not crash), however there are checks to ensure
    * tagged edges will split. So far its not been an issue. */
-  edbm_ripsel_deselect_helper(bm, eloop_pairs, region, projectMat, fmval);
+  edbm_ripsel_deselect_helper(bm, eloop_pairs, ray_start, ray_dir, obmat);
 
   /* deselect loose verts */
   BM_mesh_select_mode_clean_ex(bm, SCE_SELECT_EDGE);
@@ -1008,14 +1015,10 @@ static wmOperatorStatus edbm_rip_exec(bContext *C, wmOperator *op)
       *bmain, scene, view_layer, CTX_wm_view3d(C));
   const bool do_fill = RNA_boolean_get(op->ptr, "use_fill");
 
-  float ray_origin[3], ray_dir[3];
-  RNA_float_get_array(op->ptr, "ray_origin", ray_origin);
+  float3 ray_start;
+  float3 ray_dir;
+  RNA_float_get_array(op->ptr, "ray_start", ray_start);
   RNA_float_get_array(op->ptr, "ray_dir", ray_dir);
-
-  ARegion *region = CTX_wm_region(C);
-  float fmval[2];
-  /* Project the 3D ray origin into 2D screen space to get the mouse position. */
-  ED_view3d_project_v2(region, ray_origin, fmval);
 
   bool no_vertex_selected = true;
   bool error_face_selected = true;
@@ -1069,10 +1072,10 @@ static wmOperatorStatus edbm_rip_exec(bContext *C, wmOperator *op)
 
     /* split 2 main parts of this operator out into vertex and edge ripping */
     if (singlesel) {
-      ret = edbm_rip_invoke__vert(C, fmval, obedit, do_fill);
+      ret = edbm_rip_invoke__vert(obedit, do_fill, ray_start, ray_dir);
     }
     else {
-      ret = edbm_rip_invoke__edge(C, fmval, obedit, do_fill);
+      ret = edbm_rip_invoke__edge(obedit, do_fill, ray_start, ray_dir);
     }
 
     if (ret != OPERATOR_FINISHED) {
@@ -1118,13 +1121,21 @@ static wmOperatorStatus edbm_rip_exec(bContext *C, wmOperator *op)
 static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
-  const float mval[2] = {float(event->mval[0]), float(event->mval[1])};
+  const float2 mval_fl = {float(event->mval[0]), float(event->mval[1])};
 
-  float ray_origin[3], ray_dir[3];
+  float3 ray_start;
+  float3 ray_dir;
   /* Convert the 2D mouse position into a 3D ray. */
-  ED_view3d_win_to_ray(region, mval, ray_origin, ray_dir);
+  ED_view3d_win_to_ray(region, mval_fl, ray_start, ray_dir);
+  normalize_v3(ray_dir);
 
-  RNA_float_set_array(op->ptr, "ray_origin", ray_origin);
+  /* Project ray_start onto a plane defined by the ray direction to avoid precision
+   * issues especially for orthographic views where the far-clipping is used to calculate
+   * the ray_start. */
+  float3 ray_start_proj;
+  project_plane_normalized_v3_v3v3(ray_start_proj, ray_start, ray_dir);
+
+  RNA_float_set_array(op->ptr, "ray_start", ray_start_proj);
   RNA_float_set_array(op->ptr, "ray_dir", ray_dir);
 
   return edbm_rip_exec(C, op);
@@ -1153,7 +1164,7 @@ void MESH_OT_rip(wmOperatorType *ot)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MESH);
 
   prop = RNA_def_float_vector(ot->srna,
-                              "ray_origin",
+                              "ray_start",
                               3,
                               nullptr,
                               -FLT_MAX,
