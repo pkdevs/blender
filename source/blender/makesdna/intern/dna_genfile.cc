@@ -793,6 +793,11 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   auto make_stub_struct_name = [](const int struct_i) { return fmt::format("#{}", struct_i); };
   auto is_stub_struct_name = [](const StringRef name) { return name.startswith("#"); };
 
+  for (const SdnaBuiltinType &builtin : builtin_sdna_types) {
+    BLI_assert(type_names.size() == builtin.type_index);
+    type_names.add_new(builtin.name);
+  }
+
   for (const int64_t struct_i : IndexRange(structs_num)) {
     if (structs_to_write[struct_i]) {
       const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];

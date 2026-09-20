@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
@@ -57,6 +59,37 @@ enum eSDNA_Type {
    */
   SDNA_TYPE_RAW_DATA = 13,
 };
+
+#
+#
+struct SdnaBuiltinType {
+  StringRefNull name;
+  short size;
+  int type_index;
+};
+
+/* All built-in types.
+ *
+ * \warning Order of members calls here must be aligned with #eSDNA_Type.
+ * \warning uint is not allowed! Use in structs an unsigned int.
+ * \warning Sizes must match #DNA_elem_type_size().
+ */
+inline constexpr std::array<SdnaBuiltinType, SDNA_TYPE_RAW_DATA> builtin_sdna_types = {{
+    {"char", 1, SDNA_TYPE_CHAR},
+    {"uchar", 1, SDNA_TYPE_UCHAR},
+    {"short", 2, SDNA_TYPE_SHORT},
+    {"ushort", 2, SDNA_TYPE_USHORT},
+    {"int", 4, SDNA_TYPE_INT},
+    /* `long`/`ulong` are place-holders to keep indices aligned with #eSDNA_Type. */
+    {"long", 4, 5 /* SDNA_TYPE_LONG */},
+    {"ulong", 4, 6 /* SDNA_TYPE_ULONG */},
+    {"float", 4, SDNA_TYPE_FLOAT},
+    {"double", 8, SDNA_TYPE_DOUBLE},
+    {"int64_t", 8, SDNA_TYPE_INT64},
+    {"uint64_t", 8, SDNA_TYPE_UINT64},
+    {"void", 0, SDNA_TYPE_VOID},
+    {"int8_t", 1, SDNA_TYPE_INT8},
+}};
 
 /**
  * For use with #DNA_struct_reconstruct & #DNA_struct_get_compareflags
