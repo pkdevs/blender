@@ -5517,6 +5517,8 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
   Object *object = CTX_data_active_object(C);
   GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
 
+  const bool flip = RNA_boolean_get(op->ptr, "flip");
+
   boolean::CurveBooleanOpParameters op_params;
   op_params.boolean_mode = boolean::Operation(RNA_enum_get(op->ptr, "boolean_mode"));
   op_params.keep_caps = RNA_boolean_get(op->ptr, "keep_caps");
@@ -5557,7 +5559,9 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
     const IndexMask editable_shapes = bke::greasepencil::curves_mask_to_shapes(
         strokes, shapes, memory);
 
-    const IndexRange clipping_shapes = IndexRange::from_single(editable_shapes.last());
+    const IndexMask clipping_shapes = flip ? editable_shapes.slice(
+                                                 editable_shapes.index_range().drop_back(1)) :
+                                             IndexRange::from_single(editable_shapes.last());
 
     curves = boolean::curve_boolean(
         op_params, curves, project_fn, shapes, editable_shapes, clipping_shapes);
@@ -5600,15 +5604,16 @@ static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  RNA_def_boolean(ot->srna, "keep_caps", false, "Keep Caps", "The keep same caps");
-  RNA_def_boolean(
-      ot->srna, "separate_islands", true, "Separate Islands", "Separate unconnected fills");
   RNA_def_enum(ot->srna,
                "boolean_mode",
                prop_boolean_modes,
                int(boolean::Operation::Union),
                "Boolean Mode",
                "Mode of the boolean operation");
+  RNA_def_boolean(ot->srna, "flip", false, "Flip", "Reverse which strokes are acting");
+  RNA_def_boolean(ot->srna, "keep_caps", false, "Keep Caps", "The keep same caps");
+  RNA_def_boolean(
+      ot->srna, "separate_islands", true, "Separate Islands", "Separate unconnected fills");
 }
 
 /** \} */
