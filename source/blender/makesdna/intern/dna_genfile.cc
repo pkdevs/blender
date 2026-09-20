@@ -721,7 +721,7 @@ static void expand_sdna_structs_to_write(const SDNA &sdna, MutableSpan<bool> sdn
     sdna_structs_to_write[struct_index] = true;
   }
 
-  /* Recursively handle add all inlined structs. For example, #ARegion contains a #View2D, so the
+  /* Recursively handle all inlined structs. For example, #ARegion contains a #View2D, so the
    * members of that struct have to be written too. */
   Vector<int> structs_to_check;
   for (const int64_t i : sdna_structs_to_write.index_range()) {
@@ -757,7 +757,7 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   expand_sdna_structs_to_write(sdna, structs_to_write);
 
   /* It's necessary to write stubs for unused structs if there is a used struct afterwards. That's
-   * because the struct id has can't be changed anymore and is given by #sdna_struct_id_get.
+   * because the struct id can't be changed anymore and is given by #sdna_struct_id_get.
    * Structs after the last used one don't need to be written anymore though. */
   int64_t structs_num = 0;
   for (const int64_t i : structs_to_write.index_range()) {
