@@ -1,1 +1,2 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by issue #164164, bpy.app.handlers.render_stats causes rendering process to stall
