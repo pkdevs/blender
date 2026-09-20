@@ -615,10 +615,8 @@ void raycast_eval([[resource_table]] KernelGlobals &kg,
   }
 }
 
-#ifndef GPU_METAL
 float3 nodetree_displacement([[resource_table]] KernelGlobals &kg, ShadingData &sd);
 float4 closure_to_rgba([[resource_table]] KernelGlobals &kg, ShadingData &sd, Closure cl);
-#endif
 
 /**
  * Used for packing.
