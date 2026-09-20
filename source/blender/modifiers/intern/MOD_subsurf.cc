@@ -427,7 +427,8 @@ static void panel_draw(const bContext *C, Panel *panel)
     ui::Layout &col = advanced_layout->column(true);
     col.active_set((smd->flags & eSubsurfModifierFlag_UseAdaptiveSubdivision) ||
                    RNA_boolean_get(ptr, "use_limit_surface"));
-    col.prop(ptr, "quality", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "quality", UI_ITEM_NONE, IFACE_("Quality Viewport"), ICON_NONE);
+    col.prop(ptr, "render_quality", UI_ITEM_NONE, IFACE_("Render"), ICON_NONE);
 
     advanced_layout->prop(ptr, "uv_smooth", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     advanced_layout->prop(ptr, "boundary_smooth", UI_ITEM_NONE, std::nullopt, ICON_NONE);

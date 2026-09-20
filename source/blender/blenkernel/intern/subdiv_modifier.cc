@@ -31,12 +31,14 @@ subdiv::Settings BKE_subsurf_modifier_settings_init(const SubsurfModifierData *s
                                                     const bool use_render_params)
 {
   const int requested_levels = (use_render_params) ? smd->renderLevels : smd->levels;
+  const int requested_quality = (use_render_params) ? smd->renderQuality : smd->quality;
 
   subdiv::Settings settings{};
   settings.is_simple = (smd->subdivType == SUBSURF_TYPE_SIMPLE);
   settings.is_adaptive = !(smd->flags & eSubsurfModifierFlag_UseRecursiveSubdivision);
   settings.level = settings.is_simple ? 1 :
-                                        (settings.is_adaptive ? smd->quality : requested_levels);
+                                        (settings.is_adaptive ? requested_quality :
+                                                                requested_levels);
   settings.use_creases = (smd->flags & eSubsurfModifierFlag_UseCrease);
   settings.vtx_boundary_interpolation = subdiv::vtx_boundary_interpolation_from_subsurf(
       smd->boundary_smooth);

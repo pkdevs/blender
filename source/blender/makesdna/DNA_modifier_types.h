@@ -265,10 +265,12 @@ struct SubsurfModifierData {
   short levels = 1, renderLevels = 2;
   SubsurfModifierFlag flags = eSubsurfModifierFlag_UseCrease | eSubsurfModifierFlag_ControlEdges;
   eSubsurfUVSmooth uv_smooth = SUBSURF_UV_SMOOTH_PRESERVE_BOUNDARIES;
-  short quality = 3;
+  /** Subdivision accuracy. As with `levels`, the unprefixed value is the viewport one. */
+  short quality = 1, renderQuality = 3;
   eSubsurfBoundarySmooth boundary_smooth = SUBSURF_BOUNDARY_SMOOTH_ALL;
   /* Adaptive subdivision. */
   eSubsurfAdaptiveSpace adaptive_space = SUBSURF_ADAPTIVE_SPACE_PIXEL;
+  char _pad[6] = {};
   float adaptive_pixel_size = 1.0f;
   float adaptive_object_edge_length = 0.01f;
 };

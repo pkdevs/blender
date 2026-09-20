@@ -2719,7 +2719,14 @@ static void rna_def_modifier_panel_open_prop(StructRNA *srna, const char *identi
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, nullptr);
 }
 
-static void rna_def_property_subdivision_common(StructRNA *srna)
+/**
+ * Shared by the Subdivision Surface and Multiresolution modifiers. Only Subdivision Surface
+ * separates its render quality from its viewport quality, so `split_render_quality` guards both
+ * the extra property and the wording of the existing one: Multiresolution still applies a single
+ * quality everywhere.
+ */
+static void rna_def_property_subdivision_common(StructRNA *srna,
+                                              const bool split_render_quality = false)
 {
   PropertyRNA *prop;
   RNA_define_lib_overridable(true);
@@ -2735,8 +2742,22 @@ static void rna_def_property_subdivision_common(StructRNA *srna)
   RNA_def_property_range(prop, 1, 10);
   RNA_def_property_ui_range(prop, 1, 6, 1, -1);
   RNA_def_property_ui_text(
-      prop, "Quality", "Accuracy of vertex positions, lower value is faster but less precise");
+      prop,
+      "Quality",
+      split_render_quality ? "Accuracy of vertex positions in the 3D viewport, lower value is "
+                             "faster and uses less memory but is less precise" :
+                             "Accuracy of vertex positions, lower value is faster but less precise");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  if (split_render_quality) {
+    prop = RNA_def_property(srna, "render_quality", PROP_INT, PROP_UNSIGNED);
+    RNA_def_property_int_sdna(prop, nullptr, "renderQuality");
+    RNA_def_property_range(prop, 1, 10);
+    RNA_def_property_ui_range(prop, 1, 6, 1, -1);
+    RNA_def_property_ui_text(
+        prop, "Render Quality", "Accuracy of vertex positions used at render time");
+    RNA_def_property_update(prop, 0, "rna_Modifier_update");
+  }
 
   prop = RNA_def_property(srna, "boundary_smooth", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "boundary_smooth");
@@ -2782,7 +2803,7 @@ static void rna_def_modifier_subsurf(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "SubsurfModifierData");
   RNA_def_struct_ui_icon(srna, ICON_MOD_SUBSURF);
 
-  rna_def_property_subdivision_common(srna);
+  rna_def_property_subdivision_common(srna, true);
 
   RNA_define_lib_overridable(true);
 
