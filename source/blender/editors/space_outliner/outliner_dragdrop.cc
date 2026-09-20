@@ -1203,10 +1203,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  for (const wmDragID &dragged : drag->ids) {
-    if (outliner_is_collection_dragged_into_itself(te, dragged.id)) {
-      return false;
-    }
+  if (outliner_is_collection_dragged_into_itself(te, id)) {
+    return false;
   }
 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
