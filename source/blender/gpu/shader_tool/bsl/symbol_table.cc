@@ -228,6 +228,8 @@ void SymbolTable::register_builtins(LocalScope node)
       {"float", 4, 4, builtin::float_t},
       {"bool", 1, 1, builtin::bool_t},
       {"bool32_t", 4, 4, builtin::bool_t},
+
+      {"string_t", 4, 4, builtin::uint_t},
   };
 
   for (const auto &t : basic_types) {
@@ -256,8 +258,6 @@ void SymbolTable::register_builtins(LocalScope node)
       {err_symbol, 1, 1},
 
       {"void", 1, 1}, /* Only for function return type. */
-
-      {"string_t", 4, 4},
 
       {"samplerBuffer", 0, 1},
       {"sampler1D", 0, 1},
@@ -696,7 +696,8 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   vector<BuiltinFunc> functions = {{err_cls, err_symbol, {}}};
 
   /* Special functions */
-  functions.push_back({void_cls, "printf", {str_cls}});
+  functions.push_back({uint_cls, "print_data", {uint_cls, str_cls}});
+  functions.push_back({uint_cls, "print_start", {uint_cls}});
   functions.push_back({void_cls, "static_assert", {bool_cls}});
 
   for (SymbolClass *type : {float_cls,
