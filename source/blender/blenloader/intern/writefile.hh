@@ -14,9 +14,9 @@
 #include "DNA_sdna_pointers.hh"
 #include "DNA_sdna_types.h"
 
+#include "BLI_array.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
-#include "BLI_vector_set.hh"
 
 #include "BLO_undofile.hh"
 
