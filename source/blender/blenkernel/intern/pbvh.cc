@@ -315,7 +315,7 @@ Tree Tree::from_mesh(const Mesh &mesh)
     return pbvh;
   }
 
-  constexpr int leaf_limit = 2500;
+  constexpr int leaf_limit = MESH_LEAF_LIMIT;
   static_assert(leaf_limit < std::numeric_limits<MeshNode::LocalVertMapIndexT>::max());
 
   Array<float3> face_centers(faces.size());
@@ -975,6 +975,7 @@ static void normals_calc_faces(const Span<float3> positions,
                                const Span<int> face_indices,
                                MutableSpan<float3> face_normals)
 {
+  PRF_scope(ProfileCategory::Core);
   for (const int i : face_indices) {
     face_normals[i] = mesh::face_normal_calc(positions, corner_verts.slice(faces[i]));
   }
@@ -999,6 +1000,7 @@ static void normals_calc_verts_simple(const GroupedSpan<int> vert_to_face_map,
                                       const Span<int> verts,
                                       MutableSpan<float3> vert_normals)
 {
+  PRF_scope(ProfileCategory::Core);
   for (const int vert : verts) {
     float3 normal(0.0f);
     for (const int face : vert_to_face_map[vert]) {
@@ -1079,6 +1081,7 @@ static void update_normals_mesh(Object &object_orig,
                                 const Span<MeshNode> nodes,
                                 const IndexMask &nodes_to_update)
 {
+  PRF_scope(ProfileCategory::Core);
   /* Position changes are tracked on a per-node level, so all the vertex and face normals for every
    * affected node are recalculated.
    *
@@ -1550,7 +1553,7 @@ int count_grid_quads(const BitGroupVector<> &grid_hidden,
     /* grid hidden are present, have to check each element */
     for (int y = 0; y < gridsize - skip; y += skip) {
       for (int x = 0; x < gridsize - skip; x += skip) {
-        if (!paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+        if (!BKE_paint_is_grid_face_hidden(gh, gridsize, x, y)) {
           totquad++;
         }
       }
@@ -2012,7 +2015,7 @@ bool node_raycast_grids(const SubdivCCG &subdiv_ccg,
       for (const short y : IndexRange(grid_size - 1)) {
         for (const short x : IndexRange(grid_size - 1)) {
           if (!grid_hidden.is_empty()) {
-            if (paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
+            if (BKE_paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
               continue;
             }
           }
@@ -2047,7 +2050,7 @@ bool node_raycast_grids(const SubdivCCG &subdiv_ccg,
       for (const short y : IndexRange(grid_size - 1)) {
         for (const short x : IndexRange(grid_size - 1)) {
           if (!grid_hidden.is_empty()) {
-            if (paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
+            if (BKE_paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
               continue;
             }
           }
@@ -2278,7 +2281,7 @@ static bool pbvh_grids_node_nearest_to_ray(const SubdivCCG &subdiv_ccg,
       for (const short y : IndexRange(grid_size - 1)) {
         for (const short x : IndexRange(grid_size - 1)) {
           if (!grid_hidden.is_empty()) {
-            if (paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
+            if (BKE_paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
               continue;
             }
           }
@@ -2302,7 +2305,7 @@ static bool pbvh_grids_node_nearest_to_ray(const SubdivCCG &subdiv_ccg,
       for (const short y : IndexRange(grid_size - 1)) {
         for (const short x : IndexRange(grid_size - 1)) {
           if (!grid_hidden.is_empty()) {
-            if (paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
+            if (BKE_paint_is_grid_face_hidden(grid_hidden[grid], grid_size, x, y)) {
               continue;
             }
           }

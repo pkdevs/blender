@@ -1098,9 +1098,10 @@ static const Map<StringRef, StringRef> &subtype_pixel_to_none()
 template<typename ValueType>
 static void write_default_value_none_subtype(BlendWriter *writer, const void *default_value)
 {
-  ValueType value = *static_cast<const ValueType *>(default_value);
-  value.subtype = PROP_NONE;
-  writer->write_struct_at_address_cast<ValueType>(default_value, &value);
+  writer->write_struct_cast<ValueType>(default_value,
+                                       [](BlendStructWriter<ValueType> &struct_writer) {
+                                         struct_writer.shallow_data.subtype = PROP_NONE;
+                                       });
 }
 
 static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket &sock)
@@ -1119,7 +1120,11 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
   IDProperty *prop_copy = sock_copy->prop;
   sock_copy->default_value = sock.default_value;
   sock_copy->prop = sock.prop;
-  writer->write_struct_at_address(&sock, sock_copy);
+  writer->write_struct_at_address(
+      &sock, sock_copy, [](BlendStructWriter<bNodeSocket> &struct_writer) {
+        struct_writer.shallow_data.runtime = nullptr;
+        struct_writer.shallow_data.typeinfo = nullptr;
+      });
   sock_copy->default_value = default_value_copy;
   sock_copy->prop = prop_copy;
 
@@ -1240,7 +1245,10 @@ static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
     return;
   }
 
-  writer->write_struct(sock);
+  writer->write_struct(sock, [](BlendStructWriter<bNodeSocket> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
+    struct_writer.shallow_data.typeinfo = nullptr;
+  });
 
   if (sock->prop) {
     IDP_BlendWrite(writer, sock->prop);
@@ -1371,9 +1379,13 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
       node->custom1 = data->parametrization;
     }
 
-    writer->write_struct(node, [](BlendStructWriter &struct_writer) {
-      struct_writer.runtime_ptr(offsetof(bNode, runtime));
-      struct_writer.runtime_ptr(offsetof(bNode, typeinfo));
+    writer->write_struct(node, [](BlendStructWriter<bNode> &struct_writer) {
+      bNode &shallow_node = struct_writer.shallow_data;
+      shallow_node.runtime = nullptr;
+      shallow_node.typeinfo = nullptr;
+      if (shallow_node.num_panel_states == 0) {
+        shallow_node.panel_states_array = nullptr;
+      }
     });
 
     if (node->prop) {
@@ -2533,6 +2545,7 @@ IDTypeInfo IDType_ID_NT = {
     .foreach_cache = nullptr,
     .foreach_path = bke::node_foreach_path,
     .foreach_working_space_color = bke::node_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = bke::node_owner_pointer_get,
 
     .blend_write = bke::ntree_blend_write,
@@ -4013,8 +4026,8 @@ void node_remove_socket_ex(bNodeTree &ntree, bNode &node, bNodeSocket &sock, con
   }
 
   for (const int64_t i : node.runtime->internal_links.index_range()) {
-    const bNodeLink &link = node.runtime->internal_links[i];
-    if (link.fromsock == &sock || link.tosock == &sock) {
+    const bNodeInternalLink &link = node.runtime->internal_links[i];
+    if (link.in == &sock || link.out == &sock) {
       node.runtime->internal_links.remove_and_reorder(i);
       BKE_ntree_update_tag_node_internal_link(&ntree, &node);
       break;
@@ -4230,9 +4243,7 @@ void node_unique_name(bNodeTree &ntree, bNode &node)
 
 void node_unique_id(bNodeTree &ntree, bNode &node)
 {
-  /* Use a pointer cast to avoid overflow warnings. */
-  const double time = BLI_time_now_seconds() * 1000000.0;
-  RandomNumberGenerator id_rng{*reinterpret_cast<const uint32_t *>(&time)};
+  RandomNumberGenerator id_rng{ntree.next_node_identifier_seed++};
 
   /* In the unlikely case that the random ID doesn't match, choose a new one until it does. */
   int32_t new_id = id_rng.get_int32();
@@ -4374,11 +4385,9 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
       MEM_dupalloc(node_src.panel_states_array));
 
   node_dst->runtime->internal_links = node_src.runtime->internal_links;
-  for (bNodeLink &dst_link : node_dst->runtime->internal_links) {
-    dst_link.fromnode = node_dst;
-    dst_link.tonode = node_dst;
-    dst_link.fromsock = socket_map.lookup(dst_link.fromsock);
-    dst_link.tosock = socket_map.lookup(dst_link.tosock);
+  for (bNodeInternalLink &dst_link : node_dst->runtime->internal_links) {
+    dst_link.in = socket_map.lookup(dst_link.in);
+    dst_link.out = socket_map.lookup(dst_link.out);
   }
 
   if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
@@ -4423,9 +4432,8 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
       return true;
     case SH_NODE_VALUE:
       /* The value is stored in the default value of the first output socket. */
-      static_cast<bNodeSocket *>(node.outputs.first)
-          ->default_value_typed<bNodeSocketValueFloat>()
-          ->value = *static_cast<const float *>(value);
+      node.outputs.first()->default_value_typed<bNodeSocketValueFloat>()->value =
+          *static_cast<const float *>(value);
       return true;
     case FN_NODE_INPUT_INT:
       reinterpret_cast<NodeInputInt *>(node.storage)->integer = *static_cast<const int *>(value);
@@ -4711,7 +4719,7 @@ static bool check_link_selected_backward(const bNodeLink &link, Set<const bNode 
   if (!node) {
     return false;
   }
-  if ((node->flag & NODE_SELECT)) {
+  if (node->is_selected()) {
     return true;
   }
   if (!node->is_reroute()) {
@@ -4738,7 +4746,7 @@ static bool check_link_selected_forward(const bNodeLink &link, Set<const bNode *
   if (!node) {
     return false;
   }
-  if ((node->flag & NODE_SELECT)) {
+  if (node->is_selected()) {
     return true;
   }
   if (!node->is_reroute()) {
@@ -4761,7 +4769,7 @@ static bool check_link_selected_forward(const bNodeLink &link, Set<const bNode *
 
 bool node_link_is_selected(const bNodeLink &link)
 {
-  if ((link.fromnode->flag & NODE_SELECT) || (link.tonode->flag & NODE_SELECT)) {
+  if (link.fromnode->is_selected() || link.tonode->is_selected()) {
     return true;
   }
   if (!link.fromnode->is_reroute() && !link.tonode->is_reroute()) {
@@ -4803,11 +4811,6 @@ static void adjust_multi_input_indices_after_removed_link(bNodeTree *ntree,
 
 void node_internal_relink(bNodeTree &ntree, bNode &node)
 {
-  /* store link pointers in output sockets, for efficient lookup */
-  for (bNodeLink &link : node.runtime->internal_links) {
-    link.tosock->link = &link;
-  }
-
   Vector<bNodeLink *> duplicate_links_to_remove;
 
   /* redirect downstream links */
@@ -4817,8 +4820,14 @@ void node_internal_relink(bNodeTree &ntree, bNode &node)
       continue;
     }
 
-    bNodeLink *internal_link = link.fromsock->link;
-    bNodeLink *fromlink = internal_link ? internal_link->fromsock->link : nullptr;
+    const bNodeSocket *internal_input = nullptr;
+    for (const bNodeInternalLink &internal_link : node.runtime->internal_links) {
+      if (internal_link.out == link.fromsock) {
+        internal_input = internal_link.in;
+        break;
+      }
+    }
+    bNodeLink *fromlink = internal_input ? internal_input->link : nullptr;
 
     if (fromlink == nullptr) {
       if (link.tosock->is_multi_input()) {
@@ -5371,8 +5380,8 @@ bNodeTree *node_tree_localize(bNodeTree *ntree, std::optional<ID *> new_owner_id
   /* Ensures only a single output node is enabled. */
   node_tree_set_output(*ntree);
 
-  bNode *node_src = reinterpret_cast<bNode *>(ntree->nodes.first);
-  bNode *node_local = reinterpret_cast<bNode *>(ltree->nodes.first);
+  bNode *node_src = ntree->nodes.first();
+  bNode *node_local = ltree->nodes.first();
   while (node_src != nullptr) {
     node_local->runtime->original = node_src;
     node_src = node_src->next;
@@ -5446,7 +5455,7 @@ bNode *node_get_active(bNodeTree &ntree)
 bool node_set_selected(bNode &node, const bool select)
 {
   bool changed = false;
-  if (select != ((node.flag & NODE_SELECT) != 0)) {
+  if (select != node.is_selected()) {
     changed = true;
     SET_FLAG_FROM_TEST(node.flag, select, NODE_SELECT);
   }
@@ -5584,12 +5593,6 @@ float2 node_dimensions_get(const bNode &node)
 void node_tag_update_id(bNode &node)
 {
   node.runtime->update |= NODE_UPDATE_ID;
-}
-
-void node_internal_links(bNode &node, bNodeLink **r_links, int *r_len)
-{
-  *r_links = node.runtime->internal_links.data();
-  *r_len = node.runtime->internal_links.size();
 }
 
 /* Node Instance Hash */
@@ -6214,13 +6217,13 @@ void node_system_exit()
 
 void node_tree_iterator_init(NodeTreeIterStore *ntreeiter, Main *bmain)
 {
-  ntreeiter->ngroup = static_cast<bNodeTree *>(bmain->nodetrees.first);
-  ntreeiter->scene = static_cast<Scene *>(bmain->scenes.first);
-  ntreeiter->mat = static_cast<Material *>(bmain->materials.first);
-  ntreeiter->tex = static_cast<Tex *>(bmain->textures.first);
-  ntreeiter->light = static_cast<Light *>(bmain->lights.first);
-  ntreeiter->world = static_cast<World *>(bmain->worlds.first);
-  ntreeiter->linestyle = static_cast<FreestyleLineStyle *>(bmain->linestyles.first);
+  ntreeiter->ngroup = bmain->nodetrees.first();
+  ntreeiter->scene = bmain->scenes.first();
+  ntreeiter->mat = bmain->materials.first();
+  ntreeiter->tex = bmain->textures.first();
+  ntreeiter->light = bmain->lights.first();
+  ntreeiter->world = bmain->worlds.first();
+  ntreeiter->linestyle = bmain->linestyles.first();
 }
 bool node_tree_iterator_step(NodeTreeIterStore *ntreeiter, bNodeTree **r_nodetree, ID **r_id)
 {

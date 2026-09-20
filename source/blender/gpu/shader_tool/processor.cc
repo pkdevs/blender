@@ -314,6 +314,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     /* Lower class methods. */
     lower_method_forward_declaration(parser);
     lower_union_setters(parser);
+    lower_bitfield_setters(parser);
     lower_method_calls(parser, false);
     /* Lower string, assert, printf. */
     lower_strings(parser);
@@ -1142,28 +1143,90 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 
         fn_args.foreach_scope(ScopeType::FunctionArg, [&](Scope arg) {
           /* Note: There is no array support. */
-          const Token name = arg.back();
-          const Token type = name.prev() == '&' ? name.prev().prev() : name.prev();
-          string qualifier(type.prev().str());
-          if (qualifier != "out" && qualifier != "inout" && qualifier != "in") {
-            if (name.prev() == '&') {
-              qualifier = "out";
-            }
-            else if (qualifier != "const" && qualifier != "(" && qualifier != ",") {
-              report_error(type.prev(),
-                           "Unrecognized qualifier, expecting 'const', 'in', 'out' or 'inout'.");
-              qualifier = "in";
-            }
-            else {
-              qualifier = "in";
-            }
+          Token curr = arg.front();
+          /* Skip attribute. */
+          if (curr == '[') {
+            curr = curr.scope().back().next();
           }
-          fn.arguments.emplace_back(ArgumentFormat{metadata::Qualifier(hash(qualifier)),
-                                                   metadata::Type(hash(string(type.str())))});
+          /* Skip const. */
+          if (curr.str() == "const") {
+            curr = curr.next();
+          }
+          /* Parse qualifier. */
+          string qualifier = "in";
+          if (curr.str() == "in") {
+            qualifier = "in";
+            curr = curr.next();
+          }
+          else if (curr.str() == "out") {
+            qualifier = "out";
+            curr = curr.next();
+          }
+          /* Parse the type */
+          Token type_tok = curr;
+          string type = string(curr.str());
+          curr = curr.next();
+          /* Skip optional parenthesis. */
+          if (curr == '(') {
+            curr = curr.next();
+          }
+          /* Reference. */
+          if (curr == '&') {
+            qualifier = "out";
+          }
+
+          if (type == "ShadingData" || type == "KernelGlobals") {
+            /* They are technically inout, but we declare them at the end of the input list. */
+            qualifier = "in";
+          }
+
+          metadata::Qualifier qualifier_enum = metadata::Qualifier(hash(qualifier));
+          metadata::Type type_enum = metadata::Type(hash(type));
+
+          switch (qualifier_enum) {
+            case metadata::Qualifier::in:
+            case metadata::Qualifier::out:
+            case metadata::Qualifier::inout:
+              break;
+            default:
+              report_error(arg.front(), "Unknown qualifier '" + qualifier + "'");
+              break;
+          }
+
+          switch (type_enum) {
+            case metadata::Type::float1:
+            case metadata::Type::float2:
+            case metadata::Type::float3:
+            case metadata::Type::float4:
+            case metadata::Type::float3x3:
+            case metadata::Type::float4x4:
+            case metadata::Type::int1:
+            case metadata::Type::int2:
+            case metadata::Type::int3:
+            case metadata::Type::int4:
+            case metadata::Type::bool1:
+            case metadata::Type::sampler1DArray:
+            case metadata::Type::sampler2DArray:
+            case metadata::Type::sampler2D:
+            case metadata::Type::sampler3D:
+            case metadata::Type::Closure:
+            case metadata::Type::KernelGlobals:
+            case metadata::Type::ShadingData:
+              break;
+            default:
+              report_error(type_tok, "Invalid type for node function '" + type + "'");
+              break;
+          }
+
+          fn.arguments.emplace_back(ArgumentFormat{qualifier_enum, type_enum});
         });
 
         metadata_.functions.emplace_back(fn);
       });
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
+  }
 }
 
 void SourceProcessor::parse_library_functions_ast(Parser &parser)
@@ -1171,15 +1234,15 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
   using namespace metadata;
   for (FuncDecl func : parser.root().children_of_type<FuncDecl>()) {
     if (!func.attributes().contains_attr("node")) {
-      return;
+      continue;
     }
     if (func.return_type().str() != "void") {
       report_error(func.return_type(), "Expected void return type for node function");
-      return;
+      continue;
     }
     if (func.arguments().is_empty()) {
       report_error(func.identifier(), "Expected at least one argument for node function");
-      return;
+      continue;
     }
 
     FunctionFormat fn;
@@ -1191,18 +1254,54 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
                      "Array arguments are not supported in node functions.");
       }
 
-      Type type = Type(hash(string(arg.type().str())));
+      Type type = Type(hash(string(arg.type().identifier().str())));
       Qualifier qualifier;
       if (arg.is_reference() && !arg.is_const()) {
-        qualifier = Qualifier(hash("inout"));
+        qualifier = Qualifier::out;
       }
       else {
-        qualifier = Qualifier(hash("in"));
+        qualifier = Qualifier::in;
       }
+
+      if (type == Type::KernelGlobals || type == Type::ShadingData) {
+        /* They are technically inout, but we declare them at the end of the input list. */
+        qualifier = Qualifier::in;
+      }
+
+      [&](Type type) {
+        switch (type) {
+          case Type::float1:
+          case Type::float2:
+          case Type::float3:
+          case Type::float4:
+          case Type::float3x3:
+          case Type::float4x4:
+          case Type::int1:
+          case Type::int2:
+          case Type::int3:
+          case Type::int4:
+          case Type::bool1:
+          case Type::sampler1DArray:
+          case Type::sampler2DArray:
+          case Type::sampler2D:
+          case Type::sampler3D:
+          case Type::Closure:
+          case Type::KernelGlobals:
+          case Type::ShadingData:
+            return;
+        }
+        report_error(arg.type().identifier(),
+                     "Invalid type for node function '" + string(arg.type().identifier().str()) +
+                         "'");
+      }(type);
 
       fn.arguments.emplace_back(qualifier, type);
     }
     metadata_.functions.emplace_back(fn);
+  }
+
+  if (error_handler.err.has_value()) {
+    throw ParserException();
   }
 }
 

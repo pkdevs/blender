@@ -18,7 +18,7 @@
 #include "eevee_shadow.bsl.hh"
 #include "eevee_volume_lib.bsl.hh"
 #include "eevee_volume_shared.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
 
 namespace eevee::volume {
 
@@ -158,7 +158,7 @@ struct LightEvalCtx {
       return float3(0);
     }
 
-    LightVector lv = light_shape_vector_get(light, is_directional, P);
+    LightVector lv = LightVector::get_shape_closest(light, is_directional, P);
 
     float attenuation = light_attenuation_volume(light, is_directional, lv);
     if (attenuation < LIGHT_ATTENUATION_THRESHOLD) {
@@ -179,8 +179,10 @@ struct LightEvalCtx {
 
     float3 Li = volume_light(light, is_directional, lv) * visibility;
 
-    if (light.tilemap_index != LIGHT_NO_SHADOW) {
-      Li *= volume_shadow(uni, views.get(0), light, is_directional, P, lv, srt.extinction_tx);
+    if (srt.use_volume_light) [[static_branch]] {
+      if (light.tilemap_index != LIGHT_NO_SHADOW) {
+        Li *= volume_shadow(uni, views.get(0), light, is_directional, P, lv, srt.extinction_tx);
+      }
     }
 
     return Li;
@@ -372,7 +374,7 @@ void integration_main([[resource_table]] Integrate &srt,
       prev_ray_len = ray_len;
     }
     float3 froxel_transmittance = exp(-extinction * step_len);
-    /** NOTE: Original calculation carries precision issues when compiling for AMD GPUs
+    /* NOTE: Original calculation carries precision issues when compiling for AMD GPUs
      * and running Metal. This version of the equation retains precision well for all
      * macOS HW configurations.
      * Here is the original for reference:

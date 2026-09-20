@@ -75,6 +75,7 @@
 #include "CLG_log.h"
 
 #include "buttons/interface_label.hh"
+#include "buttons/interface_label_markdown.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -388,7 +389,7 @@ static void update_window_matrix(const wmWindow *window, const ARegion *region, 
 
 void region_winrct_get_no_margin(const ARegion *region, rcti *r_rect)
 {
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
   if (block && (block->flag & BLOCK_LOOP) && (block->flag & BLOCK_PIE_MENU) == 0) {
     BLI_rcti_rctf_copy_floor(r_rect, &block->rect);
     BLI_rcti_translate(r_rect, region->winrct.xmin, region->winrct.ymin);
@@ -872,7 +873,8 @@ static bool but_equals_old(const Button *but, const Button *oldbut)
   }
 
   if (but->type == ButtonType::Label) {
-    return button_label_is_multiline(but) == button_label_is_multiline(oldbut);
+    return static_cast<const ButtonLabel *>(but)->label_type ==
+           static_cast<const ButtonLabel *>(oldbut)->label_type;
   }
 
   return true;
@@ -1014,6 +1016,7 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
     auto *label_oldbut = static_cast<ButtonLabel *>(oldbut);
     auto *label_but = static_cast<ButtonLabel *>(but);
     std::swap(label_oldbut->wrap_cache, label_but->wrap_cache);
+    std::swap(label_oldbut->markdown_cache, label_but->markdown_cache);
     std::swap(label_oldbut->max_lines, label_but->max_lines);
   }
 
@@ -2202,7 +2205,7 @@ void block_end_ex(const bContext *C,
   }
 
   /* handle pending stuff */
-  if (block->layouts.first) {
+  if (block->layouts.first_) {
     block_layout_resolve(block);
   }
   block_align_calc(block, region);
@@ -5761,7 +5764,7 @@ int blocklist_min_y_get(ListBaseT<Block> *lb)
   int min = 0;
 
   for (Block &block : *lb) {
-    if (&block == lb->first || block.rect.ymin < min) {
+    if (&block == lb->first_ || block.rect.ymin < min) {
       min = block.rect.ymin;
     }
   }
@@ -6887,7 +6890,7 @@ void update_text_styles()
     return;
   }
 
-  uiStyle *style = static_cast<uiStyle *>(U.uistyles.first);
+  uiStyle *style = U.uistyles.first();
   const int weight = BLF_default_weight(0);
   style->paneltitle.character_weight = weight;
   style->grouplabel.character_weight = weight;

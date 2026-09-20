@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "constexpr.hh"
 #include "resource.hh"
 #include "source_location.hh"
 
 #include <cstdint>
-#include <variant>
 
 namespace bsl {
 
@@ -32,17 +32,9 @@ struct Symbol {
   SymbolScope *parent = nullptr;
 };
 
-/**
- * Note that we do not support smaller types (e.g. char, ushort, ...) because they might not exist
- * in the target language. Supporting them would mean having potentially 2 different result for the
- * same expression depending on whether or not it is constexpr.
- */
-using ConstexprValue = std::variant<bool, int32_t, uint32_t, float>;
+using ConstexprError = ConstexprValue;
 
-template<typename T> T value_as(const ConstexprValue &v)
-{
-  return std::visit([](auto &&arg) -> T { return static_cast<T>(arg); }, v);
-}
+std::string constexpr_to_string(const ConstexprValue &v);
 
 /**
  * Represent variable declarations, parameters, or enum values.
@@ -55,7 +47,7 @@ struct SymbolVariable : Symbol {
   ast::Expr reference_value = {};
 
   /* Value if constexpr. */
-  ConstexprValue value = 0;
+  ConstexprValue value = ConstexprError();
 
   ResourceType res_type = ResourceType::NONE;
 
@@ -66,7 +58,11 @@ struct SymbolVariable : Symbol {
   int array_elements = 0;
   /* In bytes. From scope start, taking alignment into account. */
   int offset = 0;
+  /* In bits. From start and length in a bitfield. 0 otherwise.  */
+  int bit_offset = 0;
+  int bit_length = 0;
 
+  bool is_bitfield = false;
   bool is_static = false;
   bool is_error = false;
   bool is_constexpr = false;
