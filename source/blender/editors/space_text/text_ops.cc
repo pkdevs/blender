@@ -2428,9 +2428,7 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
 {
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
-  short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first),
-                              static_cast<TextLine *>(text->lines.last)) +
-                 1;
+  short nlines = txt_get_span(text->lines.first(), text->lines.last()) + 1;
 
   if (line < 1) {
     txt_move_toline(text, 1, false);
@@ -2487,6 +2485,12 @@ static const EnumPropertyItem delete_type_items[] = {
 
 static wmOperatorStatus text_delete_exec(bContext *C, wmOperator *op)
 {
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_edit_maybe(C)) {
+    return *status;
+  }
+#endif
+
   SpaceText *st = CTX_wm_space_text(C);
   Text *text = CTX_data_edit_text(C);
   int type = RNA_enum_get(op->ptr, "type");
@@ -3091,7 +3095,7 @@ static TextLine *space_text_get_line_pos_wrapped(const SpaceText *st,
                                                  const ARegion *region,
                                                  int *y)
 {
-  TextLine *linep = static_cast<TextLine *>(st->text->lines.first);
+  TextLine *linep = st->text->lines.first();
   int i, lines;
 
   if (*y < -st->top) {
@@ -3217,11 +3221,11 @@ static void space_text_cursor_set_to_pos_wrapped(
     }
   }
   else if (y < 0) { /* Before start of text. */
-    linep = static_cast<TextLine *>(st->text->lines.first);
+    linep = st->text->lines.first();
     charp = 0;
   }
   else { /* Beyond end of text. */
-    linep = static_cast<TextLine *>(st->text->lines.last);
+    linep = st->text->lines.last();
     charp = linep->len;
   }
 
@@ -3265,7 +3269,7 @@ static void text_cursor_set_to_pos(
       charp = &text->curc;
     }
 
-    y -= txt_get_span(static_cast<TextLine *>(text->lines.first), *linep) - st->top;
+    y -= txt_get_span(text->lines.first(), *linep) - st->top;
 
     if (y > 0) {
       while (y-- != 0) {
@@ -3386,7 +3390,7 @@ static wmOperatorStatus text_selection_set_invoke(bContext *C,
   ssel->mval_prev[0] = event->mval[0];
   ssel->mval_prev[1] = event->mval[1];
 
-  ssel->sell = txt_get_span(static_cast<TextLine *>(st->text->lines.first), st->text->sell);
+  ssel->sell = txt_get_span(st->text->lines.first(), st->text->sell);
   ssel->selc = st->text->selc;
 
   WM_event_add_modal_handler(C, op);
@@ -3572,6 +3576,14 @@ static wmOperatorStatus text_insert_exec(bContext *C, wmOperator *op)
 
   str = RNA_string_get_alloc(op->ptr, "text", nullptr, 0, &str_len);
 
+  /* NOTE: we rely on this check to ensure `done` will never be false,
+   * this area of code should be refactored not to depend on `done`
+   * being set as a side-effect of a successful insert. */
+  if (*str == '\0' || text->curl == nullptr) {
+    MEM_delete(str);
+    return OPERATOR_CANCELLED;
+  }
+
   ED_text_undo_push_init(C);
 
   if (st && st->overwrite) {
@@ -3589,9 +3601,8 @@ static wmOperatorStatus text_insert_exec(bContext *C, wmOperator *op)
 
   MEM_delete(str);
 
-  if (!done) {
-    return OPERATOR_CANCELLED;
-  }
+  BLI_assert(done);
+  UNUSED_VARS_NDEBUG(done);
 
   text_update_line_edited(text->curl);
 
@@ -3619,6 +3630,14 @@ static wmOperatorStatus text_insert_invoke(bContext *C, wmOperator *op, const wm
     int selc;
     int curc;
   } auto_close_select = {nullptr}, auto_close_select_backup = {nullptr};
+
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_insert_maybe(
+          C, op, event, "text"))
+  {
+    return *status;
+  }
+#endif
 
   /* NOTE: the "text" property is always set from key-map,
    * so we can't use #RNA_struct_property_is_set, check the length instead. */
@@ -3815,7 +3834,7 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
       text = st->text = static_cast<Text *>(text->id.next);
     }
     else {
-      text = st->text = static_cast<Text *>(bmain->texts.first);
+      text = st->text = bmain->texts.first();
     }
     txt_move_toline(text, 0, false);
     space_text_update_cursor_moved(C);

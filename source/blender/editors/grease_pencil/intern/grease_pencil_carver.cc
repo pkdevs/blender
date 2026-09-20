@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2025 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -19,12 +19,15 @@
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
 
+#include "BLI_bounds.hh"
+
 #include "DNA_brush_types.h"
 #include "DNA_material_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "WM_api.hh"
 
+#include "GEO_resample_curves.hh"
 #include "GEO_smooth_curves.hh"
 
 namespace blender {
@@ -34,9 +37,7 @@ namespace ed::greasepencil {
 /**
  * Apply the stroke carver to a drawing.
  */
-static bool execute_carver_on_drawing(const int /*layer_index*/,
-                                      const int /*frame_number*/,
-                                      const Object &ob_eval,
+static bool execute_carver_on_drawing(const Object &ob_eval,
                                       Object &obact,
                                       const ARegion &region,
                                       const float4x4 &projection,
@@ -44,7 +45,8 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
                                       const DrawingPlacement &placement,
                                       const Span<float2> mcoords,
                                       const bool keep_caps,
-                                      bke::greasepencil::Drawing &drawing)
+                                      bke::greasepencil::Drawing &drawing,
+                                      bool *r_converted)
 {
   const bke::CurvesGeometry &src = drawing.strokes();
   const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
@@ -53,24 +55,15 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
   bke::crazyspace::GeometryDeformation deformation =
       bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(&ob_eval, obact, drawing);
 
-  /* Compute screen space positions. */
-  Array<float2> screen_space_positions(src.points_num());
-  threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
-    for (const int src_point : src_points) {
-      screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-          &region, deformation.positions[src_point], projection);
-    }
-  });
-
   const Span<float3> normals = drawing.curve_plane_normals();
 
-  Array<float4> normal_planes(src.curves_num());
+  Array<float4> curve_planes(src.curves_num());
   threading::parallel_for(src.curves_range(), 4096, [&](const IndexRange src_curves) {
     for (const int src_curve : src_curves) {
       const float3 &normal = normals[src_curve];
       const IndexRange points = src_points_by_curve[src_curve];
       const float3 &point = deformation.positions[points.first()];
-      normal_planes[src_curve] = float4(normal, -math::dot(point, normal));
+      curve_planes[src_curve] = float4(normal, -math::dot(point, normal));
     }
   });
 
@@ -80,20 +73,13 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
 
   bke::MutableAttributeAccessor attributes = input_curves.attributes_for_write();
 
-  bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
-      ".positions_2d", bke::AttrDomain::Point);
-
-  pos_writer.span.slice(src.points_range()).copy_from(screen_space_positions);
-  pos_writer.span.take_back(mcoords.size()).copy_from(mcoords);
-  pos_writer.finish();
-
   placement.project(mcoords, input_curves.positions_for_write().take_back(mcoords.size()));
 
   bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_span<int>(
       "fill_id", bke::AttrDomain::Curve);
   fill_ids.span.last() = bke::greasepencil::get_next_available_fill_id(fill_ids.span.varray());
 
-  auto [shape_map, shape_offsets] = blender::bke::greasepencil::shapes_from_fill_ids(
+  const bke::greasepencil::ShapeData shapes_data = bke::greasepencil::shapes_from_fill_ids(
       fill_ids.span.varray(), input_curves.curves_num());
 
   fill_ids.finish();
@@ -102,31 +88,86 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
   const IndexRange clipping_curves = IndexRange::from_single(src.curves_num());
 
   input_curves.fill_curve_types(clipping_curves, CURVE_TYPE_POLY);
+  input_curves.cyclic_for_write().last() = true;
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Point,
-      bke::attribute_filter_from_skip_ref({"position", ".positions_2d"}),
-      clipping_points);
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref({"position"}),
+                                    clipping_points);
   bke::fill_attribute_range_default(
       attributes,
       bke::AttrDomain::Curve,
       bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
       clipping_curves);
 
-  carver::CurveBooleanOpParameters op_params;
-  op_params.boolean_mode = carver::Operation::Difference;
+  auto project_fn = [&](const float3 &position) {
+    return ED_view3d_project_float_v2_m4(&region, position, projection);
+  };
+
+  /* WORKAROUND. Currently only poly curves are supported. Convert any curve close to the clipping
+   * shape to poly. */
+  if (!input_curves.is_single_type(CURVE_TYPE_POLY)) {
+    const OffsetIndices<int> points_by_curve = input_curves.points_by_curve();
+    Array<float2> src_positions_2d(input_curves.points_num());
+    const Span<float3> positions = input_curves.positions();
+    for (const int i : input_curves.points_range()) {
+      src_positions_2d[i] = project_fn(positions[i]);
+    }
+
+    Array<Bounds<float2>> screen_space_bbox(input_curves.curves_num());
+    threading::parallel_for(points_by_curve.index_range(), 512, [&](const IndexRange curves_i) {
+      for (const int curve_i : curves_i) {
+        const IndexRange points_i = points_by_curve[curve_i];
+        screen_space_bbox[curve_i] = *bounds::min_max(src_positions_2d.as_span().slice(points_i));
+      }
+    });
+
+    const VArray<int8_t> curve_types = input_curves.curve_types();
+
+    const Bounds<float2> bbox_j = screen_space_bbox.last();
+
+    IndexMaskMemory memory;
+    IndexMask curves_to_convert = IndexMask::from_predicate(
+        input_curves.curves_range(), memory, [&](const int64_t curve_i) {
+          const Bounds<float2> bbox_i = screen_space_bbox[curve_i];
+
+          /* Poly curve do not need to be converted. */
+          if (curve_types[curve_i] == CURVE_TYPE_POLY) {
+            return false;
+          }
+
+          if (bounds::intersect(bbox_i, bbox_j).has_value()) {
+            return true;
+          }
+          return false;
+        });
+    curves_to_convert = bke::greasepencil::selected_mask_to_fills(
+        curves_to_convert, input_curves, bke::AttrDomain::Curve, memory);
+
+    if (!curves_to_convert.is_empty()) {
+      input_curves = geometry::resample_to_evaluated(input_curves, curves_to_convert);
+      *r_converted = true;
+    }
+  }
+
+  boolean::CurveBooleanOpParameters op_params;
+  op_params.boolean_mode = boolean::Operation::Difference;
   op_params.keep_caps = keep_caps;
   op_params.skip_clipping_attributes = true;
+  op_params.separate_islands = true;
 
-  const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-  bke::CurvesGeometry carved_strokes = carver::curve_boolean_with_planes(
-      op_params, input_curves, shapes, normal_planes, clipping_shapes, layer_to_world, region);
-
-  carved_strokes.attributes_for_write().remove(".positions_2d");
+  bke::CurvesGeometry carved_strokes = boolean::curve_boolean_with_planes(op_params,
+                                                                          input_curves,
+                                                                          project_fn,
+                                                                          shapes,
+                                                                          curve_planes,
+                                                                          clipping_shapes,
+                                                                          layer_to_world,
+                                                                          region);
 
   /* Set the new geometry. */
   drawing.strokes_for_write() = std::move(carved_strokes);
@@ -138,8 +179,14 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
 /**
  * Apply the stroke carver to all layers.
  */
-static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2> mcoords)
+static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator *op)
 {
+  const Array<int2> mcoords = WM_gesture_lasso_path_to_array(C, op);
+
+  if (mcoords.is_empty()) {
+    return OPERATOR_PASS_THROUGH;
+  }
+
   const Scene *scene = CTX_data_scene(C);
   const ARegion *region = CTX_wm_region(C);
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -176,13 +223,20 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
   const bool keep_caps = (brush->gpencil_settings->flag & GP_BRUSH_ERASER_KEEP_CAPS) != 0;
   const bool active_layer_only = (brush->gpencil_settings->flag & GP_BRUSH_ACTIVE_LAYER_ONLY) != 0;
   std::atomic<bool> changed = false;
+  std::atomic<bool> converted = false;
 
+  bool inserted_keyframe = false;
   if (active_layer_only) {
     /* Apply carver on drawings of active layer. */
     if (!grease_pencil.has_active_layer()) {
       return OPERATOR_CANCELLED;
     }
-    const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
+    bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
+    if (!layer.is_editable()) {
+      return OPERATOR_CANCELLED;
+    }
+
+    ensure_active_keyframe(*scene, grease_pencil, layer, true, inserted_keyframe);
     const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
     const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d, layer_to_world);
     const Vector<ed::greasepencil::MutableDrawingInfo> drawings =
@@ -193,9 +247,8 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
         *scene, *region, *view3d, *ob_eval, &layer);
 
     threading::parallel_for_each(drawings, [&](const ed::greasepencil::MutableDrawingInfo &info) {
-      if (execute_carver_on_drawing(info.layer_index,
-                                    info.frame_number,
-                                    *ob_eval,
+      bool r_converted = false;
+      if (execute_carver_on_drawing(*ob_eval,
                                     *obact,
                                     *region,
                                     projection,
@@ -203,14 +256,26 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
                                     placement,
                                     lasso_pos.as_span(),
                                     keep_caps,
-                                    info.drawing))
+                                    info.drawing,
+                                    &r_converted))
       {
         changed = true;
+      }
+
+      if (r_converted) {
+        converted = true;
       }
     });
   }
   else {
-    /* Apply cutter on every editable drawing. */
+    for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
+      if (layer->is_editable()) {
+        ed::greasepencil::ensure_active_keyframe(
+            *scene, grease_pencil, *layer, true, inserted_keyframe);
+      }
+    }
+
+    /* Apply carver on every editable drawing. */
     const Vector<ed::greasepencil::MutableDrawingInfo> drawings =
         ed::greasepencil::retrieve_editable_drawings(*scene, grease_pencil);
     threading::parallel_for_each(drawings, [&](const ed::greasepencil::MutableDrawingInfo &info) {
@@ -222,9 +287,8 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
       DrawingPlacement placement = ed::greasepencil::DrawingPlacement(
           *scene, *region, *view3d, *ob_eval, &layer);
 
-      if (execute_carver_on_drawing(info.layer_index,
-                                    info.frame_number,
-                                    *ob_eval,
+      bool r_converted = false;
+      if (execute_carver_on_drawing(*ob_eval,
                                     *obact,
                                     *region,
                                     projection,
@@ -232,30 +296,31 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
                                     placement,
                                     lasso_pos,
                                     keep_caps,
-                                    info.drawing))
+                                    info.drawing,
+                                    &r_converted))
       {
         changed = true;
       }
+
+      if (r_converted) {
+        converted = true;
+      }
     });
+  }
+
+  if (converted) {
+    BKE_report(op->reports, RPT_WARNING, "Some curves were converted to Poly");
   }
 
   if (changed) {
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
+    if (inserted_keyframe) {
+      WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    }
   }
 
   return OPERATOR_FINISHED;
-}
-
-static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator *op)
-{
-  const Array<int2> mcoords = WM_gesture_lasso_path_to_array(C, op);
-
-  if (mcoords.is_empty()) {
-    return OPERATOR_PASS_THROUGH;
-  }
-
-  return stroke_carver_execute(C, mcoords);
 }
 
 }  // namespace ed::greasepencil
