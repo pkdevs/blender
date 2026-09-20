@@ -1228,6 +1228,51 @@ TEST(straight_skeleton, FullSkeletonWithSegments)
   EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
 }
 
+TEST(straight_skeleton, OneFaceBevel)
+{
+  const char *spec = R"(19 1
+0.0000 0.0000
+-0.0676 -0.0732
+-0.2208 -0.2057
+-0.3188 -0.2705
+-0.3188 -0.2719
+-0.0994 -0.1863
+-0.0994 -1.7736
+-0.0994 -1.8523
+-0.1339 -1.9393
+-0.2236 -1.9834
+-0.3078 -1.9986
+-0.3078 -2.0000
+0.3602 -2.0000
+0.3602 -1.9986
+0.2719 -1.9821
+0.1767 -1.9379
+0.1408 -1.8523
+0.1408 -1.7736
+0.1518 0.0000
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "OneFaceBevel";
+  input.offset = 0.2;
+  input.segments = 1;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_EQ(output.face_offsets.size(), 18);
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange face_r = output.face_offsets[fi];
+    Set<int> unique_verts;
+    for (const int i : face_r) {
+      EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
+    }
+  }
+  EXPECT_NEAR(total_faces_area(output), 0.509493, 1e-4);
+}
+
 /** \} */
 
 } /* namespace blender::straightskeleton::test */
