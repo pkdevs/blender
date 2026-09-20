@@ -282,9 +282,10 @@ class CYCLES_RENDER_PT_sampling_viewport_denoise(CyclesButtonsPanel, Panel):
             if has_dlss_gpu_devices(context):
                 col.prop(cscene, "preview_denoising_upscale_quality", text="Upscale Mode")
             else:
-                col.label(text=rpt_("Requires NVIDIA GPU with compute capability %s") % "7.5",
+                col.label(text=rpt_("DLSS Ray Reconstruction is not available on this system"),
                           icon='INFO', translate=False)
-                col.label(text=rpt_("and NVIDIA driver version %s or newer") % "590",
+                col.label(text=rpt_("Requires an NVIDIA GPU with compute capability 7.5 or newer, "
+                                    "and a driver providing the DLSS Ray Reconstruction runtime"),
                           icon='BLANK1', translate=False)
             return
 
