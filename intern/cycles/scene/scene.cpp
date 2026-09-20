@@ -435,32 +435,56 @@ ccl_debug_printf("Scene::device_update(): Before bake_manager->device_update()\n
   }
 }
 
+bool Scene::need_motion_pass() const
+{
+  const bool denoiser_motion = integrator->get_use_denoise() &&
+      (integrator->get_denoiser_passes() & (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
+  return denoiser_motion || integrator->get_use_temporal_frames() ||
+         Pass::contains(passes, PASS_MOTION) || Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION);
+}
+
+bool Scene::need_motion_blur() const
+{
+  return integrator->get_motion_blur();
+}
+
+// need_motion() stays for everything that isn't ready to be split (camera code, BVH build flags,
+// apply_static_transforms, etc.) but now composes from the two independents rather than an
+// exclusive if/else chain:
 Scene::MotionType Scene::need_motion() const
 {
-if (integrator->get_motion_blur()) { // !!!: With use_motion_blur, this wins immediately, restir_temporal never even evaluated
-  return MOTION_BLUR;
-}
-
-  const bool denoiser_motion = integrator->get_use_denoise() &&
-                               (integrator->get_denoiser_passes() &
-                               (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
-
-  const bool restir_temporal = integrator->get_use_temporal_frames();
-
-ccl_debug_printf(
-    "Scene::need_motion(): restir=%d background=%d result candidate\n",
-    int(restir_temporal), int(params.background));
-
-  if (denoiser_motion ||
-      restir_temporal ||
-      Pass::contains(passes, PASS_MOTION) ||
-      Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION))
-  {
-    return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
-  }
-
+// !!!(Tri): MOTION_BLUR still wins for anything not yet updated to know about coexistence
+  if (need_motion_blur()) return MOTION_BLUR;
+  if (need_motion_pass()) return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
   return MOTION_NONE;
 }
+
+// Scene::MotionType Scene::need_motion() const
+// {
+// if (integrator->get_motion_blur()) { // !!!: With use_motion_blur, this wins immediately, restir_temporal never even evaluated
+//   return MOTION_BLUR;
+// }
+
+//   const bool denoiser_motion = integrator->get_use_denoise() &&
+//                                (integrator->get_denoiser_passes() &
+//                                (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
+
+//   const bool restir_temporal = integrator->get_use_temporal_frames();
+
+// ccl_debug_printf(
+//     "Scene::need_motion(): restir=%d background=%d result candidate\n",
+//     int(restir_temporal), int(params.background));
+
+//   if (denoiser_motion ||
+//       restir_temporal ||
+//       Pass::contains(passes, PASS_MOTION) ||
+//       Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION))
+//   {
+//     return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
+//   }
+
+//   return MOTION_NONE;
+// }
 
 float Scene::motion_shutter_time()
 {
@@ -556,7 +580,7 @@ void Scene::enable_update_stats()
   }
 }
 
-void Scene::update_kernel_features() //
+void Scene::update_kernel_features()
 {
   if (!need_update()) {
     return;
@@ -566,8 +590,7 @@ void Scene::update_kernel_features() //
    * so could be done selective magic for the viewport as well. */
   uint kernel_features = shader_manager->get_kernel_features(this);
 
-  // const bool use_motion = need_motion() == Scene::MotionType::MOTION_BLUR;
-  const bool use_motion = need_motion() != Scene::MotionType::MOTION_NONE; // TODO(Tri): Wrong! Revert
+  const bool use_motion = need_motion() != Scene::MotionType::MOTION_NONE;
 
   kernel_features |= KERNEL_FEATURE_PATH_TRACING;
 
@@ -648,9 +671,7 @@ void Scene::update_kernel_features() //
 
   dscene.data.kernel_features = kernel_features;
 
-  // TODO(Tri): Remove
-  dscene.data.integrator.use_object_motion_pass =
-      (need_motion() == Scene::MOTION_PASS || need_motion() == Scene::MOTION_PASS_INTERACTIVE);
+  dscene.data.integrator.use_object_motion_pass = need_motion_pass(); // !!!: scene->need_motion_pass();
 
   /* Currently viewport render is faster with higher max_closures, needs
    * investigating. */

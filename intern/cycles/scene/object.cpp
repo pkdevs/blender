@@ -42,6 +42,9 @@ struct UpdateObjectTransformState {
   /* Type of the motion required by the scene settings. */
   Scene::MotionType need_motion;
 
+  bool need_motion_pass;
+  bool need_motion_blur;
+
   /* Mapping from particle system to a index in packed particle array.
    * Only used for read.
    */
@@ -54,7 +57,7 @@ struct UpdateObjectTransformState {
   uint *object_flag;
   uint *object_visibility;
   KernelObject *objects;
-  Transform *object_motion_pass; // !!!
+  Transform *object_motion_pass;
   DecomposedTransform *object_motion;
 
   /* Flags which will be synchronized to Integrator. */
@@ -559,13 +562,13 @@ static int object_num_motion_verts(Geometry *geom)
                                                   0;
 }
 
-void ObjectManager::device_update_object_transform(UpdateObjectTransformState *state, //
+void ObjectManager::device_update_object_transform(UpdateObjectTransformState *state,
                                                    Object *ob,
                                                    bool update_all,
                                                    const Scene *scene)
 {
   KernelObject &kobject = state->objects[ob->index];
-  Transform *object_motion_pass = state->object_motion_pass; //
+  Transform *object_motion_pass = state->object_motion_pass;
 
   Geometry *geom = ob->geometry;
   uint flag = 0;
@@ -646,22 +649,18 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
     }
   }
 
-  if (state->need_motion == Scene::MOTION_PASS ||
-      state->need_motion == Scene::MOTION_PASS_INTERACTIVE) // !!!
-  {
+
+  if (state->need_motion_pass) {
     /* Clear motion array if there is no actual motion. */
     ob->update_motion();
 
     /* Compute motion transforms. */
-    Transform tfm_pre;
-    Transform tfm_post;
+    Transform tfm_pre, tfm_post;
     if (ob->use_motion()) {
       tfm_pre = ob->motion[0];
       tfm_post = ob->motion[ob->motion.size() - 1];
-    }
-    else {
-      tfm_pre = tfm;
-      tfm_post = tfm;
+    } else {
+      tfm_pre = tfm_post = tfm;
     }
 
     /* Motion transformations, is world/object space depending if mesh
@@ -672,16 +671,12 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
       tfm_post = tfm_post * itfm;
     }
 
-
-// ccl_debug_printf(
-//     "object=%d motion_pass_offset=%d array_size=%zu\n",
-//     ob->index, motion_pass_offset, dscene->object_motion_pass.size());
-
     const int motion_pass_offset = ob->index * OBJECT_MOTION_PASS_SIZE;
-    object_motion_pass[motion_pass_offset + 0] = tfm_pre; // !!!
+    object_motion_pass[motion_pass_offset + 0] = tfm_pre;
     object_motion_pass[motion_pass_offset + 1] = tfm_post;
   }
-  else if (state->need_motion == Scene::MOTION_BLUR) {
+
+  if (state->need_motion_blur) {
     if (ob->use_motion()) {
       kobject.motion_offset = state->motion_offset[ob->index];
 
@@ -793,10 +788,12 @@ void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dsce
   dscene->object_prim_offset.clear_modified();
 }
 
+// TODO(Tri): Rel of MOTION_PASS/MOTION_BLUR here & in device_update_object_transform() is a false dichotomy
 void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress) // !!!: See device_update_object_transform
 {
   UpdateObjectTransformState state;
-  state.need_motion = scene->need_motion();
+  state.need_motion_pass = scene->need_motion_pass();
+  state.need_motion_blur = scene->need_motion_blur();
   state.have_motion = false;
   state.have_curves = false;
   state.have_points = false;
@@ -814,33 +811,26 @@ ccl_debug_printf(
     "scene_objects=%zu\n", int(state.need_motion), scene->objects.size());
 
 
-  if (state.need_motion == Scene::MOTION_PASS || // !!!: temporal frames not entering...
-      state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
-  {
-// TODO(Tri): Log the array to see why is it empty on temporal; lag between tag_update() and device_update()?
-
+  if (state.need_motion_pass) {
 ccl_debug_printf(
     "  Allocating object_motion_pass: objects=%zu "
     "OBJECT_MOTION_PASS_SIZE=%d\n",
-    scene->objects.size(),
-    OBJECT_MOTION_PASS_SIZE);
+    scene->objects.size(), OBJECT_MOTION_PASS_SIZE);
 
 ccl_debug_printf("BEFORE alloc: dscene width=%zu data=%p\n",
                  dscene->object_motion_pass.size(), dscene->object_motion_pass.data());
 
-    state.object_motion_pass = dscene->object_motion_pass.alloc(OBJECT_MOTION_PASS_SIZE *
-                                                                scene->objects.size()); // !!!: classic Vector-pass transforms
+    state.object_motion_pass = dscene->object_motion_pass.alloc(OBJECT_MOTION_PASS_SIZE * 
+                                                                scene->objects.size());
 
 ccl_debug_printf("AFTER alloc: dscene width=%zu data=%p state object_motion_pass=%zu\n",
                  dscene->object_motion_pass.size(), dscene->object_motion_pass.data(), state.object_motion_pass);
 
 ccl_debug_printf(
     "  After alloc: width=%zu data=%p\n",
-    dscene->object_motion_pass.size(),
-    dscene->object_motion_pass.data());
+    dscene->object_motion_pass.size(), dscene->object_motion_pass.data());
   }
-  else if (state.need_motion == Scene::MOTION_BLUR) {
-    /* Set object offsets into global object motion array. */
+  if (state.need_motion_blur) {
     uint *motion_offsets = state.motion_offset.resize(scene->objects.size());
     uint motion_offset = 0;
 
@@ -851,15 +841,12 @@ ccl_debug_printf(
     dscene->object_motion_pass.data());
 
     for (Object *ob : scene->objects) {
-      *motion_offsets = motion_offset;
-      motion_offsets++;
-
-      /* Clear motion array if there is no actual motion. */
+      *motion_offsets++ = motion_offset;
       ob->update_motion();
       motion_offset += ob->motion.size();
     }
 
-    state.object_motion = dscene->object_motion.alloc(motion_offset); // !!!: DecomposedTransform, motion blur interpolation
+    state.object_motion = dscene->object_motion.alloc(motion_offset);
   }
 
 ccl_debug_printf("ObjectManager::device_update_transforms()\n\n");
@@ -899,12 +886,10 @@ ccl_debug_printf(
     dscene->object_motion_pass.data());
 
   dscene->objects.copy_to_device_if_modified();
-  if (state.need_motion == Scene::MOTION_PASS ||
-      state.need_motion == Scene::MOTION_PASS_INTERACTIVE)
-  {
+  if (state.need_motion_pass) {
     dscene->object_motion_pass.copy_to_device();
   }
-  else if (state.need_motion == Scene::MOTION_BLUR) {
+  if (state.need_motion_blur) {
     dscene->object_motion.copy_to_device();
   }
 

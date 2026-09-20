@@ -205,6 +205,12 @@ class Scene : public NodeOwner {
 
   enum MotionType { MOTION_NONE = 0, MOTION_PASS, MOTION_BLUR, MOTION_PASS_INTERACTIVE };
   MotionType need_motion() const;
+
+  /* If temporal-frame reuse (or classic Vector/denoiser-motion pass) wants frame to frame transforms. */
+  bool need_motion_pass() const;
+  /* If integrator->get_motion_blur(). */
+  bool need_motion_blur() const;
+
   float motion_shutter_time();
 
   bool need_update();
