@@ -135,6 +135,8 @@ void surf_hybrid(
     [[out]] HybridFragOut &frag_out,
     [[front_facing]] const bool front_face)
 {
+  [[resource_table]] const NodeTreeRes &nt = kg.nt;
+
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
@@ -154,7 +156,8 @@ void surf_hybrid(
   float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
-  sd.thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
+  sd.thickness = Thickness::from(nodetree_thickness(kg, sd),
+                                 ThicknessMode(nt.node_tree.thickness_mode));
 
   fragment_displacement(kg, sd);
 
@@ -188,12 +191,9 @@ void surf_hybrid(
   /* ----- Render Passes output ----- */
 
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
-  {
-    [[resource_table]] const NodeTreeRes &nt = kg.nt;
-    cryptomatte.store(out_texel, nt.node_tree.crypto_hash, resource_id);
-    render_passes.store_color(
-        out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
-  }
+  cryptomatte.store(out_texel, nt.node_tree.crypto_hash, resource_id);
+  render_passes.store_color(
+      out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
     float light_sample_rcp = safe_rcp(float(sd.light_accum.light_accumulation_count));

@@ -105,6 +105,8 @@ void surf_deferred(
     [[out]] DeferredFragOut &frag_out,
     [[front_facing]] const bool front_face)
 {
+  [[resource_table]] const NodeTreeRes &nt = kg.nt;
+
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
@@ -130,7 +132,8 @@ void surf_deferred(
 
   sd.holdout = saturate(sd.holdout);
 
-  Thickness thickness = Thickness::from(nodetree_thickness(kg, sd), thickness_mode);
+  Thickness thickness = Thickness::from(nodetree_thickness(kg, sd),
+                                        ThicknessMode(nt.node_tree.thickness_mode));
 
   /** Transparency weight is already applied through dithering, remove it from other closures. */
   float alpha = 1.0f - average(sd.transmittance);
@@ -157,12 +160,9 @@ void surf_deferred(
   /* ----- Render Passes output ----- */
 
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
-  {
-    [[resource_table]] const NodeTreeRes &nt = kg.nt;
-    cryptomatte.store(out_texel, nt.node_tree.crypto_hash, resource_id);
-    render_passes.store_color(
-        out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
-  }
+  cryptomatte.store(out_texel, nt.node_tree.crypto_hash, resource_id);
+  render_passes.store_color(
+      out_texel, uni.uniform_buf.render_pass.emission_id, float4(sd.emission, 1.0f));
 
   /* ----- GBuffer output ----- */
 
