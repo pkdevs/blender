@@ -403,6 +403,9 @@ static void print_test_output(const char *test_name,
                               const StraightSkeletonInput &input,
                               const StraightSkeletonOutput &output)
 {
+  EXPECT_FALSE(output.hit_max_events)
+      << "Straight skeleton hit max_events in test: " << (test_name ? test_name : "unknown");
+
   if (get_debug_output_mode() != DebugOutputMode::OUTPUT) {
     return;
   }
@@ -496,6 +499,7 @@ TEST(straight_skeleton, Triangle)
 
   StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
+  EXPECT_FALSE(output.hit_max_events);
 
   /* Triangle skeleton: 3 original verts + 1 incenter = 4 verts, 3 output faces. */
   EXPECT_EQ(output.vert.size(), 4);
@@ -1554,6 +1558,101 @@ TEST(straight_skeleton, FatCrossAxisAlignedWithHoles)
     for (const int i : face_r) {
       EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
     }
+  }
+}
+
+/**
+ * Opposing notches designed to trigger concurrent flip events (Section 3.2, Fig 3(b)).
+ * Four reflex vertices (v2, v4, v9, v12) move towards the horizontal midline y = 0
+ * and become collinear simultaneously at t* = 1 / sqrt(5) ≈ 0.447214.
+ *
+ * Outer polygon: 15 vertices on a 10x6 box [-5, 5] x [-3, 3] with 4 reflex notches:
+ * - 2 top notches pointing down: tips v12=(-2, 1) and v9=(2, 1) moving down at Vy = sqrt(5).
+ * - 2 bottom notches pointing up: tips v2=(-1, -1) and v4=(1, -1) moving up at Vy = sqrt(5).
+ * At t* = 1/sqrt(5) ≈ 0.447214, all four tips reach y = 0 with x: -2 < -1 < 1 < 2.
+ * Total area = 60 - 4 * 2 = 52.
+ */
+TEST(straight_skeleton, OpposingNotchesConcurrentFlips)
+{
+  const char *spec = R"(15 1
+-5.0 -4.0
+-2.0 -4.0
+-1.0 -1.0
+ 0.0 -4.0
+ 1.0 -1.0
+ 2.0 -4.0
+ 5.0 -4.0
+ 5.0  4.0
+ 3.0  4.0
+ 2.0  1.0
+ 1.0  4.0
+-1.0  4.0
+-2.0  1.0
+-3.0  4.0
+-5.0  4.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14
+)";
+
+  for (int shift = 0; shift < 15; shift++) {
+    InputStorage storage;
+    StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    Array<double2> orig_verts = storage.vert;
+    for (int i = 0; i < 15; i++) {
+      storage.vert[i] = orig_verts[(i + shift) % 15];
+    }
+    const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    EXPECT_FALSE(output.hit_max_events)
+        << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
+  }
+}
+
+/**
+ * 6-notch polygon designed to exhibit the 6-vertex collinear cycle of Section 3.2 (Figure 4).
+ * Six reflex vertices (v2, v4, v6, v8 on bottom; v13, v16 on top) move towards y = 0
+ * and all reach the line y = 0 simultaneously at t* = 1 / sqrt(5) ≈ 0.447214:
+ *   v16: (-5, 0)
+ *   v2:  (-3, 0)
+ *   v4:  (-1, 0)
+ *   v6:  ( 1, 0)
+ *   v8:  ( 3, 0)
+ *   v13: ( 5, 0)
+ * Box [-8, 8] x [-3, 3] has area 96; minus 6 notches of area 2 each = 84.
+ */
+TEST(straight_skeleton, SixNotchesConcurrentFlips)
+{
+  const char *spec = R"(19 1
+-8.0 -4.0
+-4.0 -4.0
+-3.0 -1.0
+-2.0 -4.0
+-1.0 -1.0
+ 0.0 -4.0
+ 1.0 -1.0
+ 2.0 -4.0
+ 3.0 -1.0
+ 4.0 -4.0
+ 8.0 -4.0
+ 8.0  4.0
+ 6.0  4.0
+ 5.0  1.0
+ 4.0  4.0
+-4.0  4.0
+-5.0  1.0
+-6.0  4.0
+-8.0  4.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18
+)";
+
+  for (int shift = 0; shift < 19; shift++) {
+    InputStorage storage;
+    StraightSkeletonInput input = fill_input_from_string(spec, storage);
+    Array<double2> orig_verts = storage.vert;
+    for (int i = 0; i < 19; i++) {
+      storage.vert[i] = orig_verts[(i + shift) % 19];
+    }
+    const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    EXPECT_FALSE(output.hit_max_events)
+        << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
   }
 }
 

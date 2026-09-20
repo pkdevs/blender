@@ -169,6 +169,16 @@ class StraightSkeletonOutput {
    * When #StraightSkeletonInput::segments is 1 every entry is 0.
    */
   Array<int> face_band;
+
+  /** True if the event loop was terminated because max_events was reached while events
+   * still remained in the priority queue (e.g. infinite flip event loop). */
+  bool hit_max_events{false};
+
+  /** Total number of events processed during the simulation. */
+  int events_processed_num{0};
+
+  /** Total number of flip events processed. */
+  int flips_num{0};
 };
 
 /** \} */

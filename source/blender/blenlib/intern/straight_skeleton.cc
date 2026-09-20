@@ -581,9 +581,73 @@ class TrianglePriorityQueue {
     return result;
   }
 
+  /** Pop the next event from the heap. If multiple events occur at the same timestamp
+   * (within numerical tolerance), prefer an internal diagonal flip between two collapsing
+   * triangles over an event that flips into non-collapsing cavity triangles.
+   * This ensures that collinear cycles (such as the 2-cycle in Palfreder et al. Section 3.2,
+   * Fig. 3(b)) are processed as flip events rather than being preempted by cavity flips. */
+  TriangleEvent pop_with_flip_priority(const TriangleEdges &triangles)
+  {
+    if (is_empty()) {
+      TriangleEvent dummy;
+      dummy.type = TriangleEventType::NONE;
+      return dummy;
+    }
+    const int ti_min = POINTER_AS_INT(BLI_heap_pop_min(heap_));
+    TriangleEvent min_ev = events_[ti_min];
+    events_[ti_min].heap_node = nullptr;
+
+    auto check_internal = [&](const TriangleEvent &ev) {
+      const int e1 = ev.edge_index;
+      const int e2 = triangles.paired_edge(e1);
+      if (e2 == -1) {
+        return false;
+      }
+      const int p_ti = triangles.triangle(e2);
+      if (p_ti < 0 || p_ti >= int(events_.size())) {
+        return false;
+      }
+      if (p_ti == ti_min || events_[p_ti].heap_node != nullptr) {
+        if (std::abs(events_[p_ti].time - min_ev.time) <= 1e-6) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const bool min_is_internal = (min_ev.type == TriangleEventType::FLIP) &&
+                                 check_internal(min_ev);
+
+    int best_flip_ti = -1;
+    bool best_flip_is_internal = false;
+
+    for (const int ti : events_.index_range()) {
+      if (events_[ti].heap_node != nullptr && events_[ti].type == TriangleEventType::FLIP &&
+          std::abs(events_[ti].time - min_ev.time) <= 1e-6)
+      {
+        const bool is_int = check_internal(events_[ti]);
+        if (best_flip_ti == -1 || (!best_flip_is_internal && is_int)) {
+          best_flip_ti = ti;
+          best_flip_is_internal = is_int;
+        }
+      }
+    }
+
+    if (best_flip_ti != -1 && best_flip_ti != ti_min) {
+      if (min_ev.type == TriangleEventType::FLIP && !min_is_internal && best_flip_is_internal) {
+        insert_or_update(ti_min, min_ev);
+        TriangleEvent flip_ev = events_[best_flip_ti];
+        remove(best_flip_ti);
+        return flip_ev;
+      }
+    }
+
+    return min_ev;
+  }
+
   const TriangleEvent &peek() const
   {
-    const int ti = POINTER_AS_INT(BLI_heap_top(heap_));
+    const int ti = POINTER_AS_INT(BLI_heap_node_ptr(BLI_heap_top(heap_)));
     return events_[ti];
   }
 
@@ -865,7 +929,8 @@ static TriangleEvent compute_triangle_collapse(const int ti,
         const double r2 = (-c1 + sqrt_disc) / (2.0 * c2);
         double best_r = std::numeric_limits<double>::infinity();
         for (const double r : {r1, r2}) {
-          if (r > 1e-9 && r < best_r) {
+          const bool is_valid_r = (current_time > 0.0 && r >= -1e-9) || (r > 1e-9);
+          if (is_valid_r && r < best_r) {
             best_r = r;
           }
         }
@@ -876,13 +941,16 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     }
     else if (std::abs(c1) > 1e-14) {
       const double r = -c0 / c1;
-      if (r > 1e-9) {
+      const bool is_valid_r = (current_time > 0.0 && r >= -1e-9) || (r > 1e-9);
+      if (is_valid_r) {
         dt_root = r;
       }
     }
 
-    if (dt_root > 1e-9 && (current_time + dt_root < best_event.time)) {
-      const double2 pt[3] = {p[0] + dt_root * v[0], p[1] + dt_root * v[1], p[2] + dt_root * v[2]};
+    const bool is_valid_dt = (current_time > 0.0 && dt_root >= -1e-9) || (dt_root > 1e-9);
+    const double eff_dt = std::max(0.0, dt_root);
+    if (is_valid_dt && (current_time + eff_dt < best_event.time)) {
+      const double2 pt[3] = {p[0] + eff_dt * v[0], p[1] + eff_dt * v[1], p[2] + eff_dt * v[2]};
       int best_k = 0;
       double max_len_sq = -1.0;
       for (const int k : IndexRange(3)) {
@@ -896,7 +964,7 @@ static TriangleEvent compute_triangle_collapse(const int ti,
 
       TriangleEvent cand;
       cand.triangle_index = ti;
-      cand.time = current_time + dt_root;
+      cand.time = current_time + eff_dt;
       cand.type = TriangleEventType::FLIP;
       cand.edge_index = e0 + best_k;
       cand.vert_index = tri_v[(best_k + 2) % 3];
@@ -931,6 +999,7 @@ class StraightSkeletonState {
   int edge_collapses_count_{0};
   int multi_splits_count_{0};
   int splits_count_{0};
+  bool hit_max_events_{false};
 
   explicit StraightSkeletonState(const StraightSkeletonInput &input)
       : epsilon(input.epsilon <= 0.0 ? 1e-8 : input.epsilon), input_(&input)
@@ -1089,7 +1158,7 @@ void StraightSkeletonState::build_initial_kinetic_triangulation()
 
   /* 5. Initialize priority queue with events for all initial triangles. */
   pq.reinitialize(triangles.triangles_num());
-  for (const int ti : IndexRange(triangles.triangles_num())) {
+  for (int ti = triangles.triangles_num() - 1; ti >= 0; ti--) {
     const TriangleEvent ev = compute_triangle_collapse(ti, triangles, kinetic_verts, 0.0);
     if (ev.type != TriangleEventType::NONE && !std::isinf(ev.time)) {
       pq.insert_or_update(ti, ev);
@@ -1486,7 +1555,7 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
 bool StraightSkeletonState::process_next_event()
 {
   while (!pq.is_empty()) {
-    const TriangleEvent ev = pq.pop();
+    const TriangleEvent ev = pq.pop_with_flip_priority(triangles);
     if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
       continue;
     }
@@ -1962,18 +2031,15 @@ bool StraightSkeletonState::process_flip_event(const TriangleEvent &ev)
   const TriangleEvent ev2 = compute_triangle_collapse(
       ti2, triangles, kinetic_verts, current_time_);
 
+  pq.remove(ti1);
+  pq.remove(ti2);
+
   if (ev1.type != TriangleEventType::NONE && !std::isinf(ev1.time)) {
     pq.insert_or_update(ti1, ev1);
-  }
-  else {
-    pq.remove(ti1);
   }
 
   if (ev2.type != TriangleEventType::NONE && !std::isinf(ev2.time)) {
     pq.insert_or_update(ti2, ev2);
-  }
-  else {
-    pq.remove(ti2);
   }
 
   return true;
@@ -1987,6 +2053,10 @@ void StraightSkeletonState::run_event_loop(const int max_events)
       break;
     }
     count++;
+  }
+  events_processed_num_ = count;
+  if (count >= max_events && !pq.is_empty()) {
+    hit_max_events_ = true;
   }
 }
 
@@ -2209,6 +2279,10 @@ static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkele
                                                              const StraightSkeletonInput &input)
 {
   StraightSkeletonOutput output;
+  output.hit_max_events = state.hit_max_events_;
+  output.events_processed_num = state.events_processed_num_;
+  output.flips_num = state.flips_count_;
+
   const SkeletonGraph &skel = state.skeleton;
   const int nodes_num = int(skel.nodes.size());
 
@@ -2591,6 +2665,10 @@ static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkele
   }
   output.edge = Array<int2>(out_edges.as_span());
   output.edge_orig = Array<int>(out_edge_orig.as_span());
+
+  output.hit_max_events = state.hit_max_events_;
+  output.events_processed_num = state.events_processed_num_;
+  output.flips_num = state.flips_count_;
 
   return output;
 }
