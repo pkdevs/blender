@@ -317,14 +317,18 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
   return {state_L, state_R};
 }
 
+/* Detriment if a point is within the final result. */
+using BooleanInsideFunc = FunctionRef<bool(const int, const WindingState)>;
+
 /* Check the left and right of a curve `k` */
-static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
+static void get_inside_states_for_segments(const CurveBooleanOpParameters & /*op_params*/,
                                            const int curve_k,
                                            const int subj_shape_i,
                                            const Span<float2> points,
                                            const GroupedSpan<int> shapes,
                                            const OffsetIndices<int> points_by_curve,
                                            const IndexMask &clipping_shapes,
+                                           const BooleanInsideFunc result_func,
                                            const Span<Segment> all_segments,
                                            const OffsetIndices<int> segments_by_curve,
                                            const VArray<bool> &is_fill,
@@ -347,18 +351,8 @@ static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_pa
     auto [state_L, state_R] = LR_states_from_segment(
         this_segment, points, points_by_curve, shapes, mask_shapes, is_fill);
 
-    if (is_fill[curve_k]) {
-      all_inside_left[seg_i] = state_L.is_contributing(
-          op_params, shapes, subj_shape_i, clipping_shapes);
-      all_inside_right[seg_i] = state_R.is_contributing(
-          op_params, shapes, subj_shape_i, clipping_shapes);
-    }
-    else {
-      all_inside_left[seg_i] = op_is_contributing(
-          op_params, true, !state_L.is_in_shapes(clipping_shapes, shapes));
-      all_inside_right[seg_i] = op_is_contributing(
-          op_params, true, !state_R.is_in_shapes(clipping_shapes, shapes));
-    }
+    all_inside_left[seg_i] = result_func(curve_k, state_L);
+    all_inside_right[seg_i] = result_func(curve_k, state_R);
   }
 }
 
@@ -736,6 +730,13 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   Array<bool> all_inside_left(all_segments.size());
   Array<bool> all_inside_right(all_segments.size());
 
+  auto result_func = [&](const int curve_k, const WindingState &state) {
+    if (is_fill[curve_k]) {
+      return state.is_contributing(op_params, shapes, subj_shape_id, clipping_shapes);
+    }
+    return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
+  };
+
   for (const int curve_i : shapes[subj_shape_id]) {
     get_inside_states_for_segments(op_params,
                                    curve_i,
@@ -744,6 +745,7 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
                                    shapes,
                                    points_by_curve,
                                    clipping_shapes,
+                                   result_func,
                                    all_segments,
                                    segments_by_curve,
                                    is_fill,
@@ -760,6 +762,7 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
                                      shapes,
                                      points_by_curve,
                                      clipping_shapes,
+                                     result_func,
                                      all_segments,
                                      segments_by_curve,
                                      is_fill,
