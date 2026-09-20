@@ -960,7 +960,7 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
     }
     else {
       /* Don't add the shape when in intersect mode. */
-      if (op_params.boolean_mode == Operation::Intersect && !editable_shapes_bool[shape_i]) {
+      if (op_params.boolean_mode == Operation::Intersect && editable_shapes_bool[shape_i]) {
         return;
       }
 
