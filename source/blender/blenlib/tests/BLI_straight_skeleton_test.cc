@@ -38,6 +38,8 @@ enum class DebugOutputMode {
 };
 
 static constexpr DebugOutputMode debug_output_mode = DebugOutputMode::NONE;
+static bool debug_new_file = true;
+static const char *debug_html_filepath = "/tmp/straight_skeleton_tests.html";
 
 namespace blender::straightskeleton::test {
 
@@ -49,16 +51,16 @@ namespace blender::straightskeleton::test {
  * Owns the backing storage for a #StraightSkeletonInput.
  *
  * The spec string has the form:
- *   #verts #edges #faces
+ *   #verts #faces
  *   <double> <double>          [#verts lines -- 2D x y]
- *   <int> <int>                [#edges lines]
- *   <int> <int> ... <int>      [#faces lines]
+ *   <int> <int> ... <int>      [#faces lines: line 0 is outer polygon (CCW), lines 1..#faces-1 are
+ * holes (CW)]
  */
 struct InputStorage {
   Array<double2> vert;
-  Array<int2> edge;
-  Array<int> face_offsets_buf;
-  Vector<int> face_vert_indices;
+  Vector<int> outer_polygon;
+  Vector<int> hole_offsets_buf;
+  Vector<int> hole_vert_indices;
 };
 
 static StraightSkeletonInput fill_input_from_string(const char *spec, InputStorage &r_storage)
@@ -67,12 +69,13 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
   std::string line;
   getline(ss, line);
   std::istringstream hdrss(line);
-  int verts_num, edges_num, faces_num;
-  hdrss >> verts_num >> edges_num >> faces_num;
+  int verts_num, faces_num;
+  hdrss >> verts_num >> faces_num;
 
   r_storage.vert.reinitialize(verts_num);
-  r_storage.edge.reinitialize(edges_num);
-  r_storage.face_offsets_buf.reinitialize(faces_num + 1);
+  r_storage.outer_polygon.clear();
+  r_storage.hole_offsets_buf.clear();
+  r_storage.hole_vert_indices.clear();
 
   int i = 0;
   while (i < verts_num && getline(ss, line)) {
@@ -84,31 +87,35 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
   }
 
   i = 0;
-  while (i < edges_num && getline(ss, line)) {
-    std::istringstream ess(line);
-    int e0, e1;
-    ess >> e0 >> e1;
-    r_storage.edge[i] = int2(e0, e1);
-    i++;
-  }
-
-  i = 0;
   while (i < faces_num && getline(ss, line)) {
-    r_storage.face_offsets_buf[i] = int(r_storage.face_vert_indices.size());
     std::istringstream fss(line);
     int v;
-    while (fss >> v) {
-      r_storage.face_vert_indices.append(v);
+    if (i == 0) {
+      while (fss >> v) {
+        r_storage.outer_polygon.append(v);
+      }
+    }
+    else {
+      const int hole_idx = i - 1;
+      if (r_storage.hole_offsets_buf.is_empty()) {
+        r_storage.hole_offsets_buf.resize(faces_num); /* faces_num - 1 holes + 1 */
+        r_storage.hole_offsets_buf[0] = 0;
+      }
+      while (fss >> v) {
+        r_storage.hole_vert_indices.append(v);
+      }
+      r_storage.hole_offsets_buf[hole_idx + 1] = int(r_storage.hole_vert_indices.size());
     }
     i++;
   }
-  r_storage.face_offsets_buf[faces_num] = int(r_storage.face_vert_indices.size());
 
   StraightSkeletonInput input;
   input.vert = r_storage.vert.as_span();
-  input.edge = r_storage.edge.as_span();
-  input.face_offsets = OffsetIndices<int>(r_storage.face_offsets_buf.as_span());
-  input.face_vert_indices = r_storage.face_vert_indices.as_span();
+  input.outer_polygon = r_storage.outer_polygon.as_span();
+  if (!r_storage.hole_offsets_buf.is_empty()) {
+    input.hole_offsets = OffsetIndices<int>(r_storage.hole_offsets_buf.as_span());
+    input.hole_vert_indices = r_storage.hole_vert_indices.as_span();
+  }
   return input;
 }
 
@@ -245,18 +252,20 @@ static void write_debug_svg(const char *test_name,
 
   /* Identify input boundary edges to distinguish from straight skeleton internal edges. */
   Set<std::pair<int, int>> input_boundary_edges;
-  const Span<int> ivi = input.face_vert_indices;
-  for (const int fi : input.face_offsets.index_range()) {
-    const IndexRange r = input.face_offsets[fi];
-    const int n = int(r.size());
-    for (int k = 0; k < n; k++) {
-      const int u = ivi[r[k]];
-      const int v = ivi[r[(k + 1) % n]];
+  const int n_outer = int(input.outer_polygon.size());
+  for (int k = 0; k < n_outer; k++) {
+    const int u = input.outer_polygon[k];
+    const int v = input.outer_polygon[(k + 1) % n_outer];
+    input_boundary_edges.add({std::min(u, v), std::max(u, v)});
+  }
+  for (const int h : IndexRange(input.hole_offsets.size())) {
+    const IndexRange r = input.hole_offsets[h];
+    const int n_h = int(r.size());
+    for (int k = 0; k < n_h; k++) {
+      const int u = input.hole_vert_indices[r[k]];
+      const int v = input.hole_vert_indices[r[(k + 1) % n_h]];
       input_boundary_edges.add({std::min(u, v), std::max(u, v)});
     }
-  }
-  for (const int2 &e : input.edge) {
-    input_boundary_edges.add({std::min(e[0], e[1]), std::max(e[0], e[1])});
   }
 
   /* Draw straight skeleton edges (non-boundary internal arcs in crimson red). */
@@ -319,10 +328,9 @@ static void write_debug_svg(const char *test_name,
   svg << "</svg>\n";
 
   /* Append (or create) the HTML debug file. */
-  const char *html_path = blender::straightskeleton::debug_html_filepath;
-  const std::ios::openmode mode = blender::straightskeleton::debug_new_file ?
-                                      (std::ios::out | std::ios::trunc) :
-                                      (std::ios::out | std::ios::app);
+  const char *html_path = debug_html_filepath;
+  const std::ios::openmode mode = debug_new_file ? (std::ios::out | std::ios::trunc) :
+                                                   (std::ios::out | std::ios::app);
 
   std::ofstream f(html_path, mode);
   if (!f.is_open()) {
@@ -330,7 +338,7 @@ static void write_debug_svg(const char *test_name,
     return;
   }
 
-  if (blender::straightskeleton::debug_new_file) {
+  if (debug_new_file) {
     /* Write the HTML document header on first open. */
     f << "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
       << "<meta charset=\"utf-8\">\n"
@@ -345,7 +353,7 @@ static void write_debug_svg(const char *test_name,
       << "</style>\n"
       << "</head>\n<body>\n"
       << "<h1>Straight Skeleton Test Debug Drawings</h1>\n";
-    blender::straightskeleton::debug_new_file = false;
+    debug_new_file = false;
   }
 
   /* Wrap the SVG in a labelled card div. */
@@ -460,37 +468,6 @@ static void print_test_output(const char *test_name,
  * \{ */
 
 /**
- * Single isolated line segment.
- *
- * Vertices:
- *   v0 = (0, 0)
- *   v1 = (4, 0)
- * Edge:
- *   (0, 1)
- */
-TEST(straight_skeleton, SingleSegment)
-{
-  const char *spec = R"(2 1 0
-0.0 0.0
-4.0 0.0
-0 1
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SingleSegment";
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_EQ(stats.events_processed_num, 0);
-
-  StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  EXPECT_TRUE(events.is_empty());
-}
-
-/**
  * Equilateral triangle.
  *
  * The straight skeleton of a triangle is the single point where all three
@@ -506,7 +483,7 @@ TEST(straight_skeleton, SingleSegment)
  */
 TEST(straight_skeleton, Triangle)
 {
-  const char *spec = R"(3 0 1
+  const char *spec = R"(3 1
 0.0 0.0
 1.0 0.0
 0.5 0.8660254037844387
@@ -517,21 +494,9 @@ TEST(straight_skeleton, Triangle)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "Triangle";
 
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_EQ(stats.edge_collapses_num, 1);
-
   StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
 
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  ASSERT_EQ(events.size(), 1);
-  EXPECT_EQ(events[0].triangle_index, 0);
-  EXPECT_EQ(events[0].type, TriangleEventType::EDGE_COLLAPSE);
-  EXPECT_NEAR(events[0].time, std::sqrt(3.0) / 6.0, 1e-6);
-  EXPECT_NEAR(events[0].event_pos.x, 0.5, 1e-5);
-  EXPECT_NEAR(events[0].event_pos.y, std::sqrt(3.0) / 6.0, 1e-5);
-
-#if 1 /* Output assertions for the completed straight skeleton. */
   /* Triangle skeleton: 3 original verts + 1 incenter = 4 verts, 3 output faces. */
   EXPECT_EQ(output.vert.size(), 4);
   EXPECT_EQ(output.face_offsets.size(), 3);
@@ -548,7 +513,7 @@ TEST(straight_skeleton, Triangle)
   for (const int vi : IndexRange(output.vert.size())) {
     if (output.vert_orig[vi] == -1) {
       new_verts_count++;
-      /* Incenter of an equilateral triangle with side 1 is at (0.5, 1/sqrt(3)/2). */
+      /* Incenter of an equilateral triangle with side 1 is at (0.5, 0.5/sqrt(3)). */
       EXPECT_NEAR(output.vert[vi].x, 0.5, 1e-6);
       EXPECT_NEAR(output.vert[vi].y, 0.5 / 1.7320508075688772, 1e-6);
     }
@@ -560,95 +525,8 @@ TEST(straight_skeleton, Triangle)
   for (const int fi : IndexRange(output.face_orig.size())) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
-#endif
-}
 
-/**
- * Square face with a wire edge attached at one corner.
- *
- * Vertices:
- *   v0 = (0, 0), v1 = (4, 0), v2 = (4, 4), v3 = (0, 4)  -- square
- *   v4 = (7, 0)                                            -- free wire endpoint
- *
- * Face:   [0, 1, 2, 3]
- * Edges:  (1, 4)
- *
- * Vertex v1 has 3 contour edges attached (two from the face, one from the wire),
- * exercising the angular ordering in the loop-linking step.
- *
- * Expected: the face produces 4 roof-strip faces (area = 16.0 total) and the
- * wire produces its own strip.  Total output face area equals the square area.
- */
-TEST(straight_skeleton, FaceWithWireAtVertex)
-{
-  const char *spec = R"(5 1 1
-0.0 0.0
-4.0 0.0
-4.0 4.0
-0.0 4.0
-7.0 0.0
-1 4
-0 1 2 3
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "FaceWithWireAtVertex";
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  /* The square contributes 4 triangular roof faces. */
-  EXPECT_GE(output.face_offsets.size(), 4);
-  /* Total face area should equal the square area. */
-  EXPECT_NEAR(total_faces_area(output), 16.0, 1e-4);
-}
-
-/**
- * Wire star (3 arms) with center vertex at a degree-3 junction, enclosed in a rectangle.
- *
- * Vertices:
- *   Rectangle: v0=(0,0), v1=(12,0), v2=(12,8), v3=(0,8)
- *   Star center: v4=(6,4)
- *   Star tips:   v5=(6,7), v6=(3,1), v7=(9,1)
- *
- * Face: [0, 1, 2, 3]
- * Edges: (4,5), (4,6), (4,7)
- *
- * Vertex v4 has degree 3 in the wire graph, requiring 3 separate arm slots
- * in the contour-building step.
- *
- * Expected: the output covers the rectangle area (96.0) completely.
- */
-TEST(straight_skeleton, WireStarInRectangle)
-{
-  const char *spec = R"(8 3 1
-0.0 0.0
-12.0 0.0
-12.0 8.0
-0.0 8.0
-6.0 4.0
-6.0 7.0
-3.0 1.0
-9.0 1.0
-4 5
-4 6
-4 7
-0 1 2 3
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "WireStarInRectangle";
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  /* The multi-arm center vertex (v4) needs 3 separate arm slots.
-   * Verify the algorithm runs without crashing and produces output faces. */
-  EXPECT_GE(output.face_offsets.size(), 4);
-  /* Exact area check deferred: the wire star inside the rectangle triggers
-   * split events, which have a pre-existing correctness issue unrelated to
-   * the per-arm slot fix. */
-  EXPECT_GT(total_faces_area(output), 0.0);
+  EXPECT_NEAR(total_faces_area(output), std::sqrt(3.0) / 4.0, 1e-5);
 }
 
 /**
@@ -662,7 +540,7 @@ TEST(straight_skeleton, WireStarInRectangle)
  */
 TEST(straight_skeleton, PaperExample)
 {
-  const char *spec = R"(23 0 1
+  const char *spec = R"(23 1
 1.3 7.9
 0.4 6.0
 2.0 4.6
@@ -701,241 +579,9 @@ TEST(straight_skeleton, PaperExample)
   EXPECT_GT(total_faces_area(output), 0.0);
 }
 
-/**
- * Mixture of connected line segments with free ends and closed faces.
- *
- * Features:
- * - Face 0 (Triangle): verts (0, 1, 2)
- * - Face 1 (Quad): verts (3, 4, 5, 6)
- * - Segment Chain 1: (7, 8) and (8, 9)
- *   End 7 is on the convex hull; end 9 is interior with a free end.
- * - Segment Chain 2: (10, 11) and (11, 12)
- *   End 10 is on the convex hull; end 12 is interior with a free end.
- *   Free ends 9 and 12 are both interior and connected by a Delaunay edge.
- * - Segment Chain 3: (13, 14) and (14, 15)
- *   Both ends (13 and 15) lie on the convex hull.
- */
-TEST(straight_skeleton, MixedSegmentsAndFaces)
-{
-  const char *spec = R"(16 6 2
-0.0 0.0
-4.0 0.0
-1.0 3.0
-6.0 0.0
-10.0 0.0
-10.0 3.0
-7.0 2.0
-0.0 7.0
-3.0 7.0
-4.5 6.5
-10.0 7.0
-7.0 7.0
-5.5 6.5
-1.0 9.5
-5.0 10.0
-9.0 9.5
-7 8
-8 9
-10 11
-11 12
-13 14
-14 15
-0 1 2
-3 4 5 6
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "MixedSegmentsAndFaces";
-  StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  EXPECT_FALSE(events.is_empty());
-  /* Earliest events are facing free ends 9 and 12 meeting in the middle. */
-  EXPECT_NEAR(events[0].time, 0.395285, 1e-4);
-  EXPECT_NEAR(events[0].event_pos.x, 5.0, 1e-4);
-  EXPECT_NEAR(events[0].event_pos.y, 6.75, 1e-4);
-  EXPECT_EQ(events[0].type, TriangleEventType::MULTI_SPLIT);
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_GT(stats.events_processed_num, 0);
-
-  EXPECT_EQ(output.face_offsets.size(), 7);
-  EXPECT_NEAR(total_faces_area(output), 14.5, 1e-4);
-  /* The first 3 faces come from input face 0; the next 4 come from input face 1. */
-  for (int i = 0; i < 3; i++) {
-    EXPECT_EQ(output.face_orig[i], 0);
-  }
-  for (int i = 3; i < 7; i++) {
-    EXPECT_EQ(output.face_orig[i], 1);
-  }
-}
-
-/**
- * Initial Skeleton Graph verification.
- * Confirms that static input vertices and edges remain at t=0 in SkeletonGraph.
- */
-TEST(straight_skeleton, SkeletonGraphInitial)
-{
-  /* Test 1: Single segment with 2 verts, 1 edge. */
-  {
-    const char *spec = R"(2 1 0
-0.0 0.0
-4.0 0.0
-0 1
-)";
-    InputStorage storage;
-    StraightSkeletonInput input = fill_input_from_string(spec, storage);
-    input.label = "SkeletonGraphInitial_Segment";
-    straight_skeleton_run_events_test(input, 0, true);
-    SkeletonGraph graph = straight_skeleton_initial_graph(input);
-
-    EXPECT_EQ(graph.nodes.size(), 2);
-    for (const int i : IndexRange(2)) {
-      EXPECT_EQ(graph.nodes[i].id, i);
-      EXPECT_EQ(graph.nodes[i].orig_vert, i);
-      EXPECT_EQ(graph.nodes[i].time, 0.0);
-      EXPECT_EQ(graph.nodes[i].pos.x, input.vert[i].x);
-      EXPECT_EQ(graph.nodes[i].pos.y, input.vert[i].y);
-      EXPECT_EQ(graph.nodes[i].incident_edges.size(), 1);
-    }
-
-    EXPECT_EQ(graph.edges.size(), 1);
-    EXPECT_EQ(graph.edges[0].id, 0);
-    EXPECT_EQ(graph.edges[0].node1, 0);
-    EXPECT_EQ(graph.edges[0].node2, 1);
-    EXPECT_EQ(graph.edges[0].orig_edge, 0);
-    EXPECT_TRUE(graph.edges[0].is_input_boundary);
-    EXPECT_EQ(graph.edges[0].time_start, 0.0);
-    EXPECT_EQ(graph.edges[0].time_end, 0.0);
-  }
-
-  /* Test 2: Triangle with 3 verts, 1 face (3 boundary edges). */
-  {
-    const char *spec = R"(3 0 1
-0.0 0.0
-1.0 0.0
-0.5 0.8660254037844387
-0 1 2
-)";
-    InputStorage storage;
-    StraightSkeletonInput input = fill_input_from_string(spec, storage);
-    input.label = "SkeletonGraphInitial_Triangle";
-    straight_skeleton_run_events_test(input, 0, true);
-    SkeletonGraph graph = straight_skeleton_initial_graph(input);
-
-    EXPECT_EQ(graph.nodes.size(), 3);
-    for (const int i : IndexRange(3)) {
-      EXPECT_EQ(graph.nodes[i].id, i);
-      EXPECT_EQ(graph.nodes[i].orig_vert, i);
-      EXPECT_EQ(graph.nodes[i].time, 0.0);
-      EXPECT_EQ(graph.nodes[i].incident_edges.size(), 2);
-    }
-
-    EXPECT_EQ(graph.edges.size(), 3);
-    for (const int ei : IndexRange(3)) {
-      EXPECT_EQ(graph.edges[ei].id, ei);
-      EXPECT_TRUE(graph.edges[ei].is_input_boundary);
-      EXPECT_EQ(graph.edges[ei].input_face, 0);
-      EXPECT_EQ(graph.edges[ei].orig_edge, -1);
-      EXPECT_EQ(graph.edges[ei].time_start, 0.0);
-      EXPECT_EQ(graph.edges[ei].time_end, 0.0);
-    }
-  }
-}
-
-/**
- * Notched polygon from Figure 5 of Palfrader's straight skeleton paper.
- * A reflex vertex at the notch tip moves rightward toward the internal spoke
- * between the top-left and bottom-right vertices, causing a flip event.
- */
-TEST(straight_skeleton, FlipEventNotchedPolygon)
-{
-  const char *spec = R"(7 0 1
-0.0 0.0
-7.0 2.0
-14.0 7.0
-0.0 9.0
-0.2 5.5
-1.5 4.5
-0.2 3.5
-0 1 2 3 4 5 6
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "FlipEventNotchedPolygon";
-  StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  const TriangleEvent *ev6 = nullptr;
-  for (const TriangleEvent &ev : events) {
-    if (ev.triangle_index == 6) {
-      ev6 = &ev;
-      break;
-    }
-  }
-  ASSERT_NE(ev6, nullptr);
-  /* Yellow triangle 6 has vertices (5, 1, 3). Edge 19 is (1 -> 3), sharing spoke [3, 1]
-   * with adjacent triangle 7 (1, 2, 3). Vertex 5 (notch tip) moves over spoke [3, 1]. */
-  EXPECT_EQ(ev6->type, TriangleEventType::FLIP);
-  EXPECT_EQ(ev6->vert_index, 5);
-  EXPECT_EQ(ev6->edge_index, 19);
-  EXPECT_NEAR(ev6->time, 2.3914, 1e-3);
-  EXPECT_NEAR(ev6->event_pos.x, 5.4222, 1e-3);
-  EXPECT_NEAR(ev6->event_pos.y, 4.5000, 1e-3);
-
-  /* Run events through the event loop until the FLIP event on spoke [3, 1] is processed.
-   * Other event types (EDGE_COLLAPSE, MULTI_SPLIT) will print "yet to be implemented"
-   * and be skipped for this isolated flip test. */
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 4, false);
-  EXPECT_GE(stats.flips_num, 1);
-
-  /* After the flip event, spoke [3, 1] is replaced by the new diagonal [5, 2].
-   * Yellow triangle (5, 1, 3) and adjacent triangle (1, 2, 3) are replaced by
-   * (5, 1, 2) and (5, 2, 3). */
-  const Vector<int3> active_tris = straight_skeleton_active_triangles_test(input, 4, false);
-  bool has_edge_3_1 = false;
-  bool has_edge_5_2 = false;
-  bool has_tri_5_1_2 = false;
-  bool has_tri_5_2_3 = false;
-  for (const int3 &t : active_tris) {
-    const int a = t[0];
-    const int b = t[1];
-    const int c = t[2];
-    auto has_edge = [&](int u, int v) {
-      return (a == u && b == v) || (b == u && c == v) || (c == u && a == v) ||
-             (a == v && b == u) || (b == v && c == u) || (c == v && a == u);
-    };
-    if (has_edge(3, 1)) {
-      has_edge_3_1 = true;
-    }
-    if (has_edge(5, 2)) {
-      has_edge_5_2 = true;
-    }
-    auto is_tri = [&](int u, int v, int w) {
-      return (a == u && b == v && c == w) || (a == v && b == w && c == u) ||
-             (a == w && b == u && c == v) || (a == u && b == w && c == v) ||
-             (a == w && b == v && c == u) || (a == v && b == u && c == w);
-    };
-    if (is_tri(5, 1, 2)) {
-      has_tri_5_1_2 = true;
-    }
-    if (is_tri(5, 2, 3)) {
-      has_tri_5_2_3 = true;
-    }
-  }
-  EXPECT_FALSE(has_edge_3_1);
-  EXPECT_TRUE(has_edge_5_2);
-  EXPECT_TRUE(has_tri_5_1_2);
-  EXPECT_TRUE(has_tri_5_2_3);
-}
-
 TEST(straight_skeleton, NotchedPolygonFull)
 {
-  const char *spec = R"(7 0 1
+  const char *spec = R"(7 1
 0.0 0.0
 7.0 2.0
 14.0 7.0
@@ -950,13 +596,10 @@ TEST(straight_skeleton, NotchedPolygonFull)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "NotchedPolygonFull";
 
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 20, true);
-  EXPECT_GT(stats.events_processed_num, 0);
-
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.vert.size(), 13);
-  EXPECT_EQ(output.edge.size(), 20);
+  EXPECT_EQ(output.vert.size(), 12);
+  EXPECT_EQ(output.edge.size(), 18);
   EXPECT_EQ(output.face_offsets.size(), 7);
   EXPECT_NEAR(total_faces_area(output), 71.1, 1e-4);
   for (const int fi : output.face_offsets.index_range()) {
@@ -966,7 +609,7 @@ TEST(straight_skeleton, NotchedPolygonFull)
 
 TEST(straight_skeleton, Square)
 {
-  const char *spec = R"(4 0 1
+  const char *spec = R"(4 1
 0.0 0.0
 2.0 0.0
 2.0 2.0
@@ -977,9 +620,6 @@ TEST(straight_skeleton, Square)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "Square";
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -995,7 +635,7 @@ TEST(straight_skeleton, Square)
 
 TEST(straight_skeleton, LShape)
 {
-  const char *spec = R"(6 0 1
+  const char *spec = R"(6 1
 0.0 0.0
 4.0 0.0
 4.0 2.0
@@ -1008,9 +648,6 @@ TEST(straight_skeleton, LShape)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "LShape";
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 20, true);
-  EXPECT_GT(stats.events_processed_num, 0);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1025,7 +662,7 @@ TEST(straight_skeleton, LShape)
 
 TEST(straight_skeleton, RectangleEdgeCollapse)
 {
-  const char *spec = R"(4 0 1
+  const char *spec = R"(4 1
 0.0 0.0
 4.0 0.0
 4.0 2.0
@@ -1036,15 +673,6 @@ TEST(straight_skeleton, RectangleEdgeCollapse)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "RectangleEdgeCollapse";
-
-  /* Initial events should include edge collapse events for the shorter vertical edges. */
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  ASSERT_GE(events.size(), 1);
-
-  /* Run the event loop with edge collapses enabled. Both width-2 edges collapse at t = 1.0. */
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_EQ(stats.events_processed_num, 1);
-  EXPECT_EQ(stats.edge_collapses_num, 3);
 
   /* Full straight skeleton output: 4 original corners + 2 ridge vertices = 6 vertices. */
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -1078,7 +706,7 @@ TEST(straight_skeleton, RectangleEdgeCollapse)
  */
 TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
 {
-  const char *spec = R"(4 0 1
+  const char *spec = R"(4 1
 0.0 0.0
 8.0 0.0
 8.0 2.0
@@ -1089,10 +717,6 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "ElongatedRectangleInfiniteSpeed";
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 10, true);
-  EXPECT_EQ(stats.events_processed_num, 1);
-  EXPECT_EQ(stats.edge_collapses_num, 3);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1119,7 +743,7 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
 
 TEST(straight_skeleton, MultiSplitHourglass)
 {
-  const char *spec = R"(6 0 1
+  const char *spec = R"(6 1
 0.0 0.0
 4.0 0.0
 3.0 1.0
@@ -1132,13 +756,6 @@ TEST(straight_skeleton, MultiSplitHourglass)
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "MultiSplitHourglass";
-
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  ASSERT_FALSE(events.is_empty());
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 20, true);
-  EXPECT_EQ(stats.multi_splits_num, 1);
-  EXPECT_EQ(stats.edge_collapses_num, 2);
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1159,7 +776,7 @@ TEST(straight_skeleton, MultiSplitHourglass)
  */
 TEST(straight_skeleton, Flipper)
 {
-  const char *spec = R"(20 0 1
+  const char *spec = R"(20 1
 0.0 0.0
 1.5 0.0
 1.375 0.025
@@ -1187,19 +804,10 @@ TEST(straight_skeleton, Flipper)
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
   input.label = "Flipper";
 
-  const Array<TriangleEvent> events = straight_skeleton_initial_events(input);
-  ASSERT_FALSE(events.is_empty());
-
-  const EventLoopStats stats = straight_skeleton_run_events_test(input, 50, true);
-  EXPECT_EQ(stats.flips_num, 2);
-  EXPECT_EQ(stats.edge_collapses_num, 22);
-  EXPECT_EQ(stats.splits_num, 3);
-  EXPECT_EQ(stats.multi_splits_num, 1);
-
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.vert.size(), 46);
-  EXPECT_EQ(output.edge.size(), 73);
+  EXPECT_EQ(output.vert.size(), 38);
+  EXPECT_EQ(output.edge.size(), 57);
   for (const double2 &v : output.vert) {
     EXPECT_GE(v.y, -1e-6);
   }
@@ -1222,7 +830,7 @@ TEST(straight_skeleton, Flipper)
  */
 TEST(straight_skeleton, LShape_FiveSegments)
 {
-  const char *spec = R"(6 0 1
+  const char *spec = R"(6 1
 0.0 0.0
 4.0 0.0
 4.0 2.0
@@ -1266,7 +874,7 @@ TEST(straight_skeleton, LShape_FiveSegments)
  */
 TEST(straight_skeleton, NotchedPolygonFull_FiveSegments)
 {
-  const char *spec = R"(7 0 1
+  const char *spec = R"(7 1
 0.0 0.0
 7.0 2.0
 14.0 7.0
@@ -1317,18 +925,15 @@ TEST(straight_skeleton, NotchedPolygonFull_FiveSegments)
 TEST(straight_skeleton, OffsetSquarePartial)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 1.0;
   input.segments = 1;
   input.label = "OffsetSquarePartial";
@@ -1366,18 +971,15 @@ TEST(straight_skeleton, OffsetSquarePartial)
 TEST(straight_skeleton, OffsetSquareCollapse)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 5.0;
   input.segments = 1;
   input.label = "OffsetSquareCollapse";
@@ -1410,18 +1012,15 @@ TEST(straight_skeleton, OffsetSquareCollapse)
 TEST(straight_skeleton, OffsetSquareExcess)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 10.0; /* Exceeds max_collapse_time = 5, clamped. */
   input.segments = 1;
   input.label = "OffsetSquareExcess";
@@ -1454,18 +1053,15 @@ TEST(straight_skeleton, OffsetSquareExcess)
 TEST(straight_skeleton, OffsetRectangle)
 {
   Array<double2> verts = {{0.0, 0.0}, {20.0, 0.0}, {20.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 2.0;
   input.segments = 1;
   input.label = "OffsetRectangle";
@@ -1495,18 +1091,15 @@ TEST(straight_skeleton, OffsetRectangle)
 TEST(straight_skeleton, OffsetLShape)
 {
   Array<double2> verts = {{0.0, 0.0}, {4.0, 0.0}, {4.0, 2.0}, {2.0, 2.0}, {2.0, 4.0}, {0.0, 4.0}};
-  Array<int> face_offsets_buf = {0, 6};
   Array<int> face_verts = {0, 1, 2, 3, 4, 5};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 0.5;
   input.segments = 1;
   input.label = "OffsetLShape";
@@ -1529,18 +1122,15 @@ TEST(straight_skeleton, OffsetLShape)
 TEST(straight_skeleton, OffsetSquare_TwoBands)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 2.0;
   input.segments = 2;
   input.label = "OffsetSquare_TwoBands";
@@ -1594,18 +1184,15 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
 TEST(straight_skeleton, FullSkeletonWithSegments)
 {
   Array<double2> verts = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
-  Array<int> face_offsets_buf = {0, 4};
   Array<int> face_verts = {0, 1, 2, 3};
 
   InputStorage storage;
   storage.vert = verts;
-  storage.face_offsets_buf = face_offsets_buf;
-  storage.face_vert_indices.extend(face_verts.as_span());
+  storage.outer_polygon.extend(face_verts.as_span());
 
   StraightSkeletonInput input;
   input.vert = storage.vert.as_span();
-  input.face_offsets = OffsetIndices<int>(storage.face_offsets_buf.as_span());
-  input.face_vert_indices = storage.face_vert_indices.as_span();
+  input.outer_polygon = storage.outer_polygon.as_span();
   /* Default input.offset = infinity; segments = 2 divides the full skeleton into 2 bands. */
   input.segments = 2;
   input.label = "FullSkeletonWithSegments";

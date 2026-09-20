@@ -7,59 +7,52 @@
 /** \file
  * \ingroup bli
  *
- * Straight Skeleton computation for PSLGs (Planar Straight Line Graphs).
+ * Straight Skeleton computation for 2D polygons with holes.
  *
- * The straight skeleton of a PSLG is a geometric structure in which each edge of
- * the skeleton is equidistant from two edges of the input PSLG.  It is used to
- * compute interior offsets (insets) of PSLG: as an inset amount increases, each
- * edge of the PSLG moves inward parallel to itself, and the skeleton records the
- * trace of each vertex under this motion.
+ * The straight skeleton of a polygon is a geometric structure where each edge of
+ * the skeleton is equidistant from two boundary edges of the input polygon.
+ * As an inset amount increases, the boundary of the polygon moves inward parallel
+ * to itself (the outer polygon moves inward, while hole polygons move outward into
+ * the interior domain), and the skeleton records the trace of vertices under this motion.
  *
  * Input
  * -----
- * The input is a set of vertices and one or more faces (simple polygons) defined over
- * those vertices.  Edges that are not part of a face may also be supplied as
- * additional input.
+ * The input is a set of 2D vertices, a single outer polygon oriented counter-clockwise (CCW),
+ * and any number of hole polygons each oriented clockwise (CW).
  *
- * Vertices are given as 2D coordinates (double precision).  The library ignores the
- * z-coordinate; callers that work in 3D should project to the face plane before
- * calling.
- *
- * Faces must be simple (non-self-intersecting) polygons wound counter-clockwise when
- * viewed in the standard orientation (y up).  Clockwise-wound faces will produce an
- * exterior skeleton rather than an interior one.
+ * Vertices are given as 2D coordinates (double precision). Callers working in 3D
+ * should project to the polygon plane before calling.
  *
  * Offset and Segments
  * -------------------
- * #StraightSkeletonInput::offset controls the inward offset distance.  When left at
- * its default of infinity the complete straight skeleton (full roof tiling) is returned.
- * When set to a finite value d the roof is clipped at height t = d; if d exceeds the
+ * #StraightSkeletonInput::offset controls the inward offset distance. When left at
+ * its default of infinity, the complete straight skeleton (full roof tiling) is returned.
+ * When set to a finite value d, the roof is clipped at height t = d; if d exceeds the
  * maximum collapse time it is silently clamped so that no bands are empty.
  *
  * #StraightSkeletonInput::segments divides the effective offset range into that many
- * equal-width bands.  Band 0 is the outermost ring (adjacent to the input boundary);
- * band k-1 is the innermost ring.  #StraightSkeletonOutput::face_band records which
+ * equal-width bands. Band 0 is the outermost ring (adjacent to the input boundary);
+ * band k-1 is the innermost ring. #StraightSkeletonOutput::face_band records which
  * band each output face belongs to.
  *
  * Output
  * ------
- * The output describes the faces of the offset mesh: for every input face there will
- * be one or more output faces.  Each output face corresponds to one edge of the
- * input polygon (a "side strip") or to the central skeleton / inner offset region.
- *
- * Output-to-input mappings are always filled in:
+ * The output describes the faces of the straight skeleton roof (or offset bands):
+ *   - #StraightSkeletonOutput::vert          - 2D coordinates of output vertices.
+ *   - #StraightSkeletonOutput::edge          - pairs of indices into #vert.
+ *   - #StraightSkeletonOutput::face_offsets  - ranges into #face_vert_indices.
  *   - #StraightSkeletonOutput::vert_orig[v]  - index of the input vertex that
  *     corresponds to output vertex v, or -1 if v is a new skeleton vertex.
- *   - #StraightSkeletonOutput::edge_orig[e]  - index of the input edge that
- *     corresponds to output edge e, or -1 if e is a new skeleton edge.
- *   - #StraightSkeletonOutput::face_orig[f]  - index of the input face from which
- *     output face f was derived.
+ *   - #StraightSkeletonOutput::edge_orig[e]  - index of the input boundary edge that
+ *     corresponds to output edge e, or -1 if e is a skeleton edge.
+ *   - #StraightSkeletonOutput::face_orig[f]  - index of the input face (0 for outer polygon,
+ *     or hole index + 1) from which output face f was derived.
  *   - #StraightSkeletonOutput::face_band[f]  - zero-based band index of output face f.
  *
  * Epsilon
  * -------
  * #StraightSkeletonInput::epsilon controls how close two vertices must be to be
- * considered coincident.  If zero is supplied, a default of 1e-8 is used.
+ * considered coincident. If zero is supplied, a default of 1e-8 is used.
  */
 
 #include <limits>
@@ -68,132 +61,8 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
-#include "BLI_vector.hh"
-
-namespace blender {
-struct HeapNode;
-}
 
 namespace blender::straightskeleton {
-
-class StraightSkeletonInput;
-
-/* -------------------------------------------------------------------- */
-/** \name Kinetic Triangle Events
- * \{ */
-
-enum class TriangleEventType {
-  NONE,
-  EDGE_COLLAPSE,
-  SPLIT,
-  FLIP,
-  MULTI_SPLIT,
-  UNBOUNDED_COLLAPSE,
-};
-
-struct TriangleEvent {
-  int triangle_index{-1};
-  double time{std::numeric_limits<double>::infinity()};
-  TriangleEventType type{TriangleEventType::NONE};
-  int edge_index{-1};          /* Half-edge index involved in the event */
-  int vert_index{-1};          /* Vertex index involved in the event */
-  double2 event_pos{0.0, 0.0}; /* Coordinates where event occurs */
-  HeapNode *heap_node{nullptr};
-};
-
-const char *triangle_event_type_name(TriangleEventType type);
-
-/** For testing: calculate initial collapse events in the priority queue. */
-Array<TriangleEvent> straight_skeleton_initial_events(const StraightSkeletonInput &input);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Skeleton Graph & Kinetic Vertices
- * \{ */
-
-struct SkeletonNode {
-  int id{-1};                 /* Node index in SkeletonGraph */
-  double2 pos{0.0, 0.0};      /* 2D position (x, y) */
-  double time{0.0};           /* Event time / height t (0 for input verts) */
-  int orig_vert{-1};          /* Index of coincident input vertex, or -1 for interior nodes */
-  Vector<int> incident_edges; /* Incident SkeletonEdge indices */
-};
-
-struct SkeletonEdge {
-  int id{-1};                    /* Unique edge index in SkeletonGraph */
-  int node1{-1};                 /* First endpoint (lower time or start) */
-  int node2{-1};                 /* Second endpoint (higher time or end) */
-  int orig_edge{-1};             /* Coincident input edge index, or -1 for skeleton arcs */
-  int input_face{-1};            /* Incident input face index, or -1 */
-  int side{0};                   /* Side 0 or Side 1 */
-  double time_start{0.0};        /* Time at node1 */
-  double time_end{0.0};          /* Time at node2 */
-  bool is_input_boundary{false}; /* True for input edges / face boundaries at t=0 */
-};
-
-class SkeletonGraph {
- public:
-  Vector<SkeletonNode> nodes;
-  Vector<SkeletonEdge> edges;
-
-  int add_node(const double2 &pos, double time, int orig_vert = -1);
-  int add_edge(int node1,
-               int node2,
-               int orig_edge = -1,
-               int input_face = -1,
-               int side = 0,
-               double time_start = 0.0,
-               double time_end = 0.0,
-               bool is_input_boundary = false);
-};
-
-struct KineticVertex {
-  int id{-1};                  /* Unique kinetic vertex index */
-  int start_node{-1};          /* SkeletonNode index where this vertex was born */
-  double start_time{0.0};      /* Creation time (t_birth) */
-  double2 start_pos{0.0, 0.0}; /* Position at start_time */
-  double2 velocity{0.0, 0.0};  /* Velocity vector v */
-
-  int end_node{-1}; /* SkeletonNode index where this vertex crashes */
-  double end_time{std::numeric_limits<double>::infinity()}; /* Collapse time */
-
-  int input_edge{-1}; /* Incident input edge (or -1) */
-  int input_face{-1}; /* Incident input face (or -1) */
-  int side{0};        /* 0 or 1 */
-
-  bool is_active{true};
-  bool is_infinitely_fast{false};
-
-  double2 position_at(const double t) const
-  {
-    return start_pos + (t - start_time) * velocity;
-  }
-};
-
-/** For testing: return the initial skeleton graph built from input. */
-SkeletonGraph straight_skeleton_initial_graph(const StraightSkeletonInput &input);
-
-struct EventLoopStats {
-  int events_processed_num{0};
-  int flips_num{0};
-  int edge_collapses_num{0};
-  int multi_splits_num{0};
-  int splits_num{0};
-};
-
-/** For testing: run the straight skeleton event loop up to \a max_events. */
-EventLoopStats straight_skeleton_run_events_test(const StraightSkeletonInput &input,
-                                                 int max_events = 100,
-                                                 bool handle_edge_collapses = true);
-
-/** For testing: return active triangles (as triples of vertex indices) after running \a
- * max_events. */
-Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput &input,
-                                                     int max_events = 100,
-                                                     bool handle_edge_collapses = true);
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Input
@@ -201,34 +70,34 @@ Vector<int3> straight_skeleton_active_triangles_test(const StraightSkeletonInput
 
 /**
  * Input to the straight skeleton computation.
- * All indices inside #edge and #face_vert_indices refer to positions in #vert.
+ * Specifies 1 outer polygon (oriented CCW) and any number of hole polygons (each oriented CW).
+ * All indices inside #outer_polygon and #hole_vert_indices refer to positions in #vert.
  */
 class StraightSkeletonInput {
  public:
   /** 2D positions of the input vertices. */
   Span<double2> vert;
 
-  /** Optional additional edges, each given as a pair of vertex indices. */
-  Span<int2> edge;
+  /** Vertex indices in #vert of the outer boundary polygon, oriented CCW. */
+  Span<int> outer_polygon;
 
-  /** Per-face vertex ranges into #face_vert_indices. */
-  OffsetIndices<int> face_offsets;
+  /** Per-hole vertex ranges into #hole_vert_indices. */
+  OffsetIndices<int> hole_offsets;
 
-  /** Concatenated list of vertex indices for all faces.
-   * Vertices for face f occupy face_vert_indices[face_offsets[f]]. */
-  Span<int> face_vert_indices;
+  /** Concatenated list of vertex indices in #vert for all hole polygons (each oriented CW). */
+  Span<int> hole_vert_indices;
 
-  /** Coincidence threshold.  Pass 0.0 to use the default (1e-8). */
+  /** Coincidence threshold. Pass 0.0 to use the default (1e-8). */
   double epsilon{0.0};
 
   /**
    * Inward offset distance for polygon offsetting.
    *
-   * - `infinity` (default): the full straight skeleton is computed.  The algorithm
+   * - `infinity` (default): the full straight skeleton is computed. The algorithm
    *   determines the maximum collapse time automatically and uses it as the effective
    *   offset for the purposes of band subdivision (see #segments).
    * - A finite non-negative value `d`: the roof is clipped at height
-   *   `t = min(d, max_collapse_time)`.  Silently clamping to the maximum collapse
+   *   `t = min(d, max_collapse_time)`. Silently clamping to the maximum collapse
    *   time ensures all bands have uniform width and none are empty.
    */
   double offset{std::numeric_limits<double>::infinity()};
@@ -236,7 +105,7 @@ class StraightSkeletonInput {
   /**
    * Number of equal-width offset bands to subdivide the effective offset into.
    *
-   * - `1` (default): a single output at the effective offset.  When #offset is
+   * - `1` (default): a single output at the effective offset. When #offset is
    *   infinite this produces the complete roof tiling as one set of faces (band 0).
    * - `k > 1`: the range `[0, effective_offset]` is divided into `k` bands of equal
    *   width (`effective_offset / k` each) by instantiating intermediate wavefronts at
@@ -262,8 +131,6 @@ class StraightSkeletonInput {
  * Output of the straight skeleton computation.
  *
  * The arrays are owned by the output struct.
- * The meaning is the same as in the input, but in addition there are arrays
- * to give the mapping from output indices to input ones.
  */
 class StraightSkeletonOutput {
  public:
@@ -311,7 +178,7 @@ class StraightSkeletonOutput {
  * \{ */
 
 /**
- * Compute the straight skeleton of the polygon mesh described by \a input,
+ * Compute the straight skeleton of the polygon with holes described by \a input,
  * optionally clipped and subdivided into offset bands.
  *
  * When `input.offset` is infinity (the default) and `input.segments` is 1,
@@ -321,34 +188,11 @@ class StraightSkeletonOutput {
  * When `input.offset` is finite, or `input.segments > 1`, the output is
  * divided into `input.segments` equal-width bands spanning
  * `[0, effective_offset]`, where `effective_offset = min(input.offset,
- * max_collapse_time)`.  Each band produces side-strip faces and an inner
- * polygon.  #StraightSkeletonOutput::face_band identifies the band (0 =
+ * max_collapse_time)`. Each band produces side-strip faces and an inner
+ * polygon. #StraightSkeletonOutput::face_band identifies the band (0 =
  * outermost) for each output face.
  */
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Debug Output Controls
- * \{ */
-
-/**
- * When true, debug drawing functions open a new file (truncating existing content)
- * and write the HTML document header.  When false, they append new sections to the
- * existing file.  Debug drawing functions automatically set this to false after opening
- * a new file.
- */
-extern bool debug_new_file;
-
-/** Alias for convenience. */
-inline bool &straight_skeleton_debug_new_file = debug_new_file;
-
-/** Filepath for debug HTML output. */
-extern const char *debug_html_filepath;
-
-/** Reset the debug file flag so the next debug drawing starts a new file. */
-void debug_reset_file();
 
 /** \} */
 
