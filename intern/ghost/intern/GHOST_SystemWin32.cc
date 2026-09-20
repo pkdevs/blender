@@ -2649,9 +2649,14 @@ static void getClipboardImageDibV5(std::function<void(GHOST_ImageData)> load_fn)
     }
   }
 
-  GHOST_ImageData image_data = {.data = GHOST_ImageData::Bitmap{.width = uint32_t(width),
-                                                                .height = uint32_t(height),
-                                                                .buffer = rbga}};
+  GHOST_ImageData image_data = {
+      .data =
+          GHOST_ImageData::Bitmap{
+              .width = uint32_t(width),
+              .height = uint32_t(height),
+              .buffer = rbga,
+          },
+  };
   load_fn(image_data);
 
   GlobalUnlock(hGlobal);

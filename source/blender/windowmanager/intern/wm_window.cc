@@ -2854,6 +2854,9 @@ ImBuf *WM_clipboard_image_get()
           if constexpr (std::is_same_v<T, GHOST_ImageData::Bitmap>) {
             ibuf = IMB_allocFromBufferOwn(value.buffer, nullptr, value.width, value.height, 4);
           }
+          else if constexpr (std::is_same_v<T, GHOST_ImageData::ConstBitmap>) {
+            ibuf = IMB_allocFromBuffer(value.buffer, nullptr, value.width, value.height, 4);
+          }
           else if constexpr (std::is_same_v<T, GHOST_ImageData::MemFile>) {
             ibuf = IMB_load_image_from_memory(
                 value.buffer, value.size, ImBufFlags::ByteData, "<clipboard>");
