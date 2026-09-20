@@ -780,18 +780,22 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   }
   BLI_assert(!used_member_names.is_empty());
 
+  /* Create a fake type name that's written to the file but is not used at all. */
+  auto make_stub_struct_name = [](const int struct_i) { return fmt::format("#{}", struct_i); };
+  auto is_stub_struct_name = [](const StringRef name) { return name.startswith("#"); };
+  auto to_type_name_in_blend_file = [](const StringRef name) {
+    return DNA_struct_rename_legacy_hack_alias_from_static(name);
+  };
+
   Map<StringRef, short> all_type_sizes;
   all_type_sizes.reserve(sdna.types_num);
   for (const int type_i : IndexRange(sdna.types_num)) {
-    all_type_sizes.add_new(sdna.types[type_i], sdna.types_size[type_i]);
+    all_type_sizes.add_new(to_type_name_in_blend_file(sdna.types[type_i]),
+                           sdna.types_size[type_i]);
   }
 
   LinearAllocator<> allocator;
   VectorSet<StringRef> type_names;
-
-  /* Create a fake type name that's written to the file but is not used at all. */
-  auto make_stub_struct_name = [](const int struct_i) { return fmt::format("#{}", struct_i); };
-  auto is_stub_struct_name = [](const StringRef name) { return name.startswith("#"); };
 
   for (const SdnaBuiltinType &builtin : builtin_sdna_types) {
     BLI_assert(type_names.size() == builtin.type_index);
@@ -801,9 +805,10 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   for (const int64_t struct_i : IndexRange(structs_num)) {
     if (structs_to_write[struct_i]) {
       const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
-      type_names.add(sdna.types[sdna_struct.type_index]);
+      type_names.add(to_type_name_in_blend_file(sdna.types[sdna_struct.type_index]));
       for (const int member_i : IndexRange(sdna_struct.members_num)) {
-        type_names.add(sdna.types[sdna_struct.members[member_i].type_index]);
+        type_names.add(
+            to_type_name_in_blend_file(sdna.types[sdna_struct.members[member_i].type_index]));
       }
     }
     else {
@@ -866,13 +871,15 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
       if (structs_to_write[struct_i]) {
         /* Write the struct with all its members. */
         const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
-        const short struct_type_i = type_names.index_of_as(sdna.types[sdna_struct.type_index]);
+        const short struct_type_i = type_names.index_of_as(
+            to_type_name_in_blend_file(sdna.types[sdna_struct.type_index]));
         const short members_num = sdna_struct.members_num;
         write(&struct_type_i, sizeof(struct_type_i));
         write(&members_num, sizeof(members_num));
         for (const int member_i : IndexRange(sdna_struct.members_num)) {
           const SDNA_StructMember &member = sdna_struct.members[member_i];
-          const short member_type_i = type_names.index_of_as(sdna.types[member.type_index]);
+          const short member_type_i = type_names.index_of_as(
+              to_type_name_in_blend_file(sdna.types[member.type_index]));
           const short member_name_i = used_member_names.index_of_as(
               sdna.members[member.member_index]);
           write(&member_type_i, sizeof(member_type_i));
