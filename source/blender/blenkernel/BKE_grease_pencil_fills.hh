@@ -16,8 +16,6 @@
 namespace blender::bke::greasepencil {
 
 std::optional<FillCache> fill_cache_from_fill_ids(const VArray<int> &fill_ids);
-std::pair<Vector<int>, Vector<int>> shapes_from_fill_ids(const VArray<int> &fill_ids,
-                                                         int curves_num);
 
 struct ShapeData {
   Vector<int> shape_map;

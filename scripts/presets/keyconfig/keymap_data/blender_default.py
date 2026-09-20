@@ -9338,7 +9338,6 @@ def generate_keymaps(params=None):
           for fallback in (False, True)),
         *(km_sequencer_tool_generic_select_circle(params, fallback=fallback)
           for fallback in (False, True)),
-        km_3d_view_tool_paint_grease_pencil_carver(params),
         km_sequencer_tool_blade(params),
         km_sequencer_tool_slip(params),
         km_sequencer_preview_tool_generic_cursor(params),
