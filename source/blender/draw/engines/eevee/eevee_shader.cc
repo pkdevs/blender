@@ -715,6 +715,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
   info.compilation_constant(Type::bool_t, "is_pointcloud", geometry_type == MAT_GEOM_POINTCLOUD);
   info.compilation_constant(Type::bool_t, "is_gsplat", geometry_type == MAT_GEOM_GSPLAT);
   info.compilation_constant(Type::bool_t, "is_world", geometry_type == MAT_GEOM_WORLD);
+  info.compilation_constant(Type::bool_t, "is_volume_object", geometry_type == MAT_GEOM_VOLUME);
 
   info.compilation_constant(Type::bool_t, "is_shadow_pipe", pipeline_type == MAT_PIPE_SHADOW);
   if (pipeline_type == MAT_PIPE_SHADOW) {
@@ -742,7 +743,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.name_ += "_world_volume";
           info.define("MAT_VOLUME");
           info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(Type::bool_t, "is_volume_object", false);
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
            * pipeline. */
           info.fragment_source("eevee_surf_volume.bsl.hh");
@@ -828,9 +828,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.compilation_constant(Type::bool_t, "use_velocity", false);
           info.compilation_constant(Type::bool_t, "use_lighting_nodes", false);
           info.compilation_constant(Type::bool_t, "is_homogenous", false); /* TODO? */
-          info.compilation_constant(Type::bool_t,
-                                    "is_volume_object",
-                                    geometry_type == eMaterialGeometry::MAT_GEOM_VOLUME);
           info.name_ += "_volume";
           info.define("MAT_VOLUME");
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the

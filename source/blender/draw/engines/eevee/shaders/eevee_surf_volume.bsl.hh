@@ -36,7 +36,7 @@ struct SurfVolume {
   [[compilation_constant]] bool is_homogenous;
   [[compilation_constant]] bool is_world;
 
-  [[resource_table]] [[condition(is_volume_object)]] srt_t<draw::Volume> volume;
+  [[resource_table]] [[condition(!is_world)]] srt_t<draw::Volume> volume;
 
   [[image(VOLUME_OCCUPANCY_SLOT, read, UINT_32)]] uimage3DAtomic occupancy_img;
 
@@ -102,7 +102,7 @@ struct SurfVolume {
     VolumePoint volume_pt;
     volume_pt.lP = lP;
     volume_pt.orco_default = lP_orco;
-    if (pipe.is_volume_object) [[static_branch]] {
+    if (!pipe.is_world) [[static_branch]] {
       [[resource_table]] draw::Volume &vol = volume;
       for (int i = 0; i < 16 /* DRW_GRID_PER_VOLUME_MAX */; i++) [[unroll]] {
         volume_pt.grid_co[i] = transform_point(vol.drw_volume.grids_xform[i], lP);
