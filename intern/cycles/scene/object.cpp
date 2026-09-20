@@ -784,12 +784,11 @@ void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dsce
     object_prim_offset[obj_index] = prim_offset;
   }
 
-  dscene->object_prim_offset.copy_to_device(); // !!!
+  dscene->object_prim_offset.copy_to_device();
   dscene->object_prim_offset.clear_modified();
 }
 
-// TODO(Tri): Rel of MOTION_PASS/MOTION_BLUR here & in device_update_object_transform() is a false dichotomy
-void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress) // !!!: See device_update_object_transform
+void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)
 {
   UpdateObjectTransformState state;
   state.need_motion_pass = scene->need_motion_pass();
@@ -804,7 +803,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, 
   state.objects = dscene->objects.alloc(scene->objects.size());
   state.object_flag = dscene->object_flag.alloc(scene->objects.size());
   state.object_motion = nullptr;
-  state.object_motion_pass = nullptr; // !!!:
+  state.object_motion_pass = nullptr;
 
 ccl_debug_printf(
     "ObjectManager::device_update_transforms(): need_motion=%d "
@@ -812,10 +811,6 @@ ccl_debug_printf(
 
 
   if (state.need_motion_pass) {
-ccl_debug_printf(
-    "  Allocating object_motion_pass: objects=%zu "
-    "OBJECT_MOTION_PASS_SIZE=%d\n",
-    scene->objects.size(), OBJECT_MOTION_PASS_SIZE);
 
 ccl_debug_printf("BEFORE alloc: dscene width=%zu data=%p\n",
                  dscene->object_motion_pass.size(), dscene->object_motion_pass.data());
@@ -825,10 +820,6 @@ ccl_debug_printf("BEFORE alloc: dscene width=%zu data=%p\n",
 
 ccl_debug_printf("AFTER alloc: dscene width=%zu data=%p state object_motion_pass=%zu\n",
                  dscene->object_motion_pass.size(), dscene->object_motion_pass.data(), state.object_motion_pass);
-
-ccl_debug_printf(
-    "  After alloc: width=%zu data=%p\n",
-    dscene->object_motion_pass.size(), dscene->object_motion_pass.data());
   }
   if (state.need_motion_blur) {
     uint *motion_offsets = state.motion_offset.resize(scene->objects.size());
@@ -940,7 +931,7 @@ ccl_debug_printf("--- ObjectManager::device_update(): Still going\n");
 
   LOG_INFO << "Total " << scene->objects.size() << " objects.";
 
-  device_free(device, dscene, false); // !!!
+  device_free(device, dscene, false);
 
   if (scene->objects.empty()) {
 ccl_debug_printf("--- ObjectManager::device_update(): returned! scene->objects.empty()=%d ---\n\n", scene->objects.empty());
@@ -1199,7 +1190,7 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
   }
 }
 
-void ObjectManager::device_free(Device * /*unused*/, DeviceScene *dscene, bool force_free) // 
+void ObjectManager::device_free(Device * /*unused*/, DeviceScene *dscene, bool force_free)
 {
   dscene->objects.free_if_need_realloc(force_free);
   dscene->object_motion_pass.free_if_need_realloc(force_free);

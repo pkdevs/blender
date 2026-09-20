@@ -24,11 +24,6 @@ ccl_device_inline size_t film_write_cryptomatte_pass(ccl_global float *ccl_restr
   return depth * 4;
 }
 
-ccl_device_inline bool restir_has_motion_pass_data(KernelGlobals kg)
-{
-  return kernel_data.integrator.use_object_motion_pass != 0;
-}
-
 /* primitive_motion_vector() dereferences object/geometry motion-transform
  * arrays that Cycles only uploads when KERNEL_FEATURE_OBJECT_MOTION is
  * requested. Calling it when the feature isn't present reads an unbound
@@ -39,7 +34,6 @@ ccl_device_inline bool restir_has_motion_data(KernelGlobals kg) // !!!: Not suff
 {
   return (kernel_data.kernel_features & KERNEL_FEATURE_OBJECT_MOTION) != 0;
 }
-// TODO(Tri): Add a film_read_motion_vector() or sth... helper for temporal reprojection... Done
 
 /* Write ReSTIR temporal-reprojection ground truth for this pixel: the raster
  * motion vector toward the previous frame, plus enough surface data (N, depth)
@@ -51,7 +45,7 @@ ccl_device_inline void film_write_restir_reprojection_surface_pass( // !!!: Runs
 {
   // const float4 motion = primitive_motion_vector(kg, sd); // !!!: Why does it crash in full pipeline path?
   float2 motion = zero_float2();
- if (restir_has_motion_pass_data(kg)) {
+ if (restir_has_motion_data(kg)) {
     const float4 mv = primitive_motion_vector(kg, sd);
     motion = make_float2(mv.x, mv.y);
   }

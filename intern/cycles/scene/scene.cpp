@@ -218,15 +218,11 @@ void Scene::device_update(Device *device_, Progress &progress)
       return;
     }
 
-ccl_debug_printf("Scene::device_update(): Before film->update_passes()\n\n");
-
     /* Passes. After shader manager as this depends on the shaders. */
-    film->update_passes(this); // !!!: Sets tags (MOTION_BLUR_MODIFIED)
+    film->update_passes(this);
 
     /* Update kernel features. After shaders and passes since those affect features. */
-    update_kernel_features(); // !!!
-
-ccl_debug_printf("Scene::device_update(): After update_kernel_features()\n\n");
+    update_kernel_features();
 
     /* Load render kernels, before uploading most data to the GPU, and before displacement and
      * background light need to run kernels.
@@ -295,12 +291,9 @@ ccl_debug_printf("Scene::device_update(): After update_kernel_features()\n\n");
     return;
   }
 
-  // TODO(Tri): Make sure motion table is allocated
-ccl_debug_printf("Scene::device_update(): Before object_manager->device_update()\n\n");
-
   /* Update objects after geometry preprocessing. */
   progress.set_status("Updating Objects");
-  object_manager->device_update(device, &dscene, this, progress); // !!!: After film->update_passes()
+  object_manager->device_update(device, &dscene, this, progress);
 
   if (progress.get_cancel() || device->have_error()) {
     return;
@@ -453,38 +446,11 @@ bool Scene::need_motion_blur() const
 // exclusive if/else chain:
 Scene::MotionType Scene::need_motion() const
 {
-// !!!(Tri): MOTION_BLUR still wins for anything not yet updated to know about coexistence
+// !!!(Tri): MOTION_BLUR still wins for anything not yet updated to know about coexistence 
   if (need_motion_blur()) return MOTION_BLUR;
   if (need_motion_pass()) return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
   return MOTION_NONE;
 }
-
-// Scene::MotionType Scene::need_motion() const
-// {
-// if (integrator->get_motion_blur()) { // !!!: With use_motion_blur, this wins immediately, restir_temporal never even evaluated
-//   return MOTION_BLUR;
-// }
-
-//   const bool denoiser_motion = integrator->get_use_denoise() &&
-//                                (integrator->get_denoiser_passes() &
-//                                (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
-
-//   const bool restir_temporal = integrator->get_use_temporal_frames();
-
-// ccl_debug_printf(
-//     "Scene::need_motion(): restir=%d background=%d result candidate\n",
-//     int(restir_temporal), int(params.background));
-
-//   if (denoiser_motion ||
-//       restir_temporal ||
-//       Pass::contains(passes, PASS_MOTION) ||
-//       Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION))
-//   {
-//     return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
-//   }
-
-//   return MOTION_NONE;
-// }
 
 float Scene::motion_shutter_time()
 {
@@ -670,8 +636,6 @@ void Scene::update_kernel_features()
   kernel_features |= camera->get_kernel_features();
 
   dscene.data.kernel_features = kernel_features;
-
-  dscene.data.integrator.use_object_motion_pass = need_motion_pass(); // !!!: scene->need_motion_pass();
 
   /* Currently viewport render is faster with higher max_closures, needs
    * investigating. */

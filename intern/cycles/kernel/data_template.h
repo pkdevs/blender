@@ -257,10 +257,6 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_spatial_resampling)
 KERNEL_STRUCT_MEMBER(integrator, int, use_temporal_samples)
 KERNEL_STRUCT_MEMBER(integrator, int, use_temporal_frames)
 
-// 1 iff ObjectManager built object_motion_pass this render (MOTION_PASS / MOTION_PASS_INTERACTIVE); 
-// 0 if object_motion (MOTION_BLUR) was built instead, or no motion at all.
-KERNEL_STRUCT_MEMBER(integrator, int, use_object_motion_pass)
-
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_radius)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_neighbors)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_iterations)
