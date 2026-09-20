@@ -7043,6 +7043,11 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
   if (!play_screen || !play_screen->animtimer) {
     return std::nullopt;
   }
+
+  if (play_screen != &screen) {
+    return std::nullopt;
+  }
+
   const ScreenAnimData *sad = static_cast<ScreenAnimData *>(play_screen->animtimer->customdata);
   if (sad == nullptr) {
     return std::nullopt;
