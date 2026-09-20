@@ -2364,6 +2364,41 @@ static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkele
     }
   } /* end per-band loop */
 
+  /* Compact vertices:
+   * Preserve input boundary vertices at indices 0 .. input_verts_num - 1 so that
+   * callers (e.g. mesh_bevel.cc) can rely on correspondence with input vertices.
+   * Only include vertices >= input_verts_num that are actively referenced by at least
+   * one face in result_faces. This excludes unreached skeleton nodes that lie beyond
+   * the offset cutoff. */
+  const int input_verts_num = int(input.vert.size());
+  Array<int> old_to_new(out_vert.size(), -1);
+  Vector<double2> compact_vert;
+  Vector<double> compact_vert_time;
+  Vector<int> compact_vert_orig;
+
+  compact_vert.reserve(out_vert.size());
+  compact_vert_time.reserve(out_vert.size());
+  compact_vert_orig.reserve(out_vert.size());
+
+  for (const int i : IndexRange(input_verts_num)) {
+    old_to_new[i] = i;
+    compact_vert.append(out_vert[i]);
+    compact_vert_time.append(out_vert_time[i]);
+    compact_vert_orig.append(out_vert_orig[i]);
+  }
+
+  for (Vector<int> &f : result_faces) {
+    for (int &v : f) {
+      if (old_to_new[v] == -1) {
+        old_to_new[v] = int(compact_vert.size());
+        compact_vert.append(out_vert[v]);
+        compact_vert_time.append(out_vert_time[v]);
+        compact_vert_orig.append(out_vert_orig[v]);
+      }
+      v = old_to_new[v];
+    }
+  }
+
   const int total_faces = int(result_faces.size());
   Vector<int> face_indices;
   Vector<int> face_lens;
@@ -2382,9 +2417,9 @@ static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkele
   output.face_orig = Array<int>(result_face_orig.as_span());
   output.face_band = Array<int>(result_face_band.as_span());
 
-  output.vert = Array<double2>(out_vert.as_span());
-  output.vert_time = Array<double>(out_vert_time.as_span());
-  output.vert_orig = Array<int>(out_vert_orig.as_span());
+  output.vert = Array<double2>(compact_vert.as_span());
+  output.vert_time = Array<double>(compact_vert_time.as_span());
+  output.vert_orig = Array<int>(compact_vert_orig.as_span());
 
   /* Collect all face boundary edges into output.edge. */
   VectorSet<OrderedEdge> all_face_edges;

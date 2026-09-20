@@ -944,8 +944,12 @@ TEST(straight_skeleton, OffsetSquarePartial)
   /* 4 side-strip trapezoids + 1 inner square. */
   EXPECT_EQ(output.face_offsets.size(), 5);
 
-  /* Cut vertices at the offset boundary should be at vert_time == offset == 1.0.
-   * (The skeleton apex at t = 5 also has vert_orig == -1, so filter by vert_time.) */
+  /* Output contains only 4 input corners + 4 cut vertices (the apex at t = 5 is omitted). */
+  EXPECT_EQ(output.vert.size(), 8);
+  for (const int vi : output.vert.index_range()) {
+    EXPECT_LE(output.vert_time[vi], 1.0 + 1e-6);
+  }
+
   bool found_cut_vert = false;
   for (const int vi : output.vert.index_range()) {
     if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 1.0) < 1e-6) {
@@ -1071,8 +1075,12 @@ TEST(straight_skeleton, OffsetRectangle)
 
   EXPECT_EQ(output.face_offsets.size(), 5);
 
-  /* Cut vertices at the offset boundary should have vert_time ≈ 2.0.
-   * (Interior skeleton nodes with vert_orig == -1 exist at higher times.) */
+  /* Output contains only 4 input corners + 4 cut vertices (ridge nodes at t = 5 are omitted). */
+  EXPECT_EQ(output.vert.size(), 8);
+  for (const int vi : output.vert.index_range()) {
+    EXPECT_LE(output.vert_time[vi], 2.0 + 1e-6);
+  }
+
   bool found_cut_vert = false;
   for (const int vi : output.vert.index_range()) {
     if (output.vert_orig[vi] == -1 && std::abs(output.vert_time[vi] - 2.0) < 1e-6) {
@@ -1109,6 +1117,13 @@ TEST(straight_skeleton, OffsetLShape)
 
   EXPECT_EQ(output.face_offsets.size(), 7); /* 6 side-strips + 1 inner L-shape. */
 
+  /* Output contains only 6 input corners + 6 cut vertices (skeleton nodes at t = 1 are omitted).
+   */
+  EXPECT_EQ(output.vert.size(), 12);
+  for (const int vi : output.vert.index_range()) {
+    EXPECT_LE(output.vert_time[vi], 0.5 + 1e-6);
+  }
+
   EXPECT_NEAR(total_faces_area(output), 12.0, 1e-6);
 }
 
@@ -1142,6 +1157,13 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
    * Band 1 (t=1..2): 4 side-strip trapezoids + 1 inner square.
    * Total = 9 faces. */
   EXPECT_EQ(output.face_offsets.size(), 9);
+
+  /* Output contains only 4 input corners + 4 cut vertices (t=1) + 4 cut vertices (t=2).
+   * Apex at t = 5 is omitted. */
+  EXPECT_EQ(output.vert.size(), 12);
+  for (const int vi : output.vert.index_range()) {
+    EXPECT_LE(output.vert_time[vi], 2.0 + 1e-6);
+  }
 
   /* Check band assignments. */
   int band0_count = 0;
