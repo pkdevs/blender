@@ -822,6 +822,98 @@ static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
   return unchanged_curves;
 }
 
+static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_params,
+                                           const Span<float2> positions_2d,
+                                           const OffsetIndices<int> points_by_curve,
+                                           const IndexMask &editable_shapes,
+                                           const GroupedSpan<int> shapes,
+                                           const VArray<int> &fill_ids,
+                                           const VArray<bool> &is_cyclic)
+{
+  BooleanResult results_all;
+  results_all.segment_offsets.append(0);
+
+  IndexMaskMemory memory;
+  const IndexMask non_editable_shapes = editable_shapes.complement(shapes.index_range(), memory);
+
+  if (points_by_curve.is_empty()) {
+    return results_all;
+  }
+
+  /* Treat filled curves as cyclical. */
+  const VArray<bool> cyclic = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
+    return is_cyclic[index] || (fill_ids[index] != 0);
+  });
+
+  const VArray<bool> is_fill = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
+    const IndexRange points = points_by_curve[index];
+
+    if (points.size() <= 2) {
+      return false;
+    }
+
+    return fill_ids[index] != 0;
+  });
+
+  /* Copy over all the uneditable shapes. */
+  non_editable_shapes.foreach_index([&](const int64_t shape_i) {
+    BooleanResult result;
+    result.segment_offsets.append(0);
+
+    const Span<int> shape = shapes[shape_i];
+    for (const int pos_j : shape.index_range()) {
+      const int curve_j = shape[pos_j];
+
+      result.segments.append(
+          Segment::from_curve(curve_j, points_by_curve[curve_j], is_cyclic[curve_j]));
+      result.cyclic.append(is_cyclic[curve_j]);
+      result.segment_offsets.append(pos_j + 1);
+      result.segment_reversed.append(false);
+    }
+
+    const int subj_first_curve = shape.first();
+    results_all.append_result(result, subj_first_curve);
+  });
+
+  {
+    const int shape_i = editable_shapes.first();
+
+    const IndexMask subj_mask = IndexMask::from_difference(
+        editable_shapes, IndexRange::from_single(shape_i), memory);
+
+    const BooleanResult result = execute_single_boolean(
+        op_params, shape_i, positions_2d, shapes, points_by_curve, subj_mask, is_fill, cyclic);
+
+    const int subj_first_curve = shapes[shape_i].first();
+    results_all.append_result(result, subj_first_curve);
+  }
+
+  if (results_all.segments.is_empty()) {
+    return results_all;
+  }
+
+  const OffsetIndices<int> dst_segments_by_curve = OffsetIndices<int>(results_all.segment_offsets);
+
+  Array<bool> is_src_curve_clipping(points_by_curve.size(), false);
+
+  results_all.is_segments_clipping = Array<bool>(results_all.segments.size(), false);
+
+  results_all.dst_to_src_curves = Array<int>(dst_segments_by_curve.size());
+  for (const int i : dst_segments_by_curve.index_range()) {
+    const IndexRange segment_range = dst_segments_by_curve[i];
+    const int subj_first_curve = results_all.subj_first_curves[i];
+    results_all.dst_to_src_curves[i] = subj_first_curve;
+
+    const int curve_i = results_all.segments[segment_range.first()].curve;
+    results_all.dst_to_src_curves[i] = curve_i;
+  }
+
+  results_all.unchanged_curves = calculate_unchanged_curves(
+      results_all.segments, results_all.is_segments_clipping, dst_segments_by_curve);
+
+  return results_all;
+}
+
 static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                      const Span<float2> positions_2d,
                                      const OffsetIndices<int> points_by_curve,
@@ -831,6 +923,11 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                      const VArray<int> &fill_ids,
                                      const VArray<bool> &is_cyclic)
 {
+  if (op_params.boolean_mode == Operation::Union) {
+    return execute_boolean_union(
+        op_params, positions_2d, points_by_curve, editable_shapes, shapes, fill_ids, is_cyclic);
+  }
+
   BooleanResult results_all;
   results_all.segment_offsets.append(0);
 
