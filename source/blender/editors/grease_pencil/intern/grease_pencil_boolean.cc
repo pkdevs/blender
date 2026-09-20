@@ -790,7 +790,7 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
                                            const OffsetIndices<int> points_by_curve,
                                            const IndexMask &editable_shapes,
                                            const GroupedSpan<int> shapes,
-                                           const VArray<int> &fill_ids,
+                                           const VArray<bool> &is_fill,
                                            const VArray<bool> &is_cyclic)
 {
   BooleanResult results_all;
@@ -804,19 +804,8 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
   }
 
   /* Treat filled curves as cyclical. */
-  const VArray<bool> cyclic = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
-    return is_cyclic[index] || (fill_ids[index] != 0);
-  });
-
-  const VArray<bool> is_fill = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
-    const IndexRange points = points_by_curve[index];
-
-    if (points.size() <= 2) {
-      return false;
-    }
-
-    return fill_ids[index] != 0;
-  });
+  const VArray<bool> cyclic = VArray<bool>::from_func(
+      points_by_curve.size(), [&](int64_t index) { return is_cyclic[index] || is_fill[index]; });
 
   /* Copy over all the shapes that are unselected. */
   non_editable_shapes.foreach_index([&](const int64_t shape_i) {
@@ -893,25 +882,6 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                      const VArray<int> &fill_ids,
                                      const VArray<bool> &is_cyclic)
 {
-  if (op_params.boolean_mode == Operation::Union) {
-    return execute_boolean_union(
-        op_params, positions_2d, points_by_curve, editable_shapes, shapes, fill_ids, is_cyclic);
-  }
-
-  BooleanResult results_all;
-  results_all.segment_offsets.append(0);
-
-  if (points_by_curve.is_empty()) {
-    return results_all;
-  }
-
-  IndexMaskMemory memory;
-  const IndexMask subject_shapes = clipping_shapes.complement(shapes.index_range(), memory);
-
-  /* Treat filled curves as cyclical. */
-  const VArray<bool> cyclic = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
-    return is_cyclic[index] || (fill_ids[index] != 0);
-  });
 
   const VArray<bool> is_fill = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
     const IndexRange points = points_by_curve[index];
@@ -922,6 +892,26 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
 
     return fill_ids[index] != 0;
   });
+
+  if (op_params.boolean_mode == Operation::Union) {
+    return execute_boolean_union(
+        op_params, positions_2d, points_by_curve, editable_shapes, shapes, is_fill, is_cyclic);
+  }
+
+  BooleanResult results_all;
+  results_all.segment_offsets.append(0);
+
+  if (points_by_curve.is_empty()) {
+    return results_all;
+  }
+
+  /* Treat filled curves as cyclical. */
+  const VArray<bool> cyclic = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
+    return is_cyclic[index] || (fill_ids[index] != 0);
+  });
+
+  IndexMaskMemory memory;
+  const IndexMask subject_shapes = clipping_shapes.complement(shapes.index_range(), memory);
 
   Array<Bounds<float2>> screen_space_bbox(shapes.size());
   compute_bounding_boxes(points_by_curve, shapes, positions_2d, screen_space_bbox);
