@@ -7843,8 +7843,7 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
     skel_input.vert = verts_2d.as_span();
     skel_input.outer_polygon = outer_polygon.as_span();
     skel_input.offset = inset_amount;
-    /* segments could be exposed as a node parameter in future; default to 1 for now. */
-    skel_input.segments = 1;
+    skel_input.segments = std::max(1, params.segments);
 
     const straightskeleton::StraightSkeletonOutput skel_out =
         straightskeleton::straight_skeleton_calc(skel_input);
