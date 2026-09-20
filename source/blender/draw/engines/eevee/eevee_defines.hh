@@ -282,6 +282,8 @@
 #define VELOCITY_CAMERA_PREV_BUF 4
 #define VELOCITY_CAMERA_CURR_BUF 5
 #define VELOCITY_CAMERA_NEXT_BUF 6
+/* Overlap with Draw module reserved slot for volume.
+ * But this is used only for the prepass which doesn't bind volume data. */
 #define CLIP_PLANE_BUF 7
 /* Only during subsurface scattering */
 #define SUBSURFACE_BUF_SLOT 4
