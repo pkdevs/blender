@@ -228,13 +228,12 @@ void surf_deferred(
     }
   }
 
-#if defined(GBUFFER_HAS_REFRACTION) || defined(GBUFFER_HAS_SUBSURFACE) || \
-    defined(GBUFFER_HAS_TRANSLUCENT)
-  if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
-    srt.write_normal_data(
-        out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
+  if (pipe.use_additional_data) [[static_branch]] {
+    if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
+      srt.write_normal_data(
+          out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
+    }
   }
-#endif
 
   if (flag_test(gbuf.used_layers, OBJECT_ID)) {
     srt.write_header_data(out_texel, 1, resource_id);

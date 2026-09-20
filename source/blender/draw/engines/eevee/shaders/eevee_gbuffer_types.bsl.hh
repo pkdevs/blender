@@ -52,12 +52,6 @@ namespace gbuffer {
 #  define GBUFFER_LAYER_MAX 3
 #endif
 
-/* TODO(fclem): This should save some compile time per material. */
-#define GBUFFER_HAS_REFLECTION
-#define GBUFFER_HAS_REFRACTION
-#define GBUFFER_HAS_SUBSURFACE
-#define GBUFFER_HAS_TRANSLUCENT
-
 /* -------------------------------------------------------------------- */
 /** \name Utilities
  *

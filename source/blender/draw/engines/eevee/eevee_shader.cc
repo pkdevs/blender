@@ -704,7 +704,8 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                                               const bool use_shader_to_rgba,
                                               const bool use_lighting_nodes,
                                               const bool use_ao_node,
-                                              const bool use_raycast)
+                                              const bool use_raycast,
+                                              const bool use_additional_data)
 {
   using namespace blender::gpu::shader;
   using gpu::shader::Type;
@@ -729,6 +730,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
                             (pipeline_type == MAT_PIPE_FORWARD) ||
                                 ((pipeline_type == MAT_PIPE_DEFERRED) && use_shader_to_rgba));
   info.compilation_constant(Type::bool_t, "use_raycast", use_raycast);
+  info.compilation_constant(Type::bool_t, "use_additional_data", use_additional_data);
 
   StringRefNull pipeline_info_name;
   /* Pipeline Info. */
@@ -1028,6 +1030,10 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   const bool use_raycast = (GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST) &&
                             ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD));
 
+  const bool use_additional_data = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT) ||
+                                   GPU_material_flag_get(gpumat, GPU_MATFLAG_SUBSURFACE) ||
+                                   GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSLUCENT);
+
   if (ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD) &&
       GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA) &&
       GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT))
@@ -1059,7 +1065,8 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                                  use_shader_to_rgba,
                                                  use_lighting_nodes,
                                                  use_ao_node,
-                                                 use_raycast);
+                                                 use_raycast,
+                                                 use_additional_data);
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
     info.define("MAT_SHADER_TO_RGBA");

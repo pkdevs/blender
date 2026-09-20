@@ -27,12 +27,6 @@
 #  define GBUFFER_LAYER_MAX 3
 #endif
 
-/* TODO(fclem): This should save some compile time per material. */
-#define GBUFFER_HAS_REFLECTION
-#define GBUFFER_HAS_REFRACTION
-#define GBUFFER_HAS_SUBSURFACE
-#define GBUFFER_HAS_TRANSLUCENT
-
 namespace gbuffer::detail {
 
 /* -------------------------------------------------------------------- */
@@ -48,15 +42,12 @@ ClosureUndetermined unpack_closure(ClosurePacking cl_in)
   cl.N = cl_in.N;
   /* Some closures require additional unpacking. */
   switch (cl_in.mode) {
-#ifdef GBUFFER_HAS_REFLECTION
     case GBUF_REFLECTION:
       gbuffer::Reflection::unpack_additional(cl, cl_in.data1);
       break;
     case GBUF_REFLECTION_COLORLESS:
       gbuffer::ReflectionColorless::unpack_additional(cl, cl_in.data0);
       break;
-#endif
-#ifdef GBUFFER_HAS_REFRACTION
     case GBUF_REFRACTION:
       gbuffer::Refraction::unpack_additional(cl, cl_in.data1);
       break;
@@ -69,12 +60,9 @@ ClosureUndetermined unpack_closure(ClosurePacking cl_in)
     case GBUF_THIN_REFRACTION_COLORLESS:
       gbuffer::ThinRefractionColorless::unpack_additional(cl, cl_in.data0);
       break;
-#endif
-#ifdef GBUFFER_HAS_SUBSURFACE
     case GBUF_SUBSURFACE:
       gbuffer::Subsurface::unpack_additional(cl, cl_in.data1);
       break;
-#endif
     default:
       break;
   }
