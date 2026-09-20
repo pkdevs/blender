@@ -5578,6 +5578,29 @@ static wmOperatorStatus grease_pencil_stroke_boolean_exec(bContext *C, wmOperato
   return OPERATOR_FINISHED;
 }
 
+static void grease_pencil_stroke_boolean_ui(bContext *C, wmOperator *op)
+{
+  ui::Layout &layout = *op->layout;
+  wmWindowManager *wm = CTX_wm_manager(C);
+
+  PointerRNA ptr = RNA_pointer_create_discrete(&wm->id, op->type->srna, op->properties);
+
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+
+  layout.prop(&ptr, "boolean_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  const boolean::Operation boolean_mode = boolean::Operation(
+      RNA_enum_get(op->ptr, "boolean_mode"));
+
+  if (ELEM(boolean_mode, boolean::Operation::Difference, boolean::Operation::Intersect)) {
+    layout.prop(&ptr, "flip", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(&ptr, "separate_islands", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
+  layout.prop(&ptr, "keep_caps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+}
+
 static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
 {
   static const EnumPropertyItem prop_boolean_modes[] = {
@@ -5601,6 +5624,8 @@ static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
 
   ot->exec = grease_pencil_stroke_boolean_exec;
   ot->poll = editable_grease_pencil_poll;
+
+  ot->ui = grease_pencil_stroke_boolean_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
