@@ -856,11 +856,8 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
   results_all.is_segments_clipping = Array<bool>(results_all.segments.size(), false);
 
   results_all.dst_to_src_curves = Array<int>(dst_segments_by_curve.size());
-  for (const int i : dst_segments_by_curve.index_range()) {
-    const IndexRange segment_range = dst_segments_by_curve[i];
-    const int subj_first_curve = results_all.subj_first_curves[i];
-    results_all.dst_to_src_curves[i] = subj_first_curve;
-  }
+  array_utils::copy(results_all.subj_first_curves.as_span(),
+                    results_all.dst_to_src_curves.as_mutable_span());
 
   results_all.unchanged_curves = calculate_unchanged_curves(
       results_all.segments, results_all.is_segments_clipping, dst_segments_by_curve);
