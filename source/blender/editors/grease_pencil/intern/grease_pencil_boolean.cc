@@ -321,13 +321,11 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
 using BooleanInsideFunc = FunctionRef<bool(const int, const WindingState)>;
 
 /* Check the left and right of a curve `k` */
-static void get_inside_states_for_segments(const CurveBooleanOpParameters & /*op_params*/,
-                                           const int curve_k,
-                                           const int subj_shape_i,
+static void get_inside_states_for_segments(const int curve_k,
                                            const Span<float2> points,
                                            const GroupedSpan<int> shapes,
                                            const OffsetIndices<int> points_by_curve,
-                                           const IndexMask &clipping_shapes,
+                                           const IndexMask &mask_shapes,
                                            const BooleanInsideFunc result_func,
                                            const Span<Segment> all_segments,
                                            const OffsetIndices<int> segments_by_curve,
@@ -335,17 +333,7 @@ static void get_inside_states_for_segments(const CurveBooleanOpParameters & /*op
                                            MutableSpan<bool> all_inside_left,
                                            MutableSpan<bool> all_inside_right)
 {
-  const IndexRange segments = segments_by_curve[curve_k];
-
-  if (segments.is_empty()) {
-    return;
-  }
-
-  IndexMaskMemory memory;
-  const IndexMask &mask_shapes = IndexMask::from_union(
-      clipping_shapes, IndexRange::from_single(subj_shape_i), memory);
-
-  for (const int seg_i : segments) {
+  for (const int seg_i : segments_by_curve[curve_k]) {
     const Segment &this_segment = all_segments[seg_i];
 
     auto [state_L, state_R] = LR_states_from_segment(
@@ -696,6 +684,10 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   const bool skip_double = op_params.boolean_mode == Operation::Union;
   const bool self_intersection = false;
 
+  IndexMaskMemory memory;
+  const IndexMask shape_mask = IndexMask::from_union(
+      clipping_shapes, IndexRange::from_single(subj_shape_id), memory);
+
   find_intersections_between_shapes(points,
                                     shapes,
                                     subj_shapes,
@@ -737,31 +729,14 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
     return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
   };
 
-  for (const int curve_i : shapes[subj_shape_id]) {
-    get_inside_states_for_segments(op_params,
-                                   curve_i,
-                                   subj_shape_id,
-                                   points,
-                                   shapes,
-                                   points_by_curve,
-                                   clipping_shapes,
-                                   result_func,
-                                   all_segments,
-                                   segments_by_curve,
-                                   is_fill,
-                                   all_inside_left,
-                                   all_inside_right);
-  }
-  clipping_shapes.foreach_index([&](const int clip_shape_id) {
+  shape_mask.foreach_index([&](const int clip_shape_id) {
     const Span<int> curves_j = shapes[clip_shape_id];
     for (const int curve_j : curves_j) {
-      get_inside_states_for_segments(op_params,
-                                     curve_j,
-                                     subj_shape_id,
+      get_inside_states_for_segments(curve_j,
                                      points,
                                      shapes,
                                      points_by_curve,
-                                     clipping_shapes,
+                                     shape_mask,
                                      result_func,
                                      all_segments,
                                      segments_by_curve,
