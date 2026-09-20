@@ -211,7 +211,7 @@ void Camera::compute_auto_viewplane()
   }
 }
 
-void Camera::update(Scene *scene)
+void Camera::update(Scene *scene) //
 {
   const Scene::MotionType need_motion = scene->need_motion();
 
@@ -361,7 +361,10 @@ void Camera::update(Scene *scene)
     have_motion = have_motion || motion[i] != matrix;
   }
 
-  if (need_motion == Scene::MOTION_PASS || need_motion == Scene::MOTION_PASS_INTERACTIVE) {
+  /* TODO(Tri): kcam->motion_pass_pre/post is currently only consumed by classic
+   * Vector-pass output. ReSTIR temporal-frame reuse (restir.h) doesn't yet read
+   * it for camera-motion reprojection — object motion only, for now. */
+  if (scene->need_motion_pass()) {   // was: need_motion == MOTION_PASS || MOTION_PASS_INTERACTIVE
     if (have_motion) {
       kcam->motion_pass_pre = transform_inverse(motion[0]);
       kcam->motion_pass_post = transform_inverse(motion[motion.size() - 1]);
@@ -385,22 +388,21 @@ void Camera::update(Scene *scene)
         const ProjectionTransform cameratoraster_pre = screentoraster * cameratoscreen_pre;
         const ProjectionTransform cameratoraster_post = screentoraster * cameratoscreen_post;
         if (have_motion) {
-          kcam->perspective_pre = cameratoraster_pre * transform_inverse(motion[0]);
-          kcam->perspective_post = cameratoraster_post *
-                                   transform_inverse(motion[motion.size() - 1]);
+          kcam->motion_pass_perspective_pre = cameratoraster_pre * transform_inverse(motion[0]);
+          kcam->motion_pass_perspective_post = cameratoraster_post * transform_inverse(motion[motion.size() - 1]);
         }
         else {
-          kcam->perspective_pre = cameratoraster_pre * worldtocamera;
-          kcam->perspective_post = cameratoraster_post * worldtocamera;
+          kcam->motion_pass_perspective_pre = cameratoraster_pre * worldtocamera;
+          kcam->motion_pass_perspective_post = cameratoraster_post * worldtocamera;
         }
       }
       else {
-        kcam->perspective_pre = worldtoraster;
-        kcam->perspective_post = worldtoraster;
+        kcam->motion_pass_perspective_pre = worldtoraster;
+        kcam->motion_pass_perspective_post = worldtoraster;
       }
     }
   }
-  else if (need_motion == Scene::MOTION_BLUR) {
+  if (scene->need_motion_blur()) {
     if (have_motion) {
       kernel_camera_motion.resize(motion.size());
       transform_motion_decompose(kernel_camera_motion.data(), motion.data(), motion.size());
@@ -408,7 +410,7 @@ void Camera::update(Scene *scene)
     }
 
     /* TODO(sergey): Support other types of camera. */
-    if (use_perspective_motion && camera_type == CAMERA_PERSPECTIVE) {
+    if (use_perspective_motion && camera_type == CAMERA_PERSPECTIVE) { // !!!(Tri): motion blur & pass collision; Added motion_pass_perspective_pre/post as the fix
       const ProjectionTransform screentocamera_pre = projection_inverse(
           projection_perspective(fov_pre, nearclip, farclip));
       const ProjectionTransform screentocamera_post = projection_inverse(

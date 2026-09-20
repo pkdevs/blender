@@ -627,10 +627,10 @@ ccl_device_forceinline float4 camera_motion_vector_direction(KernelGlobals kg, c
     ProjectionTransform projection = kernel_data.cam.worldtoraster;
     motion_center = transform_perspective_direction(&projection, D);
 
-    projection = kernel_data.cam.perspective_pre;
+     projection = kernel_data.cam.motion_pass_perspective_pre;
     motion_pre = transform_perspective_direction(&projection, D);
 
-    projection = kernel_data.cam.perspective_post;
+    projection = kernel_data.cam.motion_pass_perspective_post;
     motion_post = transform_perspective_direction(&projection, D);
   }
   else {

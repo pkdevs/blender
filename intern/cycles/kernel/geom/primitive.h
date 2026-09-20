@@ -221,8 +221,10 @@ ccl_device_forceinline void primitive_motion_data_without_camera(KernelGlobals k
   *motion_pre = *motion_center;
   *motion_post = *motion_center;
 
+ccl_debug_printf("primitive_motion_data_without_camera(), before kernel_data_fetch()\n\n");
+
   /* deformation motion */
-  const ccl_global KernelObject &kobject = kernel_data_fetch(objects, sd->object);
+  const ccl_global KernelObject &kobject = kernel_data_fetch(objects, sd->object); // !!!: Causes crash
   const int pos_offset = kobject.position_offset;
   const int numverts = kobject.numverts;
   const int num_motion_steps = kobject.num_geom_steps;
@@ -270,8 +272,12 @@ ccl_device_forceinline void primitive_motion_data_without_camera(KernelGlobals k
    * transformation was set match the world/object space of motion_pre/post */
   Transform tfm;
 
-  tfm = object_fetch_motion_pass_transform(kg, sd->object, OBJECT_PASS_MOTION_PRE);
+ccl_debug_printf("primitive_motion_data_without_camera(), before motion_pre object_fetch_motion_pass_transform()\n\n");
+
+  tfm = object_fetch_motion_pass_transform(kg, sd->object, OBJECT_PASS_MOTION_PRE); // !!!: Crashing here... tag ObjectManager
   *motion_pre = transform_point(&tfm, *motion_pre);
+
+ccl_debug_printf("primitive_motion_data_without_camera(), before motion_post object_fetch_motion_pass_transform()\n\n");
 
   tfm = object_fetch_motion_pass_transform(kg, sd->object, OBJECT_PASS_MOTION_POST);
   *motion_post = transform_point(&tfm, *motion_post);
@@ -283,6 +289,8 @@ ccl_device_forceinline void primitive_motion_data_camera_step(KernelGlobals kg,
                                                               ccl_private float3 *motion_post)
 {
   Transform tfm;
+
+ccl_debug_printf("primitive_motion_data_camera_step(), Ran\n\n");
 
   /* camera motion, for perspective/orthographic motion.pre/post will be a
    * world-to-raster matrix, for panorama it's world-to-camera, for custom
@@ -304,10 +312,10 @@ ccl_device_forceinline void primitive_motion_data_camera_step(KernelGlobals kg,
     ProjectionTransform projection = kernel_data.cam.worldtoraster;
     *motion_center = transform_perspective(&projection, *motion_center);
 
-    projection = kernel_data.cam.perspective_pre;
+    projection = kernel_data.cam.motion_pass_perspective_pre;
     *motion_pre = transform_perspective(&projection, *motion_pre);
 
-    projection = kernel_data.cam.perspective_post;
+    projection = kernel_data.cam.motion_pass_perspective_post;
     *motion_post = transform_perspective(&projection, *motion_post);
   }
   else {
@@ -334,7 +342,7 @@ ccl_device_forceinline void primitive_motion_data_camera_step(KernelGlobals kg,
 
 /* Motion vector for motion pass */
 
-ccl_device_forceinline float4 primitive_motion_vector(KernelGlobals kg,
+ccl_device_forceinline float4 primitive_motion_vector(KernelGlobals kg, // !!!
                                                       const ccl_private ShaderData *sd)
 {
   float3 motion_center, motion_pre, motion_post;

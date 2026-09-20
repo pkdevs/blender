@@ -540,6 +540,8 @@ ccl_debug_printf("\n--- streaming_temporal_sample(), returned true! total_weight
   return true;
 }
 
+// TODO(Tri): Cam motion isn't accounted for here yet (Only object motion is handled)
+
 // TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
 ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                                  IntegratorState state,

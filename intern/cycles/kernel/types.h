@@ -61,6 +61,10 @@ CCL_NAMESPACE_BEGIN
 /* Reconnection only happens if the roughness of consecutive vertices are larger than this
  * threshold. */
 #define RESTIR_ROUGHNESS_THRESH_SQ 0.04f
+
+#define RESTIR_REPROJECTION_SURFACE_STRIDE 7
+#define RESTIR_RESERVOIR_STRIDE 9
+
 /* Reconnection only happens if the ray length from the reconnection vertex to the previous vertex
  * is longer than this threshold. */
 /* TODO(weizhen): this can be adaptive to scene size or spatial reuse radius. */
@@ -440,6 +444,8 @@ enum PassType {
   PASS_RESTIR_PT_PREVIOUS_RESERVOIR = 58,
   PASS_RESTIR_PT_RESERVOIR,
   PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR,
+  PASS_RESTIR_REPROJECTION_SURFACE,
+  PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE,
   PASS_RESTIR_PREVIOUS_RESERVOIR,
   PASS_RESTIR_RESERVOIR,
 
@@ -447,7 +453,7 @@ enum PassType {
    * When reading this pass, it is converted to majorant transmittance */
   PASS_VOLUME_MAJORANT,
   PASS_VOLUME_MAJORANT_SAMPLE_COUNT,
-  PASS_CATEGORY_DATA_END = 65,
+  PASS_CATEGORY_DATA_END = 67,
 
   /* Denoising passes */
   PASS_DENOISING_ALBEDO,
@@ -1365,10 +1371,14 @@ struct KernelCamera {
   ProjectionTransform worldtondc;
   Transform worldtocamera;
 
-  /* Stores changes in the projection matrix. Use for camera zoom motion
-   * blur and motion pass output for perspective camera. */
+  /* Stores changes in the projection matrix. Use for camera zoom motion blur. */
   ProjectionTransform perspective_pre;
   ProjectionTransform perspective_post;
+
+  /* Same purpose, but for the frame-to-frame motion pass (Vector-pass / temporal reprojection)
+   * rather than sub-frame camera-zoom motion blur. */
+  ProjectionTransform motion_pass_perspective_pre;
+  ProjectionTransform motion_pass_perspective_post;
 
   /* Transforms for motion pass. */
   Transform motion_pass_pre;
