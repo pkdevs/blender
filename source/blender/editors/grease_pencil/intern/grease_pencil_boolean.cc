@@ -555,6 +555,7 @@ static void find_intersections_between_shapes(const Span<float2> points,
                                               const IndexMask &shapes_j,
                                               const OffsetIndices<int> points_by_curve,
                                               const VArray<bool> &cyclic,
+                                              const bool skip_double,
                                               const bool self_intersection,
                                               Array<Vector<int>> &r_inters_per_curves,
                                               Vector<IntersectionPoint> &r_intersections)
@@ -569,7 +570,10 @@ static void find_intersections_between_shapes(const Span<float2> points,
       shapes_j.foreach_index([&](const int shape_j) {
         const Span<int> curves_j = shapes[shape_j];
         for (const int curve_j : curves_j) {
-          if (self_intersection && curve_i >= curve_j) {
+          if (skip_double && curve_i > curve_j) {
+            return;
+          }
+          if (!self_intersection && curve_i == curve_j) {
             return;
           }
 
@@ -693,13 +697,17 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 
   const IndexMask subj_shapes = IndexRange::from_single(subj_shape_id);
 
+  const bool skip_double = op_params.boolean_mode == Operation::Union;
+  const bool self_intersection = false;
+
   find_intersections_between_shapes(points,
                                     shapes,
                                     subj_shapes,
                                     clipping_shapes,
                                     points_by_curve,
                                     cyclic,
-                                    false,
+                                    skip_double,
+                                    self_intersection,
                                     inters_per_curves,
                                     intersections);
 
