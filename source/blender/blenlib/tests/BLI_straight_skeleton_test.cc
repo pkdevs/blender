@@ -1284,7 +1284,8 @@ TEST(straight_skeleton, OneFaceBevel)
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
 
-  EXPECT_EQ(output.face_offsets.size(), 18);
+  /* 19 input boundary edges produce 19 bevel faces. */
+  EXPECT_EQ(output.face_offsets.size(), 19);
   for (const int fi : output.face_offsets.index_range()) {
     const IndexRange face_r = output.face_offsets[fi];
     Set<int> unique_verts;
@@ -1293,6 +1294,267 @@ TEST(straight_skeleton, OneFaceBevel)
     }
   }
   EXPECT_NEAR(total_faces_area(output), 0.509493, 1e-4);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Tests with Holes
+ * \{ */
+
+/**
+ * 10x10 outer square (CCW) with a 4x4 inner square hole (CW) centered inside it.
+ *
+ * Outer: [0, 10] x [0, 10], corners (0,0), (10,0), (10,10), (0,10).
+ * Hole:  [3, 7] x [3, 7], corners (3,7), (7,7), (7,3), (3,3) in CW order.
+ *
+ * The distance between outer and hole edges is 3 on all sides.
+ * Wavefronts advance inward from the outer square and outward from the hole,
+ * meeting at t = 1.5 along 4 ridges connecting collision points at:
+ * (1.5, 1.5), (8.5, 1.5), (8.5, 8.5), (1.5, 8.5).
+ *
+ * Produces 8 trapezoidal faces:
+ * - 4 outer faces (face_orig = 0)
+ * - 4 hole faces (face_orig = 1)
+ * Total face area = 100 - 16 = 84.
+ */
+TEST(straight_skeleton, SquareWithHole)
+{
+  const char *spec = R"(8 2
+0.0 0.0
+10.0 0.0
+10.0 10.0
+0.0 10.0
+3.0 7.0
+7.0 7.0
+7.0 3.0
+3.0 3.0
+0 1 2 3
+4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SquareWithHole";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* 8 input vertices + 4 skeleton ridge vertices = 12 vertices. */
+  EXPECT_EQ(output.vert.size(), 12);
+  /* 4 outer + 4 hole + 8 spoke + 4 ridge = 20 edges. */
+  EXPECT_EQ(output.edge.size(), 20);
+  /* 4 outer trapezoids + 4 hole trapezoids = 8 faces. */
+  EXPECT_EQ(output.face_offsets.size(), 8);
+
+  /* Total area = 10x10 outer - 4x4 hole = 84. */
+  EXPECT_NEAR(total_faces_area(output), 84.0, 1e-5);
+
+  /* Input boundary vertices (v0..v7) have vert_orig == vi and vert_time == 0. */
+  for (const int vi : IndexRange(8)) {
+    EXPECT_EQ(output.vert_orig[vi], vi);
+    EXPECT_NEAR(output.vert_time[vi], 0.0, 1e-6);
+  }
+
+  /* 4 skeleton ridge vertices (v8..v11) are at collapse time t = 1.5 and vert_orig == -1. */
+  int new_verts_count = 0;
+  for (const int vi : IndexRange(8, 4)) {
+    EXPECT_EQ(output.vert_orig[vi], -1);
+    EXPECT_NEAR(output.vert_time[vi], 1.5, 1e-5);
+    new_verts_count++;
+    /* Each ridge vertex is either at x = 1.5 or x = 8.5, and y = 1.5 or y = 8.5. */
+    const double2 p = output.vert[vi];
+    EXPECT_TRUE(std::abs(p.x - 1.5) < 1e-5 || std::abs(p.x - 8.5) < 1e-5);
+    EXPECT_TRUE(std::abs(p.y - 1.5) < 1e-5 || std::abs(p.y - 8.5) < 1e-5);
+  }
+  EXPECT_EQ(new_verts_count, 4);
+
+  /* 4 outer faces have face_orig == 0 (area 12.75 each);
+   * 4 hole faces have face_orig == 1 (area 8.25 each). */
+  int outer_faces_count = 0;
+  int hole_faces_count = 0;
+  for (const int fi : output.face_offsets.index_range()) {
+    const int orig = output.face_orig[fi];
+    const IndexRange r = output.face_offsets[fi];
+    EXPECT_EQ(r.size(), 4); /* All are trapezoids. */
+    if (orig == 0) {
+      outer_faces_count++;
+    }
+    else if (orig == 1) {
+      hole_faces_count++;
+    }
+  }
+  EXPECT_EQ(outer_faces_count, 4);
+  EXPECT_EQ(hole_faces_count, 4);
+}
+
+/**
+ * Fat cross outer polygon with 5 square holes inside it (1 in the center, 1 in each arm).
+ *
+ * Outer polygon: 12 vertices forming a plus / fat cross shape spanning [0, 30] x [0, 30].
+ * Outer fat cross with 4 reflex vertices pushed outward to (22,8), (22,22), (8,22), (8,8)
+ * plus 5 square holes (4x4 each): 1 in center, 4 in the arms.
+ * Total area = 580 (outer area) - 5 * 16 (holes) = 500.
+ */
+TEST(straight_skeleton, FatCrossPushedOutWithHoles)
+{
+  const char *spec = R"(32 6
+10.0 0.0
+20.0 0.0
+22.0 8.0
+30.0 10.0
+30.0 20.0
+22.0 22.0
+20.0 30.0
+10.0 30.0
+8.0 22.0
+0.0 20.0
+0.0 10.0
+8.0 8.0
+13.0 17.0
+17.0 17.0
+17.0 13.0
+13.0 13.0
+13.0 27.0
+17.0 27.0
+17.0 23.0
+13.0 23.0
+13.0 7.0
+17.0 7.0
+17.0 3.0
+13.0 3.0
+3.0 17.0
+7.0 17.0
+7.0 13.0
+3.0 13.0
+23.0 17.0
+27.0 17.0
+27.0 13.0
+23.0 13.0
+0 1 2 3 4 5 6 7 8 9 10 11
+12 13 14 15
+16 17 18 19
+20 21 22 23
+24 25 26 27
+28 29 30 31
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "FatCrossPushedOutWithHoles";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Total area = 580 (outer area) - 5 * 16 (holes) = 500. */
+  EXPECT_NEAR(total_faces_area(output), 500.0, 1e-4);
+
+  /* Input boundary vertices (v0..v31) have vert_orig == vi and vert_time == 0. */
+  for (const int vi : IndexRange(32)) {
+    EXPECT_EQ(output.vert_orig[vi], vi);
+    EXPECT_NEAR(output.vert_time[vi], 0.0, 1e-6);
+  }
+
+  /* Skeleton event vertices have vert_orig == -1 and vert_time > 0. */
+  for (const int vi : IndexRange(32, output.vert.size() - 32)) {
+    EXPECT_EQ(output.vert_orig[vi], -1);
+    EXPECT_GT(output.vert_time[vi], 0.0);
+  }
+
+  /* Every face has at least 3 unique vertices. */
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange face_r = output.face_offsets[fi];
+    EXPECT_GE(face_r.size(), 3);
+    Set<int> unique_verts;
+    for (const int i : face_r) {
+      EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
+    }
+  }
+}
+
+/**
+ * Fat cross outer polygon with 5 square holes inside it, where all outer cross
+ * edges are strictly parallel to the x and y axes.
+ *
+ * Outer polygon: 12 vertices forming an axis-aligned fat cross spanning [0, 30] x [0, 30],
+ * composed of five 10x10 squares. Outer area = 500.
+ * 5 square holes (4x4 each): 1 in center, 4 in arms. Hole area = 5 * 16 = 80.
+ * Expected total area = 500 - 80 = 420.
+ */
+TEST(straight_skeleton, FatCrossAxisAlignedWithHoles)
+{
+  const char *spec = R"(32 6
+10.0 0.0
+20.0 0.0
+20.0 10.0
+30.0 10.0
+30.0 20.0
+20.0 20.0
+20.0 30.0
+10.0 30.0
+10.0 20.0
+0.0 20.0
+0.0 10.0
+10.0 10.0
+13.0 17.0
+17.0 17.0
+17.0 13.0
+13.0 13.0
+13.0 27.0
+17.0 27.0
+17.0 23.0
+13.0 23.0
+13.0 7.0
+17.0 7.0
+17.0 3.0
+13.0 3.0
+3.0 17.0
+7.0 17.0
+7.0 13.0
+3.0 13.0
+23.0 17.0
+27.0 17.0
+27.0 13.0
+23.0 13.0
+0 1 2 3 4 5 6 7 8 9 10 11
+12 13 14 15
+16 17 18 19
+20 21 22 23
+24 25 26 27
+28 29 30 31
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "FatCrossAxisAlignedWithHoles";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  /* Total area = 500 (outer area) - 5 * 16 (holes) = 420. */
+  EXPECT_NEAR(total_faces_area(output), 420.0, 1e-4);
+
+  /* Input boundary vertices (v0..v31) have vert_orig == vi and vert_time == 0. */
+  for (const int vi : IndexRange(32)) {
+    EXPECT_EQ(output.vert_orig[vi], vi);
+    EXPECT_NEAR(output.vert_time[vi], 0.0, 1e-6);
+  }
+
+  /* Skeleton event vertices have vert_orig == -1 and vert_time > 0. */
+  for (const int vi : IndexRange(32, output.vert.size() - 32)) {
+    EXPECT_EQ(output.vert_orig[vi], -1);
+    EXPECT_GT(output.vert_time[vi], 0.0);
+  }
+
+  /* Every face has at least 3 unique vertices. */
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange face_r = output.face_offsets[fi];
+    EXPECT_GE(face_r.size(), 3);
+    Set<int> unique_verts;
+    for (const int i : face_r) {
+      EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
+    }
+  }
 }
 
 /** \} */
