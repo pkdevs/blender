@@ -538,7 +538,6 @@ static void find_intersections_between_shapes(const Span<float2> points,
                                               const IndexMask &shape_mask,
                                               const OffsetIndices<int> points_by_curve,
                                               const VArray<bool> &cyclic,
-                                              const bool skip_double,
                                               const bool self_intersection,
                                               Array<Vector<int>> &r_inters_per_curves,
                                               Vector<IntersectionPoint> &r_intersections)
@@ -665,12 +664,12 @@ static void create_connections_from_intersection_points(
   }
 }
 
-static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_params,
-                                            const int subj_shape_id,
+static BooleanResult execute_single_boolean(const CurveBooleanOpParameters /*op_params*/,
                                             const Span<float2> points,
                                             const GroupedSpan<int> shapes,
                                             const OffsetIndices<int> points_by_curve,
-                                            const IndexMask &clipping_shapes,
+                                            const IndexMask &shape_mask,
+                                            const BooleanInsideFunc result_func,
                                             const VArray<bool> &is_fill,
                                             const VArray<bool> &cyclic)
 {
@@ -679,10 +678,6 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   Array<Vector<int>> inters_per_curves(points_by_curve.size());
 
   const bool self_intersection = false;
-
-  IndexMaskMemory memory;
-  const IndexMask shape_mask = IndexMask::from_union(
-      clipping_shapes, IndexRange::from_single(subj_shape_id), memory);
 
   find_intersections_between_shapes(points,
                                     shapes,
@@ -710,13 +705,6 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 
   Array<bool> all_inside_left(all_segments.size());
   Array<bool> all_inside_right(all_segments.size());
-
-  auto result_func = [&](const int curve_k, const WindingState &state) {
-    if (is_fill[curve_k]) {
-      return state.is_contributing(op_params, shapes, subj_shape_id, clipping_shapes);
-    }
-    return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
-  };
 
   shape_mask.foreach_index([&](const int clip_shape_id) {
     const Span<int> curves_j = shapes[clip_shape_id];
@@ -853,11 +841,18 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
   {
     const int shape_i = editable_shapes.first();
 
-    const IndexMask subj_mask = IndexMask::from_difference(
-        editable_shapes, IndexRange::from_single(shape_i), memory);
+    auto result_func = [&](const int /*curve_k*/, const WindingState &state) {
+      return state.is_in_shapes(editable_shapes, shapes);
+    };
 
-    const BooleanResult result = execute_single_boolean(
-        op_params, shape_i, positions_2d, shapes, points_by_curve, subj_mask, is_fill, cyclic);
+    const BooleanResult result = execute_single_boolean(op_params,
+                                                        positions_2d,
+                                                        shapes,
+                                                        points_by_curve,
+                                                        editable_shapes,
+                                                        result_func,
+                                                        is_fill,
+                                                        cyclic);
 
     const int subj_first_curve = shapes[shape_i].first();
     results_all.append_result(result, subj_first_curve);
@@ -959,12 +954,23 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
   subject_shapes.foreach_index([&](const int64_t shape_i) {
     /* Only do full calculation with the bounding boxes are intersecting. */
     if (shapes_bbox_intersecting[shape_i] && editable_shapes_bool[shape_i]) {
+      auto result_func = [&](const int curve_k, const WindingState &state) {
+        if (is_fill[curve_k]) {
+          return state.is_contributing(op_params, shapes, shape_i, clipping_shapes);
+        }
+        return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
+      };
+
+      IndexMaskMemory memory;
+      const IndexMask shape_mask = IndexMask::from_union(
+          clipping_shapes, IndexRange::from_single(shape_i), memory);
+
       const BooleanResult result = execute_single_boolean(op_params,
-                                                          shape_i,
                                                           positions_2d,
                                                           shapes,
                                                           points_by_curve,
-                                                          clipping_shapes,
+                                                          shape_mask,
+                                                          result_func,
                                                           is_fill,
                                                           cyclic);
 
