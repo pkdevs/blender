@@ -568,6 +568,9 @@ struct CodegenContext : NodeErrorHandler {
         case NodeType::FuncDecl:
           func_decl(FuncDecl(node), symbol);
           break;
+        case NodeType::FuncForwardDecl:
+          func_forward_decl(FuncForwardDecl(node), symbol);
+          break;
         case NodeType::TemplateDecl:
           skip_node(node);
           break;
@@ -1540,6 +1543,28 @@ struct CodegenContext : NodeErrorHandler {
     else {
       assert(0);
     }
+  }
+
+  void func_forward_decl(FuncForwardDecl decl, SymbolScope &scope)
+  {
+    /* Prototypes are not needed with MSL wrapper class. */
+    builder.ss << "\n#ifndef GPU_METAL\n";
+    string id(decl.identifier().str());
+    if (auto it = scope.functions.find(id); it != scope.functions.end()) {
+      SymbolScope &body_scope = *it->second.second;
+      jump_to(decl.front()); /* Adds too many directives. */
+      builder.curr = decl.front();
+      skip_node(decl.attributes());
+      skip_if(Static);
+      id_type(decl.return_type(), scope);
+      id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
+      func_arg_list(decl.arguments(), body_scope, false, true);
+      builder << string(";\n");
+    }
+    else {
+      error(decl, Diag::UnknownFunction, id);
+    }
+    builder.ss << "#endif\n";
   }
 
   string condition(const SymbolScope *scope)
