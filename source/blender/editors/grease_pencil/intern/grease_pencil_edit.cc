@@ -5595,10 +5595,10 @@ static void grease_pencil_stroke_boolean_ui(bContext *C, wmOperator *op)
 
   if (ELEM(boolean_mode, boolean::Operation::Difference, boolean::Operation::Intersect)) {
     layout.prop(&ptr, "flip", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    layout.prop(&ptr, "separate_islands", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   layout.prop(&ptr, "keep_caps", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(&ptr, "separate_islands", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void GREASE_PENCIL_OT_stroke_boolean(wmOperatorType *ot)
