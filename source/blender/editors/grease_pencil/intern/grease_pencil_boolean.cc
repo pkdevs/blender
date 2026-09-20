@@ -818,7 +818,7 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
     return fill_ids[index] != 0;
   });
 
-  /* Copy over all the uneditable shapes. */
+  /* Copy over all the shapes that are unselected. */
   non_editable_shapes.foreach_index([&](const int64_t shape_i) {
     BooleanResult result;
     result.segment_offsets.append(0);
