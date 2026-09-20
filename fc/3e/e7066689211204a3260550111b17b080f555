@@ -4,3 +4,4 @@ Referenced by pull request #156003, Benchmark: Bisecting performance regressions
 Referenced by issue #159503, Crash trying to start VR while no VR headset/runtime is setup
 Referenced by pull request #159515, Fix #159503: XR: Crash on WM error report when no OpenXR runtime is setup
 Referenced by commit 9de335ab7645f5f7cff614ab95c20b69c182f91d, Fix #159503: XR: Crash on WM error report when no OpenXR runtime is setup
+Referenced by issue #164155, Annotations do not show up in viewport renders/playblasts
