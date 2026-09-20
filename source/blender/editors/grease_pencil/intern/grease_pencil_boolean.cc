@@ -702,12 +702,7 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   Vector<Segment> all_segments;
   Array<int> all_segment_offset_data(points_by_curve.size() + 1, 0);
 
-  for (const int curve_i : shapes[subj_shape_id]) {
-    all_segment_offset_data[curve_i] = create_segments_from_intersections_single_curve(
-        curve_i, inters_per_curves, points_by_curve, intersections, cyclic, all_segments);
-  }
-
-  clipping_shapes.foreach_index([&](const int clip_shape_i) {
+  shape_mask.foreach_index([&](const int clip_shape_i) {
     const Span<int> curves_j = shapes[clip_shape_i];
     for (const int curve_j : curves_j) {
       all_segment_offset_data[curve_j] = create_segments_from_intersections_single_curve(
