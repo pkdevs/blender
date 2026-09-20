@@ -1219,15 +1219,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  /* Block dropping any dragged collection onto/into itself (checked across the whole drag,
-   * since a multi-select drag can have the dragged collection anywhere in the list). */
-  for (const wmDragID &dragged : drag->ids) {
-    if (GS(dragged.id->name) == ID_GR && dragged.id == &to_collection->id) {
-      return false;
-    }
-  }
-
-  /* If dragging an object and custom sort is off, only allow dropping INTO the collection. */
+  /* If dragging an object and custom sort is off, only allow dropping INTO the collection.
+   * If dragging a collection, block dropping it onto itself. */
   if (GS(id->name) == ID_OB) {
     if (space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
@@ -1240,6 +1233,11 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
 
     if (te == collection_te && space_outliner->sort_method != SO_SORT_CUSTOM) {
       insert_type = TE_INSERT_INTO;
+    }
+  }
+  else if (GS(id->name) == ID_GR) {
+    if (id == &to_collection->id) {
+      return false;
     }
   }
 
