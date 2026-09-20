@@ -1116,7 +1116,7 @@ bool light_iter_should_skip([[resource_table]] KernelGlobals &kg,
 
 #  define LIGHT_ITER_BEGIN(light_index) \
     { \
-      eevee::light::VisibleLightIterator iter; \
+      eevee_light_VisibleLightIterator iter; \
       light_iter_init(kg, sd, iter); \
       while (light_iter_next(kg, iter)) { \
         if (light_iter_should_skip(kg, iter, sd.P)) { \
