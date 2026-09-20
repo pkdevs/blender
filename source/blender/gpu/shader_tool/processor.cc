@@ -296,8 +296,11 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_trailing_comma_in_list_ast(parser);
     lower_assert_ast(parser, filename);
     lower_this_keyword(parser);
-
     parser.apply_mutations();
+
+    /* Lower string, assert, printf. */
+    lower_strings(parser);
+    lower_printf(parser);
 
     /* Linting phase. Detect valid syntax with invalid usage. */
     lint_reserved_tokens(parser);
@@ -316,9 +319,6 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_union_setters(parser);
     lower_bitfield_setters(parser);
     lower_method_calls(parser, false);
-    /* Lower string, assert, printf. */
-    lower_strings(parser);
-    lower_printf(parser);
     /* Needs to be last. */
     lower_resource_macro_placeholder_ast(parser);
     lower_constructors(parser);
@@ -1349,7 +1349,6 @@ void SourceProcessor::parse_builtins(const string &str, const string &filename, 
   else {
     /* Assume blender GLSL or BSL. */
     tokens.emplace_back("drw_debug_");
-    tokens.emplace_back("printf");
 #ifdef WITH_GPU_SHADER_ASSERT
     tokens.emplace_back("assert");
 #endif
