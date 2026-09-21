@@ -204,6 +204,7 @@ endif()
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/bmesh_core_test.cc
+    tests/bmesh_interp_test.cc
   )
   set(TEST_INC
   )

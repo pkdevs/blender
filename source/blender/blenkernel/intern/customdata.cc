@@ -1339,6 +1339,31 @@ static void layerInterp_propfloat2(const void **sources,
                                    int count,
                                    void *dest)
 {
+  /* UV interpolation can change a component even when it has the same value in every source,
+   * because rounding errors affect the normalized weights. We preserve that component by
+   * interpolating offsets from a source value. The source with the largest weight serves as
+   * the reference to reduce cancellation near a source corner. */
+  int reference_index = 0;
+  float weight_sum = 0.0f;
+  bool has_negative_weight = false;
+  for (int i = 0; i < count; i++) {
+    weight_sum += weights[i];
+    has_negative_weight |= weights[i] < 0.0f;
+    if (weights[i] > weights[reference_index]) {
+      reference_index = i;
+    }
+  }
+  if (!has_negative_weight && weight_sum > 0.0f) {
+    const float2 reference = *static_cast<const float2 *>(sources[reference_index]);
+    float2 offset_sum(0.0f);
+    for (int i = 0; i < count; i++) {
+      offset_sum += (*static_cast<const float2 *>(sources[i]) - reference) * weights[i];
+    }
+    *static_cast<float2 *>(dest) = reference + offset_sum / weight_sum;
+    return;
+  }
+
+  /* Keep the existing arithmetic for extrapolation, where cancellation can amplify rounding. */
   vec2f result = {0.0f, 0.0f};
   for (int i = 0; i < count; i++) {
     const float interp_weight = weights[i];
