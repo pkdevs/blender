@@ -800,7 +800,6 @@ int PaintStroke::space_stroke(bContext *C,
                                                               pressure,
                                                               pressure_delta,
                                                               length);
-
     BLI_assert(spacing >= 0.0f);
 
     if (length >= spacing) {
@@ -1586,15 +1585,14 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   /* We want the stroke to have the first daub at the start location instead of waiting till we
    * have moved the space distance.
    * If rake is active, we need to wait for the second step to calculate it. */
-  const bool frist_step = first_dab && paint_space_stroke_enabled(*br, mode);
+  const bool first_step = first_dab && paint_space_stroke_enabled(*br, mode);
 
   const float mouse_delta_length = math::length(sample_average.mouse - this->last_mouse_position);
-  /* This indicates the first step where rake should be calculated. */
-  const bool first_rake_step = paint_rake_rotation_active(*br, mode) && !rake_started_ &&
+  const bool rake_start_step = paint_rake_rotation_active(*br, mode) && !rake_started_ &&
                                mouse_delta_length >=
                                    paint_rake_rotation_spacing(*paint, *br, true, true);
 
-  if ((frist_step || first_rake_step) && !(br->flag & BRUSH_SMOOTH_STROKE)) {
+  if ((first_step || rake_start_step) && !(br->flag & BRUSH_SMOOTH_STROKE)) {
     paint_runtime.overlap_factor = paint_stroke_integrate_overlap(*br, 1.0);
     this->add_step(C, op, sample_average.mouse, sample_average.pressure);
     needs_redraw = true;
