@@ -2270,7 +2270,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
 
         from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
         tool = ToolSelectPanelHelper.tool_active_from_context(context)
-        if tool and tool.idname in {"builtin.cutter", "builtin.eyedropper", "builtin.interpolate"}:
+        if tool and tool.idname in {"builtin.trim", "builtin.carver", "builtin.eyedropper", "builtin.interpolate"}:
             return False
 
         if brush.gpencil_brush_type == 'TINT':
@@ -2327,7 +2327,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mix_palette(View3DPanel, Panel):
 
         from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
         tool = ToolSelectPanelHelper.tool_active_from_context(context)
-        if tool and tool.idname in {"builtin.cutter", "builtin.eyedropper", "builtin.interpolate"}:
+        if tool and tool.idname in {"builtin.trim", "builtin.carver", "builtin.eyedropper", "builtin.interpolate"}:
             return False
 
         if brush.gpencil_brush_type == 'TINT':

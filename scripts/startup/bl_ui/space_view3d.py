@@ -8701,14 +8701,14 @@ class VIEW3D_PT_greasepencil_draw_context_menu(Panel):
 
         layout.prop(gp_settings, "stroke_type", expand=True)
 
-        if brush.gpencil_brush_type not in {'ERASE', 'CUTTER', 'EYEDROPPER'} and is_vertex:
+        if brush.gpencil_brush_type not in {'ERASE', 'TRIM', 'CARVER', 'EYEDROPPER'} and is_vertex:
             split = layout.split(factor=0.1)
             ups = settings.unified_paint_settings
             prop_owner = ups if brush.use_unified_color else brush
             split.prop(prop_owner, "color", text="")
             split.template_color_picker(prop_owner, "color", value_slider=True)
 
-        if brush.gpencil_brush_type not in {'FILL', 'CUTTER', 'ERASE'}:
+        if brush.gpencil_brush_type not in {'FILL', 'TRIM', 'CARVER', 'ERASE'}:
             if brush.use_locked_size == 'VIEW':
                 row = layout.row(align=True)
                 row.prop(brush, "size", slider=True)
@@ -8721,7 +8721,7 @@ class VIEW3D_PT_greasepencil_draw_context_menu(Panel):
             row = layout.row(align=True)
             row.prop(brush, "size", slider=True)
             row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
-        if brush.gpencil_brush_type not in {'ERASE', 'FILL', 'CUTTER'}:
+        if brush.gpencil_brush_type not in {'ERASE', 'FILL', 'TRIM', 'CARVER'}:
             row = layout.row(align=True)
             row.prop(brush, "strength", slider=True)
             row.prop(brush, "use_pressure_strength", text="", icon='STYLUS_PRESSURE')
