@@ -49,87 +49,45 @@ static void node_shader_init_vect_transform(bNodeTree * /*ntree*/, bNode *node)
 
 static const char *get_gpufn_name_from_to(short from, short to, short vector_type)
 {
-  switch (from) {
-    case SHD_VECT_TRANSFORM_SPACE_OBJECT:
-      switch (to) {
-        case SHD_VECT_TRANSFORM_SPACE_OBJECT:
-          return nullptr;
-        case SHD_VECT_TRANSFORM_SPACE_WORLD:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_object_to_world";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_object_to_world";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_object_to_world";
-          }
-          break;
-        case SHD_VECT_TRANSFORM_SPACE_CAMERA:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_object_to_view";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_object_to_view";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_object_to_view";
-          }
-          break;
-      }
-      break;
-    case SHD_VECT_TRANSFORM_SPACE_WORLD:
-      switch (to) {
-        case SHD_VECT_TRANSFORM_SPACE_WORLD:
-          return nullptr;
-        case SHD_VECT_TRANSFORM_SPACE_CAMERA:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_world_to_view";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_world_to_view";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_world_to_view";
-          }
-          break;
-        case SHD_VECT_TRANSFORM_SPACE_OBJECT:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_world_to_object";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_world_to_object";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_world_to_object";
-          }
-          break;
-      }
-      break;
-    case SHD_VECT_TRANSFORM_SPACE_CAMERA:
-      switch (to) {
-        case SHD_VECT_TRANSFORM_SPACE_CAMERA:
-          return nullptr;
-        case SHD_VECT_TRANSFORM_SPACE_WORLD:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_view_to_world";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_view_to_world";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_view_to_world";
-          }
-          break;
-        case SHD_VECT_TRANSFORM_SPACE_OBJECT:
-          switch (vector_type) {
-            case SHD_VECT_TRANSFORM_TYPE_NORMAL:
-              return "normal_transform_view_to_object";
-            case SHD_VECT_TRANSFORM_TYPE_VECTOR:
-              return "direction_transform_view_to_object";
-            case SHD_VECT_TRANSFORM_TYPE_POINT:
-              return "point_transform_view_to_object";
-          }
-          break;
-      }
-      break;
+  if (from == to) {
+    return nullptr;
   }
-  return nullptr;
+
+#define SWITCH_VECTOR_TYPE(FROM, TO) \
+  switch (vector_type) { \
+    case SHD_VECT_TRANSFORM_TYPE_NORMAL: \
+      return "normal_transform_" FROM "_to_" TO; \
+    case SHD_VECT_TRANSFORM_TYPE_VECTOR: \
+      return "direction_transform_" FROM "_to_" TO; \
+    case SHD_VECT_TRANSFORM_TYPE_POINT: \
+      return "point_transform_" FROM "_to_" TO; \
+  } \
+  break;
+
+#define SWITCH_SPACE_TYPE(FROM) \
+  switch (to) { \
+    case SHD_VECT_TRANSFORM_SPACE_WORLD: \
+      SWITCH_VECTOR_TYPE(FROM, "world"); \
+    case SHD_VECT_TRANSFORM_SPACE_OBJECT: \
+      SWITCH_VECTOR_TYPE(FROM, "object"); \
+    case SHD_VECT_TRANSFORM_SPACE_CAMERA: \
+      SWITCH_VECTOR_TYPE(FROM, "camera"); \
+  } \
+  break;
+
+  switch (from) {
+    case SHD_VECT_TRANSFORM_SPACE_WORLD:
+      SWITCH_SPACE_TYPE("world");
+    case SHD_VECT_TRANSFORM_SPACE_OBJECT:
+      SWITCH_SPACE_TYPE("object");
+    case SHD_VECT_TRANSFORM_SPACE_CAMERA:
+      SWITCH_SPACE_TYPE("camera");
+  }
+
+  BLI_assert_unreachable();
+
+#undef SWITCH_VECTOR_SPACE
+#undef SWITCH_VECTOR_TYPE
 }
 
 static int gpu_shader_vect_transform(GPUMaterial *mat,

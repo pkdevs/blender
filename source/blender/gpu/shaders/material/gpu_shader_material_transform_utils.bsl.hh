@@ -9,17 +9,6 @@
 #include "gpu_shader_material_interface.bsl.hh"
 
 [[node]]
-void normal_transform_object_to_world(float3 vin,
-                                      [[resource_table]] KernelGlobals &kg,
-                                      const ShadingData &sd,
-                                      float3 &vout)
-{
-  const ObjectMatrices obj = kg.object_matrices_get(sd);
-  /* Expansion of NormalMatrix. */
-  vout = vin * to_float3x3(obj.model_inverse);
-}
-
-[[node]]
 void normal_transform_world_to_object(float3 vin,
                                       [[resource_table]] KernelGlobals &kg,
                                       const ShadingData &sd,
@@ -28,6 +17,27 @@ void normal_transform_world_to_object(float3 vin,
   const ObjectMatrices obj = kg.object_matrices_get(sd);
   /* Expansion of NormalMatrixInverse. */
   vout = vin * to_float3x3(obj.model);
+}
+
+[[node]]
+void normal_transform_world_to_view(float3 vin,
+                                    [[resource_table]] KernelGlobals &kg,
+                                    const ShadingData &sd,
+                                    float3 &vout)
+{
+  const ViewMatrices view = kg.view_matrices_get(sd);
+  vout = to_float3x3(view.viewmat) * vin;
+}
+
+[[node]]
+void normal_transform_object_to_world(float3 vin,
+                                      [[resource_table]] KernelGlobals &kg,
+                                      const ShadingData &sd,
+                                      float3 &vout)
+{
+  const ObjectMatrices obj = kg.object_matrices_get(sd);
+  /* Expansion of NormalMatrix. */
+  vout = vin * to_float3x3(obj.model_inverse);
 }
 
 [[node]]
@@ -65,10 +75,20 @@ void normal_transform_view_to_object(float3 vin,
 }
 
 [[node]]
-void normal_transform_world_to_view(float3 vin,
-                                    [[resource_table]] KernelGlobals &kg,
-                                    const ShadingData &sd,
-                                    float3 &vout)
+void direction_transform_world_to_object(float3 vin,
+                                         [[resource_table]] KernelGlobals &kg,
+                                         const ShadingData &sd,
+                                         float3 &vout)
+{
+  const ObjectMatrices obj = kg.object_matrices_get(sd);
+  vout = to_float3x3(obj.model_inverse) * vin;
+}
+
+[[node]]
+void direction_transform_world_to_view(float3 vin,
+                                       [[resource_table]] KernelGlobals &kg,
+                                       const ShadingData &sd,
+                                       float3 &vout)
 {
   const ViewMatrices view = kg.view_matrices_get(sd);
   vout = to_float3x3(view.viewmat) * vin;
@@ -119,23 +139,23 @@ void direction_transform_view_to_object(float3 vin,
 }
 
 [[node]]
-void direction_transform_world_to_view(float3 vin,
-                                       [[resource_table]] KernelGlobals &kg,
-                                       const ShadingData &sd,
-                                       float3 &vout)
+void point_transform_world_to_object(float3 vin,
+                                     [[resource_table]] KernelGlobals &kg,
+                                     const ShadingData &sd,
+                                     float3 &vout)
 {
-  const ViewMatrices view = kg.view_matrices_get(sd);
-  vout = to_float3x3(view.viewmat) * vin;
+  const ObjectMatrices obj = kg.object_matrices_get(sd);
+  vout = (obj.model_inverse * float4(vin, 1.0f)).xyz;
 }
 
 [[node]]
-void direction_transform_world_to_object(float3 vin,
-                                         [[resource_table]] KernelGlobals &kg,
-                                         const ShadingData &sd,
-                                         float3 &vout)
+void point_transform_world_to_view(float3 vin,
+                                   [[resource_table]] KernelGlobals &kg,
+                                   const ShadingData &sd,
+                                   float3 &vout)
 {
-  const ObjectMatrices obj = kg.object_matrices_get(sd);
-  vout = to_float3x3(obj.model_inverse) * vin;
+  const ViewMatrices view = kg.view_matrices_get(sd);
+  vout = (view.viewmat * float4(vin, 1.0f)).xyz;
 }
 
 [[node]]
@@ -178,24 +198,4 @@ void point_transform_view_to_object(float3 vin,
   const ObjectMatrices obj = kg.object_matrices_get(sd);
   const ViewMatrices view = kg.view_matrices_get(sd);
   vout = (obj.model_inverse * (view.viewinv * float4(vin, 1.0f))).xyz;
-}
-
-[[node]]
-void point_transform_world_to_view(float3 vin,
-                                   [[resource_table]] KernelGlobals &kg,
-                                   const ShadingData &sd,
-                                   float3 &vout)
-{
-  const ViewMatrices view = kg.view_matrices_get(sd);
-  vout = (view.viewmat * float4(vin, 1.0f)).xyz;
-}
-
-[[node]]
-void point_transform_world_to_object(float3 vin,
-                                     [[resource_table]] KernelGlobals &kg,
-                                     const ShadingData &sd,
-                                     float3 &vout)
-{
-  const ObjectMatrices obj = kg.object_matrices_get(sd);
-  vout = (obj.model_inverse * float4(vin, 1.0f)).xyz;
 }
