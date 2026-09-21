@@ -398,14 +398,14 @@ const GeoOperatorLog &node_group_operator_static_eval_log()
 static void find_verbose_log_contexts(const Main &bmain,
                                       Set<ComputeContextHash> &r_verbose_log_contexts)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first);
+  wmWindowManager *wm = bmain.wm.first();
   if (wm == nullptr) {
     return;
   }
   for (const wmWindow &window : wm->windows) {
     const bScreen *screen = BKE_workspace_active_screen_get(window.workspace_hook);
     for (const ScrArea &area : screen->areabase) {
-      const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      const SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       if (sl->spacetype == SPACE_NODE) {
         const SpaceNode &snode = *reinterpret_cast<const SpaceNode *>(sl);
         if (snode.edittree == nullptr) {
@@ -607,10 +607,11 @@ static void get_geometry_active_indices(const Object &object,
   switch (object.type) {
     case OB_MESH: {
       const Mesh *mesh = id_cast<const Mesh *>(object.data);
-      if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
-        operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
-        operator_data.active_edge_index = BM_mesh_active_edge_index_get(em->bm);
-        operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
+      if (mesh->runtime->edit_mesh) {
+        BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(mesh));
+        operator_data.active_point_index = BM_mesh_active_vert_index_get(bm);
+        operator_data.active_edge_index = BM_mesh_active_edge_index_get(bm);
+        operator_data.active_face_index = BM_mesh_active_face_index_get(bm, false, true);
       }
       break;
     }
@@ -707,7 +708,8 @@ static void store_result_geometry(const bContext &C,
         }
         if (object.mode == OB_MODE_EDIT) {
           EDBM_mesh_make_from_mesh(&object, new_mesh, scene.toolsettings->selectmode, true);
-          BKE_editmesh_looptris_and_normals_calc(mesh.runtime->edit_mesh.get());
+          BKE_editmesh_looptris_and_normals_calc(mesh.runtime->edit_mesh.get(),
+                                                 BKE_editmesh_bmesh_get_for_write(&mesh));
           BKE_id_free(nullptr, new_mesh);
           DEG_id_tag_update(&mesh.id, ID_RECALC_GEOMETRY);
         }
@@ -1296,7 +1298,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
       const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
       if (socket_type == SOCK_GEOMETRY && i == 0) {
         bke::SocketValueVariant &value = scope.construct<bke::SocketValueVariant>();
-        value.set(op_data.geometry_orig[object_i]);
+        value = bke::SocketValueVariant::from(op_data.geometry_orig[object_i]);
         param_inputs[function.inputs.main[0]] = &value;
         continue;
       }

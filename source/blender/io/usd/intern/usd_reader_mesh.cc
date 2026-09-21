@@ -432,7 +432,7 @@ void USDMeshReader::read_uv_data_primvar(Mesh *mesh,
 
 void USDMeshReader::read_subdiv()
 {
-  ModifierData *md = static_cast<ModifierData *>(object_->modifiers.last);
+  ModifierData *md = object_->modifiers.last();
   SubsurfModifierData *subdiv_data = reinterpret_cast<SubsurfModifierData *>(md);
 
   pxr::TfToken uv_smooth;
@@ -784,8 +784,8 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
       continue;
     }
 
-    /* We handle the non-standard primvar:velocity elsewhere. */
-    if (ELEM(name, "velocity")) {
+    /* We handle certain primvars elsewhere. */
+    if (ELEM(name, "velocity", "normals")) {
       continue;
     }
 

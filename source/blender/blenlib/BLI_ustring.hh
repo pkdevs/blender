@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
 #include <atomic>
@@ -46,7 +50,14 @@ const blender::detail::UStringEntry &ustring_ensure_entry(const char *str);
  */
 class UString {
  public:
+#if defined(_MSC_VER) && !defined(NDEBUG)
+  /* MSVC's extended STL checks do something to std::string where you can't have a global constexpr
+   * without it causing a build error this only happens in debug builds, for details see :
+   * https://github.com/microsoft/STL/issues/4427 */
+  static const inline blender::detail::UStringEntry EMPTY_ENTRY = {"", hash_string("")};
+#else
   static constexpr blender::detail::UStringEntry EMPTY_ENTRY = {"", hash_string("")};
+#endif
 
  private:
   const blender::detail::UStringEntry *ptr_ = &EMPTY_ENTRY;
@@ -192,13 +203,3 @@ inline std::string_view format_as(UString str)
 }
 
 }  // namespace blender
-
-/**
- * Disable conflicting range formatter in fmtlib. Otherwise we will get compile errors
- * where fmtlib doesn't know if it should use the formatter from format.h or ranges.h.
- */
-namespace fmt {
-
-template<> struct is_range<blender::UString, char> : std::false_type {};
-
-}  // namespace fmt

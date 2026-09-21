@@ -221,7 +221,7 @@ void DrawCacheImpl::tag_visibility_changed(const IndexMask &node_mask)
 
 void DrawCacheImpl::tag_topology_changed(const IndexMask &node_mask)
 {
-  /** Currently the only times where topology changes are for BMesh dynamic topology, where tagging
+  /* Currently the only times where topology changes are for BMesh dynamic topology, where tagging
    * a visibility update deletes all the GPU data anyway. */
   this->tag_visibility_changed(node_mask);
 }
@@ -1992,7 +1992,7 @@ static int create_tri_index_grids(const Span<int> grid_indices,
     for (int y = 0; y < gridsize - skip; y += skip) {
       for (int x = 0; x < gridsize - skip; x += skip) {
         /* Skip hidden grid face */
-        if (!gh.is_empty() && paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+        if (!gh.is_empty() && BKE_paint_is_grid_face_hidden(gh, gridsize, x, y)) {
           continue;
         }
         /* Indices in a Clockwise QUAD disposition. */
@@ -2030,7 +2030,7 @@ static int create_tri_index_grids_flat_layout(const Span<int> grid_indices,
     for (int y = 0; y < gridsize - skip; y += skip) {
       for (int x = 0; x < gridsize - skip; x += skip) {
         /* Skip hidden grid face */
-        if (!gh.is_empty() && paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+        if (!gh.is_empty() && BKE_paint_is_grid_face_hidden(gh, gridsize, x, y)) {
           continue;
         }
 
@@ -2085,7 +2085,7 @@ static void create_lines_index_grids(const Span<int> grid_indices,
     for (int y = 0; y < gridsize - skip; y += skip) {
       for (int x = 0; x < gridsize - skip; x += skip) {
         /* Skip hidden grid face */
-        if (!gh.is_empty() && paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+        if (!gh.is_empty() && BKE_paint_is_grid_face_hidden(gh, gridsize, x, y)) {
           continue;
         }
         /* Indices in a Clockwise QUAD disposition. */
@@ -2134,7 +2134,7 @@ static void create_lines_index_grids_flat_layout(const Span<int> grid_indices,
     for (int y = 0; y < gridsize - skip; y += skip) {
       for (int x = 0; x < gridsize - skip; x += skip) {
         /* Skip hidden grid face */
-        if (!gh.is_empty() && paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+        if (!gh.is_empty() && BKE_paint_is_grid_face_hidden(gh, gridsize, x, y)) {
           continue;
         }
 
