@@ -273,7 +273,7 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   get_positions(mesh->vert_positions(), points);
   get_topology(mesh, face_verts, loop_counts);
 
-  if (!frame_has_been_written_ && args_.export_params->face_sets) {
+  if (args_.export_params->face_sets) {
     write_face_sets(context.object, mesh, abc_poly_mesh_schema_);
   }
 
@@ -338,7 +338,7 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
   get_edge_creases(mesh, edge_crease_indices, edge_crease_lengths, edge_crease_sharpness);
   get_vert_creases(mesh, vert_crease_indices, vert_crease_sharpness);
 
-  if (!frame_has_been_written_ && args_.export_params->face_sets) {
+  if (args_.export_params->face_sets) {
     write_face_sets(context.object, mesh, abc_subdiv_schema_);
   }
 
@@ -439,10 +439,31 @@ void ABCGenericMeshWriter::write_face_sets(Object *object, Mesh *mesh, Schema &s
 
   std::map<std::string, std::vector<int32_t>>::iterator it;
   for (it = geo_groups.begin(); it != geo_groups.end(); ++it) {
-    OFaceSet face_set = schema.createFaceSet(it->first);
+    OFaceSet face_set;
+    if (schema.hasFaceSet(it->first)) {
+      face_set = schema.getFaceSet(it->first);
+    }
+    else {
+      face_set = schema.createFaceSet(it->first);
+    }
+
+    OFaceSetSchema &face_set_schema = face_set.getSchema();
+    face_set_schema.setTimeSampling(timesample_index());
+
     OFaceSetSchema::Sample samp;
+
+    /* Write empty samples for missing frames.
+     * NOTE: we need a non-null pointer for the array sample otherwise Alembic will treat it as a
+     * null sample and either throw an exception on the first frame, or reuse the last frame's
+     * data. */
+    static int address_for_empty_sample = 0;
+    samp.setFaces(Int32ArraySample(&address_for_empty_sample, 0));
+    for (size_t i = face_set_schema.getNumSamples(); i < schema.getNumSamples(); i++) {
+      face_set_schema.set(samp);
+    }
+
     samp.setFaces(Int32ArraySample(it->second));
-    face_set.getSchema().set(samp);
+    face_set_schema.set(samp);
   }
 }
 
