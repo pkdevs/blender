@@ -685,7 +685,7 @@ class JoltSolverStep {
 
         float4x4 &transform = geo_data.transform_attr.span[instance_i];
         float3 &velocity = geo_data.velocity_attr.span[instance_i];
-        float3 &angular_velocity = geo_data.velocity_attr.span[instance_i];
+        float3 &angular_velocity = geo_data.angular_velocity_attr.span[instance_i];
 
         /* Scale is not simulated to Jolt, so keep the scale of the original geometry. */
         transform = math::from_loc_rot_scale<float4x4>(
