@@ -352,11 +352,7 @@ template<typename T, typename... Args>
 inline T *MEM_new(const char *allocation_name, Args &&...args)
 {
   void *buffer = mem_guarded::internal::mem_mallocN_aligned_ex(
-      sizeof(T),
-      alignof(T),
-      allocation_name,
-      std::is_trivially_destructible_v<T> ? mem_guarded::internal::DestructorType::Trivial :
-                                            mem_guarded::internal::DestructorType::NonTrivial);
+      sizeof(T), alignof(T), allocation_name);
   return new (buffer) T(std::forward<Args>(args)...);
 }
 
@@ -425,8 +421,7 @@ template<typename T> inline void MEM_delete(const T *ptr)
     ptr->~T();
   }
   /* C++ allows destruction of `const` objects, so the pointer is allowed to be `const`. */
-  mem_guarded::internal::mem_freeN_ex(const_cast<void *>(complete_ptr),
-                                      mem_guarded::internal::DestructorType::NonTrivial);
+  mem_guarded::internal::mem_freeN_ex(const_cast<void *>(complete_ptr));
 }
 
 /**
@@ -467,44 +462,32 @@ template<typename T> struct MEM_smart_ptr_deleter {
     void *operator new(size_t num_bytes) \
     { \
       return mem_guarded::internal::mem_mallocN_aligned_ex( \
-          num_bytes, \
-          __STDCPP_DEFAULT_NEW_ALIGNMENT__, \
-          _id, \
-          mem_guarded::internal::DestructorType::NonTrivial); \
+          num_bytes, __STDCPP_DEFAULT_NEW_ALIGNMENT__, _id); \
     } \
     void *operator new(size_t num_bytes, std::align_val_t alignment) \
     { \
-      return mem_guarded::internal::mem_mallocN_aligned_ex( \
-          num_bytes, size_t(alignment), _id, mem_guarded::internal::DestructorType::NonTrivial); \
+      return mem_guarded::internal::mem_mallocN_aligned_ex(num_bytes, size_t(alignment), _id); \
     } \
     void operator delete(void *mem) \
     { \
       if (mem) { \
-        mem_guarded::internal::mem_freeN_ex(mem, \
-                                            mem_guarded::internal::DestructorType::NonTrivial); \
+        mem_guarded::internal::mem_freeN_ex(mem); \
       } \
     } \
     void *operator new[](size_t num_bytes) \
     { \
       return mem_guarded::internal::mem_mallocN_aligned_ex( \
-          num_bytes, \
-          __STDCPP_DEFAULT_NEW_ALIGNMENT__, \
-          _id "[]", \
-          mem_guarded::internal::DestructorType::NonTrivial); \
+          num_bytes, __STDCPP_DEFAULT_NEW_ALIGNMENT__, _id "[]"); \
     } \
     void *operator new[](size_t num_bytes, std::align_val_t alignment) \
     { \
       return mem_guarded::internal::mem_mallocN_aligned_ex( \
-          num_bytes, \
-          size_t(alignment), \
-          _id "[]", \
-          mem_guarded::internal::DestructorType::NonTrivial); \
+          num_bytes, size_t(alignment), _id "[]"); \
     } \
     void operator delete[](void *mem) \
     { \
       if (mem) { \
-        mem_guarded::internal::mem_freeN_ex(mem, \
-                                            mem_guarded::internal::DestructorType::NonTrivial); \
+        mem_guarded::internal::mem_freeN_ex(mem); \
       } \
     } \
     void *operator new(size_t /*count*/, void *ptr) \
@@ -648,8 +631,7 @@ template<typename T> inline void MEM_delete_void(T *ptr)
 {
   static_assert(std::is_void_v<T>,
                 "MEM_delete_void only supported for void pointer, use MEM_delete instead");
-  mem_guarded::internal::mem_freeN_ex(const_cast<void *>(static_cast<const void *>(ptr)),
-                                      mem_guarded::internal::DestructorType::Trivial);
+  mem_guarded::internal::mem_freeN_ex(const_cast<void *>(static_cast<const void *>(ptr)));
 }
 
 /** \} */

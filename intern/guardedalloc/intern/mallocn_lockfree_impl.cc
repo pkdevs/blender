@@ -63,11 +63,6 @@ static void (*error_callback)(const char *) = nullptr;
 enum {
   /** This block used aligned allocation, and its 'head' is of #MemHeadAligned type. */
   MEMHEAD_FLAG_ALIGN = 1 << 0,
-  /**
-   * This block of memory has been allocated for a type with a non-trivial destructor.
-   * This checks that #MEM_delete is used to free the memory, and not #MEM_delete_void.
-   */
-  MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR = 1 << 1,
 
   MEMHEAD_FLAG_MASK = (1 << 2) - 1
 };
@@ -76,8 +71,6 @@ enum {
 #define PTR_FROM_MEMHEAD(memhead) (memhead + 1)
 #define MEMHEAD_ALIGNED_FROM_PTR(ptr) (((MemHeadAligned *)ptr) - 1)
 #define MEMHEAD_IS_ALIGNED(memhead) ((memhead)->len & size_t(MEMHEAD_FLAG_ALIGN))
-#define MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memhead) \
-  ((memhead)->len & size_t(MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR))
 #define MEMHEAD_LEN(memhead) ((memhead)->len & ~size_t(MEMHEAD_FLAG_MASK))
 
 #ifdef __GNUC__
@@ -146,7 +139,7 @@ size_t MEM_lockfree_allocN_len(const void *vmemh)
   return 0;
 }
 
-void MEM_lockfree_freeN(void *vmemh, DestructorType destructor_type)
+void MEM_lockfree_freeN(void *vmemh)
 {
   PRF_scope(blender::ProfileCategory::Core);
   if (leak_detector_has_run) [[unlikely]] {
@@ -160,12 +153,6 @@ void MEM_lockfree_freeN(void *vmemh, DestructorType destructor_type)
 
   MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
   size_t len = MEMHEAD_LEN(memh);
-
-  if (destructor_type != DestructorType::NonTrivial && MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
-    report_error_on_address(vmemh,
-                            "Attempt to use C-style MEM_delete_void on a pointer created with "
-                            "CPP-style MEM_new or new\n");
-  }
 
   memory_usage_block_free(len);
 
@@ -190,16 +177,10 @@ void *MEM_lockfree_dupallocN(const void *vmemh)
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t prev_size = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
-      report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_dupalloc_void on a pointer created with "
-                              "CPP-style MEM_new or new\n");
-    }
-
     if (MEMHEAD_IS_ALIGNED(memh)) [[unlikely]] {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
       newp = MEM_lockfree_mallocN_aligned(
-          prev_size, size_t(memh_aligned->alignment), "dupli_malloc", DestructorType::Trivial);
+          prev_size, size_t(memh_aligned->alignment), "dupli_malloc");
     }
     else {
       newp = MEM_lockfree_mallocN(prev_size, "dupli_malloc");
@@ -218,20 +199,12 @@ void *MEM_lockfree_reallocN_id(void *vmemh, size_t len, const char *str)
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t old_len = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
-      report_error_on_address(
-          vmemh,
-          "Attempt to use C-style MEM_realloc_uninitialized on a pointer created with "
-          "CPP-style MEM_new or new\n");
-    }
-
     if (!MEMHEAD_IS_ALIGNED(memh)) [[likely]] {
       newp = MEM_lockfree_mallocN(len, "realloc");
     }
     else {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
-      newp = MEM_lockfree_mallocN_aligned(
-          len, size_t(memh_aligned->alignment), "realloc", DestructorType::Trivial);
+      newp = MEM_lockfree_mallocN_aligned(len, size_t(memh_aligned->alignment), "realloc");
     }
 
     if (newp) {
@@ -245,7 +218,7 @@ void *MEM_lockfree_reallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_lockfree_freeN(vmemh, DestructorType::Trivial);
+    MEM_lockfree_freeN(vmemh);
   }
   else {
     newp = MEM_lockfree_mallocN(len, str);
@@ -263,20 +236,12 @@ void *MEM_lockfree_recallocN_id(void *vmemh, size_t len, const char *str)
     const MemHead *memh = MEMHEAD_FROM_PTR(vmemh);
     const size_t old_len = MEM_lockfree_allocN_len(vmemh);
 
-    if (MEMHEAD_HAS_NONTRIVIAL_DESTRUCTOR(memh)) {
-      report_error_on_address(
-          vmemh,
-          "Attempt to use C-style MEM_realloc_zeroed on a pointer created with "
-          "CPP-style MEM_new or new\n");
-    }
-
     if (!MEMHEAD_IS_ALIGNED(memh)) [[likely]] {
       newp = MEM_lockfree_mallocN(len, "recalloc");
     }
     else {
       const MemHeadAligned *memh_aligned = MEMHEAD_ALIGNED_FROM_PTR(vmemh);
-      newp = MEM_lockfree_mallocN_aligned(
-          len, size_t(memh_aligned->alignment), "recalloc", DestructorType::Trivial);
+      newp = MEM_lockfree_mallocN_aligned(len, size_t(memh_aligned->alignment), "recalloc");
     }
 
     if (newp) {
@@ -295,7 +260,7 @@ void *MEM_lockfree_recallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_lockfree_freeN(vmemh, DestructorType::Trivial);
+    MEM_lockfree_freeN(vmemh);
   }
   else {
     newp = MEM_lockfree_callocN(len, str);
@@ -406,10 +371,7 @@ void *MEM_lockfree_malloc_arrayN(size_t len, size_t size, const char *str)
   return MEM_lockfree_mallocN(total_size, str);
 }
 
-void *MEM_lockfree_mallocN_aligned(size_t len,
-                                   size_t alignment,
-                                   const char *str,
-                                   const DestructorType destructor_type)
+void *MEM_lockfree_mallocN_aligned(size_t len, size_t alignment, const char *str)
 {
   PRF_scope(blender::ProfileCategory::Core);
   /* Huge alignment values doesn't make sense and they wouldn't fit into 'short' used in the
@@ -462,10 +424,7 @@ void *MEM_lockfree_mallocN_aligned(size_t len,
 #endif /* WITH_MEM_VALGRIND */
     }
 
-    memh->len = len | size_t(MEMHEAD_FLAG_ALIGN) |
-                size_t(destructor_type == DestructorType::NonTrivial ?
-                           MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR :
-                           0);
+    memh->len = len | size_t(MEMHEAD_FLAG_ALIGN);
     memh->alignment = short(alignment);
     memory_usage_block_alloc(len);
 

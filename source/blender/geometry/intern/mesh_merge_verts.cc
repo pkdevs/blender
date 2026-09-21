@@ -22,6 +22,7 @@
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_attribute_filters.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_mesh.hh"
@@ -1483,6 +1484,12 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
   const int dst_faces_num = src_faces.size() - weld_mesh.removed_faces_num +
                             weld_mesh.new_faces_num;
 
+  /* When no edges or faces are merged, collapsed, or split, they keep their source indices in the
+   * result, so their attributes can be copied directly instead of mixing groups of source
+   * values. */
+  const bool edges_unchanged = weld_mesh.removed_edges_num == 0;
+  const bool faces_unchanged = weld_mesh.removed_faces_num == 0 && weld_mesh.new_faces_num == 0;
+
   Mesh *result = BKE_mesh_new_nomain(dst_verts_num, dst_edges_num, dst_faces_num, dst_corners_num);
   BKE_mesh_copy_parameters_for_eval(result, &mesh);
   MutableSpan<int2> dst_edges = result->edges_for_write();
@@ -1525,41 +1532,61 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
 
   /* Edges. */
 
-  /* Collapsed edges have no target, so they can't be part of any group. */
-  const IndexMask kept_edges = IndexMask::from_predicate(
-      IndexMask(src_edges_num), mask_memory, [&](const int edge) {
-        return weld_mesh.edge_src_to_target[edge] != ELEM_COLLAPSED;
-      });
-
-  const IndexMask edge_survivors = merge_survivors(weld_mesh.edge_src_to_target, mask_memory);
-  BLI_assert(edge_survivors.size() == dst_edges_num);
-
-  const Array<int> edge_src_to_dst = merge_src_to_dst_map(weld_mesh.edge_src_to_target,
-                                                          edge_survivors);
-
+  Array<int> edge_src_to_dst;
   Array<int> edge_dst_to_src_offsets;
   Array<int> edge_dst_to_src_indices;
-  const GroupedSpan<int> edge_dst_to_src = merge_dst_to_src_map(weld_mesh.edge_src_to_target,
-                                                                kept_edges,
-                                                                edge_survivors,
-                                                                do_mix_data,
-                                                                edge_dst_to_src_offsets,
-                                                                edge_dst_to_src_indices);
+  GroupedSpan<int> edge_dst_to_src;
+  if (edges_unchanged) {
+    BLI_assert(dst_edges_num == src_edges_num);
+    edge_src_to_dst.reinitialize(src_edges_num);
+    array_utils::fill_index_range<int>(edge_src_to_dst);
+    bke::copy_attributes(src_attributes,
+                         bke::AttrDomain::Edge,
+                         bke::AttrDomain::Edge,
+                         bke::attribute_filter_with_skip_ref({}, {".edge_verts"}),
+                         dst_attributes);
+  }
+  else {
+    /* Collapsed edges have no target, so they can't be part of any group. */
+    const IndexMask kept_edges = IndexMask::from_predicate(
+        IndexMask(src_edges_num), mask_memory, [&](const int edge) {
+          return weld_mesh.edge_src_to_target[edge] != ELEM_COLLAPSED;
+        });
 
-  mix_attributes(
-      src_attributes, edge_dst_to_src, bke::AttrDomain::Edge, {".edge_verts"}, dst_attributes);
+    const IndexMask edge_survivors = merge_survivors(weld_mesh.edge_src_to_target, mask_memory);
+    BLI_assert(edge_survivors.size() == dst_edges_num);
+
+    edge_src_to_dst = merge_src_to_dst_map(weld_mesh.edge_src_to_target, edge_survivors);
+
+    edge_dst_to_src = merge_dst_to_src_map(weld_mesh.edge_src_to_target,
+                                           kept_edges,
+                                           edge_survivors,
+                                           do_mix_data,
+                                           edge_dst_to_src_offsets,
+                                           edge_dst_to_src_indices);
+
+    mix_attributes(
+        src_attributes, edge_dst_to_src, bke::AttrDomain::Edge, {".edge_verts"}, dst_attributes);
+  }
+
   if (CustomData_has_layer(&mesh.edge_data, CD_ORIGINDEX)) {
     const Span src(static_cast<const int *>(CustomData_get_layer(&mesh.edge_data, CD_ORIGINDEX)),
                    mesh.edges_num);
     MutableSpan dst(static_cast<int *>(CustomData_add_layer(
                         &result->edge_data, CD_ORIGINDEX, CD_CONSTRUCT, result->edges_num)),
                     result->edges_num);
-    copy_first_from_src(src, edge_dst_to_src, dst);
+    if (edges_unchanged) {
+      array_utils::copy(src, dst);
+    }
+    else {
+      copy_first_from_src(src, edge_dst_to_src, dst);
+    }
   }
 
   threading::parallel_for(dst_edges.index_range(), 2048, [&](const IndexRange range) {
     for (const int dst_edge_index : range) {
-      const int src_edge_index = edge_dst_to_src[dst_edge_index].first();
+      const int src_edge_index = edges_unchanged ? dst_edge_index :
+                                                   edge_dst_to_src[dst_edge_index].first();
       const int2 src_edge = src_edges[src_edge_index];
       dst_edges[dst_edge_index] = int2(vert_src_to_dst[src_edge[0]], vert_src_to_dst[src_edge[1]]);
     }
@@ -1664,27 +1691,34 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
 
   const OffsetIndices dst_faces = result->faces();
 
-  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
-    if (iter.domain != bke::AttrDomain::Face) {
-      return;
-    }
-    const GVArray src_attr = *iter.get();
-    const CommonVArrayInfo info = src_attr.common_info();
-    if (info.type == CommonVArrayInfo::Type::Single) {
-      const bke::AttributeInitValue init(GPointer(src_attr.type(), info.data));
-      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+  if (faces_unchanged) {
+    BLI_assert(dst_to_src_faces.size() == dst_faces_num);
+    bke::copy_attributes(
+        src_attributes, bke::AttrDomain::Face, bke::AttrDomain::Face, {}, dst_attributes);
+  }
+  else {
+    src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+      if (iter.domain != bke::AttrDomain::Face) {
         return;
       }
-    }
-    const CPPType &type = src_attr.type();
-    bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
-        iter.name, iter.domain, iter.data_type);
-    bke::attribute_math::gather(
-        src_attr, dst_to_src_faces, dst_attr.span.take_front(dst_to_src_faces.size()));
-    GMutableSpan default_data = dst_attr.span.drop_front(dst_to_src_faces.size());
-    type.fill_assign_n(type.default_value(), default_data.data(), default_data.size());
-    dst_attr.finish();
-  });
+      const GVArray src_attr = *iter.get();
+      const CommonVArrayInfo info = src_attr.common_info();
+      if (info.type == CommonVArrayInfo::Type::Single) {
+        const bke::AttributeInitValue init(GPointer(src_attr.type(), info.data));
+        if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+          return;
+        }
+      }
+      const CPPType &type = src_attr.type();
+      bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
+          iter.name, iter.domain, iter.data_type);
+      bke::attribute_math::gather(
+          src_attr, dst_to_src_faces, dst_attr.span.take_front(dst_to_src_faces.size()));
+      GMutableSpan default_data = dst_attr.span.drop_front(dst_to_src_faces.size());
+      type.fill_assign_n(type.default_value(), default_data.data(), default_data.size());
+      dst_attr.finish();
+    });
+  }
 
   if (CustomData_has_layer(&mesh.face_data, CD_ORIGINDEX)) {
     const Span src(static_cast<const int *>(CustomData_get_layer(&mesh.face_data, CD_ORIGINDEX)),
@@ -1692,8 +1726,13 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
     MutableSpan dst(static_cast<int *>(CustomData_add_layer(
                         &result->face_data, CD_ORIGINDEX, CD_CONSTRUCT, result->faces_num)),
                     result->faces_num);
-    bke::attribute_math::gather(src, dst_to_src_faces, dst.take_front(dst_to_src_faces.size()));
-    dst.drop_front(dst_to_src_faces.size()).fill(ORIGINDEX_NONE);
+    if (faces_unchanged) {
+      array_utils::copy(src, dst);
+    }
+    else {
+      bke::attribute_math::gather(src, dst_to_src_faces, dst.take_front(dst_to_src_faces.size()));
+      dst.drop_front(dst_to_src_faces.size()).fill(ORIGINDEX_NONE);
+    }
   }
 
   IndexMaskMemory memory;

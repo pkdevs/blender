@@ -12,15 +12,8 @@
 
 namespace mem_guarded::internal {
 
-enum class DestructorType {
-  /** Allocation has a trivial destructor. */
-  Trivial,
-  /** Allocation has a non-trivial destructor that should be called when freeing. */
-  NonTrivial,
-};
-
 /** Internal implementation of #MEM_delete_void, exposed because #MEM_delete needs access to it. */
-extern void (*mem_freeN_ex)(void *vmemh, DestructorType destructor_type);
+extern void (*mem_freeN_ex)(void *vmemh);
 
 /**
  * Internal implementation of #MEM_new_zeroed, exposed because public #MEM_new_zeroed cannot be a
@@ -58,10 +51,7 @@ extern void *(*mem_malloc_arrayN)(size_t len,
 /** Internal implementation of #MEM_new_uninitialized_aligned, exposed because #MEM_new needs
  * access to it.
  */
-extern void *(*mem_mallocN_aligned_ex)(size_t len,
-                                       size_t alignment,
-                                       const char *str,
-                                       DestructorType destructor_type);
+extern void *(*mem_mallocN_aligned_ex)(size_t len, size_t alignment, const char *str);
 
 /**
  * Internal implementation of #MEM_dupalloc_void, exposed because public #MEM_dupalloc_void cannot

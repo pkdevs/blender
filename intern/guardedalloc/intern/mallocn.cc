@@ -25,8 +25,7 @@ using namespace mem_guarded::internal;
 /* NOTE: Keep in sync with MEM_use_lockfree_allocator(). */
 
 size_t (*MEM_allocN_len)(const void *vmemh) = MEM_lockfree_allocN_len;
-void (*mem_guarded::internal::mem_freeN_ex)(void *vmemh,
-                                            DestructorType destructor_type) = MEM_lockfree_freeN;
+void (*mem_guarded::internal::mem_freeN_ex)(void *vmemh) = MEM_lockfree_freeN;
 void *(*mem_guarded::internal::mem_dupallocN)(const void *vmemh) = MEM_lockfree_dupallocN;
 void *(*MEM_realloc_uninitialized_id)(void *vmemh,
                                       size_t len,
@@ -42,11 +41,8 @@ void *(*mem_guarded::internal::mem_mallocN)(size_t len, const char *str) = MEM_l
 void *(*mem_guarded::internal::mem_malloc_arrayN)(size_t len,
                                                   size_t size,
                                                   const char *str) = MEM_lockfree_malloc_arrayN;
-void *(*mem_guarded::internal::mem_mallocN_aligned_ex)(size_t len,
-                                                       size_t alignment,
-                                                       const char *str,
-                                                       DestructorType destructor_type) =
-    MEM_lockfree_mallocN_aligned;
+void *(*mem_guarded::internal::mem_mallocN_aligned_ex)(
+    size_t len, size_t alignment, const char *str) = MEM_lockfree_mallocN_aligned;
 void *(*MEM_new_array_uninitialized_aligned)(size_t len,
                                              size_t size,
                                              size_t alignment,
@@ -108,7 +104,7 @@ void aligned_free(void *ptr)
 
 void MEM_delete_void(void *vmemh)
 {
-  mem_freeN_ex(vmemh, DestructorType::Trivial);
+  mem_freeN_ex(vmemh);
 }
 
 void *MEM_new_zeroed(size_t len, const char *str)
@@ -133,7 +129,7 @@ void *MEM_new_array_uninitialized(size_t len, size_t size, const char *str)
 
 void *MEM_new_uninitialized_aligned(size_t len, size_t alignment, const char *str)
 {
-  return mem_mallocN_aligned_ex(len, alignment, str, DestructorType::Trivial);
+  return mem_mallocN_aligned_ex(len, alignment, str);
 }
 
 void *MEM_dupalloc_void(const void *vmemh)
