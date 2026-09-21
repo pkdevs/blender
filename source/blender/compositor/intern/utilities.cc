@@ -4,7 +4,7 @@
 
 #include <optional>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -90,6 +90,8 @@ ResultType socket_data_type_to_result_type(const eNodeSocketDatatype data_type,
       return ResultType::Text;
     case SOCK_MASK:
       return ResultType::Mask;
+    case SOCK_BUNDLE:
+      return ResultType::Bundle;
     default:
       BLI_assert_unreachable();
       return ResultType::Float;

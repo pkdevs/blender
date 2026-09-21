@@ -10,16 +10,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_heap_simple.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_heap_simple.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
 
-#include "BLI_mempool.h"
+#include "BLI_mempool.hh"
 
 namespace blender {
 
@@ -530,7 +530,7 @@ static void bm_vert_pair_to_matrix(BMVert *v_pair[2], float r_unit_mat[3][3])
   cross_v3_v3v3(basis_tmp, basis_dir, basis_nor);
 
   /* Try get the axis from surrounding faces, fallback to 'ortho_v3_v3' */
-  if (UNLIKELY(normalize_v3(basis_tmp) < eps)) {
+  if (normalize_v3(basis_tmp) < eps) [[unlikely]] {
     /* vertex normals are directly opposite */
 
     /* find the loop with the lowest angle */
@@ -574,7 +574,7 @@ static void bm_vert_pair_to_matrix(BMVert *v_pair[2], float r_unit_mat[3][3])
     cross_v3_v3v3(basis_tmp, basis_dir, basis_nor);
 
     /* last resort, pick _any_ ortho axis */
-    if (UNLIKELY(normalize_v3(basis_tmp) < eps)) {
+    if (normalize_v3(basis_tmp) < eps) [[unlikely]] {
       ortho_v3_v3(basis_nor, basis_dir);
       normalize_v3(basis_nor);
       cross_v3_v3v3(basis_tmp, basis_dir, basis_nor);

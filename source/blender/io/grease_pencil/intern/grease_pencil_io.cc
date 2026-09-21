@@ -4,10 +4,10 @@
 
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
@@ -245,14 +245,15 @@ void GreasePencilExporter::prepare_render_params(Scene &scene, const int frame_n
 
   if (use_camera_view) {
     /* Camera rectangle (in screen space). */
-    rctf camera_rect;
-    ED_view3d_calc_camera_border(&scene,
-                                 context_.depsgraph,
-                                 context_.region,
-                                 context_.v3d,
-                                 context_.rv3d,
-                                 true,
-                                 &camera_rect);
+    const rctf camera_rect = BKE_camera_view_border(&scene,
+                                                    context_.depsgraph,
+                                                    context_.v3d,
+                                                    context_.rv3d,
+                                                    context_.region->winx,
+                                                    context_.region->winy,
+                                                    true,
+                                                    false,
+                                                    true);
     screen_rect_ = {{camera_rect.xmin, camera_rect.ymin}, {camera_rect.xmax, camera_rect.ymax}};
     camera_persmat_ = persmat_from_camera_object(scene);
 

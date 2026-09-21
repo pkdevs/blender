@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 ## Update and uncomment this in the release branch
-set(BLENDER_VERSION 5.2)
+# set(BLENDER_VERSION 3.1)
 
 function(download_source dep)
   set(TARGET_FILE ${${dep}_FILE})
@@ -113,7 +113,6 @@ download_source(X265)
 download_source(OPENJPEG)
 download_source(FFMPEG)
 download_source(FFTW)
-download_source(ICONV)
 download_source(SNDFILE)
 download_source(WEBP)
 download_source(SPNAV)

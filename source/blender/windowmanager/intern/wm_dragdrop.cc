@@ -22,12 +22,12 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BIF_glutil.hh"
 
@@ -784,7 +784,7 @@ ID *WM_drag_get_local_ID(const wmDrag *drag, short idcode)
     return nullptr;
   }
 
-  wmDragID *drag_id = static_cast<wmDragID *>(drag->ids.first);
+  wmDragID *drag_id = drag->ids.first();
   if (!drag_id) {
     return nullptr;
   }
@@ -800,7 +800,7 @@ ID *WM_drag_get_local_ID_from_event(const wmEvent *event, short idcode)
   }
 
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
-  return WM_drag_get_local_ID(static_cast<const wmDrag *>(lb->first), idcode);
+  return WM_drag_get_local_ID(lb->first(), idcode);
 }
 
 bool WM_drag_is_ID_type(const wmDrag *drag, int idcode)

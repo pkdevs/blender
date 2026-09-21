@@ -15,11 +15,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_heap.h"
-#include "BLI_math_base.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_heap.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_customdata.hh"
 
@@ -472,7 +472,8 @@ struct JoinEdgesNeighborItem {
 };
 
 struct JoinEdgesNeighborInfo {
-  /** Logically there can only ever be 8 items in this array.
+  /**
+   * Logically there can only ever be 8 items in this array.
    *
    * Since a quad has no more than 4 neighbor triangles, and each neighbor triangle has no more
    * than two edges to consider, #reprioritize_face_neighbors can't possibly call this function
@@ -968,7 +969,7 @@ static BMFace *bm_faces_join_pair_by_edge(BMesh *bm,
    *
    * See #BM_faces_join note on `r_double`. The corners match #bm_edge_to_quad_verts winding. */
   BMVert *v_quad[4] = {l_a->v, l_b->prev->v, l_a->next->v, l_a->prev->v};
-  if (UNLIKELY(BM_face_exists(v_quad, 4) != nullptr)) {
+  if (BM_face_exists(v_quad, 4) != nullptr) [[unlikely]] {
     return nullptr;
   }
 

@@ -114,6 +114,7 @@ enum eSpaceButtons_Context : short {
   BCONTEXT_COLLECTION = 17,
   BCONTEXT_STRIP = 18,
   BCONTEXT_STRIP_MODIFIER = 19,
+  BCONTEXT_COMPOSITOR = 20,
 
   /* Keep last. */
   BCONTEXT_TOT,
@@ -154,6 +155,7 @@ enum eSpaceOutliner_Flag : short {
   SO_SYNC_SELECT = (1 << 5),
   SO_MODE_COLUMN = (1 << 6),
   SO_SCROLL_TO_ACTIVE = (1 << 7),
+  SO_EXPAND_ON_FOCUS = (1 << 8),
 };
 ENUM_OPERATORS(eSpaceOutliner_Flag)
 
@@ -186,6 +188,17 @@ enum eSpaceOutliner_Filter : int {
   SO_FILTER_ID_TYPE = (1 << 19),
 
   SO_FILTER_NO_OB_GREASE_PENCIL = (1 << 20),
+
+  SO_FILTER_NO_OB_DATA = (1 << 21),
+  SO_FILTER_NO_OB_ANIMATION = (1 << 22),
+  SO_FILTER_NO_OB_CONSTRAINTS = (1 << 23),
+  SO_FILTER_NO_OB_SHAPE_KEYS = (1 << 24),
+  SO_FILTER_NO_OB_MATERIAL = (1 << 25),
+  SO_FILTER_NO_OB_DEFGROUP = (1 << 26),
+  SO_FILTER_NO_OB_MODIFIERS = (1 << 27),
+  SO_FILTER_NO_ARMATURE_BONE_COLLECTION = (1 << 28),
+  SO_FILTER_NO_GREASE_PENCIL_EFFECTS = (1 << 29),
+  SO_FILTER_NO_POSE_BONES = (1 << 30),
 };
 ENUM_OPERATORS(eSpaceOutliner_Filter)
 
@@ -198,9 +211,15 @@ ENUM_OPERATORS(eSpaceOutliner_Filter)
   (SO_FILTER_OB_STATE_VISIBLE | SO_FILTER_OB_STATE_SELECTED | SO_FILTER_OB_STATE_ACTIVE | \
    SO_FILTER_OB_STATE_SELECTABLE)
 
+#define SO_FILTER_OB_CONTENT_TYPE \
+  (SO_FILTER_NO_OB_DATA | SO_FILTER_NO_OB_ANIMATION | SO_FILTER_NO_OB_CONSTRAINTS | \
+   SO_FILTER_NO_OB_SHAPE_KEYS | SO_FILTER_NO_OB_MATERIAL | SO_FILTER_NO_OB_DEFGROUP | \
+   SO_FILTER_NO_OB_MODIFIERS | SO_FILTER_NO_ARMATURE_BONE_COLLECTION | \
+   SO_FILTER_NO_GREASE_PENCIL_EFFECTS | SO_FILTER_NO_POSE_BONES)
+
 #define SO_FILTER_ANY \
   (SO_FILTER_NO_OB_CONTENT | SO_FILTER_NO_CHILDREN | SO_FILTER_OB_TYPE | SO_FILTER_OB_STATE | \
-   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_VIEW_LAYERS)
+   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_VIEW_LAYERS | SO_FILTER_OB_CONTENT_TYPE)
 
 /** #SpaceOutliner.filter_state */
 enum eSpaceOutliner_StateFilter : char {
@@ -400,6 +419,10 @@ enum eSpaceSeq_SequencerTimelineOverlay_Flag : int {
   SEQ_TIMELINE_SHOW_GRID = (1 << 18),
   /** Show continuous sequence of thumbnails. */
   SEQ_TIMELINE_CONTINUOUS_THUMBNAILS = (1 << 19),
+  /** Show a single thumbnail in the middle. */
+  SEQ_TIMELINE_MIDDLE_THUMBNAILS = (1 << 20),
+  /** Draw thumbnails on strips. */
+  SEQ_TIMELINE_SHOW_THUMBNAILS = (1 << 21),
 };
 ENUM_OPERATORS(eSpaceSeq_SequencerTimelineOverlay_Flag)
 
@@ -882,6 +905,7 @@ enum eSpaceNodeOverlay_Flag : int {
    */
   SN_OVERLAY_SHOW_REROUTE_AUTO_LABELS = (1 << 7),
   SN_OVERLAY_SHOW_RENDER_REGION = (1 << 8),
+  SN_OVERLAY_SHOW_TEXT_INFO = (1 << 9),
 };
 ENUM_OPERATORS(eSpaceNodeOverlay_Flag)
 
@@ -1179,9 +1203,10 @@ enum eSpace_Type : char {
   SPACE_CLIP = 20,
   SPACE_TOPBAR = 21,
   SPACE_STATUSBAR = 22,
-  SPACE_SPREADSHEET = 23
+  SPACE_SPREADSHEET = 23,
+  SPACE_PROJECT = 24
 
-#define SPACE_TYPE_NUM (SPACE_SPREADSHEET + 1)
+#define SPACE_TYPE_NUM (SPACE_PROJECT + 1)
 };
 
 /* use for function args */

@@ -43,12 +43,17 @@ static bool cache_scene_linear_interop_id_done = false;
 static const char *cache_scene_linear_interop_id = "";
 static const char *cache_scene_linear_srgb_interop_id = "";
 
+/* Config the caches were built for, holding a reference so a new config can't
+ * reuse its address. */
+static OCIO::ConstConfigRcPtr cache_config;
+
 static void check_invalidate_caches()
 {
   static thread_mutex cache_scene_linear_mutex;
   static string cache_scene_linear_name;
 
-  /* Invalidate cached processors and colorspace, in case Blender changed it.
+  /* Invalidate cached processors and colorspace, in case Blender changed the
+   * scene linear space or switched to another config.
    * Note this should not happen during rendering, all render should be stopped
    * before it is changed. */
   const thread_scoped_lock cache_scene_linear_lock(cache_scene_linear_mutex);
@@ -62,7 +67,10 @@ static void check_invalidate_caches()
   }
 
   const OCIO::ConstColorSpaceRcPtr scene_linear_colorspace = config->getColorSpace("scene_linear");
-  if (scene_linear_colorspace && cache_scene_linear_name != scene_linear_colorspace->getName()) {
+  if (scene_linear_colorspace &&
+      (cache_config != config || cache_scene_linear_name != scene_linear_colorspace->getName()))
+  {
+    cache_config = config;
     cache_scene_linear_name = scene_linear_colorspace->getName();
     {
       const thread_scoped_lock cache_processors_lock(cache_processors_mutex);
@@ -264,9 +272,17 @@ const char *ColorSpaceManager::colorspace_interop_id(ustring colorspace)
                                    "srgb_p3d65_scene",
                                    "g22_adobergb_scene"};
       for (const char *interop_id : interop_ids) {
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+        for (int i = 0; i < space->getNumAliases(); i++) {
+          if (string_iequals(space->getAlias(i), interop_id)) {
+            return interop_id;
+          }
+        }
+#  else
         if (space->hasAlias(interop_id)) {
           return interop_id;
         }
+#  endif
       }
     }
   }
@@ -299,9 +315,37 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
       colorspace = file_colorspace;
     }
     else {
-      const char *role_colorspace = (is_float) ? config->getRoleColorSpace("default_float") :
-                                                 config->getRoleColorSpace("default_byte");
-      role_colorspace = (role_colorspace) ? role_colorspace : config->getRoleColorSpace("default");
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+      /* Roles are looked up by index, where -1 means the role is not defined in the config. */
+      int default_float_id = -1;
+      int default_byte_id = -1;
+      int default_id = -1;
+      for (int i = 0; i < config->getNumRoles(); i++) {
+        const char *role_name = config->getRoleName(i);
+        if (strcmp(role_name, "default_float") == 0) {
+          default_float_id = i;
+        }
+        else if (strcmp(role_name, "default_byte") == 0) {
+          default_byte_id = i;
+        }
+        else if (strcmp(role_name, "default") == 0) {
+          default_id = i;
+        }
+      }
+      const int role_id = (is_float) ? default_float_id : default_byte_id;
+      const char *role_colorspace = (role_id != -1) ? config->getRoleColorSpace(role_id) : nullptr;
+      if (role_colorspace == nullptr && default_id != -1) {
+        role_colorspace = config->getRoleColorSpace(default_id);
+      }
+#  else
+      const char *role_name = (is_float) ? "default_float" : "default_byte";
+      const char *role_colorspace = config->hasRole(role_name) ?
+                                        config->getRoleColorSpace(role_name) :
+                                        nullptr;
+      if (role_colorspace == nullptr && config->hasRole("default")) {
+        role_colorspace = config->getRoleColorSpace("default");
+      }
+#  endif
       if (role_colorspace) {
         colorspace = role_colorspace;
       }
@@ -643,6 +687,7 @@ void ColorSpaceManager::free_memory()
 #ifdef WITH_OCIO
   map_free_memory(cached_colorspaces);
   map_free_memory(cache_processors);
+  cache_config.reset();
 #endif
 }
 
@@ -687,18 +732,21 @@ static bool to_scene_linear_transform(OCIO::ConstConfigRcPtr &config,
 Transform ColorSpaceManager::get_xyz_to_rec709()
 {
   /* Default to ITU-BT.709 in case no appropriate transform found.
-   * Note XYZ here is defined as having a D65 white point. */
-  return make_transform(3.2404542f,
-                        -1.5371385f,
-                        -0.4985314f,
+   * Note XYZ here is defined as having a D65 white point.
+   *
+   * Dumped from OpenColorIO so it matches those transforms exactly, same as
+   * XYZ_TO_REC709 in Blender. */
+  return make_transform(3.2409699f,
+                        -1.5373832f,
+                        -0.4986108f,
                         0.0f,
-                        -0.9692660f,
-                        1.8760108f,
-                        0.0415560f,
+                        -0.9692436f,
+                        1.8759675f,
+                        0.0415551f,
                         0.0f,
-                        0.0556434f,
-                        -0.2040259f,
-                        1.0572252f,
+                        0.0556301f,
+                        -0.2039770f,
+                        1.0569715f,
                         0.0f);
 }
 

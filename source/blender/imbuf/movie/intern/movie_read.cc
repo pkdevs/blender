@@ -15,10 +15,10 @@
 #include <sys/types.h>
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_scene_types.h"
 
@@ -307,10 +307,10 @@ static AVFormatContext *init_format_context(const char *filepath,
 
   av_dump_format(format_ctx, 0, filepath, 0);
 
-  /* Find the video stream */
+  /* Find the video stream. */
   r_stream_index = -1;
   for (int i = 0; i < format_ctx->nb_streams; i++) {
-    if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (ffmpeg_stream_counts_as_video(format_ctx, format_ctx->streams[i])) {
       if (video_stream_index > 0) {
         video_stream_index--;
         continue;
@@ -1370,13 +1370,13 @@ ImBuf *MOV_decode_preview_frame(MovieReader *anim)
     ibuf = MOV_decode_frame(anim, position, IMB_PROXY_NONE);
 
     char value[128];
-    IMB_metadata_ensure(&ibuf->metadata);
+    IDProperty *metadata = ibuf->metadata_for_write();
     SNPRINTF_UTF8(value, "%i", anim->x);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::Width", value);
+    IMB_metadata_set_field(metadata, "Thumb::Video::Width", value);
     SNPRINTF_UTF8(value, "%i", anim->y);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::Height", value);
+    IMB_metadata_set_field(metadata, "Thumb::Video::Height", value);
     SNPRINTF_UTF8(value, "%i", anim->duration_in_frames);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::Frames", value);
+    IMB_metadata_set_field(metadata, "Thumb::Video::Frames", value);
 
 #ifdef WITH_FFMPEG
     if (anim->pFormatCtx) {
@@ -1385,10 +1385,10 @@ ImBuf *MOV_decode_preview_frame(MovieReader *anim)
       if (frame_rate.num != 0) {
         double duration = anim->duration_in_frames / av_q2d(frame_rate);
         SNPRINTF_UTF8(value, "%g", av_q2d(frame_rate));
-        IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::FPS", value);
+        IMB_metadata_set_field(metadata, "Thumb::Video::FPS", value);
         SNPRINTF_UTF8(value, "%g", duration);
-        IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::Duration", value);
-        IMB_metadata_set_field(ibuf->metadata, "Thumb::Video::Codec", anim->pCodec->long_name);
+        IMB_metadata_set_field(metadata, "Thumb::Video::Duration", value);
+        IMB_metadata_set_field(metadata, "Thumb::Video::Codec", anim->pCodec->long_name);
       }
     }
 #endif
@@ -1454,7 +1454,7 @@ int MOV_get_video_stream_count(MovieReader *anim)
   }
   int count = 0;
   for (int i = 0; i < anim->pFormatCtx->nb_streams; i++) {
-    if (anim->pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (ffmpeg_stream_counts_as_video(anim->pFormatCtx, anim->pFormatCtx->streams[i])) {
       count++;
     }
   }
