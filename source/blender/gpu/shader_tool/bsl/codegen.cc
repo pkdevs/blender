@@ -1552,7 +1552,7 @@ struct CodegenContext : NodeErrorHandler {
     string id(decl.identifier().str());
     if (auto it = scope.functions.find(id); it != scope.functions.end()) {
       SymbolScope &body_scope = *it->second.second;
-      jump_to(decl.front()); /* Adds too many directives. */
+      jump_to(decl.front());
       builder.curr = decl.front();
       skip_node(decl.attributes());
       skip_if(Static);
