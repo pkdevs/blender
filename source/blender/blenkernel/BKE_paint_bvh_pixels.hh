@@ -280,6 +280,7 @@ struct PixelData {
   CopyPixelTiles tiles_copy_pixels;
 
   Vector<PixelNode> nodes;
+  Set<image::TileNumber> used_tiles;
 };
 
 void mark_image_dirty(bke::pbvh::Node &node,

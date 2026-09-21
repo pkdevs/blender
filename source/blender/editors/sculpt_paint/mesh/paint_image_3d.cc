@@ -1309,6 +1309,121 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   });
 }
 
+void build_pixel_position_map(Object &ob,
+                              const ImageData &data,
+                              Vector<float3> &r_pixel_positions,
+                              Vector<int> &r_filled_positions,
+                              Vector<int> &r_offsets)
+{
+  BLI_assert(r_pixel_positions.is_empty());
+  BLI_assert(r_offsets.is_empty());
+
+  PRF_scope(ProfileCategory::Editor);
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  PixelData &pixel_data = *pbvh.pixels_;
+  Span<PixelNode> pixel_nodes = pixel_data.nodes;
+
+  for (data.
+  ImageUser tile_user = data.image_user_get();
+  tile_user.tile = tile.tile_number;
+  ImBuf *tile_buffer = BKE_image_acquire_ibuf(data.image, &tile_user, nullptr);
+  if (tile_buffer == nullptr) {
+    BLI_assert(0);
+    continue;
+  }
+
+  const size_t tile_count = IMB_get_pixel_count(tile_buffer);
+  r_pixel_positions.resize(r_pixel_positions.size() + tile_count);
+  r_offsets.append(r_pixel_positions.size());
+
+  Map<image::TileNumber, Vector<UDIMTilePixels *>> tile_number_to_pixel_tile =
+      build_tile_number_to_pixel_tile_map(pixel_nodes);
+
+  r_offsets.append(0);
+  for (const ImageTile &tile : data.image->tiles) {
+    if (!tile_number_to_pixel_tile.contains(tile.tile_number)) {
+      continue;
+    }
+
+    ImageUser tile_user = data.image_user_get();
+    tile_user.tile = tile.tile_number;
+    ImBuf *tile_buffer = BKE_image_acquire_ibuf(data.image, &tile_user, nullptr);
+    if (tile_buffer == nullptr) {
+      BLI_assert(0);
+      continue;
+    }
+
+    const size_t tile_count = IMB_get_pixel_count(tile_buffer);
+    r_pixel_positions.resize(r_pixel_positions.size() + tile_count);
+    r_offsets.append(r_pixel_positions.size());
+
+    Span<UDIMTilePixels *> pixel_tiles = tile_number_to_pixel_tile.lookup(tile.tile_number);
+    for (UDIMTilePixels *udim_tile : pixel_tiles) {
+      const UDIMTilePixels &tile_data = *udim_tile;
+
+      const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
+      for (const int run_i : IndexRange(num_runs)) {
+        const int run_begin = tile_data.pixel_row_run_starts[run_i];
+        const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
+
+        /* Compute run position and size. */
+        const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
+        const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
+        int run_size = 0;
+        for (int k = run_begin; k < run_end; k++) {
+          run_size += int(tile_data.pixel_rows[k].num_pixels);
+        }
+
+        int tri_row_offset = 0;
+
+        for (int k = run_begin; k < run_end; k++) {
+          const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
+          const int uv_prim = tri_row.uv_primitive_index;
+          const int tri_row_size = int(tri_row.num_pixels);
+          /* TODO: Maybe there's a better way to filter this? */
+          if (!pixel_node.uv_primitives.original_tris[uv_prim]) {
+            tri_row_offset += tri_row_size;
+            skipped_pixels += tri_row_size;
+            total_pixels += tri_row_size;
+            continue;
+          }
+
+          const int tri_row_x = run_x + tri_row_offset;
+          const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
+          const float3 P_delta = pixel_to_position[0];
+          const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
+                                 pixel_to_position[2];
+
+          for (const int pixel_i : IndexRange(tri_row_size)) {
+            int pixel = run_y * height + tri_row_x + pixel_i;
+            const float3 position = P_start + P_delta * pixel_i;
+#if 0
+            printf("Inserting %d (%d %d %d %d) at (%f %f %f)\n",
+                   pixel,
+                   run_y,
+                   height,
+                   tri_row_x,
+                   pixel_i,
+                   position.x,
+                   position.y,
+                   position.z);
+#endif
+            kdtree_insert(tree, pixel, position);
+#if 0
+            used_pixels[pixel] = true;
+#endif
+          }
+
+          tri_row_offset += tri_row_size;
+          total_pixels += tri_row_size;
+        }
+      }
+    }
+
+    BKE_image_release_ibuf(data.image, tile_buffer, nullptr);
+  }
+}
+
 KDTree<float3> *build_kd_tree(Object &ob,
                               const ImageData &data,
                               const image::TileNumber tile_number)
