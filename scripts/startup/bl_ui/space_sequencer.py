@@ -105,7 +105,7 @@ class SEQUENCER_HT_header(Header):
 
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
-            row.prop(sequencer_tool_settings, "overlap_mode", expand=True)
+            row.prop(sequencer_tool_settings, "overlap_mode", expand=True, icon_only=True)
             sub = row.row(align=True)
             sub.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
             sub.popover(
