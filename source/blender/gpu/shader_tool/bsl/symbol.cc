@@ -652,6 +652,9 @@ struct SymbolParser : NodeErrorHandler {
       /* Modify symbol location if it is forward declared. */
       fn->loc = fdecl.front();
       fn->is_defined = true;
+      fn->decl = func;
+      /* Use attributes of the definition. */
+      fn->is_inline = func.attributes().contains_attr("force_inline");
       /* Note: We discard the argument parsed by the forward declaration.
        * They are parsed again by `parse_scope`. */
       fn->variables.clear();
