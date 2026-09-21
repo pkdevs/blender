@@ -129,6 +129,11 @@ class PathTraceWork {
   virtual int adaptive_sampling_converge_filter_count_active(const float threshold,
                                                              bool reset) = 0;
 
+// TODO(Tri): CPU only now; add GPU
+  /* Persist this frame's temporal history to storage that survives zero_render_buffers(). 
+   * NOTE: No-op unless temporal-frame reuse is enabled. */
+  virtual void save_restir_temporal_history() {}
+
   /* Denoise Volume Scattering Probability Guiding buffers. */
   virtual void denoise_volume_guiding_buffers() = 0;
 

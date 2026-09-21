@@ -1245,6 +1245,13 @@ bool PathTrace::has_denoised_result() const
   return render_state_.has_denoised_result;
 }
 
+void PathTrace::save_restir_temporal_history()
+{
+  for (auto &&path_trace_work : path_trace_works_) {
+    path_trace_work->save_restir_temporal_history();
+  }
+}
+
 void PathTrace::destroy_gpu_resources()
 {
   /* Destroy any GPU resource which was used for graphics interop.

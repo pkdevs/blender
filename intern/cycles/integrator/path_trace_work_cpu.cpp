@@ -34,7 +34,7 @@ static inline tbb::task_arena local_tbb_arena_create(const Device *device)
 }
 
 /* Get ThreadKernelGlobalsCPU for the current thread. */
-static inline ThreadKernelGlobalsCPU *kernel_thread_globals_get(
+static inline ThreadKernelGlobalsCPU *kernel_thread_globals_get( // !!!(Tri): warning: unused function 'kernel_thread_globals_get'
     vector<ThreadKernelGlobalsCPU> &kernel_thread_globals)
 {
   const int thread_index = tbb::this_task_arena::current_thread_index();
@@ -64,6 +64,94 @@ void PathTraceWorkCPU::deinit_execution()
 {
   device_->release_cpu_kernel_thread_globals();
   kernel_thread_globals_ = nullptr;
+}
+
+void PathTraceWorkCPU::alloc_work_memory()
+{
+  if (!device_scene_->data.integrator.use_temporal_frames) {
+    restir_prev_reprojection_surface_.clear();
+    restir_prev_temporal_reservoir_.clear();
+
+    return;
+  }
+
+  const size_t num_pixels = (size_t)effective_buffer_params_.width *
+                            effective_buffer_params_.height;
+
+  /* assign() only if size changed: resizing on every call would be harmless
+   * but wasteful, and more importantly this must NOT clear the array when
+   * dimensions are unchanged. */
+  if (restir_prev_reprojection_surface_.size() != num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE) {
+    restir_prev_reprojection_surface_.assign(num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE, 0.0f);
+  }
+  if (restir_prev_temporal_reservoir_.size() != num_pixels * RESTIR_RESERVOIR_STRIDE) {
+    restir_prev_temporal_reservoir_.assign(num_pixels * RESTIR_RESERVOIR_STRIDE, 0.0f);
+  }
+}
+
+// TODO(Tri): Handle every reset (viewport nav, res divider drops)? Will it capture mid-refinement garbage in that case?
+/* Copy this frame's finished reprojection-surface + temporal-history-reservoir
+ * passes out of buffers_ into persistent storage. Must be called exactly once
+ * per completed ANIMATION frame. */
+void PathTraceWorkCPU::save_restir_temporal_history()
+{
+  if (restir_prev_reprojection_surface_.empty()) {
+    return; /* Temporal-frame reuse disabled. */
+  }
+
+  const float *render_buffer = buffers_->buffer.data();
+  const int pass_stride = device_scene_->data.film.pass_stride;
+
+  const size_t num_pixels = (size_t)effective_buffer_params_.width *
+                            effective_buffer_params_.height;
+
+ccl_debug_printf("\n\n\n--- PathTraceWorkCPU::save_restir_temporal_history() Invoked; pass_stride=%d num_pixels=%zu ---",
+  pass_stride, num_pixels);
+
+ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_restir_temporal_history_reservoir=%d\n\n\n", // !!!: pass_restir_reprojection_surface=-1 always...
+    render_buffer, device_scene_->data.film.pass_restir_reprojection_surface, device_scene_->data.film.pass_restir_temporal_history_reservoir);
+
+  for (size_t i = 0; i < num_pixels; i++) {
+    memcpy(&restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE],
+           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
+           RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
+
+    memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
+           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
+           RESTIR_RESERVOIR_STRIDE * sizeof(float));
+
+// debug print of restir_prev_temporal_reservoir_[0..8]
+// if (i == 0) {
+//   ccl_debug_printf(
+//       "TEMPORAL HISTORY[0]: type=%f flags=%f object=%f prim=%f "
+//       "param=(%f,%f) W=%f L=%f M=%f\n",
+//       (double)restir_prev_temporal_reservoir_[0],
+//       (double)restir_prev_temporal_reservoir_[1],
+//       (double)restir_prev_temporal_reservoir_[2],
+//       (double)restir_prev_temporal_reservoir_[3],
+//       (double)restir_prev_temporal_reservoir_[4],
+//       (double)restir_prev_temporal_reservoir_[5],
+//       (double)restir_prev_temporal_reservoir_[6],
+//       (double)restir_prev_temporal_reservoir_[7],
+//       (double)restir_prev_temporal_reservoir_[8]
+//     );
+// }
+if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
+ccl_debug_printf(
+    "restir_prev_temporal_reservoir_[%zu]: "
+    "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
+    i,
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
+    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
+}
+  }
 }
 
 void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
@@ -134,7 +222,7 @@ void PathTraceWorkCPU::temporal_resampling(const int64_t image_width,
 
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
-    render_samples_temporal_resampling(kernel_globals, work_tile);
+    render_samples_temporal_resampling(kernel_globals, work_tile);//
   });
 }
 
@@ -194,6 +282,8 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
 
+// ccl_debug_printf("\n\n\n--- PathTraceWorkCPU::render_samples() Invoked ---");
+
   if (device_->profiler.active()) {
     for (ThreadKernelGlobalsCPU &kernel_globals : *kernel_thread_globals_) {
       kernel_globals.start_profiling();
@@ -205,11 +295,20 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   local_arena.execute(
       [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
 
+// ccl_debug_printf("render_samples() use_restir=%d restir_temporal_sample_count=%d\n", 
+//   device_scene_->data.integrator.use_restir, device_scene_->data.integrator.restir_temporal_sample_count);
+
   /* Temporal Resampling: runs before spatial regardless of its 
    * iteration count, since temporal and spatial reuse are orthogonal settings. */
   if (device_scene_->data.integrator.use_restir &&
-      device_scene_->data.integrator.restir_temporal_sample_count > 0)
+      (device_scene_->data.integrator.restir_temporal_sample_count > 0 ||
+          device_scene_->data.integrator.restir_temporal_frame_count > 0))
   {
+    /* Invoked once per render_pipeline()->path_trace()->work-dispatch. */
+    restir_init_kernel_globals();
+
+// ccl_debug_printf("render_samples() Invoked executing temporal_resampling()...\n");
+
     local_arena.execute(
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });
   }
@@ -223,7 +322,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
           [&] { spatial_resampling(image_width, image_height, start_sample, sample_offset, i); });
     }
 
-    local_arena.execute([&] {
+    local_arena.execute([&] { 
       evaluate_final_samples(image_width, image_height, start_sample, sample_offset, i);
     });
   }
@@ -634,6 +733,22 @@ void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field,
                                             kg.data.integrator.max_bounce + 3);
       kg.opgl_path_segment_storage->Clear();
     }
+  }
+}
+
+/* Bind persistent temporal history to the per-thread kernel-globals. */
+void PathTraceWorkCPU::restir_init_kernel_globals()
+{
+  if (restir_prev_reprojection_surface_.empty()) {
+    return; /* Temporal-frame reuse disabled. */
+  }
+
+ccl_debug_printf("RESTIR HISTORY BIND: surface=%p reservoir=%p\n\n",
+    restir_prev_reprojection_surface_.data(), restir_prev_temporal_reservoir_.data());
+
+  for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) {
+    kg.restir_prev_reprojection_surface = restir_prev_reprojection_surface_.data();
+    kg.restir_prev_temporal_reservoir = restir_prev_temporal_reservoir_.data();
   }
 }
 

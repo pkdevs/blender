@@ -153,6 +153,8 @@ class Session {
 
   void device_free();
 
+  void save_restir_temporal_history();
+
   /* Returns the rendering progress or 0 if no progress can be determined
    * (for example, when rendering with unlimited samples). */
   float get_progress();

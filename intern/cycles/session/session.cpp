@@ -768,7 +768,7 @@ void Session::update_status_time(bool show_pause, bool show_done)
 
   /* Show ReSTIR active state and candidate count. */
   if (scene->integrator->get_use_restir()) {
-    substatus += string_printf(" | ReSTIR: %d candidates",
+    substatus += string_printf(" | ReSTIR: %d candidates", // TODO(Tri): Update with sth proper
                                scene->integrator->get_restir_light_samples());
   }
 
@@ -793,6 +793,11 @@ void Session::update_status_time(bool show_pause, bool show_done)
   }
 
   progress.set_status(status, substatus);
+}
+
+void Session::save_restir_temporal_history()
+{
+  path_trace_->save_restir_temporal_history();
 }
 
 void Session::device_free()

@@ -75,6 +75,9 @@ struct ThreadKernelGlobalsCPU : public KernelGlobalsCPU {
   ThreadKernelGlobalsCPU &operator=(const ThreadKernelGlobalsCPU &other) = delete;
   ThreadKernelGlobalsCPU &operator=(ThreadKernelGlobalsCPU &&other) = delete;
 
+  ccl_global const float *restir_prev_reprojection_surface = nullptr;
+  ccl_global const float *restir_prev_temporal_reservoir = nullptr;
+
   void start_profiling();
   void stop_profiling();
 

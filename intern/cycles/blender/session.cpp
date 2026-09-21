@@ -461,6 +461,9 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
     }
   }
 
+  /* Save after the completed frame. */
+  session->save_restir_temporal_history();
+
   /* add metadata */
   stamp_view_layer_metadata(scene, b_rlay_name);
 
