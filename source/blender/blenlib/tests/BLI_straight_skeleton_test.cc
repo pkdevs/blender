@@ -1601,8 +1601,13 @@ TEST(straight_skeleton, OpposingNotchesConcurrentFlips)
       storage.vert[i] = orig_verts[(i + shift) % 15];
     }
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    if (shift == 0) {
+      print_test_output("OpposingNotchesConcurrentFlips", input, output);
+    }
     EXPECT_FALSE(output.hit_max_events)
         << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
+    EXPECT_NEAR(total_faces_area(output), 68.0, 1e-4);
+    EXPECT_EQ(output.face_offsets.size(), 15);
   }
 }
 
@@ -1651,6 +1656,9 @@ TEST(straight_skeleton, SixNotchesConcurrentFlips)
       storage.vert[i] = orig_verts[(i + shift) % 19];
     }
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
+    if (shift == 0) {
+      print_test_output("SixNotchesConcurrentFlips", input, output);
+    }
     EXPECT_FALSE(output.hit_max_events)
         << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
   }

@@ -32,6 +32,7 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_ordered_edge.hh"
+#include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
@@ -230,13 +231,25 @@ class TriangleEdges {
     start_[3 * ti + 1] = v1;
     start_[3 * ti + 2] = v2;
   }
+
+  int active_triangles_count() const
+  {
+    int count = 0;
+    for (const int ti : IndexRange(triangles_num())) {
+      if (!is_triangle_deleted(ti)) {
+        count++;
+      }
+    }
+    return count;
+  }
 };
 
 /**
  * Flip the internal diagonal shared by two adjacent triangles in TriangleEdges.
  * Returns true if the flip succeeded, false if edge cannot be flipped.
+ * If \a r_new_edge is non-null, stores the half-edge index of the new diagonal in ti1.
  */
-static bool flip_edge(TriangleEdges &tri, const int edge_index)
+static bool flip_edge(TriangleEdges &tri, const int edge_index, int *r_new_edge = nullptr)
 {
   const int e1 = edge_index;
   const int e2 = tri.paired_edge(e1);
@@ -331,6 +344,10 @@ static bool flip_edge(TriangleEdges &tri, const int edge_index)
   /* Connect new diagonal between ti1 and ti2 */
   tri.set_paired(slot1_2, slot2_2);
   tri.set_paired(slot2_2, slot1_2);
+
+  if (r_new_edge != nullptr) {
+    *r_new_edge = slot1_2;
+  }
 
   return true;
 }
@@ -656,6 +673,46 @@ class TrianglePriorityQueue {
     return events_;
   }
 };
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Section 3.2 Flip Event Loop Journal
+ * \{ */
+
+/**
+ * History journal entry for processed flip events (Palfreder et al. Section 3.2).
+ * Stores a triple (t*, t, Δ) where t* is the number of remaining active triangles,
+ * t is the collapse timestamp, and Δ is the sorted vertex-triple of the collapsed triangle.
+ */
+struct JournalEntry {
+  int triangles_remaining_num{0}; /* t* */
+  double time{0.0};               /* t */
+  int3 triangle_verts{0, 0, 0};   /* Sorted triangle vertex indices (Δ) */
+  int flipped_edge{-1};           /* Half-edge before the flip */
+  int new_edge{-1};               /* Half-edge of the new diagonal after the flip */
+  int ti1{-1};                    /* First triangle */
+  int ti2{-1};                    /* Second triangle */
+  int parent_entry_index{-1};     /* Pointer to earlier entry T1 if reconfigured */
+};
+
+/** Return the vertex indices of triangle \a ti in canonically sorted order (v0 < v1 < v2). */
+static int3 get_sorted_triangle_verts(const TriangleEdges &triangles, const int ti)
+{
+  int v0 = triangles.start_vert(3 * ti);
+  int v1 = triangles.start_vert(3 * ti + 1);
+  int v2 = triangles.start_vert(3 * ti + 2);
+  if (v0 > v1) {
+    std::swap(v0, v1);
+  }
+  if (v1 > v2) {
+    std::swap(v1, v2);
+  }
+  if (v0 > v1) {
+    std::swap(v0, v1);
+  }
+  return int3(v0, v1, v2);
+}
 
 /** \} */
 
@@ -1001,6 +1058,11 @@ class StraightSkeletonState {
   int splits_count_{0};
   bool hit_max_events_{false};
 
+  /* Section 3.2 Flip event loop journal (history H and search structure S). */
+  Vector<JournalEntry> journal_history_;
+  Map<int3, int> journal_search_;
+  int last_active_triangles_count_{0};
+
   explicit StraightSkeletonState(const StraightSkeletonInput &input)
       : epsilon(input.epsilon <= 0.0 ? 1e-8 : input.epsilon), input_(&input)
   {
@@ -1010,6 +1072,20 @@ class StraightSkeletonState {
   {
     handle_edge_collapses_ = val;
   }
+
+  void journal_clear()
+  {
+    journal_history_.clear();
+    journal_search_.clear();
+  }
+
+  void journal_record_flip(
+      int ti1, int ti2, int flipped_edge, int new_edge, double time, const int3 &sorted_verts);
+  bool check_and_handle_flip_cycle(const TriangleEvent &ev);
+  bool retriangulate_collapsed_polygon(const Set<int> &p_triangles,
+                                       Span<int> p_verts,
+                                       double t_star,
+                                       int t1_entry_idx);
 
   void build_initial_kinetic_triangulation();
   bool process_next_event();
@@ -1164,6 +1240,9 @@ void StraightSkeletonState::build_initial_kinetic_triangulation()
       pq.insert_or_update(ti, ev);
     }
   }
+
+  last_active_triangles_count_ = triangles.active_triangles_count();
+  journal_clear();
 }
 
 void StraightSkeletonState::handle_infinite_speed_vertex(const int initial_v_prime,
@@ -1548,6 +1627,12 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
     handle_infinite_speed_vertex(v_prime, node_id, ev.time);
   }
 
+  const int current_active = triangles.active_triangles_count();
+  if (current_active < last_active_triangles_count_) {
+    journal_clear();
+    last_active_triangles_count_ = current_active;
+  }
+
   edge_collapses_count_++;
   return true;
 }
@@ -1557,8 +1642,10 @@ bool StraightSkeletonState::process_next_event()
   while (!pq.is_empty()) {
     const TriangleEvent ev = pq.pop_with_flip_priority(triangles);
     if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
+
       continue;
     }
+
     if (ev.type == TriangleEventType::NONE || std::isinf(ev.time)) {
       continue;
     }
@@ -1836,6 +1923,12 @@ bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev)
     handle_infinite_speed_vertex(v2_prime, node_id, ev.time);
   }
 
+  const int current_active = triangles.active_triangles_count();
+  if (current_active < last_active_triangles_count_) {
+    journal_clear();
+    last_active_triangles_count_ = current_active;
+  }
+
   multi_splits_count_++;
   return true;
 }
@@ -1998,7 +2091,393 @@ bool StraightSkeletonState::process_split_event(const TriangleEvent &ev)
     handle_infinite_speed_vertex(kv_b, node_id, ev.time);
   }
 
+  const int current_active = triangles.active_triangles_count();
+  if (current_active < last_active_triangles_count_) {
+    journal_clear();
+    last_active_triangles_count_ = current_active;
+  }
+
   splits_count_++;
+  return true;
+}
+
+void StraightSkeletonState::journal_record_flip(const int ti1,
+                                                const int ti2,
+                                                const int flipped_edge,
+                                                const int new_edge,
+                                                const double time,
+                                                const int3 &sorted_verts)
+{
+  JournalEntry entry;
+  entry.triangles_remaining_num = triangles.active_triangles_count();
+  entry.time = time;
+  entry.triangle_verts = sorted_verts;
+  entry.flipped_edge = flipped_edge;
+  entry.new_edge = new_edge;
+  entry.ti1 = ti1;
+  entry.ti2 = ti2;
+  entry.parent_entry_index = -1;
+
+  const int entry_idx = int(journal_history_.size());
+  journal_history_.append(entry);
+  journal_search_.add(sorted_verts, entry_idx);
+}
+
+bool StraightSkeletonState::retriangulate_collapsed_polygon(const Set<int> &p_triangles,
+                                                            const Span<int> p_verts,
+                                                            const double /*t_star*/,
+                                                            const int t1_entry_idx)
+{
+  const int k = int(p_verts.size());
+
+  if (k < 3 || p_triangles.is_empty()) {
+    return false;
+  }
+
+  /* Map each vertex in P to its index 0 <= idx < k along the collapse line. */
+  Map<int, int> vert_to_idx;
+  for (const int i : IndexRange(k)) {
+    vert_to_idx.add(p_verts[i], i);
+  }
+
+  /* Boundary edges of P and attached exterior triangles Delta_e. */
+  struct BoundaryEdgeInfo {
+    int u{-1};
+    int v{-1};
+    int u_idx{-1};
+    int v_idx{-1};
+    int pe_ext{-1};
+    int ti_ext{-1};
+    int ve{-1};
+    bool is_forward{false};
+  };
+
+  Vector<BoundaryEdgeInfo> boundary_edges;
+
+  for (const int ti : p_triangles) {
+    if (triangles.is_triangle_deleted(ti)) {
+      continue;
+    }
+    for (const int corner : IndexRange(3)) {
+      const int e = 3 * ti + corner;
+      const int pe = triangles.paired_edge(e);
+      const int p_tri = (pe != -1) ? triangles.triangle(pe) : -1;
+      if (p_tri == -1 || !p_triangles.contains(p_tri)) {
+        /* Edge e is on the boundary of polygon P. */
+        const int u = triangles.start_vert(e);
+        const int v = triangles.end_vert(e);
+        const int *u_idx_ptr = vert_to_idx.lookup_ptr(u);
+        const int *v_idx_ptr = vert_to_idx.lookup_ptr(v);
+        if (u_idx_ptr == nullptr || v_idx_ptr == nullptr || *u_idx_ptr == *v_idx_ptr) {
+          continue;
+        }
+        const int u_idx = *u_idx_ptr;
+        const int v_idx = *v_idx_ptr;
+
+        int ve = -1;
+        if (pe != -1) {
+          const int pe_prev = prev_triangle_edge(pe);
+          ve = triangles.start_vert(pe_prev);
+        }
+
+        BoundaryEdgeInfo info;
+        info.u = u;
+        info.v = v;
+        info.u_idx = u_idx;
+        info.v_idx = v_idx;
+        info.pe_ext = pe;
+        info.ti_ext = p_tri;
+        info.ve = ve;
+        info.is_forward = (u_idx < v_idx);
+        boundary_edges.append(info);
+      }
+    }
+  }
+
+  /* Map each monotone segment i in [0, k-2] to its forward and backward boundary edges. */
+  Vector<int> seg_fwd_bnd(k - 1, -1);
+  Vector<int> seg_bwd_bnd(k - 1, -1);
+  for (const int b_idx : boundary_edges.index_range()) {
+    const BoundaryEdgeInfo &be = boundary_edges[b_idx];
+    if (be.is_forward) {
+      for (int i = be.u_idx; i < be.v_idx; i++) {
+        seg_fwd_bnd[i] = b_idx;
+      }
+    }
+    else {
+      for (int i = be.v_idx; i < be.u_idx; i++) {
+        seg_bwd_bnd[i] = b_idx;
+      }
+    }
+  }
+
+  for (const int i : IndexRange(k - 1)) {
+    if (seg_fwd_bnd[i] == -1 || seg_bwd_bnd[i] == -1) {
+      return false;
+    }
+  }
+
+  /* Collect available triangle indices from P and attached Delta_e triangles. */
+  Vector<int> available_triangles;
+  for (const int ti : p_triangles) {
+    if (!available_triangles.contains(ti)) {
+      available_triangles.append(ti);
+    }
+  }
+  for (const BoundaryEdgeInfo &be : boundary_edges) {
+    if (be.ti_ext != -1 && !available_triangles.contains(be.ti_ext)) {
+      available_triangles.append(be.ti_ext);
+    }
+  }
+
+  /* Collect external half-edges connecting to Delta_e triangles from outside R. */
+  Vector<int> outer_half_edges;
+  for (const BoundaryEdgeInfo &be : boundary_edges) {
+    if (be.pe_ext != -1) {
+      const int pe_next = next_triangle_edge(be.pe_ext);
+      const int pe_prev = prev_triangle_edge(be.pe_ext);
+      const int out_pair_next = triangles.paired_edge(pe_next);
+      const int out_pair_prev = triangles.paired_edge(pe_prev);
+      if (out_pair_next != -1 && !available_triangles.contains(triangles.triangle(out_pair_next)))
+      {
+        if (!outer_half_edges.contains(out_pair_next)) {
+          outer_half_edges.append(out_pair_next);
+        }
+      }
+      if (out_pair_prev != -1 && !available_triangles.contains(triangles.triangle(out_pair_prev)))
+      {
+        if (!outer_half_edges.contains(out_pair_prev)) {
+          outer_half_edges.append(out_pair_prev);
+        }
+      }
+    }
+  }
+
+  const int num_needed = 2 * (k - 1);
+  while (available_triangles.size() < num_needed) {
+    triangles.add_triangle(-1, -1, -1);
+    available_triangles.append(triangles.triangles_num() - 1);
+  }
+
+  /* Remove any prior events from pq for all available triangles. */
+  for (const int ti : available_triangles) {
+    pq.remove(ti);
+  }
+
+  /* Assign the 2*(k-1) replacement triangles:
+   * For segment i:
+   *   Side -: [p_verts[i], p_verts[i+1], ve_minus]
+   *   Side +: [p_verts[i+1], p_verts[i], ve_plus] */
+  for (const int i : IndexRange(k - 1)) {
+    const int ti_minus = available_triangles[2 * i];
+    const int ti_plus = available_triangles[2 * i + 1];
+
+    const int ve_minus = boundary_edges[seg_bwd_bnd[i]].ve;
+    const int ve_plus = boundary_edges[seg_fwd_bnd[i]].ve;
+
+    triangles.set_triangle_verts(ti_minus, p_verts[i], p_verts[i + 1], ve_minus);
+    triangles.set_triangle_verts(ti_plus, p_verts[i + 1], p_verts[i], ve_plus);
+
+    /* Initialize paired_ to -1. */
+    for (const int corner : IndexRange(3)) {
+      triangles.set_paired(3 * ti_minus + corner, -1);
+      triangles.set_paired(3 * ti_plus + corner, -1);
+    }
+  }
+
+  /* Build map of directed edges in the newly formed triangles: (u, v) -> half_edge. */
+  Map<std::pair<int, int>, int> directed_to_halfedge;
+  for (const int idx : IndexRange(num_needed)) {
+    const int ti = available_triangles[idx];
+    for (const int corner : IndexRange(3)) {
+      const int h = 3 * ti + corner;
+      const int u = triangles.start_vert(h);
+      const int v = triangles.end_vert(h);
+      directed_to_halfedge.add({u, v}, h);
+    }
+  }
+
+  /* Connect half-edge pairs:
+   * 1. Internal pairs within R: if (v, u) is in directed_to_halfedge.
+   * 2. External pairs to outer mesh: match with outer_half_edges. */
+  Set<int> updated_external_triangles;
+  for (const int idx : IndexRange(num_needed)) {
+    const int ti = available_triangles[idx];
+    for (const int corner : IndexRange(3)) {
+      const int h = 3 * ti + corner;
+      if (triangles.paired_edge(h) != -1) {
+        continue;
+      }
+      const int u = triangles.start_vert(h);
+      const int v = triangles.end_vert(h);
+
+      const int *twin_h_ptr = directed_to_halfedge.lookup_ptr({v, u});
+      if (twin_h_ptr != nullptr) {
+        const int twin_h = *twin_h_ptr;
+        triangles.set_paired(h, twin_h);
+        triangles.set_paired(twin_h, h);
+      }
+      else {
+        /* Look for an outer half-edge connecting v -> u. */
+        for (const int out_h : outer_half_edges) {
+          if (triangles.start_vert(out_h) == v && triangles.end_vert(out_h) == u) {
+            triangles.set_paired(h, out_h);
+            triangles.set_paired(out_h, h);
+            updated_external_triangles.add(triangles.triangle(out_h));
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  /* Any remaining triangles beyond num_needed are marked deleted. */
+  for (int idx = num_needed; idx < available_triangles.size(); idx++) {
+    triangles.mark_triangle_deleted(available_triangles[idx]);
+  }
+
+  /* Recompute collapse events for external neighbor triangles whose pairings changed. */
+  for (const int ext_ti : updated_external_triangles) {
+    if (!triangles.is_triangle_deleted(ext_ti)) {
+      const TriangleEvent rev = compute_triangle_collapse(
+          ext_ti, triangles, kinetic_verts, current_time_);
+      pq.remove(ext_ti);
+      if (rev.type != TriangleEventType::NONE && !std::isinf(rev.time) &&
+          rev.time >= current_time_ - 1e-9)
+      {
+        pq.insert_or_update(ext_ti, rev);
+      }
+    }
+  }
+
+  /* Schedule collapse events for the newly formed triangles. */
+  for (const int idx : IndexRange(num_needed)) {
+    const int ti = available_triangles[idx];
+    const TriangleEvent rev = compute_triangle_collapse(
+        ti, triangles, kinetic_verts, current_time_);
+    if (rev.type != TriangleEventType::NONE && !std::isinf(rev.time) &&
+        rev.time >= current_time_ - 1e-9)
+    {
+      pq.insert_or_update(ti, rev);
+    }
+
+    /* Record in journal pointing back to t1_entry_idx. */
+    const int3 sorted_verts = get_sorted_triangle_verts(triangles, ti);
+    JournalEntry entry;
+    entry.ti1 = ti;
+    entry.time = current_time_;
+    entry.triangle_verts = sorted_verts;
+    entry.parent_entry_index = t1_entry_idx;
+    const int entry_idx = int(journal_history_.size());
+    journal_history_.append(entry);
+    journal_search_.add(sorted_verts, entry_idx);
+  }
+  return true;
+}
+
+bool StraightSkeletonState::check_and_handle_flip_cycle(const TriangleEvent &ev)
+{
+  const int ti = ev.triangle_index;
+  if (ti < 0 || triangles.is_triangle_deleted(ti)) {
+    return false;
+  }
+  const int3 sorted_verts = get_sorted_triangle_verts(triangles, ti);
+
+  const int *t1_ptr = journal_search_.lookup_ptr(sorted_verts);
+  if (t1_ptr == nullptr) {
+    return false;
+  }
+  if (std::abs(journal_history_[*t1_ptr].time - ev.time) > 1e-5) {
+    return false;
+  }
+
+  /* Triangle Δ was already processed at the same t* (Palfreder et al. Section 3.2).
+   * Potential loop detected between first occurrence T1 and current occurrence T2. */
+  int t1 = *t1_ptr;
+  while (journal_history_[t1].parent_entry_index != -1) {
+    t1 = journal_history_[t1].parent_entry_index;
+  }
+  const int t2 = int(journal_history_.size());
+
+  /* Identify the set of triangles that form the collapsed polygon P. */
+
+  Set<int> p_triangles;
+  for (int i = t1; i < t2; i++) {
+    p_triangles.add(journal_history_[i].ti1);
+    p_triangles.add(journal_history_[i].ti2);
+  }
+  p_triangles.add(ti);
+  const int paired_e = triangles.paired_edge(ev.edge_index);
+  if (paired_e != -1) {
+    p_triangles.add(triangles.triangle(paired_e));
+  }
+
+  /* Identify all vertices in polygon P. */
+  Set<int> p_verts_set;
+  for (const int tri_idx : p_triangles) {
+    if (!triangles.is_triangle_deleted(tri_idx)) {
+      for (const int k : IndexRange(3)) {
+        p_verts_set.add(triangles.start_vert(3 * tri_idx + k));
+      }
+    }
+  }
+
+  Vector<int> p_verts;
+  p_verts.reserve(p_verts_set.size());
+  for (const int v : p_verts_set) {
+    p_verts.append(v);
+  }
+
+  /* Sort vertices along the line to which P collapsed at t* = ev.time. */
+  if (p_verts.size() >= 2) {
+    const double t_star = ev.time;
+    auto get_pos = [&](const int vi) -> double2 {
+      if (vi < kinetic_verts.size()) {
+        return kinetic_verts.position_at(vi, t_star);
+      }
+      return double2(0.0, 0.0);
+    };
+
+    /* Find direction of the collinear line from the two vertices farthest apart. */
+    double max_dist_sq = -1.0;
+    double2 line_dir(1.0, 0.0);
+    double2 ref_pos = get_pos(p_verts[0]);
+    for (int i = 0; i < p_verts.size(); i++) {
+      for (int j = i + 1; j < p_verts.size(); j++) {
+        const double2 d = get_pos(p_verts[j]) - get_pos(p_verts[i]);
+        const double d_sq = dot_2d(d, d);
+        if (d_sq > max_dist_sq) {
+          max_dist_sq = d_sq;
+          line_dir = d;
+          ref_pos = get_pos(p_verts[i]);
+        }
+      }
+    }
+
+    std::sort(p_verts.begin(), p_verts.end(), [&](const int a, const int b) {
+      const double proj_a = dot_2d(get_pos(a) - ref_pos, line_dir);
+      const double proj_b = dot_2d(get_pos(b) - ref_pos, line_dir);
+      return proj_a < proj_b;
+    });
+  }
+
+  /* Rollback: undo all flips in P from T2 down to T1 in reverse order. */
+  for (int i = t2 - 1; i >= t1; i--) {
+    const JournalEntry &entry = journal_history_[i];
+    if (p_triangles.contains(entry.ti1) || p_triangles.contains(entry.ti2)) {
+      /* Undo flip by flipping the new diagonal back to the original. */
+      flip_edge(triangles, entry.new_edge);
+      journal_search_.remove(entry.triangle_verts);
+      journal_history_.pop_last();
+    }
+  }
+
+  /* Section 3.2 (Figure 5): Retriangulate collapsed polygon P and attached triangles. */
+  if (!retriangulate_collapsed_polygon(p_triangles, p_verts, ev.time, t1)) {
+    return false;
+  }
+
+  journal_clear();
   return true;
 }
 
@@ -2018,13 +2497,27 @@ bool StraightSkeletonState::process_flip_event(const TriangleEvent &ev)
     return false;
   }
 
+  if (ev.time > current_time_ + 1e-7) {
+    journal_clear();
+  }
+
+  /* Section 3.2: Check if this flip event repeats a collapsed triangle in the journal. */
+  if (check_and_handle_flip_cycle(ev)) {
+    return true;
+  }
+
   current_time_ = ev.time;
 
-  if (!flip_edge(triangles, e1)) {
+  const int3 sorted_verts = get_sorted_triangle_verts(triangles, ti1);
+
+  int new_edge = -1;
+  if (!flip_edge(triangles, e1, &new_edge)) {
     return false;
   }
 
   flips_count_++;
+
+  journal_record_flip(ti1, ti2, e1, new_edge, current_time_, sorted_verts);
 
   const TriangleEvent ev1 = compute_triangle_collapse(
       ti1, triangles, kinetic_verts, current_time_);
@@ -2055,6 +2548,7 @@ void StraightSkeletonState::run_event_loop(const int max_events)
     count++;
   }
   events_processed_num_ = count;
+
   if (count >= max_events && !pq.is_empty()) {
     hit_max_events_ = true;
   }
