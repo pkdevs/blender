@@ -203,6 +203,12 @@ template<> struct device_type_traits<uint16_t> {
   static_assert(sizeof(uint16_t) == num_elements * datatype_size(data_type));
 };
 
+template<> struct device_type_traits<packed_half3> {
+  static const DataType data_type = TYPE_HALF;
+  static const size_t num_elements = 3;
+  static_assert(sizeof(packed_half3) == num_elements * datatype_size(data_type));
+};
+
 template<> struct device_type_traits<half4> {
   static const DataType data_type = TYPE_HALF;
   static const size_t num_elements = 4;
@@ -221,9 +227,9 @@ template<> struct device_type_traits<Quaternion> {
   static_assert(sizeof(Quaternion) == num_elements * datatype_size(data_type));
 };
 
-template<> struct device_type_traits<PackedSphericalHarmonics> {
+template<> struct device_type_traits<PackedSphericalHarmonicsRest> {
   static const DataType data_type = TYPE_INT8;
-  static const size_t num_elements = sizeof(PackedSphericalHarmonics);
+  static const size_t num_elements = sizeof(PackedSphericalHarmonicsRest);
 };
 
 /* Device Memory

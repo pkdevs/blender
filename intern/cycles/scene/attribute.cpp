@@ -27,7 +27,7 @@ Attribute::Attribute(ustring name,
   /* String is not supported! */
   assert(type == TypeFloat || type == TypeColor || type == TypePoint || type == TypeVector ||
          type == TypeNormal || type == TypeMatrix || type == TypeFloat2 || type == TypeFloat4 ||
-         type == TypeRGBA || type == TypeQuaternion || type == TypePackedSphericalHarmonics);
+         type == TypeRGBA || type == TypeQuaternion || type == TypePackedSphericalHarmonicsRest);
 
   if (element & ATTR_ELEMENT_VOXEL) {
     auto *data = GuardedAllocator<ImageHandle>().allocate(1);
@@ -353,8 +353,8 @@ size_t Attribute::data_sizeof() const
   if (type == TypeQuaternion) {
     return sizeof(Quaternion);
   }
-  if (type == TypePackedSphericalHarmonics) {
-    return sizeof(PackedSphericalHarmonics);
+  if (type == TypePackedSphericalHarmonicsRest) {
+    return sizeof(PackedSphericalHarmonicsRest);
   }
   return sizeof(packed_float3);
 }
@@ -454,6 +454,11 @@ bool Attribute::same_storage(const TypeDesc a, const TypeDesc b)
 
 void Attribute::zero_data(void *dst)
 {
+  if (type == TypePackedSphericalHarmonicsRest) {
+    spherical_harmonics_rest_fill_zero(*static_cast<PackedSphericalHarmonicsRest *>(dst));
+    return;
+  }
+
   memset(dst, 0, data_sizeof());
 }
 
@@ -527,6 +532,16 @@ const char *Attribute::standard_name(AttributeStandard std)
       return "random_per_island";
     case ATTR_STD_SHADOW_TRANSPARENCY:
       return "shadow_transparency";
+    case ATTR_STD_GSPLAT_RADIANCE_BASE:
+      return "radiance:base";
+    case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST:
+      return "radiance:sh";
+    case ATTR_STD_GSPLAT_RADIANCE:
+      return "radiance";
+    case ATTR_STD_GSPLAT_SCALE:
+      return "scale";
+    case ATTR_STD_GSPLAT_ROTATION:
+      return "rotation";
     case ATTR_STD_NOT_FOUND:
     case ATTR_STD_NONE:
     case ATTR_STD_NUM:
@@ -609,8 +624,8 @@ AttrKernelDataType Attribute::kernel_type(const Attribute &attr)
     return AttrKernelDataType::QUATERNION;
   }
 
-  if (attr.type == TypePackedSphericalHarmonics) {
-    return AttrKernelDataType::SPHERICAL_HARMONICS;
+  if (attr.type == TypePackedSphericalHarmonicsRest) {
+    return AttrKernelDataType::SPHERICAL_HARMONICS_REST;
   }
 
   return AttrKernelDataType::FLOAT3;
@@ -822,6 +837,26 @@ static bool standard_type_element(const Geometry *geometry,
       case ATTR_STD_GENERATED_TRANSFORM:
         type = TypeMatrix;
         element = ATTR_ELEMENT_MESH;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE_BASE:
+        type = TypeFloat4;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST:
+        type = TypePackedSphericalHarmonicsRest;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE:
+        type = TypeRGBA;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_SCALE:
+        type = TypeVector;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_ROTATION:
+        type = TypeQuaternion;
+        element = ATTR_ELEMENT_VERTEX;
         return true;
       default:
         return false;

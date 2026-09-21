@@ -8,7 +8,7 @@
 
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 namespace eevee::light {
 
@@ -77,7 +77,7 @@ struct VisibleLightIterator {
 
   void next_local_word()
   {
-    /* clang-format off */ /* Multiline macros would break line count. */
+    /* clang-format off */ /* Multi-line macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
     const auto &words = lrd.light_tile_buf;
@@ -105,7 +105,7 @@ struct VisibleLightIterator {
  public:
   void init(float2 pixel, float linear_view_z, uint receiver_light_set)
   {
-    /* clang-format off */ /* Multiline macros would break line count. */
+    /* clang-format off */ /* Multi-line macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
     const LightCullingData &culling = lrd.light_cull_buf;
@@ -136,7 +136,7 @@ struct VisibleLightIterator {
 
   bool next()
   {
-    /* clang-format off */ /* Multiline macros would break line count. */
+    /* clang-format off */ /* Multi-line macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
     const LightCullingData &culling = lrd.light_cull_buf;
@@ -185,7 +185,7 @@ struct VisibleLightIterator {
 
   bool should_skip(float3 P)
   {
-    /* clang-format off */ /* Multiline macros would break line count. */
+    /* clang-format off */ /* Multi-line macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
 
@@ -203,7 +203,7 @@ struct VisibleLightIterator {
     if (is_directional()) {
       return false;
     }
-    LightVector lv = light_vector_get(light, false, P);
+    LightVector lv = LightVector::get(light, false, P);
     if (light_attenuation_surface(light, false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
       return true;
     }
