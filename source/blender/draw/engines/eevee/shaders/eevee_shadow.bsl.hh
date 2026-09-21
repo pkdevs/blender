@@ -19,6 +19,8 @@ struct ShadowRenderData {
   [[sampler(SHADOW_TILEMAPS_TEX_SLOT)]] usampler2D shadow_tilemaps_tx;
 
   [[compilation_constant]] bool shadow_random;
+  /* Use a fixed seed for the noise input. */
+  [[compilation_constant]] bool shadow_static_noise;
 
   [[resource_table]] srt_t<Uniform> uniforms;
   [[resource_table]] srt_t<draw::View> views;
