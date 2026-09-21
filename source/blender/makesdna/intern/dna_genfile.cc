@@ -756,16 +756,8 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
 {
   expand_sdna_structs_to_write(sdna, structs_to_write);
 
-  /* It's necessary to write stubs for unused structs if there is a used struct afterwards. That's
-   * because the struct id can't be changed anymore and is given by #sdna_struct_id_get.
-   * Structs after the last used one don't need to be written anymore though. */
-  int64_t structs_num = 0;
-  for (const int64_t i : structs_to_write.index_range()) {
-    if (structs_to_write[i]) {
-      structs_num = i + 1;
-    }
-  }
-  BLI_assert(structs_num > 0);
+  const int64_t structs_num = sdna.structs.size();
+  BLI_assert(structs_num == structs_to_write.size());
 
   /* Gather all member names used by the used structs. */
   VectorSet<StringRef> used_member_names;
@@ -783,14 +775,11 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
   /* Create a fake type name that's written to the file but is not used at all. */
   auto make_stub_struct_name = [](const int struct_i) { return fmt::format("#{}", struct_i); };
   auto is_stub_struct_name = [](const StringRef name) { return name.startswith("#"); };
-  auto to_type_name_in_blend_file = [](const StringRef name) {
-    return DNA_struct_rename_legacy_hack_alias_from_static(name);
-  };
 
   Map<StringRef, short> all_type_sizes;
   all_type_sizes.reserve(sdna.types_num);
   for (const int type_i : IndexRange(sdna.types_num)) {
-    all_type_sizes.add_new(to_type_name_in_blend_file(sdna.types[type_i]),
+    all_type_sizes.add_new(DNA_struct_rename_legacy_hack_alias_from_static(sdna.types[type_i]),
                            sdna.types_size[type_i]);
   }
 
@@ -802,17 +791,31 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
     type_names.add_new(builtin.name);
   }
 
+  Array<StringRef> stub_struct_names(structs_num);
   for (const int64_t struct_i : IndexRange(structs_num)) {
-    if (structs_to_write[struct_i]) {
-      const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
-      type_names.add(to_type_name_in_blend_file(sdna.types[sdna_struct.type_index]));
-      for (const int member_i : IndexRange(sdna_struct.members_num)) {
-        type_names.add(
-            to_type_name_in_blend_file(sdna.types[sdna_struct.members[member_i].type_index]));
-      }
+    if (!structs_to_write[struct_i]) {
+      stub_struct_names[struct_i] = allocator.copy_string(make_stub_struct_name(struct_i));
     }
-    else {
-      type_names.add(allocator.copy_string(make_stub_struct_name(struct_i)));
+  }
+
+  auto get_encoded_type_name = [&](const int type_i) -> StringRef {
+    const StringRef static_name = sdna.types[type_i];
+    const int struct_i = DNA_struct_find_index_without_alias(&sdna, static_name);
+    if (struct_i >= 0 && struct_i < structs_num && !structs_to_write[struct_i]) {
+      /* Structs that are not actually written use the stub name. */
+      return stub_struct_names[struct_i];
+    }
+    return DNA_struct_rename_legacy_hack_alias_from_static(static_name);
+  };
+
+  for (const int64_t struct_i : IndexRange(structs_num)) {
+    const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
+    type_names.add(get_encoded_type_name(sdna_struct.type_index));
+    /* Only*/
+    if (structs_to_write[struct_i]) {
+      for (const int member_i : IndexRange(sdna_struct.members_num)) {
+        type_names.add(get_encoded_type_name(sdna_struct.members[member_i].type_index));
+      }
     }
   }
 
@@ -872,14 +875,14 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
         /* Write the struct with all its members. */
         const SDNA_Struct &sdna_struct = *sdna.structs[struct_i];
         const short struct_type_i = type_names.index_of_as(
-            to_type_name_in_blend_file(sdna.types[sdna_struct.type_index]));
+            get_encoded_type_name(sdna_struct.type_index));
         const short members_num = sdna_struct.members_num;
         write(&struct_type_i, sizeof(struct_type_i));
         write(&members_num, sizeof(members_num));
         for (const int member_i : IndexRange(sdna_struct.members_num)) {
           const SDNA_StructMember &member = sdna_struct.members[member_i];
           const short member_type_i = type_names.index_of_as(
-              to_type_name_in_blend_file(sdna.types[member.type_index]));
+              get_encoded_type_name(member.type_index));
           const short member_name_i = used_member_names.index_of_as(
               sdna.members[member.member_index]);
           write(&member_type_i, sizeof(member_type_i));
@@ -888,7 +891,7 @@ Vector<uint8_t> DNA_sdna_encode_subset(const SDNA &sdna, MutableSpan<bool> struc
       }
       else {
         /* Write the struct as stub without any members. */
-        const short struct_type_i = type_names.index_of_as(make_stub_struct_name(struct_i));
+        const short struct_type_i = type_names.index_of_as(stub_struct_names[struct_i]);
         const short members_num = 0;
         write(&struct_type_i, sizeof(struct_type_i));
         write(&members_num, sizeof(members_num));
