@@ -7044,6 +7044,8 @@ std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen
     return std::nullopt;
   }
 
+  /* Only continue if playback is running in this screen, so scrubbing in
+   * another screen does not interrupt playback. See #164040. */
   if (play_screen != &screen) {
     return std::nullopt;
   }
