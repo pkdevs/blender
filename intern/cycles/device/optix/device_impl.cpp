@@ -92,6 +92,11 @@ OptiXDevice::OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profile
   optix_assert(optixDeviceContextSetLogCallback(
       context, options.logCallbackFunction, options.logCallbackData, options.logCallbackLevel));
 
+  unsigned int rtcore_version = 0;
+  optix_assert(optixDeviceContextGetProperty(
+      context, OPTIX_DEVICE_PROPERTY_RTCORE_VERSION, &rtcore_version, sizeof(rtcore_version)));
+  this->info.use_hardware_raytracing = rtcore_version > 0;
+
   /* Fix weird compiler bug that assigns wrong size. */
   launch_params.data_elements = sizeof(KernelParamsOptiX);
 
@@ -273,7 +278,6 @@ bool OptiXDevice::load_kernels(const uint64_t kernel_features)
 #  else
   const bool use_osl_shading = false;
   const bool use_osl_camera = false;
-  const bool use_osl_volume = false;
 #  endif
   const bool use_shader_raytrace = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE);
   const bool use_mnee = (kernel_features & KERNEL_FEATURE_MNEE);
@@ -446,7 +450,6 @@ bool OptiXDevice::load_kernels(const uint64_t kernel_features)
     auto load_optional_module = [this, &kernel_features](const string &name,
                                                          string &ptx_data) -> bool {
       string filename = path_get("lib/" + name + ".ptx.zst");
-      LOG_INFO << "OptiX: Loading optional module from " << filename;
       if (use_adaptive_compilation() || path_file_size(filename) == -1) {
         /* Map kernel_optix_foo.ptx to kernel_foo.cu. */
         const char *suffix = "_optix";
@@ -460,6 +463,7 @@ bool OptiXDevice::load_kernels(const uint64_t kernel_features)
         const string cflags = compile_kernel_get_common_cflags(kernel_features);
         filename = compile_kernel(cflags, source_name.c_str(), true);
       }
+      LOG_INFO << "OptiX: Loading optional module from " << filename;
       if (filename.empty() || !path_read_compressed_text(filename, ptx_data)) {
         set_error(string_printf("Failed to load OptiX kernel from '%s'", filename.c_str()));
         return false;
@@ -859,16 +863,16 @@ bool OptiXDevice::load_kernels(const uint64_t kernel_features)
   if (use_osl_shading || use_osl_camera) {
     /* OSL kernels will be (re)created on by OSL manager. */
   }
-  else if (kernel_features & (KERNEL_FEATURE_NODE_RAYTRACE | KERNEL_FEATURE_MNEE)) {
+  else if (use_shader_raytrace || use_mnee) {
     /* Create shader ray-tracing and MNEE pipeline. */
     vector<OptixProgramGroup> pipeline_groups;
     pipeline_groups.reserve(NUM_PROGRAM_GROUPS);
-    if (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) {
+    if (use_shader_raytrace) {
       pipeline_groups.push_back(groups[PG_RGEN_SHADE_SURFACE_RAYTRACE]);
       pipeline_groups.push_back(groups[PG_CALL_SVM_AO]);
       pipeline_groups.push_back(groups[PG_CALL_SVM_BEVEL]);
     }
-    if (kernel_features & KERNEL_FEATURE_MNEE) {
+    if (use_mnee) {
       pipeline_groups.push_back(groups[PG_RGEN_INTERSECT_MNEE]);
     }
     add_hit_miss_program_groups(groups, pipeline_groups);
