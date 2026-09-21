@@ -1732,7 +1732,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
 
           const int fill_intersect_offset = intersection_points.is_empty() ?
                                                 0 :
-                                                intersection_offsets[fill_index].first();
+                                                intersection_offsets[fill_index].start();
 
           auto point_to_id = [&](int32_t p) {
             if (p < 0) {
