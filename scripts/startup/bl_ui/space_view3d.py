@@ -8709,22 +8709,47 @@ class VIEW3D_PT_greasepencil_draw_context_menu(Panel):
             split.template_color_picker(prop_owner, "color", value_slider=True)
 
         if brush.gpencil_brush_type not in {'FILL', 'TRIM', 'CARVER', 'ERASE'}:
-            if brush.use_locked_size == 'VIEW':
+            size = "size"
+            if brush.use_locked_size != 'VIEW':
+                size = "unprojected_size"
+
+            if UnifiedPaintPanel.paint_settings_from_active_tool(context) is None: 
                 row = layout.row(align=True)
                 row.prop(brush, "size", slider=True)
                 row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
             else:
-                row = layout.row(align=True)
-                row.prop(brush, "unprojected_size", text="Size", slider=True)
-                row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
+                UnifiedPaintPanel.prop_unified(
+                    layout,
+                    context,
+                    brush,
+                    size,
+                    unified_name="use_unified_size",
+                    pressure_name="use_pressure_size",
+                    text="Size",
+                    slider=True,
+                )
         if brush.gpencil_brush_type == 'ERASE':
-            row = layout.row(align=True)
-            row.prop(brush, "size", slider=True)
-            row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
-        if brush.gpencil_brush_type not in {'ERASE', 'FILL', 'TRIM', 'CARVER'}:
-            row = layout.row(align=True)
-            row.prop(brush, "strength", slider=True)
-            row.prop(brush, "use_pressure_strength", text="", icon='STYLUS_PRESSURE')
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                "size",
+                unified_name="use_unified_size",
+                pressure_name="use_pressure_size",
+                text="Size",
+                slider=True,
+            )
+        if brush.gpencil_brush_type not in {'ERASE', 'FILL', 'TRIM', 'CARVER'} and UnifiedPaintPanel.paint_settings_from_active_tool(context) is not None:
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                "strength",
+                unified_name="use_unified_strength",
+                pressure_name="use_pressure_strength",
+                text="",
+                slider=True,
+            )
 
         layer = context.object.data.layers.active
 
@@ -8806,17 +8831,29 @@ class VIEW3D_PT_greasepencil_vertex_paint_context_menu(Panel):
             col.prop(gp_settings, "vertex_mode", text="")
             col.separator()
 
-        row = col.row(align=True)
-        row.prop(settings.unified_paint_settings, "size", text="Radius")
-        row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            "size",
+            unified_name="use_unified_size",
+            pressure_name="use_pressure_size",
+            text="Size",
+            slider=True,
+        )
 
         if brush.gpencil_vertex_brush_type in {'DRAW', 'BLUR', 'SMEAR'}:
             ups = settings.unified_paint_settings
             strength_owner = ups if brush.use_unified_strength else brush
-            row = layout.row(align=True)
-            row.prop(strength_owner, "strength", text="")
-            row.prop(brush, "use_pressure_strength", text="", icon='STYLUS_PRESSURE')
-            row.prop(brush, "use_unified_strength", text="", icon='BRUSHES_ALL')
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                "strength",
+                unified_name="use_unified_strength",
+                pressure_name="use_pressure_strength",
+                slider=True,
+            )
 
         layer = context.object.data.layers.active
 
