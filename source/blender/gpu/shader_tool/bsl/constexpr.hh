@@ -125,7 +125,7 @@ struct ConstexprValue {
     return 0;
   }
 
-  std::vector<uint32_t> values;
+  std::vector<uint32_t> values = {0};
 
   explicit ConstexprValue(int32_t s) : type_(INT1), values({uint32_t(s)}) {}
   explicit ConstexprValue(uint32_t s) : type_(UINT1), values({s}) {}
