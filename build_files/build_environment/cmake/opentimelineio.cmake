@@ -17,11 +17,12 @@ set(OPENTIMELINEIO_EXTRA_ARGS
   -DOTIO_FIND_MINIZIP_NG=ON
 
   -DImath_ROOT=${LIBDIR}/imath
-  -DZLIB_ROOT=${LIBDIR}/zlib
   -DRapidJSON_ROOT=${LIBDIR}/rapidjson
   -Dminizip-ng_ROOT=${LIBDIR}/minizipng
   -Dpybind11_ROOT=${LIBDIR}/pybind11
   -DPython_EXECUTABLE=${PYTHON_BINARY}
+  -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
+  -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
 
   # Latest main currently fails to build with C++20, try to remove on next upgrade.
   -DCMAKE_CXX_STANDARD=17
@@ -55,7 +56,13 @@ ExternalProject_Add(external_opentimelineio
 )
 
 if(WIN32)
-  # TODO
+  ExternalProject_Add_Step(external_opentimelineio after_install
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory
+      ${LIBDIR}/opentimelineio/
+      ${HARVEST_TARGET}/opentimelineio/
+    DEPENDEES install
+  )
 else()
   harvest(external_opentimelineio opentimelineio/include opentimelineio/include "*.h")
   # Cmake files first because harvest_rpath_lib edits them.
