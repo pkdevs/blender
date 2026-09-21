@@ -1425,6 +1425,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
     const std::optional<GroupedSpan<int3>> triangles = info.drawing.triangles();
     const std::optional<GroupedSpan<int>> fills = info.drawing.fills();
     const GroupedSpan<float3> intersection_points = info.drawing.intersection_points();
+    const OffsetIndices<int> intersection_offsets = intersection_points.offsets;
     const Span<float4x2> texture_matrices = info.drawing.texture_matrices();
     const Span<int> verts_start_offsets = verts_start_offsets_per_visible_drawing[drawing_i];
     IndexMaskMemory memory;
@@ -1629,10 +1630,13 @@ static void grease_pencil_geom_batch_ensure(Object &object,
         const float4x2 texture_matrix = texture_matrices[first_curve] *
                                         object_space_to_layer_space;
 
+        const int fill_intersect_offset = intersection_offsets[fill_index].first();
+
         for (const int inter_i : inter_points.index_range()) {
           const float3 &pos_3d = inter_points[inter_i];
 
-          const int verts_start_offset = verts_start_offsets.last() + inter_i;
+          const int verts_start_offset = verts_start_offsets.last() + inter_i +
+                                         fill_intersect_offset;
 
           GreasePencilStrokeVert &s_vert = verts[verts_start_offset];
           GreasePencilColorVert &c_vert = cols[verts_start_offset];
@@ -1726,9 +1730,14 @@ static void grease_pencil_geom_batch_ensure(Object &object,
             }
           });
 
+          const int fill_intersect_offset = intersection_points.is_empty() ?
+                                                0 :
+                                                intersection_offsets[fill_index].first();
+
           auto point_to_id = [&](int32_t p) {
             if (p < 0) {
-              return (-(p + 1) + verts_start_offsets.last()) << GP_VERTEX_ID_SHIFT;
+              return (-(p + 1) + fill_intersect_offset + verts_start_offsets.last())
+                     << GP_VERTEX_ID_SHIFT;
             }
             const int pos_ = fill_point_to_pos_map[p];
             const int curve_ = fill[pos_];
