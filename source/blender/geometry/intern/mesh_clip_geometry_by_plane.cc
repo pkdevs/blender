@@ -28,26 +28,53 @@ namespace blender::geometry {
  * \{ */
 
 /*
- * Vertex generated from linear interpolation between two
+ * Interface for that can
  */
-struct MeshVertexSetCopyMask {
-  IndexMask src_indices;
-};
-/*
- * Vertex generated from linear interpolation between two
- */
-struct MeshVertexSetLinear {
-  Span<int2> src_indices;
-  Span<float> weights;
+class IVariantVertexSet {
+ public:
+  /*
+   * Number of vertex elements in the set description.
+   */
+  virtual IndexRange vertex_range() = 0;
 };
 
+/*
+ * Masked vertex data copied from the source mesh.
+ */
+class MeshVertexSetCopyMask : public IVariantVertexSet {
+
+  IndexMask src_indices;
+
+ public:
+  virtual IndexRange vertex_range()
+  {
+    return src_indices.index_range();
+  }
+};
+/*
+ * Vertex generated from linear interpolating over an edge in the source mesh.
+ */
+class MeshVertexSetLinear : public IVariantVertexSet {
+  Span<int2> src_indices;
+  Span<float> weights;
+
+ public:
+  virtual IndexRange vertex_range()
+  {
+    return src_indices.index_range();
+  }
+};
+/*
+ * Masked edge data copied from the source mesh.
+ */
 struct MeshEdgeSetCopyMask {
   /*
    * Mask for the edges to copy from the data source.
    */
   IndexMask src_indices;
   /*
-   * Optional: Table for remapping the src indices. Leave empty if indices are unchanged.
+   * Optional: Table for remapping the vertex indices in the source mesh. Leave empty if indices
+   * are unchanged.
    */
   Span<int> mapping_table;
 };
@@ -65,13 +92,14 @@ struct MeshEdgeSetPair {
    */
   Span<int2> src_edge_indices;
 };
-
 /*
- * Triangles generated from given .
+ * Triangle set generated from vertex and edge data that has been set and is available in the new
+ * mesh.
  */
 struct MeshTriangleSet {
   /*
-   * Indices to the polygon attributes should be copied from.
+   * Indices to an associated polygon/face in a source mesh from which polygon attributes will be
+   * copied from.
    */
   Span<int> src_polygon_indices;
   /*
@@ -102,6 +130,9 @@ struct MeshTriangleSet {
     }
   }
 };
+/*
+ * Faces transferred (copied) from the source mesh.
+ */
 struct MeshFaceSetCopyMask {
 
   int num_corners;
@@ -110,7 +141,15 @@ struct MeshFaceSetCopyMask {
    */
   IndexMask src_indices;
 
+  /*
+   * Optional: Table for remapping the vertex indices in the source mesh. Leave empty if indices
+   * are unchanged.
+   */
   Span<int> mapping_table_verts;
+  /*
+   * Optional: Table for remapping the edge indices in the source mesh. Leave empty if indices
+   * are unchanged.
+   */
   Span<int> mapping_table_edges;
 
   void fill_corner_table(const OffsetIndices<int> src_corner_offsets,
@@ -151,21 +190,6 @@ using VariantEdgeSet = std::variant<MeshEdgeSetCopyMask, MeshEdgeSetPair>;
 using VariantPolygonSet = std::variant<MeshFaceSetCopyMask, MeshTriangleSet>;
 
 /*
- * Number of vertex elements in the set description.
- */
-IndexRange vertex_range(const VariantVertexSet &desc)
-{
-  if (auto item = std::get_if<MeshVertexSetCopyMask>(&desc)) {
-    return item->src_indices.index_range();
-  }
-  else if (auto item = std::get_if<MeshVertexSetLinear>(&desc)) {
-    return item->src_indices.index_range();
-  }
-  BLI_assert_msg(false, "Unreachable: Invalid variant implementation");
-  return IndexRange();
-}
-
-/*
  * Number of edge elements in the set description.
  */
 IndexRange edge_range(const VariantEdgeSet &desc)
@@ -180,11 +204,11 @@ IndexRange edge_range(const VariantEdgeSet &desc)
   return IndexRange();
 }
 
-int vertex_count(const Span<VariantVertexSet> vertex_sets)
+int vertex_count(const Span<IVariantVertexSet *> vertex_sets)
 {
   int count = 0;
   for (int64_t i = 0; i < vertex_sets.size(); i++) {
-    count += vertex_range(vertex_sets[i]).size();
+    count += vertex_sets[i]->vertex_range().size();
   }
   return count;
 }
@@ -610,7 +634,7 @@ void transfer_polygon_data(const Mesh &src_mesh,
 }
 
 Mesh *build_mesh_from_descriptors(const Mesh &src_mesh,
-                                  const Span<VariantVertexSet> vertex_sets,
+                                  const Span<IVariantVertexSet*> vertex_sets,
                                   const Span<VariantEdgeSet> edge_sets,
                                   const Span<VariantPolygonSet> poly_sets)
 {
@@ -756,7 +780,7 @@ static int compute_triangulation_offsets(const Mesh &src_mesh,
         return face_size;
       },
       [](int a, int b) { return std::max<int>(a, b); },
-    exec_mode::grain_size(4096));
+      exec_mode::grain_size(4096));
 
   std::partial_sum(
       r_tesselation_offsets.begin(), r_tesselation_offsets.end(), r_tesselation_offsets.begin());
@@ -772,13 +796,16 @@ static inline IndexMask classify_vertices(const Mesh &src_mesh,
 {
   const Span<float3> src_positions = src_mesh.vert_positions();
   return IndexMask::from_predicate(
-      src_positions.index_range(), memory, [&](const int64_t i) {
+      src_positions.index_range(),
+      memory,
+      [&](const int64_t i) {
         const float dist_to_plane = dist_signed_to_plane_v3(src_positions[i], args.plane);
         const bool is_kept = !is_clipped(dist_to_plane);
         vertex_flags[i] = is_kept;
         signed_distance[i] = dist_to_plane;
         return is_kept;
-      }, exec_mode::grain_size(4096));
+      },
+      exec_mode::grain_size(4096));
 }
 
 static inline void classify_edges(const Mesh &src_mesh,
@@ -934,7 +961,8 @@ static void triangulate_clipped_geometry(const Mesh &src_mesh,
                                                   boundary_intersect_count / 2;
         r_edge_formed_dst_offsets[index_pos] = formed_count;
         r_edge_mask_offsets[index_pos] = tris_clipped_count; /* any cut => has edge on border */
-      }, exec_mode::grain_size(512));
+      },
+      exec_mode::grain_size(512));
 
   /* Accumulate dst offsets */
   threading::parallel_invoke(
@@ -1111,7 +1139,8 @@ std::pair<Mesh *, ClipResult> clip_by_plane(const Mesh &src_mesh,
         const int2 ve_index = fn_split_edge(
             vert_indices, index_pos, int2{int(index_src_edge), -1}, edge_weight);
         edge_remap[index_src_edge] = ve_index.y;
-      }, exec_mode::grain_size(4096));
+      },
+      exec_mode::grain_size(4096));
 
   /* Generate output triangulation (asynchronous)
    */
@@ -1413,14 +1442,16 @@ std::pair<Mesh *, ClipResult> clip_by_plane(const Mesh &src_mesh,
             tri_count += 2;
           }
         }
-      }, exec_mode::grain_size(512));
+      },
+      exec_mode::grain_size(512));
 
   const int copied_corner_count = face_selections[IntersectionType::Kept].parallel_reduce(
       0,
       [&](const int64_t index_face, const int64_t /* index_pos */, const int & /* identity */) {
         return int(src_polys[index_face].size());
       },
-      [](int a, int b) { return a + b; }, exec_mode::grain_size(4096));
+      [](int a, int b) { return a + b; },
+      exec_mode::grain_size(4096));
 
   /* Set Descriptors */
   std::array<VariantVertexSet, 2> vertex_sets = {
