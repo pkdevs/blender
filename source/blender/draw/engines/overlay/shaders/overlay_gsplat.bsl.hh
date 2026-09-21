@@ -259,7 +259,7 @@ void wire_object_color_get(float3 &rim_col,
 }
 
 [[fragment]] void frag([[resource_table]] const PipelineResources &pipe,
-                       [[resource_table]] const Resources &srt,
+                       [[resource_table]] const Resources & /* srt */,
                        [[resource_table, condition(selectable)]] draw::Select &select,
                        [[point_coord]] const float2 &in_pointcoord,
                        [[frag_coord]] const float4 frag_coordinate,
@@ -347,7 +347,6 @@ struct FragOut {
 }
 
 [[fragment]] void frag([[point_coord]] const float2 &in_pointcoord,
-                       [[frag_coord]] const float4 frag_coordinate,
                        [[in]] const VertOut &v_in,
                        [[out]] FragOut &f_out)
 {
@@ -376,7 +375,7 @@ struct VertOut {
 
 [[vertex]] void vert(
     [[resource_table]] const PipelineResources &pipe,
-    [[resource_table]] const Resources &srt,
+    [[resource_table]] const Resources & /* srt */,
     [[resource_table]] const draw::gsplat::ShapeResource &shape,
     [[resource_table]] const draw::View &views,
     [[resource_table]] const draw::Model &models,
@@ -524,9 +523,7 @@ struct FragOut {
   }
 }
 
-[[fragment]] void frag([[frag_coord]] const float4 frag_coord,
-                       [[in]] const VertOut &v_in,
-                       [[out]] FragOut &f_out)
+[[fragment]] void frag([[in]] const VertOut &v_in, [[out]] FragOut &f_out)
 {
   /* Discard outline parts below a threshold. Otherwise, the gsplat outline shows billboards. */
   float alpha = draw::gsplat::evaluate_gaussian(v_in.P, v_in.alpha);
@@ -544,7 +541,7 @@ PipelineGraphic viewer_attribute_gsplat(viewer_attribute::vert, viewer_attribute
 PipelineGraphic viewer_attribute_gsplat_clipped(viewer_attribute::vert, viewer_attribute::frag, PipelineResources{.use_clipping = true, .selectable = false});
 
 PipelineGraphic edit_gsplat(edit_vert::vert, edit_vert::frag, PipelineResources{.use_clipping = false, .selectable = false});
-PipelineGraphic edit_gsplat_clipped(edit_vert::vert, edit_vert::frag, PipelineResources{.use_clipping = true, .selectable = false}); /* so anyways */
+PipelineGraphic edit_gsplat_clipped(edit_vert::vert, edit_vert::frag, PipelineResources{.use_clipping = true, .selectable = false}); /* So anyway. */
 
 PipelineGraphic depth_gsplat(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = false, .selectable = false});
 PipelineGraphic depth_gsplat_selectable(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = false, .selectable = true});
