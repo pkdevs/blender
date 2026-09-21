@@ -24,6 +24,8 @@
 #include "WM_api.hh"
 
 #include "BKE_asset.hh"
+#include "BKE_bake_data_block_id.hh"
+#include "BKE_bake_data_block_map.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
@@ -982,13 +984,48 @@ struct DataPerZone {
   std::optional<bke::bake::BakeValues> state;
 };
 
+class NodeOperatorBakeDataBlockMap : public bke::bake::BakeDataBlockMap {
+ private:
+  std::mutex mutex_;
+  Map<bke::bake::BakeDataBlockID, uint32_t> session_uid_by_key_;
+  Main &bmain_;
+
+ public:
+  NodeOperatorBakeDataBlockMap(Main &bmain) : bmain_(bmain) {}
+
+  ID *lookup_or_remember_missing(const bke::bake::BakeDataBlockID &key) override
+  {
+    std::lock_guard lock{mutex_};
+    const uint32_t session_uid = session_uid_by_key_.lookup_or_add_cb(key, [&]() -> uint32_t {
+      ID *id = BKE_libblock_find_name_and_library(
+          &bmain_, short(key.type), key.id_name.c_str(), key.lib_name.c_str());
+      return id ? id->session_uid : MAIN_ID_SESSION_UID_UNSET;
+    });
+    if (session_uid == MAIN_ID_SESSION_UID_UNSET) {
+      return nullptr;
+    }
+    return BKE_libblock_find_session_uid(&bmain_, short(key.type), session_uid);
+  }
+
+  void try_add(ID &id) override
+  {
+    ID *id_orig = (id.tag & ID_TAG_NO_MAIN) ? DEG_get_original(&id) : &id;
+    std::lock_guard lock{mutex_};
+    session_uid_by_key_.add_overwrite(bke::bake::BakeDataBlockID(*id_orig), id_orig->session_uid);
+  }
+};
+
 struct NodeOperatorCustomData {
   double last_time;
   bool initialized = false;
   Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
+  NodeOperatorBakeDataBlockMap bake_data_block_map;
   wmTimer *timer = nullptr;
-  NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
+  NodeOperatorCustomData(Main &bmain)
+      : last_time(BLI_time_now_seconds()), bake_data_block_map(bmain)
+  {
+  }
 };
 
 /**
@@ -1025,13 +1062,15 @@ class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
   mutable std::mutex mutex_;
   mutable Map<int, nodes::SimulationZoneBehavior *> behaviors_;
   Map<int, std::unique_ptr<DataPerZone>> &data_by_zone_;
+  bke::bake::BakeDataBlockMap &data_block_map_;
 
  public:
   float delta_time = 0.0f;
 
   NodeOperatorSimulationParams(Map<int, std::unique_ptr<DataPerZone>> &data_by_zone,
+                               bke::bake::BakeDataBlockMap &data_block_map,
                                const float delta_time)
-      : data_by_zone_{data_by_zone}, delta_time(delta_time)
+      : data_by_zone_{data_by_zone}, data_block_map_(data_block_map), delta_time(delta_time)
   {
   }
 
@@ -1054,6 +1093,7 @@ class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
 
       data.behavior.output = nodes::sim_output::StoreNewState{
           [&data](bke::bake::BakeValues values) { data.state = std::move(values); }};
+      data.behavior.data_block_map = &data_block_map_;
       return &data.behavior;
     });
   }
@@ -1110,7 +1150,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
   const eObjectMode mode = active_object->mode;
 
   if (!op->customdata) {
-    op->customdata = MEM_new<NodeOperatorCustomData>(__func__);
+    op->customdata = MEM_new<NodeOperatorCustomData>(__func__, *bmain);
   }
   NodeOperatorCustomData &op_data = *static_cast<NodeOperatorCustomData *>(op->customdata);
 
@@ -1260,8 +1300,8 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
                                                                  "viewport_is_perspective");
     get_geometry_active_indices(object, operator_eval_data);
 
-    NodeOperatorSimulationParams simulation_params(op_data.simulation_data_by_zone[object_i],
-                                                   delta_time);
+    NodeOperatorSimulationParams simulation_params(
+        op_data.simulation_data_by_zone[object_i], op_data.bake_data_block_map, delta_time);
 
     nodes::GeoNodesCallData call_data{};
     call_data.operator_data = &operator_eval_data;
