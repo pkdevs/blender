@@ -796,7 +796,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
                 split.label_multiline(text=getattr(asset_metadata, propname))
             else:
                 layout.textbox(asset_metadata, propname, placeholder=ui_name,
-                              initial_visible_lines=initial_visible_lines)
+                               initial_visible_lines=initial_visible_lines)
 
     @staticmethod
     def _webpage_prop(layout, asset_metadata):
