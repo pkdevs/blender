@@ -177,6 +177,15 @@ void NodeTreeEvaluator::compute_zone_external_input_reference_counts()
   }
 }
 
+/* Identifies if the given node is a node tree input, this includes the Group Input and Zone Input
+ * nodes. Those nodes are a special case, while they are compiled as node operation, their outputs
+ * are retrieved from the operation using the evaluator, while their inputs are ignored from the
+ * perspective of the node operation. */
+static bool is_node_tree_input_node(const bNode &node)
+{
+  return node.is_group_input() || bke::all_zone_input_node_types().contains(node.type_legacy);
+}
+
 NodeOperation *NodeTreeEvaluator::create_node_operation(const bNode &node)
 {
   const char *disabled_hint = nullptr;
@@ -192,7 +201,7 @@ NodeOperation *NodeTreeEvaluator::create_node_operation(const bNode &node)
     return get_node_tree_output_node_operation(this->context(), node, this->operation());
   }
 
-  if (node.is_group_input() || bke::all_zone_input_node_types().contains(node.type_legacy)) {
+  if (is_node_tree_input_node(node)) {
     return get_node_tree_input_node_operation(this->context(), node, this->operation());
   }
 
@@ -243,7 +252,9 @@ void NodeTreeEvaluator::map_node_operation_inputs_to_their_results(const bNode &
     }
 
     const bNodeSocket *output = get_output_linked_to_input(*input);
-    if (!output || this->schedule().unneeded_inputs.contains(input)) {
+    if (!output || this->schedule().unneeded_inputs.contains(input) ||
+        is_node_tree_input_node(node))
+    {
       this->map_unlinked_input(*input, operation);
       continue;
     }
