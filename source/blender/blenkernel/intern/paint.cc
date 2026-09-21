@@ -1973,10 +1973,10 @@ float BKE_paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, ui
 }
 
 /* Threshold to move before updating the brush rotation, reduces jitter. */
-float paint_rake_rotation_spacing(const Paint & /*paint*/,
-                                  const Brush &brush,
-                                  bool in_stroke,
-                                  bool is_first_dab)
+float BKE_paint_rake_rotation_spacing(const Paint & /*paint*/,
+                                      const Brush &brush,
+                                      bool in_stroke,
+                                      bool is_first_dab)
 {
   const float rotation_spacing = brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f :
                                                                                             20.0f;
@@ -2011,7 +2011,7 @@ static bool paint_rake_rotation_active(const MTex &mtex)
   return mtex.tex && mtex.brush_angle_mode & MTEX_ANGLE_RAKE;
 }
 
-bool paint_rake_rotation_active(const Brush &brush, PaintMode paint_mode)
+bool BKE_paint_rake_rotation_active(const Brush &brush, PaintMode paint_mode)
 {
   return paint_rake_rotation_active(brush.mtex) || paint_rake_rotation_active(brush.mask_mtex) ||
          BKE_brush_has_cube_tip(&brush, paint_mode);
@@ -2027,8 +2027,8 @@ bool BKE_paint_calculate_rake_rotation(Paint &paint,
   bke::PaintRuntime &paint_runtime = *paint.runtime;
 
   bool ok = false;
-  if (paint_rake_rotation_active(brush, paint_mode)) {
-    const float r = paint_rake_rotation_spacing(paint, brush, in_stroke, is_first_dab);
+  if (BKE_paint_rake_rotation_active(brush, paint_mode)) {
+    const float r = BKE_paint_rake_rotation_spacing(paint, brush, in_stroke, is_first_dab);
     float rotation;
 
     float dpos[2];

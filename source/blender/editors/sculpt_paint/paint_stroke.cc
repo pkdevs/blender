@@ -1620,9 +1620,9 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   const bool first_step = first_dab && paint_space_stroke_enabled(*br, mode);
 
   const float mouse_delta_length = math::length(sample_average.mouse - this->last_mouse_position);
-  const bool rake_start_step = paint_rake_rotation_active(*br, mode) && !rake_started_ &&
+  const bool rake_start_step = BKE_paint_rake_rotation_active(*br, mode) && !rake_started_ &&
                                mouse_delta_length >=
-                                   paint_rake_rotation_spacing(*paint, *br, true, true);
+                                   BKE_paint_rake_rotation_spacing(*paint, *br, true, true);
 
   if ((first_step || rake_start_step) && !(br->flag & BRUSH_SMOOTH_STROKE)) {
     paint_runtime.overlap_factor = paint_stroke_integrate_overlap(*br, 1.0);
