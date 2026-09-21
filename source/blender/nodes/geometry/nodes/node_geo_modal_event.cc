@@ -84,7 +84,7 @@ class LazyFunctionForModalEventNode : public LazyFunction {
 
     /* The node is evaluated as a side-effect node, so the "Enable" input is always available. */
     const SocketValueVariant &enable_variant = params.get_input<SocketValueVariant>(0);
-    const bool enabled = enable_variant.is_single() && enable_variant.get<bool>();
+    const bool enabled = enable_variant.is_single() && enable_variant.copy_as<bool>();
     if (enabled) {
       /* Other modal nodes may set this at the same time, so it must never be reset here. */
       operator_data->modal_requested->store(true, std::memory_order_relaxed);

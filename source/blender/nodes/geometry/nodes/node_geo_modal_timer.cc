@@ -54,7 +54,7 @@ class LazyFunctionForModalTimerNode : public LazyFunction {
 
     /* The node is evaluated as a side-effect node, so the "Enable" input is always available. */
     const SocketValueVariant &enable_variant = params.get_input<SocketValueVariant>(0);
-    if (enable_variant.is_single() && enable_variant.get<bool>()) {
+    if (enable_variant.is_single() && enable_variant.copy_as<bool>()) {
       /* Other modal nodes may set these at the same time, so they must never be reset here. */
       operator_data->modal_requested->store(true, std::memory_order_relaxed);
       operator_data->timer_requested->store(true, std::memory_order_relaxed);

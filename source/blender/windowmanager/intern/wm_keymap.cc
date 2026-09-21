@@ -513,7 +513,7 @@ void WM_keymap_remove(wmKeyConfig *keyconf, wmKeyMap *keymap)
 void WM_keymap_modal_items_clear(wmKeyMap *keymap)
 {
   keymap->modal_items = nullptr;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
   if (wm == nullptr) {
     return;
   }
