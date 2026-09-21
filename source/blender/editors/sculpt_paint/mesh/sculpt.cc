@@ -6481,9 +6481,7 @@ float4x4 cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &bru
    *
    * TODO: try disabling this and check that all edge cases work properly.
    */
-  mat.x_axis() = math::normalize(mat.x_axis());
-  mat.y_axis() = math::normalize(mat.y_axis());
-  mat.z_axis() = math::normalize(mat.z_axis());
+  normalize_m4(mat.ptr());
 
   const float4x4 scale = math::from_scale<float4x4>(float3(ss.cache->radius));
   float4x4 tmat = mat * scale;
