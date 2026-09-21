@@ -7546,7 +7546,10 @@ static std::optional<Mesh *> build_output_mesh(const BevelState &state,
     const GVArray src = *iter.get();
     const CPPType &type = src.type();
     const CommonVArrayInfo src_info = src.common_info();
-    if (src_info.type == CommonVArrayInfo::Type::Single) {
+    if (src_info.type == CommonVArrayInfo::Type::Single &&
+        (iter.domain != bke::AttrDomain::Edge || edges_new_no_src.is_empty() ||
+         type.is_equal_or_false(src_info.data, type.default_value())))
+    {
       const GPointer value(src.type(), src_info.data);
       dst_attrs.add(iter.name, iter.domain, iter.data_type, bke::AttributeInitValue(value));
       return;
