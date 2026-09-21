@@ -581,6 +581,7 @@ bool CUDADevice::shared_alloc(void *&shared_pointer, const size_t size)
     return true;
   }
   util_page_aligned_free(shared_pointer, size);
+  shared_pointer = nullptr;
   return false;
 #  else
   const unsigned int flags = CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP;
