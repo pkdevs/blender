@@ -1616,6 +1616,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
             return offset_indices::sum_group_sizes(points_by_curve, visible_strokes.slice(range));
           }));
 
+      /* Add all of the intersection points at the end. */
       for (const int fill_index : intersection_points.index_range()) {
         const Span<float3> inter_points = intersection_points[fill_index];
 
