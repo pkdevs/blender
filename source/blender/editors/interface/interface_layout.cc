@@ -2835,8 +2835,11 @@ void Layout::textbox_with_state(PointerRNA *ptr,
 
   StringRefNull name = name_opt.value_or(RNA_property_ui_name(prop));
 
-  if (!name.is_empty() or this->use_property_split()) {
+  if (!name.is_empty()) {
     uiItemL_respect_property_split(this, name, ICON_NONE);
+  }
+  else {
+    this->row(true).alignment_set(LayoutAlign::Expand);
   }
 
   int w, h;
