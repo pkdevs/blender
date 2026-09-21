@@ -149,6 +149,7 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::profile
   PRIVATE bf::extern::curve_fit_nd
+  PRIVATE bf::extern::xxhash
   PRIVATE bf::dependencies::optional::manifold
   PRIVATE bf::dependencies::optional::gmp
   PRIVATE bf::dependencies::optional::jolt
