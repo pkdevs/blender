@@ -387,6 +387,12 @@ BlenderDisplayDriver::~BlenderDisplayDriver()
  * Update procedure.
  */
 
+void BlenderDisplayDriver::reset()
+{
+  const thread_scoped_lock lock(has_update_mutex_);
+  update_pending_ = true;
+}
+
 void BlenderDisplayDriver::next_tile_begin()
 {
   if (!tiles_->current_tile.tile.ready_to_draw()) {
@@ -640,12 +646,6 @@ void BlenderDisplayDriver::graphics_interop_deactivate()
 void BlenderDisplayDriver::zero()
 {
   need_zero_ = true;
-}
-
-void BlenderDisplayDriver::reset()
-{
-  const thread_scoped_lock lock(has_update_mutex_);
-  update_pending_ = true;
 }
 
 void BlenderDisplayDriver::set_zoom(const float zoom_x, const float zoom_y)

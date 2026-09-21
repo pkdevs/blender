@@ -832,9 +832,6 @@ void BlenderSession::synchronize(blender::Depsgraph &b_depsgraph_)
   /* reset if needed */
   if (scene->need_reset()) {
     session->reset(session_params, buffer_params);
-    if (display_driver_) {
-      display_driver_->reset();
-    }
 
     /* After session reset, so device is not accessing image data anymore. */
     builtin_images_load();
@@ -963,9 +960,6 @@ void BlenderSession::view_draw(const int w, const int h)
           b_v3d, b_rv3d, scene->camera, width, height);
       if (view_paused == false) {
         session->reset(session_params, buffer_params);
-        if (display_driver_) {
-          display_driver_->reset();
-        }
         start_resize_time = 0.0;
       }
     }
