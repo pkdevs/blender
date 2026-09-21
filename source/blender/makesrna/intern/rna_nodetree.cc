@@ -6186,6 +6186,7 @@ static void def_sh_vect_transform(BlenderRNA * /*brna*/, StructRNA *srna)
       {SHD_VECT_TRANSFORM_SPACE_WORLD, "WORLD", 0, "World", ""},
       {SHD_VECT_TRANSFORM_SPACE_OBJECT, "OBJECT", 0, "Object", ""},
       {SHD_VECT_TRANSFORM_SPACE_CAMERA, "CAMERA", 0, "Camera", ""},
+      {SHD_VECT_TRANSFORM_SPACE_LIGHT, "LIGHT", 0, "Light", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
