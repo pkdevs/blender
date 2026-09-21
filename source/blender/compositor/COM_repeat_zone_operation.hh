@@ -29,6 +29,11 @@ class RepeatZoneOperation : public ZoneOperation {
 
   void execute() override;
 
+  /* Sets the reference counts of the zone tree operation according to the needed status of the
+   * outputs of the zone output node. This is only called for the last iteration, since the other
+   * iterations supply their outputs back to the inputs of the next iteration. */
+  void set_reference_counts(ZoneTreeOperation &zone_tree_operation);
+
   /* Maps the input results of the zone tree operation to the inputs of the repeat zone operation
    * through temporary results that share their data. The given last_zone_tree_operation is the
    * zone tree operation of the last iteration, which will be nullptr for the first iteration. For

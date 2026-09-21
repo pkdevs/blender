@@ -49,6 +49,15 @@ void RepeatZoneOperation::execute()
   this->write_outputs(*last_operation);
 }
 
+void RepeatZoneOperation::set_reference_counts(ZoneTreeOperation &zone_tree_operation)
+{
+  for (const bNodeSocket *output : this->zone().output_node()->output_sockets()) {
+    Result &zone_result = zone_tree_operation.get_result(output->identifier);
+    Result &repeat_zone_result = this->get_result(output->identifier);
+    zone_result.set_reference_count(repeat_zone_result.should_compute() ? 1 : 0);
+  }
+}
+
 Vector<std::unique_ptr<Result>> RepeatZoneOperation::map_inputs(
     ZoneTreeOperation &zone_tree_operation, ZoneTreeOperation *last_zone_tree_operation)
 {
