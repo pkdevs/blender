@@ -217,6 +217,7 @@ void Instances::resize(int size)
 {
   attributes_.resize(AttrDomain::Instance, size);
   instances_num_ = size;
+  this->tag_reference_handles_changed();
 }
 
 Span<int> Instances::reference_handles() const
@@ -319,6 +320,7 @@ void Instances::remove(const IndexMask &mask, const AttributeFilter &attribute_f
                     new_instances.attributes_for_write());
 
   *this = std::move(new_instances);
+  this->tag_reference_handles_changed();
 
   this->remove_unused_references();
 }
