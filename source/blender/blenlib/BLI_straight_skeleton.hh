@@ -109,7 +109,7 @@ class StraightSkeletonInput {
    *   infinite this produces the complete roof tiling as one set of faces (band 0).
    * - `k > 1`: the range `[0, effective_offset]` is divided into `k` bands of equal
    *   width (`effective_offset / k` each) by instantiating intermediate wavefronts at
-   *   `t_i = effective_offset * i / k` for `i = 1 … k-1`.
+   *   `t_i = effective_offset * i / k` for `i = 1 ... k-1`.
    *   Each band `b` (0-indexed, outermost first) spans `[t_b, t_{b+1}]` and produces
    *   its own side-strip faces plus the inner polygon at `t_{b+1}`.
    *   When #offset is infinite, #segments still applies using the computed
@@ -170,6 +170,8 @@ class StraightSkeletonOutput {
    */
   Array<int> face_band;
 
+  /* The following fields are provided for unit testing; users can ignore them. */
+
   /** True if the event loop was terminated because max_events was reached while events
    * still remained in the priority queue (e.g. infinite flip event loop). */
   bool hit_max_events{false};
@@ -192,7 +194,7 @@ class StraightSkeletonOutput {
  * optionally clipped and subdivided into offset bands.
  *
  * When `input.offset` is infinity (the default) and `input.segments` is 1,
- * the complete roof tiling is returned — one face per input boundary edge plus
+ * the complete roof tiling is returned -- one face per input boundary edge plus
  * the inner skeleton faces.
  *
  * When `input.offset` is finite, or `input.segments > 1`, the output is

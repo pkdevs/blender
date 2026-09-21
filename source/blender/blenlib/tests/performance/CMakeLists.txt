@@ -35,3 +35,9 @@ set(SRC
 )
 
 blender_add_test_performance_executable(BLI_kdtree_performance "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+set(SRC
+  BLI_straight_skeleton_performance.cc
+)
+
+blender_add_test_performance_executable(BLI_straight_skeleton_performance "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

@@ -478,10 +478,10 @@ static void print_test_output(const char *test_name,
  * each sharing the incenter as one vertex and one side of the input as their base.
  *
  * Input:
- *   v0 = (0, 0)   v1 = (1, 0)   v2 = (0.5, sqrt(3)/2 ≈ 0.866)
+ *   v0 = (0, 0)   v1 = (1, 0)   v2 = (0.5, sqrt(3)/2 ~= 0.866)
  *
  * Expected:
- *   4 output vertices: the 3 originals plus the incenter at (0.5, 0.5/sqrt(3) ≈ 0.2887).
+ *   4 output vertices: the 3 originals plus the incenter at (0.5, 0.5/sqrt(3) ~= 0.2887).
  *   3 output faces, each a triangle.
  */
 TEST(straight_skeleton, Triangle)
@@ -1134,8 +1134,8 @@ TEST(straight_skeleton, OffsetLShape)
 /**
  * Two-segment offset of a 10x10 square with offset = 2.
  * effective_offset = 2 (< max_collapse = 5).
- * Band 0: t in [0, 1]  — 4 side-strip trapezoids + 1 inner square.
- * Band 1: t in [1, 2]  — 4 side-strip trapezoids + 1 inner square.
+ * Band 0: t in [0, 1]  -- 4 side-strip trapezoids + 1 inner square.
+ * Band 1: t in [1, 2]  -- 4 side-strip trapezoids + 1 inner square.
  * Total: 10 faces.  Total area = 100 (the whole square).
  */
 TEST(straight_skeleton, OffsetSquare_TwoBands)
@@ -1203,8 +1203,8 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
  * Full-skeleton with segments = 2 on a 10x10 square.
  * offset = infinity, segments = 2.
  * effective_offset = max_collapse_time = 5.
- * Band 0: t in [0, 2.5]  — 4 side-strip faces + 1 inner square at 2.5.
- * Band 1: t in [2.5, 5]  — 4 narrower side-strip faces + apex.
+ * Band 0: t in [0, 2.5]  -- 4 side-strip faces + 1 inner square at 2.5.
+ * Band 1: t in [2.5, 5]  -- 4 narrower side-strip faces + apex.
  * Total: 10 faces.  Total area = 100.
  */
 TEST(straight_skeleton, FullSkeletonWithSegments)
@@ -1228,7 +1228,7 @@ TEST(straight_skeleton, FullSkeletonWithSegments)
 
   /* Band 0 (t=0..2.5): 4 side-strip trapezoids.
    * Band 1 (t=2.5..5): 4 side-strip triangles converging to the apex.
-   *   The apex inner polygon degenerates to a point (area ≈ 0) and is silently omitted.
+   *   The apex inner polygon degenerates to a point (area ~= 0) and is silently omitted.
    * Total = 8 faces. */
   EXPECT_EQ(output.face_offsets.size(), 8);
 
@@ -1564,12 +1564,12 @@ TEST(straight_skeleton, FatCrossAxisAlignedWithHoles)
 /**
  * Opposing notches designed to trigger concurrent flip events (Section 3.2, Fig 3(b)).
  * Four reflex vertices (v2, v4, v9, v12) move towards the horizontal midline y = 0
- * and become collinear simultaneously at t* = 1 / sqrt(5) ≈ 0.447214.
+ * and become collinear simultaneously at t* = 1 / sqrt(5) ~= 0.447214.
  *
  * Outer polygon: 15 vertices on a 10x6 box [-5, 5] x [-3, 3] with 4 reflex notches:
  * - 2 top notches pointing down: tips v12=(-2, 1) and v9=(2, 1) moving down at Vy = sqrt(5).
  * - 2 bottom notches pointing up: tips v2=(-1, -1) and v4=(1, -1) moving up at Vy = sqrt(5).
- * At t* = 1/sqrt(5) ≈ 0.447214, all four tips reach y = 0 with x: -2 < -1 < 1 < 2.
+ * At t* = 1/sqrt(5) ~= 0.447214, all four tips reach y = 0 with x: -2 < -1 < 1 < 2.
  * Total area = 60 - 4 * 2 = 52.
  */
 TEST(straight_skeleton, OpposingNotchesConcurrentFlips)
@@ -1614,7 +1614,7 @@ TEST(straight_skeleton, OpposingNotchesConcurrentFlips)
 /**
  * 6-notch polygon designed to exhibit the 6-vertex collinear cycle of Section 3.2 (Figure 4).
  * Six reflex vertices (v2, v4, v6, v8 on bottom; v13, v16 on top) move towards y = 0
- * and all reach the line y = 0 simultaneously at t* = 1 / sqrt(5) ≈ 0.447214:
+ * and all reach the line y = 0 simultaneously at t* = 1 / sqrt(5) ~= 0.447214:
  *   v16: (-5, 0)
  *   v2:  (-3, 0)
  *   v4:  (-1, 0)
