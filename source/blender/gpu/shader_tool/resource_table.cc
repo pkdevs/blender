@@ -327,7 +327,7 @@ void SourceProcessor::lower_using(Parser &parser)
     /* Assignments do not allow to alias functions symbols. */
     const bool use_alias = from.str() != to_end.str();
     const bool replace_fn = !use_alias;
-    /** IMPORTANT: If replace_fn is true, this can replace any symbol type if there are functions
+    /* IMPORTANT: If `replace_fn` is true, this can replace any symbol type if there are functions
      * and types with the same name. We could support being more explicit about the type of
      * symbol to replace using an optional attribute [[gpu::using_function]]. */
 
@@ -481,6 +481,14 @@ void SourceProcessor::lower_resource_table(Parser &parser)
       string_view type = attribute[0].str();
       if (type == "attribute") {
         vert_in.slot = attribute[2].str();
+      }
+      else if (type == "condition") {
+        attribute[1].scope().foreach_token(Word, [&](const Token tok) {
+          vert_in.res_condition += "int " + string(tok.str()) + " = ";
+          vert_in.res_condition += "ShaderCreateInfo::find_constant(constants, \"" +
+                                   string(tok.str()) + "\"); ";
+        });
+        vert_in.res_condition += "return " + string(attribute[1].scope().str()) + ";";
       }
       else {
         report_error(attribute[0], "Invalid attribute in vertex input interface");

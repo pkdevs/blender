@@ -182,7 +182,7 @@ void Node::print_ast() const
   /* Recursive lambda to handle tree traversal and indentation. */
   auto print_node =
       [&](auto &self, NodeID id, int depth, const std::vector<bool> &is_last) -> void {
-    if (id == -1 || id >= static_cast<int>(nodes.size())) {
+    if (id == -1 || id >= int(nodes.size())) {
       return;
     }
 
@@ -190,7 +190,7 @@ void Node::print_ast() const
 
     std::string loc = node.location(parser);
     /* Create indentation based on tree depth. */
-    int padding_size = std::max(0, 55 - static_cast<int>(loc.size()));
+    int padding_size = std::max(0, 55 - int(loc.size()));
     std::string padding(padding_size, ' ');
 
     std::cout << loc << padding;
@@ -317,6 +317,8 @@ static std::string to_string(ast::NodeType type)
       return "BreakStmt";
     case ast::NodeType::UsingStmt:
       return "UsingStmt";
+    case ast::NodeType::BitField:
+      return "BitField";
     case ast::NodeType::FuncForwardDecl:
       return "FuncForwardDecl";
     case ast::NodeType::LocalStmt:
@@ -449,6 +451,8 @@ static bool display_type(ast::NodeType type)
     case ast::NodeType::BreakStmt:
       return false;
     case ast::NodeType::UsingStmt:
+      return false;
+    case ast::NodeType::BitField:
       return false;
     case ast::NodeType::FuncForwardDecl:
       return false;

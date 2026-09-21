@@ -46,9 +46,11 @@ struct SymbolParser : NodeErrorHandler {
     }
 
     int offset = 0;
+    int bitfield_offset = 0;
+    SymbolVariable *bitfield_base = nullptr;
 
     /* For enums, the value of the last declaration. */
-    ConstexprValue enum_last_val = -1;
+    ConstexprValue enum_last_val(-1);
 
     if (node.type() == NodeType::FuncDecl || node.type() == NodeType::ClassDecl ||
         node.type() == NodeType::LocalScope)
@@ -80,7 +82,7 @@ struct SymbolParser : NodeErrorHandler {
             parse_func_decl(scope, child, prefix);
             break;
           case NodeType::VarDecl:
-            parse_var_decl(scope, child, offset, prefix);
+            parse_var_decl(scope, child, offset, bitfield_offset, bitfield_base, prefix);
             break;
           case NodeType::StructuredBinding:
             parse_structured_binding(scope, child);
@@ -155,6 +157,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolClass *resolved = inst_scope.lookup_class(table, type_id).unwrap(this);
         /* IMPORTANT: Instantiate at argument declaration. Allow correct lookup. */
         scope.classes.emplace(id, resolved, arg.identifier().front());
+        scope.scopes.emplace(id, resolved);
       }
       else {
         IdQualified type = arg.type();
@@ -509,7 +512,7 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; }, enum_last_val);
+      sym->value = enum_last_val + ConstexprValue(1);
     }
 
     if (scope.variable_emplace(sym)) {
@@ -588,7 +591,7 @@ struct SymbolParser : NodeErrorHandler {
       SymbolFunction *ctor = table.fun_arena.alloc(
           &scope, decl.front(), cls, cls->original, SymbolFunction::Type::GLOBAL);
       ctor->add_argument(cls);
-      ctor->is_builtin = true;
+      ctor->allow_vector_promotion = true;
       scope.function_emplace(ctor, true);
       ctor->identifier = prefix + ctor->identifier;
     }
@@ -910,7 +913,12 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_var_decl(SymbolScope &scope, VarDecl var, int &offset, const std::string &prefix)
+  void parse_var_decl(SymbolScope &scope,
+                      VarDecl var,
+                      int &offset,
+                      int &bitfield_offset,
+                      SymbolVariable *&bitfield_base,
+                      const std::string &prefix)
   {
     IdQualified type_id = var.type().identifier();
     string_view type_id_str = type_id.str();
@@ -986,6 +994,7 @@ struct SymbolParser : NodeErrorHandler {
         error(decl, Diag::ReferenceMixedVarDecl);
         continue;
       }
+      ast::BitField bitfield = decl.bitfield();
 
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
       sym->res_type = attr.res_type;
@@ -1026,13 +1035,67 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (cls) {
-        sym->set_offset(cls->is_union, offset);
+        if (sym->is_bitfield) {
+          if ((sym->type != table.int_cls && sym->type != table.uint_cls) ||
+              sym->array_dimensions != 0)
+          {
+            error(decl, Diag::BitFieldNotIntegral, sym->type->original);
+          }
+          ExpressionResult result =
+              table.expr_type_analysis(scope, bitfield.expr().child_first()).unwrap(this);
+          if (!result.is_constexpr()) {
+            error(decl, Diag::ExprNotIntegralConstant);
+          }
+          int len = result.value.comp_as<int>(0);
+          if (len > 32) {
+            error(decl, Diag::BitFieldSizeTooLarge, to_string(len));
+          }
+          else if (len == 0) {
+            error(decl, Diag::BitFieldSizeNull);
+          }
+          else if (len < 0) {
+            error(decl, Diag::BitFieldSizeNegative, to_string(len));
+          }
+          else {
+            if (bitfield_base && bitfield_offset + len <= 32 && !cls->is_union) {
+              /* Fits in existing bitfield. */
+              sym->bit_length = len;
+              sym->bit_offset = bitfield_offset;
+              bitfield_offset += len;
+            }
+            else {
+              /* Doesn't fit in existing bitfield or first in bitfield. Start a new bitfield. */
+              sym->bit_length = len;
+              sym->bit_offset = 0;
+              bitfield_offset = len;
+              bitfield_base = sym;
+            }
+          }
+        }
+        else {
+          /* Terminate any in progress bitfield. */
+          bitfield_base = nullptr;
+        }
+
+        if (sym->bit_offset != 0 && bitfield_base) {
+          /* Bitfield members copy their offset from the first bitfield member. */
+          sym->offset = bitfield_base->offset;
+        }
+        else {
+          sym->set_offset(cls->is_union, offset);
+        }
 
         /* Alias to the first, non-anonymous parent. */
         if (cls->is_anonymous) {
           if (named_parent->variable_emplace(sym)) {
             error(sym->loc.tok, Diag::Redefinition, sym->identifier);
           }
+        }
+
+        if (bitfield_base) {
+          /* Note: we mutate assignments into bitfieldInsert in a second pass. */
+          sym->identifier = bitfield_base->original + ".bitfieldExtract(" +
+                            to_string(sym->bit_offset) + ", " + to_string(sym->bit_length) + ")";
         }
 
         if (cls->is_anonymous || cls->is_union) {
@@ -1061,6 +1124,10 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (sym->is_constexpr) {
+        if (sym->array_dimensions > 0) {
+          error(decl.array(), Diag::ConstexprVarMustNotBeArray);
+        }
+
         ExpressionResult result = initialize_constexpr(scope, sym->type, decl);
         /* For now demote constexpr if we couldn't deduce its value. */
         if (result.is_constexpr()) {
@@ -1121,10 +1188,14 @@ struct SymbolParser : NodeErrorHandler {
                                         SymbolClass *cls,
                                         Declarator decl)
   {
-    if (cls != table.int_cls && cls != table.uint_cls && cls != table.bool_cls &&
-        cls != table.float_cls)
+    if (cls != table.int_cls && cls != table.int2_cls && cls != table.int3_cls &&
+        cls != table.int4_cls && cls != table.uint_cls && cls != table.uint2_cls &&
+        cls != table.uint3_cls && cls != table.uint4_cls && cls != table.bool_cls &&
+        cls != table.bool2_cls && cls != table.bool3_cls && cls != table.bool4_cls &&
+        cls != table.float_cls && cls != table.float2_cls && cls != table.float3_cls &&
+        cls != table.float4_cls)
     {
-      error(decl, Diag::ConstexprVarMustBeIntOrUint);
+      error(decl, Diag::ConstexprVarMustBeValidType);
       return {table.err_cls};
     }
 
@@ -1136,9 +1207,17 @@ struct SymbolParser : NodeErrorHandler {
       result = eval_scalar_initializer_list(scope, cls, list);
     }
 
-    if (!result.is_constexpr()) {
+    if (result.type != cls) {
+      error(decl,
+            Diag::ConstexprVarMustBeInitializedByCorrectType,
+            decl.identifier().str(),
+            cls->original,
+            result.type->original);
+    }
+    else if (!result.is_constexpr()) {
       error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
     }
+
     return result;
   }
 
