@@ -1154,7 +1154,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
     }
     if (op_data.timer && ISTIMER(type) && !is_timer_event) {
       /* Timers from other parts of Blender should not trigger another execution. */
-      return OPERATOR_RUNNING_MODAL;
+      return OPERATOR_PASS_THROUGH;
     }
     if (const std::optional<StringRef> event_name = modal_event_name_for_event(*op->type, *event))
     {
@@ -1163,7 +1163,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
     else if (!is_invoke && !is_timer_event && !ELEM(type, EVT_PADENTER, EVT_RETKEY)) {
       /* The event is not part of the tool's modal keymap, so no Modal Event node can react to it.
        * Evaluating the whole node group would just be wasted work. */
-      return OPERATOR_RUNNING_MODAL;
+      return OPERATOR_PASS_THROUGH;
     }
   }
 
