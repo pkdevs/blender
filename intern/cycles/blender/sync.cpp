@@ -438,10 +438,13 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   bool use_temporal_samples    = get_boolean(cscene, "use_temporal_samples");
   bool use_temporal_frames     = get_boolean(cscene, "use_temporal_frames");
   const bool restir_unbiased   = get_boolean(cscene, "restir_unbiased");
-  int restir_temporal_sample_count = get_int(cscene, "restir_temporal_sample_count"); // !!!(Tri): Unused
-  int restir_temporal_frame_count = get_int(cscene, "restir_temporal_frame_count");
+  int restir_temporal_sample_count = get_int(cscene, "restir_temporal_sample_count");
+  int restir_temporal_frame_count  = get_int(cscene, "restir_temporal_frame_count");
+  float restir_temporal_normal_threshold = get_float(cscene, "restir_temporal_normal_threshold");
+  float restir_temporal_depth_threshold  = get_float(cscene, "restir_temporal_depth_threshold");
+
   int light_samples = get_int(cscene, "restir_light_samples");
-  int bsdf_samples = 1;
+  int bsdf_samples  = 1;
 
   if (light_samples == 1 && bsdf_samples == 1 && 
         !(use_spatial_resampling && restir_unbiased && use_temporal_samples && use_temporal_frames)) {
@@ -474,9 +477,11 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   integrator->set_restir_spatial_iterations(
       use_spatial_resampling ? get_int(cscene, "restir_spatial_iterations") : 0);
   integrator->set_restir_temporal_sample_count(
-      use_temporal_samples ? get_int(cscene, "restir_temporal_sample_count") : 0);
+      use_temporal_samples ? restir_temporal_sample_count : 0);
   integrator->set_restir_temporal_frame_count(
-      use_temporal_frames ? get_int(cscene, "restir_temporal_frame_count") : 0);
+      use_temporal_frames ? restir_temporal_frame_count : 0);
+  integrator->set_restir_temporal_normal_threshold(restir_temporal_normal_threshold);
+  integrator->set_restir_temporal_depth_threshold(restir_temporal_depth_threshold);
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
       cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);

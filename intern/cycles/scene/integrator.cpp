@@ -109,6 +109,8 @@ NODE_DEFINE(Integrator)
   SOCKET_INT(restir_spatial_iterations, "Iterations", 2);
   SOCKET_INT(restir_temporal_sample_count, "Samples Limit", 32);
   SOCKET_INT(restir_temporal_frame_count, "Frames Limit", 4);
+  SOCKET_FLOAT(restir_temporal_normal_threshold, "Normal cosine threshold for Spatiotemporal", 0.5f);
+  SOCKET_FLOAT(restir_temporal_depth_threshold, "Relative depth threshold for Spatiotemporal", 0.1f);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
@@ -427,6 +429,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->restir_spatial_iterations = restir_spatial_iterations;
   kintegrator->restir_temporal_sample_count = restir_temporal_sample_count;
   kintegrator->restir_temporal_frame_count = restir_temporal_frame_count;
+  kintegrator->restir_temporal_normal_threshold= restir_temporal_normal_threshold;
+  kintegrator->restir_temporal_depth_threshold= restir_temporal_depth_threshold;
   kintegrator->restir_pairwise_mis = (use_restir >> 2) & 1;
 
   dscene->sample_pattern_lut.clear_modified();

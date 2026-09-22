@@ -640,6 +640,22 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=2,
     )
 
+    restir_temporal_normal_threshold: FloatProperty(
+        name="Normal Cosine SpatioTemporal Threshold",
+        default=0.5,
+        min=0.0,
+        soft_max=1.0,
+        description="Normal cosine threshold for reusing temporal or spatial neighbor samples.", 
+    )
+
+    restir_temporal_depth_threshold: FloatProperty(
+        name="Relative Depth SpatioTemporal Threshold",
+        default=0.1,
+        min=0.0,
+        soft_max=1.0,
+        description="Relative depth threshold for reusing temporal or spatial neighbor samples.", 
+    )
+
     scrambling_distance: FloatProperty(
         name="Scrambling Distance",
         default=1.0,

@@ -552,6 +552,9 @@ class CYCLES_RENDER_PT_sampling_lights_restir(CyclesButtonsPanel, Panel):
         row.prop(cscene, "restir_unbiased", toggle=True)
         row.prop(cscene, "restir_pairwise", toggle=True)
         # col.prop(cscene, "restir_heuristics")
+        
+        col.prop(cscene, "restir_temporal_normal_threshold", text="Normal Threshold")
+        col.prop(cscene, "restir_temporal_depth_threshold", text="Relative Threshold")
 
 
 class CYCLES_RENDER_PT_sampling_lights_restir_initial(CyclesButtonsPanel, Panel):

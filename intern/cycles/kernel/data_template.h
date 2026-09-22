@@ -264,8 +264,8 @@ KERNEL_STRUCT_MEMBER(integrator, int, restir_pairwise_mis)
 
 KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_sample_count)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_frame_count)
-KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_normal_threshold)
-KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_depth_threshold)
+KERNEL_STRUCT_MEMBER(integrator, float, restir_temporal_normal_threshold)
+KERNEL_STRUCT_MEMBER(integrator, float, restir_temporal_depth_threshold)
 
 KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
 KERNEL_STRUCT_END(KernelIntegrator)

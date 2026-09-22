@@ -116,25 +116,38 @@ ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_re
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
            RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
 
+    if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) { // is_valid
+    ccl_debug_printf( // !!!: the reservoir side of the pipeline can be trusted
+        "restir_prev_reprojection_surface_[%zu]: N=(%f,%f,%f) depth=%f motion=(%f,%f) valid=%f\n",
+        i,
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 0],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 1],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 2],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 3],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 4],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 5],
+        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+    }
+
     memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
            RESTIR_RESERVOIR_STRIDE * sizeof(float));
 
-    if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
-    ccl_debug_printf(
-        "restir_prev_temporal_reservoir_[%zu]: "
-        "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
-        i,
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
-        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
-    }
+    // if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
+    // ccl_debug_printf(
+    //     "restir_prev_temporal_reservoir_[%zu]: "
+    //     "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
+    //     i,
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
+    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
+    // }
   }
 }
 

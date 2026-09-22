@@ -495,7 +495,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   reservoir->luminance = buffer[i++];
 
-  reservoir->M = (int)buffer[i]; // New
+  reservoir->M = (int)buffer[i];
 
   // ccl_debug_printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
   //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
@@ -523,6 +523,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
     return false;
   }
 
+if (reservoir->M > 0) {
 ccl_debug_printf( // Accepted candidates
     "\n=== UNPACKED REFERENCE; Accepted candidates ===\n"
     "total_weight=%f\n"
@@ -532,7 +533,8 @@ ccl_debug_printf( // Accepted candidates
     "object=%d\n"
     "prim=%d\n"
     "param=(%f,%f)\n"
-    "==========================\n",
+    "M=%f\n"
+    "=== === === === === ===\n",
     (double)reservoir->total_weight,
     (double)reservoir->luminance,
     reservoir->reference.type,
@@ -540,7 +542,9 @@ ccl_debug_printf( // Accepted candidates
     reservoir->reference.object,
     reservoir->reference.prim,
     (double)reservoir->reference.param.x,
-    (double)reservoir->reference.param.y);
+    (double)reservoir->reference.param.y,
+    (double)reservoir->M);
+}
 
   return true;
 }
@@ -626,11 +630,29 @@ struct TemporalReprojection {
                                     const float normal_threshold,
                                     const float depth_threshold)
   {
-    if (!prev->is_valid) {
+ccl_debug_printf("is_valid_reprojection(): prev.is_valid=%d curr.N=(%f,%f,%f)\n" 
+    "prev.N=(%f,%f,%f) curr.depth=%f prev.depth=%f\n\n",
+    prev->is_valid, (double)curr->N.x, (double)curr->N.y, (double)curr->N.z, 
+    (double)prev->N.x, (double)prev->N.y, (double)prev->N.z, 
+    (double)curr->depth, (double)prev->depth);
+
+    if (!prev->is_valid) { // !!!(Tri): Rejecting essentially every temporal candidate:
       /* Disocclusion, off-screen last frame, or history never written
        * (first sample of the render). */
       return false;
     }
+
+ccl_debug_printf(
+    "is_valid_reprojection() CHECK: curr=(N=%f,%f,%f D=%f) prev=(N=%f,%f,%f D=%f) "
+    "dot=%f depth_diff=%f thresholds=(N=%f D=%f)\n",
+    (double)curr->N.x, (double)curr->N.y, (double)curr->N.z,
+    (double)curr->depth,
+    (double)prev->N.x, (double)prev->N.y, (double)prev->N.z,
+    (double)prev->depth,
+    (double)dot(curr->N, prev->N),
+    (double)fabsf(curr->depth - prev->depth),
+    (double)normal_threshold,
+    (double)depth_threshold);
 
     if (dot(curr->N, prev->N) < normal_threshold) {
       return false;

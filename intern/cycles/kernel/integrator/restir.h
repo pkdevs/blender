@@ -38,7 +38,7 @@ struct SpatialResampling {
       return make_uint3(x, y, -1);
     }
 
-    return make_uint3(x, y, get_render_pixel_index(x, y));
+    return make_uint3(x, y, get_render_pixel_index(x, y)); // !!!
   }
 
   static bool is_valid_neighbor(const ccl_private ShaderData *sd,
@@ -488,7 +488,8 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                    kernel_data.film.pass_restir_temporal_history_reservoir;
 
   if (!restir_unpack_reservoir(kg, &history, buffer)) {
-    ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+
     return false; /* No valid history yet (first sample, or history invalidated). */
   }
 
@@ -505,7 +506,6 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                               current->path_flag,
                               &history.light);
 
-  // !!!(Tri):
   radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
   const float history_at_current = compute_luminance(kg, history.radiance);
 
@@ -568,6 +568,12 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
     return false; /* No persistent history yet (first frame, or feature just enabled). */
   }
 
+ccl_debug_printf("TEMPORAL REPROJECTION: curr=(%d,%d) prev=(%d,%d) prev_index=%u\n"
+    "restir_temporal_normal_threshold=%f restir_temporal_depth_threshold=%f\n\n",
+    x, y, prev_pixel.x, prev_pixel.y, prev_pixel.z,
+    (double)kernel_data.integrator.restir_temporal_normal_threshold,
+    (double)kernel_data.integrator.restir_temporal_depth_threshold);
+
   const ReprojectionSurface prev_surf = reprojection_surface_unpack(
       kg->restir_prev_reprojection_surface + prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE);
 
@@ -576,19 +582,25 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
           kernel_data.integrator.restir_temporal_normal_threshold,
           kernel_data.integrator.restir_temporal_depth_threshold))
   {
+ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_reprojection()\n\n");
+
     return false; /* Reprojection miss: disocclusion, silhouette edge, etc. */
   }
 
   Reservoir history;
   reservoir_init(kg, &history);
 
+  // ccl_global const float *buffer = 
+  //     kg->restir_prev_temporal_reservoir + prev_pixel.z * RESTIR_RESERVOIR_STRIDE;
+
   const bool history_ok = restir_unpack_reservoir(
       kg, &history, kg->restir_prev_temporal_reservoir + prev_pixel.z * RESTIR_RESERVOIR_STRIDE);
   if (!history_ok) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_HISTORY\n", x, y);
     return false;
   }
 
-  history.M = min(
+  history.M = min( 
       history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_frame_count);
 
   light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
@@ -643,9 +655,7 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
     return false;
   }
 
-  shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: SD is initialized here
-
-ccl_debug_printf("\n-- integrator_restir_temporal(): sd.object=%d --\n\n\n", current.sd.object); // Then compare with a kernel where primitive_motion_vector() works.
+  shader_data_setup_from_restir(kg, state, &current, render_buffer);
 
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
@@ -654,20 +664,17 @@ ccl_debug_printf("\n-- integrator_restir_temporal(): sd.object=%d --\n\n\n", cur
 
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
 
-
   const bool use_temporal_samples = kernel_data.integrator.use_temporal_samples;
   const bool use_temporal_frames  = kernel_data.integrator.use_temporal_frames;
 
-
-ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n",
+ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n\n",
                  use_temporal_samples, use_temporal_frames, visibility);
 
   if (use_temporal_samples) {
     streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
   }
 
-  if (use_temporal_frames) { // !!!(Tri): Doesn't reach execution
-    // TODO(Tri): new cross-frame streaming_temporal_sample()
+  if (use_temporal_frames) {
     TemporalReprojection reprojection(tile);
     streaming_temporal_sample(
         kg, state, &reprojection, &current, &rng_state, visibility, render_buffer, x, y, scheduled_sample);
@@ -902,7 +909,6 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 
-// TODO(Tri): Silence unused arguments' warns
 ccl_device bool integrator_restir(KernelGlobals kg,
                                   IntegratorState state,
                                   ccl_global const KernelWorkTile *ccl_restrict tile,
