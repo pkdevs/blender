@@ -778,7 +778,10 @@ class PROJECT_OT_AssetLibraryAdd(Operator):
             .decode('utf-8', 'ignore') \
             or data_(ASSET_LIBRARY_DEFAULT_NAME)
 
-        bpy.data.project.asset_libraries.new(name=asset_library_name, directory=asset_library_path)
+        bpy.data.project.asset_libraries.new(
+            name=asset_library_name,
+            directory=bpy.path.template_escape(asset_library_path),
+        )
 
         return {'FINISHED'}
 

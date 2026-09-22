@@ -25,6 +25,7 @@ __all__ = (
     "reduce_dirs",
     "relpath",
     "resolve_ncase",
+    "template_escape",
 )
 
 import bpy as _bpy
@@ -442,6 +443,18 @@ def native_pathsep(path):
                 return b"//" + path[2:].replace(b"/", b"\\")
             else:
                 return path.replace(b"/", b"\\")
+
+
+def template_escape(path):
+    """
+    Escape ``{`` and ``}`` in a path, so they are not treated as path templates.
+
+    :param path: The path to escape.
+    :type path: str
+    :return: The escaped path.
+    :rtype: str
+    """
+    return path.replace("{", "{{").replace("}", "}}")
 
 
 def reduce_dirs(dirs):

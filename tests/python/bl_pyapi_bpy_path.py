@@ -35,6 +35,14 @@ class TestBpyPath(unittest.TestCase):
         self.assertEqual(ensure_ext('demoBlend', 'blend', case_sensitive=True), 'demoBlendblend')
         self.assertEqual(ensure_ext('demo', '', case_sensitive=True), 'demo')
 
+    def test_template_escape(self):
+        from bpy.path import template_escape
+
+        self.assertEqual(template_escape(''), '')
+        self.assertEqual(template_escape('/a/b.blend'), '/a/b.blend')
+        self.assertEqual(template_escape('/a/{b}/c'), '/a/{{b}}/c')
+        self.assertEqual(template_escape('{{}}'), '{{{{}}}}')
+
     def test_is_autoexec(self):
         import bpy
         from bpy.path import is_autoexec

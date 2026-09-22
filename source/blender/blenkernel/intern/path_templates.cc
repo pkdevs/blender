@@ -898,6 +898,7 @@ bool BKE_path_contains_template_syntax(StringRef path)
 
 std::string BKE_path_template_escape(const StringRef text)
 {
+  /* NOTE: When making changes here, update bpy.path.template_escape() too. */
   std::string escaped;
   escaped.reserve(text.size());
 
