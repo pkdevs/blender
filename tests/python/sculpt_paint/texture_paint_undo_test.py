@@ -195,6 +195,33 @@ class TexturePaintUndoTest(unittest.TestCase):
         bpy.ops.ed.redo()                   # Redo: second stroke.
         self._assert_pixels_equal(image, after_b, "Redo should restore second stroke")
 
+    def test_image_editor_undo_redo_each_step_after_pack(self):
+        # Undoing the pack regenerates the image buffer, which the already applied
+        # image steps before it must restore again.
+        image = self._image_editor_startup()
+        states = [("New Image", get_image_pixels(image))]
+
+        for y_factor in (0.3, 0.5, 0.7):
+            states.append(("Stroke", self._paint_stroke(image, y_factor)))
+
+        bpy.data.images[image].pack()
+        bpy.ops.ed.undo_push(message="Pack")
+        states.append(("Pack", get_image_pixels(image)))
+        bpy.data.images[image].source = 'GENERATED'
+        bpy.ops.ed.undo_push(message="Source")
+        states.append(("Source", get_image_pixels(image)))
+        states.append(("Generated Type", self._regenerate_image(image)))
+
+        for y_factor in (0.35, 0.55, 0.75):
+            states.append(("Stroke", self._paint_stroke(image, y_factor)))
+
+        for i in reversed(range(len(states) - 1)):
+            bpy.ops.ed.undo()
+            self._assert_pixels_equal(image, states[i][1], f"Undo to {states[i][0]} (step {i})")
+        for i in range(1, len(states)):
+            bpy.ops.ed.redo()
+            self._assert_pixels_equal(image, states[i][1], f"Redo to {states[i][0]} (step {i})")
+
 
 def main():
     argv = [sys.argv[0]]

@@ -583,15 +583,23 @@ struct UndoImageHandle {
   ListBaseT<UndoImageBuf> buffers;
 };
 
+enum class RestoreMode {
+  /** Restore only tiles this undo step changed. */
+  Changed,
+  /** Restore image buffers regenerated outside of image undoby memfile undo. */
+  FullUpdateChanged,
+  /** Restore all tiles (for debugging). */
+  All,
+};
+
 /**
  * Copy the tiles of every #UndoImageBuf back into the image buffers.
  *
  * \param use_init: Restore the state before the undo step, instead of the state after it.
- * \param use_partial: Only restore tiles this undo step changed (for debugging).
  */
 static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
                                  const bool use_init,
-                                 const bool use_partial = true)
+                                 const RestoreMode mode = RestoreMode::Changed)
 {
   for (UndoImageHandle &uh : *undo_handles) {
     /* Tiles only added to second set of tiles. */
@@ -607,12 +615,22 @@ static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
       UndoImageBuf *ubuf = use_init ? &ubuf_iter : ubuf_iter.post;
       const UndoImageBuf *ubuf_other = use_init ? ubuf_iter.post : &ubuf_iter;
 
+      /* Skip image buffers without a full update, restore all tiles of others. */
+      if (mode == RestoreMode::FullUpdateChanged &&
+          ibuf->full_update_changeset_id == ubuf->ibuf_full_update_changeset_id)
+      {
+        continue;
+      }
+
       /* Check if we need to restore all because of modified image dimensions or image
        * buffer, or if we can do a partial restore and update. */
       const bool ibuf_reallocated = ubuf_ensure_compat_ibuf(ubuf, ibuf);
-      const bool restore_all = ibuf_reallocated || !use_partial || ubuf_other == nullptr ||
+      const bool restore_all = ibuf_reallocated || mode != RestoreMode::Changed ||
+                               ubuf_other == nullptr ||
                                ubuf_other->tiles_dims[0] != ubuf->tiles_dims[0] ||
-                               ubuf_other->tiles_dims[1] != ubuf->tiles_dims[1];
+                               ubuf_other->tiles_dims[1] != ubuf->tiles_dims[1] ||
+                               ibuf->full_update_changeset_id !=
+                                   ubuf_other->ibuf_full_update_changeset_id;
 
       int i = 0;
       for (uint y_tile = 0; y_tile < ubuf->tiles_dims[1]; y_tile += 1) {
@@ -627,11 +645,7 @@ static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
       }
 
       /* Copy undo step changeset ID back to the image buffer. */
-      if (restore_all ||
-          ibuf->full_update_changeset_id == ubuf_other->ibuf_full_update_changeset_id)
-      {
-        ibuf->full_update_changeset_id = ubuf->ibuf_full_update_changeset_id;
-      }
+      ibuf->full_update_changeset_id = ubuf->ibuf_full_update_changeset_id;
     }
 
     if (changed) {
@@ -922,7 +936,7 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
 
     /* Useful to debug tiles are stored correctly. */
     if (false) {
-      uhandle_restore_list(&us->handles, false, false);
+      uhandle_restore_list(&us->handles, false, RestoreMode::All);
     }
   }
   else {
@@ -1003,6 +1017,12 @@ static void image_undosys_step_decode(
   }
   else if (dir == STEP_REDO) {
     image_undosys_step_decode_redo(us);
+  }
+
+  /* A memfile undo step decoded before this step may have regenerated the image buffer,
+   * e.g. when undoing image pack. Already applied steps must be restored again then. */
+  if (us->step.is_applied) {
+    uhandle_restore_list(&us->handles, false, RestoreMode::FullUpdateChanged);
   }
 
   if (us->paint_mode == PaintMode::Texture3D) {
