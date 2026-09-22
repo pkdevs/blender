@@ -1,1 +1,2 @@
 Referenced by issue #164193, Regression: Performance drop for EEVEE benchmark scene T98989
+Referenced by pull request #164245, EEVEE: Remove light_attenuation_facing from Light Evaluation
