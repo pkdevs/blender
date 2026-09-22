@@ -985,26 +985,21 @@ float4 attr_load_color_post(KernelGlobals &kg, float4 attr)
 /* -------------------------------------------------------------------- */
 /** \name GSplat Attributes
  *
- * GSplats override the radiance attribute, unpacking packed data from a float2. Additionally,
- * it applies its own alpha transparency on top of existing transmittance.
+ * GSplats amend their own alpha on top of existing transmittance.
  *
  * \{ */
 
-#if defined(MAT_GEOM_GSPLAT) && !defined(MAT_VOLUME)
-#  define GSPLAT_ATTRIBUTES_LOAD_POST
-#endif
-
-float4 attr_load_radiance_post(KernelGlobals & /*kg*/, float4 attr)
+float3 gsplat_amend_transmittance(float3 transmittance)
 {
-#ifdef GSPLAT_ATTRIBUTES_LOAD_POST
-  /* Radiance is packed as 2xfp16, unpack it from this representation. */
-  uint2 data = floatBitsToUint(attr.xy);
-  return float4(unpackHalf2x16(data.x), unpackHalf2x16(data.y));
+#ifdef MAT_GEOM_GSPLAT
+  float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
+                                                gsplat_interp_flat.opacity);
+  alpha = saturate(alpha * (256.0f / 255.0f));
+  return float3(1.0f) - alpha * saturate(float3(1.0f) - transmittance);
+#else
+  return transmittance;
 #endif
-  return attr;
 }
-
-#undef GSPLAT_ATTRIBUTES_LOAD_POST
 
 /** \} */
 
