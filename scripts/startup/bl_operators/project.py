@@ -456,6 +456,10 @@ def read_project_toml_config(root_path, report=None):
         config_dict["schema_version"] = 1
 
     # Handle project config versioning.
+    if type(config_dict["schema_version"]) is not int:
+        if report:
+            report({'ERROR'}, rpt_("Invalid project configuration file: schema_version must be an integer"))
+        raise ProjectLoadException
     if config_dict["schema_version"] > PROJECT_SCHEMA_VERSION:
         if report:
             report({'ERROR'}, rpt_("Project configuration is newer than this version of Blender supports"))
