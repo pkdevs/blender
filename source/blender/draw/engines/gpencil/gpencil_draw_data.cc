@@ -359,6 +359,7 @@ MaterialPool *gpencil_material_pool_create(Instance *inst,
     }
     else if (gp_style->fill_style == GP_MATERIAL_FILL_STYLE_GRADIENT) {
       bool use_radial = (gp_style->gradient_type == GP_MATERIAL_GRADIENT_RADIAL);
+      /* TODO: This creates a new texture even if the gradient has not changed. */
       pool->tex_fill[mat_id] = gpencil_gradient_texture_create(gp_style->gradient);
       mat_data->flag |= GP_FILL_GRADIENT_USE;
       mat_data->flag |= use_radial ? GP_FILL_GRADIENT_RADIAL : GP_FLAG_NONE;
