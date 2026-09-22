@@ -360,7 +360,7 @@ TEST(straight_skeleton_performance, KochSnowflake)
 #endif
 
   print_table_header("Straight Skeleton: Koch Snowflake (n = refinement iterations)", "  n");
-  const int n_values[] = {5};
+  const int n_values[] = {0, 1, 2, 3, 4, 5};
   for (const int n : n_values) {
     const GeneratedPolygon geom = make_koch_snowflake(n);
     run_benchmark_row("Koch Snowflake", n, geom);

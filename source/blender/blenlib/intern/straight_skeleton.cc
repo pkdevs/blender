@@ -47,7 +47,7 @@ namespace blender::straightskeleton {
  * Can also be enabled at runtime via the STRAIGHT_SKELETON_SVG environment variable.
  * \{ */
 
-#define DEBUG_STRAIGHT_SKELETON_SVG
+// #define DEBUG_STRAIGHT_SKELETON_SVG
 
 static bool debug_new_file = true;
 static const char *debug_html_filepath = "/tmp/straight_skeleton.html";
@@ -104,7 +104,6 @@ static constexpr double div_by_zero_tol = 1e-14;
 
 /** Threshold for relative velocity squared magnitude to detect degenerate motion. */
 static constexpr double small_speed_sq_tol = 1e-12;
-
 
 /** Collinear threshold for reflex vertex projection during split side assignment. */
 [[maybe_unused]] static constexpr double side_collinear_tol = 1e-9;
