@@ -232,11 +232,6 @@ static BlendFileReadWMSetupData *wm_file_read_setup_wm_init(bContext *C,
     return wm_setup_data;
   }
 
-  /* First wrap up running stuff.
-   *
-   * Code copied from `wm_init_exit.cc`. */
-  WM_jobs_kill_all(wm);
-
   wmWindow *active_win = CTX_wm_window(C);
   for (wmWindow &win : wm->windows) {
     CTX_wm_window_set(C, &win); /* Needed by operator close callbacks. */
@@ -852,8 +847,31 @@ static void wm_file_read_post(bContext *C,
   }
 }
 
+/**
+ * Stop jobs and render threads before loading a file.
+ */
+static void wm_file_read_stop_jobs(bContext *C)
+{
+  if (wmWindowManager *wm = CTX_wm_manager(C)) {
+    WM_jobs_kill_all(wm);
+  }
+
+  Main *bmain = CTX_data_main(C);
+  if (bmain) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        ED_render_engine_area_exit(bmain, &area);
+      }
+    }
+  }
+}
+
 static void wm_read_callback_pre_wrapper(bContext *C, const char *filepath)
 {
+  /* Stop jobs before potentially changing the project, which could affect
+   * them through path templates or the OpenColorIO config. */
+  wm_file_read_stop_jobs(C);
+
   /* NOTE: either #BKE_CB_EVT_LOAD_POST or #BKE_CB_EVT_LOAD_POST_FAIL must run.
    * Runs at the end of this function, don't return beforehand. */
   BKE_callback_exec_string(CTX_data_main(C), filepath, BKE_CB_EVT_LOAD_PRE);
