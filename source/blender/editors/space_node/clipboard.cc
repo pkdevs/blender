@@ -215,10 +215,14 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
     copy_tree->id.properties = IDP_New(IDP_GROUP, nullptr, "ID_Properties");
   }
 
-  /* FIXME: Store the original tree's id name as String IDP property. This can cause problems if
-   * trees are renamed or have the same name. */
-  IDProperty *id_name_prop = IDP_NewString(node_tree->id.name, "clipboard_source_id_name");
-  IDP_AddToGroup(copy_tree->id.properties, id_name_prop);
+  /* Store the current process id as Int IDP property and the original tree's #id.session_uid as
+   * String IDP property (to prevent integer overflow). These allow the original tree to be
+   * identified later in the paste operation. */
+  IDProperty *process_id_prop = IDP_NewInt(getpid(), "clipboard_source_process_id");
+  IDP_AddToGroup(copy_tree->id.properties, process_id_prop);
+  IDProperty *session_uid_prop = IDP_NewString(std::to_string(node_tree->id.session_uid),
+                                               "clipboard_source_session_uid");
+  IDP_AddToGroup(copy_tree->id.properties, session_uid_prop);
 
   /* Copy node interface to avoid losing links to Group Input and Group Output nodes.
    * Note: this doesn't create new interface items if they don't exist. */
@@ -450,10 +454,18 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
   }
 
   BLI_assert(from_tree->id.properties);
-  const std::optional<StringRef> &source_id_name = IDP_group_lookup_string(
-      *from_tree->id.properties, "clipboard_source_id_name");
-  BLI_assert(source_id_name);
-  bool is_same_tree{STREQ(source_id_name.value().data(), to_tree->id.name)};
+  const std::optional<int> &source_process_id = IDP_group_lookup_int(
+      *from_tree->id.properties, "clipboard_source_process_id");
+  const std::optional<StringRef> &source_session_uid_str = IDP_group_lookup_string(
+      *from_tree->id.properties, "clipboard_source_session_uid");
+
+  bool is_same_tree{false};
+  if (source_process_id && source_session_uid_str) {
+    const unsigned int source_session_uid{
+        static_cast<unsigned int>(std::stoul(std::string(source_session_uid_str.value())))};
+    is_same_tree = source_process_id.value() == getpid() &&
+                   source_session_uid == to_tree->id.session_uid;
+  }
 
   /* Adds io sockets and panels to tree and maps old sockets to new ones. */
 
@@ -476,7 +488,8 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
       {
         continue;
       }
-      /* If the socket is not found, the interface has changed and the socket needs to be readded.
+      /* If the socket is not found, the interface has changed and the socket needs to be
+       * readded.
        */
     }
     /* If the node tree doesn't support this socket type, don't add it and map it to an empty
