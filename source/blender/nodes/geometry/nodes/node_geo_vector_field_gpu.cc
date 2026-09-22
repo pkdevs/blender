@@ -46,76 +46,87 @@ static bool is_pure_field_node(const bNode &node)
   return true;
 }
 
-/**
- * Match a single field path and a direct geometry link to another Vector Field GPU node.
- * Fan-out and nodes with geometry sockets require CPU materialization.
- */
+/* All field paths must converge on one consumer without branching the geometry. */
 static const bNode *find_gpu_field_consumer(const bNode &producer)
 {
   const bNodeSocket *field_output = producer.output_by_identifier("Field"_ustr);
-  const bNodeSocket *geometry_output = producer.output_by_identifier("Geometry"_ustr);
-  if (field_output == nullptr || geometry_output == nullptr ||
-      field_output->directly_linked_links().size() != 1 ||
-      geometry_output->directly_linked_links().size() != 1)
-  {
-    return nullptr;
-  }
-
-  const bNodeLink *geometry_link = geometry_output->directly_linked_links().first();
-  if (geometry_link->tonode == nullptr || geometry_link->fromsock == nullptr ||
-      geometry_link->tosock == nullptr || !geometry_link->is_used() ||
-      !(geometry_link->flag & NODE_LINK_VALID) ||
-      geometry_link->tosock->identifier_ustr() != "Geometry"_ustr)
-  {
+  if (producer.is_muted() || field_output == nullptr) {
     return nullptr;
   }
 
   const bNode *consumer = nullptr;
-  Vector<const bNode *> visited_nodes;
+  Vector<const bNode *> active_nodes;
+  Vector<const bNode *> completed_nodes;
   const auto walk = [&](const auto &self, const bNodeSocket &output) -> bool {
-    if (output.directly_linked_links().size() != 1) {
+    if (output.directly_linked_links().is_empty()) {
       return false;
     }
-    const bNodeLink *link = output.directly_linked_links().first();
-    if (link->tonode == nullptr || link->fromsock == nullptr || link->tosock == nullptr ||
-        !link->is_used() || !(link->flag & NODE_LINK_VALID))
-    {
-      return false;
-    }
-
-    const bNode &node = *link->tonode;
-    if (node.type_legacy == GEO_NODE_VECTOR_FIELD_GPU) {
-      if (node.is_muted() || link->tosock->identifier_ustr() != "Field"_ustr ||
-          (consumer != nullptr && consumer != &node) || geometry_link->tonode != &node)
+    for (const bNodeLink *link : output.directly_linked_links()) {
+      if (link->tonode == nullptr || link->fromsock == nullptr || link->tosock == nullptr ||
+          !link->is_used() || !(link->flag & NODE_LINK_VALID))
       {
         return false;
       }
-      consumer = &node;
-      return true;
-    }
-    if (!is_pure_field_node(node) || visited_nodes.contains(&node)) {
-      return false;
-    }
-    visited_nodes.append(&node);
-
-    const bNodeSocket *next_output = nullptr;
-    for (const bNodeSocket *candidate : node.output_sockets()) {
-      const Span<const bNodeLink *> links = candidate->directly_linked_links();
-      if (links.is_empty()) {
+      const bNode &node = *link->tonode;
+      if (node.type_legacy == GEO_NODE_VECTOR_FIELD_GPU) {
+        if (node.is_muted() || link->tosock->identifier_ustr() != "Field"_ustr ||
+            (consumer != nullptr && consumer != &node))
+        {
+          return false;
+        }
+        consumer = &node;
         continue;
       }
-      if (candidate->type != SOCK_VECTOR || links.size() != 1 || next_output != nullptr) {
+      if (!is_pure_field_node(node) || active_nodes.contains(&node)) {
         return false;
       }
-      next_output = candidate;
+      if (completed_nodes.contains(&node)) {
+        continue;
+      }
+      active_nodes.append(&node);
+      bool has_linked_output = false;
+      for (const bNodeSocket *candidate : node.output_sockets()) {
+        if (candidate->directly_linked_links().is_empty()) {
+          continue;
+        }
+        if (candidate->type != SOCK_VECTOR || !self(self, *candidate)) {
+          return false;
+        }
+        has_linked_output = true;
+      }
+      if (!has_linked_output) {
+        return false;
+      }
+      active_nodes.remove_last();
+      completed_nodes.append(&node);
     }
-    return next_output != nullptr && self(self, *next_output);
+    return true;
   };
-
-  if (!walk(walk, *field_output)) {
+  if (!walk(walk, *field_output) || consumer == nullptr) {
     return nullptr;
   }
-  return consumer;
+
+  /* The second retained producer may lie between this producer and the consumer. */
+  const bNode *geometry_node = &producer;
+  for (int i = 0; i < 2; i++) {
+    const bNodeSocket *output = geometry_node->output_by_identifier("Geometry"_ustr);
+    if (output == nullptr || output->directly_linked_links().size() != 1) {
+      return nullptr;
+    }
+    const bNodeLink *link = output->directly_linked_links().first();
+    if (link->tonode == nullptr || link->fromsock == nullptr || link->tosock == nullptr ||
+        !link->is_used() || !(link->flag & NODE_LINK_VALID) ||
+        link->tosock->identifier_ustr() != "Geometry"_ustr ||
+        link->tonode->type_legacy != GEO_NODE_VECTOR_FIELD_GPU || link->tonode->is_muted())
+    {
+      return nullptr;
+    }
+    geometry_node = link->tonode;
+    if (geometry_node == consumer) {
+      return consumer;
+    }
+  }
+  return nullptr;
 }
 
 static fn::GPUFieldContextKey gpu_field_context_key(const bke::GeometryFieldContext &context)

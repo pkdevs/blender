@@ -77,6 +77,8 @@ enum class GPUFieldValueType : uint32_t {
 
 constexpr int GPU_FIELD_MAX_INSTRUCTIONS = 128;
 constexpr int GPU_FIELD_LOCAL_SIZE = 64;
+constexpr int GPU_FIELD_MAX_GPU_INPUTS = 2;
+constexpr int GPU_FIELD_GPU_INPUT_BINDING = 3;
 
 static bool is_gpu_value_type(const CPPType &type)
 {
@@ -191,11 +193,8 @@ struct GPUFieldIR {
   Vector<GPUFieldValueType> value_types;
   Vector<float4> constants;
   Vector<const FieldInput *> inputs;
-  enum class InputSource : uint8_t {
-    CPU,
-    GPU,
-  };
-  Vector<InputSource> input_sources;
+  /* Index into the retained input buffers, or -1 for a CPU input. */
+  Vector<int> gpu_input_indices;
   int result = -1;
 };
 
@@ -208,7 +207,7 @@ static int gpu_field_input_component_count(const GPUFieldIR &ir)
 {
   int component_count = 0;
   for (const int input_index : ir.inputs.index_range()) {
-    if (ir.input_sources[input_index] == GPUFieldIR::InputSource::GPU) {
+    if (ir.gpu_input_indices[input_index] >= 0) {
       continue;
     }
     const FieldInput *input = ir.inputs[input_index];
@@ -221,7 +220,7 @@ static int gpu_field_input_component_offset(const GPUFieldIR &ir, const int inpu
 {
   int component_offset = 0;
   for (const int i : IndexRange(input_index)) {
-    if (ir.input_sources[i] == GPUFieldIR::InputSource::GPU) {
+    if (ir.gpu_input_indices[i] >= 0) {
       continue;
     }
     component_offset += gpu_field_component_count(
@@ -375,8 +374,7 @@ class GPUFieldIRBuilder {
       return std::nullopt;
     }
     ir_.result = *result;
-    ir_.input_sources = Vector<GPUFieldIR::InputSource>(ir_.inputs.size(),
-                                                        GPUFieldIR::InputSource::CPU);
+    ir_.gpu_input_indices = Vector<int>(ir_.inputs.size(), -1);
     return std::move(ir_);
   }
 };
@@ -564,7 +562,7 @@ static GPUFieldContextRuntime &gpu_field_context_runtime()
 static uint64_t gpu_field_program_cache_key(const GPUFieldIR &ir)
 {
   /* Constants, input contents, and dispatch sizes are runtime data, excluded from the key. */
-  constexpr uint32_t key_version = 5;
+  constexpr uint32_t key_version = 6;
   uint64_t hash = get_default_hash(key_version,
                                    uint32_t(ir.result),
                                    uint32_t(ir.instructions.size()),
@@ -579,7 +577,7 @@ static uint64_t gpu_field_program_cache_key(const GPUFieldIR &ir)
     hash = hash * 33 ^ get_default_hash(uint32_t(ir.value_types[instruction_index]));
   }
   for (const int input_index : ir.inputs.index_range()) {
-    hash = hash * 33 ^ get_default_hash(uint32_t(ir.input_sources[input_index]));
+    hash = hash * 33 ^ get_default_hash(uint32_t(ir.gpu_input_indices[input_index]));
   }
   return hash;
 }
@@ -587,6 +585,11 @@ static uint64_t gpu_field_program_cache_key(const GPUFieldIR &ir)
 static std::string gpu_field_value_name(const int instruction_index)
 {
   return "value_" + std::to_string(instruction_index);
+}
+
+static std::string gpu_field_input_buffer_name(const int gpu_input_index)
+{
+  return "field_gpu_inputs_" + std::to_string(gpu_input_index);
 }
 
 static std::string gpu_field_generated_source(const GPUFieldIR &ir)
@@ -675,11 +678,13 @@ void main()
       case GPUFieldOperation::Input: {
         const GPUFieldValueType input_type = *gpu_value_type_for_cpp_type(
             ir.inputs[instruction.input_a]->cpp_type());
-        if (ir.input_sources[instruction.input_a] == GPUFieldIR::InputSource::GPU) {
+        if (ir.gpu_input_indices[instruction.input_a] >= 0) {
           BLI_assert(input_type == GPUFieldValueType::Float3);
-          const std::string input_index = "(element_index - uint(gpu_input_offset)) * 3u";
-          source += "  " + result + " = float4(field_gpu_inputs[" + input_index +
-                    "], field_gpu_inputs[" + input_index + " + 1u], field_gpu_inputs[" +
+          const std::string buffer_name = gpu_field_input_buffer_name(
+              ir.gpu_input_indices[instruction.input_a]);
+          const std::string input_index = "(element_index - uint(result_offset)) * 3u";
+          source += "  " + result + " = float4(" + buffer_name + "[" + input_index + "], " +
+                    buffer_name + "[" + input_index + " + 1u], " + buffer_name + "[" +
                     input_index + " + 2u], 0.0f);\n";
         }
         else {
@@ -950,8 +955,7 @@ bool try_evaluate_field_gpu_impl(const GField &field,
 
   GPUContext *active_gpu_context = GPU_context_active_get();
   const IndexRange range = *mask.to_range();
-  int gpu_input_count = 0;
-  Array<std::shared_ptr<GPUFieldResult>> gpu_input_results(ir->inputs.size());
+  Vector<std::shared_ptr<GPUFieldResult>, GPU_FIELD_MAX_GPU_INPUTS> gpu_input_results;
   if (chain_scope != nullptr && context_key != nullptr) {
     for (const int input_index : ir->inputs.index_range()) {
       const FieldInput *input = ir->inputs[input_index];
@@ -967,13 +971,17 @@ bool try_evaluate_field_gpu_impl(const GField &field,
       if (input->cpp_type() != CPPType::get<float3>()) {
         return false;
       }
-      ir->input_sources[input_index] = GPUFieldIR::InputSource::GPU;
-      gpu_input_results[input_index] = result;
-      gpu_input_count++;
+      if (gpu_input_results.size() == GPU_FIELD_MAX_GPU_INPUTS) {
+        return false;
+      }
+      ir->gpu_input_indices[input_index] = gpu_input_results.append_and_get_index(result);
     }
-    if (gpu_input_count > 1) {
-      return false;
-    }
+  }
+  const int storage_buffer_count = GPU_FIELD_GPU_INPUT_BINDING + gpu_input_results.size();
+  if (storage_buffer_count > GPU_max_shader_storage_buffer_bindings() ||
+      storage_buffer_count > GPU_max_compute_shader_storage_blocks())
+  {
+    return false;
   }
   const int input_component_count = gpu_field_input_component_count(*ir);
 
@@ -982,7 +990,7 @@ bool try_evaluate_field_gpu_impl(const GField &field,
   ResourceScope scope;
   Array<GVArray> input_varrays(ir->inputs.size());
   for (const int input_index : ir->inputs.index_range()) {
-    if (ir->input_sources[input_index] == GPUFieldIR::InputSource::GPU) {
+    if (ir->gpu_input_indices[input_index] >= 0) {
       continue;
     }
     const FieldInput *input = ir->inputs[input_index];
@@ -1008,7 +1016,7 @@ bool try_evaluate_field_gpu_impl(const GField &field,
   }
 
   for (const int input_index : ir->inputs.index_range()) {
-    if (ir->input_sources[input_index] == GPUFieldIR::InputSource::GPU) {
+    if (ir->gpu_input_indices[input_index] >= 0) {
       continue;
     }
     append_input_values(input_varrays[input_index],
@@ -1019,14 +1027,6 @@ bool try_evaluate_field_gpu_impl(const GField &field,
   }
 
   buffers->constants.as_mutable_span().take_front(ir->constants.size()).copy_from(ir->constants);
-
-  std::shared_ptr<GPUFieldResult> gpu_input_result;
-  for (const std::shared_ptr<GPUFieldResult> &result : gpu_input_results) {
-    if (result != nullptr) {
-      gpu_input_result = result;
-      break;
-    }
-  }
 
   gpu::Shader *shader = GPU_shader_generated_cache_lookup(program_key);
   if (shader == nullptr) {
@@ -1039,13 +1039,15 @@ bool try_evaluate_field_gpu_impl(const GField &field,
     create_info.storage_buf(0, Qualifier::read, "float", "field_inputs[]");
     create_info.storage_buf(1, Qualifier::read, "float4", "field_constants[]");
     create_info.storage_buf(2, Qualifier::write, "float", "field_results[]");
-    if (gpu_input_result != nullptr) {
-      create_info.storage_buf(3, Qualifier::read, "float", "field_gpu_inputs[]");
+    Array<std::string> gpu_input_names(gpu_input_results.size());
+    for (const int i : gpu_input_results.index_range()) {
+      gpu_input_names[i] = gpu_field_input_buffer_name(i) + "[]";
+      create_info.storage_buf(
+          GPU_FIELD_GPU_INPUT_BINDING + i, Qualifier::read, "float", gpu_input_names[i]);
     }
     create_info.push_constant(Type::int_t, "element_offset");
     create_info.push_constant(Type::int_t, "dispatch_count");
     create_info.push_constant(Type::int_t, "result_offset");
-    create_info.push_constant(Type::int_t, "gpu_input_offset");
     create_info.compute_source_generated = std::move(source);
 
     shader = GPU_shader_create_from_info_generated_cached(
@@ -1069,10 +1071,10 @@ bool try_evaluate_field_gpu_impl(const GField &field,
   GPU_storagebuf_bind(buffers->output_buffer,
                       GPU_shader_get_ssbo_binding(shader, "field_results"));
   GPU_shader_uniform_1i(shader, "result_offset", int(range.start()));
-  if (gpu_input_result != nullptr) {
-    GPU_storagebuf_bind(gpu_input_result->buffers->output_buffer,
-                        GPU_shader_get_ssbo_binding(shader, "field_gpu_inputs"));
-    GPU_shader_uniform_1i(shader, "gpu_input_offset", int(gpu_input_result->range.start()));
+  for (const int i : gpu_input_results.index_range()) {
+    GPU_storagebuf_bind(
+        gpu_input_results[i]->buffers->output_buffer,
+        GPU_shader_get_ssbo_binding(shader, gpu_field_input_buffer_name(i).c_str()));
   }
 
   const int max_groups = std::max(GPU_max_work_group_count(0), 1);
@@ -1101,8 +1103,8 @@ bool try_evaluate_field_gpu_impl(const GField &field,
 
   GPU_storagebuf_unbind(buffers->constant_buffer);
   GPU_storagebuf_unbind(buffers->output_buffer);
-  if (gpu_input_result != nullptr) {
-    GPU_storagebuf_unbind(gpu_input_result->buffers->output_buffer);
+  for (const std::shared_ptr<GPUFieldResult> &result : gpu_input_results) {
+    GPU_storagebuf_unbind(result->buffers->output_buffer);
   }
 
   if (!write_to_cpu) {
