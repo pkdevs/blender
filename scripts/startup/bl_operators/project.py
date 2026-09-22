@@ -643,7 +643,11 @@ class PROJECT_OT_OpenBlendInProject(Operator):
                 "Selected blend file is not part of a project.")
             return {'CANCELLED'}
 
-        bpy.ops.wm.open_mainfile(filepath=self.filepath)
+        bpy.ops.wm.open_mainfile(
+            'INVOKE_DEFAULT',
+            filepath=self.filepath,
+            display_file_selector=False,
+        )
 
         return {'FINISHED'}
 
