@@ -8,9 +8,12 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_implicit_sharing.hh"
+#include "BLI_implicit_sharing_ptr.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "BKE_idprop.hh"
 
@@ -20,13 +23,67 @@
 
 #include "IMB_metadata.hh"
 
+namespace blender {
+
+/** Implicit sharing wrapper for IDProperty. */
+class MetaDataImplicitSharing : public ImplicitSharingInfo {
+ public:
+  IDProperty *idprop;
+
+  MetaDataImplicitSharing(IDProperty *idprop) : idprop(idprop)
+  {
+    BLI_assert(idprop != nullptr);
+  }
+
+ private:
+  void delete_self_with_data() override
+  {
+    IDP_FreeProperty(idprop);
+    MEM_delete(this);
+  }
+};
+
 void IMB_metadata_ensure(IDProperty **metadata)
 {
   if (*metadata != nullptr) {
     return;
   }
 
-  *metadata = blender::bke::idprop::create_group("metadata").release();
+  *metadata = bke::idprop::create_group("metadata").release();
+}
+
+const IDProperty *ImBuf::metadata() const
+{
+  return this->metadata_ptr;
+}
+
+IDProperty *ImBuf::metadata_for_write()
+{
+  BLI_assert((this->metadata_ptr == nullptr) == (this->metadata_sharing_info == nullptr));
+
+  if (this->metadata_ptr == nullptr) {
+    /* Allocate on demand. */
+    this->metadata_ptr = bke::idprop::create_group("metadata").release();
+    this->metadata_sharing_info = ImplicitSharingPtr<>(
+        MEM_new<MetaDataImplicitSharing>(__func__, this->metadata_ptr));
+  }
+  else if (!this->metadata_sharing_info->is_mutable()) {
+    /* Copy on write. */
+    this->metadata_ptr = IDP_CopyProperty(this->metadata_ptr);
+    this->metadata_sharing_info = ImplicitSharingPtr<>(
+        MEM_new<MetaDataImplicitSharing>(__func__, this->metadata_ptr));
+  }
+
+  return this->metadata_ptr;
+}
+
+void ImBuf::assign_metadata(const IDProperty *metadata, ImplicitSharingPtr<> sharing_info)
+{
+  BLI_assert(metadata != nullptr);
+  BLI_assert(sharing_info.get() != nullptr);
+
+  this->metadata_ptr = const_cast<IDProperty *>(metadata);
+  this->metadata_sharing_info = std::move(sharing_info);
 }
 
 void IMB_metadata_free(IDProperty *metadata)
@@ -59,10 +116,8 @@ bool IMB_metadata_get_field(const IDProperty *metadata,
 void IMB_metadata_copy(ImBuf *ibuf_dst, const ImBuf *ibuf_src)
 {
   BLI_assert(ibuf_dst != ibuf_src);
-  if (ibuf_src->metadata) {
-    IMB_metadata_free(ibuf_dst->metadata);
-    ibuf_dst->metadata = IDP_CopyProperty(ibuf_src->metadata);
-  }
+  ibuf_dst->metadata_ptr = ibuf_src->metadata_ptr;
+  ibuf_dst->metadata_sharing_info = ibuf_src->metadata_sharing_info;
 }
 
 void IMB_metadata_set_field(IDProperty *metadata, const char *key, const char *value)
@@ -79,17 +134,20 @@ void IMB_metadata_set_field(IDProperty *metadata, const char *key, const char *v
     IDP_AssignString(prop, value);
   }
   else {
-    prop = blender::bke::idprop::create(key, value).release();
+    prop = bke::idprop::create(key, value).release();
     IDP_AddToGroup(metadata, prop);
   }
 }
 
 void IMB_metadata_foreach(const ImBuf *ibuf, IMBMetadataForeachCb callback, void *userdata)
 {
-  if (ibuf->metadata == nullptr) {
+  const IDProperty *metadata = ibuf->metadata();
+  if (metadata == nullptr) {
     return;
   }
-  LISTBASE_FOREACH (IDProperty *, prop, &ibuf->metadata->data.group) {
-    callback(prop->name, IDP_string_get(prop), userdata);
+  for (const IDProperty &prop : metadata->data.group) {
+    callback(prop.name, IDP_string_get(&prop), userdata);
   }
 }
+
+}  // namespace blender

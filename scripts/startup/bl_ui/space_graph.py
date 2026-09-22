@@ -27,8 +27,10 @@ def drivers_editor_footer(layout, context):
     layout.label(
         text=iface_("Driver: {:s} ({:s})").format(
             act_fcurve.id_data.name,
-            act_fcurve.data_path),
-        translate=False)
+            act_fcurve.data_path,
+        ),
+        translate=False,
+    )
 
     if act_driver.variables:
         layout.separator(type='LINE')
@@ -213,11 +215,13 @@ class GRAPH_MT_view(Menu):
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
         layout.prop(st, "show_region_channels")
-        layout.prop(st, "show_region_footer")
+        if st.mode != 'DRIVERS':
+            layout.prop(st, "show_region_footer", text="Playback Controls")
         layout.separator()
 
         layout.operator("graph.view_selected")
         layout.operator("graph.view_all")
+        layout.operator("graph.local_view")
         if context.scene.use_preview_range:
             layout.operator("anim.scene_range_frame", text="Frame Preview Range")
         else:
@@ -336,7 +340,7 @@ class GRAPH_MT_channel(Menu):
             layout.operator("graph.driver_delete_invalid")
 
         layout.separator()
-        layout.operator("anim.channels_group")
+        layout.operator("anim.channels_group", text="Group Channels...")
         layout.operator("anim.channels_ungroup")
 
         layout.separator()
@@ -350,7 +354,7 @@ class GRAPH_MT_channel(Menu):
         # To get it to display the hotkey.
         layout.operator_context = operator_context
         layout.operator_menu_enum("graph.fmodifier_add", "type").only_active = False
-        layout.operator_context = 'INVOKE_REGION_CHANNELS'
+        layout.operator("graph.fmodifier_delete", text="Delete F-Curve Modifiers")
 
         layout.separator()
         layout.operator("graph.hide", text="Hide Selected Curves").unselected = False
@@ -362,7 +366,7 @@ class GRAPH_MT_channel(Menu):
         layout.operator("anim.channels_collapse")
 
         layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Move Channels")
 
         layout.separator()
         layout.operator("anim.channels_fcurves_enable")
@@ -384,7 +388,7 @@ class GRAPH_MT_key_density(Menu):
     bl_label = "Density"
 
     def draw(self, _context):
-        from bl_ui_utils.layout import operator_context
+        from _bl_ui_utils.layout import operator_context
         layout = self.layout
         layout.operator("graph.decimate", text="Decimate (Ratio)").mode = 'RATIO'
         # Using the modal operation doesn't make sense for this variant
@@ -443,13 +447,13 @@ class GRAPH_MT_key(Menu):
         layout.separator()
         layout.operator("graph.frame_jump", text="Jump to Selected")
 
+        layout.operator("graph.copy", text="Copy", icon='COPYDOWN')
+        layout.operator("graph.paste", text="Paste", icon='PASTEDOWN')
+        layout.operator("graph.paste", text="Paste Flipped", icon='PASTEFLIPDOWN').flipped = True
+
         layout.separator()
         layout.operator_menu_enum("graph.keyframe_insert", "type", text="Insert")
-        layout.operator("graph.copy", text="Copy")
-        layout.operator("graph.paste", text="Paste")
-        layout.operator("graph.paste", text="Paste Flipped").flipped = True
-        layout.operator("graph.duplicate_move")
-        layout.operator("graph.delete", text="Delete")
+        layout.operator("graph.duplicate_move", icon='DUPLICATE')
 
         layout.separator()
         layout.operator_menu_enum("graph.handle_type", "type", text="Handle Type")
@@ -461,6 +465,8 @@ class GRAPH_MT_key(Menu):
         layout.menu("GRAPH_MT_key_density")
         layout.menu("GRAPH_MT_key_blending")
         layout.menu("GRAPH_MT_key_smoothing")
+        layout.separator()
+        layout.operator("graph.delete", text="Delete", icon='X')
 
 
 class GRAPH_MT_key_transform(Menu):
@@ -544,14 +550,15 @@ class GRAPH_MT_context_menu(Menu):
         layout.separator()
 
         layout.operator("graph.keyframe_insert").type = 'SEL'
-        layout.operator("graph.duplicate_move")
-        layout.operator_context = 'EXEC_REGION_WIN'
-        layout.operator("graph.delete")
+        layout.operator("graph.duplicate_move", icon='DUPLICATE')
 
         layout.separator()
 
         layout.operator_menu_enum("graph.mirror", "type", text="Mirror")
         layout.operator_menu_enum("graph.snap", "type", text="Snap")
+        layout.separator()
+        layout.operator_context = 'EXEC_REGION_WIN'
+        layout.operator("graph.delete", icon='X')
 
 
 class GRAPH_MT_pivot_pie(Menu):

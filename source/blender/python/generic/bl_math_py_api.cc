@@ -2,8 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * \file
+/** \file
  * \ingroup pygen
  *
  * This file defines the 'bl_math' module, a module for math utilities.
@@ -11,9 +10,11 @@
 
 #include <Python.h>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "bl_math_py_api.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Python Functions
@@ -27,11 +28,11 @@ PyDoc_STRVAR(
     "   Clamps the float value between minimum and maximum. To avoid\n"
     "   confusion, any call must use either one or all three arguments.\n"
     "\n"
-    "   :arg value: The value to clamp.\n"
+    "   :param value: The value to clamp.\n"
     "   :type value: float\n"
-    "   :arg min: The minimum value, defaults to 0.\n"
+    "   :param min: The minimum value, defaults to 0.\n"
     "   :type min: float\n"
-    "   :arg max: The maximum value, defaults to 1.\n"
+    "   :param max: The maximum value, defaults to 1.\n"
     "   :type max: float\n"
     "   :return: The clamped value.\n"
     "   :rtype: float\n");
@@ -40,12 +41,24 @@ static PyObject *py_bl_math_clamp(PyObject * /*self*/, PyObject *args)
   double x, minv = 0.0, maxv = 1.0;
 
   if (PyTuple_Size(args) <= 1) {
-    if (!PyArg_ParseTuple(args, "d:clamp", &x)) {
+    if (!PyArg_ParseTuple(args,
+                          "d" /* `value` */
+                          ":clamp",
+                          &x))
+    {
       return nullptr;
     }
   }
   else {
-    if (!PyArg_ParseTuple(args, "ddd:clamp", &x, &minv, &maxv)) {
+    if (!PyArg_ParseTuple(args,
+                          "d" /* `value` */
+                          "d" /* `min` */
+                          "d" /* `max` */
+                          ":clamp",
+                          &x,
+                          &minv,
+                          &maxv))
+    {
       return nullptr;
     }
   }
@@ -62,18 +75,26 @@ PyDoc_STRVAR(
     "\n"
     "   Linearly interpolate between two float values based on factor.\n"
     "\n"
-    "   :arg from_value: The value to return when factor is 0.\n"
+    "   :param from_value: The value to return when factor is 0.\n"
     "   :type from_value: float\n"
-    "   :arg to_value: The value to return when factor is 1.\n"
+    "   :param to_value: The value to return when factor is 1.\n"
     "   :type to_value: float\n"
-    "   :arg factor: The interpolation value, normally in [0.0, 1.0].\n"
+    "   :param factor: The interpolation value, normally in [0.0, 1.0].\n"
     "   :type factor: float\n"
     "   :return: The interpolated value.\n"
     "   :rtype: float\n");
 static PyObject *py_bl_math_lerp(PyObject * /*self*/, PyObject *args)
 {
   double a, b, x;
-  if (!PyArg_ParseTuple(args, "ddd:lerp", &a, &b, &x)) {
+  if (!PyArg_ParseTuple(args,
+                        "d" /* `from_value` */
+                        "d" /* `to_value` */
+                        "d" /* `factor` */
+                        ":lerp",
+                        &a,
+                        &b,
+                        &x))
+  {
     return nullptr;
   }
 
@@ -89,18 +110,26 @@ PyDoc_STRVAR(
     "to values.\n"
     "   Outside the range the function returns the same value as the nearest edge.\n"
     "\n"
-    "   :arg from_value: The edge value where the result is 0.\n"
+    "   :param from_value: The edge value where the result is 0.\n"
     "   :type from_value: float\n"
-    "   :arg to_value: The edge value where the result is 1.\n"
+    "   :param to_value: The edge value where the result is 1.\n"
     "   :type to_value: float\n"
-    "   :arg factor: The interpolation value.\n"
-    "   :type factor: float\n"
+    "   :param value: The interpolation value.\n"
+    "   :type value: float\n"
     "   :return: The interpolated value in [0.0, 1.0].\n"
     "   :rtype: float\n");
 static PyObject *py_bl_math_smoothstep(PyObject * /*self*/, PyObject *args)
 {
   double a, b, x;
-  if (!PyArg_ParseTuple(args, "ddd:smoothstep", &a, &b, &x)) {
+  if (!PyArg_ParseTuple(args,
+                        "d" /* `from_value` */
+                        "d" /* `to_value` */
+                        "d" /* `value` */
+                        ":smoothstep",
+                        &a,
+                        &b,
+                        &x))
+  {
     return nullptr;
   }
 
@@ -118,9 +147,12 @@ static PyObject *py_bl_math_smoothstep(PyObject * /*self*/, PyObject *args)
  * \{ */
 
 static PyMethodDef M_bl_math_methods[] = {
-    {"clamp", (PyCFunction)py_bl_math_clamp, METH_VARARGS, py_bl_math_clamp_doc},
-    {"lerp", (PyCFunction)py_bl_math_lerp, METH_VARARGS, py_bl_math_lerp_doc},
-    {"smoothstep", (PyCFunction)py_bl_math_smoothstep, METH_VARARGS, py_bl_math_smoothstep_doc},
+    {"clamp", static_cast<PyCFunction>(py_bl_math_clamp), METH_VARARGS, py_bl_math_clamp_doc},
+    {"lerp", static_cast<PyCFunction>(py_bl_math_lerp), METH_VARARGS, py_bl_math_lerp_doc},
+    {"smoothstep",
+     static_cast<PyCFunction>(py_bl_math_smoothstep),
+     METH_VARARGS,
+     py_bl_math_smoothstep_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 
@@ -147,3 +179,5 @@ PyMODINIT_FUNC BPyInit_bl_math()
 }
 
 /** \} */
+
+}  // namespace blender

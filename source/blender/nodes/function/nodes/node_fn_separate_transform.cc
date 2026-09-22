@@ -9,16 +9,17 @@
 #include "NOD_value_elem_eval.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 namespace blender::nodes::node_fn_separate_transform_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Matrix>("Transform");
-  b.add_output<decl::Vector>("Translation").subtype(PROP_TRANSLATION);
-  b.add_output<decl::Rotation>("Rotation");
-  b.add_output<decl::Vector>("Scale").subtype(PROP_XYZ);
+  b.add_input<decl::Matrix>("Transform"_ustr);
+  b.add_output<decl::Vector>("Translation"_ustr).subtype(PROP_TRANSLATION);
+  b.add_output<decl::Rotation>("Rotation"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr).subtype(PROP_XYZ);
 };
 
 class SeparateTransformFunction : public mf::MultiFunction {
@@ -79,34 +80,44 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 static void node_eval_elem(value_elem::ElemEvalParams &params)
 {
   using namespace value_elem;
-  const MatrixElem matrix_elem = params.get_input_elem<MatrixElem>("Transform");
-  params.set_output_elem("Translation", matrix_elem.translation);
-  params.set_output_elem("Rotation", matrix_elem.rotation);
-  params.set_output_elem("Scale", matrix_elem.scale);
+  const MatrixElem matrix_elem = params.get_input_elem<MatrixElem>("Transform"_ustr);
+  params.set_output_elem("Translation"_ustr, matrix_elem.translation);
+  params.set_output_elem("Rotation"_ustr, matrix_elem.rotation);
+  params.set_output_elem("Scale"_ustr, matrix_elem.scale);
 }
 
 static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
 {
   using namespace value_elem;
   MatrixElem transform_elem;
-  transform_elem.translation = params.get_output_elem<VectorElem>("Translation");
-  transform_elem.rotation = params.get_output_elem<RotationElem>("Rotation");
-  transform_elem.scale = params.get_output_elem<VectorElem>("Scale");
-  params.set_input_elem("Transform", transform_elem);
+  transform_elem.translation = params.get_output_elem<VectorElem>("Translation"_ustr);
+  transform_elem.rotation = params.get_output_elem<RotationElem>("Rotation"_ustr);
+  transform_elem.scale = params.get_output_elem<VectorElem>("Scale"_ustr);
+  params.set_input_elem("Transform"_ustr, transform_elem);
 }
 
 static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
 {
-  const float3 translation = params.get_output<float3>("Translation");
-  const math::Quaternion rotation = params.get_output<math::Quaternion>("Rotation");
-  const float3 scale = params.get_output<float3>("Scale");
-  params.set_input("Transform", math::from_loc_rot_scale<float4x4>(translation, rotation, scale));
+  const float3 translation = params.get_output<float3>("Translation"_ustr);
+  const math::Quaternion rotation = params.get_output<math::Quaternion>("Rotation"_ustr);
+  const float3 scale = params.get_output<float3>("Scale"_ustr);
+  params.set_input("Transform"_ustr,
+                   math::from_loc_rot_scale<float4x4>(translation, rotation, scale));
+}
+
+static int node_gpu_material(GPUMaterial *mat,
+                             bNode *node,
+                             bNodeExecData * /*execdata*/,
+                             GPUNodeStack *in,
+                             GPUNodeStack *out)
+{
+  return GPU_stack_link(mat, node, "separate_transform", in, out);
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  fn_node_type_base(&ntype, "FunctionNodeSeparateTransform", FN_NODE_SEPARATE_TRANSFORM);
+  static bke::bNodeType ntype;
+  fn_cmp_node_type_base(&ntype, "FunctionNodeSeparateTransform"_ustr, FN_NODE_SEPARATE_TRANSFORM);
   ntype.ui_name = "Separate Transform";
   ntype.ui_description =
       "Split a transformation matrix into a translation vector, a rotation, and a scale vector";
@@ -114,10 +125,11 @@ static void node_register()
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
+  ntype.gpu_fn = node_gpu_material;
   ntype.eval_elem = node_eval_elem;
   ntype.eval_inverse_elem = node_eval_inverse_elem;
   ntype.eval_inverse = node_eval_inverse;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

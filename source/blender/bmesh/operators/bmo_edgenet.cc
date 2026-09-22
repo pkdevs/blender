@@ -8,8 +8,8 @@
  * Edge-Net for filling in open edge-loops.
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "bmesh.hh"
@@ -17,7 +17,7 @@
 
 #include "intern/bmesh_operators_private.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
 #define EDGE_MARK 1
 #define EDGE_VIS 2
@@ -235,3 +235,5 @@ void bmo_edgenet_prepare_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "edges.out", BM_EDGE, ELE_NEW);
 }
+
+}  // namespace blender

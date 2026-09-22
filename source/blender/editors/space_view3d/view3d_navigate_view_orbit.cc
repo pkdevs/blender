@@ -6,8 +6,8 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -19,6 +19,8 @@
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Orbit Operator
@@ -57,9 +59,9 @@ static wmOperatorStatus vieworbit_exec(bContext *C, wmOperator *op)
   ED_view3d_smooth_view_force_finish(C, vod.v3d, vod.region);
 
   /* support for switching to the opposite view (even when in locked views) */
-  char view_opposite = (fabsf(angle) == float(M_PI)) ?
-                           ED_view3d_axis_view_opposite(vod.rv3d->view) :
-                           char(RV3D_VIEW_USER);
+  eRegionView3D_View view_opposite = (fabsf(angle) == float(M_PI)) ?
+                                         ED_view3d_axis_view_opposite(vod.rv3d->view) :
+                                         RV3D_VIEW_USER;
 
   if ((RV3D_LOCK_FLAGS(vod.rv3d) & RV3D_LOCK_ROTATION) && (view_opposite == RV3D_VIEW_USER)) {
     /* no nullptr check is needed, poll checks */
@@ -167,3 +169,5 @@ const ViewOpsType ViewOpsType_orbit = {
     /*init_fn*/ nullptr,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

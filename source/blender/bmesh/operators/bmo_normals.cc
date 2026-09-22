@@ -10,12 +10,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist_stack.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 /********* Right-hand faces implementation ****** */
 
@@ -157,7 +159,7 @@ static int recalc_face_normals_find_index(BMesh *bm,
               float loop_dir_dot;
               /* Highly unlikely the furthest loop is also the concave part of an ngon,
                * but it can be contrived with _very_ non-planar faces - so better check. */
-              if (UNLIKELY(dot_v3v3(loop_dir, l_iter->f->no) < 0.0f)) {
+              if (dot_v3v3(loop_dir, l_iter->f->no) < 0.0f) [[unlikely]] {
                 negate_v3(loop_dir);
               }
               loop_dir_dot = dot_v3v3(dir, loop_dir);
@@ -255,11 +257,10 @@ static void bmo_recalc_face_normals_array(BMesh *bm,
 
 void bmo_recalc_face_normals_exec(BMesh *bm, BMOperator *op)
 {
-  int *groups_array = MEM_malloc_arrayN<int>(bm->totface, __func__);
-  BMFace **faces_grp = static_cast<BMFace **>(
-      MEM_mallocN(sizeof(*faces_grp) * bm->totface, __func__));
+  int *groups_array = MEM_new_array_uninitialized<int>(bm->totface, __func__);
+  BMFace **faces_grp = MEM_new_array_uninitialized<BMFace *>(bm->totface, __func__);
 
-  int(*group_index)[2];
+  int (*group_index)[2];
   const int group_tot = BM_mesh_calc_face_groups(bm,
                                                  groups_array,
                                                  &group_index,
@@ -293,8 +294,10 @@ void bmo_recalc_face_normals_exec(BMesh *bm, BMOperator *op)
     }
   }
 
-  MEM_freeN(faces_grp);
+  MEM_delete(faces_grp);
 
-  MEM_freeN(groups_array);
-  MEM_freeN(group_index);
+  MEM_delete(groups_array);
+  MEM_delete(group_index);
 }
+
+}  // namespace blender

@@ -18,10 +18,10 @@
 #include <cwctype>
 #include <wcwidth.h>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_string.h"      /* #BLI_string_debug_size. */
-#include "BLI_string_utf8.h" /* own include */
+#include "BLI_string.hh"      /* #BLI_string_debug_size. */
+#include "BLI_string_utf8.hh" /* own include */
 #ifdef WIN32
 #  include "utfconv.hh"
 #endif
@@ -29,7 +29,9 @@
 #  pragma GCC diagnostic error "-Wsign-conversion"
 #endif
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 static size_t str_utf8_truncate_at_size_unchecked(char *str, const size_t str_size);
 
@@ -57,7 +59,7 @@ static size_t str_utf8_truncate_at_size_unchecked(char *str, const size_t str_si
 
 BLI_INLINE int utf8_char_compute_skip(const char c)
 {
-  if (UNLIKELY(c >= 192)) {
+  if (c >= 192) [[unlikely]] {
     if ((c & 0xe0) == 0xc0) {
       return 2;
     }
@@ -161,11 +163,11 @@ ptrdiff_t BLI_str_utf8_invalid_byte(const char *str, size_t str_len)
    * length is in bytes, since without knowing whether the string is valid
    * it's hard to know how many characters there are! */
 
-  const uchar *p, *perr, *pend = (const uchar *)str + str_len;
+  const uchar *p, *perr, *pend = reinterpret_cast<const uchar *>(str) + str_len;
   uchar c;
   int ab;
 
-  for (p = (const uchar *)str; p < pend; p++, str_len--) {
+  for (p = reinterpret_cast<const uchar *>(str); p < pend; p++, str_len--) {
     c = *p;
     perr = p; /* Erroneous char is always the first of an invalid UTF8 sequence... */
     if (ELEM(c, 0xfe, 0xff, 0x00)) {
@@ -281,7 +283,7 @@ ptrdiff_t BLI_str_utf8_invalid_byte(const char *str, size_t str_len)
 
 utf8_error:
 
-  return ((const char *)perr - (const char *)str);
+  return (reinterpret_cast<const char *>(perr) - static_cast<const char *>(str));
 }
 
 int BLI_str_utf8_invalid_strip(char *str, size_t str_len)
@@ -328,7 +330,7 @@ int BLI_str_utf8_invalid_substitute(char *str, size_t str_len, const char substi
   return tot;
 }
 
-const char *BLI_str_utf8_invalid_substitute_as_needed(const char *str,
+const char *BLI_str_utf8_invalid_substitute_if_needed(const char *str,
                                                       const size_t str_len,
                                                       const char substitute,
                                                       char *buf,
@@ -336,14 +338,14 @@ const char *BLI_str_utf8_invalid_substitute_as_needed(const char *str,
 {
   BLI_assert(str[str_len] == '\0');
   const ptrdiff_t bad_char = BLI_str_utf8_invalid_byte(str, str_len);
-  if (LIKELY(bad_char == -1)) {
+  if (bad_char == -1) [[likely]] {
     return str;
   }
   BLI_assert(bad_char >= 0);
 
   /* In the case a bad character is outside the buffer limit,
    * simply perform a truncating UTF8 copy into the buffer and return that. */
-  if (UNLIKELY(size_t(bad_char) >= buf_maxncpy)) {
+  if (size_t(bad_char) >= buf_maxncpy) [[unlikely]] {
     BLI_strncpy_utf8(buf, str, buf_maxncpy);
     return buf;
   }
@@ -386,12 +388,12 @@ BLI_INLINE char *str_utf8_copy_max_bytes_impl(char *dst, const char *src, size_t
     /* NOLINTBEGIN: bugprone-assignment-in-if-condition */
     /* clang-format off */
     switch (utf8_size) {
-      case 6: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++; ATTR_FALLTHROUGH;
-      case 5: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++; ATTR_FALLTHROUGH;
-      case 4: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++; ATTR_FALLTHROUGH;
-      case 3: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++; ATTR_FALLTHROUGH;
-      case 2: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++; ATTR_FALLTHROUGH;
-      case 1: if (UNLIKELY(!(*dst = *src++))) { return dst; } dst++;
+      case 6: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++; ATTR_FALLTHROUGH;
+      case 5: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++; ATTR_FALLTHROUGH;
+      case 4: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++; ATTR_FALLTHROUGH;
+      case 3: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++; ATTR_FALLTHROUGH;
+      case 2: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++; ATTR_FALLTHROUGH;
+      case 1: if (!(*dst = *src++)) [[unlikely]] { return dst; } dst++;
     }
     /* clang-format on */
     /* NOLINTEND: bugprone-assignment-in-if-condition */
@@ -477,7 +479,7 @@ size_t BLI_strlen_utf8_ex(const char *strc, size_t *r_len_bytes)
     /* Detect null bytes within multi-byte sequences.
      * This matches the behavior of #BLI_strncpy_utf8 for incomplete byte sequences. */
     for (int i = 1; i < step; i++) {
-      if (UNLIKELY(strc[i] == '\0')) {
+      if (strc[i] == '\0') [[unlikely]] {
         step = i;
         break;
       }
@@ -512,7 +514,7 @@ size_t BLI_strnlen_utf8_ex(const char *strc, const size_t strc_maxlen, size_t *r
     /* Detect null bytes within multi-byte sequences.
      * This matches the behavior of #BLI_strncpy_utf8 for incomplete byte sequences. */
     for (int i = 1; i < step; i++) {
-      if (UNLIKELY(strc[i] == '\0')) {
+      if (strc[i] == '\0') [[unlikely]] {
         step = i;
         break;
       }
@@ -541,7 +543,7 @@ size_t BLI_strncpy_wchar_from_utf8(wchar_t *__restrict dst_w,
   /* NOTE: it would be more efficient to calculate the length as part of #conv_utf_8_to_16. */
   return wcslen(dst_w);
 #else
-  return BLI_str_utf8_as_utf32((char32_t *)dst_w, src_c, dst_w_maxncpy);
+  return BLI_str_utf8_as_utf32(reinterpret_cast<char32_t *>(dst_w), src_c, dst_w_maxncpy);
 #endif
 }
 
@@ -892,6 +894,8 @@ char32_t BLI_str_utf32_char_to_lower(const char32_t wc)
   return wc;
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name UTF32 Text Boundary Analysis
  *
@@ -1027,6 +1031,51 @@ bool BLI_str_utf32_char_is_optional_break_before(char32_t codepoint, char32_t co
   return false;
 }
 
+bool BLI_str_utf32_char_is_terminal_punctuation(char32_t codepoint)
+{
+  /* Characters marking the end of sentences according to Unicode Text Segmentation
+   * (Standard Annex #29), Sentence Break Property (ATerm, STerm).
+   * Only the characters available in Blender are matched. */
+
+  return (ELEM(codepoint,
+               0x002E,    /* Full stop. */
+               0x2024,    /* One dot leader. */
+               0xFE52,    /* Small full stop. */
+               0xFF0E,    /* Full-width full stop. */
+               0x0021,    /* Exclamation mark. */
+               0x003F,    /* Question mark. */
+               0x0589,    /* Armenian full stop. */
+               0x061F,    /* Arabic question mark. */
+               0x06D4,    /* Arabic full stop. */
+               0x0964,    /* Devanagari danda. */
+               0x0965,    /* Devanagari double danda. */
+               0x104A,    /* Myanmar sign little section. */
+               0x104B,    /* Myanmar sign section. */
+               0x1362,    /* Ethiopic full stop. */
+               0x1367,    /* Ethiopic question mark. */
+               0x1368) || /* Ethiopic paragraph separator. */
+          ELEM(codepoint,
+               0x17D4,    /* Khmer sign khan. */
+               0x17D5,    /* Khmer sign bariyoosan. */
+               0x203C,    /* Double exclamation mark. */
+               0x203D,    /* Interrobang. */
+               0x2047,    /* Double question mark. */
+               0x2048,    /* Question exclamation mark. */
+               0x2049,    /* Exclamation question mark. */
+               0x3002,    /* Ideographic full stop. */
+               0xA9C8,    /* Javanese pada lingsa. */
+               0xA9C9,    /* Javanese pada lungsi. */
+               0xFE12,    /* Presentation form for vertical ideographic full stop. */
+               0xFE15,    /* Presentation form for vertical exclamation mark. */
+               0xFE16,    /* Presentation form for vertical question mark. */
+               0xFE56,    /* Small question mark. */
+               0xFE57,    /* Small exclamation mark. */
+               0xFF01) || /* Full-width exclamation mark. */
+          ELEM(codepoint,
+               0xFF1F,   /* Full-width question mark. */
+               0xFF61)); /* Half-width ideographic full stop. */
+}
+
 /** \} */ /* -------------------------------------------------------------------- */
 
 int BLI_str_utf8_size_or_error(const char *p)
@@ -1047,7 +1096,7 @@ uint BLI_str_utf8_as_unicode_or_error(const char *p)
 
   char mask = 0;
   const int len = utf8_char_compute_skip_or_error_with_mask(c, &mask);
-  if (UNLIKELY(len == -1)) {
+  if (len == -1) [[unlikely]] {
     return BLI_UTF8_ERR;
   }
   return utf8_char_decode(p, mask, len, BLI_UTF8_ERR);
@@ -1056,7 +1105,7 @@ uint BLI_str_utf8_as_unicode_or_error(const char *p)
 uint BLI_str_utf8_as_unicode_safe(const char *p)
 {
   const uint result = BLI_str_utf8_as_unicode_or_error(p);
-  if (UNLIKELY(result == BLI_UTF8_ERR)) {
+  if (result == BLI_UTF8_ERR) [[unlikely]] {
     return *p;
   }
   return result;
@@ -1078,7 +1127,7 @@ uint BLI_str_utf8_as_unicode_step_or_error(const char *__restrict p,
   }
 
   const uint result = utf8_char_decode(p, mask, len, BLI_UTF8_ERR);
-  if (UNLIKELY(result == BLI_UTF8_ERR)) {
+  if (result == BLI_UTF8_ERR) [[unlikely]] {
     return BLI_UTF8_ERR;
   }
   *index += size_t(len);
@@ -1091,7 +1140,7 @@ uint BLI_str_utf8_as_unicode_step_safe(const char *__restrict p,
                                        size_t *__restrict index)
 {
   uint result = BLI_str_utf8_as_unicode_step_or_error(p, p_len, index);
-  if (UNLIKELY(result == BLI_UTF8_ERR)) {
+  if (result == BLI_UTF8_ERR) [[unlikely]] {
     result = uint(p[*index]);
     *index += 1;
   }
@@ -1151,7 +1200,7 @@ size_t BLI_str_utf8_from_unicode(uint c, char *dst, const size_t dst_maxncpy)
 
   UTF8_VARS_FROM_CHAR32(c, first, len);
 
-  if (UNLIKELY(dst_maxncpy < len)) {
+  if (dst_maxncpy < len) [[unlikely]] {
     /* Null terminate instead of writing a partial byte. */
     memset(dst, 0x0, dst_maxncpy);
     return dst_maxncpy;
@@ -1248,7 +1297,7 @@ const char *BLI_str_find_prev_char_utf8(const char *p, const char *str_start)
   if (str_start < p) {
     for (--p; p >= str_start; p--) {
       if ((*p & 0xc0) != 0x80) {
-        return (char *)p;
+        return const_cast<char *>(p);
       }
     }
   }
@@ -1299,16 +1348,17 @@ size_t BLI_str_partition_ex_utf8(const char *str,
   /* Note that here, we assume end points to a valid UTF8 char! */
   BLI_assert((end >= str) && (BLI_str_utf8_as_unicode_or_error(end) != BLI_UTF8_ERR));
 
-  char *suf = (char *)(str + str_len);
+  char *suf = const_cast<char *>(str + str_len);
   size_t index = 0;
-  for (char *sep = (char *)(from_right ? BLI_str_find_prev_char_utf8(end, str) : str);
+  for (char *sep = const_cast<char *>(from_right ? BLI_str_find_prev_char_utf8(end, str) : str);
        from_right ? (sep > str) : ((sep < end) && (*sep != '\0'));
-       sep = (char *)(from_right ? (str != sep ? BLI_str_find_prev_char_utf8(sep, str) : nullptr) :
-                                   str + index))
+       sep = const_cast<char *>(
+           from_right ? (str != sep ? BLI_str_find_prev_char_utf8(sep, str) : nullptr) :
+                        str + index))
   {
     size_t index_ofs = 0;
     const uint c = BLI_str_utf8_as_unicode_step_or_error(sep, size_t(end - sep), &index_ofs);
-    if (UNLIKELY(c == BLI_UTF8_ERR)) {
+    if (c == BLI_UTF8_ERR) [[unlikely]] {
       break;
     }
     index += index_ofs;
@@ -1317,7 +1367,7 @@ size_t BLI_str_partition_ex_utf8(const char *str,
       if (*d == c) {
         /* `suf` is already correct in case from_right is true. */
         *r_sep = sep;
-        *r_suf = from_right ? suf : (char *)(str + index);
+        *r_suf = from_right ? suf : const_cast<char *>(str + index);
         return size_t(sep - str);
       }
     }
@@ -1466,3 +1516,5 @@ int BLI_str_utf8_column_count(const char *str, size_t str_len)
 }
 
 /** \} */
+
+}  // namespace blender

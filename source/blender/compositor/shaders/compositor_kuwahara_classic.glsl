@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/compositor_kuwahara_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_kuwahara_classic_convolution_variable_size)
+
 #include "gpu_shader_compositor_summed_area_table_lib.glsl"
 #include "gpu_shader_compositor_texture_utilities.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 void main()
 {
@@ -16,10 +20,9 @@ void main()
   int radius = max(0, size);
 #endif
 
-  float4 mean_of_squared_color_of_quadrants[4] = float4_array(
-      float4(0.0f), float4(0.0f), float4(0.0f), float4(0.0f));
-  float4 mean_of_color_of_quadrants[4] = float4_array(
-      float4(0.0f), float4(0.0f), float4(0.0f), float4(0.0f));
+  float4 mean_of_squared_color_of_quadrants[4] = {
+      float4(0.0f), float4(0.0f), float4(0.0f), float4(0.0f)};
+  float4 mean_of_color_of_quadrants[4] = {float4(0.0f), float4(0.0f), float4(0.0f), float4(0.0f)};
 
   /* Compute the above statistics for each of the quadrants around the current pixel. */
   for (int q = 0; q < 4; q++) {

@@ -205,7 +205,7 @@ def point_cache_ui(self, cache, enabled, cachetype):
         col.active = can_bake
 
         if is_liboverride and not cache.use_disk_cache:
-            col.operator("ptcache.bake", icon='ERROR', text="Bake (Disk Cache mandatory)")
+            col.operator("ptcache.bake", icon='STATUS_ERROR', text="Bake (Disk Cache mandatory)")
         elif cache.is_baked is True:
             col.operator("ptcache.free_bake", text="Delete Bake")
         else:
@@ -220,7 +220,7 @@ def point_cache_ui(self, cache, enabled, cachetype):
         sub.operator("ptcache.bake_from_cache", text="Current Cache to Bake")
 
         col = flow.column()
-        col.operator("ptcache.bake_all", text="Bake All Dynamics").bake = True
+        col.operator("ptcache.bake_all", text="Bake All Physics").bake = True
         col.operator("ptcache.free_bake_all", text="Delete All Bakes")
         col.operator("ptcache.bake_all", text="Update All to Frame").bake = False
 

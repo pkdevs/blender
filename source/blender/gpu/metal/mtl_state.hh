@@ -9,7 +9,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "GPU_state.hh"
 #include "gpu_state_private.hh"
@@ -53,8 +53,6 @@ class MTLStateManager : public StateManager {
   void image_unbind(Texture *tex) override;
   void image_unbind_all() override;
 
-  void texture_unpack_row_length_set(uint len) override;
-
   /* Global pipeline descriptors. */
   MTLRenderPipelineStateDescriptor &get_pipeline_descriptor()
   {
@@ -67,11 +65,10 @@ class MTLStateManager : public StateManager {
   void set_stencil_test(const GPUStencilTest test, const GPUStencilOp operation);
   void set_stencil_mask(const GPUStencilTest test, const GPUStateMutable &state);
   void set_clip_distances(const int new_dist_len, const int old_dist_len);
-  void set_logic_op(const bool enable);
+
   void set_facing(const bool invert);
   void set_backface_culling(const GPUFaceCullTest test);
   void set_provoking_vert(const GPUProvokingVertex vert);
-  void set_shadow_bias(const bool enable);
   void set_blend(const GPUBlend value);
 
   void set_state(const GPUState &state);
@@ -79,7 +76,6 @@ class MTLStateManager : public StateManager {
 
   /* METAL State utility functions. */
   void mtl_state_init();
-  void mtl_depth_range(float near, float far);
   void mtl_stencil_mask(uint mask);
   void mtl_stencil_set_func(GPUStencilTest stencil_func, int ref, uint mask);
   void mtl_clip_plane_enable(uint i);
@@ -99,7 +95,7 @@ class MTLFence : public Fence {
   uint64_t last_signalled_value_ = 0;
 
  public:
-  MTLFence() : Fence(){};
+  MTLFence() : Fence() {};
   ~MTLFence() override;
 
   void signal() override;

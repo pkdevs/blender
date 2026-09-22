@@ -13,7 +13,7 @@
 #include <cstring>
 #include <deque>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_anim_types.h"
 
@@ -87,26 +87,28 @@ OperationKey DriverDescriptor::depsgraph_key() const
   return OperationKey(id_ptr_->owner_id,
                       NodeType::PARAMETERS,
                       OperationCode::DRIVER,
-                      fcu_->rna_path,
+                      fcu_->rna_path().c_str(),
                       fcu_->array_index);
 }
 
 void DriverDescriptor::split_rna_path()
 {
-  const char *last_dot = strrchr(fcu_->rna_path, '.');
+  const StringRefNull rna_path = fcu_->rna_path();
+  const char *last_dot = strrchr(rna_path.c_str(), '.');
   if (last_dot == nullptr || last_dot[1] == '\0') {
     rna_prefix = StringRef();
-    rna_suffix = StringRef(fcu_->rna_path);
+    rna_suffix = rna_path;
     return;
   }
 
-  rna_prefix = StringRef(fcu_->rna_path, last_dot);
+  rna_prefix = StringRef(rna_path.c_str(), last_dot);
   rna_suffix = StringRef(last_dot + 1);
 }
 
 bool DriverDescriptor::resolve_rna()
 {
-  return RNA_path_resolve_property(id_ptr_, fcu_->rna_path, &pointer_rna_, &property_rna_);
+  return RNA_path_resolve_property(
+      id_ptr_, fcu_->rna_path().c_str(), &pointer_rna_, &property_rna_);
 }
 
 static bool is_reachable(const Node *const from, const Node *const to)
@@ -172,12 +174,12 @@ void DepsgraphRelationBuilder::build_driver_relations(IDNode *id_node)
 
   PointerRNA id_ptr = RNA_id_pointer_create(id_orig);
 
-  LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
-    if (fcu->rna_path == nullptr) {
+  for (FCurve &fcu : adt->drivers) {
+    if (fcu.rna_path().is_empty()) {
       continue;
     }
 
-    DriverDescriptor driver_desc(&id_ptr, fcu);
+    DriverDescriptor driver_desc(&id_ptr, &fcu);
     if (!driver_desc.driver_relations_needed()) {
       continue;
     }

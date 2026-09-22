@@ -8,11 +8,13 @@
  * Fill in geometry with the attributes of their adjacent data.
  */
 
-#include "BLI_linklist_stack.h"
+#include "BLI_linklist_stack.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 /**
  * Check if all other loops are tagged.
@@ -154,3 +156,5 @@ void bmo_face_attribute_fill_exec(BMesh *bm, BMOperator *op)
         bm, op, op->slots_out, "faces_fail.out", BM_FACE, BM_ELEM_TAG);
   }
 }
+
+}  // namespace blender

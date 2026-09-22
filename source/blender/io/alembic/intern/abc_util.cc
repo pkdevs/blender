@@ -20,55 +20,22 @@
 
 #include <algorithm>
 
-#include "DNA_object_types.h"
-
-#include "BLI_time.h"
+namespace blender {
 
 using Alembic::Abc::IV3fArrayProperty;
 using Alembic::Abc::PropertyHeader;
 using Alembic::Abc::V3fArraySamplePtr;
 
-namespace blender::io::alembic {
-
-std::string get_id_name(const Object *const ob)
-{
-  if (!ob) {
-    return "";
-  }
-
-  return get_id_name(&ob->id);
-}
-
-std::string get_id_name(const ID *const id)
-{
-  return get_valid_abc_name(id->name + 2);
-}
+namespace io::alembic {
 
 std::string get_valid_abc_name(const char *name)
 {
-  std::string name_string(name);
-  std::replace(name_string.begin(), name_string.end(), ' ', '_');
-  std::replace(name_string.begin(), name_string.end(), '.', '_');
-  std::replace(name_string.begin(), name_string.end(), ':', '_');
-  return name_string;
-}
-
-std::string get_object_dag_path_name(const Object *const ob, Object *dupli_parent)
-{
-  std::string name = get_id_name(ob);
-
-  Object *p = ob->parent;
-
-  while (p) {
-    name = get_id_name(p) + "/" + name;
-    p = p->parent;
-  }
-
-  if (dupli_parent && (ob != dupli_parent)) {
-    name = get_id_name(dupli_parent) + "/" + name;
-  }
-
-  return name;
+  std::string abc_name(name);
+  std::replace(abc_name.begin(), abc_name.end(), ' ', '_');
+  std::replace(abc_name.begin(), abc_name.end(), '.', '_');
+  std::replace(abc_name.begin(), abc_name.end(), ':', '_');
+  std::replace(abc_name.begin(), abc_name.end(), '/', '_');
+  return abc_name;
 }
 
 Imath::M44d convert_matrix_datatype(const float mat[4][4])
@@ -187,20 +154,20 @@ std::optional<SampleInterpolationSettings> get_sample_interpolation_settings(
 
 // #define USE_NURBS
 
-AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSettings &settings)
+AbcObjectReader *create_reader(const AbcReaderConstructorArgs &args)
 {
   AbcObjectReader *reader = nullptr;
 
-  const Alembic::AbcGeom::MetaData &md = object.getMetaData();
+  const Alembic::AbcGeom::MetaData &md = args.object.getMetaData();
 
   if (Alembic::AbcGeom::IXform::matches(md)) {
-    reader = new AbcEmptyReader(object, settings);
+    reader = new AbcEmptyReader(args);
   }
   else if (Alembic::AbcGeom::IPolyMesh::matches(md)) {
-    reader = new AbcMeshReader(object, settings);
+    reader = new AbcMeshReader(args);
   }
   else if (Alembic::AbcGeom::ISubD::matches(md)) {
-    reader = new AbcSubDReader(object, settings);
+    reader = new AbcSubDReader(args);
   }
   else if (Alembic::AbcGeom::INuPatch::matches(md)) {
 #ifdef USE_NURBS
@@ -210,14 +177,14 @@ AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSe
      * Blender. Need to figure out exactly how these points are
      * duplicated, in all cases (cyclic U, cyclic V, and cyclic UV).
      * Until this is fixed, disabling NURBS reading. */
-    reader = new AbcNurbsReader(child, settings);
+    reader = new AbcNurbsReader(args);
 #endif
   }
   else if (Alembic::AbcGeom::ICamera::matches(md)) {
-    reader = new AbcCameraReader(object, settings);
+    reader = new AbcCameraReader(args);
   }
   else if (Alembic::AbcGeom::IPoints::matches(md)) {
-    reader = new AbcPointsReader(object, settings);
+    reader = new AbcPointsReader(args);
   }
   else if (Alembic::AbcMaterial::IMaterial::matches(md)) {
     /* Pass for now. */
@@ -229,49 +196,15 @@ AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSe
     /* Pass, those are handled in the mesh reader. */
   }
   else if (Alembic::AbcGeom::ICurves::matches(md)) {
-    reader = new AbcCurveReader(object, settings);
+    reader = new AbcCurveReader(args);
   }
   else {
     std::cerr << "Alembic: unknown how to handle objects of schema '" << md.get("schemaObjTitle")
-              << "', skipping object '" << object.getFullName() << "'" << std::endl;
+              << "', skipping object '" << args.object.getFullName() << "'" << std::endl;
   }
 
   return reader;
 }
 
-/* ********************** */
-
-ScopeTimer::ScopeTimer(const char *message) : m_message(message), m_start(BLI_time_now_seconds())
-{
-}
-
-ScopeTimer::~ScopeTimer()
-{
-  fprintf(stderr, "%s: %fs\n", m_message, BLI_time_now_seconds() - m_start);
-}
-
-/* ********************** */
-
-std::string SimpleLogger::str() const
-{
-  return m_stream.str();
-}
-
-void SimpleLogger::clear()
-{
-  m_stream.clear();
-  m_stream.str("");
-}
-
-std::ostringstream &SimpleLogger::stream()
-{
-  return m_stream;
-}
-
-std::ostream &operator<<(std::ostream &os, const SimpleLogger &logger)
-{
-  os << logger.str();
-  return os;
-}
-
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

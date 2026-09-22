@@ -2,6 +2,16 @@
 - Mesh 'Cube' vtx:8 face:6 loop:24 edge:12
     - 0 1 3 2 2 ... 0 7 3 1 5 
     - 0/1 1/3 2/3 0/2 3/7 ... 5/7 4/5 4/6 1/5 0/4 
+  - attr 'custom_normal' INT16_2D CORNER
+    - (0, 0)
+    - (0, 0)
+    - (0, 0)
+      ...
+    - (0, 0)
+    - (0, 0)
+    - (0, 0)
+  - attr 'material_index' INT FACE
+    - 0 0 0 0 0 0 
   - attr 'position' FLOAT_VECTOR POINT
     - (-1.000, -1.000, -1.000)
     - (-1.000, -1.000, 1.000)
@@ -12,8 +22,12 @@
     - (1.000, 1.000, 1.000)
   - attr 'sharp_edge' BOOLEAN EDGE
     - 1 1 1 1 1 ... 1 1 1 1 1 
-  - attr 'material_index' INT FACE
-    - 0 0 0 0 0 0 
+  - 1 materials
+    - 'Shared_Material' 
+
+- Mesh 'Sphere' vtx:482 face:512 loop:1984 edge:992
+    - 476 475 8 9 469 ... 475 453 452 467 468 
+    - 475/476 8/475 8/9 9/476 468/469 ... 465/480 458/473 466/481 459/474 452/467 
   - attr 'custom_normal' INT16_2D CORNER
     - (0, 0)
     - (0, 0)
@@ -22,12 +36,8 @@
     - (0, 0)
     - (0, 0)
     - (0, 0)
-  - 1 materials
-    - 'Shared_Material' 
-
-- Mesh 'Sphere' vtx:482 face:512 loop:1984 edge:992
-    - 476 475 8 9 469 ... 475 453 452 467 468 
-    - 475/476 8/475 8/9 9/476 468/469 ... 465/480 458/473 466/481 459/474 452/467 
+  - attr 'material_index' INT FACE
+    - 0 0 0 0 0 ... 0 0 0 0 0 
   - attr 'position' FLOAT_VECTOR POINT
     - (0.038, 0.191, 0.981)
     - (0.075, 0.375, 0.924)
@@ -38,8 +48,12 @@
     - (0.000, 0.195, -0.981)
   - attr 'sharp_edge' BOOLEAN EDGE
     - 0 0 0 0 0 ... 0 0 0 0 0 
-  - attr 'material_index' INT FACE
-    - 0 0 0 0 0 ... 0 0 0 0 0 
+  - 1 materials
+    - 'Shared_Material' 
+
+- Mesh 'Tetrahedron' vtx:4 face:4 loop:12 edge:6
+    - 0 2 1 1 2 ... 2 0 0 1 3 
+    - 0/2 1/2 0/1 2/3 1/3 0/3 
   - attr 'custom_normal' INT16_2D CORNER
     - (0, 0)
     - (0, 0)
@@ -48,12 +62,8 @@
     - (0, 0)
     - (0, 0)
     - (0, 0)
-  - 1 materials
-    - 'Shared_Material' 
-
-- Mesh 'Tetrahedron' vtx:4 face:4 loop:12 edge:6
-    - 0 2 1 1 2 ... 2 0 0 1 3 
-    - 0/2 1/2 0/1 2/3 1/3 0/3 
+  - attr 'material_index' INT FACE
+    - 0 0 0 0 
   - attr 'position' FLOAT_VECTOR POINT
     - (0.000, 1.118, -1.000)
     - (1.000, -0.500, -1.000)
@@ -61,16 +71,6 @@
     - (-1.000, -0.500, -1.000)
   - attr 'sharp_edge' BOOLEAN EDGE
     - 1 1 1 1 1 1 
-  - attr 'material_index' INT FACE
-    - 0 0 0 0 
-  - attr 'custom_normal' INT16_2D CORNER
-    - (0, 0)
-    - (0, 0)
-    - (0, 0)
-      ...
-    - (0, 0)
-    - (0, 0)
-    - (0, 0)
   - 1 materials
     - 'Shared_Material' 
 
@@ -210,33 +210,78 @@
     - (1.000, 35.000) lh:(-39.000, 35.000 AUTO_CLAMPED) rh:(41.000, 35.000 AUTO_CLAMPED)
     - (121.000, 35.000) lh:(81.000, 35.000 AUTO_CLAMPED) rh:(161.000, 35.000 AUTO_CLAMPED)
  - Channelbag slot 'OBCube' curves:9
-  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 4.000) lh:(-39.000, 4.000 AUTO_CLAMPED) rh:(41.000, 4.000 AUTO_CLAMPED)
-    - (121.000, 4.000) lh:(81.000, 4.000 AUTO_CLAMPED) rh:(161.000, 4.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Cube'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
+  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 4.000) lh:(0.667, 4.000 AUTO_CLAMPED) rh:(1.333, 4.000 AUTO_CLAMPED)
+    - (2.000, 4.000) lh:(1.667, 4.000 AUTO_CLAMPED) rh:(2.333, 4.000 AUTO_CLAMPED)
+    - (3.000, 4.000) lh:(2.667, 4.000 AUTO_CLAMPED) rh:(3.333, 4.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 4.000) lh:(118.667, 4.000 AUTO_CLAMPED) rh:(119.333, 4.000 AUTO_CLAMPED)
+    - (120.000, 4.000) lh:(119.667, 4.000 AUTO_CLAMPED) rh:(120.333, 4.000 AUTO_CLAMPED)
+    - (121.000, 4.000) lh:(120.667, 4.000 AUTO_CLAMPED) rh:(121.333, 4.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.052) lh:(1.667, 0.030 AUTO_CLAMPED) rh:(2.333, 0.074 AUTO_CLAMPED)
+    - (3.000, 0.105) lh:(2.667, 0.089 AUTO_CLAMPED) rh:(3.333, 0.121 AUTO_CLAMPED)
+      ...
+    - (119.000, -0.105) lh:(118.667, -0.121 AUTO_CLAMPED) rh:(119.333, -0.089 AUTO_CLAMPED)
+    - (120.000, -0.052) lh:(119.667, -0.074 AUTO_CLAMPED) rh:(120.333, -0.030 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Cube'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
 
 - Action 'Cube|SphereAction' curverange:(1.0 .. 121.0) layers:1
 - ActionLayer Layer strips:1
@@ -417,33 +462,78 @@
     - (1.000, 35.000) lh:(-39.000, 35.000 AUTO_CLAMPED) rh:(41.000, 35.000 AUTO_CLAMPED)
     - (121.000, 35.000) lh:(81.000, 35.000 AUTO_CLAMPED) rh:(161.000, 35.000 AUTO_CLAMPED)
  - Channelbag slot 'OBSphere' curves:9
-  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Sphere'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
+  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.052) lh:(1.667, 0.030 AUTO_CLAMPED) rh:(2.333, 0.074 AUTO_CLAMPED)
+    - (3.000, 0.105) lh:(2.667, 0.089 AUTO_CLAMPED) rh:(3.333, 0.121 AUTO_CLAMPED)
+      ...
+    - (119.000, -0.105) lh:(118.667, -0.121 AUTO_CLAMPED) rh:(119.333, -0.089 AUTO_CLAMPED)
+    - (120.000, -0.052) lh:(119.667, -0.074 AUTO_CLAMPED) rh:(120.333, -0.030 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Sphere'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
 
 - Action 'Sphere|SphereAction' curverange:(1.0 .. 121.0) layers:1
 - ActionLayer Layer strips:1
@@ -624,33 +714,78 @@
     - (1.000, 35.000) lh:(-39.000, 35.000 AUTO_CLAMPED) rh:(41.000, 35.000 AUTO_CLAMPED)
     - (121.000, 35.000) lh:(81.000, 35.000 AUTO_CLAMPED) rh:(161.000, 35.000 AUTO_CLAMPED)
  - Channelbag slot 'OBTetrahedron' curves:9
-  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 4.000) lh:(-39.000, 4.000 AUTO_CLAMPED) rh:(41.000, 4.000 AUTO_CLAMPED)
-    - (121.000, 4.000) lh:(81.000, 4.000 AUTO_CLAMPED) rh:(161.000, 4.000 AUTO_CLAMPED)
-  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 0.000) lh:(-39.000, 0.000 AUTO_CLAMPED) rh:(41.000, 0.000 AUTO_CLAMPED)
-    - (121.000, 0.000) lh:(81.000, 0.000 AUTO_CLAMPED) rh:(161.000, 0.000 AUTO_CLAMPED)
-  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
-  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:2 grp:'Tetrahedron'
-    - (1.000, 1.000) lh:(-39.000, 1.000 AUTO_CLAMPED) rh:(41.000, 1.000 AUTO_CLAMPED)
-    - (121.000, 1.000) lh:(81.000, 1.000 AUTO_CLAMPED) rh:(161.000, 1.000 AUTO_CLAMPED)
+  - fcu 'location[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'location[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 4.000) lh:(0.667, 4.000 AUTO_CLAMPED) rh:(1.333, 4.000 AUTO_CLAMPED)
+    - (2.000, 4.000) lh:(1.667, 4.000 AUTO_CLAMPED) rh:(2.333, 4.000 AUTO_CLAMPED)
+    - (3.000, 4.000) lh:(2.667, 4.000 AUTO_CLAMPED) rh:(3.333, 4.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 4.000) lh:(118.667, 4.000 AUTO_CLAMPED) rh:(119.333, 4.000 AUTO_CLAMPED)
+    - (120.000, 4.000) lh:(119.667, 4.000 AUTO_CLAMPED) rh:(120.333, 4.000 AUTO_CLAMPED)
+    - (121.000, 4.000) lh:(120.667, 4.000 AUTO_CLAMPED) rh:(121.333, 4.000 AUTO_CLAMPED)
+  - fcu 'location[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.000) lh:(1.667, 0.000 AUTO_CLAMPED) rh:(2.333, 0.000 AUTO_CLAMPED)
+    - (3.000, 0.000) lh:(2.667, 0.000 AUTO_CLAMPED) rh:(3.333, 0.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 0.000) lh:(118.667, 0.000 AUTO_CLAMPED) rh:(119.333, 0.000 AUTO_CLAMPED)
+    - (120.000, 0.000) lh:(119.667, 0.000 AUTO_CLAMPED) rh:(120.333, 0.000 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'rotation_euler[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 0.000) lh:(0.667, 0.000 AUTO_CLAMPED) rh:(1.333, 0.000 AUTO_CLAMPED)
+    - (2.000, 0.052) lh:(1.667, 0.030 AUTO_CLAMPED) rh:(2.333, 0.074 AUTO_CLAMPED)
+    - (3.000, 0.105) lh:(2.667, 0.089 AUTO_CLAMPED) rh:(3.333, 0.121 AUTO_CLAMPED)
+      ...
+    - (119.000, -0.105) lh:(118.667, -0.121 AUTO_CLAMPED) rh:(119.333, -0.089 AUTO_CLAMPED)
+    - (120.000, -0.052) lh:(119.667, -0.074 AUTO_CLAMPED) rh:(120.333, -0.030 AUTO_CLAMPED)
+    - (121.000, 0.000) lh:(120.667, 0.000 AUTO_CLAMPED) rh:(121.333, 0.000 AUTO_CLAMPED)
+  - fcu 'scale[0]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[1]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
+  - fcu 'scale[2]' smooth:CONT_ACCEL extra:CONSTANT keyframes:121 grp:'Tetrahedron'
+    - (1.000, 1.000) lh:(0.667, 1.000 AUTO_CLAMPED) rh:(1.333, 1.000 AUTO_CLAMPED)
+    - (2.000, 1.000) lh:(1.667, 1.000 AUTO_CLAMPED) rh:(2.333, 1.000 AUTO_CLAMPED)
+    - (3.000, 1.000) lh:(2.667, 1.000 AUTO_CLAMPED) rh:(3.333, 1.000 AUTO_CLAMPED)
+      ...
+    - (119.000, 1.000) lh:(118.667, 1.000 AUTO_CLAMPED) rh:(119.333, 1.000 AUTO_CLAMPED)
+    - (120.000, 1.000) lh:(119.667, 1.000 AUTO_CLAMPED) rh:(120.333, 1.000 AUTO_CLAMPED)
+    - (121.000, 1.000) lh:(120.667, 1.000 AUTO_CLAMPED) rh:(121.333, 1.000 AUTO_CLAMPED)
 
 - Action 'Tetrahedron|SphereAction' curverange:(1.0 .. 121.0) layers:1
 - ActionLayer Layer strips:1

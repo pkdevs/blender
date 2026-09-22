@@ -9,12 +9,6 @@ __all__ = (
     "main",
 )
 
-import sys
-if sys.version_info.major < 3:
-    print("\nPython3.x needed, found %s.\nAborting!\n" %
-          sys.version.partition(" ")[0])
-    sys.exit(1)
-
 import os
 from os.path import (
     dirname,
@@ -225,7 +219,7 @@ def cmake_get_src(f: str) -> None:
                 l = l.replace("${CMAKE_CURRENT_BINARY_DIR}", cmake_base_bin)
                 l = l.strip('"')
                 # For library lists.
-                for known_prefix in ("PUBLIC ", "PRIVATE "):
+                for known_prefix in ("PUBLIC ", "PRIVATE ", "INTERFACE "):
                     l = l.removeprefix(known_prefix).lstrip()
 
                 if not l:

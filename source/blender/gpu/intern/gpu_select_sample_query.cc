@@ -16,9 +16,9 @@
 #include "GPU_select.hh"
 #include "GPU_state.hh"
 
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "gpu_backend.hh"
@@ -26,7 +26,8 @@
 
 #include "gpu_select_private.hh"
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu;
 
 struct GPUSelectQueryState {
@@ -178,3 +179,5 @@ uint gpu_select_query_end()
 
   return hits;
 }
+
+}  // namespace blender

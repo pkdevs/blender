@@ -8,6 +8,9 @@
 
 namespace blender::ocio {
 
+class ColorSpace;
+struct ScopeInfo;
+
 enum class Gamut {
   Unknown,
   Rec709,  /* sRGB primaries + D65 white point. */
@@ -44,9 +47,19 @@ class View {
   virtual StringRefNull name() const = 0;
 
   /**
+   * Description of the view from the OpenColorIO config.
+   */
+  virtual StringRefNull description() const = 0;
+
+  /**
    * Does this view transform output HDR colors?
    */
   virtual bool is_hdr() const = 0;
+
+  /**
+   * Does this view transform support display emulation?
+   */
+  virtual bool support_emulation() const = 0;
 
   /**
    * Gamut of the display colorspace.
@@ -57,6 +70,21 @@ class View {
    * Transfer function of the display colorspace.
    */
   virtual TransferFunction transfer_function() const = 0;
+
+  /**
+   * Display colorspace that this view transform transforms into.
+   * Not guaranteed to be display referred.
+   */
+  virtual const ColorSpace *display_colorspace() const = 0;
+
+  /** Get scope display info for waveform/parade/vectorscope. */
+  virtual const ScopeInfo &scope_info() const = 0;
+
+  /** Max luminance of the view transform, or 0 if no maximum found. */
+  virtual int max_nits() const
+  {
+    return 0;
+  }
 };
 
 }  // namespace blender::ocio

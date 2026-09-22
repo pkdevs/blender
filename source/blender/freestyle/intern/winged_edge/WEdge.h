@@ -18,7 +18,7 @@
 
 #include "../system/FreestyleConfig.h"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -347,7 +347,7 @@ class WOEdge {
     userdata = nullptr;
   }
 
-  virtual ~WOEdge(){};  // soc
+  virtual ~WOEdge() {};  // soc
 
   /** copy constructor */
   WOEdge(WOEdge &iBrother);

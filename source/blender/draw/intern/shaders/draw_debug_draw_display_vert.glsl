@@ -2,11 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * Display debug edge list.
  */
 
-#include "draw_debug_info.hh"
+#include "draw_debug_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(draw_debug_draw_display)
 

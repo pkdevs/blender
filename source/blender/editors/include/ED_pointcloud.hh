@@ -18,6 +18,8 @@
 
 #include "DNA_windowmanager_enums.h"
 
+namespace blender {
+
 struct ARegion;
 struct bContext;
 struct PointCloud;
@@ -26,16 +28,14 @@ struct UndoType;
 struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
-namespace blender::bke {
+namespace bke {
 enum class AttrType : int16_t;
 struct GSpanAttributeWriter;
-}  // namespace blender::bke
-namespace blender {
+}  // namespace bke
 class GMutableSpan;
-}  // namespace blender
 enum eSelectOp : int8_t;
 
-namespace blender::ed::pointcloud {
+namespace ed::pointcloud {
 
 void operatortypes_pointcloud();
 void operatormacros_pointcloud();
@@ -57,7 +57,7 @@ VectorSet<PointCloud *> get_unique_editable_pointclouds(const bContext &C);
  * helpful utilities on top of that.
  * \{ */
 
-void fill_selection_true(GMutableSpan span);
+void fill_selection_true(GMutableSpan selection);
 void fill_selection_false(GMutableSpan selection, const IndexMask &mask);
 void fill_selection_true(GMutableSpan selection, const IndexMask &mask);
 
@@ -150,4 +150,5 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op);
 
 /** \} */
 
-}  // namespace blender::ed::pointcloud
+}  // namespace ed::pointcloud
+}  // namespace blender

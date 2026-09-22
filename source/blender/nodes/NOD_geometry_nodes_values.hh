@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BKE_geometry_set.hh"
@@ -23,15 +27,15 @@
 #include "NOD_geometry_nodes_list_fwd.hh"
 
 namespace blender {
+
 namespace bke {
 class SocketValueVariant;
 }
 namespace nodes {
 struct GeoNodesUserData;
 }
-}  // namespace blender
 
-namespace blender::nodes {
+namespace nodes {
 
 template<typename T> struct GeoNodesMultiInput {
   using value_type = T;
@@ -47,10 +51,33 @@ template<typename T> constexpr bool is_GeoNodesMultiInput_v<GeoNodesMultiInput<T
 [[nodiscard]] bool execute_multi_function_on_value_variant(
     const mf::MultiFunction &fn,
     const std::shared_ptr<mf::MultiFunction> &owned_fn,
+    Span<bke::SocketValueVariant *> input_values,
+    Span<bke::SocketValueVariant *> output_values,
+    GeoNodesUserData *user_data,
+    std::string &r_error_message);
+
+[[nodiscard]] inline bool execute_multi_function_on_value_variant(
+    const std::shared_ptr<mf::MultiFunction> &owned_fn,
     const Span<bke::SocketValueVariant *> input_values,
     const Span<bke::SocketValueVariant *> output_values,
     GeoNodesUserData *user_data,
-    std::string &r_error_message);
+    std::string &r_error_message)
+{
+  const mf::MultiFunction &fn = *owned_fn;
+  return execute_multi_function_on_value_variant(
+      fn, std::move(owned_fn), input_values, output_values, user_data, r_error_message);
+}
+
+[[nodiscard]] inline bool execute_multi_function_on_value_variant(
+    const mf::MultiFunction &fn,
+    const Span<bke::SocketValueVariant *> input_values,
+    const Span<bke::SocketValueVariant *> output_values,
+    GeoNodesUserData *user_data,
+    std::string &r_error_message)
+{
+  return execute_multi_function_on_value_variant(
+      fn, {}, input_values, output_values, user_data, r_error_message);
+}
 
 /**
  * Performs implicit conversion between socket types. Returns false if the conversion is not
@@ -70,4 +97,5 @@ const fn::lazy_function::LazyFunction *build_implicit_conversion_lazy_function(
     const bke::bNodeSocketType &to_type,
     ResourceScope &scope);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

@@ -7,6 +7,7 @@
  */
 
 #include "DNA_collection_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_outliner_types.h"
 #include "DNA_scene_types.h"
 
@@ -22,6 +23,11 @@ TreeElementLayerCollection::TreeElementLayerCollection(TreeElement &legacy_te, L
   BLI_assert(legacy_te.store_elem->type == TSE_LAYER_COLLECTION);
   legacy_te.name = lc_.collection->id.name + 2;
   legacy_te.directdata = &lc_;
+}
+
+ID *TreeElementLayerCollection::owner_id(LayerCollection &lc)
+{
+  return &lc.collection->id;
 }
 
 }  // namespace blender::ed::outliner

@@ -14,6 +14,8 @@
 
 #include "DNA_linestyle_types.h"
 
+namespace blender {
+
 #define LS_MODIFIER_TYPE_COLOR 1
 #define LS_MODIFIER_TYPE_ALPHA 2
 #define LS_MODIFIER_TYPE_THICKNESS 3
@@ -31,16 +33,16 @@ FreestyleLineStyle *BKE_linestyle_active_from_view_layer(struct ViewLayer *view_
 
 LineStyleModifier *BKE_linestyle_color_modifier_add(FreestyleLineStyle *linestyle,
                                                     const char *name,
-                                                    int type);
+                                                    eLineStyleModifier_Type type);
 LineStyleModifier *BKE_linestyle_alpha_modifier_add(FreestyleLineStyle *linestyle,
                                                     const char *name,
-                                                    int type);
+                                                    eLineStyleModifier_Type type);
 LineStyleModifier *BKE_linestyle_thickness_modifier_add(FreestyleLineStyle *linestyle,
                                                         const char *name,
-                                                        int type);
+                                                        eLineStyleModifier_Type type);
 LineStyleModifier *BKE_linestyle_geometry_modifier_add(FreestyleLineStyle *linestyle,
                                                        const char *name,
-                                                       int type);
+                                                       eLineStyleModifier_Type type);
 
 LineStyleModifier *BKE_linestyle_color_modifier_copy(FreestyleLineStyle *linestyle,
                                                      const LineStyleModifier *m,
@@ -81,10 +83,13 @@ bool BKE_linestyle_geometry_modifier_move(FreestyleLineStyle *linestyle,
                                           LineStyleModifier *modifier,
                                           int direction);
 
-void BKE_linestyle_modifier_list_color_ramps(FreestyleLineStyle *linestyle, ListBase *listbase);
+void BKE_linestyle_modifier_list_color_ramps(FreestyleLineStyle *linestyle,
+                                             ListBaseT<LinkData> *listbase);
 std::optional<std::string> BKE_linestyle_path_to_color_ramp(FreestyleLineStyle *linestyle,
                                                             const struct ColorBand *color_ramp);
 
 bool BKE_linestyle_use_textures(FreestyleLineStyle *linestyle, bool use_shading_nodes);
 
 void BKE_linestyle_default_shader(const struct bContext *C, FreestyleLineStyle *linestyle);
+
+}  // namespace blender

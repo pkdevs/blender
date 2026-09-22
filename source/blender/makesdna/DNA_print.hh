@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup DNA
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -9,10 +13,12 @@
 
 #include "DNA_sdna_type_ids.hh"
 
+namespace blender {
+
 struct SDNA;
 struct SDNA_Struct;
 
-namespace blender::dna {
+namespace dna {
 
 /**
  * Print all members of the struct assuming that the data has the given address. This is mainly
@@ -37,7 +43,7 @@ void print_structs_at_address(const SDNA &sdna,
  */
 void print_struct_by_id(int struct_id, const void *data);
 
-}  // namespace blender::dna
+}  // namespace dna
 
 /**
  * Prints all members of the struct to stdout.
@@ -46,4 +52,6 @@ void print_struct_by_id(int struct_id, const void *data);
  *   DNA_print_struct(bNode, node);
  */
 #define DNA_print_struct(struct_name, data_ptr) \
-  blender::dna::print_struct_by_id(blender::dna::sdna_struct_id_get<struct_name>(), data_ptr)
+  dna::print_struct_by_id(dna::sdna_struct_id_get<struct_name>(), data_ptr)
+
+}  // namespace blender

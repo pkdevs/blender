@@ -12,7 +12,7 @@
 
 #include <algorithm>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 namespace blender {
@@ -20,7 +20,7 @@ namespace blender {
 /* -------------------------------------------------------------------- */
 /** \name Constexpr Utility Functions
  *
- * Those should eventually be de-duplicated with functions in BLI_math_base.h.
+ * Those should eventually be de-duplicated with functions in BLI_math_base_c.hh.
  * \{ */
 
 template<typename IntT> constexpr IntT ceil_division(const IntT x, const IntT y)
@@ -185,12 +185,12 @@ template<typename Key, Key EmptyValue, Key RemovedValue> struct TemplatedKeyInfo
 template<typename Pointer> struct PointerKeyInfo {
   static Pointer get_empty()
   {
-    return (Pointer)UINTPTR_MAX;
+    return Pointer(UINTPTR_MAX);
   }
 
   static void remove(Pointer &pointer)
   {
-    pointer = (Pointer)(UINTPTR_MAX - 1);
+    pointer = Pointer(UINTPTR_MAX - 1);
   }
 
   static bool is_empty(Pointer pointer)
@@ -266,9 +266,9 @@ class HashTableStats {
       total_collisions_ += collisions;
     }
 
-    average_collisions_ = (size_ == 0) ? 0 : (float)total_collisions_ / (float)size_;
-    load_factor_ = (float)size_ / (float)capacity_;
-    removed_load_factor_ = (float)removed_amount_ / (float)capacity_;
+    average_collisions_ = (size_ == 0) ? 0 : float(total_collisions_) / float(size_);
+    load_factor_ = float(size_) / float(capacity_);
+    removed_load_factor_ = float(removed_amount_) / float(capacity_);
   }
 
   void print(const char *name) const;

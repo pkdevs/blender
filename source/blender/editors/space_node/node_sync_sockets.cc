@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include <fmt/format.h>
 
 #include "DNA_node_types.h"
@@ -17,6 +21,8 @@
 #include "BKE_main_invariants.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
+
+#include "BLT_translation.hh"
 
 #include "ED_node.hh"
 #include "ED_screen.hh"
@@ -49,7 +55,7 @@ static Vector<bNode *> get_nodes_to_sync(bContext &C, PointerRNA *ptr)
       }
     }
     else {
-      if (!(node->flag & NODE_SELECT)) {
+      if (!node->is_selected()) {
         continue;
       }
     }
@@ -80,12 +86,12 @@ static std::string sockets_sync_get_description(bContext *C, wmOperatorType *ot,
 {
   Vector<bNode *> nodes_to_sync = get_nodes_to_sync(*C, ptr);
   if (nodes_to_sync.size() != 1) {
-    return ot->description;
+    return TIP_(ot->description);
   }
   const bNode &node = *nodes_to_sync.first();
   std::string description = nodes::sync_node_description_get(*C, node);
   if (description.empty()) {
-    return ot->description;
+    return TIP_(ot->description);
   }
   return description;
 }

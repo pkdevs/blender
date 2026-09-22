@@ -29,15 +29,17 @@ class CUDADevice : public GPUDevice {
   CUcontext cuContext;
   CUmodule cuModule;
   int pitch_alignment;
+  int max_shared_mem_bytes = 0;
   int cuDevId;
   int cuDevArchitecture;
   bool first_error;
+  int scene_max_shaders_ = 0;
 
   CUDADeviceKernels kernels;
 
   static bool have_precompiled_kernels();
 
-  BVHLayoutMask get_bvh_layout_mask(uint /*kernel_features*/) const override;
+  BVHLayoutMask get_bvh_layout_mask(uint64_t kernel_features) const override;
 
   void set_error(const string &error) override;
 
@@ -45,21 +47,18 @@ class CUDADevice : public GPUDevice {
 
   ~CUDADevice() override;
 
-  bool support_device(const uint /*kernel_features*/);
+  bool support_device(const uint64_t kernel_features);
 
   bool check_peer_access(Device *peer_device) override;
 
   bool use_adaptive_compilation();
 
-  string compile_kernel_get_common_cflags(const uint kernel_features);
+  string compile_kernel_get_common_cflags(uint64_t kernel_features);
 
-  string compile_kernel(const string &cflags,
-                        const char *name,
-                        const char *base = "cuda",
-                        bool force_ptx = false);
+  string compile_kernel(const string &cflags, const char *name, bool optix = false);
 
-  bool load_kernels(const uint kernel_features) override;
-  void reserve_local_memory(const uint kernel_features);
+  bool load_kernels(uint64_t kernel_features) override;
+  void reserve_local_memory(uint64_t kernel_features);
 
   /* All memory types. */
   void mem_alloc(device_memory &mem) override;
@@ -77,10 +76,10 @@ class CUDADevice : public GPUDevice {
   void global_copy_to(device_memory &mem);
   void global_free(device_memory &mem);
 
-  /* Texture memory. */
-  void tex_alloc(device_texture &mem);
-  void tex_copy_to(device_texture &mem);
-  void tex_free(device_texture &mem);
+  /* Image memory. */
+  void image_alloc(device_image &mem);
+  void image_copy_to(device_image &mem);
+  void image_free(device_image &mem);
 
   /* Device side memory. */
   void get_device_memory_info(size_t &total, size_t &free) override;

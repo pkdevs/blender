@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -15,10 +16,15 @@
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
 
+#include "DNA_curve_enums.h"
 #include "DNA_listBase.h"
 #include "DNA_windowmanager_enums.h"
 
 #include "DEG_depsgraph.hh"
+
+namespace blender {
+
+struct Depsgraph;
 
 /* -------------------------------------------------------------------- */
 /** \name Macros/
@@ -59,7 +65,6 @@
 
 struct ARegion;
 struct bConstraint;
-struct Depsgraph;
 struct NumInput;
 struct Object;
 struct RNG;
@@ -82,7 +87,7 @@ struct wmTimer;
 /** \name Enums and Flags
  * \{ */
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 struct TransSnap;
 struct TransConvertTypeInfo;
@@ -118,7 +123,7 @@ enum eTContext {
   /** Enable edge scrolling in 2D views. */
   CTX_VIEW2D_EDGE_PAN = (1 << 15),
 };
-ENUM_OPERATORS(eTContext, CTX_VIEW2D_EDGE_PAN)
+ENUM_OPERATORS(eTContext)
 
 /** #TransInfo.flag */
 enum eTFlag {
@@ -188,8 +193,17 @@ enum eTFlag {
 
   /** Transform origin. */
   T_ORIGIN = 1 << 27,
+
+  /**
+   * The view matrix is flipped (has a negative determinant),
+   * typically from a flipped camera view.
+   *
+   * In most cases there is no need for special handling however
+   * rotation is reversed for some input calculation, which need to account for this.
+   */
+  T_VIEW_NEGATIVE = 1 << 28,
 };
-ENUM_OPERATORS(eTFlag, T_ORIGIN);
+ENUM_OPERATORS(eTFlag);
 
 /** #TransInfo.modifiers */
 enum eTModifier {
@@ -204,7 +218,7 @@ enum eTModifier {
   MOD_NODE_FRAME = 1 << 8,
   MOD_STRIP_CLAMP_HOLDS = 1 << 9,
 };
-ENUM_OPERATORS(eTModifier, MOD_EDIT_SNAP_SOURCE)
+ENUM_OPERATORS(eTModifier)
 
 /** #TransSnap.status */
 enum eTSnap {
@@ -214,7 +228,7 @@ enum eTSnap {
   SNAP_TARGET_FOUND = 1 << 1,
   SNAP_MULTI_POINTS = 1 << 2,
 };
-ENUM_OPERATORS(eTSnap, SNAP_MULTI_POINTS)
+ENUM_OPERATORS(eTSnap)
 
 /** #TransSnap.direction */
 enum eSnapDir {
@@ -222,7 +236,7 @@ enum eSnapDir {
   DIR_GLOBAL_Y = (1 << 1),
   DIR_GLOBAL_Z = (1 << 2),
 };
-ENUM_OPERATORS(eSnapDir, DIR_GLOBAL_Z)
+ENUM_OPERATORS(eSnapDir)
 
 /** #TransCon.mode, #TransInfo.con.mode */
 enum eTConstraint {
@@ -235,7 +249,7 @@ enum eTConstraint {
   CON_SELECT = 1 << 4,
   CON_USER = 1 << 5,
 };
-ENUM_OPERATORS(eTConstraint, CON_USER)
+ENUM_OPERATORS(eTConstraint)
 
 /** #TransInfo.state */
 enum eTState {
@@ -251,7 +265,7 @@ enum eRedrawFlag {
   TREDRAW_SOFT = (1 << 0),
   TREDRAW_HARD = (1 << 1) | TREDRAW_SOFT,
 };
-ENUM_OPERATORS(eRedrawFlag, TREDRAW_HARD)
+ENUM_OPERATORS(eRedrawFlag)
 
 /** #TransInfo.helpline */
 enum eTHelpline {
@@ -471,6 +485,12 @@ struct TransDataExtension {
   int rotOrder;
   /** Original object transformation used for rigid bodies. */
   float oloc[3], orot[3], oquat[4], orotAxis[3], orotAngle;
+
+  /**
+   * Use when #TransDataBasic::center has been overridden but the real center is still needed
+   * for internal calculations.
+   */
+  float center_no_override[3];
 };
 
 struct TransData2D {
@@ -491,8 +511,8 @@ struct TransData2D {
  * Also to unset temporary flags.
  */
 struct TransDataCurveHandleFlags {
-  uint8_t ih1, ih2;
-  uint8_t *h1, *h2;
+  eBezTriple_Handle ih1, ih2;
+  eBezTriple_Handle *h1, *h2;
 };
 
 struct TransData : public TransDataBasic {
@@ -515,6 +535,8 @@ struct TransData : public TransDataBasic {
   /** If set, copy of Object or #bPoseChannel protection. */
   short protectflag;
 };
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Transform Types
@@ -546,7 +568,7 @@ struct TransSnap {
   /** To this point (in global-space). */
   float snap_target[3];
   float snapNormal[3];
-  ListBase points;
+  ListBaseT<TransSnapPoint> points;
   TransSnapPoint *selectedPoint;
   double last;
   void (*snap_target_fn)(TransInfo *, float *);
@@ -705,6 +727,9 @@ struct TransDataContainer {
    */
   bool use_local_mat;
 
+  /* True if the mirror modifier's clipping boundary has been hit. */
+  bool has_mirror_clipping;
+
   /** Mirror option. */
   union {
     struct {
@@ -726,7 +751,7 @@ struct TransDataContainer {
    * unselected items are then sorted by their "distance" for proportional editing.
    *
    * At the moment of writing, this map is only used in cases where `tc->data` has a mixture of
-   * selected and unselected items (as far as I, Sybren, know, just for proportial editing).
+   * selected and unselected items (as far as I, Sybren, know, just for proportional editing).
    * Without `tc->sorted_index_map`, all items in `tc->data` are expected to be selected.
    *
    * NOTE: this is set to `nullptr` by default; use one of the sorting functions below to
@@ -814,7 +839,7 @@ struct TransInfo {
   eTFlag flag;
   /** Special modifiers, by function, not key. */
   eTModifier modifiers;
-  /** Current state (running, canceled. */
+  /** Current state (running, canceled, ...). */
   eTState state;
   /** Redraw flag. */
   eRedrawFlag redraw;
@@ -943,12 +968,13 @@ struct TransInfo {
   ScrArea *area;
   ARegion *region;
   Depsgraph *depsgraph;
+  Main *bmain;
   Scene *scene;
   ViewLayer *view_layer;
   ToolSettings *settings;
   wmTimer *animtimer;
   /** Needed so we can perform a look up for header text. */
-  wmKeyMap *keymap;
+  const wmKeyMap *keymap;
   /** Assign from the operator, or can be NULL. */
   ReportList *reports;
   /** Current mouse position. */
@@ -1136,6 +1162,10 @@ void freeCustomNormalArray(TransInfo *t, TransDataContainer *tc, TransCustomData
 /* TODO: move to: `transform_query.c`. */
 bool checkUseAxisMatrix(TransInfo *t);
 
+/** Converts 2D mouse movement to a normalized 3D direction in world space. */
+std::optional<float3> mouse_delta_to_world_dir(const TransInfo *t, const float2 &delta);
+
 /** \} */
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

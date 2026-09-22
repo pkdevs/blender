@@ -186,7 +186,7 @@ class TestLibraryOverridesComplex(TestHelper):
 
         collection_sub = bpy.data.collections.new(self.__class__.DATA_NAME_SAMENAME_CONTAINER)
         collection_container.children.link(collection_sub)
-        # 'Samename' objects are purposedly not added to the collection here.
+        # 'Samename' objects are purposely not added to the collection here.
 
         # Sub-container collections are empty by default.
         collection_subcontainer_0 = bpy.data.collections.new(self.__class__.DATA_NAME_SUBCONTAINER_0)
@@ -920,9 +920,8 @@ def argparse_create():
     parser.add_argument(
         "--output-dir",
         dest="output_dir",
-        default=".",
         help="Where to output temp saved blendfiles",
-        required=False,
+        required=True,
     )
     parser.add_argument(
         "--test-dir",

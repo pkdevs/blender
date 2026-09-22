@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_edit_mode_info.hh"
+#include "infos/overlay_edit_mode_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_edit_lattice_wire)
 
@@ -22,9 +22,7 @@ float3 weight_to_rgb(float t)
     /* Error color */
     return float3(1.0f, 0.0f, 1.0f);
   }
-  else {
-    return texture(weight_tx, t).rgb;
-  }
+  return texture(weight_tx, t).rgb;
 }
 
 void main()

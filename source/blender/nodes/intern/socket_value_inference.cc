@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <regex>
 
 #include "NOD_menu_value.hh"
@@ -23,7 +27,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes {
@@ -40,6 +44,8 @@ class SocketValueInferencerImpl {
    */
   Map<SocketInContext, InferenceValue> all_socket_values_;
 
+  FunctionRef<InferenceValue(int group_input_i)> group_input_value_fn_;
+
   /**
    * All sockets that have animation data and thus their value is not fixed statically. This can
    * contain sockets from multiple different trees.
@@ -51,39 +57,21 @@ class SocketValueInferencerImpl {
   const bNodeTree &root_tree_;
 
  public:
-  SocketValueInferencerImpl(const bNodeTree &tree,
-                            ResourceScope &scope,
-                            bke::ComputeContextCache &compute_context_cache,
-                            const std::optional<Span<InferenceValue>> tree_input_values,
-                            const std::optional<Span<bool>> top_level_ignored_inputs)
+  SocketValueInferencerImpl(
+      const bNodeTree &tree,
+      ResourceScope &scope,
+      bke::ComputeContextCache &compute_context_cache,
+      const FunctionRef<InferenceValue(int group_input_i)> group_input_value_fn,
+      const std::optional<Span<bool>> top_level_ignored_inputs)
       : scope_(scope),
         compute_context_cache_(compute_context_cache),
+        group_input_value_fn_(group_input_value_fn),
         top_level_ignored_inputs_(top_level_ignored_inputs),
         root_tree_(tree)
   {
     root_tree_.ensure_topology_cache();
     root_tree_.ensure_interface_cache();
     this->ensure_animation_data_processed(root_tree_);
-
-    for (const bNode *node : root_tree_.group_input_nodes()) {
-      for (const int i : root_tree_.interface_inputs().index_range()) {
-        const bNodeSocket &socket = node->output_socket(i);
-        if (!socket.is_directly_linked()) {
-          /* This socket is not linked, hence it's value is never used. Thus we don't have to add
-           * it to #all_socket_values_. This optimization helps a lot when the node group has a
-           * very large number of inputs and group input nodes. */
-          continue;
-        }
-        const SocketInContext socket_in_context{nullptr, &socket};
-        InferenceValue input_value = InferenceValue::Unknown();
-        if (!this->treat_socket_as_unknown(socket_in_context)) {
-          if (tree_input_values.has_value()) {
-            input_value = (*tree_input_values)[i];
-          }
-        }
-        all_socket_values_.add_new(socket_in_context, input_value);
-      }
-    }
   }
 
   InferenceValue get_socket_value(const SocketInContext &socket)
@@ -204,7 +192,19 @@ class SocketValueInferencerImpl {
         this->value_task__output__boolean_math(socket);
         return;
       }
+      case GEO_NODE_WARNING: {
+        this->value_task__output__warning(socket);
+        return;
+      }
       default: {
+        if (node->is_type("NodeEnableOutput"_ustr)) {
+          this->value_task__output__enable_output(socket);
+          return;
+        }
+        if (node->is_type("NodeImplicitConversion"_ustr)) {
+          this->value_task__output__implicit_conversion_node(socket);
+          return;
+        }
         if (node->typeinfo->build_multi_function) {
           this->value_task__output__multi_function_node(socket);
           return;
@@ -251,8 +251,15 @@ class SocketValueInferencerImpl {
 
   void value_task__output__group_input_node(const SocketInContext &socket)
   {
-    /* Group inputs for the root context should be initialized already. */
-    BLI_assert(socket.context != nullptr);
+    const bool is_root_context = socket.context == nullptr;
+    if (is_root_context) {
+      InferenceValue value = InferenceValue::Unknown();
+      if (group_input_value_fn_) {
+        value = group_input_value_fn_(socket->index());
+      }
+      all_socket_values_.add_new(socket, value);
+      return;
+    }
 
     const bke::GroupNodeComputeContext &group_context =
         *static_cast<const bke::GroupNodeComputeContext *>(socket.context);
@@ -267,6 +274,17 @@ class SocketValueInferencerImpl {
   }
 
   void value_task__output__reroute_node(const SocketInContext &socket)
+  {
+    const SocketInContext input_socket = socket.owner_node().input_socket(0);
+    const std::optional<InferenceValue> value = all_socket_values_.lookup_try(input_socket);
+    if (!value.has_value()) {
+      this->push_value_task(input_socket);
+      return;
+    }
+    all_socket_values_.add_new(socket, *value);
+  }
+
+  void value_task__output__implicit_conversion_node(const SocketInContext &socket)
   {
     const SocketInContext input_socket = socket.owner_node().input_socket(0);
     const std::optional<InferenceValue> value = all_socket_values_.lookup_try(input_socket);
@@ -497,6 +515,48 @@ class SocketValueInferencerImpl {
     }
   }
 
+  void value_task__output__warning(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const SocketInContext show_input_socket = node.input_socket(0);
+    const std::optional<InferenceValue> value = all_socket_values_.lookup_try(show_input_socket);
+    if (!value.has_value()) {
+      this->push_value_task(show_input_socket);
+      return;
+    }
+    all_socket_values_.add_new(socket, *value);
+  }
+
+  void value_task__output__enable_output(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const SocketInContext enable_input_socket = node.input_socket(0);
+    const SocketInContext value_input_socket = node.input_socket(1);
+
+    const std::optional<InferenceValue> keep_value = all_socket_values_.lookup_try(
+        enable_input_socket);
+    if (!keep_value.has_value()) {
+      this->push_value_task(enable_input_socket);
+      return;
+    }
+    if (!keep_value->is_primitive_value()) {
+      all_socket_values_.add_new(socket, InferenceValue::Unknown());
+      return;
+    }
+    const bool keep = keep_value->get_primitive<bool>();
+    if (!keep) {
+      const CPPType &type = *socket->typeinfo->base_cpp_type;
+      all_socket_values_.add_new(socket, InferenceValue::from_primitive(type.default_value()));
+      return;
+    }
+    const std::optional<InferenceValue> value = all_socket_values_.lookup_try(value_input_socket);
+    if (!value.has_value()) {
+      this->push_value_task(value_input_socket);
+      return;
+    }
+    all_socket_values_.add_new(socket, *value);
+  }
+
   /**
    * Assumes that the first available input is a condition that selects one of the remaining inputs
    * which is then output.
@@ -667,9 +727,9 @@ class SocketValueInferencerImpl {
     const NodeInContext node = socket.owner_node();
 
     SocketInContext input_socket;
-    for (const bNodeLink &internal_link : node->internal_links()) {
-      if (internal_link.tosock == socket.socket) {
-        input_socket = SocketInContext{socket.context, internal_link.fromsock};
+    for (const bNodeInternalLink &internal_link : node->internal_links()) {
+      if (internal_link.out == socket.socket) {
+        input_socket = SocketInContext{socket.context, internal_link.in};
         break;
       }
     }
@@ -726,7 +786,7 @@ class SocketValueInferencerImpl {
       return;
     }
     if (const SocketDeclaration *socket_decl = socket.socket->runtime->declaration) {
-      if (socket_decl->input_field_type == InputSocketFieldType::Implicit) {
+      if (socket_decl->default_input_type != NODE_DEFAULT_INPUT_VALUE) {
         /* Implicit fields inputs don't have a single static value. */
         all_socket_values_.add_new(socket, InferenceValue::Unknown());
         return;
@@ -814,12 +874,12 @@ class SocketValueInferencerImpl {
     if (tree.adt->action) {
       animrig::foreach_fcurve_in_action_slot(
           tree.adt->action->wrap(), tree.adt->slot_handle, [&](const FCurve &fcurve) {
-            handle_rna_path(fcurve.rna_path);
+            handle_rna_path(fcurve.rna_path().c_str());
           });
     }
     /* Gather all inputs controlled by drivers. */
-    LISTBASE_FOREACH (const FCurve *, driver, &tree.adt->drivers) {
-      handle_rna_path(driver->rna_path);
+    for (const FCurve &driver : tree.adt->drivers) {
+      handle_rna_path(driver.rna_path().c_str());
     }
 
     /* Actually find the #bNodeSocket for each controlled input. */
@@ -866,10 +926,10 @@ SocketValueInferencer::SocketValueInferencer(
     const bNodeTree &tree,
     ResourceScope &scope,
     bke::ComputeContextCache &compute_context_cache,
-    const std::optional<Span<InferenceValue>> tree_input_values,
+    const FunctionRef<InferenceValue(int group_input_i)> group_input_value_fn,
     const std::optional<Span<bool>> top_level_ignored_inputs)
     : impl_(scope.construct<SocketValueInferencerImpl>(
-          tree, scope, compute_context_cache, tree_input_values, top_level_ignored_inputs))
+          tree, scope, compute_context_cache, group_input_value_fn, top_level_ignored_inputs))
 {
 }
 

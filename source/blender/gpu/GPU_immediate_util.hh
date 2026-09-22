@@ -10,9 +10,28 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_math_vector_types.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
+
+namespace gpu {
+
+void imm_draw_circle_partial_wire_aspect_2d(
+    uint pos, float x, float y, float2 radius, int nsegments, float start, float sweep);
+void imm_draw_circle_partial_wire_aspect_3d(
+    uint pos, float x, float y, float z, float2 radius, int nsegments, float start, float sweep);
+
+void imm_draw_rounded_box_wire_2d(
+    uint pos, float x, float y, float2 radius, float2 corner_radius, int nsegments);
+void imm_draw_rounded_box_wire_3d(
+    uint pos, float x, float y, float2 radius, float2 corner_radius, int nsegments);
+
+}  // namespace gpu
 
 struct rctf;
+
+/* TODO: update the arguments of the methods below to use float2, then move into gpu namespace. */
 
 /* Draw 2D rectangles (replaces glRect functions) */
 /* caller is responsible for vertex format & shader */
@@ -145,7 +164,7 @@ void imm_draw_box_checker_2d_ex(float x1,
                                 const float color_primary[4],
                                 const float color_secondary[4],
                                 int checker_size);
-void imm_draw_box_checker_2d(float x1, float y1, float x2, float y2);
+void imm_draw_box_checker_2d(float x1, float y1, float x2, float y2, bool clear_alpha = false);
 
 void imm_draw_cube_fill_3d(uint pos, const float center[3], const float aspect[3]);
 void imm_draw_cube_wire_3d(uint pos, const float center[3], const float aspect[3]);
@@ -174,3 +193,5 @@ void imm_draw_cylinder_fill_3d(
     uint pos, float base, float top, float height, int slices, int stacks);
 
 void imm_drawcircball(const float cent[3], float radius, const float tmat[4][4], uint pos);
+
+}  // namespace blender

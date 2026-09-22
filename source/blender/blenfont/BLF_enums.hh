@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
+#include "BLI_enum_flags.hh"
+
+namespace blender {
 
 enum class FontShadowType {
   None = 0,
@@ -27,6 +29,7 @@ enum class BLFWrapMode : int {
   /** Line break at limit. */
   HardLimit = 1 << 2,
 };
+ENUM_OPERATORS(BLFWrapMode);
 
 enum FontFlags {
   BLF_NONE = 0,
@@ -52,8 +55,6 @@ enum FontFlags {
   BLF_LAST_RESORT = 1 << 15,
   /** Failure to load this font. Don't try again. */
   BLF_BAD_FONT = 1 << 16,
-  /** This font is managed by the FreeType cache subsystem. */
-  BLF_CACHED = 1 << 17,
   /**
    * At small sizes glyphs are rendered at multiple sub-pixel positions.
    *
@@ -64,4 +65,6 @@ enum FontFlags {
   /** Do not look in other fonts when a glyph is not found in this font. */
   BLF_NO_FALLBACK = 1 << 19,
 };
-ENUM_OPERATORS(FontFlags, BLF_NO_FALLBACK);
+ENUM_OPERATORS(FontFlags);
+
+}  // namespace blender

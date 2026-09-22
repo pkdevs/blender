@@ -39,9 +39,10 @@ const char *GHOST_ISystem::system_backend_id_ = nullptr;
 
 GHOST_TBacktraceFn GHOST_ISystem::backtrace_fn_ = nullptr;
 
+bool GHOST_ISystem::use_window_frame_ = true;
+
 GHOST_TSuccess GHOST_ISystem::createSystem(bool verbose, [[maybe_unused]] bool background)
 {
-
   /* When GHOST fails to start, report the back-ends that were attempted.
    * A Verbose argument could be supported in printing isn't always desired. */
   struct GHOST_BackendInfo {
@@ -53,7 +54,6 @@ GHOST_TSuccess GHOST_ISystem::createSystem(bool verbose, [[maybe_unused]] bool b
 
   GHOST_TSuccess success;
   if (!system_) {
-
 #if defined(WITH_HEADLESS)
     /* Pass. */
 #elif defined(WITH_GHOST_WAYLAND)
@@ -159,7 +159,7 @@ GHOST_TSuccess GHOST_ISystem::createSystem(bool verbose, [[maybe_unused]] bool b
 #elif defined(__APPLE__)
     backends_attempted.push_back({"COCOA"});
     CLOG_INFO(&LOG, "Create Cocoa system");
-    system_ = new GHOST_SystemCocoa();
+    system_ = new GHOST_SystemCocoa(background);
 #endif
 
     if (system_) {
@@ -190,6 +190,28 @@ GHOST_TSuccess GHOST_ISystem::createSystem(bool verbose, [[maybe_unused]] bool b
         }
       }
       CLOG_STR_INFO_NOCHECK(&LOG, msg.c_str());
+
+#ifdef WITH_GHOST_WAYLAND
+#  ifndef WITH_GHOST_X11
+      /* Special case, Blender will eventually drop X11.
+       * show a more user friendly warning while this is in the process
+       * of being disabled by default. */
+
+      const char *wayland_display = getenv("WAYLAND_DISPLAY");
+      if (!(wayland_display && wayland_display[0])) {
+        const char *x11_display = getenv("DISPLAY");
+        if (x11_display && x11_display[0]) {
+          /* WAYLAND isn't available but X11 is.
+           * Print a message to let the users know how to enable X11.
+           * Since this is a non-standard option (currently - but used for "lite" builds),
+           * the user is likely a developer who created their own build. */
+          CLOG_STR_INFO_NOCHECK(
+              &LOG,
+              "Built without X11 support, enable \"WITH_GHOST_X11\" build-option to use X11.\n");
+        }
+      }
+#  endif /* !WITH_GHOST_X11 */
+#endif   /* WITH_GHOST_WAYLAND */
     }
     success = system_ != nullptr ? GHOST_kSuccess : GHOST_kFailure;
   }
@@ -260,4 +282,14 @@ GHOST_TBacktraceFn GHOST_ISystem::getBacktraceFn()
 void GHOST_ISystem::setBacktraceFn(GHOST_TBacktraceFn backtrace_fn)
 {
   GHOST_ISystem::backtrace_fn_ = backtrace_fn;
+}
+
+bool GHOST_ISystem::getUseWindowFrame()
+{
+  return GHOST_ISystem::use_window_frame_;
+}
+
+void GHOST_ISystem::setUseWindowFrame(bool use_window_frame)
+{
+  GHOST_ISystem::use_window_frame_ = use_window_frame;
 }

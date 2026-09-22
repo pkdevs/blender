@@ -5,8 +5,8 @@
 #include "testing/testing.h"
 #include "tests/blendfile_loading_base_test.h"
 
-#include "BLI_fileops.h"
-#include "BLI_string.h"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
@@ -102,10 +102,10 @@ static std::string read_temp_file_in_string(const std::string &file_path)
 {
   std::string res;
   size_t buffer_len;
-  void *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
+  char *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
   if (buffer != nullptr) {
-    res.assign((const char *)buffer, buffer_len);
-    MEM_freeN(buffer);
+    res.assign(buffer, buffer_len);
+    MEM_delete(buffer);
   }
   return res;
 }

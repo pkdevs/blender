@@ -2,14 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 
 #include "BLI_math_vector_types.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry {
+namespace geometry {
 
 Mesh *create_line_mesh(float3 start, float3 delta, int count);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

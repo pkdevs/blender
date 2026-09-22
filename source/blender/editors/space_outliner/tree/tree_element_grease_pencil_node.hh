@@ -8,27 +8,39 @@
 
 #pragma once
 
+#include "DNA_outliner_types.h"
+
 #include "tree_element.hh"
 
-namespace blender::bke::greasepencil {
+namespace blender {
+
+namespace bke::greasepencil {
 class TreeNode;
-}  // namespace blender::bke::greasepencil
+}  // namespace bke::greasepencil
 struct GreasePencil;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementGreasePencilNode final : public AbstractTreeElement {
   GreasePencil &owner_grease_pencil_;
-  blender::bke::greasepencil::TreeNode &node_;
+  bke::greasepencil::TreeNode &node_;
 
  public:
+  static constexpr eTreeStoreElemType element_type = TSE_GREASE_PENCIL_NODE;
+
   TreeElementGreasePencilNode(TreeElement &legacy_te,
                               GreasePencil &owner_grease_pencil,
-                              blender::bke::greasepencil::TreeNode &node);
+                              bke::greasepencil::TreeNode &node);
 
   void expand(SpaceOutliner & /*soops*/) const override;
 
-  blender::bke::greasepencil::TreeNode &node() const;
+  /** The ID identifying this element in the tree-store, see #AbstractTreeDisplay::add_element().
+   */
+  static ID *owner_id(GreasePencil &owner_grease_pencil, bke::greasepencil::TreeNode &node);
+
+  bke::greasepencil::TreeNode &node() const;
+  std::optional<BIFIconID> get_icon() const override;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

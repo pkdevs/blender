@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_bicubic_sampler_lib.glsl"
+#include "infos/compositor_displace_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_displace)
+
+#include "gpu_shader_bicubic_sampler.bsl.hh"
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()
@@ -16,8 +20,7 @@ void main()
 
   /* Note that the input displacement is in pixel space, so divide by the input size to transform
    * it into the normalized sampler space. */
-  float2 scale = float2(texture_load(x_scale_tx, texel).x, texture_load(y_scale_tx, texel).x);
-  float2 displacement = texture_load(displacement_tx, texel).xy * scale / float2(input_size);
+  float2 displacement = texture_load(displacement_tx, texel).xy / float2(input_size);
   float2 displaced_coordinates = coordinates - displacement;
 
   imageStore(output_img, texel, SAMPLER_FUNCTION(input_tx, displaced_coordinates));

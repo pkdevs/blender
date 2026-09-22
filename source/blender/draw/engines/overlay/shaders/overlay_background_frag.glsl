@@ -2,11 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_background_info.hh"
+#include "infos/overlay_background_infos.hh"
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_background)
 
-#include "gpu_shader_math_constants_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
 
 float dither()
 {
@@ -14,10 +14,10 @@ float dither()
   /* NOTE(Metal): Declaring constant array in function scope to avoid increasing local shader
    * memory pressure. */
 #define P(x) (((x + 0.5f) * (1.0f / 16.0f) - 0.5f) * (1.0f / 255.0f))
-  constexpr float4 dither_mat4x4[4] = float4_array(float4(P(0.0f), P(8.0f), P(2.0f), P(10.0f)),
-                                                   float4(P(12.0f), P(4.0f), P(14.0f), P(6.0f)),
-                                                   float4(P(3.0f), P(11.0f), P(1.0f), P(9.0f)),
-                                                   float4(P(15.0f), P(7.0f), P(13.0f), P(5.0f)));
+  constexpr float4 dither_mat4x4[4] = {float4(P(0.0f), P(8.0f), P(2.0f), P(10.0f)),
+                                       float4(P(12.0f), P(4.0f), P(14.0f), P(6.0f)),
+                                       float4(P(3.0f), P(11.0f), P(1.0f), P(9.0f)),
+                                       float4(P(15.0f), P(7.0f), P(13.0f), P(5.0f))};
 #undef P
   int2 co = int2(gl_FragCoord.xy) % 4;
   return dither_mat4x4[co.x][co.y];
@@ -31,8 +31,20 @@ void main()
    * This removes the alpha channel and put the background behind reference images
    * while masking the reference images by the render alpha.
    */
-  float alpha = texture(color_buffer, screen_uv).a;
-  float depth = texture(depth_buffer, screen_uv).r;
+
+  float alpha;
+  float depth;
+
+  if (vignette_enabled) {
+    const float dist = length(screen_uv - 0.5f);
+    const float falloff = 0.15f;
+    alpha = smoothstep(vignette_aperture, vignette_aperture + falloff, dist);
+    depth = 0.0f;
+  }
+  else {
+    alpha = texture(color_buffer, screen_uv).a;
+    depth = texture(depth_buffer, screen_uv).r;
+  }
 
   float3 bg_col;
   float3 col_high;
@@ -90,11 +102,16 @@ void main()
 
   bg_col = mix(bg_col, color_override.rgb, color_override.a);
 
-  /* Mimic alpha under behavior. Result is premultiplied. */
-  frag_color = float4(bg_col, 1.0f) * (1.0f - alpha);
+  if (vignette_enabled) {
+    frag_color = float4(bg_col, alpha);
+  }
+  else {
+    /* Mimic alpha under behavior. Result is premultiplied. */
+    frag_color = float4(bg_col, 1.0f) * (1.0f - alpha);
 
-  /* Special case: If the render is not transparent, do not clear alpha values. */
-  if (depth == 1.0f && alpha == 1.0f) {
-    frag_color.a = 1.0f;
+    /* Special case: If the render is not transparent, do not clear alpha values. */
+    if (depth == 1.0f && alpha == 1.0f) {
+      frag_color.a = 1.0f;
+    }
   }
 }

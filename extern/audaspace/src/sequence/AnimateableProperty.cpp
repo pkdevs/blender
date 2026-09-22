@@ -68,8 +68,18 @@ void AnimateableProperty::write(const float* data)
 
 void AnimateableProperty::writeConstantRange(const float* data, int position_start, int position_end)
 {
+	int pos = getSize() / (sizeof(float) * m_count);
+
 	assureSize(position_end * m_count * sizeof(float), true);
 	float* buffer = Buffer::getBuffer();
+	
+	// if we were not animated yet, use the new constant value as the
+	// first/default value to fill in the unknown parts
+	if (!m_isAnimated)
+	{
+		std::memcpy(buffer, data, m_count * sizeof(float));
+		pos = 0;
+	}
 
 	for(int i = position_start; i < position_end; i++)
 	{
@@ -77,6 +87,8 @@ void AnimateableProperty::writeConstantRange(const float* data, int position_sta
 	}
 
 	m_isAnimated = true;
+	
+	updateUnknownAfterWrite(pos, position_start, position_end - position_start);
 }
 
 void AnimateableProperty::write(const float* data, int position, int count)
@@ -95,7 +107,12 @@ void AnimateableProperty::write(const float* data, int position, int count)
 	float* buf = Buffer::getBuffer();
 
 	std::memcpy(buf + position * m_count, data, count * m_count * sizeof(float));
+	
+	updateUnknownAfterWrite(pos, position, count);
+}
 
+void AnimateableProperty::updateUnknownAfterWrite(int pos, int position, int count)
+{
 	// have to fill up space between?
 	if(pos < position)
 	{
@@ -223,8 +240,7 @@ void AnimateableProperty::read(float position, float* out)
 			m0 = (p2[i] - p0[i]) / 2.0f;
 			m1 = (p3[i] - p1[i]) / 2.0f;
 
-			out[i] = (2 * t3 - 3 * t2 + 1) * p0[i] + (-2 * t3 + 3 * t2) * p1[i] +
-					 (t3 - 2 * t2 + t) * m0 + (t3 - t2) * m1;
+			out[i] = (2 * t3 - 3 * t2 + 1) * p1[i] + (-2 * t3 + 3 * t2) * p2[i] + (t3 - 2 * t2 + t) * m0 + (t3 - t2) * m1;
 		}
 	}
 }
