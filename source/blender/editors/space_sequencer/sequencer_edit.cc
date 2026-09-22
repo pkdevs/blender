@@ -10,6 +10,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
@@ -82,6 +83,7 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "sequencer_intern.hh"
+#include <algorithm>
 #include <cstddef>
 #include <fmt/format.h>
 
@@ -2651,13 +2653,69 @@ void SEQUENCER_OT_delete(wmOperatorType *ot)
 /** \name Ripple Delete Strips Operator
  * \{ */
 
+/* The function assumes, that `strips` share start and end frame.  */
+static void sequencer_ripple_delete(Scene *scene,
+                                    ListBaseT<Strip> *seqbasep,
+                                    Span<Strip *> strips,
+                                    const bool all_channels,
+                                    const bool ripple_markers)
+{
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(
+      seq::editing_get(scene));
+
+  rcti selection_bounds;
+  BLI_rcti_init_minmax(&selection_bounds);
+  for (Strip *strip : strips) {
+    const rcti strip_bounds = strip_int_bounds_get(scene, strip);
+    BLI_rcti_union(&selection_bounds, &strip_bounds);
+  }
+
+  /* This is the amount we will ripple everything left by. */
+  const int offset = selection_bounds.xmax - selection_bounds.xmin;
+
+  VectorSet<Strip *> shifted;
+  if (offset != 0) {
+    for (Strip &strip : *seqbasep) {
+      if (seq::transform_is_locked(channels, &strip) || strips.contains(&strip)) {
+        continue;
+      }
+      const bool same_channel = all_channels ||
+                                std::any_of(
+                                    strips.begin(), strips.end(), [&](Strip *strip_in_column) {
+                                      return strip_in_column->channel == strip.channel;
+                                    });
+      if (strip.left_handle() > selection_bounds.xmin && same_channel) {
+        seq::transform_translate_strip(scene, &strip, -offset);
+        seq::relations_invalidate_cache(scene, &strip);
+        shifted.add(&strip);
+      }
+    }
+
+    if (ripple_markers && !scene->toolsettings->lock_markers) {
+      for (TimeMarker &marker : scene->markers) {
+        if (marker.frame > selection_bounds.xmin) {
+          marker.frame -= offset;
+        }
+      }
+    }
+  }
+
+  for (Strip *strip : strips) {
+    seq::edit_flag_for_removal(scene, strip);
+  }
+  seq::edit_remove_flagged_strips(scene, seqbasep);
+
+  if (!shifted.is_empty()) {
+    seq::transform_handle_overlap(scene, seqbasep, shifted.extract_vector(), ripple_markers);
+  }
+}
+
 static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
   ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
   const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
   const bool ripple_markers = RNA_boolean_get(op->ptr, "markers");
 
@@ -2672,48 +2730,27 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
 
   seq::prefetch_stop(scene);
 
-  rcti selection_bounds;
-  BLI_rcti_init_minmax(&selection_bounds);
+  /* Group the selected strips into columns. */
+  Map<std::pair<int, int>, Vector<Strip *>> columns;
   for (Strip *strip : selected) {
-    const rcti strip_bounds = strip_int_bounds_get(scene, strip);
-    BLI_rcti_union(&selection_bounds, &strip_bounds);
+    const int left = strip->left_handle();
+    const int right = strip->right_handle(scene);
+    columns.lookup_or_add_default({left, right}).append(strip);
   }
 
-  /* This is the amount we will ripple everything left by. */
-  const int offset = selection_bounds.xmax - selection_bounds.xmin;
+  /* Sort columns. */
+  Vector<std::pair<int, int>> keys;
+  keys.reserve(columns.size());
+  columns.foreach_item([&keys](const std::pair<int, int> &key,
+                               const Vector<Strip *> & /*column*/) { keys.append(key); });
+  std::sort(keys.begin(),
+            keys.end(),
+            [](const std::pair<int, int> &a, const std::pair<int, int> &b) { return a > b; });
 
-  Vector<Strip *> shifted;
-  for (Strip &strip : *seqbasep) {
-    if (selected.contains(&strip) || seq::transform_is_locked(channels, &strip)) {
-      continue;
-    }
-    if (!all_channels) {
-      const rcti strip_bounds = strip_int_bounds_get(scene, &strip);
-      if (!BLI_rcti_isect_rect_y(&selection_bounds, &strip_bounds, nullptr)) {
-        continue;
-      }
-    }
-    if (strip.left_handle() > selection_bounds.xmin) {
-      seq::transform_translate_strip(scene, &strip, -offset);
-      seq::relations_invalidate_cache(scene, &strip);
-      shifted.append(&strip);
-    }
+  /* Ripple delete. */
+  for (const std::pair<int, int> &key : keys) {
+    sequencer_ripple_delete(scene, seqbasep, columns.lookup(key), all_channels, ripple_markers);
   }
-
-  if (ripple_markers && !scene->toolsettings->lock_markers) {
-    for (TimeMarker &marker : scene->markers) {
-      if (marker.frame > selection_bounds.xmin) {
-        marker.frame -= offset;
-      }
-    }
-  }
-
-  for (Strip *strip : selected) {
-    seq::edit_flag_for_removal(scene, strip);
-  }
-  seq::edit_remove_flagged_strips(scene, seqbasep);
-
-  seq::transform_handle_overlap(scene, seqbasep, shifted, ripple_markers);
 
   vse::sync_active_scene_and_time_with_scene_strip(*C);
 
