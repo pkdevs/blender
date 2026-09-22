@@ -577,10 +577,9 @@ TEST(straight_skeleton, PaperExample)
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
 
-  /* A non-degenerate straight skeleton should produce multiple output faces. */
-  EXPECT_GE(output.face_offsets.size(), 5);
-  /* Total area should be positive and plausible (within 2x the polygon area). */
-  EXPECT_GT(total_faces_area(output), 0.0);
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets.size(), 23);
+  EXPECT_NEAR(total_faces_area(output), 159.835, 1e-3);
 }
 
 TEST(straight_skeleton, NotchedPolygonFull)
@@ -1662,6 +1661,214 @@ TEST(straight_skeleton, SixNotchesConcurrentFlips)
     EXPECT_FALSE(output.hit_max_events)
         << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
   }
+}
+
+/**
+ * Regular 64-gon approximating a circle.
+ * In a regular polygon, all vertices converge to the center concurrently without splits,
+ * yielding exactly n triangular faces and n skeleton rays from perimeter vertices to center.
+ */
+TEST(straight_skeleton, Circle64)
+{
+  const int n = 64;
+  const double radius = 100.0;
+  Array<double2> verts(n);
+  Vector<int> outer_polygon(n);
+  for (const int i : IndexRange(n)) {
+    const double theta = (2.0 * M_PI * double(i)) / double(n);
+    verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
+    outer_polygon[i] = i;
+  }
+
+  StraightSkeletonInput input;
+  input.vert = verts.as_span();
+  input.outer_polygon = outer_polygon.as_span();
+  input.label = "Circle64";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets.size(), n);
+
+  /* All faces must be triangles connecting consecutive boundary vertices to the center node. */
+  for (const int fi : output.face_offsets.index_range()) {
+    EXPECT_EQ(output.face_offsets[fi].size(), 3);
+  }
+
+  /* Exactly 65 vertices in the output: 64 perimeter vertices + 1 center node. */
+  EXPECT_EQ(output.vert.size(), n + 1);
+
+  /* Total area should match regular 64-gon: 0.5 * n * r^2 * sin(2*pi/n). */
+  const double expected_area = 0.5 * double(n) * radius * radius *
+                               std::sin(2.0 * M_PI / double(n));
+  EXPECT_NEAR(total_faces_area(output), expected_area, 1e-4);
+}
+
+TEST(straight_skeleton, CircleWithHoles24)
+{
+  const int n = 24;
+  const int hole_verts_num = 8;
+  const double radius = 100.0;
+  const int total_verts_num = n + n * hole_verts_num;
+
+  Array<double2> verts(total_verts_num);
+  Vector<int> outer_polygon;
+  outer_polygon.reserve(n);
+
+  for (const int i : IndexRange(n)) {
+    const double theta = (2.0 * M_PI * double(i)) / double(n);
+    verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
+    outer_polygon.append(i);
+  }
+
+  const double r_mid = radius * 0.5;
+  const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
+  const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
+
+  Vector<int> hole_offsets_buf;
+  hole_offsets_buf.reserve(n + 1);
+  hole_offsets_buf.append(0);
+  Vector<int> hole_vert_indices;
+  hole_vert_indices.reserve(n * hole_verts_num);
+
+  int v_idx = n;
+  for (const int j : IndexRange(n)) {
+    const double phi = (2.0 * M_PI * (double(j) + 0.5)) / double(n);
+    const double2 center(r_mid * std::cos(phi), r_mid * std::sin(phi));
+
+    for (const int k : IndexRange(hole_verts_num)) {
+      const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
+      verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
+      hole_vert_indices.append(v_idx);
+      v_idx++;
+    }
+    hole_offsets_buf.append(int(hole_vert_indices.size()));
+  }
+
+  StraightSkeletonInput input;
+  input.vert = verts.as_span();
+  input.outer_polygon = outer_polygon.as_span();
+  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
+  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.label = "CircleWithHoles24";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets.size(), 216);
+  EXPECT_NEAR(total_faces_area(output), 29641.554, 1e-2);
+}
+
+TEST(straight_skeleton, CircleWithHoles48)
+{
+  const int n = 48;
+  const int hole_verts_num = 8;
+  const double radius = 100.0;
+  const int total_verts_num = n + n * hole_verts_num;
+
+  Array<double2> verts(total_verts_num);
+  Vector<int> outer_polygon;
+  outer_polygon.reserve(n);
+
+  for (const int i : IndexRange(n)) {
+    const double theta = (2.0 * M_PI * double(i)) / double(n);
+    verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
+    outer_polygon.append(i);
+  }
+
+  const double r_mid = radius * 0.5;
+  const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
+  const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
+
+  Vector<int> hole_offsets_buf;
+  hole_offsets_buf.reserve(n + 1);
+  hole_offsets_buf.append(0);
+  Vector<int> hole_vert_indices;
+  hole_vert_indices.reserve(n * hole_verts_num);
+
+  int v_idx = n;
+  for (const int j : IndexRange(n)) {
+    const double phi = (2.0 * M_PI * (double(j) + 0.5)) / double(n);
+    const double2 center(r_mid * std::cos(phi), r_mid * std::sin(phi));
+
+    for (const int k : IndexRange(hole_verts_num)) {
+      const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
+      verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
+      hole_vert_indices.append(v_idx);
+      v_idx++;
+    }
+    hole_offsets_buf.append(int(hole_vert_indices.size()));
+  }
+
+  StraightSkeletonInput input;
+  input.vert = verts.as_span();
+  input.outer_polygon = outer_polygon.as_span();
+  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
+  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.label = "CircleWithHoles48";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets.size(), 432);
+}
+
+TEST(straight_skeleton, CircleWithHoles96)
+{
+  const int n = 96;
+  const int hole_verts_num = 8;
+  const double radius = 100.0;
+  const int total_verts_num = n + n * hole_verts_num;
+
+  Array<double2> verts(total_verts_num);
+  Vector<int> outer_polygon;
+  outer_polygon.reserve(n);
+
+  for (const int i : IndexRange(n)) {
+    const double theta = (2.0 * M_PI * double(i)) / double(n);
+    verts[i] = double2(radius * std::cos(theta), radius * std::sin(theta));
+    outer_polygon.append(i);
+  }
+
+  const double r_mid = radius * 0.5;
+  const double d_adj = 2.0 * r_mid * std::sin(M_PI / double(n));
+  const double r_hole = std::min(0.35 * r_mid, 0.35 * d_adj);
+
+  Vector<int> hole_offsets_buf;
+  hole_offsets_buf.reserve(n + 1);
+  hole_offsets_buf.append(0);
+  Vector<int> hole_vert_indices;
+  hole_vert_indices.reserve(n * hole_verts_num);
+
+  int v_idx = n;
+  for (const int j : IndexRange(n)) {
+    const double phi = (2.0 * M_PI * (double(j) + 0.5)) / double(n);
+    const double2 center(r_mid * std::cos(phi), r_mid * std::sin(phi));
+
+    for (const int k : IndexRange(hole_verts_num)) {
+      const double alpha = (-2.0 * M_PI * double(k)) / double(hole_verts_num);
+      verts[v_idx] = center + double2(r_hole * std::cos(alpha), r_hole * std::sin(alpha));
+      hole_vert_indices.append(v_idx);
+      v_idx++;
+    }
+    hole_offsets_buf.append(int(hole_vert_indices.size()));
+  }
+
+  StraightSkeletonInput input;
+  input.vert = verts.as_span();
+  input.outer_polygon = outer_polygon.as_span();
+  input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
+  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.label = "CircleWithHoles96";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+
+  EXPECT_FALSE(output.hit_max_events);
+  EXPECT_EQ(output.face_offsets.size(), 864);
 }
 
 /** \} */

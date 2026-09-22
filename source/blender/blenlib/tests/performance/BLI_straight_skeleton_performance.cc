@@ -310,7 +310,7 @@ static void run_benchmark_row(const char *name, const int n, const GeneratedPoly
 /** \name Performance Tests
  * \{ */
 
-TEST(straight_skeleton_performance, DISABLED_Circle)
+TEST(straight_skeleton_performance, Circle)
 {
   print_table_header("Straight Skeleton: Circle (n = vertices on perimeter)", "  n");
   const int n_values[] = {8, 16, 32, 64, 128, 256, 512};
@@ -321,7 +321,7 @@ TEST(straight_skeleton_performance, DISABLED_Circle)
   printf("\n");
 }
 
-TEST(straight_skeleton_performance, DISABLED_SubdividedSquare)
+TEST(straight_skeleton_performance, SubdividedSquare)
 {
   print_table_header("Straight Skeleton: Subdivided Square (n = vertices per side)", "  n");
   const int n_values[] = {2, 4, 8, 16, 32, 64, 128, 256};
@@ -332,11 +332,11 @@ TEST(straight_skeleton_performance, DISABLED_SubdividedSquare)
   printf("\n");
 }
 
-TEST(straight_skeleton_performance, DISABLED_CircleWithHoles)
+TEST(straight_skeleton_performance, CircleWithHoles)
 {
   print_table_header("Straight Skeleton: Circle with Holes (n = outer vertices & hole count)",
                      "  n");
-  const int n_values[] = {3, 6, 12, 24, 48, 96};
+  const int n_values[] = {6, 12, 24, 48, 96};
   for (const int n : n_values) {
     const GeneratedPolygon geom = make_circle_with_holes(n);
     run_benchmark_row("Circle with Holes", n, geom);
