@@ -737,7 +737,9 @@ const ComputeContext &get_zone_viewer_compute_context(
       const int inspection_index = repeat_storage->inspection_index;
       current_context = &compute_context_cache.for_repeat_zone(
           current_context, *current_zone->output_node(), inspection_index);
-      continue;
+    }
+    else {
+      BLI_assert_unreachable();
     }
   }
 
@@ -781,8 +783,9 @@ static std::optional<ComputeContextHash> compute_viewer_compute_context_hash_rec
     const bNodeTree &child_node_group = *id_cast<const bNodeTree *>(group_node->id);
     const bNodeInstanceKey child_instance_key = bke::node_instance_key(
         instance_key, &node_group, group_node);
-    const bke::GroupNodeComputeContext child_compute_context(
-        &zone_compute_context, group_node->identifier, &group_node->owner_tree());
+    const bke::GroupNodeComputeContext &child_compute_context =
+        compute_context_cache.for_group_node(
+            &zone_compute_context, group_node->identifier, &group_node->owner_tree());
     std::optional<ComputeContextHash> hash = compute_viewer_compute_context_hash_recursive(
         child_node_group,
         child_compute_context,

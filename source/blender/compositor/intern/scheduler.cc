@@ -352,7 +352,11 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
   }
 
   /* Add Viewer node. */
-  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode)) {
+  std::optional<ComputeContextHash> viewer_compute_context_hash =
+      context.get_viewer_compute_context_hash();
+  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode) &&
+      viewer_compute_context_hash.has_value())
+  {
     for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
       if (!(node->flag & NODE_DO_OUTPUT) || node->is_muted()) {
         continue;
@@ -367,7 +371,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
       const ComputeContext &zone_viewer_compute_context =
           bke::compositor::get_zone_viewer_compute_context(
               *node, zone, compute_context, compute_context_cache);
-      if (context.get_viewer_compute_context_hash() != zone_viewer_compute_context.hash()) {
+      if (viewer_compute_context_hash.value() != zone_viewer_compute_context.hash()) {
         continue;
       }
 
