@@ -857,8 +857,8 @@ struct EraseOperationExecutor {
                     bke::CurvesGeometry &cut_curve,
                     const ed::greasepencil::DrawingPlacement &placement,
                     const Span<float2> /*screen_space_positions*/,
-                    const float4x4 &layer_to_world,
                     const float4x4 &projection,
+                    const float4x4 &layer_to_world,
                     bke::CurvesGeometry &dst,
                     const bool keep_caps) const
   {
