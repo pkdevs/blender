@@ -221,7 +221,7 @@ ccl_device_forceinline void primitive_motion_data_without_camera(KernelGlobals k
   *motion_pre = *motion_center;
   *motion_post = *motion_center;
 
-ccl_debug_printf("primitive_motion_data_without_camera(), before kernel_data_fetch()\n\n");
+// ccl_debug_printf("primitive_motion_data_without_camera(), before kernel_data_fetch()\n\n");
 
   /* deformation motion */
   const ccl_global KernelObject &kobject = kernel_data_fetch(objects, sd->object); // !!!: Causes crash
@@ -272,12 +272,12 @@ ccl_debug_printf("primitive_motion_data_without_camera(), before kernel_data_fet
    * transformation was set match the world/object space of motion_pre/post */
   Transform tfm;
 
-ccl_debug_printf("primitive_motion_data_without_camera(), before motion_pre object_fetch_motion_pass_transform()\n\n");
+// ccl_debug_printf("primitive_motion_data_without_camera(), before motion_pre object_fetch_motion_pass_transform()\n\n");
 
   tfm = object_fetch_motion_pass_transform(kg, sd->object, OBJECT_PASS_MOTION_PRE); // !!!: Crashing here... tag ObjectManager
   *motion_pre = transform_point(&tfm, *motion_pre);
 
-ccl_debug_printf("primitive_motion_data_without_camera(), before motion_post object_fetch_motion_pass_transform()\n\n");
+// ccl_debug_printf("primitive_motion_data_without_camera(), before motion_post object_fetch_motion_pass_transform()\n\n");
 
   tfm = object_fetch_motion_pass_transform(kg, sd->object, OBJECT_PASS_MOTION_POST);
   *motion_post = transform_point(&tfm, *motion_post);
@@ -290,7 +290,7 @@ ccl_device_forceinline void primitive_motion_data_camera_step(KernelGlobals kg,
 {
   Transform tfm;
 
-ccl_debug_printf("primitive_motion_data_camera_step(), Ran\n\n");
+// ccl_debug_printf("primitive_motion_data_camera_step(), Ran\n\n");
 
   /* camera motion, for perspective/orthographic motion.pre/post will be a
    * world-to-raster matrix, for panorama it's world-to-camera, for custom

@@ -523,19 +523,6 @@ const Transform itfm = lamp_get_inverse_transform(kg, klight);
 
 const float3 local_P = transform_point(&itfm, ls->P); // !!!: Does not come from the disk (z=0)
 
-ccl_debug_printf("\n=== SPOT INTERSECTION REFERENCE ===\n");
-ccl_debug_printf("world P = %f %f %f\n",
-       (double)ls->P.x,
-       (double)ls->P.y,
-       (double)ls->P.z);
-
-ccl_debug_printf("local P = %f %f %f\n",
-       (double)local_P.x,
-       (double)local_P.y,
-       (double)local_P.z);
-ccl_debug_printf("local Z = %g\n", (double)local_P.z);
-
-
 // !!!: Take whatever point Cycles happened to give me and pretend its XY coordinates came from the canonical disk.
 const float2 param = make_float2( // !!!: Not Final fix!
     local_P.x / klight->spot.radius,

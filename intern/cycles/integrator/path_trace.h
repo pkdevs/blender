@@ -158,6 +158,8 @@ class PathTrace {
   /* Check whether denoiser was run and denoised passes are available. */
   bool has_denoised_result() const;
 
+  void save_restir_temporal_history();
+
   /* Get size and offset (relative to the buffer's full x/y) of the currently rendering tile.
    * In the case of tiled rendering this will return full-frame after all tiles has been rendered.
    *

@@ -165,7 +165,7 @@ void BlenderSession::create_session()
   }
 }
 
-void BlenderSession::reset_session(blender::Main &b_data, blender::Depsgraph &b_depsgraph)
+void BlenderSession::reset_session(blender::Main &b_data, blender::Depsgraph &b_depsgraph) // !!!
 {
   /* Update data, scene and depsgraph pointers. These can change after undo. */
   this->b_data = &b_data;
@@ -211,13 +211,17 @@ void BlenderSession::reset_session(blender::Main &b_data, blender::Depsgraph &b_
       b_userpref, b_data, *b_scene, background, use_developer_ui);
 
   if (scene->params.modified(scene_params) || session->params.modified(session_params) ||
-      (this->b_render->mode & blender::R_PERSISTENT_DATA) == 0)
+      (this->b_render->mode & blender::R_PERSISTENT_DATA) == 0) // !!!: R_PERSISTENT_DATA
   {
     /* if scene or session parameters changed, it's easier to simply re-create
      * them rather than trying to distinguish which settings need to be updated
      */
     if (!is_new_session) {
-      free_session();
+// !!!: means free_session()->session.reset() destroys the entire Session, 
+// which destroys PathTrace, which destroys every PathTraceWork in path_trace_works_, 
+// which destroys restir_prev_reprojection_surface_/restir_prev_temporal_reservoir_ along with it.
+// Unless R_PERSISTENT_DATA is used!
+      free_session(); // !!!
       create_session();
     }
     return;

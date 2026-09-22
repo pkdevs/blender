@@ -568,14 +568,21 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
     return false; /* No persistent history yet (first frame, or feature just enabled). */
   }
 
-ccl_debug_printf("TEMPORAL REPROJECTION: curr=(%d,%d) prev=(%d,%d) prev_index=%u\n"
-    "restir_temporal_normal_threshold=%f restir_temporal_depth_threshold=%f\n\n",
-    x, y, prev_pixel.x, prev_pixel.y, prev_pixel.z,
-    (double)kernel_data.integrator.restir_temporal_normal_threshold,
-    (double)kernel_data.integrator.restir_temporal_depth_threshold);
+ccl_debug_printf("TEMPORAL REPROJECTION: curr=(%d,%d) prev=(%d,%d) prev_index=%u\n",
+    // "restir_temporal_normal_threshold=%f restir_temporal_depth_threshold=%f\n\n",
+    x, y, prev_pixel.x, prev_pixel.y, prev_pixel.z);
 
   const ReprojectionSurface prev_surf = reprojection_surface_unpack(
       kg->restir_prev_reprojection_surface + prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE);
+
+
+if (prev_pixel.z == 359) {
+ccl_debug_printf(
+    "READ CHECK: index=%u valid=%d raw_valid=%f\n",
+    prev_pixel.z,
+    prev_surf.is_valid,
+    (double)kg->restir_prev_reprojection_surface[prev_pixel.z * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+}
 
   if (!TemporalReprojection::is_valid_reprojection(
           &curr_surf, &prev_surf,

@@ -180,11 +180,13 @@ ccl_device_inline ShaderEvalResult integrate_background(
       Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
 
 // What bounce should we regard as the first PT candidate?
+if (contribution.x > 0 || contribution.y > 0 || contribution.z > 0) {
 ccl_debug_printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n" 
         "contribution=(%f, %f, %f)\n\n",
         INTEGRATOR_STATE(state, path, render_pixel_index), 0, // !!!: Prints for every pixel!
         (double)L.x, (double)L.y, (double)L.z, 
         (double)contribution.x, (double)contribution.y, (double)contribution.z);
+}
 
       RNGState rng_state;
       path_state_rng_load(state, &rng_state);

@@ -111,23 +111,30 @@ ccl_debug_printf("\n\n\n--- PathTraceWorkCPU::save_restir_temporal_history() Inv
 ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_restir_temporal_history_reservoir=%d\n\n\n", // !!!: pass_restir_reprojection_surface=-1 always...
     render_buffer, device_scene_->data.film.pass_restir_reprojection_surface, device_scene_->data.film.pass_restir_temporal_history_reservoir);
 
+size_t valid_surface_count = 0; // TODO(Tri): Remove
+
   for (size_t i = 0; i < num_pixels; i++) {
     memcpy(&restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
            RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
 
-    if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) { // is_valid
-    ccl_debug_printf( // !!!: the reservoir side of the pipeline can be trusted
-        "restir_prev_reprojection_surface_[%zu]: N=(%f,%f,%f) depth=%f motion=(%f,%f) valid=%f\n",
-        i,
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 0],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 1],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 2],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 3],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 4],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 5],
-        (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
-    }
+if (i == 359) {
+  ccl_debug_printf("SAVE CHECK: index=%zu valid=%f\n",
+      i, restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+}
+
+    // if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) { // is_valid
+    // ccl_debug_printf( // !!!: the reservoir side of the pipeline can be trusted
+    //     "restir_prev_reprojection_surface_[%zu]: N=(%f,%f,%f) depth=%f motion=(%f,%f) valid=%f\n",
+    //     i,
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 0],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 1],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 2],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 3],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 4],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 5],
+    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
+    // }
 
     memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
@@ -148,7 +155,15 @@ ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_re
     //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
     //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
     // }
+
+    if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) {
+      valid_surface_count++;
+    }
   }
+
+// 59.4% of pixels logged a valid surface; background/unshaded pixels can legitimately be invalid.
+ccl_debug_printf("save_restir_temporal_history(): valid_surfaces=%zu / %zu (%.1f%%)\n\n",
+                 valid_surface_count, num_pixels, 100.0 * valid_surface_count / num_pixels);
 }
 
 void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
@@ -297,6 +312,13 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   {
     /* Invoked once per render_pipeline()->path_trace()->work-dispatch. */
     restir_init_kernel_globals();
+
+// for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) { // !!!: DEBUG ONLY
+//   ccl_debug_printf(
+//       "TEMPORAL KG PTR: surface=%p expected=%p\n",
+//       kg.restir_prev_reprojection_surface,
+//       restir_prev_reprojection_surface_.data());
+// }
 
     local_arena.execute(
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });
@@ -735,10 +757,20 @@ void PathTraceWorkCPU::restir_init_kernel_globals()
 ccl_debug_printf("RESTIR HISTORY BIND: surface=%p reservoir=%p\n\n",
     restir_prev_reprojection_surface_.data(), restir_prev_temporal_reservoir_.data());
 
-  for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) {
+  for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) { // !!!
     kg.restir_prev_reprojection_surface = restir_prev_reprojection_surface_.data();
     kg.restir_prev_temporal_reservoir = restir_prev_temporal_reservoir_.data();
   }
+
+  const size_t index = 359;// TODO(Tri): Remove
+  for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) {
+    const float *surface =
+        kg.restir_prev_reprojection_surface + index * RESTIR_REPROJECTION_SURFACE_STRIDE;
+
+    ccl_debug_printf("AFTER BIND: index=%zu valid=%f ptr=%p\n",
+        index, surface[6], surface);
+  }
+  
 }
 
 void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(ThreadKernelGlobalsCPU *kg,
