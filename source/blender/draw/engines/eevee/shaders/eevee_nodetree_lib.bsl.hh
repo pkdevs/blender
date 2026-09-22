@@ -822,17 +822,39 @@ float3 brdf_lut([[resource_table]] KernelGlobals &kg,
 }
 
 /* -------------------------------------------------------------------- */
+/** \name Mixed render resolution
+ *
+ * Callbacks image texture sampling.
+ *
+ * \{ */
+
+float texture_lod_bias_get([[resource_table]] KernelGlobals &kg)
+{
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
+  return uni.uniform_buf.film.texture_lod_bias;
+}
+
+/**
+ * Scale hardware derivatives depending on render resolution.
+ * This is because the distance between pixels increases as we lower the resolution. The hardware
+ * uses neighboring pixels to compute derivatives and thus the value increases as we lower the
+ * resolution. So we compensate by scaling them back to the expected amplitude at full resolution.
+ */
+float derivative_scale_get([[resource_table]] KernelGlobals &kg)
+{
+  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
+  return 1.0f / float(uni.uniform_buf.film.scaling_factor);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Fragment Displacement
  *
  * Displacement happening in the fragment shader.
  * Can be used in conjunction with a per vertex displacement.
  *
  * \{ */
-
-#ifndef GPU_METAL
-/* Prototype. */
-float derivative_scale_get([[resource_table]] KernelGlobals &kg);
-#endif
 
 #ifdef MAT_DISPLACEMENT_BUMP
 /* Return new shading normal. */
@@ -942,33 +964,6 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals &kg,
     coords.incoming = view.world_incident_vector(P);
   }
   return coords;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Mixed render resolution
- *
- * Callbacks image texture sampling.
- *
- * \{ */
-
-float texture_lod_bias_get([[resource_table]] KernelGlobals &kg)
-{
-  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
-  return uni.uniform_buf.film.texture_lod_bias;
-}
-
-/**
- * Scale hardware derivatives depending on render resolution.
- * This is because the distance between pixels increases as we lower the resolution. The hardware
- * uses neighboring pixels to compute derivatives and thus the value increases as we lower the
- * resolution. So we compensate by scaling them back to the expected amplitude at full resolution.
- */
-float derivative_scale_get([[resource_table]] KernelGlobals &kg)
-{
-  [[resource_table]] const eevee::Uniform &uni = kg.uniforms;
-  return 1.0f / float(uni.uniform_buf.film.scaling_factor);
 }
 
 /** \} */
