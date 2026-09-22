@@ -2149,7 +2149,7 @@ class EXTENSIONS_OT_package_upgrade_all(Operator, _ExtCmdMixIn):
         # Ensure wheels are refreshed before re-enabling.
         _extensions_repo_refresh_on_change(
             repo_cache_store,
-            extensions_enabled=set(
+            extensions_enabled=_extensions_enabled() | set(
                 (repo_item.module, pkg_id)
                 for (repo_item, pkg_id_sequence, result) in self._addon_restore
                 for pkg_id in pkg_id_sequence

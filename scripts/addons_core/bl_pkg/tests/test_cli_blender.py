@@ -189,6 +189,7 @@ def create_package_addon(
         pkg_idname: str,
 
         # Optional.
+        pkg_version: str = "1.0.0",
         wheel_params: Sequence[WheelModuleParams] = (),
         platforms: tuple[str, ...] | None = None,
         blender_version_min: str | None = None,
@@ -230,7 +231,7 @@ def create_package_addon(
         fh.write('''tags = ["UV"]\n''')
         fh.write('''maintainer = "Maintainer Name <username@addr.com>"\n''')
         fh.write('''license = ["SPDX:GPL-2.0-or-later"]\n''')
-        fh.write('''version = "1.0.0"\n''')
+        fh.write('''version = "{:s}"\n'''.format(pkg_version))
         fh.write('''tagline = "This is a tagline"\n''')
         fh.write('''blender_version_min = "{:s}"\n'''.format(blender_version_min or "0.0.0"))
         if blender_version_max is not None:
@@ -265,6 +266,7 @@ def create_package_theme(
         pkg_idname: str,
 
         # Optional.
+        pkg_version: str = "1.0.0",
         blender_version_min: str | None = None,
         blender_version_max: str | None = None,
         file_contents: dict[str, bytes] | None = None,
@@ -278,7 +280,7 @@ def create_package_theme(
         fh.write('''type = "theme"\n''')
         fh.write('''maintainer = "Maintainer Name <username@addr.com>"\n''')
         fh.write('''license = ["SPDX:GPL-2.0-or-later"]\n''')
-        fh.write('''version = "1.0.0"\n''')
+        fh.write('''version = "{:s}"\n'''.format(pkg_version))
         fh.write('''tagline = "This is a tagline"\n''')
         fh.write('''blender_version_min = "{:s}"\n'''.format(blender_version_min or "0.0.0"))
         if blender_version_max is not None:
@@ -481,6 +483,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             wheel_params: Sequence[WheelModuleParams] = (),
 
             # Optional.
+            pkg_version: str = "1.0.0",
             pkg_type: str = "add-on",
             pkg_filename: str | None = None,
             platforms: tuple[str, ...] | None = None,
@@ -499,6 +502,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
                     pkg_idname=pkg_idname,
 
                     # Optional.
+                    pkg_version=pkg_version,
                     wheel_params=wheel_params,
                     platforms=platforms,
                     blender_version_min=blender_version_min,
@@ -515,6 +519,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
                     pkg_idname=pkg_idname,
 
                     # Optional.
+                    pkg_version=pkg_version,
                     blender_version_min=blender_version_min,
                     blender_version_max=blender_version_max,
                     file_contents=file_contents,
@@ -712,6 +717,61 @@ class TestSimple(TestWithTempBlenderUser_MixIn, unittest.TestCase):
             print(TEMP_DIR_REMOTE)
             print(TEMP_DIR_BLENDER_USER)
             pause_until_keyboard_interrupt()
+
+    def test_upgrade_preserves_other_extension_wheels(self) -> None:
+        """Updating one extension must preserve another enabled extension's wheels (#164227)."""
+        repo_id = "test_repo_module_name"
+        self.repo_add(repo_id=repo_id, repo_name="MyTestRepo")
+        self.build_package(
+            pkg_idname="foo",
+            wheel_params=(WheelModuleParams(module_name="foo_dependency", module_version="1.0.0"),),
+        )
+        # Build both versions before enabling add-ons, whose startup output would
+        # interfere with the build helper's output checks.
+        bar_archive = self.build_package(pkg_idname="bar", pkg_version="1.0.1")
+        with open(bar_archive, "rb") as fh:
+            bar_update = fh.read()
+        self.build_package(pkg_idname="bar")
+        run_blender_extensions_no_errors(("server-generate", "--repo-dir", TEMP_DIR_REMOTE))
+        run_blender_extensions_no_errors(("sync",))
+        run_blender_extensions_no_errors(("install", "foo,bar", "--enable"))
+
+        # Replace only Bar's archive and publish its new version.
+        with open(bar_archive, "wb") as fh:
+            fh.write(bar_update)
+        run_blender_extensions_no_errors(("server-generate", "--repo-dir", TEMP_DIR_REMOTE))
+
+        # Check the filesystem in the update process: imports may be cached, and
+        # starting Blender again could reinstall the missing wheel.
+        run_blender_no_errors((
+            "-b", "--python-expr",
+            (
+                "import bpy\n"
+                "import addon_utils\n"
+                "import tomllib\n"
+                "from pathlib import Path\n"
+                "import foo_dependency\n"
+                "foo_module = {foo_module!r}\n"
+                "bar_module = {bar_module!r}\n"
+                "manifest_path = Path({manifest_path!r})\n"
+                "assert addon_utils.check(foo_module) == (True, True)\n"
+                "assert addon_utils.check(bar_module) == (True, True)\n"
+                "assert tomllib.loads(manifest_path.read_text())['version'] == '1.0.0'\n"
+                "wheel_path = Path(foo_dependency.__file__)\n"
+                "wheel_contents = wheel_path.read_bytes()\n"
+                "assert bpy.ops.extensions.repo_sync_all() == {{'FINISHED'}}\n"
+                "assert bpy.ops.extensions.package_upgrade_all() == {{'FINISHED'}}\n"
+                "assert tomllib.loads(manifest_path.read_text())['version'] == '1.0.1'\n"
+                "assert addon_utils.check(foo_module) == (True, True)\n"
+                "assert addon_utils.check(bar_module) == (True, True)\n"
+                "assert wheel_path.is_file(), 'Update All removed an unchanged extension dependency'\n"
+                "assert wheel_path.read_bytes() == wheel_contents\n"
+            ).format(
+                foo_module="bl_ext." + repo_id + ".foo",
+                bar_module="bl_ext." + repo_id + ".bar",
+                manifest_path=os.path.join(TEMP_DIR_LOCAL, "bar", PKG_MANIFEST_FILENAME_TOML),
+            ),
+        ))
 
     def test_install_files(self) -> None:
 
