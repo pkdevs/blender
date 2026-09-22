@@ -632,8 +632,6 @@ static void do_brush_action(const Depsgraph &depsgraph,
 
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   bke::pbvh::pixels::PixelData &pixel_data = *pbvh.pixels_;
-  /* TODO: This may need to be scoped per-tile, but we should keep the data alive outside of a
-   * stroke. */
   if (needs_kd_tree && !pixel_data.tree_data) {
     pixel_data.tree_data = bke::pbvh::pixels::KDTreeData();
     build_pixel_position_map(ob,

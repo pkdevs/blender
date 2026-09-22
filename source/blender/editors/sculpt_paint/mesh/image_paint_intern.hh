@@ -57,10 +57,6 @@ struct ImageData : NonCopyable {
   }
 };
 
-KDTree<float3> *build_kd_tree(Object &ob,
-                              const ImageData &data,
-                              bke::image::TileNumber tile_number);
-
 void build_pixel_position_map(Object &ob,
                               const ImageData &data,
                               Vector<float3, 0> &r_pixel_positions,
