@@ -730,13 +730,13 @@ const ComputeContext &get_zone_viewer_compute_context(
   Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
 
   const ComputeContext *current_context = &compute_context;
-  for (const bke::bNodeTreeZone *zone : zone_stack) {
-    const bNode &output_node = *zone->output_node();
+  for (const bke::bNodeTreeZone *current_zone : zone_stack) {
+    const bNode &output_node = *current_zone->output_node();
     if (output_node.is_type("GeometryNodeRepeatOutput"_ustr)) {
       const auto *repeat_storage = static_cast<NodeGeometryRepeatOutput *>(output_node.storage);
       const int inspection_index = repeat_storage->inspection_index;
       current_context = &compute_context_cache.for_repeat_zone(
-          current_context, *zone->output_node(), inspection_index);
+          current_context, *current_zone->output_node(), inspection_index);
       continue;
     }
   }

@@ -269,6 +269,18 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
 
   Stack<const bNode *> node_stack;
 
+  /* If the node is in the same zone, we push the node to the stack, otherwise, we push the output
+   * node of the immediate child zone that contain the node. */
+  auto push_node_to_stack = [&](const bNode &node) {
+    const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node.identifier);
+    if (node_zone == zone) {
+      node_stack.push(&node);
+    }
+    else {
+      node_stack.push(zones.get_zones_to_enter(zone, node_zone)[0]->output_node());
+    }
+  };
+
   /* Add group nodes that contain File Output and Viewer nodes. */
   for (const bNode *group_node : node_group.group_nodes()) {
     if (group_node->is_muted() || !group_node->id) {
@@ -297,32 +309,14 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
                         viewer_compute_context_hash.value(),
                         compute_context_cache))
     {
-      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
-       * the output node of the immediate child zone that contain the group node. */
-      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(group_node->identifier);
-      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
-      if (node_zone == zone) {
-        node_stack.push(group_node);
-      }
-      else {
-        node_stack.push(zone_stack[0]->output_node());
-      }
+      push_node_to_stack(*group_node);
       continue;
     }
 
     if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::FileOutputNode) &&
         has_file_output_recursive(child_tree))
     {
-      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
-       * the output node of the immediate child zone that contain the group node. */
-      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(group_node->identifier);
-      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
-      if (node_zone == zone) {
-        node_stack.push(group_node);
-      }
-      else {
-        node_stack.push(zone_stack[0]->output_node());
-      }
+      push_node_to_stack(*group_node);
       continue;
     }
   }
@@ -338,16 +332,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
       continue;
     }
 
-    /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
-     * the output node of the immediate child zone that contain the group node. */
-    const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
-    Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
-    if (node_zone == zone) {
-      node_stack.push(node);
-    }
-    else {
-      node_stack.push(zone_stack[0]->output_node());
-    }
+    push_node_to_stack(*node);
   }
 
   /* Add File Output nodes. */
@@ -362,16 +347,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
         continue;
       }
 
-      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
-       * the output node of the immediate child zone that contain the group node. */
-      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
-      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
-      if (node_zone == zone) {
-        node_stack.push(node);
-      }
-      else {
-        node_stack.push(zone_stack[0]->output_node());
-      }
+      push_node_to_stack(*node);
     }
   }
 
@@ -395,16 +371,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
         continue;
       }
 
-      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
-       * the output node of the immediate child zone that contain the group node. */
-      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
-      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
-      if (node_zone == zone) {
-        node_stack.push(node);
-      }
-      else {
-        node_stack.push(zone_stack[0]->output_node());
-      }
+      push_node_to_stack(*node);
       break;
     }
   }

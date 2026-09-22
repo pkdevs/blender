@@ -385,9 +385,8 @@ void CompositorContext::set_output_refcount(const bNodeTree &node_group,
 {
   using namespace compositor;
 
-  /* If the node group has no viewer node in the active context or the base context, and the
-   * context requires a viewer output, we use the group output as a viewer. */
-  const bke::DataBlockComputeContext base_compute_context(nullptr, this->get_scene().id);
+  /* If the node group has no viewer node in the active context, and the context requires a viewer
+   * output, we use the group output as a viewer. */
   const bool has_viewer = this->get_viewer_compute_context_hash().has_value();
   const bool needs_viewer_output = flag_is_set(this->needed_side_effect_output_types(),
                                                SideEffectOutputTypes::ViewerNode);

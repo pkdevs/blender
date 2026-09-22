@@ -193,7 +193,8 @@ void SceneCompositorEffectsOperation::execute()
      * - We need a viewer output but do not have a viewer, in which case, the output of the last
      *   effect will be double as the viewer output.
      * - We need a viewer output and have a viewer, in which case, the output is needed until the
-     *   active effect, since it is the one that have the viewer. */
+     *   active effect, since it is the one that have the viewer. Note that we break if this is
+     *   false, so effects after the active one are not evaluated. */
     const bool is_active_effect = flag_is_set(effect.flags, SceneCompositorEffectFlags::IsActive);
     const bool is_effect_output_needed = this->context().render_context() ||
                                          (needs_viewer_output && !has_viewer_output) ||
