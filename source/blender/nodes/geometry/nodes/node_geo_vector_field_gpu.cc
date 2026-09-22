@@ -46,15 +46,14 @@ static bool is_pure_field_node(const bNode &node)
   return true;
 }
 
-/* All field paths must converge on one consumer without branching the geometry. */
-static const bNode *find_gpu_field_consumer(const bNode &producer)
+static bool can_retain_gpu_field_result(const bNode &producer)
 {
   const bNodeSocket *field_output = producer.output_by_identifier("Field"_ustr);
   if (producer.is_muted() || field_output == nullptr) {
-    return nullptr;
+    return false;
   }
 
-  const bNode *consumer = nullptr;
+  Vector<const bNode *, 2> consumers;
   Vector<const bNode *> active_nodes;
   Vector<const bNode *> completed_nodes;
   const auto walk = [&](const auto &self, const bNodeSocket &output) -> bool {
@@ -69,12 +68,15 @@ static const bNode *find_gpu_field_consumer(const bNode &producer)
       }
       const bNode &node = *link->tonode;
       if (node.type_legacy == GEO_NODE_VECTOR_FIELD_GPU) {
-        if (node.is_muted() || link->tosock->identifier_ustr() != "Field"_ustr ||
-            (consumer != nullptr && consumer != &node))
-        {
+        if (node.is_muted() || link->tosock->identifier_ustr() != "Field"_ustr) {
           return false;
         }
-        consumer = &node;
+        if (!consumers.contains(&node)) {
+          if (consumers.size() == 2) {
+            return false;
+          }
+          consumers.append(&node);
+        }
         continue;
       }
       if (!is_pure_field_node(node) || active_nodes.contains(&node)) {
@@ -102,16 +104,16 @@ static const bNode *find_gpu_field_consumer(const bNode &producer)
     }
     return true;
   };
-  if (!walk(walk, *field_output) || consumer == nullptr) {
-    return nullptr;
+  if (!walk(walk, *field_output) || consumers.is_empty()) {
+    return false;
   }
 
-  /* The second retained producer may lie between this producer and the consumer. */
+  /* Geometry branching would break the retained result's identity matching. */
   const bNode *geometry_node = &producer;
   for (int i = 0; i < 2; i++) {
     const bNodeSocket *output = geometry_node->output_by_identifier("Geometry"_ustr);
     if (output == nullptr || output->directly_linked_links().size() != 1) {
-      return nullptr;
+      return false;
     }
     const bNodeLink *link = output->directly_linked_links().first();
     if (link->tonode == nullptr || link->fromsock == nullptr || link->tosock == nullptr ||
@@ -119,14 +121,17 @@ static const bNode *find_gpu_field_consumer(const bNode &producer)
         link->tosock->identifier_ustr() != "Geometry"_ustr ||
         link->tonode->type_legacy != GEO_NODE_VECTOR_FIELD_GPU || link->tonode->is_muted())
     {
-      return nullptr;
+      return false;
     }
     geometry_node = link->tonode;
-    if (geometry_node == consumer) {
-      return consumer;
+    if (consumers.contains(geometry_node)) {
+      consumers.remove_first_occurrence_and_reorder(geometry_node);
+    }
+    if (consumers.is_empty()) {
+      return true;
     }
   }
-  return nullptr;
+  return false;
 }
 
 static fn::GPUFieldContextKey gpu_field_context_key(const bke::GeometryFieldContext &context)
@@ -189,7 +194,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (GeoNodesUserData *user_data = params.user_data()) {
       chain_scope = user_data->gpu_field_chain_scope;
     }
-    const bool can_retain_result = find_gpu_field_consumer(params.node()) != nullptr;
+    const bool can_retain_result = can_retain_gpu_field_result(params.node());
 
     geometry::foreach_real_geometry(geometry, [&](GeometrySet &instance_geometry) {
       for (const GeometryComponent::Type component_type : {GeometryComponent::Type::Mesh,
