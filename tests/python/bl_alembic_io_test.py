@@ -837,6 +837,24 @@ class AlembicAnimatedMaterialsImportTests(AbstractAlembicTest):
         modifier = ob.modifiers[0]
         self.assertEqual(modifier.type, 'MESH_SEQUENCE_CACHE')
 
+        # Verify that we have the right materials on each frame
+        for frame in range(1, 9):
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            ob_eval = ob.evaluated_get(depsgraph)
+            mesh_eval = ob_eval.data
+
+            frame_index = (frame - 1) % 4
+
+            for polygon_index, polygon in enumerate(mesh_eval.polygons):
+                expected_index = polygon_index if frame_index >= polygon_index else 0
+                # NOTE: in the blend file, the materials are written in the same order as in the material names array above.
+                # However, due to the export process, the names are sorted, which in this case happens to be the reverse order of the array
+                # so we can simply subtract the expected index from the largest index to get the corrected/sorted value.
+                corrected_index = 3 - expected_index
+                self.assertEqual(polygon.material_index, corrected_index)
+                self.assertEqual(ob_eval.material_slots[corrected_index].name, material_names[expected_index])
+
     def test_materials_static_mesh(self):
         self.do_import_test("animated-materials-static-mesh")
 
