@@ -1876,6 +1876,7 @@ void ED_spacetype_node()
   BLI_addhead(&st->regiontypes, art);
 
   node_tree_interface_panel_register(art);
+  node_modal_keymap_panel_register(art);
 
   /* regions: toolbar */
   art = MEM_new_zeroed<ARegionType>("spacetype view3d tools region");

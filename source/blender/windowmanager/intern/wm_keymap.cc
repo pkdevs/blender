@@ -224,27 +224,32 @@ void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
   wm_keymap_item_properties_set(kmi);
 }
 
-int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+eKMI_MapType WM_keymap_map_type_from_event_type(const short type)
 {
-  if (ISTIMER(kmi->type)) {
+  if (ISTIMER(type)) {
     return KMI_TYPE_TIMER;
   }
-  if (ISKEYBOARD(kmi->type)) {
+  if (ISKEYBOARD(type)) {
     return KMI_TYPE_KEYBOARD;
   }
-  if (ISMOUSE(kmi->type)) {
+  if (ISMOUSE(type)) {
     return KMI_TYPE_MOUSE;
   }
-  if (ISNDOF(kmi->type)) {
+  if (ISNDOF(type)) {
     return KMI_TYPE_NDOF;
   }
-  if (kmi->type == KM_TEXTINPUT) {
+  if (type == KM_TEXTINPUT) {
     return KMI_TYPE_TEXTINPUT;
   }
-  if (ELEM(kmi->type, TABLET_STYLUS, TABLET_ERASER)) {
+  if (ELEM(type, TABLET_STYLUS, TABLET_ERASER)) {
     return KMI_TYPE_MOUSE;
   }
   return KMI_TYPE_KEYBOARD;
+}
+
+int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+{
+  return WM_keymap_map_type_from_event_type(kmi->type);
 }
 
 /** \} */
@@ -307,6 +312,28 @@ wmKeyConfig *WM_keyconfig_new(wmWindowManager *wm, const char *idname, bool user
   return keyconf;
 }
 
+void WM_keyconfig_operator_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyconf)
+{
+  if (ot->modal_keymap_ensure == nullptr) {
+    return;
+  }
+  ot->modal_keymap_ensure(ot, keyconf);
+  if (ot->modalkeymap) {
+    ot->modalkeymap->flag |= KEYMAP_OPERATOR_MODAL;
+  }
+}
+
+void WM_keyconfig_operator_modal_keymaps_ensure(wmWindowManager *wm)
+{
+  wmKeyConfig *keyconf = wm->runtime->defaultconf;
+  if (keyconf == nullptr) {
+    return;
+  }
+  for (wmOperatorType *ot : WM_operatortypes_registered_get()) {
+    WM_keyconfig_operator_modal_keymap_ensure(ot, keyconf);
+  }
+}
+
 wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool user_defined)
 {
   wmKeyConfig *keyconf = static_cast<wmKeyConfig *>(
@@ -318,6 +345,7 @@ wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool u
       for (wmKeyMap &km : keyconf->keymaps) {
         WM_keymap_clear(&km);
       }
+      WM_keyconfig_operator_modal_keymaps_ensure(wm);
     }
     else {
       /* For user defined key configuration, clear all keymaps. */
@@ -480,6 +508,27 @@ void WM_keymap_remove(wmKeyConfig *keyconf, wmKeyMap *keymap)
   WM_keymap_clear(keymap);
   BLI_remlink(&keyconf->keymaps, keymap);
   MEM_delete(keymap);
+}
+
+void WM_keymap_modal_items_clear(wmKeyMap *keymap)
+{
+  keymap->modal_items = nullptr;
+  wmWindowManager *wm = G_MAIN->wm.first();
+  if (wm == nullptr) {
+    return;
+  }
+  for (wmKeyConfig &keyconf : wm->runtime->keyconfigs) {
+    if (wmKeyMap *km = WM_keymap_list_find(
+            &keyconf.keymaps, keymap->idname, keymap->spaceid, keymap->regionid))
+    {
+      km->modal_items = nullptr;
+    }
+  }
+  if (wmKeyMap *km = WM_keymap_list_find(
+          &U.user_keymaps, keymap->idname, keymap->spaceid, keymap->regionid))
+  {
+    km->modal_items = nullptr;
+  }
 }
 
 bool WM_keymap_poll(bContext *C, wmKeyMap *keymap)

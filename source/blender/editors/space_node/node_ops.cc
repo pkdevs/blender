@@ -123,6 +123,9 @@ void node_operatortypes()
 
   WM_operatortype_append(NODE_OT_link_drag_operation_test);
 
+  WM_operatortype_append(NODE_OT_modal_keymap_item_add);
+  WM_operatortype_append(NODE_OT_modal_keymap_item_remove);
+
   for (bke::bNodeType *ntype : bke::node_types_get()) {
     if (ntype->register_operators) {
       ntype->register_operators();

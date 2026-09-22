@@ -35,6 +35,7 @@
 #include "RNA_path.hh"
 
 #include "NOD_common.hh"
+#include "NOD_geometry_nodes_modal_events.hh"
 
 #include "rna_internal.hh"
 #include "rna_internal_types.hh"
@@ -745,6 +746,7 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 #  include "DNA_text_types.h"
 
 #  include "WM_api.hh"
+#  include "WM_keymap.hh"
 
 #  include "DEG_depsgraph_query.hh"
 
@@ -1272,6 +1274,50 @@ static void rna_NodeTree_update_asset(Main *bmain, Scene *scene, PointerRNA *ptr
   rna_NodeTree_update(bmain, scene, ptr);
   WM_main_add_notifier(NC_NODE | ND_NODE_ASSET_DATA, nullptr);
   bke::node_update_asset_metadata(*reinterpret_cast<bNodeTree *>(ptr->owner_id));
+}
+
+static void rna_GeometryNodeModalKeymapItem_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
+  BKE_ntree_update_tag_modal_keymap(ntree);
+  rna_NodeTree_update_asset(bmain, scene, ptr);
+}
+
+static int rna_GeometryNodeModalKeymapItem_map_type_get(PointerRNA *ptr)
+{
+  const auto &item = *static_cast<const GeometryNodeModalKeymapItem *>(ptr->data);
+  return WM_keymap_map_type_from_event_type(item.type);
+}
+
+/** Mirrors #rna_wmKeyMapItem_map_type_set: the map type is derived from the event type. */
+static void rna_GeometryNodeModalKeymapItem_map_type_set(PointerRNA *ptr, const int value)
+{
+  auto &item = *static_cast<GeometryNodeModalKeymapItem *>(ptr->data);
+  if (value == WM_keymap_map_type_from_event_type(item.type)) {
+    return;
+  }
+  switch (value) {
+    case KMI_TYPE_KEYBOARD:
+      item.type = EVT_AKEY;
+      item.val = KM_PRESS;
+      break;
+    case KMI_TYPE_MOUSE:
+      item.type = LEFTMOUSE;
+      item.val = KM_PRESS;
+      break;
+    case KMI_TYPE_TEXTINPUT:
+      item.type = wmEventType(KM_TEXTINPUT);
+      item.val = KM_NOTHING;
+      break;
+    case KMI_TYPE_TIMER:
+      item.type = TIMER;
+      item.val = KM_NOTHING;
+      break;
+    case KMI_TYPE_NDOF:
+      item.type = NDOF_MOTION;
+      item.val = KM_NOTHING;
+      break;
+  }
 }
 
 static const EnumPropertyItem *rna_NodeTree_color_tag_itemf(bContext * /*C*/,
@@ -2349,6 +2395,36 @@ static bool rna_GeometryNodeTree_is_tool_get(PointerRNA *ptr)
 static void rna_GeometryNodeTree_is_tool_set(PointerRNA *ptr, bool value)
 {
   geometry_node_asset_trait_flag_set(ptr, GEO_NODE_ASSET_TOOL, value);
+}
+
+static void rna_GeometryNodeTree_modal_keymap_default_begin(CollectionPropertyIterator *iter,
+                                                            PointerRNA *ptr)
+{
+  const bNodeTree &ntree = *static_cast<const bNodeTree *>(ptr->data);
+  const GeometryNodeAssetTraits *traits = ntree.geometry_node_asset_traits;
+  rna_iterator_array_begin(iter,
+                           ptr,
+                           traits ? traits->modal_keymap_default : nullptr,
+                           sizeof(GeometryNodeModalKeymapItem),
+                           traits ? traits->modal_keymap_default_num : 0,
+                           false,
+                           nullptr);
+}
+
+static int rna_GeometryNodeTree_modal_keymap_active_index_get(PointerRNA *ptr)
+{
+  const bNodeTree &ntree = *static_cast<const bNodeTree *>(ptr->data);
+  const GeometryNodeAssetTraits *traits = ntree.geometry_node_asset_traits;
+  return traits ? traits->modal_keymap_active_index : 0;
+}
+
+static void rna_GeometryNodeTree_modal_keymap_active_index_set(PointerRNA *ptr, const int value)
+{
+  bNodeTree &ntree = *static_cast<bNodeTree *>(ptr->data);
+  if (GeometryNodeAssetTraits *traits = ntree.geometry_node_asset_traits) {
+    traits->modal_keymap_active_index = std::clamp(
+        value, 0, std::max(traits->modal_keymap_default_num - 1, 0));
+  }
 }
 
 static bool rna_GeometryNodeTree_is_modifier_get(PointerRNA *ptr)
@@ -9334,6 +9410,95 @@ static void def_geo_image(BlenderRNA * /*brna*/, StructRNA *srna)
       prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 }
 
+static void def_geo_modal_event(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "GeometryNodeModalEvent", "storage");
+
+  prop = RNA_def_property(srna, "event_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "name");
+  RNA_def_property_ui_text(
+      prop, "Name", "Name of the event that the node tool reacts to while it keeps running");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "description", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop, "Description", "Explanation of what the node tool does when the event is processed");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void rna_def_geometry_node_modal_keymap_item(BlenderRNA *brna)
+{
+  PropertyRNA *prop;
+
+  StructRNA *srna = RNA_def_struct(brna, "GeometryNodeModalKeymapItem", nullptr);
+  RNA_def_struct_sdna(srna, "GeometryNodeModalKeymapItem");
+  RNA_def_struct_ui_text(srna,
+                         "Modal Keymap Item",
+                         "Default key binding for one of the events that a node tool reacts to");
+
+  prop = RNA_def_property(srna, "event_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "event_name");
+  RNA_def_property_ui_text(
+      prop, "Name", "Name of the event, matching the name of a Modal Event node");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "map_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_keymap_item_map_type_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_GeometryNodeModalKeymapItem_map_type_get",
+                              "rna_GeometryNodeModalKeymapItem_map_type_set",
+                              nullptr);
+  RNA_def_property_ui_text(prop, "Map Type", "Type of event mapping");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "type");
+  RNA_def_property_enum_items(prop, rna_enum_event_type_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
+  RNA_def_property_ui_text(prop, "Type", "Type of event that triggers this item by default");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "value", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "val");
+  RNA_def_property_enum_items(prop, rna_enum_event_value_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
+  RNA_def_property_ui_text(prop, "Value", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "key_modifier", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "keymodifier");
+  RNA_def_property_enum_items(prop, rna_enum_event_type_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
+  RNA_def_property_ui_text(prop, "Key Modifier", "Regular key pressed as a modifier");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "repeat", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "repeat", 1);
+  RNA_def_property_ui_text(
+      prop, "Repeat", "Run the tool again for every key-repeat event while the key is held");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  struct {
+    const char *identifier;
+    const char *dna_name;
+    const char *ui_name;
+  } modifiers[] = {
+      {"shift", "shift", "Shift"},
+      {"ctrl", "ctrl", "Ctrl"},
+      {"alt", "alt", "Alt"},
+      {"oskey", "oskey", "OS Key"},
+      {"hyper", "hyper", "Hyper"},
+  };
+  for (const auto &modifier : modifiers) {
+    prop = RNA_def_property(srna, modifier.identifier, PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, nullptr, modifier.dna_name, KM_MOD_HELD);
+    RNA_def_property_ui_text(prop, modifier.ui_name, "");
+    RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+  }
+}
+
 static void rna_def_geo_menu_switch_item(BlenderRNA *brna)
 {
   PropertyRNA *prop;
@@ -10607,6 +10772,34 @@ static void rna_def_geometry_nodetree(BlenderRNA *brna)
                                 "rna_GeometryNodeTree_node_tool_idname_set");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_NodeTree_update_asset");
 
+  rna_def_geometry_node_modal_keymap_item(brna);
+
+  prop = RNA_def_property(srna, "modal_keymap_default", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_struct_type(prop, "GeometryNodeModalKeymapItem");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_GeometryNodeTree_modal_keymap_default_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(prop,
+                           "Default Modal Keymap",
+                           "Default key bindings for the events that the node tool reacts to. The "
+                           "actual bindings are configured in the keymap editor");
+
+  prop = RNA_def_property(srna, "modal_keymap_active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_int_funcs(prop,
+                             "rna_GeometryNodeTree_modal_keymap_active_index_get",
+                             "rna_GeometryNodeTree_modal_keymap_active_index_set",
+                             nullptr);
+  RNA_def_property_ui_text(prop, "Active Index", "Index of the active default key binding");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, nullptr);
+
   prop = RNA_def_property(srna, "is_modifier", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(prop, "Modifier", "The node group is used as a geometry modifier");
@@ -11239,6 +11432,8 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeMeshToSDFGrid");
   define("GeometryNode", "GeometryNodeMeshToVolume");
   define("GeometryNode", "GeometryNodeMeshUVSphere");
+  define("GeometryNode", "GeometryNodeModalEvent", def_geo_modal_event);
+  define("GeometryNode", "GeometryNodeModalTimer");
   define("GeometryNode", "GeometryNodeNURBSOrder");
   define("GeometryNode", "GeometryNodeNURBSWeight");
   define("GeometryNode", "GeometryNodeObjectInfo");

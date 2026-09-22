@@ -478,6 +478,10 @@ void WM_keyconfig_init(bContext *C)
       wm->runtime->defaultconf->flag |= KEYCONF_INIT_DEFAULT;
     }
 
+    /* Operator types that were registered before the key configuration existed still need their
+     * modal keymaps. Doing this again is harmless, each keymap is only created once. */
+    WM_keyconfig_operator_modal_keymaps_ensure(wm);
+
     /* Harmless, but no need to update in background mode. */
     if (!G.background) {
       WM_keyconfig_update_tag(nullptr, nullptr);

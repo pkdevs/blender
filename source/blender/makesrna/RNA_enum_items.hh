@@ -105,6 +105,7 @@ DEF_ENUM(rna_enum_event_direction_items)
 
 DEF_ENUM(rna_enum_event_type_items)
 DEF_ENUM(rna_enum_event_type_mask_items)
+DEF_ENUM(rna_enum_keymap_item_map_type_items)
 
 DEF_ENUM(rna_enum_operator_type_flag_items)
 DEF_ENUM(rna_enum_operator_return_items)

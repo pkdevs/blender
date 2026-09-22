@@ -1885,7 +1885,7 @@ void NodesModifierUsageInferenceCache::ensure(const Object &object, const NodesM
       nodes::get_geometry_nodes_input_inference_values(tree, properties_ptr, scope);
 
   /* Compute the hash of the input values. This has to be done every time currently, because there
-   * is no reliable callback yet that is called any of the modifier properties changes. */
+   * is no reliable callback yet that is called when any of the modifier properties changes. */
   XXH3_state_t *state = XXH3_createState();
   XXH3_64bits_reset(state);
   BLI_SCOPED_DEFER([&]() { XXH3_freeState(state); });

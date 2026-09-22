@@ -336,6 +336,12 @@ enum eKeyMap_Flag : short {
   KEYMAP_UPDATE = (1 << 6),
   /** key-map for active tool system. */
   KEYMAP_TOOL = (1 << 7),
+  /**
+   * Modal keymap defined by an operator type rather than by a key configuration preset. Used for
+   * operator types that are registered at run-time, which the preset scripts don't know about.
+   * See #wmOperatorType::modal_keymap_ensure.
+   */
+  KEYMAP_OPERATOR_MODAL = (1 << 8),
 };
 ENUM_OPERATORS(eKeyMap_Flag)
 

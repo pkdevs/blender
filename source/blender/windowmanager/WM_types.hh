@@ -1219,6 +1219,16 @@ struct wmOperatorType {
   /** Pointer to modal keymap. Do not free! */
   wmKeyMap *modalkeymap = nullptr;
 
+  /**
+   * Register #modalkeymap in the given key configuration, including its default bindings.
+   * Called whenever the default key configuration is created or re-created.
+   *
+   * Operator types that exist statically don't need this, because the key configuration
+   * preset scripts add the default items of their modal keymaps, but runtime registered
+   * operators are unkown to these scripts, so they have to provide their own defaults.
+   */
+  void (*modal_keymap_ensure)(wmOperatorType *ot, wmKeyConfig *keyconf) = nullptr;
+
   /** Python needs the operator type as well. */
   bool (*pyop_poll)(bContext *C, wmOperatorType *ot) ATTR_WARN_UNUSED_RESULT = nullptr;
 

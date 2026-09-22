@@ -29,6 +29,21 @@ void WM_keyconfig_reload(bContext *C);
 
 wmKeyConfig *WM_keyconfig_new(wmWindowManager *wm, const char *idname, bool user_defined);
 wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool user_defined);
+/**
+ * Let the operator type register its own modal keymap in the given key configuration, if it has
+ * one. See #wmOperatorType::modal_keymap_ensure.
+ */
+void WM_keyconfig_operator_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyconf);
+/**
+ * Same as above for every registered operator type, in the default key configuration.
+ */
+void WM_keyconfig_operator_modal_keymaps_ensure(wmWindowManager *wm);
+/**
+ * Stop every copy of the keymap from referencing its modal items, which are owned by the operator
+ * type that defines them. The keymap itself is kept, so that key bindings the user configured for
+ * it survive an operator type that is registered again.
+ */
+void WM_keymap_modal_items_clear(wmKeyMap *keymap);
 void WM_keyconfig_remove(wmWindowManager *wm, wmKeyConfig *keyconf);
 void WM_keyconfig_clear(wmKeyConfig *keyconf);
 void WM_keyconfig_free(wmKeyConfig *keyconf);
@@ -204,6 +219,7 @@ void WM_keymap_restore_to_default(wmKeyMap *keymap, wmWindowManager *wm);
  */
 void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties);
 void WM_keymap_item_restore_to_default(wmWindowManager *wm, wmKeyMap *keymap, wmKeyMapItem *kmi);
+eKMI_MapType WM_keymap_map_type_from_event_type(short type);
 int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi);
 
 /* Key Event. */

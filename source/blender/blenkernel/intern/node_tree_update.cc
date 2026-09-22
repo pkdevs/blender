@@ -44,6 +44,7 @@
 #include "NOD_geo_viewer.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
+#include "NOD_geometry_nodes_modal_events.hh"
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_scene_compositor_effect_inputs_srna.hh"
@@ -87,6 +88,8 @@ enum eNodeTreeChangedFlag {
   NTREE_CHANGED_SOCKET_PROPERTY = (1 << 7),
   NTREE_CHANGED_INTERNAL_LINK = (1 << 8),
   NTREE_CHANGED_PARENT = (1 << 9),
+  /** The default modal keymap of a node tool changed. See #GeometryNodeAssetTraits. */
+  NTREE_CHANGED_MODAL_KEYMAP = (1 << 10),
   NTREE_CHANGED_ALL = -1,
 };
 
@@ -700,6 +703,10 @@ class NodeTreeMainUpdater {
       this->update_eval_dependencies(ntree);
     }
 
+    if (ntree.type == NTREE_GEOMETRY) {
+      this->update_modal_events(ntree);
+    }
+
     result.output_changed = this->check_if_output_changed(ntree);
 
     this->update_socket_link_and_use(ntree);
@@ -1193,6 +1200,19 @@ class NodeTreeMainUpdater {
       needs_relations_update_ = true;
       ntree.runtime->eval_dependencies = std::make_unique<nodes::EvalDependencies>(
           std::move(new_deps));
+    }
+  }
+
+  void update_modal_events(bNodeTree &ntree)
+  {
+    ntree.ensure_topology_cache();
+    nodes::ModalEventsInfo new_events = nodes::gather_modal_events_with_cache(ntree);
+
+    /* Only replace the cache when the events actually changed. Node tool operator types include
+     * the events in their hash, so they only register their modal keymap again in that case. */
+    if (!ntree.runtime->modal_events || new_events != *ntree.runtime->modal_events) {
+      ntree.runtime->modal_events = std::make_unique<nodes::ModalEventsInfo>(
+          std::move(new_events));
     }
   }
 
@@ -2318,6 +2338,11 @@ void BKE_ntree_update_tag_link_mute(bNodeTree *ntree, bNodeLink * /*link*/)
 void BKE_ntree_update_tag_active_output_changed(bNodeTree *ntree)
 {
   add_tree_tag(ntree, NTREE_CHANGED_ANY);
+}
+
+void BKE_ntree_update_tag_modal_keymap(bNodeTree *ntree)
+{
+  add_tree_tag(ntree, NTREE_CHANGED_MODAL_KEYMAP);
 }
 
 void BKE_ntree_update_tag_missing_runtime_data(bNodeTree *ntree)

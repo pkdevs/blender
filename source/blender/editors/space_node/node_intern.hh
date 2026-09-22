@@ -678,6 +678,9 @@ void build_socket_tooltip(ui::TooltipData &tip_data,
 /** node_tree_interface_ui.cc */
 
 void node_tree_interface_panel_register(ARegionType *art);
+void node_modal_keymap_panel_register(ARegionType *art);
+void NODE_OT_modal_keymap_item_add(wmOperatorType *ot);
+void NODE_OT_modal_keymap_item_remove(wmOperatorType *ot);
 
 /* -------------------------------------------------------------------- */
 /** \name Utilities for copying node sets

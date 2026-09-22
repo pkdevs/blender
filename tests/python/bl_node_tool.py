@@ -224,6 +224,43 @@ class TestNodeTool(unittest.TestCase):
         for i in left_vertex_indices:
             self.assertAlmostEqual(value_attr.data[i].value, 1.0, places=2)
 
+    def test_simulation_zone_keeps_material(self):
+        from bpy.types import WindowManager
+
+        material = bpy.data.materials.new("TestNodeToolSimMaterial")
+
+        bpy.ops.mesh.primitive_cube_add()
+        cube = bpy.context.active_object
+
+        tree = create_object_mode_mesh_tool_tree(
+            "TestNodeToolSimulation", "geometry.test_node_tool_simulation_material"
+        )
+        tree.interface.new_socket("Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+        tree.interface.new_socket("Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+        group_input = tree.nodes.new("NodeGroupInput")
+        group_output = tree.nodes.new("NodeGroupOutput")
+        set_material = tree.nodes.new("GeometryNodeSetMaterial")
+        set_material.inputs["Material"].default_value = material
+
+        sim_input = tree.nodes.new("GeometryNodeSimulationInput")
+        sim_output = tree.nodes.new("GeometryNodeSimulationOutput")
+        # Nodes are created with a default "Geometry" state item already.
+        sim_input.pair_with_output(sim_output)
+
+        tree.links.new(group_input.outputs["Geometry"], set_material.inputs["Geometry"])
+        tree.links.new(set_material.outputs["Geometry"], sim_input.inputs["Geometry"])
+        tree.links.new(sim_input.outputs["Geometry"], sim_output.inputs["Geometry"])
+        tree.links.new(sim_output.outputs["Geometry"], group_output.inputs["Geometry"])
+
+        WindowManager.register_node_group_operators()
+
+        # Modal execution is unnecessary because bake item conversion happens on the first execution anyway.
+        bpy.ops.geometry.test_node_tool_simulation_material('EXEC_DEFAULT')
+
+        self.assertEqual(len(cube.data.materials), 1)
+        self.assertEqual(cube.data.materials[0], material)
+
 
 if __name__ == "__main__":
     import sys

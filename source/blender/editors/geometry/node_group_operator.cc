@@ -11,6 +11,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 
 #include "DNA_key_types.h"
 #include "ED_curves.hh"
@@ -23,12 +24,15 @@
 #include "WM_api.hh"
 
 #include "BKE_asset.hh"
+#include "BKE_bake_data_block_id.hh"
+#include "BKE_bake_data_block_map.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_geometry_nodes_reference_set.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
@@ -64,6 +68,8 @@
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+#include "FN_lazy_function_execute.hh"
 
 #include "ED_asset.hh"
 #include "ED_asset_menu_utils.hh"
@@ -139,6 +145,9 @@ struct OperatorTypeData : public wmOperatorType::TypeData {
   std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> asset_meta_data_properties;
   Vector<StructRNA *> generated_structs;
   Vector<Array<EnumPropertyItem, 0>> enum_item_storage;
+  Array<EnumPropertyItem, 0> modal_keymap_items;
+  /** Owns the identifier strings referenced by #modal_keymap_items. */
+  Array<std::string, 0> modal_keymap_item_identifiers;
 
   struct LocalRef {
     uint32_t session_uid;
@@ -525,7 +534,6 @@ static void remove_shape_key_attributes(Mesh &mesh, const Key &key)
  */
 static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
                                                         Object &object,
-                                                        nodes::GeoNodesOperatorData &operator_data,
                                                         Vector<MeshState> &orig_mesh_states)
 {
   switch (object.type) {
@@ -541,10 +549,6 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
       Mesh *mesh = id_cast<Mesh *>(object.data);
 
       if (mesh->runtime->edit_mesh) {
-        BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
-        operator_data.active_point_index = BM_mesh_active_vert_index_get(bm);
-        operator_data.active_edge_index = BM_mesh_active_edge_index_get(bm);
-        operator_data.active_face_index = BM_mesh_active_face_index_get(bm, false, true);
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
         /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh
@@ -574,15 +578,55 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
     }
     case OB_GREASE_PENCIL: {
       const GreasePencil *grease_pencil = id_cast<const GreasePencil *>(object.data);
-      if (const bke::greasepencil::Layer *active_layer = grease_pencil->get_active_layer()) {
-        operator_data.active_layer_index = *grease_pencil->get_layer_index(*active_layer);
-      }
       GreasePencil *grease_pencil_copy = BKE_grease_pencil_copy_for_eval(grease_pencil);
       grease_pencil_copy->runtime->eval_frame = int(DEG_get_ctime(&depsgraph));
       return bke::GeometrySet::from_grease_pencil(grease_pencil_copy);
     }
     default:
       return {};
+  }
+}
+
+static void store_mesh_state_for_comparison(Object &object, Vector<MeshState> &orig_mesh_states)
+{
+  switch (object.type) {
+    case OB_MESH: {
+      Mesh *mesh = id_cast<Mesh *>(object.data);
+      if (!mesh->runtime->edit_mesh) {
+        orig_mesh_states.append_as(*mesh);
+      }
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
+static void get_geometry_active_indices(const Object &object,
+                                        nodes::GeoNodesOperatorData &operator_data)
+{
+  switch (object.type) {
+    case OB_MESH: {
+      const Mesh *mesh = id_cast<const Mesh *>(object.data);
+      if (mesh->runtime->edit_mesh) {
+        BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(mesh));
+        operator_data.active_point_index = BM_mesh_active_vert_index_get(bm);
+        operator_data.active_edge_index = BM_mesh_active_edge_index_get(bm);
+        operator_data.active_face_index = BM_mesh_active_face_index_get(bm, false, true);
+      }
+      break;
+    }
+    case OB_GREASE_PENCIL: {
+      const GreasePencil *grease_pencil = id_cast<const GreasePencil *>(object.data);
+      if (const bke::greasepencil::Layer *active_layer = grease_pencil->get_active_layer()) {
+        operator_data.active_layer_index = *grease_pencil->get_layer_index(*active_layer);
+      }
+      break;
+    }
+    default: {
+      break;
+    }
   }
 }
 
@@ -935,7 +979,167 @@ static void store_input_node_values_rna_props(const bContext &C,
   RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
 }
 
-static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
+struct DataPerZone {
+  nodes::SimulationZoneBehavior behavior;
+  std::optional<bke::bake::BakeValues> state;
+};
+
+class NodeOperatorBakeDataBlockMap : public bke::bake::BakeDataBlockMap {
+ private:
+  std::mutex mutex_;
+  Map<bke::bake::BakeDataBlockID, uint32_t> session_uid_by_key_;
+  Main &bmain_;
+
+ public:
+  NodeOperatorBakeDataBlockMap(Main &bmain) : bmain_(bmain) {}
+
+  ID *lookup_or_remember_missing(const bke::bake::BakeDataBlockID &key) override
+  {
+    std::lock_guard lock{mutex_};
+    const uint32_t session_uid = session_uid_by_key_.lookup_or_add_cb(key, [&]() -> uint32_t {
+      ID *id = BKE_libblock_find_name_and_library(
+          &bmain_, short(key.type), key.id_name.c_str(), key.lib_name.c_str());
+      return id ? id->session_uid : MAIN_ID_SESSION_UID_UNSET;
+    });
+    if (session_uid == MAIN_ID_SESSION_UID_UNSET) {
+      return nullptr;
+    }
+    return BKE_libblock_find_session_uid(&bmain_, short(key.type), session_uid);
+  }
+
+  void try_add(ID &id) override
+  {
+    ID *id_orig = (id.tag & ID_TAG_NO_MAIN) ? DEG_get_original(&id) : &id;
+    std::lock_guard lock{mutex_};
+    session_uid_by_key_.add_overwrite(bke::bake::BakeDataBlockID(*id_orig), id_orig->session_uid);
+  }
+};
+
+struct NodeOperatorCustomData {
+  double last_time;
+  bool initialized = false;
+  Array<bke::GeometrySet> geometry_orig;
+  Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
+  NodeOperatorBakeDataBlockMap bake_data_block_map;
+  wmTimer *timer = nullptr;
+  NodeOperatorCustomData(Main &bmain)
+      : last_time(BLI_time_now_seconds()), bake_data_block_map(bmain)
+  {
+  }
+};
+
+/**
+ * The window manager rewrites events that the operator's modal keymap matches, so the original
+ * event type has to be read from #wmEvent::prev_type in that case. Used for the keys that the
+ * operator handles itself that don't necessarily have modal events.
+ */
+static wmEventType original_event_type(const wmEvent &event)
+{
+  return event.type == EVT_MODAL_MAP ? event.prev_type : event.type;
+}
+
+/**
+ * \return The name of the event that Modal Event nodes use to react to this event, or none if the
+ * event isn't part of the tool's modal keymap.
+ */
+static std::optional<StringRef> modal_event_name_for_event(const wmOperatorType &ot,
+                                                           const wmEvent &event)
+{
+  if (event.type != EVT_MODAL_MAP || !ot.modalkeymap || !ot.modalkeymap->modal_items) {
+    return std::nullopt;
+  }
+  const auto *items = static_cast<const EnumPropertyItem *>(ot.modalkeymap->modal_items);
+  /* The UI name rather than the identifier, since that's the name the Modal Event nodes store. */
+  const char *name = nullptr;
+  if (!RNA_enum_name(items, event.val, &name)) {
+    return std::nullopt;
+  }
+  return StringRef(name);
+}
+
+class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
+ private:
+  mutable std::mutex mutex_;
+  mutable Map<int, nodes::SimulationZoneBehavior *> behaviors_;
+  Map<int, std::unique_ptr<DataPerZone>> &data_by_zone_;
+  bke::bake::BakeDataBlockMap &data_block_map_;
+
+ public:
+  float delta_time = 0.0f;
+
+  NodeOperatorSimulationParams(Map<int, std::unique_ptr<DataPerZone>> &data_by_zone,
+                               bke::bake::BakeDataBlockMap &data_block_map,
+                               const float delta_time)
+      : data_by_zone_{data_by_zone}, data_block_map_(data_block_map), delta_time(delta_time)
+  {
+  }
+
+  nodes::SimulationZoneBehavior *get(const int zone_id) const override
+  {
+    std::lock_guard lock{mutex_};
+    return behaviors_.lookup_or_add_cb(zone_id, [&]() {
+      DataPerZone &data = *data_by_zone_.lookup_or_add_cb(
+          zone_id,
+          [&]() -> std::unique_ptr<DataPerZone> { return std::make_unique<DataPerZone>(); });
+      if (data.state.has_value()) {
+        auto input = nodes::sim_input::UseCache();
+        input.values = std::move(*data.state);
+        input.delta_time = this->delta_time;
+        data.behavior.input = std::move(input);
+      }
+      else {
+        data.behavior.input = nodes::sim_input::PassThrough();
+      }
+
+      data.behavior.output = nodes::sim_output::StoreNewState{
+          [&data](bke::bake::BakeValues values) { data.state = std::move(values); }};
+      data.behavior.data_block_map = &data_block_map_;
+      return &data.behavior;
+    });
+  }
+};
+
+static void run_node_group_end(bContext &C, wmOperator &op)
+{
+  auto *op_data = static_cast<NodeOperatorCustomData *>(op.customdata);
+  if (!op_data) {
+    return;
+  }
+  if (op_data->timer) {
+    WM_event_timer_remove(CTX_wm_manager(&C), op_data->timer->win, op_data->timer);
+  }
+  MEM_delete(op_data);
+  op.customdata = nullptr;
+}
+
+static void store_geometries(bContext &C,
+                             wmOperator &op,
+                             Depsgraph &depsgraph_active,
+                             const Span<Object *> objects,
+                             const Span<bke::GeometrySet> geometries)
+{
+  Main *bmain = CTX_data_main(&C);
+  Scene *scene = CTX_data_scene(&C);
+  RegionView3D *rv3d = CTX_wm_region_view3d(&C);
+  for (const int object_i : objects.index_range()) {
+    Object &object = *objects[object_i];
+    Vector<MeshState> orig_mesh_states;
+    store_mesh_state_for_comparison(object, orig_mesh_states);
+    store_result_geometry(
+        C, op, depsgraph_active, *bmain, *scene, object, rv3d, geometries[object_i]);
+    WM_event_add_notifier(&C, NC_GEOM | ND_DATA, object.data);
+  }
+}
+
+static void run_node_group_cancel(bContext *C, wmOperator *op)
+{
+  run_node_group_end(*C, *op);
+}
+
+static wmOperatorStatus run_node_group_execute(bContext *C,
+                                               wmOperator *op,
+                                               const wmEvent *event,
+                                               const bool is_invoke)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -945,8 +1149,25 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   }
   const eObjectMode mode = active_object->mode;
 
+  if (!op->customdata) {
+    op->customdata = MEM_new<NodeOperatorCustomData>(__func__, *bmain);
+  }
+  NodeOperatorCustomData &op_data = *static_cast<NodeOperatorCustomData *>(op->customdata);
+
+  /* The event is null when the operator is redone from the redo panel or called from a script.
+   * Then the previously stored properties are reused and the operator can't run modally. */
+  const bool can_run_modal = event != nullptr;
+  if (event) {
+    store_input_node_values_rna_props(*C, *op, *event);
+  }
+
+  /* Only this operator's timer should trigger execution. */
+  const bool is_timer_event = event && event->type == TIMER && op_data.timer &&
+                              event->customdata == op_data.timer;
+
   const bNodeTree *node_tree_orig = get_node_group(*C, *op->type, op->reports);
   if (!node_tree_orig) {
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
 
@@ -963,6 +1184,29 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     }
   }
 
+  StringRef active_event;
+  if (event) {
+    const wmEventType type = original_event_type(*event);
+    if (type == EVT_ESCKEY) {
+      store_geometries(*C, *op, *depsgraph_active, objects, op_data.geometry_orig);
+      run_node_group_cancel(C, op);
+      return OPERATOR_CANCELLED;
+    }
+    if (op_data.timer && ISTIMER(type) && !is_timer_event) {
+      /* Timers from other parts of Blender should not trigger another execution. */
+      return OPERATOR_PASS_THROUGH;
+    }
+    if (const std::optional<StringRef> event_name = modal_event_name_for_event(*op->type, *event))
+    {
+      active_event = *event_name;
+    }
+    else if (!is_invoke && !is_timer_event && !ELEM(type, EVT_PADENTER, EVT_RETKEY)) {
+      /* The event is not part of the tool's modal keymap, so no Modal Event node can react to it.
+       * Evaluating the whole node group would just be wasted work. */
+      return OPERATOR_PASS_THROUGH;
+    }
+  }
+
   const nodes::GeoNodesOperatorDepsgraphs depsgraphs{
       depsgraph_active,
       extra_ids.is_empty() ? nullptr : build_extra_depsgraph(*depsgraph_active, extra_ids),
@@ -975,24 +1219,32 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   else {
     node_tree = node_tree_orig;
   }
+  node_tree->ensure_interface_cache();
+  const Span<const bNodeTreeInterfaceSocket *> interface_inputs = node_tree->interface_inputs();
+  const Span<const bNodeTreeInterfaceSocket *> interface_outputs = node_tree->interface_outputs();
 
   const nodes::GeometryNodesLazyFunctionGraphInfo *lf_graph_info =
       nodes::ensure_geometry_nodes_lazy_function_graph(*node_tree).get();
   if (lf_graph_info == nullptr) {
     BKE_report(op->reports, RPT_ERROR, "Cannot evaluate node group");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
 
   if (!node_tree->group_output_node()) {
     BKE_report(op->reports, RPT_ERROR, "Node group must have a group output node");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
-  if (node_tree->interface_outputs().is_empty() ||
-      !STREQ(node_tree->interface_outputs()[0]->socket_type, "NodeSocketGeometry"))
+  if (interface_outputs.is_empty() ||
+      !STREQ(interface_outputs[0]->socket_type, "NodeSocketGeometry"))
   {
     BKE_report(op->reports, RPT_ERROR, "Node group's first output must be a geometry");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
+
+  PointerRNA inputs_ptr = RNA_pointer_get(op->ptr, "inputs");
 
   bke::OperatorComputeContext compute_context;
   Set<ComputeContextHash> verbose_log_contexts;
@@ -1002,14 +1254,38 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   find_verbose_log_contexts(*bmain, verbose_log_contexts);
 
   /* May be null if operator called from outside 3D view context. */
-  const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Vector<MeshState> orig_mesh_states;
 
-  for (Object *object : objects) {
+  if (!op_data.initialized) {
+    op_data.geometry_orig.reinitialize(objects.size());
+    for (const int object_i : objects.index_range()) {
+      op_data.geometry_orig[object_i] = get_original_geometry_eval_copy(
+          *depsgraph_active, *objects[object_i], orig_mesh_states);
+    }
+    op_data.simulation_data_by_zone.reinitialize(objects.size());
+    op_data.initialized = true;
+  }
+
+  const double now = BLI_time_now_seconds();
+  const float delta_time = float(now - op_data.last_time);
+  op_data.last_time = now;
+
+  /* The operator keeps running if one of the evaluations has an enabled Modal Timer or Modal Event
+   * node, but the timer is only added when a Modal Timer node asks for it. */
+  std::atomic<bool> modal_requested = false;
+  std::atomic<bool> timer_requested = false;
+
+  Array<bke::GeometrySet> output_geometries(objects.size());
+  for (const int object_i : objects.index_range()) {
+    Object &object = *objects[object_i];
     nodes::GeoNodesOperatorData operator_eval_data{};
     operator_eval_data.mode = mode;
+    operator_eval_data.is_timer_event = is_timer_event;
+    operator_eval_data.active_event = active_event;
+    operator_eval_data.modal_requested = &modal_requested;
+    operator_eval_data.timer_requested = &timer_requested;
     operator_eval_data.depsgraphs = &depsgraphs;
-    operator_eval_data.self_object_orig = object;
+    operator_eval_data.self_object_orig = &object;
     operator_eval_data.scene_orig = scene;
     operator_eval_data.input_ids = &input_ids;
     RNA_int_get_array(op->ptr, "mouse_position", operator_eval_data.mouse_position);
@@ -1022,25 +1298,116 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
         op->ptr, "viewport_view_matrix", operator_eval_data.viewport_viewmat.base_ptr());
     operator_eval_data.viewport_is_perspective = RNA_boolean_get(op->ptr,
                                                                  "viewport_is_perspective");
+    get_geometry_active_indices(object, operator_eval_data);
+
+    NodeOperatorSimulationParams simulation_params(
+        op_data.simulation_data_by_zone[object_i], op_data.bake_data_block_map, delta_time);
 
     nodes::GeoNodesCallData call_data{};
     call_data.operator_data = &operator_eval_data;
+    call_data.simulation_params = &simulation_params;
     call_data.eval_log = eval_log.log.get();
-    if (object == active_object) {
+    if (&object == active_object) {
       /* Only log values from the active object. */
       call_data.verbose_log_contexts = &verbose_log_contexts;
     }
 
-    bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(
-        *depsgraph_active, *object, operator_eval_data, orig_mesh_states);
+    store_mesh_state_for_comparison(object, orig_mesh_states);
 
-    bke::GeometrySet new_geometry = nodes::execute_geometry_nodes_on_geometry(
-        *node_tree, *op->ptr, compute_context, call_data, std::move(geometry_orig));
+    const nodes::GeometryNodesLazyFunctionGraphInfo &lf_graph_info =
+        *nodes::ensure_geometry_nodes_lazy_function_graph(*node_tree);
+    const nodes::GeometryNodesGroupFunction &function = lf_graph_info.function;
+    const lf::LazyFunction &lazy_function = *function.function;
+    const int num_inputs = lazy_function.inputs().size();
+    const int num_outputs = lazy_function.outputs().size();
 
-    store_result_geometry(
-        *C, *op, *depsgraph_active, *bmain, *scene, *object, rv3d, std::move(new_geometry));
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, object->data);
+    nodes::GeoNodesUserData user_data;
+    user_data.call_data = &call_data;
+    call_data.root_ntree = node_tree;
+
+    user_data.compute_context = &compute_context;
+
+    ResourceScope scope;
+    LinearAllocator<> &allocator = scope.allocator();
+
+    /* Prepare main inputs. */
+    Array<GMutablePointer> param_inputs(num_inputs);
+    for (const int i : interface_inputs.index_range()) {
+      const bNodeTreeInterfaceSocket &interface_socket = *interface_inputs[i];
+      const bke::bNodeSocketType *typeinfo = interface_socket.socket_typeinfo();
+      const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
+      if (socket_type == SOCK_GEOMETRY && i == 0) {
+        bke::SocketValueVariant &value = scope.construct<bke::SocketValueVariant>();
+        value = bke::SocketValueVariant::from(op_data.geometry_orig[object_i]);
+        param_inputs[function.inputs.main[0]] = &value;
+        continue;
+      }
+
+      PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, interface_socket.identifier);
+      bke::SocketValueVariant value = init_socket_cpp_value(
+          &call_data, &input_props_ptr, *node_tree, interface_socket);
+      param_inputs[function.inputs.main[i]] = &scope.construct<bke::SocketValueVariant>(
+          std::move(value));
+    }
+
+    /* Prepare used-outputs inputs. */
+    Array<bool> output_used_inputs(interface_outputs.size(), true);
+    for (const int i : interface_outputs.index_range()) {
+      param_inputs[function.inputs.output_usages[i]] = &output_used_inputs[i];
+    }
+
+    /* No anonymous attributes have to be propagated. */
+    Array<bke::GeometryNodesReferenceSet> references_to_propagate(
+        function.inputs.references_to_propagate.geometry_outputs.size());
+    for (const int i : references_to_propagate.index_range()) {
+      param_inputs[function.inputs.references_to_propagate.range[i]] = &references_to_propagate[i];
+    }
+
+    /* Prepare memory for output values. */
+    Array<GMutablePointer> param_outputs(num_outputs);
+    for (const int i : IndexRange(num_outputs)) {
+      const lf::Output &lf_output = lazy_function.outputs()[i];
+      const CPPType &type = *lf_output.type;
+      void *buffer = allocator.allocate(type);
+      param_outputs[i] = {type, buffer};
+    }
+
+    /* We want to evaluate the main outputs, but don't care about which inputs are used for now. */
+    Array<lf::ValueUsage> param_output_usages(num_outputs);
+    param_output_usages.as_mutable_span().slice(function.outputs.main).fill(lf::ValueUsage::Used);
+    param_output_usages.as_mutable_span()
+        .slice(function.outputs.input_usages)
+        .fill(lf::ValueUsage::Unused);
+
+    nodes::GeoNodesLocalUserData local_user_data(user_data);
+
+    lf::Context lf_context(lazy_function.init_storage(allocator), &user_data, &local_user_data);
+    Array<std::optional<lf::ValueUsage>> param_input_usages(num_inputs);
+    Array<bool> param_set_outputs(num_outputs, false);
+    lf::BasicParams lf_params{lazy_function,
+                              param_inputs,
+                              param_outputs,
+                              param_input_usages,
+                              param_output_usages,
+                              param_set_outputs};
+    {
+      nodes::ScopedComputeContextTimer timer{lf_context};
+      lazy_function.execute(lf_params, lf_context);
+    }
+    lazy_function.destruct_storage(lf_context.storage);
+
+    output_geometries[object_i] =
+        param_outputs[0].get<bke::SocketValueVariant>()->extract<bke::GeometrySet>();
+
+    for (const int i : IndexRange(num_outputs)) {
+      if (param_set_outputs[i]) {
+        GMutablePointer &ptr = param_outputs[i];
+        ptr.destruct();
+      }
+    }
   }
+
+  store_geometries(*C, *op, *depsgraph_active, objects, output_geometries);
 
   nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
   tree_log.ensure_node_warnings(*bmain);
@@ -1053,7 +1420,35 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     }
   }
 
-  return OPERATOR_FINISHED;
+  wmWindow *window = CTX_wm_window(C);
+  if (!can_run_modal || !modal_requested || !window) {
+    run_node_group_end(*C, *op);
+    return OPERATOR_FINISHED;
+  }
+  if (ELEM(original_event_type(*event), EVT_PADENTER, EVT_RETKEY)) {
+    /* Hard-coded "end" key. Let the evaluation happen first though, unlike "escape." */
+    run_node_group_end(*C, *op);
+    return OPERATOR_FINISHED;
+  }
+
+  if (timer_requested && !op_data.timer) {
+    op_data.timer = WM_event_timer_add(CTX_wm_manager(C), window, TIMER, 1.0 / 100.0);
+  }
+  else if (!timer_requested && op_data.timer) {
+    WM_event_timer_remove(CTX_wm_manager(C), op_data.timer->win, op_data.timer);
+    op_data.timer = nullptr;
+  }
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
+{
+  return run_node_group_execute(C, op, nullptr, false);
+}
+
+static wmOperatorStatus run_node_group_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  return run_node_group_execute(C, op, event, false);
 }
 
 static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1063,9 +1458,11 @@ static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const
     return OPERATOR_CANCELLED;
   }
 
-  store_input_node_values_rna_props(*C, *op, *event);
-
-  return run_node_group_exec(C, op);
+  const wmOperatorStatus retval = run_node_group_execute(C, op, event, true);
+  if (retval & OPERATOR_RUNNING_MODAL) {
+    WM_event_add_modal_handler(C, op);
+  }
+  return retval;
 }
 
 static void run_node_group_ui(bContext *C, wmOperator *op)
@@ -1407,6 +1804,152 @@ static StructRNA *create_panels_srna(const IDProperty &properties,
   return srna;
 }
 
+/**
+ * The events and their default key bindings are read back from the asset meta-data properties,
+ * because those are available for both local node groups and assets that aren't loaded. Since the
+ * properties are part of #OperatorTypeData::hash, the modal keymap is only rebuilt when the events
+ * or their defaults actually changed.
+ */
+static std::string identifier_from_event_name(const StringRef name)
+{
+  std::string identifier;
+  identifier.reserve(name.size());
+  for (const char c : name) {
+    identifier.push_back(std::isalnum(uchar(c)) ? c : '_');
+  }
+  if (!identifier.empty() && std::isdigit(uchar(identifier[0]))) {
+    identifier.insert(identifier.begin(), '_');
+  }
+  return identifier;
+}
+
+/** Build the modal keymap's item array from the events listed in the meta-data properties. */
+static void ensure_modal_keymap_items(OperatorTypeData &type_data)
+{
+  const IDProperty *events = IDP_GetPropertyFromGroup(type_data.asset_meta_data_properties.get(),
+                                                      "modal_events");
+  if (!events || events->type != IDP_GROUP) {
+    return;
+  }
+  Vector<const IDProperty *> event_props;
+  Vector<std::string> identifiers;
+  for (const IDProperty &event : events->data.group) {
+    if (event.type != IDP_STRING) {
+      continue;
+    }
+    std::string identifier = identifier_from_event_name(event.name);
+    if (identifier.empty()) {
+      continue;
+    }
+    if (identifiers.contains(identifier)) {
+      /* Two names that only differ in characters that aren't part of an identifier end up with
+       * the same identifier. Only the first of them can be bound to a key. */
+      continue;
+    }
+    identifiers.append(std::move(identifier));
+    event_props.append(&event);
+  }
+  if (identifiers.is_empty()) {
+    return;
+  }
+
+  type_data.modal_keymap_item_identifiers = Array<std::string, 0>(identifiers.as_span());
+
+  Vector<EnumPropertyItem> items;
+  for (const int i : event_props.index_range()) {
+    items.append({i,
+                  type_data.modal_keymap_item_identifiers[i].c_str(),
+                  0,
+                  event_props[i]->name,
+                  IDP_string_get(event_props[i])});
+  }
+  items.append({0, nullptr, 0, nullptr, nullptr});
+  type_data.modal_keymap_items = Array<EnumPropertyItem, 0>(items.as_span());
+}
+
+static void add_default_modal_keymap_items(wmKeyMap &keymap,
+                                           const IDProperty &properties,
+                                           const Span<EnumPropertyItem> items)
+{
+  const IDProperty *keymap_props = IDP_GetPropertyFromGroup(&properties, "modal_keymap_default");
+  if (!keymap_props || keymap_props->type != IDP_GROUP) {
+    return;
+  }
+  for (const IDProperty &item_props : keymap_props->data.group) {
+    if (item_props.type != IDP_GROUP) {
+      continue;
+    }
+    const std::optional<StringRefNull> event_name = IDP_group_lookup_string(item_props,
+                                                                            "event_name");
+    if (!event_name) {
+      continue;
+    }
+    /* The default keymap can be out of date when the Modal Event node that defined an event has
+     * been removed or renamed. That's not an error, the binding is just skipped. */
+    const std::string identifier = identifier_from_event_name(*event_name);
+    int propvalue;
+    if (!RNA_enum_value_from_id(items.data(), identifier.c_str(), &propvalue)) {
+      continue;
+    }
+    KeyMapItem_Params params{};
+    params.type = IDP_group_lookup_int(item_props, "type").value_or(0);
+    params.value = IDP_group_lookup_int(item_props, "val").value_or(0);
+    params.direction = IDP_group_lookup_int(item_props, "direction").value_or(0);
+    params.modifier = 0;
+    if (IDP_group_lookup_int(item_props, "shift").value_or(0)) {
+      params.modifier |= KM_SHIFT;
+    }
+    if (IDP_group_lookup_int(item_props, "ctrl").value_or(0)) {
+      params.modifier |= KM_CTRL;
+    }
+    if (IDP_group_lookup_int(item_props, "alt").value_or(0)) {
+      params.modifier |= KM_ALT;
+    }
+    if (IDP_group_lookup_int(item_props, "oskey").value_or(0)) {
+      params.modifier |= KM_OSKEY;
+    }
+    if (IDP_group_lookup_int(item_props, "hyper").value_or(0)) {
+      params.modifier |= KM_HYPER;
+    }
+    params.keymodifier = IDP_group_lookup_int(item_props, "keymodifier").value_or(0);
+    /* Not #WM_modalkeymap_add_item_str: that stores the name for #wm_user_modal_keymap_set_items
+     * to resolve later, but it only does that for keymaps that don't have their items yet. */
+    wmKeyMapItem &kmi = *WM_modalkeymap_add_item(&keymap, &params, propvalue);
+    if (!IDP_group_lookup_int(item_props, "repeat").value_or(0)) {
+      kmi.flag |= KMI_REPEAT_IGNORE;
+    }
+  }
+}
+
+/**
+ * Create the modal keymap of a node tool and fill it with the default bindings its node groups
+ * define. Called by the window manager whenever the default key configuration is created or
+ * re-created, and directly when the node group changed.
+ */
+static void node_tool_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyconf)
+{
+  auto &type_data = static_cast<OperatorTypeData &>(*ot->custom_data);
+  if (type_data.modal_keymap_items.is_empty()) {
+    ensure_modal_keymap_items(type_data);
+    if (type_data.modal_keymap_items.is_empty()) {
+      return;
+    }
+  }
+  /* The keymap name is its identity, so the operator identifier is used rather than the tool name,
+   * which isn't unique. */
+  wmKeyMap *keymap = WM_modalkeymap_ensure(
+      keyconf, type_data.idname.c_str(), type_data.modal_keymap_items.data());
+  /* Not #WM_modalkeymap_assign, because that looks the operator type up by name and it is only
+   * added to the map after the registration callback returns (see #WM_operatortype_append_ptr). */
+  ot->modalkeymap = keymap;
+
+  /* #WM_modalkeymap_ensure keeps the items of a keymap that already exists, so replace them
+   * instead of adding a second copy of every binding. */
+  WM_keymap_clear(keymap);
+  add_default_modal_keymap_items(
+      *keymap, *type_data.asset_meta_data_properties, type_data.modal_keymap_items.as_span());
+}
+
 static void register_node_tool(wmOperatorType *ot,
                                std::unique_ptr<OperatorTypeData> &type_data_ptr)
 {
@@ -1421,8 +1964,11 @@ static void register_node_tool(wmOperatorType *ot,
   ot->pyop_poll = run_node_group_poll;
   ot->invoke = run_node_group_invoke;
   ot->exec = run_node_group_exec;
+  ot->modal = run_node_group_modal;
+  ot->cancel = run_node_group_cancel;
   ot->ui = run_node_group_ui;
   ot->ui_poll = run_node_ui_poll;
+  ot->modal_keymap_ensure = node_tool_modal_keymap_ensure;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_NODE_TOOL;
   if (type_data.flag & GEO_NODE_ASSET_WAIT_FOR_CURSOR) {
@@ -1776,12 +2322,24 @@ void register_node_group_operators(const bContext &C)
   }
 
   Vector<std::unique_ptr<OperatorTypeData>> vector = types_to_register.extract_vector();
+  Vector<StringRefNull> registered_idnames;
   for (std::unique_ptr<OperatorTypeData> &type : vector) {
+    registered_idnames.append(type->idname);
     WM_operatortype_append_ptr(
         [](wmOperatorType *ot, void *user_data) {
           register_node_tool(ot, *static_cast<std::unique_ptr<OperatorTypeData> *>(user_data));
         },
         &type);
+  }
+
+  /* Build the modal keymaps of the tools that were just registered. Only those, so that editing
+   * one node group doesn't rebuild the keymaps of every other tool. */
+  if (wm.runtime->defaultconf) {
+    for (const StringRefNull idname : registered_idnames) {
+      if (wmOperatorType *ot = WM_operatortype_find(idname.c_str(), true)) {
+        WM_keyconfig_operator_modal_keymap_ensure(ot, wm.runtime->defaultconf);
+      }
+    }
   }
 
   registration_data.local_types.clear();

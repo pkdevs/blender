@@ -190,6 +190,10 @@ void WM_operatortype_remove_ptr(wmOperatorType *ot)
     wm_operatortype_free_macro(ot);
   }
 
+  if (ot->modal_keymap_ensure && ot->modalkeymap) {
+    WM_keymap_modal_items_clear(ot->modalkeymap);
+  }
+
   get_operators_map().remove(ot);
 
   WM_keyconfig_update_operatortype_tag();

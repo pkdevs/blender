@@ -23,6 +23,10 @@
 /** Workaround to forward-declare C++ type in C header. */
 #include "BLI_vector.hh"
 
+#ifdef hyper /* MSVC defines. */
+#  undef hyper
+#endif
+
 namespace blender {
 
 template<typename T> class Span;
@@ -51,6 +55,7 @@ struct bNodeSocketType;
 namespace bke {
 struct RuntimeNodeEnumItems;
 }  // namespace bke
+enum wmEventType : int16_t;
 
 struct AnimData;
 struct Collection;
@@ -2190,10 +2195,41 @@ struct bNodeSocketValueMenu {
 #endif
 };
 
+/**
+ * One entry of the default modal keymap of a node tool, mirroring the relevant fields of
+ * #wmKeyMapItem, which is what it is converted to when the tool's operator type is registered.
+ * The binding is only a default, the keymap is configured in the keymap editor like any other
+ * operator.
+ */
+struct GeometryNodeModalKeymapItem {
+  /** Name of the event, matching the name of a Modal Event node. See #nodes::ModalEvent. */
+  char event_name[/*MAX_NAME*/ 64];
+  /** #wmKeyMapItem.type. */
+  wmEventType type;
+  /** #wmKeyMapItem.keymodifier. */
+  short keymodifier;
+  /** #wmKeyMapItem.val. */
+  int8_t val;
+  /** #wmKeyMapItem.direction. */
+  int8_t direction;
+  int8_t shift;
+  int8_t ctrl;
+  int8_t alt;
+  int8_t oskey;
+  int8_t hyper;
+  /** Opposite of #KMI_REPEAT_IGNORE: run the tool again for every key-repeat event. */
+  int8_t repeat;
+  char _pad[4];
+};
+
 struct GeometryNodeAssetTraits {
   int flag = 0;
   char _pad[4] = {};
   char *node_tool_idname = nullptr;
+  /** Default bindings for events defined by Modal Event nodes. */
+  GeometryNodeModalKeymapItem *modal_keymap_default = nullptr;
+  int modal_keymap_default_num = 0;
+  int modal_keymap_active_index = 0;
 };
 
 struct CompositorNodeAssetTraits {
@@ -3835,6 +3871,17 @@ struct GeometryNodeClosureToList {
   GeometryNodeClosureToListItem *items = nullptr;
   int items_num = 0;
   int active_index = 0;
+};
+
+struct GeometryNodeModalEvent {
+  DNA_DEFINE_CXX_METHODS(GeometryNodeModalEvent)
+  /**
+   * Identifies the event within the node tool. All modal event nodes with the same name in the
+   * node group and its nested groups define the same event.
+   */
+  char *name = nullptr;
+  /** UI explanation of what the tool does when the event is processed. */
+  char *description = nullptr;
 };
 
 struct NodeGeometryDistributePointsInVolume {

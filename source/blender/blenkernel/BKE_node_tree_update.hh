@@ -55,6 +55,12 @@ void BKE_ntree_update_tag_link_mute(bNodeTree *ntree, bNodeLink *link);
 
 /** Used when the a new output node becomes active and therefore changes the output. */
 void BKE_ntree_update_tag_active_output_changed(bNodeTree *ntree);
+/**
+ * The default modal keymap of a node tool changed. The events and bindings that the node group
+ * and its nested groups define are cached on the node tree, and that cache is refreshed as
+ * part of the node tree update.
+ */
+void BKE_ntree_update_tag_modal_keymap(bNodeTree *ntree);
 /** Used after file loading when run-time data on the tree has not been initialized yet. */
 void BKE_ntree_update_tag_missing_runtime_data(bNodeTree *ntree);
 /** Used when change parent node. */

@@ -128,10 +128,10 @@ static GeometryNodesInputType get_effective_input_type(PointerRNA *input_props_p
   return GeometryNodesInputType::Fallback;
 }
 
-static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *call_data,
-                                                     PointerRNA *input_props_ptr,
-                                                     const bNodeTree &ntree,
-                                                     const bNodeTreeInterfaceSocket &io_socket)
+bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *call_data,
+                                              PointerRNA *input_props_ptr,
+                                              const bNodeTree &ntree,
+                                              const bNodeTreeInterfaceSocket &io_socket)
 {
   const bke::bNodeSocketType *stype = io_socket.socket_typeinfo();
   const eNodeSocketDatatype socket_type = stype->type;

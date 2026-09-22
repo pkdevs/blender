@@ -39,6 +39,7 @@ set(SRC
   node_geometry_volume_grid_search.cc
   node_gizmo.cc
   node_group.cc
+  node_modal_keymap_ui.cc
   node_ops.cc
   node_relationships.cc
   node_select.cc
