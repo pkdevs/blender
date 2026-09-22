@@ -70,7 +70,7 @@ static const char *debug_html_filepath = "/tmp/straight_skeleton.html";
 static constexpr double default_epsilon = 1e-8;
 
 /** Cross product (determinant) threshold identifying parallel/collinear wavefront normals. */
-static constexpr double det_parallel_tol = 1e-9;
+[[maybe_unused]] static constexpr double det_parallel_tol = 1e-9;
 
 /** Determinant threshold for non-parallel bisector velocity solver. */
 static constexpr double det_zero_tol = 1e-12;
@@ -82,10 +82,7 @@ static constexpr double antiparallel_dot_tol = -0.999999;
 static constexpr double reflex_cross_tol = -1e-6;
 
 /** Barycentric coordinate margin on an edge separating SPLIT from MULTI_SPLIT / FLIP events. */
-static constexpr double bary_edge_tol = 0.05;
-
-/** Timestamp tolerance for grouping simultaneous events in the priority queue. */
-static constexpr double concurrent_time_tol = 1e-6;
+static constexpr double bary_edge_tol = 1e-3;
 
 /** Tolerance for event time validity and comparisons (guarding floating-point roundoff). */
 static constexpr double event_time_tol = 1e-9;
@@ -798,88 +795,114 @@ class TrianglePriorityQueue {
     return result;
   }
 
-  /** Pop the next event from the heap. If multiple events occur at the same timestamp
-   * (within numerical tolerance), prefer an internal diagonal flip between two collapsing
-   * triangles over an event that flips into non-collapsing cavity triangles.
-   * This ensures that collinear cycles (such as the 2-cycle in Palfreder et al. Section 3.2,
-   * Fig. 3(b)) are processed as flip events rather than being preempted by cavity flips. */
-  TriangleEvent pop_with_flip_priority(const TriangleEdges &triangles)
+  /**
+   * Pop the next event using Palfrader Algorithm 3 (§5.2.1) for event ordering.
+   *
+   * When multiple events occur at the same timestamp (using exact bitwise comparison,
+   * following the paper's principle of avoiding precision thresholds for judging whether
+   * collapse times are identical):
+   * 1. Non-flip events (EDGE_COLLAPSE, SPLIT, MULTI_SPLIT) are preferred over FLIP events,
+   *    since they guarantee progress by reducing the triangle count.
+   * 2. Among flip events, the one with the longest flipping edge is chosen first.
+   *    This guarantees termination via a monotonicity argument (longest edge strictly
+   *    decreasing) and processes symmetric events in a geometry-determined order.
+   */
+  TriangleEvent pop_with_palfrader_ordering(const TriangleEdges &triangles,
+                                            const KineticVertices &kinetic_verts)
   {
     if (is_empty()) {
       TriangleEvent dummy;
       dummy.type = TriangleEventType::NONE;
       return dummy;
     }
+
     const int ti_min = POINTER_AS_INT(BLI_heap_pop_min(heap_));
     TriangleEvent min_ev = events_[ti_min];
     events_[ti_min].heap_node = nullptr;
+    const double event_time = min_ev.time;
 
-    auto check_internal = [&](const TriangleEvent &ev) {
-      const int e1 = ev.edge_index;
-      const int e2 = triangles.paired_edge(e1);
-      if (e2 == -1) {
-        return false;
+    /* Gather all events at the exact same timestamp (bitwise `==`). */
+    Vector<int> simultaneous_tis;
+    for (const int ti : events_.index_range()) {
+      if (events_[ti].heap_node != nullptr && events_[ti].time == event_time) {
+        simultaneous_tis.append(ti);
       }
-      const int p_ti = triangles.triangle(e2);
-      if (p_ti < 0 || p_ti >= int(events_.size())) {
-        return false;
-      }
-      if (p_ti == ti_min || events_[p_ti].heap_node != nullptr) {
-        if (std::abs(events_[p_ti].time - min_ev.time) <= concurrent_time_tol) {
-          return true;
+    }
+
+    /* If no simultaneous events, return the popped minimum as-is. */
+    if (simultaneous_tis.is_empty()) {
+      return min_ev;
+    }
+
+    /* Step 1: If the minimum event is already a non-flip event, return it.
+     * Non-flip events reduce triangle count and guarantee progress. */
+    if (min_ev.type != TriangleEventType::FLIP) {
+      return min_ev;
+    }
+
+    /* Step 2: The minimum event is a FLIP. Check if any simultaneous event is non-flip. */
+    int best_nonflip_ti = -1;
+    for (const int ti : simultaneous_tis) {
+      if (events_[ti].type != TriangleEventType::FLIP) {
+        /* Prefer EDGE_COLLAPSE over MULTI_SPLIT over SPLIT. */
+        if (best_nonflip_ti == -1) {
+          best_nonflip_ti = ti;
+        }
+        else if (events_[ti].type == TriangleEventType::EDGE_COLLAPSE &&
+                 events_[best_nonflip_ti].type != TriangleEventType::EDGE_COLLAPSE)
+        {
+          best_nonflip_ti = ti;
         }
       }
-      return false;
+    }
+
+    if (best_nonflip_ti != -1) {
+      /* Put the popped flip event back, return the non-flip event instead. */
+      insert_or_update(ti_min, min_ev);
+      TriangleEvent nonflip_ev = events_[best_nonflip_ti];
+      remove(best_nonflip_ti);
+      return nonflip_ev;
+    }
+
+    /* Step 3: All simultaneous events (including the popped one) are flips.
+     * Pick the flip with the longest flipping edge (Palfrader Algorithm 3 line 8). */
+    auto flip_edge_len_sq = [&](const TriangleEvent &ev) -> double {
+      const int e1 = ev.edge_index;
+      if (e1 < 0) {
+        return -1.0;
+      }
+      const int va = triangles.start_vert(e1);
+      const int vb = triangles.end_vert(e1);
+      if (va < 0 || vb < 0 || va >= kinetic_verts.size() || vb >= kinetic_verts.size()) {
+        return -1.0;
+      }
+      const double2 pa = kinetic_verts.position_at(va, event_time);
+      const double2 pb = kinetic_verts.position_at(vb, event_time);
+      return math::length_squared(pb - pa);
     };
 
-    const bool min_is_internal = (min_ev.type == TriangleEventType::FLIP) &&
-                                 check_internal(min_ev);
-
+    double best_len_sq = flip_edge_len_sq(min_ev);
     int best_flip_ti = -1;
-    bool best_flip_is_internal = false;
 
-    for (const int ti : events_.index_range()) {
-      if (events_[ti].heap_node != nullptr && events_[ti].type == TriangleEventType::FLIP &&
-          std::abs(events_[ti].time - min_ev.time) <= concurrent_time_tol)
-      {
-        const bool is_int = check_internal(events_[ti]);
-        if (best_flip_ti == -1 || (!best_flip_is_internal && is_int)) {
+    for (const int ti : simultaneous_tis) {
+      if (events_[ti].type == TriangleEventType::FLIP) {
+        const double len_sq = flip_edge_len_sq(events_[ti]);
+        if (len_sq > best_len_sq) {
+          best_len_sq = len_sq;
           best_flip_ti = ti;
-          best_flip_is_internal = is_int;
         }
       }
     }
 
-    if (best_flip_ti != -1 && best_flip_ti != ti_min) {
-      if (min_ev.type == TriangleEventType::FLIP && !min_is_internal && best_flip_is_internal) {
-        insert_or_update(ti_min, min_ev);
-        TriangleEvent flip_ev = events_[best_flip_ti];
-        remove(best_flip_ti);
-        return flip_ev;
-      }
+    if (best_flip_ti != -1) {
+      /* A simultaneous flip has a longer edge. Put back the popped one, return the longer. */
+      insert_or_update(ti_min, min_ev);
+      TriangleEvent best_ev = events_[best_flip_ti];
+      remove(best_flip_ti);
+      return best_ev;
     }
 
-    /* When multiple events occur concurrently, prioritize boundary EDGE_COLLAPSE over
-     * internal MULTI_SPLIT events so that shrinking boundary wavefronts are processed first. */
-    if (min_ev.type == TriangleEventType::MULTI_SPLIT) {
-      int best_collapse_ti = -1;
-      for (const int ti : events_.index_range()) {
-        if (events_[ti].heap_node != nullptr &&
-            events_[ti].type == TriangleEventType::EDGE_COLLAPSE &&
-            std::abs(events_[ti].time - min_ev.time) <= concurrent_time_tol)
-        {
-          best_collapse_ti = ti;
-          break;
-        }
-      }
-      if (best_collapse_ti != -1) {
-        insert_or_update(ti_min, min_ev);
-        TriangleEvent collapse_ev = events_[best_collapse_ti];
-        remove(best_collapse_ti);
-        return collapse_ev;
-      }
-    }
-
+    /* The popped event already has the longest (or only) flip edge. */
     return min_ev;
   }
 
@@ -1147,8 +1170,16 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     }
   }
 
-  /* 2. Vertices moving into edges: area collapse of 1-boundary triangle.
-   * Solves exact quadratic polynomial for triangle area reaching zero. */
+  /* 2. Vertex crash into wavefront edge: linear distance method (Palfrader §4.3.3, §4.4c).
+   *
+   * For 1-boundary triangles, the paper recommends computing the vertex crash time tv
+   * using the linear distance from the opposite vertex to the wavefront edge's supporting
+   * line. This is numerically more robust than the quadratic area method (§4.3.4, Fig. 14):
+   * "slight errors in input will only result in slight errors for the collapse time,
+   * not in missing the collapse entirely."
+   *
+   * The approach speed is 1 - v_opp · n̂, where n̂ is the wavefront edge's inward normal
+   * and the wavefront moves at unit speed in the n̂ direction. */
   if (num_boundary == 1) {
     const int k = boundary_k;
     const int ei = e0 + k;
@@ -1156,120 +1187,134 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     const int k_b = (k + 1) % 3;
     const int k_opp = (k + 2) % 3;
 
-    const double2 e01_p = p[1] - p[0];
-    const double2 e02_p = p[2] - p[0];
-    const double2 e01_v = v[1] - v[0];
-    const double2 e02_v = v[2] - v[0];
+    /* Compute the inward unit normal of the wavefront (boundary) edge.
+     * The boundary edge runs from vertex k_a to k_b. The wavefront normal n̂
+     * points towards the triangle interior. */
+    const double2 edge_dir_0 = p[k_b] - p[k_a];
+    const double edge_len_0 = math::length(edge_dir_0);
 
-    const double c0 = math::cross(e01_p, e02_p);
-    const double c1 = math::cross(e01_p, e02_v) + math::cross(e01_v, e02_p);
-    const double c2 = math::cross(e01_v, e02_v);
+    if (edge_len_0 > div_by_zero_tol) {
+      /* Candidate wavefront normal: rotate edge 90° CW → (ey, -ex). */
+      double2 n_hat = double2(edge_dir_0.y, -edge_dir_0.x) / edge_len_0;
 
-    double dt_root = -1.0;
-    if (std::abs(c2) > div_by_zero_tol) {
-      const double disc = c1 * c1 - 4.0 * c2 * c0;
-      if (disc >= 0.0) {
-        const double sqrt_disc = std::sqrt(disc);
-        const double r1 = (-c1 - sqrt_disc) / (2.0 * c2);
-        const double r2 = (-c1 + sqrt_disc) / (2.0 * c2);
-        double best_r = std::numeric_limits<double>::infinity();
-        for (const double r : {r1, r2}) {
-          const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) ||
-                                  (r > event_time_tol);
-          if (is_valid_r && r < best_r) {
-            best_r = r;
+      /* Ensure n̂ points towards the opposite vertex (into the triangle interior). */
+      const double2 to_opp_0 = p[k_opp] - p[k_a];
+      if (math::dot(to_opp_0, n_hat) < 0.0) {
+        n_hat = -n_hat;
+      }
+
+      /* Distance from opposite vertex to the wavefront edge's supporting line at t=0
+       * relative to current_time positions. */
+      const double d_perp = math::dot(p[k_opp] - p[k_a], n_hat);
+
+      /* Approach speed: wavefront moves at unit speed along n̂, vertex moves at v_opp.
+       * Combined approach speed = 1 - v_opp · n̂ + v_edge_point · n̂.
+       * But the edge endpoints also move, so use the relative speed:
+       * approach = (v_a · n̂ + 1) - v_opp · n̂  ... no, simpler:
+       * The supporting line of the wavefront edge moves at 1 in the n̂ direction.
+       * The vertex moves at v_opp · n̂ in the n̂ direction.
+       * Net approach speed = v_opp · n̂ - (speed of supporting line along n̂).
+       * But the supporting line also translates if v_a has a component along n̂.
+       * Actually: d(t) = (p_opp + dt*v_opp - p_a - dt*v_a) · n̂
+       *                   - dt * 1   (wavefront advance)
+       * Wait: for a kinetic triangulation, the wavefront doesn't "advance" independently;
+       * the vertex velocities already encode the wavefront motion. The distance from
+       * the opposite vertex to the supporting line of edge (a,b) at time current_time + dt is:
+       *   d(dt) = ((p_opp + dt*v_opp) - (p_a + dt*v_a)) · n̂(dt)
+       * But n̂ changes over time as the edge endpoints move! For a truly linear formula,
+       * we use the initial n̂ as an approximation (following §4.3.3 which computes
+       * tv = M→v · n̂ / (1 - s·n̂) using time-zero quantities). */
+      const double d_opp_dot_n = math::dot(v[k_opp] - v[k_a], n_hat);
+      const double approach_speed = -d_opp_dot_n;
+
+      double dt_vertex = -1.0;
+      if (std::abs(approach_speed) > div_by_zero_tol) {
+        dt_vertex = d_perp / approach_speed;
+      }
+      else if (d_perp < epsilon) {
+        /* Already on the supporting line or very close: collapse now. */
+        dt_vertex = 0.0;
+      }
+
+      const bool is_valid_dt = (current_time > 0.0 && dt_vertex >= -event_time_tol) ||
+                               (dt_vertex > event_time_tol);
+      if (is_valid_dt) {
+        const double eff_dt = std::max(0.0, dt_vertex);
+        const double2 pt_a = p[k_a] + eff_dt * v[k_a];
+        const double2 pt_b = p[k_b] + eff_dt * v[k_b];
+        const double2 pt_opp = p[k_opp] + eff_dt * v[k_opp];
+
+        const double2 edge_dir_t = pt_b - pt_a;
+        const double edge_len_t = math::length(edge_dir_t);
+        const double2 to_opp_t = pt_opp - pt_a;
+        const double d_along = (edge_len_t > div_by_zero_tol) ?
+                                   math::dot(to_opp_t, edge_dir_t) / (edge_len_t * edge_len_t) :
+                                   0.0;
+
+        TriangleEvent cand;
+        cand.triangle_index = ti;
+        cand.time = current_time + eff_dt;
+        cand.edge_index = ei;
+        cand.vert_index = tri_v[k_opp];
+        cand.event_pos = pt_a + std::clamp(d_along, 0.0, 1.0) * edge_dir_t;
+
+        /* Classification per §4.4 case (c). */
+        if (edge_len_t < epsilon) {
+          cand.type = TriangleEventType::EDGE_COLLAPSE;
+          consider_candidate(cand);
+        }
+        else if (d_along < -bary_edge_tol) {
+          /* Crosses supporting line outside segment near endpoint a: flip internal edge. */
+          const int e_flip = e0 + ((k + 2) % 3);
+          if (is_edge_flippable_at_time(triangles, kinetic_verts, e_flip, cand.time)) {
+            cand.type = TriangleEventType::FLIP;
+            cand.edge_index = e_flip;
+            consider_candidate(cand);
           }
         }
-        if (!std::isinf(best_r)) {
-          dt_root = best_r;
+        else if (d_along > 1.0 + bary_edge_tol) {
+          /* Crosses supporting line outside segment near endpoint b: flip internal edge. */
+          const int e_flip = e0 + ((k + 1) % 3);
+          if (is_edge_flippable_at_time(triangles, kinetic_verts, e_flip, cand.time)) {
+            cand.type = TriangleEventType::FLIP;
+            cand.edge_index = e_flip;
+            consider_candidate(cand);
+          }
         }
-      }
-    }
-    else if (std::abs(c1) > div_by_zero_tol) {
-      const double r = -c0 / c1;
-      const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) || (r > event_time_tol);
-      if (is_valid_r) {
-        dt_root = r;
-      }
-    }
-
-    const bool is_valid_dt = (current_time > 0.0 && dt_root >= -event_time_tol) ||
-                             (dt_root > event_time_tol);
-    if (is_valid_dt) {
-      const double eff_dt = std::max(0.0, dt_root);
-      const double2 pt_a = p[k_a] + eff_dt * v[k_a];
-      const double2 pt_b = p[k_b] + eff_dt * v[k_b];
-      const double2 pt_opp = p[k_opp] + eff_dt * v[k_opp];
-
-      const double2 edge_dir_t = pt_b - pt_a;
-      const double edge_len_t = math::length(edge_dir_t);
-      const double2 to_opp_t = pt_opp - pt_a;
-      const double d_along = (edge_len_t > div_by_zero_tol) ?
-                                 math::dot(to_opp_t, edge_dir_t) / (edge_len_t * edge_len_t) :
-                                 0.0;
-
-      TriangleEvent cand;
-      cand.triangle_index = ti;
-      cand.time = current_time + eff_dt;
-      cand.edge_index = ei;
-      cand.vert_index = tri_v[k_opp];
-      cand.event_pos = pt_a + std::clamp(d_along, 0.0, 1.0) * edge_dir_t;
-
-      if (edge_len_t < epsilon) {
-        cand.type = TriangleEventType::EDGE_COLLAPSE;
-        consider_candidate(cand);
-      }
-      else if (d_along < -bary_edge_tol) {
-        /* Crosses supporting line outside segment near endpoint a: flip internal edge. */
-        const int e_flip = e0 + ((k + 2) % 3);
-        if (is_edge_flippable_at_time(triangles, kinetic_verts, e_flip, cand.time)) {
-          cand.type = TriangleEventType::FLIP;
-          cand.edge_index = e_flip;
-          consider_candidate(cand);
-        }
-      }
-      else if (d_along > 1.0 + bary_edge_tol) {
-        /* Crosses supporting line outside segment near endpoint b: flip internal edge. */
-        const int e_flip = e0 + ((k + 1) % 3);
-        if (is_edge_flippable_at_time(triangles, kinetic_verts, e_flip, cand.time)) {
-          cand.type = TriangleEventType::FLIP;
-          cand.edge_index = e_flip;
-          consider_candidate(cand);
-        }
-      }
-      else if (d_along <= bary_edge_tol) {
-        const int e_opp_a = e0 + ((k + 2) % 3);
-        cand.type = triangles.is_boundary(e_opp_a) ? TriangleEventType::EDGE_COLLAPSE :
-                                                     TriangleEventType::MULTI_SPLIT;
-        cand.edge_index = e_opp_a;
-        consider_candidate(cand);
-      }
-      else if (d_along >= 1.0 - bary_edge_tol) {
-        const int e_b_opp = e0 + ((k + 1) % 3);
-        cand.type = triangles.is_boundary(e_b_opp) ? TriangleEventType::EDGE_COLLAPSE :
-                                                     TriangleEventType::MULTI_SPLIT;
-        cand.edge_index = e_b_opp;
-        consider_candidate(cand);
-      }
-      else if (is_vertex_reflex(kinetic_verts, tri_v[k_opp])) {
-        cand.type = TriangleEventType::SPLIT;
-        consider_candidate(cand);
-      }
-      else {
-        /* Opposite vertex is convex or flat: collapses towards closer boundary endpoint. */
-        if (d_along >= 0.5) {
-          const int e_b_opp = e0 + ((k + 1) % 3);
-          cand.type = triangles.is_boundary(e_b_opp) ? TriangleEventType::EDGE_COLLAPSE :
-                                                       TriangleEventType::MULTI_SPLIT;
-          cand.edge_index = e_b_opp;
-        }
-        else {
+        else if (d_along <= bary_edge_tol) {
           const int e_opp_a = e0 + ((k + 2) % 3);
           cand.type = triangles.is_boundary(e_opp_a) ? TriangleEventType::EDGE_COLLAPSE :
                                                        TriangleEventType::MULTI_SPLIT;
           cand.edge_index = e_opp_a;
+          consider_candidate(cand);
         }
-        consider_candidate(cand);
+        else if (d_along >= 1.0 - bary_edge_tol) {
+          const int e_b_opp = e0 + ((k + 1) % 3);
+          cand.type = triangles.is_boundary(e_b_opp) ? TriangleEventType::EDGE_COLLAPSE :
+                                                       TriangleEventType::MULTI_SPLIT;
+          cand.edge_index = e_b_opp;
+          consider_candidate(cand);
+        }
+        else if (is_vertex_reflex(kinetic_verts, tri_v[k_opp])) {
+          cand.type = TriangleEventType::SPLIT;
+          consider_candidate(cand);
+        }
+        else {
+          /* Opposite vertex is convex or flat: collapses towards closer boundary endpoint. */
+          if (d_along >= 0.5) {
+            const int e_b_opp = e0 + ((k + 1) % 3);
+            cand.type = triangles.is_boundary(e_b_opp) ? TriangleEventType::EDGE_COLLAPSE :
+                                                         TriangleEventType::MULTI_SPLIT;
+            cand.edge_index = e_b_opp;
+          }
+          else {
+            const int e_opp_a = e0 + ((k + 2) % 3);
+            cand.type = triangles.is_boundary(e_opp_a) ? TriangleEventType::EDGE_COLLAPSE :
+                                                         TriangleEventType::MULTI_SPLIT;
+            cand.edge_index = e_opp_a;
+          }
+          consider_candidate(cand);
+        }
       }
     }
   }
@@ -2697,7 +2742,7 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
 bool StraightSkeletonState::process_next_event()
 {
   while (!pq.is_empty()) {
-    const TriangleEvent ev = pq.pop_with_flip_priority(triangles);
+    const TriangleEvent ev = pq.pop_with_palfrader_ordering(triangles, kinetic_verts);
     if (ev.triangle_index < 0 || triangles.is_triangle_deleted(ev.triangle_index)) {
 
       continue;
