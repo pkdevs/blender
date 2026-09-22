@@ -115,12 +115,12 @@ class ProjectVariable:
         import re
 
         if self.name == "":
-            raise ValueError("Invalid variable name '{:s}': variable names cannot be empty.")
+            raise ValueError("Invalid variable name '{:s}': variable names cannot be empty.".format(self.name))
 
         if re.match("^[a-zA-Z_][a-zA-Z0-9_]*$", self.name) is None:
             raise ValueError(
                 "Invalid variable name '{:s}': variable names must not start with a digit, and "
-                "must contain only alphanumeric characters and underscores.")
+                "must contain only alphanumeric characters and underscores.".format(self.name))
 
         # Check that value matches the declared variable type.
         match (self.type, self.value):
@@ -144,8 +144,8 @@ class ProjectVariable:
                 pass
             case _:
                 raise ValueError("Invalid subtype '{:s}' for variable type '{:s}' of variable '{:s}'.".format(
-                    self.type.value,
                     self.subtype.value,
+                    self.type.value,
                     self.name,
                 ))
 
