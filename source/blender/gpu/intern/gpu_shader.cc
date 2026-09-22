@@ -304,8 +304,8 @@ static gpu::Shader *gpu_shader_create_from_info_generated(const GPUShaderCreateI
 
   std::string processed_str;
   processed_str += "\n";
-  processed_str += "#ifdef CREATE_INFO_RES_PASS_gpu_shader_generated\n";
-  processed_str += "CREATE_INFO_RES_PASS_gpu_shader_generated\n";
+  processed_str += "#ifdef CREATE_INFO_RES_PASS_" + info.name_ + "\n";
+  processed_str += "CREATE_INFO_RES_PASS_" + info.name_ + "\n";
   processed_str += "#endif\n";
   processed_str += GPU_shader_preprocess_source(info.compute_source_generated, info);
 

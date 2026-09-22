@@ -1056,10 +1056,7 @@ bool try_evaluate_field_gpu_impl(const GField &field,
   }
 
   if (input_component_count > 0) {
-    GPU_vertbuf_update_sub(buffers->input_buffer,
-                           0,
-                           uint(buffers->input_data.size() * sizeof(float)),
-                           buffers->input_data.data());
+    GPU_vertbuf_attr_fill(buffers->input_buffer, 0, buffers->input_data.data());
   }
 
   GPU_storagebuf_update(buffers->constant_buffer, buffers->constants.data());
