@@ -1695,9 +1695,7 @@ void OUTLINER_OT_collection_drop(wmOperatorType *ot)
 
 #define OUTLINER_DRAG_SCOLL_OUTSIDE_PAD 7 /* In UI units */
 
-/* Gathers selected objects and collections together in tree order, so they can be dragged as
- * one. A selected collection drags its whole subtree along, so anything selected underneath it
- * is not also collected as a separate item. */
+/* Gathers selected objects and collections together in tree order. */
 static TreeTraversalAction outliner_collect_selected_objects_and_collections(TreeElement *te,
                                                                              void *customdata)
 {
