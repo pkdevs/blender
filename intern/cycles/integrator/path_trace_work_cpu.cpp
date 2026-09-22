@@ -120,37 +120,21 @@ ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_re
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
            RESTIR_RESERVOIR_STRIDE * sizeof(float));
 
-// debug print of restir_prev_temporal_reservoir_[0..8]
-// if (i == 0) {
-//   ccl_debug_printf(
-//       "TEMPORAL HISTORY[0]: type=%f flags=%f object=%f prim=%f "
-//       "param=(%f,%f) W=%f L=%f M=%f\n",
-//       (double)restir_prev_temporal_reservoir_[0],
-//       (double)restir_prev_temporal_reservoir_[1],
-//       (double)restir_prev_temporal_reservoir_[2],
-//       (double)restir_prev_temporal_reservoir_[3],
-//       (double)restir_prev_temporal_reservoir_[4],
-//       (double)restir_prev_temporal_reservoir_[5],
-//       (double)restir_prev_temporal_reservoir_[6],
-//       (double)restir_prev_temporal_reservoir_[7],
-//       (double)restir_prev_temporal_reservoir_[8]
-//     );
-// }
-if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
-ccl_debug_printf(
-    "restir_prev_temporal_reservoir_[%zu]: "
-    "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
-    i,
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
-    (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
-}
+    if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
+    ccl_debug_printf(
+        "restir_prev_temporal_reservoir_[%zu]: "
+        "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
+        i,
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
+        (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
+    }
   }
 }
 
@@ -249,8 +233,6 @@ void PathTraceWorkCPU::spatial_resampling(const int64_t image_width,
   });
 }
 
-// TODO(Tri): temporal_resampling()
-
 void PathTraceWorkCPU::evaluate_final_samples(const int64_t image_width,
                                               const int64_t image_height,
                                               const int start_sample,
@@ -282,8 +264,6 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
 
-// ccl_debug_printf("\n\n\n--- PathTraceWorkCPU::render_samples() Invoked ---");
-
   if (device_->profiler.active()) {
     for (ThreadKernelGlobalsCPU &kernel_globals : *kernel_thread_globals_) {
       kernel_globals.start_profiling();
@@ -291,12 +271,10 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   }
 
   tbb::task_arena local_arena = local_tbb_arena_create(device_);
+
   /* Initial Resampling. */
   local_arena.execute(
       [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
-
-// ccl_debug_printf("render_samples() use_restir=%d restir_temporal_sample_count=%d\n", 
-//   device_scene_->data.integrator.use_restir, device_scene_->data.integrator.restir_temporal_sample_count);
 
   /* Temporal Resampling: runs before spatial regardless of its 
    * iteration count, since temporal and spatial reuse are orthogonal settings. */
@@ -306,8 +284,6 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   {
     /* Invoked once per render_pipeline()->path_trace()->work-dispatch. */
     restir_init_kernel_globals();
-
-// ccl_debug_printf("render_samples() Invoked executing temporal_resampling()...\n");
 
     local_arena.execute(
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });

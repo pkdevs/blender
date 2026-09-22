@@ -17,9 +17,7 @@ struct Reservoir {
   float luminance;
   float total_weight = 0.0f;
 
-  // TODO(Tri): Support restir_temporal_frame_count
-  /* Number of samples this reservoir represents. A freshly generated
-   * candidate this render sample starts at 1; temporal combination grows
+  /* Number of samples this reservoir represents. Temporal combination grows
    * it (capped by restir_temporal_sample_count) as history accumulates
    * across samples. Spatial-only combination currently ignores this and
    * treats every neighbor as M == 1; see mis_weight_pairwise() call sites. */
@@ -106,7 +104,11 @@ ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir, // !
     return false;
   }
 
+if (reservoir->total_weight > 0) {
   ccl_debug_printf("reservoir_finalize(); total_weight=%f, luminance=%f\n", (double)reservoir->total_weight, (double)reservoir->luminance);
+}
+
+
   /* Apply unbiased contribution weight. */
   reservoir->total_weight /= reservoir->luminance; // !!!
 
@@ -203,12 +205,12 @@ ccl_device_inline void reservoir_add_sample( // !!!
   //   return;
   // }
   if (!(weight > 0.0f)) {
-    ccl_debug_printf(
-        "=== RESERVOIR ADD REJECTED === "
-        "valid_ref=%d luminance=%f weight=%f\n",
-        (int)light_reference_is_valid(&candidate_reference),
-        (double)candidate_luminance,
-        (double)weight);
+    // ccl_debug_printf(
+    //     "=== RESERVOIR ADD REJECTED === "
+    //     "valid_ref=%d luminance=%f weight=%f\n",
+    //     (int)light_reference_is_valid(&candidate_reference),
+    //     (double)candidate_luminance,
+    //     (double)weight);
     /* Should be theoretically captured by the following condition, but we can not trust floating
       * point precision. */
     return;
@@ -509,7 +511,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 //     reservoir->reference.prim,
 //     reservoir->reference.object);
 
-  return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
+  // return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
 
 
 // !!!: DEBUG ONLY
@@ -517,7 +519,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
    * Do not attempt to restore/reconstruct its light reference.
    */
   if (reservoir_is_empty(reservoir)) {
-    ccl_debug_printf("restir_unpack_reservoir() returns false on empty reservoir!\n\n");
+    // ccl_debug_printf("restir_unpack_reservoir() returns false on empty reservoir!\n\n");
     return false;
   }
 
@@ -541,9 +543,6 @@ ccl_debug_printf( // Accepted candidates
     (double)reservoir->reference.param.y);
 
   return true;
-
-  // TODO: Compress later... flags and ...
-  // return restir_light_reference_restore_metadata(kg, &reservoir->reference);
 }
 
 
@@ -781,12 +780,12 @@ ccl_device_inline bool restir_unpack_reservoir_pt(KernelGlobals kg,
   reservoir->rcv_index = (int)kernel_read_pass_float(buffer + 2);
   reservoir->radiance = kernel_read_pass_float3(buffer + 3);
 
+if (reservoir->total_weight > 0) {
 // !!!: If this isn't logged, The reservoir is being written but never consumed.
 ccl_debug_printf("restir_unpack_reservoir_pt(): weight=%f flag=%u rcv=%d rad=(%f,%f,%f)\n\n",
-       (double)reservoir->total_weight,
-       reservoir->path_flag,
-       reservoir->rcv_index,
+       (double)reservoir->total_weight, reservoir->path_flag, reservoir->rcv_index,
        (double)reservoir->radiance.x, (double)reservoir->radiance.y, (double)reservoir->radiance.z);
+}
 
   return !global_reservoir_is_empty(reservoir);
 }

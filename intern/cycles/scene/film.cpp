@@ -626,7 +626,12 @@ void Film::update_passes(Scene *scene)
     }
   }
 
-  const bool use_restir = integrator->get_use_restir();
+  const int use_restir_flags = integrator->get_use_restir();
+  const bool use_restir = use_restir_flags != 0;
+
+// ccl_debug_printf("Film::update_passes(), temporal pass, use_restir=%d\n\n", use_restir);
+
+
   if (use_restir) {
     add_auto_pass(scene, PASS_SURFACE_DATA);
   }
@@ -650,19 +655,24 @@ void Film::update_passes(Scene *scene)
   }
 
   /* Add reservoir pass if spatial resampling is used. */
-  if (use_restir & 0b11) {
+  if (use_restir_flags & 0b11) {
     add_auto_pass(scene, PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PT_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
     add_auto_pass(scene, PASS_SURFACE_DATA);
+  }
 
-    /* Cross-frame temporal should be independently enabled. */
-    if (use_restir & (1 << 4)) {
-      add_auto_pass(scene, PASS_RESTIR_REPROJECTION_SURFACE);
-      add_auto_pass(scene, PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE);
-    }
+  /* Cross-frame temporal should be independently enabled. */
+  // if (use_restir_flags & (1 << 4)) { // !!!: Doesn't enter!
+  if (use_restir_flags && integrator->get_use_temporal_frames()) {
+// ccl_debug_printf("Film::update_passes(), temporal pass, use_restir_flags=%d use_restir=%d\n\n", use_restir_flags, use_restir);
+
+    add_auto_pass(scene, PASS_RESTIR_REPROJECTION_SURFACE);
+    add_auto_pass(scene, PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE);
+    add_auto_pass(scene, PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR);
+    add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
   }
 
   const vector<Pass *> passes_immutable = scene->passes;
