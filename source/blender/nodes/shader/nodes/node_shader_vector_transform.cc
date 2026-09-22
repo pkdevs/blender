@@ -94,6 +94,7 @@ static const char *get_gpufn_name_from_to(short from, short to, short vector_typ
   }
 
   BLI_assert_unreachable();
+  return nullptr;
 
 #undef SWITCH_VECTOR_SPACE
 #undef SWITCH_VECTOR_TYPE
