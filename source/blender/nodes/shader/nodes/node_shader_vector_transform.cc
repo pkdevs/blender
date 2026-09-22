@@ -168,7 +168,6 @@ static int gpu_shader_vect_transform(GPUMaterial *mat,
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  /* TODO: Handle SHD_VECT_TRANSFORM_SPACE_LIGHT. */
   NodeItem res = empty();
   NodeShaderVectTransform *nodeprop = (NodeShaderVectTransform *)node_->storage;
   std::string fromspace;
@@ -184,7 +183,7 @@ NODE_SHADER_MATERIALX_BEGIN
       fromspace = "object";
       break;
     default:
-      /* NOTE: SHD_VECT_TRANSFORM_SPACE_CAMERA don't have an implementation in MaterialX. */
+      /* NOTE: SHD_VECT_TRANSFORM_SPACE_CAMERA/LIGHT don't have an implementation in MaterialX. */
       BLI_assert_unreachable();
       return vector;
   }
@@ -197,7 +196,7 @@ NODE_SHADER_MATERIALX_BEGIN
       tospace = "object";
       break;
     default:
-      /* NOTE: SHD_VECT_TRANSFORM_SPACE_CAMERA don't have an implementation in MaterialX. */
+      /* NOTE: SHD_VECT_TRANSFORM_SPACE_CAMERA/LIGHT don't have an implementation in MaterialX. */
       BLI_assert_unreachable();
       return vector;
   }
