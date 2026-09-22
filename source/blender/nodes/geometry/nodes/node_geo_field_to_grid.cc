@@ -177,7 +177,8 @@ static void node_geo_exec(GeoNodeExecParams params)
                       [&](const auto &grid) { mask_tree.topologyUnion(grid.tree()); });
 
   Vector<bke::GVolumeGrid> output_grids(fields.size());
-  evaluate_fields_to_grid(mask_tree, transform, fields, output_grids);
+  /* Keep the default background so the topology defines the extent of the grid. */
+  evaluate_fields_to_grid(mask_tree, transform, fields, output_grids, false);
 
   for (const int i : required_items.index_range()) {
     const int item_i = required_items[i];

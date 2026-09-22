@@ -1110,7 +1110,8 @@ BLI_NOINLINE static void process_background(const Span<fn::GField> fields,
 void evaluate_fields_to_grid(const openvdb::MaskTree &mask_tree,
                              const openvdb::math::Transform &transform,
                              const Span<fn::GField> fields,
-                             MutableSpan<bke::GVolumeGrid> r_output_grids)
+                             MutableSpan<bke::GVolumeGrid> r_output_grids,
+                             const bool evaluate_background)
 {
   BLI_assert(r_output_grids.size() == fields.size());
 
@@ -1136,7 +1137,9 @@ void evaluate_fields_to_grid(const openvdb::MaskTree &mask_tree,
         process_tiles(fields, transform, tiles, output_grids);
       });
 
-  process_background(fields, transform, output_grids);
+  if (evaluate_background) {
+    process_background(fields, transform, output_grids);
+  }
 
   for (const int i : fields.index_range()) {
     r_output_grids[i] = bke::GVolumeGrid(std::move(output_grids[i]));

@@ -155,10 +155,16 @@ void sample_tree_indices(const VolumeGridType grid_type,
 
 std::optional<VolumeGridType> cpp_type_to_grid_type(const CPPType &cpp_type);
 
+/**
+ * Evaluate fields on a grid topology.
+ *
+ * \param evaluate_background: Evaluate fields to determine the grid background value.
+ */
 void evaluate_fields_to_grid(const openvdb::MaskTree &mask_tree,
                              const openvdb::math::Transform &transform,
                              Span<fn::GField> fields,
-                             MutableSpan<bke::GVolumeGrid> r_output_grids);
+                             MutableSpan<bke::GVolumeGrid> r_output_grids,
+                             bool evaluate_background = true);
 
 }  // namespace blender::bke::volume_grid
 
