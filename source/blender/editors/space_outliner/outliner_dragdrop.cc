@@ -198,10 +198,20 @@ static bool is_collection_element(TreeElement *te)
   return outliner_is_collection_tree_element(te);
 }
 
-/* Check if a collection is being dragged inside its own hierarchy. */
-static bool outliner_is_collection_dragged_into_itself(TreeElement *drop_target_te, ID *dragged_id)
+/* Check if any of the dragged collections is being dragged inside its own hierarchy. */
+static bool outliner_is_collection_dragged_into_itself(TreeElement *drop_target_te, wmDrag *drag)
 {
-  if (!(drop_target_te && dragged_id && GS(dragged_id->name) == ID_GR)) {
+  if (!drop_target_te) {
+    return false;
+  }
+
+  Vector<ID *> dragged_collections;
+  for (const wmDragID &dragged : drag->ids) {
+    if (dragged.id && GS(dragged.id->name) == ID_GR) {
+      dragged_collections.append(dragged.id);
+    }
+  }
+  if (dragged_collections.is_empty()) {
     return false;
   }
 
@@ -214,8 +224,8 @@ static bool outliner_is_collection_dragged_into_itself(TreeElement *drop_target_
     /* Get the actual collection type. */
     Collection *te_parent_coll = outliner_collection_from_tree_element(coll_te->parent);
 
-    if (&te_parent_coll->id == dragged_id) {
-      /* The destination te is inside the dragged collection's hierarchy. */
+    if (dragged_collections.contains(&te_parent_coll->id)) {
+      /* The destination te is inside a dragged collection's hierarchy. */
       return true;
     }
 
@@ -1203,7 +1213,7 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  if (outliner_is_collection_dragged_into_itself(te, id)) {
+  if (outliner_is_collection_dragged_into_itself(te, drag)) {
     return false;
   }
 
