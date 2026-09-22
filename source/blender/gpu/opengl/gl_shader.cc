@@ -913,7 +913,7 @@ std::string GLShader::geometry_interface_declare(const ShaderCreateInfo &info) c
 
   /* Interfaces. */
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-    std::string suffix = "_in";
+    std::string suffix = "_in[]";
     if (iface->instance_name.is_empty()) {
       suffix = iface->name + suffix;
     }
