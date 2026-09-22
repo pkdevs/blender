@@ -2673,29 +2673,28 @@ static void sequencer_ripple_delete(Scene *scene,
   /* This is the amount we will ripple everything left by. */
   const int offset = selection_bounds.xmax - selection_bounds.xmin;
 
-  VectorSet<Strip *> shifted;
-  if (offset != 0) {
-    for (Strip &strip : *seqbasep) {
-      if (seq::transform_is_locked(channels, &strip) || strips.contains(&strip)) {
+  Vector<Strip *> shifted;
+  for (Strip &strip : *seqbasep) {
+    if (strips.contains(&strip) || seq::transform_is_locked(channels, &strip)) {
+      continue;
+    }
+    if (!all_channels) {
+      const rcti strip_bounds = strip_int_bounds_get(scene, &strip);
+      if (!BLI_rcti_isect_rect_y(&selection_bounds, &strip_bounds, nullptr)) {
         continue;
       }
-      const bool same_channel = all_channels ||
-                                std::any_of(
-                                    strips.begin(), strips.end(), [&](Strip *strip_in_column) {
-                                      return strip_in_column->channel == strip.channel;
-                                    });
-      if (strip.left_handle() > selection_bounds.xmin && same_channel) {
-        seq::transform_translate_strip(scene, &strip, -offset);
-        seq::relations_invalidate_cache(scene, &strip);
-        shifted.add(&strip);
-      }
     }
+    if (strip.left_handle() > selection_bounds.xmin) {
+      seq::transform_translate_strip(scene, &strip, -offset);
+      seq::relations_invalidate_cache(scene, &strip);
+      shifted.append(&strip);
+    }
+  }
 
-    if (ripple_markers && !scene->toolsettings->lock_markers) {
-      for (TimeMarker &marker : scene->markers) {
-        if (marker.frame > selection_bounds.xmin) {
-          marker.frame -= offset;
-        }
+  if (ripple_markers && !scene->toolsettings->lock_markers) {
+    for (TimeMarker &marker : scene->markers) {
+      if (marker.frame > selection_bounds.xmin) {
+        marker.frame -= offset;
       }
     }
   }
@@ -2705,9 +2704,7 @@ static void sequencer_ripple_delete(Scene *scene,
   }
   seq::edit_remove_flagged_strips(scene, seqbasep);
 
-  if (!shifted.is_empty()) {
-    seq::transform_handle_overlap(scene, seqbasep, shifted.extract_vector(), ripple_markers);
-  }
+  seq::transform_handle_overlap(scene, seqbasep, shifted, ripple_markers);
 }
 
 static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op)
