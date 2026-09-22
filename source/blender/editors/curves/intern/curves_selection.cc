@@ -511,12 +511,7 @@ static bool is_everything_selected(GMutableSpan &selection_curve)
   }
 
   if (selection_curve.type().is<float>()) {
-    for (const float elem : selection_curve.typed<float>()) {
-      if (elem == 0.0f) {
-        return false;
-      }
-    }
-    return true;
+    return !selection_curve.typed<float>().contains(0.0f);
   }
 
   return false;
