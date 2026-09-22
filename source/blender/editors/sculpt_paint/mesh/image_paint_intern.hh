@@ -27,6 +27,7 @@ struct TileColorspaceProcessor : NonCopyable {
 };
 
 using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan<uchar4>>;
+using NeighborSourceType = std::variant<std::monostate, Array<Span<float4>>, Array<Span<uchar4>>>;
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
@@ -60,6 +61,12 @@ KDTree<float3> *build_kd_tree(Object &ob,
                               const ImageData &data,
                               bke::image::TileNumber tile_number);
 
+void build_pixel_position_map(Object &ob,
+                              const ImageData &data,
+                              Vector<float3, 0> &r_pixel_positions,
+                              Vector<int, 0> &r_filled_positions,
+                              Vector<int, 0> &r_offsets);
+
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
                              const Brush &brush,
@@ -71,7 +78,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
                             const Brush &brush,
                             Object &ob,
                             ImageData &image_data,
-                            const KDTree<float3> &tree,
+                            const KDTreeNew<float3> &tree,
                             const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image

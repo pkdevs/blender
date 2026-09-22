@@ -475,6 +475,27 @@ static void apply_watertight_check(Tree &pbvh, Image &image, const ImageUser &im
   }
 }
 
+static void collect_used_tiles(Span<PixelNode> nodes, Tree &pbvh)
+{
+  if (!pbvh.pixels_->used_tiles.is_empty()) {
+    return;
+  }
+
+  Set<image::TileNumber> used_tiles;
+  for (const PixelNode &pixel_node : nodes) {
+    for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
+      used_tiles.add(tile_data.tile_number);
+    }
+  }
+
+  Vector<image::TileNumber> result;
+  for (image::TileNumber tile_number : used_tiles) {
+    result.append(tile_number);
+  }
+  std::ranges::sort(result);
+  pbvh.pixels_->used_tiles = std::move(result);
+}
+
 static bool update_pixels(const Depsgraph &depsgraph,
                           const Object &object,
                           Tree &pbvh,
@@ -553,6 +574,8 @@ static bool update_pixels(const Depsgraph &depsgraph,
 
   /* Add solution for non-manifold parts of the model. */
   copy_update(pbvh, image, image_user, mesh_data);
+
+  collect_used_tiles(pixel_nodes, pbvh);
 
   /* Clear the UpdatePixels flag. */
   nodes_to_update.foreach_index([&](const int i) { pixel_nodes[i].flags.rebuild = false; });

@@ -20,6 +20,7 @@
 #include "BKE_image.hh"
 #include "BKE_image_wrappers.hh"
 #include "BKE_paint_bvh.hh"
+#include "BLI_kdtree_new.hh"
 
 #include "IMB_imbuf_types.hh"
 #include "IMB_partial_update.hh"
@@ -268,6 +269,13 @@ struct CopyPixelTiles {
 
 /** \} */
 
+struct KDTreeData {
+  Vector<float3, 0> pixel_positions;
+  Vector<int, 0> filled_pixels;
+  Vector<int, 0> offsets;
+  std::unique_ptr<KDTreeNew<float3>> kd_tree;
+};
+
 /**
  * Storage for texture painting on bke::pbvh::Tree level.
  */
@@ -280,7 +288,14 @@ struct PixelData {
   CopyPixelTiles tiles_copy_pixels;
 
   Vector<PixelNode> nodes;
-  Set<image::TileNumber> used_tiles;
+
+  /* TODO: KD-Tree Specific information, probably not the right long-term place for this? */
+
+  /* Sorted list of used tile numbers. */
+  Vector<image::TileNumber> used_tiles;
+  Map<image::TileNumber, int> tile_to_index;
+
+  std::optional<KDTreeData> tree_data;
 };
 
 void mark_image_dirty(bke::pbvh::Node &node,

@@ -464,15 +464,6 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 
 struct TexturePaintData : public PaintModeData {
   std::unique_ptr<ImageData> image_data;
-  /**
-   * For blur, smear, sharpen
-   */
-  KDTree<float3> *pixel_tree = nullptr;
-
-  ~TexturePaintData()
-  {
-    MEM_delete(pixel_tree);
-  }
 };
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
@@ -639,10 +630,19 @@ static void do_brush_action(const Depsgraph &depsgraph,
       depsgraph, ob, *mode_data->image_data->image, mode_data->image_data->image_user_get());
   const bool needs_kd_tree = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_SOFTEN;
 
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  bke::pbvh::pixels::PixelData &pixel_data = *pbvh.pixels_;
   /* TODO: This may need to be scoped per-tile, but we should keep the data alive outside of a
    * stroke. */
-  if (needs_kd_tree && mode_data->pixel_tree == nullptr) {
-    mode_data->pixel_tree = build_kd_tree(ob, *mode_data->image_data, 1001);
+  if (needs_kd_tree && !pixel_data.tree_data) {
+    pixel_data.tree_data = bke::pbvh::pixels::KDTreeData();
+    build_pixel_position_map(ob,
+                             *mode_data->image_data,
+                             pixel_data.tree_data->pixel_positions,
+                             pixel_data.tree_data->filled_pixels,
+                             pixel_data.tree_data->offsets);
+    pixel_data.tree_data->kd_tree = std::make_unique<KDTreeNew<float3>>(
+        pixel_data.tree_data->pixel_positions, pixel_data.tree_data->filled_pixels);
   }
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
@@ -678,7 +678,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
                              brush,
                              ob,
                              *mode_data->image_data,
-                             *mode_data->pixel_tree,
+                             *pixel_data.tree_data->kd_tree,
                              node_mask);
       break;
     default:

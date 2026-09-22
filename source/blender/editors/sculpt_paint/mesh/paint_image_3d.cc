@@ -397,47 +397,95 @@ BLI_NOINLINE static void paint_blend_pixels_color_managed(
   }
 }
 
-/* TODO: Maybe we need to collect all the entries first, in parallel, then convert / average into
- * scene linear? It's more important for us to paralellize on the gathering rather than the row
- * proessing here. */
-template<typename PixelT>
+struct IndexRemainder {
+  int index;
+  int remainder;
+};
+
+static std::optional<IndexRemainder> index_remainder_in(Span<int> offsets, const int i)
+{
+  for (const int offset_i : offsets.index_range().drop_front(1)) {
+    if (i < offsets[offset_i]) {
+      return IndexRemainder(offset_i - 1, i - offsets[offset_i - 1]);
+    }
+  }
+  return std::nullopt;
+}
+
+inline static float4 scene_linear_pixel_get(
+    const Map<image::TileNumber, TileColorspaceProcessor> &tile_processors,
+    const Map<image::TileNumber, BufferType> &tile_buffers,
+    const Span<image::TileNumber> tile_index_to_number,
+    const int tile_index,
+    const int img_index)
+{
+  const image::TileNumber tile_number = tile_index_to_number[tile_index];
+  const BufferType type = tile_buffers.lookup(tile_number);
+  const TileColorspaceProcessor &processor = *tile_processors.lookup_ptr(tile_number);
+
+  if (std::holds_alternative<MutableSpan<float4>>(type)) {
+    MutableSpan<float4> image_pixels = std::get<MutableSpan<float4>>(type);
+    if (processor.is_noop) {
+      return image_pixels[img_index];
+    }
+    /* TODO: Color space transform */
+    return float4(0.0f);
+  }
+  if (std::holds_alternative<MutableSpan<uchar4>>(type)) {
+    if (processor.is_srgb_byte) {
+      /* TODO: Fast conversion */
+      return float4(0.0f);
+    }
+
+    /* TODO: Color space transform */
+    return float4(0.0f);
+  }
+
+  BLI_assert_unreachable();
+  return float4(0.0f);
+}
+
+/* TODO: Maybe we need to collect all the entries first, in parallel, then convert / average
+ * into scene linear? It's more important for us to paralellize on the gathering rather than
+ * the row proessing here. */
 static void average_pixels(const int start,
                            const int size,
-                           const int /*img_x*/,
-                           const KDTree<float3> &tree,
+                           const KDTreeNew<float3> &tree,
                            const Span<float3> pixel_positions,
-                           const Span<PixelT> image_pixels,
-                           const TileColorspaceProcessor &processors,
+                           const Span<int> offsets,
+                           const Map<image::TileNumber, TileColorspaceProcessor> &tile_processors,
+                           const Map<image::TileNumber, BufferType> &tile_buffers,
+                           const Span<image::TileNumber> tile_index_to_number,
                            const MutableSpan<float4> scratch_pixels)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(scratch_pixels.size() == size);
 
-  constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
-  const bool fast_colorspace = is_float ? processors.is_noop : processors.is_srgb_byte;
-  if (is_float) {
-    if (!fast_colorspace) {
-      /* TODO: Slow path */
-      return;
-    }
-    for (int i = 0; i < size; i++) {
-      KDTreeNearest<float3> nearest_pixels[8];
-      const int nearest_count = kdtree_find_nearest_n(
-          &tree, pixel_positions[start + i], nearest_pixels, 8);
-      int num = 0;
-      float4 accum(0);
-      for (int k = 0; k < nearest_count; k++) {
-        if (nearest_pixels[k].dist < FLT_EPSILON) {
-          continue;
-        }
-        accum += image_pixels[nearest_pixels[k].index];
+  for (int i = 0; i < size; i++) {
+    Array<KDTreeNew<float3>::Nearest, 8> nearest_pixels(8);
+    const int nearest_count = tree.find_nearest_n(pixel_positions[start + i], nearest_pixels);
+
+    int num = 0;
+    float4 accum(0);
+    for (int k = 0; k < nearest_count; k++) {
+      if (nearest_pixels[k].distance_sq < FLT_EPSILON) {
+        continue;
+      }
+
+      std::optional<IndexRemainder> index_remainder = index_remainder_in(offsets,
+                                                                         nearest_pixels[k].index);
+
+      if (!index_remainder.has_value()) [[unlikely]] {
+        BLI_assert(0);
+      }
+      else {
+        auto [span_i, pixel_i] = index_remainder.value();
+        accum += scene_linear_pixel_get(
+            tile_processors, tile_buffers, tile_index_to_number, span_i, pixel_i);
         num++;
       }
-      scratch_pixels[i] = accum / float(num);
     }
-  }
-  else {
-    /* TODO Implement byte handling */
+    scratch_pixels[i] = accum / float(num);
   }
 }
 
@@ -914,8 +962,10 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                              Object &object,
                              const Paint & /*paint*/,
                              const Brush &brush,
+                             const Span<TileNumber> tile_index_to_number,
                              ImageData &image_data,
-                             const KDTree<float3> &tree,
+                             const KDTreeData &tree_data,
+                             const KDTreeNew<float3> &tree,
                              bke::pbvh::Node & /*node*/,
                              PixelNode &pixel_node)
 {
@@ -1095,16 +1145,15 @@ static void fill_blur_pixels(const Depsgraph &depsgraph,
                         run_y);
 
         /* Blend pixels with computed factors. */
-        if (std::holds_alternative<MutableSpan<float4>>(orig_buffer)) {
-          average_pixels<float4>(run_active_begin,
-                                 run_active_size,
-                                 run_y * image_buffer->x + run_active_x,
-                                 tree,
-                                 positions,
-                                 std::get<MutableSpan<float4>>(orig_buffer),
-                                 *processors,
-                                 scratch_run_buffer);
-        }
+        average_pixels(run_active_begin,
+                       run_active_size,
+                       tree,
+                       positions,
+                       tree_data.offsets,
+                       image_data.processors,
+                       image_data.data_buffers,
+                       tile_index_to_number,
+                       scratch_run_buffer);
       }
     });
 
@@ -1311,9 +1360,9 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
 
 void build_pixel_position_map(Object &ob,
                               const ImageData &data,
-                              Vector<float3> &r_pixel_positions,
-                              Vector<int> &r_filled_positions,
-                              Vector<int> &r_offsets)
+                              Vector<float3, 0> &r_pixel_positions,
+                              Vector<int, 0> &r_filled_positions,
+                              Vector<int, 0> &r_offsets)
 {
   BLI_assert(r_pixel_positions.is_empty());
   BLI_assert(r_offsets.is_empty());
@@ -1321,32 +1370,14 @@ void build_pixel_position_map(Object &ob,
   PRF_scope(ProfileCategory::Editor);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   PixelData &pixel_data = *pbvh.pixels_;
-  Span<PixelNode> pixel_nodes = pixel_data.nodes;
 
-  for (data.
-  ImageUser tile_user = data.image_user_get();
-  tile_user.tile = tile.tile_number;
-  ImBuf *tile_buffer = BKE_image_acquire_ibuf(data.image, &tile_user, nullptr);
-  if (tile_buffer == nullptr) {
-    BLI_assert(0);
-    continue;
-  }
+  Map<image::TileNumber, ImBuf *> tile_to_buffer_map;
 
-  const size_t tile_count = IMB_get_pixel_count(tile_buffer);
-  r_pixel_positions.resize(r_pixel_positions.size() + tile_count);
-  r_offsets.append(r_pixel_positions.size());
-
-  Map<image::TileNumber, Vector<UDIMTilePixels *>> tile_number_to_pixel_tile =
-      build_tile_number_to_pixel_tile_map(pixel_nodes);
-
+  /* Allocate */
   r_offsets.append(0);
-  for (const ImageTile &tile : data.image->tiles) {
-    if (!tile_number_to_pixel_tile.contains(tile.tile_number)) {
-      continue;
-    }
-
+  for (const TileNumber used_tile_number : pixel_data.used_tiles) {
     ImageUser tile_user = data.image_user_get();
-    tile_user.tile = tile.tile_number;
+    tile_user.tile = used_tile_number;
     ImBuf *tile_buffer = BKE_image_acquire_ibuf(data.image, &tile_user, nullptr);
     if (tile_buffer == nullptr) {
       BLI_assert(0);
@@ -1356,10 +1387,22 @@ void build_pixel_position_map(Object &ob,
     const size_t tile_count = IMB_get_pixel_count(tile_buffer);
     r_pixel_positions.resize(r_pixel_positions.size() + tile_count);
     r_offsets.append(r_pixel_positions.size());
+    tile_to_buffer_map.add(used_tile_number, tile_buffer);
+  }
 
-    Span<UDIMTilePixels *> pixel_tiles = tile_number_to_pixel_tile.lookup(tile.tile_number);
-    for (UDIMTilePixels *udim_tile : pixel_tiles) {
-      const UDIMTilePixels &tile_data = *udim_tile;
+  Map<image::TileNumber, int> tile_to_index_map;
+  for (const int i : pixel_data.used_tiles.index_range()) {
+    tile_to_index_map.add(pixel_data.used_tiles[i], i);
+  }
+
+  Span<PixelNode> pixel_nodes = pixel_data.nodes;
+  for (const PixelNode &pixel_node : pixel_nodes) {
+    for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
+      ImBuf *tile_buffer = tile_to_buffer_map.lookup(tile_data.tile_number);
+      const int tile_index = tile_to_index_map.lookup(tile_data.tile_number);
+      const int tile_height = tile_buffer->y;
+
+      const int tile_offset = r_offsets[tile_index];
 
       const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
       for (const int run_i : IndexRange(num_runs)) {
@@ -1383,8 +1426,6 @@ void build_pixel_position_map(Object &ob,
           /* TODO: Maybe there's a better way to filter this? */
           if (!pixel_node.uv_primitives.original_tris[uv_prim]) {
             tri_row_offset += tri_row_size;
-            skipped_pixels += tri_row_size;
-            total_pixels += tri_row_size;
             continue;
           }
 
@@ -1395,32 +1436,20 @@ void build_pixel_position_map(Object &ob,
                                  pixel_to_position[2];
 
           for (const int pixel_i : IndexRange(tri_row_size)) {
-            int pixel = run_y * height + tri_row_x + pixel_i;
+            int pixel = tile_offset + run_y * tile_height + tri_row_x + pixel_i;
             const float3 position = P_start + P_delta * pixel_i;
-#if 0
-            printf("Inserting %d (%d %d %d %d) at (%f %f %f)\n",
-                   pixel,
-                   run_y,
-                   height,
-                   tri_row_x,
-                   pixel_i,
-                   position.x,
-                   position.y,
-                   position.z);
-#endif
-            kdtree_insert(tree, pixel, position);
-#if 0
-            used_pixels[pixel] = true;
-#endif
+            r_pixel_positions[pixel] = position;
+            r_filled_positions.append(pixel);
           }
 
           tri_row_offset += tri_row_size;
-          total_pixels += tri_row_size;
         }
       }
     }
+  }
 
-    BKE_image_release_ibuf(data.image, tile_buffer, nullptr);
+  for (ImBuf *buffer : tile_to_buffer_map.values()) {
+    BKE_image_release_ibuf(data.image, buffer, nullptr);
   }
 }
 
@@ -1540,7 +1569,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
                             const Brush &brush,
                             Object &ob,
                             ImageData &image_data,
-                            const KDTree<float3> &tree,
+                            const KDTreeNew<float3> &tree,
                             const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
@@ -1548,6 +1577,9 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
   PixelData &pixel_data = *pbvh.pixels_;
+  const std::optional<KDTreeData> &tree_data = pbvh.pixels_->tree_data;
+  if (!tree_data.has_value()) {
+  }
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
   node_mask.foreach_index(
@@ -1566,7 +1598,16 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index(
       [&](const int i) {
-        fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
+        fill_blur_pixels(depsgraph,
+                         ob,
+                         paint,
+                         brush,
+                         pbvh.pixels_->used_tiles,
+                         image_data,
+                         tree_data.value(),
+                         tree,
+                         nodes[i],
+                         pixel_nodes[i]);
       },
       exec_mode::grain_size(1));
 
