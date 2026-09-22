@@ -1,0 +1,1 @@
+Referenced by issue #162889, Geometry Nodes: uninterruptible hang in Realize Instances (VectorSet::index_of never terminates)
