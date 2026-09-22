@@ -13,8 +13,8 @@
 
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
-#include "BKE_material.hh"
 #include "BKE_light.h"
+#include "BKE_material.hh"
 
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
@@ -25,7 +25,6 @@
 #include "IMB_imbuf_types.hh"
 
 #include "gpencil_engine_private.hh"
-
 
 namespace blender::draw::gpencil {
 
