@@ -14,6 +14,8 @@
 
 #include "DNA_node_types.h"
 
+#include "BKE_compositor.hh"
+#include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
@@ -29,18 +31,26 @@
 
 namespace blender::compositor {
 
-bool has_viewer_node(const bNodeTree &node_group,
-                     const ComputeContext &compute_context,
-                     const ComputeContextHash &active_compute_context_hash)
+/* Checks if the given node group with the given compute context has an active Viewer node in it or
+ * in one of its descendants with the given viewer compute context. */
+static bool has_viewer_node(const bNodeTree &node_group,
+                            const ComputeContext &compute_context,
+                            const ComputeContextHash &viewer_compute_context_hash,
+                            bke::ComputeContextCache &compute_context_cache)
 {
   node_group.ensure_topology_cache();
 
-  /* If this is the active node group, check if a viewer node exists.  */
-  if (compute_context.hash() == active_compute_context_hash) {
-    for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
-      if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
-        return true;
-      }
+  /* Check if any of the nodes match the viewer compute context. */
+  for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
+    if (!(node->flag & NODE_DO_OUTPUT) || node->is_muted()) {
+      continue;
+    }
+
+    const ComputeContext &zone_viewer_compute_context =
+        bke::compositor::get_zone_viewer_compute_context(
+            *node, nullptr, compute_context, compute_context_cache);
+    if (viewer_compute_context_hash == zone_viewer_compute_context.hash()) {
+      return true;
     }
   }
 
@@ -50,10 +60,19 @@ bool has_viewer_node(const bNodeTree &node_group,
       continue;
     }
 
+    const ComputeContext &zone_viewer_compute_context =
+        bke::compositor::get_zone_viewer_compute_context(
+            *group_node, nullptr, compute_context, compute_context_cache);
+
     const bNodeTree &child_node_group = *reinterpret_cast<const bNodeTree *>(group_node->id);
-    const bke::GroupNodeComputeContext node_compute_context(
-        &compute_context, group_node->identifier, &group_node->owner_tree());
-    if (has_viewer_node(child_node_group, node_compute_context, active_compute_context_hash)) {
+    const bke::GroupNodeComputeContext &node_compute_context =
+        compute_context_cache.for_group_node(
+            &zone_viewer_compute_context, group_node->identifier, &group_node->owner_tree());
+    if (has_viewer_node(child_node_group,
+                        node_compute_context,
+                        viewer_compute_context_hash,
+                        compute_context_cache))
+    {
       return true;
     }
   }
@@ -233,8 +252,9 @@ static bool is_input_needed(const Context &context,
 
 /* Get a stack of the output nodes whose result should be computed. This typically includes the
  * main output node like the Group Output node, as well as side-effect nodes if requested by the
- * context like the File Output, Viewer nodes, or group nodes that have those side effect nodes. If
- * zone is not nullptr, only output nodes in that zone will be included. */
+ * context like the File Output, Viewer nodes, group nodes whose group that have those side effect
+ * nodes, or zones that have those side effect nodes. If zone is not nullptr, only output nodes in
+ * that zone will be included. */
 static Stack<const bNode *> get_output_nodes(const Context &context,
                                              const bNodeTree &node_group,
                                              const ComputeContext &compute_context,
@@ -242,6 +262,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
                                              SocketResultFn socket_result_fn)
 {
   node_group.ensure_topology_cache();
+  bke::ComputeContextCache compute_context_cache;
   const bke::bNodeTreeZones &zones = *node_group.zones();
   const SideEffectOutputTypes needed_side_effect_output_types =
       context.needed_side_effect_output_types();
@@ -254,26 +275,55 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
       continue;
     }
 
-    /* Only consider nodes in the same zone being scheduled. */
-    if (zones.get_zone_by_node(group_node->identifier) != zone) {
+    /* Only consider nodes inside the same zone being scheduled. */
+    if (zone && !zone->contains_node_recursively(*group_node)) {
       continue;
     }
 
+    const ComputeContext &zone_viewer_compute_context =
+        bke::compositor::get_zone_viewer_compute_context(
+            *group_node, zone, compute_context, compute_context_cache);
+
     const bNodeTree &child_tree = *reinterpret_cast<const bNodeTree *>(group_node->id);
-    const bke::GroupNodeComputeContext node_compute_context(
-        &compute_context, group_node->identifier, &group_node->owner_tree());
+    const bke::GroupNodeComputeContext &node_compute_context =
+        compute_context_cache.for_group_node(
+            &zone_viewer_compute_context, group_node->identifier, &group_node->owner_tree());
+    const std::optional<ComputeContextHash> viewer_compute_context_hash =
+        context.get_viewer_compute_context_hash();
     if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode) &&
-        has_viewer_node(
-            child_tree, node_compute_context, context.get_viewer_compute_context_hash()))
+        viewer_compute_context_hash.has_value() &&
+        has_viewer_node(child_tree,
+                        node_compute_context,
+                        viewer_compute_context_hash.value(),
+                        compute_context_cache))
     {
-      node_stack.push(group_node);
+      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
+       * the output node of the immediate child zone that contain the group node. */
+      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(group_node->identifier);
+      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
+      if (node_zone == zone) {
+        node_stack.push(group_node);
+      }
+      else {
+        node_stack.push(zone_stack[0]->output_node());
+      }
       continue;
     }
 
     if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::FileOutputNode) &&
         has_file_output_recursive(child_tree))
     {
-      node_stack.push(group_node);
+      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
+       * the output node of the immediate child zone that contain the group node. */
+      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(group_node->identifier);
+      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
+      if (node_zone == zone) {
+        node_stack.push(group_node);
+      }
+      else {
+        node_stack.push(zone_stack[0]->output_node());
+      }
+      continue;
     }
   }
 
@@ -283,12 +333,21 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
       continue;
     }
 
-    /* Only consider nodes in the same zone being scheduled. */
-    if (zones.get_zone_by_node(node->identifier) != zone) {
+    /* Only consider nodes inside the same zone being scheduled. */
+    if (zone && !zone->contains_node_recursively(*node)) {
       continue;
     }
 
-    node_stack.push(node);
+    /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
+     * the output node of the immediate child zone that contain the group node. */
+    const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
+    Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
+    if (node_zone == zone) {
+      node_stack.push(node);
+    }
+    else {
+      node_stack.push(zone_stack[0]->output_node());
+    }
   }
 
   /* Add File Output nodes. */
@@ -298,32 +357,54 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
         continue;
       }
 
-      /* Only consider nodes in the same zone being scheduled. */
-      if (zones.get_zone_by_node(node->identifier) != zone) {
+      /* Only consider nodes inside the same zone being scheduled. */
+      if (zone && !zone->contains_node_recursively(*node)) {
         continue;
       }
 
-      node_stack.push(node);
+      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
+       * the output node of the immediate child zone that contain the group node. */
+      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
+      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
+      if (node_zone == zone) {
+        node_stack.push(node);
+      }
+      else {
+        node_stack.push(zone_stack[0]->output_node());
+      }
     }
   }
 
-  /* Add Viewer node if this is the active context. */
-  const bool is_active_context = compute_context.hash() ==
-                                 context.get_viewer_compute_context_hash();
-  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode) &&
-      is_active_context)
-  {
+  /* Add Viewer node. */
+  if (flag_is_set(needed_side_effect_output_types, SideEffectOutputTypes::ViewerNode)) {
     for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
       if (!(node->flag & NODE_DO_OUTPUT) || node->is_muted()) {
         continue;
       }
 
-      /* Only consider nodes in the same zone being scheduled. */
-      if (zones.get_zone_by_node(node->identifier) != zone) {
+      /* Only consider nodes inside the same zone being scheduled. */
+      if (zone && !zone->contains_node_recursively(*node)) {
         continue;
       }
 
-      node_stack.push(node);
+      /* Only consider nodes in the viewer compute context. */
+      const ComputeContext &zone_viewer_compute_context =
+          bke::compositor::get_zone_viewer_compute_context(
+              *node, zone, compute_context, compute_context_cache);
+      if (context.get_viewer_compute_context_hash() != zone_viewer_compute_context.hash()) {
+        continue;
+      }
+
+      /* If the group node is in the same zone, we push the node to the stack, otherwise, we push
+       * the output node of the immediate child zone that contain the group node. */
+      const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
+      Vector<const bke::bNodeTreeZone *> zone_stack = zones.get_zones_to_enter(zone, node_zone);
+      if (node_zone == zone) {
+        node_stack.push(node);
+      }
+      else {
+        node_stack.push(zone_stack[0]->output_node());
+      }
       break;
     }
   }
@@ -654,7 +735,7 @@ Schedule compute_schedule(const Context &context,
                           const SocketResultFn socket_result_fn,
                           const bke::bNodeTreeZone *zone)
 {
-  Schedule schedule;
+  Schedule schedule = Schedule{node_group, zone};
 
   /* Validate node group. */
   node_group.ensure_topology_cache();
