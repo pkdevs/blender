@@ -2342,7 +2342,11 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     const bool par = match_if('(');
-    if (var->type->is_srt()) {
+
+    /* Lookup the type from the declaration as var might be ERROR_SYMBOL for forward declared
+     * functions (because of name mismatch). */
+    SymbolClass *type = scope.lookup_class(table, decl.type().identifier()).unwrap(this);
+    if (type->is_srt()) {
       /* WORKAROUND: Do not pass SRT by reference because it causes issue on metal when the caller
        * is just calling the constructor in place. */
       skip_if('&');
