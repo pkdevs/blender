@@ -1,2 +1,3 @@
 Referenced by issue #162318, EEVEE: Performance regression for barbershop_interior
 Referenced by issue #162950, Artifacts when rendering the Barbershop interior scene
+Referenced by issue #162889, Geometry Nodes: uninterruptible hang in Realize Instances (VectorSet::index_of never terminates)
