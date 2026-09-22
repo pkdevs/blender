@@ -856,8 +856,9 @@ struct EraseOperationExecutor {
                     const bke::CurvesGeometry &src,
                     bke::CurvesGeometry &cut_curve,
                     const ed::greasepencil::DrawingPlacement &placement,
-                    const Span<float2> screen_space_positions,
+                    const Span<float2> /*screen_space_positions*/,
                     const float4x4 &layer_to_world,
+                    const float4x4 &projection,
                     bke::CurvesGeometry &dst,
                     const bool keep_caps) const
   {
@@ -874,11 +875,15 @@ struct EraseOperationExecutor {
       cut_curve.radius_for_write().last() = this->eraser_radius;
     }
 
+    auto project_fn = [&](const float3 &position) {
+      return ED_view3d_project_float_v2_m4(&region, position, projection);
+    };
+
     bke::greasepencil::Drawing cut_drawing = bke::greasepencil::Drawing();
     cut_drawing.strokes_for_write() = cut_curve;
 
     const bke::CurvesGeometry outline = create_curves_outline(
-        cut_drawing, cut_curve.curves_range(), layer_to_world, 3, 0.0f, 0.0f, -1);
+        cut_drawing, cut_curve.curves_range(), float4x4::identity(), 3, 0.0f, 0.0f, -1);
 
     const Span<float3> pos = outline.positions();
     Array<float2> cut_pos2d(outline.points_num());
@@ -910,20 +915,13 @@ struct EraseOperationExecutor {
 
     bke::MutableAttributeAccessor attributes = input_curves.attributes_for_write();
 
-    bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
-        ".positions_2d", bke::AttrDomain::Point);
-
-    pos_writer.span.slice(src.points_range()).copy_from(screen_space_positions);
-    pos_writer.span.take_back(cut_pos2d.size()).copy_from(cut_pos2d);
-    pos_writer.finish();
-
     placement.project(cut_pos2d, input_curves.positions_for_write().take_back(cut_pos2d.size()));
 
     bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_span<int>(
         "fill_id", bke::AttrDomain::Curve);
     fill_ids.span.last() = bke::greasepencil::get_next_available_fill_id(fill_ids.span.varray());
 
-    auto [shape_map, shape_offsets] = blender::bke::greasepencil::shapes_from_fill_ids(
+    const bke::greasepencil::ShapeData shapes_data = bke::greasepencil::shapes_from_fill_ids(
         fill_ids.span.varray(), input_curves.curves_num());
 
     fill_ids.finish();
@@ -935,29 +933,33 @@ struct EraseOperationExecutor {
     input_curves.fill_curve_types(clipping_curves, CURVE_TYPE_POLY);
 
     /* Initialize the rest of the attributes with default values. */
-    bke::fill_attribute_range_default(
-        attributes,
-        bke::AttrDomain::Point,
-        bke::attribute_filter_from_skip_ref({"position", ".positions_2d"}),
-        clipping_points);
+    bke::fill_attribute_range_default(attributes,
+                                      bke::AttrDomain::Point,
+                                      bke::attribute_filter_from_skip_ref({"position"}),
+                                      clipping_points);
     bke::fill_attribute_range_default(
         attributes,
         bke::AttrDomain::Curve,
         bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
         clipping_curves);
 
-    carver::CurveBooleanOpParameters op_params;
-    op_params.boolean_mode = carver::Operation::Difference;
+    boolean::CurveBooleanOpParameters op_params;
+    op_params.boolean_mode = boolean::Operation::Difference;
     op_params.keep_caps = keep_caps;
     op_params.skip_clipping_attributes = true;
+    op_params.separate_islands = true;
 
-    const GroupedSpan<int> shapes = GroupedSpan<int>(shape_offsets.as_span(), shape_map.as_span());
+    const GroupedSpan<int> shapes = shapes_data.shapes();
     const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
-    dst = carver::curve_boolean_with_planes(
-        op_params, input_curves, shapes, normal_planes, clipping_shapes, layer_to_world, region);
-
-    dst.attributes_for_write().remove(".positions_2d");
+    dst = boolean::curve_boolean_with_planes(op_params,
+                                             input_curves,
+                                             project_fn,
+                                             shapes,
+                                             normal_planes,
+                                             clipping_shapes,
+                                             layer_to_world,
+                                             region);
 
     return true;
   }
@@ -969,6 +971,7 @@ struct EraseOperationExecutor {
     Depsgraph *depsgraph = CTX_data_depsgraph_pointer(&C);
     ARegion *region = CTX_wm_region(&C);
     View3D *view3d = CTX_wm_view3d(&C);
+    RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     Object *obact = CTX_data_active_object(&C);
     Object *ob_eval = DEG_get_evaluated(depsgraph, obact);
 
@@ -1034,6 +1037,8 @@ struct EraseOperationExecutor {
               break;
             case GP_BRUSH_ERASER_HARD: {
               const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
+              const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(rv3d,
+                                                                                  layer_to_world);
 
               /* Initialize helper class for projecting screen space coordinates. */
               ed::greasepencil::DrawingPlacement placement = ed::greasepencil::DrawingPlacement(
@@ -1047,6 +1052,7 @@ struct EraseOperationExecutor {
                                     self.cut_curve,
                                     placement,
                                     screen_space_positions,
+                                    projection,
                                     layer_to_world,
                                     dst,
                                     self.keep_caps_);
