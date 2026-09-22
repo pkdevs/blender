@@ -261,11 +261,14 @@ struct GeometryData {
   bke::SpanAttributeWriter<float3> velocity_attr;
   bke::SpanAttributeWriter<float3> angular_velocity_attr;
 
-  VArray<int> collision_shape_types;
-  VArray<int> motion_types;
-  VArray<float> frictions;
-  VArray<float> bouncinesses;
-  VArray<float> densities;
+  VArraySpan<float3> external_force_attr;
+  VArraySpan<float3> external_torque_attr;
+
+  VArraySpan<int> collision_shape_types;
+  VArraySpan<int> motion_types;
+  VArraySpan<float> frictions;
+  VArraySpan<float> bouncinesses;
+  VArraySpan<float> densities;
 
   GeometryData(const bke::MutableAttributeAccessor attributes) : attributes(attributes) {}
 };
@@ -474,12 +477,12 @@ class JoltSolverStep {
       geo_data.angular_velocity_attr = simulation::ensure_attribute<float3>(
           geo_data.attributes, attribute_names::angular_velocity, domain);
 
-      // geo_data.external_force_attr = this->lookup_attribute_default<float3>(
-      //     data_key_i, attribute_names::external_force, domain, float3(0, 0, 0));
+      geo_data.external_force_attr = this->lookup_attribute_default<float3>(
+          data_key_i, attribute_names::external_force, domain, float3(0, 0, 0));
+      geo_data.external_torque_attr = this->lookup_attribute_default<float3>(
+          data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
       // geo_data.masses = this->lookup_attribute_default<float>(
       //     data_key_i, attribute_names::mass, domain, 1.0f);
-      // geo_data.external_torque_attr = this->lookup_attribute_default<float3>(
-      //     data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
       // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
       //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
 
@@ -498,27 +501,11 @@ class JoltSolverStep {
 
   void update_jolt_state_from_world()
   {
-    this->update_jolt_state__gravity();
+    /* XXX Jolt gravity is disabled because the gravity is implemented as an external force.
+     * TBD if this has significant drawbacks. */
+    state_.system.SetGravity({0, 0, 0});
+
     this->update_jolt_state__rigid_bodies();
-  }
-
-  void update_jolt_state__gravity()
-  {
-    // TODO
-    // if (behaviors.gravities.size() >= 2) {
-    //   params.error_message_add(NodeWarningType::Warning, "There can't be multiple gravities");
-    //   state.system.SetGravity(JPH::Vec3::sZero());
-    //   return;
-    // }
-    // if (behaviors.gravities.size() == 1) {
-    //   const GravityBehavior &behavior = behaviors.gravities[0];
-    //   const float3 gravity = behavior.gravity;
-    //   state.system.SetGravity(JPH::Vec3(gravity.x, gravity.y, gravity.z));
-    //   return;
-    // }
-
-    const JPH::Vec3 default_gravity(0.0f, 0.0f, -9.81f);
-    state_.system.SetGravity(default_gravity);
   }
 
   void update_jolt_state__rigid_bodies()
@@ -657,6 +644,11 @@ class JoltSolverStep {
             geometry::jolt::convert_quat(instance_rotation),
             JPH::EActivation::Activate);
       }
+
+      body_interface.AddForceAndTorque(
+          rigid_body->body->GetID(),
+          geometry::jolt::convert_vec3(geo_data.external_force_attr[instance_i]),
+          geometry::jolt::convert_vec3(geo_data.external_torque_attr[instance_i]));
 
       rigid_bodies.bodies_by_id.add(instance_id, std::move(*rigid_body));
     }
