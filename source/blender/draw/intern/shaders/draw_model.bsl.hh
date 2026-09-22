@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "gpu_shader_compat.hh"
@@ -76,6 +80,16 @@ struct Model {
   ObjectMatrices get(uint resource_id) const
   {
     return drw_matrix_buf[resource_id];
+  }
+};
+
+struct Infos {
+  [[storage(DRW_OBJ_INFOS_SLOT, read)]] const ObjectInfos (&drw_infos)[];
+
+  /* `resource_id` should be the result of `draw::ID::resource_id()` or manually indexed. */
+  ObjectInfos get(uint resource_id) const
+  {
+    return drw_infos[resource_id];
   }
 };
 

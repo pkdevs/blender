@@ -6,12 +6,10 @@
 
 #include "infos/eevee_common_infos.hh"
 
-SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
-
 #include "eevee_lightprobe_volume.bsl.hh"
-#include "eevee_spherical_harmonics.bsl.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_matrix_normalize_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_matrix_normalize.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
 
 namespace eevee::lightprobe::volume {
 
@@ -27,8 +25,6 @@ struct AtlasStore {
 };
 
 struct LoadGrid {
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-
   [[push_constant]] const float4x4 grid_local_to_world;
   [[push_constant]] const int grid_index;
   [[push_constant]] const int grid_start_index;
@@ -79,10 +75,8 @@ struct LoadGrid {
 void load_grid([[resource_table]] const LoadGrid &srt,
                [[resource_table]] const LightprobeVolumeRenderData &lvd,
                [[resource_table]] AtlasStore &atlas,
-               [[global_invocation_id]] const uint3 global_id,
                [[work_group_id]] const uint3 group_id,
-               [[local_invocation_id]] const uint3 local_id,
-               [[local_invocation_index]] const uint local_index)
+               [[local_invocation_id]] const uint3 local_id)
 {
   int brick_index = lightprobe::volume::grid_brick_index_get(lvd.grids_infos_buf[srt.grid_index],
                                                              int3(group_id));
@@ -205,8 +199,6 @@ void load_grid([[resource_table]] const LoadGrid &srt,
 }
 
 struct LoadWorld {
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-
   [[storage(1, read)]] const SphereProbeHarmonic &harmonic_buf;
 
   [[push_constant]] const int grid_index;
@@ -223,9 +215,7 @@ struct LoadWorld {
 void load_world([[resource_table]] const LoadWorld &srt,
                 [[resource_table]] const LightprobeVolumeRenderData &lvd,
                 [[resource_table]] AtlasStore &atlas,
-                [[global_invocation_id]] const uint3 global_id,
-                [[local_invocation_id]] const uint3 local_id,
-                [[local_invocation_index]] const uint local_index)
+                [[local_invocation_id]] const uint3 local_id)
 {
   int brick_index = lvd.grids_infos_buf[srt.grid_index].brick_offset;
 

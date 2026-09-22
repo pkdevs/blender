@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BLI_string_ref.hh"
@@ -64,10 +68,24 @@ class CrossEdgeLengthConstraintBundle {
   static const FlatBundleTypePtr &get_bundle_type();
 };
 
-/* This is currently not used by built-in nodes but is used in essential assets. */
+/** This is currently not used by built-in nodes but is used in essential assets. */
 class ForceBundle {
  public:
   static constexpr StringRefNull name = "Blender.Force";
+  static const FlatBundleTypePtr &get_bundle_type();
+};
+
+/** This is currently not used by built-in nodes but is used in essential assets. */
+class CustomGeometryEffector {
+ public:
+  static constexpr StringRefNull name = "Blender.CustomEffector.Geometry";
+  static const FlatBundleTypePtr &get_bundle_type();
+};
+
+/** This is currently not used by built-in nodes but is used in essential assets. */
+class CustomWorldEffector {
+ public:
+  static constexpr StringRefNull name = "Blender.CustomEffector.World";
   static const FlatBundleTypePtr &get_bundle_type();
 };
 

@@ -64,7 +64,7 @@ def print_row(table: api.MarkdownTable, entries: list, end='\n') -> None:
     # For time series, revision is printed first.
     row.append(entries[0].revision)
     row.append(entries[0].category)
-    row.append(entries[0].device_type)
+    row.append(api.normalize_device_id(entries[0].device_id))
     row.append(entries[0].test)
 
     for entry in entries:
@@ -136,6 +136,7 @@ def run_entry(env: api.TestEnvironment,
     testcategory = entry.category
     device_type = entry.device_type
     device_id = entry.device_id
+
     gpu_backend = {
         'VULKAN': 'vulkan',
         'METAL': 'metal',
@@ -311,6 +312,58 @@ def cmd_reset(env: api.TestEnvironment, argv: list):
             shutil.rmtree(config.logs_dir)
 
 
+def cmd_build(env: api.TestEnvironment, argv: list):
+    # Build all revisions, skipping the ones that are already up to date.
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config', nargs='?', default=None)
+    parser.add_argument(
+        '--no-submodules',
+        action='store_true',
+        help="Skip updating submodules when checking out revisions. Useful when testing performance regressions for library changes.")
+    args = parser.parse_args(argv)
+
+    update_submodules = not args.no_submodules
+
+    configs = env.get_configs(args.config)
+    for config in configs:
+        if config.benchmark_type != "comparison":
+            print(f"{config.name}: build not supported, this command can only be used with comparison benchmarks")
+            continue
+
+        # Collect revisions that need building: entries without a pre-built executable.
+        revisions = {}
+        for entry in config.queue.entries:
+            if len(entry.executable) == 0 and entry.revision not in revisions:
+                revisions[entry.revision] = entry.git_hash
+
+        if not revisions:
+            continue
+
+        print(config.name.upper())
+        for revision in sorted(revisions.keys()):
+            git_hash = revisions[revision]
+            install_dir = config.builds_dir / revision
+
+            logname = revision + '_build'
+            env.set_log_file(config.logs_dir / (logname + '.log'), clear=True)
+            print(f"{revision} building")
+            env.echo_output = True
+            try:
+                ok = env.build(git_hash, install_dir, update_submodules)
+            except SystemExit:
+                # e.g. build directory not initialized, treat as a failed build.
+                ok = False
+            finally:
+                env.echo_output = False
+                env.unset_log_file()
+
+            if ok:
+                print(f"{revision} done")
+            else:
+                print(f"{revision} failed")
+                sys.exit(1)
+
+
 def cmd_run(env: api.TestEnvironment, argv: list, update_only: bool):
     # Run tests.
     parser = argparse.ArgumentParser()
@@ -419,9 +472,9 @@ def cmd_bisect(env: api.TestEnvironment, argv: list):
 
     table = api.MarkdownTable()
     table.add_column("Remaining", width=5, alignment='RIGHT')
-    table.add_column("Commit", width=12)
+    table.add_column("Commit", width=14)
     table.add_column("Date (UTC)", width=22)
-    table.add_column("Title", width=70)
+    table.add_column("Title", width=72)
     table.add_column(args.attribute, width=14, alignment='RIGHT')
     table.add_column("Status", width=8)
     table.print_header()
@@ -442,15 +495,17 @@ def cmd_bisect(env: api.TestEnvironment, argv: list):
     end_ts = int(end_dt.timestamp()) + SECONDS_PER_DAY
 
     progress = api.bisect.BisectProgress()
+    env.set_log_file(env.base_dir / 'bisect.log', clear=True)
     bisect = api.bisect.Bisect(env, run_commit_wrapper, start_ts, end_ts)
     bisect.run(progress=progress)
+    env.unset_log_file()
 
     if bisect.first_bad is None:
         print('\nNo regression found in the given date range.')
         return
 
-    title = env.commit_title(bisect.first_bad)
-    print(f'\nRegression introduced by commit {bisect.first_bad}: {title}')
+    title = env.commit_title(bisect.first_bad).replace('`', '\'')
+    print(f'\nRegression introduced by commit `{bisect.first_bad}`: `{title}`')
 
 
 def cmd_graph(argv: list):
@@ -486,6 +541,7 @@ def main():
              '  \n'
              '  run [<config>] [<test>]              Execute all tests in configuration\n'
              '  update [<config>] [<test>]           Execute only queued and outdated tests\n'
+             '  build [<config>]                     Build revisions (skips the up to date ones)\n'
              '  reset [<config>] [<test>]            Clear tests results in configuration\n'
              '  status [<config>] [<test>]           List configurations and their tests\n'
              '  \n'
@@ -529,6 +585,8 @@ def main():
         cmd_run(env, argv, update_only=False)
     elif args.command == 'update':
         cmd_run(env, argv, update_only=True)
+    elif args.command == 'build':
+        cmd_build(env, argv)
     elif args.command == 'reset':
         cmd_reset(env, argv)
     elif args.command == 'bisect':

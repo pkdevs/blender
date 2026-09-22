@@ -8,6 +8,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_set.hh"
+
 #include "OCIO_colorspace.hh"
 
 #include "../cpu_processor_cache.hh"
@@ -24,19 +26,19 @@ class LibOCIOColorSpace : public ColorSpace {
   StringRefNull interop_id_;
   bool is_primary_interop_id_ = false;
 
-  /* Mutable because they are lazily initialized and cached from the is_scene_linear() and
-   * is_srgb(). */
-  mutable bool is_info_cached_ = false;
-  mutable bool is_scene_linear_ = false;
-  mutable bool is_srgb_ = false;
-
   CPUProcessorCache to_scene_linear_cpu_processor_;
   CPUProcessorCache from_scene_linear_cpu_processor_;
+
+  /* Configuration whose scene linear role is the target of the to/from scene linear processors.
+   * Usually this is #ocio_config_, but can also be something else if the color space is not
+   * part of a new config but still preserved. */
+  OCIO_NAMESPACE::ConstConfigRcPtr scene_linear_config_;
 
  public:
   LibOCIOColorSpace(int index,
                     const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config,
-                    const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space);
+                    const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space,
+                    Set<StringRef> &primary_interop_ids);
 
   StringRefNull name() const override
   {
@@ -76,12 +78,16 @@ class LibOCIOColorSpace : public ColorSpace {
   const CPUProcessor *get_to_scene_linear_cpu_processor() const override;
   const CPUProcessor *get_from_scene_linear_cpu_processor() const override;
 
+  void switch_scene_linear_config(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config);
+
+  const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space() const
+  {
+    return ocio_color_space_;
+  }
+
   void clear_caches();
 
   MEM_CXX_CLASS_ALLOC_FUNCS("LibOCIOColorSpace");
-
- private:
-  void ensure_srgb_scene_linear_info() const;
 };
 
 }  // namespace blender::ocio

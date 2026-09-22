@@ -242,11 +242,13 @@ void ShadowPipeline::render(View &view)
 
 void Prepass::init(DRWState extra_state,
                    bool supports_motion_vectors,
+                   bool supports_raycast_visibility,
                    FunctionRef<void(PassMain &pass)> pass_setup_cb)
 {
   common_state_ = DRW_STATE_WRITE_DEPTH | DRW_STATE_CLIP_CONTROL_UNIT_RANGE |
                   inst_.film.depth.test_state | extra_state;
   supports_motion_vectors_ = supports_motion_vectors;
+  supports_raycast_visibility_ = supports_raycast_visibility;
 
   pass_.init();
   /* Common resources. */
@@ -276,11 +278,15 @@ void Prepass::init(DRWState extra_state,
           PassMain::Sub *&sub = subs_[hide_from_raycast][double_sided][moving][write_id];
           PassMain::Sub *&setup_sub =
               setup_subs_[hide_from_raycast][double_sided][moving][write_id];
-          if ((hide_from_raycast && write_id) || (!supports_motion_vectors && moving)) {
+          if ((hide_from_raycast && write_id) || (!supports_motion_vectors && moving) ||
+              (!supports_raycast_visibility && !hide_from_raycast))
+          {
             /* Never needed.
              * Object IDs are only used for checking raycast self-hits.
              * If the pipeline doesn't support motion vectors, Prepass::add should always be called
-             * with has_motion == false. */
+             * with has_motion == false.
+             * If the pipeline doesn't support raycast visibility, Prepass::add should always be
+             * called with hide_from_raycast == true. */
             sub = nullptr;
             setup_sub = nullptr;
             continue;
@@ -356,13 +362,15 @@ void Prepass::end_sync()
     }
   }
 
-  /* First Subpass. */
-  setup_subs_[false][false][false][false]->bind_ubo(PIPELINE_BUF_SLOT, &pipeline_buf_copy_);
+  if (supports_raycast_visibility_) {
+    /* First Raycast-visible Subpass. */
+    setup_subs_[false][false][false][false]->bind_ubo(PIPELINE_BUF_SLOT, &pipeline_buf_copy_);
+  }
   /* First HideFromRaycast Subpass. */
   setup_subs_[true][false][false][false]->bind_ubo(PIPELINE_BUF_SLOT,
                                                    &pipeline_buf_copy_hide_from_raycast_);
 
-  if (has_raycast) {
+  if (has_raycast && supports_raycast_visibility_) {
     setup_subs_[true][false][false][false]->texture_copy(&fb_depth_tx_,
                                                          &inst_.render_buffers.raycast_depth_tx);
   }
@@ -399,7 +407,7 @@ void ForwardPipeline::sync()
   has_colored_transparency_ = false;
   has_holdout_ = false;
 
-  prepass_.init();
+  prepass_.init({}, true, false);
 
   {
     opaque_ps_.init();
@@ -772,9 +780,10 @@ void DeferredLayer::begin_sync()
   bool alpha_hash_subpixel_scale = !inst_.is_viewport() || !inst_.velocity.camera_has_motion();
   inst_.pipelines.data.alpha_hash_scale = alpha_hash_subpixel_scale ? 0.1f : 1.0f;
 
-  prepass_.init(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS, true, [](PassMain &pass) {
-    pass.state_stencil(0xFFu, 0u, 0xFFu);
-  });
+  prepass_.init(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS,
+                true,
+                true,
+                [](PassMain &pass) { pass.state_stencil(0xFFu, 0u, 0xFFu); });
 
   {
     gpu::Shader *sh = inst_.shaders.static_shader_get(DEFERRED_AOV_CLEAR);
@@ -900,6 +909,7 @@ void DeferredLayer::end_sync(bool is_first_pass,
         sub.bind_resources(inst_.hiz_buffer.front);
         sub.bind_resources(inst_.uniform_data);
         sub.bind_resources(inst_.sampling);
+        sub.bind_texture("utility_tx", &inst_.pipelines.utility_tx);
         sub.bind_texture("gbuf_header_tx", &inst_.gbuffer.header_tx);
         sub.bind_image("gbuf_normal_img", &inst_.gbuffer.normal_tx);
         sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_EQUAL);
@@ -918,7 +928,7 @@ void DeferredLayer::end_sync(bool is_first_pass,
         /* Use depth test to reject background pixels which have not been stencil cleared. */
         /* WORKAROUND: Avoid rasterizer discard by enabling stencil write, but the shaders actually
          * use no fragment output. */
-        sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_EQUAL | DRW_STATE_DEPTH_GREATER);
+        sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_EQUAL | DRW_STATE_DEPTH_LESS);
         sub.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
         sub.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
         sub.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
@@ -940,9 +950,7 @@ void DeferredLayer::end_sync(bool is_first_pass,
               eShaderType(DEFERRED_LIGHT_SINGLE + i));
           set_specialization_constants(sub, sh, false);
           sub.shader_set(sh);
-          sub.bind_image("direct_radiance_1_img", &direct_radiance_txs_[0]);
-          sub.bind_image("direct_radiance_2_img", &direct_radiance_txs_[1]);
-          sub.bind_image("direct_radiance_3_img", &direct_radiance_txs_[2]);
+          sub.bind_image("direct_radiance_imgs", &direct_radiance_txs_);
           sub.bind_image("indirect_radiance_1_img", &indirect_result_.closures[0]);
           sub.bind_image("indirect_radiance_2_img", &indirect_result_.closures[1]);
           sub.bind_image("indirect_radiance_3_img", &indirect_result_.closures[2]);
@@ -989,14 +997,28 @@ void DeferredLayer::end_sync(bool is_first_pass,
           sh, "use_radiance_feedback", use_feedback_output_ && use_clamp_direct_);
       pass.specialize_constant(sh, "render_pass_normal_enabled", rbuf_data.normal_id != -1);
       pass.specialize_constant(sh, "render_pass_position_enabled", rbuf_data.position_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_depth_enabled", rbuf_data.denoising_depth_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_normal_enabled", rbuf_data.denoising_normal_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_roughness_enabled", rbuf_data.denoising_roughness_id != -1);
+      pass.specialize_constant(sh,
+                               "render_passes_denoising_diffuse_albedo_enabled",
+                               rbuf_data.denoising_diffuse_albedo_id != -1);
+      pass.specialize_constant(sh,
+                               "render_passes_denoising_specular_albedo_enabled",
+                               rbuf_data.denoising_specular_albedo_id != -1);
+      pass.specialize_constant(sh,
+                               "use_albedo_roughness_weighting",
+                               (inst_.view_layer->eevee.denoising_pass_flags &
+                                EEVEE_DENOISING_PASS_USE_ALBEDO_ROUGHNESS_WEIGHTING) != 0);
       pass.shader_set(sh);
       /* Use stencil test to reject pixels not written by this layer. */
       pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_STENCIL_NEQUAL);
       /* Render where stencil is not 0. */
       pass.state_stencil(0x0u, 0x0u, uint8_t(StencilBits::HEADER_BITS));
-      pass.bind_texture("direct_radiance_1_tx", &direct_radiance_txs_[0]);
-      pass.bind_texture("direct_radiance_2_tx", &direct_radiance_txs_[1]);
-      pass.bind_texture("direct_radiance_3_tx", &direct_radiance_txs_[2]);
+      pass.bind_texture("direct_radiance_txs", &direct_radiance_txs_);
       pass.bind_texture("indirect_radiance_1_tx", &indirect_result_.closures[0]);
       pass.bind_texture("indirect_radiance_2_tx", &indirect_result_.closures[1]);
       pass.bind_texture("indirect_radiance_3_tx", &indirect_result_.closures[2]);
@@ -1091,11 +1113,9 @@ gpu::Texture *DeferredLayer::render(View &render_view,
   inst_.gbuffer.bind(gbuffer_fb);
   inst_.manager->submit(gbuffer_ps_, render_view);
 
-  for (int i = 0; i < ARRAY_SIZE(direct_radiance_txs_); i++) {
-    direct_radiance_txs_[i].acquire_2d((closure_count_ > i) ? extent : int2(1),
-                                       gpu::TextureFormat::DEFERRED_RADIANCE_FORMAT,
-                                       usage_rw);
-  }
+  direct_radiance_txs_.acquire_2d_array(
+      extent, closure_count_, gpu::TextureFormat::DEFERRED_RADIANCE_FORMAT, usage_rw);
+  direct_radiance_txs_.ensure_layer_views();
 
   if (use_raytracing_) {
     indirect_result_ = inst_.raytracing.render(
@@ -1112,7 +1132,7 @@ gpu::Texture *DeferredLayer::render(View &render_view,
   inst_.manager->submit(eval_light_ps_, render_view);
 
   inst_.subsurface.render(
-      direct_radiance_txs_[0], indirect_result_.closures[0], closure_bits_, render_view);
+      direct_radiance_txs_, indirect_result_.closures[0], closure_bits_, render_view);
 
   radiance_feedback_tx_ = rt_buffer.feedback_ensure(!use_feedback_output_, extent);
 
@@ -1131,10 +1151,7 @@ gpu::Texture *DeferredLayer::render(View &render_view,
   }
 
   indirect_result_.release();
-
-  for (int i = 0; i < ARRAY_SIZE(direct_radiance_txs_); i++) {
-    direct_radiance_txs_[i].release();
-  }
+  direct_radiance_txs_.release();
 
   inst_.pipelines.deferred.debug_draw(render_view, combined_fb);
 
@@ -1502,7 +1519,7 @@ void DeferredProbePipeline::end_sync()
     PassSimple &pass = eval_light_ps_;
     pass.init();
     /* Use depth test to reject background pixels. */
-    pass.state_set(DRW_STATE_DEPTH_GREATER | DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+    pass.state_set(DRW_STATE_DEPTH_LESS | DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
     pass.shader_set(inst_.shaders.static_shader_get(DEFERRED_CAPTURE_EVAL));
     pass.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
     pass.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
@@ -1587,7 +1604,7 @@ void DeferredProbePipeline::render(View &view,
 
 void PlanarProbePipeline::begin_sync()
 {
-  prepass_.init(DRW_STATE_NO_DRAW, false, [&](PassMain &pass) {
+  prepass_.init(DRW_STATE_NO_DRAW, false, true, [&](PassMain &pass) {
     pass.bind_ubo(CLIP_PLANE_BUF, inst_.planar_probes.world_clip_buf_);
   });
 
@@ -1603,7 +1620,7 @@ void PlanarProbePipeline::end_sync()
   if (!gbuffer_ps_.is_empty()) {
     PassSimple &pass = eval_light_ps_;
     pass.init();
-    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_DEPTH_GREATER);
+    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_DEPTH_LESS);
     pass.shader_set(inst_.shaders.static_shader_get(DEFERRED_PLANAR_EVAL));
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
     pass.bind_resources(inst_.uniform_data);
@@ -1707,9 +1724,15 @@ void CapturePipeline::sync()
   surface_ps_.bind_resources(inst_.uniform_data);
 }
 
-PassMain::Sub *CapturePipeline::surface_material_add(blender::Material *blender_mat,
+PassMain::Sub *CapturePipeline::surface_material_add(Object *ob,
+                                                     blender::Material *blender_mat,
                                                      GPUMaterial *gpumat)
 {
+  if (pointcloud_is_gsplat(ob)) {
+    /* GSplat objects are not currently supported by volume probe captures, so we do not sync. */
+    return nullptr;
+  }
+
   PassMain::Sub &sub_pass = surface_ps_.sub(GPU_material_get_name(gpumat));
   GPUPass *gpupass = GPU_material_get_pass(gpumat);
   sub_pass.shader_set(GPU_pass_shader_get(gpupass));

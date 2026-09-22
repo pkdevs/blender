@@ -4,7 +4,7 @@
 
 #ifdef GPU_SHADER
 #  pragma once
-#  include "BLI_utildefines_variadic.h"
+#  include "BLI_utildefines_variadic.hh"
 
 #  include "gpu_shader_compat.hh"
 
@@ -12,10 +12,7 @@
 #  include "draw_view_infos.hh"
 
 #  include "eevee_common_infos.hh"
-#  include "eevee_lightprobe_shared.hh"
-#  include "eevee_sampling_infos.hh"
-#  include "eevee_shadow_shared.hh"
-#  include "eevee_uniform_infos.hh"
+#  include "eevee_uniform_shared.hh"
 #endif
 
 #ifdef GLSL_CPP_STUBS
@@ -39,6 +36,10 @@ SMOOTH(float3, P)
 /* World Normal. */
 SMOOTH(float3, N)
 GPU_SHADER_NAMED_INTERFACE_END(interp)
+
+GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_flat_iface, interp_flat)
+FLAT(uint, resource_id_raw)
+GPU_SHADER_NAMED_INTERFACE_END(interp_flat)
 
 GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_shadow_iface, shadow_iface)
 FLAT(int, shadow_view_id)
@@ -71,6 +72,14 @@ GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_pointcloud_flat_iface, pointcloud_int
 FLAT(int, id)
 GPU_SHADER_NAMED_INTERFACE_END(pointcloud_interp_flat)
 
+GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_gsplat_iface, gsplat_interp)
+SMOOTH(float2, billboard_co)
+GPU_SHADER_NAMED_INTERFACE_END(gsplat_interp)
+
+GPU_SHADER_NAMED_INTERFACE_INFO(eevee_surf_gsplat_flat_iface, gsplat_interp_flat)
+FLAT(float, opacity)
+GPU_SHADER_NAMED_INTERFACE_END(gsplat_interp_flat)
+
 /* WORKAROUND: Until we get condition support for interfaces. */
 GPU_SHADER_CREATE_INFO(eevee_shadow_iface_info)
 VERTEX_OUT(eevee_surf_shadow_iface)
@@ -89,7 +98,25 @@ VERTEX_OUT(eevee_surf_pointcloud_iface)
 VERTEX_OUT(eevee_surf_pointcloud_flat_iface)
 GPU_SHADER_CREATE_END()
 
+/* WORKAROUND: Until we get condition support for interfaces. */
+GPU_SHADER_CREATE_INFO(eevee_geom_gsplat_iface_info)
+VERTEX_OUT(eevee_surf_gsplat_iface)
+VERTEX_OUT(eevee_surf_gsplat_flat_iface)
+GPU_SHADER_CREATE_END()
+
 /* WORKAROUND: Until we remove global accesses to the interface. */
 GPU_SHADER_CREATE_INFO(eevee_geom_iface_info)
 VERTEX_OUT(eevee_surf_iface)
+VERTEX_OUT(eevee_surf_flat_iface)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_NAMED_INTERFACE_INFO(eevee_clip_plane_iface, clip_interp)
+SMOOTH(float, clip_distance)
+GPU_SHADER_NAMED_INTERFACE_END(clip_interp)
+
+/* WORKAROUND: Until we remove global accesses to the interface. */
+GPU_SHADER_CREATE_INFO(eevee_clip_plane)
+VERTEX_OUT(eevee_clip_plane_iface)
+TYPEDEF_SOURCE("eevee_uniform_shared.hh")
+UNIFORM_BUF(CLIP_PLANE_BUF, ClipPlaneData, clip_plane)
 GPU_SHADER_CREATE_END()

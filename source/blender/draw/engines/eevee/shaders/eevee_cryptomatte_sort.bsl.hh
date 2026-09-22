@@ -4,19 +4,14 @@
 
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
-SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
-
-#include "gpu_shader_math_base_lib.glsl"
+#include "eevee_uniform.bsl.hh"
+#include "gpu_shader_math_base.bsl.hh"
 
 namespace eevee::cryptomatte {
 
 #define CRYPTOMATTE_LEVELS_MAX 16
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-
   [[push_constant]] const int cryptomatte_layer_len;
   [[push_constant]] const int cryptomatte_samples_per_layer;
 
@@ -78,13 +73,12 @@ struct Resources {
 
 [[compute, local_size(FILM_GROUP_SIZE, FILM_GROUP_SIZE)]]
 void sort_samples([[resource_table]] Resources &srt,
-                  [[global_invocation_id]] const uint3 global_id,
-                  [[local_invocation_id]] const uint3 local_id,
-                  [[local_invocation_index]] const uint local_index)
+                  [[resource_table]] const Uniform &uni,
+                  [[global_invocation_id]] const uint3 global_id)
 {
   int2 texel = int2(global_id.xy);
 
-  if (any(greaterThanEqual(texel, uniform_buf.film.extent))) {
+  if (any(greaterThanEqual(texel, uni.uniform_buf.film.extent))) {
     return;
   }
 

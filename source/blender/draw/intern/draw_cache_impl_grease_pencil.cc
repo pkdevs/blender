@@ -17,7 +17,7 @@
 #include "BKE_material.hh"
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 #include "BLI_task_size_hints.hh"
@@ -1719,10 +1719,10 @@ static void grease_pencil_geom_batch_ensure(Object &object,
       });
     }
     else {
-      visible_strokes.foreach_index([&](const int curve_i, const int pos) {
+      visible_strokes.foreach_index([&](const int curve_i) {
         const IndexRange points = points_by_curve[curve_i];
         const bool is_cyclic = cyclic[curve_i] && (points.size() > 2);
-        const int verts_start_offset = verts_start_offsets[pos];
+        const int verts_start_offset = verts_start_offsets[curve_i];
         const int num_verts = 1 + points.size() + (is_cyclic ? 1 : 0) + 1;
         const IndexRange verts_range = IndexRange(verts_start_offset, num_verts);
 

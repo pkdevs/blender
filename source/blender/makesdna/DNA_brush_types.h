@@ -52,7 +52,7 @@ struct BrushGpencilSettings {
 
   /** Factor for transparency. */
   float fill_threshold = 0;
-  char _pad[2] = {};
+  short fill_solver = 0;
   /* Type of caps: eGPDstroke_Caps. */
   int8_t caps_type = 0;
   char _pad1[1] = {};
@@ -134,6 +134,9 @@ struct BrushGpencilSettings {
   /* #CurveType Used for converting. */
   int8_t curve_type = 0;
   char _pad4[3] = {};
+  /* Fill Tool gap detection factor. */
+  float fill_gap_factor = 0;
+  char _pad5[4] = {};
 
   /* optional link of material to replace default in context */
   /** Material. */
@@ -194,7 +197,7 @@ struct Brush {
   /** Blend mode. */
   short blend = 0;
   /** #eObjectMode: to see if the brush is compatible, use for display only. */
-  short ob_mode = OB_MODE_ALL_PAINT;
+  short ob_mode = OB_MODE_ALL_PAINT_MESH;
   /** Brush weight. */
   float weight = 1.0f; /* weight of brush 0 - 1.0 */
   /** Brush diameter. */
@@ -241,6 +244,9 @@ struct Brush {
   struct CurveMapping *curve_size = nullptr;
   struct CurveMapping *curve_strength = nullptr;
   struct CurveMapping *curve_jitter = nullptr;
+  struct CurveMapping *curve_hardness = nullptr;
+  struct CurveMapping *curve_auto_smooth = nullptr;
+  struct CurveMapping *curve_spacing = nullptr;
 
   /** Opacity. */
   float alpha = 1.0f; /* brush strength/intensity probably variable should be renamed? */
@@ -292,7 +298,7 @@ struct Brush {
 
   /** Projection shape (sphere, circle). */
   eBrushFalloffShape falloff_shape = PAINT_FALLOFF_SHAPE_SPHERE;
-  float falloff_angle = 0;
+  float falloff_angle_legacy = 0;
 
   /** Active sculpt brush type. */
   eBrushSculptType sculpt_brush_type = SCULPT_BRUSH_TYPE_DRAW;
@@ -446,6 +452,9 @@ struct Brush {
 
   DNA_DEPRECATED struct CurveMapping *automasking_cavity_curve = nullptr;
   struct MeshAutomaskingSettings *mesh_automasking_settings = nullptr;
+  eBrushUnifiedPaintFlags unified_paint_flags = BRUSH_USE_UNIFIED_PAINT_SIZE |
+                                                BRUSH_USE_UNIFIED_PAINT_COLOR;
+  char _pad3[4] = {};
 };
 
 struct PaletteColor {

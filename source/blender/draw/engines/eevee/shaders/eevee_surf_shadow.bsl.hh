@@ -16,26 +16,26 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
+#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
 
 #include "eevee_nodetree_frag_lib.glsl"
-#include "eevee_sampling_lib.glsl"
+#include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow_shared.hh"
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-float4 closure_to_rgba_shadow(Closure /*cl*/)
+float4 closure_to_rgba_shadow([[resource_table]] KernelGlobals &kg,
+                              ShadingData &sd,
+                              Closure /*cl*/)
 {
-  return float4(0.0f);
+  float3 transmittance = sd.transmittance;
+  closure_weights_reset(kg, sd, 0.0f);
+  return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
 namespace eevee {
 
 struct SurfShadow {
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-  [[legacy_info]] ShaderCreateInfo eevee_utility_texture;
-  [[legacy_info]] ShaderCreateInfo eevee_sampling_data;
   [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
 
   [[storage(SHADOW_RENDER_MAP_BUF_SLOT,
@@ -45,8 +45,13 @@ struct SurfShadow {
 };
 
 [[fragment]] [[texture_atomic]]
-void surf_shadow([[resource_table]] PipelineConstants &pipe,
+void surf_shadow([[resource_table]] KernelGlobals &kg,
+                 [[resource_table]] PipelineConstants &pipe,
                  [[resource_table]] SurfShadow &srt,
+                 [[resource_table]] const Uniform &uni,
+                 [[resource_table]] const draw::View &views,
+                 [[resource_table]] const Sampling &sampling,
+                 [[resource_table]] const UtilityTexture & /*util_tx*/,
                  [[front_facing]] const bool front_face,
                  [[frag_coord]] const float4 frag_co)
 {
@@ -62,14 +67,16 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
   }
 
   if (pipe.use_transparency) [[static_branch]] {
-    init_globals(front_face);
+    const ViewMatrices view = views.get(shadow_iface.shadow_view_id);
+    ShadingData sd = init_globals(uni, view, front_face, frag_co);
 
-    nodetree_surface(0.0f);
+    nodetree_surface(kg, sd, 0.0f);
+    sd.transmittance = gsplat_amend_transmittance(sd.transmittance);
 
-    float noise_offset = sampling_rng_1D_get(SAMPLING_TRANSPARENCY);
-    float random_threshold = pcg4d(float4(g_data.P, noise_offset)).x;
+    float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
+    float random_threshold = pcg4d(float4(sd.P, noise_offset)).x;
 
-    float transparency = average(g_transmittance);
+    float transparency = average(sd.transmittance);
     if (transparency > random_threshold) {
       gpu_discard_fragment();
       return;
@@ -109,7 +116,7 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
    * This is equivalent of calling `next_after`, but without the safety. */
   u_depth += 2;
 
-  if (uniform_buf.shadow.use_debug_cost) {
+  if (uni.uniform_buf.shadow.use_debug_cost) {
     imageAtomicAdd(srt.shadow_atlas_img, out_texel, 1u);
   }
   else {

@@ -173,6 +173,8 @@ class GField {
   /** Utility to access a specific input type if this field is just an input. */
   template<typename InputT> const InputT *get_input_if() const;
 
+  const void *get_if_constant() const;
+
   /**
    * This only implements shallow comparison. A more deep comparison could reveal that two fields
    * are semantically the same even if this comparison is false. Deep comparison is much more
@@ -187,6 +189,13 @@ class GField {
    */
   template<typename T> const Field<T> &typed() const;
   template<typename T> Field<T> &typed();
+
+  /**
+   * Attempts to take ownership of a FieldOperation stored in this field, leaving the field input.
+   * It's expected to be deleted shortly after. This is necessary to avoid deep recursion when
+   * destructing a field tree.
+   */
+  FieldOperationPtr try_extract_operation();
 };
 
 /** A version of #GField that should be used when the field type is known at compile time. */
@@ -403,6 +412,9 @@ class FieldOperation : public ImplicitSharingMixin {
   Span<GField> inputs() const;
 
   void delete_self() override;
+
+ private:
+  void delete_input_fields();
 };
 
 bool operator==(const GField &a, const GField &b);
@@ -614,6 +626,23 @@ template<typename InputT> inline const InputT *GField::get_input_if() const
     return dynamic_cast<const InputT *>(input->node.get());
   }
   return nullptr;
+}
+
+inline const void *GField::get_if_constant() const
+{
+  return std::visit(
+      []<typename T>(const T &v) -> const void * {
+        if constexpr (is_same_any_v<T, Input, MultiFn>) {
+          return nullptr;
+        }
+        else if constexpr (std::is_same_v<T, FieldRef>) {
+          return v.field_ref->get_if_constant();
+        }
+        else {
+          return v.value;
+        }
+      },
+      variant_);
 }
 
 template<typename T> template<typename InputT> inline const InputT *Field<T>::get_input_if() const

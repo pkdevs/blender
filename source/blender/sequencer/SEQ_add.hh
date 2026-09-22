@@ -25,6 +25,13 @@ struct Stereo3dFormat;
 
 namespace seq {
 
+/**
+ * Default duration in *frames* for strips with no inherent duration (color, text, etc).
+ *
+ * \note For default length in seconds, use #U.sequencer_default_strip_length.
+ */
+int default_strip_length(double scene_fps);
+
 /** #SeqLoadData.flags */
 enum eLoadFlags {
   SEQ_LOAD_SOUND_CACHE = (1 << 1),
@@ -112,6 +119,8 @@ Strip *add_meta_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
 /**
  * Add movie strip.
  *
+ * NOTE: This function can change the scene FPS if `SEQ_LOAD_MOVIE_SYNC_FPS` is set, take caution!
+ *
  * \param bmain: Main reference
  * \param scene: Scene where strips will be added
  * \param seqbase: List where strips will be added
@@ -177,6 +186,8 @@ void add_image_load_file(Scene *scene, Strip *strip, size_t strip_frame, const c
  */
 void add_image_init_alpha_mode(Main *bmain, Scene *scene, Strip *strip);
 void add_reload_new_file(Main *bmain, Scene *scene, Strip *strip, bool lock_range);
+/** Recalculate content length without reopening an unchanged source. */
+void add_update_content_length(Main *bmain, Scene *scene, Strip *strip);
 void add_movie_reload_if_needed(
     Main *bmain, Scene *scene, Strip *strip, bool *r_was_reloaded, bool *r_can_produce_frames);
 

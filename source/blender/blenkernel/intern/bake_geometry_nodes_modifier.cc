@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <sstream>
 
 #include "BKE_bake_geometry_nodes_modifier.hh"
@@ -12,9 +16,9 @@
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "MOD_nodes.hh"
 

@@ -8,26 +8,23 @@
  */
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
-FRAGMENT_SHADER_CREATE_INFO(draw_view)
-FRAGMENT_SHADER_CREATE_INFO(eevee_hiz_data)
-
-#include "draw_view_lib.glsl"
+#include "draw_view.bsl.hh"
 #include "eevee_debug_shared.hh"
 #include "eevee_defines.hh"
-#include "eevee_gbuffer_read_lib.glsl"
+#include "eevee_gbuffer_read.bsl.hh"
+#include "eevee_hiz.bsl.hh"
 #include "eevee_light_iter.bsl.hh"
-#include "eevee_light_lib.glsl"
+#include "eevee_light_lib.bsl.hh"
 #include "eevee_lightprobe_volume.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
-#include "eevee_sampling_lib.glsl"
+#include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow.bsl.hh"
 #include "eevee_shadow_shared.hh"
 #include "eevee_shadow_tilemap_lib.bsl.hh"
-#include "gpu_shader_debug_gradients_lib.glsl"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_debug_gradients.bsl.hh"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 namespace eevee {
 
@@ -67,9 +64,6 @@ template void light::foreach<SearchDebugLightCtx, LightRenderData>(const LightRe
                                                                    LightRenderData &);
 
 struct ShadowDebug {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-  [[legacy_info]] ShaderCreateInfo eevee_hiz_data;
-
   [[resource_table]] srt_t<LightRenderData> light_data;
   [[resource_table]] srt_t<ShadowRenderData> shadow_data;
 
@@ -328,8 +322,10 @@ ShadowDebugOutput debug_random_tilemap_color([[resource_table]] const ShadowDebu
 
 [[fragment]]
 void debug_shadow_frag([[resource_table]] ShadowDebug &srt,
+                       [[resource_table]] const draw::View &views,
                        [[frag_coord]] const float4 frag_co,
                        [[frag_depth(greater)]] float &frag_depth,
+                       [[resource_table]] const HiZ &hiz,
                        [[in]] const DebugVertOut v_out,
                        [[out]] DualBlendFragOut &frag_out)
 {
@@ -337,8 +333,10 @@ void debug_shadow_frag([[resource_table]] ShadowDebug &srt,
   frag_out.color_add = float4(0.0f);
   frag_out.color_mul = float4(1.0f);
 
-  float depth = texelFetch(hiz_tx, int2(frag_co.xy), 0).r;
-  float3 P = drw_point_screen_to_world(float3(v_out.screen_uv, depth));
+  const ViewMatrices view = views.get(0);
+
+  float depth = texelFetch(hiz.hiz_tx, int2(frag_co.xy), 0).r;
+  float3 P = view.point_screen_to_world(float3(v_out.screen_uv, depth));
 
   const LightData light = srt.debug_light_get();
 
@@ -381,7 +379,9 @@ void debug_shadow_frag([[resource_table]] ShadowDebug &srt,
 
 }  // namespace eevee
 
-PipelineGraphic eevee_shadow_debug(eevee::debug_fullscreen_vert, eevee::debug_shadow_frag);
+PipelineGraphic eevee_shadow_debug(eevee::debug_fullscreen_vert,
+                                   eevee::debug_shadow_frag,
+                                   eevee::ShadowRenderData{.shadow_random = false});
 
 namespace eevee::debug::irradiance_grid {
 
@@ -394,8 +394,6 @@ struct FragOut {
 };
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[push_constant]] const float4x4 grid_mat;
   [[push_constant]] const int debug_mode;
   [[push_constant]] const float debug_value;
@@ -404,6 +402,7 @@ struct Resources {
 };
 
 [[vertex, clip_control]] void vert_main([[resource_table]] const Resources &srt,
+                                        [[resource_table]] const draw::View &views,
                                         [[vertex_id]] const int vert_id,
                                         [[position]] float4 &out_position,
                                         [[point_size]] float &out_point_size,
@@ -456,7 +455,9 @@ struct Resources {
     }
   }
 
-  out_position = drw_point_world_to_homogenous(P);
+  const ViewMatrices view = views.get(0);
+
+  out_position = view.point_world_to_homogenous(P);
   out_position.z -= 2.5e-5f;
   out_point_size = 3.0f;
 }
@@ -484,8 +485,6 @@ struct FragOut {
 };
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[storage(0, read)]] const Surfel (&surfels_buf)[];
 
   [[push_constant]] const float debug_surfel_radius;
@@ -494,6 +493,7 @@ struct Resources {
 
 [[vertex, clip_control]]
 void vert_main([[resource_table]] const Resources &srt,
+               [[resource_table]] const draw::View &views,
                [[vertex_id]] const int vert_id,
                [[instance_id]] const int inst_id,
                [[position]] float4 &out_position,
@@ -539,7 +539,9 @@ void vert_main([[resource_table]] const Resources &srt,
 
   v_out.P = (model_matrix * float4(lP, 1)).xyz;
 
-  out_position = reverse_z::transform(drw_point_world_to_homogenous(v_out.P));
+  const ViewMatrices view = views.get(0);
+
+  out_position = reverse_z::transform(view.point_world_to_homogenous(v_out.P));
   out_position.z += 2.5e-5f;
 }
 
@@ -551,15 +553,16 @@ float3 debug_random_color(int v)
 
 [[fragment]]
 void frag_main([[resource_table]] const Resources &srt,
+               [[front_facing]] const bool front_face,
                [[in]] const VertOut &v_out,
                [[out]] FragOut &frag_out)
 {
   Surfel surfel = srt.surfels_buf[v_out.surfel_index];
 
   float4 radiance_vis = float4(0.0f);
-  radiance_vis += gl_FrontFacing ? surfel.radiance_direct.front : surfel.radiance_direct.back;
-  radiance_vis += gl_FrontFacing ? surfel.radiance_indirect[1].front :
-                                   surfel.radiance_indirect[1].back;
+  radiance_vis += front_face ? surfel.radiance_direct.front : surfel.radiance_direct.back;
+  radiance_vis += front_face ? surfel.radiance_indirect[1].front :
+                               surfel.radiance_indirect[1].back;
 
   switch (eDebugMode(srt.debug_mode)) {
     default:
@@ -592,29 +595,30 @@ PipelineGraphic eevee_debug_surfels(eevee::debug::surfels::vert_main,
 namespace eevee::debug::gbuffer {
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-  [[legacy_info]] ShaderCreateInfo eevee_gbuffer_data;
-
   [[push_constant]] const int debug_mode;
 };
 
 [[fragment]]
 void frag_main([[resource_table]] Resources &srt,
+               [[resource_table]] const draw::View &views,
+               [[resource_table]] const ::gbuffer::Reader &reader,
                [[frag_coord]] const float4 frag_co,
                [[out]] DualBlendFragOut &frag_out)
 {
   int2 texel = int2(frag_co.xy);
 
-  const ::gbuffer::Layers gbuf = ::gbuffer::read_layers(texel);
+  const ::gbuffer::Layers gbuf = reader.read_layers(texel);
 
   if (gbuf.has_no_closure()) {
     gpu_discard_fragment();
     return;
   }
 
-  float shade = saturate(drw_normal_world_to_view(gbuf.surface_N()).z);
+  const ViewMatrices view = views.get(0);
 
-  ::gbuffer::Header header = ::gbuffer::read_header(texel);
+  float shade = saturate(view.normal_world_to_view(gbuf.surface_N()).z);
+
+  ::gbuffer::Header header = reader.read_header(texel);
   uint4 closure_types = (uint4(header.raw()) >> uint4(0u, 4u, 8u, 12u)) & 15u;
   float storage_cost = reduce_add(float4(not(equal(closure_types, uint4(0u)))));
 
@@ -656,28 +660,24 @@ PipelineGraphic eevee_debug_gbuffer(eevee::debug_fullscreen_vert,
 
 namespace eevee::debug::hiz {
 
-struct Resources {
-  [[legacy_info]] ShaderCreateInfo eevee_hiz_data;
-};
-
 /**
  * Debug hiz down sampling pass.
  * Output red if above any max pixels, blue otherwise.
  */
 [[fragment]]
-void frag_main([[resource_table]] Resources &srt,
+void frag_main([[resource_table]] const HiZ &hiz,
                [[frag_coord]] const float4 frag_co,
                [[out]] DualBlendFragOut &frag_out)
 {
   int2 texel = int2(frag_co.xy);
 
-  float depth0 = texelFetch(hiz_tx, texel, 0).r;
+  float depth0 = texelFetch(hiz.hiz_tx, texel, 0).r;
 
   float4 color = float4(0.1f, 0.1f, 1.0f, 1.0f);
   for (int i = 1; i < HIZ_MIP_COUNT; i++) {
     int2 lvl_texel = texel / int2(uint2(1) << uint(i));
-    lvl_texel = min(lvl_texel, textureSize(hiz_tx, i) - 1);
-    if (texelFetch(hiz_tx, lvl_texel, i).r < depth0) {
+    lvl_texel = min(lvl_texel, textureSize(hiz.hiz_tx, i) - 1);
+    if (texelFetch(hiz.hiz_tx, lvl_texel, i).r < depth0) {
       color = float4(1.0f, 0.1f, 0.1f, 1.0f);
       break;
     }
