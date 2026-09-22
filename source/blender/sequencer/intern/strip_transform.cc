@@ -600,24 +600,48 @@ static Side strip_selected_handles_get(const Strip *strip)
   return Side::None;
 }
 
-static void transform_shuffle_handle(const Scene *scene,
-                                     ListBaseT<Strip> *seqbasep,
-                                     Strip *strip,
-                                     const Side handle_side)
+static int shuffle_handle_offset_get(const Scene *scene,
+                                     Span<Strip *> strips_to_shuffle,
+                                     ListBaseT<Strip> *seqbasep)
 {
-  BLI_assert(ELEM(handle_side, Side::Left, Side::Right));
+  int offset = 0;
 
-  for (Strip &other : *seqbasep) {
-    if (!transform_test_overlap(scene, strip, &other)) {
-      continue;
+  /* Note that this algorithm looks similar to #shuffle_frame_offset_get, but the two are slightly
+   * different: handles need only a single pass, and with strips, the direction to shuffle is the
+   * same for all, but here handles can be both left & right (which we may eventually remove). */
+  for (Strip *strip : strips_to_shuffle) {
+    const bool is_left = strip_selected_handles_get(strip) == Side::Left;
+    for (Strip &other : *seqbasep) {
+      if (strips_to_shuffle.contains(&other) || relation_is_effect_of_strip(&other, strip) ||
+          !transform_test_overlap(scene, strip, &other))
+      {
+        continue;
+      }
+
+      offset = is_left ? max_ii(offset, other.right_handle(scene) - strip->left_handle()) :
+                         min_ii(offset, other.left_handle() - strip->right_handle(scene));
     }
-    /* Repeatedly pull back the handle bounds until no strip blocks anymore.
-     * Note that this is guaranteed to eventually resolve the handle overlap.  */
-    if (handle_side == Side::Left) {
-      strip->left_handle_set(scene, other.right_handle(scene));
+  }
+
+  return offset;
+}
+
+static void transform_shuffle_handles(const Scene *scene,
+                                      ListBaseT<Strip> *seqbasep,
+                                      Span<Strip *> strips_to_shuffle)
+{
+  const int offset = shuffle_handle_offset_get(scene, strips_to_shuffle, seqbasep);
+
+  if (offset == 0) {
+    return;
+  }
+
+  for (Strip *strip : strips_to_shuffle) {
+    if (strip_selected_handles_get(strip) == Side::Left) {
+      strip->left_handle_set(scene, strip->left_handle() + offset);
     }
     else {
-      strip->right_handle_set(scene, other.left_handle());
+      strip->right_handle_set(scene, strip->right_handle(scene) + offset);
     }
   }
 }
@@ -629,18 +653,21 @@ static void strip_transform_handle_shuffle(Scene *scene,
                                            bool use_sync_markers)
 {
   VectorSet<Strip *> strips_to_shuffle;
+  VectorSet<Strip *> handles_to_shuffle;
 
-  /* First, shuffle any transformed handles back. If neither or both handles are selected, then add
-   * to #strips_to_shuffle for shuffling the strip as a whole.  */
+  /* If neither or both handles are selected, then add to #strips_to_shuffle
+   * for shuffling the strip as a whole. */
   for (Strip *strip : extract_standalone_strips(source_strips)) {
-    const Side handle_side = strip_selected_handles_get(strip);
-    if (ELEM(handle_side, Side::Left, Side::Right)) {
-      transform_shuffle_handle(scene, seqbasep, strip, handle_side);
+    if (ELEM(strip_selected_handles_get(strip), Side::Left, Side::Right)) {
+      handles_to_shuffle.add(strip);
     }
     else {
       strips_to_shuffle.add(strip);
     }
   }
+
+  /* First shuffle handles. */
+  transform_shuffle_handles(scene, seqbasep, handles_to_shuffle);
 
   /* Shuffle entire strips. */
   transform_shuffle_horizontal(
