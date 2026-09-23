@@ -113,6 +113,27 @@ static bool op_is_contributing(const CurveBooleanOpParameters op_params,
   return false;
 }
 
+static bool evaluate_fill_rule(const int winding, const FillRule fill_rule)
+{
+  switch (fill_rule) {
+    case FillRule::OddEven: {
+      return winding % 2 != 0;
+    }
+    case FillRule::NonZero: {
+      return winding != 0;
+    }
+    case FillRule::Positive: {
+      return winding > 0;
+    }
+    case FillRule::Negative: {
+      return winding < 0;
+    }
+  };
+
+  BLI_assert_unreachable();
+  return false;
+}
+
 /**
  * The Winding State is a sparse way to store what curves a point is inside.
  */
@@ -147,7 +168,9 @@ class WindingState {
     }
   }
 
-  bool is_in_shape(const int shape_id, const GroupedSpan<int> &shapes) const
+  bool is_in_shape(const int shape_id,
+                   const GroupedSpan<int> &shapes,
+                   const FillRule fill_rule) const
   {
     int winding = 0;
 
@@ -157,11 +180,13 @@ class WindingState {
         winding += orders_per_curve_.lookup(curve_i);
       }
     }
-    /* Odd-Even fill rule. */
-    return winding % 2 != 0;
+
+    return evaluate_fill_rule(winding, fill_rule);
   }
 
-  bool is_in_shapes(const IndexMask &shape_mask, const GroupedSpan<int> &shapes) const
+  bool is_in_shapes(const IndexMask &shape_mask,
+                    const GroupedSpan<int> &shapes,
+                    const FillRule fill_rule) const
   {
     if (orders_per_curve_.is_empty() || shape_mask.is_empty()) {
       return false;
@@ -176,7 +201,7 @@ class WindingState {
             return value;
           }
           shape_mask.slice(range).foreach_index([&](const int shape_i) {
-            if (this->is_in_shape(shape_i, shapes)) {
+            if (this->is_in_shape(shape_i, shapes, fill_rule)) {
               value = true;
               return;
             }
@@ -192,8 +217,8 @@ class WindingState {
                        const int subject_shape,
                        const IndexMask &clipping_shapes) const
   {
-    const bool subj = this->is_in_shape(subject_shape, shapes);
-    const bool clip = this->is_in_shapes(clipping_shapes, shapes);
+    const bool subj = this->is_in_shape(subject_shape, shapes, op_params.fill_rule);
+    const bool clip = this->is_in_shapes(clipping_shapes, shapes, op_params.fill_rule);
 
     return op_is_contributing(op_params, subj, clip);
   }
@@ -839,7 +864,7 @@ static BooleanResult execute_boolean_union(const CurveBooleanOpParameters op_par
     const int shape_i = editable_shapes.first();
 
     auto result_func = [&](const int /*curve_k*/, const WindingState &state) {
-      return state.is_in_shapes(editable_shapes, shapes);
+      return state.is_in_shapes(editable_shapes, shapes, op_params.fill_rule);
     };
 
     const BooleanResult result = execute_single_boolean(op_params,
@@ -951,7 +976,8 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
         if (is_fill[curve_k]) {
           return state.is_contributing(op_params, shapes, shape_i, clipping_shapes);
         }
-        return op_is_contributing(op_params, true, !state.is_in_shapes(clipping_shapes, shapes));
+        return op_is_contributing(
+            op_params, true, !state.is_in_shapes(clipping_shapes, shapes, op_params.fill_rule));
       };
 
       const IndexMask shape_mask = IndexMask::from_union(

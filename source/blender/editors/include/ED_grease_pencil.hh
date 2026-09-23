@@ -984,6 +984,13 @@ bke::CurvesGeometry trim_curve_segment_ends(const bke::CurvesGeometry &src,
 
 namespace boolean {
 
+enum class FillRule : int8_t {
+  OddEven,
+  NonZero,
+  Positive,
+  Negative,
+};
+
 enum class Operation : int8_t {
   /* Intersection of the Subject and the Clipping. */
   Intersect,
@@ -995,6 +1002,7 @@ enum class Operation : int8_t {
 
 struct CurveBooleanOpParameters {
   Operation boolean_mode;
+  FillRule fill_rule;
   bool keep_caps;
   bool skip_clipping_attributes;
   bool separate_islands;
