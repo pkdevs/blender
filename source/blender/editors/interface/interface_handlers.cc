@@ -438,7 +438,9 @@ struct HandleButtonData {
    */
   std::string text_edit_unit_hint;
 
+  /* Only used for autocomplete hinting. */
   int64_t text_edit_hint_replace_start = 0;
+  /* Only used for autocomplete hinting. */
   int64_t text_edit_hint_replace_end = 0;
 
   wmTimer *text_select_auto_scroll = nullptr;
@@ -3900,8 +3902,7 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
     return;
   }
 
-  /* Mirror whatever is currently highlighted in the popup, rather than independently picking a
-   * match: keeps the ghost text and the popup's selection in sync. */
+  /* Mirror whatever is currently highlighted in the popup. */
   const char *active_item = searchbox_active_item_name(data->searchbox);
   if (active_item == nullptr) {
     return;
@@ -3921,7 +3922,6 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
   const int64_t name_end = span->one_after_last();
   const bool has_closing_brace = name_end < int64_t(text.size()) && text[name_end] == '}';
 
-  /* Only show a hint "}" when the real text doesn't have a '}' */
   data->text_edit_unit_hint = name.substr(typed.size());
   if (!has_closing_brace) {
     data->text_edit_unit_hint += "}";
@@ -3938,7 +3938,6 @@ static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData 
   }
 }
 
-/** Refresh the edit hint and redraw, since a changed hint changes what's drawn. */
 static void button_edit_hint_refresh_and_redraw(bContext *C, Button *but, HandleButtonData *data)
 {
   button_edit_hint_refresh(C, but, data);
@@ -4338,7 +4337,7 @@ static int do_but_textedit(
         }
 
         /* For a suggestions-style search box (e.g. path-template variable hinting), the first
-         * Escape press should only dismiss the suggestions, not cancel the whole edit. A second
+         * Escape press only dismisses the suggestions, not cancel the whole edit. A second
          * Escape (with no suggestions left to dismiss) falls through to the cancel below. */
         if (event->type == EVT_ESCKEY && data->searchbox) {
           ButtonSearch *but_search = static_cast<ButtonSearch *>(but);

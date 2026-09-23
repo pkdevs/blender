@@ -211,7 +211,7 @@ class VariableMap {
   std::optional<double> get_float(StringRef name) const;
 
   /**
-   * The names of all variables currently in the map, in no particular order.
+   * The names of all variables.
    */
   Vector<StringRefNull> names() const;
 

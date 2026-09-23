@@ -379,7 +379,6 @@ static bool button_editstr_splice(Button *but,
     return false;
   }
 
-  /* Shift the tail of the string to make room, then copy the replacement text in. */
   std::memmove(
       editstr + replace_start + replacement.size(), editstr + replace_end, size_t(tail_len) + 1);
   std::memcpy(editstr + replace_start, replacement.data(), replacement.size());
