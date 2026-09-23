@@ -921,7 +921,7 @@ static void set_colorspace_options(AVCodecContext *c, const ColorSpace *colorspa
      * set to unspecified (which most players treat as sRGB) */
     c->color_primaries = AVCOL_PRI_UNSPECIFIED;
     c->color_trc = AVCOL_TRC_UNSPECIFIED;
-    c->colorspace = AVCOL_SPC_UNSPECIFIED;
+    c->colorspace = AVCOL_SPC_BT709;
     /* TODO(sergey): Consider making the range an option to cover more use-cases. */
     c->color_range = AVCOL_RANGE_MPEG;
   }
