@@ -38,6 +38,7 @@
 #include "BKE_curves.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_gsplat.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
@@ -952,6 +953,7 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
     else if (ob->type == OB_POINTCLOUD) {
       PointCloud &pointcloud = *id_cast<PointCloud *>(ob->data);
       math::transform_points(float4x4(mat), pointcloud.positions_for_write());
+      bke::gsplat::transform_attributes(float4x4(mat), pointcloud);
       pointcloud.tag_positions_changed();
     }
     else if (ob->type == OB_CAMERA) {
