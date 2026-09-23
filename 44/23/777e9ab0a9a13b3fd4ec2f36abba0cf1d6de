@@ -1,2 +1,3 @@
 Referenced by issue #164138, DLSS "Requires … driver version 590 or newer" hint shown although the driver is newer
 Referenced by issue #164167, Cycles: Switching to the DLSS viewport denoiser temporarily pauses viewport playback
+Referenced by issue #164280, Cycles: DLSS denoiser flickers when camera Passepartout is set to exactly 1.000
