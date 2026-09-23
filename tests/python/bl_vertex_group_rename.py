@@ -93,6 +93,24 @@ class VertexGroupRenameTest(unittest.TestCase):
                     finally:
                         self._remove_object_and_data(obj)
 
+    def test_shape_key_mask_updates_on_vertex_group_rename(self):
+        obj = self._new_mesh_object_and_data()
+        try:
+            vg = obj.vertex_groups.new(name="Group")
+            obj.shape_key_add(name="Basis")
+            key = obj.shape_key_add(name="Key")
+            key.vertex_group = vg.name
+
+            vg.name = "RenamedGroup"
+
+            self.assertEqual(
+                key.vertex_group,
+                "RenamedGroup",
+                "Shape key mask was not updated after rename",
+            )
+        finally:
+            self._remove_object_and_data(obj)
+
     @staticmethod
     def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")

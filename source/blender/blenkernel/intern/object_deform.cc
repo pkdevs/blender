@@ -37,6 +37,7 @@
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil_vertex_groups.hh"
+#include "BKE_key.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
@@ -101,6 +102,13 @@ void BKE_object_foreach_vgroup_reference(Object *ob,
 {
   for (ModifierData &md : ob->modifiers) {
     BKE_modifier_foreach_vgroup_reference(&md, callback, user_data);
+  }
+
+  /* Shape key masks live on the geometry Key, visit those as well. */
+  if (Key *key = BKE_key_from_object(ob)) {
+    for (KeyBlock &kb : key->block) {
+      callback(kb.vgroup, sizeof(kb.vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+    }
   }
 
   if (ob->soft) {
