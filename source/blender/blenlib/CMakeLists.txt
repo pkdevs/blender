@@ -104,6 +104,7 @@ set(SRC
   intern/math_rotation.cc
   intern/math_rotation_c.cc
   intern/math_solvers.cc
+  intern/math_spherical_harmonics.cc
   intern/math_statistics.cc
   intern/math_time.cc
   intern/math_vec.cc
@@ -319,6 +320,7 @@ set(SRC
   BLI_math_rotation_legacy.hh
   BLI_math_rotation_types.hh
   BLI_math_solvers.hh
+  BLI_math_spherical_harmonics.hh
   BLI_math_statistics.hh
   BLI_math_time.hh
   BLI_math_vector.hh
@@ -566,6 +568,7 @@ if(WITH_GTESTS)
     tests/BLI_math_rotation_test.cc
     tests/BLI_math_rotation_types_test.cc
     tests/BLI_math_solvers_test.cc
+    tests/BLI_math_spherical_harmonics_test.cc
     tests/BLI_math_time_test.cc
     tests/BLI_math_vector_test.cc
     tests/BLI_math_vector_types_test.cc

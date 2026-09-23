@@ -47,6 +47,7 @@ blender_add_lib(bf_io_spz "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/spz_header_test.cc
+    tests/spz_read_common_test.cc
   )
   set(TEST_LIB
     bf_io_spz
