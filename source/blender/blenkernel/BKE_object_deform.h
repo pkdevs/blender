@@ -39,9 +39,15 @@ void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
 void BKE_object_foreach_vgroup_reference(Object *ob,
                                           ModifierVGroupReferenceCallback callback,
                                           void *user_data);
-void BKE_object_defgroup_rename_users(struct Object *ob,
-                                      const char *old_name,
-                                      const char *new_name);
+/**
+ * Update all vertex-group name references used by the object from `old_name` to `new_name`
+ * (see #BKE_object_foreach_vgroup_reference).
+ *
+ * \return The number of references that were updated.
+ */
+int BKE_object_defgroup_rename_users(struct Object *ob,
+                                     const char *old_name,
+                                     const char *new_name);
 
 /**
  * Get #MDeformVert vgroup data from given object. Should only be used in Object mode.

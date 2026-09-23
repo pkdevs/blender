@@ -96,7 +96,13 @@ int *BKE_object_defgroup_flip_map_single(const Object *ob,
 int BKE_object_defgroup_flip_index(const Object *ob, int index, bool use_default);
 int BKE_object_defgroup_name_index(const Object *ob, StringRef name);
 void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob);
-void BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name);
+/**
+ * Rename the vertex group, propagating the change to all of its name references
+ * used by the object (see #BKE_object_defgroup_rename_users).
+ *
+ * \return The number of references that were updated.
+ */
+int BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name);
 
 MDeformWeight *BKE_defvert_find_index(const MDeformVert *dv, int defgroup);
 /**

@@ -113,18 +113,24 @@ void BKE_object_foreach_vgroup_reference(Object *ob,
 struct DefgroupRenameData {
   const char *old_name;
   const char *new_name;
+  int renamed_count = 0;
 };
 
 static bool defgroup_rename_callback(char *name, size_t name_maxncpy, void *user_data)
 {
-  const DefgroupRenameData *data = static_cast<const DefgroupRenameData *>(user_data);
-  return BLI_string_replace_if_match(name, name_maxncpy, data->old_name, data->new_name);
+  DefgroupRenameData *data = static_cast<DefgroupRenameData *>(user_data);
+  if (BLI_string_replace_if_match(name, name_maxncpy, data->old_name, data->new_name)) {
+    data->renamed_count++;
+    return true;
+  }
+  return false;
 }
 
-void BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
+int BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
 {
   DefgroupRenameData data{old_name, new_name};
   BKE_object_foreach_vgroup_reference(ob, defgroup_rename_callback, &data);
+  return data.renamed_count;
 }
 
 /** \} */

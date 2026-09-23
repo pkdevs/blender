@@ -764,7 +764,7 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob)
                     sizeof(dg->name));
 }
 
-void BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name)
+int BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name)
 {
   std::string old_name = dg->name;
   STRNCPY_UTF8(dg->name, new_name);
@@ -775,7 +775,7 @@ void BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_
     BKE_grease_pencil_vgroup_name_update(ob, old_name.c_str(), dg->name);
   }
 
-  BKE_object_defgroup_rename_users(ob, old_name.c_str(), dg->name);
+  return BKE_object_defgroup_rename_users(ob, old_name.c_str(), dg->name);
 }
 
 float BKE_defvert_find_weight(const MDeformVert *dvert, const int defgroup)

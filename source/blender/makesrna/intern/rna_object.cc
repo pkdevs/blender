@@ -887,7 +887,10 @@ static void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
   }
 
   bDeformGroup *dg = static_cast<bDeformGroup *>(ptr->data);
-  BKE_object_defgroup_set_name(dg, ob, value);
+  const int renamed_count = BKE_object_defgroup_set_name(dg, ob, value);
+  if (renamed_count > 0) {
+    WM_global_reportf(RPT_INFO, "Updated %d vertex group references", renamed_count);
+  }
 }
 
 static int rna_VertexGroup_index_get(PointerRNA *ptr)
