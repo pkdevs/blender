@@ -357,7 +357,7 @@ static void rna_uiItemTabsEnumR(Layout *layout,
 
   /* Get the highlight property used to gray out some of the tabs. */
   PropertyRNA *prop_highlight = nullptr;
-  if (!RNA_pointer_is_null(ptr_highlight)) {
+  if (*ptr_highlight) {
     prop_highlight = RNA_struct_find_property(ptr_highlight, propname_highlight);
     if (!prop_highlight) {
       RNA_warning_bare("UILayout.prop_tabs_enum(): property not found: %s.%s",
@@ -481,7 +481,7 @@ static PointerRNA rna_uiItemO(Layout *layout,
   if (!ot || !ot->srna) {
     RNA_warning_bare(
         "UILayout.operator(): %s '%s'", ot ? "operator missing srna" : "unknown operator", opname);
-    return PointerRNA_NULL;
+    return {};
   }
 
   /* Get translated name (label). */
@@ -524,7 +524,7 @@ static PointerRNA rna_uiItemOMenuHold(Layout *layout,
     RNA_warning_bare("UILayout.operator_menu_hold(): %s '%s'",
                      ot ? "operator missing srna" : "unknown operator",
                      opname);
-    return PointerRNA_NULL;
+    return {};
   }
 
   /* Get translated name (label). */
@@ -568,7 +568,7 @@ static PointerRNA rna_uiItemMenuEnumO(Layout *layout,
     RNA_warning_bare("UILayout.operator_menu_enum(): %s '%s'",
                      ot ? "operator missing srna" : "unknown operator",
                      opname);
-    return PointerRNA_NULL;
+    return {};
   }
 
   /* Get translated name (label). */
@@ -612,6 +612,16 @@ static void rna_layout_label_multiline(Layout *layout,
     icon = icon_value;
   }
   layout->label_multiline(text.value_or(""), icon, ui::FontStyleAlign(alignment), max_lines);
+}
+
+static void rna_layout_label_markdown(Layout *layout,
+                                      const char *name,
+                                      const char *text_ctxt,
+                                      bool translate)
+{
+  std::optional<StringRefNull> text = rna_translate_ui_text(
+      name, text_ctxt, nullptr, nullptr, translate);
+  layout->label_markdown(text.value_or(""));
 }
 
 static void rna_layout_link(Layout *layout,
@@ -1091,11 +1101,12 @@ static void rna_uiLayout_template_node_operator_asset_menu_items(Layout *layout,
 }
 
 static void rna_uiLayout_template_modifier_asset_menu_items(Layout *layout,
+                                                            bContext *C,
                                                             const char *catalog_path,
                                                             const bool skip_essentials)
 {
   ed::object::ui_template_modifier_asset_menu_items(
-      *layout, StringRef(catalog_path), skip_essentials);
+      *C, *layout, StringRef(catalog_path), skip_essentials);
 }
 
 static void rna_uiLayout_template_node_operator_root_items(Layout *layout, bContext *C)
@@ -1231,7 +1242,7 @@ PointerRNA rna_uiTemplatePopupConfirm(Layout *layout,
                                       const char *cancel_text,
                                       bool cancel_default)
 {
-  PointerRNA opptr = PointerRNA_NULL;
+  PointerRNA opptr = {};
 
   /* This allows overriding buttons in `WM_operator_props_dialog_popup` and other popups. */
   wmOperatorType *ot = nullptr;
@@ -1416,6 +1427,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   /* simple layout specifiers */
   func = RNA_def_function(srna, "row", "rna_uiLayoutRowWithHeading");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_function_ui_description(
       func,
@@ -1426,6 +1438,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 
   func = RNA_def_function(srna, "column", "rna_uiLayoutColumnWithHeading");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_function_ui_description(
       func,
@@ -1449,6 +1462,7 @@ void RNA_api_ui_layout(StructRNA *srna)
                   "Open by Default",
                   "When true, the panel will be open the first time it is shown");
   parm = RNA_def_pointer(func, "layout_header", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
   parm = RNA_def_pointer(func,
                          "layout_body",
@@ -1478,6 +1492,7 @@ void RNA_api_ui_layout(StructRNA *srna)
       "Identifier of the boolean property that determines whether the panel is open or closed");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "layout_header", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
   parm = RNA_def_pointer(func,
                          "layout_body",
@@ -1489,6 +1504,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   func = RNA_def_function(srna, "column_flow", "rna_uiLayoutColumnFlow");
   RNA_def_int(func, "columns", 0, 0, INT_MAX, "", "Number of columns, 0 is automatic", 0, INT_MAX);
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_boolean(func, "align", false, "", "Align buttons to each other");
 
@@ -1510,11 +1526,13 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_boolean(func, "even_rows", false, "", "All rows will have the same height");
   RNA_def_boolean(func, "align", false, "", "Align buttons to each other");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* box layout */
   func = RNA_def_function(srna, "box", "rna_uiLayoutBox");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_function_ui_description(func,
                                   "Sublayout (items placed in this sublayout are placed "
@@ -1523,6 +1541,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   /* split layout */
   func = RNA_def_function(srna, "split", "rna_uiLayoutSplit");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_float(func,
                 "factor",
@@ -1538,6 +1557,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   /* radial/pie layout */
   func = RNA_def_function(srna, "menu_pie", "rna_uiLayoutMenuPie");
   parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   RNA_def_function_ui_description(func,
                                   "Sublayout. Items placed in this sublayout are placed "
@@ -1812,6 +1832,13 @@ void RNA_api_ui_layout(StructRNA *srna)
   parm = RNA_def_property(func, "max_lines", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_range(parm, 0, INT_MAX);
   RNA_def_property_ui_text(parm, "", "Maximum number of lines to display, 0 means all");
+
+  func = RNA_def_function(srna, "label_markdown", "rna_layout_label_markdown");
+  RNA_def_function_ui_description(
+      func,
+      "Displays markdown-formatted text in the layout. Only a subset of markdown is supported "
+      "including headers, lists, bold/italic/code text, links, quotes, horizontal rules.");
+  api_ui_item_common_text(func);
 
   func = RNA_def_function(srna, "link", "rna_layout_link");
   RNA_def_function_ui_description(func, "Item. Displays a url that can be clicked in the layout.");
@@ -2094,6 +2121,12 @@ void RNA_api_ui_layout(StructRNA *srna)
   func = RNA_def_function(srna, "template_strip_modifiers", "template_strip_modifiers");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   RNA_def_function_ui_description(func, "Generates the UI layout for the strip modifier stack");
+
+  func = RNA_def_function(
+      srna, "template_scene_compositor_effects", "template_scene_compositor_effects");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  RNA_def_function_ui_description(
+      func, "Generates the UI layout for the scene compositor effects stack");
 
   func = RNA_def_function(srna, "template_collection_importer", "template_collection_importer");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
@@ -2462,6 +2495,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   func = RNA_def_function(srna,
                           "template_modifier_asset_menu_items",
                           "rna_uiLayout_template_modifier_asset_menu_items");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   parm = RNA_def_string(func, "catalog_path", nullptr, 0, "", "");
   parm = RNA_def_boolean(func, "skip_essentials", false, "", "");
 
@@ -2597,6 +2631,14 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_function_ui_description(func, "Show a node settings and input socket values");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   parm = RNA_def_pointer(func, "node", "Node", "Node", "Display inputs of this node");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+
+  func = RNA_def_function(
+      srna, "template_compositor_strip_inputs", "template_compositor_strip_inputs");
+  RNA_def_function_ui_description(
+      func, "Show the compositor node group input values for a compositor effect strip");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(func, "strip", "Strip", "Strip", "Compositor effect strip");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 
   func = RNA_def_function(srna, "template_asset_shelf_popover", "rna_uiTemplateAssetShelfPopover");
