@@ -1127,6 +1127,7 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
             if (WM_gizmo_highlight_set(gzmap, nullptr)) {
               ED_region_tag_redraw_no_rebuild(region_prev);
             }
+            WM_cursor_set(win, WM_CURSOR_DEFAULT);
           }
         }
 
