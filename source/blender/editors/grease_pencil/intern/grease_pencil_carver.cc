@@ -157,6 +157,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   op_params.keep_caps = keep_caps;
   op_params.skip_clipping_attributes = true;
   op_params.separate_islands = true;
+  op_params.self_intersect = false;
 
   const GroupedSpan<int> shapes = shapes_data.shapes();
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);

@@ -697,7 +697,7 @@ static void create_connections_from_intersection_points(
   }
 }
 
-static BooleanResult execute_single_boolean(const CurveBooleanOpParameters /*op_params*/,
+static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_params,
                                             const Span<float2> points,
                                             const GroupedSpan<int> shapes,
                                             const OffsetIndices<int> points_by_curve,
@@ -710,7 +710,7 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters /*op_
 
   Array<Vector<int>> inters_per_curves(points_by_curve.size());
 
-  const bool self_intersection = false;
+  const bool self_intersection = op_params.self_intersect;
 
   find_intersections_between_shapes(points,
                                     shapes,

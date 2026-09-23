@@ -1006,6 +1006,7 @@ struct CurveBooleanOpParameters {
   bool keep_caps;
   bool skip_clipping_attributes;
   bool separate_islands;
+  bool self_intersect;
 };
 
 /* Project the point from local space to the clipping 2d space. */

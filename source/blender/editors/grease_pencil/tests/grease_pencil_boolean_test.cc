@@ -441,6 +441,7 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;
   op_params.separate_islands = false;
+  op_params.self_intersect = false;
 
   const ShapeData shapes_data = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
                                                      src_curves.curves_num());
