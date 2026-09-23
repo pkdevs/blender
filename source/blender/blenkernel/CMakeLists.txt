@@ -140,6 +140,7 @@ set(SRC
   intern/grease_pencil_fills.cc
   intern/grease_pencil_modifiers.cc
   intern/grease_pencil_vertex_groups.cc
+  intern/gsplat.cc
   intern/gtest_setup.cc
   intern/icons.cc
   intern/icons_rasterize.cc
@@ -421,6 +422,7 @@ set(SRC
   BKE_grease_pencil_legacy_convert.hh
   BKE_grease_pencil_modifiers.h
   BKE_grease_pencil_vertex_groups.hh
+  BKE_gsplat.hh
   BKE_gtest_base.hh
   BKE_gtest_setup.hh
   BKE_icons.hh
@@ -785,6 +787,7 @@ if(WITH_GTESTS)
     intern/fcurve_test.cc
     intern/file_handler_test.cc
     intern/grease_pencil_test.cc
+    intern/gsplat_test.cc
     intern/idprop_serialize_test.cc
     intern/idprop_test.cc
     intern/image_test.cc

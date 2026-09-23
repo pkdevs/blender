@@ -26,6 +26,7 @@
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_gsplat.hh"
 #include "BKE_instances.hh"
 #include "BKE_mesh.hh"
 #include "BKE_pointcloud.hh"
@@ -73,6 +74,7 @@ static void transform_pointcloud(PointCloud &pointcloud, const float4x4 &transfo
       "position", bke::AttrDomain::Point);
   math::transform_points(transform, position.span);
   position.finish();
+  bke::gsplat::transform_attributes(transform, pointcloud);
 }
 
 static void translate_greasepencil(GreasePencil &grease_pencil, const float3 translation)
