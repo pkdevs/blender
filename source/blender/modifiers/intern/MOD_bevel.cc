@@ -472,10 +472,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   }
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
-  callback(bmd->defgrp_name, sizeof(bmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(
+      bmd->defgrp_name, sizeof(bmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Bevel = {

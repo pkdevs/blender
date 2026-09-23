@@ -320,10 +320,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &smd->influence);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   auto *smd = reinterpret_cast<GreasePencilShrinkwrapModifierData *>(md);
-  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(&smd->influence, callback, user_data);
+  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
+      &smd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilShrinkwrap = {

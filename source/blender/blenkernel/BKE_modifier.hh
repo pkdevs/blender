@@ -494,8 +494,8 @@ void BKE_modifier_free(ModifierData *md);
  * modifier type stores no such references.
  */
 void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
-                                            ModifierVGroupReferenceCallback callback,
-                                            void *user_data);
+                                           ModifierVGroupReferenceCallback callback,
+                                           void *user_data);
 /**
  * Run `callback` on the vertex-group name stored in a grease-pencil modifier influence.
  * Does nothing if `influence` is null.

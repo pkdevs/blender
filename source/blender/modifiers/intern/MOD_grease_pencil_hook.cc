@@ -313,10 +313,13 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilHook, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   auto *mmd = reinterpret_cast<GreasePencilHookModifierData *>(md);
-  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(&mmd->influence, callback, user_data);
+  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
+      &mmd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilHook = {

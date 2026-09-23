@@ -159,10 +159,13 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Weld, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   WeldModifierData *wmd = reinterpret_cast<WeldModifierData *>(md);
-  callback(wmd->defgrp_name, sizeof(wmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(
+      wmd->defgrp_name, sizeof(wmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Weld = {

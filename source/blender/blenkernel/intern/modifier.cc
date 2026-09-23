@@ -128,8 +128,8 @@ const ModifierTypeInfo *BKE_modifier_get_info(ModifierType type)
 }
 
 void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
-                                            ModifierVGroupReferenceCallback callback,
-                                            void *user_data)
+                                           ModifierVGroupReferenceCallback callback,
+                                           void *user_data)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
   if (mti != nullptr && mti->foreach_vgroup_reference != nullptr) {

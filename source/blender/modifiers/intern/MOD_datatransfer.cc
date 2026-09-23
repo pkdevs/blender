@@ -451,10 +451,13 @@ static void panel_register(ARegionType *region_type)
 
 #undef DT_TYPES_AFFECT_MESH
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   DataTransferModifierData *dmd = reinterpret_cast<DataTransferModifierData *>(md);
-  callback(dmd->defgrp_name, sizeof(dmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(
+      dmd->defgrp_name, sizeof(dmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_DataTransfer = {

@@ -856,10 +856,15 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   lmd->cache_system = nullptr;
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   LaplacianDeformModifierData *lmd = reinterpret_cast<LaplacianDeformModifierData *>(md);
-  callback(lmd->anchor_grp_name, sizeof(lmd->anchor_grp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(lmd->anchor_grp_name,
+           sizeof(lmd->anchor_grp_name),
+           MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_LaplacianDeform = {

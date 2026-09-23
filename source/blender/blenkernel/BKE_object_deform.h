@@ -38,8 +38,8 @@ void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
  * Each visited reference is tagged with its #ModifierVGroupReferenceScope.
  */
 void BKE_object_foreach_vgroup_reference(Object *ob,
-                                          ModifierVGroupReferenceCallback callback,
-                                          void *user_data);
+                                         ModifierVGroupReferenceCallback callback,
+                                         void *user_data);
 /**
  * Update all vertex-group name references used by the object from `old_name` to `new_name`
  * (see #BKE_object_foreach_vgroup_reference).

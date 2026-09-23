@@ -180,7 +180,9 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Curve, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
   callback(cmd->name, sizeof(cmd->name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);

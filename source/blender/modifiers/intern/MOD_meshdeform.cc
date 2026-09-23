@@ -665,10 +665,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   }
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   MeshDeformModifierData *mmd = reinterpret_cast<MeshDeformModifierData *>(md);
-  callback(mmd->defgrp_name, sizeof(mmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(
+      mmd->defgrp_name, sizeof(mmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_MeshDeform = {

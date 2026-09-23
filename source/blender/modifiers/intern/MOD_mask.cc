@@ -775,7 +775,9 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Mask, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   MaskModifierData *mmd = reinterpret_cast<MaskModifierData *>(md);
   callback(mmd->vgroup, sizeof(mmd->vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);

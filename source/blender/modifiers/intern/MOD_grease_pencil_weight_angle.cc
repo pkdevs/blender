@@ -260,12 +260,18 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilWeightAngle, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
+static void foreach_vgroup_reference(ModifierData *md,
+                                     ModifierVGroupReferenceCallback callback,
+                                     void *user_data)
 {
   GreasePencilWeightAngleModifierData *mmd =
       reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
-  callback(mmd->target_vgname, sizeof(mmd->target_vgname), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
-  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(&mmd->influence, callback, user_data);
+  callback(mmd->target_vgname,
+           sizeof(mmd->target_vgname),
+           MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+           user_data);
+  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
+      &mmd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilWeightAngle = {

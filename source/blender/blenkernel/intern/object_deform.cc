@@ -97,8 +97,8 @@ void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
 }
 
 void BKE_object_foreach_vgroup_reference(Object *ob,
-                                          ModifierVGroupReferenceCallback callback,
-                                          void *user_data)
+                                         ModifierVGroupReferenceCallback callback,
+                                         void *user_data)
 {
   for (ModifierData &md : ob->modifiers) {
     BKE_modifier_foreach_vgroup_reference(&md, callback, user_data);
@@ -134,9 +134,9 @@ struct DefgroupRenameData {
 };
 
 static bool defgroup_rename_callback(char *name,
-                                       size_t name_maxncpy,
-                                       ModifierVGroupReferenceScope scope,
-                                       void *user_data)
+                                     size_t name_maxncpy,
+                                     ModifierVGroupReferenceScope scope,
+                                     void *user_data)
 {
   if (scope != MOD_VGROUP_REF_SCOPE_VERTEX_GROUP) {
     return false;
