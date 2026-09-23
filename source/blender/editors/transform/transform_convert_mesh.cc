@@ -2180,6 +2180,47 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
     }
   }
 
+  if (t->mode == TFM_MIRROR) {
+    int axis_bitmap = (t->con.mode & (CON_AXIS0 | CON_AXIS1 | CON_AXIS2)) / CON_AXIS0;
+    int bitmap_len = count_bits_i(axis_bitmap);
+
+    if (ELEM(bitmap_len, 1, 3)) {
+      FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
+        const int cd_custom_normal_offset = CustomData_get_offset_named(
+            &bm->ldata, CD_PROP_INT16_2D, "custom_normal");
+
+        if (cd_custom_normal_offset != -1) {
+          bm->spacearr_dirty |= BM_SPACEARR_DIRTY_ALL;
+          BM_lnorspace_update(bm);
+
+          auto correct_mirrored_custom_normals_fn = [&](BMVert *v) {
+            BMLoop *l;
+            BMIter liter;
+            BM_ITER_ELEM (l, &liter, v, BM_LOOPS_OF_VERT) {
+              const MLoopNorSpace *lnor_space = bm->lnor_spacearr->lspacearr[BM_elem_index_get(l)];
+              short *clnors_data = static_cast<short *>(
+                  BM_ELEM_CD_GET_VOID_P(l, cd_custom_normal_offset));
+              float nloc[3];
+
+              BKE_lnor_space_custom_data_to_normal(lnor_space, clnors_data, nloc);
+              reflect_v3_v3v3(nloc, nloc, lnor_space->vec_lnor);
+              negate_v3(nloc);
+              BKE_lnor_space_custom_normal_to_data(lnor_space, nloc, clnors_data);
+            }
+          };
+
+          for (const int i : IndexRange(tc->data_len)) {
+            correct_mirrored_custom_normals_fn(static_cast<BMVert *>(tc->data[i].extra));
+          }
+          for (const int i : IndexRange(tc->data_mirror_len)) {
+            correct_mirrored_custom_normals_fn(static_cast<BMVert *>(tc->data_mirror[i].extra));
+          }
+        }
+      }
+    }
+  }
+
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     /* Table needs to be created for each edit command, since vertices can move etc. */
     ED_mesh_mirror_spatial_table_end(tc->obedit);
