@@ -775,6 +775,7 @@ class SEQUENCER_MT_add_clip(Menu):
         for clip in bpy.data.movieclips:
             layout.operator("sequencer.movieclip_strip_add", text=clip.name, translate=False).clip = clip.name
 
+
 class SEQUENCER_MT_add_image(Menu):
     bl_label = "Image"
     bl_translation_context = i18n_contexts.id_movieclip

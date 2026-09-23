@@ -153,7 +153,6 @@ static bool image_id_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (WM_drag_is_ID_type(drag, ID_IM)) {
     return generic_poll_operations(C, event, TH_SEQ_IMAGE);
   }
-
   return false;
 }
 
@@ -1010,9 +1009,15 @@ static bool image_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /
   return false;
 }
 
-static bool movie_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
+static bool scene_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
   return is_movie(drag);
+}
+
+static bool movie_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
+{
+  return is_movie(drag) && (drag->type != WM_DRAG_PATH ||
+                            test_single_file_handler_poll(C, drag, "SEQUENCER_FH_movie_strip"));
 }
 
 static bool movieclip_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
@@ -1023,17 +1028,6 @@ static bool movieclip_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wm
 static bool image_id_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
     return WM_drag_is_ID_type(drag, ID_IM);
-}
-
-static bool scene_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
-{
-  const Scene *sequencer_scene = CTX_data_sequencer_scene(C);
-  if (sequencer_scene == nullptr) {
-    return false;
-  }
-
-  return WM_drag_is_ID_type(drag, ID_SCE) &&
-         WM_drag_get_local_ID(drag, ID_SCE) != &sequencer_scene->id;
 }
 
 static bool mask_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)

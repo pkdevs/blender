@@ -633,11 +633,16 @@ static void add_reload_new_file_impl(
         return;
       }
 
-      strip->len = get_image_id_len(strip->image);
 
-      strip->len -= strip->anim_startofs;
-      strip->len -= strip->anim_endofs;
-      strip->len = std::max(strip->len, 0);
+      //TODO: GD;; Review this whole part later
+      //strip->len = get_image_id_len(strip->image);
+
+      int new_len = get_image_id_len(strip->image);
+
+      new_len -= strip->anim_startofs;
+      new_len -= strip->anim_endofs;
+      new_len = std::max(new_len, 0);
+      strip->content_length_set(new_len);
       break;
     }
     case STRIP_TYPE_MASK: {

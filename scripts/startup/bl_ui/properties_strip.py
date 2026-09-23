@@ -1054,7 +1054,7 @@ class STRIP_PT_adjust_video(StripButtonsPanel, Panel):
             return False
 
         return strip.type in {
-            'MOVIE', 'IMAGE', 'SCENE', 'MOVIECLIP', 'MASK', 'META', 'IMAGE_ID',
+            'MOVIE', 'IMAGE', 'SCENE', 'MOVIECLIP', 'MASK', 'META', 'IMAGE_ID'
         }
 
     def draw(self, context):
