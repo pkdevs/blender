@@ -557,7 +557,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                                                                               corner_subdivisions,
                                                                               outline_radius,
                                                                               outline_offset,
-                                                                              material_index);
+                                                                              material_index,
+                                                                              true);
 
         /* Sample the outline stroke. */
         if (params_.outline_resample_length > 0.0f) {

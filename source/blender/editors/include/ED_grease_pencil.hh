@@ -826,7 +826,8 @@ bke::CurvesGeometry create_curves_outline(const bke::greasepencil::Drawing &draw
                                           int corner_subdivisions,
                                           float outline_radius,
                                           float outline_offset,
-                                          int material_index);
+                                          int material_index,
+                                          bool self_union);
 
 /* Function that generates an update mask for a selection operation. */
 using SelectionUpdateFunc = FunctionRef<IndexMask(const ed::greasepencil::MutableDrawingInfo &info,

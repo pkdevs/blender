@@ -1417,7 +1417,8 @@ static void outline_stroke(bke::greasepencil::Drawing &drawing,
       3,
       outline_radius,
       0.0f,
-      material_index);
+      material_index,
+      true);
 
   /* Reproject the outline onto the drawing placement. */
   placement.reproject(outline.positions(), outline.positions_for_write());

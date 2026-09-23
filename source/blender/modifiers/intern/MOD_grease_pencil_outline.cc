@@ -200,7 +200,7 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                           -1);
 
   bke::CurvesGeometry curves = ed::greasepencil::create_curves_outline(
-      drawing, curves_mask, viewmat, omd.subdiv, radius, outline_offset, mat_nr);
+      drawing, curves_mask, viewmat, omd.subdiv, radius, outline_offset, mat_nr, false);
 
   /* Cyclic curve reordering feature. */
   if (omd.object) {

@@ -4677,7 +4677,8 @@ static wmOperatorStatus grease_pencil_outline_exec(bContext *C, wmOperator *op)
                                                               corner_subdivisions,
                                                               radius,
                                                               outline_offset,
-                                                              mat_nr);
+                                                              mat_nr,
+                                                              true);
 
     info.drawing.strokes_for_write().remove_curves(editable_strokes, {});
 

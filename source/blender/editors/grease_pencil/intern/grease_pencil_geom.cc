@@ -23,6 +23,7 @@
 #include "BKE_curves_utils.hh"
 #include "BKE_deform.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_fills.hh"
 
 #include "DNA_curves_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -756,7 +757,8 @@ bke::CurvesGeometry create_curves_outline(const bke::greasepencil::Drawing &draw
                                           const int corner_subdivisions,
                                           const float outline_radius,
                                           const float outline_offset,
-                                          const int material_index)
+                                          const int material_index,
+                                          const bool self_union)
 {
   const bke::CurvesGeometry &src_curves = drawing.strokes();
   Span<float3> src_positions = src_curves.positions();
@@ -922,6 +924,33 @@ bke::CurvesGeometry create_curves_outline(const bke::greasepencil::Drawing &draw
   dst_radius.finish();
   dst_fill_ids.finish();
   dst_curves.update_curve_types();
+
+  if (!self_union) {
+    return dst_curves;
+  }
+
+  auto project_fn = [&](const float3 &position) {
+    return float2(math::transform_point(transform, position));
+  };
+
+  boolean::CurveBooleanOpParameters op_params;
+  op_params.boolean_mode = boolean::Operation::Union;
+  op_params.fill_rule = boolean::FillRule::NonZero;
+  op_params.keep_caps = true;
+  op_params.skip_clipping_attributes = false;
+  op_params.separate_islands = false;
+  op_params.self_intersect = true;
+
+  const VArray<int> fill_ids = *dst_attributes.lookup<int>("fill_id", bke::AttrDomain::Curve);
+
+  const bke::greasepencil::ShapeData shapes_data = bke::greasepencil::shapes_from_fill_ids(
+      fill_ids, dst_curves.curves_num());
+  const GroupedSpan<int> shapes = shapes_data.shapes();
+
+  const IndexRange clipping_shapes = IndexRange(0);
+
+  dst_curves = boolean::curve_boolean(
+      op_params, dst_curves, project_fn, shapes, shapes.index_range(), clipping_shapes);
 
   return dst_curves;
 }
