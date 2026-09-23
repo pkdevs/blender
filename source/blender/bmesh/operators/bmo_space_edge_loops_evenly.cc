@@ -73,11 +73,6 @@ struct SplineCoeffs {
   float x;
 };
 
-static bool bm_edge_space_test_cb(BMEdge *e, void * /*user_data*/)
-{
-  return BM_elem_flag_test(e, BM_ELEM_TAG);
-}
-
 /**
  * Build vertex chains from selected edges.
  */
@@ -87,7 +82,8 @@ static void get_space_input_chains(BMesh *bm, Vector<SpaceChainData> &r_chains)
   const BMEdgeLoopFind_Params params = {
       .use_vert_junction = true,
   };
-  BM_mesh_edgeloops_find(bm, &eloops, bm_edge_space_test_cb, nullptr, &params);
+  BM_mesh_edgeloops_find(
+      bm, &eloops, [](BMEdge *e) { return BM_elem_flag_test(e, BM_ELEM_TAG); }, &params);
 
   for (BMEdgeLoopStore &el_store : eloops) {
     SpaceChainData chain;
@@ -307,7 +303,7 @@ void bmo_space_edge_loops_evenly_exec(BMesh *bm, BMOperator *op)
 
     for (const int i : IndexRange(verts_num)) {
       /* The first and last vertices of an open chain are anchor points so they are skipped. */
-      if (!chain.is_closed && (i == 0 || i == verts_num - 1)) {
+      if (!chain.is_closed && ELEM(i, 0, verts_num - 1)) {
         continue;
       }
 

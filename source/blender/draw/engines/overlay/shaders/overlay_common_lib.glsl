@@ -5,8 +5,8 @@
 #pragma once
 
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_constants_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_constants.bsl.hh"
 
 /* Wire Color Types, matching eV3DShadingColorType. */
 #define V3D_SHADING_SINGLE_COLOR 2
@@ -30,7 +30,7 @@ float4x4 extract_matrix_packed_data(float4x4 mat, float4 &dataA, float4 &dataB)
 /**
  * Pack overlay line data to float4.
  * Note: edge_start, edge_pos need to be in the range [0..uniform_buf.size_viewport].
- * Note: returns float4 for fbo output; only the first two components store data.
+ * Note: returns float4 for FBO output; only the first two components store data.
  */
 float4 pack_line_data(float2 frag_co, float2 edge_start, float2 edge_pos)
 {
@@ -102,6 +102,7 @@ float get_homogenous_z_offset(float4x4 winmat, float vs_z, float hs_w, float vs_
   }
 }
 
+#if defined(DRAW_VIEW_CREATE_INFO)
 float mul_project_m4_v3_zfac(float pixel_fac, float3 co)
 {
   float3 vP = drw_point_world_to_view(co).xyz;
@@ -109,3 +110,4 @@ float mul_project_m4_v3_zfac(float pixel_fac, float3 co)
   return pixel_fac *
          (winmat[0][3] * vP.x + winmat[1][3] * vP.y + winmat[2][3] * vP.z + winmat[3][3]);
 }
+#endif

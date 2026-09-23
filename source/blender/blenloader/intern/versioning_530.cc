@@ -143,6 +143,18 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
+  // TODO: GD;; Change before merge! (and bump version up)
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 99)) {
+    for (Scene &scene : bmain->scenes) {
+      Editing *ed = scene.ed;
+      if (ed == nullptr) {
+        continue;
+      }
+
+      ed->image_user.flag |= IMA_ANIM_ALWAYS;
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.

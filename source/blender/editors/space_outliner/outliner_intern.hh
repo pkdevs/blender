@@ -290,7 +290,8 @@ void outliner_build_tree(Main *mainvar,
                          SpaceOutliner *space_outliner,
                          ARegion *region);
 
-TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
+TreeElement *outliner_add_collection_recursive(AbstractTreeDisplay &tree_display,
+                                               SpaceOutliner *space_outliner,
                                                Collection *collection,
                                                TreeElement *ten);
 
@@ -465,10 +466,7 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
  */
 void outliner_item_openclose(TreeElement *te, bool open, bool toggle_all);
 
-void outliner_scroll_to_active(const bContext *C,
-                               SpaceOutliner *space_outliner,
-                               ARegion *region,
-                               TreeViewContext *tvc);
+void outliner_scroll_to_active(SpaceOutliner *space_outliner, ARegion *region, short idcode);
 
 /* `outliner_dragdrop.cc` */
 
@@ -691,7 +689,8 @@ void outliner_tag_redraw_avoid_rebuild_on_open_change(const SpaceOutliner *space
  */
 bool outliner_sync_selection(const bContext *C,
                              const TreeViewContext &tvc,
-                             SpaceOutliner *space_outliner);
+                             SpaceOutliner *space_outliner,
+                             short &idcode);
 
 /* `outliner_context.cc` */
 
