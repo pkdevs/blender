@@ -1210,6 +1210,10 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
     /* Init Custom Data correction.
      * Ideally this should be called when creating the TransData. */
     transform_convert_mesh_customdatacorrect_init(t);
+
+    if (t->mode == TFM_MIRROR) {
+      transform_convert_mesh_mirror_custom_normals_init(t);
+    }
   }
 
   transform_gizmo_3d_model_from_constraint_and_mode_set(t);

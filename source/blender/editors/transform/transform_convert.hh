@@ -159,6 +159,7 @@ void recalc_data(TransInfo *t);
 /* `transform_convert_mesh.cc` */
 
 void transform_convert_mesh_customdatacorrect_init(TransInfo *t);
+void transform_convert_mesh_mirror_custom_normals_init(TransInfo *t);
 
 /* `transform_convert_sequencer.cc` */
 

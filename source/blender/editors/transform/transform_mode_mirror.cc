@@ -30,6 +30,56 @@ namespace blender::ed::transform {
 /** \name Transform (Mirror)
  * \{ */
 
+struct MirrorParams {
+  int axis_bitmap;
+  int special_axis;
+  bool flip;
+};
+
+static MirrorParams mirror_params_get(const TransInfo *t)
+{
+  BLI_assert(t->con.mode & CON_APPLY);
+
+  /* `special_axis` is either the constraint plane normal or the constraint axis.
+   * Assume CON_AXIS0 < CON_AXIS1 < CON_AXIS2 and CON_AXIS2 == CON_AXIS0 << 2. */
+  BLI_assert(CON_AXIS2 == CON_AXIS0 << 2);
+
+  MirrorParams params;
+  params.axis_bitmap = (t->con.mode & (CON_AXIS0 | CON_AXIS1 | CON_AXIS2)) / CON_AXIS0;
+
+  const int axis_count = count_bits_i(params.axis_bitmap);
+
+  params.special_axis = -1;
+  if (!ELEM(axis_count, 0, 3)) [[likely]] {
+    const int special_axis_bitmap = (axis_count == 2) ? ~params.axis_bitmap : params.axis_bitmap;
+    params.special_axis = bitscan_forward_i(special_axis_bitmap);
+  }
+
+  params.flip = axis_count >= 2;
+  return params;
+}
+
+static void mirror_vector(
+    const TransInfo *t, const TransData *td, const int axis, const bool flip, float vec[3])
+{
+  if (axis >= 0) {
+    /* Always do the mirror in global space. */
+    if (t->flag & T_EDIT) {
+      mul_m3_v3(td->mtx, vec);
+    }
+
+    reflect_v3_v3v3(vec, vec, t->spacemtx[axis]);
+
+    if (t->flag & T_EDIT) {
+      mul_m3_v3(td->smtx, vec);
+    }
+  }
+
+  if (flip) {
+    negate_v3(vec);
+  }
+}
+
 /**
  * Mirrors an object by negating the scale of the object on the mirror axis, reflecting the
  * location and adjusting the rotation.
@@ -121,19 +171,7 @@ static void ElementMirror(TransInfo *t, TransDataContainer *tc, int td_index, in
       sub_v3_v3v3(vec, td->center, center);
     }
 
-    if (axis >= 0) {
-      /* Always do the mirror in global space. */
-      if (t->flag & T_EDIT) {
-        mul_m3_v3(td->mtx, vec);
-      }
-      reflect_v3_v3v3(vec, vec, t->spacemtx[axis]);
-      if (t->flag & T_EDIT) {
-        mul_m3_v3(td->smtx, vec);
-      }
-    }
-    if (flip) {
-      negate_v3(vec);
-    }
+    mirror_vector(t, td, axis, flip, vec);
 
     add_v3_v3(vec, center);
     if (t->flag & T_POINTS) {
@@ -156,6 +194,26 @@ static void ElementMirror(TransInfo *t, TransDataContainer *tc, int td_index, in
   }
 }
 
+/**
+ * Build the linear mirror transform applied by #ElementMirror to `td`.
+ */
+bool transform_mode_mirror_matrix_get(const TransInfo *t, const TransData *td, float r_mat[3][3])
+{
+  if (!(t->con.mode & CON_APPLY)) {
+    return false;
+  }
+
+  const MirrorParams params = mirror_params_get(t);
+
+  unit_m3(r_mat);
+
+  for (int i = 0; i < 3; i++) {
+    mirror_vector(t, td, params.special_axis, params.flip, r_mat[i]);
+  }
+
+  return true;
+}
+
 static void applyMirror(TransInfo *t)
 {
   int i;
@@ -168,26 +226,16 @@ static void applyMirror(TransInfo *t)
 
   /* If an axis has been selected. */
   if (t->con.mode & CON_APPLY) {
-    /* #special_axis is either the constraint plane normal or the constraint axis.
-     * Assuming that CON_AXIS0 < CON_AXIS1 < CON_AXIS2 and CON_AXIS2 is CON_AXIS0 << 2 */
-    BLI_assert(CON_AXIS2 == CON_AXIS0 << 2);
-    int axis_bitmap = (t->con.mode & (CON_AXIS0 | CON_AXIS1 | CON_AXIS2)) / CON_AXIS0;
-    int special_axis_bitmap = 0;
-    int special_axis = -1;
-    int bitmap_len = count_bits_i(axis_bitmap);
-    if (!ELEM(bitmap_len, 0, 3)) [[likely]] {
-      special_axis_bitmap = (bitmap_len == 2) ? ~axis_bitmap : axis_bitmap;
-      special_axis = bitscan_forward_i(special_axis_bitmap);
-    }
+    const MirrorParams params = mirror_params_get(t);
 
     SNPRINTF_UTF8(str, IFACE_("Mirror%s"), t->con.text);
 
     if (t->options & CTX_SEQUENCER_IMAGE) {
-      if (axis_bitmap == 1) {
+      if (params.axis_bitmap == 1) {
         t->values_final[0] = -1;
         t->values_final[1] = 1;
       }
-      if (axis_bitmap == 2) {
+      if (params.axis_bitmap == 2) {
         t->values_final[0] = 1;
         t->values_final[1] = -1;
       }
@@ -200,7 +248,7 @@ static void applyMirror(TransInfo *t)
           continue;
         }
 
-        ElementMirror(t, tc, i, special_axis, bitmap_len >= 2);
+        ElementMirror(t, tc, i, params.special_axis, params.flip);
       }
     }
 

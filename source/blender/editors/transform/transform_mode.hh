@@ -174,6 +174,7 @@ extern TransModeInfo TransMode_maskshrinkfatten;
 /* `transform_mode_mirror.cc` */
 
 extern TransModeInfo TransMode_mirror;
+bool transform_mode_mirror_matrix_get(const TransInfo *t, const TransData *td, float r_mat[3][3]);
 
 /* `transform_mode_push_pull.cc` */
 

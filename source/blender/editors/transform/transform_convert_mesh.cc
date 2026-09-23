@@ -15,6 +15,7 @@
 #include "BLI_array.hh"
 #include "BLI_linklist_stack.hh"
 #include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
@@ -34,6 +35,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "transform.hh"
+#include "transform_mode.hh"
 #include "transform_orientations.hh"
 #include "transform_snap.hh"
 
@@ -2125,12 +2127,159 @@ static void recalcData_mesh(TransInfo *t)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Mirror Custom Normals
+ * \{ */
+
+void transform_convert_mesh_mirror_custom_normals_init(TransInfo *t)
+{
+  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    if (tc->data_len == 0) {
+      continue;
+    }
+
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
+    BM_custom_loop_normals_to_vector_layer(bm);
+  }
+}
+
+static void mesh_mirror_custom_normals_apply(const TransInfo *t,
+                                             const TransDataContainer *tc,
+                                             BMesh *bm)
+{
+  if (!CustomData_has_layer_named(&bm->ldata, CD_PROP_INT16_2D, "custom_normal")) {
+    return;
+  }
+
+  const int cd_normal_offset = CustomData_get_offset(&bm->ldata, CD_NORMAL);
+  if (cd_normal_offset == -1) {
+    return;
+  }
+
+  /* Store the mirror transform for every affected vertex. This needs to be per-vertex because
+   * CrazySpace can use a different transform matrix for each vertex. */
+  Map<BMVert *, float3x3> transform_by_vert;
+  transform_by_vert.reserve(tc->data_len + tc->data_mirror_len);
+
+  /* Map vertex-coordinate pointers back to their #TransData. #TransDataMirror::loc_src points to
+   * the corresponding source vertex location. */
+  Map<const float *, const TransData *> transdata_by_loc;
+  transdata_by_loc.reserve(tc->data_len);
+
+  for (int i = 0; i < tc->data_len; i++) {
+    const TransData *td = &tc->data[i];
+
+    if (td->flag & TD_SKIP) {
+      continue;
+    }
+
+    if (td->loc != nullptr) {
+      transdata_by_loc.add(td->loc, td);
+    }
+
+    BMVert *v = static_cast<BMVert *>(td->extra);
+    if (v == nullptr) {
+      continue;
+    }
+
+    float3x3 mirror_matrix;
+    if (transform_mode_mirror_matrix_get(t, td, mirror_matrix.ptr())) {
+      transform_by_vert.add_overwrite(v, mirror_matrix);
+    }
+  }
+
+  /* Edit-mode symmetry updates mirrored counterpart vertices separately from the main TransData.
+   * Their transform is the source mirror transform conjugated by the symmetry reflection. */
+  const TransDataMirror *td_mirror = tc->data_mirror;
+  for (int i = 0; i < tc->data_mirror_len; i++, td_mirror++) {
+    const TransData *td_src = transdata_by_loc.lookup_default(td_mirror->loc_src, nullptr);
+    if (td_src == nullptr) {
+      continue;
+    }
+
+    BMVert *v = static_cast<BMVert *>(td_mirror->extra);
+    if (v == nullptr) {
+      continue;
+    }
+
+    float3x3 mirror_matrix;
+    if (!transform_mode_mirror_matrix_get(t, td_src, mirror_matrix.ptr())) {
+      continue;
+    }
+
+    float3x3 symmetry_matrix = float3x3::identity();
+
+    if (td_mirror->flag & TD_MIRROR_X) {
+      symmetry_matrix[0][0] = -1.0f;
+    }
+    if (td_mirror->flag & TD_MIRROR_Y) {
+      symmetry_matrix[1][1] = -1.0f;
+    }
+    if (td_mirror->flag & TD_MIRROR_Z) {
+      symmetry_matrix[2][2] = -1.0f;
+    }
+
+    transform_by_vert.add_overwrite(v, symmetry_matrix * mirror_matrix * symmetry_matrix);
+  }
+
+  BMFace *f;
+  BMIter fiter;
+  BM_ITER_MESH (f, &fiter, bm, BM_FACES_OF_MESH) {
+    BMLoop *l_first = BM_FACE_FIRST_LOOP(f);
+    BMLoop *l = l_first;
+
+    /* Only transform corner normals when every vertex of the face participates in the mirror.
+     * Partially transformed faces are deformations and keep their saved normal directions. */
+    bool face_is_transformed = true;
+    do {
+      if (!transform_by_vert.contains(l->v)) {
+        face_is_transformed = false;
+        break;
+      }
+    } while ((l = l->next) != l_first);
+
+    if (!face_is_transformed) {
+      continue;
+    }
+
+    l = l_first;
+    do {
+      const float3x3 &mirror_matrix = transform_by_vert.lookup(l->v);
+
+      float3 *normal = reinterpret_cast<float3 *>(BM_ELEM_CD_GET_VOID_P(l, cd_normal_offset));
+
+      MutableSpan<float3> normal_span(normal, 1);
+      math::transform_normals(mirror_matrix, normal_span);
+
+      /* Edit-mode mirror keeps face winding unchanged, so orientation-reversing transforms need
+       * the determinant sign in addition to the inverse-transpose normal transform. */
+      if (math::is_negative(mirror_matrix)) {
+        *normal *= -1.0f;
+      }
+    } while ((l = l->next) != l_first);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Special After Transform Mesh
  * \{ */
 
 static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
 {
   const bool is_canceling = (t->state == TRANS_CANCEL);
+  const bool use_mirror_custom_normals = !is_canceling && (t->mode == TFM_MIRROR);
+  if (use_mirror_custom_normals) {
+    FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+      if (tc->data_len == 0) {
+        continue;
+      }
+
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
+      mesh_mirror_custom_normals_apply(t, tc, bm);
+    }
+  }
+
   const bool use_automerge = !is_canceling && (t->flag & (T_AUTOMERGE | T_AUTOSPLIT)) != 0;
 
   if (!is_canceling && ELEM(t->mode, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
@@ -2177,6 +2326,18 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
       if (has_face_sel && (em->selectmode == SCE_SELECT_FACE)) {
         EDBM_selectmode_flush_ex(bm, SCE_SELECT_EDGE);
       }
+    }
+  }
+
+  if (use_mirror_custom_normals) {
+    /* Re-encode after auto-merge so the custom normals use the final loop-normal spaces. */
+    FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+      if (tc->data_len == 0) {
+        continue;
+      }
+
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
+      BM_custom_loop_normals_from_vector_layer(bm, false);
     }
   }
 
