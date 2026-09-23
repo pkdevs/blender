@@ -1,0 +1,1 @@
+Referenced by issue #164260, [Regression] copied or appended `glTF Material Output` groups with `.001` suffixes are ignored by the GLTF Exporter
