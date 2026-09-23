@@ -387,12 +387,16 @@ static int node_shader_gpu_bsdf_open_pbr(GPUMaterial *mat,
 {
   /* Normals */
   if (!in[OPENPBR_SOCK_GEOMETRY_NORMAL_ID].link) {
-    GPU_link(mat, "world_normals_get", &in[OPENPBR_SOCK_GEOMETRY_NORMAL_ID].link);
+    GPU_link(
+        mat, "world_normals_get", GPU_shading_data(), &in[OPENPBR_SOCK_GEOMETRY_NORMAL_ID].link);
   }
 
   /* Coat Normals */
   if (!in[OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID].link) {
-    GPU_link(mat, "world_normals_get", &in[OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID].link);
+    GPU_link(mat,
+             "world_normals_get",
+             GPU_shading_data(),
+             &in[OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID].link);
   }
 
   const GPUNodeStack metalness = in[OPENPBR_SOCK_BASE_METALNESS_ID];
@@ -469,7 +473,8 @@ static int node_shader_gpu_bsdf_open_pbr(GPUMaterial *mat,
     in[OPENPBR_SOCK_TRANSMISSION_WEIGHT_ID].link = GPU_constant(&zero);
   }
 
-  return GPU_stack_link(mat, node, "node_bsdf_open_pbr", in, out);
+  return GPU_stack_link(
+      mat, node, "node_bsdf_open_pbr", in, out, GPU_kernel_globals(), GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN

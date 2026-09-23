@@ -147,7 +147,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
     float eta = max(IOR, 1e-5);
     if (ThinWall) {
       closure color ThinGlassBSDF = thin_glass(
-          Normal, specular_tint, clamped_base_color, eta, r2, ThinFilmThickness, thinfilm_ior, 0);
+          Normal, specular_tint, clamped_base_color, eta, r2, ThinFilmThickness, ThinFilmIOR, 0);
       BSDF = mix(ThinGlassBSDF, BSDF, 1.0 - transmission);
     }
     else {

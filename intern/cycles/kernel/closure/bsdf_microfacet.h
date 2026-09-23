@@ -686,7 +686,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
 
   if (bsdf->fresnel_type != MicrofacetFresnel::DIELECTRIC) {
     ccl_private FresnelThinFilmed *fresnel_tf = (ccl_private FresnelThinFilmed *)bsdf->fresnel;
-    if (fresnel_tf->thin_film.valid()){
+    if (fresnel_tf->thin_film.valid()) {
       /* Precomputing LUTs for thin-film iridescence isn't viable, so fall back to the specular
        * reflection approximation from the microfacet_fresnel call above in that case. */
     }

@@ -5,8 +5,6 @@
 #pragma once
 
 #include "gpu_shader_material_open_pbr_util.bsl.hh"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
 
 float openpbr_specular_ior(const Specular specular, const Coat coat)
 {
@@ -26,7 +24,9 @@ float openpbr_specular_ior(const Specular specular, const Coat coat)
   return openpbr_modulate_ior(specular.weight, specular_ior);
 }
 
-float3 openpbr_eval_translucent(float3 weight,
+float3 openpbr_eval_translucent([[resource_table]] KernelGlobals &kg,
+                                ShadingData &sd,
+                                float3 weight,
                                 [[maybe_unused]] const Specular specular,
                                 [[maybe_unused]] const Transmission transmission,
                                 [[maybe_unused]] const float3 N,
@@ -34,13 +34,13 @@ float3 openpbr_eval_translucent(float3 weight,
                                 [[maybe_unused]] const bool thin_walled,
                                 [[maybe_unused]] ClosureReflection &reflection_data)
 {
-#ifdef MAT_REFRACTION
+#if defined(MAT_REFRACTION) || defined(GLSL_CPP_STUBS)
   if (transmission.weight == 0.0f) {
     return weight;
   }
 
   const bool multiggx = true;
-  const float2 bsdf = bsdf_lut(NV, specular.roughness, specular.ior, multiggx);
+  const float2 bsdf = bsdf_lut(kg, NV, specular.roughness, specular.ior, multiggx);
   float3 R, T;
   if (thin_walled) {
     /* Adjust transmission tint based on relative path length. */
@@ -58,13 +58,15 @@ float3 openpbr_eval_translucent(float3 weight,
   }
 
   weight = openpbr_eval_translucent(
-      weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
+      sd, weight, transmission.weight, R, T, N, specular, thin_walled, reflection_data);
 #endif
 
   return weight;
 }
 
-float3 openpbr_eval_gloss(const float3 weight,
+float3 openpbr_eval_gloss([[resource_table]] const KernelGlobals &kg,
+                          ShadingData &sd,
+                          const float3 weight,
                           const Specular specular,
                           const float3 N,
                           const float NV,
@@ -75,12 +77,12 @@ float3 openpbr_eval_gloss(const float3 weight,
   }
 
   const bool multiggx = true;
-  const float reflectance = bsdf_lut(NV, specular.roughness, specular.ior, multiggx).x;
+  const float reflectance = bsdf_lut(kg, NV, specular.roughness, specular.ior, multiggx).x;
 
   reflection_data.N = N;
   reflection_data.roughness = specular.roughness;
   reflection_data.color += weight * reflectance * specular.tint;
-  closure_eval(reflection_data);
+  closure_eval(sd, reflection_data);
 
   /* Attenuate lower layers */
   return weight * max(1.0f - reflectance, 0.0f);
@@ -129,6 +131,8 @@ void node_bsdf_open_pbr(const float float_weight,                             //
                         const float3 geometry_tangent,                        // #39
                         const float3 geometry_coat_normal,                    // #40
                         const float3 /*geometry_coat_tangent*/,               // #41
+                        [[resource_table]] KernelGlobals &kg,
+                        ShadingData &sd,
                         Closure &result)
 {
   /* Clamp parameters. OpenPBR Surface Specification, Section 5. */
@@ -172,7 +176,7 @@ void node_bsdf_open_pbr(const float float_weight,                             //
   Coat coat;
   coat.tint = saturate(coat_color.rgb);
   coat.roughness = saturate(coat_roughness);
-  coat.N = normalize_fallback(geometry_coat_normal, g_data.N);
+  coat.N = normalize_fallback(geometry_coat_normal, sd.N);
   coat.ior = max(coat_ior, 0.0f);
   coat.weight = saturate(coat_weight);
   /* Not used by EEVEE.
@@ -199,13 +203,13 @@ void node_bsdf_open_pbr(const float float_weight,                             //
 
   /* Geometry. */
   geometry_opacity = saturate(geometry_opacity);
-  const float3 N = normalize_fallback(geometry_normal, g_data.N);
+  const float3 N = normalize_fallback(geometry_normal, sd.N);
   [[maybe_unused]] float3 T = geometry_tangent;
 
   /* Adjust parameters. */
   const float3 weighted_base_color = base_weight * base_color.rgb;
   specular.ior = openpbr_specular_ior(specular, coat);
-  const float3 V = coordinate_incoming(g_data.P);
+  const float3 V = coordinate_impl(kg, sd, sd.P, sd.N).incoming;
   const float NV = dot(N, V);
   const bool multiggx = true;
 
@@ -213,17 +217,17 @@ void node_bsdf_open_pbr(const float float_weight,                             //
   ClosureDiffuse diffuse_data;
   ClosureReflection reflection_data;
 
-  weight = openpbr_eval_transparency(weight, geometry_opacity);
-  weight = openpbr_eval_fuzz(weight, coat, fuzz, N, V, diffuse_data);
-  weight = openpbr_eval_coat(weight, coat, V);
-  weight = openpbr_eval_emission(weight, emission_color.rgb, emission_luminance);
+  weight = openpbr_eval_transparency(sd, weight, geometry_opacity);
+  weight = openpbr_eval_fuzz(sd, weight, coat, fuzz, N, V, diffuse_data);
+  weight = openpbr_eval_coat(kg, sd, weight, coat, V);
+  weight = openpbr_eval_emission(sd, weight, emission_color.rgb, emission_luminance);
   weight = openpbr_eval_metal(
-      weight, weighted_base_color, specular, base_metalness, NV, multiggx, reflection_data);
+      kg, weight, weighted_base_color, specular, base_metalness, NV, multiggx, reflection_data);
   weight = openpbr_eval_translucent(
-      weight, specular, transmission, N, NV, geometry_thin_walled, reflection_data);
-  weight = openpbr_eval_gloss(weight, specular, N, NV, reflection_data);
-  weight = openpbr_eval_subsurface(weight, subsurface, geometry_thin_walled, N, diffuse_data);
-  openpbr_eval_diffuse(weight, weighted_base_color, N, diffuse_data);
+      kg, sd, weight, specular, transmission, N, NV, geometry_thin_walled, reflection_data);
+  weight = openpbr_eval_gloss(kg, sd, weight, specular, N, NV, reflection_data);
+  weight = openpbr_eval_subsurface(sd, weight, subsurface, geometry_thin_walled, N, diffuse_data);
+  openpbr_eval_diffuse(sd, weight, weighted_base_color, N, diffuse_data);
 
   /* TODO(fclem): EEVEE implementation leaking. */
   result = CLOSURE_DEFAULT;
