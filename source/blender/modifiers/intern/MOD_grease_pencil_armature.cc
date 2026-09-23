@@ -306,10 +306,10 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &amd->influence);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   auto *amd = reinterpret_cast<GreasePencilArmatureModifierData *>(md);
-  BKE_modifier_defgroup_rename_grease_pencil_influence(&amd->influence, old_name, new_name);
+  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(&amd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilArmature = {
@@ -347,7 +347,7 @@ ModifierTypeInfo modifierType_GreasePencilArmature = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

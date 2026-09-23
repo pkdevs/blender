@@ -496,11 +496,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Cast, panel_draw);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   CastModifierData *cmd = reinterpret_cast<CastModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      cmd->defgrp_name, sizeof(cmd->defgrp_name), old_name, new_name);
+  callback(cmd->defgrp_name, sizeof(cmd->defgrp_name), user_data);
 }
 
 ModifierTypeInfo modifierType_Cast = {
@@ -538,7 +537,7 @@ ModifierTypeInfo modifierType_Cast = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

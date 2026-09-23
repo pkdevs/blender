@@ -55,14 +55,6 @@ static Lattice *object_defgroup_lattice_get(ID *id)
   return (lt->editlatt) ? lt->editlatt->latt : lt;
 }
 
-static void object_defgroup_rename_if_matches(const char *old_name,
-                                               const char *new_name,
-                                               char *prop,
-                                               size_t prop_maxncpy)
-{
-  BLI_string_replace_if_match(prop, prop_maxncpy, old_name, new_name);
-}
-
 void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
 {
   /* these cases don't use names to refer to vertex groups, so when
@@ -103,20 +95,36 @@ void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
   }
 }
 
-void BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
+void BKE_object_foreach_vgroup_reference(Object *ob,
+                                          ModifierVGroupReferenceCallback callback,
+                                          void *user_data)
 {
   for (ModifierData &md : ob->modifiers) {
-    BKE_modifier_defgroup_rename(&md, old_name, new_name);
+    BKE_modifier_foreach_vgroup_reference(&md, callback, user_data);
   }
 
   if (ob->soft) {
-    object_defgroup_rename_if_matches(
-        old_name, new_name, ob->soft->namedVG_Mass, sizeof(ob->soft->namedVG_Mass));
-    object_defgroup_rename_if_matches(
-        old_name, new_name, ob->soft->namedVG_Softgoal, sizeof(ob->soft->namedVG_Softgoal));
-    object_defgroup_rename_if_matches(
-        old_name, new_name, ob->soft->namedVG_Spring_K, sizeof(ob->soft->namedVG_Spring_K));
+    callback(ob->soft->namedVG_Mass, sizeof(ob->soft->namedVG_Mass), user_data);
+    callback(ob->soft->namedVG_Softgoal, sizeof(ob->soft->namedVG_Softgoal), user_data);
+    callback(ob->soft->namedVG_Spring_K, sizeof(ob->soft->namedVG_Spring_K), user_data);
   }
+}
+
+struct DefgroupRenameData {
+  const char *old_name;
+  const char *new_name;
+};
+
+static bool defgroup_rename_callback(char *name, size_t name_maxncpy, void *user_data)
+{
+  const DefgroupRenameData *data = static_cast<const DefgroupRenameData *>(user_data);
+  return BLI_string_replace_if_match(name, name_maxncpy, data->old_name, data->new_name);
+}
+
+void BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
+{
+  DefgroupRenameData data{old_name, new_name};
+  BKE_object_foreach_vgroup_reference(ob, defgroup_rename_callback, &data);
 }
 
 /** \} */

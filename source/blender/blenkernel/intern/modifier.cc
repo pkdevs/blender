@@ -127,28 +127,23 @@ const ModifierTypeInfo *BKE_modifier_get_info(ModifierType type)
   return nullptr;
 }
 
-void BKE_modifier_defgroup_rename_char(char *prop,
-                                        size_t prop_maxncpy,
-                                        const char *old_name,
-                                        const char *new_name)
+void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
+                                            ModifierVGroupReferenceCallback callback,
+                                            void *user_data)
 {
-  BLI_string_replace_if_match(prop, prop_maxncpy, old_name, new_name);
-}
-
-void BKE_modifier_defgroup_rename_grease_pencil_influence(
-    GreasePencilModifierInfluenceData *influence, const char *old_name, const char *new_name)
-{
-  if (influence != nullptr) {
-    BKE_modifier_defgroup_rename_char(
-        influence->vertex_group_name, sizeof(influence->vertex_group_name), old_name, new_name);
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
+  if (mti != nullptr && mti->foreach_vgroup_reference != nullptr) {
+    mti->foreach_vgroup_reference(md, callback, user_data);
   }
 }
 
-void BKE_modifier_defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+void BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
+    GreasePencilModifierInfluenceData *influence,
+    ModifierVGroupReferenceCallback callback,
+    void *user_data)
 {
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-  if (mti != nullptr && mti->defgroup_rename != nullptr) {
-    mti->defgroup_rename(md, old_name, new_name);
+  if (influence != nullptr) {
+    callback(influence->vertex_group_name, sizeof(influence->vertex_group_name), user_data);
   }
 }
 

@@ -12,6 +12,8 @@
 
 #include "DNA_scene_enums.h"
 
+#include "BKE_modifier.hh"
+
 namespace blender {
 
 struct ID;
@@ -29,6 +31,14 @@ struct bDeformGroup;
  * \param map: an array mapping old indices to new indices.
  */
 void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
+/**
+ * Run `callback` on every vertex-group name reference used by the object: all of its
+ * modifiers (see #ModifierTypeInfo.foreach_vgroup_reference), as well as object-level users
+ * such as the soft-body goal/spring vertex groups. The callback may modify the names in place.
+ */
+void BKE_object_foreach_vgroup_reference(Object *ob,
+                                          ModifierVGroupReferenceCallback callback,
+                                          void *user_data);
 void BKE_object_defgroup_rename_users(struct Object *ob,
                                       const char *old_name,
                                       const char *new_name);

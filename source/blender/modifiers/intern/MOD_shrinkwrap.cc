@@ -177,11 +177,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Shrinkwrap, panel_draw);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   ShrinkwrapModifierData *smd = reinterpret_cast<ShrinkwrapModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      smd->vgroup_name, sizeof(smd->vgroup_name), old_name, new_name);
+  callback(smd->vgroup_name, sizeof(smd->vgroup_name), user_data);
 }
 
 ModifierTypeInfo modifierType_Shrinkwrap = {
@@ -220,7 +219,7 @@ ModifierTypeInfo modifierType_Shrinkwrap = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

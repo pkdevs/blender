@@ -775,10 +775,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Mask, panel_draw);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   MaskModifierData *mmd = reinterpret_cast<MaskModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(mmd->vgroup, sizeof(mmd->vgroup), old_name, new_name);
+  callback(mmd->vgroup, sizeof(mmd->vgroup), user_data);
 }
 
 ModifierTypeInfo modifierType_Mask = {
@@ -817,7 +817,7 @@ ModifierTypeInfo modifierType_Mask = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

@@ -234,15 +234,12 @@ static void panel_register(ARegionType *region_type)
                              panel_type);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   SolidifyModifierData *smd = reinterpret_cast<SolidifyModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      smd->defgrp_name, sizeof(smd->defgrp_name), old_name, new_name);
-  BKE_modifier_defgroup_rename_char(
-      smd->shell_defgrp_name, sizeof(smd->shell_defgrp_name), old_name, new_name);
-  BKE_modifier_defgroup_rename_char(
-      smd->rim_defgrp_name, sizeof(smd->rim_defgrp_name), old_name, new_name);
+  callback(smd->defgrp_name, sizeof(smd->defgrp_name), user_data);
+  callback(smd->shell_defgrp_name, sizeof(smd->shell_defgrp_name), user_data);
+  callback(smd->rim_defgrp_name, sizeof(smd->rim_defgrp_name), user_data);
 }
 
 ModifierTypeInfo modifierType_Solidify = {
@@ -282,7 +279,7 @@ ModifierTypeInfo modifierType_Solidify = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

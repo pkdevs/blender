@@ -272,11 +272,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Decimate, panel_draw);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   DecimateModifierData *dmd = reinterpret_cast<DecimateModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      dmd->defgrp_name, sizeof(dmd->defgrp_name), old_name, new_name);
+  callback(dmd->defgrp_name, sizeof(dmd->defgrp_name), user_data);
 }
 
 ModifierTypeInfo modifierType_Decimate = {
@@ -313,7 +312,7 @@ ModifierTypeInfo modifierType_Decimate = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

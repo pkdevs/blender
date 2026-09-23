@@ -451,11 +451,10 @@ static void panel_register(ARegionType *region_type)
 
 #undef DT_TYPES_AFFECT_MESH
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   DataTransferModifierData *dmd = reinterpret_cast<DataTransferModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      dmd->defgrp_name, sizeof(dmd->defgrp_name), old_name, new_name);
+  callback(dmd->defgrp_name, sizeof(dmd->defgrp_name), user_data);
 }
 
 ModifierTypeInfo modifierType_DataTransfer = {
@@ -493,7 +492,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

@@ -202,11 +202,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Smooth, panel_draw);
 }
 
-static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
+static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(md);
-  BKE_modifier_defgroup_rename_char(
-      smd->defgrp_name, sizeof(smd->defgrp_name), old_name, new_name);
+  callback(smd->defgrp_name, sizeof(smd->defgrp_name), user_data);
 }
 
 ModifierTypeInfo modifierType_Smooth = {
@@ -244,7 +243,7 @@ ModifierTypeInfo modifierType_Smooth = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*defgroup_rename*/ defgroup_rename,
+    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
 };
 
 }  // namespace blender

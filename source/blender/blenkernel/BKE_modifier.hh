@@ -142,6 +142,18 @@ using TexWalkFunc = void (*)(void *user_data,
                              ModifierData *md,
                              const PointerRNA *ptr,
                              PropertyRNA *texture_prop);
+/**
+ * Callback for vertex-group reference iterators
+ * (see #ModifierTypeInfo.foreach_vgroup_reference).
+ *
+ * \param name: Pointer to the stored fixed-size name buffer, may be modified in place.
+ * \param name_maxncpy: Size of the buffer in bytes, including the null terminator.
+ * \param user_data: Opaque caller data.
+ * \return True if the name was modified.
+ */
+using ModifierVGroupReferenceCallback = bool (*)(char *name,
+                                                 size_t name_maxncpy,
+                                                 void *user_data);
 
 enum ModifierApplyFlag {
   /** Render time. */
@@ -425,9 +437,14 @@ struct ModifierTypeInfo {
                                       const IDTypeForeachColorFunctionCallback &fn);
 
   /**
-   * Update any vertex-group name references stored by this modifier.
+   * Call the given callback for each vertex-group name reference stored by this modifier.
+   *
+   * The callback may modify the names in place (e.g. to handle renaming a vertex group).
+   * This function is optional (assumes the modifier stores no such references if not present).
    */
-  void (*defgroup_rename)(ModifierData *md, const char *old_name, const char *new_name);
+  void (*foreach_vgroup_reference)(ModifierData *md,
+                                   ModifierVGroupReferenceCallback callback,
+                                   void *user_data);
 };
 
 /** Used to set a modifier's panel type. */
@@ -454,15 +471,22 @@ ModifierData *BKE_modifier_new(int type);
 
 void BKE_modifier_free_ex(ModifierData *md, int flag);
 void BKE_modifier_free(ModifierData *md);
-void BKE_modifier_defgroup_rename(ModifierData *md,
-                                   const char *old_name,
-                                   const char *new_name);
-void BKE_modifier_defgroup_rename_char(char *prop,
-                                       size_t prop_maxncpy,
-                                       const char *old_name,
-                                       const char *new_name);
-void BKE_modifier_defgroup_rename_grease_pencil_influence(
-    GreasePencilModifierInfluenceData *influence, const char *old_name, const char *new_name);
+/**
+ * Run `callback` on every vertex-group name reference stored by the modifier.
+ * Thin wrapper around #ModifierTypeInfo.foreach_vgroup_reference, does nothing if the
+ * modifier type stores no such references.
+ */
+void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
+                                            ModifierVGroupReferenceCallback callback,
+                                            void *user_data);
+/**
+ * Run `callback` on the vertex-group name stored in a grease-pencil modifier influence.
+ * Does nothing if `influence` is null.
+ */
+void BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
+    GreasePencilModifierInfluenceData *influence,
+    ModifierVGroupReferenceCallback callback,
+    void *user_data);
 /**
  * Use instead of `BLI_remlink` when the object's active modifier should change.
  */
