@@ -390,6 +390,12 @@ class TestBlendFileOpenLinkSaveAllTestFiles(TestHelper):
                 (OSError, RuntimeError),
                 "Corrupt .blend file, missing library"
             ),
+            # invalid_blendfiles/invalid_library_filepath_unterminated_listing.blend
+            # Library filepath overwriting the library flags, marking it as archive library.
+            "invalid_library_filepath_unterminated_listing.blend": (
+                (OSError, RuntimeError),
+                "Corrupt .blend file, link placeholder in archive library"
+            ),
         }
 
         assert all(p.endswith("/") for p in self.excluded_open_link_dirs)
