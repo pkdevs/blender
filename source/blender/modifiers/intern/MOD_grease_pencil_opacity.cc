@@ -290,10 +290,10 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &omd->influence);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   auto *omd = reinterpret_cast<GreasePencilOpacityModifierData *>(md);
-  BKE_modifier_defgroup_name_update_grease_pencil_influence(&omd->influence, old_name, new_name);
+  BKE_modifier_defgroup_rename_grease_pencil_influence(&omd->influence, old_name, new_name);
 }
 
 ModifierTypeInfo modifierType_GreasePencilOpacity = {
@@ -331,7 +331,7 @@ ModifierTypeInfo modifierType_GreasePencilOpacity = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

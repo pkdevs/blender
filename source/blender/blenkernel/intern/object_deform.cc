@@ -55,14 +55,12 @@ static Lattice *object_defgroup_lattice_get(ID *id)
   return (lt->editlatt) ? lt->editlatt->latt : lt;
 }
 
-static void object_defgroup_update_name_if_matches(const char *old_name,
-                                                   const char *new_name,
-                                                   char *prop,
-                                                   size_t prop_size)
+static void object_defgroup_rename_if_matches(const char *old_name,
+                                               const char *new_name,
+                                               char *prop,
+                                               size_t prop_maxncpy)
 {
-  if (STREQ(prop, old_name)) {
-    BLI_strncpy_utf8(prop, new_name, prop_size);
-  }
+  BLI_string_replace_if_match(prop, prop_maxncpy, old_name, new_name);
 }
 
 void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
@@ -105,18 +103,18 @@ void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
   }
 }
 
-void BKE_object_defgroup_name_update_users(Object *ob, const char *old_name, const char *new_name)
+void BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
 {
   for (ModifierData &md : ob->modifiers) {
-    BKE_modifier_defgroup_name_update(&md, old_name, new_name);
+    BKE_modifier_defgroup_rename(&md, old_name, new_name);
   }
 
   if (ob->soft) {
-    object_defgroup_update_name_if_matches(
+    object_defgroup_rename_if_matches(
         old_name, new_name, ob->soft->namedVG_Mass, sizeof(ob->soft->namedVG_Mass));
-    object_defgroup_update_name_if_matches(
+    object_defgroup_rename_if_matches(
         old_name, new_name, ob->soft->namedVG_Softgoal, sizeof(ob->soft->namedVG_Softgoal));
-    object_defgroup_update_name_if_matches(
+    object_defgroup_rename_if_matches(
         old_name, new_name, ob->soft->namedVG_Spring_K, sizeof(ob->soft->namedVG_Spring_K));
   }
 }

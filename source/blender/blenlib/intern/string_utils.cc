@@ -121,9 +121,9 @@ void BLI_string_replace_char(char *str, char src, char dst)
 }
 
 bool BLI_string_replace_table_exact(char *string,
-                                    const size_t string_maxncpy,
-                                    const char *replace_table[][2],
-                                    int replace_table_len)
+                                     const size_t string_maxncpy,
+                                     const char *replace_table[][2],
+                                     int replace_table_len)
 {
   BLI_string_debug_size_after_nil(string, string_maxncpy);
 
@@ -132,6 +132,18 @@ bool BLI_string_replace_table_exact(char *string,
       BLI_strncpy(string, replace_table[i][1], string_maxncpy);
       return true;
     }
+  }
+  return false;
+}
+
+bool BLI_string_replace_if_match(char *string,
+                                 const size_t string_maxncpy,
+                                 const char *old_name,
+                                 const char *new_name)
+{
+  if (STREQ(string, old_name)) {
+    BLI_strncpy_utf8(string, new_name, string_maxncpy);
+    return true;
   }
   return false;
 }

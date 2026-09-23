@@ -825,10 +825,10 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   csmd->delta_cache.deltas_num = 0;
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   CorrectiveSmoothModifierData *csmd = reinterpret_cast<CorrectiveSmoothModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(
+  BKE_modifier_defgroup_rename_char(
       csmd->defgrp_name, sizeof(csmd->defgrp_name), old_name, new_name);
 }
 
@@ -866,7 +866,7 @@ ModifierTypeInfo modifierType_CorrectiveSmooth = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

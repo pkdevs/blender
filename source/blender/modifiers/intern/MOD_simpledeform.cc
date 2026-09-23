@@ -505,10 +505,10 @@ static void panel_register(ARegionType *region_type)
       region_type, "restrictions", "Restrictions", nullptr, restrictions_panel_draw, panel_type);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(
+  BKE_modifier_defgroup_rename_char(
       smd->vgroup_name, sizeof(smd->vgroup_name), old_name, new_name);
 }
 
@@ -549,7 +549,7 @@ ModifierTypeInfo modifierType_SimpleDeform = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

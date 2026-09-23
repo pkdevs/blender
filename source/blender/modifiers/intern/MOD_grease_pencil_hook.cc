@@ -315,10 +315,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilHook, panel_draw);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   auto *mmd = reinterpret_cast<GreasePencilHookModifierData *>(md);
-  BKE_modifier_defgroup_name_update_grease_pencil_influence(&mmd->influence, old_name, new_name);
+  BKE_modifier_defgroup_rename_grease_pencil_influence(&mmd->influence, old_name, new_name);
 }
 
 ModifierTypeInfo modifierType_GreasePencilHook = {
@@ -357,7 +357,7 @@ ModifierTypeInfo modifierType_GreasePencilHook = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

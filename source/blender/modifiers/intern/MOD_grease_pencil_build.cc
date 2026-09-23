@@ -865,10 +865,10 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilBuild, panel_draw);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   GreasePencilBuildModifierData *mmd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(
+  BKE_modifier_defgroup_rename_char(
       mmd->target_vgname, sizeof(mmd->target_vgname), old_name, new_name);
 }
 
@@ -908,7 +908,7 @@ ModifierTypeInfo modifierType_GreasePencilBuild = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

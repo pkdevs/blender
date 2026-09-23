@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import argparse
-import pathlib
 import sys
 import unittest
 
@@ -71,56 +69,59 @@ class VertexGroupRenameTest(unittest.TestCase):
             'LINEART': ('vertex_group',),
         }
 
-        for modifiers, object_data_factory in (
-            (mesh_modifiers, self._new_mesh_object),
-            (grease_pencil_modifiers, self._new_grease_pencil_object),
+        for modifiers, new_object_and_data_fn in (
+            (mesh_modifiers, self._new_mesh_object_and_data),
+            (grease_pencil_modifiers, self._new_grease_pencil_object_and_data),
         ):
             for modifier_type, prop_names in modifiers.items():
                 with self.subTest(modifier_type=modifier_type):
-                    obj = object_data_factory()
+                    obj = new_object_and_data_fn()
+                    try:
+                        vg = obj.vertex_groups.new(name="Group")
+                        modifier = obj.modifiers.new(name="Modifier", type=modifier_type)
+                        for prop_name in prop_names:
+                            setattr(modifier, prop_name, vg.name)
 
-                    vg = obj.vertex_groups.new(name="Group")
-                    modifier = obj.modifiers.new(name="Modifier", type=modifier_type)
-                    for prop_name in prop_names:
-                        setattr(modifier, prop_name, vg.name)
+                        vg.name = "RenamedGroup"
 
-                    vg.name = "RenamedGroup"
-
-                    for prop_name in prop_names:
-                        self.assertEqual(
-                            getattr(modifier, prop_name),
-                            "RenamedGroup",
-                            f"Property '{prop_name}' was not updated after rename",
-                        )
+                        for prop_name in prop_names:
+                            self.assertEqual(
+                                getattr(modifier, prop_name),
+                                "RenamedGroup",
+                                f"Property '{prop_name}' was not updated after rename",
+                            )
+                    finally:
+                        self._remove_object_and_data(obj)
 
     @staticmethod
-    def _new_mesh_object():
+    def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")
         obj = bpy.data.objects.new(name="Object", object_data=mesh)
         bpy.context.collection.objects.link(obj)
         return obj
 
     @staticmethod
-    def _new_grease_pencil_object():
+    def _new_grease_pencil_object_and_data():
         grease_pencil = bpy.data.grease_pencils.new(name="GreasePencil")
         obj = bpy.data.objects.new(name="Object", object_data=grease_pencil)
         bpy.context.collection.objects.link(obj)
         return obj
 
+    @staticmethod
+    def _remove_object_and_data(obj):
+        data = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        # Remove the data-block as well, to avoid stale data being reused.
+        if data is not None and data.users == 0:
+            if isinstance(data, bpy.types.Mesh):
+                bpy.data.meshes.remove(data)
+            elif isinstance(data, bpy.types.GreasePencil):
+                bpy.data.grease_pencils.remove(data)
+
 
 def main():
-    global args
-
-    if '--' in sys.argv:
-        argv = [sys.argv[0]] + sys.argv[sys.argv.index('--') + 1:]
-    else:
-        argv = sys.argv
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--testdir', type=pathlib.Path, default=None)
-    args, remaining = parser.parse_known_args(argv)
-
-    unittest.main(argv=remaining)
+    sys.argv = [__file__] + (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+    unittest.main()
 
 
 if __name__ == "__main__":

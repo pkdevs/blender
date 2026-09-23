@@ -854,10 +854,10 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   lmd->cache_system = nullptr;
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   LaplacianDeformModifierData *lmd = reinterpret_cast<LaplacianDeformModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(
+  BKE_modifier_defgroup_rename_char(
       lmd->anchor_grp_name, sizeof(lmd->anchor_grp_name), old_name, new_name);
 }
 
@@ -894,7 +894,7 @@ ModifierTypeInfo modifierType_LaplacianDeform = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

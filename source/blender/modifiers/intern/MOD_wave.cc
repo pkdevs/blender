@@ -401,10 +401,10 @@ static void panel_register(ARegionType *region_type)
       region_type, "texture", "Texture", nullptr, texture_panel_draw, panel_type);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   WaveModifierData *wmd = reinterpret_cast<WaveModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(
+  BKE_modifier_defgroup_rename_char(
       wmd->defgrp_name, sizeof(wmd->defgrp_name), old_name, new_name);
 }
 
@@ -443,7 +443,7 @@ ModifierTypeInfo modifierType_Wave = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender

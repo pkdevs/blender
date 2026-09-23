@@ -534,10 +534,10 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   BLO_read_array_and_validate_size(reader, &hmd->indexar, &hmd->indexar_num);
 }
 
-static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+static void defgroup_rename(ModifierData *md, const char *old_name, const char *new_name)
 {
   HookModifierData *hmd = reinterpret_cast<HookModifierData *>(md);
-  BKE_modifier_defgroup_name_update_char(hmd->name, sizeof(hmd->name), old_name, new_name);
+  BKE_modifier_defgroup_rename_char(hmd->name, sizeof(hmd->name), old_name, new_name);
 }
 
 ModifierTypeInfo modifierType_Hook = {
@@ -574,7 +574,7 @@ ModifierTypeInfo modifierType_Hook = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*update_defgroup_name*/ update_defgroup_name,
+    /*defgroup_rename*/ defgroup_rename,
 };
 
 }  // namespace blender
