@@ -293,22 +293,19 @@ void OBJMesh::store_uv_coords_and_indices()
 
   corner_to_uv_index_.reinitialize(uv_map.size());
 
-  if (export_uv_seams_) {
-    const VArraySpan<bool> uv_seams = *attributes.lookup<bool>("uv_seam", bke::AttrDomain::Edge);
-    const Span<int> corner_edges = export_mesh_->corner_edges();
-    for (const int i : corner_edges.index_range()) {
-      if (uv_seams[corner_edges[i]]) {
-        uv_coords_.append(uv_map[i]);
-        corner_to_uv_index_[i] = uv_coords_.size() - 1;
-      }
-    }
-  }
+  const VArraySpan<bool> uv_seams = *attributes.lookup_or_default<bool>(
+      "uv_seam", bke::AttrDomain::Edge, false);
+  const Span<int> corner_edges = export_mesh_->corner_edges();
 
   for (int index = 0; index < int(uv_map.size()); index++) {
     float2 uv = uv_map[index];
+    if (export_uv_seams_ && uv_seams[corner_edges[index]]) {
+      corner_to_uv_index_[index] = uv_coords_.append_and_get_index(uv);
+      continue;
+    }
     int uv_index = uv_to_index.lookup_default(uv, -1);
     if (uv_index == -1) {
-      uv_index = uv_to_index.size();
+      uv_index = uv_coords_.size();
       uv_to_index.add(uv, uv_index);
       uv_coords_.append(uv);
     }
