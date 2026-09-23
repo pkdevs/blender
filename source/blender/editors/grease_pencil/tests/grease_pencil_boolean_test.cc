@@ -445,7 +445,8 @@ static bke::CurvesGeometry test_curve_boolean(const Operation opt,
                                                      src_curves.curves_num());
   const GroupedSpan<int> shapes = shapes_data.shapes();
 
-  return curve_boolean(op_params, src_curves, project_fn, shapes, clipping_shapes);
+  return curve_boolean(
+      op_params, src_curves, project_fn, shapes, shapes.index_range(), clipping_shapes);
 }
 
 class GreasePencilBooleanTest : public bke::BlenderGTestBase {};
@@ -988,6 +989,18 @@ TEST_F(GreasePencilBooleanTest, Multiple_Shapes)
     expect_boolean_result_coord(dst_curves, expected_points);
 
     draw_results("2 Subjects Difference", "polygon", src_curves, dst_curves, clipping_shapes);
+  }
+
+  {
+    const IndexRange clipping_shapes = IndexRange::from_begin_end(2, 3);
+    const bke::CurvesGeometry dst_curves = test_curve_boolean(
+        Operation::Union, src_curves, fill_ids, clipping_shapes);
+
+    const Array<Vector<float2>> expected_points = {
+        {{2, 2}, {0, 2}, {0, 7}, {3, 7}, {3, 8}, {8, 8}, {8, 3}, {7, 3}, {7, 0}, {2, 0}}};
+    expect_boolean_result_coord(dst_curves, expected_points);
+
+    draw_results("3 Union", "polygon", src_curves, dst_curves, clipping_shapes);
   }
   draw_divider_end();
 }

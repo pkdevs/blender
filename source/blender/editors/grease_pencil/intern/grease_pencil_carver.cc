@@ -165,6 +165,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
                                                                           project_fn,
                                                                           shapes,
                                                                           curve_planes,
+                                                                          shapes.index_range(),
                                                                           clipping_shapes,
                                                                           layer_to_world,
                                                                           region);
