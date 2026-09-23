@@ -3179,8 +3179,7 @@ static void dynamic_topology_update(const Depsgraph &depsgraph,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
 
   /* Build a list of all nodes that are potentially within the brush's area of influence. */
-  const bool use_original = brush_type_needs_original(brush.sculpt_brush_type) ? true :
-                                                                                 !ss.cache->accum;
+  const bool use_original = brush_type_needs_original(brush.sculpt_brush_type);
   constexpr float radius_scale = 1.25f;
 
   IndexMaskMemory memory;
