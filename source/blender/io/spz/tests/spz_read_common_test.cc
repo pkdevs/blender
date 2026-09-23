@@ -5,7 +5,6 @@
 #include "testing/testing.h"
 
 #include "BLI_array.hh"
-#include "BLI_math_rotation.hh"
 #include "BLI_math_spherical_harmonics.hh"
 #include "BLI_rand.hh"
 
@@ -13,32 +12,32 @@
 
 namespace blender::io::spz::tests {
 
-/* The axis conversion rotates the spherical harmonics by a quarter turn about X, using a
- * hard-coded table. It has to agree with the general rotation for every band. */
-TEST(spz_read_common, AxisConversionMatchesGeneralRotation)
+/* The spherical harmonics have to be rotated the same way as the positions. */
+TEST(spz_read_common, AxisConversionRotatesSphericalHarmonicsLikePositions)
 {
   constexpr int degree = 4;
   const int coefficients_num = gsplat::dimension_for_degree(degree);
 
+  /* Points on the unit axes end up at the columns of the matrix applied to the positions. */
+  Array<float3> positions = {float3(1, 0, 0), float3(0, 1, 0), float3(0, 0, 1)};
+  Array<math::Quaternion> rotations(3, math::Quaternion::identity());
+
   RandomNumberGenerator rng(7);
-  Array<Array<float3>> sh_data(coefficients_num, Array<float3>(1));
+  Array<Array<float3>> sh_data(coefficients_num, Array<float3>(3));
+  Array<MutableSpan<float3>> sh_attrs(coefficients_num);
   Array<float3> expected(coefficients_num);
   for (const int i : IndexRange(coefficients_num)) {
-    sh_data[i][0] = float3(rng.get_float(), rng.get_float(), rng.get_float()) * 2.0f - 1.0f;
+    for (float3 &value : sh_data[i]) {
+      value = float3(rng.get_float(), rng.get_float(), rng.get_float()) * 2.0f - 1.0f;
+    }
+    sh_attrs[i] = sh_data[i];
     expected[i] = sh_data[i][0];
   }
-  Array<MutableSpan<float3>> sh_attrs(coefficients_num);
-  for (const int i : IndexRange(coefficients_num)) {
-    sh_attrs[i] = sh_data[i];
-  }
 
-  Array<float3> positions(1, float3(0.0f));
-  Array<math::Quaternion> rotations(1, math::Quaternion::identity());
   convert_axis_to_blender(positions, rotations, sh_attrs);
 
-  const float3x3 quarter_turn_x = math::from_rotation<float3x3>(
-      math::AxisAngle(math::AxisSigned::X_POS, math::AngleRadian(float(M_PI_2))));
-  math::SphericalHarmonicsRotation(quarter_turn_x, degree).rotate(expected);
+  const float3x3 matrix(positions[0], positions[1], positions[2]);
+  math::SphericalHarmonicsRotation(matrix, degree).rotate(expected);
 
   for (const int i : IndexRange(coefficients_num)) {
     SCOPED_TRACE(i);
