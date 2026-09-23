@@ -309,8 +309,8 @@ bool DLSSDenoiser::denoise_configure_if_needed(DenoiseContext & /*context*/)
 bool DLSSDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context,
                                                    const DenoisePass &pass)
 {
-  if (pass.type != PASS_COMBINED) {
-    return true;
+  if (pass.type != PASS_COMBINED && params_.upscale_factor == 1.0f) {
+    return DenoiserGPU::denoise_filter_color_preprocess(context, pass);
   }
 
   /* Input params (with resolution divider applied). */
@@ -336,8 +336,8 @@ bool DLSSDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context
 bool DLSSDenoiser::denoise_filter_color_postprocess(const DenoiseContext &context,
                                                     const DenoisePass &pass)
 {
-  if (pass.type != PASS_COMBINED) {
-    return true;
+  if (pass.type != PASS_COMBINED && params_.upscale_factor == 1.0f) {
+    return DenoiserGPU::denoise_filter_color_postprocess(context, pass);
   }
 
   /* Output params. */
@@ -355,6 +355,8 @@ bool DLSSDenoiser::denoise_filter_color_postprocess(const DenoiseContext &contex
                                    &buffer_params.stride,
                                    &context.buffer_params.full_x,
                                    &context.buffer_params.full_y,
+                                   &context.buffer_params.width,
+                                   &context.buffer_params.height,
                                    &context.buffer_params.offset,
                                    &context.buffer_params.stride,
                                    &buffer_params.pass_stride,

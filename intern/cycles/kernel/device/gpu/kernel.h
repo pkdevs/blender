@@ -1317,6 +1317,8 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              const int stride,
                              const int render_full_x,
                              const int render_full_y,
+                             const int render_width,
+                             const int render_height,
                              const int render_offset,
                              const int render_stride,
                              const int pass_stride,
@@ -1335,13 +1337,16 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     return;
   }
 
+  const int render_x = min(int(x / upscale_factor), render_width - 1);
+  const int render_y = min(int(y / upscale_factor), render_height - 1);
+
   float pixel_scale;
   if (pass_sample_count == PASS_UNUSED) {
     pixel_scale = num_samples;
   }
   else {
-    const uint64_t render_pixel_index = render_offset + (int(x / upscale_factor) + render_full_x) +
-                                        (int(y / upscale_factor) + render_full_y) * render_stride;
+    const uint64_t render_pixel_index = render_offset + (render_x + render_full_x) +
+                                        (render_y + render_full_y) * render_stride;
     ccl_global float *buffer = render_buffer + render_pixel_index * pass_stride;
 
     pixel_scale = __float_as_uint(buffer[pass_sample_count]);
@@ -1376,6 +1381,8 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              const int stride,
                              const int render_full_x,
                              const int render_full_y,
+                             const int render_width,
+                             const int render_height,
                              const int render_offset,
                              const int render_stride,
                              const int pass_stride,
@@ -1395,13 +1402,16 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     return;
   }
 
+  const int render_x = min(int(x / upscale_factor), render_width - 1);
+  const int render_y = min(int(y / upscale_factor), render_height - 1);
+
   float pixel_scale;
   if (pass_sample_count == PASS_UNUSED) {
     pixel_scale = num_samples;
   }
   else {
-    const uint64_t render_pixel_index = render_offset + (int(x / upscale_factor) + render_full_x) +
-                                        (int(y / upscale_factor) + render_full_y) * render_stride;
+    const uint64_t render_pixel_index = render_offset + (render_x + render_full_x) +
+                                        (render_y + render_full_y) * render_stride;
     ccl_global float *buffer = render_buffer + render_pixel_index * pass_stride;
 
     pixel_scale = __float_as_uint(buffer[pass_sample_count]);
