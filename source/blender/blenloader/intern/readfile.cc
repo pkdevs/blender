@@ -4435,6 +4435,14 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
          * the one last added in #direct_link_library. */
         bmain_to_read_into = (*fd->bmain->split_mains)[fd->bmain->split_mains->size() - 1];
         placeholder_set_indirect_extern = true;
+
+        /* Corrupt file without library before the placeholder, which would otherwise be
+         * read as a local ID. */
+        if (bmain_to_read_into->curlib == nullptr) [[unlikely]] {
+          blo_readfile_invalidate(fd, bfd->main, "Corrupt .blend file, missing library");
+          bmain_to_read_into = nullptr;
+          bhead = blo_bhead_next(fd, bhead);
+        }
         break;
       case ID_LI:
         if ((fd->skip_flags & BLO_READ_SKIP_DATA) != 0) {
