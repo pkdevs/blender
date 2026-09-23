@@ -759,4 +759,51 @@ Schedule compute_schedule(const Context &context,
   return schedule;
 }
 
+int compute_output_reference_count(const bNodeSocket &output,
+                                   const Schedule &schedule,
+                                   const VectorSet<const bNode *> *ignored_nodes)
+{
+  int count = 0;
+  Set<const bke::bNodeTreeZone *> child_zones_counted;
+  const bke::bNodeTreeZones &zones = *schedule.node_group.zones();
+  for (const bNodeSocket *input : output.logically_linked_sockets()) {
+    /* Input is explicitly ignored by the schedule and is thus not referenced. */
+    if (schedule.unneeded_inputs.contains(input)) {
+      continue;
+    }
+
+    /* The node of the input is explicitly ignored and is thus not referenced. */
+    if (ignored_nodes && ignored_nodes->contains(&input->owner_node())) {
+      continue;
+    }
+
+    /* If the input is in the same zone being scheduled and is part of the schedule, it is
+     * referenced. */
+    const bke::bNodeTreeZone *target_zone = zones.get_zone_by_node(input->owner_node().identifier);
+    if (target_zone == schedule.zone && schedule.nodes.contains(&input->owner_node())) {
+      count++;
+      continue;
+    }
+
+    /* Get the immediate child of the zone being scheduled in the nested zone chain toward the
+     * target. */
+    const bke::bNodeTreeZone *child_zone = zones.get_zones_to_enter(schedule.zone, target_zone)[0];
+
+    /* The child node is not scheduled, so the input is not referenced. */
+    if (!schedule.nodes.contains(child_zone->output_node())) {
+      continue;
+    }
+
+    /* Zones consider all incoming links from the same output as a single input, so we skip
+     * counting the child zone if it was already counted. */
+    if (child_zones_counted.contains(child_zone)) {
+      continue;
+    }
+
+    count++;
+    child_zones_counted.add_new(child_zone);
+  }
+  return count;
+}
+
 }  // namespace blender::compositor

@@ -65,40 +65,12 @@ ZoneOperation::ZoneOperation(Context &context,
 
 void ZoneOperation::compute_results_reference_counts(const Schedule &schedule)
 {
-  const bke::bNodeTreeZones &zones = *this->zone().owner;
   for (const bNodeSocket *output : this->zone().output_node()->output_sockets()) {
     if (!is_socket_available(output)) {
       continue;
     }
 
-    Set<const bke::bNodeTreeZone *> zones_counted;
-    const bke::bNodeTreeZone *output_zone = zones.get_zone_by_socket(*output);
-    const int reference_count = number_of_inputs_linked_to_output_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          if (schedule.unneeded_inputs.contains(&input)) {
-            return false;
-          }
-
-          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_node(
-              input.owner_node().identifier);
-          if (output_zone == input_zone && schedule.nodes.contains(&input.owner_node())) {
-            return true;
-          }
-
-          for (const bke::bNodeTreeZone *zone = input_zone; zone; zone = zone->parent_zone) {
-            if (!zone || zone->parent_zone != output_zone) {
-              continue;
-            }
-
-            if (schedule.nodes.contains(zone->output_node()) && !zones_counted.contains(zone)) {
-              zones_counted.add_new(zone);
-              return true;
-            }
-          }
-
-          return false;
-        });
-
+    const int reference_count = compute_output_reference_count(*output, schedule);
     this->get_result(output->identifier).set_reference_count(reference_count);
   }
 }

@@ -191,51 +191,23 @@ int PixelOperation::get_internal_input_reference_count(const StringRef &identifi
 void PixelOperation::compute_results_reference_counts(const Schedule &schedule)
 {
   for (const auto item : output_sockets_to_output_identifiers_map_.items()) {
-    Set<const bke::bNodeTreeZone *> zones_counted;
-    const bke::bNodeTreeZones &zones = *item.key->owner_tree().zones();
-    const bke::bNodeTreeZone *output_zone = zones.get_zone_by_socket(*item.key);
-    int reference_count = number_of_inputs_linked_to_output_conditioned(
-        *item.key, [&](const bNodeSocket &input) {
-          /* We only consider inputs that are not part of the pixel operations, because inputs that
-           * are part of the pixel operations are internal and do not deal with the result
-           * directly. */
-          if (node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node())) {
-            return false;
-          }
+    const bNodeSocket &output = *item.key;
+    const std::string identifier = item.value;
 
-          if (schedule.unneeded_inputs.contains(&input)) {
-            return false;
-          }
+    /* We ignore inputs that are part of the pixel compile unit, because they are internal and do
+     * not deal with the result directly. */
+    int reference_count = compute_output_reference_count(
+        output, schedule, &node_tree_evaluator_.pixel_compile_unit());
 
-          const bke::bNodeTreeZone *input_zone = zones.get_zone_by_node(
-              input.owner_node().identifier);
-          if (output_zone == input_zone && schedule.nodes.contains(&input.owner_node())) {
-            return true;
-          }
-
-          for (const bke::bNodeTreeZone *zone = input_zone; zone; zone = zone->parent_zone) {
-            if (!zone || zone->parent_zone != output_zone) {
-              continue;
-            }
-
-            if (schedule.nodes.contains(zone->output_node()) && !zones_counted.contains(zone)) {
-              zones_counted.add_new(zone);
-              return true;
-            }
-          }
-
-          return false;
-        });
-
-    if (preview_outputs_.contains(item.key)) {
+    if (preview_outputs_.contains(&output)) {
       reference_count++;
     }
 
-    if (logged_outputs_.contains(item.key)) {
+    if (logged_outputs_.contains(&output)) {
       reference_count++;
     }
 
-    get_result(item.value).set_reference_count(reference_count);
+    this->get_result(identifier).set_reference_count(reference_count);
   }
 }
 
