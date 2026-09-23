@@ -113,7 +113,8 @@ eImFileTypeCapability IMB_ftype_capability_write(eImbFileType ftype);
  */
 enum class IMBThumbLoadFlags {
   Zero = 0,
-  /** Normally files larger than 100MB are not loaded for thumbnails, except when this flag is set.
+  /**
+   * Normally files larger than 100MB are not loaded for thumbnails, except when this flag is set.
    */
   LoadLargeFiles = (1 << 0),
 };
@@ -542,7 +543,7 @@ void *imb_alloc_pixels(unsigned int x,
 bool IMB_alloc_byte_pixels(ImBuf *ibuf, bool initialize_pixels = true);
 
 /**
- * Deallocate image byte storage.
+ * Deallocate image byte storage. The colorspace is kept.
  */
 void IMB_free_byte_pixels(ImBuf *ibuf);
 
@@ -552,7 +553,7 @@ void IMB_free_byte_pixels(ImBuf *ibuf);
  */
 bool IMB_alloc_float_pixels(ImBuf *ibuf, unsigned int channels, bool initialize_pixels = true);
 /**
- * Deallocate image float storage.
+ * Deallocate image float storage. The colorspace is kept.
  */
 void IMB_free_float_pixels(ImBuf *ibuf);
 
@@ -629,9 +630,7 @@ gpu::Texture *IMB_create_gpu_texture(const char *name, ImBuf *ibuf, GPUTextureCr
  * yet. */
 gpu::Texture *IMB_acquire_gpu_texture(const char *name,
                                       ImBuf *ibuf,
-                                      bool use_high_bitdepth,
-                                      bool use_premult,
-                                      bool limit_size,
+                                      GPUTextureCreateFlags texture_create_flags,
                                       bool try_only = false);
 
 gpu::TextureFormat IMB_gpu_get_texture_format(const ImBuf *ibuf,
