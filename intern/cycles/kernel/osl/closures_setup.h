@@ -336,7 +336,7 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   bsdf->alpha_x = closure->alpha_x;
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = backfacing ? 1.0f / closure->ior : closure->ior;
-  bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, closure->inv_abbe);
+  bsdf->ior = bsdf_glass_ior(sd, closure->ior, closure->inv_abbe);
   bsdf->T = closure->T;
 
   const bool beckmann = closure->distribution == make_string("beckmann", 14712237670914973463ull);
