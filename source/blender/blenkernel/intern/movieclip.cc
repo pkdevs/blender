@@ -209,7 +209,9 @@ static void movieclip_blend_write(BlendWriter *writer, ID *id, const void *id_ad
 
   MovieTracking *tracking = &clip->tracking;
 
-  writer->write_id_struct(id_address, clip);
+  writer->write_id_struct(id_address, clip, [](BlendStructWriter<MovieClip> &struct_writer) {
+    struct_writer.shallow_data.runtime = {};
+  });
   BKE_id_blend_write(writer, &clip->id);
 
   for (MovieTrackingObject &object : tracking->objects) {
@@ -309,6 +311,7 @@ IDTypeInfo IDType_ID_MC = {
     .foreach_cache = movie_clip_foreach_cache,
     .foreach_path = movie_clip_foreach_path,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = movieclip_blend_write,
@@ -461,7 +464,7 @@ static ImBuf *movieclip_load_sequence_file(MovieClip *clip,
   ImBuf *ibuf;
   char filepath[FILE_MAX];
   bool use_proxy = false;
-  char *colorspace;
+  ColorManagedColorspaceSettings *colorspace_settings;
 
   use_proxy = (flag & MCLIP_USE_PROXY) && user->render_size != MCLIP_PROXY_RENDER_SIZE_FULL;
   if (use_proxy) {
@@ -474,21 +477,21 @@ static ImBuf *movieclip_load_sequence_file(MovieClip *clip,
      * But image sequences are built in the display space.
      */
     if (clip->source == MCLIP_SRC_MOVIE) {
-      colorspace = clip->colorspace_settings.name;
+      colorspace_settings = &clip->colorspace_settings;
     }
     else {
-      colorspace = nullptr;
+      colorspace_settings = nullptr;
     }
   }
   else {
     get_sequence_filepath(clip, framenr, filepath);
-    colorspace = clip->colorspace_settings.name;
+    colorspace_settings = &clip->colorspace_settings;
   }
 
   ImBufFlags loadflag = ImBufFlags::ByteData | ImBufFlags::AlphaDetect | ImBufFlags::Metadata;
 
   /* read ibuf */
-  ibuf = IMB_load_image_from_filepath(filepath, loadflag, colorspace);
+  ibuf = IMB_load_image_from_filepath(filepath, loadflag, colorspace_settings);
 
   return ibuf;
 }
@@ -502,8 +505,7 @@ static void movieclip_open_anim_file(MovieClip *clip)
     BLI_path_abs(filepath_abs, ID_BLEND_PATH_FROM_GLOBAL(&clip->id));
 
     /* FIXME: make several stream accessible in image editor, too */
-    clip->anim = openanim(
-        filepath_abs, ImBufFlags::Zero, 0, false, clip->colorspace_settings.name);
+    clip->anim = openanim(filepath_abs, ImBufFlags::Zero, 0, false, &clip->colorspace_settings);
 
     if (clip->anim) {
       if (clip->flag & MCLIP_USE_PROXY_CUSTOM_DIR) {

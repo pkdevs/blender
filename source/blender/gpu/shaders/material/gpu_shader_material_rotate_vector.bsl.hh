@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "gpu_shader_math_quaternion_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_quaternion.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 [[node]]
 void rotate_vector(float3 vector, float4 rotation, float3 &result)
 {
-  result = transform_point_by_quaternion(Quaternion{UNPACK4(rotation)}, vector);
+  result = transform_point_by_quaternion(Quaternion::from_float4(rotation), vector);
 }

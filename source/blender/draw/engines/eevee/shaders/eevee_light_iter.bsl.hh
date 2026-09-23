@@ -8,7 +8,7 @@
 
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 namespace eevee::light {
 
@@ -203,7 +203,7 @@ struct VisibleLightIterator {
     if (is_directional()) {
       return false;
     }
-    LightVector lv = light_vector_get(light, false, P);
+    LightVector lv = LightVector::get(light, false, P);
     if (light_attenuation_surface(light, false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
       return true;
     }

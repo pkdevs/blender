@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "gpu_shader_math_rotation_conversion_lib.glsl"
+#include "gpu_shader_math_rotation_conversion.bsl.hh"
 
 [[node]]
 void rotation_to_axis_angle(float4 rotation, float3 &axis, float &angle)
 {
-  const AxisAngle aa = to_axis_angle(Quaternion{UNPACK4(rotation)});
+  const AxisAngle aa = to_axis_angle(Quaternion::from_float4(rotation));
   axis = aa.axis;
   angle = aa.angle;
 }

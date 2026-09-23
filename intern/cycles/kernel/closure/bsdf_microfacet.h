@@ -154,7 +154,7 @@ struct Coat {
 /* -------------------------------------------------------------------- */
 /** \name GGX LUT Index Mapping Functions
  *
- * This section contains functions to map from GGX alphas, IOR, and mu to the indicies of
+ * This section contains functions to map from GGX alphas, IOR, and mu to the indices of
  * 2D and 3D LUTs (e.g., for multi-scatter GGX energy compensation or scattering albedos).
  * \{ */
 
@@ -685,11 +685,8 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
   FresnelCoeff coeff(eval_reflection, eval_transmission);
 
   if (bsdf->fresnel_type != MicrofacetFresnel::DIELECTRIC) {
-
     ccl_private FresnelThinFilmed *fresnel_tf = (ccl_private FresnelThinFilmed *)bsdf->fresnel;
-    if (fresnel_tf->thin_film.thickness > THINFILM_THICKNESS_CUTOFF &&
-        fresnel_tf->thin_film.weight >= CLOSURE_WEIGHT_CUTOFF)
-    {
+    if (fresnel_tf->thin_film.valid()){
       /* Precomputing LUTs for thin-film iridescence isn't viable, so fall back to the specular
        * reflection approximation from the microfacet_fresnel call above in that case. */
     }

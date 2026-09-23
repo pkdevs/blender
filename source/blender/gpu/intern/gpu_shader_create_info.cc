@@ -129,6 +129,9 @@ std::string ShaderCreateInfo::resource_guard_defines(Span<CompilationConstant> c
 {
   std::string defines;
   defines += "#define CREATE_INFO_" + name_ + "\n";
+  for (const StageInterfaceInfo *interface : this->vertex_out_interfaces_) {
+    defines += "#define IFACE_INFO_" + interface->name + "\n";
+  }
   for (const auto &additional_info : additional_infos_) {
     const ShaderCreateInfo &info = *reinterpret_cast<const ShaderCreateInfo *>(
         gpu_shader_create_info_get(additional_info.name.c_str()));
@@ -381,6 +384,7 @@ std::string ShaderCreateInfo::check_error() const
     return error;
   }
 
+#if 0 /* TODO(fclem): See if this is still needed without any named interface. */
   if (flag_is_set(this->builtins_combined(),
                   BuiltinBits::BARYCENTRIC_COORD | BuiltinBits::VIEWPORT_INDEX |
                       BuiltinBits::LAYER))
@@ -393,6 +397,7 @@ std::string ShaderCreateInfo::check_error() const
       }
     }
   }
+#endif
 
   for (const StageInterfaceInfo *interface : this->vertex_out_interfaces_) {
     for (const StageInterfaceInfo::InOut &inout : interface->inouts) {
@@ -667,6 +672,35 @@ using namespace blender::gpu::shader;
 #define GPU_SHADER_NAMED_INTERFACE_END(_inst_name) ;
 #define GPU_SHADER_INTERFACE_END() ;
 #define GPU_SHADER_CREATE_END() ;
+
+/* WORKAROUND(@fclem): Undefine constants defined by system headers to fix warnings.
+ * This is caused by the macros copy system made for compatibility of the Create info system before
+ * BSL 5.3. Can be phased out after BSL 5.3 is default everywhere. */
+#undef M_PI
+#undef M_TAU
+#undef M_PI_2
+#undef M_PI_4
+#undef M_SQRT2
+#undef M_SQRT1_2
+#undef M_SQRT3
+#undef M_SQRT1_3
+#undef M_1_PI
+#undef M_E
+#undef M_LOG2E
+#undef M_LOG10E
+#undef M_LN2
+#undef M_LN10
+#undef NAN_FLT
+#undef UNPACK2
+#undef UNPACK3
+#undef UNPACK4
+#undef SHRT_MAX
+#undef INT_MAX
+#undef USHRT_MAX
+#undef UINT_MAX
+#undef FLT_MAX
+#undef FLT_MIN
+#undef FLT_EPSILON
 
 #ifdef _MSC_VER
 /* Disable optimization for this function with MSVC. It does not like the fact
