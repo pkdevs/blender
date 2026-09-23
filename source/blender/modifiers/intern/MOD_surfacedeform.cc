@@ -1728,7 +1728,7 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   SurfaceDeformModifierData *smd = reinterpret_cast<SurfaceDeformModifierData *>(md);
-  callback(smd->defgrp_name, sizeof(smd->defgrp_name), user_data);
+  callback(smd->defgrp_name, sizeof(smd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_SurfaceDeform = {

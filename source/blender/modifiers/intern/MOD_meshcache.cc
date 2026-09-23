@@ -374,7 +374,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
-  callback(mcmd->defgrp_name, sizeof(mcmd->defgrp_name), user_data);
+  callback(mcmd->defgrp_name, sizeof(mcmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_MeshCache = {

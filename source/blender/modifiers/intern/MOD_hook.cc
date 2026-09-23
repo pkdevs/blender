@@ -537,7 +537,7 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   HookModifierData *hmd = reinterpret_cast<HookModifierData *>(md);
-  callback(hmd->name, sizeof(hmd->name), user_data);
+  callback(hmd->name, sizeof(hmd->name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Hook = {

@@ -487,9 +487,9 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
-  callback(wmd->defgrp_name_a, sizeof(wmd->defgrp_name_a), user_data);
-  callback(wmd->defgrp_name_b, sizeof(wmd->defgrp_name_b), user_data);
-  callback(wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name), user_data);
+  callback(wmd->defgrp_name_a, sizeof(wmd->defgrp_name_a), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(wmd->defgrp_name_b, sizeof(wmd->defgrp_name_b), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_WeightVGMix = {

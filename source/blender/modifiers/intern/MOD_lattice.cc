@@ -154,7 +154,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(md);
-  callback(lmd->name, sizeof(lmd->name), user_data);
+  callback(lmd->name, sizeof(lmd->name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Lattice = {

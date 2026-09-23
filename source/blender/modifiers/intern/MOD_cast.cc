@@ -499,7 +499,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   CastModifierData *cmd = reinterpret_cast<CastModifierData *>(md);
-  callback(cmd->defgrp_name, sizeof(cmd->defgrp_name), user_data);
+  callback(cmd->defgrp_name, sizeof(cmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Cast = {

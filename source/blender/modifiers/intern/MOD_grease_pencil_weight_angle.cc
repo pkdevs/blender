@@ -264,7 +264,7 @@ static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCa
 {
   GreasePencilWeightAngleModifierData *mmd =
       reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
-  callback(mmd->target_vgname, sizeof(mmd->target_vgname), user_data);
+  callback(mmd->target_vgname, sizeof(mmd->target_vgname), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
   BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(&mmd->influence, callback, user_data);
 }
 

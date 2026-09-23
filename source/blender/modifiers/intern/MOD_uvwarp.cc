@@ -305,7 +305,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   UVWarpModifierData *umd = reinterpret_cast<UVWarpModifierData *>(md);
-  callback(umd->vgroup_name, sizeof(umd->vgroup_name), user_data);
+  callback(umd->vgroup_name, sizeof(umd->vgroup_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_UVWarp = {

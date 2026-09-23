@@ -35,6 +35,7 @@ void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
  * Run `callback` on every vertex-group name reference used by the object: all of its
  * modifiers (see #ModifierTypeInfo.foreach_vgroup_reference), as well as object-level users
  * such as the soft-body goal/spring vertex groups. The callback may modify the names in place.
+ * Each visited reference is tagged with its #ModifierVGroupReferenceScope.
  */
 void BKE_object_foreach_vgroup_reference(Object *ob,
                                           ModifierVGroupReferenceCallback callback,

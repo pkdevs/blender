@@ -143,7 +143,10 @@ void BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
     void *user_data)
 {
   if (influence != nullptr) {
-    callback(influence->vertex_group_name, sizeof(influence->vertex_group_name), user_data);
+    callback(influence->vertex_group_name,
+             sizeof(influence->vertex_group_name),
+             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             user_data);
   }
 }
 

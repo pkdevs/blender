@@ -237,9 +237,9 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   SolidifyModifierData *smd = reinterpret_cast<SolidifyModifierData *>(md);
-  callback(smd->defgrp_name, sizeof(smd->defgrp_name), user_data);
-  callback(smd->shell_defgrp_name, sizeof(smd->shell_defgrp_name), user_data);
-  callback(smd->rim_defgrp_name, sizeof(smd->rim_defgrp_name), user_data);
+  callback(smd->defgrp_name, sizeof(smd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(smd->shell_defgrp_name, sizeof(smd->shell_defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(smd->rim_defgrp_name, sizeof(smd->rim_defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Solidify = {

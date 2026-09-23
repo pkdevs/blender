@@ -549,7 +549,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   LaplacianSmoothModifierData *smd = reinterpret_cast<LaplacianSmoothModifierData *>(md);
-  callback(smd->defgrp_name, sizeof(smd->defgrp_name), user_data);
+  callback(smd->defgrp_name, sizeof(smd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_LaplacianSmooth = {

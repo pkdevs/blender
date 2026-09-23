@@ -104,9 +104,18 @@ void BKE_object_foreach_vgroup_reference(Object *ob,
   }
 
   if (ob->soft) {
-    callback(ob->soft->namedVG_Mass, sizeof(ob->soft->namedVG_Mass), user_data);
-    callback(ob->soft->namedVG_Softgoal, sizeof(ob->soft->namedVG_Softgoal), user_data);
-    callback(ob->soft->namedVG_Spring_K, sizeof(ob->soft->namedVG_Spring_K), user_data);
+    callback(ob->soft->namedVG_Mass,
+             sizeof(ob->soft->namedVG_Mass),
+             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             user_data);
+    callback(ob->soft->namedVG_Softgoal,
+             sizeof(ob->soft->namedVG_Softgoal),
+             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             user_data);
+    callback(ob->soft->namedVG_Spring_K,
+             sizeof(ob->soft->namedVG_Spring_K),
+             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             user_data);
   }
 }
 
@@ -116,8 +125,14 @@ struct DefgroupRenameData {
   int renamed_count = 0;
 };
 
-static bool defgroup_rename_callback(char *name, size_t name_maxncpy, void *user_data)
+static bool defgroup_rename_callback(char *name,
+                                       size_t name_maxncpy,
+                                       ModifierVGroupReferenceScope scope,
+                                       void *user_data)
 {
+  if (scope != MOD_VGROUP_REF_SCOPE_VERTEX_GROUP) {
+    return false;
+  }
   DefgroupRenameData *data = static_cast<DefgroupRenameData *>(user_data);
   if (BLI_string_replace_if_match(name, name_maxncpy, data->old_name, data->new_name)) {
     data->renamed_count++;

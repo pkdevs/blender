@@ -676,7 +676,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(md);
-  callback(nemd->defgrp_name, sizeof(nemd->defgrp_name), user_data);
+  callback(nemd->defgrp_name, sizeof(nemd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_NormalEdit = {

@@ -183,7 +183,7 @@ static void panel_register(ARegionType *region_type)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
-  callback(cmd->name, sizeof(cmd->name), user_data);
+  callback(cmd->name, sizeof(cmd->name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_Curve = {

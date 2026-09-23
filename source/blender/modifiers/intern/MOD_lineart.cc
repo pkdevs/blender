@@ -881,7 +881,7 @@ static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
 static void foreach_vgroup_reference(ModifierData *md, ModifierVGroupReferenceCallback callback, void *user_data)
 {
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
-  callback(lmd->vgname, sizeof(lmd->vgname), user_data);
+  callback(lmd->vgname, sizeof(lmd->vgname), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilLineart = {
