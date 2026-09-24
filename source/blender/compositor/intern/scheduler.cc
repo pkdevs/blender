@@ -779,8 +779,21 @@ int compute_output_reference_count(const bNodeSocket &output,
 
     /* If the input is in the same zone being scheduled and is part of the schedule, it is
      * referenced. */
-    const bke::bNodeTreeZone *target_zone = zones.get_zone_by_node(input->owner_node().identifier);
+    const bke::bNodeTreeZone *target_zone = zones.get_zone_by_socket(*input);
     if (target_zone == schedule.zone && schedule.nodes.contains(&input->owner_node())) {
+      count++;
+      continue;
+    }
+
+    /* An exception to the above condition for inputs of zone input nodes. If the zone retrieved
+     * from the input socket is not the same as that of the owner node, that means the input is on
+     * a zone input node. In that case, we check the schedule for the zone output node, since the
+     * zone input does not exist in the schedule. */
+    const bke::bNodeTreeZone *target_node_zone = zones.get_zone_by_node(
+        input->owner_node().identifier);
+    if (target_zone == schedule.zone && target_zone != target_node_zone &&
+        schedule.nodes.contains(target_node_zone->output_node()))
+    {
       count++;
       continue;
     }
@@ -796,7 +809,7 @@ int compute_output_reference_count(const bNodeSocket &output,
      * target. */
     const bke::bNodeTreeZone *child_zone = zones.get_zones_to_enter(schedule.zone, target_zone)[0];
 
-    /* The child node is not scheduled, so the input is not referenced. */
+    /* The child zone is not scheduled, so the input is not referenced. */
     if (!schedule.nodes.contains(child_zone->output_node())) {
       continue;
     }

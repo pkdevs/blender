@@ -35,20 +35,20 @@ ZoneTreeOperation::ZoneTreeOperation(Context &context,
   }
 
   /* Declare inputs for border links. */
-  Set<const bNodeSocket *> visited_outputs_;
+  Set<const bNodeSocket *> outputs_already_considered;
   for (const bNodeLink *link : zone_.border_links) {
     const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
     if (!output) {
       continue;
     }
 
-    if (visited_outputs_.contains(output)) {
+    if (outputs_already_considered.contains(output)) {
       continue;
     }
-    visited_outputs_.add_new(output);
+    outputs_already_considered.add_new(output);
 
-    const InputDescriptor input_descriptor = InputDescriptor{
-        get_node_socket_result_type(link->tosock), InputRealizationMode::None};
+    const InputDescriptor input_descriptor = InputDescriptor{get_node_socket_result_type(output),
+                                                             InputRealizationMode::None};
     const std::string input_identifier = ZoneTreeOperation::get_external_input_identifier(*output);
     this->declare_input_descriptor(input_identifier, input_descriptor);
   }
@@ -88,7 +88,7 @@ void ZoneTreeOperation::execute()
   node_tree_evaluator.evaluate();
 
   /* Some of the needed outputs might not be allocated even after execution. This could happen for
-   * instance when  when the evaluation gets canceled before the output is written. */
+   * instance when the evaluation gets canceled before the output is written. */
   this->allocate_default_remaining_outputs();
 }
 

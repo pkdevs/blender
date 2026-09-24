@@ -27,23 +27,32 @@ void RepeatZoneOperation::execute()
   }
 
   std::unique_ptr<ZoneTreeOperation> last_operation;
-  for (const int64_t i : IndexRange(iterations_count)) {
+  const IndexRange iterations_range = IndexRange(iterations_count);
+  for (const int64_t i : iterations_range) {
     const bke::RepeatZoneComputeContext compute_context(
         &compute_context_, *this->zone().output_node(), i);
-    ZoneTreeOperation *zone_operation = new ZoneTreeOperation(
+    ZoneTreeOperation *zone_tree_operation = new ZoneTreeOperation(
         this->context(), this->zone(), compute_context);
 
     Result iteration_input = this->context().create_result(ResultType::Int);
     iteration_input.allocate_single_value();
     iteration_input.set_single_value(int(i));
-    zone_operation->map_input_to_result("Iteration", &iteration_input);
+    zone_tree_operation->map_input_to_result("Iteration", &iteration_input);
 
-    Vector<std::unique_ptr<Result>> inputs = this->map_inputs(*zone_operation,
+    if (i == iterations_range.last()) {
+      this->set_reference_counts(*zone_tree_operation);
+    }
+    Vector<std::unique_ptr<Result>> inputs = this->map_inputs(*zone_tree_operation,
                                                               last_operation.get());
-    Vector<std::unique_ptr<Result>> border_inputs = this->map_external_inputs(*zone_operation);
-    zone_operation->evaluate();
+    Vector<std::unique_ptr<Result>> border_inputs = this->map_external_inputs(
+        *zone_tree_operation);
+    zone_tree_operation->evaluate();
 
-    last_operation.reset(zone_operation);
+    last_operation.reset(zone_tree_operation);
+
+    if (this->context().is_canceled()) {
+      break;
+    }
   }
 
   this->write_outputs(*last_operation);
@@ -52,6 +61,10 @@ void RepeatZoneOperation::execute()
 void RepeatZoneOperation::set_reference_counts(ZoneTreeOperation &zone_tree_operation)
 {
   for (const bNodeSocket *output : this->zone().output_node()->output_sockets()) {
+    if (!is_socket_available(output)) {
+      continue;
+    }
+
     Result &zone_result = zone_tree_operation.get_result(output->identifier);
     Result &repeat_zone_result = this->get_result(output->identifier);
     zone_result.set_reference_count(repeat_zone_result.should_compute() ? 1 : 0);
@@ -80,18 +93,17 @@ Vector<std::unique_ptr<Result>> RepeatZoneOperation::map_inputs(
   }
 
   /* Otherwise, map the initial inputs of the operation. */
-  for (const bNodeSocket *input_socket : this->zone().output_node()->output_sockets()) {
-    if (!is_socket_available(input_socket)) {
+  for (const bNodeSocket *output : this->zone().output_node()->output_sockets()) {
+    if (!is_socket_available(output)) {
       continue;
     }
 
-    const Result &input_result = this->get_input(input_socket->identifier);
+    const Result &input_result = this->get_input(output->identifier);
     std::unique_ptr<Result> temporary_input = std::make_unique<Result>(
         this->context().create_result(input_result.type(), input_result.precision()));
     temporary_input->share_data(input_result);
     temporary_inputs.append(std::move(temporary_input));
-    zone_tree_operation.map_input_to_result(input_socket->identifier,
-                                            temporary_inputs.last().get());
+    zone_tree_operation.map_input_to_result(output->identifier, temporary_inputs.last().get());
   }
   return temporary_inputs;
 }
@@ -100,11 +112,17 @@ Vector<std::unique_ptr<Result>> RepeatZoneOperation::map_external_inputs(
     ZoneTreeOperation &zone_tree_operation)
 {
   Vector<std::unique_ptr<Result>> temporary_inputs;
+  Set<const bNodeSocket *> outputs_already_considered;
   for (const bNodeLink *link : this->zone().border_links) {
     const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
     if (!output) {
       continue;
     }
+
+    if (outputs_already_considered.contains(output)) {
+      continue;
+    }
+    outputs_already_considered.add_new(output);
 
     const std::string input_identifier = ZoneTreeOperation::get_external_input_identifier(*output);
     const Result &input_result = this->get_input(input_identifier);
@@ -124,11 +142,11 @@ void RepeatZoneOperation::write_outputs(ZoneTreeOperation &zone_tree_operation)
       continue;
     }
 
-    Result &zone_result = zone_tree_operation.get_result(output->identifier);
+    Result &zone_tree_result = zone_tree_operation.get_result(output->identifier);
     Result &repeat_zone_result = this->get_result(output->identifier);
     if (repeat_zone_result.should_compute()) {
-      repeat_zone_result.share_data(zone_result);
-      zone_result.release();
+      repeat_zone_result.share_data(zone_tree_result);
+      zone_tree_result.release();
     }
   }
 }

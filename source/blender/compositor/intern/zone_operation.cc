@@ -35,20 +35,20 @@ ZoneOperation::ZoneOperation(Context &context,
   }
 
   /* Declare inputs for border links. */
-  Set<const bNodeSocket *> visited_outputs_;
+  Set<const bNodeSocket *> outputs_already_considered;
   for (const bNodeLink *link : zone_.border_links) {
     const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
     if (!output) {
       continue;
     }
 
-    if (visited_outputs_.contains(output)) {
+    if (outputs_already_considered.contains(output)) {
       continue;
     }
-    visited_outputs_.add_new(output);
+    outputs_already_considered.add_new(output);
 
-    const InputDescriptor input_descriptor = InputDescriptor{
-        get_node_socket_result_type(link->tosock), InputRealizationMode::None};
+    const InputDescriptor input_descriptor = InputDescriptor{get_node_socket_result_type(output),
+                                                             InputRealizationMode::None};
     const std::string input_identifier = ZoneTreeOperation::get_external_input_identifier(*output);
     this->declare_input_descriptor(input_identifier, input_descriptor);
   }

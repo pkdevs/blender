@@ -130,17 +130,17 @@ void NodeTreeEvaluator::compute_zone_external_input_reference_counts()
     return;
   }
 
-  Set<const bNodeSocket *> outputs_already_computed_;
+  Set<const bNodeSocket *> outputs_already_considered;
   for (const bNodeLink *link : this->schedule().zone->border_links) {
     const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
     if (!output) {
       continue;
     }
 
-    if (outputs_already_computed_.contains(output)) {
+    if (outputs_already_considered.contains(output)) {
       continue;
     }
-    outputs_already_computed_.add_new(output);
+    outputs_already_considered.add_new(output);
 
     const int reference_count = compute_output_reference_count(*output, this->schedule());
     Result &result = this->get_result_from_output_socket(*output);
@@ -366,11 +366,17 @@ void NodeTreeEvaluator::map_zone_operation_inputs_to_their_results(ZoneOperation
     operation->map_input_to_result(input->identifier, &input_result);
   }
 
+  Set<const bNodeSocket *> outputs_already_considered;
   for (const bNodeLink *link : operation->zone().border_links) {
     const bNodeSocket *output = get_output_linked_to_input(*link->tosock);
     if (!output) {
       continue;
     }
+
+    if (outputs_already_considered.contains(output)) {
+      continue;
+    }
+    outputs_already_considered.add_new(output);
 
     std::string input_identifier = ZoneTreeOperation::get_external_input_identifier(*output);
     Result *input_result = &this->get_result_from_output_socket(*output);
