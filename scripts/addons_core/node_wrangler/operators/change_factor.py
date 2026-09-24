@@ -17,7 +17,7 @@ from ..utils.nodes import (
 class NODE_OT_change_factor(Operator, NWBase):
     bl_idname = "node.nw_factor"
     bl_label = "Change Factor"
-    bl_description = "Change factors of Mix nodes and Mix Shader nodes"
+    bl_description = "Change factor inputs of selected nodes"
     bl_options = {'REGISTER', 'UNDO'}
 
     @staticmethod
