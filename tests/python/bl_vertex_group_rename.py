@@ -143,6 +143,24 @@ class VertexGroupRenameTest(unittest.TestCase):
             self._remove_object_and_data(obj1)
             self._remove_object_and_data(obj2)
 
+    def test_lattice_influence_group_updates_on_vertex_group_rename(self):
+        lattice = bpy.data.lattices.new(name="Lattice")
+        obj = bpy.data.objects.new(name="Object", object_data=lattice)
+        bpy.context.collection.objects.link(obj)
+        try:
+            vg = obj.vertex_groups.new(name="Group")
+            lattice.vertex_group = vg.name
+
+            vg.name = "RenamedGroup"
+
+            self.assertEqual(
+                lattice.vertex_group,
+                "RenamedGroup",
+                "Lattice influence group was not updated after rename",
+            )
+        finally:
+            self._remove_object_and_data(obj)
+
     @staticmethod
     def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")
@@ -167,6 +185,8 @@ class VertexGroupRenameTest(unittest.TestCase):
                 bpy.data.meshes.remove(data)
             elif isinstance(data, bpy.types.GreasePencil):
                 bpy.data.grease_pencils.remove(data)
+            elif isinstance(data, bpy.types.Lattice):
+                bpy.data.lattices.remove(data)
 
 
 def main():

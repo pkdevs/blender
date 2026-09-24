@@ -111,6 +111,20 @@ void BKE_object_foreach_vgroup_reference(Object *ob,
     }
   }
 
+  /* The lattice's own vertex group weights per-point deform influence. */
+  if (ob->type == OB_LATTICE) {
+    Lattice *lt = id_cast<Lattice *>(ob->data);
+    callback(lt->vgroup, sizeof(lt->vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+    /* Keep the edit-mode copy in sync, same as direct writes do. */
+    if (lt->editlatt != nullptr) {
+      Lattice *edit_latt = lt->editlatt->latt;
+      callback(edit_latt->vgroup,
+               sizeof(edit_latt->vgroup),
+               MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+               user_data);
+    }
+  }
+
   if (ob->soft) {
     callback(ob->soft->namedVG_Mass,
              sizeof(ob->soft->namedVG_Mass),
