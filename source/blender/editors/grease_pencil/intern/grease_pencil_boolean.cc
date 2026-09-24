@@ -546,6 +546,11 @@ static void find_intersections_between_curves(
       const int point_j1 = points_j[j];
       const int point_j2 = points_j[(j + 1) % points_j.size()];
 
+      /* Skip double creation when self intersecting. */
+      if (curve_i == curve_j && point_i1 > point_j1) {
+        continue;
+      }
+
       /* Avoid checking a segment with it's self for direct neighbor. */
       if (point_i1 == point_j1 || point_i2 == point_j2 || point_i1 == point_j2 ||
           point_i2 == point_j1)
