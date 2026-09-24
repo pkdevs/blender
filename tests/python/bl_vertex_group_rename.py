@@ -114,31 +114,34 @@ class VertexGroupRenameTest(unittest.TestCase):
     def test_shared_mesh_references_update_on_vertex_group_rename(self):
         # Vertex groups are owned by the geometry ID: two objects sharing one
         # mesh share the same groups, so renaming through either object must
-        # update the references of both.
+        # update the references of both. Covers deform (ARMATURE, HOOK) and
+        # non-deform (MASK, SMOOTH, WEIGHTED_NORMAL) modifiers.
         mesh = bpy.data.meshes.new(name="Mesh")
         obj1 = bpy.data.objects.new(name="Object1", object_data=mesh)
         obj2 = bpy.data.objects.new(name="Object2", object_data=mesh)
         bpy.context.collection.objects.link(obj1)
         bpy.context.collection.objects.link(obj2)
         try:
-            vg = obj1.vertex_groups.new(name="Group")
-            modifier1 = obj1.modifiers.new(name="Modifier", type='MASK')
-            modifier1.vertex_group = vg.name
-            modifier2 = obj2.modifiers.new(name="Modifier", type='MASK')
-            modifier2.vertex_group = vg.name
+            for modifier_type in ('ARMATURE', 'HOOK', 'MASK', 'SMOOTH', 'WEIGHTED_NORMAL'):
+                with self.subTest(modifier_type=modifier_type):
+                    vg = obj1.vertex_groups.new(name=f"Group_{modifier_type}")
+                    modifier1 = obj1.modifiers.new(name="Modifier", type=modifier_type)
+                    modifier1.vertex_group = vg.name
+                    modifier2 = obj2.modifiers.new(name="Modifier", type=modifier_type)
+                    modifier2.vertex_group = vg.name
 
-            vg.name = "RenamedGroup"
+                    vg.name = f"Renamed_{modifier_type}"
 
-            self.assertEqual(
-                modifier1.vertex_group,
-                "RenamedGroup",
-                "First object's reference was not updated after rename",
-            )
-            self.assertEqual(
-                modifier2.vertex_group,
-                "RenamedGroup",
-                "Second object's reference was not updated after rename",
-            )
+                    self.assertEqual(
+                        modifier1.vertex_group,
+                        f"Renamed_{modifier_type}",
+                        "First object's reference was not updated after rename",
+                    )
+                    self.assertEqual(
+                        modifier2.vertex_group,
+                        f"Renamed_{modifier_type}",
+                        "Second object's reference was not updated after rename",
+                    )
         finally:
             self._remove_object_and_data(obj1)
             self._remove_object_and_data(obj2)
