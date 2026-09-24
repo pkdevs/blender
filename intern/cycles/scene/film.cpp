@@ -811,9 +811,9 @@ void Film::finalize_passes(Scene *scene, const bool use_denoise)
   scene->passes = std::move(new_passes);
 }
 
-uint64_t Film::get_kernel_features(const Scene *scene) const
+uint Film::get_kernel_features(const Scene *scene) const
 {
-  uint64_t kernel_features = 0;
+  uint kernel_features = 0;
 
   for (const Pass *pass : scene->passes) {
     if (!pass->is_written()) {

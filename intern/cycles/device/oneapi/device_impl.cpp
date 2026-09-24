@@ -173,8 +173,7 @@ bool OneapiDevice::check_peer_access(Device * /*peer_device*/)
   return false;
 }
 
-bool OneapiDevice::can_use_hardware_raytracing_for_features(
-    const uint64_t requested_features) const
+bool OneapiDevice::can_use_hardware_raytracing_for_features(const uint requested_features) const
 {
   /* MNEE and Ray-trace kernels work correctly with Hardware Ray-tracing starting with Embree 4.1.
    */
@@ -186,7 +185,7 @@ bool OneapiDevice::can_use_hardware_raytracing_for_features(
 #  endif
 }
 
-BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const uint64_t requested_features) const
+BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const uint requested_features) const
 {
   return (use_hardware_raytracing &&
           can_use_hardware_raytracing_for_features(requested_features)) ?
@@ -255,7 +254,7 @@ size_t OneapiDevice::get_free_mem() const
   return free_memory;
 }
 
-bool OneapiDevice::load_kernels(const uint64_t requested_features)
+bool OneapiDevice::load_kernels(const uint requested_features)
 {
   assert(device_queue_);
 
@@ -299,7 +298,7 @@ bool OneapiDevice::load_kernels(const uint64_t requested_features)
   return is_finished_ok;
 }
 
-void OneapiDevice::reserve_private_memory(const uint64_t kernel_features)
+void OneapiDevice::reserve_private_memory(const uint kernel_features)
 {
   size_t free_before = get_free_mem();
 

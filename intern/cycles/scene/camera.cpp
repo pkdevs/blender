@@ -1075,9 +1075,9 @@ void Camera::clear_osl_camera(Scene *scene)
 #endif
 }
 
-uint64_t Camera::get_kernel_features() const
+uint Camera::get_kernel_features() const
 {
-  uint64_t kernel_features = 0;
+  uint kernel_features = 0;
 
   if (!script_name.empty()) {
     kernel_features |= KERNEL_FEATURE_OSL_CAMERA;

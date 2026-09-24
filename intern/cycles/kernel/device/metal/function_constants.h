@@ -16,6 +16,5 @@ enum {
         [[function_constant(KernelData_##parent##_##name)]];
 #  include "kernel/data_template.h"
 
-constant ulong kernel_data_kernel_features [[function_constant(KernelData_kernel_features)]];
-
+constant int kernel_data_kernel_features [[function_constant(KernelData_kernel_features)]];
 #endif

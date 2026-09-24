@@ -861,9 +861,9 @@ void ShaderManager::add_default(Scene *scene)
   }
 }
 
-uint64_t ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
+uint ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
 {
-  uint64_t kernel_features = 0;
+  uint kernel_features = 0;
 
   for (ShaderNode *node : graph->nodes) {
     kernel_features |= node->get_feature();
@@ -884,9 +884,9 @@ uint64_t ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
   return kernel_features;
 }
 
-uint64_t ShaderManager::get_kernel_features(Scene *scene)
+uint ShaderManager::get_kernel_features(Scene *scene)
 {
-  uint64_t kernel_features = KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION;
+  uint kernel_features = KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION;
   for (int i = 0; i < scene->shaders.size(); i++) {
     Shader *shader = scene->shaders[i];
     if (!shader->reference_count()) {

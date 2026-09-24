@@ -463,7 +463,7 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 #  include "kernel/data_template.h"
 
   [constant_values setConstantValue:&data->kernel_features
-                               type:MTLDataTypeULong
+                               type:MTLDataTypeInt
                             atIndex:KernelData_kernel_features];
 
   return constant_values;

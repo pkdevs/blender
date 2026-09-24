@@ -233,7 +233,7 @@ void Scene::device_update(Device *device_, Progress &progress)
      *
      * This does mean the scene might have gotten updated in the meantime, in which case
      * we have to redo the first part of the scene update. */
-    const uint64_t kernel_features = dscene.data.kernel_features;
+    const uint kernel_features = dscene.data.kernel_features;
     scene_updated_while_loading_kernels = false;
     if (!kernels_loaded || loaded_kernel_features != kernel_features) {
       mutex.unlock();
@@ -547,7 +547,7 @@ void Scene::update_kernel_features()
 
   /* These features are not being tweaked as often as shaders,
    * so could be done selective magic for the viewport as well. */
-  uint64_t kernel_features = shader_manager->get_kernel_features(this);
+  uint kernel_features = shader_manager->get_kernel_features(this);
 
   const bool use_motion = need_motion() == Scene::MotionType::MOTION_BLUR;
   kernel_features |= KERNEL_FEATURE_PATH_TRACING;
@@ -686,7 +686,7 @@ bool Scene::update_camera_resolution(Progress &progress, int width, int height)
   return update_data;
 }
 
-static void log_kernel_features(const uint64_t features)
+static void log_kernel_features(const uint features)
 {
   LOG_INFO << "Requested features:";
   LOG_INFO << "Use BSDF " << string_from_bool(features & KERNEL_FEATURE_NODE_BSDF);
@@ -718,7 +718,7 @@ bool Scene::load_kernels(Progress &progress)
 
   const scoped_timer timer;
 
-  const uint64_t kernel_features = dscene.data.kernel_features;
+  const uint kernel_features = dscene.data.kernel_features;
   log_kernel_features(kernel_features);
   if (!device->load_kernels(kernel_features)) {
     string message = device->error_message();
