@@ -15,6 +15,8 @@
  */
 
 #include "BLI_straight_skeleton.hh"
+#include "straight_skeleton_intern.hh"
+#include "straight_skeleton_verify.hh"
 
 #include <algorithm>
 #include <cmath>
@@ -24,6 +26,7 @@
 #include <sstream>
 
 #include "BLI_array.hh"
+#include "BLI_assert.hh"
 #include "BLI_delaunay_2d.hh"
 #include "BLI_heap.hh"
 #include "BLI_map.hh"
@@ -4623,7 +4626,7 @@ static void write_debug_svg(const StraightSkeletonInput &input,
 /** \name Public API Implementation
  * \{ */
 
-StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
+StraightSkeletonOutput straight_skeleton_calc_kinetic(const StraightSkeletonInput &input)
 {
   PRF_scope(ProfileCategory::Core);
   StraightSkeletonState state(input);
@@ -4640,6 +4643,30 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
   }
 #endif
 
+  return output;
+}
+
+StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
+{
+  StraightSkeletonOutput output;
+  switch (input.algorithm) {
+    case StraightSkeletonAlgorithm::KINETIC_TRIANGULATION:
+      output = straight_skeleton_calc_kinetic(input);
+      break;
+    case StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH:
+      output = straight_skeleton_calc_motorcycle(input);
+      break;
+    case StraightSkeletonAlgorithm::SIMULATION:
+      output = straight_skeleton_calc_simulation(input);
+      break;
+    default:
+      BLI_assert_unreachable();
+      output = straight_skeleton_calc_kinetic(input);
+      break;
+  }
+  if (input.full_verification) {
+    output.is_valid = verify_straight_skeleton(input, output, output.error_message);
+  }
   return output;
 }
 

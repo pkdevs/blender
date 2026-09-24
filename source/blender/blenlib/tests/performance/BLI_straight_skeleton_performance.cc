@@ -22,6 +22,7 @@
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
 #include "BLI_straight_skeleton.hh"
+#include "BLI_straight_skeleton_test_util.hh"
 #include "BLI_time.hh"
 #include "BLI_vector.hh"
 
@@ -60,9 +61,34 @@ static void print_time(const double seconds)
   }
 }
 
+static StraightSkeletonAlgorithm get_benchmark_algorithm()
+{
+  if (const char *env = std::getenv("STRAIGHT_SKELETON_ALGO")) {
+    if (std::string_view(env) == "kinetic" || std::string_view(env) == "kinetictriangulation") {
+      return StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+    }
+    if (std::string_view(env) == "simulation") {
+      return StraightSkeletonAlgorithm::SIMULATION;
+    }
+  }
+  return StraightSkeletonAlgorithm::SIMULATION;
+}
+
+static bool is_debug_drawings_enabled()
+{
+  if (const char *env = std::getenv("STRAIGHT_SKELETON_DEBUG")) {
+    return (std::string_view(env) != "0" && std::string_view(env) != "none");
+  }
+  return true;
+}
+
 static void print_table_header(const char *title, const char *n_label)
 {
-  printf("\n#### %s\n\n", title);
+  const StraightSkeletonAlgorithm algo = get_benchmark_algorithm();
+  const char *algo_name = (algo == StraightSkeletonAlgorithm::SIMULATION) ?
+                              "SIMULATION" :
+                              "KINETIC_TRIANGULATION";
+  printf("\n#### %s [%s]\n\n", title, algo_name);
   printf("| %s | vertices | full skeleton | 5 segments | events | flips | faces |\n", n_label);
   printf("|---:|---------:|--------------:|-----------:|-------:|------:|------:|\n");
   fflush(stdout);
@@ -274,10 +300,13 @@ static GeneratedPolygon make_koch_snowflake(const int iterations, const double r
 
 static void run_benchmark_row(const char *name, const int n, const GeneratedPolygon &geom)
 {
+  const StraightSkeletonAlgorithm algo = get_benchmark_algorithm();
+
   char label_full[128];
   std::snprintf(label_full, sizeof(label_full), "%s n=%d (full)", name, n);
   StraightSkeletonInput input_full = geom.to_input();
   input_full.label = label_full;
+  input_full.algorithm = algo;
   StraightSkeletonOutput output_full;
 
   /* Benchmark full straight skeleton computation. */
@@ -290,9 +319,20 @@ static void run_benchmark_row(const char *name, const int n, const GeneratedPoly
   StraightSkeletonInput input_segmented = geom.to_input();
   input_segmented.segments = 5;
   input_segmented.label = label_segmented;
+  input_segmented.algorithm = algo;
   StraightSkeletonOutput output_segmented;
   const double time_segmented = run_iterations(
       [&]() { output_segmented = straight_skeleton_calc(input_segmented); });
+
+  if (is_debug_drawings_enabled()) {
+    char svg_name_full[128];
+    std::snprintf(svg_name_full, sizeof(svg_name_full), "%s_n%d_full", name, n);
+    test::write_debug_svg(svg_name_full, input_full, output_full);
+
+    char svg_name_segmented[128];
+    std::snprintf(svg_name_segmented, sizeof(svg_name_segmented), "%s_n%d_5segments", name, n);
+    test::write_debug_svg(svg_name_segmented, input_segmented, output_segmented);
+  }
 
   printf("| %3d | %8d |", n, int(geom.vert.size()));
   print_time(time_full);

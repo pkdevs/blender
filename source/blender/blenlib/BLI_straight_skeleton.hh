@@ -56,6 +56,7 @@
  */
 
 #include <limits>
+#include <string>
 
 #include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
@@ -67,6 +68,18 @@ namespace blender::straightskeleton {
 /* -------------------------------------------------------------------- */
 /** \name Input
  * \{ */
+
+/**
+ * Algorithms available for computing the straight skeleton.
+ */
+enum class StraightSkeletonAlgorithm {
+  /** Kinetic Delaunay Triangulation (default, Palfrader, Held, Huber 2012). */
+  KINETIC_TRIANGULATION,
+  /** Motorcycle-graph based straight skeleton algorithm (Eppstein-Erickson / Huber-Held). */
+  MOTORCYCLE_GRAPH,
+  /** Naive step-by-step wavefront simulation with spatial acceleration (kdtree). */
+  SIMULATION,
+};
 
 /**
  * Input to the straight skeleton computation.
@@ -117,8 +130,15 @@ class StraightSkeletonInput {
    */
   int segments{1};
 
+  /** Algorithm used to compute the straight skeleton. */
+  StraightSkeletonAlgorithm algorithm{StraightSkeletonAlgorithm::KINETIC_TRIANGULATION};
+
   /** Optional identifying label for debug drawings and logging. */
   const char *label{nullptr};
+
+  /** If true, runs extensive validation checks (graph planarity, no edge crossings, face
+   * simplicity, and area partition). */
+  bool full_verification{false};
 };
 
 /** \} */
@@ -181,6 +201,69 @@ class StraightSkeletonOutput {
 
   /** Total number of flip events processed. */
   int flips_num{0};
+
+  /** If full_verification was requested, true if all validation checks passed. */
+  bool is_valid{true};
+
+  /** Detailed diagnostic message if validation failed. */
+  std::string error_message;
+
+  StraightSkeletonOutput() = default;
+
+  StraightSkeletonOutput(const StraightSkeletonOutput &other)
+  {
+    *this = other;
+  }
+
+  StraightSkeletonOutput(StraightSkeletonOutput &&other) noexcept
+  {
+    *this = std::move(other);
+  }
+
+  StraightSkeletonOutput &operator=(const StraightSkeletonOutput &other)
+  {
+    if (this != &other) {
+      vert = other.vert;
+      edge = other.edge;
+      face_offsets_data = other.face_offsets_data;
+      face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+      face_vert_indices = other.face_vert_indices;
+      vert_time = other.vert_time;
+      vert_orig = other.vert_orig;
+      edge_orig = other.edge_orig;
+      face_orig = other.face_orig;
+      face_band = other.face_band;
+      hit_max_events = other.hit_max_events;
+      events_processed_num = other.events_processed_num;
+      flips_num = other.flips_num;
+      is_valid = other.is_valid;
+      error_message = other.error_message;
+    }
+    return *this;
+  }
+
+  StraightSkeletonOutput &operator=(StraightSkeletonOutput &&other) noexcept
+  {
+    if (this != &other) {
+      vert = std::move(other.vert);
+      edge = std::move(other.edge);
+      face_offsets_data = std::move(other.face_offsets_data);
+      face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
+      face_vert_indices = std::move(other.face_vert_indices);
+      vert_time = std::move(other.vert_time);
+      vert_orig = std::move(other.vert_orig);
+      edge_orig = std::move(other.edge_orig);
+      face_orig = std::move(other.face_orig);
+      face_band = std::move(other.face_band);
+      hit_max_events = other.hit_max_events;
+      events_processed_num = other.events_processed_num;
+      flips_num = other.flips_num;
+      is_valid = other.is_valid;
+      error_message = std::move(other.error_message);
+      other.face_offsets = OffsetIndices<int>();
+    }
+    return *this;
+  }
 };
 
 /** \} */
