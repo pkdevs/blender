@@ -85,7 +85,7 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
                                 SEQ_TIMELINE_SHOW_STRIP_DURATION | SEQ_TIMELINE_SHOW_GRID |
                                 SEQ_TIMELINE_SHOW_FCURVES | SEQ_TIMELINE_SHOW_STRIP_COLOR_TAG |
                                 SEQ_TIMELINE_SHOW_STRIP_RETIMING | SEQ_TIMELINE_WAVEFORMS_HALF |
-                                SEQ_TIMELINE_STRIP_END_THUMBNAILS;
+                                SEQ_TIMELINE_SHOW_THUMBNAILS | SEQ_TIMELINE_STRIP_END_THUMBNAILS;
 
   sseq->cache_overlay.flag = SEQ_CACHE_SHOW | SEQ_CACHE_SHOW_FINAL_OUT;
   sseq->draw_flag |= SEQ_DRAW_TRANSFORM_PREVIEW;
@@ -205,7 +205,7 @@ static void sequencer_free(SpaceLink *sl)
 
 #if 0
   if (sseq->gpd) {
-    BKE_gpencil_free_data(sseq->gpd);
+    BKE_annotations_free_data(sseq->gpd);
   }
 #endif
 }
@@ -1185,14 +1185,16 @@ static void sequencer_space_blend_read_data(BlendDataReader * /*reader*/, SpaceL
 #if 0
   if (sseq->gpd) {
     sseq->gpd = newdataadr(fd, sseq->gpd);
-    BKE_gpencil_blend_read_data(fd, sseq->gpd);
+    BKE_annotations_blend_read_data(fd, sseq->gpd);
   }
 #endif
 }
 
 static void sequencer_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceSeq>(sl);
+  writer->write_struct_cast<SpaceSeq>(sl, [](BlendStructWriter<SpaceSeq> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
+  });
 }
 
 static bool sequencer_scrubbing_region_poll(const RegionPollParams *params)

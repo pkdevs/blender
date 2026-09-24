@@ -28,6 +28,7 @@
 #include "BKE_global.hh"
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
+#include "BKE_node_runtime.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -645,6 +646,14 @@ static const EnumPropertyItem rna_enum_shader_attribute_type_items[] = {
      0,
      "Light",
      "The attribute is associated with the Light that is being rendered"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static const EnumPropertyItem rna_enum_shader_vect_transform_space_items[] = {
+    {SHD_VECT_TRANSFORM_SPACE_WORLD, "WORLD", 0, "World", ""},
+    {SHD_VECT_TRANSFORM_SPACE_OBJECT, "OBJECT", 0, "Object", ""},
+    {SHD_VECT_TRANSFORM_SPACE_CAMERA, "CAMERA", 0, "Camera", ""},
+    {SHD_VECT_TRANSFORM_SPACE_LIGHT, "LIGHT", 0, "Light", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -2664,10 +2673,25 @@ static void rna_Node_parent_set(PointerRNA *ptr, PointerRNA value, ReportList * 
 static void rna_Node_internal_links_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   bNode *node = ptr->data_as<bNode>();
-  bNodeLink *begin;
-  int len;
-  bke::node_internal_links(*node, &begin, &len);
-  rna_iterator_array_begin(iter, ptr, begin, sizeof(bNodeLink), len, false, nullptr);
+  rna_iterator_array_begin(iter,
+                           ptr,
+                           node->runtime->internal_links.data(),
+                           sizeof(bNodeInternalLink),
+                           node->runtime->internal_links.size(),
+                           false,
+                           nullptr);
+}
+
+static PointerRNA rna_NodeInternalLink_from_socket_get(PointerRNA *ptr)
+{
+  bNodeInternalLink *link = static_cast<bNodeInternalLink *>(ptr->data);
+  return RNA_pointer_create_id_subdata(*ptr->owner_id, RNA_NodeSocket, link->in);
+}
+
+static PointerRNA rna_NodeInternalLink_to_socket_get(PointerRNA *ptr)
+{
+  bNodeInternalLink *link = static_cast<bNodeInternalLink *>(ptr->data);
+  return RNA_pointer_create_id_subdata(*ptr->owner_id, RNA_NodeSocket, link->out);
 }
 
 /**
@@ -4283,9 +4307,27 @@ static void rna_NodeConvertColorSpace_from_color_space_set(PointerRNA *ptr, int 
   const char *name = IMB_colormanagement_colorspace_get_indexed_name(value);
 
   if (name && name[0]) {
-    STRNCPY_UTF8(node_storage->from_color_space, name);
+    IMB_colormanagement_colorspace_name_set(
+        node_storage->from_color_space, node_storage->from_interop_id, name);
   }
 }
+
+static int rna_NodeConvertColorSpace_from_interop_id_get(PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->from_color_space,
+                                                             node_storage->from_interop_id);
+}
+
+static void rna_NodeConvertColorSpace_from_interop_id_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  IMB_colormanagement_colorspace_interop_id_set(
+      node_storage->from_color_space, node_storage->from_interop_id, value);
+}
+
 static int rna_NodeConvertColorSpace_to_color_space_get(PointerRNA *ptr)
 {
   bNode *node = ptr->data_as<bNode>();
@@ -4300,8 +4342,25 @@ static void rna_NodeConvertColorSpace_to_color_space_set(PointerRNA *ptr, int va
   const char *name = IMB_colormanagement_colorspace_get_indexed_name(value);
 
   if (name && name[0]) {
-    STRNCPY_UTF8(node_storage->to_color_space, name);
+    IMB_colormanagement_colorspace_name_set(
+        node_storage->to_color_space, node_storage->to_interop_id, name);
   }
+}
+
+static int rna_NodeConvertColorSpace_to_interop_id_get(PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  return IMB_colormanagement_colorspace_get_interop_id_index(node_storage->to_color_space,
+                                                             node_storage->to_interop_id);
+}
+
+static void rna_NodeConvertColorSpace_to_interop_id_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  NodeConvertColorSpace *node_storage = static_cast<NodeConvertColorSpace *>(node->storage);
+  IMB_colormanagement_colorspace_interop_id_set(
+      node_storage->to_color_space, node_storage->to_interop_id, value);
 }
 
 static void rna_reroute_node_socket_type_set(PointerRNA *ptr, const char *value)
@@ -4350,6 +4409,23 @@ static void rna_implicit_conversion_node_socket_type_set(PointerRNA *ptr, const 
   }
   NodeImplicitConversion *storage = static_cast<NodeImplicitConversion *>(node.storage);
   STRNCPY(storage->type_idname, value);
+}
+
+static const EnumPropertyItem *rna_NodeConvertColorSpace_interop_id_itemf(bContext * /*C*/,
+                                                                          PointerRNA * /*ptr*/,
+                                                                          PropertyRNA * /*prop*/,
+                                                                          bool *r_free)
+{
+  EnumPropertyItem *items = nullptr;
+  int totitem = 0;
+
+  RNA_enum_items_add(&items, &totitem, rna_enum_color_space_interop_id_default_items);
+  IMB_colormanagement_interop_id_items_add(&items, &totitem);
+  RNA_enum_item_end(&items, &totitem);
+
+  *r_free = true;
+
+  return items;
 }
 
 static const EnumPropertyItem *rna_NodeConvertColorSpace_color_space_itemf(bContext * /*C*/,
@@ -4573,6 +4649,32 @@ static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
   return itemf_function_check(
       rna_enum_shader_attribute_type_items, [&](const EnumPropertyItem *item) {
         return supports_light_attributes || item->value != SHD_ATTRIBUTE_LIGHT;
+      });
+}
+
+static const EnumPropertyItem *rna_NodeShaderVectTransform_space_itemf(bContext *C,
+                                                                       PointerRNA * /*ptr*/,
+                                                                       PropertyRNA * /*prop*/,
+                                                                       bool *r_free)
+{
+  if (C == nullptr) {
+    return rna_enum_shader_vect_transform_space_items;
+  }
+
+  Scene *scene = CTX_data_scene(C);
+  SpaceNode *space_node = CTX_wm_space_node(C);
+
+  if (scene == nullptr || space_node == nullptr) {
+    return rna_enum_shader_vect_transform_space_items;
+  }
+
+  *r_free = true;
+
+  bool supports_light_transform = !STREQ(CTX_data_scene(C)->r.engine, RE_engine_id_CYCLES) &&
+                                  CTX_wm_space_node(C)->shaderfrom == SNODE_SHADER_OBJECT;
+  return itemf_function_check(
+      rna_enum_shader_vect_transform_space_items, [&](const EnumPropertyItem *item) {
+        return supports_light_transform || item->value != SHD_VECT_TRANSFORM_SPACE_LIGHT;
       });
 }
 
@@ -6166,13 +6268,6 @@ static void def_sh_vect_transform(BlenderRNA * /*brna*/, StructRNA *srna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
-  static const EnumPropertyItem prop_vect_space_items[] = {
-      {SHD_VECT_TRANSFORM_SPACE_WORLD, "WORLD", 0, "World", ""},
-      {SHD_VECT_TRANSFORM_SPACE_OBJECT, "OBJECT", 0, "Object", ""},
-      {SHD_VECT_TRANSFORM_SPACE_CAMERA, "CAMERA", 0, "Camera", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   PropertyRNA *prop;
 
   RNA_def_struct_sdna_from(srna, "NodeShaderVectTransform", "storage");
@@ -6184,12 +6279,14 @@ static void def_sh_vect_transform(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, 0, "rna_Node_update");
 
   prop = RNA_def_property(srna, "convert_from", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, prop_vect_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_shader_vect_transform_space_items);
+  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_NodeShaderVectTransform_space_itemf");
   RNA_def_property_ui_text(prop, "Convert From", "Space to convert from");
   RNA_def_property_update(prop, 0, "rna_Node_update");
 
   prop = RNA_def_property(srna, "convert_to", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, prop_vect_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_shader_vect_transform_space_items);
+  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_NodeShaderVectTransform_space_itemf");
   RNA_def_property_ui_text(prop, "Convert To", "Space to convert to");
   RNA_def_property_update(prop, 0, "rna_Node_update");
 }
@@ -7069,6 +7166,16 @@ static void def_cmp_convert_color_space(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
+  prop = RNA_def_property(srna, "from_interop_id", PROP_ENUM, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
+  RNA_def_property_enum_items(prop, rna_enum_color_space_interop_id_default_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_NodeConvertColorSpace_from_interop_id_get",
+                              "rna_NodeConvertColorSpace_from_interop_id_set",
+                              "rna_NodeConvertColorSpace_interop_id_itemf");
+  RNA_def_property_ui_text(prop, "From Interop ID", "Interop ID of the input color space");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
   prop = RNA_def_property(srna, "to_color_space", PROP_ENUM, PROP_NONE);
   RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
   RNA_def_property_enum_items(prop, rna_enum_color_space_convert_default_items);
@@ -7078,6 +7185,16 @@ static void def_cmp_convert_color_space(BlenderRNA * /*brna*/, StructRNA *srna)
                               "rna_NodeConvertColorSpace_color_space_itemf");
   RNA_def_property_ui_text(prop, "To", "Color space of the output image");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "to_interop_id", PROP_ENUM, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
+  RNA_def_property_enum_items(prop, rna_enum_color_space_interop_id_default_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_NodeConvertColorSpace_to_interop_id_get",
+                              "rna_NodeConvertColorSpace_to_interop_id_set",
+                              "rna_NodeConvertColorSpace_interop_id_itemf");
+  RNA_def_property_ui_text(prop, "To Interop ID", "Interop ID of the output color space");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
@@ -9500,6 +9617,18 @@ static void def_implicit_conversion(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
+static void def_comment(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeComment", "storage");
+
+  prop = RNA_def_property(srna, "text", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Text", "Text to show in the node");
+  RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, nullptr);
+}
+
 static void rna_def_internal_node(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -9804,7 +9933,7 @@ static void rna_def_node(BlenderRNA *brna)
                                     nullptr,
                                     nullptr,
                                     nullptr);
-  RNA_def_property_struct_type(prop, "NodeLink");
+  RNA_def_property_struct_type(prop, "NodeInternalLink");
   RNA_def_property_ui_text(
       prop, "Internal Links", "Internal input-to-output connections for muting");
 
@@ -10070,6 +10199,35 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
   RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
+}
+
+static void rna_def_node_internal_link(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "NodeInternalLink", nullptr);
+  RNA_def_struct_ui_text(srna,
+                         "Node Internal Link",
+                         "Internal link used by muted nodes to connect input to output sockets");
+
+  prop = RNA_def_property(srna, "from_socket", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodeSocket");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_pointer_funcs(
+      prop, "rna_NodeInternalLink_from_socket_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "From Socket", "");
+
+  prop = RNA_def_property(srna, "to_socket", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodeSocket");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_pointer_funcs(
+      prop, "rna_NodeInternalLink_to_socket_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "To Socket", "");
 }
 
 static void rna_def_node_link(BlenderRNA *brna)
@@ -10707,6 +10865,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("NodeInternal", "NodeGroupOutput", def_group_output);
   define("NodeInternal", "NodeReroute", def_reroute);
   define("NodeInternal", "NodeImplicitConversion", def_implicit_conversion);
+  define ("NodeInternal", "NodeComment", def_comment);
 
   define("NodeInternal", "NodeClosureInput", def_closure_input);
   define("NodeInternal", "NodeClosureOutput", def_closure_output);
@@ -11097,6 +11256,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeGridMedian");
   define("GeometryNode", "GeometryNodeGridPrune");
   define("GeometryNode", "GeometryNodeGridClip");
+  define("GeometryNode", "GeometryNodeGridSolvePoisson");
   define("GeometryNode", "GeometryNodeGridToMesh");
   define("GeometryNode", "GeometryNodeGridToPoints");
   define("GeometryNode", "GeometryNodeGridTopologyBoolean");
@@ -11106,6 +11266,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeImportCSV");
   define("GeometryNode", "GeometryNodeImportOBJ");
   define("GeometryNode", "GeometryNodeImportPLY");
+  define("GeometryNode", "GeometryNodeImportSPZ");
   define("GeometryNode", "GeometryNodeImportSTL");
   define("GeometryNode", "GeometryNodeImportText");
   define("GeometryNode", "GeometryNodeImportVDB");
@@ -11185,6 +11346,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeOffsetPointInCurve");
   define("GeometryNode", "GeometryNodePoints");
   define("GeometryNode", "GeometryNodePointsOfCurve");
+  define("GeometryNode", "GeometryNodePointsSetType");
   define("GeometryNode", "GeometryNodePointsToCurves");
   define("GeometryNode", "GeometryNodePointsToSDFGrid");
   define("GeometryNode", "GeometryNodePointsToVertices");
@@ -11298,6 +11460,7 @@ void RNA_def_nodetree(BlenderRNA *brna)
 {
   rna_def_node_panel_state(brna);
   rna_def_node(brna);
+  rna_def_node_internal_link(brna);
   rna_def_node_link(brna);
 
   rna_def_internal_node(brna);

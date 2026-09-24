@@ -251,6 +251,12 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
       input->source = GPU_SOURCE_LAYER_ATTR;
       input->layer_attr = link->layer_attr;
       break;
+    case GPU_NODE_LINK_KERNEL_GLOBALS:
+      input->source = GPU_SOURCE_KERNEL_GLOBALS;
+      break;
+    case GPU_NODE_LINK_SHADING_DATA:
+      input->source = GPU_SOURCE_SHADING_DATA;
+      break;
     case GPU_NODE_LINK_CONSTANT:
       input->source = (type == GPU_CLOSURE) ? GPU_SOURCE_STRUCT : GPU_SOURCE_CONSTANT;
       break;
@@ -261,7 +267,7 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
       input->source = GPU_SOURCE_FUNCTION_CALL;
       /* NOTE(@fclem): End of function call is the return variable set during codegen. */
       SNPRINTF(input->function_call,
-               "dF_branch_incomplete(%s(), %g, ",
+               "dF_branch_incomplete(%s(kg, sd), %g, ",
                link->differentiate_float.function_name,
                link->differentiate_float.filter_width);
       break;
@@ -277,6 +283,20 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
     MEM_delete(link);
   }
   BLI_addtail(&node->inputs, input);
+}
+
+GPUNodeLink *GPU_shading_data()
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_SHADING_DATA;
+  return link;
+}
+
+GPUNodeLink *GPU_kernel_globals()
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_KERNEL_GLOBALS;
+  return link;
 }
 
 GPUNodeLink *GPU_constant(const float *num)
@@ -376,11 +396,12 @@ GPUNodeLink *GPU_uniform(const GPUNodeStack &stack)
 static const char *gpu_uniform_set_function_from_type(eNodeSocketDatatype type)
 {
   switch (type) {
-    /* For now INT & BOOL are supported as float. */
-    case SOCK_INT:
     case SOCK_FLOAT:
-    case SOCK_BOOLEAN:
       return "set_value";
+    case SOCK_INT:
+      return "set_int";
+    case SOCK_BOOLEAN:
+      return "set_bool";
     case SOCK_VECTOR:
       return "set_rgb";
     case SOCK_RGBA:
@@ -417,7 +438,7 @@ static GPUNodeLink *gpu_uniformbuffer_link(GPUMaterial *mat,
     return nullptr;
   }
 
-  if (!ELEM(socket->type, SOCK_INT, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA)) {
+  if (!ELEM(socket->type, SOCK_BOOLEAN, SOCK_INT, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA)) {
     return nullptr;
   }
 

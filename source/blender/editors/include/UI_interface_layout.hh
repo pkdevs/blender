@@ -117,6 +117,9 @@ enum class EnumTabExpand {
 };
 
 struct Layout : public Item, NonCopyable, NonMovable {
+
+  static constexpr float PROPERTY_SPLIT_FACTOR = 0.4f;
+
  protected:
   LayoutRoot *root_ = nullptr;
   bContextStore *context_ = nullptr;
@@ -415,6 +418,12 @@ struct Layout : public Item, NonCopyable, NonMovable {
                        int icon,
                        FontStyleAlign align = UI_STYLE_TEXT_LEFT,
                        int max_lines = 0);
+
+  /**
+   * Renders the given text rendered as markdown. Only a subset of markdown is supported:
+   * Bold, italic, code, links, lists, headers, quotes, horizontal rules.
+   */
+  void label_markdown(StringRef text);
 
   /**
    * Adds link item, displays a url that can be clicked in the layout.
