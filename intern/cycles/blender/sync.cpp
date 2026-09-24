@@ -348,6 +348,14 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
   has_updates_ = false;
 }
 
+static blender::RenderData *engine_render_get(blender::RenderEngine *engine)
+{
+  if (engine->re) {
+    return RE_engine_get_render_data(engine->re);
+  }
+  return nullptr;
+}
+
 /* Integrator */
 
 void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
@@ -437,7 +445,9 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   bool use_spatial_resampling  = get_boolean(cscene, "use_spatial_resampling");
   bool use_temporal_samples    = get_boolean(cscene, "use_temporal_samples");
   bool use_temporal_frames     = get_boolean(cscene, "use_temporal_frames");
+  const bool pairwise_mis      = get_boolean(cscene, "restir_pairwise");
   const bool restir_unbiased   = get_boolean(cscene, "restir_unbiased");
+
   int restir_temporal_sample_count = get_int(cscene, "restir_temporal_sample_count");
   int restir_temporal_frame_count  = get_int(cscene, "restir_temporal_frame_count");
   float restir_temporal_normal_threshold = get_float(cscene, "restir_temporal_normal_threshold");
@@ -460,7 +470,13 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
     light_samples = bsdf_samples = 1;
   }
 
-  const bool pairwise_mis = get_boolean(cscene, "restir_pairwise");
+  if (use_temporal_frames && (engine_render_get(b_engine)->mode & blender::R_PERSISTENT_DATA) == 0) {
+    /* Cross-frame ReSTIR history is owned by BlenderSession, which does not
+    * survive animation frames unless Persistent Data keeps the render engine
+    * instance alive across frames. */
+    use_temporal_frames = false;
+    // TODO(Tri): Surface this to the user via RNA/UI warning
+  }
 
   // TODO(Tri):
   /* TODO(weizhen): add proper flags if necessary. */
@@ -750,13 +766,7 @@ void BlenderSync::sync_view_layer(blender::ViewLayer &b_view_layer)
   }
 }
 
-static blender::RenderData *engine_render_get(blender::RenderEngine *engine)
-{
-  if (engine->re) {
-    return RE_engine_get_render_data(engine->re);
-  }
-  return nullptr;
-}
+// static blender::RenderData *engine_render_get(blender::RenderEngine *engine) // TODO(Tri): Move here
 
 /* Images */
 void BlenderSync::sync_images()

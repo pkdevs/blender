@@ -55,7 +55,7 @@ PathTrace::PathTrace(Device *device,
     unique_ptr<PathTraceWork> work = PathTraceWork::create(
         path_trace_device, film, device_scene, &render_cancel_.is_requested);
     if (work) {
-      path_trace_works_.emplace_back(std::move(work));
+      path_trace_works_.emplace_back(std::move(work)); // !!!: Built once; So PathTraceWorkCPU objects live and die with the Session/PathTrace that owns them
     }
   });
 
@@ -159,7 +159,7 @@ void PathTrace::set_progress(Progress *progress)
   progress_ = progress;
 }
 
-void PathTrace::render(const RenderWork &render_work)
+void PathTrace::render(const RenderWork &render_work) //
 {
   /* Indicate that rendering has started and that it can be requested to cancel. */
   {
@@ -1249,6 +1249,13 @@ void PathTrace::save_restir_temporal_history()
 {
   for (auto &&path_trace_work : path_trace_works_) {
     path_trace_work->save_restir_temporal_history();
+  }
+}
+
+void PathTrace::bind_restir_temporal_history(float *reprojection_surface, float *temporal_reservoir)
+{
+  for (auto &&path_trace_work : path_trace_works_) {
+    path_trace_work->set_restir_temporal_history_storage(reprojection_surface, temporal_reservoir);
   }
 }
 

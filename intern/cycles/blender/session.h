@@ -160,6 +160,15 @@ class BlenderSession {
 
   vector<string> full_buffer_files_;
 
+  vector<float> restir_prev_reprojection_surface_;
+  vector<float> restir_prev_temporal_reservoir_;
+
+  /* (Re)size storage to the current frame dimensions if needed, and (re)bind
+   * it into the current Session's PathTraceWork(s). Safe and cheap to call
+   * every (frame) render(); size mismatch reallocates and zero-inits, and rebinding
+   * after any reallocation is required since the vector's data() pointer moves. */
+  void update_restir_temporal_storage();
+
   int bake_id = 0;
 };
 

@@ -66,106 +66,6 @@ void PathTraceWorkCPU::deinit_execution()
   kernel_thread_globals_ = nullptr;
 }
 
-void PathTraceWorkCPU::alloc_work_memory()
-{
-  if (!device_scene_->data.integrator.use_temporal_frames) {
-    restir_prev_reprojection_surface_.clear();
-    restir_prev_temporal_reservoir_.clear();
-
-    return;
-  }
-
-  const size_t num_pixels = (size_t)effective_buffer_params_.width *
-                            effective_buffer_params_.height;
-
-  /* assign() only if size changed: resizing on every call would be harmless
-   * but wasteful, and more importantly this must NOT clear the array when
-   * dimensions are unchanged. */
-  if (restir_prev_reprojection_surface_.size() != num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE) {
-    restir_prev_reprojection_surface_.assign(num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE, 0.0f);
-  }
-  if (restir_prev_temporal_reservoir_.size() != num_pixels * RESTIR_RESERVOIR_STRIDE) {
-    restir_prev_temporal_reservoir_.assign(num_pixels * RESTIR_RESERVOIR_STRIDE, 0.0f);
-  }
-}
-
-// TODO(Tri): Handle every reset (viewport nav, res divider drops)? Will it capture mid-refinement garbage in that case?
-/* Copy this frame's finished reprojection-surface + temporal-history-reservoir
- * passes out of buffers_ into persistent storage. Must be called exactly once
- * per completed ANIMATION frame. */
-void PathTraceWorkCPU::save_restir_temporal_history()
-{
-  if (restir_prev_reprojection_surface_.empty()) {
-    return; /* Temporal-frame reuse disabled. */
-  }
-
-  const float *render_buffer = buffers_->buffer.data();
-  const int pass_stride = device_scene_->data.film.pass_stride;
-
-  const size_t num_pixels = (size_t)effective_buffer_params_.width *
-                            effective_buffer_params_.height;
-
-ccl_debug_printf("\n\n\n--- PathTraceWorkCPU::save_restir_temporal_history() Invoked; pass_stride=%d num_pixels=%zu ---",
-  pass_stride, num_pixels);
-
-ccl_debug_printf("\nrender_buffer=%f pass_restir_reprojection_surface=%d pass_restir_temporal_history_reservoir=%d\n\n\n", // !!!: pass_restir_reprojection_surface=-1 always...
-    render_buffer, device_scene_->data.film.pass_restir_reprojection_surface, device_scene_->data.film.pass_restir_temporal_history_reservoir);
-
-size_t valid_surface_count = 0; // TODO(Tri): Remove
-
-  for (size_t i = 0; i < num_pixels; i++) {
-    memcpy(&restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE],
-           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
-           RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
-
-if (i == 359) {
-  ccl_debug_printf("SAVE CHECK: index=%zu valid=%f\n",
-      i, restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
-}
-
-    // if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) { // is_valid
-    // ccl_debug_printf( // !!!: the reservoir side of the pipeline can be trusted
-    //     "restir_prev_reprojection_surface_[%zu]: N=(%f,%f,%f) depth=%f motion=(%f,%f) valid=%f\n",
-    //     i,
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 0],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 1],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 2],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 3],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 4],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 5],
-    //     (double)restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6]);
-    // }
-
-    memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
-           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
-           RESTIR_RESERVOIR_STRIDE * sizeof(float));
-
-    // if (restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5] > 0) { // W > 0
-    // ccl_debug_printf(
-    //     "restir_prev_temporal_reservoir_[%zu]: "
-    //     "type=%f flags=%f object=%f prim=%f param=(%f,%f) W=%f L=%f M=%f\n",
-    //     i,
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 0],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 1],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 2],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 3],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 4],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 5],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 6],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 7],
-    //     (double)restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE + 8]);
-    // }
-
-    if (restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE + 6] > 0.0f) {
-      valid_surface_count++;
-    }
-  }
-
-// 59.4% of pixels logged a valid surface; background/unshaded pixels can legitimately be invalid.
-ccl_debug_printf("save_restir_temporal_history(): valid_surfaces=%zu / %zu (%.1f%%)\n\n",
-                 valid_surface_count, num_pixels, 100.0 * valid_surface_count / num_pixels);
-}
-
 void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
                                        const int64_t work_index,
                                        const int64_t image_width,
@@ -534,6 +434,38 @@ void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *ker
   kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
 }
 
+// TODO(Tri): Handle every reset (viewport nav, res divider drops)? Will it capture mid-refinement garbage in that case?
+/* Called once per completed animation frame. Writes through the externally-owned
+ * temporal pointers. */
+void PathTraceWorkCPU::save_restir_temporal_history()
+{
+  if (restir_prev_reprojection_surface_ == nullptr) {
+    return; /* Temporal-frame reuse disabled, or not yet bound. */
+  }
+
+  const float *render_buffer = buffers_->buffer.data();
+  const int pass_stride = device_scene_->data.film.pass_stride;
+  const size_t num_pixels = (size_t)effective_buffer_params_.width *
+                            effective_buffer_params_.height;
+
+  for (size_t i = 0; i < num_pixels; i++) {
+    memcpy(&restir_prev_reprojection_surface_[i * RESTIR_REPROJECTION_SURFACE_STRIDE],
+           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_reprojection_surface,
+           RESTIR_REPROJECTION_SURFACE_STRIDE * sizeof(float));
+
+    memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
+           render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
+           RESTIR_RESERVOIR_STRIDE * sizeof(float));
+  }
+}
+
+void PathTraceWorkCPU::set_restir_temporal_history_storage(float *reprojection_surface,
+                                                            float *temporal_reservoir)
+{
+  restir_prev_reprojection_surface_ = reprojection_surface;
+  restir_prev_temporal_reservoir_ = temporal_reservoir;
+}
+
 void PathTraceWorkCPU::copy_to_display(PathTraceDisplay *display,
                                        PassMode pass_mode,
                                        const int num_samples)
@@ -750,27 +682,13 @@ void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field,
 /* Bind persistent temporal history to the per-thread kernel-globals. */
 void PathTraceWorkCPU::restir_init_kernel_globals()
 {
-  if (restir_prev_reprojection_surface_.empty()) {
-    return; /* Temporal-frame reuse disabled. */
+  if (restir_prev_reprojection_surface_ == nullptr) {
+    return;
   }
-
-ccl_debug_printf("RESTIR HISTORY BIND: surface=%p reservoir=%p\n\n",
-    restir_prev_reprojection_surface_.data(), restir_prev_temporal_reservoir_.data());
-
-  for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) { // !!!
-    kg.restir_prev_reprojection_surface = restir_prev_reprojection_surface_.data();
-    kg.restir_prev_temporal_reservoir = restir_prev_temporal_reservoir_.data();
-  }
-
-  const size_t index = 359;// TODO(Tri): Remove
   for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) {
-    const float *surface =
-        kg.restir_prev_reprojection_surface + index * RESTIR_REPROJECTION_SURFACE_STRIDE;
-
-    ccl_debug_printf("AFTER BIND: index=%zu valid=%f ptr=%p\n",
-        index, surface[6], surface);
+    kg.restir_prev_reprojection_surface = restir_prev_reprojection_surface_;
+    kg.restir_prev_temporal_reservoir = restir_prev_temporal_reservoir_;
   }
-  
 }
 
 void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(ThreadKernelGlobalsCPU *kg,

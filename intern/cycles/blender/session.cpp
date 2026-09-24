@@ -217,7 +217,7 @@ void BlenderSession::reset_session(blender::Main &b_data, blender::Depsgraph &b_
      * them rather than trying to distinguish which settings need to be updated
      */
     if (!is_new_session) {
-// !!!: means free_session()->session.reset() destroys the entire Session, 
+// !!!: means free_session()->session.reset() destroys the entire Session,
 // which destroys PathTrace, which destroys every PathTraceWork in path_trace_works_, 
 // which destroys restir_prev_reprojection_surface_/restir_prev_temporal_reservoir_ along with it.
 // Unless R_PERSISTENT_DATA is used!
@@ -347,6 +347,8 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
     update_status_progress();
     return;
   }
+
+  update_restir_temporal_storage();   // NEW — before anything else touches the session's works
 
   /* Create driver to write out render results. */
   ensure_display_driver_if_needed();
@@ -1140,6 +1142,38 @@ void BlenderSession::ensure_display_driver_if_needed()
       b_engine, *b_scene, b_rv3d, background);
   display_driver_ = display_driver.get();
   session->set_display_driver(std::move(display_driver));
+}
+
+void BlenderSession::update_restir_temporal_storage()
+{
+  if (!scene->integrator->get_use_temporal_frames()) {
+    restir_prev_reprojection_surface_.clear();
+    restir_prev_temporal_reservoir_.clear();
+    session->bind_restir_temporal_history(nullptr, nullptr);
+    return;
+  }
+
+// TODO(Tri): It's a single-device assumption; handle tiles!
+  /* This sizes storage to the full frame and hands the same flat buffer to
+   * every PathTraceWork unmodified. Correct for a single CPU device, but WRONG
+   * for multi-device/tiled rendering, where each PathTraceWork's render_pixel_index
+   * is local to its own tile (effective_buffer_params_.offset/stride), not the full frame. */
+  const size_t num_pixels = (size_t)width * height; // !!!
+
+  if (restir_prev_reprojection_surface_.size() != num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE) {
+    restir_prev_reprojection_surface_.assign(num_pixels * RESTIR_REPROJECTION_SURFACE_STRIDE, 0.0f);
+  }
+  if (restir_prev_temporal_reservoir_.size() != num_pixels * RESTIR_RESERVOIR_STRIDE) {
+    restir_prev_temporal_reservoir_.assign(num_pixels * RESTIR_RESERVOIR_STRIDE, 0.0f);
+  }
+
+ccl_debug_printf("--- BlenderSession::update_restir_temporal_storage(): ---\n"
+                 "restir_prev_reprojection_surface_.size=%zu\n"
+                 "restir_prev_temporal_reservoir_.size=%zu",
+    restir_prev_reprojection_surface_.size(), restir_prev_temporal_reservoir_.size());
+
+  session->bind_restir_temporal_history(restir_prev_reprojection_surface_.data(),
+                                        restir_prev_temporal_reservoir_.data());
 }
 
 CCL_NAMESPACE_END

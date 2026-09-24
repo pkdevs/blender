@@ -36,9 +36,6 @@ class PathTraceWorkCPU : public PathTraceWork {
   void init_execution() override;
   void deinit_execution() override;
 
-  void alloc_work_memory() override;
-  void save_restir_temporal_history() override;
-
   void initial_resampling(const int64_t image_width,
                           const int64_t image_height,
                           const int start_sample,
@@ -95,7 +92,10 @@ class PathTraceWorkCPU : public PathTraceWork {
                                    void *sample_data_storage,
                                    const bool train) override;
 
-  void restir_init_kernel_globals();
+  void save_restir_temporal_history() override;
+
+  void set_restir_temporal_history_storage(float *reprojection_surface,
+                                           float *temporal_reservoir) override;
 
   /* Pushes the collected training data/samples of a path to the global sample storage.
    * This function is called at the end of a random walk/path generation. */
@@ -120,6 +120,8 @@ class PathTraceWorkCPU : public PathTraceWork {
                                      const KernelWorkTile &work_tile,
                                      const int iteration);
 
+  void restir_init_kernel_globals();
+
   /* CPU kernels. */
   const CPUKernels &kernels_;
 
@@ -127,8 +129,11 @@ class PathTraceWorkCPU : public PathTraceWork {
    * threads. This allows dynamic updates to image_info when textures are loaded on demand. */
   vector<ThreadKernelGlobalsCPU> *kernel_thread_globals_ = nullptr;
 
-  vector<float> restir_prev_reprojection_surface_;
-  vector<float> restir_prev_temporal_reservoir_;
+  /* Points into BlenderSession-owned storage, bound via
+   * set_restir_temporal_history_storage(). nullptr when temporal-frame
+   * reuse is disabled or not yet bound. */
+  float *restir_prev_reprojection_surface_ = nullptr;
+  float *restir_prev_temporal_reservoir_ = nullptr;
 };
 
 CCL_NAMESPACE_END

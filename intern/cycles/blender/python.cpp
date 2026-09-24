@@ -222,9 +222,17 @@ static PyObject *create_func(PyObject * /*self*/, PyObject *args)
   return PyLong_FromVoidPtr(session);
 }
 
+// !!!(Tri): Flagging for a maintainer (Brecht/Sergey)
+/*TODO(Tri): ReSTIR temporal-frame history (restir_prev_*) does not
+ * survive animation frames when Persistent Data is off. sync.cpp requires R_PERSISTENT_DATA 
+ * when temporal-frame reuse is enabled as a workaround. A real fix would need process-wide 
+ * storage outside the BlenderSession hierarchy, with correct scoping/cleanup across multiple 
+ * scenes, view layers, and viewports sharing one process. */
 static PyObject *free_func(PyObject * /*self*/, PyObject *value)
 {
-  delete (BlenderSession *)PyLong_AsVoidPtr(value);
+  delete (BlenderSession *)PyLong_AsVoidPtr(value); // !!!(Tri): Deletes BlenderSession
+// !!!: With P.D. off, Blender's core render pipeline frees & recreates the entire render engine instance between frames of a render
+// With it on, the same engine instance, and thus the same BlenderSession object, is reused for the whole animation.
 
   Py_RETURN_NONE;
 }
