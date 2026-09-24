@@ -38,6 +38,7 @@
 #include "BKE_deform.hh" /* own include */
 #include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_vertex_groups.hh"
+#include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_object_deform.h"
@@ -764,7 +765,7 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob)
                     sizeof(dg->name));
 }
 
-int BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name)
+int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name)
 {
   std::string old_name = dg->name;
   STRNCPY_UTF8(dg->name, new_name);
@@ -775,7 +776,15 @@ int BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_n
     BKE_grease_pencil_vgroup_name_update(ob, old_name.c_str(), dg->name);
   }
 
-  return BKE_object_defgroup_rename_users(ob, old_name.c_str(), dg->name);
+  /* Vertex groups are owned by the geometry ID, which may be shared by several objects:
+   * update the references of all objects using the same geometry. */
+  int renamed_count = 0;
+  for (Object &co_user : bmain->objects) {
+    if (co_user.data == ob->data) {
+      renamed_count += BKE_object_defgroup_rename_users(&co_user, old_name.c_str(), dg->name);
+    }
+  }
+  return renamed_count;
 }
 
 float BKE_defvert_find_weight(const MDeformVert *dvert, const int defgroup)

@@ -111,6 +111,38 @@ class VertexGroupRenameTest(unittest.TestCase):
         finally:
             self._remove_object_and_data(obj)
 
+    def test_shared_mesh_references_update_on_vertex_group_rename(self):
+        # Vertex groups are owned by the geometry ID: two objects sharing one
+        # mesh share the same groups, so renaming through either object must
+        # update the references of both.
+        mesh = bpy.data.meshes.new(name="Mesh")
+        obj1 = bpy.data.objects.new(name="Object1", object_data=mesh)
+        obj2 = bpy.data.objects.new(name="Object2", object_data=mesh)
+        bpy.context.collection.objects.link(obj1)
+        bpy.context.collection.objects.link(obj2)
+        try:
+            vg = obj1.vertex_groups.new(name="Group")
+            modifier1 = obj1.modifiers.new(name="Modifier", type='MASK')
+            modifier1.vertex_group = vg.name
+            modifier2 = obj2.modifiers.new(name="Modifier", type='MASK')
+            modifier2.vertex_group = vg.name
+
+            vg.name = "RenamedGroup"
+
+            self.assertEqual(
+                modifier1.vertex_group,
+                "RenamedGroup",
+                "First object's reference was not updated after rename",
+            )
+            self.assertEqual(
+                modifier2.vertex_group,
+                "RenamedGroup",
+                "Second object's reference was not updated after rename",
+            )
+        finally:
+            self._remove_object_and_data(obj1)
+            self._remove_object_and_data(obj2)
+
     @staticmethod
     def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")
