@@ -160,6 +160,32 @@ class VertexGroupRenameTest(unittest.TestCase):
         finally:
             self._remove_object_and_data(obj)
 
+    def test_dynamic_paint_weight_output_updates_on_vertex_group_rename(self):
+        obj = self._new_mesh_object_and_data()
+        try:
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            modifier = obj.modifiers.new(name="Modifier", type='DYNAMIC_PAINT')
+            self.assertEqual(bpy.ops.dpaint.type_toggle(type='CANVAS'), {'FINISHED'})
+
+            surface = modifier.canvas_settings.canvas_surfaces.active
+            self.assertEqual(surface.surface_format, 'VERTEX')
+            surface.surface_type = 'WEIGHT'
+            group = obj.vertex_groups.new(name=surface.output_name_a)
+            self.assertEqual(surface.output_name_a, group.name)
+            self.assertTrue(surface.output_exists(object=obj, index=0))
+
+            group.name = "RenamedGroup"
+
+            self.assertEqual(
+                surface.output_name_a,
+                "RenamedGroup",
+                "Dynamic Paint weight output was not updated after vertex group rename",
+            )
+            self.assertTrue(surface.output_exists(object=obj, index=0))
+        finally:
+            self._remove_object_and_data(obj)
+
     @staticmethod
     def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")
