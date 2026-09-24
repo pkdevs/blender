@@ -125,23 +125,28 @@ BSDF_T openpbr_gloss(color specular_color,
                      vector2 roughness,
                      float specular_ior,
                      ThinFilm thin_film,
+                     int thin_walled,
                      normal N,
                      normal T)
 {
+  /* In thin_walled mode we need to counter the implicit IOR inversion of the glossy layer
+   * on top of the diffuse base. */
+  float ior = backfacing() && thin_walled ? 1.0 / specular_ior : specular_ior;
+  float thinfilm_ior = backfacing() && thin_walled ? thin_film.ior * specular_ior : thin_film.ior;
   BSDF_T F_dielectric_film = dielectric_bsdf(N,
                                              T,
                                              specular_color,
                                              color(0.0),
                                              roughness.x,
                                              roughness.y,
-                                             specular_ior,
+                                             ior,
                                              "multi_ggx",
                                              "thinfilm_thickness",
                                              thin_film.thickness,
                                              "thinfilm_ior",
-                                             thin_film.ior);
+                                             thinfilm_ior);
   BSDF_T F_dielectric = dielectric_bsdf(
-      N, T, specular_color, color(0.0), roughness.x, roughness.y, specular_ior, "multi_ggx");
+      N, T, specular_color, color(0.0), roughness.x, roughness.y, ior, "multi_ggx");
   return mix(F_dielectric, F_dielectric_film, thin_film.weight);
 }
 
@@ -397,16 +402,13 @@ closure color node_spec_open_pbr_bsdf(float BaseWeight,
 
   /* Adjust parameters. */
   specular.ior = openpbr_specular_ior(specular.ior, specular.weight, coat.weight, coat.ior);
-  if (!thin_walled && backfacing()) {
-    specular.ior = 1.0 / specular.ior;
-    thin_film.ior *= specular.ior;
-  }
   color weighted_base_color = base_weight * base_color;
   vector2 alpha = openpbr_specular_roughness(specular.roughness, specular.anisotropy, coat);
 
   /* Slabs. */
   BSDF_T S_diffuse = openpbr_diffuse(weighted_base_color, base_diffuse_roughness, GeometryNormal);
-  BSDF_T S_gloss = openpbr_gloss(specular.tint, alpha, specular.ior, thin_film, GeometryNormal, T);
+  BSDF_T S_gloss = openpbr_gloss(
+      specular.tint, alpha, specular.ior, thin_film, thin_walled, GeometryNormal, T);
   BSDF_T S_subsurface = openpbr_subsurface(
       sss, thin_walled, base_diffuse_roughness, GeometryNormal);
   BSDF_T S_translucent_base = openpbr_translucent(

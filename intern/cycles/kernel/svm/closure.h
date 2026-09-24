@@ -285,9 +285,8 @@ ccl_device_inline float openpbr_specular_ior(const ccl_global SVMNodeOpenPBRBsdf
                                              const bool backfacing)
 {
   float specular_ior = stack_load(stack, data.specular_ior);
-  /* Flipping the IOR in case we are inside the object. */
-  specular_ior = backfacing ? 1.0f / specular_ior : specular_ior;
-
+  /* We need to figure out what we should do with the coat_ior and specular_ior
+   * when coming from the inside of the object. */
   if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
     /* Fixing the ratio to compensate for total internal reflections (TIR).
      * OpenPBR Surface specification v1.1.1, Eq. (74) */
@@ -758,8 +757,8 @@ ccl_device
           data, stack, &geometry_tangent, coat_weight, coat_roughness);
       const float specular_ior = openpbr_specular_ior(
           data, stack, coat_weight, coat_ior, backfacing);
-      const float modulated_specular_ior = openpbr_modulate_ior(specular_ior, specular_weight);
-
+      float modulated_specular_ior = openpbr_modulate_ior(specular_ior, specular_weight);
+      modulated_specular_ior = backfacing ? 1.0f / modulated_specular_ior : modulated_specular_ior;
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
 #ifdef __CAUSTICS_TRICKS__
