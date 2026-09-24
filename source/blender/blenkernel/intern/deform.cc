@@ -15,6 +15,7 @@
 #include "BLI_math_base.hh"
 #include "MEM_guardedalloc.h"
 
+#include "DNA_ID.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_lattice_types.h"
@@ -44,6 +45,8 @@
 #include "BKE_object_deform.h"
 
 #include "BLO_read_write.hh"
+
+#include "DEG_depsgraph.hh"
 
 #include "data_transfer_intern.hh"
 
@@ -781,7 +784,13 @@ int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, cons
   int renamed_count = 0;
   for (Object &co_user : bmain->objects) {
     if (co_user.data == ob->data) {
-      renamed_count += BKE_object_defgroup_rename_users(&co_user, old_name.c_str(), dg->name);
+      const int user_renamed_count = BKE_object_defgroup_rename_users(
+          &co_user, old_name.c_str(), dg->name);
+      /* Tag co-users for recalc, the renamed object itself is covered by the RNA update. */
+      if (user_renamed_count > 0 && &co_user != ob) {
+        DEG_id_tag_update(&co_user.id, ID_RECALC_GEOMETRY);
+      }
+      renamed_count += user_renamed_count;
     }
   }
   return renamed_count;
