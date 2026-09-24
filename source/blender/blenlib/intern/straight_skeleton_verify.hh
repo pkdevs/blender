@@ -93,6 +93,10 @@ inline bool segments_intersect_improper(const double2 &a,
   const bool a_d = math::length(a - d) < tol;
   const bool b_c = math::length(b - c) < tol;
   const bool b_d = math::length(b - d) < tol;
+  /* If segments share both endpoints (same segment in either direction), they are identical. */
+  if ((a_c && b_d) || (a_d && b_c)) {
+    return false;
+  }
 
   if (a_c) {
     const double2 v1 = b - a;

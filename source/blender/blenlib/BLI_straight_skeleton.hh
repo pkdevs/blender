@@ -139,6 +139,9 @@ class StraightSkeletonInput {
   /** If true, runs extensive validation checks (graph planarity, no edge crossings, face
    * simplicity, and area partition). */
   bool full_verification{false};
+
+  /** If true, uses priority queue acceleration for simulation algorithm. */
+  bool use_priority_queue{false};
 };
 
 /** \} */

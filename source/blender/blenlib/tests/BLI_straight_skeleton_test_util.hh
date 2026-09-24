@@ -265,13 +265,18 @@ inline void write_debug_svg(const char *test_name,
   }
 
   /* Append (or create) the HTML debug file. */
+  const char *target_html = std::getenv("STRAIGHT_SKELETON_HTML_FILE");
+  if (!target_html || target_html[0] == '\0') {
+    target_html = html_filepath;
+  }
+
   bool &debug_new_file = get_debug_new_file();
   const std::ios::openmode mode = debug_new_file ? (std::ios::out | std::ios::trunc) :
                                                    (std::ios::out | std::ios::app);
 
-  std::ofstream f(html_filepath, mode);
+  std::ofstream f(target_html, mode);
   if (!f.is_open()) {
-    std::cout << "Could not open debug HTML file: " << html_filepath << "\n";
+    std::cout << "Could not open debug HTML file: " << target_html << "\n";
     return;
   }
 
@@ -297,7 +302,7 @@ inline void write_debug_svg(const char *test_name,
   f << "<div class=\"card\">\n" << svg.str() << "</div>\n";
   f.close();
 
-  std::cout << "SVG appended to: " << html_filepath << "\n";
+  std::cout << "SVG appended to: " << target_html << "\n";
 }
 
 }  // namespace blender::straightskeleton::test

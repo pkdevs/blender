@@ -4648,8 +4648,18 @@ StraightSkeletonOutput straight_skeleton_calc_kinetic(const StraightSkeletonInpu
 
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
 {
+  StraightSkeletonAlgorithm algo = input.algorithm;
+  if (const char *env = std::getenv("STRAIGHT_SKELETON_ALGO")) {
+    if (std::string_view(env) == "simulation") {
+      algo = StraightSkeletonAlgorithm::SIMULATION;
+    }
+    else if (std::string_view(env) == "kinetic") {
+      algo = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+    }
+  }
+
   StraightSkeletonOutput output;
-  switch (input.algorithm) {
+  switch (algo) {
     case StraightSkeletonAlgorithm::KINETIC_TRIANGULATION:
       output = straight_skeleton_calc_kinetic(input);
       break;

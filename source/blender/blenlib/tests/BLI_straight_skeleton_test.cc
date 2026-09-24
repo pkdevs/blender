@@ -109,6 +109,7 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = r_storage.vert.as_span();
   input.outer_polygon = r_storage.outer_polygon.as_span();
   if (!r_storage.hole_offsets_buf.is_empty()) {
@@ -166,6 +167,12 @@ static void print_test_output(const char *test_name,
 {
   EXPECT_FALSE(output.hit_max_events)
       << "Straight skeleton hit max_events in test: " << (test_name ? test_name : "unknown");
+
+  if (input.full_verification) {
+    EXPECT_TRUE(output.is_valid) << "verify_straight_skeleton failed for test: "
+                                 << (test_name ? test_name : "unknown") << ": "
+                                 << output.error_message;
+  }
 
   if (get_debug_output_mode() != DebugOutputMode::OUTPUT) {
     return;
@@ -1442,6 +1449,7 @@ TEST(straight_skeleton, Circle64)
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.label = "Circle64";
@@ -1508,6 +1516,7 @@ TEST(straight_skeleton, CircleWithHoles6)
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1564,6 +1573,7 @@ TEST(straight_skeleton, CircleWithHoles24)
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1620,6 +1630,7 @@ TEST(straight_skeleton, CircleWithHoles48)
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1675,6 +1686,7 @@ TEST(straight_skeleton, CircleWithHoles96)
   }
 
   StraightSkeletonInput input;
+  input.full_verification = true;
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1704,12 +1716,14 @@ TEST(straight_skeleton, AlgorithmDispatcher)
   EXPECT_EQ(input.algorithm, StraightSkeletonAlgorithm::KINETIC_TRIANGULATION);
   const StraightSkeletonOutput out_default = straight_skeleton_calc(input);
   EXPECT_FALSE(out_default.hit_max_events);
+  EXPECT_TRUE(out_default.is_valid);
   EXPECT_EQ(out_default.face_offsets.size(), 4);
 
   /* 2. Explicit KINETIC_TRIANGULATION. */
   input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
   const StraightSkeletonOutput out_kinetic = straight_skeleton_calc(input);
   EXPECT_FALSE(out_kinetic.hit_max_events);
+  EXPECT_TRUE(out_kinetic.is_valid);
   EXPECT_EQ(out_kinetic.face_offsets.size(), 4);
 
   /* 3. MOTORCYCLE_GRAPH stub. */
@@ -1722,6 +1736,7 @@ TEST(straight_skeleton, AlgorithmDispatcher)
   input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
   const StraightSkeletonOutput out_sim = straight_skeleton_calc(input);
   EXPECT_FALSE(out_sim.hit_max_events);
+  EXPECT_TRUE(out_sim.is_valid);
   EXPECT_EQ(out_sim.face_offsets.size(), 4);
   EXPECT_EQ(out_sim.vert.size(), 5);
   EXPECT_NEAR(total_faces_area(out_sim), 100.0, 1e-6);
@@ -1916,6 +1931,547 @@ TEST(straight_skeleton, FullVerificationFlag)
   EXPECT_TRUE(output.error_message.empty());
   EXPECT_NEAR(total_faces_area(output), 84.0, 1e-4);
 }
+
+TEST(straight_skeleton, SimulationFourWayStarSplit)
+{
+  const char *spec = R"(12 1
+-1.0 4.0
+-1.0 1.0
+-4.0 1.0
+-4.0 -1.0
+-1.0 -1.0
+-1.0 -4.0
+1.0 -4.0
+1.0 -1.0
+4.0 -1.0
+4.0 1.0
+1.0 1.0
+1.0 4.0
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationFourWayStarSplit";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_NEAR(total_faces_area(output), 28.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationDumbbellCollinear)
+{
+  const char *spec = R"(12 1
+2.0 1.0
+-2.0 1.0
+-2.0 4.0
+-6.0 4.0
+-6.0 -4.0
+-2.0 -4.0
+-2.0 -1.0
+2.0 -1.0
+2.0 -4.0
+6.0 -4.0
+6.0 4.0
+2.0 4.0
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationDumbbellCollinear";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_NEAR(total_faces_area(output), 72.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationDoubleCombSplit)
+{
+  /* 10-vert comb polygon with 2 reflex notches simultaneously splitting top edge:
+   * (-6, 0) -> (-4, 0) -> (-3, 2) [reflex] -> (-2, 0) -> (2, 0) -> (3, 2) [reflex]
+   * -> (4, 0) -> (6, 0) -> (6, 4) -> (-6, 4)
+   * Area: 12 x 4 = 48 minus two triangles of base 2, height 2 (area 2 each) = 44.0.
+   */
+  const char *spec10 = R"(10 1
+-6.0 0.0
+-4.0 0.0
+-3.0 2.0
+-2.0 0.0
+2.0 0.0
+3.0 2.0
+4.0 0.0
+6.0 0.0
+6.0 4.0
+-6.0 4.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec10, storage);
+  input.label = "SimulationDoubleCombSplit";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 10);
+  EXPECT_NEAR(total_faces_area(output), 44.0, 1e-4);
+}
+
+TEST(straight_skeleton, KineticFourWayStarSplit)
+{
+  const char *spec = R"(12 1
+-1.0 4.0
+-1.0 1.0
+-4.0 1.0
+-4.0 -1.0
+-1.0 -1.0
+-1.0 -4.0
+1.0 -4.0
+1.0 -1.0
+4.0 -1.0
+4.0 1.0
+1.0 1.0
+1.0 4.0
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticFourWayStarSplit";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_NEAR(total_faces_area(output), 28.0, 1e-4);
+}
+
+TEST(straight_skeleton, KineticDumbbellCollinear)
+{
+  const char *spec = R"(12 1
+2.0 1.0
+-2.0 1.0
+-2.0 4.0
+-6.0 4.0
+-6.0 -4.0
+-2.0 -4.0
+-2.0 -1.0
+2.0 -1.0
+2.0 -4.0
+6.0 -4.0
+6.0 4.0
+2.0 4.0
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticDumbbellCollinear";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_NEAR(total_faces_area(output), 72.0, 1e-4);
+}
+
+TEST(straight_skeleton, KineticDoubleCombSplit)
+{
+  const char *spec10 = R"(10 1
+-6.0 0.0
+-4.0 0.0
+-3.0 2.0
+-2.0 0.0
+2.0 0.0
+3.0 2.0
+4.0 0.0
+6.0 0.0
+6.0 4.0
+-6.0 4.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec10, storage);
+  input.label = "KineticDoubleCombSplit";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 10);
+  EXPECT_NEAR(total_faces_area(output), 44.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationAsymmetricHourglass)
+{
+  const char *spec = R"(6 1
+-5.0 -3.0
+0.0 -1.0
+3.0 -2.0
+3.0 2.0
+0.0 1.0
+-5.0 3.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationAsymmetricHourglass";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_NEAR(total_faces_area(output), 29.0, 1e-4);
+}
+
+TEST(straight_skeleton, KineticAsymmetricHourglass)
+{
+  const char *spec = R"(6 1
+-5.0 -3.0
+0.0 -1.0
+3.0 -2.0
+3.0 2.0
+0.0 1.0
+-5.0 3.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticAsymmetricHourglass";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_NEAR(total_faces_area(output), 29.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationThreeWayStarSplit)
+{
+  const char *spec = R"(9 1
+1.0000 4.0000
+-1.0000 4.0000
+-0.69282 0.40000
+-3.96410 -1.13397
+-2.96410 -2.86603
+0.0000 -0.80000
+2.96410 -2.86603
+3.96410 -1.13397
+0.69282 0.40000
+0 1 2 3 4 5 6 7 8
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationThreeWayStarSplit";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 9);
+  EXPECT_NEAR(total_faces_area(output), 19.1138, 1e-3);
+}
+
+TEST(straight_skeleton, KineticThreeWayStarSplit)
+{
+  const char *spec = R"(9 1
+1.0000 4.0000
+-1.0000 4.0000
+-0.69282 0.40000
+-3.96410 -1.13397
+-2.96410 -2.86603
+0.0000 -0.80000
+2.96410 -2.86603
+3.96410 -1.13397
+0.69282 0.40000
+0 1 2 3 4 5 6 7 8
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticThreeWayStarSplit";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 9);
+  EXPECT_NEAR(total_faces_area(output), 19.1138, 1e-3);
+}
+
+TEST(straight_skeleton, SimulationTShapeSplit)
+{
+  /* 8-vertex T-shaped polygon.
+   * Two reflex vertices at (1, 2) and (-1, 2) move towards (0, 3) at speed sqrt(2).
+   * At t = 1.0, they collide head-on at (0, 3), dividing the single closed wavefront
+   * contour into TWO separate contours (the upper stem and the lower bar).
+   */
+  const char *spec = R"(8 1
+-3.0 0.0
+ 3.0 0.0
+ 3.0 2.0
+ 1.0 2.0
+ 1.0 6.0
+-1.0 6.0
+-1.0 2.0
+-3.0 2.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationTShapeSplit";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_NEAR(total_faces_area(output), 20.0, 1e-4);
+}
+
+TEST(straight_skeleton, KineticTShapeSplit)
+{
+  const char *spec = R"(8 1
+-3.0 0.0
+ 3.0 0.0
+ 3.0 2.0
+ 1.0 2.0
+ 1.0 6.0
+-1.0 6.0
+-1.0 2.0
+-3.0 2.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticTShapeSplit";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_NEAR(total_faces_area(output), 20.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationDoubleHourglass)
+{
+  /* 16-vertex polygon with 3 lobes and 2 necks.
+   * Neck 1 at x = -3, Neck 2 at x = 3.
+   * At t = 1/sqrt(2) ~= 0.7071, two simultaneous neck vertex collisions occur,
+   * dividing the single closed wavefront contour into THREE separate contours
+   * (left, center, right lobes).
+   */
+  const char *spec = R"(16 1
+-8.0 -2.0
+-4.0 -2.0
+-3.0 -1.0
+-2.0 -2.0
+2.0 -2.0
+3.0 -1.0
+4.0 -2.0
+8.0 -2.0
+8.0 2.0
+4.0 2.0
+3.0 1.0
+2.0 2.0
+-2.0 2.0
+-3.0 1.0
+-4.0 2.0
+-8.0 2.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationDoubleHourglass";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_EQ(output.face_offsets.size(), 16);
+  EXPECT_NEAR(total_faces_area(output), 60.0, 1e-4);
+}
+
+TEST(straight_skeleton, SimulationTwoPeaksHourglass_EightSegments)
+{
+  /* 8-vertex polygon with two symmetric diamond lobes connected by a narrow hourglass neck.
+   * Neck pinches at t ~= 0.35, dividing the wavefront into TWO separate contours.
+   * Each diamond lobe continues to advance until all 4 edges converge simultaneously
+   * to a single peak vertex at (-4, 0) and (4, 0).
+   * 8 segments are used to show the separate evolution of the wavefronts towards both peaks.
+   */
+  const char *spec = R"(8 1
+-8.0  0.0
+-4.0 -3.0
+ 0.0 -0.6
+ 4.0 -3.0
+ 8.0  0.0
+ 4.0  3.0
+ 0.0  0.6
+-4.0  3.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationTwoPeaksHourglass_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 52.8, 1e-3);
+}
+
+TEST(straight_skeleton, KineticTwoPeaksHourglass_EightSegments)
+{
+  const char *spec = R"(8 1
+-8.0  0.0
+-4.0 -3.0
+ 0.0 -0.6
+ 4.0 -3.0
+ 8.0  0.0
+ 4.0  3.0
+ 0.0  0.6
+-4.0  3.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticTwoPeaksHourglass_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 52.8, 1e-3);
+}
+
+TEST(straight_skeleton, SimulationThreePeaksStar_EightSegments)
+{
+  /* 12-vertex 3-fold symmetric polygon with 3 pointed lobes and 3 reflex valleys.
+   * At t ~= 0.73, the 3 reflex vertices collide at (0, 0), dividing the closed wavefront
+   * into THREE separate contours. Each arm continues to advance until converging to its own
+   * peak vertex. 8 segments are used to illustrate the separate wavefronts advancing.
+   */
+  const char *spec = R"(12 1
+ 1.7500  3.0311
+ 0.0000  6.0000
+-1.7500  3.0311
+-0.6928  0.4000
+-3.5000 -0.0000
+-5.1962 -3.0000
+-1.7500 -3.0311
+-0.0000 -0.8000
+ 1.7500 -3.0311
+ 5.1962 -3.0000
+ 3.5000 -0.0000
+ 0.6928  0.4000
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationThreePeaksStar_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 35.7, 1e-2);
+}
+
+TEST(straight_skeleton, KineticThreePeaksStar_EightSegments)
+{
+  const char *spec = R"(12 1
+ 1.7500  3.0311
+ 0.0000  6.0000
+-1.7500  3.0311
+-0.6928  0.4000
+-3.5000 -0.0000
+-5.1962 -3.0000
+-1.7500 -3.0311
+-0.0000 -0.8000
+ 1.7500 -3.0311
+ 5.1962 -3.0000
+ 3.5000 -0.0000
+ 0.6928  0.4000
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticThreePeaksStar_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 35.7, 1e-2);
+}
+
+TEST(straight_skeleton, SimulationShiftedOverlap_EightSegments)
+{
+  const char *spec = R"(10 1
+ 1.0  1.0
+-3.0  1.0
+-5.0  3.0
+-8.0  0.0
+-5.0 -3.0
+-1.0 -1.0
+ 3.0 -1.0
+ 5.0 -3.0
+ 8.0  0.0
+ 5.0  3.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SimulationShiftedOverlap_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 50.0, 1e-3);
+}
+
+TEST(straight_skeleton, KineticShiftedOverlap_EightSegments)
+{
+  const char *spec = R"(10 1
+ 1.0  1.0
+-3.0  1.0
+-5.0  3.0
+-8.0  0.0
+-5.0 -3.0
+-1.0 -1.0
+ 3.0 -1.0
+ 5.0 -3.0
+ 8.0  0.0
+ 5.0  3.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "KineticShiftedOverlap_EightSegments";
+  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 50.0, 1e-3);
+}
+
 /** \} */
 
 } /* namespace blender::straightskeleton::test */

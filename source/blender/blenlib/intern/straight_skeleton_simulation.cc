@@ -136,6 +136,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <queue>
+#include <vector>
 
 #include "BLI_array.hh"
 #include "BLI_map.hh"
@@ -143,6 +145,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
+#include "BLI_time.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
@@ -297,6 +300,34 @@ class SimulationEngine {
   int current_band_{0};
   int events_processed_count_{0};
 
+  bool use_priority_queue_{false};
+
+  enum class SimEventType : uint8_t {
+    EDGE_COLLAPSE,
+    SPLIT,
+    VERT_COLLISION,
+  };
+
+  struct SimEvent {
+    double time;
+    SimEventType type;
+    int u;
+    int v;
+    int target_v;
+    int version_u;
+    int version_v;
+    int version_target_v;
+
+    bool operator>(const SimEvent &other) const
+    {
+      return time > other.time;
+    }
+  };
+
+  std::priority_queue<SimEvent, std::vector<SimEvent>, std::greater<SimEvent>> pq_;
+  Vector<int> node_version_;
+  Vector<int> modified_nodes_;
+
  public:
   SimulationEngine(const StraightSkeletonInput &input,
                    double target_offset,
@@ -304,6 +335,10 @@ class SimulationEngine {
                    bool dry_run)
       : input_(input), target_offset_(target_offset), segments_num_(segments), dry_run_(dry_run)
   {
+    use_priority_queue_ = input_.use_priority_queue;
+    if (const char *env = std::getenv("STRAIGHT_SKELETON_USE_PQ")) {
+      use_priority_queue_ = (std::string_view(env) == "1" || std::string_view(env) == "true");
+    }
   }
 
   double run()
@@ -311,6 +346,9 @@ class SimulationEngine {
     init_state();
 
     const double eps = (input_.epsilon > 0.0) ? input_.epsilon : 1e-8;
+    if (use_priority_queue_) {
+      init_pq(eps);
+    }
     const int max_steps = 10000;
     int step_count = 0;
 
@@ -342,7 +380,14 @@ class SimulationEngine {
       }
 
       /* Detect events occurring in [current_time_, current_time_ + max_lookahead]. */
-      const double event_t = find_earliest_event(max_lookahead, eps);
+      Vector<SimEvent> simultaneous_events;
+      double event_t = std::numeric_limits<double>::infinity();
+      if (use_priority_queue_) {
+        event_t = find_earliest_event_pq(max_lookahead, eps, simultaneous_events);
+      }
+      else {
+        event_t = find_earliest_event(max_lookahead, eps);
+      }
 
       if (!std::isinf(event_t) && event_t <= next_seg_time + 1e-9 &&
           event_t <= target_offset_ + 1e-9)
@@ -353,7 +398,10 @@ class SimulationEngine {
         max_collapse_time_ = std::max(max_collapse_time_, current_time_);
 
         /* Resolve all concurrent events at current_time_. */
-        resolve_events_at_current_time(eps);
+        resolve_events_at_current_time(eps, simultaneous_events);
+        if (use_priority_queue_) {
+          update_pq_for_modified_nodes(eps);
+        }
       }
       else if (!std::isinf(next_seg_time) && next_seg_time <= target_offset_ + 1e-9) {
         /* Advance to segment threshold. */
@@ -361,8 +409,16 @@ class SimulationEngine {
         current_time_ = next_seg_time;
         max_collapse_time_ = std::max(max_collapse_time_, current_time_);
 
+        Vector<SimEvent> seg_events;
+        if (use_priority_queue_) {
+          peek_events_at_current_time(eps, seg_events);
+        }
+
         /* Resolve any events that coincide with segment threshold. */
-        resolve_events_at_current_time(eps);
+        resolve_events_at_current_time(eps, seg_events);
+        if (use_priority_queue_) {
+          update_pq_for_modified_nodes(eps);
+        }
 
         if (!dry_run_) {
           emit_segment_boundary_faces();
@@ -730,6 +786,13 @@ class SimulationEngine {
     const double2 d2 = (len > 1e-12) ? d / len : double2(0.0, 0.0);
 
     wf_nodes_.vel[i] = compute_bisector_velocity(n1, n2, d2);
+
+    if (use_priority_queue_) {
+      if (i < node_version_.size()) {
+        node_version_[i]++;
+      }
+      modified_nodes_.append(i);
+    }
   }
 
   bool has_active_contours() const
@@ -883,6 +946,320 @@ class SimulationEngine {
     return earliest_t;
   }
 
+  bool is_reflex(int w) const
+  {
+    if (!wf_nodes_.is_active[w]) {
+      return false;
+    }
+    const int prev_w = wf_nodes_.prev_node[w];
+    const int next_w = wf_nodes_.next_node[w];
+    if (prev_w < 0 || next_w < 0 || !wf_nodes_.is_active[prev_w] || !wf_nodes_.is_active[next_w]) {
+      return false;
+    }
+    const double2 n_in = compute_inward_normal(wf_nodes_.pos[prev_w], wf_nodes_.pos[w]);
+    const double2 n_out = compute_inward_normal(wf_nodes_.pos[w], wf_nodes_.pos[next_w]);
+    return (n_in.x * n_out.y - n_in.y * n_out.x <= -1e-8);
+  }
+
+  void schedule_edge_collapse(int u, double eps)
+  {
+    if (!wf_nodes_.is_active[u]) {
+      return;
+    }
+    const int v = wf_nodes_.next_node[u];
+    if (v < 0 || !wf_nodes_.is_active[v]) {
+      return;
+    }
+    const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+    const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
+    const double dv_sq = math::length_squared(dv);
+
+    if (dv_sq > 1e-12 && math::dot(e0, dv) < -1e-12) {
+      const double tau = -math::dot(e0, dv) / dv_sq;
+      if (tau >= -1e-9) {
+        const double2 e_tau = e0 + tau * dv;
+        if (math::length(e_tau) < std::max(eps, 1e-5)) {
+          const double event_t = current_time_ + std::max(0.0, tau);
+          pq_.push(SimEvent{event_t,
+                            SimEventType::EDGE_COLLAPSE,
+                            u,
+                            v,
+                            -1,
+                            node_version_[u],
+                            node_version_[v],
+                            -1});
+        }
+      }
+    }
+  }
+
+  void test_and_schedule_split(int w, int u)
+  {
+    if (!wf_nodes_.is_active[w] || !wf_nodes_.is_active[u]) {
+      return;
+    }
+    const int prev_w = wf_nodes_.prev_node[w];
+    const int next_w = wf_nodes_.next_node[w];
+    const int v = wf_nodes_.next_node[u];
+    if (v < 0 || !wf_nodes_.is_active[v]) {
+      return;
+    }
+    if (u == w || v == w || prev_w == u || next_w == v) {
+      return;
+    }
+
+    const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+    const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
+    const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
+
+    if (rate > 1e-8 && d0 >= -1e-7) {
+      const double tau = d0 / rate;
+      if (tau >= -1e-9) {
+        const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
+        const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
+        const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
+        const double2 e_uv = p_v - p_u;
+        const double len_sq = math::length_squared(e_uv);
+
+        if (len_sq > 1e-12) {
+          const double s = math::dot(p_w - p_u, e_uv) / len_sq;
+          if (s > 1e-5 && s < 1.0 - 1e-5) {
+            const double event_t = current_time_ + std::max(0.0, tau);
+            pq_.push(SimEvent{event_t,
+                              SimEventType::SPLIT,
+                              w,
+                              u,
+                              v,
+                              node_version_[w],
+                              node_version_[u],
+                              node_version_[v]});
+          }
+        }
+      }
+    }
+  }
+
+  void test_and_schedule_vert_collision(int u, int w, double eps)
+  {
+    if (!wf_nodes_.is_active[u] || !wf_nodes_.is_active[w]) {
+      return;
+    }
+    if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+      return;
+    }
+
+    const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
+    const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
+    const double dv_sq = math::length_squared(dv);
+
+    if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
+      const double tau = -math::dot(dp, dv) / dv_sq;
+      if (tau >= -1e-9) {
+        const double dist_at_tau = math::length(dp + tau * dv);
+        if (dist_at_tau < std::max(eps, 1e-5)) {
+          const double event_t = current_time_ + std::max(0.0, tau);
+          pq_.push(SimEvent{event_t,
+                            SimEventType::VERT_COLLISION,
+                            u,
+                            w,
+                            -1,
+                            node_version_[u],
+                            node_version_[w],
+                            -1});
+        }
+      }
+    }
+  }
+
+  bool is_event_valid(const SimEvent &ev) const
+  {
+    if (ev.type == SimEventType::EDGE_COLLAPSE) {
+      const int u = ev.u;
+      const int v = ev.v;
+      if (u < 0 || u >= wf_nodes_.pos.size() || !wf_nodes_.is_active[u]) {
+        return false;
+      }
+      if (v < 0 || v >= wf_nodes_.pos.size() || !wf_nodes_.is_active[v]) {
+        return false;
+      }
+      if (wf_nodes_.next_node[u] != v) {
+        return false;
+      }
+      if (node_version_[u] != ev.version_u || node_version_[v] != ev.version_v) {
+        return false;
+      }
+      return true;
+    }
+    if (ev.type == SimEventType::SPLIT) {
+      const int w = ev.u;
+      const int u = ev.v;
+      if (w < 0 || w >= wf_nodes_.pos.size() || !wf_nodes_.is_active[w]) {
+        return false;
+      }
+      if (u < 0 || u >= wf_nodes_.pos.size() || !wf_nodes_.is_active[u]) {
+        return false;
+      }
+      const int v = wf_nodes_.next_node[u];
+      if (v < 0 || v >= wf_nodes_.pos.size() || !wf_nodes_.is_active[v]) {
+        return false;
+      }
+      if (v != ev.target_v) {
+        return false;
+      }
+      if (node_version_[w] != ev.version_u || node_version_[u] != ev.version_v ||
+          node_version_[v] != ev.version_target_v)
+      {
+        return false;
+      }
+      return true;
+    }
+    if (ev.type == SimEventType::VERT_COLLISION) {
+      const int u = ev.u;
+      const int w = ev.v;
+      if (u < 0 || u >= wf_nodes_.pos.size() || !wf_nodes_.is_active[u]) {
+        return false;
+      }
+      if (w < 0 || w >= wf_nodes_.pos.size() || !wf_nodes_.is_active[w]) {
+        return false;
+      }
+      if (node_version_[u] != ev.version_u || node_version_[w] != ev.version_v) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  void init_pq(double eps)
+  {
+    node_version_.reinitialize(wf_nodes_.pos.size());
+    node_version_.fill(0);
+    modified_nodes_.clear();
+
+    for (const int u : wf_nodes_.pos.index_range()) {
+      schedule_edge_collapse(u, eps);
+    }
+
+    for (const int w : wf_nodes_.pos.index_range()) {
+      if (is_reflex(w)) {
+        for (const int u : wf_nodes_.pos.index_range()) {
+          test_and_schedule_split(w, u);
+        }
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (u < w) {
+            test_and_schedule_vert_collision(u, w, eps);
+          }
+        }
+      }
+    }
+  }
+
+  void update_pq_for_modified_nodes(double eps)
+  {
+    if (!use_priority_queue_ || modified_nodes_.is_empty()) {
+      modified_nodes_.clear();
+      return;
+    }
+
+    std::sort(modified_nodes_.begin(), modified_nodes_.end());
+    modified_nodes_.resize(std::unique(modified_nodes_.begin(), modified_nodes_.end()) -
+                           modified_nodes_.begin());
+
+    for (const int m : modified_nodes_) {
+      if (!wf_nodes_.is_active[m]) {
+        continue;
+      }
+
+      const int prev_m = wf_nodes_.prev_node[m];
+      if (prev_m >= 0 && wf_nodes_.is_active[prev_m]) {
+        schedule_edge_collapse(prev_m, eps);
+      }
+      schedule_edge_collapse(m, eps);
+
+      const bool m_reflex = is_reflex(m);
+      if (m_reflex) {
+        for (const int u : wf_nodes_.pos.index_range()) {
+          test_and_schedule_split(m, u);
+        }
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (u != m) {
+            test_and_schedule_vert_collision(std::min(u, m), std::max(u, m), eps);
+          }
+        }
+      }
+
+      for (const int r : wf_nodes_.pos.index_range()) {
+        if (r != m && is_reflex(r)) {
+          if (prev_m >= 0 && wf_nodes_.is_active[prev_m]) {
+            test_and_schedule_split(r, prev_m);
+          }
+          test_and_schedule_split(r, m);
+          if (!m_reflex) {
+            test_and_schedule_vert_collision(std::min(r, m), std::max(r, m), eps);
+          }
+        }
+      }
+    }
+
+    modified_nodes_.clear();
+  }
+
+  double find_earliest_event_pq(double max_lookahead,
+                                double eps,
+                                Vector<SimEvent> &r_simultaneous_events)
+  {
+    r_simultaneous_events.clear();
+
+    while (!pq_.empty()) {
+      const SimEvent top = pq_.top();
+      if (!is_event_valid(top)) {
+        pq_.pop();
+        continue;
+      }
+
+      const double event_t = std::max(current_time_, top.time);
+      if (event_t > current_time_ + max_lookahead + 1e-9) {
+        return std::numeric_limits<double>::infinity();
+      }
+
+      /* Peek all events within time_tol of event_t. */
+      const double time_tol = std::max(eps, 1e-4);
+      while (!pq_.empty()) {
+        const SimEvent ev = pq_.top();
+        if (!is_event_valid(ev)) {
+          pq_.pop();
+          continue;
+        }
+        if (ev.time > event_t + time_tol) {
+          break;
+        }
+        pq_.pop();
+        r_simultaneous_events.append(ev);
+      }
+
+      return event_t;
+    }
+
+    return std::numeric_limits<double>::infinity();
+  }
+
+  void peek_events_at_current_time(double eps, Vector<SimEvent> &r_events)
+  {
+    const double time_tol = std::max(eps, 1e-4);
+    while (!pq_.empty()) {
+      const SimEvent top = pq_.top();
+      if (!is_event_valid(top)) {
+        pq_.pop();
+        continue;
+      }
+      if (top.time > current_time_ + time_tol) {
+        break;
+      }
+      r_events.append(top);
+      pq_.pop();
+    }
+  }
+
   int get_or_create_skel_node(const double2 &pos, double tol)
   {
     for (int i = int(skel_graph_.nodes_pos.size()) - 1; i >= 0; i--) {
@@ -909,8 +1286,11 @@ class SimulationEngine {
 
   void resolve_opposing_overlapping_edges(const double cluster_tol)
   {
+    Vector<std::pair<int, int>> processed_pairs;
+    int opp_iter = 0;
     bool found_opposing = true;
-    while (found_opposing) {
+    while (found_opposing && opp_iter < 50) {
+      opp_iter++;
       found_opposing = false;
       const int n = int(wf_nodes_.pos.size());
       for (int e1 = 0; e1 < n; e1++) {
@@ -932,6 +1312,9 @@ class SimulationEngine {
 
         for (int e2 = e1 + 1; e2 < n; e2++) {
           if (!wf_nodes_.is_active[e2]) {
+            continue;
+          }
+          if (processed_pairs.contains(std::make_pair(e1, e2))) {
             continue;
           }
           const int w = e2;
@@ -965,6 +1348,7 @@ class SimulationEngine {
           if (s_b - s_a < cluster_tol) {
             continue;
           }
+          processed_pairs.append(std::make_pair(e1, e2));
 
           const double2 p_a = wf_nodes_.pos[u] + s_a * dir1;
           const double2 p_b = wf_nodes_.pos[u] + s_b * dir1;
@@ -1074,10 +1458,90 @@ class SimulationEngine {
 
             wf_nodes_.is_active[u] = false;
             wf_nodes_.is_active[w] = false;
+            if (use_priority_queue_) {
+              if (u < node_version_.size()) {
+                node_version_[u]++;
+              }
+              if (w < node_version_.size()) {
+                node_version_[w]++;
+              }
+            }
           }
           else {
-            /* Case B: Partial overlap - surviving suffixes continue advancing; no faces emitted.
-             */
+            /* Case B: Partial overlap - if an edge is completely covered by the overlap,
+             * it fully collapses and emits its roof face. Surviving suffixes continue. */
+            const bool e1_completely_covered = (s_a < cluster_tol && s_b > l1 - cluster_tol);
+            const double l2 = math::length(wf_nodes_.pos[z] - wf_nodes_.pos[w]);
+            const bool e2_completely_covered = (s_b - s_a > l2 - cluster_tol);
+
+            if (e1_completely_covered) {
+              if (!dry_run_) {
+                Vector<int> face_verts1;
+                face_verts1.append(wf_nodes_.left_trail[e1][0]);
+                for (const int r : wf_nodes_.right_trail[e1]) {
+                  if (face_verts1.last() != r) {
+                    face_verts1.append(r);
+                  }
+                }
+                if (face_verts1.last() != s_b_star) {
+                  face_verts1.append(s_b_star);
+                }
+                if (face_verts1.last() != s_a_star) {
+                  face_verts1.append(s_a_star);
+                }
+                for (int k = int(wf_nodes_.left_trail[e1].size()) - 1; k >= 1; k--) {
+                  const int l = wf_nodes_.left_trail[e1][k];
+                  if (face_verts1.last() != l && l != face_verts1[0]) {
+                    face_verts1.append(l);
+                  }
+                }
+                if (face_verts1.size() >= 3) {
+                  out_faces_.faces.append(std::move(face_verts1));
+                  out_faces_.face_orig.append(wf_nodes_.orig_face[e1]);
+                  out_faces_.face_band.append(current_band_);
+                  out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
+                }
+              }
+              wf_nodes_.is_active[u] = false;
+              if (use_priority_queue_ && u < node_version_.size()) {
+                node_version_[u]++;
+              }
+            }
+
+            if (e2_completely_covered) {
+              if (!dry_run_) {
+                Vector<int> face_verts2;
+                face_verts2.append(wf_nodes_.left_trail[e2][0]);
+                for (const int r : wf_nodes_.right_trail[e2]) {
+                  if (face_verts2.last() != r) {
+                    face_verts2.append(r);
+                  }
+                }
+                if (face_verts2.last() != s_a_star) {
+                  face_verts2.append(s_a_star);
+                }
+                if (face_verts2.last() != s_b_star) {
+                  face_verts2.append(s_b_star);
+                }
+                for (int k = int(wf_nodes_.left_trail[e2].size()) - 1; k >= 1; k--) {
+                  const int l = wf_nodes_.left_trail[e2][k];
+                  if (face_verts2.last() != l && l != face_verts2[0]) {
+                    face_verts2.append(l);
+                  }
+                }
+                if (face_verts2.size() >= 3) {
+                  out_faces_.faces.append(std::move(face_verts2));
+                  out_faces_.face_orig.append(wf_nodes_.orig_face[e2]);
+                  out_faces_.face_band.append(current_band_);
+                  out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
+                }
+              }
+              wf_nodes_.is_active[w] = false;
+              if (use_priority_queue_ && w < node_version_.size()) {
+                node_version_[w]++;
+              }
+            }
+
             /* Handle left endpoint p_a (s_a): */
             if (s_z < -cluster_tol) {
               /* Edge 2 extends to the left of s_a: surviving piece of Edge 2 starts at p_a, goes
@@ -1086,8 +1550,10 @@ class SimulationEngine {
               wf_nodes_.skel_node[w] = s_a_star;
               wf_nodes_.next_node[w] = z;
               wf_nodes_.prev_node[z] = w;
-              wf_nodes_.prev_node[w] = prev_u;
-              wf_nodes_.next_node[prev_u] = w;
+              if (prev_u != w && prev_u >= 0) {
+                wf_nodes_.prev_node[w] = prev_u;
+                wf_nodes_.next_node[prev_u] = w;
+              }
               if (wf_nodes_.right_trail[prev_u].is_empty() ||
                   wf_nodes_.right_trail[prev_u].last() != s_a_star)
               {
@@ -1221,7 +1687,7 @@ class SimulationEngine {
     rebuild_active_contours();
   }
 
-  void resolve_events_at_current_time(double eps)
+  void resolve_events_at_current_time(double eps, Span<SimEvent> simultaneous_events = {})
   {
     const double cluster_tol = std::max(eps, 1e-4);
 
@@ -1246,22 +1712,6 @@ class SimulationEngine {
       int w;
     };
     Vector<VertPair> vert_collisions;
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
-        continue;
-      }
-      for (const int w : wf_nodes_.pos.index_range()) {
-        if (w <= u || !wf_nodes_.is_active[w]) {
-          continue;
-        }
-        if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
-          continue;
-        }
-        if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
-          vert_collisions.append(VertPair{u, w});
-        }
-      }
-    }
 
     /* 3. Identify all split events at current_time_. */
     struct SplitInfo {
@@ -1271,39 +1721,88 @@ class SimulationEngine {
     };
     Vector<SplitInfo> splits;
 
-    for (const int w : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[w]) {
-        continue;
+    if (use_priority_queue_) {
+      for (const SimEvent &ev : simultaneous_events) {
+        if (ev.type == SimEventType::EDGE_COLLAPSE) {
+          if (wf_nodes_.is_active[ev.u] && !collapsing_edges.contains(ev.u)) {
+            collapsing_edges.append(ev.u);
+          }
+        }
+        else if (ev.type == SimEventType::VERT_COLLISION) {
+          if (wf_nodes_.is_active[ev.u] && wf_nodes_.is_active[ev.v]) {
+            if (math::length(wf_nodes_.pos[ev.v] - wf_nodes_.pos[ev.u]) < cluster_tol * 2.0) {
+              vert_collisions.append(VertPair{ev.u, ev.v});
+            }
+          }
+        }
+        else if (ev.type == SimEventType::SPLIT) {
+          const int w = ev.u;
+          const int u = ev.v;
+          if (wf_nodes_.is_active[w] && wf_nodes_.is_active[u]) {
+            const int v = wf_nodes_.next_node[u];
+            if (v >= 0 && wf_nodes_.is_active[v]) {
+              const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+              const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
+              if (dist < cluster_tol * 2.0) {
+                splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+              }
+            }
+          }
+        }
       }
-      const int prev_w = wf_nodes_.prev_node[w];
-      const int next_w = wf_nodes_.next_node[w];
-      const double2 n_in = compute_inward_normal(wf_nodes_.pos[prev_w], wf_nodes_.pos[w]);
-      const double2 n_out = compute_inward_normal(wf_nodes_.pos[w], wf_nodes_.pos[next_w]);
-      if (n_in.x * n_out.y - n_in.y * n_out.x > -1e-8) {
-        continue;
-      }
-
+    }
+    else {
       for (const int u : wf_nodes_.pos.index_range()) {
         if (!wf_nodes_.is_active[u]) {
           continue;
         }
-        const int v = wf_nodes_.next_node[u];
-        if (u == w || v == w || prev_w == u || next_w == v) {
+        for (const int w : wf_nodes_.pos.index_range()) {
+          if (w <= u || !wf_nodes_.is_active[w]) {
+            continue;
+          }
+          if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+            continue;
+          }
+          if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
+            vert_collisions.append(VertPair{u, w});
+          }
+        }
+      }
+
+      for (const int w : wf_nodes_.pos.index_range()) {
+        if (!wf_nodes_.is_active[w]) {
           continue;
         }
-        if (collapsing_edges.contains(u)) {
+        const int prev_w = wf_nodes_.prev_node[w];
+        const int next_w = wf_nodes_.next_node[w];
+        const double2 n_in = compute_inward_normal(wf_nodes_.pos[prev_w], wf_nodes_.pos[w]);
+        const double2 n_out = compute_inward_normal(wf_nodes_.pos[w], wf_nodes_.pos[next_w]);
+        if (n_in.x * n_out.y - n_in.y * n_out.x > -1e-8) {
           continue;
         }
 
-        const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
-        const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
-        if (dist < cluster_tol) {
-          const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-          const double len_sq = math::length_squared(e_uv);
-          if (len_sq > 1e-12) {
-            const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
-            if (s > 1e-5 && s < 1.0 - 1e-5) {
-              splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (!wf_nodes_.is_active[u]) {
+            continue;
+          }
+          const int v = wf_nodes_.next_node[u];
+          if (u == w || v == w || prev_w == u || next_w == v) {
+            continue;
+          }
+          if (collapsing_edges.contains(u)) {
+            continue;
+          }
+
+          const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+          const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
+          if (dist < cluster_tol) {
+            const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+            const double len_sq = math::length_squared(e_uv);
+            if (len_sq > 1e-12) {
+              const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
+              if (s > 1e-5 && s < 1.0 - 1e-5) {
+                splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+              }
             }
           }
         }
@@ -1400,8 +1899,6 @@ class SimulationEngine {
         }
       }
     }
-
-
 
     /* 5. Phase 1: Create Skeleton Nodes and bind colliding vertices across all clusters. */
     for (EventCluster &cluster : clusters) {
@@ -1575,6 +2072,9 @@ class SimulationEngine {
     /* Retire all colliding vertices. */
     for (const int v : cluster.colliding_verts) {
       wf_nodes_.is_active[v] = false;
+      if (use_priority_queue_ && v < node_version_.size()) {
+        node_version_[v]++;
+      }
     }
 
     if (rays.size() < 2) {
@@ -1593,7 +2093,6 @@ class SimulationEngine {
       }
       return false;
     });
-
 
     /* Find all interior sectors (Gaps): each OUT ray followed by an IN ray. */
     const int n_rays = int(rays.size());
@@ -1619,22 +2118,12 @@ class SimulationEngine {
         wf_nodes_.skel_node.append(s_star);
         wf_nodes_.orig_edge.append(ray_out.orig_edge);
         wf_nodes_.orig_face.append(ray_out.orig_face);
-        if (input_.outer_polygon.size() == 6 && !dry_run_) {
-          printf(
-              "SPAWN w_g=%d t=%f: prev=%d next=%d orig_edge=%d orig_face=%d "
-              "(ray_out.orig_edge=%d, ray_in.orig_edge=%d)\n",
-              w_g,
-              current_time_,
-              ray_in.incident_node,
-              ray_out.incident_node,
-              ray_out.orig_edge,
-              ray_out.orig_face,
-              ray_out.orig_edge,
-              ray_in.orig_edge);
-        }
         wf_nodes_.contour_id.append(wf_nodes_.contour_id[ray_in.incident_node]);
         wf_nodes_.is_active.append(true);
         wf_nodes_.time_birth.append(current_time_);
+        if (use_priority_queue_) {
+          node_version_.append(0);
+        }
 
         Vector<int> lt;
         if (ray_out.retiring_node >= 0 && ray_out.retiring_node < int(wf_nodes_.left_trail.size()))
