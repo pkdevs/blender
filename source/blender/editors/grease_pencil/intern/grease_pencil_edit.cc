@@ -4614,6 +4614,7 @@ static wmOperatorStatus grease_pencil_outline_exec(bContext *C, wmOperator *op)
   const float radius = RNA_float_get(op->ptr, "radius");
   const float offset_factor = RNA_float_get(op->ptr, "offset_factor");
   const int corner_subdivisions = RNA_int_get(op->ptr, "corner_subdivisions");
+  const int self_union = RNA_boolean_get(op->ptr, "self_union");
   const float outline_offset = radius * offset_factor;
   const int mat_nr = -1;
 
@@ -4678,7 +4679,7 @@ static wmOperatorStatus grease_pencil_outline_exec(bContext *C, wmOperator *op)
                                                               radius,
                                                               outline_offset,
                                                               mat_nr,
-                                                              true);
+                                                              self_union);
 
     info.drawing.strokes_for_write().remove_curves(editable_strokes, {});
 
@@ -4724,6 +4725,7 @@ static void GREASE_PENCIL_OT_outline(wmOperatorType *ot)
   RNA_def_float_factor(
       ot->srna, "offset_factor", -1.0f, -1.0f, 1.0f, "Offset Factor", "", -1.0f, 1.0f);
   RNA_def_int(ot->srna, "corner_subdivisions", 2, 0, 10, "Corner Subdivisions", "", 0, 5);
+  RNA_def_boolean(ot->srna, "self_union", true, "Self Union", "Remove all inside geometry");
 }
 
 /** \} */
