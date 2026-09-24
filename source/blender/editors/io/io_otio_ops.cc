@@ -23,17 +23,12 @@
 #  include "BLI_path_utils.hh"
 #  include "BLI_string_utf8.hh"
 
-#  include "BLT_translation.hh"
-
 #  include "RNA_access.hh"
 #  include "RNA_define.hh"
 #  include "RNA_enum_types.hh"
 
 #  include "ED_fileselect.hh"
 #  include "ED_object.hh"
-
-#  include "UI_interface.hh"
-#  include "UI_resources.hh"
 
 #  include "WM_api.hh"
 #  include "WM_types.hh"
@@ -44,52 +39,7 @@
 #  include "io_otio_ops.hh"
 #  include "io_utils.hh"
 
-#  include "UI_interface_layout.hh"
-
 namespace blender {
-
-static const EnumPropertyItem io_otio_scene_strip_resolution[] = {
-    {static_cast<int>(io::otio::SceneStripRes::Percent100),
-     "SCENE_STRIP_100",
-     ICON_NONE,
-     "100%",
-     "Bake scene strips at 100% resolution"},
-    {static_cast<int>(io::otio::SceneStripRes::Percent75),
-     "SCENE_STRIP_75",
-     ICON_NONE,
-     "75%",
-     "Bake scene strips at 75% resolution"},
-    {static_cast<int>(io::otio::SceneStripRes::Percent50),
-     "SCENE_STRIP_50",
-     ICON_NONE,
-     "50%",
-     "Bake scene strips at 50% resolution"},
-    {static_cast<int>(io::otio::SceneStripRes::Percent25),
-     "SCENE_STRIP_25",
-     ICON_NONE,
-     "25%",
-     "Bake scene strips at 25% resolution"},
-    {0, nullptr, 0, nullptr, nullptr}};
-
-static const EnumPropertyItem io_otio_image_sequence_export_fallback[] = {
-#  ifndef WIN32
-    {static_cast<int>(io::otio::ImgSeqFallback::Symlink),
-     "IMG_SEQUENCE_SYMLINK",
-     ICON_NONE,
-     "Create Symlinks",
-     "Create sequenced symbolic links that point to the original images"},
-#  endif
-    {static_cast<int>(io::otio::ImgSeqFallback::RenderMovie),
-     "IMG_SEQUENCE_RENDER_MOVIE",
-     ICON_NONE,
-     "Render Movie",
-     "Render and link the image sequence as a movie"},
-    {static_cast<int>(io::otio::ImgSeqFallback::Rename),
-     "IMG_SEQUENCE_RENAME",
-     ICON_NONE,
-     "Rename Images",
-     "Append sequence numbers to the image filenames"},
-    {0, nullptr, 0, nullptr, nullptr}};
 
 static wmOperatorStatus wm_otio_export_invoke(bContext *C,
                                               wmOperator *op,
@@ -121,47 +71,13 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  char filepath[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filepath);
-
   OTIOExportParams export_params;
+  RNA_string_get(op->ptr, "filepath", export_params.filepath);
+  export_params.reports = op->reports;
 
-  export_params.bake_scene_strips = RNA_boolean_get(op->ptr, "bake_scene_strips");
-  export_params.scene_strip_res = io::otio::SceneStripRes(
-      RNA_enum_get(op->ptr, "scene_strip_resolution"));
-
-  export_params.img_sequence_fallback = io::otio::ImgSeqFallback(
-      RNA_enum_get(op->ptr, "img_sequence_fallback"));
-
-  OTIO_export(C, filepath, &export_params);
+  OTIO_export(C, export_params);
 
   return OPERATOR_FINISHED;
-}
-
-static void wm_otio_export_draw(bContext *C, wmOperator *op)
-{
-  ui::Layout &layout = *op->layout;
-  PointerRNA *ptr = op->ptr;
-
-  layout.use_property_split_set(true);
-  layout.use_property_decorate_set(false);
-
-  /* Scene Strip Options. */
-  if (ui::Layout *panel = layout.panel(C, "OTIO_export_scene", false, IFACE_("Scene Strips"))) {
-    ui::Layout *col = &panel->column(false);
-    col->prop(ptr, "bake_scene_strips", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-
-    ui::Layout *sub = &col->column(false);
-    sub->enabled_set(RNA_boolean_get(ptr, "bake_scene_strips"));
-    sub->prop(ptr, "scene_strip_resolution", UI_ITEM_NONE, IFACE_("Resolution"), ICON_NONE);
-  }
-
-  /* Image Sequence Options. */
-  if (ui::Layout *panel = layout.panel(C, "OTIO_export_img_seq", false, IFACE_("Image Sequences")))
-  {
-    ui::Layout *col = &panel->column(false);
-    col->prop(ptr, "img_sequence_fallback", UI_ITEM_NONE, IFACE_("Fallback Method"), ICON_NONE);
-  }
 }
 
 static bool wm_otio_export_check(bContext * /*C*/, wmOperator *op)
@@ -203,41 +119,18 @@ void WM_OT_otio_export(wmOperatorType *ot)
   ot->invoke = wm_otio_export_invoke;
   ot->exec = wm_otio_export_exec;
   ot->poll = wm_otio_export_poll;
-  ot->ui = wm_otio_export_draw;
   ot->check = wm_otio_export_check;
-  ot->flag = OPTYPE_PRESET;
 
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER,
                                  FILE_BLENDER,
                                  FILE_SAVE,
-                                 WM_FILESEL_FILEPATH | WM_FILESEL_SHOW_PROPS,
+                                 WM_FILESEL_FILEPATH,
                                  FILE_DEFAULTDISPLAY,
                                  FILE_SORT_DEFAULT);
 
   PropertyRNA *prop = RNA_def_string(ot->srna, "filter_glob", "*.otio", 0, "", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
-
-  RNA_def_boolean(
-      ot->srna, "bake_scene_strips", true, "Bake Scene Strips", "Export scene strips as video");
-
-  RNA_def_enum(ot->srna,
-               "scene_strip_resolution",
-               io_otio_scene_strip_resolution,
-               static_cast<int>(io::otio::SceneStripRes::Percent100),
-               "Scene Strip Resolution",
-               "Resolution at which to export scene strips");
-
-  RNA_def_enum(ot->srna,
-               "img_sequence_fallback",
-               io_otio_image_sequence_export_fallback,
-#  ifndef WIN32
-               static_cast<int>(io::otio::ImgSeqFallback::Symlink),
-#  else
-               static_cast<int>(io::otio::ImgSeqFallback::RenderMovie),
-#  endif
-               "Fallback Method",
-               "Method used for image sequences with non-sequential filenames");
 }
 
 namespace ed::io {

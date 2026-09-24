@@ -8,15 +8,16 @@
 
 #pragma once
 
+#include "IO_otio.hh"
+
 namespace blender {
 
-struct wmJobWorkerStatus;
-struct ReportList;
+struct Main;
 struct Scene;
 
 namespace io::otio {
 
-void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status);
+void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params);
 
 }  // namespace io::otio
 }  // namespace blender

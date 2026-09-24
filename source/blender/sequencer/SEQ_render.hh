@@ -76,17 +76,6 @@ void render_new_render_data(Main *bmain,
                             RenderData *r_context);
 StripElem *render_give_stripelem(const Scene *scene, const Strip *strip, int timeline_frame);
 
-/**
- * Render and save an individual strip as a movie at `filepath`.
- * \return true if render was successful
- */
-bool render_strip_full(Main *bmain,
-                       Scene *scene,
-                       Strip *strip,
-                       short resolution_percent,
-                       const char *filepath,
-                       bool audio);
-
 /* Converts image into scene linear, if needed.
  * Note: if make_float is false and input image contains byte pixels, it is *NOT* modified. */
 void ensure_ibuf_is_linear_space(ImBuf *ibuf, bool make_float);

@@ -21,7 +21,6 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_rect.hh"
-#include "BLI_string.hh"
 #include "BLI_task.hh"
 
 #include "BKE_anim_data.hh"
@@ -34,7 +33,6 @@
 #include "BKE_main.hh"
 #include "BKE_mask.hh"
 #include "BKE_movieclip.hh"
-#include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_scene_runtime.hh"
 
@@ -54,14 +52,12 @@
 
 #include "PRF_profile.hh"
 
-#include "MOV_enums.hh"
 #include "MOV_read.hh"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
 
 #include "SEQ_channels.hh"
-#include "SEQ_edit.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_offscreen.hh"
@@ -1895,140 +1891,6 @@ SeqResult seq_render_strip(const RenderData *context,
   }
 
   return res;
-}
-
-bool render_strip_full(Main *bmain,
-                       Scene *scene,
-                       Strip *strip,
-                       short resolution_percent,
-                       const char *filepath,
-                       bool audio)
-{
-  Editing *ed = editing_get(scene);
-  if (!ed) {
-    return false;
-  }
-
-  Main *bmain_temp = BKE_main_new();
-  if (!bmain_temp) {
-    return false;
-  }
-
-  /* Prevents crash. */
-  BLI_addtail(&bmain_temp->wm, bmain->wm.first());
-
-  Scene *scene_temp = BKE_scene_add(bmain_temp, "Strip Render Temporary Scene");
-  if (!scene_temp) {
-    BKE_main_free(bmain_temp);
-    return false;
-  }
-
-  Editing *ed_temp = editing_ensure(scene_temp);
-  if (!ed_temp) {
-    BKE_id_free(bmain_temp, scene_temp);
-    BKE_main_free(bmain_temp);
-    return false;
-  }
-
-  /* Shallow copy. */
-  Strip *strip_temp = strip_duplicate_recursive(
-      bmain_temp, scene, scene_temp, &ed_temp->seqbase, strip, StripDuplicate::All);
-
-  if (!strip_temp) {
-    BKE_id_free(bmain_temp, scene_temp);
-    BKE_main_free(bmain_temp);
-    return false;
-  }
-
-  /* Reference original scene instead of copying. */
-  strip_temp->scene = strip->scene;
-
-  /* Copy render settings from original `scene`. */
-  scene_temp->r.subframe = scene->r.subframe;
-  scene_temp->r.flag = scene->r.flag;
-  scene_temp->r.threads = scene->r.threads;
-  scene_temp->r.framelen = scene->r.framelen;
-  scene_temp->r.xsch = scene->r.xsch;
-  scene_temp->r.ysch = scene->r.ysch;
-  scene_temp->r.scemode = scene->r.scemode;
-  scene_temp->r.mode = scene->r.mode;
-
-  /* Configure render settings for strip export. */
-  scene_temp->r.im_format.media_type = MEDIA_TYPE_VIDEO;
-  scene_temp->r.im_format.imtype = R_IMF_IMTYPE_FFMPEG;
-  scene_temp->r.size = resolution_percent;
-  scene_temp->r.ffcodecdata.type = FFMPEG_MPEG4;
-  scene_temp->r.ffcodecdata.codec_id_set(FFMPEG_CODEC_ID_H264);
-  scene_temp->r.ffcodecdata.audio_codec = audio ? FFMPEG_CODEC_ID_AAC : FFMPEG_CODEC_ID_NONE;
-  scene_temp->r.sfra = strip_temp->left_handle();
-  scene_temp->r.efra = strip_temp->right_handle(scene_temp) - 1;
-  scene_temp->r.frame_step = 1;
-  BLI_strncpy(scene_temp->r.pic, filepath, FILE_MAX);
-
-  short res_original = scene->r.size;
-  if (strip_temp->type == STRIP_TYPE_SCENE && !(strip_temp->flag & SEQ_SCENE_STRIPS) &&
-      strip_temp->scene)
-  {
-    strip_temp->scene->r.size = resolution_percent;
-  }
-
-  auto restore_scene_res = [strip_temp, res_original]() {
-    if (strip_temp->type == STRIP_TYPE_SCENE && !(strip_temp->flag & SEQ_SCENE_STRIPS) &&
-        strip_temp->scene)
-    {
-      strip_temp->scene->r.size = res_original;
-    }
-  };
-
-  ViewLayer *active_layer = BKE_view_layer_default_render(scene_temp);
-  RenderEngineType *re_type = RE_engines_find(scene_temp->r.engine);
-
-  if (re_type->render == nullptr) {
-    restore_scene_res();
-    BKE_id_free(bmain_temp, scene_temp);
-    BKE_main_free(bmain_temp);
-    return false;
-  }
-
-  Render *re = RE_NewSceneRender(scene_temp);
-
-  G.is_break = false;
-
-  RE_draw_lock_cb(re, nullptr, nullptr);
-  RE_test_break_cb(re, nullptr, [](void * /*rjv*/) { return G.is_break; });
-
-  ReportList *reports_temp = MEM_new<ReportList>("Temporary Report List");
-  RE_SetReports(re, reports_temp);
-
-  Image *ima = BKE_image_ensure_viewer(bmain_temp, IMA_TYPE_R_RESULT, "Render Result");
-  BKE_image_signal(bmain_temp, ima, nullptr, IMA_SIGNAL_FREE);
-  BKE_image_backup_render(scene_temp, ima, true);
-
-  RE_RenderAnim(re,
-                bmain_temp,
-                scene_temp,
-                active_layer,
-                nullptr,
-                scene_temp->r.sfra,
-                scene_temp->r.efra,
-                scene_temp->r.frame_step);
-
-  RE_SetReports(re, nullptr);
-
-  const bool cancelled = G.is_break;
-
-  restore_scene_res();
-  BLI_listbase_clear(&bmain_temp->wm);
-  /* Deallocate stuff. */
-  RE_FreeRender(re);
-  MEM_delete(reports_temp);
-  BKE_id_free(bmain_temp, scene_temp);
-  BKE_main_free(bmain_temp);
-
-  if (cancelled) {
-    return false;
-  }
-  return true;
 }
 
 static bool seq_must_swap_input_in_blend_mode(Strip *strip)

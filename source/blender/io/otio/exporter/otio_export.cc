@@ -13,7 +13,6 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
-#include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
 
 #include "CLG_log.h"
@@ -26,8 +25,6 @@
 #include "SEQ_effects.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_utils.hh"
-
-#include "WM_types.hh"
 
 #include "opentimelineio/clip.h"
 #include "opentimelineio/color.h"
@@ -103,13 +100,6 @@ static void export_transition(const Strip *strip,
   last_strip_end = strip->right_handle(scene);
 }
 
-static void increment_progress(wmJobWorkerStatus *worker_status, float progress_per_strip)
-{
-  worker_status->progress += progress_per_strip;
-  math::clamp(worker_status->progress, 0.0f, 1.0f);
-  worker_status->do_update = true;
-}
-
 /**
  * We need two stacks when we have meta strips with both video and audio strips. It is not as
  * straight forward as separating clips to video or audio channels as metastrips can also contain
@@ -130,16 +120,13 @@ static void increment_progress(wmJobWorkerStatus *worker_status, float progress_
  */
 static void otio_export_recursive(Main *bmain,
                                   Scene *scene,
-                                  const blender::OTIOExportParams *export_params,
-                                  const char *filepath,
+                                  const OTIOExportParams &params,
                                   SerializableObject::Retainer<Stack> *primary_stack,
                                   SerializableObject::Retainer<Stack> *secondary_stack,
                                   ListBaseT<Strip> *strips,
                                   int stack_start,
                                   int stack_end,
-                                  const ListBaseT<SeqTimelineChannel> *channel_listbase,
-                                  wmJobWorkerStatus *worker_status,
-                                  float progress_per_strip)
+                                  const ListBaseT<SeqTimelineChannel> *channel_listbase)
 {
   bool inside_meta = secondary_stack != nullptr;
 
@@ -236,7 +223,7 @@ static void otio_export_recursive(Main *bmain,
       }
       else if (strip->type == STRIP_TYPE_IMAGE) {
         strip_exporter = new ImageStripExporter(
-            strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
+            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
       }
       /* Nested Strips (Meta, Sequencer Scene). */
       else if (strip->type == STRIP_TYPE_META ||
@@ -264,16 +251,13 @@ static void otio_export_recursive(Main *bmain,
 
           otio_export_recursive(bmain,
                                 scene,
-                                export_params,
-                                filepath,
+                                params,
                                 &primary_meta_stack,
                                 &secondary_meta_stack,
                                 seqbase,
                                 strip->left_handle() - 1,
                                 strip->right_handle(scene) - 1,
-                                r_channels,
-                                worker_status,
-                                0.0f);
+                                r_channels);
 
           if (!primary_meta_stack->children().empty()) {
             primary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
@@ -306,16 +290,10 @@ static void otio_export_recursive(Main *bmain,
       else if (strip->type == STRIP_TYPE_SCENE && !(strip->flag & SEQ_SCENE_STRIPS) &&
                strip->scene)
       {
-        if (export_params->bake_scene_strips) {
-          strip_exporter = new RenderAsMovieExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
-        }
-        else {
-          auto missing_reference_exporter = StripExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
+        auto missing_reference_exporter = StripExporter(
+            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
 
-          missing_reference_exporter.export_with_missing_reference(single_input_effects);
-        }
+        missing_reference_exporter.export_with_missing_reference(single_input_effects);
       }
       /* Color, Adjustment, Text, etc. Strips. */
       else if (ELEM(strip->type,
@@ -335,7 +313,7 @@ static void otio_export_recursive(Main *bmain,
 
       if (strip_exporter) {
         SerializableObject::Retainer<Clip> clip = strip_exporter->export_strip(
-            bmain, export_params, single_input_effects);
+            bmain, &params, single_input_effects);
         std::optional<TimeRange> source_range = clip->source_range();
         last_strip_end = strip_exporter->last_strip_end;
 
@@ -356,8 +334,6 @@ static void otio_export_recursive(Main *bmain,
 
         delete strip_exporter;
       }
-      /* wmJob progress. */
-      increment_progress(worker_status, progress_per_strip);
     }
 
     if (!track->children().empty()) {
@@ -394,49 +370,26 @@ static void otio_export_recursive(Main *bmain,
   }
 }
 
-void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
+void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
 {
-  ExportJobData *job_data = static_cast<ExportJobData *>(custom_data);
-  OTIOExportParams *export_params = &job_data->params;
-
-  Main *bmain = job_data->bmain;
-  Scene *scene = job_data->scene;
   Editing *editing = seq::editing_get(scene);
 
   ListBaseT<Strip> *seqbase = &editing->seqbase;
-
-  worker_status->progress = 0.0f;
-  worker_status->do_update = true;
-
-  float progress_per_strip = 1.0f / BLI_listbase_count(seqbase);
 
   auto timeline = SerializableObject::Retainer<Timeline>(
       new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
 
   auto main_stack = SerializableObject::Retainer<Stack>(new Stack());
-  otio_export_recursive(bmain,
-                        scene,
-                        export_params,
-                        job_data->filepath,
-                        &main_stack,
-                        nullptr,
-                        seqbase,
-                        0,
-                        scene->r.efra,
-                        &editing->channels,
-                        worker_status,
-                        progress_per_strip);
+  otio_export_recursive(
+      bmain, scene, params, &main_stack, nullptr, seqbase, 0, scene->r.efra, &editing->channels);
 
   attach_foreign_metadata_scene(scene, timeline);
   export_scene_markers(scene, main_stack);
 
   timeline->set_tracks(main_stack);
-  timeline->to_json_file(job_data->filepath);
+  timeline->to_json_file(params.filepath);
 
-  worker_status->progress = 1.0f;
-  worker_status->do_update = true;
-
-  BKE_report(worker_status->reports, RPT_INFO, "File exported successfully");
+  BKE_report(params.reports, RPT_INFO, "File exported successfully");
 }
 
 }  // namespace io::otio

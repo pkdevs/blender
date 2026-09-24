@@ -6,13 +6,11 @@
  * \ingroup otio
  */
 
-#include <cstdio>
 #include <cstring>
 
 #include "BKE_idprop.hh"
 #include "BKE_main.hh"
 
-#include "BLI_fileops.hh"
 #include "BLI_listbase_iterator.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
@@ -28,7 +26,6 @@
 #include "DNA_vec_types.h"
 #include "DNA_vfont_types.h"
 
-#include "SEQ_render.hh"
 #include "SEQ_transform.hh"
 
 #include "opentimelineio/anyDictionary.h"
@@ -102,22 +99,12 @@ static TimeRange get_strip_source_range(const Strip *strip,
 }
 
 static SerializableObject::Retainer<ExternalReference> create_external_reference(
-    const Main *bmain,
-    const Strip *strip,
-    const Scene *scene,
-    float media_fps,
-    const char *filepath = nullptr)
+    const Main *bmain, const Strip *strip, const Scene *scene, float media_fps)
 {
   char media_filename[FILE_MAX];
   char media_filepath[FILE_MAX];
-  if (!filepath) {
-    get_media_filename(strip, media_filename);
-    get_media_filepath(bmain, strip, media_filepath);
-  }
-  else {
-    BLI_strncpy(media_filepath, filepath, sizeof(media_filepath));
-    BLI_path_split_file_part(filepath, media_filename, sizeof(media_filename));
-  }
+  get_media_filename(strip, media_filename);
+  get_media_filepath(bmain, strip, media_filepath);
 
   TimeRange media_available_range = get_media_available_range(strip, scene, media_fps);
 
@@ -333,110 +320,6 @@ static bool img_seq_need_fallback(StripElem *se)
 
   return false;
 }
-
-static void path_append_sequence_number(
-    const char *old_path, char *path_out, int frame_nr, int padding, bool prefix_period = true)
-{
-  /* Copy old path. */
-  BLI_strncpy(path_out, old_path, FILE_MAX);
-
-  /* Remove and store the extension. */
-  char ext[FILE_MAX];
-  ext[0] = '\0';
-  if (BLI_path_extension(path_out)) {
-    BLI_strncpy(ext, BLI_path_extension(path_out), sizeof(ext));
-    BLI_path_extension_strip(path_out);
-  }
-
-  /* create ### mask. */
-  char mask[FILE_MAX];
-
-  {
-    int curr = 0;
-    for (; curr < min_ii(padding, FILE_MAX - 1); ++curr) {
-      mask[curr] = '#';
-    }
-    mask[curr] = '\0';
-  }
-
-  if (prefix_period) {
-    BLI_strncat(path_out, ".", FILE_MAX);
-  }
-  BLI_strncat(path_out, mask, FILE_MAX);
-  BLI_strncat(path_out, ext, FILE_MAX);
-
-  /* Replace mask with frame_nr and with `0` pading if required. */
-  BLI_path_frame(path_out, FILE_MAX, frame_nr, padding);
-}
-
-static int calculate_padding(int img_count)
-{
-  /* Count number of digits required to represent the largest number in the sequence. */
-  int padding = 0;
-
-  for (int imc = img_count; imc; imc /= 10) {
-    ++padding;
-  };
-
-  /* Keep the padding atleast 2. */
-  return max_ii(padding, 2);
-}
-
-static void img_sequence_rename(StripElem *se, const char *dirpath, int img_count, int padding)
-{
-  char common_filename[FILE_MAX];
-  BLI_strncpy(common_filename, se->filename, sizeof(common_filename));
-
-  for (int seq_num = 1; seq_num <= img_count; ++seq_num, ++se) {
-    char old_path[FILE_MAX];
-    BLI_path_join(old_path, sizeof(old_path), dirpath, se->filename);
-
-    path_append_sequence_number(common_filename, se->filename, seq_num, padding);
-
-    char new_path[FILE_MAX];
-    BLI_path_join(new_path, sizeof(new_path), dirpath, se->filename);
-
-    std::rename(old_path, new_path);
-    CLOG_INFO_NOCHECK(&LOG, "Rename '%s' -> '%s'", old_path, new_path);
-  }
-}
-
-#ifndef WIN32
-/* `BLI_create_symlink` is not implemented for Windows. Windows require admin previlages to create
- * symlinks. */
-
-static void img_sequence_create_symlinks(const StripElem *se,
-                                         char *target_url_base,
-                                         const int img_count,
-                                         int padding)
-{
-  char BL_links_path[FILE_MAX];
-  BLI_path_join(BL_links_path, sizeof(BL_links_path), target_url_base, "BL_links");
-
-  /* Create `BL_links` directory if it does not exist. */
-  if (!BLI_dir_create_recursive(BL_links_path)) {
-    CLOG_ERROR(&LOG, "Unable to create directory '%s'", BL_links_path);
-    return;
-  }
-
-  BLI_strncpy(target_url_base, BL_links_path, FILE_MAX);
-
-  char symlink_base_path[FILE_MAX];
-  BLI_path_join(symlink_base_path, sizeof(symlink_base_path), BL_links_path, se->filename);
-
-  for (int seq_num = 1; seq_num <= img_count; ++seq_num, ++se) {
-    char symlink_path[FILE_MAX];
-    path_append_sequence_number(symlink_base_path, symlink_path, seq_num, padding);
-
-    char symlink_target[FILE_MAX];
-    BLI_path_join(symlink_target, sizeof(symlink_target), "..", se->filename);
-
-    BLI_create_symlink(symlink_path, symlink_target);
-    CLOG_INFO_NOCHECK(&LOG, "Created symlink '%s' -> '%s'", symlink_path, symlink_target);
-  }
-}
-
-#endif
 
 template<typename T>
 static void attach_foreign_metadata(IDProperty *idp, SerializableObject::Retainer<T> &clip)
@@ -1064,7 +947,7 @@ SerializableObject::Retainer<Clip> MovieStripExporter::export_strip(
 
   TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
   SerializableObject::Retainer<ExternalReference> external_reference = create_external_reference(
-      bmain, strip_, scene_, media_fps, filepath_);
+      bmain, strip_, scene_, media_fps);
 
   auto clip = otio::SerializableObject::Retainer<otio::Clip>(
       new Clip(strip_->name + 2, external_reference, strip_source_range));
@@ -1103,7 +986,7 @@ SerializableObject::Retainer<Clip> SoundStripExporter::export_strip(
 
 SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
     Main *bmain,
-    const OTIOExportParams *export_params,
+    const OTIOExportParams * /*export_params*/,
     std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
 {
   float media_fps = scene_->frames_per_second();
@@ -1146,49 +1029,13 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
 
     int frame_step = 1;
     int start_frame_nr = 1;
-    int padding = calculate_padding(img_count);
+    int padding = 0;
 
     if (img_seq_need_fallback(se)) {
-      /* Update `name_prefix` to : filename without extension + '.' */
-      BLI_strncpy(name_prefix, se->filename, sizeof(name_prefix));
-      BLI_path_extension_strip(name_prefix);
-      BLI_strncat(name_prefix, ".", sizeof(name_prefix));
-
       CLOG_WARN(&LOG,
                 "Strip '%s' contains an image sequence with non-sequential filenames",
                 strip_->name + 2);
-
-      switch (export_params->img_sequence_fallback) {
-        case ImgSeqFallback::RenderMovie: {
-          CLOG_INFO(
-              &LOG, "Exporting image sequence strip '%s' as a rendered movie", strip_->name + 2);
-
-          auto exporter = RenderAsMovieExporter(strip_, scene_, track_, last_strip_end, filepath_);
-          auto clip = exporter.export_strip(bmain, export_params, single_input_effects);
-          last_strip_end = exporter.last_strip_end;
-          return clip;
-        }
-        case ImgSeqFallback::Rename: {
-          CLOG_INFO(&LOG, "Renaming the images of image sequence strip '%s'", strip_->name + 2);
-
-          img_sequence_rename(se, target_url_base, img_count, padding);
-          break;
-        }
-
-#ifndef WIN32
-        case ImgSeqFallback::Symlink: {
-          CLOG_INFO(&LOG,
-                    "Creating symbolic links for the images of image sequence strip '%s'",
-                    strip_->name + 2);
-
-          img_sequence_create_symlinks(se, target_url_base, img_count, padding);
-          break;
-        }
-#endif
-
-        default:
-          break;
-      }
+      return export_with_missing_reference(single_input_effects);
     }
     else {
       if (!BLI_path_frame_get(se->filename, &start_frame_nr, &padding)) {
@@ -1244,67 +1091,6 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
     track_->append_child(clip);
     return clip;
   }
-}
-
-SerializableObject::Retainer<Clip> RenderAsMovieExporter::export_strip(
-    Main *bmain,
-    const OTIOExportParams *export_params,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-
-{
-  if (!filepath_) {
-    return export_with_missing_reference(single_input_effects);
-  }
-
-  /* Create a unique filename for the strip containing the strip name, channel number and frame
-   * range. */
-  char render_filename[FILE_MAX];
-  char temp[FILE_MAX];
-  temp[0] = '\0';
-  int padding = calculate_padding(strip_->right_handle(scene_) - 1);
-  BLI_strncpy(render_filename, strip_->name + 2, sizeof(render_filename));
-  BLI_strncat(render_filename, ".C", sizeof(render_filename));
-  BLI_strncat(render_filename, std::to_string(strip_->channel).c_str(), sizeof(render_filename));
-  BLI_strncat(render_filename, ".", sizeof(render_filename));
-
-  BLI_strncat(temp, "[", sizeof(temp));
-  path_append_sequence_number(temp, temp, strip_->left_handle(), padding, false);
-  BLI_strncat(temp, "-", sizeof(temp));
-  path_append_sequence_number(temp, temp, strip_->right_handle(scene_) - 1, padding, false);
-  BLI_strncat(temp, "]", sizeof(temp));
-
-  BLI_strncat(render_filename, temp, sizeof(render_filename));
-  BLI_strncat(render_filename, ".mp4", sizeof(render_filename));
-
-  char render_filepath[FILE_MAX];
-  BLI_path_split_dir_part(filepath_, render_filepath, sizeof(render_filepath));
-  BLI_path_append_dir(render_filepath, sizeof(render_filepath), "BL_render");
-  if (!BLI_dir_create_recursive(render_filepath)) {
-    return SerializableObject::Retainer<Clip>(new Clip());
-  }
-  BLI_path_append(render_filepath, sizeof(render_filepath), render_filename);
-
-  short render_res = 100;
-  if (strip_->type == STRIP_TYPE_SCENE && !(strip_->flag & SEQ_SCENE_STRIPS) && strip_->scene) {
-    render_res = get_scene_strip_resolution_percent(export_params->scene_strip_res);
-  }
-
-  CLOG_INFO(&LOG, "Rendering strip '%s'", strip_->name + 2);
-  const bool is_rendered = seq::render_strip_full(
-      bmain, scene_, strip_, render_res, render_filepath, false);
-
-  if (!is_rendered) {
-    CLOG_ERROR(&LOG, "Strip rendering failed, exporting with a missing reference");
-    return export_with_missing_reference(single_input_effects);
-  }
-  CLOG_INFO(&LOG, "Strip rendered as movie to '%s'", render_filepath);
-
-  auto exporter = MovieStripExporter(strip_, scene_, track_, last_strip_end, render_filepath);
-  auto clip = exporter.export_strip(bmain, export_params, single_input_effects);
-  last_strip_end = exporter.last_strip_end;
-
-  UNUSED_VARS(include_audio_);
-  return clip;
 }
 
 SerializableObject::Retainer<Clip> GeneratorStripExporter::export_strip(
