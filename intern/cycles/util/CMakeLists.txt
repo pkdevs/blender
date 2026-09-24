@@ -63,6 +63,7 @@ set(SRC_HEADERS
   defines.h
   deque.h
   disjoint_set.h
+  enum.h
   guarded_allocator.h
   guiding.h
   half.h
