@@ -37,7 +37,7 @@ class HIPDevice : public GPUDevice {
 
   static bool have_precompiled_kernels();
 
-  BVHLayoutMask get_bvh_layout_mask(uint64_t kernel_features) const override;
+  BVHLayoutMask get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const override;
 
   void set_error(const string &error) override;
 
@@ -45,18 +45,20 @@ class HIPDevice : public GPUDevice {
 
   ~HIPDevice() override;
 
-  bool support_device(const uint64_t /*kernel_features*/);
+  bool support_device(const KernelFeatures & /*kernel_features*/);
 
   bool check_peer_access(Device *peer_device) override;
 
   bool use_adaptive_compilation();
 
-  string compile_kernel_get_common_cflags(uint64_t kernel_features);
+  string compile_kernel_get_common_cflags(const KernelFeatures &kernel_features);
 
-  string compile_kernel(uint64_t kernel_features, const char *name, const char *base = "hip");
+  string compile_kernel(const KernelFeatures &kernel_features,
+                        const char *name,
+                        const char *base = "hip");
 
-  bool load_kernels(uint64_t kernel_features) override;
-  void reserve_local_memory(uint64_t kernel_features);
+  bool load_kernels(const KernelFeatures &kernel_features) override;
+  void reserve_local_memory(const KernelFeatures &kernel_features);
 
   /* All memory types. */
   void mem_alloc(device_memory &mem) override;

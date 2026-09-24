@@ -175,7 +175,7 @@ unique_ptr<DeviceQueue> OptiXDevice::gpu_queue_create()
   return make_unique<OptiXDeviceQueue>(this);
 }
 
-BVHLayoutMask OptiXDevice::get_bvh_layout_mask(const uint64_t /*kernel_features*/) const
+BVHLayoutMask OptiXDevice::get_bvh_layout_mask(const KernelFeatures & /*kernel_features*/) const
 {
   /* OptiX has its own internal acceleration structure format. */
   return BVH_LAYOUT_OPTIX;
@@ -198,7 +198,7 @@ static string get_optix_include_dir()
   return string();
 }
 
-string OptiXDevice::compile_kernel_get_common_cflags(const uint64_t kernel_features)
+string OptiXDevice::compile_kernel_get_common_cflags(const KernelFeatures &kernel_features)
 {
   string common_cflags = CUDADevice::compile_kernel_get_common_cflags(kernel_features);
 
@@ -264,7 +264,7 @@ static unsigned int hit_program_continuation_stack_size(const OptixStackSizes *s
   return trace_css;
 }
 
-bool OptiXDevice::load_kernels(const uint64_t kernel_features)
+bool OptiXDevice::load_kernels(const KernelFeatures &kernel_features)
 {
   if (have_error()) {
     /* Abort early if context creation failed already. */
@@ -726,7 +726,7 @@ bool OptiXDevice::load_kernels(const uint64_t kernel_features)
   }
 
   /* Add hit group for local intersections. */
-  if (kernel_features & (KERNEL_FEATURE_SUBSURFACE | KERNEL_FEATURE_NODE_RAYTRACE)) {
+  if (kernel_features & KernelFeatures(KERNEL_FEATURE_SUBSURFACE, KERNEL_FEATURE_NODE_RAYTRACE)) {
     group_descs[PG_HITL].kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
     group_descs[PG_HITL].hitgroup.moduleAH = optix_module;
     group_descs[PG_HITL].hitgroup.entryFunctionNameAH = "__anyhit__kernel_optix_local_hit";

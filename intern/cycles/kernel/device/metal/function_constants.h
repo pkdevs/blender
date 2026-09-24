@@ -8,6 +8,7 @@ enum {
 #include "kernel/data_template.h"
 
   KernelData_kernel_features,
+  KernelData_node_features,
 };
 
 #ifdef __KERNEL_METAL__
@@ -16,6 +17,8 @@ enum {
         [[function_constant(KernelData_##parent##_##name)]];
 #  include "kernel/data_template.h"
 
-constant ulong kernel_data_kernel_features [[function_constant(KernelData_kernel_features)]];
-
+constant uint kernel_data_kernel_features_value [[function_constant(KernelData_kernel_features)]];
+constant uint kernel_data_node_features_value [[function_constant(KernelData_node_features)]];
+#  define kernel_data_kernel_features KernelFeature(kernel_data_kernel_features_value)
+#  define kernel_data_node_features KernelNodeFeature(kernel_data_node_features_value)
 #endif

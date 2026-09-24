@@ -252,9 +252,9 @@ class ShaderNode : public Node {
    * so it's possible to disable huge nodes inside of the required
    * nodes group.
    */
-  virtual uint64_t get_feature()
+  virtual KernelNodeFeature get_feature()
   {
-    return bump == SHADER_BUMP_NONE ? 0 : KERNEL_FEATURE_NODE_BUMP;
+    return bump == SHADER_BUMP_NONE ? KERNEL_FEATURE_NODE_NONE : KERNEL_FEATURE_NODE_BUMP;
   }
 
   /* Get closure ID to which the node compiles into. */

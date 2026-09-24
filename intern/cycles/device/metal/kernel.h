@@ -8,6 +8,8 @@
 
 #  include "device/kernel.h"
 
+#  include "kernel/features.h"
+
 #  include <Metal/Metal.h>
 
 CCL_NAMESPACE_BEGIN
@@ -70,7 +72,7 @@ class MetalKernelPipeline {
 
   KernelData kernel_data_;
   bool use_metalrt;
-  uint64_t kernel_features = 0;
+  KernelFeatures kernel_features;
 
   int threads_per_threadgroup;
 

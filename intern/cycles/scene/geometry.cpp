@@ -993,7 +993,7 @@ void GeometryManager::device_update(Device *device,
   device_free(device, dscene, false);
 
   const BVHLayout bvh_layout = BVHParams::best_bvh_layout(
-      scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->data.kernel_features));
+      scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->get_kernel_features()));
   geom_calc_offset(scene, bvh_layout);
   if (true_displacement_used || curve_need_update_shadow_transparency) {
     const scoped_callback_timer timer([scene](double time) {
@@ -1192,7 +1192,7 @@ void GeometryManager::device_update(Device *device,
   /* Always set BVH layout again after displacement where it was set to none,
    * to avoid ray-tracing at that stage. */
   dscene->data.bvh.bvh_layout = BVHParams::best_bvh_layout(
-      scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->data.kernel_features));
+      scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->get_kernel_features()));
 
   /* Upload attributes to the device.
    *

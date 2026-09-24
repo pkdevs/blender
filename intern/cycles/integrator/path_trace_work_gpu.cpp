@@ -20,7 +20,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-static size_t estimate_single_state_size(const uint64_t kernel_features)
+static size_t estimate_single_state_size(const KernelFeatures &kernel_features)
 {
   size_t state_size = 0;
 
@@ -87,7 +87,6 @@ PathTraceWorkGPU::PathTraceWorkGPU(Device *device,
                                    const bool *cancel_requested_flag)
     : PathTraceWork(device, film, device_scene, cancel_requested_flag),
       queue_(device->gpu_queue_create()),
-      integrator_state_soa_kernel_features_(0),
       integrator_queue_counter_(device, "integrator_queue_counter", MEM_READ_WRITE),
       integrator_shader_sort_counter_(device, "integrator_shader_sort_counter", MEM_READ_WRITE),
       integrator_shader_raytrace_sort_counter_(
@@ -118,7 +117,7 @@ void PathTraceWorkGPU::alloc_integrator_soa()
    * Note that both disabling and enabling features may require memory
    * allocations, so we check for equality. */
   const int requested_volume_stack_size = device_scene_->data.volume_stack_size;
-  const uint64_t kernel_features = device_scene_->data.kernel_features;
+  const KernelFeatures kernel_features = device_scene_->get_kernel_features();
   if (integrator_state_soa_kernel_features_ == kernel_features &&
       integrator_state_soa_volume_stack_size_ >= requested_volume_stack_size)
   {
@@ -210,7 +209,6 @@ void PathTraceWorkGPU::alloc_integrator_soa()
 
   bool shadow = false;
 #include "kernel/integrator/state_template.h"
-
   shadow = true;
 #include "kernel/integrator/shadow_state_template.h"
 
@@ -289,7 +287,7 @@ void PathTraceWorkGPU::alloc_integrator_sorting()
       integrator_shader_sort_prefix_sum_.zero_to_device();
     }
 
-    const bool use_raytrace = device_scene_->data.kernel_features & KERNEL_FEATURE_NODE_RAYTRACE;
+    const bool use_raytrace = device_scene_->data.node_features & KERNEL_FEATURE_NODE_RAYTRACE;
     if (use_raytrace && integrator_shader_raytrace_sort_counter_.size() < sort_buckets) {
       integrator_shader_raytrace_sort_counter_.alloc(sort_buckets);
       integrator_shader_raytrace_sort_counter_.zero_to_device();
@@ -374,7 +372,8 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
    * schedules work in halves of available number of paths. */
   work_tile_scheduler_.set_max_num_path_states(max_num_paths_ / 8);
   work_tile_scheduler_.set_accelerated_rt(
-      (device_->get_bvh_layout_mask(device_scene_->data.kernel_features) & BVH_LAYOUT_OPTIX) != 0);
+      (device_->get_bvh_layout_mask(device_scene_->get_kernel_features()) & BVH_LAYOUT_OPTIX) !=
+      0);
   work_tile_scheduler_.reset(effective_buffer_params_,
                              start_sample,
                              samples_num,
@@ -461,7 +460,7 @@ void PathTraceWorkGPU::enqueue_reset()
   if (integrator_shader_sort_counter_.size() != 0) {
     queue_->zero_to_device(integrator_shader_sort_counter_);
   }
-  if (device_scene_->data.kernel_features & KERNEL_FEATURE_NODE_RAYTRACE &&
+  if (device_scene_->data.node_features & KERNEL_FEATURE_NODE_RAYTRACE &&
       integrator_shader_raytrace_sort_counter_.size() != 0)
   {
     queue_->zero_to_device(integrator_shader_raytrace_sort_counter_);

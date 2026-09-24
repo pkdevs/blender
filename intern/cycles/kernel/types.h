@@ -1403,10 +1403,12 @@ struct KernelSceneTime {
 
 struct ccl_align(16) KernelData {
   /* Features and limits. */
-  uint64_t kernel_features;
+  KernelFeature kernel_features;
+  KernelNodeFeature node_features;
   uint max_closures;
   uint max_shaders;
   uint volume_stack_size;
+  uint pad_features[3];
 
   /* Always dynamic data members. */
   KernelCamera cam;

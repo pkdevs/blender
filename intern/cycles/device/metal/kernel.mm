@@ -443,7 +443,7 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
   MTLDataType MTLDataType_float = MTLDataTypeFloat;
   MTLDataType MTLDataType_float2 = MTLDataTypeFloat2;
   MTLDataType MTLDataType_float4 = MTLDataTypeFloat4;
-  KernelData zero_data = {0};
+  KernelData zero_data = {};
   if (!data) {
     data = &zero_data;
   }
@@ -463,8 +463,11 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 #  include "kernel/data_template.h"
 
   [constant_values setConstantValue:&data->kernel_features
-                               type:MTLDataTypeULong
+                               type:MTLDataTypeUInt
                             atIndex:KernelData_kernel_features];
+  [constant_values setConstantValue:&data->node_features
+                               type:MTLDataTypeUInt
+                            atIndex:KernelData_node_features];
 
   return constant_values;
 }

@@ -268,7 +268,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
       state, path, glossy_bounce);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, throughput) = throughput;
 
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL)) {
+  if ((kernel_data.node_features & KERNEL_FEATURE_NODE_PORTAL)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, portal_bounce) = INTEGRATOR_STATE(
         state, path, portal_bounce);
   }
@@ -312,7 +312,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
 
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
-template<uint64_t node_feature_mask>
+template<KernelNodeFeature node_feature_mask>
 #if defined(__KERNEL_HIP__)
 /* Inlining the function makes gfx1102 crash rendering principled_bsdf_bevel_emission_137420.blend
  * using SDK 7.2.1. */
@@ -764,7 +764,7 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
 }
 #endif /* defined(__AO__) */
 
-template<uint64_t node_feature_mask>
+template<KernelNodeFeature node_feature_mask>
 ccl_device int integrate_surface(KernelGlobals kg,
                                  IntegratorState state,
                                  ccl_global float *ccl_restrict render_buffer)
@@ -917,8 +917,8 @@ ccl_device_forceinline void integrator_shade_surface_next_kernel(IntegratorState
   }
 }
 
-template<uint64_t node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE &
-                                      ~KERNEL_FEATURE_NODE_RAYTRACE,
+template<KernelNodeFeature node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE &
+                                               ~KERNEL_FEATURE_NODE_RAYTRACE,
          DeviceKernel current_kernel = DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE>
 ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
                                                      IntegratorState state,

@@ -102,6 +102,11 @@ class DeviceScene {
 
   KernelData data;
 
+  KernelFeatures get_kernel_features() const
+  {
+    return {data.kernel_features, data.node_features};
+  }
+
   DeviceScene(Device *device);
 };
 

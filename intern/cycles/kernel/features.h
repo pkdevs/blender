@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "util/enum.h"
 #include "util/types.h"
 
 CCL_NAMESPACE_BEGIN
@@ -13,104 +14,148 @@ CCL_NAMESPACE_BEGIN
  * These are set from the host side depending on which features are used by the scene,
  * either for runtime checks or specialization.
  *
- * NOTE: Keep kernel features as defines as they are used by the preprocessor to do
- * compile time optimization while using adaptive kernel compilation. */
+ * Shader node features and other kernel features are separate 32 bit types. Mixing them in
+ * bitwise operations is a compile error. On the host they are combined in #KernelFeatures. */
 
-/* Shader nodes. */
-#define KERNEL_FEATURE_NODE_BSDF (1ULL << 0ULL)
-#define KERNEL_FEATURE_NODE_EMISSION (1ULL << 1ULL)
-#define KERNEL_FEATURE_NODE_VOLUME (1ULL << 2ULL)
-#define KERNEL_FEATURE_NODE_BUMP (1ULL << 3ULL)
-#define KERNEL_FEATURE_NODE_BUMP_STATE (1ULL << 4ULL)
-#define KERNEL_FEATURE_NODE_VORONOI_EXTRA (1ULL << 5ULL)
-#define KERNEL_FEATURE_NODE_RAYTRACE (1ULL << 6ULL)
-#define KERNEL_FEATURE_NODE_AOV (1ULL << 7ULL)
-#define KERNEL_FEATURE_NODE_LIGHT_PATH (1ULL << 8ULL)
-#define KERNEL_FEATURE_NODE_PRINCIPLED_HAIR (1ULL << 9ULL)
-#define KERNEL_FEATURE_NODE_PORTAL (1ULL << 10ULL)
+/* Bit positions, also used by the preprocessor for adaptive compilation. */
+#define KERNEL_FEATURE_NODE_BIT_BSDF 0
+#define KERNEL_FEATURE_NODE_BIT_EMISSION 1
+#define KERNEL_FEATURE_NODE_BIT_VOLUME 2
+#define KERNEL_FEATURE_NODE_BIT_BUMP 3
+#define KERNEL_FEATURE_NODE_BIT_BUMP_STATE 4
+#define KERNEL_FEATURE_NODE_BIT_VORONOI_EXTRA 5
+#define KERNEL_FEATURE_NODE_BIT_RAYTRACE 6
+#define KERNEL_FEATURE_NODE_BIT_AOV 7
+#define KERNEL_FEATURE_NODE_BIT_LIGHT_PATH 8
+#define KERNEL_FEATURE_NODE_BIT_PRINCIPLED_HAIR 9
+#define KERNEL_FEATURE_NODE_BIT_PORTAL 10
 
-/* Use path tracing kernels. */
-#define KERNEL_FEATURE_PATH_TRACING (1ULL << 11ULL)
+#define KERNEL_FEATURE_BIT_PATH_TRACING 0
+#define KERNEL_FEATURE_BIT_POINTCLOUD 1
+#define KERNEL_FEATURE_BIT_HAIR_RIBBON 2
+#define KERNEL_FEATURE_BIT_HAIR_THICK 3
+#define KERNEL_FEATURE_BIT_OBJECT_MOTION 4
+#define KERNEL_FEATURE_BIT_BAKING 5
+#define KERNEL_FEATURE_BIT_SUBSURFACE 6
+#define KERNEL_FEATURE_BIT_VOLUME 7
+#define KERNEL_FEATURE_BIT_TRANSPARENT 8
+#define KERNEL_FEATURE_BIT_SHADOW_CATCHER 9
+#define KERNEL_FEATURE_BIT_LIGHT_PASSES 10
+#define KERNEL_FEATURE_BIT_AO_PASS 11
+#define KERNEL_FEATURE_BIT_AO_ADDITIVE 12
+#define KERNEL_FEATURE_BIT_MNEE 13
+#define KERNEL_FEATURE_BIT_PATH_GUIDING 14
+#define KERNEL_FEATURE_BIT_OSL_SHADING 15
+#define KERNEL_FEATURE_BIT_OSL_CAMERA 16
+#define KERNEL_FEATURE_BIT_LIGHT_LINKING 17
+#define KERNEL_FEATURE_BIT_SHADOW_LINKING 18
+#define KERNEL_FEATURE_BIT_DENOISING 19
+#define KERNEL_FEATURE_BIT_LIGHT_TREE 20
+#define KERNEL_FEATURE_BIT_GSPLATS 21
 
-/* BVH/sampling kernel features. */
-#define KERNEL_FEATURE_POINTCLOUD (1ULL << 12ULL)
-#define KERNEL_FEATURE_HAIR_RIBBON (1ULL << 13ULL)
-#define KERNEL_FEATURE_HAIR_THICK (1ULL << 14ULL)
-#define KERNEL_FEATURE_HAIR (KERNEL_FEATURE_HAIR_RIBBON | KERNEL_FEATURE_HAIR_THICK)
-#define KERNEL_FEATURE_OBJECT_MOTION (1ULL << 15ULL)
+/* Shader nodes, also used to specialize shader evaluation for kernels. */
+enum KernelNodeFeature : uint32_t {
+  KERNEL_FEATURE_NODE_NONE = 0U,
+  KERNEL_FEATURE_NODE_BSDF = (1U << KERNEL_FEATURE_NODE_BIT_BSDF),
+  KERNEL_FEATURE_NODE_EMISSION = (1U << KERNEL_FEATURE_NODE_BIT_EMISSION),
+  KERNEL_FEATURE_NODE_VOLUME = (1U << KERNEL_FEATURE_NODE_BIT_VOLUME),
+  KERNEL_FEATURE_NODE_BUMP = (1U << KERNEL_FEATURE_NODE_BIT_BUMP),
+  KERNEL_FEATURE_NODE_BUMP_STATE = (1U << KERNEL_FEATURE_NODE_BIT_BUMP_STATE),
+  KERNEL_FEATURE_NODE_VORONOI_EXTRA = (1U << KERNEL_FEATURE_NODE_BIT_VORONOI_EXTRA),
+  KERNEL_FEATURE_NODE_RAYTRACE = (1U << KERNEL_FEATURE_NODE_BIT_RAYTRACE),
+  KERNEL_FEATURE_NODE_AOV = (1U << KERNEL_FEATURE_NODE_BIT_AOV),
+  KERNEL_FEATURE_NODE_LIGHT_PATH = (1U << KERNEL_FEATURE_NODE_BIT_LIGHT_PATH),
+  KERNEL_FEATURE_NODE_PRINCIPLED_HAIR = (1U << KERNEL_FEATURE_NODE_BIT_PRINCIPLED_HAIR),
+  KERNEL_FEATURE_NODE_PORTAL = (1U << KERNEL_FEATURE_NODE_BIT_PORTAL),
 
-/* Denotes whether baking functionality is needed. */
-#define KERNEL_FEATURE_BAKING (1ULL << 16ULL)
+  /* Shader node feature masks, to specialize shader evaluation for kernels. */
+  KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT = (KERNEL_FEATURE_NODE_EMISSION |
+                                            KERNEL_FEATURE_NODE_VORONOI_EXTRA |
+                                            KERNEL_FEATURE_NODE_LIGHT_PATH |
+                                            KERNEL_FEATURE_NODE_PORTAL),
+  KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND = (KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT |
+                                                 KERNEL_FEATURE_NODE_AOV),
+  KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW =
+      (KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_BUMP |
+       KERNEL_FEATURE_NODE_BUMP_STATE | KERNEL_FEATURE_NODE_VORONOI_EXTRA |
+       KERNEL_FEATURE_NODE_LIGHT_PATH | KERNEL_FEATURE_NODE_PRINCIPLED_HAIR |
+       KERNEL_FEATURE_NODE_PORTAL),
+  KERNEL_FEATURE_NODE_MASK_SURFACE = (KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW |
+                                      KERNEL_FEATURE_NODE_RAYTRACE | KERNEL_FEATURE_NODE_AOV |
+                                      KERNEL_FEATURE_NODE_LIGHT_PATH),
+  KERNEL_FEATURE_NODE_MASK_VOLUME = (KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_VOLUME |
+                                     KERNEL_FEATURE_NODE_VORONOI_EXTRA |
+                                     KERNEL_FEATURE_NODE_LIGHT_PATH | KERNEL_FEATURE_NODE_PORTAL),
+  KERNEL_FEATURE_NODE_MASK_DISPLACEMENT = (KERNEL_FEATURE_NODE_VORONOI_EXTRA |
+                                           KERNEL_FEATURE_NODE_BUMP |
+                                           KERNEL_FEATURE_NODE_BUMP_STATE |
+                                           KERNEL_FEATURE_NODE_PORTAL),
+  KERNEL_FEATURE_NODE_MASK_BUMP = KERNEL_FEATURE_NODE_MASK_DISPLACEMENT,
+};
 
-/* Use subsurface scattering materials. */
-#define KERNEL_FEATURE_SUBSURFACE (1ULL << 17ULL)
+enum KernelFeature : uint32_t {
+  KERNEL_FEATURE_NONE = 0U,
 
-/* Use volume materials. */
-#define KERNEL_FEATURE_VOLUME (1ULL << 18ULL)
+  /* Use path tracing kernels. */
+  KERNEL_FEATURE_PATH_TRACING = (1U << KERNEL_FEATURE_BIT_PATH_TRACING),
 
-/* Use Transparent shadows */
-#define KERNEL_FEATURE_TRANSPARENT (1ULL << 19ULL)
+  /* BVH/sampling kernel features. */
+  KERNEL_FEATURE_POINTCLOUD = (1U << KERNEL_FEATURE_BIT_POINTCLOUD),
+  KERNEL_FEATURE_HAIR_RIBBON = (1U << KERNEL_FEATURE_BIT_HAIR_RIBBON),
+  KERNEL_FEATURE_HAIR_THICK = (1U << KERNEL_FEATURE_BIT_HAIR_THICK),
+  KERNEL_FEATURE_HAIR = (KERNEL_FEATURE_HAIR_RIBBON | KERNEL_FEATURE_HAIR_THICK),
+  KERNEL_FEATURE_OBJECT_MOTION = (1U << KERNEL_FEATURE_BIT_OBJECT_MOTION),
 
-/* Use shadow catcher. */
-#define KERNEL_FEATURE_SHADOW_CATCHER (1ULL << 20ULL)
+  /* Denotes whether baking functionality is needed. */
+  KERNEL_FEATURE_BAKING = (1U << KERNEL_FEATURE_BIT_BAKING),
 
-/* Light render passes. */
-#define KERNEL_FEATURE_LIGHT_PASSES (1ULL << 21ULL)
+  /* Use subsurface scattering materials. */
+  KERNEL_FEATURE_SUBSURFACE = (1U << KERNEL_FEATURE_BIT_SUBSURFACE),
 
-/* AO. */
-#define KERNEL_FEATURE_AO_PASS (1ULL << 22ULL)
-#define KERNEL_FEATURE_AO_ADDITIVE (1ULL << 23ULL)
-#define KERNEL_FEATURE_AO (KERNEL_FEATURE_AO_PASS | KERNEL_FEATURE_AO_ADDITIVE)
+  /* Use volume materials. */
+  KERNEL_FEATURE_VOLUME = (1U << KERNEL_FEATURE_BIT_VOLUME),
 
-/* MNEE. */
-#define KERNEL_FEATURE_MNEE (1ULL << 24ULL)
+  /* Use Transparent shadows */
+  KERNEL_FEATURE_TRANSPARENT = (1U << KERNEL_FEATURE_BIT_TRANSPARENT),
 
-/* Path guiding. */
-#define KERNEL_FEATURE_PATH_GUIDING (1ULL << 25ULL)
+  /* Use shadow catcher. */
+  KERNEL_FEATURE_SHADOW_CATCHER = (1U << KERNEL_FEATURE_BIT_SHADOW_CATCHER),
 
-/* OSL. */
-#define KERNEL_FEATURE_OSL_SHADING (1ULL << 26ULL)
-#define KERNEL_FEATURE_OSL_CAMERA (1ULL << 27ULL)
+  /* Light render passes. */
+  KERNEL_FEATURE_LIGHT_PASSES = (1U << KERNEL_FEATURE_BIT_LIGHT_PASSES),
 
-/* Light and shadow linking. */
-#define KERNEL_FEATURE_LIGHT_LINKING (1ULL << 28ULL)
-#define KERNEL_FEATURE_SHADOW_LINKING (1ULL << 29ULL)
+  /* AO. */
+  KERNEL_FEATURE_AO_PASS = (1U << KERNEL_FEATURE_BIT_AO_PASS),
+  KERNEL_FEATURE_AO_ADDITIVE = (1U << KERNEL_FEATURE_BIT_AO_ADDITIVE),
+  KERNEL_FEATURE_AO = (KERNEL_FEATURE_AO_PASS | KERNEL_FEATURE_AO_ADDITIVE),
 
-/* Use denoising kernels and output denoising passes. */
-#define KERNEL_FEATURE_DENOISING (1ULL << 30ULL)
+  /* MNEE. */
+  KERNEL_FEATURE_MNEE = (1U << KERNEL_FEATURE_BIT_MNEE),
 
-/* Light tree. */
-#define KERNEL_FEATURE_LIGHT_TREE (1ULL << 31ULL)
+  /* Path guiding. */
+  KERNEL_FEATURE_PATH_GUIDING = (1U << KERNEL_FEATURE_BIT_PATH_GUIDING),
 
-/* Gaussian splats. */
-#define KERNEL_FEATURE_GSPLATS (1ULL << 32ULL)
+  /* OSL. */
+  KERNEL_FEATURE_OSL_SHADING = (1U << KERNEL_FEATURE_BIT_OSL_SHADING),
+  KERNEL_FEATURE_OSL_CAMERA = (1U << KERNEL_FEATURE_BIT_OSL_CAMERA),
 
-/* Shader node feature mask, to specialize shader evaluation for kernels. */
+  /* Light and shadow linking. */
+  KERNEL_FEATURE_LIGHT_LINKING = (1U << KERNEL_FEATURE_BIT_LIGHT_LINKING),
+  KERNEL_FEATURE_SHADOW_LINKING = (1U << KERNEL_FEATURE_BIT_SHADOW_LINKING),
 
-#define KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT \
-  (KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_VORONOI_EXTRA | \
-   KERNEL_FEATURE_NODE_LIGHT_PATH | KERNEL_FEATURE_NODE_PORTAL)
-#define KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND \
-  (KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT | KERNEL_FEATURE_NODE_AOV)
-#define KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW \
-  (KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_BUMP | \
-   KERNEL_FEATURE_NODE_BUMP_STATE | KERNEL_FEATURE_NODE_VORONOI_EXTRA | \
-   KERNEL_FEATURE_NODE_LIGHT_PATH | KERNEL_FEATURE_NODE_PRINCIPLED_HAIR | \
-   KERNEL_FEATURE_NODE_PORTAL)
-#define KERNEL_FEATURE_NODE_MASK_SURFACE \
-  (KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW | KERNEL_FEATURE_NODE_RAYTRACE | \
-   KERNEL_FEATURE_NODE_AOV | KERNEL_FEATURE_NODE_LIGHT_PATH)
-#define KERNEL_FEATURE_NODE_MASK_VOLUME \
-  (KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_VOLUME | \
-   KERNEL_FEATURE_NODE_VORONOI_EXTRA | KERNEL_FEATURE_NODE_LIGHT_PATH | \
-   KERNEL_FEATURE_NODE_PORTAL)
-#define KERNEL_FEATURE_NODE_MASK_DISPLACEMENT \
-  (KERNEL_FEATURE_NODE_VORONOI_EXTRA | KERNEL_FEATURE_NODE_BUMP | \
-   KERNEL_FEATURE_NODE_BUMP_STATE | KERNEL_FEATURE_NODE_PORTAL)
-#define KERNEL_FEATURE_NODE_MASK_BUMP KERNEL_FEATURE_NODE_MASK_DISPLACEMENT
+  /* Use denoising kernels and output denoising passes. */
+  KERNEL_FEATURE_DENOISING = (1U << KERNEL_FEATURE_BIT_DENOISING),
 
-#define IF_KERNEL_FEATURE(feature) \
-  if constexpr ((node_feature_mask & (KERNEL_FEATURE_##feature)) != 0U)
+  /* Light tree. */
+  KERNEL_FEATURE_LIGHT_TREE = (1U << KERNEL_FEATURE_BIT_LIGHT_TREE),
+
+  /* Gaussian splats. */
+  KERNEL_FEATURE_GSPLATS = (1U << KERNEL_FEATURE_BIT_GSPLATS),
+};
+
+CCL_ENUM_OPERATORS(KernelNodeFeature, uint32_t)
+CCL_ENUM_OPERATORS(KernelFeature, uint32_t)
+
 #define IF_KERNEL_NODES_FEATURE(feature) \
   if constexpr ((node_feature_mask & (KERNEL_FEATURE_NODE_##feature)) != 0U)
 #define IF_NOT_KERNEL_NODES_FEATURE(feature) \
@@ -167,52 +212,57 @@ CCL_NAMESPACE_BEGIN
 #  define __VOLUME_RECORD_ALL__
 #endif /* !__KERNEL_GPU__ */
 
-/* Scene-based selective features compilation. */
+/* Scene-based adaptive features compilation.
+ *
+ * __KERNEL_FEATURES__ and __KERNEL_NODE_FEATURES__ are then defined as
+ * integers to indicate the features used. */
 
 #ifdef __KERNEL_FEATURES__
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_OBJECT_MOTION)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_OBJECT_MOTION))
 #    undef __OBJECT_MOTION__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_HAIR)
+#  if !(__KERNEL_FEATURES__ & \
+        ((1U << KERNEL_FEATURE_BIT_HAIR_RIBBON) | (1U << KERNEL_FEATURE_BIT_HAIR_THICK)))
 #    undef __HAIR__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_POINTCLOUD)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_POINTCLOUD))
 #    undef __POINTCLOUD__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_VOLUME)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_VOLUME))
 #    undef __VOLUME__
-#    if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_TRANSPARENT)
+#    if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_TRANSPARENT))
 #      undef __TRANSPARENT_SHADOWS__
 #    endif
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_SUBSURFACE)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SUBSURFACE))
 #    undef __SUBSURFACE__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_SHADOW_CATCHER)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_CATCHER))
 #    undef __SHADOW_CATCHER__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_DENOISING)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_DENOISING))
 #    undef __DENOISING_FEATURES__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_AO)
+#  if !(__KERNEL_FEATURES__ & \
+        ((1U << KERNEL_FEATURE_BIT_AO_PASS) | (1U << KERNEL_FEATURE_BIT_AO_ADDITIVE)))
 #    undef __AO__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_MNEE)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_MNEE))
 #    undef __MNEE__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_PATH_GUIDING)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_PATH_GUIDING))
 #    undef __PATH_GUIDING__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_NODE_PRINCIPLED_HAIR)
+#  if !(__KERNEL_NODE_FEATURES__ & (1U << KERNEL_FEATURE_NODE_BIT_PRINCIPLED_HAIR))
 #    undef __PRINCIPLED_HAIR__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_LIGHT_LINKING)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_LIGHT_LINKING))
 #    undef __LIGHT_LINKING__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_SHADOW_LINKING)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_SHADOW_LINKING))
 #    undef __SHADOW_LINKING__
 #  endif
-#  if !(__KERNEL_FEATURES__ & KERNEL_FEATURE_GSPLATS)
+#  if !(__KERNEL_FEATURES__ & (1U << KERNEL_FEATURE_BIT_GSPLATS))
 #    undef __GSPLATS__
 #  endif
 #endif
@@ -227,20 +277,73 @@ CCL_NAMESPACE_BEGIN
 #  define __BVH_LOCAL__
 #endif
 
+#ifndef __KERNEL_GPU__
+
+/* Kernel and shader node features combined, for host side code. */
+
+struct KernelFeatures {
+  KernelFeature kernel = KERNEL_FEATURE_NONE;
+  KernelNodeFeature nodes = KERNEL_FEATURE_NODE_NONE;
+
+  KernelFeatures() = default;
+  KernelFeatures(const KernelFeature kernel) : kernel(kernel) {}
+  KernelFeatures(const KernelNodeFeature nodes) : nodes(nodes) {}
+  KernelFeatures(const KernelFeature kernel, const KernelNodeFeature nodes)
+      : kernel(kernel), nodes(nodes)
+  {
+  }
+
+  KernelFeature operator&(const KernelFeature mask) const
+  {
+    return kernel & mask;
+  }
+  KernelNodeFeature operator&(const KernelNodeFeature mask) const
+  {
+    return nodes & mask;
+  }
+  KernelFeatures operator&(const KernelFeatures &mask) const
+  {
+    return {kernel & mask.kernel, nodes & mask.nodes};
+  }
+  KernelFeatures operator|(const KernelFeatures &other) const
+  {
+    return {kernel | other.kernel, nodes | other.nodes};
+  }
+  KernelFeatures &operator|=(const KernelFeatures &other)
+  {
+    return *this = *this | other;
+  }
+
+  bool operator==(const KernelFeatures &other) const
+  {
+    return kernel == other.kernel && nodes == other.nodes;
+  }
+  bool operator!=(const KernelFeatures &other) const
+  {
+    return !(*this == other);
+  }
+  explicit operator bool() const
+  {
+    return kernel != KERNEL_FEATURE_NONE || nodes != KERNEL_FEATURE_NODE_NONE;
+  }
+};
+
 /* Feature mask for integrator states, to allocate state memory only when
  * certain features are on or off. */
 
 struct KernelFeatureRequest {
-  uint64_t on;
-  uint64_t off;
+  KernelFeatures on;
+  KernelFeatures off;
 
-  explicit KernelFeatureRequest(const uint64_t on) : on(on), off(0) {}
-  KernelFeatureRequest(const uint64_t on, const uint64_t off) : on(on), off(off) {}
+  explicit KernelFeatureRequest(const KernelFeatures &on) : on(on) {}
+  KernelFeatureRequest(const KernelFeatures &on, const KernelFeatures &off) : on(on), off(off) {}
 
-  bool test(const uint64_t features) const
+  bool test(const KernelFeatures &features) const
   {
     return (features & on) && !(features & off);
   }
 };
+
+#endif /* !__KERNEL_GPU__ */
 
 CCL_NAMESPACE_END

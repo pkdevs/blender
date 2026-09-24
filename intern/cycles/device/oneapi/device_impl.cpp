@@ -174,19 +174,19 @@ bool OneapiDevice::check_peer_access(Device * /*peer_device*/)
 }
 
 bool OneapiDevice::can_use_hardware_raytracing_for_features(
-    const uint64_t requested_features) const
+    const KernelFeatures &requested_features) const
 {
   /* MNEE and Ray-trace kernels work correctly with Hardware Ray-tracing starting with Embree 4.1.
    */
 #  if defined(RTC_VERSION) && RTC_VERSION < 40100
-  return !(requested_features & (KERNEL_FEATURE_MNEE | KERNEL_FEATURE_NODE_RAYTRACE));
+  return !(requested_features & KernelFeatures(KERNEL_FEATURE_MNEE, KERNEL_FEATURE_NODE_RAYTRACE));
 #  else
   (void)requested_features;
   return true;
 #  endif
 }
 
-BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const uint64_t requested_features) const
+BVHLayoutMask OneapiDevice::get_bvh_layout_mask(const KernelFeatures &requested_features) const
 {
   return (use_hardware_raytracing &&
           can_use_hardware_raytracing_for_features(requested_features)) ?
@@ -255,7 +255,7 @@ size_t OneapiDevice::get_free_mem() const
   return free_memory;
 }
 
-bool OneapiDevice::load_kernels(const uint64_t requested_features)
+bool OneapiDevice::load_kernels(const KernelFeatures &requested_features)
 {
   assert(device_queue_);
 
@@ -282,8 +282,10 @@ bool OneapiDevice::load_kernels(const uint64_t requested_features)
     use_hardware_raytracing = false;
   }
 
-  is_finished_ok = oneapi_load_kernels(
-      device_queue_, (const unsigned int)requested_features, use_hardware_raytracing);
+  is_finished_ok = oneapi_load_kernels(device_queue_,
+                                       uint(requested_features.kernel),
+                                       uint(requested_features.nodes),
+                                       use_hardware_raytracing);
   if (is_finished_ok == false) {
     set_error("oneAPI kernels loading: got a runtime exception \"" + oneapi_error_string_ + "\"");
   }
@@ -299,7 +301,7 @@ bool OneapiDevice::load_kernels(const uint64_t requested_features)
   return is_finished_ok;
 }
 
-void OneapiDevice::reserve_private_memory(const uint64_t kernel_features)
+void OneapiDevice::reserve_private_memory(const KernelFeatures &kernel_features)
 {
   size_t free_before = get_free_mem();
 
@@ -1297,7 +1299,7 @@ bool OneapiDevice::enqueue_kernel(KernelContext *kernel_context,
                                kernel,
                                global_size,
                                local_size,
-                               kernel_features,
+                               uint(kernel_features.kernel),
                                use_hardware_raytracing,
                                args);
 }

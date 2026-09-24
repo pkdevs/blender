@@ -697,7 +697,7 @@ ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
                                                      ConstIntegratorState state,
                                                      const uint32_t /*path_flag*/)
 {
-  return (kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL) ?
+  return (kernel_data.node_features & KERNEL_FEATURE_NODE_PORTAL) ?
              INTEGRATOR_STATE(state, path, portal_bounce) :
              0;
 }
@@ -706,7 +706,7 @@ ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
                                                      ConstIntegratorShadowState state,
                                                      const uint32_t /*path_flag*/)
 {
-  return (kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL) ?
+  return (kernel_data.node_features & KERNEL_FEATURE_NODE_PORTAL) ?
              INTEGRATOR_STATE(state, shadow_path, portal_bounce) :
              0;
 }

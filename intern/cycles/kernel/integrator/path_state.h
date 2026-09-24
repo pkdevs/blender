@@ -53,7 +53,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, transparent_bounce) = 0;
   INTEGRATOR_STATE_WRITE(state, path, volume_bounce) = 0;
   INTEGRATOR_STATE_WRITE(state, path, volume_bounds_bounce) = 0;
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL)) {
+  if ((kernel_data.node_features & KERNEL_FEATURE_NODE_PORTAL)) {
     INTEGRATOR_STATE_WRITE(state, path, portal_bounce) = 0;
   }
   INTEGRATOR_STATE_WRITE(state, path, rng_pixel) = rng_pixel;
