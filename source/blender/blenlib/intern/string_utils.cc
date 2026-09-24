@@ -136,18 +136,6 @@ bool BLI_string_replace_table_exact(char *string,
   return false;
 }
 
-bool BLI_string_replace_if_match(char *string,
-                                 const size_t string_maxncpy,
-                                 const char *old_name,
-                                 const char *new_name)
-{
-  if (STREQ(string, old_name)) {
-    BLI_strncpy_utf8(string, new_name, string_maxncpy);
-    return true;
-  }
-  return false;
-}
-
 size_t BLI_string_replace_range(
     char *string, size_t string_maxncpy, int src_beg, int src_end, const char *dst)
 {

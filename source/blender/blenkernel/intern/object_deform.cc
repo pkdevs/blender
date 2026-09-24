@@ -153,11 +153,12 @@ static bool defgroup_rename_callback(char *name,
     return false;
   }
   DefgroupRenameData *data = static_cast<DefgroupRenameData *>(user_data);
-  if (BLI_string_replace_if_match(name, name_maxncpy, data->old_name, data->new_name)) {
-    data->renamed_count++;
-    return true;
+  if (!STREQ(name, data->old_name)) {
+    return false;
   }
-  return false;
+  BLI_strncpy_utf8(name, data->new_name, name_maxncpy);
+  data->renamed_count++;
+  return true;
 }
 
 int BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
