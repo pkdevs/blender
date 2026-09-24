@@ -51,7 +51,8 @@ void RepeatZoneOperation::execute()
     last_operation.reset(zone_tree_operation);
 
     if (this->context().is_canceled()) {
-      break;
+      this->cancel_evaluation(*last_operation);
+      return;
     }
   }
 
@@ -146,6 +147,22 @@ void RepeatZoneOperation::write_outputs(ZoneTreeOperation &zone_tree_operation)
     Result &repeat_zone_result = this->get_result(output->identifier);
     if (repeat_zone_result.should_compute()) {
       repeat_zone_result.share_data(zone_tree_result);
+      zone_tree_result.release();
+    }
+  }
+}
+
+void RepeatZoneOperation::cancel_evaluation(ZoneTreeOperation &last_zone_tree_operation)
+{
+  this->allocate_default_remaining_outputs();
+
+  for (const bNodeSocket *output : this->zone().output_node()->output_sockets()) {
+    if (!is_socket_available(output)) {
+      continue;
+    }
+
+    Result &zone_tree_result = last_zone_tree_operation.get_result(output->identifier);
+    if (zone_tree_result.should_compute()) {
       zone_tree_result.release();
     }
   }

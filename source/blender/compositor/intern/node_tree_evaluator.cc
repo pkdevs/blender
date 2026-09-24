@@ -71,6 +71,7 @@ void NodeTreeEvaluator::evaluate()
     const bke::bNodeTreeZones &zones = *node->owner_tree().zones();
     const bke::bNodeTreeZone *node_zone = zones.get_zone_by_node(node->identifier);
     if (node_zone && node_zone != this->schedule().zone) {
+      BLI_assert(node == node_zone->output_node());
       this->evaluate_zone(*node_zone);
       continue;
     }

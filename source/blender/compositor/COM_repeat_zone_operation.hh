@@ -48,6 +48,10 @@ class RepeatZoneOperation : public ZoneOperation {
   /* Writes the output results of the zone tree operation of the last iteration to this repeat zone
    * operation by sharing its data and freeing the results. */
   void write_outputs(ZoneTreeOperation &zone_tree_operation);
+
+  /* Cancel evaluation by allocating default values for the outputs and freeing the results of the
+   * last zone tree operation. */
+  void cancel_evaluation(ZoneTreeOperation &last_zone_tree_operation);
 };
 
 }  // namespace blender::compositor
