@@ -775,7 +775,6 @@ int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, cons
   BKE_object_defgroup_unique_name(dg, ob);
 
   if (ob->type == OB_GREASE_PENCIL) {
-    /* Update vgroup names stored in CurvesGeometry */
     BKE_grease_pencil_vgroup_name_update(ob, old_name.c_str(), dg->name);
   }
 

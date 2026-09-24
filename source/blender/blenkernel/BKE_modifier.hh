@@ -153,7 +153,6 @@ using TexWalkFunc = void (*)(void *user_data,
  * as more reference kinds are visited.
  */
 enum ModifierVGroupReferenceScope {
-  /** Reference to a vertex group name. */
   MOD_VGROUP_REF_SCOPE_VERTEX_GROUP = 0,
 };
 /**
@@ -490,8 +489,6 @@ void BKE_modifier_free_ex(ModifierData *md, int flag);
 void BKE_modifier_free(ModifierData *md);
 /**
  * Run `callback` on every vertex-group name reference stored by the modifier.
- * Thin wrapper around #ModifierTypeInfo.foreach_vgroup_reference, does nothing if the
- * modifier type stores no such references.
  */
 void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
                                            ModifierVGroupReferenceCallback callback,

@@ -15,8 +15,6 @@ class VertexGroupRenameTest(unittest.TestCase):
         bpy.ops.wm.read_homefile(use_factory_startup=True)
 
     def test_all_modifier_references_update_on_vertex_group_rename(self):
-        # Modifiers that store vertex group names, mapping the modifier type to
-        # the RNA properties (on the modifier) holding those names.
         mesh_modifiers = {
             'ARMATURE': ('vertex_group',),
             'BEVEL': ('vertex_group',),
@@ -112,10 +110,8 @@ class VertexGroupRenameTest(unittest.TestCase):
             self._remove_object_and_data(obj)
 
     def test_shared_mesh_references_update_on_vertex_group_rename(self):
-        # Vertex groups are owned by the geometry ID: two objects sharing one
-        # mesh share the same groups, so renaming through either object must
-        # update the references of both. Covers deform (ARMATURE, HOOK) and
-        # non-deform (MASK, SMOOTH, WEIGHTED_NORMAL) modifiers.
+        # The mesh owns the vertex groups, so references on both objects must
+        # update for deform and non-deform modifiers.
         mesh = bpy.data.meshes.new(name="Mesh")
         obj1 = bpy.data.objects.new(name="Object1", object_data=mesh)
         obj2 = bpy.data.objects.new(name="Object2", object_data=mesh)

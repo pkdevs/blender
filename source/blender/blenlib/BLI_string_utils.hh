@@ -82,9 +82,6 @@ bool BLI_string_replace_table_exact(char *string,
  * If `string` exactly matches `old_name`, replace its contents with `new_name`
  * (truncated to `string_maxncpy`), and return true.
  * Otherwise leave `string` untouched and return false.
- *
- * Generic helper for propagating renames of fixed-size name buffers
- * (e.g. vertex-group references).
  */
 bool BLI_string_replace_if_match(char *string,
                                  size_t string_maxncpy,
