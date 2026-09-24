@@ -2057,7 +2057,7 @@ enum eTool_Unwrapper : char {
 };
 
 /** #ToolSettings::uvcalc_flag */
-enum eTool_UvCalcFlag : char {
+enum eTool_UvCalcFlag : short {
   UVCALC_FILLHOLES = 1 << 0,
   /** Would call this UVCALC_ASPECT_CORRECT, except it should be default with old file. */
   UVCALC_NO_ASPECT_CORRECT = 1 << 1,
