@@ -785,6 +785,13 @@ int compute_output_reference_count(const bNodeSocket &output,
       continue;
     }
 
+    /* If the input is not in a zone that is a descendant of the zone being scheduled, then it is
+     * not referenced. */
+    if (!target_zone || (schedule.zone && !schedule.zone->contains_zone_recursively(*target_zone)))
+    {
+      continue;
+    }
+
     /* Get the immediate child of the zone being scheduled in the nested zone chain toward the
      * target. */
     const bke::bNodeTreeZone *child_zone = zones.get_zones_to_enter(schedule.zone, target_zone)[0];

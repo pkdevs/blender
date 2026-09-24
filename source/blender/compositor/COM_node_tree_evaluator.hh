@@ -87,6 +87,15 @@ class ZoneOperation;
  * pixel operation to the operations stream and resetting the compile unit. Finally, node 6 is
  * compiled into a node operation similar to nodes 1 and 2 and added to the operations stream.
  *
+ * Zones are evaluated in a special manner. The scheduler only contains the output node of each
+ * zone, and when the evaluator encounters such a node, it constructs a zone operation that
+ * internally calls the node tree evaluator only on nodes inside the zone, and the same happen for
+ * nested zones recursively. The only complication is external inputs that go into a zone from the
+ * outside. Each of those inputs have a corresponding operation input with an identifier derived
+ * from the origin output as returned by ZoneTreeOperation::get_external_input_identifier, and
+ * those are linked appropriately when needed, additionally, their reference count is incremented
+ * by the number of references inside the zone as in compute_zone_external_input_reference_counts.
+ *
  * During compilation, the class tracks two important pieces of information, each of which is
  * described in one of the following sections.
  *
