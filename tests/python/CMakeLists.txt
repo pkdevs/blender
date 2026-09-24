@@ -1756,6 +1756,7 @@ if(WITH_UI_TESTS)
     test_editor_types.test_open_editor_types
     test_search_in_editors.test_properties_search
     test_search_in_editors.test_outliner_search
+    test_outliner.test_outliner_vertex_group_rename_updates_modifier_reference
     test_search_in_editors.test_dopesheet_search
     test_search_in_editors.test_graph_editor_search
     test_search_in_editors.test_file_browser_search

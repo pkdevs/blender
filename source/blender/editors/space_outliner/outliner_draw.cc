@@ -824,7 +824,14 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
         case TSE_DEFGROUP: {
           Object *ob = id_cast<Object *>(tselem->id);
           bDeformGroup *vg = static_cast<bDeformGroup *>(te->directdata);
-          BKE_object_defgroup_unique_name(vg, ob);
+          char newname[sizeof(vg->name)];
+
+          STRNCPY_UTF8(newname, vg->name);
+          STRNCPY_UTF8(vg->name, oldname);
+          const int renamed_count = BKE_object_defgroup_set_name(bmain, vg, ob, newname);
+          if (renamed_count > 0) {
+            WM_global_reportf(RPT_INFO, "Updated %d vertex group references", renamed_count);
+          }
           WM_msg_publish_rna_prop(mbus, &ob->id, vg, VertexGroup, name);
           DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
           undo_str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Vertex Group");
