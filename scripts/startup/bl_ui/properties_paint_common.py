@@ -1509,7 +1509,7 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
                 container.prop(brush, "blur_kernel_radius")
             container.prop(brush, "blur_mode")
 
-        elif brush.image_brush_type == 'MASK' and not show_experimental_texture_paint(brush):
+        elif brush.image_brush_type == 'MASK':
             container.prop(brush, "weight", text="Mask Value", slider=True)
 
         elif brush.image_brush_type == 'CLONE':

@@ -235,7 +235,7 @@ struct PaintBlendSettings {
 static PaintBlendSettings mask_brush_blend_settings(const Brush &brush, const bool invert)
 {
   PaintBlendSettings settings;
-  settings.brush_color = float4(invert ? float3(0.0f) : float3(1.0f), 1.0f);
+  settings.brush_color = float4(invert ? float3(1.0f - brush.weight) : float3(brush.weight), 1.0f);
   settings.brush_alpha = brush.alpha;
   settings.blend_mode = IMB_BlendMode(brush.blend);
 
@@ -492,7 +492,7 @@ static void mark_seam_tiles_modified(MutableSpan<uint8_t> mask,
 
 static void do_paint_pixels(const Depsgraph &depsgraph,
                             Object &object,
-                            const Paint &paint,
+                            const PaintBlendSettings blend_settings,
                             const Brush &brush,
                             ImageData &image_data,
                             bke::pbvh::Node & /*node*/,
@@ -508,238 +508,6 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
   const Span<int3> corner_tris = mesh.corner_tris();
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
-
-  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
-
-#ifdef DEBUG_PIXEL_NODES
-  float4 debug_color;
-  uint hash = BLI_hash_int(POINTER_AS_UINT(&node));
-
-  debug_color[0] = float(hash & 255) / 255.0f;
-  debug_color[1] = float((hash >> 8) & 255) / 255.0f;
-  debug_color[2] = float((hash >> 16) & 255) / 255.0f;
-  debug_color[3] = 1.0f;
-#endif
-
-  bool pixels_updated = false;
-
-  const float3 location = ss.cache ? ss.cache->location_symm : ss.cursor_location;
-  const float radius = ss.cache ? ss.cache->radius : ss.cursor_radius;
-  const Bounds<float3> brush_bounds(location - radius, location + radius);
-
-  for (UDIMTilePixels &tile_data : pixel_node.tiles) {
-    ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
-    if (image_buffer == nullptr) {
-      continue;
-    }
-
-    BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
-                                                                       BufferType{});
-    if (std::holds_alternative<std::monostate>(mutable_buffer)) {
-      BLI_assert_unreachable();
-      continue;
-    }
-
-    const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
-        tile_data.tile_number);
-
-    const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
-        tile_data.tile_number);
-
-    threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
-
-    /* Parallelize over contiguous runs containing one or more per-triangle pixel rows. */
-    const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
-    threading::parallel_for(IndexRange(num_runs), 32, [&](const IndexRange task_range) {
-      PaintLocalData &tls = all_factor_tls.local();
-      for (const int run_i : task_range) {
-        const int run_begin = tile_data.pixel_row_run_starts[run_i];
-        const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
-
-        /* Compute run position and size. */
-        const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
-        const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
-        int run_size = 0;
-        for (int k = run_begin; k < run_end; k++) {
-          run_size += int(tile_data.pixel_rows[k].num_pixels);
-        }
-
-        /* Resize temporary data to match run size. */
-        tls.factors.resize(run_size);
-        tls.pixel_positions.resize(run_size);
-        tls.distances.resize(run_size);
-        const MutableSpan<float> factors = tls.factors;
-        const MutableSpan<float3> positions = tls.pixel_positions;
-        const MutableSpan<float> distances = tls.distances;
-
-        /* Tracking for active subset of run with nonzero factors. */
-        int run_active_begin = -1;
-        int run_active_end = -1;
-        int tri_skip_start = -1;
-        int tri_row_offset = 0;
-
-        /* For each triangle pixel row in the run. */
-        for (int k = run_begin; k < run_end; k++) {
-          const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
-          const int tri_row_size = int(tri_row.num_pixels);
-
-          /* Use pixel to position mapping to compute 3D position. */
-          const int tri_row_x = run_x + tri_row_offset;
-          const int uv_prim = tri_row.uv_primitive_index;
-          const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
-          const float3 P_delta = pixel_to_position[0];
-          const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
-                                 pixel_to_position[2];
-
-          /* Quick bounds check. */
-          if (brush_test[tri_row.uv_primitive_index] &&
-              brush_bounds.intersects_segment(P_start, P_start + P_delta * tri_row_size))
-          {
-            /* Compute brush factors per triangle. */
-            const MutableSpan<float> tri_factors = factors.slice(tri_row_offset, tri_row_size);
-            const MutableSpan<float3> tri_positions = positions.slice(tri_row_offset,
-                                                                      tri_row_size);
-            const MutableSpan<float> tri_distances = distances.slice(tri_row_offset, tri_row_size);
-
-            tri_factors.fill(1.0f);
-            calc_pixel_row_positions(P_start, P_delta, tri_positions, IndexRange(tri_row_size));
-            calc_brush_distances(
-                ss, tri_positions, eBrushFalloffShape(brush.falloff_shape), tri_distances);
-            filter_distances_with_radius(cache.radius, tri_distances, tri_factors);
-            apply_hardness_to_distances(cache, tri_distances);
-            calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
-            calc_brush_texture_factors(ss, brush, tri_positions, tri_factors);
-            scale_factors(tri_factors, cache.bstrength);
-
-            /* Track which subset of the run has non-zero factors. */
-            int tri_active_begin = -1;
-            int tri_active_end = -1;
-            for (int i = 0; i < tri_row_size; i++) {
-              if (tri_factors[i] != 0.0f) {
-                if (tri_active_begin < 0) {
-                  tri_active_begin = i;
-                }
-                tri_active_end = i;
-              }
-            }
-
-            if (tri_active_begin >= 0) {
-              if (run_active_begin < 0) {
-                run_active_begin = tri_row_offset + tri_active_begin;
-              }
-              else if (tri_skip_start >= 0) {
-                factors.slice(tri_skip_start, tri_row_offset - tri_skip_start).fill(0.0f);
-                tri_skip_start = -1;
-              }
-              run_active_end = tri_row_offset + tri_active_end;
-            }
-          }
-          else {
-            /* No intersection, skip this triangle row. */
-            if (run_active_begin >= 0 && tri_skip_start < 0) {
-              tri_skip_start = tri_row_offset;
-            }
-          }
-          tri_row_offset += tri_row_size;
-        }
-
-        if (run_active_begin < 0) {
-          continue;
-        }
-
-        /* Record modified spans. */
-        const int run_active_size = run_active_end - run_active_begin + 1;
-        const int run_active_x = run_x + run_active_begin;
-        tls.modified_spans.append({.x = run_active_x, .y = run_y, .size = run_active_size});
-
-        /* Push undo tiles before we edit the pixels. */
-        push_undo_tiles(image_data,
-                        tile_data.tile_number,
-                        *image_buffer,
-                        undo_tile_pushed,
-                        run_active_x,
-                        run_active_x + run_active_size - 1,
-                        run_y);
-
-        /* Blend pixels with computed factors. */
-        if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
-          paint_blend_pixels<float4>(blend_settings,
-                                     factors,
-                                     run_active_begin,
-                                     run_active_size,
-                                     std::get<MutableSpan<float4>>(mutable_buffer),
-                                     run_y * image_buffer->x + run_active_x,
-                                     run_y,
-                                     *processors,
-                                     tls.paint_blend_pixels);
-        }
-        else {
-          paint_blend_pixels<uchar4>(blend_settings,
-                                     factors,
-                                     run_active_begin,
-                                     run_active_size,
-                                     std::get<MutableSpan<uchar4>>(mutable_buffer),
-                                     run_y * image_buffer->x + run_active_x,
-                                     run_y,
-                                     *processors,
-                                     tls.paint_blend_pixels);
-        }
-      }
-    });
-
-    /* Mark the seam tiles modified and update dirty bounds. */
-    const MutableSpan<uint8_t> seam_tile_modified = image_data.seam_tile_modified.lookup(
-        tile_data.tile_number);
-    const int seam_tiles_x = (image_buffer->x + SEAM_TILE_SIZE - 1) >> SEAM_TILE_BITS;
-    const int seam_tiles_y = (image_buffer->y + SEAM_TILE_SIZE - 1) >> SEAM_TILE_BITS;
-    Bounds<int2> dirty_bounds = negative_bounds();
-    for (PaintLocalData &tls : all_factor_tls) {
-      for (const PaintLocalData::ModifiedSpan span : tls.modified_spans) {
-        mark_seam_tiles_modified(seam_tile_modified,
-                                 seam_tiles_x,
-                                 seam_tiles_y,
-                                 span.x,
-                                 span.x + span.size - 1,
-                                 span.y);
-        const int2 start(span.x, span.y);
-        const int2 end = start + int2(span.size + 1, 0);
-        dirty_bounds = bounds::merge(dirty_bounds, Bounds<int2>(start, end));
-      }
-    }
-    if (!dirty_bounds.is_empty()) {
-      tile_data.mark_dirty(dirty_bounds);
-    }
-
-    if (tile_data.flags.dirty) {
-      IMB_mark_dirty(image_buffer);
-    }
-    pixels_updated |= tile_data.flags.dirty;
-  }
-
-  pixel_node.flags.dirty |= pixels_updated;
-}
-
-static void do_mask_pixels(const Depsgraph &depsgraph,
-                           Object &object,
-                           const Paint & /*paint*/,
-                           const Brush &brush,
-                           ImageData &image_data,
-                           bke::pbvh::Node & /*node*/,
-                           PixelNode &pixel_node)
-{
-  PRF_scope(ProfileCategory::Editor);
-  SculptSession &ss = *object.runtime->sculpt_session;
-  const StrokeCache &cache = *ss.cache;
-  const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
-
-  const Mesh &mesh = *id_cast<const Mesh *>(object.data);
-  const Span<int> corner_verts = mesh.corner_verts();
-  const Span<int3> corner_tris = mesh.corner_tris();
-  BitVector<> brush_test = init_uv_primitives_brush_test(
-      ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
-
-  const PaintBlendSettings blend_settings = mask_brush_blend_settings(
-      brush, ss.cache->toggle_settings.invert);
 
 #ifdef DEBUG_PIXEL_NODES
   float4 debug_color;
@@ -1011,40 +779,11 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   PixelData &pixel_data = *pbvh.pixels_;
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
-  node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
-
-  for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
-    modified.as_mutable_span().fill(0);
-  }
-
-  node_mask.foreach_index(
-      [&](const int i) {
-        do_paint_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
-      },
-      exec_mode::grain_size(1));
-
-  fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
-
-  node_mask.foreach_index([&](const int i) {
-    bke::pbvh::pixels::mark_image_dirty(
-        nodes[i], pixel_nodes[i], *image_data.image, image_data.image_buffers);
-  });
-}
-
-void do_3d_image_mask_brush(const Depsgraph &depsgraph,
-                            const Paint &paint,
-                            const Brush &brush,
-                            Object &ob,
-                            ImageData &image_data,
-                            const IndexMask &node_mask)
-{
-  PRF_scope(ProfileCategory::Editor);
-
-  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
-  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  PixelData &pixel_data = *pbvh.pixels_;
-  MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
+  const bool is_mask_brush = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
+  const bool is_inverted = ob.runtime->sculpt_session->cache->toggle_settings.invert;
+  const PaintBlendSettings blend_settings = is_mask_brush ?
+                                                mask_brush_blend_settings(brush, is_inverted) :
+                                                PaintBlendSettings(paint, brush, is_inverted);
 
   node_mask.foreach_index(
       [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
@@ -1055,7 +794,8 @@ void do_3d_image_mask_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index(
       [&](const int i) {
-        do_mask_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
+        do_paint_pixels(
+            depsgraph, ob, blend_settings, brush, image_data, nodes[i], pixel_nodes[i]);
       },
       exec_mode::grain_size(1));
 
