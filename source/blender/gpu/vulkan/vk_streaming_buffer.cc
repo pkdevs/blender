@@ -25,6 +25,9 @@ VKStreamingBuffer::~VKStreamingBuffer()
 
 VkDeviceSize VKStreamingBuffer::update(VKContext &context, const void *data, size_t data_size)
 {
+  if (data_size == 0) {
+    return offset_;
+  }
   render_graph::VKRenderGraph &render_graph = context.render_graph();
   const bool allocate_new_buffer = !(host_buffer_.has_value() &&
                                      data_size < host_buffer_.value()->size_in_bytes() - offset_);
