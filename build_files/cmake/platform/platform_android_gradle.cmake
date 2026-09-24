@@ -57,6 +57,22 @@ set(_apk_output "${_gradle_staging_dir}/app/build/outputs/apk/${_gradle_build_ty
 unset(_gradle_build_type)
 
 # -----------------------------------------------------------------------------
+# Android architecture triple
+
+# Names the NDK sysroot library directory of the target ABI, used by the staging script to
+# pick up the matching libc++ shared library.
+# NOTE: This differs from ANDROID_LLVM_TRIPLE, which carries a `-none-` infix and an API
+# level suffix, and from CMAKE_ANDROID_ARCH_TRIPLE, which is only set when CMake drives the
+# NDK itself rather than through the NDK own toolchain file.
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+  set(_android_arch_triple "aarch64-linux-android")
+elseif(ANDROID_ABI STREQUAL "x86_64")
+  set(_android_arch_triple "x86_64-linux-android")
+else()
+  message(FATAL_ERROR "Unsupported Android ABI \"${ANDROID_ABI}\".")
+endif()
+
+# -----------------------------------------------------------------------------
 # Main Android APK building targets
 
 # Ensure Blender is freshly built and installed before staging.
@@ -74,6 +90,8 @@ add_custom_target(gradle_stage
           "-DGRADLE_STAGING_DIR=${_gradle_staging_dir}"
           "-DINSTALL_TARGET_DIR=${_install_target_dir}"
           "-DANDROID_NDK_ROOT=${ANDROID_NDK_ROOT}"
+          "-DANDROID_ABI=${ANDROID_ABI}"
+          "-DANDROID_ARCH_TRIPLE=${_android_arch_triple}"
           -P "${CMAKE_CURRENT_LIST_DIR}/platform_android_stage.cmake"
   COMMENT "Staging the Gradle project into ${_gradle_staging_dir}"
   USES_TERMINAL VERBATIM
@@ -85,6 +103,7 @@ add_custom_target(gradle_assemble
           "-PblenderVersionName=${_apk_version_name}"
           "-PblenderVersionCode=${_apk_version_code}"
           "-PblenderMinSdk=${ANDROID_PLATFORM_LEVEL}"
+          "-PblenderAbi=${ANDROID_ABI}"
   COMMAND ${CMAKE_COMMAND} -E echo "APK built: ${_apk_output}"
   COMMENT "Assembling Blender APK via Gradle"
   USES_TERMINAL VERBATIM
@@ -94,6 +113,7 @@ add_dependencies(gradle_assemble gradle_stage)
 unset(_apk_version_name)
 unset(_apk_version_code)
 unset(_gradle_source_dir)
+unset(_android_arch_triple)
 unset(_gradle_staging_dir)
 unset(_gradle_executable)
 unset(_gradle_assemble_target)
