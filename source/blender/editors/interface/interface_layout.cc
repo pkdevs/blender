@@ -47,6 +47,7 @@
 #include "WM_types.hh"
 
 #include "buttons/interface_label.hh"
+#include "buttons/interface_label_markdown.hh"
 #include "buttons/interface_textbox.hh"
 #include "interface_intern.hh"
 
@@ -73,11 +74,9 @@ struct ButtonItem;
   if (ot == nullptr) { \
     item_disabled(this, _opname); \
     RNA_warning_bare("%s: '%s' unknown operator", _caller_fn_name, _opname); \
-    return PointerRNA_NULL; \
+    return {}; \
   } \
   (void)0
-
-#define UI_ITEM_PROP_SEP_DIVIDE 0.4f
 
 /* uiLayoutRoot */
 
@@ -1341,7 +1340,7 @@ void context_active_but_prop_get_filebrowser(const bContext *C,
 
   for (Block &block : region->runtime->uiblocks) {
     for (Button &but : block.buttons()) {
-      if (but.rnapoin.data) {
+      if (but.rnapoin) {
         if (RNA_property_type(but.rnaprop) == PROP_STRING) {
           prevbut = &but;
         }
@@ -2158,7 +2157,7 @@ void Layout::prop(PointerRNA *ptr,
     }
     else {
       Layout *layout_split =
-          &(layout_row ? layout_row : layout)->split(UI_ITEM_PROP_SEP_DIVIDE, true);
+          &(layout_row ? layout_row : layout)->split(Layout::PROPERTY_SPLIT_FACTOR, true);
       bool label_added = false;
       Layout *layout_sub = &layout_split->column(true);
       layout_sub->space_ = 0;
@@ -2764,7 +2763,7 @@ void button_configure_search(Button *but,
     }
     else {
       /* Rely on `has_search_fn`. */
-      coll_search->search_ptr = PointerRNA_NULL;
+      coll_search->search_ptr = {};
       coll_search->search_prop = nullptr;
       coll_search->item_search_prop = nullptr;
     }
@@ -2835,38 +2834,11 @@ void Layout::textbox_with_state(PointerRNA *ptr,
 
   this->row(true).alignment_set(LayoutAlign::Expand);
 
-  const float line_height = fontstyle_height_max(UI_FSTYLE_WIDGET);
-
-  /** Ensure minimum value is set. */
-  textbox_state->visible_lines = std::max(textbox_state->visible_lines,
-                                          textbox_minimum_visible_lines);
-
   int w, h;
   item_rna_size(block->curlayout, "", ICON_NONE, ptr, prop, -1, false, false, &w, &h);
-  Button *but = uiDefButR_prop(
-      block,
-      ButtonType::TextBox,
-      RNA_property_ui_name(prop),
-      0,
-      0,
-      w,
-      std::max<int>(UI_UNIT_Y,
-                    std::round(line_height * textbox_state->visible_lines) +
-                        (textbox_vertical_padding() * 2.0f)),
-      ptr,
-      prop,
-      0,
-      0,
-      0,
-      std::nullopt);
-  ButtonTextBox *textbox = static_cast<ButtonTextBox *>(but);
-  textbox->state = textbox_state;
+  Button *but = uiDefButTextBoxR(block, ptr, propname, textbox_state, 0, 0, w);
   if (placeholder) {
     button_placeholder_set(but, *placeholder);
-  }
-
-  if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
-    button_flag_enable(but, BUT_TEXTEDIT_UPDATE);
   }
   block_layout_set_current(block, this);
 }
@@ -3392,8 +3364,28 @@ void Layout::label_multiline(StringRefNull text, int icon, FontStyleAlign align,
   this->root_->use_dynamic_height = true;
   ButtonLabel *label = static_cast<ButtonLabel *>(button);
   label->text_align = align;
-  label->is_multiline = true;
+  label->label_type = ButtonLabelType::Multiline;
   label->max_lines = max_lines;
+  if (this->red_alert()) {
+    button_flag_enable(button, BUT_REDALERT);
+  }
+}
+
+void Layout::label_markdown(const StringRef text)
+{
+  if (G.debug_value == 4002) {
+    label_markdown_dev_config(*this);
+  }
+
+  block_layout_set_current(this->block(), this);
+  /* Must be >0 for it to work on horizontal layouts. */
+  const int dummy_width = 1;
+  ButtonLabel *button = static_cast<ButtonLabel *>(uiDefBut(
+      this->block(), ButtonType::Label, text, 0, 0, dummy_width, 0, nullptr, 0, 0, std::nullopt));
+  this->root_->use_dynamic_height = true;
+  button->label_type = ButtonLabelType::Markdown;
+  button->emboss = EmbossType::None;
+  button->drawflag |= BUT_NO_TEXT_PADDING;
   if (this->red_alert()) {
     button_flag_enable(button, BUT_REDALERT);
   }
@@ -3482,7 +3474,7 @@ PropertySplitWrapper uiItemPropertySplitWrapperCreate(Layout *parent_layout)
   PropertySplitWrapper split_wrapper = {nullptr};
 
   Layout *layout_row = &parent_layout->row(true);
-  Layout *layout_split = &layout_row->split(UI_ITEM_PROP_SEP_DIVIDE, true);
+  Layout *layout_split = &layout_row->split(Layout::PROPERTY_SPLIT_FACTOR, true);
 
   split_wrapper.label_column = &layout_split->column(true);
   split_wrapper.label_column->alignment_set(LayoutAlign::Right);
@@ -3519,7 +3511,7 @@ void uiItemLDrag(Layout *layout, PointerRNA *ptr, StringRef name, int icon)
 {
   Button *but = uiItem_simple(layout, name, icon);
 
-  if (ptr && ptr->type) {
+  if (ptr && ptr->has_type()) {
     if (RNA_struct_is_ID(ptr->type)) {
       button_drag_set_id(but, ptr->owner_id);
     }
@@ -3756,7 +3748,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   /* Use the menu button as owner for the operator properties, which will then be passed to the
    * individual menu items. */
   but->opptr = MEM_new<PointerRNA>("uiButOpPtr", WM_operator_properties_create_ptr(ot));
-  BLI_assert(but->opptr->data == nullptr);
+  BLI_assert(!*but->opptr);
   WM_operator_properties_alloc(
       &but->opptr, reinterpret_cast<IDProperty **>(&but->opptr->data), ot->idname);
 
@@ -3784,7 +3776,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   if (!ot->srna) {
     item_disabled(this, opname.c_str());
     RNA_warning_bare("UILayout.operator_menu_enum(): operator missing srna '%s'", opname.c_str());
-    return PointerRNA_NULL;
+    return {};
   }
 
   return this->op_menu_enum(C, ot, propname, name, icon);
@@ -5813,6 +5805,9 @@ void Layout::resolve_dynamic_height()
         if (button_label_is_multiline(sub_bitem->but)) {
           resolve_label_multiline(static_cast<ButtonLabel *>(sub_bitem->but));
         }
+        else if (button_label_is_markdown(sub_bitem->but)) {
+          label_markdown_resolve(static_cast<ButtonLabel *>(sub_bitem->but));
+        }
       }
       else {
         static_cast<Layout *>(subitem)->resolve_dynamic_height();
@@ -6083,6 +6078,10 @@ int2 block_layout_resolve(Block *block)
   }
 
   block->layouts.clear_no_delete();
+
+  /* Link hit-targets need final button positions from layout resolve. */
+  label_markdown_create_link_buttons(block);
+
   return block_size;
 }
 bool block_layout_needs_resolving(const Block *block)
@@ -6209,7 +6208,7 @@ void Layout::context_set_from_but(const Button *but)
     this->context_ptr_set("button_operator", but->opptr);
   }
 
-  if (but->rnapoin.data && but->rnaprop) {
+  if (but->rnapoin && but->rnaprop) {
     /* TODO: index could be supported as well */
     PointerRNA ptr_prop = RNA_pointer_create_discrete(nullptr, RNA_Property, but->rnaprop);
     this->context_ptr_set("button_prop", &ptr_prop);

@@ -101,7 +101,7 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
   std::optional<StringRefNull> parent_path = colorspace_rna_details_from_context(C, &ptr, &prop);
 
   /* In case menu is invoked from invalid context. */
-  if (ptr.data == nullptr || prop == nullptr) {
+  if (!ptr || prop == nullptr) {
     return;
   }
 
@@ -110,7 +110,7 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
 
   /* Loop through color spaces in the config. */
   ColorManagedConfig &config = IMB_colormanagement_get_config();
-  for (const int colorspace_index : IndexRange(config.get_num_color_spaces())) {
+  for (const int colorspace_index : IndexRange(config.get_num_active_color_spaces())) {
     const ColorSpace *colorspace = config.get_sorted_color_space_by_index(colorspace_index);
     if (!colorspace) {
       continue;
