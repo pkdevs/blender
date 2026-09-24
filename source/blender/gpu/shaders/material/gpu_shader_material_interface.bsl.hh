@@ -119,6 +119,11 @@ struct KernelGlobals {
   {
     return {};
   }
+
+  ObjectMatrices light_matrices_get(int /*light_index*/)
+  {
+    return {};
+  }
 };
 
 /* Closure Nodes. */

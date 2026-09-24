@@ -222,6 +222,13 @@ struct KernelGlobals {
     [[resource_table]] const draw::View &views = view;
     return views.get(view_id_get(sd));
   }
+
+  ObjectMatrices light_matrices_get(int light_index)
+  {
+    [[resource_table]] const draw::Model &models = this->model;
+    [[resource_table]] const eevee::LightRenderData &lrds = this->lrd;
+    return models.get(lrds.light_buf[light_index].resource_id);
+  }
 };
 
 void closure_weights_reset([[resource_table]] KernelGlobals &kg,
@@ -1212,9 +1219,6 @@ void node_light_evaluation_impl([[resource_table]] KernelGlobals &kg,
     float3x3 T = from_incident_vector(normal, V);
     ltc_data.Minv = ltc_data.Minv * transpose(T);
     factor = eevee::ltc::evaluate(util_tx.utility_tx, light, light_shape_vertices, lv, ltc_data);
-
-    const bool is_transmission = false; /* TODO: Expose? */
-    factor *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 
     factor *= light.shape_power;
     /* Remove the base power (exposed in Light Info).
