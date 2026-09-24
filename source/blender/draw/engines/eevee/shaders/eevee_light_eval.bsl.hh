@@ -104,7 +104,6 @@ template<bool is_transmission> struct EvalCtx {
                          const bool is_directional)
   {
     [[resource_table]] ShadowRenderData &srd = srt.shadow_data;
-    [[resource_table]] Uniform &uni = srd.uniforms;
 
     if (!light_linking_affects_receiver(light.light_set_membership, receiver_light_set)) {
       return;

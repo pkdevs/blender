@@ -85,7 +85,6 @@ struct SurfVolume {
                                int3 froxel,
                                float jitter)
   {
-    [[resource_table]] eevee::PipelineConstants &pipe = kg.pipe;
     [[resource_table]] draw::Volume &vol = volume;
 
     float3 uvw = (float3(froxel) + float3(0.5f, 0.5f, 0.5f - jitter)) *
