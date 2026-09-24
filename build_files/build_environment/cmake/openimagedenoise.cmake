@@ -163,7 +163,7 @@ if(NOT CMAKE_CROSSCOMPILING)
   )
 endif()
 
-if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
+if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM OR ANDROID))
   add_dependencies(
     external_openimagedenoise
     external_dpcpp
