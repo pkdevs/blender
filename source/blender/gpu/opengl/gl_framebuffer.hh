@@ -30,6 +30,11 @@ class GLFrameBuffer : public FrameBuffer {
   GLuint fbo_id_ = 0;
   /** Context the handle is from. Frame-buffers are not shared across contexts. */
   GLContext *context_ = nullptr;
+  /**
+   * WORKAROUND: GLTexture::framebuffer_ can outlive its context.
+   * We track the context id to ensure we don't try to use context_ after its been freed.
+   */
+  int context_id_ = -1;
   /** State Manager of the same contexts. */
   GLStateManager *state_manager_ = nullptr;
   /** Copy of the GL state. Contains ONLY color attachments enums for slot binding. */
@@ -38,8 +43,10 @@ class GLFrameBuffer : public FrameBuffer {
   GPUAttachment tmp_detached_[GPU_FB_MAX_ATTACHMENT];
   /** Internal frame-buffers are immutable. */
   bool immutable_ = false;
-  /** True is the frame-buffer has its first color target using the
-   * TextureFormat::SRGBA_8_8_8_8 format. */
+  /**
+   * True is the frame-buffer has its first color target using the
+   * TextureFormat::SRGBA_8_8_8_8 format.
+   */
   bool srgb_ = false;
   /** True is the frame-buffer has been bound using the GL_FRAMEBUFFER_SRGB feature. */
   bool enabled_srgb_ = false;
@@ -101,6 +108,11 @@ class GLFrameBuffer : public FrameBuffer {
                int dst_slot,
                int dst_offset_x,
                int dst_offset_y) override;
+
+  GLContext *context_get() const
+  {
+    return context_;
+  }
 
   void apply_state();
 

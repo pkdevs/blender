@@ -372,7 +372,11 @@ ccl_device_inline float object_volume_density(KernelGlobals kg, const int object
     return 1.0f;
   }
 
-  return kernel_data_fetch(objects, object).volume_density;
+  if (kernel_data_fetch(objects, object).primitive_type & PRIMITIVE_TRIANGLE) {
+    return kernel_data_fetch(objects, object).mesh_volume.volume_density;
+  }
+
+  return 1.0f;
 }
 
 /* Pass ID for shader */
@@ -508,12 +512,5 @@ ccl_device_inline void bvh_instance_pop(const ccl_private Ray *ray,
   *dir = bvh_clamp_direction(ray->D);
   *idir = bvh_inverse_direction(*dir);
 }
-
-/* TODO: This can be removed when we know if no devices will require explicit
- * address space qualifiers for this case. */
-
-#define object_position_transform_auto object_position_transform
-#define object_dir_transform_auto object_dir_transform
-#define object_normal_transform_auto object_normal_transform
 
 CCL_NAMESPACE_END

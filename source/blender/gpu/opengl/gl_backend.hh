@@ -10,10 +10,11 @@
 
 #include "GPU_capabilities.hh"
 #include "GPU_platform.hh"
+#include "GPU_work_in_flight.hh"
 
 #include "gpu_backend.hh"
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "gpu_capabilities_private.hh"
@@ -35,6 +36,7 @@
 #include "gl_texture_pool.hh"
 #include "gl_uniform_buffer.hh"
 #include "gl_vertex_buffer.hh"
+#include "gl_work_in_flight.hh"
 
 namespace blender::gpu {
 
@@ -44,6 +46,9 @@ class GLBackend : public GPUBackend {
 #ifdef WITH_RENDERDOC
   renderdoc::api::Renderdoc renderdoc_;
 #endif
+
+  Set<int> valid_contexts_;
+  std::mutex valid_contexts_mutex_;
 
  public:
   GLBackend()
@@ -83,10 +88,28 @@ class GLBackend : public GPUBackend {
     return static_cast<GLBackend *>(GPUBackend::get());
   }
 
-  Context *context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext * /*ghost_context*/) override
+  Context *context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context) override
   {
-    return new GLContext(ghost_window, shared_orphan_list_);
+    return new GLContext(ghost_window, ghost_context, shared_orphan_list_);
   };
+
+  void add_context_id(int context_id)
+  {
+    std::lock_guard lock(valid_contexts_mutex_);
+    valid_contexts_.add(context_id);
+  }
+
+  void remove_context_id(int context_id)
+  {
+    std::lock_guard lock(valid_contexts_mutex_);
+    valid_contexts_.remove(context_id);
+  }
+
+  bool is_valid_context_id(int context_id)
+  {
+    std::lock_guard lock(valid_contexts_mutex_);
+    return valid_contexts_.contains(context_id);
+  }
 
   Batch *batch_alloc() override
   {
@@ -96,6 +119,11 @@ class GLBackend : public GPUBackend {
   Fence *fence_alloc() override
   {
     return new GLFence();
+  };
+
+  WorkInFlight *work_in_flight_alloc(unsigned int max_in_flight) override
+  {
+    return new GLWorkInFlight(max_in_flight);
   };
 
   FrameBuffer *framebuffer_alloc(const char *name) override
@@ -144,6 +172,19 @@ class GLBackend : public GPUBackend {
   {
     return new GLVertBuf();
   };
+
+  TopLevelAS *tlas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+  BottomLevelAS *blas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
 
   GLSharedOrphanLists &shared_orphan_list_get()
   {

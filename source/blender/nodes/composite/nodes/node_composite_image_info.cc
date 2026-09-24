@@ -15,20 +15,20 @@ namespace blender::nodes::node_composite_image_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::IntVector>("Dimensions")
+  b.add_output<decl::IntVector>("Dimensions"_ustr)
       .dimensions(2)
       .description("The dimensions of the image in pixels with transformations applied");
-  b.add_output<decl::IntVector>("Resolution")
+  b.add_output<decl::IntVector>("Resolution"_ustr)
       .dimensions(2)
       .description("The original resolution of the image in pixels before any transformations");
-  b.add_output<decl::Vector>("Location").dimensions(2);
-  b.add_output<decl::Float>("Rotation");
-  b.add_output<decl::Vector>("Scale").dimensions(2);
+  b.add_output<decl::Vector>("Location"_ustr).dimensions(2);
+  b.add_output<decl::Float>("Rotation"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr).dimensions(2);
 }
 
 using namespace blender::compositor;
@@ -97,7 +97,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeImageInfo", CMP_NODE_IMAGE_INFO);
+  cmp_node_type_base(&ntype, "CompositorNodeImageInfo"_ustr, CMP_NODE_IMAGE_INFO);
   ntype.ui_name = "Image Info";
   ntype.ui_description = "Returns information about an image";
   ntype.nclass = NODE_CLASS_INPUT;

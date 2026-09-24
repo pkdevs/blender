@@ -14,8 +14,8 @@
 #include "BKE_object.hh"
 #include "BKE_report.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_math_rotation.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_task.hh"
 
 #include "DEG_depsgraph.hh"
@@ -230,10 +230,7 @@ void FbxImportContext::import_lights()
     lamp->b = flight->color.z;
     lamp->energy = flight->intensity;
     lamp->exposure = ufbx_find_real(&flight->props, "Exposure", 0.0);
-    if (flight->cast_shadows) {
-      lamp->mode |= LA_SHADOW;
-    }
-    //@TODO: if hasattr(lamp, "cycles"): lamp.cycles.cast_shadow = lamp.use_shadow
+    lamp->mode = flight->cast_shadows ? (lamp->mode | LA_SHADOW) : (lamp->mode & ~LA_SHADOW);
 
     Object *obj = BKE_object_add_only_object(this->bmain, OB_LAMP, get_fbx_name(node->name));
     obj->data = id_cast<ID *>(lamp);
@@ -445,8 +442,8 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
   }
 
   /* Select objects, sync layers etc. */
-  BKE_view_layer_base_deselect_all(scene, view_layer);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   bool has_instantiated_object = false;
   bool has_uninstantiated_object = false;
   for (Object *obj : ctx.mapping.imported_objects) {

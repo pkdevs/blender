@@ -4,6 +4,7 @@
 
 #include "usd_writer_material.hh"
 #include "usd_asset_utils.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_exporter_context.hh"
 #include "usd_hook.hh"
 #include "usd_utils.hh"
@@ -20,12 +21,12 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utils.hh"
 
@@ -124,26 +125,26 @@ static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &u
                                                      int type);
 static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &usd_export_context,
                                                      const pxr::UsdShadeMaterial &material,
-                                                     bNode *node);
+                                                     const bNode *node);
 static pxr::UsdShadeShader create_primvar_reader_shader(
     const USDExporterContext &usd_export_context,
     const pxr::UsdShadeMaterial &material,
     const pxr::TfToken &primvar_type,
     const bNode *node);
 static void create_uv_input(const USDExporterContext &usd_export_context,
-                            bNodeSocket *input_socket,
+                            const bNodeSocket *input_socket,
                             pxr::UsdShadeMaterial &usd_material,
                             pxr::UsdShadeInput &usd_input,
                             const std::string &active_uvmap_name,
                             ReportList *reports);
 static void export_texture(const USDExporterContext &usd_export_context, bNode *node);
-static bNode *find_bsdf_node(Material *material);
-static bNode *find_displacement_node(Material *material);
+static bNode *find_bsdf_node(const Material *material);
+static bNode *find_displacement_node(const Material *material);
 static void get_absolute_path(const Image *ima, char *r_path);
 static std::string get_tex_image_asset_filepath(const USDExporterContext &usd_export_context,
-                                                bNode *node);
+                                                const bNode *node);
 static const InputSpecMap &preview_surface_input_map();
-static bNodeLink *traverse_channel(bNodeSocket *input, short target_type);
+static const bNodeLink *traverse_channel(const bNodeSocket *input, short target_type);
 
 void set_transmission_opacity_range(pxr::UsdShadeShader &usd_shader,
                                     const InputSpec &input_spec,
@@ -201,7 +202,7 @@ static void process_inputs(const USDExporterContext &usd_export_context,
     /* Don't export emission color if strength is zero. */
     if (input_spec.input_name == usdtokens::emissive_color) {
       const bNodeSocket *emission_strength_sock = bke::node_find_socket(
-          *node, SOCK_IN, "Emission Strength");
+          *node, SOCK_IN, "Emission Strength"_ustr);
       if (!emission_strength_sock) {
         continue;
       }
@@ -275,23 +276,23 @@ static void process_inputs(const USDExporterContext &usd_export_context,
        * Displacement: The scale-bias values come from the Midlevel and Scale sockets.
        */
       if (input_spec.input_name != usdtokens::displacement) {
-        bNodeLink *scale_link = traverse_channel(&sock, SH_NODE_VECTOR_MATH);
+        const bNodeLink *scale_link = traverse_channel(&sock, SH_NODE_VECTOR_MATH);
         if (scale_link) {
           bNode *vector_math_node = scale_link->fromnode;
           if (vector_math_node->custom1 == NODE_VECTOR_MATH_MULTIPLY_ADD) {
             /* Attempt one more traversal in case the current node is not the
              * correct NODE_VECTOR_MATH_MULTIPLY_ADD (see code in usd_reader_material). */
-            bNodeSocket *sock_current = bke::node_find_socket(
-                *vector_math_node, SOCK_IN, "Vector");
-            bNodeLink *temp_link = traverse_channel(sock_current, SH_NODE_VECTOR_MATH);
+            const bNodeSocket *sock_current = bke::node_find_socket(
+                *vector_math_node, SOCK_IN, "Vector"_ustr);
+            const bNodeLink *temp_link = traverse_channel(sock_current, SH_NODE_VECTOR_MATH);
             if (temp_link && temp_link->fromnode->custom1 == NODE_VECTOR_MATH_MULTIPLY_ADD) {
               vector_math_node = temp_link->fromnode;
             }
 
             const bNodeSocket *sock_scale = bke::node_find_socket(
-                *vector_math_node, SOCK_IN, "Vector_001");
+                *vector_math_node, SOCK_IN, "Vector_001"_ustr);
             const bNodeSocket *sock_bias = bke::node_find_socket(
-                *vector_math_node, SOCK_IN, "Vector_002");
+                *vector_math_node, SOCK_IN, "Vector_002"_ustr);
             const float *scale_value =
                 sock_scale->default_value_typed<bNodeSocketValueVector>()->value;
             const float *bias_value =
@@ -304,8 +305,8 @@ static void process_inputs(const USDExporterContext &usd_export_context,
         }
       }
       else {
-        const bNodeSocket *sock_midlevel = bke::node_find_socket(*node, SOCK_IN, "Midlevel");
-        const bNodeSocket *sock_scale = bke::node_find_socket(*node, SOCK_IN, "Scale");
+        const bNodeSocket *sock_midlevel = bke::node_find_socket(*node, SOCK_IN, "Midlevel"_ustr);
+        const bNodeSocket *sock_scale = bke::node_find_socket(*node, SOCK_IN, "Scale"_ustr);
         const float midlevel_value =
             sock_midlevel->default_value_typed<bNodeSocketValueFloat>()->value;
         const float scale_value = sock_scale->default_value_typed<bNodeSocketValueFloat>()->value;
@@ -317,7 +318,7 @@ static void process_inputs(const USDExporterContext &usd_export_context,
       }
 
       /* Look for a connected uvmap node. */
-      if (bNodeSocket *socket = bke::node_find_socket(*input_node, SOCK_IN, "Vector")) {
+      if (bNodeSocket *socket = bke::node_find_socket(*input_node, SOCK_IN, "Vector"_ustr)) {
         if (pxr::UsdShadeInput st_input = usd_shader.CreateInput(usdtokens::st,
                                                                  pxr::SdfValueTypeNames->Float2))
         {
@@ -331,7 +332,7 @@ static void process_inputs(const USDExporterContext &usd_export_context,
         float threshold = 0.0f;
 
         /* The immediate upstream node should either be a Math Round or a Math 1-minus. */
-        bNodeLink *math_link = traverse_channel(&sock, SH_NODE_MATH);
+        const bNodeLink *math_link = traverse_channel(&sock, SH_NODE_MATH);
         if (math_link && math_link->fromnode) {
           bNode *math_node = math_link->fromnode;
 
@@ -340,9 +341,9 @@ static void process_inputs(const USDExporterContext &usd_export_context,
           }
           else if (math_node->custom1 == NODE_MATH_SUBTRACT) {
             /* If this is the 1-minus node, we need to search upstream to find the less-than. */
-            bNodeSocket *math_sock = bke::node_find_socket(*math_node, SOCK_IN, "Value");
+            bNodeSocket *math_sock = bke::node_find_socket(*math_node, SOCK_IN, "Value"_ustr);
             if (math_sock->default_value_typed<bNodeSocketValueFloat>()->value == 1.0f) {
-              math_sock = bke::node_find_socket(*math_node, SOCK_IN, "Value_001");
+              math_sock = bke::node_find_socket(*math_node, SOCK_IN, "Value_001"_ustr);
               math_link = traverse_channel(math_sock, SH_NODE_MATH);
               if (math_link && math_link->fromnode) {
                 math_node = math_link->fromnode;
@@ -350,7 +351,7 @@ static void process_inputs(const USDExporterContext &usd_export_context,
                 if (math_node->custom1 == NODE_MATH_LESS_THAN) {
                   /* We found the upstream less-than with the threshold value. */
                   bNodeSocket *threshold_sock = bke::node_find_socket(
-                      *math_node, SOCK_IN, "Value_001");
+                      *math_node, SOCK_IN, "Value_001"_ustr);
                   threshold = threshold_sock->default_value_typed<bNodeSocketValueFloat>()->value;
                 }
               }
@@ -440,7 +441,7 @@ static void process_inputs(const USDExporterContext &usd_export_context,
 }
 
 static void create_usd_preview_surface_material(const USDExporterContext &usd_export_context,
-                                                Material *material,
+                                                const Material *material,
                                                 pxr::UsdShadeMaterial &usd_material,
                                                 const std::string &active_uvmap_name,
                                                 ReportList *reports)
@@ -473,8 +474,8 @@ static void create_usd_preview_surface_material(const USDExporterContext &usd_ex
       return;
     }
 
-    bNodeSocket *sock_mid = bke::node_find_socket(*displacement_node, SOCK_IN, "Midlevel");
-    bNodeSocket *sock_scale = bke::node_find_socket(*displacement_node, SOCK_IN, "Scale");
+    bNodeSocket *sock_mid = bke::node_find_socket(*displacement_node, SOCK_IN, "Midlevel"_ustr);
+    bNodeSocket *sock_scale = bke::node_find_socket(*displacement_node, SOCK_IN, "Scale"_ustr);
     if (sock_mid->link || sock_scale->link) {
       CLOG_WARN(&LOG, "Skipping displacement. Midlevel and Scale must be constants.");
       return;
@@ -483,7 +484,7 @@ static void create_usd_preview_surface_material(const USDExporterContext &usd_ex
     usd_material.CreateDisplacementOutput().ConnectToSource(preview_surface.ConnectableAPI(),
                                                             usdtokens::displacement);
 
-    bNodeSocket *sock_height = bke::node_find_socket(*displacement_node, SOCK_IN, "Height");
+    bNodeSocket *sock_height = bke::node_find_socket(*displacement_node, SOCK_IN, "Height"_ustr);
     if (sock_height->link) {
       process_inputs(usd_export_context,
                      usd_material,
@@ -591,9 +592,9 @@ void set_normal_texture_range(pxr::UsdShadeShader &usd_shader, const InputSpec &
 }
 
 /* Create USD Shade Material network from Blender viewport display settings. */
-static void create_usd_viewport_material(const USDExporterContext &usd_export_context,
-                                         const Material *material,
-                                         const pxr::UsdShadeMaterial &usd_material)
+void create_usd_viewport_material(const USDExporterContext &usd_export_context,
+                                  const Material *material,
+                                  const pxr::UsdShadeMaterial &usd_material)
 {
   /* Construct the shader. */
   pxr::SdfPath shader_path = usd_material.GetPath().AppendChild(usdtokens::preview_shader);
@@ -679,15 +680,15 @@ static void create_uvmap_shader(const USDExporterContext &usd_export_context,
 }
 
 static void create_transform2d_shader(const USDExporterContext &usd_export_context,
-                                      bNodeLink *mapping_link,
+                                      const bNodeLink *mapping_link,
                                       pxr::UsdShadeMaterial &usd_material,
                                       pxr::UsdShadeInput &usd_input,
                                       const std::string &uvmap_name,
                                       ReportList *reports)
 
 {
-  bNode *mapping_node = (mapping_link && mapping_link->fromnode ? mapping_link->fromnode :
-                                                                  nullptr);
+  const bNode *mapping_node = (mapping_link && mapping_link->fromnode ? mapping_link->fromnode :
+                                                                        nullptr);
 
   BLI_assert(mapping_node && mapping_node->type_legacy == SH_NODE_MAPPING);
 
@@ -696,7 +697,7 @@ static void create_transform2d_shader(const USDExporterContext &usd_export_conte
   }
 
   if (mapping_node->custom1 != TEXMAP_TYPE_POINT) {
-    if (bNodeSocket *socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Vector")) {
+    if (const bNodeSocket *socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Vector"_ustr)) {
       create_uv_input(usd_export_context, socket, usd_material, usd_input, uvmap_name, reports);
     }
     return;
@@ -716,19 +717,25 @@ static void create_transform2d_shader(const USDExporterContext &usd_export_conte
   float loc[3] = {0.0f, 0.0f, 0.0f};
   float rot[3] = {0.0f, 0.0f, 0.0f};
 
-  if (bNodeSocket *scale_socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Scale")) {
+  if (const bNodeSocket *scale_socket = bke::node_find_socket(
+          *mapping_node, SOCK_IN, "Scale"_ustr))
+  {
     copy_v3_v3(scale, scale_socket->default_value_typed<bNodeSocketValueVector>()->value);
     /* Ignore the Z scale. */
     scale[2] = 1.0f;
   }
 
-  if (bNodeSocket *loc_socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Location")) {
+  if (const bNodeSocket *loc_socket = bke::node_find_socket(
+          *mapping_node, SOCK_IN, "Location"_ustr))
+  {
     copy_v3_v3(loc, loc_socket->default_value_typed<bNodeSocketValueVector>()->value);
     /* Ignore the Z translation. */
     loc[2] = 0.0f;
   }
 
-  if (bNodeSocket *rot_socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Rotation")) {
+  if (const bNodeSocket *rot_socket = bke::node_find_socket(
+          *mapping_node, SOCK_IN, "Rotation"_ustr))
+  {
     copy_v3_v3(rot, rot_socket->default_value_typed<bNodeSocketValueVector>()->value);
     /* Ignore the X and Y rotations. */
     rot[0] = 0.0f;
@@ -757,7 +764,7 @@ static void create_transform2d_shader(const USDExporterContext &usd_export_conte
     rot_input.Set(rot_val);
   }
 
-  if (bNodeSocket *socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Vector")) {
+  if (const bNodeSocket *socket = bke::node_find_socket(*mapping_node, SOCK_IN, "Vector"_ustr)) {
     if (pxr::UsdShadeInput in_input = transform2d_shader.CreateInput(
             usdtokens::in, pxr::SdfValueTypeNames->Float2))
     {
@@ -767,7 +774,7 @@ static void create_transform2d_shader(const USDExporterContext &usd_export_conte
 }
 
 static void create_uv_input(const USDExporterContext &usd_export_context,
-                            bNodeSocket *input_socket,
+                            const bNodeSocket *input_socket,
                             pxr::UsdShadeMaterial &usd_material,
                             pxr::UsdShadeInput &usd_input,
                             const std::string &active_uvmap_name,
@@ -777,7 +784,7 @@ static void create_uv_input(const USDExporterContext &usd_export_context,
     return;
   }
 
-  if (bNodeLink *mapping_link = traverse_channel(input_socket, SH_NODE_MAPPING)) {
+  if (const bNodeLink *mapping_link = traverse_channel(input_socket, SH_NODE_MAPPING)) {
     /* Use either "st" or active UV map name from mesh, depending if it was renamed. */
     std::string uvmap_name = (usd_export_context.export_params.rename_uvmaps) ? usdtokens::st :
                                                                                 active_uvmap_name;
@@ -796,7 +803,7 @@ static void create_uv_input(const USDExporterContext &usd_export_context,
 static bool has_generated_tiles(const Image *ima)
 {
   bool any_generated = false;
-  for (ImageTile &tile : ima->tiles) {
+  for (const ImageTile &tile : ima->tiles) {
     if ((tile.gen_flag & IMA_GEN_TILE) != 0) {
       any_generated = true;
       break;
@@ -924,7 +931,7 @@ static void export_in_memory_texture(Image *ima,
   }
   else {
     eUDIM_TILE_FORMAT tile_format;
-    char *udim_pattern = nullptr;
+    const char *udim_pattern = nullptr;
     udim_pattern = BKE_image_get_tile_strformat(file_name, &tile_format);
     if (tile_format == UDIM_TILE_FORMAT_NONE) {
       return;
@@ -932,7 +939,7 @@ static void export_in_memory_texture(Image *ima,
 
     /* Save all the tiles. */
     ImageUser iuser{};
-    for (ImageTile &tile : ima->tiles) {
+    for (const ImageTile &tile : ima->tiles) {
       char tile_filepath[FILE_MAX];
       BKE_image_set_filepath_from_tile_number(
           tile_filepath, udim_pattern, tile_format, tile.tile_number);
@@ -951,12 +958,12 @@ static void export_in_memory_texture(Image *ima,
   }
 }
 
-static void export_packed_texture(Image *ima,
+static void export_packed_texture(const Image *ima,
                                   const std::string &export_dir,
                                   const bool allow_overwrite,
                                   ReportList *reports)
 {
-  for (ImagePackedFile &imapf : ima->packedfiles) {
+  for (const ImagePackedFile &imapf : ima->packedfiles) {
     if (!imapf.packedfile || !imapf.packedfile->data || !imapf.packedfile->size) {
       continue;
     }
@@ -1027,24 +1034,6 @@ static void get_absolute_path(const Image *ima, char *r_path)
   BLI_path_normalize(r_path);
 }
 
-static pxr::TfToken get_node_tex_image_color_space(const bNode *node)
-{
-  if (!node->id) {
-    return pxr::TfToken();
-  }
-
-  const Image *ima = reinterpret_cast<const Image *>(node->id);
-
-  if (IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name)) {
-    return usdtokens::raw;
-  }
-  if (IMB_colormanagement_space_name_is_srgb(ima->colorspace_settings.name)) {
-    return usdtokens::sRGB;
-  }
-
-  return pxr::TfToken();
-}
-
 static pxr::TfToken get_node_tex_image_wrap(const bNode *node)
 {
   if (node->type_legacy != SH_NODE_TEX_IMAGE) {
@@ -1080,21 +1069,21 @@ static pxr::TfToken get_node_tex_image_wrap(const bNode *node)
 /* Search the upstream node links connected to the given socket and return the first occurrence
  * of the link connected to the node of the given type. Return null if no such link was found.
  * The 'fromnode' and 'fromsock' members of the returned link are guaranteed to be not null. */
-static bNodeLink *traverse_channel(bNodeSocket *input, const short target_type)
+static const bNodeLink *traverse_channel(const bNodeSocket *input, const short target_type)
 {
   if (!(input->link && input->link->fromnode && input->link->fromsock)) {
     return nullptr;
   }
 
-  bNode *linked_node = input->link->fromnode;
+  const bNode *linked_node = input->link->fromnode;
   if (linked_node->type_legacy == target_type) {
     /* Return match. */
     return input->link;
   }
 
   /* Recursively traverse the linked node's sockets. */
-  for (bNodeSocket &sock : linked_node->inputs) {
-    if (bNodeLink *found_link = traverse_channel(&sock, target_type)) {
+  for (const bNodeSocket &sock : linked_node->inputs) {
+    if (const bNodeLink *found_link = traverse_channel(&sock, target_type)) {
       return found_link;
     }
   }
@@ -1104,7 +1093,7 @@ static bNodeLink *traverse_channel(bNodeSocket *input, const short target_type)
 
 /* Returns the first occurrence of a principled BSDF or a diffuse BSDF node found in the given
  * material's node tree.  Returns null if no instance of either type was found. */
-static bNode *find_bsdf_node(Material *material)
+static bNode *find_bsdf_node(const Material *material)
 {
   for (bNode *node : material->nodetree->all_nodes()) {
     if (ELEM(node->type_legacy, SH_NODE_BSDF_PRINCIPLED, SH_NODE_BSDF_DIFFUSE)) {
@@ -1120,7 +1109,7 @@ static bNode *find_bsdf_node(Material *material)
  * material's node tree. Vector Displacement is not supported in the #UsdPreviewSurface.
  * Returns null if no instance of either type was found.
  */
-static bNode *find_displacement_node(Material *material)
+static bNode *find_displacement_node(const Material *material)
 {
   for (bNode *node : material->nodetree->all_nodes()) {
     if (node->type_legacy == SH_NODE_DISPLACEMENT) {
@@ -1180,7 +1169,7 @@ static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &u
  */
 static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &usd_export_context,
                                                      const pxr::UsdShadeMaterial &material,
-                                                     bNode *node)
+                                                     const bNode *node)
 {
   pxr::UsdShadeShader shader = create_usd_preview_shader(
       usd_export_context, material, node->name, node->type_legacy);
@@ -1196,10 +1185,7 @@ static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &u
         .Set(pxr::SdfAssetPath(imagePath));
   }
 
-  pxr::TfToken colorSpace = get_node_tex_image_color_space(node);
-  if (!colorSpace.IsEmpty()) {
-    shader.CreateInput(usdtokens::sourceColorSpace, pxr::SdfValueTypeNames->Token).Set(colorSpace);
-  }
+  io::usd::colorspace_from_image_texture(reinterpret_cast<const Image *>(node->id), shader);
 
   pxr::TfToken wrap = get_node_tex_image_wrap(node);
   if (!wrap.IsEmpty()) {
@@ -1233,7 +1219,7 @@ static std::string get_tex_image_asset_filepath(const Image *ima)
 }
 
 static std::string get_tex_image_asset_filepath(const USDExporterContext &usd_export_context,
-                                                bNode *node)
+                                                const bNode *node)
 {
   return get_tex_image_asset_filepath(
       node, usd_export_context.stage, usd_export_context.export_params);
@@ -1325,7 +1311,7 @@ std::string get_tex_image_asset_filepath(const std::string &path,
   return path;
 }
 
-std::string get_tex_image_asset_filepath(bNode *node,
+std::string get_tex_image_asset_filepath(const bNode *node,
                                          const pxr::UsdStageRefPtr stage,
                                          const USDExportParams &export_params)
 {
@@ -1335,7 +1321,7 @@ std::string get_tex_image_asset_filepath(bNode *node,
 
 /* If the given image is tiled, copy the image tiles to the given
  * destination directory. */
-static void copy_tiled_textures(Image *ima,
+static void copy_tiled_textures(const Image *ima,
                                 const std::string &dest_dir,
                                 const bool allow_overwrite,
                                 ReportList *reports)
@@ -1344,7 +1330,7 @@ static void copy_tiled_textures(Image *ima,
   get_absolute_path(ima, src_path);
 
   eUDIM_TILE_FORMAT tile_format;
-  char *udim_pattern = BKE_image_get_tile_strformat(src_path, &tile_format);
+  const char *udim_pattern = BKE_image_get_tile_strformat(src_path, &tile_format);
 
   /* Only <UDIM> tile formats are supported by USD right now. */
   if (tile_format != UDIM_TILE_FORMAT_UDIM) {
@@ -1354,7 +1340,7 @@ static void copy_tiled_textures(Image *ima,
   }
 
   /* Copy all tiles. */
-  for (ImageTile &tile : ima->tiles) {
+  for (const ImageTile &tile : ima->tiles) {
     char src_tile_path[FILE_MAX];
     BKE_image_set_filepath_from_tile_number(
         src_tile_path, udim_pattern, tile_format, tile.tile_number);
@@ -1548,7 +1534,7 @@ static pxr::SdfPath reflow_materialx_paths(pxr::SdfPath input_path,
 /* Exports the material as a MaterialX node-graph within the USD layer. */
 static void create_usd_materialx_material(const USDExporterContext &usd_export_context,
                                           pxr::SdfPath usd_path,
-                                          Material *material,
+                                          const Material *material,
                                           const std::string &active_uvmap_name,
                                           const pxr::UsdShadeMaterial &usd_material)
 {
@@ -1749,7 +1735,7 @@ static void create_usd_materialx_material(const USDExporterContext &usd_export_c
 
 pxr::UsdShadeMaterial create_usd_material(const USDExporterContext &usd_export_context,
                                           pxr::SdfPath usd_path,
-                                          Material *material,
+                                          const Material *material,
                                           const std::string &active_uvmap_name,
                                           ReportList *reports)
 {

@@ -10,7 +10,9 @@ set(INC_GLSL
   ../../gpu/intern
   ../../gpu/shaders
   ../../gpu/shaders/common
+  ../../gpu/shaders/compat
   ../../gpu/shaders/infos
+  ../../gpu/shaders/nodes
 )
 
 set(SRC_GLSL_COMP
@@ -140,5 +142,5 @@ if(WITH_GPU_SHADER_CPP_COMPILATION)
   compile_sources_as_cpp(compositor_cpp_shaders_comp "${SRC_GLSL_COMP}" "GPU_COMPUTE_SHADER")
   # Only enable to make sure they compile on their own.
   # Otherwise it creates a warning about `pragma once`.
-  compile_sources_as_cpp(compositor_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
+  # compile_sources_as_cpp(compositor_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
 endif()

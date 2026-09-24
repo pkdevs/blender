@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <queue>
 
 #include "NOD_partial_eval.hh"
@@ -198,16 +202,16 @@ void eval_downstream(
         forward_output({context, &node.output_socket(0)});
       }
     }
-    if (node.is_type("NodeImplicitConversion")) {
+    if (node.is_type("NodeImplicitConversion"_ustr)) {
       if (propagate_value_fn({context, &node.input_socket(0)}, {context, &node.output_socket(0)}))
       {
         forward_output({context, &node.output_socket(0)});
       }
     }
     else if (node.is_muted()) {
-      for (const bNodeLink &link : node.internal_links()) {
-        if (propagate_value_fn({context, link.fromsock}, {context, link.tosock})) {
-          forward_output({context, link.tosock});
+      for (const bNodeInternalLink &link : node.internal_links()) {
+        if (propagate_value_fn({context, link.in}, {context, link.out})) {
+          forward_output({context, link.out});
         }
       }
     }
@@ -386,14 +390,14 @@ UpstreamEvalTargets eval_upstream(
       propagate_value_fn({context, &node.output_socket(0)}, {context, &node.input_socket(0)});
       forward_input({context, &node.input_socket(0)});
     }
-    else if (node.is_type("NodeImplicitConversion")) {
+    else if (node.is_type("NodeImplicitConversion"_ustr)) {
       propagate_value_fn({context, &node.output_socket(0)}, {context, &node.input_socket(0)});
       forward_input({context, &node.input_socket(0)});
     }
     else if (node.is_muted()) {
-      for (const bNodeLink &link : node.internal_links()) {
-        if (propagate_value_fn({context, link.tosock}, {context, link.fromsock})) {
-          forward_input({context, link.fromsock});
+      for (const bNodeInternalLink &link : node.internal_links()) {
+        if (propagate_value_fn({context, link.out}, {context, link.in})) {
+          forward_input({context, link.in});
         }
       }
     }

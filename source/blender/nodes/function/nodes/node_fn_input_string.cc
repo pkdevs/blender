@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 #include "NOD_socket_search_link.hh"
 
@@ -20,18 +21,13 @@ namespace blender::nodes::node_fn_input_string_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.is_function_node();
-  b.add_output<decl::String>("String").custom_draw([](CustomSocketDrawParams &params) {
+  b.add_output<decl::String>("String"_ustr).custom_draw([](CustomSocketDrawParams &params) {
     params.layout.alignment_set(ui::LayoutAlign::Expand);
-    PropertyRNA *prop = RNA_struct_find_property(&params.node_ptr, "string");
-    params.layout.prop(&params.node_ptr,
-                       prop,
-                       -1,
-                       0,
-                       ui::ITEM_R_SPLIT_EMPTY_NAME,
-                       "",
-                       ICON_NONE,
-                       IFACE_("String"));
+    params.layout.textbox_with_state(
+        &params.node_ptr,
+        "string",
+        RNA_pointer_get(&params.node_ptr, "textbox_state").data_as<TextboxState>(),
+        IFACE_("String"));
   });
 }
 
@@ -45,7 +41,9 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->storage = MEM_new<NodeInputString>(__func__);
+  NodeInputString *storage = MEM_new<NodeInputString>(__func__);
+  storage->textbox_state.visible_lines = 1;
+  node->storage = storage;
 }
 
 static void node_storage_free(bNode *node)
@@ -69,7 +67,6 @@ static void node_storage_copy(bNodeTree * /*dst_ntree*/, bNode *dest_node, const
   if (source_storage->string) {
     destination_storage->string = MEM_dupalloc(source_storage->string);
   }
-
   dest_node->storage = destination_storage;
 }
 
@@ -87,7 +84,7 @@ static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const eNodeSocketDatatype type = eNodeSocketDatatype(params.other_socket().type);
+  const eNodeSocketDatatype type = params.other_socket().type;
   if (type != SOCK_STRING) {
     return;
   }
@@ -96,8 +93,8 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 
   params.add_item(IFACE_("String"), [](LinkSearchOpParams &params) {
-    bNode &node = params.add_node("FunctionNodeInputString");
-    params.update_and_connect_available_socket(node, "String");
+    bNode &node = params.add_node("FunctionNodeInputString"_ustr);
+    params.update_and_connect_available_socket(node, "String"_ustr);
 
     /* Adapt width of the new node to its content. */
     const StringRef string = static_cast<NodeInputString *>(node.storage)->string;
@@ -112,7 +109,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeInputString", FN_NODE_INPUT_STRING);
+  common_node_type_base(&ntype, "FunctionNodeInputString"_ustr, FN_NODE_INPUT_STRING);
   ntype.ui_name = "String";
   ntype.ui_description = "Provide a string value that can be connected to other nodes in the tree";
   ntype.enum_name_legacy = "INPUT_STRING";

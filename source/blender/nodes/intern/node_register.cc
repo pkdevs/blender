@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_composite.hh"
 #include "NOD_geometry.hh"
 #include "NOD_register.hh"
@@ -32,14 +36,14 @@ static void register_undefined_types()
    */
 
   bke::NodeTreeTypeUndefined.type = NTREE_UNDEFINED;
-  bke::NodeTreeTypeUndefined.idname = "NodeTreeUndefined";
+  bke::NodeTreeTypeUndefined.idname = "NodeTreeUndefined"_ustr;
   bke::NodeTreeTypeUndefined.ui_name = N_("Undefined");
   bke::NodeTreeTypeUndefined.ui_description = N_("Undefined Node Tree Type");
 
   bke::node_type_base_custom(bke::NodeTypeUndefined, "NodeUndefined", "Undefined", "UNDEFINED", 0);
   bke::NodeTypeUndefined.poll = node_undefined_poll;
 
-  bke::NodeSocketTypeUndefined.idname = "NodeSocketUndefined";
+  bke::NodeSocketTypeUndefined.idname = "NodeSocketUndefined"_ustr;
   /* extra type info for standard socket types */
   bke::NodeSocketTypeUndefined.type = SOCK_CUSTOM;
   bke::NodeSocketTypeUndefined.subtype = PROP_NONE;
@@ -53,8 +57,8 @@ class SimulationZoneType : public bke::bNodeZoneType {
  public:
   SimulationZoneType()
   {
-    this->input_idname = "GeometryNodeSimulationInput";
-    this->output_idname = "GeometryNodeSimulationOutput";
+    this->input_idname = "GeometryNodeSimulationInput"_ustr;
+    this->output_idname = "GeometryNodeSimulationOutput"_ustr;
     this->input_type = GEO_NODE_SIMULATION_INPUT;
     this->output_type = GEO_NODE_SIMULATION_OUTPUT;
     this->theme_id = TH_NODE_ZONE_SIMULATION;
@@ -71,8 +75,8 @@ class RepeatZoneType : public bke::bNodeZoneType {
  public:
   RepeatZoneType()
   {
-    this->input_idname = "GeometryNodeRepeatInput";
-    this->output_idname = "GeometryNodeRepeatOutput";
+    this->input_idname = "GeometryNodeRepeatInput"_ustr;
+    this->output_idname = "GeometryNodeRepeatOutput"_ustr;
     this->input_type = GEO_NODE_REPEAT_INPUT;
     this->output_type = GEO_NODE_REPEAT_OUTPUT;
     this->theme_id = TH_NODE_ZONE_REPEAT;
@@ -89,8 +93,8 @@ class ForeachGeometryElementZoneType : public bke::bNodeZoneType {
  public:
   ForeachGeometryElementZoneType()
   {
-    this->input_idname = "GeometryNodeForeachGeometryElementInput";
-    this->output_idname = "GeometryNodeForeachGeometryElementOutput";
+    this->input_idname = "GeometryNodeForeachGeometryElementInput"_ustr;
+    this->output_idname = "GeometryNodeForeachGeometryElementOutput"_ustr;
     this->input_type = GEO_NODE_FOREACH_GEOMETRY_ELEMENT_INPUT;
     this->output_type = GEO_NODE_FOREACH_GEOMETRY_ELEMENT_OUTPUT;
     this->theme_id = TH_NODE_ZONE_FOREACH_GEOMETRY_ELEMENT;
@@ -108,8 +112,8 @@ class ClosureZoneType : public bke::bNodeZoneType {
  public:
   ClosureZoneType()
   {
-    this->input_idname = "NodeClosureInput";
-    this->output_idname = "NodeClosureOutput";
+    this->input_idname = "NodeClosureInput"_ustr;
+    this->output_idname = "NodeClosureOutput"_ustr;
     this->input_type = NODE_CLOSURE_INPUT;
     this->output_type = NODE_CLOSURE_OUTPUT;
     this->theme_id = TH_NODE_ZONE_CLOSURE;
@@ -122,16 +126,36 @@ class ClosureZoneType : public bke::bNodeZoneType {
   }
 };
 
+class LightIterInternalZoneType : public bke::bNodeZoneType {
+ public:
+  LightIterInternalZoneType()
+  {
+    this->input_idname = "ShaderNodeLightIterInternalInput"_ustr;
+    this->output_idname = "ShaderNodeLightIterInternalOutput"_ustr;
+    this->input_type = SH_NODE_LIGHT_ITER_INTERNAL_INPUT;
+    this->output_type = SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT;
+    this->theme_id = TH_NODE_ZONE_REPEAT;
+  }
+
+  const int &get_corresponding_output_id(const bNode &input_bnode) const override
+  {
+    BLI_assert(input_bnode.type_legacy == this->input_type);
+    return *reinterpret_cast<const int *>(&input_bnode.custom3);
+  }
+};
+
 static void register_zone_types()
 {
   static SimulationZoneType simulation_zone_type;
   static RepeatZoneType repeat_zone_type;
   static ForeachGeometryElementZoneType foreach_geometry_element_zone_type;
   static ClosureZoneType closure_zone_type;
+  static LightIterInternalZoneType light_iter_internal_zone_type;
   bke::register_node_zone_type(simulation_zone_type);
   bke::register_node_zone_type(repeat_zone_type);
   bke::register_node_zone_type(foreach_geometry_element_zone_type);
   bke::register_node_zone_type(closure_zone_type);
+  bke::register_node_zone_type(light_iter_internal_zone_type);
 }
 
 void register_nodes()
@@ -148,6 +172,7 @@ void register_nodes()
   register_node_type_frame();
   register_node_type_reroute();
   register_node_type_implicit_conversion();
+  register_node_type_comment();
   register_node_type_group_input();
   register_node_type_group_output();
 

@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -23,7 +24,6 @@ struct LibIDMainSortTestContext {
 
   LibIDMainSortTestContext()
   {
-    BKE_idtype_init();
     bmain = BKE_main_new();
   }
   ~LibIDMainSortTestContext()
@@ -45,16 +45,18 @@ static void test_lib_id_main_sort_check_order(std::initializer_list<ID *> list)
   EXPECT_EQ(prev_id->next, nullptr);
 }
 
-TEST(lib_id_main_sort, local_ids_1)
+class LibIDMainSortTest : public BlenderGTestBase {};
+
+TEST_F(LibIDMainSortTest, local_ids_1)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   ID *id_c = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_C"));
   ID *id_a = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_A"));
   ID *id_b = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_B"));
-  EXPECT_TRUE(ctx.bmain->objects.first == id_a);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_c);
   test_lib_id_main_sort_check_order({id_a, id_b, id_c});
 
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
@@ -75,10 +77,10 @@ static IDNewNameResult change_name(Main *bmain, ID *id, const char *name, const 
   return BKE_libblock_rename(*bmain, *id, name, mode);
 }
 
-TEST(lib_id_main_sort, linked_ids_1)
+TEST_F(LibIDMainSortTest, linked_ids_1)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   Library *lib_a = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_A"));
   Library *lib_b = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_B"));
@@ -90,20 +92,20 @@ TEST(lib_id_main_sort, linked_ids_1)
   id_sort_by_name(&ctx.bmain->objects.cast<ID>(), id_a, nullptr);
   change_lib(ctx.bmain, id_b, lib_a);
   id_sort_by_name(&ctx.bmain->objects.cast<ID>(), id_b, nullptr);
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   change_lib(ctx.bmain, id_a, lib_b);
   id_sort_by_name(&ctx.bmain->objects.cast<ID>(), id_a, nullptr);
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_a);
   test_lib_id_main_sort_check_order({id_c, id_b, id_a});
 
   change_lib(ctx.bmain, id_b, lib_b);
   id_sort_by_name(&ctx.bmain->objects.cast<ID>(), id_b, nullptr);
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -111,10 +113,12 @@ TEST(lib_id_main_sort, linked_ids_1)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, local_ids_rename_existing_never)
+class LibIDMainUniqueNameTest : public BlenderGTestBase {};
+
+TEST_F(LibIDMainUniqueNameTest, local_ids_rename_existing_never)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   ID *id_c = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_C"));
   ID *id_a = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_A"));
@@ -133,8 +137,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_never)
   EXPECT_EQ(result.other_id, nullptr);
   EXPECT_STREQ(id_c->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_a);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_a, id_c, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -147,8 +151,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_never)
   EXPECT_EQ(result.other_id, nullptr);
   EXPECT_STREQ(id_c->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_a);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_a, id_c, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -188,10 +192,10 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_never)
   EXPECT_STREQ(future_name, long_name_shorten);
 }
 
-TEST(lib_id_main_unique_name, local_ids_rename_existing_always)
+TEST_F(LibIDMainUniqueNameTest, local_ids_rename_existing_always)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   ID *id_c = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_C"));
   ID *id_a = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_A"));
@@ -209,8 +213,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_always)
   EXPECT_EQ(result.other_id, id_a);
   EXPECT_STREQ(id_c->name + 2, "OB_A");
   EXPECT_STREQ(id_a->name + 2, "OB_A.001");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -222,8 +226,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_always)
   EXPECT_EQ(result.other_id, id_c);
   EXPECT_STREQ(id_c->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_a);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_a, id_c, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -231,10 +235,10 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_always)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, local_ids_rename_existing_same_root)
+TEST_F(LibIDMainUniqueNameTest, local_ids_rename_existing_same_root)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   ID *id_c = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_C"));
   ID *id_a = static_cast<ID *>(BKE_id_new(ctx.bmain, ID_OB, "OB_A"));
@@ -253,8 +257,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_same_root)
   EXPECT_EQ(result.other_id, nullptr);
   EXPECT_STREQ(id_c->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_a);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_a, id_c, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -266,8 +270,8 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_same_root)
   EXPECT_EQ(result.other_id, id_a);
   EXPECT_STREQ(id_c->name + 2, "OB_A");
   EXPECT_STREQ(id_a->name + 2, "OB_A.001");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -275,10 +279,10 @@ TEST(lib_id_main_unique_name, local_ids_rename_existing_same_root)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, linked_ids_1)
+TEST_F(LibIDMainUniqueNameTest, linked_ids_1)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   Library *lib_a = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_A"));
   Library *lib_b = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_B"));
@@ -296,8 +300,8 @@ TEST(lib_id_main_unique_name, linked_ids_1)
   change_name(ctx.bmain, id_b, "OB_A", IDNewNameMode::RenameExistingNever);
   EXPECT_STREQ(id_b->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -307,8 +311,8 @@ TEST(lib_id_main_unique_name, linked_ids_1)
   change_name(ctx.bmain, id_b, "OB_A", IDNewNameMode::RenameExistingNever);
   EXPECT_STREQ(id_b->name + 2, "OB_A");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -326,10 +330,12 @@ static void change_name_global(Main *bmain, ID *id, const char *name)
   id_sort_by_name(&bmain->objects.cast<ID>(), id, nullptr);
 }
 
-TEST(lib_id_main_global_unique_name, linked_ids_1)
+class LibIDMainGlobalUniqueNameTest : public BlenderGTestBase {};
+
+TEST_F(LibIDMainGlobalUniqueNameTest, linked_ids_1)
 {
   LibIDMainSortTestContext ctx;
-  EXPECT_TRUE(BLI_listbase_is_empty(&ctx.bmain->libraries));
+  EXPECT_TRUE(ctx.bmain->libraries.is_empty());
 
   Library *lib_a = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_A"));
   Library *lib_b = static_cast<Library *>(BKE_id_new(ctx.bmain, ID_LI, "LI_B"));
@@ -348,8 +354,8 @@ TEST(lib_id_main_global_unique_name, linked_ids_1)
   EXPECT_NE(ctx.bmain->name_map_global, nullptr);
   EXPECT_STREQ(id_b->name + 2, "OB_A.001");
   EXPECT_STREQ(id_a->name + 2, "OB_A");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_b);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_b);
   test_lib_id_main_sort_check_order({id_c, id_a, id_b});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -364,8 +370,8 @@ TEST(lib_id_main_global_unique_name, linked_ids_1)
   EXPECT_STREQ(id_b->name + 2, "OB_C.001");
   EXPECT_STREQ(id_a->name + 2, "OB_C.002");
   EXPECT_STREQ(id_c->name + 2, "OB_C");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_a);
   test_lib_id_main_sort_check_order({id_c, id_b, id_a});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
@@ -374,14 +380,14 @@ TEST(lib_id_main_global_unique_name, linked_ids_1)
   EXPECT_STREQ(id_b->name + 2, "OB_C");
   EXPECT_STREQ(id_a->name + 2, "OB_C.002");
   EXPECT_STREQ(id_c->name + 2, "OB_C");
-  EXPECT_TRUE(ctx.bmain->objects.first == id_c);
-  EXPECT_TRUE(ctx.bmain->objects.last == id_a);
+  EXPECT_TRUE(ctx.bmain->objects.first_as<ID>() == id_c);
+  EXPECT_TRUE(ctx.bmain->objects.last_as<ID>() == id_a);
   test_lib_id_main_sort_check_order({id_c, id_b, id_a});
 
   EXPECT_TRUE(BKE_main_namemap_validate(*ctx.bmain));
 }
 
-TEST(lib_id_main_unique_name, ids_sorted_by_default)
+TEST_F(LibIDMainUniqueNameTest, ids_sorted_by_default)
 {
   LibIDMainSortTestContext ctx;
 
@@ -404,7 +410,7 @@ static ID *add_id_in_library(Main *bmain, const char *name, Library *lib)
   return id;
 }
 
-TEST(lib_id_main_unique_name, ids_sorted_by_default_with_libraries)
+TEST_F(LibIDMainUniqueNameTest, ids_sorted_by_default_with_libraries)
 {
   LibIDMainSortTestContext ctx;
 
@@ -428,7 +434,7 @@ TEST(lib_id_main_unique_name, ids_sorted_by_default_with_libraries)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, name_too_long_handling)
+TEST_F(LibIDMainUniqueNameTest, name_too_long_handling)
 {
   LibIDMainSortTestContext ctx;
   constexpr char name_a[] =
@@ -476,7 +482,7 @@ TEST(lib_id_main_unique_name, name_too_long_handling)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, create_equivalent_numeric_suffixes)
+TEST_F(LibIDMainUniqueNameTest, create_equivalent_numeric_suffixes)
 {
   LibIDMainSortTestContext ctx;
 
@@ -539,7 +545,7 @@ TEST(lib_id_main_unique_name, create_equivalent_numeric_suffixes)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, re_create_equivalent_numeric_suffixes)
+TEST_F(LibIDMainUniqueNameTest, re_create_equivalent_numeric_suffixes)
 {
   LibIDMainSortTestContext ctx;
 
@@ -588,7 +594,7 @@ TEST(lib_id_main_unique_name, re_create_equivalent_numeric_suffixes)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, zero_suffix_is_never_assigned)
+TEST_F(LibIDMainUniqueNameTest, zero_suffix_is_never_assigned)
 {
   LibIDMainSortTestContext ctx;
 
@@ -607,7 +613,7 @@ TEST(lib_id_main_unique_name, zero_suffix_is_never_assigned)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, remove_after_dup_get_original_name)
+TEST_F(LibIDMainUniqueNameTest, remove_after_dup_get_original_name)
 {
   LibIDMainSortTestContext ctx;
 
@@ -628,7 +634,7 @@ TEST(lib_id_main_unique_name, remove_after_dup_get_original_name)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, name_number_suffix_assignment)
+TEST_F(LibIDMainUniqueNameTest, name_number_suffix_assignment)
 {
   LibIDMainSortTestContext ctx;
 
@@ -717,7 +723,7 @@ TEST(lib_id_main_unique_name, name_number_suffix_assignment)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, renames_with_duplicates)
+TEST_F(LibIDMainUniqueNameTest, renames_with_duplicates)
 {
   LibIDMainSortTestContext ctx;
 
@@ -745,7 +751,7 @@ TEST(lib_id_main_unique_name, renames_with_duplicates)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, names_are_unique_per_id_type)
+TEST_F(LibIDMainUniqueNameTest, names_are_unique_per_id_type)
 {
   LibIDMainSortTestContext ctx;
 
@@ -762,7 +768,7 @@ TEST(lib_id_main_unique_name, names_are_unique_per_id_type)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_main_unique_name, name_huge_number_suffix)
+TEST_F(LibIDMainUniqueNameTest, name_huge_number_suffix)
 {
   LibIDMainSortTestContext ctx;
 
@@ -779,7 +785,9 @@ TEST(lib_id_main_unique_name, name_huge_number_suffix)
   EXPECT_EQ(ctx.bmain->name_map_global, nullptr);
 }
 
-TEST(lib_id_make_local, brush)
+class LibIDMakeLocalTest : public BlenderGTestBase {};
+
+TEST_F(LibIDMakeLocalTest, brush)
 {
   LibIDMainSortTestContext ctx;
 

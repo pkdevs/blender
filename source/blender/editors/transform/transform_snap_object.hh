@@ -13,7 +13,7 @@
 
 #include "BLI_kdopbvh.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -225,6 +225,10 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
                        const Object *ob_eval,
                        const float4x4 &obmat,
                        bool is_object_active);
+
+/* `transform_snap_object_lattice.cc` */
+
+eSnapMode snapLattice(SnapObjectContext *sctx, const Object *ob_eval, const float4x4 &obmat);
 
 /* `transform_snap_object_camera.cc` */
 

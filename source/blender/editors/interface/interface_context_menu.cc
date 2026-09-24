@@ -14,18 +14,22 @@
 
 #include "DNA_screen_types.h"
 
-#include "BLI_fileops.h"
+#include "AS_asset_representation.hh"
+
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idprop.hh"
+#include "BKE_main.hh"
 #include "BKE_screen.hh"
 
 #include "ED_asset.hh"
+#include "ED_asset_menu_utils.hh"
 #include "ED_buttons.hh"
 #include "ED_keyframing.hh"
 #include "ED_screen.hh"
@@ -75,11 +79,41 @@ static IDProperty *shortcut_property_from_rna(bContext *C, Button *but)
   return prop;
 }
 
+static IDProperty *shortcut_property_from_rna_for_enum(bContext *C,
+                                                       Button *but_parent,
+                                                       Button *but)
+{
+  /* This is basically same as #shortcut_property_from_rna but with "value" in IDProperty in group.
+   * It's required for creating keyitem for enum values. */
+
+  /* If this returns null, we won't be able to bind shortcuts to these RNA properties.
+   * Support can be added at #wm_context_member_from_ptr. */
+  std::optional<std::string> final_data_path = WM_context_path_resolve_property_full(
+      C, &but_parent->rnapoin, but_parent->rnaprop, but_parent->rnaindex);
+  if (!final_data_path.has_value()) {
+    return nullptr;
+  }
+
+  const char *identifier = nullptr;
+  RNA_property_enum_identifier(
+      C, &but_parent->rnapoin, but_parent->rnaprop, but->retval, &identifier);
+
+  if (identifier == nullptr) {
+    /* Return early when valid identifier is not found for the button representing enum value. */
+    return nullptr;
+  }
+  /* Create ID property of data path and value, to pass to the operator. */
+  IDProperty *prop = bke::idprop::create_group(__func__).release();
+  IDP_AddToGroup(prop, bke::idprop::create("data_path", final_data_path.value()).release());
+  IDP_AddToGroup(prop, bke::idprop::create("value", identifier).release());
+  return prop;
+}
+
 static const char *shortcut_get_operator_property(bContext *C, Button *but, IDProperty **r_prop)
 {
   if (but->optype) {
     /* Operator */
-    *r_prop = (but->opptr && but->opptr->data) ?
+    *r_prop = (but->opptr && *but->opptr) ?
                   IDP_CopyProperty(static_cast<IDProperty *>(but->opptr->data)) :
                   nullptr;
     return but->optype->idname;
@@ -97,12 +131,30 @@ static const char *shortcut_get_operator_property(bContext *C, Button *but, IDPr
       return "WM_OT_context_toggle";
     }
     if (rnaprop_type == PROP_ENUM) {
-      /* Enum */
-      *r_prop = shortcut_property_from_rna(C, but);
+      /* `is_enum_menu` is true for expanded enum properties. It's to add shortcut to individual
+       * enum item, see: !163600 */
+      const bool is_enum_menu = but->type == ButtonType::Menu;
+      *r_prop = is_enum_menu ? shortcut_property_from_rna(C, but) :
+                               shortcut_property_from_rna_for_enum(C, but, but);
       if (*r_prop == nullptr) {
         return nullptr;
       }
-      return "WM_OT_context_menu_enum";
+      return is_enum_menu ? "WM_OT_context_menu_enum" : "WM_OT_context_set_enum";
+    }
+  }
+
+  if (but->type == ButtonType::ButMenu) {
+    if ((but->block->handle != nullptr)) {
+      Button *but_parent = but->block->handle->popup_create_vars.but;
+      if (but_parent && but_parent->rnaprop &&
+          (RNA_property_type(but_parent->rnaprop) == PROP_ENUM))
+      {
+        *r_prop = shortcut_property_from_rna_for_enum(C, but_parent, but);
+        if (*r_prop == nullptr) {
+          return nullptr;
+        }
+        return "WM_OT_context_set_enum";
+      }
     }
   }
 
@@ -352,7 +404,7 @@ static bUserMenuItem *but_user_menu_find(bContext *C, Button *but, bUserMenu *um
     /* NOTE(@ideasman42): It's highly unlikely this ever occurs since the path must be resolved
      * for this to be added in the first place, there might be some cases where manually
      * constructed RNA paths don't resolve and in this case a crash should be avoided. */
-    if (UNLIKELY(!member_id_data_path.has_value())) {
+    if (!member_id_data_path.has_value()) [[unlikely]] {
       /* Assert because this should never happen for typical usage. */
       BLI_assert_unreachable();
       return nullptr;
@@ -479,6 +531,17 @@ static bool but_menu_add_path_operators(Layout &layout, PointerRNA *ptr, Propert
 
   RNA_property_string_get(ptr, prop, filepath);
 
+  if (BLI_path_is_rel(filepath)) {
+    if (ptr->owner_id == nullptr) {
+      return false;
+    }
+    const char *base_path = ID_BLEND_PATH_FROM_GLOBAL(ptr->owner_id);
+    if (base_path[0] == '\0') {
+      return false;
+    }
+    BLI_path_abs(filepath, base_path);
+  }
+
   if (!BLI_exists(filepath)) {
     return false;
   }
@@ -546,7 +609,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       layout.separator();
     }
   }
-  else if (but->rnapoin.data && but->rnaprop) {
+  else if (but->rnapoin && but->rnaprop) {
     PointerRNA *ptr = &but->rnapoin;
     PropertyRNA *prop = but->rnaprop;
     const PropertyType type = RNA_property_type(prop);
@@ -565,9 +628,9 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     const bool is_array_component = (is_array && but->rnaindex != -1);
     const bool is_whole_array = (is_array && but->rnaindex == -1);
 
-    const uint override_status = RNA_property_override_library_status(
+    const eRNAOverrideStatus override_status = RNA_property_override_library_status(
         CTX_data_main(C), ptr, prop, -1);
-    const bool is_overridable = (override_status & RNA_OVERRIDE_STATUS_OVERRIDABLE) != 0;
+    const bool is_overridable = flag_is_set(override_status, eRNAOverrideStatus::LibOverridable);
 
     /* Set the (button_pointer, button_prop)
      * and pointer data for Python access to the hovered UI element. */
@@ -867,7 +930,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     /* Swap render X and Y dimensions. */
     if (but->rnaprop && but->rnapoin.type == RNA_RenderSettings) {
       const std::string prop_id = RNA_property_identifier(but->rnaprop);
-      if (prop_id == "resolution_x" || prop_id == "resolution_y") {
+      if (ELEM(prop_id, "resolution_x", "resolution_y")) {
         layout.op("RENDER_OT_swap_dimensions",
                   CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Swap Dimensions"),
                   ICON_RENDER_SWAP_DIMENSIONS);
@@ -984,6 +1047,14 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     }
   }
 
+  /* Download online assets. */
+  if (but->optype && but->opptr && ed::asset::operator_asset_reference_props_is_set(*but->opptr)) {
+    const asset_system::AssetRepresentation *asset = CTX_wm_asset(C);
+    if (asset && asset->is_online_only()) {
+      layout.op("ASSET_OT_assets_download", {}, ICON_DOWNLOAD);
+    }
+  }
+
   {
     const ARegion *region = CTX_wm_region_popup(C) ? CTX_wm_region_popup(C) : CTX_wm_region(C);
     ButtonViewItem *view_item_but = (but->type == ButtonType::ViewItem) ?
@@ -1008,9 +1079,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   /* Expose id specific operators in context menu when button has no operator associated. Otherwise
    * they would appear in nested context menus, see: #126006. */
-  if ((but->optype == nullptr) && (but->apply_func == nullptr) &&
-      (but->menu_create_func == nullptr))
-  {
+  if ((but->optype == nullptr) && (but->menu_create_func == nullptr)) {
     /* If the button represents an id, it can set the "id" context pointer. */
     if (ed::asset::can_mark_single_from_context(C)) {
       const ID *id = static_cast<const ID *>(CTX_data_pointer_get_type(C, "id", RNA_ID).data);
@@ -1041,7 +1110,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   /* Pointer properties and string properties with
    * prop_search support jumping to target object/bone. */
-  if (but->rnapoin.data && but->rnaprop) {
+  if (but->rnapoin && but->rnaprop) {
     const PropertyType prop_type = RNA_property_type(but->rnaprop);
     if (((prop_type == PROP_POINTER) ||
          (prop_type == PROP_STRING && but->type == ButtonType::SearchMenu &&
@@ -1236,12 +1305,18 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   /* perhaps we should move this into (G.debug & G_DEBUG) - campbell */
   if (U.flag & USER_DEVELOPER_UI) {
-    if (block_is_menu(but->block) == false) {
-      layout.op("UI_OT_editsource",
-                std::nullopt,
-                ICON_NONE,
-                wm::OpCallContext::InvokeDefault,
-                UI_ITEM_NONE);
+    if (!block_is_menu(but->block) || (but->block->handle && but->block->handle->can_refresh)) {
+      Layout &sub = layout.column(true);
+      if (but->block->handle) {
+        PointerRNA region_ptr = RNA_pointer_create_discrete(
+            id_cast<ID *>(CTX_wm_screen(C)), RNA_Region, but->block->handle->region);
+        sub.context_ptr_set("popup_region", &region_ptr);
+      }
+      sub.op("UI_OT_editsource",
+             std::nullopt,
+             ICON_NONE,
+             wm::OpCallContext::InvokeDefault,
+             UI_ITEM_NONE);
     }
   }
 
@@ -1298,30 +1373,41 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /** \name Panel Context Menu
  * \{ */
 
-void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
+int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
 {
   bScreen *screen = CTX_wm_screen(C);
   const bool has_panel_category = panel_category_tabs_is_visible(region);
   const bool any_item_visible = has_panel_category;
 
   if (!any_item_visible) {
-    return;
+    return WM_UI_HANDLER_CONTINUE;
   }
-  if (panel->type->parent != nullptr) {
-    return;
+  if (panel && panel->type->parent != nullptr) {
+    return WM_UI_HANDLER_CONTINUE;
   }
-  if (!panel_can_be_pinned(panel)) {
-    return;
+
+  if (!BKE_regiontype_uses_category_tabs(region->runtime->type)) {
+    return WM_UI_HANDLER_CONTINUE;
   }
 
   PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_Panel, panel);
 
-  PopupMenu *pup = popup_menu_begin(C, IFACE_("Panel"), ICON_NONE);
+  PopupMenu *pup = popup_menu_begin(C, IFACE_("Sidebar"), ICON_NONE);
   Layout &layout = *popup_menu_layout(pup);
 
-  if (has_panel_category) {
+  if (BKE_regiontype_uses_panel_categories_search(region->runtime->type)) {
+    layout.op("UI_OT_region_start_filter",
+              IFACE_("Search..."),
+              ICON_VIEWZOOM,
+              wm::OpCallContext::ExecDefault,
+              UI_ITEM_NONE);
+    layout.separator();
+  }
+
+  if (has_panel_category && panel && panel_can_be_pinned(panel)) {
     char tmpstr[80];
-    SNPRINTF_UTF8(tmpstr, "%s" UI_SEP_CHAR_S "%s", IFACE_("Pin"), IFACE_("Shift Left Mouse"));
+    SNPRINTF_UTF8(
+        tmpstr, "%s" UI_SEP_CHAR_S "%s", IFACE_("Pin Panel"), IFACE_("Shift Left Mouse"));
     layout.prop(&ptr, "use_pin", UI_ITEM_NONE, tmpstr, ICON_NONE);
 
     /* evil, force shortcut flag */
@@ -1330,8 +1416,15 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
       Button *but = block->buttons_ptrs.last().get();
       but->flag |= BUT_HAS_SEP_CHAR;
     }
+    layout.separator();
   }
+
+  PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);
+  layout.prop(
+      &prefs_ptr, "show_panel_tabs_compact", UI_ITEM_NONE, IFACE_("Compact Tabs"), ICON_NONE);
+
   popup_menu_end(C, pup);
+  return WM_UI_HANDLER_BREAK;
 }
 
 /** \} */

@@ -4,7 +4,7 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_movieclip_types.h"
 #include "DNA_node_types.h"
@@ -33,42 +33,47 @@ NODE_STORAGE_FUNCS(NodeKeyingScreenData)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Smoothness")
+  b.add_input<decl::Float>("Smoothness"_ustr)
       .default_value(0.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
       .max(1.0f)
       .description("Specifies the smoothness of the keying screen");
 
-  b.add_output<decl::Color>("Screen")
+  b.add_output<decl::Color>("Screen"_ustr)
       .translation_context(BLT_I18NCONTEXT_ID_SCREEN)
       .structure_type(StructureType::Dynamic);
 }
 
-static void node_init(const bContext *C, PointerRNA *ptr)
+static void node_init(bNodeTree * /*node_tree*/, bNode *node)
 {
-  bNode *node = static_cast<bNode *>(ptr->data);
-
   NodeKeyingScreenData *data = MEM_new<NodeKeyingScreenData>(__func__);
   node->storage = data;
+}
 
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
+{
   const Scene *scene = CTX_data_scene(C);
-  if (scene->clip) {
-    MovieClip *clip = scene->clip;
-
-    node->id = &clip->id;
-    id_us_plus(&clip->id);
-
-    const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
-    STRNCPY_UTF8(data->tracking_object, tracking_object->name);
+  MovieClip *movie_clip = scene->clip;
+  if (!movie_clip) {
+    return;
   }
+
+  bNode *node = node_ptr->data_as<bNode>();
+  node->id = &movie_clip->id;
+  id_us_plus(&movie_clip->id);
+
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(
+      &movie_clip->tracking);
+  NodeKeyingScreenData &data = node_storage(*node);
+  STRNCPY_UTF8(data.tracking_object, tracking_object->name);
 }
 
 static void node_draw_buttons(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
   bNode *node = static_cast<bNode *>(ptr->data);
 
-  template_id(&layout, C, ptr, "clip", nullptr, nullptr, nullptr);
+  template_id(&layout, C, ptr, "clip", nullptr, "CLIP_OT_open", nullptr);
 
   if (node->id) {
     MovieClip *clip = id_cast<MovieClip *>(node->id);
@@ -103,7 +108,7 @@ class KeyingScreenOperation : public NodeOperation {
     }
 
     Result &keying_screen = get_result("Screen");
-    keying_screen.wrap_external(cached_keying_screen);
+    keying_screen.share_data(cached_keying_screen);
   }
 
   Domain compute_domain() override
@@ -172,14 +177,15 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeKeyingScreen", CMP_NODE_KEYINGSCREEN);
+  cmp_node_type_base(&ntype, "CompositorNodeKeyingScreen"_ustr, CMP_NODE_KEYINGSCREEN);
   ntype.ui_name = "Keying Screen";
   ntype.ui_description = "Create plates for use as a color reference for keying nodes";
   ntype.enum_name_legacy = "KEYINGSCREEN";
   ntype.nclass = NODE_CLASS_MATTE;
   ntype.declare = node_declare;
   ntype.draw_buttons = node_draw_buttons;
-  ntype.initfunc_api = node_init;
+  ntype.initfunc = node_init;
+  ntype.initfunc_api = node_init_api;
   bke::node_type_storage(
       ntype, "NodeKeyingScreenData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;

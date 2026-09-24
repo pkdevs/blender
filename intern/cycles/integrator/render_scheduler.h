@@ -18,7 +18,8 @@ class TileManager;
 
 class RenderWork {
  public:
-  int resolution_divider = 1;
+  float resolution_divider = 1;
+  float denoised_resolution_divider = 1;
 
   /* Initialize render buffers.
    * Includes steps like zeroing the buffer on the device, and optional reading of pixels from the
@@ -247,6 +248,9 @@ class RenderScheduler {
   /* Check whether denoising is active during interactive update while resolution divider is not
    * unit. */
   bool is_denoise_active_during_update() const;
+
+  /* Check whether a real-time denoiser like DLSS is active. */
+  bool is_denoiser_interactive() const;
 
   /* Heuristic which aims to give perceptually pleasant update of display interval in a way that at
    * lower samples and near the beginning of rendering, updates happen more often, but with higher

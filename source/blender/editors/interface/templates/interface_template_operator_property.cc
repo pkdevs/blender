@@ -11,8 +11,8 @@
 #include "BKE_idprop.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -114,7 +114,7 @@ static AutoPropButsReturn template_operator_property_buts_draw_single(
     op->type->ui(const_cast<bContext *>(C), op);
     op->layout = nullptr;
 
-    /* #UI_LAYOUT_OP_SHOW_EMPTY ignored. retun_info is ignored too.
+    /* #UI_LAYOUT_OP_SHOW_EMPTY ignored. return_info is ignored too.
      * We could allow #wmOperatorType.ui callback to return this, but not needed right now. */
   }
   else {
@@ -338,25 +338,46 @@ static wmOperator *minimal_operator_create(wmOperatorType *ot, PointerRNA *prope
   return op;
 }
 
-static void draw_import_controls(bContext *, Layout &layout, const std::string &label, bool valid)
+static void draw_import_controls(bContext *C, Layout &layout, const std::string &label, bool valid)
 {
   layout.label(label, ICON_NONE);
   if (valid) {
     Layout &row = layout.row(false);
     row.emboss_set(EmbossType::None);
-    /* TODO: Provide control for actual import operator and, potentially, presets. */
+    row.popover(C, "WM_PT_operator_presets", "", ICON_PRESET);
   }
 }
 
-static void draw_import_properties(bContext *C, Layout &layout, wmOperator *op)
+static void draw_import_properties(bContext *C,
+                                   Layout &layout,
+                                   PointerRNA &importer_ptr,
+                                   wmOperator *op)
 {
   Layout &col = layout.column(false);
 
   col.separator();
   col.use_property_decorate_set(false);
 
-  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "filepath");
-  col.prop(op->ptr, prop, RNA_NO_INDEX, 0, UI_ITEM_NONE, std::nullopt, ICON_NONE, "");
+  /* Note this property is used as an alternative to the `filepath` property of `op->ptr`.
+   * This property is a wrapper to access that property, see the `CollectionExport::filepath`
+   * code comments for details. */
+  PropertyRNA *prop = RNA_struct_find_property(&importer_ptr, "filepath");
+
+  /* Style filepath field as alert when empty, it's required for importing. */
+  char filepath[FILE_MAX];
+  RNA_string_get(&importer_ptr, "filepath", filepath);
+  if (!filepath[0]) {
+    col.red_alert_set(true);
+  }
+
+  col.prop(&importer_ptr,
+           prop,
+           RNA_NO_INDEX,
+           0,
+           UI_ITEM_NONE,
+           "",
+           ICON_NONE,
+           IFACE_("Select a file..."));
 
   template_operator_property_buts_draw_single(
       C, op, layout, BUT_LABEL_ALIGN_NONE, TEMPLATE_OP_PROPS_HIDE_PRESETS);
@@ -371,14 +392,17 @@ void template_collection_importer(Layout *layout, bContext *C)
   Collection *collection = CTX_data_collection(C);
   CollectionImport *data = collection->importer;
 
-  Layout &row = layout->row(false);
-  Layout &col = row.column(false);
+  Layout &col = layout->column(false);
   if (data == nullptr) {
-    col.menu("COLLECTION_MT_importer_add", "Add Importer", ICON_ADD);
+    col.menu("COLLECTION_MT_importer_add", IFACE_("Add"), ICON_ADD);
     return;
   }
 
-  col.op("COLLECTION_OT_importer_remove", std::nullopt, ICON_REMOVE);
+  Layout &row = layout->row(true);
+  row.op("COLLECTION_OT_importer_import", IFACE_("Import"), ICON_IMPORT);
+  row.op("COLLECTION_OT_importer_remove", "", ICON_X);
+
+  layout->separator();
 
   /* Draw the importer. */
   PointerRNA importer_ptr = RNA_pointer_create_discrete(
@@ -409,7 +433,7 @@ void template_collection_importer(Layout *layout, bContext *C)
   std::string label(fh->label);
   draw_import_controls(C, *panel.header, label, true);
   if (panel.body) {
-    draw_import_properties(C, *panel.body, op);
+    draw_import_properties(C, *panel.body, importer_ptr, op);
   }
 }
 
@@ -484,7 +508,7 @@ void template_collection_exporters(Layout *layout, bContext *C)
 
   /* Register the exporter list type on first use. */
   static const uiListType *exporter_item_list = []() {
-    uiListType *lt = MEM_new_zeroed<uiListType>(__func__);
+    uiListType *lt = MEM_new_zeroed<uiListType>("template_collection_exporters");
     STRNCPY_UTF8(lt->idname, "COLLECTION_UL_exporter_list");
     lt->draw_item = draw_exporter_item;
     WM_uilisttype_add(lt);
@@ -521,7 +545,7 @@ void template_collection_exporters(Layout *layout, bContext *C)
 
   col = &layout->column(true);
   col->op("COLLECTION_OT_export_all", std::nullopt, ICON_EXPORT);
-  col->enabled_set(!BLI_listbase_is_empty(exporters));
+  col->enabled_set(!exporters->is_empty());
 
   /* Draw the active exporter. */
   CollectionExport *data = static_cast<CollectionExport *>(BLI_findlink(exporters, index));

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <fcntl.h>
 #ifndef WIN32
 #  include <unistd.h>
@@ -19,7 +23,7 @@
 #include "BKE_main.hh"
 
 #include "BLI_fileops.hh"
-#include "BLI_mmap.h"
+#include "BLI_mmap.hh"
 #include "BLI_mutex.hh"
 #include "BLI_set.hh"
 

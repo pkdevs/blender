@@ -18,6 +18,7 @@
 
 #include "ED_screen.hh"
 
+#include "UI_interface_c.hh"
 #include "UI_interface_icons.hh"
 #include "UI_interface_types.hh"
 
@@ -72,11 +73,12 @@ const EnumPropertyItem rna_enum_window_cursor_items[] = {
 
 #  include "DNA_userdef_types.h"
 
+#  include "ED_geometry.hh"
 #  include "ED_screen.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_context.hh"
 #  include "BKE_global.hh"
@@ -134,9 +136,9 @@ static void rna_Operator_enum_search_invoke(bContext *C, wmOperator *op)
   WM_enum_search_invoke(C, op, nullptr);
 }
 
-static int rna_Operator_ui_popup(bContext *C, wmOperator *op, int width)
+static int rna_Operator_ui_popup(bContext *C, wmOperator *op, int width, bool auto_keymap)
 {
-  return wmOperatorStatus(WM_operator_ui_popup(C, op, width));
+  return wmOperatorStatus(WM_operator_ui_popup(C, op, width, auto_keymap));
 }
 
 static bool rna_event_modal_handler_add(bContext *C, ReportList *reports, wmOperator *op)
@@ -260,6 +262,36 @@ static int rna_Operator_confirm(bContext *C,
                                 message_str ? message_str->c_str() : nullptr,
                                 confirm_text_str ? confirm_text_str->c_str() : nullptr,
                                 ui::AlertIcon(icon));
+}
+
+static void rna_WM_try_activate_rna_button(blender::wmWindowManager * /*wm*/,
+                                           bContext *C,
+                                           ARegion *region,
+                                           PointerRNA *ptr,
+                                           const char *propname,
+                                           int state,
+                                           bool warp_cursor_at_button,
+                                           int index,
+                                           int **r_xy,
+                                           int *r_xy_total)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
+  if (!prop) {
+    RNA_warning_bare("WindowManager.try_activate_rna_button(): property not found: %s.%s",
+                     RNA_struct_identifier(ptr->type),
+                     propname);
+    return;
+  }
+  std::optional<int2> xy = ui::try_activate_rna_button(
+      C, region, ui::ActivationButtonState(state), ptr, prop, warp_cursor_at_button, index);
+
+  if (!xy) {
+    return;
+  }
+  *r_xy = MEM_new_array_uninitialized<int>(2, __func__);
+  (*r_xy)[0] = (*xy)[0];
+  (*r_xy)[1] = (*xy)[1];
+  *r_xy_total = 2;
 }
 
 static int rna_Operator_props_popup(bContext *C, wmOperator *op, wmEvent *event)
@@ -447,7 +479,7 @@ static void rna_KeyMap_item_remove(wmKeyMap *km, ReportList *reports, PointerRNA
 {
   wmKeyMapItem *kmi = static_cast<wmKeyMapItem *>(kmi_ptr->data);
 
-  if (UNLIKELY(BLI_findindex(&km->items, kmi) == -1)) {
+  if (BLI_findindex(&km->items, kmi) == -1) [[unlikely]] {
     BKE_reportf(
         reports, RPT_ERROR, "KeyMapItem '%s' not found in KeyMap '%s'", kmi->idname, km->idname);
     return;
@@ -464,7 +496,7 @@ static PointerRNA rna_KeyMap_item_find_match(
   if (kmi_base) {
     return RNA_pointer_create_discrete(id, RNA_KeyMapItem, kmi_base);
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_KeyMap_item_find_from_operator(ID *id,
@@ -504,7 +536,7 @@ static wmKeyMap *rna_KeyMaps_new(wmKeyConfig *keyconf,
      * add-ons can define modal key-maps.
      * Currently this is only useful for add-ons to override built-in modal keymaps
      * which is not the intended use for add-on keymaps. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+    wmWindowManager *wm = G_MAIN->wm.first();
     if (keyconf == wm->runtime->addonconf) {
       BKE_reportf(reports, RPT_ERROR, "Modal key-maps not supported for add-on key-config");
       return nullptr;
@@ -555,7 +587,7 @@ static void rna_KeyMaps_remove(wmKeyConfig *keyconfig, ReportList *reports, Poin
 {
   wmKeyMap *keymap = static_cast<wmKeyMap *>(keymap_ptr->data);
 
-  if (UNLIKELY(BLI_findindex(&keyconfig->keymaps, keymap) == -1)) {
+  if (BLI_findindex(&keyconfig->keymaps, keymap) == -1) [[unlikely]] {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "KeyMap '%s' not found in KeyConfig '%s'",
@@ -581,7 +613,7 @@ wmKeyConfig *rna_KeyConfig_new(wmWindowManager *wm, const char *idname)
 static void rna_KeyConfig_remove(wmWindowManager *wm, ReportList *reports, PointerRNA *keyconf_ptr)
 {
   wmKeyConfig *keyconf = static_cast<wmKeyConfig *>(keyconf_ptr->data);
-  if (UNLIKELY(BLI_findindex(&wm->runtime->keyconfigs, keyconf) == -1)) {
+  if (BLI_findindex(&wm->runtime->keyconfigs, keyconf) == -1) [[unlikely]] {
     BKE_reportf(reports, RPT_ERROR, "KeyConfig '%s' cannot be removed", keyconf->idname);
     return;
   }
@@ -636,7 +668,7 @@ static PointerRNA rna_PopMenuBegin(bContext *C,
                                    const int icon)
 {
   if (!rna_popup_context_ok_or_report(C, reports)) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   void *data = static_cast<void *>(ui::popup_menu_begin(C, title, icon));
@@ -653,14 +685,15 @@ static void rna_PopMenuEnd(bContext *C, PointerRNA *handle)
 static PointerRNA rna_PopoverBegin(bContext *C,
                                    ReportList *reports,
                                    const int ui_units_x,
-                                   const bool from_active_button)
+                                   const bool from_active_button,
+                                   const bool auto_keymap)
 {
   if (!rna_popup_context_ok_or_report(C, reports)) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   void *data = static_cast<void *>(
-      ui::popover_begin(C, U.widget_unit * ui_units_x, from_active_button));
+      ui::popover_begin(C, U.widget_unit * ui_units_x, from_active_button, auto_keymap));
   PointerRNA ptr_result = RNA_pointer_create_discrete(nullptr, RNA_UIPopover, data);
   return ptr_result;
 }
@@ -675,7 +708,7 @@ static PointerRNA rna_PieMenuBegin(
     bContext *C, ReportList *reports, const char *title, const int icon, PointerRNA *event)
 {
   if (!rna_popup_context_ok_or_report(C, reports)) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   void *data = (void *)ui::pie_menu_begin(
@@ -710,7 +743,7 @@ static PointerRNA rna_WindoManager_operator_properties_last(const char *idname)
     WM_operator_last_properties_ensure(ot, &ptr);
     return ptr;
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static wmEvent *rna_Window_event_add_simulate(wmWindow *win,
@@ -847,9 +880,33 @@ static void rna_asset_library_status_ping_loaded_new_preview(bContext *C,
   RemoteLibraryLoadingStatus::ping_new_preview(*C, preview_full_path);
 }
 
-static void rna_asset_library_status_ping_loaded_new_assets(bContext *C, const char *library_url)
+static void rna_asset_library_status_ping_asset_file_progress(const char *absolute_file_url,
+                                                              const int size_written)
 {
-  RemoteLibraryLoadingStatus::ping_new_assets(*C, library_url);
+  RemoteLibraryLoadingStatus::ping_asset_file_progress(absolute_file_url, size_written);
+}
+
+static void rna_asset_library_status_ping_asset_file_succeeded(bContext *C,
+                                                               const char *library_url,
+                                                               const char *absolute_file_url,
+                                                               const char *local_file_abspath)
+{
+  RemoteLibraryLoadingStatus::ping_asset_file_download_succeeded(
+      *C, library_url, absolute_file_url, local_file_abspath);
+}
+
+static void rna_asset_library_status_ping_asset_file_failed(bContext *C,
+                                                            const char *library_url,
+                                                            const char *absolute_file_url,
+                                                            const char *local_file_abspath)
+{
+  RemoteLibraryLoadingStatus::ping_asset_file_download_failed(
+      *C, library_url, absolute_file_url, local_file_abspath);
+}
+
+static void rna_asset_library_status_ping_finished_download_queue(bContext *C)
+{
+  RemoteLibraryLoadingStatus::ping_download_queue_done(*C);
 }
 
 static void rna_asset_library_status_finished_loading(const char *library_url)
@@ -862,6 +919,11 @@ static void rna_asset_library_status_failed_loading(const char *library_url, con
   RemoteLibraryLoadingStatus::set_failure(
       library_url,
       message && message[0] ? std::optional<blender::StringRefNull>{message} : std::nullopt);
+}
+
+static void rna_register_node_group_operators(bContext *C)
+{
+  ed::geometry::register_node_group_operators(*C);
 }
 
 }  // namespace blender
@@ -945,6 +1007,7 @@ void RNA_api_window(StructRNA *srna)
   RNA_def_boolean(func, "oskey", false, "OS Key", "");
   RNA_def_boolean(func, "hyper", false, "Hyper", "");
   parm = RNA_def_pointer(func, "event", "Event", "Item", "Added key map item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "find_playing_scene", "rna_Window_find_playing_scene");
@@ -972,6 +1035,14 @@ const EnumPropertyItem rna_operator_popup_icon_items[] = {
     {int(ui::AlertIcon::Question), "QUESTION", 0, "Question", ""},
     {int(ui::AlertIcon::Error), "ERROR", 0, "Error", ""},
     {int(ui::AlertIcon::Info), "INFO", 0, "Info", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+const EnumPropertyItem rna_button_activation[] = {
+    {int(ui::ActivationButtonState::Highlight), "HIGHLIGHT", 0, "HIGHLIGHT", ""},
+    {int(ui::ActivationButtonState::WaitKeyEvent), "WAIT_KEY_EVENT", 0, "WAIT_KEY_EVENT", ""},
+    {int(ui::ActivationButtonState::NumEditing), "NUM_EDITING", 0, "NUM_EDITING", ""},
+    {int(ui::ActivationButtonState::TextEditing), "TEXT_EDITING", 0, "TEXT_EDITING", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -1007,6 +1078,7 @@ void RNA_api_wm(StructRNA *srna)
   RNA_def_property_ui_text(parm, "Time Step", "Interval in seconds between timer events");
   RNA_def_pointer(func, "window", "Window", "", "Window to attach the timer to, or None");
   parm = RNA_def_pointer(func, "result", "Timer", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "event_timer_remove", "rna_event_timer_remove");
@@ -1089,6 +1161,11 @@ void RNA_api_wm(StructRNA *srna)
                                   "Operator popup invoke "
                                   "(only shows operator's properties, without executing it)");
   rna_generic_op_invoke(func, WM_GEN_INVOKE_SIZE | WM_GEN_INVOKE_RETURN);
+  RNA_def_boolean(func,
+                  "auto_keymap",
+                  false,
+                  "Auto Keymap",
+                  "Assign accelerator keys to buttons, shown as underlined characters");
 
   func = RNA_def_function(srna, "invoke_confirm", "rna_Operator_confirm");
   RNA_def_function_ui_description(
@@ -1115,6 +1192,42 @@ void RNA_api_wm(StructRNA *srna)
   RNA_def_property_ui_text(parm, "Icon", "Optional icon displayed in the dialog");
 
   api_ui_item_common_translation(func);
+
+  func = RNA_def_function(srna, "try_activate_rna_button", "rna_WM_try_activate_rna_button");
+  RNA_def_function_ui_description(
+      func,
+      "Attempt to activate an button referencing an RNA property. If any other button in the "
+      "screen is active, it will be deactivated");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(func, "region", "Region", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "data", "AnyType", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+  parm = RNA_def_string(func, "property", nullptr, 0, "", "Identifier of property in data");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_property(func, "state", PROP_ENUM, PROP_NONE);
+  RNA_def_property_ui_text(
+      parm,
+      "State",
+      "Activation state for button. Some states are specific to certain button types; when an "
+      "incompatible state is provided, the button will be activated with the 'HIGHLIGHT' state.");
+  RNA_def_property_enum_items(parm, rna_button_activation);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_property(func, "warp_cursor_at_button", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_default(parm, true);
+  parm = RNA_def_property(func, "index", PROP_INT, PROP_NONE);
+  RNA_def_property_ui_text(
+      parm,
+      "Index",
+      "RNA index of the button when a single member of the referenced RNA property is accessed");
+  RNA_def_property_int_default(parm, 0);
+  parm = RNA_def_property(func, "xy", PROP_INT, PROP_NONE);
+  RNA_def_property_ui_text(
+      parm,
+      "xy",
+      "The center point of the button in window coordinates when successfully activated");
+  RNA_def_property_array(parm, 2);
+  RNA_def_parameter_flags(parm, PROP_DYNAMIC, PARM_OUTPUT);
 
   /* wrap popup_menu_begin */
   func = RNA_def_function(srna, "popmenu_begin__internal", "rna_PopMenuBegin");
@@ -1144,6 +1257,11 @@ void RNA_api_wm(StructRNA *srna)
   RNA_def_function_return(func, parm);
   RNA_def_boolean(
       func, "from_active_button", false, "Use Button", "Use the active button for positioning");
+  RNA_def_boolean(func,
+                  "auto_keymap",
+                  false,
+                  "Auto Keymap",
+                  "Assign accelerator keys to buttons, shown as underlined characters");
 
   /* wrap popover_end */
   func = RNA_def_function(srna, "popover_end__internal", "rna_PopoverEnd");
@@ -1353,6 +1471,7 @@ void RNA_api_keymap(StructRNA *srna)
   func = RNA_def_function(srna, "active", "rna_keymap_active");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Active key map");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "restore_to_default", "rna_keymap_restore_to_default");
@@ -1411,6 +1530,7 @@ void RNA_api_keymapitems(StructRNA *srna)
                   "Force item to be added at start (not end) of key map so that "
                   "it doesn't get blocked by an existing key map item");
   parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Added key map item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "new_modal", "rna_KeyMap_item_new_modal");
@@ -1431,6 +1551,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_enum(func, "direction", rna_enum_event_direction_items, KM_ANY, "Direction", "");
   RNA_def_boolean(func, "repeat", false, "Repeat", "When set, accept key-repeat events");
   parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Added key map item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "new_from_item", "rna_KeyMap_item_new_from_item");
@@ -1439,6 +1560,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   RNA_def_boolean(func, "head", false, "At Head", "");
   parm = RNA_def_pointer(func, "result", "KeyMapItem", "Item", "Added key map item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_KeyMap_item_remove");
@@ -1486,7 +1608,7 @@ void RNA_api_keymapitems(StructRNA *srna)
 
   func = RNA_def_function(srna, "match_event", "rna_KeyMap_item_match_event");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
-  parm = RNA_def_pointer(func, "event", "Event", "", "");
+  parm = RNA_def_pointer(func, "event", "Event", "", "Event to match against");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "item", "KeyMapItem", "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
@@ -1518,6 +1640,7 @@ void RNA_api_keymaps(StructRNA *srna)
                   "Modal keymaps are not supported for :class:`KeyConfigs.addons`.");
   RNA_def_boolean(func, "tool", false, "Tool", "Keymap for active tools");
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Added key map");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_KeyMaps_remove");
@@ -1561,6 +1684,7 @@ void RNA_api_keyconfigs(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(
       func, "keyconfig", "KeyConfig", "Key Configuration", "Added key configuration");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_KeyConfig_remove"); /* remove_keyconfig */
@@ -1692,11 +1816,36 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna,
-                          "asset_library_status_ping_loaded_new_assets",
-                          "rna_asset_library_status_ping_loaded_new_assets");
+                          "asset_library_status_ping_asset_file_progress",
+                          "rna_asset_library_status_ping_asset_file_progress");
+  RNA_def_function_ui_description(
+      func, "Inform the asset system about the current progress of an asset file.");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "absolute_file_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The absolute URL this file was downloaded from");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_int(
+      func,
+      "size_written",
+      0,
+      0,
+      INT_MAX,
+      "Size Written to Disk",
+      "The number of bytes written to disk after uncompressing the download data, if needed",
+      0,
+      0);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_asset_file_succeeded",
+                          "rna_asset_library_status_ping_asset_file_succeeded");
   RNA_def_function_ui_description(func,
-                                  "Inform the asset system that new assets were downloaded and "
-                                  "available at the expected location on disk");
+                                  "Inform the asset system that a single asset file download has "
+                                  "finished successfully.");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
   parm = RNA_def_string(func,
                         "library_url",
@@ -1705,6 +1854,57 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
                         "URL",
                         "The URL identifying the asset library being loaded");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func,
+                        "absolute_file_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The absolute URL this file was downloaded from");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func,
+                        "local_file_abspath",
+                        nullptr,
+                        0,
+                        "Local Path",
+                        "The absolute path this file was downloaded to");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_asset_file_failed",
+                          "rna_asset_library_status_ping_asset_file_failed");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that a single asset file download has "
+                                  "stopped because of some failure.");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func,
+                        "absolute_file_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The absolute URL this file was downloaded from");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func,
+                        "local_file_abspath",
+                        nullptr,
+                        0,
+                        "Local Path",
+                        "The absolute path this file was supposed to be downloaded to");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_finished_download_queue",
+                          "rna_asset_library_status_ping_finished_download_queue");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that there are no more pending asset "
+                                  "file downloads for any asset library.");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
 
   func = RNA_def_function(
       srna, "asset_library_status_finished_loading", "rna_asset_library_status_finished_loading");
@@ -1734,6 +1934,13 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
                         "The URL identifying the asset library being loaded");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   RNA_def_string(func, "message", nullptr, 0, "Message", "An error message to show to users");
+
+  func = RNA_def_function(
+      srna, "register_node_group_operators", "rna_register_node_group_operators");
+  RNA_def_function_ui_description(func,
+                                  "Trigger manual re-registration of node group operators. Useful "
+                                  "in background mode where this doesn't happen automatically.");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
 }
 
 }  // namespace blender

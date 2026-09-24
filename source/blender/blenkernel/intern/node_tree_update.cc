@@ -2,24 +2,30 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_noise.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
+#include "DNA_sequence_types.h"
 
 #include "BKE_anim_data.hh"
+#include "BKE_compositor.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
@@ -33,11 +39,15 @@
 
 #include "MOD_nodes.hh"
 
+#include "NOD_compositor_nodes_srna.hh"
 #include "NOD_dependencies.hh"
 #include "NOD_geo_viewer.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
+#include "NOD_geometry_nodes_srna.hh"
 #include "NOD_node_declaration.hh"
+#include "NOD_scene_compositor_effect_inputs_srna.hh"
+#include "NOD_shader.h"
 #include "NOD_socket.hh"
 #include "NOD_socket_declarations.hh"
 #include "NOD_sync_sockets.hh"
@@ -46,6 +56,16 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "BLT_translation.hh"
+
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+
+#include "SEQ_effects.hh"
+#include "SEQ_iterator.hh"
+#include "SEQ_modifier.hh"
+#include "SEQ_sequencer.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender {
 
@@ -206,6 +226,9 @@ static bool is_tree_changed(const bNodeTree &tree)
 using TreeNodePair = std::pair<bNodeTree *, bNode *>;
 using ObjectModifierPair = std::pair<Object *, ModifierData *>;
 using NodeSocketPair = std::pair<bNode *, bNodeSocket *>;
+using StripModifierPair = std::pair<Scene *, StripModifierData *>;
+using StripEffectPair = std::pair<Scene *, Strip *>;
+using SceneCompositorEffectPair = std::pair<Scene *, SceneCompositorEffect *>;
 
 /**
  * Cache common data about node trees from the #Main database that is expensive to retrieve on
@@ -217,6 +240,10 @@ struct NodeTreeRelations {
   std::optional<Vector<bNodeTree *>> all_trees_;
   std::optional<MultiValueMap<bNodeTree *, TreeNodePair>> group_node_users_;
   std::optional<MultiValueMap<bNodeTree *, ObjectModifierPair>> modifiers_users_;
+  std::optional<MultiValueMap<bNodeTree *, StripModifierPair>> strip_modifier_users_;
+  std::optional<MultiValueMap<bNodeTree *, StripEffectPair>> strip_effect_users_;
+  std::optional<MultiValueMap<bNodeTree *, SceneCompositorEffectPair>>
+      scene_compositor_effects_users_;
 
  public:
   NodeTreeRelations(Main *bmain) : bmain_(bmain) {}
@@ -285,10 +312,87 @@ struct NodeTreeRelations {
     }
   }
 
+  void ensure_strip_users()
+  {
+    if (strip_modifier_users_.has_value() || strip_effect_users_.has_value()) {
+      return;
+    }
+    strip_modifier_users_.emplace();
+    strip_effect_users_.emplace();
+    if (bmain_ == nullptr) {
+      return;
+    }
+
+    for (Scene &scene : bmain_->scenes) {
+      Editing *ed = seq::editing_get(&scene);
+      if (!ed) {
+        continue;
+      }
+      for (Strip *strip : seq::query_all_strips_recursive(&ed->seqbase)) {
+        /* Compositor effects. */
+        if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata != nullptr) {
+          const auto *comp = static_cast<const CompositorEffectVars *>(strip->effectdata);
+          if (comp->node_group != nullptr && !ID_MISSING(comp->node_group)) {
+            strip_effect_users_->add(comp->node_group, {&scene, strip});
+          }
+        }
+
+        /* Compositor modifiers. */
+        for (StripModifierData &modifier : strip->modifiers) {
+          if (modifier.type != eSeqModifierType_Compositor) {
+            continue;
+          }
+          const SequencerCompositorModifierData *modifier_data =
+              reinterpret_cast<SequencerCompositorModifierData *>(&modifier);
+          if (modifier_data->node_group != nullptr && !ID_MISSING(modifier_data->node_group)) {
+            strip_modifier_users_->add(modifier_data->node_group, {&scene, &modifier});
+          }
+        }
+      }
+    }
+  }
+
+  void ensure_scene_compositor_effects_users()
+  {
+    if (scene_compositor_effects_users_.has_value()) {
+      return;
+    }
+    scene_compositor_effects_users_.emplace();
+    if (bmain_ == nullptr) {
+      return;
+    }
+
+    for (Scene &scene : bmain_->scenes) {
+      for (SceneCompositorEffect &effect : scene.compositor_effects) {
+        if (effect.node_group && !ID_MISSING(effect.node_group)) {
+          scene_compositor_effects_users_->add(effect.node_group, {&scene, &effect});
+        }
+      }
+    }
+  }
+
   Span<ObjectModifierPair> get_modifier_users(bNodeTree *ntree)
   {
     BLI_assert(modifiers_users_.has_value());
     return modifiers_users_->lookup(ntree);
+  }
+
+  Span<StripModifierPair> get_strip_modifier_users(bNodeTree *ntree)
+  {
+    BLI_assert(strip_modifier_users_.has_value());
+    return strip_modifier_users_->lookup(ntree);
+  }
+
+  Span<StripEffectPair> get_compositor_effect_users(bNodeTree *ntree)
+  {
+    BLI_assert(strip_effect_users_.has_value());
+    return strip_effect_users_->lookup(ntree);
+  }
+
+  Span<SceneCompositorEffectPair> get_scene_compositor_effects_users(bNodeTree *ntree)
+  {
+    BLI_assert(scene_compositor_effects_users_.has_value());
+    return scene_compositor_effects_users_->lookup(ntree);
   }
 
   Span<TreeNodePair> get_group_node_users(bNodeTree *ntree)
@@ -303,6 +407,15 @@ struct NodeTreeRelations {
     return *all_trees_;
   }
 };
+
+enum class ShaderNodeAncestorFlags {
+  None = 0u,
+  ShaderMaterialOutput = 1u << 0,
+  ShaderToRGB = 1u << 1,
+  LightAccumulation = 1u << 2,
+  LightAccumulationColor = 1u << 3,
+};
+ENUM_OPERATORS(ShaderNodeAncestorFlags);
 
 struct TreeUpdateResult {
   bool interface_changed = false;
@@ -340,6 +453,7 @@ class NodeTreeMainUpdater {
     if (root_ntrees.is_empty()) {
       return;
     }
+    PRF_scope_with_name("NodeTreeMainUpdater::update_rooted", ProfileCategory::Core);
 
     bool is_single_tree_update = false;
 
@@ -394,8 +508,32 @@ class NodeTreeMainUpdater {
             ModifierData *md = pair.second;
 
             if (md->type == eModifierType_Nodes) {
-              MOD_nodes_update_interface(object, reinterpret_cast<NodesModifierData *>(md));
+              MOD_nodes_update_interface(
+                  *bmain_, object, reinterpret_cast<NodesModifierData *>(md));
             }
+          }
+        }
+        if (ntree->type == NTREE_COMPOSIT) {
+          relations_.ensure_strip_users();
+          for (const StripModifierPair &pair : relations_.get_strip_modifier_users(ntree)) {
+            Scene *scene = pair.first;
+            StripModifierData *md = pair.second;
+
+            if (md->type == eSeqModifierType_Compositor) {
+              seq::compositor_modifier_nodes_update_interface(
+                  *bmain_, *scene, *reinterpret_cast<SequencerCompositorModifierData *>(md));
+            }
+          }
+
+          for (const StripEffectPair &pair : relations_.get_compositor_effect_users(ntree)) {
+            seq::compositor_effect_nodes_update_interface(*bmain_, *pair.first, *pair.second);
+          }
+
+          relations_.ensure_scene_compositor_effects_users();
+          for (const SceneCompositorEffectPair &pair :
+               relations_.get_scene_compositor_effects_users(ntree))
+          {
+            compositor::update_effect_node_group_interface(*bmain_, *pair.first, *pair.second);
           }
         }
       }
@@ -509,11 +647,17 @@ class NodeTreeMainUpdater {
 
   TreeUpdateResult update_tree(bNodeTree &ntree)
   {
+    PRF_scope_with_name("NodeTreeMainUpdater::update_tree", ProfileCategory::Core);
     TreeUpdateResult result;
 
     ntree.runtime->link_errors.clear();
     ntree.runtime->invalid_zone_output_node_ids.clear();
     ntree.runtime->shader_node_errors.clear();
+
+    if (ntree.runtime->changed_flag & NTREE_CHANGED_ANY) {
+      result.interface_changed = true;
+      result.output_changed = true;
+    }
 
     if (this->update_panel_toggle_names(ntree)) {
       result.interface_changed = true;
@@ -523,18 +667,11 @@ class NodeTreeMainUpdater {
     this->update_individual_nodes(ntree);
     this->update_internal_links(ntree);
     this->update_generic_callback(ntree);
-    this->remove_unused_previews_when_necessary(ntree);
     this->make_node_previews_dirty(ntree);
 
     this->propagate_runtime_flags(ntree);
     if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT, NTREE_SHADER)) {
       if (this->propagate_enum_definitions(ntree)) {
-        result.interface_changed = true;
-      }
-    }
-
-    if (ntree.type == NTREE_GEOMETRY) {
-      if (node_field_inferencing::update_field_inferencing(ntree)) {
         result.interface_changed = true;
       }
     }
@@ -578,6 +715,21 @@ class NodeTreeMainUpdater {
 
     if (ntree.tree_interface.requires_dependent_tree_updates()) {
       result.interface_changed = true;
+    }
+
+    if (result.interface_changed) {
+      if (ntree.type == NTREE_GEOMETRY) {
+        ntree.runtime->geometry_nodes_srna_data = nodes::create_geometry_nodes_rna_for_modifier(
+            ntree);
+      }
+      else if (ntree.type == NTREE_COMPOSIT) {
+        ntree.runtime->compositor_nodes_srna_data =
+            nodes::create_compositor_nodes_rna_for_strip_modifier(ntree);
+        ntree.runtime->compositor_effect_nodes_srna_data =
+            nodes::create_compositor_nodes_rna_for_effect(ntree);
+        ntree.runtime->scene_compositor_effect_srna_data =
+            nodes::create_scene_compositor_effect_inputs_srna(ntree);
+      }
     }
 
 #ifndef NDEBUG
@@ -632,7 +784,7 @@ class NodeTreeMainUpdater {
           /* Should have been created when the node was registered. */
           BLI_assert(ntype.static_declaration != nullptr);
           if (ntype.static_declaration->is_context_dependent) {
-            nodes::update_node_declaration_and_sockets(ntree, *node);
+            nodes::update_node_declaration_and_sockets(ntree, *node, bmain_);
           }
         }
         else if (node->is_undefined()) {
@@ -694,7 +846,7 @@ class NodeTreeMainUpdater {
         continue;
       }
       const std::string identifier_str = GeoViewerItemsAccessor::socket_identifier_for_item(item);
-      const bNodeSocket *socket = viewer_node.input_by_identifier(identifier_str.c_str());
+      const bNodeSocket *socket = viewer_node.input_by_identifier(UString(identifier_str));
       if (!socket) {
         continue;
       }
@@ -712,25 +864,6 @@ class NodeTreeMainUpdater {
     }
   }
 
-  struct InternalLink {
-    bNodeSocket *from;
-    bNodeSocket *to;
-    int multi_input_sort_id = 0;
-
-    friend bool operator==(const InternalLink &a, const InternalLink &b) = default;
-  };
-
-  const bNodeLink *first_non_dangling_link(const bNodeTree & /*ntree*/,
-                                           const Span<const bNodeLink *> links) const
-  {
-    for (const bNodeLink *link : links) {
-      if (!link->fromnode->is_dangling_reroute()) {
-        return link;
-      }
-    }
-    return nullptr;
-  }
-
   void update_internal_links(bNodeTree &ntree)
   {
     bke::node_tree_runtime::AllowUsingOutdatedInfo allow_outdated_info{ntree};
@@ -740,7 +873,7 @@ class NodeTreeMainUpdater {
         continue;
       }
       /* Find all expected internal links. */
-      Vector<InternalLink> expected_internal_links;
+      Vector<bNodeInternalLink> expected_internal_links;
       for (const bNodeSocket *output_socket : node->output_sockets()) {
         if (!output_socket->is_available()) {
           continue;
@@ -755,14 +888,8 @@ class NodeTreeMainUpdater {
           continue;
         }
 
-        const Span<const bNodeLink *> connected_links = input_socket->directly_linked_links();
-        const bNodeLink *connected_link = first_non_dangling_link(ntree, connected_links);
-
-        const int index = connected_link ? connected_link->multi_input_sort_id :
-                                           std::max<int>(0, connected_links.size() - 1);
-        expected_internal_links.append(InternalLink{const_cast<bNodeSocket *>(input_socket),
-                                                    const_cast<bNodeSocket *>(output_socket),
-                                                    index});
+        expected_internal_links.append(bNodeInternalLink{
+            const_cast<bNodeSocket *>(input_socket), const_cast<bNodeSocket *>(output_socket)});
       }
 
       /* Rebuilt internal links if they have changed. */
@@ -774,9 +901,8 @@ class NodeTreeMainUpdater {
       const bool all_expected_internal_links_exist = std::all_of(
           node->runtime->internal_links.begin(),
           node->runtime->internal_links.end(),
-          [&](const bNodeLink &link) {
-            const InternalLink internal_link{link.fromsock, link.tosock, link.multi_input_sort_id};
-            return expected_internal_links.as_span().contains(internal_link);
+          [&](const bNodeInternalLink &link) {
+            return expected_internal_links.as_span().contains(link);
           });
 
       if (all_expected_internal_links_exist) {
@@ -825,20 +951,10 @@ class NodeTreeMainUpdater {
 
   void update_internal_links_in_node(bNodeTree &ntree,
                                      bNode &node,
-                                     Span<InternalLink> internal_links)
+                                     Span<bNodeInternalLink> internal_links)
   {
     node.runtime->internal_links.clear();
-    node.runtime->internal_links.reserve(internal_links.size());
-    for (const InternalLink &internal_link : internal_links) {
-      bNodeLink link{};
-      link.fromnode = &node;
-      link.fromsock = internal_link.from;
-      link.tonode = &node;
-      link.tosock = internal_link.to;
-      link.multi_input_sort_id = internal_link.multi_input_sort_id;
-      link.flag |= NODE_LINK_VALID;
-      node.runtime->internal_links.append(link);
-    }
+    node.runtime->internal_links.extend(internal_links);
     BKE_ntree_update_tag_node_internal_link(&ntree, &node);
   }
 
@@ -848,17 +964,6 @@ class NodeTreeMainUpdater {
       return;
     }
     ntree.typeinfo->update(&ntree);
-  }
-
-  void remove_unused_previews_when_necessary(bNodeTree &ntree)
-  {
-    /* Don't trigger preview removal when only those flags are set. */
-    const uint32_t allowed_flags = NTREE_CHANGED_LINK | NTREE_CHANGED_SOCKET_PROPERTY |
-                                   NTREE_CHANGED_NODE_PROPERTY | NTREE_CHANGED_NODE_OUTPUT;
-    if ((ntree.runtime->changed_flag & allowed_flags) == ntree.runtime->changed_flag) {
-      return;
-    }
-    bke::node_preview_remove_unused(&ntree);
   }
 
   void make_node_previews_dirty(bNodeTree &ntree)
@@ -889,7 +994,7 @@ class NodeTreeMainUpdater {
 
     if (ntree.type == NTREE_SHADER) {
       /* Check if the tree itself has an animated image. */
-      for (const StringRefNull idname : {"ShaderNodeTexImage", "ShaderNodeTexEnvironment"}) {
+      for (const UString idname : {"ShaderNodeTexImage"_ustr, "ShaderNodeTexEnvironment"_ustr}) {
         for (const bNode *node : ntree.nodes_by_type(idname)) {
           Image *image = reinterpret_cast<Image *>(node->id);
           if (image != nullptr && BKE_image_is_animated(image)) {
@@ -899,10 +1004,10 @@ class NodeTreeMainUpdater {
         }
       }
       /* Check if the tree has a material output. */
-      for (const StringRefNull idname : {"ShaderNodeOutputMaterial",
-                                         "ShaderNodeOutputLight",
-                                         "ShaderNodeOutputWorld",
-                                         "ShaderNodeOutputAOV"})
+      for (const UString idname : {"ShaderNodeOutputMaterial"_ustr,
+                                   "ShaderNodeOutputLight"_ustr,
+                                   "ShaderNodeOutputWorld"_ustr,
+                                   "ShaderNodeOutputAOV"_ustr})
       {
         const Span<const bNode *> nodes = ntree.nodes_by_type(idname);
         if (!nodes.is_empty()) {
@@ -913,7 +1018,7 @@ class NodeTreeMainUpdater {
     }
     if (ntree.type == NTREE_GEOMETRY) {
       /* Check if there is a simulation zone. */
-      if (!ntree.nodes_by_type("GeometryNodeSimulationOutput").is_empty()) {
+      if (!ntree.nodes_by_type("GeometryNodeSimulationOutput"_ustr).is_empty()) {
         ntree.runtime->runtime_flag |= NTREE_RUNTIME_FLAG_HAS_SIMULATION_ZONE;
       }
     }
@@ -924,7 +1029,7 @@ class NodeTreeMainUpdater {
     /* Automatically tag a bake item as attribute when the input is a field. The flag should not be
      * removed automatically even when the field input is disconnected because the baked data may
      * still contain attribute data instead of a single value. */
-    for (bNode *node : ntree.nodes_by_type("GeometryNodeBake")) {
+    for (bNode *node : ntree.nodes_by_type("GeometryNodeBake"_ustr)) {
       NodeGeometryBake &storage = *static_cast<NodeGeometryBake *>(node->storage);
       for (const int i : IndexRange(storage.items_num)) {
         const bNodeSocket &socket = node->input_socket(i);
@@ -936,8 +1041,8 @@ class NodeTreeMainUpdater {
     }
   }
 
-  static int get_socket_shape(const bNodeSocket &socket,
-                              const bool use_inferred_structure_type = false)
+  static eNodeSocketDisplayShape get_socket_shape(const bNodeSocket &socket,
+                                                  const bool use_inferred_structure_type = false)
   {
     const SocketDeclaration *decl = socket.runtime->declaration;
     if (!decl) {
@@ -996,7 +1101,7 @@ class NodeTreeMainUpdater {
             const NodeCombineBundleItem &item = storage.items[i];
             bNodeSocket &socket = node->input_socket(i);
             socket.display_shape = get_socket_shape(
-                socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           break;
         }
@@ -1006,7 +1111,7 @@ class NodeTreeMainUpdater {
             const NodeSeparateBundleItem &item = storage.items[i];
             bNodeSocket &socket = node->output_socket(i);
             socket.display_shape = get_socket_shape(
-                socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           break;
         }
@@ -1020,7 +1125,7 @@ class NodeTreeMainUpdater {
               const NodeClosureInputItem &item = storage.input_items.items[i];
               bNodeSocket &socket = node->output_socket(i);
               socket.display_shape = get_socket_shape(
-                  socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                  socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
             }
           }
           break;
@@ -1031,7 +1136,7 @@ class NodeTreeMainUpdater {
             const NodeClosureOutputItem &item = storage.output_items.items[i];
             bNodeSocket &socket = node->input_socket(i);
             socket.display_shape = get_socket_shape(
-                socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           break;
         }
@@ -1041,13 +1146,13 @@ class NodeTreeMainUpdater {
             const NodeEvaluateClosureInputItem &item = storage.input_items.items[i];
             bNodeSocket &socket = node->input_socket(i + 1);
             socket.display_shape = get_socket_shape(
-                socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           for (const int i : IndexRange(storage.output_items.items_num)) {
             const NodeEvaluateClosureOutputItem &item = storage.output_items.items[i];
             bNodeSocket &socket = node->output_socket(i);
             socket.display_shape = get_socket_shape(
-                socket, item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, item.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           break;
         }
@@ -1060,17 +1165,17 @@ class NodeTreeMainUpdater {
             socket->display_shape = get_socket_shape(*socket);
           }
 
-          if (node->is_type("NodeGetBundleItem")) {
-            bNodeSocket &socket = *node->output_by_identifier("Item");
+          if (node->is_type("NodeGetBundleItem"_ustr)) {
+            bNodeSocket &socket = *node->output_by_identifier("Item"_ustr);
             const auto &storage = *static_cast<const NodeGetBundleItem *>(node->storage);
             socket.display_shape = get_socket_shape(
-                socket, storage.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, storage.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
-          else if (node->is_type("NodeStoreBundleItem")) {
-            bNodeSocket &socket = *node->input_by_identifier("Item");
+          else if (node->is_type("NodeStoreBundleItem"_ustr)) {
+            bNodeSocket &socket = *node->input_by_identifier("Item"_ustr);
             const auto &storage = *static_cast<const NodeStoreBundleItem *>(node->storage);
             socket.display_shape = get_socket_shape(
-                socket, storage.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
+                socket, storage.structure_type == NodeSocketInterfaceStructureType::Auto);
           }
           break;
         }
@@ -1101,7 +1206,7 @@ class NodeTreeMainUpdater {
       const bool node_updated = this->should_update_individual_node(ntree, *node);
 
       Vector<bNodeSocket *> locally_defined_enums;
-      if (node->is_type("GeometryNodeMenuSwitch")) {
+      if (node->is_type("GeometryNodeMenuSwitch"_ustr)) {
         bNodeSocket &enum_input = node->input_socket(0);
         BLI_assert(enum_input.is_available() && enum_input.type == SOCK_MENU);
         /* Generate new enum items when the node has changed, otherwise keep existing items. */
@@ -1184,7 +1289,7 @@ class NodeTreeMainUpdater {
           }
         }
       }
-      else if (node->is_type("GeometryNodeMenuSwitch")) {
+      else if (node->is_type("GeometryNodeMenuSwitch"_ustr)) {
         /* First input is always the node's own menu, propagate only to the enum case inputs. */
         const bNodeSocket *output = node->output_sockets().first();
         for (bNodeSocket *input : node->input_sockets().drop_front(1)) {
@@ -1195,7 +1300,7 @@ class NodeTreeMainUpdater {
           }
         }
       }
-      else if (node->is_type("GeometryNodeForeachGeometryElementInput")) {
+      else if (node->is_type("GeometryNodeForeachGeometryElementInput"_ustr)) {
         /* Propagate menu from element inputs to field inputs. */
         BLI_assert(node->input_sockets().size() == node->output_sockets().size());
         /* Inputs Geometry, Selection and outputs Index, Element are ignored. */
@@ -1395,21 +1500,108 @@ class NodeTreeMainUpdater {
     }
   }
 
-  void update_link_validation(bNodeTree &ntree)
+  void shader_tree_tag_by_ancestor(bNodeTree &ntree)
   {
-    /* Tests if enum references are undefined. */
-    const auto is_invalid_enum_ref = [](const bNodeSocket &socket) -> bool {
-      if (socket.type == SOCK_MENU) {
-        return socket.default_value_typed<bNodeSocketValueMenu>()->enum_items == nullptr;
+    for (bNode &node : ntree.nodes) {
+      node.runtime->tmp_flag = 0;
+    }
+
+    bNode *output_node = ntreeShaderOutputNode(&ntree, SHD_OUTPUT_EEVEE);
+    if (!output_node) {
+      return;
+    }
+
+    for (const bNodeSocket *socket :
+         output_node->input_by_identifier("Surface"_ustr)->logically_linked_sockets())
+    {
+      socket->owner_node().runtime->tmp_flag |= short(
+          ShaderNodeAncestorFlags::ShaderMaterialOutput);
+    }
+
+    auto tag_by_ancestor = [](bNode *node, bNode * /*to_node*/, void * /*userdata*/) -> bool {
+      for (const bNodeSocket *socket : node->output_sockets()) {
+        for (const bNodeSocket *linked_socket : socket->logically_linked_sockets()) {
+          node->runtime->tmp_flag |= linked_socket->owner_node().runtime->tmp_flag;
+          if (linked_socket->owner_node().type_legacy == SH_NODE_LIGHT_ACCUMULATION &&
+              ELEM(StringRefNull(linked_socket->name), "Diffuse Color", "Glossy Color"))
+          {
+            node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulationColor);
+          }
+        }
       }
-      return false;
+
+      if (node->type_legacy == SH_NODE_SHADERTORGB) {
+        node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::ShaderToRGB);
+      }
+      else if (node->type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+        node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulation);
+      }
+
+      return true;
     };
 
+    bke::node_chain_iterator_backwards(&ntree, output_node, tag_by_ancestor, nullptr, 0);
+  }
+
+  const char *shader_tree_link_error(bNodeLink &link)
+  {
+    bNode &node = *link.fromnode;
+    ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(link.fromnode->runtime->tmp_flag);
+    switch (node.type_legacy) {
+      case SH_NODE_LIGHT_ACCUMULATION:
+        if (bool(flags & ShaderNodeAncestorFlags::ShaderToRGB)) {
+          return TIP_("Shader To RGB can't evaluate Light Accumulation nodes");
+        }
+        break;
+      case SH_NODE_ATTRIBUTE:
+        if (static_cast<NodeShaderAttribute *>(node.storage)->type != SHD_ATTRIBUTE_LIGHT) {
+          break;
+        }
+        ATTR_FALLTHROUGH;
+      case SH_NODE_VECT_TRANSFORM: {
+        NodeShaderVectTransform *nodeprop = static_cast<NodeShaderVectTransform *>(node.storage);
+        if (!ELEM(SHD_VECT_TRANSFORM_SPACE_LIGHT, nodeprop->convert_from, nodeprop->convert_to)) {
+          break;
+        }
+      }
+        ATTR_FALLTHROUGH;
+      case SH_NODE_LIGHT_INFO:
+      case SH_NODE_LIGHT_EVALUATION:
+      case SH_NODE_SHADOW_RAYCAST:
+        if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput)) {
+          if (!bool(flags & ShaderNodeAncestorFlags::LightAccumulation)) {
+            return TIP_(
+                "Lighting nodes must be connected to the Light sockets of a Light Accumulation "
+                "node before reaching the Material Output");
+          }
+          if (bool(flags & ShaderNodeAncestorFlags::LightAccumulationColor) &&
+              (link.tonode->type_legacy != SH_NODE_LIGHT_ACCUMULATION ||
+               ELEM(StringRefNull(link.tosock->name), "Diffuse Color", "Glossy Color")))
+          {
+            return TIP_(
+                "Lighting nodes can't be connected to the Color sockets of a Light Accumulation "
+                "node");
+          }
+        }
+        break;
+      default:
+        break;
+    }
+
+    return nullptr;
+  }
+
+  void update_link_validation(bNodeTree &ntree)
+  {
     const bNodeTreeZones *fallback_zones = nullptr;
     if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_SHADER) && !ntree.zones() &&
         ntree.runtime->last_valid_zones)
     {
       fallback_zones = ntree.runtime->last_valid_zones.get();
+    }
+
+    if (ntree.type == NTREE_SHADER) {
+      this->shader_tree_tag_by_ancestor(ntree);
     }
 
     for (bNodeLink &link : ntree.links) {
@@ -1418,12 +1610,18 @@ class NodeTreeMainUpdater {
         link.flag &= ~NODE_LINK_VALID;
         continue;
       }
-      if (is_invalid_enum_ref(*link.fromsock) || is_invalid_enum_ref(*link.tosock)) {
-        link.flag &= ~NODE_LINK_VALID;
-        ntree.runtime->link_errors.add(
-            NodeLinkKey{link},
-            NodeLinkError{TIP_("Use node groups to reuse the same menu multiple times")});
-        continue;
+      if (link.fromsock->type == SOCK_MENU && link.tosock->type == SOCK_MENU) {
+        const bNodeSocketValueMenu *from_value =
+            link.fromsock->default_value_typed<bNodeSocketValueMenu>();
+        const bNodeSocketValueMenu *to_value =
+            link.tosock->default_value_typed<bNodeSocketValueMenu>();
+        if (from_value->has_conflict() || to_value->has_conflict()) {
+          link.flag &= ~NODE_LINK_VALID;
+          ntree.runtime->link_errors.add(
+              NodeLinkKey{link},
+              NodeLinkError{TIP_("Use node groups to reuse the same menu multiple times")});
+          continue;
+        }
       }
       const bNode &from_node = *link.fromnode;
       const bNode &to_node = *link.tonode;
@@ -1437,8 +1635,8 @@ class NodeTreeMainUpdater {
         continue;
       }
       if (ntree.typeinfo->validate_link) {
-        const eNodeSocketDatatype from_type = eNodeSocketDatatype(link.fromsock->type);
-        const eNodeSocketDatatype to_type = eNodeSocketDatatype(link.tosock->type);
+        const eNodeSocketDatatype from_type = link.fromsock->type;
+        const eNodeSocketDatatype to_type = link.tosock->type;
         if (!ntree.typeinfo->validate_link(from_type, to_type)) {
           link.flag &= ~NODE_LINK_VALID;
           ntree.runtime->link_errors.add(
@@ -1468,6 +1666,13 @@ class NodeTreeMainUpdater {
         link.flag &= ~NODE_LINK_VALID;
         ntree.runtime->link_errors.add(NodeLinkKey{link}, NodeLinkError{error});
         continue;
+      }
+      if (ntree.type == NTREE_SHADER) {
+        if (const char *error = this->shader_tree_link_error(link)) {
+          link.flag &= ~NODE_LINK_VALID;
+          ntree.runtime->link_errors.add(NodeLinkKey{link}, NodeLinkError{error});
+          continue;
+        }
       }
     }
   }
@@ -1611,7 +1816,7 @@ class NodeTreeMainUpdater {
     if (node.is_group_output()) {
       return true;
     }
-    if (node.is_type("GeometryNodeWarning")) {
+    if (node.is_type("GeometryNodeWarning"_ustr)) {
       return true;
     }
     if (nodes::gizmos::is_builtin_gizmo_node(node)) {
@@ -1758,7 +1963,7 @@ class NodeTreeMainUpdater {
 
           /* The Image Texture node has a special case. The behavior of the color output changes
            * depending on whether the Alpha output is linked. */
-          if (node.is_type("ShaderNodeTexImage") && socket.index() == 0) {
+          if (node.is_type("ShaderNodeTexImage"_ustr) && socket.index() == 0) {
             BLI_assert(STREQ(socket.name, "Color"));
             const bNodeSocket &alpha_socket = node.output_socket(1);
             BLI_assert(STREQ(alpha_socket.name, "Alpha"));
@@ -1804,12 +2009,16 @@ class NodeTreeMainUpdater {
         return true;
       }
       if (node.runtime->changed_flag != NTREE_CHANGED_NOTHING) {
-        const bool only_unused_internal_link_changed = !node.is_muted() &&
-                                                       node.runtime->changed_flag ==
-                                                           NTREE_CHANGED_INTERNAL_LINK;
-        const bool only_parent_changed = node.runtime->changed_flag == NTREE_CHANGED_PARENT;
-        const bool change_affects_output = !(only_unused_internal_link_changed ||
-                                             only_parent_changed);
+        bool change_affects_output = true;
+        if (!node.is_muted() && node.runtime->changed_flag == NTREE_CHANGED_INTERNAL_LINK) {
+          change_affects_output = false;
+        }
+        if (node.runtime->changed_flag == NTREE_CHANGED_PARENT) {
+          change_affects_output = false;
+        }
+        if (node.is_muted() && node.runtime->changed_flag == NTREE_CHANGED_NODE_PROPERTY) {
+          change_affects_output = false;
+        }
         if (change_affects_output) {
           return true;
         }
@@ -1861,7 +2070,7 @@ class NodeTreeMainUpdater {
         }
         /* The Normal node has a special case, because the value stored in the first output
          * socket is used as input in the node. */
-        if ((node.is_type("ShaderNodeNormal") || node.is_type("CompositorNodeNormal")) &&
+        if ((node.is_type("ShaderNodeNormal"_ustr) || node.is_type("CompositorNodeNormal"_ustr)) &&
             socket.index() == 1)
         {
           BLI_assert(STREQ(socket.name, "Dot"));
@@ -1908,7 +2117,7 @@ class NodeTreeMainUpdater {
     if (ntree.type == NTREE_GEOMETRY) {
       /* Create references for simulations and bake nodes in geometry nodes.
        * Those are the nodes that we want to store settings for at a higher level. */
-      for (StringRefNull idname : {"GeometryNodeSimulationOutput", "GeometryNodeBake"}) {
+      for (const UString idname : {"GeometryNodeSimulationOutput"_ustr, "GeometryNodeBake"_ustr}) {
         for (const bNode *node : ntree.nodes_by_type(idname)) {
           nested_node_paths.append({node->identifier, -1});
         }
@@ -2015,14 +2224,14 @@ class NodeTreeMainUpdater {
     bool changed = false;
     ntree.ensure_interface_cache();
     for (bNodeTreeInterfaceItem *item : ntree.interface_items()) {
-      if (item->item_type != NODE_INTERFACE_PANEL) {
+      if (item->item_type != NodeTreeInterfaceItemType::Panel) {
         continue;
       }
       bNodeTreeInterfacePanel *panel = reinterpret_cast<bNodeTreeInterfacePanel *>(item);
       if (bNodeTreeInterfaceSocket *toggle_socket = panel->header_toggle_socket()) {
-        if (!STREQ(panel->name, toggle_socket->name)) {
-          MEM_SAFE_DELETE(toggle_socket->name);
-          toggle_socket->name = BLI_strdup_null(panel->name);
+        if (!STREQ(panel->name_, toggle_socket->name_)) {
+          MEM_SAFE_DELETE(toggle_socket->name_);
+          toggle_socket->name_ = BLI_strdup_null(panel->name_);
           changed = true;
         }
       }

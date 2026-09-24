@@ -4,13 +4,13 @@
 
 #include "infos/engine_image_infos.hh"
 
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_tiled_image_lookup_lib.glsl"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_tiled_image_lookup.bsl.hh"
 #include "image_engine_lib.glsl"
 
 void main()
 {
-  const float2 coordinates = transform_point(image_matrix, float3(screen_uv, 0.0f)).xy();
+  const float2 coordinates = transform_point(to_float3x3(image_matrix), screen_uv);
   float3 tiled_coordinates = float3(coordinates, 0.0f);
   if (!tiled_image_lookup(tiled_coordinates, image_tile_array, image_tile_data)) {
     out_color = float4(0.0f);

@@ -2,20 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "draw_object_infos_infos.hh"
 
-SHADER_LIBRARY_CREATE_INFO(draw_object_infos)
+SHADER_LIBRARY_CREATE_INFO(draw_pointcloud)
 
 #include "draw_defines.hh"
-#include "draw_model_lib.glsl"
-#include "draw_view_lib.glsl"
 
-#include "gpu_shader_math_constants_lib.glsl"
-#include "gpu_shader_math_matrix_conversion_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_constants.bsl.hh"
+#include "gpu_shader_math_matrix_conversion.bsl.hh"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace pointcloud {
 
@@ -106,11 +108,13 @@ float3x3 facing_matrix(const float3 V, const float3 up_axis)
  * \arg pt : world space curve point.
  * \arg V : world space view vector (toward viewer) at `pt.P`.
  */
-ShapePoint shape_point_get(const Point pt, const float3 V, const float3 up_axis)
+ShapePoint shape_point_get(const Point pt,
+                           const float3 V,
+                           const float3 up_axis,
+                           const eObjectInfoFlag ob_flag)
 {
   ShapePoint shape;
   shape.N = facing_matrix(V, up_axis) * pt.shape_pos;
-  eObjectInfoFlag ob_flag = buffer_get(draw_object_infos, drw_infos)[drw_resource_id()].flag;
   if (flag_test(ob_flag, OBJECT_NEGATIVE_SCALE)) {
     shape.N = -shape.N;
   }

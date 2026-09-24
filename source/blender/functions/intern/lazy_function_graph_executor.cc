@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "FN_lazy_function_graph_executor.hh"
 
 /* The entire executor is included here. Otherwise an additional indirection using forward
@@ -88,6 +92,12 @@ std::string GraphExecutor::output_name(const int index) const
 {
   const lf::InputSocket &socket = *graph_outputs_[index];
   return socket.name();
+}
+
+GraphExecutorLogger::LoggingEnabledState GraphExecutorLogger::get_logging_enabled_state(
+    const Context & /*context*/) const
+{
+  return LoggingEnabledState{true};
 }
 
 void GraphExecutorLogger::log_socket_value(const Socket &socket,

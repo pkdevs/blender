@@ -23,13 +23,10 @@ class OneapiDeviceQueue : public DeviceQueue {
  public:
   explicit OneapiDeviceQueue(OneapiDevice *device);
 
-  int num_concurrent_states(const size_t state_size) const override;
-
-  int num_concurrent_busy_states(const size_t state_size) const override;
-
   int num_sort_partitions(int max_num_paths, uint max_scene_shaders) const override;
 
   void init_execution() override;
+  void load_image_info() override;
 
   bool enqueue(DeviceKernel kernel,
                const int kernel_work_size,
@@ -40,6 +37,7 @@ class OneapiDeviceQueue : public DeviceQueue {
   void zero_to_device(device_memory &mem) override;
   void copy_to_device(device_memory &mem) override;
   void copy_from_device(device_memory &mem) override;
+  void *copy_from_device_synchronized(device_memory &mem, vector<uint8_t> &storage) override;
 
   bool supports_local_atomic_sort() const override
   {
@@ -53,6 +51,9 @@ class OneapiDeviceQueue : public DeviceQueue {
  protected:
   OneapiDevice *oneapi_device_;
   unique_ptr<KernelContext> kernel_context_;
+
+  ConcurrentStatesParams concurrent_states_params() const override;
+  void get_memory_info(size_t &total, size_t &free) const override;
 };
 
 CCL_NAMESPACE_END

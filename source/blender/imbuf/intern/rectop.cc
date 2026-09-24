@@ -9,12 +9,12 @@
 #include <algorithm>
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_math_color_blend.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_blend.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
@@ -343,86 +343,147 @@ void IMB_blend_color_float(const MutableSpan<float4> dst,
 /** \name Crop
  * \{ */
 
-static void rect_crop_4bytes(void **buf_p, const int size_src[2], const rcti *crop)
+static void copy_to_cropped_bufffer(void *dst_void,
+                                    const int2 &dst_size,
+                                    const void *src_void,
+                                    const int2 &src_size,
+                                    const int stride,
+                                    const int2 &src_rect_pos,
+                                    const int2 &dst_rect_pos,
+                                    const int2 &rect_size)
 {
-  if (*buf_p == nullptr) {
-    return;
+  BLI_assert(src_size.x > 0 && src_size.y > 0);
+  BLI_assert(dst_size.x > 0 && dst_size.y > 0);
+  BLI_assert(rect_size.x > 0 && rect_size.y > 0);
+  BLI_assert(src_rect_pos.x >= 0 && src_rect_pos.y >= 0);
+  BLI_assert(dst_rect_pos.x >= 0 && dst_rect_pos.y >= 0);
+  BLI_assert((src_rect_pos.x + rect_size.x) <= src_size.x &&
+             (src_rect_pos.y + rect_size.y) <= src_size.y);
+  BLI_assert((dst_rect_pos.x + rect_size.x) <= dst_size.x &&
+             (dst_rect_pos.y + rect_size.y) <= dst_size.y);
+  auto *dst = static_cast<std::byte *>(dst_void);
+  const auto *src = static_cast<const std::byte *>(src_void);
+  for (const int rect_y : IndexRange(rect_size.y)) {
+    const int src_y = src_rect_pos.y + rect_y;
+    const int dst_y = dst_rect_pos.y + rect_y;
+    const std::byte *row_src = src + size_t(src_size.x) * stride * src_y;
+    std::byte *row_dst = dst + size_t(dst_size.x) * stride * dst_y;
+    std::copy_n(row_src + size_t(src_rect_pos.x) * stride,
+                size_t(rect_size.x) * stride,
+                row_dst + size_t(dst_rect_pos.x) * stride);
   }
-  const int size_dst[2] = {
-      BLI_rcti_size_x(crop) + 1,
-      BLI_rcti_size_y(crop) + 1,
-  };
-  uint *src = static_cast<uint *>(*buf_p);
-  uint *dst = src + crop->ymin * size_src[0] + crop->xmin;
-  for (int y = 0; y < size_dst[1]; y++, src += size_dst[0], dst += size_src[0]) {
-    memmove(src, dst, sizeof(uint) * size_dst[0]);
-  }
-  *buf_p = MEM_realloc_uninitialized(*buf_p, sizeof(uint) * size_dst[0] * size_dst[1]);
 }
 
-static void rect_crop_16bytes(void **buf_p, const int size_src[2], const rcti *crop)
+static void *create_cropped_buffer_impl(const void *src_void,
+                                        const int2 &src_size,
+                                        const int stride,
+                                        const int2 &src_rect_pos,
+                                        const int2 &rect_size)
 {
-  if (*buf_p == nullptr) {
-    return;
-  }
-  const int size_dst[2] = {
-      BLI_rcti_size_x(crop) + 1,
-      BLI_rcti_size_y(crop) + 1,
-  };
-  uint(*src)[4] = static_cast<uint(*)[4]>(*buf_p);
-  uint(*dst)[4] = src + crop->ymin * size_src[0] + crop->xmin;
-  for (int y = 0; y < size_dst[1]; y++, src += size_dst[0], dst += size_src[0]) {
-    memmove(src, dst, sizeof(uint[4]) * size_dst[0]);
-  }
-  *buf_p = static_cast<void *>(
-      MEM_realloc_uninitialized(*buf_p, sizeof(uint[4]) * size_dst[0] * size_dst[1]));
+  BLI_assert(rect_size.x > 0 && rect_size.y > 0);
+  const size_t dst_buffer_size = size_t(rect_size.x) * size_t(rect_size.y);
+  auto *dst = MEM_new_array_uninitialized<std::byte>(dst_buffer_size * stride, __func__);
+  copy_to_cropped_bufffer(
+      dst, rect_size, src_void, src_size, stride, src_rect_pos, int2(0, 0), rect_size);
+  return dst;
 }
 
-void IMB_rect_crop(ImBuf *ibuf, const rcti *crop)
+static float *create_cropped_buffer(const float *src,
+                                    const int2 &src_size,
+                                    const int channels,
+                                    const int2 &src_rect_pos,
+                                    const int2 &rect_size)
 {
-  const int size_src[2] = {
-      ibuf->x,
-      ibuf->y,
-  };
-  const int size_dst[2] = {
-      BLI_rcti_size_x(crop) + 1,
-      BLI_rcti_size_y(crop) + 1,
-  };
-  BLI_assert(size_dst[0] > 0 && size_dst[1] > 0);
-  BLI_assert(crop->xmin >= 0 && crop->ymin >= 0);
-  BLI_assert(crop->xmax < ibuf->x && crop->ymax < ibuf->y);
-
-  if ((size_dst[0] == ibuf->x) && (size_dst[1] == ibuf->y)) {
-    return;
-  }
-
-  /* TODO(sergey: Validate ownership. */
-  rect_crop_4bytes(reinterpret_cast<void **>(&ibuf->byte_buffer.data), size_src, crop);
-  rect_crop_16bytes(reinterpret_cast<void **>(&ibuf->float_buffer.data), size_src, crop);
-
-  ibuf->x = size_dst[0];
-  ibuf->y = size_dst[1];
+  /* For some reason channels == 0 means 4-channel default. */
+  const int stride = (channels == 0 ? 4 : channels) * sizeof(float);
+  return static_cast<float *>(
+      create_cropped_buffer_impl(src, src_size, stride, src_rect_pos, rect_size));
 }
 
-/**
- * Re-allocate buffers at a new size.
- */
-static void rect_realloc_4bytes(void **buf_p, const uint size[2])
+static uchar *create_cropped_buffer(const uchar *src,
+                                    const int2 &src_size,
+                                    const int2 &src_rect_pos,
+                                    const int2 &rect_size)
 {
-  if (*buf_p == nullptr) {
-    return;
-  }
-  MEM_delete_void(*buf_p);
-  *buf_p = MEM_new_array_uninitialized<uint>(size_t(size[0]) * size_t(size[1]), __func__);
+  /* Byte buffers always have 4 channels. */
+  const int stride = 4 * sizeof(uchar);
+  return static_cast<uchar *>(
+      create_cropped_buffer_impl(src, src_size, stride, src_rect_pos, rect_size));
 }
 
-static void rect_realloc_16bytes(void **buf_p, const uint size[2])
+void IMB_copy_rect(float *dst,
+                   const int2 &dst_size,
+                   const float *src,
+                   const int2 &src_size,
+                   const int channels,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size)
 {
-  if (*buf_p == nullptr) {
+  /* For some reason channels == 0 means 4-channel default. */
+  const int stride = (channels == 0 ? 4 : channels) * sizeof(float);
+  copy_to_cropped_bufffer(
+      dst, dst_size, src, src_size, stride, src_rect_pos, dst_rect_pos, rect_size);
+}
+
+void IMB_copy_rect(uchar *dst,
+                   const int2 &dst_size,
+                   const uchar *src,
+                   const int2 &src_size,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size)
+{
+  /* Byte buffers always have 4 channels. */
+  const int stride = 4 * sizeof(uchar);
+  copy_to_cropped_bufffer(
+      dst, dst_size, src, src_size, stride, src_rect_pos, dst_rect_pos, rect_size);
+}
+
+void IMB_copy_rect(ImBuf *dst,
+                   const ImBuf *src,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size)
+{
+  if (src->byte_data() && dst->byte_data()) {
+    IMB_copy_rect(dst->byte_data_for_write(),
+                  int2(dst->x, dst->y),
+                  src->byte_data(),
+                  int2(src->x, src->y),
+                  src_rect_pos,
+                  dst_rect_pos,
+                  rect_size);
+  }
+  if (src->float_data() && dst->float_data()) {
+    IMB_copy_rect(dst->float_data_for_write(),
+                  int2(dst->x, dst->y),
+                  src->float_data(),
+                  int2(src->x, src->y),
+                  src->channels,
+                  src_rect_pos,
+                  dst_rect_pos,
+                  rect_size);
+  }
+}
+
+void IMB_crop(ImBuf *ibuf, const int2 &rect_pos, const int2 &rect_size)
+{
+  const int2 src_size(ibuf->x, ibuf->y);
+  if (src_size == rect_size) {
     return;
   }
-  MEM_delete_void(*buf_p);
-  *buf_p = MEM_new_array_uninitialized<uint>(4 * size_t(size[0]) * size_t(size[1]), __func__);
+
+  if (const uchar *byte_data = ibuf->byte_data()) {
+    ibuf->assign_byte_data(create_cropped_buffer(byte_data, src_size, rect_pos, rect_size));
+  }
+  if (const float *float_data = ibuf->float_data()) {
+    ibuf->assign_float_data(
+        create_cropped_buffer(float_data, src_size, ibuf->channels, rect_pos, rect_size));
+  }
+
+  ibuf->x = rect_size.x;
+  ibuf->y = rect_size.y;
 }
 
 void IMB_rect_size_set(ImBuf *ibuf, const uint size[2])
@@ -432,12 +493,15 @@ void IMB_rect_size_set(ImBuf *ibuf, const uint size[2])
     return;
   }
 
-  /* TODO(sergey: Validate ownership. */
-  rect_realloc_4bytes(reinterpret_cast<void **>(&ibuf->byte_buffer.data), size);
-  rect_realloc_16bytes(reinterpret_cast<void **>(&ibuf->float_buffer.data), size);
-
   ibuf->x = size[0];
   ibuf->y = size[1];
+
+  if (ibuf->float_data()) {
+    IMB_alloc_float_pixels(ibuf, ibuf->channels, false);
+  }
+  if (ibuf->byte_data()) {
+    IMB_alloc_byte_pixels(ibuf, false);
+  }
 }
 
 /** \} */
@@ -579,40 +643,12 @@ static void imb_rectclip3(ImBuf *dbuf,
   }
 }
 
-/* copy and blend */
-
-void IMB_rectcpy(ImBuf *dbuf,
-                 const ImBuf *sbuf,
-                 int destx,
-                 int desty,
-                 int srcx,
-                 int srcy,
-                 int width,
-                 int height)
-{
-  IMB_rectblend(dbuf,
-                dbuf,
-                sbuf,
-                nullptr,
-                nullptr,
-                nullptr,
-                0,
-                destx,
-                desty,
-                destx,
-                desty,
-                srcx,
-                srcy,
-                width,
-                height,
-                IMB_BLEND_COPY,
-                false);
-}
-
 using IMB_blend_func = void (*)(uchar *dst, const uchar *src1, const uchar *src2);
 using IMB_blend_func_float = void (*)(float *dst, const float *src1, const float *src2);
 
 void IMB_rectblend(ImBuf *dbuf,
+                   uint8_t *dbuf_byte_data,
+                   float *dbuf_float_data,
                    const ImBuf *obuf,
                    const ImBuf *sbuf,
                    ushort *dmask,
@@ -630,8 +666,18 @@ void IMB_rectblend(ImBuf *dbuf,
                    IMB_BlendMode mode,
                    bool accumulate)
 {
-  uint *drect = nullptr, *orect = nullptr, *srect = nullptr, *dr, *outr, *sr;
-  float *drectf = nullptr, *orectf = nullptr, *srectf = nullptr, *drf, *orf, *srf;
+  uint *drect = nullptr;
+  const uint *orect = nullptr;
+  const uint *srect = nullptr;
+  uint *dr;
+  const uint *outr;
+  const uint *sr;
+  float *drectf = nullptr;
+  const float *orectf = nullptr;
+  const float *srectf = nullptr;
+  float *drf;
+  const float *orf;
+  const float *srf;
   const ushort *cmaskrect = curvemask, *cmr;
   ushort *dmaskrect = dmask, *dmr;
   const ushort *texmaskrect = texmask, *tmr;
@@ -655,18 +701,16 @@ void IMB_rectblend(ImBuf *dbuf,
     return;
   }
 
-  const bool do_char = (sbuf && sbuf->byte_buffer.data && dbuf->byte_buffer.data &&
-                        obuf->byte_buffer.data);
-  const bool do_float = (sbuf && sbuf->float_buffer.data && dbuf->float_buffer.data &&
-                         obuf->float_buffer.data);
+  const bool do_char = (sbuf && sbuf->byte_data() && dbuf_byte_data && obuf->byte_data());
+  const bool do_float = (sbuf && sbuf->float_data() && dbuf_float_data && obuf->float_data());
 
   if (do_char) {
-    drect = reinterpret_cast<uint *>(dbuf->byte_buffer.data) + size_t(desty) * dbuf->x + destx;
-    orect = reinterpret_cast<uint *>(obuf->byte_buffer.data) + size_t(origy) * obuf->x + origx;
+    drect = reinterpret_cast<uint *>(dbuf_byte_data) + size_t(desty) * dbuf->x + destx;
+    orect = reinterpret_cast<const uint *>(obuf->byte_data()) + size_t(origy) * obuf->x + origx;
   }
   if (do_float) {
-    drectf = dbuf->float_buffer.data + (size_t(desty) * dbuf->x + destx) * 4;
-    orectf = obuf->float_buffer.data + (size_t(origy) * obuf->x + origx) * 4;
+    drectf = dbuf_float_data + (size_t(desty) * dbuf->x + destx) * 4;
+    orectf = obuf->float_data() + (size_t(origy) * obuf->x + origx) * 4;
   }
 
   if (dmaskrect) {
@@ -678,10 +722,10 @@ void IMB_rectblend(ImBuf *dbuf,
 
   if (sbuf) {
     if (do_char) {
-      srect = reinterpret_cast<uint *>(sbuf->byte_buffer.data) + size_t(srcy) * sbuf->x + srcx;
+      srect = reinterpret_cast<const uint *>(sbuf->byte_data()) + size_t(srcy) * sbuf->x + srcx;
     }
     if (do_float) {
-      srectf = sbuf->float_buffer.data + (size_t(srcy) * sbuf->x + srcx) * 4;
+      srectf = sbuf->float_data() + (size_t(srcy) * sbuf->x + srcx) * 4;
     }
     srcskip = sbuf->x;
 
@@ -699,32 +743,16 @@ void IMB_rectblend(ImBuf *dbuf,
     srcskip = destskip;
   }
 
-  if (mode == IMB_BLEND_COPY) {
-    /* copy */
-    for (; height > 0; height--) {
-      if (do_char) {
-        memcpy(drect, srect, width * sizeof(int));
-        drect += destskip;
-        srect += srcskip;
-      }
-
-      if (do_float) {
-        memcpy(drectf, srectf, sizeof(float[4]) * width);
-        drectf += destskip * 4;
-        srectf += srcskip * 4;
-      }
-    }
-  }
-  else if (mode == IMB_BLEND_COPY_RGB) {
+  if (mode == IMB_BLEND_COPY_RGB) {
     /* copy rgb only */
     for (; height > 0; height--) {
       if (do_char) {
         dr = drect;
         sr = srect;
         for (x = width; x > 0; x--, dr++, sr++) {
-          (reinterpret_cast<char *>(dr))[0] = (reinterpret_cast<char *>(sr))[0];
-          (reinterpret_cast<char *>(dr))[1] = (reinterpret_cast<char *>(sr))[1];
-          (reinterpret_cast<char *>(dr))[2] = (reinterpret_cast<char *>(sr))[2];
+          (reinterpret_cast<char *>(dr))[0] = (reinterpret_cast<const char *>(sr))[0];
+          (reinterpret_cast<char *>(dr))[1] = (reinterpret_cast<const char *>(sr))[1];
+          (reinterpret_cast<char *>(dr))[2] = (reinterpret_cast<const char *>(sr))[2];
         }
         drect += destskip;
         srect += srcskip;
@@ -752,7 +780,7 @@ void IMB_rectblend(ImBuf *dbuf,
         dr = drect;
         sr = srect;
         for (x = width; x > 0; x--, dr++, sr++) {
-          (reinterpret_cast<char *>(dr))[3] = (reinterpret_cast<char *>(sr))[3];
+          (reinterpret_cast<char *>(dr))[3] = (reinterpret_cast<const char *>(sr))[3];
         }
         drect += destskip;
         srect += srcskip;
@@ -888,7 +916,7 @@ void IMB_rectblend(ImBuf *dbuf,
           if (dmaskrect) {
             dmr = dmaskrect;
             for (x = width; x > 0; x--, dr++, outr++, sr++, dmr++, cmr++) {
-              uchar *src = reinterpret_cast<uchar *>(sr);
+              const uchar *src = reinterpret_cast<const uchar *>(sr);
               float mask_lim = mask_max * (*cmr);
 
               if (texmaskrect) {
@@ -919,13 +947,15 @@ void IMB_rectblend(ImBuf *dbuf,
                   if (mode == IMB_BLEND_INTERPOLATE) {
                     mask_src[3] = src[3];
                     blend_color_interpolate_byte(reinterpret_cast<uchar *>(dr),
-                                                 reinterpret_cast<uchar *>(outr),
+                                                 reinterpret_cast<const uchar *>(outr),
                                                  mask_src,
                                                  mask / 65535.0f);
                   }
                   else {
                     mask_src[3] = divide_round_i(src[3] * mask, 65535);
-                    func(reinterpret_cast<uchar *>(dr), reinterpret_cast<uchar *>(outr), mask_src);
+                    func(reinterpret_cast<uchar *>(dr),
+                         reinterpret_cast<const uchar *>(outr),
+                         mask_src);
                   }
                 }
               }
@@ -935,7 +965,7 @@ void IMB_rectblend(ImBuf *dbuf,
           /* No destination mask buffer, do regular blend with mask-texture if present. */
           else {
             for (x = width; x > 0; x--, dr++, outr++, sr++, cmr++) {
-              uchar *src = reinterpret_cast<uchar *>(sr);
+              const uchar *src = reinterpret_cast<const uchar *>(sr);
               float mask = mask_max * float(*cmr);
 
               if (texmaskrect) {
@@ -954,13 +984,15 @@ void IMB_rectblend(ImBuf *dbuf,
                 if (mode == IMB_BLEND_INTERPOLATE) {
                   mask_src[3] = src[3];
                   blend_color_interpolate_byte(reinterpret_cast<uchar *>(dr),
-                                               reinterpret_cast<uchar *>(outr),
+                                               reinterpret_cast<const uchar *>(outr),
                                                mask_src,
                                                mask / 65535.0f);
                 }
                 else {
                   mask_src[3] = divide_round_i(src[3] * mask, 65535);
-                  func(reinterpret_cast<uchar *>(dr), reinterpret_cast<uchar *>(outr), mask_src);
+                  func(reinterpret_cast<uchar *>(dr),
+                       reinterpret_cast<const uchar *>(outr),
+                       mask_src);
                 }
               }
             }
@@ -974,10 +1006,10 @@ void IMB_rectblend(ImBuf *dbuf,
         else {
           /* regular blending */
           for (x = width; x > 0; x--, dr++, outr++, sr++) {
-            if ((reinterpret_cast<uchar *>(sr))[3]) {
+            if ((reinterpret_cast<const uchar *>(sr))[3]) {
               func(reinterpret_cast<uchar *>(dr),
-                   reinterpret_cast<uchar *>(outr),
-                   reinterpret_cast<uchar *>(sr));
+                   reinterpret_cast<const uchar *>(outr),
+                   reinterpret_cast<const uchar *>(sr));
             }
           }
         }
@@ -1099,8 +1131,18 @@ void IMB_rectblend_threaded(ImBuf *dbuf,
                             IMB_BlendMode mode,
                             bool accumulate)
 {
+  if (dbuf == nullptr || obuf == nullptr) {
+    return;
+  }
+
+  /* Acquire mutable data pointers outside of parallel loop. */
+  uint8_t *dbuf_byte_data = dbuf->byte_data_for_write();
+  float *dbuf_float_data = dbuf->float_data_for_write();
+
   threading::parallel_for(IndexRange(height), 16, [&](const IndexRange y_range) {
     IMB_rectblend(dbuf,
+                  dbuf_byte_data,
+                  dbuf_float_data,
                   obuf,
                   sbuf,
                   dmask,
@@ -1124,8 +1166,8 @@ void IMB_rectfill(ImBuf *drect, const float col[4])
 {
   size_t num;
 
-  if (drect->byte_buffer.data) {
-    uint *rrect = reinterpret_cast<uint *>(drect->byte_buffer.data);
+  if (drect->byte_data()) {
+    uint *rrect = reinterpret_cast<uint *>(drect->byte_data_for_write());
 
     char ccol[4];
     unit_float_to_uchar_clamp_v4(ccol, col);
@@ -1136,8 +1178,8 @@ void IMB_rectfill(ImBuf *drect, const float col[4])
     }
   }
 
-  if (drect->float_buffer.data) {
-    float *rrectf = drect->float_buffer.data;
+  if (drect->float_data()) {
+    float *rrectf = drect->float_data_for_write();
 
     num = IMB_get_pixel_count(drect);
     for (; num > 0; num--) {
@@ -1156,8 +1198,8 @@ void IMB_rectfill_area(
     return;
   }
 
-  uchar *rect = ibuf->byte_buffer.data;
-  float *rectf = ibuf->float_buffer.data;
+  uchar *rect = ibuf->byte_data_for_write();
+  float *rectf = ibuf->float_data_for_write();
   const int width = ibuf->x;
   const int height = ibuf->y;
 
@@ -1268,16 +1310,16 @@ void IMB_rectfill_alpha(ImBuf *ibuf, const float value)
 {
   size_t i;
 
-  if (ibuf->float_buffer.data && (ibuf->channels == 4)) {
-    float *fbuf = ibuf->float_buffer.data + 3;
+  if (ibuf->float_data() && (ibuf->channels == 4)) {
+    float *fbuf = ibuf->float_data_for_write() + 3;
     for (i = IMB_get_pixel_count(ibuf); i > 0; i--, fbuf += 4) {
       *fbuf = value;
     }
   }
 
-  if (ibuf->byte_buffer.data) {
+  if (uchar *byte_data = ibuf->byte_data_for_write()) {
     const uchar cvalue = value * 255;
-    uchar *cbuf = ibuf->byte_buffer.data + 3;
+    uchar *cbuf = byte_data + 3;
     for (i = IMB_get_pixel_count(ibuf); i > 0; i--, cbuf += 4) {
       *cbuf = cvalue;
     }

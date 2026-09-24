@@ -5,7 +5,7 @@
 #include "BLI_array.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_movieclip_types.h"
 #include "DNA_tracking_types.h"
@@ -41,12 +41,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::Transforms)
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
-  b.add_output<decl::Float>("Plane").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
+  b.add_output<decl::Float>("Plane"_ustr).structure_type(StructureType::Dynamic);
 
   b.add_layout([](ui::Layout &layout, bContext *C, PointerRNA *ptr) {
     bNode *node = ptr->data_as<bNode>();
@@ -79,16 +81,16 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   PanelDeclarationBuilder &motion_blur_panel =
       b.add_panel("Motion Blur"_ustr).default_closed(true);
-  motion_blur_panel.add_input<decl::Bool>("Motion Blur")
+  motion_blur_panel.add_input<decl::Bool>("Motion Blur"_ustr)
       .default_value(false)
       .panel_toggle()
       .description("Use multi-sampled motion blur of the plane");
-  motion_blur_panel.add_input<decl::Int>("Samples", "Motion Blur Samples")
+  motion_blur_panel.add_input<decl::Int>("Samples"_ustr, "Motion Blur Samples"_ustr)
       .default_value(16)
       .min(1)
       .max(64)
       .description("Number of motion blur samples");
-  motion_blur_panel.add_input<decl::Float>("Shutter", "Motion Blur Shutter")
+  motion_blur_panel.add_input<decl::Float>("Shutter"_ustr, "Motion Blur Shutter"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -96,27 +98,32 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Exposure for motion blur as a factor of FPS");
 }
 
-static void node_init(const bContext *C, PointerRNA *ptr)
+static void node_init(bNodeTree * /*node_tree*/, bNode *node)
 {
-  bNode *node = static_cast<bNode *>(ptr->data);
-
   NodePlaneTrackDeformData *data = MEM_new<NodePlaneTrackDeformData>(__func__);
   node->storage = data;
+}
+
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
+{
+  bNode *node = node_ptr->data_as<bNode>();
+  NodePlaneTrackDeformData &data = node_storage(*node);
 
   const Scene *scene = CTX_data_scene(C);
-  if (scene->clip) {
-    MovieClip *clip = scene->clip;
-    MovieTracking *tracking = &clip->tracking;
+  MovieClip *movie_clip = scene->clip;
+  if (!movie_clip) {
+    return;
+  }
 
-    node->id = &clip->id;
-    id_us_plus(&clip->id);
+  node->id = &movie_clip->id;
+  id_us_plus(&movie_clip->id);
 
-    const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(tracking);
-    STRNCPY_UTF8(data->tracking_object, tracking_object->name);
+  MovieTracking *tracking = &movie_clip->tracking;
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(tracking);
+  STRNCPY_UTF8(data.tracking_object, tracking_object->name);
 
-    if (tracking_object->active_plane_track) {
-      STRNCPY_UTF8(data->plane_track_name, tracking_object->active_plane_track->name);
-    }
+  if (tracking_object->active_plane_track) {
+    STRNCPY_UTF8(data.plane_track_name, tracking_object->active_plane_track->name);
   }
 }
 
@@ -178,11 +185,10 @@ class PlaneTrackDeformOperation : public NodeOperation {
 
     Result &output_mask = get_result("Plane");
     if (output_mask.should_compute()) {
-      output_mask.steal_data(anti_aliased_plane_mask);
+      output_mask.share_data(anti_aliased_plane_mask);
     }
-    else {
-      anti_aliased_plane_mask.release();
-    }
+
+    anti_aliased_plane_mask.release();
   }
 
   void compute_plane_gpu(const Array<float4x4> &homography_matrices,
@@ -260,11 +266,10 @@ class PlaneTrackDeformOperation : public NodeOperation {
 
     Result &output_mask = get_result("Plane");
     if (output_mask.should_compute()) {
-      output_mask.steal_data(anti_aliased_plane_mask);
+      output_mask.share_data(anti_aliased_plane_mask);
     }
-    else {
-      anti_aliased_plane_mask.release();
-    }
+
+    anti_aliased_plane_mask.release();
   }
 
   void compute_plane_cpu(const Array<float4x4> &homography_matrices, Result &plane_mask)
@@ -287,13 +292,13 @@ class PlaneTrackDeformOperation : public NodeOperation {
           continue;
         }
         float2 projected_coordinates = transformed_coordinates.xy() / transformed_coordinates.z;
-
-        /* The derivatives of the projected coordinates with respect to x and y are the first and
-         * second columns respectively, divided by the z projection factor as can be shown by
-         * differentiating the above matrix multiplication with respect to x and y. */
-        float2 x_gradient = homography_matrix[0].xy() / transformed_coordinates.z;
-        float2 y_gradient = homography_matrix[1].xy() / transformed_coordinates.z;
-
+        /* Derivative of transformed_coordinates.xy / transformed_coordinates.z vs texels. */
+        float2 x_gradient = (homography_matrix[0].xy() * transformed_coordinates.z -
+                             transformed_coordinates.xy() * homography_matrix[0].z) /
+                            (math::square(transformed_coordinates.z) * size.x);
+        float2 y_gradient = (homography_matrix[1].xy() * transformed_coordinates.z -
+                             transformed_coordinates.xy() * homography_matrix[1].z) /
+                            (math::square(transformed_coordinates.z) * size.y);
         const float2x2 jacobian = float2x2(x_gradient, y_gradient);
         float4 sampled_color = float4(input.sample<Color>(projected_coordinates,
                                                           Interpolation::Anisotropic,
@@ -450,7 +455,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodePlaneTrackDeform", CMP_NODE_PLANETRACKDEFORM);
+  cmp_node_type_base(&ntype, "CompositorNodePlaneTrackDeform"_ustr, CMP_NODE_PLANETRACKDEFORM);
   ntype.ui_name = "Plane Track Deform";
   ntype.ui_description =
       "Replace flat planes in footage by another image, detected by plane tracks from motion "
@@ -458,7 +463,8 @@ static void node_register()
   ntype.enum_name_legacy = "PLANETRACKDEFORM";
   ntype.nclass = NODE_CLASS_DISTORT;
   ntype.declare = node_declare;
-  ntype.initfunc_api = node_init;
+  ntype.initfunc = node_init;
+  ntype.initfunc_api = node_init_api;
   bke::node_type_storage(
       ntype, "NodePlaneTrackDeformData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;

@@ -56,6 +56,7 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/attribute.h
   svm/bevel.h
   svm/blackbody.h
+  svm/boolean_math.h
   svm/bump.h
   svm/camera.h
   svm/clamp.h
@@ -84,7 +85,9 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/mapping_util.h
   svm/math.h
   svm/math_util.h
+  svm/integer_math.h
   svm/mix.h
+  svm/node_types.h
   svm/node_types_template.h
   svm/noise.h
   svm/noisetex.h
@@ -94,6 +97,7 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/radial_tiling.h
   svm/radial_tiling_shared.h
   svm/raycast.h
+  svm/scene_time.h
   svm/sepcomb_color.h
   svm/sepcomb_vector.h
   svm/sky.h
@@ -127,7 +131,10 @@ set(SRC_KERNEL_GEOM_HEADERS
   geom/curve.h
   geom/curve_intersect.h
   geom/geom_intersect.h
+  geom/gsplat.h
+  geom/gsplat_intersect.h
   geom/motion_curve.h
+  geom/motion_gsplat.h
   geom/motion_point.h
   geom/motion_triangle.h
   geom/motion_triangle_intersect.h
@@ -182,6 +189,7 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/init_from_camera.h
   integrator/intersect_dedicated_light.h
   integrator/intersect_closest.h
+  integrator/intersect_mnee.h
   integrator/intersect_shadow.h
   integrator/intersect_subsurface.h
   integrator/intersect_volume_stack.h
@@ -246,6 +254,7 @@ set(SRC_KERNEL_UTIL_HEADERS
 )
 
 set(SRC_KERNEL_TYPES_HEADERS
+  constants.h
   data_arrays.h
   data_template.h
   features.h
@@ -291,6 +300,9 @@ set(SRC_UTIL_HEADERS
   ../util/math_int4.h
   ../util/math_int8.h
   ../util/math_dual.h
+  ../util/math_float3x3.h
+  ../util/math_quaternion.h
+  ../util/math_spherical_harmonics.h
   ../util/projection.h
   ../util/projection_inverse.h
   ../util/rect.h
@@ -302,6 +314,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_float3.h
   ../util/types_float4.h
   ../util/types_float8.h
+  ../util/types_gpu_compressed.h
   ../util/types_image.h
   ../util/types_int2.h
   ../util/types_int3.h
@@ -309,6 +322,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_int8.h
   ../util/types_normal.h
   ../util/types_spectrum.h
+  ../util/types_spherical_harmonics.h
   ../util/types_rgbe.h
   ../util/types_uchar2.h
   ../util/types_uchar3.h
@@ -318,6 +332,8 @@ set(SRC_UTIL_HEADERS
   ../util/types_uint4.h
   ../util/types_ushort4.h
   ../util/types_dual.h
+  ../util/types_float3x3.h
+  ../util/types_quaternion.h
 )
 
 set(LIB

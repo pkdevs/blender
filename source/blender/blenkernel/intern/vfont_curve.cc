@@ -17,15 +17,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -70,7 +70,7 @@ static float vfont_metrics_descent(const VFontData_Metrics *metrics)
 
 static VFont *vfont_from_charinfo(const Curve &cu, const CharInfo *info)
 {
-  switch (info->flag & (CU_CHINFO_BOLD | CU_CHINFO_ITALIC)) {
+  switch (int(info->flag & (CU_CHINFO_BOLD | CU_CHINFO_ITALIC))) {
     case CU_CHINFO_BOLD:
       return cu.vfontb ? cu.vfontb : cu.vfont;
     case CU_CHINFO_ITALIC:
@@ -279,7 +279,7 @@ static VChar *vfont_char_find_or_placeholder(const VFontData *vfd,
   if (vfd) {
     vfont_char_find(vfd, charcode, &che);
   }
-  if (UNLIKELY(che == nullptr)) {
+  if (che == nullptr) [[unlikely]] {
     che = vfont_placeholder_ensure(che_placeholder, charcode);
   }
   return che;
@@ -391,7 +391,7 @@ static void vfont_char_build_impl(const Curve &cu,
   /* Select the glyph data */
   const Nurb *nu_from_vchar = nullptr;
   if (che) {
-    nu_from_vchar = static_cast<Nurb *>(che->nurbsbase.first);
+    nu_from_vchar = che->nurbsbase.first();
   }
 
   /* Create the character. */
@@ -501,8 +501,14 @@ void BKE_vfont_char_build(const Curve &cu,
   if (!vfd) {
     return;
   }
-  VChar *che;
-  vfont_char_find(vfd, charcode, &che);
+  VChar *che = nullptr;
+  /* C0 control characters should not generate geometry. */
+  if (charcode >= 32) {
+    VCharPlaceHolder che_placeholder = {
+        /*metrics*/ &vfd->metrics,
+    };
+    che = vfont_char_find_or_placeholder(vfd, charcode, che_placeholder);
+  }
   vfont_char_build_impl(cu, nubase, che, info, is_smallcaps, offset, rotate, charidx, fsize);
 }
 
@@ -519,9 +525,22 @@ static float vfont_char_width(const Curve &cu, VChar *che, const bool is_smallca
   return che->width;
 }
 
+/**
+ * A combining character, drawn over the previous base character.
+ *
+ * Check the code-point as well as the width since some fonts use
+ * zero-width glyphs for spacing characters (the "." in LCD style digit fonts for e.g.)
+ * which must not be drawn over the previous character, see #162036.
+ * See also: `blf_glyph_is_combining` which also uses this logic.
+ */
+static bool vfont_char_is_combining(const char32_t charcode, const float char_width)
+{
+  return (char_width == 0.0f) && (BLI_wcwidth_or_error(charcode) == 0);
+}
+
 static char32_t vfont_char_apply_smallcaps(char32_t charcode, const bool is_smallcaps)
 {
-  if (UNLIKELY(is_smallcaps)) {
+  if (is_smallcaps) [[unlikely]] {
     return toupper(charcode);
   }
   return charcode;
@@ -721,7 +740,7 @@ static bool vfont_to_curve(Object *ob,
   BLI_assert(ob == nullptr || ob->type == OB_FONT);
 
   /* Read-file ensures non-null, must have become null at run-time, this is a bug! */
-  if (UNLIKELY(!(cu.str && cu.tb && (ef ? ef->textbufinfo : cu.strinfo)))) {
+  if (!(cu.str && cu.tb && (ef ? ef->textbufinfo : cu.strinfo))) [[unlikely]] {
     BLI_assert(0);
     return false;
   }
@@ -825,6 +844,13 @@ static bool vfont_to_curve(Object *ob,
       MARGIN_X_MIN,
       MARGIN_Y_MIN,
   };
+  /* X position of the last base (non-combining) character, for centering combining marks. */
+  float offset_x_base = MARGIN_X_MIN;
+  /* Base character bounds & accumulators for combining mark vertical positioning.
+   * Mirrors the fallback algorithm in BLF (see #blf_glyph_step) and HarfBuzz. */
+  const VChar *che_base = nullptr;
+  float base_ymax_accum = 0.0f;
+  float base_ymin_accum = 0.0f;
 
   /* `xtrax` is used to implement character "spacing".
    * Note that this is added (when adding space), and multiplied when subtracting space.
@@ -933,7 +959,7 @@ static bool vfont_to_curve(Object *ob,
         for (j = i; (mem[j] != '\n') && (chartransdata[j].do_break == 0); j--) {
 
           /* Special case when there are no breaks possible. */
-          if (UNLIKELY(j == 0)) {
+          if (j == 0) [[unlikely]] {
             if (i == slen) {
               /* Use the behavior of zero a height text-box when a break cannot be inserted.
                *
@@ -1022,6 +1048,10 @@ static bool vfont_to_curve(Object *ob,
       }
 
       offset.x = MARGIN_X_MIN;
+      offset_x_base = MARGIN_X_MIN;
+      che_base = nullptr;
+      base_ymax_accum = 0.0f;
+      base_ymin_accum = 0.0f;
       lnr++;
       cnr = 0;
       wsnr = 0;
@@ -1036,37 +1066,95 @@ static bool vfont_to_curve(Object *ob,
       tabfac = (offset.x - MARGIN_X_MIN + 0.01f);
       tabfac = 2.0f * ceilf(tabfac / 2.0f);
       offset.x = MARGIN_X_MIN + tabfac;
+      offset_x_base = offset.x;
+      che_base = nullptr;
+      base_ymax_accum = 0.0f;
+      base_ymin_accum = 0.0f;
     }
     else {
-      EditFontSelBox *sb = nullptr;
-      float wsfac;
-
-      ct->offset = offset;
-      ct->linenr = lnr;
-      ct->charnr = cnr++;
-
-      if (selboxes && (i >= selstart) && (i <= selend)) {
-        sb = &selboxes[i - selstart];
-        sb->y = (offset.y - font_select_y_offset) * font_size - linedist * font_size * 0.1f;
-        sb->h = linedist * font_size;
-        sb->w = offset.x * font_size;
-      }
-
-      if (charcode == ' ') { /* Space character. */
-        wsfac = cu.wordspace;
-        wsnr++;
-      }
-      else {
-        wsfac = 1.0f;
-      }
-
       /* Won't have been changed since last assignment, ensure this remains the case. */
       BLI_assert(twidth == vfont_char_width(cu, che, ct->is_smallcaps));
 
-      offset.x += (twidth * wsfac * (1.0f + (info->kern / 40.0f))) + XTRAX_WITH_CHAR_WIDTH(twidth);
+      if ((che != nullptr) && vfont_char_is_combining(charcode, twidth)) [[unlikely]] {
+        /* Combining character: center the mark over the previous base character.
+         * This mirrors the fallback algorithm used by BLF (see #blf_glyph_step)
+         * and HarfBuzz when GPOS tables are absent. */
+        const float base_center = (offset_x_base + offset.x) * 0.5f;
+        ct->offset.x = base_center - BLI_rctf_cent_x(&che->bounds);
+        ct->offset.y = offset.y;
 
-      if (sb) {
-        sb->w = (offset.x * font_size) - sb->w;
+        /* Vertical: reposition above/below marks (follows HarfBuzz `position_mark`). */
+        if (che_base) {
+          const float mark_ymin = che->bounds.ymin;
+          const float mark_ymax = che->bounds.ymax;
+          const float mark_height = mark_ymax - mark_ymin;
+          const float base_mid = BLI_rctf_cent_y(&che_base->bounds);
+          const float mark_mid = (mark_ymin + mark_ymax) * 0.5f;
+          /* Gap matches HarfBuzz `y_gap = font->y_scale / 16`. */
+          const float y_gap = metrics->em_ratio / 16.0f;
+
+          if (mark_mid > base_mid) {
+            /* Above mark. */
+            base_ymax_accum += y_gap;
+            float offset_y = base_ymax_accum - mark_ymin;
+            /* Don't shift down "above" marks too much (HarfBuzz dampening). */
+            if ((y_gap > 0.0f) != (offset_y > 0.0f)) {
+              const float correction = -offset_y * 0.5f;
+              base_ymax_accum += correction;
+              offset_y += correction;
+            }
+            base_ymax_accum += mark_height;
+            ct->offset.y += offset_y;
+          }
+          else {
+            /* Below mark. */
+            base_ymin_accum -= y_gap;
+            float offset_y = base_ymin_accum - mark_ymax;
+            /* Never shift up "below" marks (HarfBuzz dampening). */
+            if ((y_gap > 0.0f) == (offset_y > 0.0f)) {
+              base_ymin_accum -= offset_y;
+              offset_y = 0.0f;
+            }
+            base_ymin_accum -= mark_height;
+            ct->offset.y += offset_y;
+          }
+        }
+
+        ct->linenr = lnr;
+        ct->charnr = cnr++;
+      }
+      else {
+        ct->offset = offset;
+        ct->linenr = lnr;
+        ct->charnr = cnr++;
+
+        EditFontSelBox *sb = nullptr;
+        if (selboxes && (i >= selstart) && (i <= selend)) {
+          sb = &selboxes[i - selstart];
+          sb->y = (offset.y - font_select_y_offset) * font_size - linedist * font_size * 0.1f;
+          sb->h = linedist * font_size;
+          sb->w = offset.x * font_size;
+        }
+
+        float wsfac;
+        if (charcode == ' ') { /* Space character. */
+          wsfac = cu.wordspace;
+          wsnr++;
+        }
+        else {
+          wsfac = 1.0f;
+        }
+
+        offset_x_base = offset.x;
+        che_base = che;
+        base_ymax_accum = che ? che->bounds.ymax : 0.0f;
+        base_ymin_accum = che ? che->bounds.ymin : 0.0f;
+        offset.x += (twidth * wsfac * (1.0f + (info->kern / 40.0f))) +
+                    XTRAX_WITH_CHAR_WIDTH(twidth);
+
+        if (sb) {
+          sb->w = (offset.x * font_size) - sb->w;
+        }
       }
     }
     ct++;
@@ -1146,7 +1234,11 @@ static bool vfont_to_curve(Object *ob,
         }
 
         if ((mem[j] != '\n') && (chartransdata[j].do_break != 0)) {
-          if (mem[i] == ' ') {
+          /* Skip terminator spaces (those that became the wrap break point):
+           * they were removed from `wspace_nr` so they don't receive slack
+           * and dividing by `wspace_nr` here would be a divide-by-zero on
+           * lines whose only space was consumed by the wrap. */
+          if (mem[i] == ' ' && chartransdata[i].do_break == 0) {
             TempLineInfo *li;
 
             li = &lineinfo[ct->linenr];
@@ -1786,16 +1878,16 @@ static bool vfont_to_curve(Object *ob,
       }
 
       i = min_ii(i, char_end);
-      const float char_yof = chartransdata[i].offset.y;
+      const short char_line = chartransdata[i].linenr;
 
       /* Loop back until find the first character of the line, this because `cursor_location` can
        * be positioned further below the text, so #i can be the last character of the last line. */
-      for (; i >= char_beg + 1 && chartransdata[i - 1].offset.y == char_yof; i--) {
+      for (; i >= char_beg + 1 && chartransdata[i - 1].linenr == char_line; i--) {
         /* Pass. */
       }
       /* Loop until find the first character to the right of `cursor_location`
        * (using the character midpoint on the x-axis as a reference). */
-      for (; i <= char_end && char_yof == chartransdata[i].offset.y; i++) {
+      for (; i <= char_end && chartransdata[i].linenr == char_line; i++) {
         info = &custrinfo[i];
         const char32_t charcode = vfont_char_apply_smallcaps(mem[i], info);
 
@@ -1803,6 +1895,10 @@ static bool vfont_to_curve(Object *ob,
         che = vfont_char_find_or_placeholder(vfinfo_ctx.vfd, charcode, che_placeholder);
 
         const float charwidth = vfont_char_width(cu, che, info);
+        if (vfont_char_is_combining(charcode, charwidth)) [[unlikely]] {
+          /* Combining character, skip so the cursor won't be between combining characters. */
+          continue;
+        }
         const float charhalf = (charwidth / 2.0f);
         if (cursor_location.x <= ((chartransdata[i].offset.x + charhalf) * font_size)) {
           break;
@@ -1812,7 +1908,7 @@ static bool vfont_to_curve(Object *ob,
 
       /* If there is no character to the right of the cursor we are on the next line, go back to
        * the last character of the previous line. */
-      if (i > char_beg && chartransdata[i].offset.y != char_yof) {
+      if (i > char_beg && chartransdata[i].linenr != char_line) {
         i -= 1;
       }
       cursor_params->r_string_offset = i;

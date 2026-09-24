@@ -18,6 +18,7 @@ import time
 import multiprocessing
 import traceback
 import re
+import json
 
 from pathlib import Path
 
@@ -229,23 +230,38 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
     return test
 
 
-def get_gpu_device_vendor(blender):
+def get_gpu_device_info(blender, gpu_backend):
     command = [
         blender,
         "--background",
         "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
         "--python",
         str(pathlib.Path(__file__).parent / "gpu_info.py")
     ]
-    try:
-        completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
-        for line in completed_process.stdout.splitlines():
-            if line.startswith("GPU_DEVICE_TYPE:"):
-                vendor = line.split(':')[1].upper()
-                return vendor
-    except Exception:
-        return None
-    return None
+
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    info = completed_process.stdout.split("<GPU_INFO>")[1].split("</GPU_INFO>")[0]
+    return json.loads(info)
+
+
+def get_gpu_device_vendor(blender, gpu_backend):
+    return get_gpu_device_info(blender, gpu_backend)["DEVICE_TYPE"]
+
+
+def get_gpu_device_ray_queries_support(blender, gpu_backend):
+    command = [
+        blender,
+        "--background",
+        "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
+        "--python-expr",
+        'import gpu; gpu.init(); print("GPU_RAY_QUERIES_SUPPORT:", gpu.capabilities.ray_query_support_get())'
+    ]
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    return "GPU_RAY_QUERIES_SUPPORT: True" in completed_process.stdout
 
 
 class Report:
@@ -256,6 +272,7 @@ class Report:
         'global_dir',
         'reference_dir',
         'reference_override_dir',
+        "test_name_suffix",
         'oiiotool',
         'pixelated',
         'fail_threshold',
@@ -280,6 +297,7 @@ class Report:
 
         self.reference_dir = 'reference_renders'
         self.reference_override_dir = None
+        self.test_name_suffix = ""
         self.oiiotool = oiiotool
         self.compare_engine = None
         self.fail_threshold = 0.016
@@ -325,6 +343,9 @@ class Report:
 
     def set_engine_name(self, engine_name):
         self.engine_name = engine_name
+
+    def set_test_name_suffix(self, suffix):
+        self.test_name_suffix = suffix
 
     def run(self, dirpath, blender, arguments_cb, batch=False, fail_silently=False):
         # Run tests and output report.
@@ -507,7 +528,7 @@ class Report:
         return pathlib.Path(relpath).as_posix()
 
     def _write_test_html(self, test_category, test_result):
-        name = test_result.name.replace('_', ' ')
+        name = test_result.name + self.test_name_suffix
 
         status = "<strong>" + test_result.error + "</strong><br>" if test_result.error else ""
         if test_result.stats:

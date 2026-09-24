@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 #include "DNA_customdata_types.h"
@@ -15,13 +19,13 @@ namespace nodes::node_shader_tex_coord_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Generated").translation_context(BLT_I18NCONTEXT_ID_TEXTURE);
-  b.add_output<decl::Vector>("Normal");
-  b.add_output<decl::Vector>("UV");
-  b.add_output<decl::Vector>("Object");
-  b.add_output<decl::Vector>("Camera");
-  b.add_output<decl::Vector>("Window");
-  b.add_output<decl::Vector>("Reflection");
+  b.add_output<decl::Vector>("Generated"_ustr).translation_context(BLT_I18NCONTEXT_ID_TEXTURE);
+  b.add_output<decl::Vector>("Normal"_ustr);
+  b.add_output<decl::Vector>("UV"_ustr);
+  b.add_output<decl::Vector>("Object"_ustr);
+  b.add_output<decl::Vector>("Camera"_ustr);
+  b.add_output<decl::Vector>("Window"_ustr);
+  b.add_output<decl::Vector>("Reflection"_ustr);
 }
 
 static void node_shader_buts_tex_coord(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -49,7 +53,16 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat,
   GPUNodeLink *orco = out[0].hasoutput ? GPU_attribute(mat, CD_ORCO, "") : GPU_constant(zero);
   GPUNodeLink *mtface = GPU_attribute(mat, CD_AUTO_FROM_NAME, "");
 
-  GPU_stack_link(mat, node, "node_tex_coord", in, out, inv_obmat, orco, mtface);
+  GPU_stack_link(mat,
+                 node,
+                 "node_tex_coord",
+                 in,
+                 out,
+                 inv_obmat,
+                 orco,
+                 mtface,
+                 GPU_kernel_globals(),
+                 GPU_shading_data());
 
   for (const auto [i, sock] : node->outputs.enumerate()) {
     node_shader_gpu_bump_tex_coord(mat, node, &out[i].link);
@@ -107,7 +120,7 @@ void register_node_type_sh_tex_coord()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeTexCoord", SH_NODE_TEX_COORD);
+  sh_node_type_base(&ntype, "ShaderNodeTexCoord"_ustr, SH_NODE_TEX_COORD);
   ntype.ui_name = "Texture Coordinate";
   ntype.ui_description =
       "Retrieve multiple types of texture coordinates.\nTypically used as inputs for texture "

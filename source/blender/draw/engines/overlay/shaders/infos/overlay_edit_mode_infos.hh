@@ -174,8 +174,8 @@ PUSH_CONSTANT(float, normal_size)
 PUSH_CONSTANT(float, normal_screen_size)
 PUSH_CONSTANT(float, alpha)
 PUSH_CONSTANT(bool, is_constant_screen_size_normals)
-VERTEX_OUT(overlay_edit_flat_color_iface)
-DEFINE("LINE_OUTPUT")
+VERTEX_OUT(overlay_edit_flat_wire_iface)
+DEFINE("LINE_OUTPUT_NO_DUMMY")
 FRAGMENT_OUT(0, float4, frag_color)
 FRAGMENT_OUT(1, float4, line_output)
 VERTEX_SOURCE("overlay_edit_mesh_normal_vert.glsl")
@@ -571,8 +571,8 @@ PUSH_CONSTANT(int2, gpu_attr_2)
 PUSH_CONSTANT(int2, gpu_attr_3)
 PUSH_CONSTANT(float, normal_size)
 PUSH_CONSTANT(bool, use_hq_normals)
-VERTEX_OUT(overlay_edit_flat_color_iface)
-DEFINE("LINE_OUTPUT")
+VERTEX_OUT(overlay_edit_flat_wire_iface)
+DEFINE("LINE_OUTPUT_NO_DUMMY")
 FRAGMENT_OUT(0, float4, frag_color)
 FRAGMENT_OUT(1, float4, line_output)
 VERTEX_SOURCE("overlay_edit_curve_normals_vert.glsl")
@@ -701,6 +701,7 @@ VERTEX_IN(1, float, selection)
 SAMPLER(0, sampler1D, weight_tx)
 PUSH_CONSTANT(bool, use_weight)
 PUSH_CONSTANT(bool, use_grease_pencil)
+PUSH_CONSTANT(bool, skip_unselected)
 VERTEX_OUT(overlay_edit_smooth_color_iface)
 FRAGMENT_OUT(0, float4, frag_color)
 FRAGMENT_OUT(1, float4, line_output)
@@ -745,7 +746,7 @@ CREATE_INFO_VARIANT(overlay_edit_particle_point_clipped, overlay_edit_particle_p
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Edit PointCloud
+/** \name Edit PointCloud/GSplat
  * \{ */
 
 GPU_SHADER_CREATE_INFO(overlay_edit_pointcloud)
@@ -805,9 +806,12 @@ CREATE_INFO_VARIANT(overlay_depth_mesh_conservative_selectable_clipped, overlay_
 /* clang-format on */
 
 GPU_SHADER_NAMED_INTERFACE_INFO(overlay_depth_only_gpencil_flat_iface, gp_interp_flat)
-FLAT(float2, aspect)
-FLAT(float4, sspos)
-FLAT(float4, sspos_adj)
+FLAT(float4, aspect)
+FLAT(float2, sspos_0)
+FLAT(float4, sspos_1)
+FLAT(float4, sspos_2)
+FLAT(float2, sspos_3)
+FLAT(float3, point_length)
 GPU_SHADER_NAMED_INTERFACE_END(gp_interp_flat)
 GPU_SHADER_NAMED_INTERFACE_INFO(overlay_depth_only_gpencil_noperspective_iface,
                                 gp_interp_noperspective)

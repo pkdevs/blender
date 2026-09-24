@@ -9,8 +9,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_color.h"
-#include "BLI_math_color_blend.h"
+#include "BLI_math_color_blend.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector.hh"
 
 #include "BLT_translation.hh"
@@ -156,15 +156,13 @@ static void color_filter_task(const Depsgraph &depsgraph,
 
   const Span<int> verts = node.verts();
 
-  tls.factors.resize(verts.size());
-  const MutableSpan<float> factors = tls.factors;
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
   fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   auto_mask::calc_vert_factors(
       depsgraph, ob, ss.filter_cache->automasking.get(), node, verts, factors);
   scale_factors(factors, filter_strength);
 
-  tls.new_colors.resize(verts.size());
-  const MutableSpan<float4> new_colors = tls.new_colors;
+  Array<float4, bke::pbvh::MESH_LEAF_LIMIT> new_colors(verts.size());
 
   /* Copy alpha. */
   for (const int i : verts.index_range()) {
@@ -281,8 +279,7 @@ static void color_filter_task(const Depsgraph &depsgraph,
     case FilterType::Smooth: {
       clamp_factors(factors, -1.0f, 1.0f);
 
-      tls.colors.resize(verts.size());
-      const MutableSpan<float4> colors = tls.colors;
+      Array<float4, bke::pbvh::MESH_LEAF_LIMIT> colors(verts.size());
       for (const int i : verts.index_range()) {
         colors[i] = color_vert_get(faces,
                                    corner_verts,
@@ -300,8 +297,7 @@ static void color_filter_task(const Depsgraph &depsgraph,
                                                              tls.neighbor_offsets,
                                                              tls.neighbor_data);
 
-      tls.average_colors.resize(verts.size());
-      const MutableSpan<float4> average_colors = tls.average_colors;
+      Array<float4, bke::pbvh::MESH_LEAF_LIMIT> average_colors(verts.size());
       smooth::neighbor_color_average(faces,
                                      corner_verts,
                                      vert_to_face_map,
@@ -401,10 +397,9 @@ static void sculpt_color_presmooth_init(const Mesh &mesh, Object &object)
                                                                  tls.neighbor_offsets,
                                                                  tls.neighbor_data);
 
-          tls.averaged_colors.resize(verts.size());
-          const MutableSpan<float4> averaged_colors = tls.averaged_colors;
+          Array<float4, bke::pbvh::MESH_LEAF_LIMIT> averaged_colors(verts.size());
           smooth::neighbor_data_average_mesh(
-              pre_smoothed_color.as_span(), neighbors, averaged_colors);
+              pre_smoothed_color.as_span(), neighbors, averaged_colors.as_mutable_span());
 
           for (const int i : verts.index_range()) {
             pre_smoothed_color[verts[i]] = math::interpolate(
@@ -434,7 +429,7 @@ static void sculpt_color_filter_apply(bContext *C, wmOperator *op, Object &ob)
   }
 
   const IndexMask &node_mask = ss.filter_cache->node_mask;
-  if (auto_mask::is_enabled(sd, ob, nullptr) && ss.filter_cache->automasking &&
+  if (auto_mask::is_enabled(sd.paint, ob, nullptr) && ss.filter_cache->automasking &&
       ss.filter_cache->automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL)
   {
     ss.filter_cache->automasking->calc_cavity_factor(depsgraph, ob, node_mask);
@@ -547,13 +542,12 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
   RNA_int_get_array(op->ptr, "start_mouse", mval);
   float mval_fl[2] = {float(mval[0]), float(mval[1])};
 
-  const bool use_automasking = auto_mask::is_enabled(sd, ob, nullptr);
+  const bool use_automasking = auto_mask::is_enabled(sd.paint, ob, nullptr);
   if (use_automasking) {
     if (v3d) {
       /* Update the active face set manually as the paint cursor is not enabled when using the Mesh
        * Filter Tool. */
-      CursorGeometryInfo cgi;
-      cursor_geometry_info_update(C, &cgi, mval_fl, false);
+      cursor_geometry_info_update(C, mval_fl, false);
     }
   }
 
@@ -571,7 +565,7 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
   /* CTX_data_ensure_evaluated_depsgraph should be used at the end to include the potential
    * creation of color layer data. */
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, true);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, true);
 
   filter::cache_init(C,
                      ob,
@@ -583,8 +577,8 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
   const SculptSession &ss = *ob.runtime->sculpt_session;
   filter::Cache *filter_cache = ss.filter_cache;
   filter_cache->active_face_set = face_set_none_id;
-  if (auto_mask::is_enabled(sd, ob, nullptr)) {
-    auto_mask::filter_cache_ensure(*depsgraph, sd, ob);
+  if (auto_mask::is_enabled(sd.paint, ob, nullptr)) {
+    auto_mask::filter_cache_ensure(*depsgraph, sd.paint, ob);
   }
 
   return OPERATOR_PASS_THROUGH;
@@ -669,7 +663,7 @@ void SCULPT_OT_color_filter(wmOperatorType *ot)
   ot->invoke = sculpt_color_filter_invoke;
   ot->exec = sculpt_color_filter_exec;
   ot->modal = sculpt_color_filter_modal;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
   ot->ui = sculpt_color_filter_ui;
   ot->get_name = sculpt_color_filter_get_name;
 

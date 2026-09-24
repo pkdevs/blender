@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 namespace blender {
@@ -10,9 +14,9 @@ namespace nodes::node_shader_point_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Position");
-  b.add_output<decl::Float>("Radius");
-  b.add_output<decl::Float>("Random");
+  b.add_output<decl::Vector>("Position"_ustr);
+  b.add_output<decl::Float>("Radius"_ustr);
+  b.add_output<decl::Float>("Random"_ustr);
 }
 
 static int node_shader_gpu_point_info(GPUMaterial *mat,
@@ -21,7 +25,7 @@ static int node_shader_gpu_point_info(GPUMaterial *mat,
                                       GPUNodeStack *in,
                                       GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "node_point_info", in, out);
+  return GPU_stack_link(mat, node, "node_point_info", in, out, GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -42,7 +46,7 @@ void register_node_type_sh_point_info()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodePointInfo", SH_NODE_POINT_INFO);
+  sh_node_type_base(&ntype, "ShaderNodePointInfo"_ustr, SH_NODE_POINT_INFO);
   ntype.ui_name = "Point Info";
   ntype.ui_description = "Retrieve information about points in a point cloud";
   ntype.enum_name_legacy = "POINT_INFO";

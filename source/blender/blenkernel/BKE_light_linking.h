@@ -60,8 +60,8 @@ void BKE_light_linking_copy_blocker_collection(Main *bmain,
 /**
  * Free the LightLinking data from the object.
  *
- * \param copy_flags: Flags controlling the copy process, see e.g. #LIB_ID_CREATE_NO_USER_REFCOUNT
- * and related flags in the same enum.
+ * \param delete_flags: Flags controlling the copy process, see e.g.
+ * #LIB_ID_CREATE_NO_USER_REFCOUNT and related flags in the same enum.
  */
 void BKE_light_linking_delete(struct Object *object, const int delete_flags);
 
@@ -164,7 +164,8 @@ void BKE_light_linking_link_receiver_to_emitter(struct Main *bmain,
 /**
  * Select all objects which are linked to the given emitter via the given light link type.
  */
-void BKE_light_linking_select_receivers_of_emitter(struct Scene *scene,
+void BKE_light_linking_select_receivers_of_emitter(const Main &bmain,
+                                                   struct Scene *scene,
                                                    struct ViewLayer *view_layer,
                                                    struct Object *emitter,
                                                    LightLinkingType link_type);

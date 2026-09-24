@@ -28,26 +28,29 @@ namespace blender::nodes::node_composite_movie_clip_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Offset X");
-  b.add_output<decl::Float>("Offset Y");
-  b.add_output<decl::Float>("Scale");
-  b.add_output<decl::Float>("Angle");
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Offset X"_ustr);
+  b.add_output<decl::Float>("Offset Y"_ustr);
+  b.add_output<decl::Float>("Scale"_ustr);
+  b.add_output<decl::Float>("Angle"_ustr);
 }
 
-static void node_init(const bContext *C, PointerRNA *ptr)
+static void node_init(bNodeTree * /*node_tree*/, bNode *node)
 {
-  bNode *node = static_cast<bNode *>(ptr->data);
-  node->flag |= NODE_PREVIEW;
-
-  Scene *scene = CTX_data_scene(C);
   MovieClipUser *user = MEM_new<MovieClipUser>(__func__);
-
-  node->id = id_cast<ID *>(scene->clip);
-  id_us_plus(node->id);
   node->storage = user;
   user->framenr = 1;
+
+  node->flag |= NODE_PREVIEW;
+}
+
+static void node_init_api(const bContext *C, PointerRNA *node_ptr)
+{
+  bNode *node = node_ptr->data_as<bNode>();
+  Scene *scene = CTX_data_scene(C);
+  node->id = id_cast<ID *>(scene->clip);
+  id_us_plus(node->id);
 }
 
 static void node_draw_buttons(ui::Layout &layout, bContext *C, PointerRNA *ptr)
@@ -95,12 +98,13 @@ class MovieClipOperation : public NodeOperation {
     result.allocate_texture(Domain(size));
 
     if (context().use_gpu()) {
-      GPU_texture_update(result, GPU_DATA_FLOAT, movie_clip_buffer->float_buffer.data);
+      GPU_texture_update(result, GPU_DATA_FLOAT, movie_clip_buffer->float_data());
     }
     else {
+      const float *src = movie_clip_buffer->float_data();
       parallel_for(size, [&](const int2 texel) {
         int64_t pixel_index = (int64_t(texel.y) * size.x + texel.x) * 4;
-        result.store_pixel(texel, Color(movie_clip_buffer->float_buffer.data + pixel_index));
+        result.store_pixel(texel, Color(src + pixel_index));
       });
     }
   }
@@ -123,17 +127,19 @@ class MovieClipOperation : public NodeOperation {
 
     if (context().use_gpu()) {
       Array<float> alpha_values(size.x * size.y);
+      const float *src = movie_clip_buffer->float_data();
       parallel_for(size, [&](const int2 texel) {
         int64_t pixel_index = int64_t(texel.y) * size.x + texel.x;
         int64_t input_pixel_index = pixel_index * 4;
-        alpha_values[pixel_index] = movie_clip_buffer->float_buffer.data[input_pixel_index + 3];
+        alpha_values[pixel_index] = src[input_pixel_index + 3];
       });
       GPU_texture_update(result, GPU_DATA_FLOAT, alpha_values.data());
     }
     else {
+      const float *src = movie_clip_buffer->float_data();
       parallel_for(size, [&](const int2 texel) {
         int64_t pixel_index = (int64_t(texel.y) * size.x + texel.x) * 4;
-        result.store_pixel(texel, movie_clip_buffer->float_buffer.data[pixel_index + 3]);
+        result.store_pixel(texel, src[pixel_index + 3]);
       });
     }
   }
@@ -217,13 +223,13 @@ class MovieClipOperation : public NodeOperation {
       return nullptr;
     }
 
-    if (movie_clip_buffer->float_buffer.data) {
+    if (movie_clip_buffer->float_data()) {
       return movie_clip_buffer;
     }
 
     /* Create a float buffer from the byte buffer if it exists, if not, return nullptr. */
     IMB_float_from_byte(movie_clip_buffer);
-    if (!movie_clip_buffer->float_buffer.data) {
+    if (!movie_clip_buffer->float_data()) {
       return nullptr;
     }
 
@@ -250,7 +256,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeMovieClip", CMP_NODE_MOVIECLIP);
+  cmp_node_type_base(&ntype, "CompositorNodeMovieClip"_ustr, CMP_NODE_MOVIECLIP);
   ntype.ui_name = "Movie Clip";
   ntype.ui_description =
       "Input image or movie from a movie clip data-block, typically used for motion tracking";
@@ -260,7 +266,8 @@ static void node_register()
   ntype.draw_buttons = node_draw_buttons;
   ntype.draw_buttons_ex = node_draw_buttons_extended;
   ntype.get_compositor_operation = get_compositor_operation;
-  ntype.initfunc_api = node_init;
+  ntype.initfunc = node_init;
+  ntype.initfunc_api = node_init_api;
   ntype.flag |= NODE_PREVIEW;
   bke::node_type_storage(
       ntype, "MovieClipUser", node_free_standard_storage, node_copy_standard_storage);

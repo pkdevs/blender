@@ -13,7 +13,7 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
 #include "infos/overlay_common_infos.hh"
 
 namespace overlay::xray_fade {
@@ -63,8 +63,7 @@ struct FragOut {
   [[frag_color(0)]] float4 color;
 };
 
-[[fragment]] void frag_main([[frag_coord]] const float4 &frag_coord,
-                            [[resource_table]] Resources &srt,
+[[fragment]] void frag_main([[resource_table]] Resources &srt,
                             [[in]] const VertOut &v_in,
                             [[out]] FragOut &frag_out)
 {

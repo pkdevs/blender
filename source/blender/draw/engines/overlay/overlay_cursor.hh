@@ -149,7 +149,7 @@ class Cursor : Overlay {
     }
 
     /* don't draw cursor in paint modes, but with a few exceptions */
-    if ((state.object_mode & (OB_MODE_ALL_PAINT | OB_MODE_SCULPT_CURVES)) != 0) {
+    if ((state.object_mode & (OB_MODE_ALL_PAINT_MESH | OB_MODE_SCULPT_CURVES)) != 0) {
       /* exception: object is in weight paint and has deforming armature in pose mode */
       if (state.object_mode & OB_MODE_WEIGHT_PAINT) {
         if (BKE_object_pose_armature_get(const_cast<Object *>(state.object_active)) != nullptr) {
@@ -158,7 +158,8 @@ class Cursor : Overlay {
       }
       /* exception: object in texture paint mode, clone brush, use_clone_layer disabled */
       else if (state.object_mode & OB_MODE_TEXTURE_PAINT) {
-        const Paint *paint = BKE_paint_get_active(const_cast<Scene *>(state.scene),
+        const Paint *paint = BKE_paint_get_active(*DEG_get_bmain(state.depsgraph),
+                                                  const_cast<Scene *>(state.scene),
                                                   const_cast<ViewLayer *>(state.view_layer));
         const Brush *brush = (paint) ? BKE_paint_brush_for_read(paint) : nullptr;
 

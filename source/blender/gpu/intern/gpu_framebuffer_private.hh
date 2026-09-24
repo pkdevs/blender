@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
 
 #include "GPU_framebuffer.hh"
@@ -236,7 +236,7 @@ class FrameBuffer {
     scissor_set(scissor_rect);
   }
 
-  inline const GPUAttachment &depth_attachment() const
+  const GPUAttachment &depth_attachment() const
   {
     if (attachments_[GPU_FB_DEPTH_ATTACHMENT].tex) {
       return attachments_[GPU_FB_DEPTH_ATTACHMENT];

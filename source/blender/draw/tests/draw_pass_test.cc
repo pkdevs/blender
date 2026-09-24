@@ -4,7 +4,7 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "GPU_context.hh"
 
@@ -181,7 +181,7 @@ static void test_draw_pass_simple_draw()
   pass.draw_procedural(GPU_PRIM_TRIS, 1, 10, 1, {1});
   pass.draw_procedural(GPU_PRIM_POINTS, 4, 20, 2, {2});
   pass.draw_procedural(GPU_PRIM_TRIS, 2, 30, 3, {3});
-  pass.draw_procedural(GPU_PRIM_POINTS, 5, 40, 4, ResourceIndex(4, true));
+  pass.draw_procedural(GPU_PRIM_POINTS, 5, 40, 4, ResourceID(4, true));
   pass.draw_procedural(GPU_PRIM_LINES, 1, 50, 5, {5});
   pass.draw_procedural(GPU_PRIM_POINTS, 6, 60, 6, {5});
   pass.draw_procedural(GPU_PRIM_TRIS, 3, 70, 7, {6});
@@ -216,7 +216,7 @@ static void test_draw_pass_multi_draw()
   pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, {1});
   pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, {2});
   pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, {3});
-  pass.draw_procedural(GPU_PRIM_POINTS, 5, -1, -1, ResourceIndex(4, true));
+  pass.draw_procedural(GPU_PRIM_POINTS, 5, -1, -1, ResourceID(4, true));
   pass.draw_procedural(GPU_PRIM_LINES, 1, -1, -1, {5});
   pass.draw_procedural(GPU_PRIM_POINTS, 6, -1, -1, {5});
   pass.draw_procedural(GPU_PRIM_TRIS, 3, -1, -1, {6});
@@ -359,8 +359,6 @@ DRAW_TEST(draw_resource_id_gen)
 
 static void test_draw_visibility()
 {
-  GTEST_SKIP() << "This test needs to be reviewed. It should check visibility checks, but all "
-                  "resource handles are visible.";
   GPU_render_begin();
   Texture color_attachment;
   Framebuffer framebuffer;
@@ -381,7 +379,7 @@ static void test_draw_visibility()
 
   drw.begin_sync();                                   /* Default {0} always visible. */
   drw.resource_handle(obmat_1);                       /* No bounds, always visible. */
-  drw.resource_handle(obmat_1, float3(3), float3(1)); /* Out of view. */
+  drw.resource_handle(obmat_1, float3(7), float3(1)); /* Out of view. */
   drw.resource_handle(obmat_2, float3(0), float3(1)); /* Inside view. */
   drw.end_sync();
 

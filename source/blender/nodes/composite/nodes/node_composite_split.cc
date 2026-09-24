@@ -15,22 +15,22 @@ namespace blender::nodes::node_composite_split_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Position")
+  b.add_input<decl::Vector>("Position"_ustr)
       .dimensions(2)
       .subtype(PROP_FACTOR)
       .default_value({0.5f, 0.5f})
       .min(0.0f)
       .max(1.0f)
       .description("Line position where the image should be split");
-  b.add_input<decl::Float>("Rotation")
+  b.add_input<decl::Float>("Rotation"_ustr)
       .default_value(std::numbers::pi_v<float> / 4.0f)
       .subtype(PROP_ANGLE)
       .description("Line angle where the image should be split");
 
-  b.add_input<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_input<decl::Color>("Image", "Image_001").structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr, "Image_001"_ustr).structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -62,9 +62,11 @@ class SplitOperation : public NodeOperation {
     GPU_shader_uniform_2fv(shader, "normal", normal);
 
     const Result &first_image = this->get_input("Image");
-    first_image.bind_as_texture(shader, "first_image_tx");
+    gpu::Texture *first_image_texture = first_image.bind_as_texture_or_single_value(
+        shader, "first_image_tx");
     const Result &second_image = this->get_input("Image_001");
-    second_image.bind_as_texture(shader, "second_image_tx");
+    gpu::Texture *second_image_texture = second_image.bind_as_texture_or_single_value(
+        shader, "second_image_tx");
 
     Result &output_image = this->get_result("Image");
     output_image.allocate_texture(domain);
@@ -72,8 +74,8 @@ class SplitOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first_image.unbind_as_texture();
-    second_image.unbind_as_texture();
+    first_image.unbind_as_texture_or_single_value(first_image_texture);
+    second_image.unbind_as_texture_or_single_value(second_image_texture);
     output_image.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -123,7 +125,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeSplit", CMP_NODE_SPLIT);
+  cmp_node_type_base(&ntype, "CompositorNodeSplit"_ustr, CMP_NODE_SPLIT);
   ntype.ui_name = "Split";
   ntype.ui_description =
       "Combine two images for side-by-side display. Typically used in combination with a Viewer "

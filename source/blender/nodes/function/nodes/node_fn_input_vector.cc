@@ -19,7 +19,7 @@ static void node_declare(NodeDeclarationBuilder &b)
     const auto &storage = *static_cast<NodeInputVector *>(node->storage);
     dimensions = storage.dimensions;
   }
-  b.add_output<decl::Vector>("Vector")
+  b.add_output<decl::Vector>("Vector"_ustr)
       .dimensions(dimensions)
       .custom_draw([](CustomSocketDrawParams &params) {
         params.layout.alignment_set(ui::LayoutAlign::Expand);
@@ -91,7 +91,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "FunctionNodeInputVector", FN_NODE_INPUT_VECTOR);
+  common_node_type_base(&ntype, "FunctionNodeInputVector"_ustr, FN_NODE_INPUT_VECTOR);
   ntype.ui_name = "Vector";
   ntype.ui_description = "Provide a vector value that can be connected to other nodes in the tree";
   ntype.enum_name_legacy = "INPUT_VECTOR";

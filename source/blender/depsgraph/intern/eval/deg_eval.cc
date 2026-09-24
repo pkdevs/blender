@@ -14,9 +14,9 @@
 #include "intern/eval/deg_eval.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_gsqueue.h"
-#include "BLI_task.h"
-#include "BLI_time.h"
+#include "BLI_gsqueue.hh"
+#include "BLI_task_c.hh"
+#include "BLI_time.hh"
 
 #include "BKE_global.hh"
 
@@ -209,9 +209,9 @@ bool is_metaball_object_operation(const OperationNode *operation_node)
   return object->type == OB_MBALL;
 }
 
-/* Simulation modifiers with subframes (fluid domain, dynamic paint canvas) perform direct updates
+/* Simulation modifiers with sub-frames (fluid domain, dynamic paint canvas) perform direct updates
  * of other objects, which can cause race conditions over certain data (#115636). Unless and until
- * substeps are fully supported in depsgraph evaluation such objects must use single-threaded
+ * sub-steps are fully supported in depsgraph evaluation such objects must use single-threaded
  * evaluation. */
 bool is_modifier_subframe_operation(const OperationNode *operation_node)
 {

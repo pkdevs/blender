@@ -96,7 +96,7 @@
 #include <memory>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_vector.hh"
 
@@ -137,6 +137,10 @@ struct wmWindowManager;
 
 namespace asset_system {
 class AssetRepresentation;
+}
+
+namespace ui {
+struct View2DEdgePanData;
 }
 
 using wmGenericUserDataFreeFn = void (*)(void *data);
@@ -218,6 +222,8 @@ enum {
    * - As tools in the toolbar.
    *
    * Even so, accessing from the menu should behave usefully.
+   * \note Operators which set this flag will be skipped by the repeat last
+   * action operator.
    */
   OPTYPE_DEPENDS_ON_CURSOR = (1 << 11),
 
@@ -412,6 +418,9 @@ struct wmNotifier {
 /* Changes to the active viewer path. */
 #define NC_VIEWER_PATH (28 << 24)
 
+/* Changes that affects UI drawing. */
+#define NC_UI (29 << 24)
+
 /* Data type, 256 entries is enough, it can overlap. */
 #define NOTE_DATA 0x00FF0000
 
@@ -471,19 +480,23 @@ struct wmNotifier {
  */
 #define ND_POSE (20 << 16)
 #define ND_BONE_ACTIVE (21 << 16)
-/** Intended for selection and visibility changes in pose/armature edit modes.
+/**
+ * Intended for selection and visibility changes in pose/armature edit modes.
  * Historically this was also used for most edit-mode changes (also "structural" like adding,
  * deleting, subdividing, filling, ..., bones). Also covers hiding/revealing (in pose-mode and
  * edit-mode). Note this causes a full (possibly slow) rebuild of the Outliner tree. For such
- * changes, new code should use #ND_ARMATURE_STRUCTURE. */
+ * changes, new code should use #ND_ARMATURE_STRUCTURE.
+ */
 #define ND_BONE_SELECT (22 << 16)
-/** Indicate a change to the structure of the armature; this has implications for both the armature
+/**
+ * Indicate a change to the structure of the armature; this has implications for both the armature
  * object and the armature data.
  *
  * The value is set to #ND_BONE_SELECT as a transitional state, as currently that notifier is
  * already used to signify such structural changes. In the future, those uses of #ND_BONE_SELECT
  * should be replaced with #ND_ARMATURE_STRUCTURE, making the selection notifier only relevant for
- * selection again. See #153774. */
+ * selection again. See #153774.
+ */
 #define ND_ARMATURE_STRUCTURE ND_BONE_SELECT
 #define ND_DRAW (23 << 16)
 #define ND_MODIFIER (24 << 16)
@@ -499,6 +512,8 @@ struct wmNotifier {
 /* For updating motion paths in 3dview. */
 #define ND_DRAW_ANIMVIZ (33 << 16)
 #define ND_BONE_COLLECTION (34 << 16)
+/* For sequencer prefetch indicator redraw. */
+#define ND_SEQUENCER_PREFETCH (35 << 16)
 
 /* NC_MATERIAL Material. */
 #define ND_SHADING (30 << 16)
@@ -582,6 +597,11 @@ struct wmNotifier {
  */
 #define ND_ASSET_CATALOGS (4 << 16)
 
+/* Changes in theme preferences that affects UI text drawing. */
+#define ND_UI_FONT (1 << 16)
+
+#define ND_UI_LANG (2 << 16)
+
 /* Subtype, 256 entries too. */
 #define NOTE_SUBTYPE 0x0000FF00
 
@@ -619,6 +639,7 @@ struct wmNotifier {
 #define NA_ACTIVATED 7
 #define NA_PAINTING 8
 #define NA_JOB_FINISHED 9
+#define NA_DOWNLOAD_FINISHED 10
 
 /* ************** Gesture Manager data ************** */
 
@@ -659,6 +680,8 @@ struct wmGesture {
   bool draw_active_side;
   /** Latest mouse position relative to area. Currently only used by lasso drawing code. */
   int2 mval;
+  /** Mouse position the gesture started at in view space. Used by edge panning. */
+  float2 init_mval_view;
 
   /**
    * For modal operators which may be running idle, waiting for an event to activate the gesture.
@@ -672,14 +695,20 @@ struct wmGesture {
   uint wait_for_input : 1;
   /** Use for gestures that can be moved, like box selection. */
   uint move : 1;
-  /** For gestures that support snapping, stores if snapping is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support snapping,
+   * stores if snapping is enabled using the modal keymap toggle.
+   */
   uint use_snap : 1;
-  /** For gestures that support flip, stores if flip is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support flip,
+   * stores if flip is enabled using the modal keymap toggle.
+   */
   uint use_flip : 1;
-  /** For gestures that support smoothing, stores if smoothing is enabled using the modal keymap
-   * toggle. */
+  /**
+   * For gestures that support smoothing,
+   * stores if smoothing is enabled using the modal keymap toggle.
+   */
   uint use_smooth : 1;
 
   /**
@@ -693,6 +722,7 @@ struct wmGesture {
 
   /** Free pointer to use for operator allocations (if set, its freed on exit). */
   wmGenericUserData user_data;
+  ui::View2DEdgePanData *edge_pan_data;
 };
 
 /* ************** wmEvent ************************ */
@@ -901,7 +931,8 @@ struct wmNDOFMotionData {
    */
   /** Translation. */
   float tvec[3];
-  /** Rotation.
+  /**
+   * Rotation.
    * <pre>
    * axis = (rx,ry,rz).normalized.
    * amount = (rx,ry,rz).magnitude [in revolutions, 1.0 = 360 deg]
@@ -1237,19 +1268,34 @@ struct wmIMEData {
 
 /* **************** Paint Cursor ******************* */
 
+using wmPaintCursorPoll = bool (*)(bContext *C);
 using wmPaintCursorDraw = void (*)(bContext *C,
                                    const int2 &xy,
                                    const float2 &tilt,
                                    void *customdata);
+
+struct wmPaintCursor {
+  wmPaintCursor *next, *prev;
+
+  void *customdata;
+
+  wmPaintCursorPoll poll;
+  wmPaintCursorDraw draw;
+
+  short space_type;
+  short region_type;
+};
 
 /* *************** Drag and drop *************** */
 
 enum eWM_DragDataType : int8_t {
   WM_DRAG_ID,
   WM_DRAG_ASSET,
-  /** The user is dragging multiple assets. This is only supported in few specific cases, proper
-   * multi-item support for dragging isn't supported well yet. Therefore this is kept separate from
-   * #WM_DRAG_ASSET. */
+  /**
+   * The user is dragging multiple assets. This is only supported in few specific cases, proper
+   * multi-item support for dragging isn't supported well yet.
+   * Therefore this is kept separate from #WM_DRAG_ASSET.
+   */
   WM_DRAG_ASSET_LIST,
   WM_DRAG_RNA,
   WM_DRAG_PATH,
@@ -1408,16 +1454,20 @@ struct wmDropBox {
   /** Test if the dropbox is active. */
   bool (*poll)(bContext *C, wmDrag *drag, const wmEvent *event);
 
-  /** Called when the drag action starts. Can be used to prefetch data for previews.
+  /**
+   * Called when the drag action starts. Can be used to prefetch data for previews.
    * \note The dropbox that will be called eventually is not known yet when starting the drag.
-   * So this callback is called on every dropbox that is registered in the current screen. */
+   * So this callback is called on every dropbox that is registered in the current screen.
+   */
   void (*on_drag_start)(bContext *C, wmDrag *drag);
 
   /** Called when poll returns true the first time. Typically used to setup some drawing data. */
   void (*on_enter)(wmDropBox *drop, wmDrag *drag);
 
-  /** Called when poll returns false the first time or when the drag event ends (successful drop or
-   * canceled). Typically used to cleanup resources or end drawing. */
+  /**
+   * Called when poll returns false the first time or when the drag event ends (successful drop or
+   * canceled). Typically used to cleanup resources or end drawing.
+   */
   void (*on_exit)(wmDropBox *drop, wmDrag *drag);
 
   /** Before exec, this copies drag info to #wmDrop properties. */
@@ -1444,6 +1494,13 @@ struct wmDropBox {
    */
   void (*draw_in_view)(bContext *C, wmWindow *win, wmDrag *drag, const int xy[2]);
 
+  /**
+   * Used by tree views to scroll when the mouse is near the edge.
+   * Called for every event while the dropbox is active (hovered and poll succeeds).
+   * For #wmEventType::TIMER events, only the ones created from this #wmDropBox.timer are passed to
+   * it.
+   */
+  void (*on_event_while_hover)(bContext *C, wmDropBox &dropbox, const wmEvent *event);
   /** Custom data for drawing. */
   void *draw_data;
 
@@ -1464,6 +1521,7 @@ struct wmDropBox {
   IDProperty *properties;
   /** RNA pointer to access properties. */
   PointerRNA *ptr;
+  wmTimer *timer;
 };
 
 /**

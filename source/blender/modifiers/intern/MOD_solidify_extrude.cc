@@ -8,12 +8,12 @@
 
 #include <algorithm>
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_bitmap.h"
-#include "BLI_math_geom.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_bitmap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -706,7 +706,6 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
 #ifdef USE_NONMANIFOLD_WORKAROUND
     const bool check_non_manifold = (smd->flag & MOD_SOLIDIFY_NORMAL_CALC) != 0;
 #endif
-    /* same as EM_solidify() in editmesh_lib.c */
     float *vert_angles = MEM_new_array_zeroed<float>(2 * verts_num, "mod_solid_pair"); /* 2 in 1 */
     float *vert_accum = vert_angles + verts_num;
     uint vidx;

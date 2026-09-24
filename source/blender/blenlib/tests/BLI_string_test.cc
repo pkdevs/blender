@@ -13,10 +13,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender {
 
@@ -632,7 +632,7 @@ TEST(string, StrFormatDecimalUnits)
   EXPECT_STREQ("-1.0B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_decimal_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_decimal_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2.1B", size_str);
 }
 
@@ -729,7 +729,7 @@ TEST(string, StrFormatIntegerUnits)
   EXPECT_STREQ("-1B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_integer_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_integer_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2B", size_str);
 }
 

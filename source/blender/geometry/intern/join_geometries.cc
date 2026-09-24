@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BLI_array_utils.hh"
 
 #include "GEO_join_geometries.hh"
@@ -249,7 +253,7 @@ GeometrySet join_geometries(
     const bool allow_merging_instance_references)
 {
   GeometrySet result;
-  result.name = geometries.is_empty() ? "" : geometries[0].name;
+  result.set_name(geometries.is_empty() ? "" : geometries[0].name());
   for (const GeometrySet &geometry_set : geometries) {
     result.merge_bundle_from(geometry_set);
   }

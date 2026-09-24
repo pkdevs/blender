@@ -9,8 +9,8 @@
 #pragma once
 
 #include "BLI_bounds.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
@@ -47,6 +47,7 @@ class GreasePencil : Overlay {
   bool show_grid_ = false;
   bool show_weight_ = false;
   bool show_material_name_ = false;
+  bool skip_unselected_ = false;
 
   /* TODO(fclem): This is quite wasteful and expensive, prefer in shader Z modification like the
    * retopology offset. */
@@ -78,7 +79,15 @@ class GreasePencil : Overlay {
 
     switch (state.object_mode) {
       case OB_MODE_PAINT_GREASE_PENCIL:
-        /* Draw mode. */
+        /* In Draw Mode, show selected strokes when a selection tool is active. */
+        if (state.active_tool && (STREQ(state.active_tool->idname, "builtin.select_lasso") ||
+                                  STREQ(state.active_tool->idname, "builtin.select_circle") ||
+                                  STREQ(state.active_tool->idname, "builtin.select") ||
+                                  STREQ(state.active_tool->idname, "builtin.select_box")))
+        {
+          show_lines_ = true;
+          skip_unselected_ = true;
+        }
         break;
       case OB_MODE_VERTEX_GREASE_PENCIL:
         /* Vertex paint mode. */
@@ -132,6 +141,7 @@ class GreasePencil : Overlay {
         sub.bind_texture("weight_tx", &res.weight_ramp_tx);
         sub.push_constant("use_weight", show_weight_);
         sub.push_constant("use_grease_pencil", true);
+        sub.push_constant("skip_unselected", skip_unselected_);
         edit_lines_ = &sub;
       }
 
@@ -275,7 +285,7 @@ class GreasePencil : Overlay {
     for (auto i : IndexRange(res.depth_planes_count)) {
       GreasePencilDepthPlane &plane = res.depth_planes[i];
       const float4x4 &object_to_world =
-          manager.matrix_buf.current().get_or_resize(plane.handle.resource_index()).model;
+          manager.matrix_buf.current().get_or_resize(plane.handle.index()).model;
       plane.plane = GreasePencil::depth_plane_get(object_to_world, plane.bounds, view);
     }
   }

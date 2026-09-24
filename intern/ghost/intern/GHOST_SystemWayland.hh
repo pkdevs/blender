@@ -27,9 +27,21 @@
 #  include <thread>
 #endif
 
+#ifdef WITH_GHOST_DBUS
+#  include "GHOST_SystemDBusUnix.hh"
+#  include <atomic>
+#  include <memory>
+#endif
+
 class GHOST_WindowWayland;
 
 bool ghost_wl_display_report_error_if_set(wl_display *display);
+
+/**
+ * Create a 1x1 transparent buffer, intended for up-scaling via #wp_viewport_set_destination.
+ * The caller owns the returned buffer, null on allocation failure.
+ */
+struct wl_buffer *ghost_wl_buffer_create_transparent_pixel(struct wl_shm *shm);
 
 bool ghost_wl_output_own(const struct wl_output *wl_output);
 void ghost_wl_output_tag(struct wl_output *wl_output);
@@ -52,6 +64,16 @@ void ghost_wl_surface_tag_cursor_pointer(struct wl_surface *wl_surface);
 
 bool ghost_wl_surface_own_cursor_tablet(const struct wl_surface *wl_surface);
 void ghost_wl_surface_tag_cursor_tablet(struct wl_surface *wl_surface);
+
+#ifdef WITH_GHOST_CSD
+/**
+ * Tag for the invisible resize margin around the window
+ * (see #GWL_WindowCSD::margin_surface). Kept distinct from #ghost_wl_surface_tag
+ * so input paths without margin support ignore it as any other foreign surface.
+ */
+bool ghost_wl_surface_own_csd_margin(const struct wl_surface *wl_surface);
+void ghost_wl_surface_tag_csd_margin(struct wl_surface *wl_surface);
+#endif
 
 /* Scaling to: translates from WAYLAND into GHOST (viewport local) coordinates.
  * Scaling from: performs the reverse translation.
@@ -83,6 +105,17 @@ int gwl_window_scale_buffer_size_to(const GWL_WindowScaleParams &scale_params,
 
 #define FRACTIONAL_DENOMINATOR 120
 
+/**
+ * The current desktop (Gnome, KDE etc..).
+ *
+ * \note Use this as a last resort, ideally wayland integration would *not* depend on this.
+ */
+enum class GWL_CurrentDesktopType {
+  Other = 0,
+  Gnome,
+  KDE,
+};
+
 #ifdef WITH_GHOST_WAYLAND_DYNLOAD
 /**
  * Return true when all required WAYLAND libraries are present.
@@ -108,7 +141,7 @@ struct GWL_Output {
   /**
    * Dimensions in pixels.
    *
-   * \note Rotation (from the `transform` flag has *not* been applied.
+   * \note Rotation (from the `transform` flag) has *not* been applied.
    * So a vertical monitor will still have a larger width.
    */
   int32_t size_native[2] = {0, 0};
@@ -121,7 +154,7 @@ struct GWL_Output {
    * \note A 2x Hi-DPI monitor with a `size_native` of 1600x1200
    * would have a `size_logical` of 800x600.
    *
-   * \note Rotation (from the `transform` flag *has* been applied.
+   * \note Rotation (from the `transform` flag) *has* been applied.
    */
   int32_t size_logical[2] = {0, 0};
   bool has_size_logical = false;
@@ -147,10 +180,15 @@ struct GWL_Output {
   std::string model;
 };
 
+struct GHOST_SystemDBusSettings {
+  /** Written from the watcher's background thread, see #getSystemColorScheme. */
+  std::atomic<uint32_t> color_scheme = -1;
+};
+
 class GHOST_SystemWayland : public GHOST_System {
  public:
   GHOST_SystemWayland(bool background);
-  GHOST_SystemWayland() : GHOST_SystemWayland(true) {};
+  GHOST_SystemWayland() : GHOST_SystemWayland(true) {}
 
   ~GHOST_SystemWayland() override;
 
@@ -246,7 +284,7 @@ class GHOST_SystemWayland : public GHOST_System {
    * Return a separate WAYLAND local timer manager to #GHOST_System::getTimerManager
    * Manipulation & access must lock with #GHOST_WaylandSystem::server_mutex.
    *
-   * See #GWL_Display::key_repeat_timer_manager doc-string for details on why this is needed.
+   * See #GWL_Display::key_repeat_timer_manager docstring for details on why this is needed.
    */
   GHOST_TimerManager *key_repeat_timer_manager();
 
@@ -256,11 +294,17 @@ class GHOST_SystemWayland : public GHOST_System {
 
   struct wl_display *wl_display_get();
   struct wl_compositor *wl_compositor_get();
+  struct wl_subcompositor *wl_subcompositor_get();
   struct zwp_primary_selection_device_manager_v1 *wp_primary_selection_manager_get();
   struct xdg_activation_v1 *xdg_activation_manager_get();
   struct zwp_pointer_gestures_v1 *wp_pointer_gestures_get();
   struct wp_fractional_scale_manager_v1 *wp_fractional_scale_manager_get();
   struct wp_viewporter *wp_viewporter_get();
+  struct wp_color_manager_v1 *wp_color_manager_get();
+  struct wl_event_queue *wp_color_manager_queue_get();
+
+  bool supports_color_manager_feature_windows_scrgb() const;
+  bool supports_color_manager_extended_srgb_linear() const;
 
   struct xdg_wm_base *xdg_decor_shell_get();
   struct zxdg_decoration_manager_v1 *xdg_decor_manager_get();
@@ -332,7 +376,8 @@ class GHOST_SystemWayland : public GHOST_System {
                               const GHOST_Rect *wrap_bounds,
                               GHOST_TAxisFlag wrap_axis,
                               wl_surface *wl_surface,
-                              const struct GWL_WindowScaleParams &scale_params);
+                              const struct GWL_WindowScaleParams &scale_params,
+                              const GHOST_TDrawingContextType context_type);
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
   /* NOTE: allocate mutex so `const` functions can lock the mutex. */
@@ -364,4 +409,9 @@ class GHOST_SystemWayland : public GHOST_System {
   void display_destroy_and_free_all();
 
   struct GWL_Display *display_;
+
+#ifdef WITH_GHOST_DBUS
+  std::unique_ptr<GHOST_SystemDBusUnix> dbus_watcher_;
+  GHOST_SystemDBusSettings dbus_;
+#endif
 };

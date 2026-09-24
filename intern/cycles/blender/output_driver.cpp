@@ -4,7 +4,7 @@
 
 #include "blender/output_driver.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "IMB_imbuf_types.hh"
 #include "RE_engine.h"
 
@@ -31,17 +31,17 @@ bool BlenderOutputDriver::read_render_tile(const Tile &tile)
   }
 
   /* layer will be missing if it was disabled in the UI */
-  if (BLI_listbase_is_empty(&b_rr->layers)) {
+  if (b_rr->layers.is_empty()) {
     return false;
   }
 
-  blender::RenderLayer *b_rlay = static_cast<blender::RenderLayer *>(b_rr->layers.first);
+  blender::RenderLayer *b_rlay = b_rr->layers.first();
 
   /* Copy each pass.
    * TODO:copy only the required ones for better performance? */
   for (blender::RenderPass &b_pass : b_rlay->passes) {
-    if (b_pass.ibuf && b_pass.ibuf->float_buffer.data) {
-      const float *rect = b_pass.ibuf->float_buffer.data;
+    if (b_pass.ibuf && b_pass.ibuf->float_data()) {
+      const float *rect = b_pass.ibuf->float_data();
       tile.set_pass_pixels(b_pass.name, b_pass.channels, rect);
     }
     else {
@@ -93,11 +93,11 @@ void BlenderOutputDriver::write_render_tile(const Tile &tile)
   }
 
   /* Layer will be missing if it was disabled in the UI. */
-  if (BLI_listbase_is_empty(&b_rr->layers)) {
+  if (b_rr->layers.is_empty()) {
     return;
   }
 
-  blender::RenderLayer *b_rlay = static_cast<blender::RenderLayer *>(b_rr->layers.first);
+  blender::RenderLayer *b_rlay = b_rr->layers.first();
 
   vector<float> pixels(static_cast<size_t>(tile.size.x) * tile.size.y * 4);
 
@@ -106,8 +106,8 @@ void BlenderOutputDriver::write_render_tile(const Tile &tile)
     if (!tile.get_pass_pixels(b_pass.name, b_pass.channels, pixels.data())) {
       memset(pixels.data(), 0, pixels.size() * sizeof(float));
     }
-    if (b_pass.ibuf && b_pass.ibuf->float_buffer.data) {
-      float *rect = b_pass.ibuf->float_buffer.data;
+    if (b_pass.ibuf && b_pass.ibuf->float_data()) {
+      float *rect = b_pass.ibuf->float_data_for_write();
       const size_t size_in_bytes = sizeof(float) * b_pass.rectx * b_pass.recty * b_pass.channels;
       memcpy(rect, pixels.data(), size_in_bytes);
     }

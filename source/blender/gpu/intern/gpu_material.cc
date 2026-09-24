@@ -17,16 +17,17 @@
 #include "DNA_scene_types.h"
 #include "DNA_world_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_main.hh"
 #include "BKE_material.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_dot_export.hh"
 
 #include "NOD_shader.h"
 #include "NOD_shader_nodes_inline.hh"
@@ -164,13 +165,16 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   /* Localize tree to create links for reroute and mute. */
   bNodeTree *localtree = bke::node_tree_add_tree(
       nullptr, (StringRef(ntree->id.name) + " Inlined").c_str(), ntree->idname);
+  localtree->flag |= NTREE_IS_GPU_SHADER_INTERNAL;
   nodes::InlineShaderNodeTreeParams inline_params;
   inline_params.allow_preserving_repeat_zones = true;
   inline_params.target_engine_ = engine == GPU_MAT_EEVEE ? SHD_OUTPUT_EEVEE : SHD_OUTPUT_ALL;
   nodes::inline_shader_node_tree(*ntree, *localtree, inline_params);
 
   for (nodes::InlineShaderNodeTreeParams::ErrorMessage &error : inline_params.r_error_messages) {
-    result.errors.append({error.node, std::move(error.message)});
+    result.errors.append({error.node,
+                          std::move(error.message),
+                          GPUMaterialFromNodeTreeResult::WarningType(error.type)});
   }
 
   ntreeGPUMaterialNodes(localtree, mat);
@@ -182,7 +186,7 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   if (GPUPass *default_pass = pass_replacement_cb ? pass_replacement_cb(thunk, mat) : nullptr) {
     mat->pass = default_pass;
     GPU_pass_acquire(mat->pass);
-    /** WORKAROUND:
+    /* WORKAROUND:
      * The node tree code is never executed in default replaced passes,
      * but the GPU validation will still complain if the node tree UBO is not bound.
      * So we create a dummy UBO with (at least) the size of the default material one (192 bytes).
@@ -203,6 +207,13 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   }
 
   gpu_node_graph_free_nodes(&mat->graph);
+
+#if 0
+  /* Dump localtree to a .dot file */
+  std::cout << ">>>>>>>>>>>>>>>>>" << name << std::endl
+            << blender::bke::node_tree_to_dot(*localtree) << std::endl;
+#endif
+
   /* Only free after GPU_pass_shader_get where gpu::UniformBuf read data from the local
    * tree. */
   BKE_id_free(nullptr, &localtree->id);
@@ -217,13 +228,23 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   return result;
 }
 
+/* Make sure the two enums are actually the same. */
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Error) ==
+              int(nodes::NodeWarningType::Error));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Warning) ==
+              int(nodes::NodeWarningType::Warning));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Info) ==
+              int(nodes::NodeWarningType::Info));
+
 GPUMaterial *GPU_material_from_callbacks(eGPUMaterialEngine engine,
                                          ConstructGPUMaterialFn construct_function_cb,
                                          GPUCodegenCallbackFn generate_code_function_cb,
-                                         void *thunk)
+                                         void *thunk,
+                                         const uint64_t uuid)
 {
   /* Allocate a new material and its material graph. */
   GPUMaterial *material = MEM_new<GPUMaterial>(__func__, engine);
+  material->uuid = uuid;
 
   /* Construct the material graph by adding and linking the necessary GPU material nodes. */
   construct_function_cb(thunk, material);
@@ -270,7 +291,7 @@ void GPU_material_free(ListBaseT<LinkData> *gpumaterial)
     GPUMaterial *material = static_cast<GPUMaterial *>(link.data);
     GPU_material_free_single(material);
   }
-  BLI_freelistN(gpumaterial);
+  gpumaterial->free_no_destruct();
 }
 
 void GPU_materials_free(Main *bmain)
@@ -412,7 +433,7 @@ const GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *mat
 const ListBaseT<GPULayerAttr> *GPU_material_layer_attributes(const GPUMaterial *material)
 {
   const ListBaseT<GPULayerAttr> *attrs = &material->graph.layer_attrs;
-  return !BLI_listbase_is_empty(attrs) ? attrs : nullptr;
+  return !attrs->is_empty() ? attrs : nullptr;
 }
 
 GPUNodeGraph *gpu_material_node_graph(GPUMaterial *material)

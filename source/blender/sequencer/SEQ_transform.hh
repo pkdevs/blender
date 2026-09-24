@@ -56,29 +56,20 @@ bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
 
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,
-                              Span<Strip *> transformed_strips,
+                              Span<Strip *> source_strips,
                               Span<Strip *> time_dependent_strips,
                               bool use_sync_markers);
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,
-                              Span<Strip *> transformed_strips,
+                              Span<Strip *> source_strips,
                               bool use_sync_markers);
 /**
- * Set strip channel. This value is clamped to valid values.
+ * Move strips and markers (if not locked) that start after \a timeline_frame by \a delta frames.
  */
-void strip_channel_set(Strip *strip, int channel);
-/**
- * Move strips and markers (if not locked) that start after timeline_frame by delta frames
- *
- * \param scene: Scene in which strips are located
- * \param seqbase: List in which strips are located
- * \param delta: offset in frames to be applied
- * \param timeline_frame: frame on timeline from where strips are moved
- */
-void transform_offset_after_frame(Scene *scene,
+void transform_strips_after_frame(Scene *scene,
                                   ListBaseT<Strip> *seqbase,
-                                  int delta,
-                                  int timeline_frame);
+                                  int timeline_frame,
+                                  int delta);
 
 /**
  * Check if `strip` can be moved.
@@ -88,45 +79,47 @@ bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const St
 
 /* Image transformation. */
 
-float2 image_transform_mirror_factor_get(const Strip *strip);
 /**
- * Get strip transform origin offset from image center
- * NOTE: This function does not apply axis mirror.
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip to calculate image transform origin
+ * Get per-axis mirror factors for a \a strip image.
+ * \return float2 where each component is 1.0f (normal) or -1.0f (mirrored).
  */
-float2 image_transform_origin_offset_pixelspace_get(const Scene *scene, const Strip *strip);
+float2 image_transform_mirror_factor_get(const Strip *strip);
 
 /**
- * Get strip transform origin relative value. This function is mainly needed to
- * recalculate text strip origin position.
+ * Get the \a strip origin as a fraction of its rendered image. This origin can be anywhere, but
+ * (0,0) corresponds to the bottom left of the image, and (1,1) the top right.
  *
- * \param render_size: Size of image canvas in pixels
- * \param strip: Strip to calculate origin for
+ * NOTE: #StripTransform::origin is stored relative to the strip box
+ * (#image_transform_box_size_get), which for text strips is smaller than their rendered image.
+ * This function properly converts it to be relative to the rendered image for the render pipeline
+ * to use. Being a fraction, it is independent of proxy render size.
  */
 float2 image_transform_origin_get(const Scene *scene, const Strip *strip);
 
 /**
- * Get size of the image, which is produced by strip without any transformation.
- *
- * \param render_size: Size of image canvas in pixels
- * \param strip: Strip to calculate origin for
+ * Get the \a strip origin's offset in view-space pixels from the preview's center, including axis
+ * mirror and viewport pixel aspect.
  */
-float2 transform_image_raw_size_get(const Scene *scene, const Strip *strip);
+float2 image_transform_origin_preview_offset_get(const Scene *scene, const Strip *strip);
 
 /**
- * Get 4 corner points of strip image, optionally without rotation component applied.
- * Corner vectors are in viewport space.
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip to calculate transformed image quad
- * \param apply_rotation: Apply strip rotation transform to the quad
- * \return array of 4 2D vectors
+ * Get \a strip image transformation matrix relative to its origin in view-space, including axis
+ * mirror and viewport pixel aspect.
  */
-Array<float2> image_transform_quad_get(const Scene *scene,
-                                       const Strip *strip,
-                                       bool apply_rotation);
+float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip);
+
+/**
+ * Get the size of the drawn \a strip quad before any cropping, scaling, or transformation.
+ * This is the size of the rendered `ImBuf` for every type but text strips, where it is the tighter
+ * bounding box of the text glyphs.
+ *
+ * For the fully-processed quad, see #image_transform_quad_get.
+ * For the bounding box of the quad, see #image_transform_bounding_box_from_strips_get.
+ *
+ * \return int2 with (width, height) in view-space pixels
+ */
+int2 image_transform_box_size_get(const Scene *scene, const Strip *strip);
+
 /**
  * Get 4 corner points of strip image. Corner vectors are in viewport space.
  * Indices correspond to following corners (assuming no rotation):
@@ -134,37 +127,19 @@ Array<float2> image_transform_quad_get(const Scene *scene,
  * |  |
  * 2--1
  *
- * \param scene: Scene in which strips are located
  * \param strip: Strip to calculate transformed image quad
- * \return array of 4 2D vectors
+ * \return array of four 2D points
  */
-Array<float2> image_transform_final_quad_get(const Scene *scene, const Strip *strip);
+Array<float2> image_transform_quad_get(const Scene *scene, const Strip *strip);
 
 float2 image_preview_unit_to_px(const Scene *scene, float2 co_src);
 float2 image_preview_unit_from_px(const Scene *scene, float2 co_src);
 
 /**
- * Get viewport axis aligned bounding box from a collection of sequences.
- * The collection must have one or more strips
- *
- * \param scene: Scene in which strips are located
- * \param strips: Collection of strips to get the bounding box from
- * \param apply_rotation: Include strip rotation transform in the bounding box calculation
- * \param r_min: Minimum x and y values
- * \param r_max: Maximum x and y values
+ * Get viewport axis aligned bounding box from multiple strips.
+ * \param strips: Span of strips to calculate the bounding box for
  */
-Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene,
-                                                            Span<Strip *> strips,
-                                                            bool apply_rotation);
-
-/**
- * Get strip image transformation matrix. Pivot point is set to correspond with viewport coordinate
- * system
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip that is used to construct the matrix
- */
-float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip);
+Bounds<float2> image_transform_bounding_box_from_strips_get(Scene *scene, Span<Strip *> strips);
 
 }  // namespace seq
 }  // namespace blender

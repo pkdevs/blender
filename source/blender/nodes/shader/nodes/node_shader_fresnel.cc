@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 namespace blender {
@@ -10,9 +14,9 @@ namespace nodes::node_shader_fresnel_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("IOR").default_value(1.5f).min(0.0f).max(1000.0f);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_output<decl::Float>("Factor", "Fac");
+  b.add_input<decl::Float>("IOR"_ustr).default_value(1.5f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr);
 }
 
 static int node_shader_gpu_fresnel(GPUMaterial *mat,
@@ -22,10 +26,11 @@ static int node_shader_gpu_fresnel(GPUMaterial *mat,
                                    GPUNodeStack *out)
 {
   if (!in[1].link) {
-    GPU_link(mat, "world_normals_get", &in[1].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[1].link);
   }
 
-  return GPU_stack_link(mat, node, "node_fresnel", in, out);
+  return GPU_stack_link(
+      mat, node, "node_fresnel", in, out, GPU_kernel_globals(), GPU_shading_data());
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -47,7 +52,7 @@ void register_node_type_sh_fresnel()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeFresnel", SH_NODE_FRESNEL);
+  sh_node_type_base(&ntype, "ShaderNodeFresnel"_ustr, SH_NODE_FRESNEL);
   ntype.ui_name = "Fresnel";
   ntype.ui_description =
       "Produce a blending factor depending on the angle between the surface normal and the view "

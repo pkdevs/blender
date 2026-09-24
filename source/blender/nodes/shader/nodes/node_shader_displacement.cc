@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 namespace blender {
@@ -10,9 +14,12 @@ namespace nodes::node_shader_displacement_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Height").default_value(0.0f).min(0.0f).max(1000.0f).description(
-      "Distance to displace the surface along the normal");
-  b.add_input<decl::Float>("Midlevel")
+  b.add_input<decl::Float>("Height"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1000.0f)
+      .description("Distance to displace the surface along the normal");
+  b.add_input<decl::Float>("Midlevel"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(1000.0f)
@@ -20,10 +27,13 @@ static void node_declare(NodeDeclarationBuilder &b)
           "Neutral displacement value that causes no displacement.\n"
           "Lower values cause the surface to move inwards, "
           "higher values push the surface outwards");
-  b.add_input<decl::Float>("Scale").default_value(0.01f).min(0.0f).max(1000.0f).description(
-      "Increase or decrease the amount of displacement");
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_output<decl::Vector>("Displacement");
+  b.add_input<decl::Float>("Scale"_ustr)
+      .default_value(0.01f)
+      .min(0.0f)
+      .max(1000.0f)
+      .description("Increase or decrease the amount of displacement");
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_output<decl::Vector>("Displacement"_ustr);
 }
 
 static void node_shader_init_displacement(bNodeTree * /*ntree*/, bNode *node)
@@ -38,11 +48,12 @@ static int gpu_shader_displacement(GPUMaterial *mat,
                                    GPUNodeStack *out)
 {
   if (!in[3].link) {
-    GPU_link(mat, "world_normals_get", &in[3].link);
+    GPU_link(mat, "world_normals_get", GPU_shading_data(), &in[3].link);
   }
 
   if (node->custom1 == SHD_SPACE_OBJECT) {
-    return GPU_stack_link(mat, node, "node_displacement_object", in, out);
+    return GPU_stack_link(
+        mat, node, "node_displacement_object", in, out, GPU_kernel_globals(), GPU_shading_data());
   }
 
   return GPU_stack_link(mat, node, "node_displacement_world", in, out);
@@ -76,7 +87,7 @@ void register_node_type_sh_displacement()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeDisplacement", SH_NODE_DISPLACEMENT);
+  sh_node_type_base(&ntype, "ShaderNodeDisplacement"_ustr, SH_NODE_DISPLACEMENT);
   ntype.ui_name = "Displacement";
   ntype.ui_description = "Displace the surface along the surface normal";
   ntype.enum_name_legacy = "DISPLACEMENT";

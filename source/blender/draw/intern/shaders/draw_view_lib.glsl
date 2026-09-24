@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "draw_view_infos.hh"
@@ -9,13 +13,13 @@
 SHADER_LIBRARY_CREATE_INFO(draw_view)
 
 #if !defined(DRAW_VIEW_CREATE_INFO) && !defined(GLSL_CPP_STUBS)
-#  error Missing draw_view additional create info on shader create info
-#endif
+#else
 
 /* Returns the current active view. */
 ViewMatrices drw_view()
 {
-  return drw_view_buf[drw_view_id];
+
+  return buffer_get(draw_view, view_buf)[drw_view_id];
 }
 
 /* Returns true if the current view has a perspective projection matrix. */
@@ -210,3 +214,4 @@ float drw_depth_screen_to_view(float ss_depth)
 }
 
 /** \} */
+#endif

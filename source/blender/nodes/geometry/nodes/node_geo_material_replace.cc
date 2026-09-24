@@ -5,6 +5,8 @@
 #include "node_geometry_util.hh"
 
 #include "DNA_mesh_types.h"
+#include "DNA_pointcloud_types.h"
+#include "DNA_volume_types.h"
 
 #include "GEO_foreach_geometry.hh"
 
@@ -16,12 +18,16 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Geometry>("Geometry")
-      .supported_type({GeometryComponent::Type::Mesh, GeometryComponent::Type::GreasePencil})
+  b.add_input<decl::Geometry>("Geometry"_ustr)
+      .supported_type({GeometryComponent::Type::Mesh,
+                       GeometryComponent::Type::Volume,
+                       GeometryComponent::Type::PointCloud,
+                       GeometryComponent::Type::Curve,
+                       GeometryComponent::Type::GreasePencil})
       .description("Geometry to replace materials on");
-  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
-  b.add_input<decl::Material>("Old");
-  b.add_input<decl::Material>("New").translation_context(BLT_I18NCONTEXT_ID_MATERIAL);
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Material>("Old"_ustr);
+  b.add_input<decl::Material>("New"_ustr).translation_context(BLT_I18NCONTEXT_ID_MATERIAL);
 }
 
 static void replace_materials(MutableSpan<Material *> materials,
@@ -37,14 +43,23 @@ static void replace_materials(MutableSpan<Material *> materials,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  Material *old_material = params.extract_input<Material *>("Old");
-  Material *new_material = params.extract_input<Material *>("New");
+  Material *old_material = params.extract_input<Material *>("Old"_ustr);
+  Material *new_material = params.extract_input<Material *>("New"_ustr);
 
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
 
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       replace_materials({mesh->mat, mesh->totcol}, old_material, new_material);
+    }
+    if (Volume *volume = geometry_set.get_volume_for_write()) {
+      replace_materials({volume->mat, volume->totcol}, old_material, new_material);
+    }
+    if (PointCloud *pointcloud = geometry_set.get_pointcloud_for_write()) {
+      replace_materials({pointcloud->mat, pointcloud->totcol}, old_material, new_material);
+    }
+    if (Curves *curves = geometry_set.get_curves_for_write()) {
+      replace_materials({curves->mat, curves->totcol}, old_material, new_material);
     }
     if (GreasePencil *grease_pencil = geometry_set.get_grease_pencil_for_write()) {
       replace_materials({grease_pencil->material_array, grease_pencil->material_array_num},
@@ -53,14 +68,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   });
 
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output("Geometry"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeReplaceMaterial", GEO_NODE_REPLACE_MATERIAL);
+  geo_node_type_base(&ntype, "GeometryNodeReplaceMaterial"_ustr, GEO_NODE_REPLACE_MATERIAL);
   ntype.ui_name = "Replace Material";
   ntype.ui_description = "Swap one material with another";
   ntype.enum_name_legacy = "REPLACE_MATERIAL";

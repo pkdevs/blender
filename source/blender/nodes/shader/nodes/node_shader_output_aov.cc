@@ -2,10 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -21,8 +25,8 @@ namespace nodes::node_shader_output_aov_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.0f, 0.0f, 0.0f, 1.0f});
-  b.add_input<decl::Float>("Value").default_value(0.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.0f, 0.0f, 0.0f, 1.0f});
+  b.add_input<decl::Float>("Value"_ustr).default_value(0.0f).min(0.0f).max(1.0f);
 }
 
 static BIFIconID aov_icon(const ViewLayer *view_layer, PointerRNA *ptr)
@@ -85,7 +89,15 @@ static int node_shader_gpu_output_aov(GPUMaterial *mat,
   GPUNodeLink *hash_link = GPU_constant(reinterpret_cast<float *>(&hash));
 
   GPU_material_flag_set(mat, GPU_MATFLAG_AOV | GPU_MATFLAG_OBJECT_INFO);
-  GPU_stack_link(mat, node, "node_output_aov", in, out, hash_link, &outlink);
+  GPU_stack_link(mat,
+                 node,
+                 "node_output_aov",
+                 in,
+                 out,
+                 hash_link,
+                 GPU_kernel_globals(),
+                 GPU_shading_data(),
+                 &outlink);
   GPU_material_add_output_link_aov(mat, outlink, hash);
   return true;
 }
@@ -99,7 +111,7 @@ void register_node_type_sh_output_aov()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeOutputAOV", SH_NODE_OUTPUT_AOV);
+  sh_node_type_base(&ntype, "ShaderNodeOutputAOV"_ustr, SH_NODE_OUTPUT_AOV);
   ntype.ui_name = "AOV Output";
   ntype.ui_description =
       "Arbitrary Output Variables.\nProvide custom render passes for arbitrary shader node "

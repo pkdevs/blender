@@ -54,6 +54,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_primitive_monkey_add);
   WM_operatortype_append(MESH_OT_primitive_uv_sphere_add);
   WM_operatortype_append(MESH_OT_primitive_ico_sphere_add);
+  WM_operatortype_append(MESH_OT_primitive_quad_sphere_add);
 
   WM_operatortype_append(MESH_OT_primitive_cube_add_gizmo);
 
@@ -120,6 +121,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_select_mode);
   WM_operatortype_append(MESH_OT_select_edge_loop_multi);
   WM_operatortype_append(MESH_OT_select_edge_ring_multi);
+  WM_operatortype_append(MESH_OT_select_boundary_loop_multi);
   WM_operatortype_append(MESH_OT_mark_seam);
   WM_operatortype_append(MESH_OT_mark_sharp);
 #if defined(WITH_FREESTYLE)
@@ -194,6 +196,9 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_reorder_vertices_spatial);
 
   WM_operatortype_append(MESH_OT_circularize);
+  WM_operatortype_append(MESH_OT_flatten);
+  WM_operatortype_append(MESH_OT_space_edge_loops_evenly);
+  WM_operatortype_append(MESH_OT_relax_edge_loops);
 }
 
 #if 0 /* UNUSED, remove? */

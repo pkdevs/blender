@@ -10,6 +10,7 @@ set(SRC_OSL
   node_attribute.osl
   node_background.osl
   node_bevel.osl
+  node_boolean_math.osl
   node_brick_texture.osl
   node_brightness.osl
   node_bump.osl
@@ -34,12 +35,14 @@ set(SRC_OSL
   node_gabor_texture.osl
   node_gamma.osl
   node_geometry.osl
+  node_get_vector_component.osl
   node_glass_bsdf.osl
   node_glossy_bsdf.osl
   node_gradient_texture.osl
   node_hair_info.osl
   node_point_info.osl
   node_scatter_volume.osl
+  node_scene_time.osl
   node_absorption_volume.osl
   node_volume_coefficients.osl
   node_principled_volume.osl
@@ -55,6 +58,7 @@ set(SRC_OSL
   node_map_range.osl
   node_mapping.osl
   node_math.osl
+  node_integer_math.osl
   node_metallic_bsdf.osl
   node_mix.osl
   node_mix_closure.osl
@@ -72,6 +76,8 @@ set(SRC_OSL
   node_particle_info.osl
   node_ray_portal_bsdf.osl
   node_raycast.osl
+  node_raycast_attr_float.osl
+  node_raycast_attr_vector.osl
   node_refraction_bsdf.osl
   node_rgb_curves.osl
   node_rgb_ramp.osl
@@ -131,6 +137,7 @@ find_path(OSL_SHADER_DIR
     ${_osl_SEARCH_DIRS}
   PATH_SUFFIXES
     share/OSL/shaders
+    share/openshadinglanguage/shaders
     shaders
 )
 mark_as_advanced(OSL_SHADER_DIR)
@@ -159,6 +166,7 @@ set(SRC_OSL_HEADERS
   node_noise.h
   node_ramp_util.h
   node_radial_tiling_shared.h
+  node_scatter.h
   node_voronoi.h
   stdcycles.h
   ${SRC_OSL_HEADER_DIST}

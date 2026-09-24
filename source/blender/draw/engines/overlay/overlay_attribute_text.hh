@@ -10,7 +10,7 @@
 
 #include "BLI_color.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_pointcloud_types.h"
@@ -98,6 +98,8 @@ class AttributeTexts : Overlay {
         add_attributes_to_text_cache(dt, curves.attributes(), object_to_world);
         break;
       }
+      default:
+        break;
     }
   }
 

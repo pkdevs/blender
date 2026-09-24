@@ -38,9 +38,6 @@ struct ShaderCreateInfo;
  * This makes sure the GPUVertexFormat name buffer does not overflow. */
 constexpr static int GPU_MAX_ATTR = 15;
 
-/* Determined by the maximum uniform buffer size divided by chunk size. */
-constexpr static int GPU_MAX_UNIFORM_ATTR = 8;
-
 /* -------------------------------------------------------------------- */
 /** \name Creation
  * \{ */
@@ -191,6 +188,7 @@ const char *GPU_shader_get_name(gpu::Shader *shader);
 int GPU_shader_get_ubo_binding(gpu::Shader *shader, const char *name);
 int GPU_shader_get_ssbo_binding(gpu::Shader *shader, const char *name);
 int GPU_shader_get_sampler_binding(gpu::Shader *shader, const char *name);
+int GPU_shader_get_tlas_binding(gpu::Shader *shader, const char *name);
 
 /**
  * Returns uniform location.
@@ -230,6 +228,7 @@ void GPU_shader_uniform_4fv(gpu::Shader *sh, const char *name, const float data[
 void GPU_shader_uniform_2iv(gpu::Shader *sh, const char *name, const int data[2]);
 void GPU_shader_uniform_3iv(gpu::Shader *sh, const char *name, const int data[3]);
 void GPU_shader_uniform_mat4(gpu::Shader *sh, const char *name, const float data[4][4]);
+void GPU_shader_uniform_mat3(gpu::Shader *sh, const char *name, const float data[3][3]);
 void GPU_shader_uniform_mat3_as_mat4(gpu::Shader *sh, const char *name, const float data[3][3]);
 void GPU_shader_uniform_1f_array(gpu::Shader *sh, const char *name, int len, const float *val);
 void GPU_shader_uniform_2fv_array(gpu::Shader *sh,
@@ -350,7 +349,8 @@ void GPU_shader_async_specialization_cancel(AsyncSpecializationHandle &handle);
  *
  * \param: shader: The shader whose cache to warm.
  * \param limit: The maximum number of PSOs to compile within a call. Specifying
- * a limit <= 0 will compile a PSO for all cached PSOs in the parent shader. */
+ * a limit <= 0 will compile a PSO for all cached PSOs in the parent shader.
+ */
 void GPU_shader_warm_cache(gpu::Shader *shader, int limit);
 
 /* We expect the parent shader to be compiled and already have some cached PSOs when being assigned

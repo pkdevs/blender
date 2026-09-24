@@ -41,10 +41,12 @@ size_t malloc_usable_size(void *ptr);
 #endif
 
 #define SIZET_FORMAT "%zu"
-#define SIZET_ARG(a) ((size_t)(a))
+#define SIZET_ARG(a) (size_t(a))
 
-#define SIZET_ALIGN_4(len) ((len + 3) & ~(size_t)3)
+#define SIZET_ALIGN_4(len) ((len + 3) & ~size_t(3))
 
+/* NOTE: prefer C++ `[[likely]]` / `[[unlikely]]` attribute.
+ * Use the defines in contexts where attributes aren't supported (ternary operators for e.g.). */
 #ifdef __GNUC__
 #  define LIKELY(x) __builtin_expect(!!(x), 1)
 #  define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -73,7 +75,7 @@ size_t malloc_usable_size(void *ptr);
 
 /* Extra padding which needs to be applied on MemHead to make it aligned. */
 #define MEMHEAD_ALIGN_PADDING(alignment) \
-  ((size_t)alignment - (sizeof(MemHeadAligned) % (size_t)alignment))
+  (size_t(alignment) - (sizeof(MemHeadAligned) % size_t(alignment)))
 
 /* Real pointer returned by the `malloc` or `aligned_alloc`. */
 #define MEMHEAD_REAL_PTR(memh) ((char *)memh - MEMHEAD_ALIGN_PADDING(memh->alignment))

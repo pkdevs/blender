@@ -152,6 +152,9 @@ struct ComponentNode : public Node {
    *
    * NOTE: Is only reliable after `deg_graph_flush_visibility()`. */
   bool affects_visible_id;
+
+  /* Accumulated flag from operations. Is initialized and used during updates flush. */
+  bool is_user_modified;
 };
 
 /* ---------------------------------------- */
@@ -201,6 +204,7 @@ DEG_COMPONENT_NODE_DECLARE_GENERIC(ParticleSettings);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Pose);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(PointCache);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Sequencer);
+DEG_COMPONENT_NODE_DECLARE_GENERIC(Compositor);
 DEG_COMPONENT_NODE_DECLARE_NO_COW_TAG_ON_UPDATE(Shading);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(ShadingParameters);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Transform);

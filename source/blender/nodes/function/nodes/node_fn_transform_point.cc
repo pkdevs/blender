@@ -15,9 +15,9 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector").subtype(PROP_XYZ).is_default_link_socket();
-  b.add_output<decl::Vector>("Vector").subtype(PROP_XYZ).align_with_previous();
-  b.add_input<decl::Matrix>("Transform");
+  b.add_input<decl::Vector>("Vector"_ustr).subtype(PROP_XYZ).is_default_link_socket();
+  b.add_output<decl::Vector>("Vector"_ustr).subtype(PROP_XYZ).align_with_previous();
+  b.add_input<decl::Matrix>("Transform"_ustr);
 }
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
@@ -40,7 +40,7 @@ static int node_gpu_material(GPUMaterial *material,
 static void node_register()
 {
   static bke::bNodeType ntype;
-  fn_cmp_node_type_base(&ntype, "FunctionNodeTransformPoint", FN_NODE_TRANSFORM_POINT);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeTransformPoint"_ustr, FN_NODE_TRANSFORM_POINT);
   ntype.ui_name = "Transform Point";
   ntype.ui_description = "Apply a transformation matrix to the given vector";
   ntype.enum_name_legacy = "TRANSFORM_POINT";

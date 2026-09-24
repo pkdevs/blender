@@ -13,8 +13,8 @@
 #include "DNA_anim_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_linklist_stack.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
@@ -391,7 +391,8 @@ static bool library_foreach_ID_link(Main *bmain,
       CALLBACK_INVOKE_ID(id->override_library->reference,
                          IDWALK_CB_USER | IDWALK_CB_OVERRIDE_LIBRARY_REFERENCE);
 
-      CALLBACK_INVOKE_ID(id->override_library->hierarchy_root, IDWALK_CB_LOOPBACK);
+      CALLBACK_INVOKE_ID(id->override_library->hierarchy_root,
+                         IDWALK_CB_LOOPBACK | IDWALK_CB_OVERRIDE_LIBRARY_HIERARCHY_ROOT);
       for (IDOverrideLibraryProperty &op : id->override_library->properties) {
         for (IDOverrideLibraryPropertyOperation &opop : op.operations) {
           CALLBACK_INVOKE_ID(opop.subitem_reference_id,
@@ -503,7 +504,7 @@ uint64_t BKE_library_id_can_use_filter_id(const ID *owner_id,
   }
   /* When including UI data (i.e. editors), Screen UI IDs can also link to virtually any ID
    * (through e.g. the Outliner). */
-  if (include_ui && GS(owner_id->name) == ID_SCR) {
+  if (include_ui && owner_id->id_type() == ID_SCR) {
     return FILTER_ID_ALL;
   }
 
@@ -621,9 +622,9 @@ static bool library_ID_is_used(Main *bmain, void *idv, const bool check_linked)
   iter.id = id;
   iter.count_direct = iter.count_indirect = 0;
   while (i-- && !is_defined) {
-    ID *id_curr = static_cast<ID *>(lb_array[i]->first);
+    ID *id_curr = lb_array[i]->first();
 
-    if (!id_curr || !BKE_library_id_can_use_idtype(id_curr, GS(id->name))) {
+    if (!id_curr || !BKE_library_id_can_use_idtype(id_curr, id->id_type())) {
       continue;
     }
 
@@ -667,9 +668,9 @@ void BKE_library_ID_test_usages(Main *bmain,
   iter.id = id;
   iter.count_direct = iter.count_indirect = 0;
   while (i-- && !is_defined) {
-    ID *id_curr = static_cast<ID *>(lb_array[i]->first);
+    ID *id_curr = lb_array[i]->first();
 
-    if (!id_curr || !BKE_library_id_can_use_idtype(id_curr, GS(id->name))) {
+    if (!id_curr || !BKE_library_id_can_use_idtype(id_curr, id->id_type())) {
       continue;
     }
 
@@ -759,7 +760,7 @@ class UnusedIDsData {
   }
 
   /** Define the current status of the given ID. */
-  void set_id_status(ID &id, const Status status)
+  void set_id_status(ID &id, Status status)
   {
     if (id.flag & ID_FLAG_EMBEDDED_DATA) {
       /* Nothing to do for embedded IDs, these may have to be processed in dependency chains, but
@@ -771,8 +772,10 @@ class UnusedIDsData {
       return;
     }
 
+    /* If the generic code has decided that this ID was unused, but the special filter callback
+     * says otherwise, then the final status of this ID must be forced to 'used'. */
     if (status == Status::Unused && this->filter_fn && !this->filter_fn(&id)) {
-      return;
+      status = Status::Used;
     }
 
     ids_status_.add_overwrite(&id, status);
@@ -787,13 +790,14 @@ class UnusedIDsData {
   /**
    * Tag all IDs in Main according to their current status.
    *
-   * \warning Must typically be called as final step of the process. */
+   * \warning Must typically be called as final step of the process.
+   */
   void tag_ids() const
   {
     ID *id;
     FOREACH_MAIN_ID_BEGIN (this->bmain, id) {
       const Status status = ids_status_.lookup_default(id, Status::Unknown);
-      const int id_type_index = BKE_idtype_idcode_to_index(GS(id->name));
+      const int id_type_index = BKE_idtype_idcode_to_index(id->id_type());
       if (status == Status::Unused) {
         id->tag |= this->id_tag;
         (*this->num_total)[INDEX_ID_NULL]++;
@@ -826,7 +830,7 @@ static bool id_is_enforced_used(ID &id, UnusedIDsData &data)
     return true;
   }
 
-  switch (GS(id.name)) {
+  switch (id.id_type()) {
     case ID_IM: {
       /* Images which have a 'viewer' source (e.g. render results) should not be considered as
        * orphaned/unused data. */
@@ -856,7 +860,7 @@ static bool id_is_enforced_used(ID &id, UnusedIDsData &data)
  */
 static bool id_is_used_dependency_exception(ID &id)
 {
-  switch (GS(id.name)) {
+  switch (id.id_type()) {
     case ID_OB: {
       /* FIXME: This is a workaround until Object usages are handled more soundly.
        *

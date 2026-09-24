@@ -14,14 +14,14 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_callbacks.hh"
 #include "BKE_context.hh"
@@ -66,6 +66,7 @@ static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOper
   ui::style_init_default();
   WM_reinit_gizmomap_all(bmain);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_UI | ND_UI_FONT, nullptr);
   U.runtime.is_dirty = true;
   return OPERATOR_FINISHED;
 }
@@ -145,11 +146,6 @@ static void PREFERENCES_OT_autoexec_path_remove(wmOperatorType *ot)
 /** \name Add Asset Library Operator
  * \{ */
 
-enum class bUserAssetLibraryAddType {
-  Remote = 0,
-  Local = 1,
-};
-
 static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperator *op)
 {
   const bUserAssetLibraryAddType library_type = bUserAssetLibraryAddType(
@@ -161,54 +157,29 @@ static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperat
     RNA_property_string_get(op->ptr, prop, name);
   }
 
-  bUserAssetLibrary *new_library;
-
   switch (library_type) {
     case bUserAssetLibraryAddType::Local: {
       char *dirpath = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
-
-      BLI_path_slash_rstrip(dirpath);
-      if (!name[0]) {
-        BLI_path_split_file_part(dirpath, name, sizeof(name));
-      }
-      if (!name[0]) {
-        STRNCPY(name, DATA_("Local Asset Library"));
-      }
-
-      new_library = BKE_preferences_asset_library_add(&U, name, dirpath);
-
+      ED_userpref_asset_library_new(C, name, dirpath, library_type, false, {}, {});
       MEM_delete(dirpath);
       break;
     }
     case bUserAssetLibraryAddType::Remote: {
       char *remote_url = RNA_string_get_alloc(op->ptr, "remote_url", nullptr, 0, nullptr);
-
-      if (!name[0]) {
-        BKE_preferences_remote_to_name(remote_url, name);
+      char *auth_token_str = RNA_string_get_alloc(op->ptr, "auth_token", nullptr, 0, nullptr);
+      const bool use_auth_token = RNA_boolean_get(op->ptr, "use_auth_token");
+      std::optional<char *> auth_token = {};
+      if (use_auth_token) {
+        auth_token = auth_token_str;
       }
-      if (!name[0]) {
-        STRNCPY(name, DATA_("Remote Asset Library"));
-      }
-
-      new_library = BKE_preferences_remote_asset_library_add(&U, name, remote_url);
-
+      ED_userpref_asset_library_new(C, name, remote_url, library_type, false, {}, auth_token);
       MEM_delete(remote_url);
+      MEM_delete(auth_token_str);
       break;
     }
   }
 
-  /* Activate new library in the UI for further setup. */
-  U.active_asset_library = BLI_findindex(&U.asset_libraries, new_library);
   U.runtime.is_dirty = true;
-
-  if (new_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
-    blender::asset_system::remote_library_request_download(*new_library);
-  }
-
-  /* There's no dedicated notifier for the Preferences. */
-  WM_main_add_notifier(NC_WINDOW, nullptr);
-  ed::asset::list::clear_all_library(C);
-
   return OPERATOR_FINISHED;
 }
 
@@ -242,6 +213,19 @@ static void preferences_asset_library_add_ui(bContext * /*C*/, wmOperator *op)
   switch (library_type) {
     case bUserAssetLibraryAddType::Remote: {
       layout->prop(op->ptr, "remote_url", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+
+      const bool use_auth_token = RNA_boolean_get(ptr, "use_auth_token");
+      const int token_icon = (use_auth_token && RNA_string_length(ptr, "auth_token")) ?
+                                 ICON_LOCKED :
+                                 ICON_UNLOCKED;
+
+      ui::Layout &col = layout->column(true, IFACE_("Authentication"));
+      col.prop(ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      if (use_auth_token) {
+        ui::Layout &row = col.row(false);
+        /* Use "immediate" flag to refresh the icon. */
+        row.prop(ptr, "auth_token", ui::ITEM_R_IMMEDIATE, IFACE_("Secret"), token_icon);
+      }
       break;
     }
     case bUserAssetLibraryAddType::Local: {
@@ -331,9 +315,35 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
                                        RNA_property_ui_description_raw(prop_ref));
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
+  { /* Use Authentication Token. */
+    const char *prop_id = "use_auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                        prop_id,
+                                        false,
+                                        RNA_property_ui_name_raw(prop_ref),
+                                        RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+  { /* Authentication Token (dynamic length). */
+    const char *prop_id = "auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       0,
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+    RNA_def_property_subtype(prop, PROP_PASSWORD);
+  }
 
-  ot->prop = RNA_def_enum(
-      ot->srna, "type", custom_library_type_items, 0, "Type", "The kind of asset library to add");
+  ot->prop = RNA_def_enum(ot->srna,
+                          "type",
+                          custom_library_type_items,
+                          int(bUserAssetLibraryAddType::Local),
+                          "Type",
+                          "The kind of asset library to add");
   RNA_def_enum_funcs(ot->prop, custom_library_type_itemf);
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
@@ -346,7 +356,7 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
 
 static bool preferences_asset_library_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.asset_libraries)) {
+  if (U.asset_libraries.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no asset library to remove");
     return false;
   }
@@ -362,47 +372,8 @@ static wmOperatorStatus preferences_asset_library_remove_exec(bContext *C, wmOpe
     return OPERATOR_CANCELLED;
   }
 
-  const bool use_remote_libraries = USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries);
-  const bool is_remote_library = library->flag & ASSET_LIBRARY_USE_REMOTE_URL;
-
-  if (is_remote_library && !use_remote_libraries) {
-    /* This is a corner case, where the active library is a remote one, but remote libraries are
-     * not shown. This only happens right after disabling the experimental flag, which doesn't
-     * update the active library index, or when somebody set the active index via Python. Just
-     * pretend the deletion happened (because actually deleting hidden things is bad), and let the
-     * code below activate a non-remote (and so visible) library. */
-  }
-  else {
-    BKE_preferences_asset_library_remove(&U, library);
-  }
-
-  /* If the experimental flag was disabled, make sure the newly activated asset
-   * library is not a remote one. */
-  if (!use_remote_libraries) {
-    int nonremote_index = 0;
-    for (auto [index, lib] : U.asset_libraries.enumerate()) {
-      if (lib.flag & ASSET_LIBRARY_USE_REMOTE_URL) {
-        /* Ignore remote libraries. */
-        continue;
-      }
-
-      nonremote_index = index;
-      if (index >= U.active_asset_library) {
-        /* We've found the first usable library above the deleted one, the search can stop. */
-        break;
-      }
-    }
-    U.active_asset_library = nonremote_index;
-  }
-
-  /* Update active library index to be in range. */
-  const int count_remaining = BLI_listbase_count(&U.asset_libraries);
-  CLAMP(U.active_asset_library, 0, count_remaining - 1);
+  ED_userpref_asset_library_remove(C, library);
   U.runtime.is_dirty = true;
-
-  ed::asset::list::clear_all_library(C);
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -624,11 +595,12 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 
       ui::Layout &row = layout.row(true, IFACE_("Authentication"));
       row.prop(op->ptr, "use_access_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      ui::Layout &col = layout.row(false);
-      col.active_set(use_access_token);
-      /* Use "immediate" flag to refresh the icon. */
-      col.prop(op->ptr, "access_token", ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
-
+      if (use_access_token) {
+        ui::Layout &col = layout.row(false);
+        col.active_set(use_access_token);
+        /* Use "immediate" flag to refresh the icon. */
+        col.prop(op->ptr, "access_token", ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
+      }
       layout.separator(0.2f, ui::LayoutSeparatorType::Line);
 
       break;
@@ -780,7 +752,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 
 static bool preferences_extension_repo_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.extension_repos)) {
+  if (U.extension_repos.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no extension repository to remove");
     return false;
   }
@@ -917,7 +889,7 @@ static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOp
   }
 
   BKE_preferences_extension_repo_remove(&U, repo);
-  const int count_remaining = BLI_listbase_count(&U.extension_repos);
+  const int count_remaining = U.extension_repos.count();
   /* Update active repo index to be in range. */
   CLAMP(U.active_extension_repo, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
@@ -1274,7 +1246,7 @@ static wmOperatorStatus preferences_start_filter_exec(bContext *C, wmOperator * 
   SpaceUserPref *space = CTX_wm_space_userpref(C);
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_UI);
-  ui::textbutton_activate_rna(C, region, space, "search_filter");
+  ED_region_activate_rna_prop(C, region, space, "search_filter");
   return OPERATOR_FINISHED;
 }
 

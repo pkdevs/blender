@@ -9,9 +9,10 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <ranges>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
@@ -26,6 +27,9 @@
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+#include "buttons/interface_label_markdown.hh"
+
 struct IconTextOverlay;
 namespace blender {
 
@@ -35,20 +39,11 @@ struct bContext;
 struct bContextStore;
 struct CurveMapping;
 struct CurveProfile;
-namespace gpu {
-class Batch;
-}
 struct ID;
 struct ImBuf;
 struct LayoutPanelHeader;
 struct Main;
 struct Scene;
-namespace ui {
-struct SafetyRect;
-struct HandleButtonData;
-struct Layout;
-struct UndoStack_Text;
-}  // namespace ui
 struct uiListType;
 struct uiStyle;
 struct uiWidgetColors;
@@ -58,14 +53,21 @@ struct wmKeyConfig;
 struct wmOperatorType;
 struct wmTimer;
 
+namespace gpu {
+class Batch;
+}
+
 namespace ui {
 
-/* ****************** general defines ************** */
+struct SafetyRect;
+struct HandleButtonData;
+struct Layout;
+struct UndoStack_Text;
+/* General defines. */
 
-#define RNA_NO_INDEX -1
 #define RNA_ENUM_VALUE -2
 
-#define UI_MENU_PADDING (int)(0.2f * UI_UNIT_Y)
+#define UI_MENU_PADDING int(0.2f * UI_UNIT_Y)
 
 #define UI_MENU_WIDTH_MIN (UI_UNIT_Y * 9)
 /** Some extra padding added to menus containing sub-menu icons. */
@@ -109,13 +111,13 @@ enum ButtonFlagInternal {
 };
 
 /** These two enums can be combined. */
-inline int operator|(const ButtonFlag a, const ButtonFlagInternal b)
+inline int64_t operator|(const ButtonFlag a, const ButtonFlagInternal b)
 {
-  return int(a) | int(b);
+  return int64_t(a) | int64_t(b);
 }
-inline int operator|(const ButtonFlagInternal b, const ButtonFlag a)
+inline int64_t operator|(const ButtonFlagInternal b, const ButtonFlag a)
 {
-  return int(a) | int(b);
+  return int64_t(a) | int64_t(b);
 }
 
 /** #Button.pie_dir */
@@ -187,24 +189,37 @@ enum {
 /** The maximum number of items a radial menu (pie menu) can contain. */
 #define PIE_MAX_ITEMS 8
 
+enum class TextDirection : int8_t {
+  Default, /* Horizontal. */
+  Down,
+  Up,
+};
+
 struct Button : NonMovable {
 
   /** Pointer back to the layout item holding this button. */
   Layout *layout = nullptr;
-  int flag = 0;
+  int64_t flag = 0;
   int drawflag = 0;
-  char flag2 = 0;
+
+  TextDirection text_direction = TextDirection::Default;
 
   ButtonType type = ButtonType(0);
   ButPointerType pointype = ButPointerType::None;
-  bool bit = 0;
+  bool bit = false;
   /* 0-31 bit index. */
   char bitnr = 0;
 
   /** When non-zero, this is the key used to activate a menu items (`a-z` always lower case). */
   uchar menu_key = 0;
 
-  short retval = 0, strwidth = 0, alignnr = 0;
+  /**
+   * Stores argument values for #Block::handle_func as well as enum values for
+   * #ButtonType::ButMenu.
+   */
+  int retval = 0;
+  short strwidth = 0;
+  short alignnr = 0;
   int ofs = 0, pos = 0, selsta = 0, selend = 0;
 
   /**
@@ -247,17 +262,6 @@ struct Button : NonMovable {
   ButtonCompleteFunc autocomplete_func = nullptr;
   void *autofunc_arg = nullptr;
 
-  ButtonHandleRenameFunc rename_func = nullptr;
-  void *rename_arg1 = nullptr;
-  char *rename_orig = nullptr;
-
-  /**
-   * When defined, and the button edits a string RNA property,
-   * the new name is _not_ set at all, instead this function is called with the new name.
-   */
-  std::function<void(std::string &new_name)> rename_full_func = nullptr;
-  std::string rename_full_new;
-
   /** Run an action when holding the button down. */
   ButtonHandleHoldFunc hold_func = nullptr;
   void *hold_argN = nullptr;
@@ -285,6 +289,8 @@ struct Button : NonMovable {
   bool changed = false;
 
   BIFIconID icon = ICON_NONE;
+  /** Configurable draw scale for the icon. */
+  float icon_scale = 1.0f;
 
   /** Affects the order if this Button is used in menu-search. */
   float search_weight = 0.0f;
@@ -367,9 +373,51 @@ struct Button : NonMovable {
   virtual ~Button() = default;
 };
 
+struct TextWrapCache {
+  int wrap_width = 0;
+  float aspect = 0.0f;
+  std::string text;
+  Vector<StringRef> wrapped_lines;
+};
+
+/** Derived struct for #ButtonType::Text */
+struct ButtonText : public Button {
+  std::function<void(bContext &, StringRefNull)> rename_func = nullptr;
+  char *rename_orig = nullptr;
+  /**
+   * When defined, and the button edits a string RNA property,
+   * the new name is _not_ set at all, instead this function is called with the new name.
+   */
+  std::function<void(StringRefNull new_name)> rename_full_func = nullptr;
+  std::string rename_full_new;
+  /** Allow double click editing on text buttons with no emboss styled like labels. */
+  bool use_label_style = false;
+};
+
+/** Derived struct for #ButtonType::TextBox */
+struct ButtonTextBox : public Button {
+
+  /** Total number of wrapped lines in the last text-box redraw/event handling. */
+  int last_total_lines = 0;
+
+  TextboxState *state;
+
+  /** Wrap cache from last redraw/event handling. */
+  std::unique_ptr<TextWrapCache> wrap_cache;
+
+  /** Placeholder wrap cache from last draw. */
+  std::unique_ptr<TextWrapCache> placeholder_wrap_cache;
+
+  void line_scroll_set(int line_scroll);
+  int line_scroll() const;
+  int visible_lines() const;
+};
+
 /** Derived struct for #ButtonType::But */
 struct ButtonPush : public Button {
   bool draw_as_link = false;
+  /** See #button_pushbutton_draw_as_overlay_set(). */
+  bool draw_as_overlay = false;
 };
 
 /** Derived struct for #ButtonType::Num */
@@ -404,8 +452,7 @@ struct ButtonSearch : public Button {
   void *item_active = nullptr;
   char *item_active_str;
 
-  void *arg = nullptr;
-  FreeArgFunc arg_free_fn = nullptr;
+  std::shared_ptr<void> arg = nullptr;
 
   ButtonSearchContextMenuFn item_context_menu_fn = nullptr;
   ButtonSearchTooltipFn item_tooltip_fn = nullptr;
@@ -452,9 +499,31 @@ struct ButtonSeparatorLine : public Button {
   bool is_vertical;
 };
 
+enum class ButtonLabelType {
+  Standard,
+  Multiline,
+  Markdown,
+};
+
 /** Derived struct for #ButtonType::Label. */
 struct ButtonLabel : public Button {
   float alpha_factor = 1.0f;
+  /** When the button draws an icon, also draw a mono-colored border for it. */
+  bool draw_icon_border = false;
+
+  ButtonLabelType label_type = ButtonLabelType::Standard;
+  /**
+   * Wrap cache from last layout pass.
+   * This is also referenced in the button owning #Block so it can be looked up and reused in
+   * following layout passes. Wrapped text references an allocated string, so it can't be just
+   * copied/moved around.
+   */
+  std::shared_ptr<TextWrapCache> wrap_cache;
+  /** Layout cache for markdown labels. */
+  std::shared_ptr<MarkdownLayoutCache> markdown_cache;
+  /** Maximum lines to be drawn in multi-line labels, 0 means all. */
+  int max_lines = 0;
+  FontStyleAlign text_align = UI_STYLE_TEXT_LEFT;
 };
 
 /** Derived struct for #ButtonType::Scroll. */
@@ -498,6 +567,14 @@ struct ButtonCurveMapping : public Button {
 /** Derived struct for #ButtonType::HotkeyEvent. */
 struct ButtonHotkeyEvent : public Button {
   wmEventModifierFlag modifier_key = wmEventModifierFlag(0);
+};
+
+/**
+ * Derived struct for #ButtonType::Menu, #ButtonType::Block, #ButtonType::Popover or
+ * ButtonType::Pulldown.
+ */
+struct ButtonMenu : public Button {
+  PopupAttachDirection popup_attach_direction = PopupAttachDirection::Vertical;
 };
 
 /**
@@ -621,6 +698,9 @@ struct Block {
   Block *next = nullptr, *prev = nullptr;
 
   Vector<std::unique_ptr<Button>> buttons_ptrs;
+  Vector<std::shared_ptr<TextWrapCache>> text_wrap_cache;
+  Vector<std::shared_ptr<MarkdownLayoutCache>> markdown_layout_cache;
+
   Panel *panel = nullptr;
   Block *oldblock = nullptr;
 
@@ -698,6 +778,9 @@ struct Block {
   bool tooltipdisabled = false;
   /** True when #block_end has been called. */
   bool endblock = false;
+  /** True when #block_end has been called with #postpone_callbacks set to true,
+   * #block_post_layout_callbacks_exec must be called. */
+  bool post_block_layout_fns_pending = false;
 
   /** for doing delayed */
   BlockBoundsCalc bounds_type = BLOCK_BOUNDS_NONE;
@@ -877,7 +960,12 @@ Button *button_drag_multi_edit_get(Button *but);
  */
 const char *button_placeholder_get(Button *but);
 
-void def_but_icon(Button *but, int icon, int flag);
+/**
+ * Get the unit hint shown after the text while editing.
+ */
+std::optional<StringRef> button_edit_unit_hint_get(const Button &but);
+
+void def_but_icon(Button *but, int icon, int64_t flag);
 /**
  * Avoid using this where possible since it's better not to ask for an icon in the first place.
  */
@@ -971,6 +1059,12 @@ struct PopupBlockHandle {
   void (*cancel_func)(bContext *C, void *arg) = nullptr;
   void *popup_arg = nullptr;
 
+  /**
+   * The StructRNA type that owns this popup, this popup should be removed if this type gets
+   * unregistered.
+   */
+  StructRNA *srna_owner = nullptr;
+
   /** Store data for refreshing popups. */
   PopupBlockCreate popup_create_vars;
   /**
@@ -993,9 +1087,10 @@ struct PopupBlockHandle {
   wmOperator *popup_op = nullptr;
   ScrArea *ctx_area = nullptr;
   ARegion *ctx_region = nullptr;
+  /** The popup region this popup was opened from (if any). */
+  ARegion *ctx_region_popup = nullptr;
 
   /* return values */
-  int butretval = 0;
   int menuretval = 0;
   int retvalue = 0;
   float retvec[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -1112,8 +1207,25 @@ PopupBlockHandle *popup_block_create(bContext *C,
                                      void *arg,
                                      FreeArgFunc arg_free,
                                      bool can_refresh);
-PopupBlockHandle *popup_menu_create(
-    bContext *C, ARegion *butregion, Button *but, MenuCreateFunc menu_func, void *arg);
+/**
+ * \param can_refresh: Allow menus to re-run their layout definitions using
+ *    `ED_region_tag_refresh_ui()`. This can be used to update the grayed out state of items or the
+ *    icon for example, but doesn't have many use-cases.
+ *
+ *    Changes that mess with user input or make popups jump around under the cursor should be
+ *    avoided. For example, avoid:
+ *    - Adding/removing menu items.
+ *    - Changing menu item names.
+ *    - Changes that interfere with keyboard navigation.
+ *
+ *    Note that this property is inherited to submenus.
+ */
+PopupBlockHandle *popup_menu_create(bContext *C,
+                                    ARegion *butregion,
+                                    Button *but,
+                                    MenuCreateFunc menu_func,
+                                    void *arg,
+                                    bool can_refresh);
 
 /* `interface_region_popover.cc` */
 
@@ -1208,11 +1320,13 @@ void draw_but_HISTOGRAM(ARegion *region,
                         Button *but,
                         const uiWidgetColors *wcol,
                         const rcti *recti);
-void draw_but_WAVEFORM(ARegion *region,
+void draw_but_WAVEFORM(const bContext *C,
+                       ARegion *region,
                        Button *but,
                        const uiWidgetColors *wcol,
                        const rcti *recti);
-void draw_but_VECTORSCOPE(ARegion *region,
+void draw_but_VECTORSCOPE(const bContext *C,
+                          ARegion *region,
                           Button *but,
                           const uiWidgetColors *wcol,
                           const rcti *recti);
@@ -1303,9 +1417,11 @@ bool button_rna_equals_ex(const Button *but,
                           int index);
 Button *button_find_old(Block *block_old, const Button *but_new);
 Button *button_find_new(Block *block_new, const Button *but_old);
+/** Scaled text padding within the but widget box. */
+int button_text_padding(const Button *but);
 
 #ifdef WITH_INPUT_IME
-void button_ime_reposition(Button *but, int x, int y, bool complete);
+void button_ime_reposition(Button *but, int x, int y);
 const wmIMEData *button_ime_data_get(Button *but);
 #endif
 
@@ -1393,7 +1509,7 @@ void draw_menu_item(const uiFontStyle *fstyle,
                     bool use_unpadded,
                     const char *name,
                     int iconid,
-                    int but_flag,
+                    int64_t but_flag,
                     MenuItemSeparatorType separator_type,
                     int *r_xmax);
 void draw_preview_item(const uiFontStyle *fstyle,
@@ -1401,15 +1517,11 @@ void draw_preview_item(const uiFontStyle *fstyle,
                        float zoom,
                        const char *name,
                        int iconid,
-                       int but_flag,
+                       int64_t but_flag,
                        FontStyleAlign text_align);
 /**
  * Version of #draw_preview_item() that does not draw the menu background and item text based on
  * state. It just draws the preview and text directly.
- *
- * \param draw_as_icon: Instead of stretching the preview/icon to the available width/height, draw
- *                      it at the standard icon size. Mono-icons will draw with \a text_col or the
- *                      corresponding theme override for this type of icon.
  */
 void draw_preview_item_stateless(const uiFontStyle *fstyle,
                                  rcti *rect,
@@ -1425,7 +1537,7 @@ void draw_preview_item_stateless(const uiFontStyle *fstyle,
  * Margin at top of screen for popups.
  * Note this value must be sufficient to draw a popover arrow to avoid cropping it.
  */
-#define UI_POPUP_MENU_TOP (int)(10 * UI_SCALE_FAC)
+#define UI_POPUP_MENU_TOP int(10 * UI_SCALE_FAC)
 
 #define UI_PIXEL_AA_JITTER 8
 extern const float ui_pixel_jitter[UI_PIXEL_AA_JITTER][2];
@@ -1440,7 +1552,6 @@ void style_init();
 
 /* `interface_icons.cc` */
 
-void icon_ensure_deferred(const bContext *C, int icon_id, bool big);
 /** Is \a icon_id a preview icon that is being loaded/rendered? */
 bool icon_is_preview_deferred_loading(int icon_id, bool big);
 int id_icon_get(const bContext *C, ID *id, bool big);
@@ -1536,6 +1647,10 @@ void button_anim_autokey(bContext *C, Button *but, Scene *scene, float cfra);
 
 void button_anim_decorate_cb(bContext *C, void *arg_but, void *arg_dummy);
 void button_anim_decorate_update_from_flag(ButtonDecorator *but);
+/**
+ * \return True when the decorated button should be considered "pushed".
+ */
+bool button_anim_decorate_pushed_state(ButtonDecorator *but);
 
 /* `interface_query.cc` */
 
@@ -1572,7 +1687,7 @@ Button *listrow_find_index(const ARegion *region,
                            int index,
                            Button *listbox) ATTR_WARN_UNUSED_RESULT;
 Button *view_item_find_mouse_over(const ARegion *region, const int xy[2]) ATTR_NONNULL(1, 2);
-Button *view_item_find_active(const ARegion *region);
+Button *view_item_find_active(const ARegion *region, const AbstractView *view = nullptr);
 Button *view_item_find_search_highlight(const ARegion *region);
 
 using ButtonFindPollFn = bool (*)(const Button *but, const void *customdata);
@@ -1615,7 +1730,9 @@ Block *block_find_mouse_over_ex(const ARegion *region, const int xy[2], bool onl
     ATTR_NONNULL(1, 2);
 Block *block_find_mouse_over(const ARegion *region, const wmEvent *event, bool only_clip);
 
-Button *region_find_first_but_test_flag(ARegion *region, int flag_include, int flag_exclude);
+Button *region_find_first_but_test_flag(ARegion *region,
+                                        int64_t flag_include,
+                                        int64_t flag_exclude);
 Button *region_find_active_but(ARegion *region) ATTR_WARN_UNUSED_RESULT;
 bool region_contains_point_px(const ARegion *region, const int xy[2])
     ATTR_NONNULL(1, 2) ATTR_WARN_UNUSED_RESULT;
@@ -1633,7 +1750,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /**
  * menu to show when right clicking on the panel header
  */
-void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
+int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
 
 /* `eyedroppers/interface_eyedropper.cc` */
 
@@ -1775,7 +1892,7 @@ Vector<FCurve *> get_property_drivers(
  * \param is_array_prop: Whether `src_drivers` are drivers for the elements
  * of an array property.
  * \param dst_ptr: The RNA pointer for the destination property.
- * \param dist_prop: The destination property RNA.
+ * \param dst_prop: The destination property RNA.
  *
  * \returns The number of successfully pasted drivers.
  */
@@ -1785,6 +1902,8 @@ int paste_property_drivers(Span<FCurve *> src_drivers,
                            PropertyRNA *dst_prop);
 
 }  // namespace internal
+void panel_region_width_set(ARegion *region, const float aspect, int unscaled_size);
+void region_panels_sort_for_search_filter_visibility_change(bContext *C, const ARegion *region);
 
 }  // namespace ui
 }  // namespace blender

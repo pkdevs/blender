@@ -30,7 +30,7 @@ class GatherLinkSearchOpParams;
 }  // namespace nodes
 
 void geo_node_type_base(bke::bNodeType *ntype,
-                        std::string idname,
+                        UString idname,
                         std::optional<int16_t> legacy_type = std::nullopt);
 bool geo_node_poll_default(const bke::bNodeType *ntype,
                            const bNodeTree *ntree,
@@ -39,7 +39,7 @@ bool geo_node_poll_default(const bke::bNodeType *ntype,
 /* Same as geo_node_type_base but allows node use in the compositor by allowing compositor node
  * trees in the poll function. */
 void geo_cmp_node_type_base(bke::bNodeType *ntype,
-                            std::string idname,
+                            UString idname,
                             std::optional<int16_t> legacy_type = std::nullopt);
 
 namespace nodes {
@@ -48,13 +48,6 @@ bool check_tool_context_and_error(GeoNodeExecParams &params);
 void search_link_ops_for_tool_node(GatherLinkSearchOpParams &params);
 
 void node_geo_sdf_grid_error_not_levelset(GeoNodeExecParams &params);
-
-void get_closest_in_bvhtree(bke::BVHTreeFromMesh &tree_data,
-                            const VArray<float3> &positions,
-                            const IndexMask &mask,
-                            MutableSpan<int> r_indices,
-                            MutableSpan<float> r_distances_sq,
-                            MutableSpan<float3> r_positions);
 
 namespace enums {
 

@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
+#include "DNA_ID_enums.h"
 #include "DNA_listBase.h"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_utility_mixins.hh"
 struct BlendHandle;
 namespace blender {
@@ -63,11 +64,13 @@ struct BlendFileData : NonCopyable, NonMovable {
 
   int fileflags = 0;
   int globalf = 0;
-  /** Typically the actual filepath of the read blend-file, except when recovering
+  /**
+   * Typically the actual filepath of the read blend-file, except when recovering
    * save-on-exit/autosave files. In the latter case, it will be the path of the file that
    * generated the auto-saved one being recovered.
    *
-   * NOTE: Currently expected to be the same path as #BlendFileData.filepath. */
+   * NOTE: Currently expected to be the same path as #BlendFileData.filepath.
+   */
   char filepath[/*FILE_MAX*/ 1024] = {};
 
   /** TODO: think this isn't needed anymore? */
@@ -231,10 +234,19 @@ void BLO_read_do_version_after_setup(Main *new_bmain,
  * \{ */
 
 struct BLODataBlockInfo {
+  struct Library {
+    const char *filepath = nullptr;
+    LibraryFlag flag = LibraryFlag(0);
+  };
+
   char name[/*MAX_ID_NAME-2*/ 256] = "";
   AssetMetaData *asset_data = nullptr;
-  /** Ownership over #asset_data above can be "stolen out" of this struct, for more permanent
-   * storage. In that case, set this to false to avoid double freeing of the stolen data. */
+  /** For Library IDs only: specific info, like the stored blendfile path, flags. */
+  BLODataBlockInfo::Library library_data = {};
+  /**
+   * Ownership over #asset_data above can be "stolen out" of this struct, for more permanent
+   * storage. In that case, set this to false to avoid double freeing of the stolen data.
+   */
   bool free_asset_data = false;
   /**
    * Optimization: Tag data-blocks for which we know there is no preview.
@@ -622,6 +634,6 @@ void BLO_readfile_id_runtime_data_free_all(Main &bmain);
  */
 void BLO_readfile_id_runtime_data_free(ID &id);
 
-#define BLEN_THUMB_MEMSIZE_FILE(_x, _y) (sizeof(int) * (2 + (size_t)(_x) * (size_t)(_y)))
+#define BLEN_THUMB_MEMSIZE_FILE(_x, _y) (sizeof(int) * (2 + size_t(_x) * size_t(_y)))
 
 }  // namespace blender

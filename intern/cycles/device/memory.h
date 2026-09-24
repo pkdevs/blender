@@ -41,6 +41,7 @@ enum DataType {
   TYPE_UINT16,
   TYPE_UINT,
   TYPE_INT,
+  TYPE_INT8,
   TYPE_FLOAT,
   TYPE_HALF,
   TYPE_UINT64,
@@ -61,6 +62,8 @@ static constexpr size_t datatype_size(DataType datatype)
       return sizeof(uint16_t);
     case TYPE_INT:
       return sizeof(int);
+    case TYPE_INT8:
+      return sizeof(int8_t);
     case TYPE_HALF:
       return sizeof(half);
     case TYPE_UINT64:
@@ -200,6 +203,12 @@ template<> struct device_type_traits<uint16_t> {
   static_assert(sizeof(uint16_t) == num_elements * datatype_size(data_type));
 };
 
+template<> struct device_type_traits<packed_half3> {
+  static const DataType data_type = TYPE_HALF;
+  static const size_t num_elements = 3;
+  static_assert(sizeof(packed_half3) == num_elements * datatype_size(data_type));
+};
+
 template<> struct device_type_traits<half4> {
   static const DataType data_type = TYPE_HALF;
   static const size_t num_elements = 4;
@@ -210,6 +219,17 @@ template<> struct device_type_traits<uint64_t> {
   static const DataType data_type = TYPE_UINT64;
   static const size_t num_elements = 1;
   static_assert(sizeof(uint64_t) == num_elements * datatype_size(data_type));
+};
+
+template<> struct device_type_traits<Quaternion> {
+  static const DataType data_type = TYPE_FLOAT;
+  static const size_t num_elements = 4;
+  static_assert(sizeof(Quaternion) == num_elements * datatype_size(data_type));
+};
+
+template<> struct device_type_traits<PackedSphericalHarmonicsRest> {
+  static const DataType data_type = TYPE_INT8;
+  static const size_t num_elements = sizeof(PackedSphericalHarmonicsRest);
 };
 
 /* Device Memory
@@ -295,6 +315,8 @@ class device_memory {
 
   /* Memory can only be freed on host and device together. */
   void host_and_device_free();
+  /* Free only the host buffer, leaving any device allocation intact. */
+  void host_only_free();
 
   bool device_is_cpu();
 
@@ -439,6 +461,37 @@ template<typename T> class device_vector : public device_memory {
     return data();
   }
 
+  /* Host-only resize: grows the host buffer while leaving any existing device allocation
+   * untouched. Use this when a kernel may be reading from device_pointer and freeing it
+   * would be unsafe. The device buffer will be reallocated on the next copy_to_device()
+   * call once the device is idle. Only valid when not shrinking. */
+  T *host_only_resize(const size_t new_count)
+  {
+    assert(new_count >= data_size);
+
+    if (new_count != data_size) {
+      void *new_ptr = host_alloc(sizeof(T) * new_count);
+
+      if (new_ptr) {
+        for (size_t i = 0; i < data_size; i++) {
+          ((T *)new_ptr)[i] = ((T *)host_pointer)[i];
+        }
+        for (size_t i = data_size; i < new_count; i++) {
+          ((T *)new_ptr)[i] = T();
+        }
+      }
+
+      host_only_free();
+      host_pointer = new_ptr;
+      modified = true;
+    }
+
+    data_size = new_count;
+    data_width = new_count;
+
+    return data();
+  }
+
   /* Take over data from an existing array. */
   void steal_data(array<T> &from)
   {
@@ -572,7 +625,7 @@ template<typename T> class device_vector : public device_memory {
  * goes out of scope, which should happen before base memory is freed.
  *
  * NOTE: some devices require offset and size of the sub_ptr to be properly
- * aligned to device->mem_address_alingment(). */
+ * aligned to device->mem_address_alignment(). */
 
 class device_sub_ptr {
  public:

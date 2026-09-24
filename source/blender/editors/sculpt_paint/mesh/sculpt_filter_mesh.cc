@@ -14,12 +14,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BLT_translation.hh"
@@ -164,21 +164,22 @@ void cache_init(bContext *C,
   }
 
   const UnifiedPaintSettings *ups = &sd.paint.unified_paint_settings;
-  bke::PaintRuntime *paint_runtime = sd.paint.runtime;
 
-  float3 co;
-
-  if (vc.rv3d && stroke_get_location_bvh(C, co, mval_fl, false)) {
+  std::optional<float3> hit_location;
+  if (vc.rv3d) {
+    hit_location = stroke_get_location_bvh(C, mval_fl, false);
+  }
+  if (hit_location) {
     /* Get radius from brush. */
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
     float radius;
     if (brush) {
-      radius = object_space_radius_get(vc, sd.paint, *brush, co, area_normal_radius);
+      radius = object_space_radius_get(vc, sd.paint, *brush, *hit_location, area_normal_radius);
     }
     else {
       radius = paint_calc_object_space_radius(
-          vc, co, float(ups->size / 2.0f) * area_normal_radius);
+          vc, *hit_location, float(ups->size / 2.0f) * area_normal_radius);
     }
 
     const float radius_sq = math::square(radius);
@@ -186,7 +187,8 @@ void cache_init(bContext *C,
     IndexMaskMemory memory;
     const IndexMask node_mask = bke::pbvh::search_nodes(
         pbvh, memory, [&](const bke::pbvh::Node &node) {
-          return !node_fully_masked_or_hidden(node) && node_in_sphere(node, co, radius_sq, true);
+          return !node_fully_masked_or_hidden(node) &&
+                 node_in_sphere(node, *hit_location, radius_sq, true);
         });
 
     const std::optional<float3> area_normal = calc_area_normal(*depsgraph, *brush, ob, node_mask);
@@ -200,11 +202,9 @@ void cache_init(bContext *C,
 
     /* Update last stroke location */
 
-    mul_m4_v3(ob.object_to_world().ptr(), co);
+    mul_m4_v3(ob.object_to_world().ptr(), *hit_location);
 
-    add_v3_v3(paint_runtime->average_stroke_accum, co);
-    paint_runtime->average_stroke_counter++;
-    paint_runtime->last_stroke_valid = true;
+    bke::paint::stroke_track_location(sd.paint, *hit_location);
   }
   else {
     /* Use last normal. */
@@ -361,12 +361,11 @@ static void calc_smooth_filter(const Depsgraph &depsgraph,
           [&](const int i) {
             LocalData &tls = all_tls.local();
             const Span<int> verts = nodes[i].verts();
-            const Span<float3> positions = gather_data_mesh(
-                position_data.eval, verts, tls.positions);
+            Array<float3, bke::pbvh::MESH_LEAF_LIMIT> positions(verts.size());
+            gather_data_mesh(position_data.eval, verts, positions.as_mutable_span());
             const OrigPositionData orig_data = orig_position_data_get_mesh(object, nodes[i]);
 
-            tls.factors.resize(verts.size());
-            const MutableSpan<float> factors = tls.factors;
+            Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
             fill_factor_from_hide_and_mask(
                 attribute_data.hide_vert, attribute_data.mask, verts, factors);
             auto_mask::calc_vert_factors(
@@ -385,13 +384,11 @@ static void calc_smooth_filter(const Depsgraph &depsgraph,
                 tls.neighbor_offsets,
                 tls.neighbor_data);
 
-            tls.new_positions.resize(verts.size());
-            const MutableSpan<float3> new_positions = tls.new_positions;
+            Array<float3, bke::pbvh::MESH_LEAF_LIMIT> new_positions(verts.size());
             smooth::neighbor_data_average_mesh_check_loose(
-                position_data.eval, verts, neighbors, new_positions);
+                position_data.eval, verts, neighbors, new_positions.as_mutable_span());
 
-            tls.translations.resize(verts.size());
-            const MutableSpan<float3> translations = tls.translations;
+            Array<float3, bke::pbvh::MESH_LEAF_LIMIT> translations(verts.size());
             if (use_original_position) {
               translations_from_new_positions(new_positions, orig_data.positions, translations);
             }
@@ -2029,7 +2026,7 @@ static void mesh_filter_surface_smooth_init(Object &object,
                                             const float current_vertex_displacement)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
-  const int totvert = SCULPT_vertex_count_get(object);
+  const int totvert = vertex_count_get(object);
   filter::Cache *filter_cache = ss.filter_cache;
 
   filter_cache->surface_smooth_laplacian_disp.reinitialize(totvert);
@@ -2062,7 +2059,7 @@ static void mesh_filter_sharpen_init(const Depsgraph &depsgraph,
   const SculptSession &ss = *object.runtime->sculpt_session;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const IndexMask &node_mask = filter_cache.node_mask;
-  const int totvert = SCULPT_vertex_count_get(object);
+  const int totvert = vertex_count_get(object);
 
   filter_cache.sharpen_smooth_ratio = smooth_ratio;
   filter_cache.sharpen_intensify_detail_strength = intensify_detail_strength;
@@ -2236,7 +2233,7 @@ static void sculpt_mesh_filter_apply(bContext *C, wmOperator *op, bool is_replay
   vert_random_access_ensure(ob);
 
   const IndexMask &node_mask = ss.filter_cache->node_mask;
-  if (auto_mask::is_enabled(sd, ob, nullptr) && ss.filter_cache->automasking &&
+  if (auto_mask::is_enabled(sd.paint, ob, nullptr) && ss.filter_cache->automasking &&
       ss.filter_cache->automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL)
   {
     ss.filter_cache->automasking->calc_cavity_factor(depsgraph, ob, node_mask);
@@ -2438,7 +2435,7 @@ static wmOperatorStatus sculpt_mesh_filter_modal(bContext *C, wmOperator *op, co
 
   sculpt_mesh_update_strength(op, ss, prev_mval, mval);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   sculpt_mesh_filter_apply(C, op);
 
@@ -2468,13 +2465,13 @@ static void sculpt_filter_specific_init(const Depsgraph &depsgraph,
       break;
     }
     case MeshFilterType::EnhanceDetails: {
-      ss.filter_cache->detail_directions.reinitialize(SCULPT_vertex_count_get(object));
+      ss.filter_cache->detail_directions.reinitialize(vertex_count_get(object));
       calc_smooth_translations(
           depsgraph, object, ss.filter_cache->node_mask, ss.filter_cache->detail_directions);
       break;
     }
     case MeshFilterType::EraseDisplacement: {
-      ss.filter_cache->limit_surface_co.reinitialize(SCULPT_vertex_count_get(object));
+      ss.filter_cache->limit_surface_co.reinitialize(vertex_count_get(object));
       calc_limit_surface_positions(object, ss.filter_cache->limit_surface_co);
       break;
     }
@@ -2501,10 +2498,10 @@ static wmOperatorStatus sculpt_mesh_filter_start(bContext *C, wmOperator *op)
   RNA_int_get_array(op->ptr, "start_mouse", mval);
 
   const MeshFilterType filter_type = MeshFilterType(RNA_enum_get(op->ptr, "type"));
-  const bool use_automasking = auto_mask::is_enabled(sd, ob, nullptr);
+  const bool use_automasking = auto_mask::is_enabled(sd.paint, ob, nullptr);
   const bool needs_topology_info = sculpt_mesh_filter_needs_pmap(filter_type) || use_automasking;
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   if (!shape_key_check(ob, op->reports)) {
     return OPERATOR_CANCELLED;
@@ -2529,8 +2526,7 @@ static wmOperatorStatus sculpt_mesh_filter_start(bContext *C, wmOperator *op)
   if (use_automasking) {
     /* Update the active face set manually as the paint cursor is not enabled when using the
      * Mesh Filter Tool. */
-    CursorGeometryInfo cgi;
-    cursor_geometry_info_update(C, &cgi, mval_fl, false);
+    cursor_geometry_info_update(C, mval_fl, false);
   }
 
   vert_random_access_ensure(ob);
@@ -2550,8 +2546,8 @@ static wmOperatorStatus sculpt_mesh_filter_start(bContext *C, wmOperator *op)
 
   filter::Cache *filter_cache = ss.filter_cache;
   filter_cache->active_face_set = face_set_none_id;
-  if (auto_mask::is_enabled(sd, ob, nullptr)) {
-    auto_mask::filter_cache_ensure(*depsgraph, sd, ob);
+  if (auto_mask::is_enabled(sd.paint, ob, nullptr)) {
+    auto_mask::filter_cache_ensure(*depsgraph, sd.paint, ob);
   }
 
   sculpt_filter_specific_init(*depsgraph, filter_type, op, ob);
@@ -2652,7 +2648,7 @@ void SCULPT_OT_mesh_filter(wmOperatorType *ot)
 
   ot->invoke = sculpt_mesh_filter_invoke;
   ot->modal = sculpt_mesh_filter_modal;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
   ot->exec = sculpt_mesh_filter_exec;
   ot->ui = sculpt_mesh_ui_exec;
 

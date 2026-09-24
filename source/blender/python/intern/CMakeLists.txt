@@ -64,6 +64,7 @@ set(SRC
   bpy_rna_text.cc
   bpy_rna_types_capi.cc
   bpy_rna_ui.cc
+  bpy_rna_wm.cc
   bpy_traceback.cc
   bpy_utils_previews.cc
   bpy_utils_units.cc
@@ -95,6 +96,7 @@ set(SRC
   bpy_library.hh
   bpy_msgbus.hh
   bpy_operator.hh
+  bpy_operator_function.hh
   bpy_operator_wrap.hh
   bpy_path.hh
   bpy_props.hh
@@ -110,6 +112,7 @@ set(SRC
   bpy_rna_text.hh
   bpy_rna_types_capi.hh
   bpy_rna_ui.hh
+  bpy_rna_wm.hh
   bpy_traceback.hh
   bpy_utils_previews.hh
   bpy_utils_units.hh
@@ -162,8 +165,7 @@ endif()
 # Without this, the absolute path on the builder is used, causing HTTPS access to fail.
 # For example `urllib.request.urlopen("https://projects.blender.org")` fails
 # (or any other HTTPS site). see: #102300 for details.
-# NOTE: that this isn't necessary on WIN32.
-if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND (APPLE OR WITH_INSTALL_PORTABLE) AND (NOT WIN32))
+if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND WITH_INSTALL_PORTABLE)
   # - `PYTHON_SSL_CERT_FILE` absolute path to the PEM file.
   find_python_module_file("certifi/cacert.pem" PYTHON_SSL_CERT_FILE _python_ssl_cert_file_relative)
   mark_as_advanced(PYTHON_SSL_CERT_FILE)
@@ -214,8 +216,8 @@ if(WITH_CYCLES_OSL)
   add_definitions(-DWITH_CYCLES_OSL)
 endif()
 
-if(WITH_CYCLES_EMBREE)
-  add_definitions(-DWITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
+  add_definitions(-DWITH_EMBREE)
 endif()
 
 if(WITH_FREESTYLE)
@@ -227,10 +229,6 @@ endif()
 
 if(WITH_IMAGE_CINEON)
   add_definitions(-DWITH_IMAGE_CINEON)
-endif()
-
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_IMAGE_OPENEXR)
 endif()
 
 if(WITH_IMAGE_OPENJPEG)
@@ -300,6 +298,10 @@ if(WITH_IO_PLY)
   add_definitions(-DWITH_IO_PLY)
 endif()
 
+if(WITH_IO_SPZ)
+  add_definitions(-DWITH_IO_SPZ)
+endif()
+
 if(WITH_IO_STL)
   add_definitions(-DWITH_IO_STL)
 endif()
@@ -340,6 +342,10 @@ endif()
 
 if(WITH_HARU)
   add_definitions(-DWITH_HARU)
+endif()
+
+if(WITH_SDL)
+  add_definitions(-DWITH_SDL)
 endif()
 
 if(WITH_HYDRA)
