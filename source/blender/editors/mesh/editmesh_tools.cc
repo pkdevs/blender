@@ -89,13 +89,14 @@ namespace blender {
 
 static wmOperatorStatus mesh_mask_verts_exec(bContext *C, wmOperator *op)
 {
-  ViewLayer *view_layer = CTX_data_view_layer(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
   const float factor = RNA_float_get(op->ptr, "factor");
   bool changed = false;
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
@@ -124,7 +125,7 @@ static wmOperatorStatus mesh_mask_verts_exec(bContext *C, wmOperator *op)
       params.calc_looptris = true;
       params.calc_normals = false;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     }
   }
 
@@ -158,12 +159,14 @@ void MESH_OT_mask_verts(wmOperatorType *ot)
 
 static wmOperatorStatus mesh_clear_mask_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Scene *scene = CTX_data_scene(C);
   bool changed = false;
 
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
@@ -188,7 +191,7 @@ static wmOperatorStatus mesh_clear_mask_exec(bContext *C, wmOperator *op)
     params.calc_looptris = true;
     params.calc_normals = false;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
 
   if (changed) {
