@@ -1,3 +1,4 @@
 Referenced by pull request #154964, Fix: Attributes: Missing w component addition for float4 type
 Referenced by commit 039ea7a5f72a5d43765b0ff436e0a01e912275a4, Fix: Attributes: Missing w component addition for float4 type
 Referenced by pull request #155867, Fix #155858: accessing UV vectors in Python is extremely slow
+Referenced by issue #164295, Geometry Nodes: Store Named Attribute node doesn't handle several Data Types properly
