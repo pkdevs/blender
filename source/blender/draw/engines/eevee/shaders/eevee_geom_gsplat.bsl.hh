@@ -30,9 +30,7 @@ namespace eevee {
     [[resource_table, condition(use_clip_plane)]] const ClipPlane &clip_srt,
     [[resource_table, condition(use_velocity)]] const GeometryVelocity &geo_vel,
     [[out]] VertOutCommon &interp,
-    [[out]] VertOutResID &interp_flat,
     [[out]] VertOutGSplat &gsplat_interp,
-    [[out]] VertOutGSplatFlat &gsplat_interp_flat,
     [[out, condition(is_shadow_pipe)]] VertOutShadow &shadow_iface,
     [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
     [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
@@ -59,7 +57,7 @@ namespace eevee {
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
   }
 
-  init_interface(interp, interp_flat, id.raw_id);
+  init_interface(interp, id.raw_id);
 
   /* TODO(not_mark): Disabled compute pass for now, due to incompatibility with instancing. */
   /* draw::gsplat::SplatShape gs;
@@ -85,7 +83,7 @@ namespace eevee {
 
   /* Output interface data. */
   gsplat_interp.billboard_co = gs.shape_offset;
-  gsplat_interp_flat.opacity = opacity;
+  gsplat_interp.opacity = opacity;
   interp.P = gs.wP;
   interp.N = gs.wN;
 
@@ -110,7 +108,7 @@ namespace eevee {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = gs.mean * ob_infos.orco_mul + ob_infos.orco_add;
 
-  [[maybe_unused]] ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
+  [[maybe_unused]] ShadingData sd = init_globals(uni, interp, view, true, float4(0));
 
   attrib_load(PointCloudPoint{gs.mean, int(gs.id), lP_orco});
 

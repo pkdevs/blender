@@ -22,9 +22,7 @@ struct VertOutCommon {
   [[smooth]] float3 P;
   /* World Normal. */
   [[smooth]] float3 N;
-};
-
-struct VertOutResID {
+  /* Resource ID. */
   [[flat]] uint resource_id_raw;
 };
 
@@ -44,26 +42,17 @@ struct VertOutCurves {
   [[smooth]] float time_width;
   [[smooth]] float radius;
   [[smooth]] float point_id; /* Smooth to be used for barycentric. */
-};
-
-struct VertOutCurvesFlat {
   [[flat]] int strand_id;
 };
 
 struct VertOutPointcloud {
   [[smooth]] float radius;
   [[smooth]] float3 position;
-};
-
-struct VertOutPointcloudFlat {
   [[flat]] int id;
 };
 
 struct VertOutGSplat {
   [[smooth]] float2 billboard_co;
-};
-
-struct VertOutGSplatFlat {
   [[flat]] float opacity;
 };
 
@@ -103,7 +92,6 @@ void init_globals_mesh([[maybe_unused]] const VertOutCommon &interp, ShadingData
 
 void init_globals_curves(const VertOutCommon &interp,
                          const VertOutCurves &curve_interp,
-                         const VertOutCurvesFlat &curve_interp_flat,
                          ShadingData &sd,
                          const ViewMatrices view)
 {
@@ -120,25 +108,22 @@ void init_globals_curves(const VertOutCommon &interp,
 
   sd.is_strand = true;
   sd.hair_diameter = curve_interp.radius * 2.0;
-  sd.hair_strand_id = curve_interp_flat.strand_id;
+  sd.hair_strand_id = curve_interp.strand_id;
 #if defined(USE_BARYCENTRICS) && defined(GPU_FRAGMENT_SHADER)
   sd.barycentric_coords.y = fract(curve_interp.point_id);
   sd.barycentric_coords.x = 1.0 - sd.barycentric_coords.y;
 #endif
 }
 
-void init_globals_pointcloud(const VertOutPointcloud &ptcloud_interp,
-                             const VertOutPointcloudFlat &ptcloud_interp_flat,
-                             ShadingData &sd)
+void init_globals_pointcloud(const VertOutPointcloud &ptcloud_interp, ShadingData &sd)
 {
   sd.point_position = ptcloud_interp.position;
   sd.point_radius = ptcloud_interp.radius;
-  sd.point_id = ptcloud_interp_flat.id;
+  sd.point_id = ptcloud_interp.id;
 }
 
 [[nodiscard]] ShadingData init_globals([[resource_table]] const eevee::Uniform &uni,
                                        const VertOutCommon &interp,
-                                       const VertOutResID &interp_flat,
                                        const ViewMatrices view,
                                        bool front_face,
                                        float4 fragment_co)
@@ -169,7 +154,7 @@ void init_globals_pointcloud(const VertOutPointcloud &ptcloud_interp,
   sd.barycentric_coords = float2(0.0f);
   sd.barycentric_dists = float3(0.0f);
   sd.thickness = Thickness::zero();
-  sd.resource_id_raw = interp_flat.resource_id_raw;
+  sd.resource_id_raw = interp.resource_id_raw;
 
   sd.N = (front_face) ? sd.N : -sd.N;
   sd.Ni = (front_face) ? sd.Ni : -sd.Ni;
@@ -183,19 +168,17 @@ void init_globals_pointcloud(const VertOutPointcloud &ptcloud_interp,
 }
 
 /* Avoid some compiler issue with non set interface parameters. */
-void init_interface(VertOutCommon &interp, VertOutResID &interp_flat, uint resource_id_raw)
+void init_interface(VertOutCommon &interp, uint resource_id_raw)
 {
   interp.P = float3(0.0f);
   interp.N = float3(0.0f);
-  interp_flat.resource_id_raw = resource_id_raw;
+  interp.resource_id_raw = resource_id_raw;
 }
 
 float3 gsplat_amend_transmittance([[maybe_unused]] const VertOutGSplat &gsplat_interp,
-                                  [[maybe_unused]] const VertOutGSplatFlat &gsplat_interp_flat,
                                   float3 transmittance)
 {
-  float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co,
-                                                gsplat_interp_flat.opacity);
+  float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.billboard_co, gsplat_interp.opacity);
   alpha = saturate(alpha * (256.0f / 255.0f));
   return float3(1.0f) - alpha * saturate(float3(1.0f) - transmittance);
 }

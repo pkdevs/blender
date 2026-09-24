@@ -47,13 +47,12 @@ void surf_world([[resource_table]] KernelGlobals &kg,
                 [[resource_table]] const draw::View &views,
                 [[frag_coord]] const float4 frag_co,
                 [[in]] const VertOutCommon &interp,
-                [[in]] const VertOutResID &interp_flat,
                 [[out]] SurfWorldFragOut &frag_out,
                 [[front_facing]] const bool front_face)
 {
   const ViewMatrices view = views.get(0);
 
-  ShadingData sd = init_globals(uni, interp, interp_flat, view, front_face, frag_co);
+  ShadingData sd = init_globals(uni, interp, view, front_face, frag_co);
 
   /* View position is passed to keep accuracy. */
   sd.N = view.normal_view_to_world(view.view_incident_vector(interp.P));

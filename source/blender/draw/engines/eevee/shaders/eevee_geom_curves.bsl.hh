@@ -36,9 +36,7 @@ namespace eevee {
     [[resource_table, condition(use_clip_plane)]] const ClipPlane &clip_srt,
     [[resource_table, condition(use_velocity)]] const GeometryVelocity &geo_vel,
     [[out]] VertOutCommon &interp,
-    [[out]] VertOutResID &interp_flat,
     [[out]] VertOutCurves &curve_interp,
-    [[out]] VertOutCurvesFlat &curve_interp_flat,
     [[out, condition(is_shadow_pipe)]] VertOutShadow &shadow_iface,
     [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
     [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
@@ -65,7 +63,7 @@ namespace eevee {
     }
   }
 
-  init_interface(interp, interp_flat, id.raw_id);
+  init_interface(interp, id.raw_id);
 
   const draw::curves::Point ls_pt = curves.point_get(uint(vert_id));
   const draw::curves::Point ws_pt = curves.object_to_world(ls_pt, obj.model);
@@ -85,7 +83,7 @@ namespace eevee {
   curve_interp.time_width = ws_pt.azimuthal_offset * ws_pt.radius;
   /* Note: Used for attribute loading. */
   curve_interp.point_id = float(ws_pt.point_id);
-  curve_interp_flat.strand_id = ws_pt.curve_id;
+  curve_interp.strand_id = ws_pt.curve_id;
 
   if (pipe.use_velocity) [[static_branch]] {
     /* Due to the screen space nature of the vertex positioning, we compute only the motion of
@@ -107,8 +105,8 @@ namespace eevee {
   float3 lP_root = curves.get_curve_root_pos(ws_pt.point_id, ws_pt.curve_segment);
   float3 lP_orco = lP_root * ob_infos.orco_mul + ob_infos.orco_add;
 
-  ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
-  init_globals_curves(interp, curve_interp, curve_interp_flat, sd, view);
+  ShadingData sd = init_globals(uni, interp, view, true, float4(0));
+  init_globals_curves(interp, curve_interp, sd, view);
 
   attrib_load(CurvesPoint{ws_pt.curve_id,
                           ws_pt.point_id,

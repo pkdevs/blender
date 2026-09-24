@@ -36,9 +36,7 @@ struct GeomPointCloud {
     [[resource_table, condition(use_clip_plane)]] const ClipPlane &clip_srt,
     [[resource_table, condition(use_velocity)]] const GeometryVelocity &geo_vel,
     [[out]] VertOutCommon &interp,
-    [[out]] VertOutResID &interp_flat,
     [[out]] VertOutPointcloud &pointcloud_interp,
-    [[out]] VertOutPointcloudFlat &pointcloud_interp_flat,
     [[out, condition(is_shadow_pipe)]] VertOutShadow &shadow_iface,
     [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
     [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
@@ -66,7 +64,7 @@ struct GeomPointCloud {
     }
   }
 
-  init_interface(interp, interp_flat, id.raw_id);
+  init_interface(interp, id.raw_id);
 
   const eObjectInfoFlag ob_flag = ob_infos.flag;
 
@@ -75,7 +73,7 @@ struct GeomPointCloud {
   const draw::pointcloud::ShapePoint pt = draw::pointcloud::shape_point_get(
       ws_pt, view.world_incident_vector(ws_pt.P), view.up(), ob_flag);
 
-  pointcloud_interp_flat.id = ws_pt.point_id;
+  pointcloud_interp.id = ws_pt.point_id;
   pointcloud_interp.position = ws_pt.P;
   pointcloud_interp.radius = ws_pt.radius;
 
@@ -91,7 +89,7 @@ struct GeomPointCloud {
   if (pipe.use_velocity) [[static_branch]] {
     float3 lP = obj.point_world_to_object(pointcloud_interp.position);
     float3 prv, nxt;
-    geo_vel.local_position_deltas(lP, pointcloud_interp_flat.id, prv, nxt, resource_id);
+    geo_vel.local_position_deltas(lP, pointcloud_interp.id, prv, nxt, resource_id);
     /* FIXME(fclem): Evaluating before displacement avoid displacement being treated as motion but
      * ignores motion from animated displacement. Supporting animated displacement motion vectors
      * would require evaluating the nodetree multiple time with different nodetree UBOs evaluated
@@ -103,8 +101,8 @@ struct GeomPointCloud {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = ls_pt.P * ob_infos.orco_mul + ob_infos.orco_add;
 
-  ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
-  init_globals_pointcloud(pointcloud_interp, pointcloud_interp_flat, sd);
+  ShadingData sd = init_globals(uni, interp, view, true, float4(0));
+  init_globals_pointcloud(pointcloud_interp, sd);
 
   attrib_load(PointCloudPoint{ls_pt.P, ws_pt.point_id, lP_orco});
 

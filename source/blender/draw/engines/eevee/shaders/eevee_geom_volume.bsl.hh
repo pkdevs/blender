@@ -26,7 +26,6 @@ struct GeomVolumeIn {
                                              [[resource_table]] const draw::Infos &infos,
                                              [[resource_table]] const draw::Resource &res_id,
                                              [[out]] VertOutCommon &interp,
-                                             [[out]] VertOutResID &interp_flat,
                                              [[in]] const GeomVolumeIn &vert_in,
                                              [[position]] float4 &out_position)
 {
@@ -37,7 +36,7 @@ struct GeomVolumeIn {
   const ViewMatrices view = views.get(view_id);
   const ObjectMatrices obj = models.get(resource_id);
 
-  init_interface(interp, interp_flat, id.raw_id);
+  init_interface(interp, id.raw_id);
 
   /* TODO(fclem): Find a better way? This is reverting what draw_resource_finalize does. */
   ObjectInfos info = infos.get(resource_id);

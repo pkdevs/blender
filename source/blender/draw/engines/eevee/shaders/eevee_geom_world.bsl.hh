@@ -22,12 +22,11 @@ namespace eevee {
                                             [[resource_table]] const draw::View &views,
                                             [[resource_table]] const draw::Model & /*models*/,
                                             [[out]] VertOutCommon &interp,
-                                            [[out]] VertOutResID &interp_flat,
                                             [[vertex_id]] const int vert_id,
                                             [[position]] float4 &out_position)
 {
   /* (W)Intel drivers require all varying iface to be written to inside the Vertex shader. */
-  interp_flat.resource_id_raw = 0u;
+  interp.resource_id_raw = 0u;
 
   /* Full-screen triangle. */
   int v = vert_id % 3;

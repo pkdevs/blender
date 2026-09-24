@@ -33,7 +33,6 @@ struct GeomMeshVertIn {
     [[resource_table, condition(use_velocity)]] const GeometryVelocity &geo_vel,
     [[in]] const GeomMeshVertIn &vert_in,
     [[out]] VertOutCommon &interp,
-    [[out]] VertOutResID &interp_flat,
     [[out, condition(is_shadow_pipe)]] VertOutShadow &shadow_iface,
     [[out, condition(is_shadow_pipe)]] VertOutShadowClipping &shadow_clip,
     [[out, condition(use_clip_plane)]] VertOutClipPlane &clip_interp,
@@ -60,7 +59,7 @@ struct GeomMeshVertIn {
     }
   }
 
-  init_interface(interp, interp_flat, id.raw_id);
+  init_interface(interp, id.raw_id);
 
   interp.P = obj.point_object_to_world(vert_in.pos);
   interp.N = normalize(obj.normal_object_to_world(vert_in.nor));
@@ -80,7 +79,7 @@ struct GeomMeshVertIn {
   /* Compute Original Coordinate (ORCO). */
   float3 lP_orco = vert_in.pos * ob_infos.orco_mul + ob_infos.orco_add;
 
-  ShadingData sd = init_globals(uni, interp, interp_flat, view, true, float4(0));
+  ShadingData sd = init_globals(uni, interp, view, true, float4(0));
   init_globals_mesh(interp, sd);
 
   attrib_load(MeshVertex{vert_in.pos, to_float3x3(obj.model_inverse), lP_orco});

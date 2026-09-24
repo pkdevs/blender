@@ -128,30 +128,26 @@ struct SurfVolume {
 
 /* Note: Only the front fragments have to be invoked. */
 [[fragment]] [[early_fragment_tests]] [[texture_atomic]]
-void surf_volume(
-    [[resource_table]] KernelGlobals &kg,
-    [[resource_table]] PipelineConstants &pipe,
-    [[resource_table]] SurfVolume &srt,
-    [[resource_table]] const Uniform &uni,
-    [[resource_table]] const draw::Model &models,
-    [[resource_table]] const draw::View &views,
-    [[resource_table]] const draw::Infos &infos,
-    [[resource_table]] const Sampling &sampling,
-    [[resource_table]] const UtilityTexture & /*util_tx*/,
-    [[in]] const VertOutCommon &interp,
-    [[in]] const VertOutResID &interp_flat,
-    [[in]] [[condition(is_curves)]] const VertOutCurves &curves_interp,
-    [[in]] [[condition(is_curves)]] const VertOutCurvesFlat &curves_interp_flat,
-    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloud &ptcloud_interp,
-    [[in]] [[condition(is_pointcloud)]] const VertOutPointcloudFlat &ptcloud_interp_flat,
-    [[frag_coord]] const float4 frag_co,
-    [[front_facing]] const bool front_face)
+void surf_volume([[resource_table]] KernelGlobals &kg,
+                 [[resource_table]] PipelineConstants &pipe,
+                 [[resource_table]] SurfVolume &srt,
+                 [[resource_table]] const Uniform &uni,
+                 [[resource_table]] const draw::Model &models,
+                 [[resource_table]] const draw::View &views,
+                 [[resource_table]] const draw::Infos &infos,
+                 [[resource_table]] const Sampling &sampling,
+                 [[resource_table]] const UtilityTexture & /*util_tx*/,
+                 [[in]] const VertOutCommon &interp,
+                 [[in]] [[condition(is_curves)]] const VertOutCurves &curves_interp,
+                 [[in]] [[condition(is_pointcloud)]] const VertOutPointcloud &ptcloud_interp,
+                 [[frag_coord]] const float4 frag_co,
+                 [[front_facing]] const bool front_face)
 {
   int3 froxel = int3(int2(frag_co.xy), 0);
   float offset = sampling.rng_1D_get(SAMPLING_VOLUME_W);
   float jitter = volume_froxel_jitter(froxel.xy, offset);
 
-  draw::ID id{interp_flat.resource_id_raw};
+  draw::ID id{interp.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
   const ObjectMatrices obj = models.get(resource_id);
   const ObjectInfos ob_infos = infos.get(resource_id);
@@ -159,15 +155,15 @@ void surf_volume(
 
   VolumeProperties prop;
 
-  ShadingData sd = init_globals(uni, interp, interp_flat, view, front_face, frag_co);
+  ShadingData sd = init_globals(uni, interp, view, front_face, frag_co);
   if (pipe.is_mesh) [[static_branch]] {
     init_globals_mesh(interp, sd);
   }
   else if (pipe.is_curves) [[static_branch]] {
-    init_globals_curves(interp, curves_interp, curves_interp_flat, sd, view);
+    init_globals_curves(interp, curves_interp, sd, view);
   }
   else if (pipe.is_pointcloud) [[static_branch]] {
-    init_globals_pointcloud(ptcloud_interp, ptcloud_interp_flat, sd);
+    init_globals_pointcloud(ptcloud_interp, sd);
   }
 
   if (srt.is_homogenous) [[static_branch]] {
