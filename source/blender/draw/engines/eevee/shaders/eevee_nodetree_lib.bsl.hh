@@ -225,8 +225,8 @@ struct KernelGlobals {
 
   ObjectMatrices light_matrices_get(int light_index)
   {
-    [[resource_table]] const draw::Model &models = this->model;
-    [[resource_table]] const eevee::LightRenderData &lrds = this->lrd;
+    [[resource_table]] const draw::Model &models = model;
+    [[resource_table]] const eevee::LightRenderData &lrds = lrd;
     return models.get(lrds.light_buf[light_index].resource_id);
   }
 };
