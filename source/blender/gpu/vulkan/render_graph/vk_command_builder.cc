@@ -1138,6 +1138,8 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_r
         change.vk_image_layout,
         change.vk_image_aspect,
         change.subimage);
+    r_barrier.image_memory_barriers = r_barrier.image_memory_barriers.with_new_end(
+        command_builder.vk_image_memory_barriers_.size());
 #if 0
     std::cout << __func__ << ": transition layout image=" << change.vk_image
               << ", layer=" << change.subimage.layer_base
