@@ -99,7 +99,8 @@ std::unique_ptr<ImageData> ImageData::init_mask(ImagePaintSettings &settings)
 
 static void fetch_image_buffers(ImageData &image_data,
                                 bke::pbvh::Node & /*node*/,
-                                PixelNode &pixel_node)
+                                PixelNode &pixel_node,
+                                const bool is_mask_brush)
 {
   PRF_scope(ProfileCategory::Editor);
   for (const UDIMTilePixels &tile : pixel_node.tiles) {
@@ -133,7 +134,7 @@ static void fetch_image_buffers(ImageData &image_data,
             buffer_colorspace_name);
 
         TileColorspaceProcessor processor;
-        if (!buffer_colorspace) {
+        if (!buffer_colorspace || is_mask_brush) {
           return processor;
         }
 
@@ -785,8 +786,9 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                                                 mask_brush_blend_settings(brush, is_inverted) :
                                                 PaintBlendSettings(paint, brush, is_inverted);
 
-  node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+  node_mask.foreach_index([&](const int i) {
+    fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush);
+  });
 
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
