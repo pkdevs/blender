@@ -10,7 +10,15 @@ if(NOT WITH_LIBS_PRECOMPILED)
   unset(LIBDIR)
 else()
   if(NOT DEFINED LIBDIR AND ANDROID)
-    set(LIBDIR_ANDROID ${CMAKE_SOURCE_DIR}/lib/android_arm64)
+    # Map the Android ABI onto Blender's own architecture naming conventions,
+    # matching the directory the dependency builder harvests into.
+    if(ANDROID_ABI STREQUAL "arm64-v8a")
+      set(LIBDIR_ANDROID ${CMAKE_SOURCE_DIR}/lib/android_arm64)
+    elseif(ANDROID_ABI STREQUAL "x86_64")
+      set(LIBDIR_ANDROID ${CMAKE_SOURCE_DIR}/lib/android_x64)
+    else()
+      message(FATAL_ERROR "Unsupported Android ABI \"${ANDROID_ABI}\".")
+    endif()
 
     file(GLOB LIBDIR_RESULT ${LIBDIR_ANDROID}/*)
     list(LENGTH LIBDIR_RESULT LIBDIR_LEN)
