@@ -89,9 +89,9 @@ class ZoneOperation;
  *
  * Zones are evaluated in a special manner. The scheduler only contains the output node of each
  * zone, and when the evaluator encounters such a node, it constructs a zone operation that
- * internally calls the node tree evaluator only on nodes inside the zone, and the same happen for
+ * internally calls the node tree evaluator only on nodes inside the zone, and the same happens for
  * nested zones recursively. The only complication is external inputs that go into a zone from the
- * outside. Each of those inputs have a corresponding operation input with an identifier derived
+ * outside. Each of those inputs has a corresponding operation input with an identifier derived
  * from the origin output as returned by ZoneTreeOperation::get_external_input_identifier, and
  * those are linked appropriately when needed, additionally, their reference count is incremented
  * by the number of references inside the zone as in compute_zone_external_input_reference_counts.
