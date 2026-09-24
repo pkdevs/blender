@@ -495,8 +495,6 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   reservoir->luminance = buffer[i++];
 
-  reservoir->M = (int)buffer[i];
-
   // ccl_debug_printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
   //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
 // ccl_debug_printf( // Rejected candidates
@@ -511,10 +509,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 //     reservoir->reference.prim,
 //     reservoir->reference.object);
 
-  // return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
 
-
-// !!!: DEBUG ONLY
   /* No selected sample exists in an empty reservoir.
    * Do not attempt to restore/reconstruct its light reference.
    */
@@ -522,6 +517,9 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
     // ccl_debug_printf("restir_unpack_reservoir() returns false on empty reservoir!\n\n");
     return false;
   }
+
+  /* Do not deserialize M until after it's established that the reservoir is non-empty. */
+  reservoir->M = (int)buffer[i]; // !!!: unconditionally overwrites
 
 if (reservoir->M > 0) {
 ccl_debug_printf( // Accepted candidates
@@ -788,7 +786,7 @@ ccl_device_inline void global_reservoir_add_reservoir(
   }
 }
 
-// TODO: Compare against restir_unpack_reservoir() for BackGround
+// TODO(Tri): Double check
 ccl_device_inline bool restir_unpack_reservoir_pt(KernelGlobals kg,
                                                   ccl_private GlobalReservoir *reservoir,
                                                   ccl_global float *buffer)

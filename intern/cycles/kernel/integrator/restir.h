@@ -142,7 +142,7 @@ ccl_device_inline bool integrator_restir_unpack_reservoir( // !!!: DI
 }
 
 // TODO(Tri): Complete
-ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg, // !!!: GI
+ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg, // !!!: GI 
                                                           ccl_private GlobalReservoir *reservoir,
                                                           uint32_t render_pixel_index,
                                                           ccl_global float *ccl_restrict
@@ -281,28 +281,6 @@ float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
   return dot(spectrum_to_rgb(radiance.sum), float4_to_float3(kernel_data.film.rgb_to_y));
 }
 
-// TODO(Tri): Remove
-/* current->sd is already reconstructed via shader_data_setup_from_restir()
- * by the time this runs, so we compute the motion vector directly instead
- * of reading PASS_MOTION.
- *
- * .xy is (previous raster pos, current raster pos). */
-// ccl_device_inline float2 restir_temporal_motion_vector(KernelGlobals kg,
-//                                                        const ccl_private ShaderData *sd)
-// {
-// ccl_debug_printf(
-//     "restir_temporal_motion_vector sd: object=%d prim=%d type=%d shader=%d P=(%f, %f, %f)\n",
-//     sd->object, sd->prim, sd->type, sd->shader,
-//     (double)sd->P.x, (double)sd->P.y, (double)sd->P.z);
-
-//   const float4 motion = primitive_motion_vector(kg, sd);
-
-// ccl_debug_printf("restir_temporal_motion_vector(), motion=(%f, %f, %f, %f)\n",
-//                   (double)motion.x, (double)motion.y, (double)motion.z, (double)motion.w);
-
-//   return make_float2(motion.x, motion.y);
-// }
-
 /* Unpack the canonical (this-pixel, non-neighbor) DI reservoir. Shared by
  * streaming_di_samples() and integrator_restir_temporal() — both need the
  * same "read whatever initial candidates or prior-stage result currently
@@ -318,6 +296,7 @@ ccl_device_inline Reservoir restir_unpack_canonical_reservoir(KernelGlobals kg,
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
+  // !!!: canonical.M gets zero here:
   if (integrator_restir_unpack_reservoir(kg, &canonical, render_pixel_index, render_buffer, read_prev)) {
     light_sample_from_reference(kg,
                                 &canonical.reference,
@@ -524,7 +503,7 @@ ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack histo
   current->reservoir.M += history.M;
 
 ccl_debug_printf("\n--- streaming_temporal_sample(), returned true! total_weight=%f ---\n\n\n",
-       (double)history.total_weight);
+    (double)history.total_weight); // !!!(Tri): Still some occasional zero weights!
   return true;
 }
 
@@ -589,7 +568,7 @@ ccl_debug_printf(
           kernel_data.integrator.restir_temporal_normal_threshold,
           kernel_data.integrator.restir_temporal_depth_threshold))
   {
-ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_reprojection()\n\n");
+ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_reprojection()\n\n"); 
 
     return false; /* Reprojection miss: disocclusion, silhouette edge, etc. */
   }
@@ -607,7 +586,10 @@ ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_r
     return false;
   }
 
-  history.M = min( 
+ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M=%f\n", 
+    (double)history.M, (double)current->reservoir.M); // !!!: current->reservoir.M (Before) coming out 0 on accepted candidates
+
+  history.M = min( // !!!
       history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_frame_count);
 
   light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
@@ -616,7 +598,7 @@ ccl_debug_printf("streaming_temporal_sample() returned false early on is_valid_r
   radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
   const float history_at_current = compute_luminance(kg, history.radiance);
 
-
+// !!!: 0 for the majority of pixels,
 const float old_M = current->reservoir.M; // TODO(Tri): Remove
 const float history_M = history.M;
 
@@ -629,7 +611,7 @@ const float history_M = history.M;
   current->reservoir.M += history.M;
 
 ccl_debug_printf(
-    "TEMPORAL_FRAME ACCEPT pixel=(%d,%d) M=%f->%f history_M=%f W=%f L=%f\n",
+    "TEMPORAL_FRAME ACCEPT pixel=(%d,%d) M=%f->%f history_M=%f W=%f L=%f\n", 
     x, y,
     (double)old_M,
     (double)current->reservoir.M,
@@ -669,6 +651,7 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   const bool visibility = kernel_data.integrator.restir_unbiased;
 
+  // !!!: Sets current->reservoir.M
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
 
   const bool use_temporal_samples = kernel_data.integrator.use_temporal_samples;

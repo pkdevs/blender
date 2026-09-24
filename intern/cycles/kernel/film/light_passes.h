@@ -813,11 +813,11 @@ ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir 
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
   film_overwrite_pass_float(ptr++, reservoir->luminance);
-  film_overwrite_pass_float(ptr,   (float)reservoir->M);
+  film_overwrite_pass_float(ptr,   (float)reservoir->M); // !!!: Issue here? canonical cannot keep reservoir_init()'s default (1) on empty reservoirs since this overwrites 'em
 
   if (reservoir->luminance > 0) {
-    ccl_debug_printf("film_write_pass_reservoir_at(), total_weight=%f luminance=%f, M=%d\n",
-          (double)reservoir->total_weight, (double)reservoir->luminance, reservoir->M);
+    ccl_debug_printf("film_write_pass_reservoir_at(), total_weight=%f luminance=%f, (float)M=%f\n",
+          (double)reservoir->total_weight, (double)reservoir->luminance, (double)reservoir->M);
   }
 }
 
@@ -838,7 +838,7 @@ ccl_device_inline void film_write_pass_reservoir(
   film_write_pass_reservoir_at(reservoir, ptr);
 }
 
-ccl_device_inline void film_write_pass_reservoir_temporal( //
+ccl_device_inline void film_write_pass_reservoir_temporal(
     KernelGlobals kg,
     ConstIntegratorState state,
     ccl_private const Reservoir *reservoir,
@@ -913,7 +913,13 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
   Reservoir reservoir;
   reservoir_init(kg, &reservoir);
 
-  const bool unpack_ok = restir_unpack_reservoir(kg, &reservoir, buffer); // !!!: DI; 
+  const bool unpack_ok = restir_unpack_reservoir(kg, &reservoir, buffer); // !!!: DI;
+
+  // /* An empty reservoir should simply not be finalized/written. */
+  // if (!unpack_ok) { // !!!(Tri): Ensure Correctness
+  //   return;
+  // }
+
 
   // ccl_debug_printf(
   //     "\n=== DI integrator_finalize_reservoir(); FINALIZE: AFTER UNPACK ===\n"
@@ -937,17 +943,23 @@ if (finalize_ok) {
       "finalize_ok=%d\n"
       "total_weight=%f\n"
       "luminance=%f\n"
+      "M=%d\n"
       "prim=%d object=%d flags=%u type=%d\n",
       (int)finalize_ok,
       (double)reservoir.total_weight,
       (double)reservoir.luminance,
+      reservoir.M,
       reservoir.reference.prim,
       reservoir.reference.object,
       reservoir.reference.flags,
       reservoir.reference.type);
 }
 
-  film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+  /* Avoid writing junk into the buffer.
+   * An empty reservoir should simply not be finalized/written. */
+  if (finalize_ok) {
+    film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+  }
 
   /* buffer[4] = safe_divide(buffer[4], buffer[5]); */
 }
