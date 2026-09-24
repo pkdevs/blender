@@ -526,14 +526,15 @@ struct BooleanResult {
   }
 };
 
-static void find_intersections_between_curves(const Span<float2> positions,
-                                              const OffsetIndices<int> points_by_curve,
-                                              const int curve_i,
-                                              const int curve_j,
-                                              const bool cyclic_i,
-                                              const bool cyclic_j,
-                                              Array<Vector<int>> &r_inters_per_curves,
-                                              Vector<IntersectionPoint> &r_intersections)
+static void find_intersections_between_curves(
+    const Span<float2> positions,
+    const OffsetIndices<int> points_by_curve,
+    const int curve_i,
+    const int curve_j,
+    const bool cyclic_i,
+    const bool cyclic_j,
+    Array<Vector<std::pair<int, bool>>> &r_inters_per_curves,
+    Vector<IntersectionPoint> &r_intersections)
 {
   const IndexRange points_i = points_by_curve[curve_i];
   const IndexRange points_j = points_by_curve[curve_j];
@@ -560,8 +561,8 @@ static void find_intersections_between_curves(const Span<float2> positions,
                                 &alpha_a,
                                 &alpha_b);
       if (val == ISECT_LINE_LINE_CROSS || val == ISECT_LINE_LINE_EXACT) {
-        r_inters_per_curves[curve_i].append(r_intersections.size());
-        r_inters_per_curves[curve_j].append(r_intersections.size());
+        r_inters_per_curves[curve_i].append(std::pair<int, bool>(r_intersections.size(), false));
+        r_inters_per_curves[curve_j].append(std::pair<int, bool>(r_intersections.size(), true));
         r_intersections.append(
             create_intersection(point_i1, point_j1, alpha_a, alpha_b, curve_i, curve_j));
       }
@@ -571,14 +572,15 @@ static void find_intersections_between_curves(const Span<float2> positions,
 
 /* TODO: This method of finding intersections is O(N^2) and should replaced with something faster.
  * This should be optimized with a BVH. */
-static void find_intersections_between_shapes(const Span<float2> points,
-                                              const GroupedSpan<int> shapes,
-                                              const IndexMask &shape_mask,
-                                              const OffsetIndices<int> points_by_curve,
-                                              const VArray<bool> &cyclic,
-                                              const bool self_intersection,
-                                              Array<Vector<int>> &r_inters_per_curves,
-                                              Vector<IntersectionPoint> &r_intersections)
+static void find_intersections_between_shapes(
+    const Span<float2> points,
+    const GroupedSpan<int> shapes,
+    const IndexMask &shape_mask,
+    const OffsetIndices<int> points_by_curve,
+    const VArray<bool> &cyclic,
+    const bool self_intersection,
+    Array<Vector<std::pair<int, bool>>> &r_inters_per_curves,
+    Vector<IntersectionPoint> &r_intersections)
 {
   shape_mask.foreach_index([&](const int shape_i) {
     const Span<int> curves_i = shapes[shape_i];
@@ -708,7 +710,7 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 {
   Vector<IntersectionPoint> intersections;
 
-  Array<Vector<int>> inters_per_curves(points_by_curve.size());
+  Array<Vector<std::pair<int, bool>>> inters_per_curves(points_by_curve.size());
 
   const bool self_intersection = op_params.self_intersect;
 
@@ -1326,13 +1328,13 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                                                op_params.skip_clipping_attributes,
                                                                is_point_clipping);
 
-  if (!op_params.keep_caps) {
-    cut_caps(dst_curves,
-             result.segments,
-             result.segment_reversed,
-             result.cyclic,
-             dst_segments_by_curve);
-  }
+  cut_caps(curves,
+           dst_curves,
+           result.segments,
+           result.segment_reversed,
+           result.cyclic,
+           dst_segments_by_curve,
+           op_params.keep_caps);
 
   if (op_params.separate_islands) {
     separate_fill_islands(dst_curves, result.unchanged_curves, project_fn);
@@ -1403,13 +1405,13 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
     }
   }
 
-  if (!op_params.keep_caps) {
-    cut_caps(dst_curves,
-             result.segments,
-             result.segment_reversed,
-             result.cyclic,
-             dst_segments_by_curve);
-  }
+  cut_caps(curves,
+           dst_curves,
+           result.segments,
+           result.segment_reversed,
+           result.cyclic,
+           dst_segments_by_curve,
+           op_params.keep_caps);
 
   if (op_params.separate_islands) {
     separate_fill_islands(dst_curves, result.unchanged_curves, project_fn);

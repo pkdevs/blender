@@ -102,27 +102,19 @@ struct IntersectionPoint {
 
   constexpr IntersectionPoint() = default;
 
-  float point_for_curve(const int curve) const
+  int point_for_side(const bool side) const
   {
-    BLI_assert(curve == curve_i || curve == curve_j);
-    return curve == curve_i ? point_i : point_j;
+    return side ? point_j : point_i;
   }
 
-  float factor_for_curve(const int curve) const
+  float factor_for_side(const bool side) const
   {
-    BLI_assert(curve == curve_i || curve == curve_j);
-    return curve == curve_i ? factor_i : factor_j;
+    return side ? factor_j : factor_i;
   }
 
-  float parameter_for_curve(const int curve) const
+  float parameter_for_side(const bool side) const
   {
-    return this->point_for_curve(curve) + this->factor_for_curve(curve);
-  }
-
-  int other_curve(const int curve) const
-  {
-    BLI_assert(curve == curve_i || curve == curve_j);
-    return curve == curve_i ? curve_j : curve_i;
+    return this->point_for_side(side) + this->factor_for_side(side);
   }
 };
 
@@ -154,29 +146,33 @@ void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
                             const Span<float2> screen_space_positions,
                             MutableSpan<Bounds<float2>> screen_space_bbox);
 
-void cut_caps(bke::CurvesGeometry &dst,
+void cut_caps(const bke::CurvesGeometry &src,
+              bke::CurvesGeometry &dst,
               const Span<Segment> segments,
               const Span<bool> segment_reversed,
               const Span<bool> cyclic,
-              const OffsetIndices<int> segment_offsets);
+              const OffsetIndices<int> segment_offsets,
+              const bool keep_caps);
 
-void find_intersections_between_all_curves(const Span<float2> screen_space_positions,
-                                           const Span<Bounds<float2>> screen_space_bbox,
-                                           const OffsetIndices<int> points_by_curve,
-                                           const VArray<bool> &cyclic,
-                                           const IndexMask &visible_curves,
-                                           Array<Vector<int>> &r_inters_per_curves,
-                                           Vector<IntersectionPoint> &r_intersections);
+void find_intersections_between_all_curves(
+    const Span<float2> screen_space_positions,
+    const Span<Bounds<float2>> screen_space_bbox,
+    const OffsetIndices<int> points_by_curve,
+    const VArray<bool> &cyclic,
+    const IndexMask &visible_curves,
+    Array<Vector<std::pair<int, bool>>> &r_inters_per_curves,
+    Vector<IntersectionPoint> &r_intersections);
 
 void store_segment_map_on_intersections(const Span<Segment> all_segments,
                                         MutableSpan<IntersectionPoint> intersections);
-int create_segments_from_intersections_single_curve(const int curve_k,
-                                                    const Span<Vector<int>> inters_per_curves,
-                                                    const OffsetIndices<int> points_by_curve,
-                                                    const Span<IntersectionPoint> &intersections,
-                                                    const VArray<bool> &cyclic,
-                                                    Vector<Segment> &all_segments);
-void create_segments_from_intersections(const Span<Vector<int>> inters_per_curves,
+int create_segments_from_intersections_single_curve(
+    const int curve_k,
+    const Span<Vector<std::pair<int, bool>>> inters_per_curves,
+    const OffsetIndices<int> points_by_curve,
+    const Span<IntersectionPoint> &intersections,
+    const VArray<bool> &cyclic,
+    Vector<Segment> &all_segments);
+void create_segments_from_intersections(const Span<Vector<std::pair<int, bool>>> inters_per_curves,
                                         const OffsetIndices<int> points_by_curve,
                                         const Span<IntersectionPoint> &intersections,
                                         const VArray<bool> &cyclic,
