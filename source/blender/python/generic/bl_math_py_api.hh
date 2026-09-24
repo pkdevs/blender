@@ -2,8 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * \file
+/** \file
  * \ingroup pygen
  */
 
@@ -11,4 +10,8 @@
 
 #include <Python.h>
 
+namespace blender {
+
 PyMODINIT_FUNC BPyInit_bl_math();
+
+}  // namespace blender

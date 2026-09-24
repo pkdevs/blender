@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 
 #include "BKE_scene.hh"
+
+namespace blender {
 
 struct ReportList;
 struct bContext;
@@ -81,3 +83,14 @@ bool ED_scene_fps_average_calc(const Scene *scene, SceneFPS_State *r_state) ATTR
 void ED_scene_fps_average_clear(Scene *scene) ATTR_NONNULL(1);
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Scene Compositor
+ * \{ */
+
+void ED_operatortypes_scene_compositor();
+void ED_menutypes_scene_compositor();
+
+/** \} */
+
+}  // namespace blender

@@ -5,10 +5,11 @@
 /* The algorithm is by Werner D. Streidt, extracted of OpenCV demhist.c:
  *   http://visca.com/ffactory/archives/5-99/msg00021.html */
 
-#include "gpu_shader_common_color_utils.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
 
 #define FLT_EPSILON 1.192092896e-07F
 
+[[node]]
 void node_composite_bright_contrast(float4 color, float brightness, float contrast, float4 &result)
 {
   float scaled_brightness = brightness / 100.0f;

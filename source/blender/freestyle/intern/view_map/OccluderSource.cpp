@@ -11,7 +11,7 @@
 
 #include "OccluderSource.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "BKE_global.hh"
 
@@ -109,7 +109,7 @@ void OccluderSource::getOccluderProscenium(real proscenium[4])
     GridHelpers::expandProscenium(proscenium, cachedPolygon);
     next();
   }
-  if (G.debug & G_DEBUG_FREESTYLE) {
+  if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
     cout << "Proscenium: (" << proscenium[0] << ", " << proscenium[1] << ", " << proscenium[2]
          << ", " << proscenium[3] << ")" << endl;
   }

@@ -10,13 +10,17 @@
 
 #include <limits>
 
+#include "DNA_outliner_types.h"
+
 #include "RNA_types.hh"
 
 #include "tree_element.hh"
 
+namespace blender {
+
 struct PointerRNA;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 /**
  * Base class for common behavior of RNA tree elements.
@@ -29,6 +33,16 @@ class TreeElementRNACommon : public AbstractTreeElement {
  public:
   TreeElementRNACommon(TreeElement &legacy_te, PointerRNA &rna_ptr);
   bool expand_poll(const SpaceOutliner & /*soops*/) const override;
+
+  /**
+   * RNA elements are identified by their owning ID where there is one, and by the data they point
+   * at otherwise. Overloaded for the sub-types that additionally take an array index.
+   * See #AbstractTreeDisplay::add_element().
+   */
+  static ID *owner_id(PointerRNA &rna_ptr);
+  static ID *owner_id(PointerRNA &rna_ptr, int index);
+  static const void *persistent_ptr(PointerRNA &rna_ptr);
+  static const void *persistent_ptr(PointerRNA &rna_ptr, int index);
 
   const PointerRNA &get_pointer_rna() const;
   /**
@@ -44,8 +58,12 @@ class TreeElementRNACommon : public AbstractTreeElement {
 
 class TreeElementRNAStruct : public TreeElementRNACommon {
  public:
+  static constexpr eTreeStoreElemType element_type = TSE_RNA_STRUCT;
+
   TreeElementRNAStruct(TreeElement &legacy_te, PointerRNA &rna_ptr);
   void expand(SpaceOutliner &space_outliner) const override;
+
+  std::optional<BIFIconID> get_icon() const override;
 };
 
 /* -------------------------------------------------------------------- */
@@ -55,6 +73,8 @@ class TreeElementRNAProperty : public TreeElementRNACommon {
   PropertyRNA *rna_prop_ = nullptr;
 
  public:
+  static constexpr eTreeStoreElemType element_type = TSE_RNA_PROPERTY;
+
   TreeElementRNAProperty(TreeElement &legacy_te, PointerRNA &rna_ptr, int index);
   void expand(SpaceOutliner &space_outliner) const override;
 
@@ -65,9 +85,12 @@ class TreeElementRNAProperty : public TreeElementRNACommon {
 
 class TreeElementRNAArrayElement : public TreeElementRNACommon {
  public:
+  static constexpr eTreeStoreElemType element_type = TSE_RNA_ARRAY_ELEM;
+
   TreeElementRNAArrayElement(TreeElement &legacy_te, PointerRNA &rna_ptr, int index);
 
   PropertyRNA *get_property_rna() const override;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

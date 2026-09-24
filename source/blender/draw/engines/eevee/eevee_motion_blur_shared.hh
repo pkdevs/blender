@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -31,7 +33,7 @@ struct [[host_shared]] MotionBlurData {
 
 /* For some reasons some GLSL compilers do not like this struct.
  * So we declare it as a uint array instead and do indexing ourselves. */
-#ifdef __cplusplus
+#ifndef GPU_SHADER
 struct MotionBlurTileIndirection {
   /**
    * Stores indirection to the tile with the highest velocity covering each tile.

@@ -12,15 +12,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_scanfill.h" /* own include */
+#include "BLI_scanfill.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 struct PolyInfo {
   ScanFillEdge *edge_first, *edge_last;
@@ -78,30 +80,33 @@ void BLI_scanfill_obj_dump(ScanFillContext *sf_ctx)
   ScanFillVert *eve;
   ScanFillEdge *eed;
 
-  for (eve = sf_ctx->fillvertbase.first; eve; eve = eve->next, i++) {
+  for (eve = sf_ctx->fillvertbase.first_; eve; eve = eve->next, i++) {
     fprintf(f, "v %f %f %f\n", UNPACK3(eve->co));
     eve->keyindex = i;
   }
-  for (eed = sf_ctx->filledgebase.first; eed; eed = eed->next) {
+  for (eed = sf_ctx->filledgebase.first_; eed; eed = eed->next) {
     fprintf(f, "f %d %d\n", eed->v1->keyindex, eed->v2->keyindex);
   }
   fclose(f);
 }
 #endif
 
-using IsectMap = blender::Map<ScanFillEdge *, ListBase *>;
+using IsectMap = Map<ScanFillEdge *, ListBaseT<LinkData> *>;
 
-static ListBase *edge_isect_ls_ensure(IsectMap *isect_hash, ScanFillEdge *eed)
+static ListBaseT<LinkData> *edge_isect_ls_ensure(IsectMap *isect_hash, ScanFillEdge *eed)
 {
-  return isect_hash->lookup_or_add_cb(eed, []() { return MEM_callocN<ListBase>(__func__); });
+  return isect_hash->lookup_or_add_cb(
+      eed, []() { return MEM_new_zeroed<ListBaseT<LinkData>>("edge_isect_ls_ensure"); });
 }
 
-static ListBase *edge_isect_ls_add(IsectMap *isect_hash, ScanFillEdge *eed, ScanFillIsect *isect)
+static ListBaseT<LinkData> *edge_isect_ls_add(IsectMap *isect_hash,
+                                              ScanFillEdge *eed,
+                                              ScanFillIsect *isect)
 {
-  ListBase *e_ls;
+  ListBaseT<LinkData> *e_ls;
   LinkData *isect_link;
   e_ls = edge_isect_ls_ensure(isect_hash, eed);
-  isect_link = MEM_callocN<LinkData>(__func__);
+  isect_link = MEM_new_zeroed<LinkData>(__func__);
   isect_link->data = isect;
   EFLAG_SET(eed, E_ISISECT);
   BLI_addtail(e_ls, isect_link);
@@ -113,9 +118,9 @@ static int edge_isect_ls_sort_cb(void *thunk, const void *def_a_ptr, const void 
   const float *co = static_cast<const float *>(thunk);
 
   const ScanFillIsect *i_a = static_cast<const ScanFillIsect *>(
-      ((const LinkData *)def_a_ptr)->data);
+      (static_cast<const LinkData *>(def_a_ptr))->data);
   const ScanFillIsect *i_b = static_cast<const ScanFillIsect *>(
-      ((const LinkData *)def_b_ptr)->data);
+      (static_cast<const LinkData *>(def_b_ptr))->data);
   const float a = len_squared_v2v2(co, i_a->co);
   const float b = len_squared_v2v2(co, i_b->co);
 
@@ -156,11 +161,11 @@ static ScanFillEdge *edge_step(PolyInfo *poly_info,
 static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
                                            PolyInfo *poly_info,
                                            const ushort poly_nr,
-                                           ListBase *filledgebase)
+                                           ListBaseT<ScanFillEdge> *filledgebase)
 {
   PolyInfo *pi = &poly_info[poly_nr];
   IsectMap *isect_hash = nullptr;
-  ListBase isect_lb = {nullptr};
+  ListBaseT<ScanFillIsect> isect_lb = {nullptr};
 
   /* warning, O(n2) check here, should use spatial lookup */
   {
@@ -184,11 +189,11 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
           {
             ScanFillIsect *isect;
 
-            if (UNLIKELY(isect_hash == nullptr)) {
+            if (isect_hash == nullptr) [[unlikely]] {
               isect_hash = MEM_new<IsectMap>(__func__);
             }
 
-            isect = MEM_mallocN<ScanFillIsect>(__func__);
+            isect = MEM_new_uninitialized<ScanFillIsect>(__func__);
 
             BLI_addtail(&isect_lb, isect);
 
@@ -218,9 +223,9 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
 
     for (eed = pi->edge_first; eed; eed = (eed == pi->edge_last) ? nullptr : eed->next) {
       if (eed->user_flag & E_ISISECT) {
-        ListBase *e_ls = isect_hash->lookup_default(eed, nullptr);
+        ListBaseT<LinkData> *e_ls = isect_hash->lookup_default(eed, nullptr);
 
-        if (UNLIKELY(e_ls == nullptr)) {
+        if (e_ls == nullptr) [[unlikely]] {
           /* only happens in very rare cases (entirely overlapping splines).
            * in this case we can't do much useful. but at least don't crash */
           continue;
@@ -231,7 +236,7 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
           pi->edge_last = nullptr;
         }
 
-        if (BLI_listbase_is_single(e_ls) == false) {
+        if (e_ls->is_single() == false) {
           BLI_listbase_sort_r(e_ls, edge_isect_ls_sort_cb, eed->v2->co);
         }
 
@@ -250,8 +255,8 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
           eed = eed_tmp;
         }
 
-        LISTBASE_FOREACH (LinkData *, isect_link, e_ls) {
-          ScanFillIsect *isect = static_cast<ScanFillIsect *>(isect_link->data);
+        for (LinkData &isect_link : *e_ls) {
+          ScanFillIsect *isect = static_cast<ScanFillIsect *>(isect_link.data);
           ScanFillEdge *eed_subd;
 
           eed_subd = BLI_scanfill_edge_add(sf_ctx, isect->v, eed->v2);
@@ -265,8 +270,8 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
           eed = eed_subd;
         }
 
-        BLI_freelistN(e_ls);
-        MEM_freeN(e_ls);
+        e_ls->free_no_destruct();
+        MEM_delete(e_ls);
 
         if (pi->edge_last == nullptr) {
           pi->edge_last = eed;
@@ -275,7 +280,7 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
     }
   }
 
-  BLI_freelistN(&isect_lb);
+  isect_lb.free_no_destruct();
   MEM_delete(isect_hash);
 
   {
@@ -354,43 +359,42 @@ static bool scanfill_preprocess_self_isect(ScanFillContext *sf_ctx,
 }
 
 bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
-                                  ListBase *remvertbase,
-                                  ListBase *remedgebase)
+                                  ListBaseT<ScanFillVert> *remvertbase,
+                                  ListBaseT<ScanFillEdge> *remedgebase)
 {
   const uint poly_num = uint(sf_ctx->poly_nr) + 1;
   bool changed = false;
 
-  if (UNLIKELY(sf_ctx->poly_nr == SF_POLY_UNSET)) {
+  if (sf_ctx->poly_nr == SF_POLY_UNSET) [[unlikely]] {
     return false;
   }
 
-  PolyInfo *poly_info = MEM_calloc_arrayN<PolyInfo>(poly_num, __func__);
+  PolyInfo *poly_info = MEM_new_array_zeroed<PolyInfo>(poly_num, __func__);
 
   /* get the polygon span */
   if (sf_ctx->poly_nr == 0) {
-    poly_info->edge_first = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first);
-    poly_info->edge_last = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.last);
+    poly_info->edge_first = sf_ctx->filledgebase.first();
+    poly_info->edge_last = sf_ctx->filledgebase.last();
   }
   else {
     ushort poly_nr = 0;
-    uint eed_index = 0;
 
-    LISTBASE_FOREACH_INDEX (ScanFillEdge *, eed, &sf_ctx->filledgebase, eed_index) {
-      BLI_assert(eed->poly_nr == eed->v1->poly_nr);
-      BLI_assert(eed->poly_nr == eed->v2->poly_nr);
+    for (auto [eed_index, eed] : sf_ctx->filledgebase.enumerate()) {
+      BLI_assert(eed.poly_nr == eed.v1->poly_nr);
+      BLI_assert(eed.poly_nr == eed.v2->poly_nr);
 
       if ((poly_info[poly_nr].edge_last != nullptr) &&
-          (poly_info[poly_nr].edge_last->poly_nr != eed->poly_nr))
+          (poly_info[poly_nr].edge_last->poly_nr != eed.poly_nr))
       {
         poly_nr++;
       }
 
       if (poly_info[poly_nr].edge_first == nullptr) {
-        poly_info[poly_nr].edge_first = eed;
-        poly_info[poly_nr].edge_last = eed;
+        poly_info[poly_nr].edge_first = &eed;
+        poly_info[poly_nr].edge_last = &eed;
       }
-      else if (poly_info[poly_nr].edge_last->poly_nr == eed->poly_nr) {
-        poly_info[poly_nr].edge_last = eed;
+      else if (poly_info[poly_nr].edge_last->poly_nr == eed.poly_nr) {
+        poly_info[poly_nr].edge_last = &eed;
       }
 
       BLI_assert(poly_info[poly_nr].edge_first->poly_nr == poly_info[poly_nr].edge_last->poly_nr);
@@ -405,7 +409,7 @@ bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
     }
   }
 
-  MEM_freeN(poly_info);
+  MEM_delete(poly_info);
 
   if (changed == false) {
     return false;
@@ -413,33 +417,33 @@ bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
 
   /* move free edges into their own list */
   {
-    LISTBASE_FOREACH_MUTABLE (ScanFillEdge *, eed, &sf_ctx->filledgebase) {
-      if (eed->user_flag & E_ISDELETE) {
-        BLI_remlink(&sf_ctx->filledgebase, eed);
-        BLI_addtail(remedgebase, eed);
+    for (ScanFillEdge &eed : sf_ctx->filledgebase.items_mutable()) {
+      if (eed.user_flag & E_ISDELETE) {
+        BLI_remlink(&sf_ctx->filledgebase, &eed);
+        BLI_addtail(remedgebase, &eed);
       }
     }
   }
 
   /* move free vertices into their own list */
   {
-    LISTBASE_FOREACH (ScanFillVert *, eve, &sf_ctx->fillvertbase) {
-      eve->user_flag = 0;
-      eve->poly_nr = SF_POLY_UNSET;
+    for (ScanFillVert &eve : sf_ctx->fillvertbase) {
+      eve.user_flag = 0;
+      eve.poly_nr = SF_POLY_UNSET;
     }
-    LISTBASE_FOREACH (ScanFillEdge *, eed, &sf_ctx->filledgebase) {
-      eed->v1->user_flag = 1;
-      eed->v2->user_flag = 1;
-      eed->poly_nr = SF_POLY_UNSET;
+    for (ScanFillEdge &eed : sf_ctx->filledgebase) {
+      eed.v1->user_flag = 1;
+      eed.v2->user_flag = 1;
+      eed.poly_nr = SF_POLY_UNSET;
     }
 
-    LISTBASE_FOREACH_MUTABLE (ScanFillVert *, eve, &sf_ctx->fillvertbase) {
-      if (eve->user_flag != 1) {
-        BLI_remlink(&sf_ctx->fillvertbase, eve);
-        BLI_addtail(remvertbase, eve);
+    for (ScanFillVert &eve : sf_ctx->fillvertbase.items_mutable()) {
+      if (eve.user_flag != 1) {
+        BLI_remlink(&sf_ctx->fillvertbase, &eve);
+        BLI_addtail(remvertbase, &eve);
       }
       else {
-        eve->user_flag = 0;
+        eve.user_flag = 0;
       }
     }
   }
@@ -455,3 +459,5 @@ bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
 
   return changed;
 }
+
+}  // namespace blender

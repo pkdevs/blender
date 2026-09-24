@@ -2,8 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_common_color_utils.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
 
+[[node]]
 void node_composite_color_matte(float4 color,
                                 float4 key,
                                 float hue_threshold,

@@ -20,8 +20,8 @@
 
 #include "DNA_screen_types.h"
 
-#include "BLI_bitmap_draw_2d.h"
-#include "BLI_math_vector.h"
+#include "BLI_bitmap_draw_2d.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_colorband.hh"
 #include "BKE_context.hh"
@@ -63,7 +63,7 @@ static bool eyedropper_colorband_init(bContext *C, wmOperator *op)
 
   Button *but = context_active_but_get(C);
 
-  PointerRNA rna_update_ptr = PointerRNA_NULL;
+  PointerRNA rna_update_ptr = {};
   PropertyRNA *rna_update_prop = nullptr;
   bool is_undo = true;
 
@@ -73,11 +73,11 @@ static bool eyedropper_colorband_init(bContext *C, wmOperator *op)
   else {
     if (but->type == ButtonType::ColorBand) {
       /* When invoked with a hotkey, we can find the band in 'but->poin'. */
-      band = (ColorBand *)but->poin;
+      band = reinterpret_cast<ColorBand *>(but->poin);
     }
     else {
       /* When invoked from a button it's in custom_data field. */
-      band = (ColorBand *)but->custom_data;
+      band = static_cast<ColorBand *>(but->custom_data);
     }
 
     if (band) {
@@ -88,14 +88,14 @@ static bool eyedropper_colorband_init(bContext *C, wmOperator *op)
   }
 
   if (!band) {
-    const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", &RNA_ColorRamp);
-    if (ptr.data != nullptr) {
+    const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", RNA_ColorRamp);
+    if (ptr) {
       band = static_cast<ColorBand *>(ptr.data);
 
       /* Set this to a sub-member of the property to trigger an update. */
       rna_update_ptr = ptr;
       rna_update_prop = &rna_ColorRamp_color_mode;
-      is_undo = RNA_struct_undo_check(ptr.type);
+      is_undo = RNA_property_undo_check(rna_update_prop, ptr.type);
     }
   }
 
@@ -312,8 +312,8 @@ static bool eyedropper_colorband_poll(bContext *C)
   if (but && but->type == ButtonType::ColorBand) {
     return true;
   }
-  const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", &RNA_ColorRamp);
-  if (ptr.data != nullptr) {
+  const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", RNA_ColorRamp);
+  if (ptr) {
     return true;
   }
   return false;

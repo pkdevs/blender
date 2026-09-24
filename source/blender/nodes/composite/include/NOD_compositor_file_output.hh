@@ -7,9 +7,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_base.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_node_types.h"
 
@@ -21,7 +21,7 @@ namespace blender::nodes {
 
 struct FileOutputItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeCompositorFileOutputItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static constexpr StringRefNull node_idname = "CompositorNodeOutputFile";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
@@ -59,7 +59,7 @@ struct FileOutputItemsAccessor : public socket_items::SocketItemsAccessorDefault
 
   static void destruct_item(NodeCompositorFileOutputItem *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
     BKE_image_format_free(&item->format);
   }
 
@@ -68,7 +68,7 @@ struct FileOutputItemsAccessor : public socket_items::SocketItemsAccessorDefault
 
   static eNodeSocketDatatype get_socket_type(const NodeCompositorFileOutputItem &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(NodeCompositorFileOutputItem &item)

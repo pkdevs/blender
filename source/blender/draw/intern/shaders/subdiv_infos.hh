@@ -2,9 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #ifdef GPU_SHADER
 #  pragma once
-#  include "BLI_utildefines_variadic.h"
+#  include "BLI_utildefines_variadic.hh"
 
 #  include "gpu_shader_compat.hh"
 
@@ -32,7 +36,6 @@ GPU_SHADER_CREATE_END()
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_loop_normals)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(LOOP_NORMALS_POS_SLOT, read, Position, positions[])
 STORAGE_BUF(LOOP_NORMALS_EXTRA_COARSE_FACE_DATA_BUF_SLOT, read, uint, extra_coarse_face_data[])
@@ -98,7 +101,6 @@ GPU_SHADER_CREATE_END()
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_edge_fac)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 ADDITIONAL_INFO(subdiv_base)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(EDGE_FAC_POS_BUF_SLOT, read, Position, positions[])
@@ -115,7 +117,6 @@ GPU_SHADER_CREATE_END()
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_custom_data_interp_base)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 COMPUTE_SOURCE("subdiv_custom_data_interp_comp.glsl")
 STORAGE_BUF(CUSTOM_DATA_FACE_PTEX_OFFSET_BUF_SLOT, read, uint, face_ptex_offset[])
 STORAGE_BUF(CUSTOM_DATA_PATCH_COORDS_BUF_SLOT, read, BlenderPatchCoord, patch_coords[])
@@ -186,7 +187,6 @@ CREATE_INFO_VARIANT(subdiv_custom_data_interp_3d_f32_normalize,
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_sculpt_data)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(SCULPT_DATA_SCULPT_MASK_BUF_SLOT, read, float, sculpt_mask[])
 STORAGE_BUF(SCULPT_DATA_SCULPT_FACE_SET_COLOR_BUF_SLOT, read, uint, sculpt_face_set_color[])
@@ -202,12 +202,11 @@ GPU_SHADER_CREATE_END()
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_edituv_stretch_angle)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(STRETCH_ANGLE_POS_BUF_SLOT, read, Position, positions[])
 STORAGE_BUF(STRETCH_ANGLE_UVS_BUF_SLOT, read, packed_float2, uvs[])
 STORAGE_BUF(STRETCH_ANGLE_UV_STRETCHES_BUF_SLOT, write, UVStretchAngle, uv_stretches[])
-COMPUTE_SOURCE("subdiv_vbo_edituv_strech_angle_comp.glsl")
+COMPUTE_SOURCE("subdiv_vbo_edituv_stretch_angle_comp.glsl")
 ADDITIONAL_INFO(subdiv_base)
 GPU_SHADER_CREATE_END()
 
@@ -215,7 +214,7 @@ GPU_SHADER_CREATE_INFO(subdiv_edituv_stretch_area)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(STRETCH_AREA_COARSE_STRETCH_AREA_BUF_SLOT, read, float, coarse_stretch_area[])
 STORAGE_BUF(STRETCH_AREA_SUBDIV_STRETCH_AREA_BUF_SLOT, write, float, subdiv_stretch_area[])
-COMPUTE_SOURCE("subdiv_vbo_edituv_strech_area_comp.glsl")
+COMPUTE_SOURCE("subdiv_vbo_edituv_stretch_area_comp.glsl")
 ADDITIONAL_INFO(subdiv_polygon_offset_base)
 GPU_SHADER_CREATE_END()
 
@@ -226,7 +225,6 @@ GPU_SHADER_CREATE_END()
  * \{ */
 
 GPU_SHADER_CREATE_INFO(subdiv_normals_accumulate)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 DO_STATIC_COMPILATION()
 STORAGE_BUF(NORMALS_ACCUMULATE_POS_BUF_SLOT, read, Position, positions[])
 STORAGE_BUF(NORMALS_ACCUMULATE_FACE_ADJACENCY_OFFSETS_BUF_SLOT,

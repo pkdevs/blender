@@ -6,7 +6,7 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 
@@ -15,6 +15,8 @@
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Center Pick Operator
@@ -74,3 +76,5 @@ void VIEW3D_OT_view_center_pick(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

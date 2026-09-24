@@ -12,7 +12,9 @@
 
 #include "FN_multi_function.hh"
 
-namespace blender::fn::multi_function::build {
+namespace blender {
+
+namespace fn::multi_function::build {
 
 /**
  * These presets determine what code is generated for a #CustomMF. Different presets make different
@@ -805,9 +807,9 @@ inline auto SI1_SO4(const char *name,
   return detail::CustomMF(name, call_fn, param_tags);
 }
 
-}  // namespace blender::fn::multi_function::build
+}  // namespace fn::multi_function::build
 
-namespace blender::fn::multi_function {
+namespace fn::multi_function {
 
 /**
  * A multi-function that outputs the same value every time. The value is not owned by an instance
@@ -815,6 +817,10 @@ namespace blender::fn::multi_function {
  * freeing the value.
  */
 class CustomMF_GenericConstant : public MultiFunction {
+ public:
+  /* For compatible hash with typed class. */
+  static constexpr int8_t HASH_ID = 0;
+
  private:
   const CPPType &type_;
   const void *value_;
@@ -827,7 +833,7 @@ class CustomMF_GenericConstant : public MultiFunction {
   CustomMF_GenericConstant(const CPPType &type, const void *value, bool make_value_copy);
   ~CustomMF_GenericConstant() override;
   void call(const IndexMask &mask, Params params, Context context) const override;
-  uint64_t hash() const override;
+  void hash_unique(UniqueHashBytes &hash) const override;
   bool equals(const MultiFunction &other) const override;
 };
 
@@ -867,9 +873,11 @@ template<typename T> class CustomMF_Constant : public MultiFunction {
     mask.foreach_index_optimized<int64_t>([&](const int64_t i) { new (&output[i]) T(value_); });
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash) const override
   {
-    return get_default_hash(value_);
+    hash.add(&CustomMF_GenericConstant::HASH_ID);
+    hash_unique_default(value_, hash);
+    hash.add(&CPPType::get<T>());
   }
 
   bool equals(const MultiFunction &other) const override
@@ -909,4 +917,6 @@ class CustomMF_GenericCopy : public MultiFunction {
   void call(const IndexMask &mask, Params params, Context context) const override;
 };
 
-}  // namespace blender::fn::multi_function
+}  // namespace fn::multi_function
+
+}  // namespace blender

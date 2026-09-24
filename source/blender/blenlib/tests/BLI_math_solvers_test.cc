@@ -4,7 +4,9 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_solvers.h"
+#include "BLI_math_solvers.hh"
+
+namespace blender {
 
 TEST(math_solvers, Tridiagonal1)
 {
@@ -70,3 +72,5 @@ TEST(math_solvers, CyclicTridiagonal3)
   EXPECT_FLOAT_EQ(x[1], 2);
   EXPECT_FLOAT_EQ(x[2], 3);
 }
+
+}  // namespace blender

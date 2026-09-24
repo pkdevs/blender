@@ -13,11 +13,14 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_utildefines.h"
+#include "BLI_fileops.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
+#include "BLT_translation.hh"
+
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
 #include "BKE_library.hh"
@@ -37,23 +40,25 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Context Query Helpers
  * \{ */
 
-blender::Vector<PointerRNA> ED_operator_single_id_from_context_as_vec(const bContext *C)
+Vector<PointerRNA> ED_operator_single_id_from_context_as_vec(const bContext *C)
 {
-  blender::Vector<PointerRNA> ids;
-  PointerRNA idptr = CTX_data_pointer_get_type(C, "id", &RNA_ID);
-  if (idptr.data) {
+  Vector<PointerRNA> ids;
+  PointerRNA idptr = CTX_data_pointer_get_type(C, "id", RNA_ID);
+  if (idptr) {
     ids.append(idptr);
   }
   return ids;
 }
 
-blender::Vector<PointerRNA> ED_operator_get_ids_from_context_as_vec(const bContext *C)
+Vector<PointerRNA> ED_operator_get_ids_from_context_as_vec(const bContext *C)
 {
-  blender::Vector<PointerRNA> ids;
+  Vector<PointerRNA> ids;
 
   /* "selected_ids" context member. */
   CTX_data_selected_ids(C, &ids);
@@ -78,19 +83,19 @@ static bool lib_id_preview_editing_poll_ex(const ID *id, const char **r_disabled
   }
   if (!ID_IS_EDITABLE(id)) {
     if (r_disabled_hint) {
-      *r_disabled_hint = "Cannot edit external library data";
+      *r_disabled_hint = RPT_("Cannot edit external library data");
     }
     return false;
   }
   if (ID_IS_OVERRIDE_LIBRARY(id)) {
     if (r_disabled_hint) {
-      *r_disabled_hint = "Cannot edit previews of overridden library data";
+      *r_disabled_hint = RPT_("Cannot edit previews of overridden library data");
     }
     return false;
   }
   if (!BKE_previewimg_id_get_p(id)) {
     if (r_disabled_hint) {
-      *r_disabled_hint = "Data-block does not support previews";
+      *r_disabled_hint = RPT_("Data-block does not support previews");
     }
     return false;
   }
@@ -101,9 +106,9 @@ static bool lib_id_preview_editing_poll_ex(const ID *id, const char **r_disabled
 static bool lib_id_preview_editing_poll(bContext *C)
 {
   const PointerRNA idptr = CTX_data_pointer_get(C, "id");
-  BLI_assert(!idptr.data || RNA_struct_is_ID(idptr.type));
+  BLI_assert(!idptr || RNA_struct_is_ID(idptr.type));
 
-  const ID *id = (ID *)idptr.data;
+  const ID *id = static_cast<ID *>(idptr.data);
   const char *disabled_hint = nullptr;
   if (!lib_id_preview_editing_poll_ex(id, &disabled_hint)) {
     CTX_wm_operator_poll_msg_set(C, disabled_hint);
@@ -190,9 +195,9 @@ static void ED_OT_lib_id_load_custom_preview(wmOperatorType *ot)
  * Helper for batch editing previews. Gets selected or active IDs from context and calls \a
  * foreach_id for each ID that supports previews.
  */
-static void lib_id_batch_edit_previews(bContext *C, blender::FunctionRef<void(ID *)> foreach_id)
+static void lib_id_batch_edit_previews(bContext *C, FunctionRef<void(ID *)> foreach_id)
 {
-  blender::Vector<PointerRNA> id_pointers = ED_operator_get_ids_from_context_as_vec(C);
+  Vector<PointerRNA> id_pointers = ED_operator_get_ids_from_context_as_vec(C);
   for (PointerRNA &idptr : id_pointers) {
     ID *id = static_cast<ID *>(idptr.data);
 
@@ -213,10 +218,9 @@ static void lib_id_batch_edit_previews(bContext *C, blender::FunctionRef<void(ID
  */
 static bool lib_id_batch_editing_preview_poll(
     bContext *C,
-    blender::FunctionRef<bool(const ID *, const char **r_disabled_hint)> additional_condition =
-        nullptr)
+    FunctionRef<bool(const ID *, const char **r_disabled_hint)> additional_condition = nullptr)
 {
-  blender::Vector<PointerRNA> id_pointers = ED_operator_get_ids_from_context_as_vec(C);
+  Vector<PointerRNA> id_pointers = ED_operator_get_ids_from_context_as_vec(C);
   if (id_pointers.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "No data-block selected or active");
     return false;
@@ -253,8 +257,12 @@ static bool lib_id_batch_editing_preview_poll(
 
 static bool lib_id_generate_preview_poll(bContext *C)
 {
+  /* Requires GPU for viewport off-screen drawing. */
+  if (G.background) {
+    return false;
+  }
   return lib_id_batch_editing_preview_poll(C, [](const ID *id, const char **r_disabled_hint) {
-    return ED_preview_id_is_supported(id, r_disabled_hint);
+    return ED_preview_id_render_is_supported(id, r_disabled_hint);
   });
 }
 
@@ -265,14 +273,14 @@ static wmOperatorStatus lib_id_generate_preview_exec(bContext *C, wmOperator * /
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
   lib_id_batch_edit_previews(C, [&](ID *id) {
-    if (ED_preview_id_is_supported(id, nullptr)) {
+    if (ED_preview_id_render_is_supported(id, nullptr)) {
       PreviewImage *preview = BKE_previewimg_id_get(id);
 
       if (preview) {
         BKE_previewimg_clear(preview);
       }
 
-      blender::ui::icon_render_id(C, nullptr, id, ICON_SIZE_PREVIEW, true);
+      ui::icon_render_id(C, nullptr, id, ICON_SIZE_PREVIEW, true);
     }
   });
 
@@ -298,6 +306,10 @@ static void ED_OT_lib_id_generate_preview(wmOperatorType *ot)
 
 static bool lib_id_generate_preview_from_object_poll(bContext *C)
 {
+  if (G.background) {
+    /* Unsupported as it requires GPU for off-screen viewport drawing. */
+    return false;
+  }
   /* This already checks if the IDs in context (e.g. selected in the Asset browser) can generate
    * previews... */
   if (!lib_id_batch_editing_preview_poll(C)) {
@@ -311,7 +323,7 @@ static bool lib_id_generate_preview_from_object_poll(bContext *C)
     return false;
   }
   const char *disabled_hint = nullptr;
-  if (!ED_preview_id_is_supported(&object_to_render->id, &disabled_hint)) {
+  if (!ED_preview_id_render_is_supported(&object_to_render->id, &disabled_hint)) {
     CTX_wm_operator_poll_msg_set(C, disabled_hint);
     return false;
   }
@@ -331,7 +343,7 @@ static wmOperatorStatus lib_id_generate_preview_from_object_exec(bContext *C, wm
     BKE_previewimg_id_free(id);
 
     PreviewImage *preview_image = BKE_previewimg_id_ensure(id);
-    blender::ui::icon_render_id_ex(
+    ui::icon_render_id_ex(
         C, nullptr, &object_to_render->id, ICON_SIZE_PREVIEW, true, preview_image);
   });
 
@@ -409,21 +421,21 @@ static void ED_OT_lib_id_remove_preview(wmOperatorType *ot)
 static wmOperatorStatus lib_id_fake_user_toggle_exec(bContext *C, wmOperator *op)
 {
   PropertyPointerRNA pprop;
-  PointerRNA idptr = PointerRNA_NULL;
+  PointerRNA idptr = {};
 
-  blender::ui::context_active_but_prop_get_templateID(C, &pprop.ptr, &pprop.prop);
+  ui::context_active_but_prop_get_templateID(C, &pprop.ptr, &pprop.prop);
 
   if (pprop.prop) {
     idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
   }
 
-  if ((pprop.prop == nullptr) || RNA_pointer_is_null(&idptr) || !RNA_struct_is_ID(idptr.type)) {
+  if ((pprop.prop == nullptr) || !idptr || !RNA_struct_is_ID(idptr.type)) {
     BKE_report(
         op->reports, RPT_ERROR, "Incorrect context for running data-block fake user toggling");
     return OPERATOR_CANCELLED;
   }
 
-  ID *id = (ID *)idptr.data;
+  ID *id = static_cast<ID *>(idptr.data);
 
   if (!BKE_id_is_editable(CTX_data_main(C), id) ||
       ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_TXT, ID_OB, ID_WS))
@@ -461,13 +473,13 @@ static wmOperatorStatus lib_id_unlink_exec(bContext *C, wmOperator *op)
   PropertyPointerRNA pprop;
   PointerRNA idptr;
 
-  blender::ui::context_active_but_prop_get_templateID(C, &pprop.ptr, &pprop.prop);
+  ui::context_active_but_prop_get_templateID(C, &pprop.ptr, &pprop.prop);
 
   if (pprop.prop) {
     idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
   }
 
-  if ((pprop.prop == nullptr) || RNA_pointer_is_null(&idptr) || !RNA_struct_is_ID(idptr.type)) {
+  if ((pprop.prop == nullptr) || !idptr || !RNA_struct_is_ID(idptr.type)) {
     BKE_report(
         op->reports, RPT_ERROR, "Incorrect context for running data-block fake user toggling");
     return OPERATOR_CANCELLED;
@@ -496,7 +508,7 @@ static void ED_OT_lib_id_unlink(wmOperatorType *ot)
 
 static bool lib_id_override_editable_toggle_poll(bContext *C)
 {
-  const PointerRNA id_ptr = CTX_data_pointer_get_type(C, "id", &RNA_ID);
+  const PointerRNA id_ptr = CTX_data_pointer_get_type(C, "id", RNA_ID);
   const ID *id = static_cast<ID *>(id_ptr.data);
 
   return id && ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_LINKED(id);
@@ -505,7 +517,7 @@ static bool lib_id_override_editable_toggle_poll(bContext *C)
 static wmOperatorStatus lib_id_override_editable_toggle_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
-  const PointerRNA id_ptr = CTX_data_pointer_get_type(C, "id", &RNA_ID);
+  const PointerRNA id_ptr = CTX_data_pointer_get_type(C, "id", RNA_ID);
   ID *id = static_cast<ID *>(id_ptr.data);
 
   const bool is_system_override = BKE_lib_override_library_is_system_defined(bmain, id);
@@ -589,3 +601,5 @@ void ED_operatortypes_edutils()
   WM_operatortype_append(ED_OT_undo_redo);
   WM_operatortype_append(ED_OT_undo_history);
 }
+
+}  // namespace blender

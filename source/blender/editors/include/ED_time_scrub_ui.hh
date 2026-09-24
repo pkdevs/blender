@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 struct ARegion;
 struct Scene;
 struct ScrArea;
@@ -20,7 +22,8 @@ struct wmWindow;
 void ED_time_scrub_draw_current_frame(const ARegion *region,
                                       const Scene *scene,
                                       bool display_seconds,
-                                      bool display_stalk = true);
+                                      bool display_stalk = true,
+                                      bool clamp_playhead = false);
 /**
  * Draw the scrub area with numbers inside.
  * \param display_seconds: Defines if the display is in seconds or in frames.
@@ -50,3 +53,5 @@ bool ED_time_scrub_event_in_region_poll(const wmWindow *win,
 
 void ED_time_scrub_channel_search_draw(const bContext *C, ARegion *region, bDopeSheet *dopesheet);
 void ED_time_scrub_region_rect_get(const ARegion *region, rcti *r_rect);
+
+}  // namespace blender

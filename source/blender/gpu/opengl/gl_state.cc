@@ -8,8 +8,8 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_math_base.h"
-#include "BLI_math_bits.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_bits.hh"
 
 #include "GPU_capabilities.hh"
 
@@ -78,32 +78,30 @@ void GLStateManager::set_state(const GPUState &state)
   GPUState changed = state ^ current_;
 
   if (changed.blend != 0) {
-    set_blend((GPUBlend)state.blend);
+    set_blend(GPUBlend(state.blend));
   }
   if (changed.write_mask != 0) {
-    set_write_mask((GPUWriteMask)state.write_mask);
+    set_write_mask(GPUWriteMask(state.write_mask));
   }
   if (changed.depth_test != 0) {
-    set_depth_test((GPUDepthTest)state.depth_test);
+    set_depth_test(GPUDepthTest(state.depth_test));
   }
   if (changed.stencil_test != 0 || changed.stencil_op != 0) {
-    set_stencil_test((GPUStencilTest)state.stencil_test, (GPUStencilOp)state.stencil_op);
-    set_stencil_mask((GPUStencilTest)state.stencil_test, mutable_state);
+    set_stencil_test(GPUStencilTest(state.stencil_test), GPUStencilOp(state.stencil_op));
+    set_stencil_mask(GPUStencilTest(state.stencil_test), mutable_state);
   }
   if (changed.clip_distances != 0) {
     set_clip_distances(state.clip_distances, current_.clip_distances);
   }
   if (changed.culling_test != 0) {
-    set_backface_culling((GPUFaceCullTest)state.culling_test);
+    set_backface_culling(GPUFaceCullTest(state.culling_test));
   }
-  if (changed.logic_op_xor != 0) {
-    set_logic_op(state.logic_op_xor);
-  }
+
   if (changed.invert_facing != 0) {
     set_facing(state.invert_facing);
   }
   if (changed.provoking_vert != 0) {
-    set_provoking_vert((GPUProvokingVertex)state.provoking_vert);
+    set_provoking_vert(GPUProvokingVertex(state.provoking_vert));
   }
   if (changed.clip_control != 0) {
     set_clip_control(state.clip_control);
@@ -153,7 +151,7 @@ void GLStateManager::set_mutable_state(const GPUStateMutable &state)
   if (changed.stencil_compare_mask != 0 || changed.stencil_reference != 0 ||
       changed.stencil_write_mask != 0)
   {
-    set_stencil_mask((GPUStencilTest)current_.stencil_test, state);
+    set_stencil_mask(GPUStencilTest(current_.stencil_test), state);
   }
 
   current_mutable_ = state;
@@ -273,17 +271,6 @@ void GLStateManager::set_clip_distances(const int new_dist_len, const int old_di
   }
   for (int i = new_dist_len; i < old_dist_len; i++) {
     glDisable(GL_CLIP_DISTANCE0 + i);
-  }
-}
-
-void GLStateManager::set_logic_op(const bool enable)
-{
-  if (enable) {
-    glEnable(GL_COLOR_LOGIC_OP);
-    glLogicOp(GL_XOR);
-  }
-  else {
-    glDisable(GL_COLOR_LOGIC_OP);
   }
 }
 

@@ -20,10 +20,10 @@
 #include "DNA_screen_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 
@@ -63,6 +63,8 @@
 #include "WM_types.hh"
 
 #include "wm_files.hh"
+
+namespace blender {
 
 static CLG_LogRef LOG = {"blend.link"};
 
@@ -206,8 +208,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   PropertyRNA *prop;
   BlendfileLinkAppendContext *lapp_context;
-  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX_LIBEXTRA],
-      relname[FILE_MAX];
+  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAX], libname[FILE_MAX_LIBEXTRA], relname[FILE_MAX];
   char *group, *name;
   int totfiles = 0;
 
@@ -267,7 +268,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Sanity checks for flag. */
@@ -297,7 +298,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
       lapp_context, datatoc_startup_blend, datatoc_startup_blend_size);
 
   if (totfiles != 0) {
-    blender::Map<std::string, int> libraries;
+    Map<std::string, int> libraries;
     int lib_idx = 0;
 
     RNA_BEGIN (op->ptr, itemptr, "files") {
@@ -535,8 +536,7 @@ static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   BlendfileLinkAppendContext *lapp_context;
-  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX_LIBEXTRA],
-      relname[FILE_MAX];
+  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAX], libname[FILE_MAX_LIBEXTRA], relname[FILE_MAX];
   char *group, *name;
 
   RNA_string_get(op->ptr, "filename", relname);
@@ -615,7 +615,7 @@ static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Never enforce instantiation of anything when relocating. */
@@ -820,7 +820,7 @@ static wmOperatorStatus wm_lib_relocate_invoke(bContext *C,
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  lib = (Library *)BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name);
+  lib = id_cast<Library *>(BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name));
 
   if (lib) {
     if (lib->runtime->parent) {
@@ -898,7 +898,7 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  Library *lib = (Library *)BKE_libblock_find_name(bmain, ID_LI, lib_name);
+  Library *lib = id_cast<Library *>(BKE_libblock_find_name(bmain, ID_LI, lib_name));
   if (lib == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -906,7 +906,7 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
   PropertyRNA *prop;
   BlendfileLinkAppendContext *lapp_context;
 
-  char filepath[FILE_MAX], root[FILE_MAXDIR], libname[FILE_MAX], relname[FILE_MAX];
+  char filepath[FILE_MAX], root[FILE_MAX], libname[FILE_MAX], relname[FILE_MAX];
 
   if (lib->runtime->parent && !do_reload) {
     BKE_reportf(op->reports,
@@ -1101,3 +1101,5 @@ void WM_OT_lib_reload(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -6,8 +6,8 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 
 #include "GPU_state.hh"
 #include "gpu_backend.hh"
@@ -24,6 +24,8 @@
 #include <cstdio>
 
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.metal"};
 
 /* -------------------------------------------------------------------- */
 /** \name Creation & Deletion
@@ -222,12 +224,12 @@ void MTLStorageBuf::update(const void *data)
 void MTLStorageBuf::bind(int slot)
 {
   if (slot >= MTL_MAX_BUFFER_BINDINGS) {
-    fprintf(
-        stderr,
-        "Error: Trying to bind \"%s\" ssbo to slot %d which is above the reported limit of %d.\n",
-        name_,
-        slot,
-        MTL_MAX_BUFFER_BINDINGS);
+    CLOG_ERROR(&LOG,
+               "Error: Trying to bind \"%s\" ssbo to slot %d which is above the reported limit of "
+               "%d.",
+               name_,
+               slot,
+               MTL_MAX_BUFFER_BINDINGS);
     BLI_assert(false);
     return;
   }
@@ -238,7 +240,7 @@ void MTLStorageBuf::bind(int slot)
 
   if (data_ != nullptr) {
     this->update(data_);
-    MEM_SAFE_FREE(data_);
+    MEM_SAFE_DELETE_VOID(data_);
   }
 
   /* Bind current UBO to active context. */
@@ -523,5 +525,7 @@ size_t MTLStorageBuf::get_size()
   BLI_assert(this);
   return size_in_bytes_;
 }
+
+/** \} */
 
 }  // namespace blender::gpu

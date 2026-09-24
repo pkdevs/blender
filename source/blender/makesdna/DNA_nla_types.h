@@ -8,19 +8,23 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "DNA_listBase.h"
+
+namespace blender {
 
 struct Object;
 struct bAction;
 
 /** #Strip::mode (these defines aren't really used, but are here for reference) */
-enum {
+enum eActStrip_Mode : short {
   ACTSTRIPMODE_BLEND = 0,
   ACTSTRIPMODE_ADD = 1,
 };
 
 /** #bActionStrip.flag */
-enum eActStrip_Flag {
+enum eActStrip_Flag : short {
   ACTSTRIP_SELECT = (1 << 0),
   ACTSTRIP_USESTRIDE = (1 << 1),
   /* Not implemented. Is not used anywhere */
@@ -33,6 +37,7 @@ enum eActStrip_Flag {
   ACTSTRIP_REVERSE = (1 << 7),
   ACTSTRIP_AUTO_BLENDS = (1 << 11),
 };
+ENUM_OPERATORS(eActStrip_Flag)
 
 /** Simple uniform modifier structure, assumed it can hold all type info. */
 struct bActionModifier {
@@ -57,7 +62,8 @@ struct bActionModifier {
 
 struct bActionStrip {
   struct bActionStrip *next = nullptr, *prev = nullptr;
-  short flag = 0, mode = 0;
+  eActStrip_Flag flag = {};
+  eActStrip_Mode mode = ACTSTRIPMODE_BLEND;
   /** Axis 0=x, 1=y, 2=z. */
   short stride_axis = 0;
   /** Current modifier for buttons. */
@@ -89,5 +95,7 @@ struct bActionStrip {
   char offs_bone[32] = "";
 
   /** Modifier stack. */
-  ListBase modifiers = {nullptr, nullptr};
+  ListBaseT<bActionModifier> modifiers = {nullptr, nullptr};
 };
+
+}  // namespace blender

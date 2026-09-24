@@ -9,11 +9,13 @@
  */
 
 #include "BLI_enum_flags.hh"
-#include "BLI_ghash.h"
+#include "BLI_ghash.hh"
 
 #include <cstdarg>
 
 #include "bmesh_class.hh"
+
+namespace blender {
 
 /**
  * operators represent logical, executable mesh modules.  all topological
@@ -59,11 +61,11 @@ BLI_INLINE BMFlagLayer *BMO_elem_flag_from_header(BMHeader *ele_head)
 {
   switch (ele_head->htype) {
     case BM_VERT:
-      return ((BMVert_OFlag *)ele_head)->oflags;
+      return (reinterpret_cast<BMVert_OFlag *>(ele_head))->oflags;
     case BM_EDGE:
-      return ((BMEdge_OFlag *)ele_head)->oflags;
+      return (reinterpret_cast<BMEdge_OFlag *>(ele_head))->oflags;
     default:
-      return ((BMFace_OFlag *)ele_head)->oflags;
+      return (reinterpret_cast<BMFace_OFlag *>(ele_head))->oflags;
   }
 }
 
@@ -459,6 +461,9 @@ void BMO_pop(BMesh *bm);
 /** Executes an operator. */
 bool BMO_op_callf(BMesh *bm, int flag, const char *fmt, ...);
 
+/** A `va_list` version of #BMO_op_callf. */
+bool BMO_op_vcallf(BMesh *bm, int flag, const char *fmt, va_list list);
+
 /**
  * Initializes, but doesn't execute an operator.  this is so you can
  * gain access to the outputs of the operator.  note that you have
@@ -805,7 +810,8 @@ void *BMO_slot_buffer_get_first(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char
  *
  * \param restrictmask: restricts the iteration to certain element types
  * (e.g. combination of BM_VERT, BM_EDGE, BM_FACE), if iterating
- * over an element buffer (not a mapping). */
+ * over an element buffer (not a mapping).
+ */
 void *BMO_iter_new(BMOIter *iter,
                    BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
                    const char *slot_name,
@@ -838,3 +844,5 @@ bool BMO_iter_map_value_bool(BMOIter *iter);
 extern const int BMO_OPSLOT_TYPEINFO[BMO_OP_SLOT_TOTAL_TYPES];
 
 int BMO_opcode_from_opname(const char *opname);
+
+}  // namespace blender

@@ -14,6 +14,7 @@ set(LIB
   PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::functions
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::imbuf::movie
@@ -22,7 +23,7 @@ set(LIB
   PRIVATE bf::render
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
-  PRIVATE bf::dependencies::optional::opencolorio
+  PRIVATE bf::dependencies::opencolorio
 )
 
 if(HAVE_FEENABLEEXCEPT)
@@ -72,17 +73,14 @@ if(WITH_CODEC_FFMPEG)
   add_definitions(-DWITH_FFMPEG)
 endif()
 
-if(WITH_TBB)
+if(WITH_TBB OR WITH_TBB_MALLOC_PROXY)
   list(APPEND INC ${TBB_INCLUDE_DIRS})
+endif()
+if(WITH_TBB)
   if(WIN32)
     # For `pragma` that links `tbbmalloc_proxy.lib`.
     link_directories(${LIBDIR}/tbb/lib)
   endif()
-endif()
-
-if(WIN32)
-  # Windows.h will define min/max macros that will collide with the STL versions.
-  add_definitions(-DNOMINMAX)
 endif()
 
 if(WITH_USD)
@@ -115,6 +113,10 @@ if(WITH_SDL)
   add_definitions(-DWITH_SDL)
 endif()
 
+if(WITH_INPUT_NDOF)
+  add_definitions(-DWITH_INPUT_NDOF)
+endif()
+
 if(WITH_BINRELOC)
   list(APPEND INC ${BINRELOC_INCLUDE_DIRS})
   add_definitions(-DWITH_BINRELOC)
@@ -132,6 +134,10 @@ endif()
 if(WITH_GMP)
   list(APPEND INC ${GMP_INCLUDE_DIRS})
   add_definitions(-DWITH_GMP)
+endif()
+
+if(WITH_TBB_MALLOC_PROXY)
+  add_definitions(-DWITH_TBB_MALLOC)
 endif()
 
 # Setup the EXE sources and `buildinfo`.
@@ -283,7 +289,7 @@ if(WITH_BUILDINFO)
   add_dependencies(buildinfoobj buildinfo)
 endif()
 
-add_cc_flags_custom_test(blender)
+add_c_and_cxx_flags_custom_test(blender)
 
 # message(STATUS "Configuring blender")
 if(WITH_PYTHON_MODULE)
@@ -392,6 +398,11 @@ if(UNIX AND NOT APPLE)
     else()
       set(TARGETDIR_VER "share/blender/${BLENDER_VERSION}")
       set(TARGETDIR_TEXT "share/doc/blender")
+      if(CMAKE_INSTALL_LIBDIR)
+        set(TARGETDIR_VER_LIBS "${CMAKE_INSTALL_LIBDIR}/blender/${BLENDER_VERSION}")
+      else()
+        set(TARGETDIR_VER_LIBS "lib/blender/${BLENDER_VERSION}")
+      endif()
     endif()
   endif()
   set(TARGETDIR_SITE_PACKAGES "${TARGETDIR_VER}/python/lib/python${PYTHON_VERSION}/site-packages")
@@ -435,6 +446,10 @@ elseif(APPLE)
   endif()
 endif()
 
+# In most cases this matches `TARGETDIR_VER`, set here unless explicitly defined.
+if(NOT DEFINED TARGETDIR_VER_LIBS)
+  set(TARGETDIR_VER_LIBS "${TARGETDIR_VER}")
+endif()
 
 # -----------------------------------------------------------------------------
 # Install Targets (Generic, All Platforms)
@@ -482,12 +497,54 @@ if(WITH_PYTHON)
   endif()
   unset(FREESTYLE_EXCLUDE_CONDITIONAL)
 
+  # The glTF add-on's draco & meshopt bridge libraries, loaded at run-time by `io_scene_gltf2`.
+  # Install beside their bundled dependencies, found via each target's RPATH (UNIX)
+  # or the `blender.shared` side-by-side assembly (WIN32).
+  # Non-portable installs (UNIX system installs) place them beside the add-on.
+  if(WITH_INSTALL_PORTABLE)
+    set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_LIB}")
+  else()
+    set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_VER_LIBS}/scripts/addons_core/io_scene_gltf2")
+  endif()
+
+  # Unlike `install(TARGETS)`, `install(PROGRAMS)` copies the file without rewriting its RPATH,
+  # so these must be linked with the install RPATH, see `BUILD_WITH_INSTALL_RPATH` below.
+  if(PLATFORM_BUNDLED_LIBRARIES)
+    if(APPLE)
+      set(GLTF_BRIDGE_RPATH "@loader_path")
+    elseif(UNIX)
+      set(GLTF_BRIDGE_RPATH "$ORIGIN")
+    endif()
+  endif()
+
   if(WITH_DRACO)
+    if(GLTF_BRIDGE_RPATH)
+      set_target_properties(bf_intern_draco_bridge PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${GLTF_BRIDGE_RPATH}"
+      )
+    endif()
     install(
-      PROGRAMS $<TARGET_FILE:extern_draco>
-      DESTINATION ${TARGETDIR_VER}/scripts/addons_core/io_scene_gltf2
+      PROGRAMS $<TARGET_FILE:bf_intern_draco_bridge>
+      DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
     )
   endif()
+
+  if(WITH_MESHOPTIMIZER)
+    if(GLTF_BRIDGE_RPATH)
+      set_target_properties(bf_intern_meshopt_bridge PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${GLTF_BRIDGE_RPATH}"
+      )
+    endif()
+    install(
+      PROGRAMS $<TARGET_FILE:bf_intern_meshopt_bridge>
+      DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
+    )
+  endif()
+
+  unset(GLTF_BRIDGE_INSTALL_DIR)
+  unset(GLTF_BRIDGE_RPATH)
 
 endif()
 
@@ -521,7 +578,7 @@ if(WITH_INTERNATIONAL)
   )
 
   foreach(_mo_file ${_all_mo_files})
-    get_filename_component(_locale_name ${_mo_file} NAME_WE)
+    cmake_path(GET _mo_file STEM _locale_name)
     install(
       FILES ${_mo_file}
       DESTINATION ${_locale_target_dir}/${_locale_name}/LC_MESSAGES
@@ -540,12 +597,10 @@ if(WITH_INTERNATIONAL)
 endif()
 
 # Color management.
-if(WITH_OPENCOLORIO)
-  install(
-    DIRECTORY ${CMAKE_SOURCE_DIR}/release/datafiles/colormanagement
-    DESTINATION ${TARGETDIR_VER}/datafiles
-  )
-endif()
+install(
+  DIRECTORY ${CMAKE_SOURCE_DIR}/release/datafiles/colormanagement
+  DESTINATION ${TARGETDIR_VER}/datafiles
+)
 if(WIN32)
   if(EXISTS ${LIBDIR}/osl/lib/python${PYTHON_VERSION}/site-packages/oslquery) # 4.4+
     install(
@@ -557,6 +612,18 @@ if(WIN32)
       DIRECTORY ${LIBDIR}/osl/lib/python${PYTHON_VERSION}_debug/site-packages/oslquery
       DESTINATION ${TARGETDIR_SITE_PACKAGES}
       CONFIGURATIONS Debug
+    )
+  endif()
+  if(EXISTS ${LIBDIR}/ceres/bin/ceres.dll) # 5.1+
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/ceres/bin/ceres.dll
+      RELEASE
+    )
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/ceres/bin/ceres-debug.dll
+      DEBUG
     )
   endif()
   if(EXISTS ${LIBDIR}/osl/bin/oslquery.dll) # 4.1+
@@ -587,14 +654,31 @@ if(WIN32)
       DEBUG
     )
   endif()
-  if(EXISTS ${LIBDIR}/opencolorio/bin/opencolorio_2_3.dll) # 4.1
+  if(EXISTS ${LIBDIR}/opencolorio/bin/opencolorio_2_5.dll) # 5.1
     windows_install_shared_manifest(
-      FILES ${LIBDIR}/opencolorio/bin/opencolorio_2_3.dll
+      FILES ${LIBDIR}/opencolorio/bin/opencolorio_2_5.dll
       RELEASE
     )
     windows_install_shared_manifest(
-      FILES ${LIBDIR}/opencolorio/bin/opencolorio_d_2_3.dll
+      FILES ${LIBDIR}/opencolorio/bin/opencolorio_d_2_5.dll
       DEBUG
+    )
+  endif()
+  if(EXISTS ${LIBDIR}/openjph/bin/openjph.0.25.dll) # 5.1
+    windows_install_shared_manifest(
+      FILES ${LIBDIR}/openjph/bin/openjph.0.25.dll
+      RELEASE
+    )
+    windows_install_shared_manifest(
+      FILES ${LIBDIR}/openjph/bin/openjph.0.25d.dll
+      DEBUG
+    )
+  endif()
+  if(EXISTS "${LIBDIR}/aom/bin/aom.dll") # 5.1
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/aom/bin/aom.dll
+      ALL
     )
   endif()
   install(
@@ -645,7 +729,7 @@ elseif("${CMAKE_GENERATOR}" MATCHES "Ninja")
 endif()
 if(NOT ("${_install_cmd}" STREQUAL ""))
   # Message to display after building.
-  get_filename_component(_install_dst ${TARGETDIR_VER} ABSOLUTE BASE_DIR ${CMAKE_INSTALL_PREFIX})
+  cmake_path(ABSOLUTE_PATH TARGETDIR_VER BASE_DIRECTORY ${CMAKE_INSTALL_PREFIX} NORMALIZE OUTPUT_VARIABLE _install_dst)
   add_custom_command(
     TARGET blender POST_BUILD
     COMMAND
@@ -657,7 +741,8 @@ endif()
 unset(_install_cmd)
 
 # macro to help install files without dragging in unnecessary data.
-macro(install_dir from to)
+# Install a directory, excluding common junk files.
+function(install_dir from to)
   install(
     DIRECTORY ${from}
     DESTINATION ${to}
@@ -684,7 +769,7 @@ macro(install_dir from to)
     PATTERN "turtle.py" EXCLUDE                 # ./turtle.py
     PATTERN "wininst*.exe" EXCLUDE              # from distutils, avoid malware false positive
   )
-endmacro()
+endfunction()
 
 # -----------------------------------------------------------------------------
 # Install Targets (Platform Specific)
@@ -745,34 +830,11 @@ if(UNIX AND NOT APPLE)
     # NOTE: there is a bug in CMake 3.25.1 where `LIBDIR` is reported as undefined.
     if(NOT DEFINED LIBDIR)
       # Pass.
-    elseif(EXISTS ${LIBDIR}/mesa)
-      install(
-        # Trailing slash is needed to install contents instead of directory itself.
-        DIRECTORY ${LIBDIR}/mesa/lib/
-        DESTINATION "./lib/mesa"
-      )
-
+    elseif(EXISTS ${LIBDIR})
       install(
         PROGRAMS
         ${CMAKE_SOURCE_DIR}/release/bin/blender-launcher
-        ${CMAKE_SOURCE_DIR}/release/bin/blender-softwaregl
         DESTINATION "."
-      )
-
-      # Remove from old location, so existing builds don't start with software
-      # OpenGL now that the `./lib/` directory is used for other libraries.
-      install(
-        CODE "\
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so.1)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so.1.5.0)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so.1)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so.1.3.1)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0)\n
-file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
-"
       )
     endif()
   else()
@@ -831,7 +893,7 @@ file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
       # determine this from Python's libraries path.
       # Ugh, its possible `lib64` is just a symbolic-link to `lib`
       # which causes incorrect use of `lib64`.
-      get_filename_component(_pypath_real ${PYTHON_LIBPATH} REALPATH)
+      file(REAL_PATH ${PYTHON_LIBPATH} _pypath_real)
       if(${_pypath_real} MATCHES "lib64$")
         set(_target_LIB "lib64")
       else()
@@ -859,7 +921,7 @@ file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
 
       # Needed for `distutils/pip`.
       # Get the last part of the include dir, will be `python{version}{abiflag}`.
-      get_filename_component(_py_inc_suffix ${PYTHON_INCLUDE_DIR} NAME)
+      cmake_path(GET PYTHON_INCLUDE_DIR FILENAME _py_inc_suffix)
       install(
         FILES ${PYTHON_INCLUDE_DIR}/pyconfig.h
         DESTINATION ${TARGETDIR_VER}/python/include/${_py_inc_suffix}
@@ -876,16 +938,16 @@ file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
         install(
           DIRECTORY ${PYTHON_NUMPY_PATH}/numpy
           DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
-          PATTERN "__pycache__" EXCLUDE           # * any cache *
-          PATTERN "*.pyc" EXCLUDE                 # * any cache *
-          PATTERN "*.pyo" EXCLUDE                 # * any cache *
-          PATTERN "oldnumeric" EXCLUDE            # ./oldnumeric
-          PATTERN "doc" EXCLUDE                   # ./doc
-          PATTERN "tests" EXCLUDE                 # ./tests
-          PATTERN "f2py" EXCLUDE                  # ./f2py - fortran/python interface code, not for blender.
-          PATTERN "include" EXCLUDE               # include dirs all over, we won't use NumPy/CAPI
-          PATTERN "*.h" EXCLUDE                   # some includes are not in include dirs
-          PATTERN "*.a" EXCLUDE                   # ./core/lib/libnpymath.a - for linking, we don't need.
+          PATTERN "__pycache__" EXCLUDE   # * any cache *
+          PATTERN "*.pyc" EXCLUDE         # * any cache *
+          PATTERN "*.pyo" EXCLUDE         # * any cache *
+          PATTERN "oldnumeric" EXCLUDE    # ./oldnumeric
+          PATTERN "doc" EXCLUDE           # ./doc
+          PATTERN "tests" EXCLUDE         # ./tests
+          PATTERN "f2py" EXCLUDE          # ./f2py - fortran/python interface code, not for blender.
+          PATTERN "include" EXCLUDE       # include dirs all over, we won't use NumPy/CAPI
+          PATTERN "*.h" EXCLUDE           # some includes are not in include dirs
+          PATTERN "*.a" EXCLUDE           # ./core/lib/libnpymath.a - for linking, we don't need.
         )
         install(
           DIRECTORY ${PYTHON_NUMPY_PATH}/Cython
@@ -983,7 +1045,7 @@ file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
       # The script uses the version of Python installed with Blender,
       # so it must only be inside installed if `WITH_PYTHON AND WITH_PYTHON_INSTALL`
       # are active.
-      get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+      cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
       configure_file(
         ${CMAKE_SOURCE_DIR}/release/freedesktop/scripts/blender-system-info.sh.in
         ${CMAKE_BINARY_DIR}/release/freedesktop/scripts/blender-system-info.sh
@@ -1136,8 +1198,12 @@ elseif(WIN32)
       if(PDBCOPY_EXECUTABLE)
         add_custom_command(
           TARGET blender POST_BUILD
-          COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb
-          COMMAND ${PDBCOPY_EXECUTABLE} $<TARGET_PDB_FILE:blender> ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb -p
+          COMMAND
+            ${CMAKE_COMMAND} -E
+            rm -f ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb
+          COMMAND
+            ${PDBCOPY_EXECUTABLE} $<TARGET_PDB_FILE:blender>
+            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb -p
           COMMENT "Stripping PDB file..."
         )
       else()
@@ -1230,7 +1296,7 @@ elseif(WIN32)
     string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
     if(NOT WITH_PYTHON_MODULE)
-      if(NOT CMAKE_COMPILER_IS_GNUCC)
+      if(NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
         install(
           FILES
             ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python${_PYTHON_VERSION_NO_DOTS}.dll
@@ -1453,7 +1519,19 @@ elseif(WIN32)
       ALL
     )
   endif()
-  if(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-61.dll")
+  if(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-62.dll")
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/ffmpeg/lib/avcodec-62.dll
+        ${LIBDIR}/ffmpeg/lib/avformat-62.dll
+        ${LIBDIR}/ffmpeg/lib/avdevice-62.dll
+        ${LIBDIR}/ffmpeg/lib/avutil-60.dll
+        ${LIBDIR}/ffmpeg/lib/swscale-9.dll
+        ${LIBDIR}/ffmpeg/lib/swresample-6.dll
+        ${LIBDIR}/ffmpeg/lib/avfilter-11.dll
+      ALL
+    )
+  elseif(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-61.dll")
     windows_install_shared_manifest(
       FILES
         ${LIBDIR}/ffmpeg/lib/avcodec-61.dll
@@ -1544,13 +1622,31 @@ elseif(WIN32)
   )
 
   windows_install_shared_manifest(
+    FILES ${LIBDIR}/meshoptimizer/bin/meshoptimizer.dll
+    RELEASE
+  )
+  windows_install_shared_manifest(
+    FILES ${LIBDIR}/meshoptimizer/bin/meshoptimizer_d.dll
+    DEBUG
+  )
+
+  windows_install_shared_manifest(
+    FILES ${LIBDIR}/draco/bin/draco.dll
+    RELEASE
+  )
+  windows_install_shared_manifest(
+    FILES ${LIBDIR}/draco/bin/draco_d.dll
+    DEBUG
+  )
+
+  windows_install_shared_manifest(
     FILES
       ${LIBDIR}/openal/lib/OpenAL32.dll
     ALL
   )
 
   windows_install_shared_manifest(
-    FILES ${LIBDIR}/sdl/lib/SDL2.dll
+    FILES ${LIBDIR}/sdl/bin/SDL3.dll
     ALL
   )
 
@@ -1566,7 +1662,7 @@ elseif(WIN32)
 
 
   if(NOT WITH_PYTHON_MODULE)
-    get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+    cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
     # Configure then generate file. Note that this copies the literal generator
     # for the Python executable name. So the file needs to be generated afterwards
     # to get the correct name.
@@ -1600,6 +1696,7 @@ elseif(WIN32)
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_debug_gpu_glitchworkaround.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_debug_log.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup.cmd
+        ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup_opengl.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup_vulkan.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_startup_opengl.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_startup_vulkan.cmd
@@ -1733,7 +1830,7 @@ elseif(APPLE)
 
     # Needed for `distutils/pip`.
     # Get the last part of the include dir, will be `python{version}{abiflag}`.
-    get_filename_component(_py_inc_suffix ${PYTHON_INCLUDE_DIR} NAME)
+    cmake_path(GET PYTHON_INCLUDE_DIR FILENAME _py_inc_suffix)
     install(
       FILES ${PYTHON_INCLUDE_DIR}/pyconfig.h
       DESTINATION ${TARGETDIR_VER}/python/include/${_py_inc_suffix}
@@ -1749,7 +1846,7 @@ elseif(APPLE)
   endif()
 
   if(NOT WITH_PYTHON_MODULE AND WITH_PYTHON AND WITH_PYTHON_INSTALL)
-    get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+    cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
     configure_file(
       ${CMAKE_SOURCE_DIR}/release/darwin/scripts/blender-system-info.sh.in
       ${CMAKE_BINARY_DIR}/release/darwin/scripts/blender-system-info.sh
@@ -1768,7 +1865,7 @@ endif()
 # the site-packages directory.
 if(WITH_PYTHON_MODULE AND LIBDIR AND NOT WIN32)
   # It's possible for a build using LIBDIR to reference a non-standard Python installation.
-  path_is_prefix(LIBDIR PYTHON_INCLUDE_DIR _is_python_in_libdir)
+  cmake_path(IS_PREFIX LIBDIR "${PYTHON_INCLUDE_DIR}" NORMALIZE _is_python_in_libdir)
   if(_is_python_in_libdir)
     install(
       DIRECTORY ${LIBDIR}/python/lib/python${PYTHON_VERSION}/site-packages/MaterialX
@@ -1791,9 +1888,13 @@ if(WITH_PYTHON_MODULE AND LIBDIR AND NOT WIN32)
       DESTINATION ${TARGETDIR_SITE_PACKAGES}
     )
     if(APPLE)
-      set(_openvdb_filename openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-darwin.so)
+      set(_openvdb_filename
+        openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-darwin.so
+      )
     else()
-      set(_openvdb_filename openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so)
+      set(_openvdb_filename
+        openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
+      )
     endif()
     install(
       FILES ${LIBDIR}/python/lib/python${PYTHON_VERSION}/site-packages/${_openvdb_filename}
@@ -1847,12 +1948,9 @@ unset(TARGETDIR_TEXT)
 
 # Geometry icons.
 get_property(_icon_names GLOBAL PROPERTY ICON_GEOM_NAMES)
-set(_icon_files)
-foreach(_f ${_icon_names})
-  list(APPEND _icon_files
-    "${CMAKE_SOURCE_DIR}/release/datafiles/icons/${_f}.dat"
-  )
-endforeach()
+set(_icon_files ${_icon_names})
+list(TRANSFORM _icon_files PREPEND "${CMAKE_SOURCE_DIR}/release/datafiles/icons/")
+list(TRANSFORM _icon_files APPEND ".dat")
 install(
   FILES ${_icon_files}
   DESTINATION ${TARGETDIR_VER}/datafiles/icons
@@ -1860,7 +1958,6 @@ install(
 
 unset(_icon_names)
 unset(_icon_files)
-unset(_f)
 
 
 # -----------------------------------------------------------------------------
@@ -1888,16 +1985,12 @@ endif()
 # -----------------------------------------------------------------------------
 # Setup link libraries
 
-add_dependencies(blender makesdna)
 target_link_libraries(blender PRIVATE ${LIB})
 unset(LIB)
 
 setup_platform_linker_flags(blender)
 setup_platform_linker_libs(blender)
-
-if(DEFINED PLATFORM_SYMBOLS_MAP)
-  set_target_properties(blender PROPERTIES LINK_DEPENDS ${PLATFORM_SYMBOLS_MAP})
-endif()
+setup_platform_linker_symbol_hiding(blender)
 
 blender_target_include_dirs(blender ${INC})
 
@@ -1928,32 +2021,19 @@ if((DEFINED LIBDIR) AND TARGETDIR_LIB)
         ${USD_LIBRARY_DIR}/usd
         DESTINATION ${TARGETDIR_LIB}
       )
-      install(DIRECTORY
-        ${LIBDIR}/usd/plugin/usd/hdStorm
-        ${LIBDIR}/usd/plugin/usd/usdShaders
-        ${LIBDIR}/usd/plugin/usd/hioOiio
-        DESTINATION "blender.shared/usd"
-      )
+      install(DIRECTORY ${LIBDIR}/usd/plugin/usd/ DESTINATION "blender.shared/usd")
     elseif(USD_PYTHON_SUPPORT)
       install(DIRECTORY
         ${USD_LIBRARY_DIR}/usd
         DESTINATION ${TARGETDIR_LIB}
       )
-      install(DIRECTORY
-        ${LIBDIR}/usd/plugin/usd/hdStorm
-        ${LIBDIR}/usd/plugin/usd/usdShaders
-        DESTINATION ${TARGETDIR_LIB}/usd
-      )
+      install(DIRECTORY ${LIBDIR}/usd/plugin/usd/ DESTINATION ${TARGETDIR_LIB}/usd)
     else()
       install(DIRECTORY
         ${USD_LIBRARY_DIR}/usd
         DESTINATION "${TARGETDIR_VER}/datafiles"
       )
-      install(DIRECTORY
-        ${LIBDIR}/usd/plugin/usd/hdStorm
-        ${LIBDIR}/usd/plugin/usd/usdShaders
-        DESTINATION "${TARGETDIR_VER}/datafiles/usd"
-      )
+      install(DIRECTORY ${LIBDIR}/usd/plugin/usd/ DESTINATION "${TARGETDIR_VER}/datafiles/usd")
     endif()
   endif()
   if(WIN32)
@@ -1993,36 +2073,17 @@ if((DEFINED LIBDIR) AND TARGETDIR_LIB AND WITH_MATERIALX)
   )
 endif()
 
-if(WIN32 AND DEFINED BOOST_LIBPATH)
-  if(EXISTS ${BOOST_LIBPATH})
-    set(BOOST_COMPONENTS atomic chrono date_time filesystem
-      iostreams locale program_options regex
-      serialization system thread wave wserialization
-      python${_PYTHON_VERSION_NO_DOTS} numpy${_PYTHON_VERSION_NO_DOTS}
-    )
-    foreach(component ${BOOST_COMPONENTS})
-      if(EXISTS ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll)
-        windows_install_shared_manifest(
-          FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll
-          RELEASE
-        )
-        windows_install_shared_manifest(
-          FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_DEBUG_POSTFIX}.dll
-          DEBUG
-        )
-      endif()
-    endforeach()
-  endif()
-endif()
-
 if(WIN32)
   if(WITH_CYCLES_DEVICE_HIPRT)
-    if(EXISTS ${LIBDIR}/hiprt/bin/hiprt64.dll)
-      install(
-        FILES ${LIBDIR}/hiprt/bin/hiprt64.dll
-        DESTINATION "./"
-      )
-    endif()
+    # Cycles does `find_package(HIPRT)` for its compilation purposes, and the variables defined by
+    # the FindHIPRT.cmake are only available in Cycles. In order to access HIPRT_VERSION need to
+    # find the package from here as well.
+    # For the strict compilation rely on Cycles to take care of set_and_warn_library_found().
+    find_package(HIPRT)
+    windows_install_shared_manifest(
+      FILES ${LIBDIR}/hiprt/bin/hiprt${HIPRT_VERSION}64.dll
+      ALL
+    )
   endif()
 endif()
 

@@ -15,7 +15,7 @@
 #include "BKE_nla.hh"
 #include "BKE_node.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 
 #include "ANIM_action.hh"
@@ -28,8 +28,8 @@ namespace blender::animrig::internal {
 void rebuild_slot_user_cache(Main &bmain)
 {
   /* Loop over all Actions and clear their slots' user cache. */
-  LISTBASE_FOREACH (bAction *, dna_action, &bmain.actions) {
-    Action &action = dna_action->wrap();
+  for (bAction &dna_action : bmain.actions) {
+    Action &action = dna_action.wrap();
     for (Slot *slot : action.slots()) {
       BLI_assert_msg(slot->runtime, "Slot::runtime should always be allocated");
       slot->runtime->users.clear();
@@ -54,14 +54,12 @@ void rebuild_slot_user_cache(Main &bmain)
       return false;
     }
 
-    foreach_action_slot_use(*id, [&](const Action &action, slot_handle_t slot_handle) {
-      const Slot *slot = action.slot_for_handle(slot_handle);
+    foreach_action_slot_use(*id, [&](Action &action, slot_handle_t slot_handle) {
+      Slot *slot = action.slot_for_handle(slot_handle);
       if (!slot) {
         return true;
       }
-      /* Constant cast because the `foreach` produces const Actions, and I (Sybren)
-       * didn't want to make a non-const duplicate. */
-      const_cast<Slot *>(slot)->users_add(*id);
+      slot->users_add(*id);
       return true;
     });
 
@@ -69,11 +67,11 @@ void rebuild_slot_user_cache(Main &bmain)
   };
 
   /* Loop over all IDs to cache their slot usage. */
-  ListBase *ids_of_idtype;
+  ListBaseT<ID> *ids_of_idtype;
   ID *id;
   FOREACH_MAIN_LISTBASE_BEGIN (&bmain, ids_of_idtype) {
     /* Check whether this ID type can be animated. If not, just skip all IDs of this type. */
-    id = static_cast<ID *>(ids_of_idtype->first);
+    id = ids_of_idtype->first();
     if (!id || !id_type_can_have_animdata(GS(id->name))) {
       continue;
     }

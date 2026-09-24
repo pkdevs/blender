@@ -274,6 +274,15 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])})"
         if isinstance(val, bpy.types.Float2AttributeValue):
             return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])})"
+        if isinstance(val, bpy.types.Float4AttributeValue):
+            return f"({fmtf(val.vector[0])}, {fmtf(val.vector[1])}, {fmtf(val.vector[2])}, {fmtf(val.vector[3])})"
+        if isinstance(val, bpy.types.Float4x4AttributeValue):
+            mat = val.value
+            res = "("
+            for row in range(0, 4):
+                res += f" ({fmtf(mat[row][0])}, {fmtf(mat[row][1])}, {fmtf(mat[row][2])}, {fmtf(mat[row][3])})"
+            res += " )"
+            return res
         if isinstance(val, bpy.types.FloatColorAttributeValue) or isinstance(val, bpy.types.ByteColorAttributeValue):
             return f"({val.color[0]:.3f}, {val.color[1]:.3f}, {val.color[2]:.3f}, {val.color[3]:.3f})"
         if isinstance(val, bpy.types.QuaternionAttributeValue):
@@ -454,7 +463,10 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
                 if len(mesh.edges) > 0:
                     Report._write_collection_single(mesh.edges, desc)
                 # attributes
-                for attr in mesh.attributes:
+                attr_names = [attr.name for attr in mesh.attributes]
+                attr_names.sort()
+                for name in attr_names:
+                    attr = mesh.attributes[name]
                     if not attr.is_internal:
                         Report._write_attr(attr, desc)
                 # skinning / vertex groups
@@ -947,7 +959,7 @@ integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw
                 generate_func(str(input_file), str(output_filepath), params, params_export)
                 got_desc = self.generate_data_desc(output_filepath)
         except RuntimeError as ex:
-            got_desc = f"Error during import: {ex}"
+            got_desc = f"Error during import: {ex}".replace(str(input_file), input_file.name)
 
         ref_path: pathlib.Path = self.reference_dir / f"{input_basename}.txt"
         if ref_path.exists():

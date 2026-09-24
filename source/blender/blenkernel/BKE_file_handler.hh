@@ -14,9 +14,11 @@
 
 #include "RNA_types.hh"
 
+namespace blender {
+
 struct bContext;
 
-namespace blender::bke {
+namespace bke {
 
 #define FH_MAX_FILE_EXTENSIONS_STR 512
 
@@ -53,6 +55,11 @@ struct FileHandlerType {
    * Generate a default file name for use with this file handler.
    */
   std::string get_default_filename(StringRefNull name);
+
+  /**
+   * Return `label` with the supported file extensions appended, e.g. "Alembic (.abc)".
+   */
+  std::string label_with_extensions() const;
 };
 
 /**
@@ -84,4 +91,5 @@ Span<std::unique_ptr<FileHandlerType>> file_handlers();
 Vector<FileHandlerType *> file_handlers_poll_file_drop(const bContext *C,
                                                        const Span<std::string> paths);
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

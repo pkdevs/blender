@@ -12,10 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
+#include "BLI_array_utils.hh"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
@@ -87,7 +88,7 @@ struct PointCloudBatchCache {
 
 static PointCloudBatchCache *pointcloud_batch_cache_get(PointCloud &pointcloud)
 {
-  return static_cast<PointCloudBatchCache *>(pointcloud.batch_cache);
+  return pointcloud.pointcloud_batch_cache;
 }
 
 static bool pointcloud_batch_cache_valid(PointCloud &pointcloud)
@@ -109,7 +110,7 @@ static void pointcloud_batch_cache_init(PointCloud &pointcloud)
 
   if (!cache) {
     cache = MEM_new<PointCloudBatchCache>(__func__);
-    pointcloud.batch_cache = cache;
+    pointcloud.pointcloud_batch_cache = cache;
   }
   else {
     cache->eval_cache = {};
@@ -118,8 +119,8 @@ static void pointcloud_batch_cache_init(PointCloud &pointcloud)
   }
 
   cache->eval_cache.mat_len = BKE_id_material_used_with_fallback_eval(pointcloud.id);
-  cache->eval_cache.surface_per_mat = static_cast<gpu::Batch **>(
-      MEM_callocN(sizeof(gpu::Batch *) * cache->eval_cache.mat_len, __func__));
+  cache->eval_cache.surface_per_mat = MEM_new_array_zeroed<gpu::Batch *>(cache->eval_cache.mat_len,
+                                                                         __func__);
 
   cache->is_dirty = false;
 }
@@ -168,7 +169,7 @@ static void pointcloud_batch_cache_clear(PointCloud &pointcloud)
       GPU_BATCH_DISCARD_SAFE(cache->eval_cache.surface_per_mat[i]);
     }
   }
-  MEM_SAFE_FREE(cache->eval_cache.surface_per_mat);
+  MEM_SAFE_DELETE(cache->eval_cache.surface_per_mat);
 
   pointcloud_discard_attributes(*cache);
 }
@@ -184,8 +185,8 @@ void DRW_pointcloud_batch_cache_validate(PointCloud *pointcloud)
 void DRW_pointcloud_batch_cache_free(PointCloud *pointcloud)
 {
   pointcloud_batch_cache_clear(*pointcloud);
-  MEM_delete(static_cast<PointCloudBatchCache *>(pointcloud->batch_cache));
-  pointcloud->batch_cache = nullptr;
+  MEM_delete(pointcloud->pointcloud_batch_cache);
+  pointcloud->pointcloud_batch_cache = nullptr;
 }
 
 void DRW_pointcloud_batch_cache_free_old(PointCloud *pointcloud, int ctime)
@@ -286,7 +287,7 @@ static void pointcloud_extract_attribute(const PointCloud &pointcloud,
   GPU_vertbuf_init_with_format_ex(attr_buf, format, usage_flag);
   GPU_vertbuf_data_alloc(attr_buf, pointcloud.totpoint);
 
-  attribute.varray.materialize(attr_buf.data<ColorGeometry4f>());
+  array_utils::copy(attribute.varray, attr_buf.data<ColorGeometry4f>());
 }
 
 /** \} */
@@ -311,9 +312,9 @@ gpu::Batch **pointcloud_surface_shaded_get(PointCloud *pointcloud,
   VectorSet<std::string> attrs_needed;
 
   for (GPUMaterial *gpu_material : Span<GPUMaterial *>(gpu_materials, mat_len)) {
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
-      const StringRef name = gpu_attr->name;
+    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
+    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
+      const StringRef name = gpu_attr.name;
       if (!attributes.contains(name)) {
         continue;
       }
@@ -356,8 +357,11 @@ gpu::Batch *pointcloud_surface_get(PointCloud *pointcloud)
 gpu::Batch *DRW_pointcloud_batch_cache_get_dots(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
-  PointCloudBatchCache *cache = pointcloud_batch_cache_get(pointcloud);
-  return DRW_batch_request(&cache->eval_cache.dots);
+  if (pointcloud.type == PointCloudType::Points) {
+    PointCloudBatchCache *cache = pointcloud_batch_cache_get(pointcloud);
+    return DRW_batch_request(&cache->eval_cache.dots);
+  }
+  return nullptr;
 }
 
 gpu::VertBuf *DRW_pointcloud_position_and_radius_buffer_get(Object *ob)
@@ -451,10 +455,14 @@ void DRW_pointcloud_batch_cache_create_requested(Object *ob)
   }
 }
 
-gpu::Batch *DRW_pointcloud_batch_cache_get_edit_dots(PointCloud *pointcloud)
+gpu::Batch *DRW_pointcloud_batch_cache_get_edit_dots(Object *ob)
 {
-  PointCloudBatchCache *cache = pointcloud_batch_cache_get(*pointcloud);
-  return DRW_batch_request(&cache->edit_selection);
+  PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);
+  if (pointcloud.type == PointCloudType::Points) {
+    PointCloudBatchCache *cache = pointcloud_batch_cache_get(pointcloud);
+    return DRW_batch_request(&cache->edit_selection);
+  }
+  return nullptr;
 }
 
 /** \} */

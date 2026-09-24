@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_brush.hh"
 #include "BKE_paint.hh"
@@ -152,10 +152,10 @@ static void createTransPaintCurveVerts(bContext *C, TransInfo *t)
   }
 
   tc->data_len = total;
-  td2d = tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "TransData2D");
-  td = tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransData");
-  tc->custom.type.data = tdpc = MEM_calloc_arrayN<TransDataPaintCurve>(tc->data_len,
-                                                                       "TransDataPaintCurve");
+  td2d = tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, "TransData2D");
+  td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransData");
+  tc->custom.type.data = tdpc = MEM_new_array_zeroed<TransDataPaintCurve>(tc->data_len,
+                                                                          "TransDataPaintCurve");
   tc->custom.type.use_free = true;
 
   for (pcp = pc->points, i = 0; i < pc->tot_points; i++, pcp++) {

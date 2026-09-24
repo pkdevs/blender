@@ -16,26 +16,19 @@
 
 #include "DNA_ID.h"
 
+#include "BLI_enum_flags.hh"
+
+namespace blender {
+
 /** Workaround to forward-declare C++ type in C header. */
-#ifdef __cplusplus
-namespace blender::bke {
+namespace bke {
 struct WindowManagerRuntime;
 struct WindowRuntime;
-}  // namespace blender::bke
-using WindowManagerRuntimeHandle = blender::bke::WindowManagerRuntime;
-using WindowRuntimeHandle = blender::bke::WindowRuntime;
+}  // namespace bke
 
-namespace blender::ui {
+namespace ui {
 struct Layout;
-}  // namespace blender::ui
-using uiLayoutHandle = blender::ui::Layout;
-
-#else   // __cplusplus
-
-struct WindowManagerRuntimeHandle;
-struct WindowRuntimeHandle;
-struct uiLayoutHandle;
-#endif  // __cplusplus
+}  // namespace ui
 
 #ifdef hyper /* MSVC defines. */
 #  undef hyper
@@ -90,24 +83,27 @@ struct wmXrData {
 // #endif
 
 /** #wmWindowManager.extensions_updates */
-enum {
+enum eWM_ExtensionsUpdates : int {
   WM_EXTENSIONS_UPDATE_UNSET = -2,
   WM_EXTENSIONS_UPDATE_CHECKING = -1,
 };
 
 /** #wmWindowManager.init_flag */
-enum {
+enum eWM_InitFlag : uint8_t {
   WM_INIT_FLAG_WINDOW = (1 << 0),
   WM_INIT_FLAG_KEYCONFIG = (1 << 1),
 };
+ENUM_OPERATORS(eWM_InitFlag)
 
 /** #wmWindowManager.outliner_sync_select_dirty */
-enum {
+enum eWM_OutlinerSyncSelectDirty : short {
   WM_OUTLINER_SYNC_SELECT_FROM_OBJECT = (1 << 0),
   WM_OUTLINER_SYNC_SELECT_FROM_EDIT_BONE = (1 << 1),
   WM_OUTLINER_SYNC_SELECT_FROM_POSE_BONE = (1 << 2),
   WM_OUTLINER_SYNC_SELECT_FROM_SEQUENCE = (1 << 3),
+  WM_OUTLINER_SYNC_SELECT_FROM_COLLECTION = (1 << 4),
 };
+ENUM_OPERATORS(eWM_OutlinerSyncSelectDirty)
 
 #define WM_OUTLINER_SYNC_SELECT_FROM_ALL \
   (WM_OUTLINER_SYNC_SELECT_FROM_OBJECT | WM_OUTLINER_SYNC_SELECT_FROM_EDIT_BONE | \
@@ -125,7 +121,7 @@ struct wmWindowManager {
   ListBaseT<wmWindow> windows = {nullptr, nullptr};
 
   /** Set on file read. */
-  uint8_t init_flag = 0;
+  eWM_InitFlag init_flag = {};
   char _pad0[1] = {};
   /** Indicator whether data was saved. */
   short file_saved = 0;
@@ -133,10 +129,10 @@ struct wmWindowManager {
   short op_undo_depth = 0;
 
   /** Set after selection to notify outliner to sync. Stores type of selection */
-  short outliner_sync_select_dirty = 0;
+  eWM_OutlinerSyncSelectDirty outliner_sync_select_dirty = {};
 
   /** Available/pending extensions updates. */
-  int extensions_updates = 0;
+  eWM_ExtensionsUpdates extensions_updates = {};
   /** Number of blocked & installed extensions. */
   int extensions_blocked = 0;
 
@@ -150,7 +146,7 @@ struct wmWindowManager {
   wmXrData xr;
   // #endif
 
-  WindowManagerRuntimeHandle *runtime = nullptr;
+  bke::WindowManagerRuntime *runtime = nullptr;
 };
 
 #define WM_KEYCONFIG_ARRAY_P(wm) \
@@ -269,7 +265,7 @@ struct wmWindow {
   /** Properties for stereoscopic displays. */
   struct Stereo3dFormat *stereo3d_format = nullptr;
 
-  WindowRuntimeHandle *runtime = nullptr;
+  bke::WindowRuntime *runtime = nullptr;
 };
 
 #ifdef ime_data
@@ -291,6 +287,57 @@ struct wmOperatorTypeMacro {
   struct IDProperty *properties = nullptr;
   struct PointerRNA *ptr = nullptr;
 };
+
+/** #wmKeyMapItem.flag */
+enum eKMI_Flag : uint8_t {
+  KMI_INACTIVE = (1 << 0),
+  KMI_EXPANDED = (1 << 1),
+  KMI_USER_MODIFIED = (1 << 2),
+  KMI_UPDATE = (1 << 3),
+  /**
+   * When set, ignore events with `wmEvent.flag & WM_EVENT_IS_REPEAT` enabled.
+   *
+   * \note this flag isn't cleared when editing/loading the key-map items,
+   * so it may be set in cases which don't make sense (modifier-keys or mouse-motion for example).
+   *
+   * Knowing if an event may repeat is something set at the operating-systems event handling level
+   * so rely on #WM_EVENT_IS_REPEAT being false non keyboard events instead of checking if this
+   * flag makes sense.
+   *
+   * Only used when: `ISKEYBOARD(kmi->type) || (kmi->type == KM_TEXTINPUT)`
+   * as mouse, 3d-mouse, timer... etc never repeat.
+   */
+  KMI_REPEAT_IGNORE = (1 << 4),
+};
+ENUM_OPERATORS(eKMI_Flag)
+
+/** #wmKeyMapItem.maptype */
+enum eKMI_MapType : uint8_t {
+  KMI_TYPE_KEYBOARD = 0,
+  KMI_TYPE_MOUSE = 1,
+  /* 2 is deprecated, was tweak. */
+  KMI_TYPE_TEXTINPUT = 3,
+  KMI_TYPE_TIMER = 4,
+  KMI_TYPE_NDOF = 5,
+};
+
+/** #wmKeyMap.flag */
+enum eKeyMap_Flag : short {
+  /** Modal map, not using operator-names. */
+  KEYMAP_MODAL = (1 << 0),
+  /** User key-map. */
+  KEYMAP_USER = (1 << 1),
+  KEYMAP_EXPANDED = (1 << 2),
+  KEYMAP_CHILDREN_EXPANDED = (1 << 3),
+  /** Diff key-map for user preferences. */
+  KEYMAP_DIFF = (1 << 4),
+  /** Key-map has user modifications. */
+  KEYMAP_USER_MODIFIED = (1 << 5),
+  KEYMAP_UPDATE = (1 << 6),
+  /** key-map for active tool system. */
+  KEYMAP_TOOL = (1 << 7),
+};
+ENUM_OPERATORS(eKeyMap_Flag)
 
 /**
  * Partial copy of the event, for matching by event handler.
@@ -331,7 +378,7 @@ struct wmKeyMapItem {
   int8_t shift = 0;
   int8_t ctrl = 0;
   int8_t alt = 0;
-  /** Also known as "Apple", "Windows-Key" or "Super. */
+  /** Also known as "Apple", "Windows-Key" or "Super". */
   int8_t oskey = 0;
   /** See #KM_HYPER for details. */
   int8_t hyper = 0;
@@ -342,11 +389,11 @@ struct wmKeyMapItem {
   short keymodifier = 0;
 
   /* flag: inactive, expanded */
-  uint8_t flag = 0;
+  eKMI_Flag flag = {};
 
   /* runtime */
   /** Keymap editor. */
-  uint8_t maptype = 0;
+  eKMI_MapType maptype = KMI_TYPE_KEYBOARD;
   /** Unique identifier. Positive for kmi that override builtins, negative otherwise. */
   short id = 0;
   /**
@@ -364,55 +411,6 @@ struct wmKeyMapDiffItem {
 
   wmKeyMapItem *remove_item = nullptr;
   wmKeyMapItem *add_item = nullptr;
-};
-
-/** #wmKeyMapItem.flag */
-enum {
-  KMI_INACTIVE = (1 << 0),
-  KMI_EXPANDED = (1 << 1),
-  KMI_USER_MODIFIED = (1 << 2),
-  KMI_UPDATE = (1 << 3),
-  /**
-   * When set, ignore events with `wmEvent.flag & WM_EVENT_IS_REPEAT` enabled.
-   *
-   * \note this flag isn't cleared when editing/loading the key-map items,
-   * so it may be set in cases which don't make sense (modifier-keys or mouse-motion for example).
-   *
-   * Knowing if an event may repeat is something set at the operating-systems event handling level
-   * so rely on #WM_EVENT_IS_REPEAT being false non keyboard events instead of checking if this
-   * flag makes sense.
-   *
-   * Only used when: `ISKEYBOARD(kmi->type) || (kmi->type == KM_TEXTINPUT)`
-   * as mouse, 3d-mouse, timer... etc never repeat.
-   */
-  KMI_REPEAT_IGNORE = (1 << 4),
-};
-
-/** #wmKeyMapItem.maptype */
-enum {
-  KMI_TYPE_KEYBOARD = 0,
-  KMI_TYPE_MOUSE = 1,
-  /* 2 is deprecated, was tweak. */
-  KMI_TYPE_TEXTINPUT = 3,
-  KMI_TYPE_TIMER = 4,
-  KMI_TYPE_NDOF = 5,
-};
-
-/** #wmKeyMap.flag */
-enum {
-  /** Modal map, not using operator-names. */
-  KEYMAP_MODAL = (1 << 0),
-  /** User key-map. */
-  KEYMAP_USER = (1 << 1),
-  KEYMAP_EXPANDED = (1 << 2),
-  KEYMAP_CHILDREN_EXPANDED = (1 << 3),
-  /** Diff key-map for user preferences. */
-  KEYMAP_DIFF = (1 << 4),
-  /** Key-map has user modifications. */
-  KEYMAP_USER_MODIFIED = (1 << 5),
-  KEYMAP_UPDATE = (1 << 6),
-  /** key-map for active tool system. */
-  KEYMAP_TOOL = (1 << 7),
 };
 
 /**
@@ -434,7 +432,7 @@ struct wmKeyMap {
   char owner_id[128] = "";
 
   /** General flags. */
-  short flag = 0;
+  eKeyMap_Flag flag = {};
   /** Last kmi id. */
   short kmi_id = 0;
 
@@ -462,10 +460,11 @@ struct wmKeyConfigPref {
 };
 
 /** #wmKeyConfig.flag */
-enum {
+enum eKeyConf_Flag : short {
   KEYCONF_USER = (1 << 1),         /* And what about (1 << 0)? */
   KEYCONF_INIT_DEFAULT = (1 << 2), /* Has default keymap been initialized? */
 };
+ENUM_OPERATORS(eKeyConf_Flag)
 
 struct wmKeyConfig {
   struct wmKeyConfig *next = nullptr, *prev = nullptr;
@@ -477,7 +476,7 @@ struct wmKeyConfig {
 
   ListBaseT<wmKeyMap> keymaps = {nullptr, nullptr};
   int actkeymap = 0;
-  short flag = 0;
+  eKeyConf_Flag flag = {};
   char _pad0[2] = {};
 };
 
@@ -512,7 +511,9 @@ struct wmOperator {
   /** Current running macro, not saved. */
   struct wmOperator *opm = nullptr;
   /** Runtime for drawing. */
-  uiLayoutHandle *layout = nullptr;
-  short flag = 0;
+  ui::Layout *layout = nullptr;
+  eOperator_Flag flag = {};
   char _pad[6] = {};
 };
+
+}  // namespace blender

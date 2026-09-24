@@ -17,8 +17,10 @@
 
 #include <cstdio>
 
-#include "BLI_compiler_compat.h"
-#include "BLI_sys_types.h"
+#include "BLI_compiler_compat.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 #ifdef _WIN32
 #  define PATHSEP_CHAR '\\'
@@ -179,8 +181,8 @@ LogImageFile *logImageCreate(const char *filepath,
                              int width,
                              int height,
                              int bitsPerSample,
-                             int isLogarithmic,
                              int hasAlpha,
+                             int isLogarithmic,
                              int referenceWhite,
                              int referenceBlack,
                              float gamma,
@@ -261,8 +263,10 @@ BLI_INLINE unsigned int float_uint(float value, unsigned int max)
   if (value < 0.0f) {
     return 0;
   }
-  if (value > (1.0f - 0.5f / (float)max)) {
+  if (value > (1.0f - 0.5f / float(max))) {
     return max;
   }
-  return (unsigned int)(((float)max * value) + 0.5f);
+  return static_cast<unsigned int>((float(max) * value) + 0.5f);
 }
+
+}  // namespace blender

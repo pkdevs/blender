@@ -18,9 +18,9 @@
 #include "BKE_main_invariants.hh"
 #include "BKE_packedFile.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_search.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -47,11 +47,22 @@
 
 namespace blender::ui {
 
+enum {
+  UI_ID_RENAME = 1 << 0,
+  UI_ID_BROWSE = 1 << 1,
+  UI_ID_ADD_NEW = 1 << 2,
+  UI_ID_OPEN = 1 << 3,
+  UI_ID_DELETE = 1 << 4,
+  UI_ID_PIN = 1 << 6,
+  UI_ID_PREVIEWS = 1 << 7,
+  UI_ID_FULL = UI_ID_RENAME | UI_ID_BROWSE | UI_ID_ADD_NEW | UI_ID_OPEN | UI_ID_DELETE,
+};
+
 struct TemplateID {
   PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
 
-  ListBase *idlb = nullptr;
+  ListBaseT<ID> *idlb = nullptr;
   short idcode = 0;
   short filter = 0;
   int prv_rows = 0;
@@ -63,7 +74,7 @@ struct TemplateID {
 /* Search browse menu, assign. */
 static void template_ID_set_property_exec_fn(bContext *C, void *arg_template, void *item)
 {
-  TemplateID *template_ui = (TemplateID *)arg_template;
+  TemplateID *template_ui = static_cast<TemplateID *>(arg_template);
 
   /* ID */
   if (item) {
@@ -71,6 +82,19 @@ static void template_ID_set_property_exec_fn(bContext *C, void *arg_template, vo
     RNA_property_pointer_set(&template_ui->ptr, template_ui->prop, idptr, nullptr);
     RNA_property_update(C, &template_ui->ptr, template_ui->prop);
   }
+}
+
+/* Search browse menu, assign #ID::session_uid as Int Property. */
+static void template_ID_set_int_property_session_uid_exec_fn(bContext * /*C*/,
+                                                             void *arg_template,
+                                                             void *item)
+{
+  TemplateID *template_ui = static_cast<TemplateID *>(arg_template);
+  if (!item) {
+    return;
+  }
+  RNA_property_int_set(
+      &template_ui->ptr, template_ui->prop, int(static_cast<ID *>(item)->session_uid));
 }
 
 static bool id_search_allows_id(TemplateID *template_ui, const int flag, ID *id, const char *query)
@@ -91,7 +115,7 @@ static bool id_search_allows_id(TemplateID *template_ui, const int flag, ID *id,
   }
 
   /* Hide dot prefixed data-blocks, but only if filter does not force them visible. */
-  if (U.uiflag & USER_HIDE_DOT) {
+  if (U.flag & USER_HIDE_DOT_DATABLOCK) {
     if ((id->name[2] == '.') && (query[0] != '.')) {
       return false;
     }
@@ -122,7 +146,7 @@ static bool id_search_add(const bContext *C, TemplateID *template_ui, SearchItem
                        name_ui,
                        id,
                        iconid,
-                       has_sep_char ? int(BUT_HAS_SEP_CHAR) : 0,
+                       has_sep_char ? int64_t(BUT_HAS_SEP_CHAR) : 0,
                        name_prefix_offset))
   {
     return false;
@@ -138,16 +162,16 @@ static void id_search_cb(const bContext *C,
                          SearchItems *items,
                          const bool /*is_first*/)
 {
-  TemplateID *template_ui = (TemplateID *)arg_template;
-  ListBase *lb = template_ui->idlb;
+  TemplateID *template_ui = static_cast<TemplateID *>(arg_template);
+  ListBaseT<ID> *lb = template_ui->idlb;
   const int flag = RNA_property_flag(template_ui->prop);
 
   string_search::StringSearch<ID> search;
 
   /* ID listbase */
-  LISTBASE_FOREACH (ID *, id, lb) {
-    if (id_search_allows_id(template_ui, flag, id, str)) {
-      search.add(id->name + 2, id);
+  for (ID &id : *lb) {
+    if (id_search_allows_id(template_ui, flag, &id, str)) {
+      search.add(id.name + 2, &id);
     }
   }
 
@@ -168,20 +192,20 @@ static void id_search_cb_tagged(const bContext *C,
                                 const char *str,
                                 SearchItems *items)
 {
-  TemplateID *template_ui = (TemplateID *)arg_template;
-  ListBase *lb = template_ui->idlb;
+  TemplateID *template_ui = static_cast<TemplateID *>(arg_template);
+  ListBaseT<ID> *lb = template_ui->idlb;
   const int flag = RNA_property_flag(template_ui->prop);
 
   blender::string_search::StringSearch<ID> search{nullptr,
                                                   blender::string_search::MainWordsHeuristic::All};
 
   /* ID listbase */
-  LISTBASE_FOREACH (ID *, id, lb) {
-    if (id->tag & ID_TAG_DOIT) {
-      if (id_search_allows_id(template_ui, flag, id, str)) {
-        search.add(id->name + 2, id);
+  for (ID &id : *lb) {
+    if (id.tag & ID_TAG_DOIT) {
+      if (id_search_allows_id(template_ui, flag, &id, str)) {
+        search.add(id.name + 2, &id);
       }
-      id->tag &= ~ID_TAG_DOIT;
+      id.tag &= ~ID_TAG_DOIT;
     }
   }
 
@@ -203,13 +227,13 @@ static void id_search_cb_objects_from_scene(const bContext *C,
                                             SearchItems *items,
                                             const bool /*is_first*/)
 {
-  TemplateID *template_ui = (TemplateID *)arg_template;
-  ListBase *lb = template_ui->idlb;
+  TemplateID *template_ui = static_cast<TemplateID *>(arg_template);
+  ListBaseT<ID> *lb = template_ui->idlb;
   Scene *scene = nullptr;
   ID *id_from = template_ui->ptr.owner_id;
 
   if (id_from && GS(id_from->name) == ID_SCE) {
-    scene = (Scene *)id_from;
+    scene = id_cast<Scene *>(id_from);
   }
   else {
     scene = CTX_data_scene(C);
@@ -240,7 +264,7 @@ static Block *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
       const bContext *, void *, const char *, SearchItems *, const bool) = id_search_cb;
 
   /* arg_litem is malloced, can be freed by parent button */
-  template_ui = *((TemplateID *)arg_litem);
+  template_ui = *(static_cast<TemplateID *>(arg_litem));
   active_item_ptr = RNA_property_pointer_get(&template_ui.ptr, template_ui.prop);
 
   if (template_ui.filter) {
@@ -264,7 +288,28 @@ static Block *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
                                      template_ui.scale);
 }
 
-static void template_id_cb(bContext *C, void *arg_litem, void *arg_event);
+static Block *id_search_menu_session_uid(bContext *C, ARegion *region, void *arg_litem)
+{
+  static TemplateID template_ui;
+  void (*id_search_update_fn)(
+      const bContext *, void *, const char *, SearchItems *, const bool) = id_search_cb;
+
+  template_ui = *(static_cast<TemplateID *>(arg_litem));
+  const uint32_t active_session_uid = RNA_property_int_get(&template_ui.ptr, template_ui.prop);
+  ID *active_id = BKE_libblock_find_session_uid(
+      CTX_data_main(C), template_ui.idcode, active_session_uid);
+
+  return template_common_search_menu(C,
+                                     region,
+                                     id_search_update_fn,
+                                     &template_ui,
+                                     template_ID_set_int_property_session_uid_exec_fn,
+                                     active_id,
+                                     template_ID_search_menu_item_tooltip,
+                                     template_ui.prv_rows,
+                                     template_ui.prv_cols,
+                                     template_ui.scale);
+}
 
 void context_active_but_prop_get_templateID(const bContext *C,
                                             PointerRNA *r_ptr,
@@ -274,12 +319,31 @@ void context_active_but_prop_get_templateID(const bContext *C,
 
   *r_ptr = {};
   *r_prop = nullptr;
-
-  if (but && (but->funcN == template_id_cb) && but->func_argN) {
-    TemplateID *template_ui = static_cast<TemplateID *>(but->func_argN);
-    *r_ptr = template_ui->ptr;
-    *r_prop = template_ui->prop;
+  if (!but || !but->context) {
+    return;
   }
+  const PointerRNA *ptr = CTX_store_ptr_lookup(but->context, "template_id_ptr");
+  std::optional<StringRefNull> prop_name = CTX_store_string_lookup(but->context,
+                                                                   "template_id_prop");
+
+  if (!ptr || !prop_name) {
+    return;
+  }
+
+  PointerRNA ptr_copy = *ptr;
+  PropertyRNA *prop = RNA_struct_find_property(&ptr_copy, prop_name->c_str());
+
+  if (!prop || RNA_property_type(prop) != PROP_POINTER) {
+    return;
+  }
+
+  StructRNA *type = RNA_property_pointer_type(&ptr_copy, prop);
+  if (!type || !RNA_struct_is_ID(type)) {
+    return;
+  }
+
+  *r_ptr = std::move(ptr_copy);
+  *r_prop = prop;
 }
 
 static void template_id_liboverride_hierarchy_collection_root_find_recursive(
@@ -297,9 +361,7 @@ static void template_id_liboverride_hierarchy_collection_root_find_recursive(
       *r_collection_parent_best = collection;
     }
   }
-  for (CollectionParent *iter =
-           static_cast<CollectionParent *>(collection->runtime->parents.first);
-       iter != nullptr;
+  for (CollectionParent *iter = collection->runtime->parents.first(); iter != nullptr;
        iter = iter->next)
   {
     if (iter->collection->id.lib != collection->id.lib && ID_IS_LINKED(iter->collection)) {
@@ -318,9 +380,7 @@ static void template_id_liboverride_hierarchy_collections_tag_recursive(
   /* Tag all local parents of the root collection, so that usages of the root collection and other
    * linked ones can be replaced by the local overrides in those parents too. */
   if (do_parents) {
-    for (CollectionParent *iter =
-             static_cast<CollectionParent *>(root_collection->runtime->parents.first);
-         iter != nullptr;
+    for (CollectionParent *iter = root_collection->runtime->parents.first(); iter != nullptr;
          iter = iter->next)
     {
       if (ID_IS_LINKED(iter->collection)) {
@@ -330,20 +390,19 @@ static void template_id_liboverride_hierarchy_collections_tag_recursive(
     }
   }
 
-  for (CollectionChild *iter = static_cast<CollectionChild *>(root_collection->children.first);
-       iter != nullptr;
+  for (CollectionChild *iter = root_collection->children.first(); iter != nullptr;
        iter = iter->next)
   {
     if (ID_IS_LINKED(iter->collection) && iter->collection->id.lib != target_id->lib) {
       continue;
     }
     if (GS(target_id->name) == ID_OB &&
-        !BKE_collection_has_object_recursive(iter->collection, (Object *)target_id))
+        !BKE_collection_has_object_recursive(iter->collection, id_cast<Object *>(target_id)))
     {
       continue;
     }
     if (GS(target_id->name) == ID_GR &&
-        !BKE_collection_has_collection(iter->collection, (Collection *)target_id))
+        !BKE_collection_has_collection(iter->collection, id_cast<Collection *>(target_id)))
     {
       continue;
     }
@@ -391,7 +450,7 @@ ID *template_id_liboverride_hierarchy_make(
 
   Object *object_active = CTX_data_active_object(C);
   if (object_active == nullptr && GS(owner_id->name) == ID_OB) {
-    object_active = (Object *)owner_id;
+    object_active = id_cast<Object *>(owner_id);
   }
   if (object_active != nullptr) {
     if (ID_IS_LINKED(object_active)) {
@@ -411,7 +470,7 @@ ID *template_id_liboverride_hierarchy_make(
   Collection *collection_active_context = CTX_data_collection(C);
   Collection *collection_active = collection_active_context;
   if (collection_active == nullptr && GS(owner_id->name) == ID_GR) {
-    collection_active = (Collection *)owner_id;
+    collection_active = id_cast<Collection *>(owner_id);
   }
   if (collection_active != nullptr) {
     if (ID_IS_LINKED(collection_active)) {
@@ -440,20 +499,20 @@ ID *template_id_liboverride_hierarchy_make(
   {
     /* If we failed to find a valid 'active' collection so far for our override hierarchy, but do
      * have a valid 'active' object, try to find a collection from that object. */
-    LISTBASE_FOREACH (Collection *, collection_iter, &bmain->collections) {
-      if (ID_IS_LINKED(collection_iter) && collection_iter->id.lib != id->lib) {
+    for (Collection &collection_iter : bmain->collections) {
+      if (ID_IS_LINKED(&collection_iter) && collection_iter.id.lib != id->lib) {
         continue;
       }
-      if (!ID_IS_OVERRIDE_LIBRARY_REAL(collection_iter)) {
+      if (!ID_IS_OVERRIDE_LIBRARY_REAL(&collection_iter)) {
         continue;
       }
-      if (!BKE_collection_has_object_recursive(collection_iter, object_active)) {
+      if (!BKE_collection_has_object_recursive(&collection_iter, object_active)) {
         continue;
       }
       int parent_level_best = -1;
       Collection *collection_parent_best = nullptr;
       template_id_liboverride_hierarchy_collection_root_find_recursive(
-          collection_iter, 0, &collection_parent_best, &parent_level_best);
+          &collection_iter, 0, &collection_parent_best, &parent_level_best);
       collection_active = collection_parent_best;
       break;
     }
@@ -465,7 +524,7 @@ ID *template_id_liboverride_hierarchy_make(
   switch (GS(id->name)) {
     case ID_GR:
       if (collection_active != nullptr &&
-          BKE_collection_has_collection(collection_active, (Collection *)id))
+          BKE_collection_has_collection(collection_active, id_cast<Collection *>(id)))
       {
         template_id_liboverride_hierarchy_collections_tag_recursive(collection_active, id, true);
         if (object_active != nullptr) {
@@ -498,7 +557,7 @@ ID *template_id_liboverride_hierarchy_make(
       break;
     case ID_OB:
       if (collection_active != nullptr &&
-          BKE_collection_has_object_recursive(collection_active, (Object *)id))
+          BKE_collection_has_object_recursive(collection_active, id_cast<Object *>(id)))
       {
         template_id_liboverride_hierarchy_collections_tag_recursive(collection_active, id, true);
         if (object_active != nullptr) {
@@ -520,7 +579,7 @@ ID *template_id_liboverride_hierarchy_make(
         }
         BKE_lib_override_library_create(
             bmain, scene, view_layer, nullptr, id, nullptr, nullptr, &id_override, false);
-        BKE_scene_collections_object_remove(bmain, scene, (Object *)id, true);
+        BKE_scene_collections_object_remove(bmain, scene, id_cast<Object *>(id), true);
         WM_event_add_notifier(C, NC_ID | NA_REMOVED, nullptr);
       }
       break;
@@ -595,7 +654,7 @@ ID *template_id_liboverride_hierarchy_make(
     ID *hierarchy_root = id_override->override_library->hierarchy_root;
     if (GS(hierarchy_root->name) == ID_OB) {
       Object *object_hierarchy_root = reinterpret_cast<Object *>(hierarchy_root);
-      if (!BKE_scene_has_object(scene, object_hierarchy_root)) {
+      if (!BKE_scene_has_object(*bmain, scene, object_hierarchy_root)) {
         if (!ID_IS_LINKED(collection_active_context)) {
           BKE_collection_object_add(bmain, collection_active_context, object_hierarchy_root);
         }
@@ -634,12 +693,12 @@ ID *template_id_liboverride_hierarchy_make(
 
 static void template_id_liboverride_hierarchy_make(bContext *C,
                                                    Main *bmain,
-                                                   TemplateID *template_ui,
+                                                   PropertyPointerRNA &pprop,
                                                    PointerRNA *idptr,
                                                    const char **r_undo_push_label)
 {
   ID *id = static_cast<ID *>(idptr->data);
-  ID *owner_id = template_ui->ptr.owner_id;
+  ID *owner_id = pprop.ptr.owner_id;
 
   ID *id_override = template_id_liboverride_hierarchy_make(
       C, bmain, owner_id, id, r_undo_push_label);
@@ -661,139 +720,124 @@ static void template_id_liboverride_hierarchy_make(bContext *C,
   }
 }
 
-static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
+static void template_ui_delete(bContext &C, PropertyPointerRNA &pprop)
 {
-  TemplateID *template_ui = (TemplateID *)arg_litem;
-  PointerRNA idptr = RNA_property_pointer_get(&template_ui->ptr, template_ui->prop);
+  PointerRNA idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
   ID *id = static_cast<ID *>(idptr.data);
-  const int event = POINTER_AS_INT(arg_event);
+
+  const char *undo_push_label;
+
+  idptr = {};
+  RNA_property_pointer_set(&pprop.ptr, pprop.prop, idptr, nullptr);
+  RNA_property_update(&C, &pprop.ptr, pprop.prop);
+
+  if (id && CTX_wm_window(&C)->runtime->eventstate->modifier & KM_SHIFT) {
+    /* only way to force-remove data (on save) */
+    id_us_clear_real(id);
+    id_fake_user_clear(id);
+    id->us = 0;
+    undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Delete Data-Block");
+  }
+  else {
+    undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Unlink Data-Block");
+  }
+  ED_undo_push(&C, undo_push_label);
+  WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+}
+
+static void template_ui_make_local(bContext &C, PropertyPointerRNA &pprop)
+{
+  PointerRNA idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
+  ID *id = static_cast<ID *>(idptr.data);
+
   const char *undo_push_label = nullptr;
 
-  switch (event) {
-    case UI_ID_NOP:
-      /* Don't do anything, typically set for buttons that execute an operator instead. They may
-       * still assign the callback so the button can be identified as part of an ID-template. See
-       * #context_active_but_prop_get_templateID(). */
-      break;
-    case UI_ID_RENAME:
-      /* Only for the undo push. */
-      undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Data-Block");
-      break;
-    case UI_ID_BROWSE:
-    case UI_ID_PIN:
-      RNA_warning("warning, id event %d shouldn't come here", event);
-      break;
-    case UI_ID_OPEN:
-    case UI_ID_ADD_NEW:
-      /* these call context_active_but_prop_get_templateID */
-      break;
-    case UI_ID_DELETE:
-      idptr = {};
-      RNA_property_pointer_set(&template_ui->ptr, template_ui->prop, idptr, nullptr);
-      RNA_property_update(C, &template_ui->ptr, template_ui->prop);
-
-      if (id && CTX_wm_window(C)->runtime->eventstate->modifier & KM_SHIFT) {
-        /* only way to force-remove data (on save) */
-        id_us_clear_real(id);
-        id_fake_user_clear(id);
-        id->us = 0;
-        undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Delete Data-Block");
-      }
-      else {
-        undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Unlink Data-Block");
-      }
-
-      break;
-    case UI_ID_FAKE_USER:
-      if (id) {
-        if (id->flag & ID_FLAG_FAKEUSER) {
-          id_us_plus(id);
-        }
-        else {
-          id_us_min(id);
-        }
-        undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Fake User");
-      }
-      else {
-        return;
-      }
-      break;
-    case UI_ID_LOCAL:
-      if (id) {
-        Main *bmain = CTX_data_main(C);
-        if (CTX_wm_window(C)->runtime->eventstate->modifier & KM_SHIFT) {
-          template_id_liboverride_hierarchy_make(C, bmain, template_ui, &idptr, &undo_push_label);
-        }
-        else {
-          if (BKE_lib_id_make_local(bmain, id, LIB_ID_MAKELOCAL_ASSET_DATA_CLEAR)) {
-            BKE_id_newptr_and_tag_clear(id);
-
-            /* Reassign to get proper updates/notifiers. */
-            idptr = RNA_property_pointer_get(&template_ui->ptr, template_ui->prop);
-            undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Local");
-          }
-        }
-        if (undo_push_label != nullptr) {
-          RNA_property_pointer_set(&template_ui->ptr, template_ui->prop, idptr, nullptr);
-          RNA_property_update(C, &template_ui->ptr, template_ui->prop);
-        }
-      }
-      break;
-    case UI_ID_OVERRIDE:
-      if (id && ID_IS_OVERRIDE_LIBRARY(id)) {
-        Main *bmain = CTX_data_main(C);
-        if (CTX_wm_window(C)->runtime->eventstate->modifier & KM_SHIFT) {
-          template_id_liboverride_hierarchy_make(C, bmain, template_ui, &idptr, &undo_push_label);
-        }
-        else {
-          BKE_lib_override_library_make_local(bmain, id);
-          /* Reassign to get proper updates/notifiers. */
-          idptr = RNA_property_pointer_get(&template_ui->ptr, template_ui->prop);
-          RNA_property_pointer_set(&template_ui->ptr, template_ui->prop, idptr, nullptr);
-          RNA_property_update(C, &template_ui->ptr, template_ui->prop);
-          undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Local");
-        }
-      }
-      break;
-    case UI_ID_ALONE:
-      if (id) {
-        const bool do_scene_obj = ((GS(id->name) == ID_OB) &&
-                                   (template_ui->ptr.type == &RNA_LayerObjects));
-
-        /* make copy */
-        if (do_scene_obj) {
-          Main *bmain = CTX_data_main(C);
-          Scene *scene = CTX_data_scene(C);
-          blender::ed::object::object_single_user_make(bmain, scene, (Object *)id);
-          WM_event_add_notifier(C, NC_WINDOW, nullptr);
-          DEG_relations_tag_update(bmain);
-        }
-        else {
-          Main *bmain = CTX_data_main(C);
-          id_single_user(C, id, &template_ui->ptr, template_ui->prop);
-          WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
-          DEG_relations_tag_update(bmain);
-        }
-        BKE_main_ensure_invariants(*CTX_data_main(C));
-        undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Single User");
-      }
-      break;
-#if 0
-      case UI_ID_AUTO_NAME:
-      break;
-#endif
+  if (!id) {
+    return;
   }
+  Main *bmain = CTX_data_main(&C);
+  if (CTX_wm_window(&C)->runtime->eventstate->modifier & KM_SHIFT) {
+    template_id_liboverride_hierarchy_make(&C, bmain, pprop, &idptr, &undo_push_label);
+  }
+  else {
+    if (BKE_lib_id_make_local(bmain, id, LIB_ID_MAKELOCAL_ASSET_DATA_CLEAR)) {
+      BKE_id_newptr_and_tag_clear(id);
 
+      /* Reassign to get proper updates/notifiers. */
+      idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
+      undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Local");
+    }
+  }
+  if (undo_push_label) {
+    RNA_property_pointer_set(&pprop.ptr, pprop.prop, idptr, nullptr);
+    RNA_property_update(&C, &pprop.ptr, pprop.prop);
+    ED_undo_push(&C, undo_push_label);
+    WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+  }
+}
+
+static void template_ui_override(bContext &C, PropertyPointerRNA &pprop)
+{
+  PointerRNA idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
+  ID *id = static_cast<ID *>(idptr.data);
+
+  const char *undo_push_label = nullptr;
+
+  if (!(id && ID_IS_OVERRIDE_LIBRARY(id))) {
+    return;
+  }
+  Main *bmain = CTX_data_main(&C);
+  if (CTX_wm_window(&C)->runtime->eventstate->modifier & KM_SHIFT) {
+    template_id_liboverride_hierarchy_make(&C, bmain, pprop, &idptr, &undo_push_label);
+  }
+  else {
+    BKE_lib_override_library_make_local(bmain, id);
+    /* Reassign to get proper updates/notifiers. */
+    idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
+    RNA_property_pointer_set(&pprop.ptr, pprop.prop, idptr, nullptr);
+    RNA_property_update(&C, &pprop.ptr, pprop.prop);
+
+    undo_push_label = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Local");
+  }
   if (undo_push_label != nullptr) {
-    ED_undo_push(C, undo_push_label);
-    WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+    ED_undo_push(&C, undo_push_label);
+    WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
   }
+}
+
+static void template_ui_alone(bContext &C, PropertyPointerRNA &pprop)
+{
+  PointerRNA idptr = RNA_property_pointer_get(&pprop.ptr, pprop.prop);
+  ID *id = static_cast<ID *>(idptr.data);
+
+  if (!id) {
+    return;
+  }
+  const bool do_scene_obj = ((GS(id->name) == ID_OB) && (pprop.ptr.type == RNA_LayerObjects));
+
+  /* make copy */
+  if (do_scene_obj) {
+    Main *bmain = CTX_data_main(&C);
+    Scene *scene = CTX_data_scene(&C);
+    ed::object::object_single_user_make(bmain, scene, id_cast<Object *>(id));
+    WM_event_add_notifier(&C, NC_WINDOW, nullptr);
+    DEG_relations_tag_update(bmain);
+  }
+  else {
+    Main *bmain = CTX_data_main(&C);
+    id_single_user(&C, id, &pprop.ptr, pprop.prop);
+    WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+    DEG_relations_tag_update(bmain);
+  }
+  BKE_main_ensure_invariants(*CTX_data_main(&C));
+  ED_undo_push(&C, CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Single User"));
+  WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 }
 
 static StringRef template_id_browse_tip(const StructRNA *type)
 {
   if (type) {
-    switch ((ID_Type)RNA_type_to_ID_code(type)) {
+    switch (ID_Type(RNA_type_to_ID_code(type))) {
       case ID_SCE:
         return N_("Browse Scene to be linked");
       case ID_OB:
@@ -853,7 +897,7 @@ static StringRef template_id_browse_tip(const StructRNA *type)
       case ID_WS:
         return N_("Browse Workspace to be linked");
       case ID_LP:
-        return N_("Browse LightProbe to be linked");
+        return N_("Browse Light Probe to be linked");
       case ID_CV:
         return N_("Browse Curves Data to be linked");
       case ID_PT:
@@ -882,7 +926,7 @@ static StringRef template_id_browse_tip(const StructRNA *type)
  */
 static void template_id_workspace_pin_extra_icon(const TemplateID &template_ui, Button *but)
 {
-  if ((template_ui.idcode != ID_SCE) || (template_ui.ptr.type != &RNA_Window)) {
+  if ((template_ui.idcode != ID_SCE) || (template_ui.ptr.type != RNA_Window)) {
     return;
   }
 
@@ -985,22 +1029,10 @@ static Button *template_id_def_new_but(Block *block,
                             w,
                             but_height,
                             std::nullopt);
-    button_funcN_set(but,
-                     template_id_cb,
-                     MEM_new<TemplateID>(__func__, template_ui),
-                     POINTER_FROM_INT(UI_ID_ADD_NEW),
-                     but_func_argN_free<TemplateID>,
-                     but_func_argN_copy<TemplateID>);
   }
   else {
     but = uiDefIconTextBut(
         block, but_type, icon, button_text, 0, 0, w, but_height, nullptr, std::nullopt);
-    button_funcN_set(but,
-                     template_id_cb,
-                     MEM_new<TemplateID>(__func__, template_ui),
-                     POINTER_FROM_INT(UI_ID_ADD_NEW),
-                     but_func_argN_free<TemplateID>,
-                     but_func_argN_copy<TemplateID>);
   }
 
   if ((idfrom && !ID_IS_EDITABLE(idfrom)) || !editable) {
@@ -1033,15 +1065,19 @@ static void template_ID(const bContext *C,
   PointerRNA idptr = RNA_property_pointer_get(&template_ui.ptr, template_ui.prop);
   ID *id = static_cast<ID *>(idptr.data);
   ID *idfrom = template_ui.ptr.owner_id;
+
+  const PropertyPointerRNA pprop = {.ptr = template_ui.ptr, .prop = template_ui.prop};
   // lb = template_ui->idlb;
 
   /* Allow operators to take the ID from context. */
   layout.context_ptr_set("id", &idptr);
+  layout.context_ptr_set("template_id_ptr", &template_ui.ptr);
+  layout.context_string_set("template_id_prop", RNA_property_identifier(template_ui.prop));
 
   Block *block = layout.block();
   block_align_begin(block);
 
-  if (idptr.type) {
+  if (idptr.has_type()) {
     type = idptr.type;
   }
 
@@ -1073,7 +1109,7 @@ static void template_ID(const bContext *C,
 
     int width = template_search_textbut_width(&idptr, RNA_struct_find_property(&idptr, "name"));
 
-    if ((template_ui.idcode == ID_SCE) && (template_ui.ptr.type == &RNA_Window)) {
+    if ((template_ui.idcode == ID_SCE) && (template_ui.ptr.type == RNA_Window)) {
       /* More room needed for "pin" icon. */
       width += UI_UNIT_X;
     }
@@ -1095,19 +1131,18 @@ static void template_ID(const bContext *C,
                     0,
                     0,
                     RNA_struct_ui_description(type));
-    /* Handle undo through the #template_id_cb set below. Default undo handling from the button
+    /* Handle undo through the #button_func_set set below. Default undo handling from the button
      * code (see #ui_apply_but_undo) would not work here, as the new name is not yet applied to the
      * ID. */
     button_flag_disable(but, BUT_UNDO);
     Main *bmain = CTX_data_main(C);
-    button_func_rename_full_set(
-        but, [bmain, id](std::string &new_name) { ED_id_rename(*bmain, *id, new_name); });
-    button_funcN_set(but,
-                     template_id_cb,
-                     MEM_new<TemplateID>(__func__, template_ui),
-                     POINTER_FROM_INT(UI_ID_RENAME),
-                     but_func_argN_free<TemplateID>,
-                     but_func_argN_copy<TemplateID>);
+    text_button_func_rename_full_set(
+        but, [bmain, id](StringRefNull new_name) { ED_id_rename(*bmain, *id, new_name); });
+    button_func_set(but, [](bContext &C) {
+      ED_undo_push(&C, CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Data-Block"));
+      WM_event_add_notifier(&C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+    });
+
     if (user_alert) {
       button_flag_enable(but, BUT_REDALERT);
     }
@@ -1179,12 +1214,8 @@ static void template_ID(const bContext *C,
                             "object instead, or make the object data local."));
         }
         else {
-          button_funcN_set(but,
-                           template_id_cb,
-                           MEM_new<TemplateID>(__func__, template_ui),
-                           POINTER_FROM_INT(UI_ID_LOCAL),
-                           but_func_argN_free<TemplateID>,
-                           but_func_argN_copy<TemplateID>);
+          button_func_set(
+              but, [pprop = pprop](bContext &C) mutable { template_ui_make_local(C, pprop); });
         }
       }
       else if (ID_IS_OVERRIDE_LIBRARY(id)) {
@@ -1201,12 +1232,8 @@ static void template_ID(const bContext *C,
             0,
             TIP_("Library override of linked data-block, click to make fully local, "
                  "Shift + Click to clear the library override and toggle if it can be edited"));
-        button_funcN_set(but,
-                         template_id_cb,
-                         MEM_new<TemplateID>(__func__, template_ui),
-                         POINTER_FROM_INT(UI_ID_OVERRIDE),
-                         but_func_argN_free<TemplateID>,
-                         but_func_argN_copy<TemplateID>);
+        button_func_set(but,
+                        [pprop = pprop](bContext &C) mutable { template_ui_override(C, pprop); });
       }
     }
 
@@ -1229,16 +1256,12 @@ static void template_ID(const bContext *C,
           0,
           TIP_("Display number of users of this data (click to make a single-user copy)"));
       but->flag |= BUT_UNDO;
+      button_func_set(but, [pprop = pprop](bContext &C) mutable { template_ui_alone(C, pprop); });
 
-      button_funcN_set(but,
-                       template_id_cb,
-                       MEM_new<TemplateID>(__func__, template_ui),
-                       POINTER_FROM_INT(UI_ID_ALONE),
-                       but_func_argN_free<TemplateID>,
-                       but_func_argN_copy<TemplateID>);
       if (!BKE_id_copy_is_allowed(id) || (idfrom && !ID_IS_EDITABLE(idfrom)) || (!editable) ||
           /* object in editmode - don't change data */
-          (idfrom && GS(idfrom->name) == ID_OB && (((Object *)idfrom)->mode & OB_MODE_EDIT)))
+          (idfrom && GS(idfrom->name) == ID_OB &&
+           ((id_cast<Object *>(idfrom))->mode & OB_MODE_EDIT)))
       {
         button_flag_enable(but, BUT_DISABLED);
       }
@@ -1331,12 +1354,6 @@ static void template_ID(const bContext *C,
                               w,
                               UI_UNIT_Y,
                               std::nullopt);
-      button_funcN_set(but,
-                       template_id_cb,
-                       MEM_new<TemplateID>(__func__, template_ui),
-                       POINTER_FROM_INT(UI_ID_OPEN),
-                       but_func_argN_free<TemplateID>,
-                       but_func_argN_copy<TemplateID>);
     }
     else {
       but = uiDefIconTextBut(block,
@@ -1349,12 +1366,6 @@ static void template_ID(const bContext *C,
                              UI_UNIT_Y,
                              nullptr,
                              std::nullopt);
-      button_funcN_set(but,
-                       template_id_cb,
-                       MEM_new<TemplateID>(__func__, template_ui),
-                       POINTER_FROM_INT(UI_ID_OPEN),
-                       but_func_argN_free<TemplateID>,
-                       but_func_argN_copy<TemplateID>);
     }
 
     if ((idfrom && !ID_IS_EDITABLE(idfrom)) || !editable) {
@@ -1380,12 +1391,6 @@ static void template_ID(const bContext *C,
                           UI_UNIT_Y,
                           std::nullopt);
       /* so we can access the template from operators, font unlinking needs this */
-      button_funcN_set(but,
-                       template_id_cb,
-                       MEM_new<TemplateID>(__func__, template_ui),
-                       POINTER_FROM_INT(UI_ID_NOP),
-                       but_func_argN_free<TemplateID>,
-                       but_func_argN_copy<TemplateID>);
     }
     else {
       if ((RNA_property_flag(template_ui.prop) & PROP_NEVER_UNLINK) == 0) {
@@ -1402,12 +1407,8 @@ static void template_ID(const bContext *C,
             0,
             TIP_("Unlink data-block "
                  "(Shift + Click to set users to zero, data will then not be saved)"));
-        button_funcN_set(but,
-                         template_id_cb,
-                         MEM_new<TemplateID>(__func__, template_ui),
-                         POINTER_FROM_INT(UI_ID_DELETE),
-                         but_func_argN_free<TemplateID>,
-                         but_func_argN_copy<TemplateID>);
+        button_func_set(but,
+                        [pprop = pprop](bContext &C) mutable { template_ui_delete(C, pprop); });
 
         if (RNA_property_flag(template_ui.prop) & PROP_NEVER_NULL) {
           button_flag_enable(but, BUT_DISABLED);
@@ -1465,27 +1466,24 @@ static void template_ID_tabs(const bContext *C,
     const int name_width = fontstyle_string_width(&style->widget, id->name + 2);
     const int but_width = name_width + UI_UNIT_X;
 
-    ButtonTab *tab = (ButtonTab *)uiDefButR_prop(block,
-                                                 ButtonType::Tab,
-                                                 id->name + 2,
-                                                 0,
-                                                 0,
-                                                 but_width,
-                                                 but_height,
-                                                 &template_id.ptr,
-                                                 template_id.prop,
-                                                 0,
-                                                 0.0f,
-                                                 sizeof(id->name) - 2,
-                                                 "");
-    button_funcN_set(tab,
-                     template_ID_set_property_exec_fn,
-                     MEM_new<TemplateID>(__func__, template_id),
-                     id,
-                     but_func_argN_free<TemplateID>,
-                     but_func_argN_copy<TemplateID>);
+    ButtonTab *tab = static_cast<ButtonTab *>(uiDefButR_prop(block,
+                                                             ButtonType::Tab,
+                                                             id->name + 2,
+                                                             0,
+                                                             0,
+                                                             but_width,
+                                                             but_height,
+                                                             &template_id.ptr,
+                                                             template_id.prop,
+                                                             0,
+                                                             0.0f,
+                                                             sizeof(id->name) - 2,
+                                                             ""));
+    button_func_set(tab, [id = id, template_ui = template_id](bContext &C) mutable {
+      template_ID_set_property_exec_fn(&C, &template_ui, id);
+    });
     button_drag_set_id(tab, id);
-    tab->custom_data = (void *)id;
+    tab->custom_data = static_cast<void *>(id);
     tab->menu = mt;
 
     button_drawflag_enable(tab, but_align);
@@ -1495,7 +1493,7 @@ static void template_ID_tabs(const bContext *C,
     const bool editable = RNA_property_editable(&template_id.ptr, template_id.prop);
     Button *but;
 
-    if (active_ptr.type) {
+    if (active_ptr.has_type()) {
       type = active_ptr.type;
     }
 
@@ -1512,24 +1510,24 @@ static void template_ID_tabs(const bContext *C,
   }
 }
 
-static void ui_template_id(Layout &layout,
-                           const bContext *C,
-                           PointerRNA *ptr,
-                           const StringRefNull propname,
-                           const char *newop,
-                           const char *openop,
-                           const char *unlinkop,
-                           /* Only respected by tabs (use_tabs). */
-                           const char *menu,
-                           const std::optional<StringRef> text,
-                           int flag,
-                           int prv_rows,
-                           int prv_cols,
-                           int filter,
-                           bool use_tabs,
-                           float scale,
-                           const bool live_icon,
-                           const bool hide_buttons)
+static void template_id(Layout &layout,
+                        const bContext *C,
+                        PointerRNA *ptr,
+                        const StringRefNull propname,
+                        const char *newop,
+                        const char *openop,
+                        const char *unlinkop,
+                        /* Only respected by tabs (use_tabs). */
+                        const char *menu,
+                        const std::optional<StringRef> text,
+                        int flag,
+                        int prv_rows,
+                        int prv_cols,
+                        int filter,
+                        bool use_tabs,
+                        float scale,
+                        const bool live_icon,
+                        const bool hide_buttons)
 {
   PropertyRNA *prop = RNA_struct_find_property(ptr, propname.c_str());
 
@@ -1581,6 +1579,62 @@ static void ui_template_id(Layout &layout,
   }
 }
 
+void template_ID_session_uid(
+    Layout &layout, bContext *C, PointerRNA *ptr, const StringRefNull propname, short idcode)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, propname.c_str());
+
+  if (!prop || RNA_property_type(prop) != PROP_INT) {
+    RNA_warning(
+        "int property not found: %s.%s", RNA_struct_identifier(ptr->type), propname.c_str());
+    return;
+  }
+  ListBaseT<ID> *lb = which_libbase(CTX_data_main(C), idcode);
+  if (!lb) {
+    RNA_warning("idcode is not an ID type: %d.", idcode);
+    return;
+  }
+  StructRNA *type = ID_code_to_RNA_type(idcode);
+  TemplateID template_ui = {};
+  template_ui.ptr = *ptr;
+  template_ui.prop = prop;
+  template_ui.scale = 1.0f;
+
+  Block *block = layout.block();
+
+  template_ui.idcode = idcode;
+  template_ui.idlb = lb;
+
+  Layout &row = layout.row(true);
+  if (layout.use_property_split()) {
+    PropertySplitWrapper split = uiItemPropertySplitWrapperCreate(&row);
+    split.label_column->label(RNA_property_ui_name(prop), 0);
+    block_layout_set_current(block, split.property_row);
+  }
+  const uint32_t session_uid = RNA_property_int_get(ptr, prop);
+  const ID *id = BKE_libblock_find_session_uid(CTX_data_main(C), template_ui.idcode, session_uid);
+
+  const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
+  const int margin = UI_UNIT_X * 0.75f;
+  const int estimated_width = id ? (fontstyle_string_width(fstyle, id->name + 2) + margin) : 0;
+  const int width = std::clamp(
+      estimated_width, TEMPLATE_SEARCH_TEXTBUT_MIN_WIDTH, TEMPLATE_SEARCH_TEXTBUT_MIN_WIDTH * 4);
+
+  Button *but = uiDefBlockButN(block,
+                               id_search_menu_session_uid,
+                               MEM_new<TemplateID>(__func__, template_ui),
+                               id ? id->name + 2 : nullptr,
+                               0,
+                               0,
+                               width,
+                               UI_UNIT_Y,
+                               nullptr,
+                               but_func_argN_free<TemplateID>,
+                               but_func_argN_copy<TemplateID>);
+
+  def_but_icon(but, RNA_struct_ui_icon(type), UI_HAS_ICON);
+}
+
 void template_id(Layout *layout,
                  const bContext *C,
                  PointerRNA *ptr,
@@ -1592,23 +1646,23 @@ void template_id(Layout *layout,
                  const bool live_icon,
                  const std::optional<StringRef> text)
 {
-  ui_template_id(*layout,
-                 C,
-                 ptr,
-                 propname,
-                 newop,
-                 openop,
-                 unlinkop,
-                 nullptr,
-                 text,
-                 UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE,
-                 0,
-                 0,
-                 filter,
-                 false,
-                 1.0f,
-                 live_icon,
-                 false);
+  template_id(*layout,
+              C,
+              ptr,
+              propname,
+              newop,
+              openop,
+              unlinkop,
+              nullptr,
+              text,
+              UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE,
+              0,
+              0,
+              filter,
+              false,
+              1.0f,
+              live_icon,
+              false);
 }
 
 void template_action(Layout *layout,
@@ -1623,7 +1677,7 @@ void template_action(Layout *layout,
     return;
   }
 
-  PropertyRNA *adt_action_prop = RNA_struct_type_find_property(&RNA_AnimData, "action");
+  PropertyRNA *adt_action_prop = RNA_struct_type_find_property(RNA_AnimData, "action");
   BLI_assert(adt_action_prop);
   BLI_assert(RNA_property_type(adt_action_prop) == PROP_POINTER);
 
@@ -1635,7 +1689,7 @@ void template_action(Layout *layout,
    * PointerRNA.
    */
   AnimData *adt = BKE_animdata_from_id(id);
-  PointerRNA adt_ptr = PointerRNA{id, &RNA_AnimData, adt, RNA_id_pointer_create(id)};
+  PointerRNA adt_ptr = PointerRNA{id, RNA_AnimData, adt, RNA_id_pointer_create(id)};
 
   TemplateID template_ui = {};
   template_ui.ptr = adt_ptr;
@@ -1655,8 +1709,7 @@ void template_action(Layout *layout,
   BLI_assert(template_ui.idlb);
 
   Layout &row = layout->row(true);
-  template_ID(
-      C, row, template_ui, &RNA_Action, flag, newop, nullptr, unlinkop, text, false, false);
+  template_ID(C, row, template_ui, RNA_Action, flag, newop, nullptr, unlinkop, text, false, false);
 }
 
 void template_id_browse(Layout *layout,
@@ -1669,23 +1722,23 @@ void template_id_browse(Layout *layout,
                         int filter,
                         const char *text)
 {
-  ui_template_id(*layout,
-                 C,
-                 ptr,
-                 propname,
-                 newop,
-                 openop,
-                 unlinkop,
-                 nullptr,
-                 text,
-                 UI_ID_BROWSE | UI_ID_RENAME,
-                 0,
-                 0,
-                 filter,
-                 false,
-                 1.0f,
-                 false,
-                 false);
+  template_id(*layout,
+              C,
+              ptr,
+              propname,
+              newop,
+              openop,
+              unlinkop,
+              nullptr,
+              text,
+              UI_ID_BROWSE | UI_ID_RENAME,
+              0,
+              0,
+              filter,
+              false,
+              1.0f,
+              false,
+              false);
 }
 
 void template_id_preview(Layout *layout,
@@ -1700,23 +1753,23 @@ void template_id_preview(Layout *layout,
                          int filter,
                          const bool hide_buttons)
 {
-  ui_template_id(*layout,
-                 C,
-                 ptr,
-                 propname,
-                 newop,
-                 openop,
-                 unlinkop,
-                 nullptr,
-                 nullptr,
-                 UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE | UI_ID_PREVIEWS,
-                 rows,
-                 cols,
-                 filter,
-                 false,
-                 1.0f,
-                 false,
-                 hide_buttons);
+  template_id(*layout,
+              C,
+              ptr,
+              propname,
+              newop,
+              openop,
+              unlinkop,
+              nullptr,
+              nullptr,
+              UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE | UI_ID_PREVIEWS,
+              rows,
+              cols,
+              filter,
+              false,
+              1.0f,
+              false,
+              hide_buttons);
 }
 
 void template_greasepencil_color_preview(Layout *layout,
@@ -1728,23 +1781,23 @@ void template_greasepencil_color_preview(Layout *layout,
                                          float scale,
                                          int filter)
 {
-  ui_template_id(*layout,
-                 C,
-                 ptr,
-                 propname,
-                 nullptr,
-                 nullptr,
-                 nullptr,
-                 nullptr,
-                 nullptr,
-                 UI_ID_BROWSE | UI_ID_PREVIEWS | UI_ID_DELETE,
-                 rows,
-                 cols,
-                 filter,
-                 false,
-                 scale < 0.5f ? 0.5f : scale,
-                 false,
-                 false);
+  template_id(*layout,
+              C,
+              ptr,
+              propname,
+              nullptr,
+              nullptr,
+              nullptr,
+              nullptr,
+              nullptr,
+              UI_ID_BROWSE | UI_ID_PREVIEWS | UI_ID_DELETE,
+              rows,
+              cols,
+              filter,
+              false,
+              scale < 0.5f ? 0.5f : scale,
+              false,
+              false);
 }
 
 void template_id_tabs(Layout *layout,
@@ -1755,23 +1808,23 @@ void template_id_tabs(Layout *layout,
                       const char *menu,
                       int filter)
 {
-  ui_template_id(*layout,
-                 C,
-                 ptr,
-                 propname,
-                 newop,
-                 nullptr,
-                 nullptr,
-                 menu,
-                 nullptr,
-                 UI_ID_BROWSE | UI_ID_RENAME,
-                 0,
-                 0,
-                 filter,
-                 true,
-                 1.0f,
-                 false,
-                 false);
+  template_id(*layout,
+              C,
+              ptr,
+              propname,
+              newop,
+              nullptr,
+              nullptr,
+              menu,
+              nullptr,
+              UI_ID_BROWSE | UI_ID_RENAME,
+              0,
+              0,
+              filter,
+              true,
+              1.0f,
+              false,
+              false);
 }
 
 void template_any_id(Layout *layout,

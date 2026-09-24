@@ -11,7 +11,7 @@
 #pragma once
 
 #include "BLI_hash_mm2a.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -61,7 +61,7 @@ class GPUCodegen {
  private:
   uint32_t hash_ = 0;
   BLI_HashMurmur2A hm2a_;
-  ListBase ubo_inputs_ = {nullptr, nullptr};
+  ListBaseT<LinkData> ubo_inputs_ = {nullptr, nullptr};
   GPUInput *cryptomatte_input_ = nullptr;
 
   /** Cache parameters for complexity heuristic. */

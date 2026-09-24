@@ -11,14 +11,16 @@
 #include "BLI_enum_flags.hh"
 #include "DNA_movieclip_types.h"
 
+namespace blender {
+
 struct Depsgraph;
 struct ImBuf;
 struct Main;
 struct MovieDistortion;
 
-namespace blender::gpu {
+namespace gpu {
 class Texture;
-}  // namespace blender::gpu
+}  // namespace gpu
 
 enum class MovieClipCacheFlag {
   None = 0,
@@ -46,13 +48,6 @@ MovieClip *BKE_movieclip_file_add_exists(Main *bmain, const char *filepath);
 void BKE_movieclip_reload(Main *bmain, MovieClip *clip);
 void BKE_movieclip_clear_cache(MovieClip *clip);
 void BKE_movieclip_clear_proxy_cache(MovieClip *clip);
-
-/**
- * Will try to make image buffer usable when originating from the multi-layer source.
- * Internally finds a first combined pass and uses that as a buffer.
- * Not ideal, but is better than a complete empty buffer.
- */
-void BKE_movieclip_convert_multilayer_ibuf(ImBuf *ibuf);
 
 ImBuf *BKE_movieclip_get_ibuf(MovieClip *clip, const MovieClipUser *user);
 ImBuf *BKE_movieclip_get_postprocessed_ibuf(MovieClip *clip,
@@ -130,10 +125,12 @@ ImBuf *BKE_movieclip_anim_ibuf_for_frame_no_lock(MovieClip *clip, const MovieCli
 bool BKE_movieclip_has_cached_frame(MovieClip *clip, const MovieClipUser *user);
 bool BKE_movieclip_put_frame_if_possible(MovieClip *clip, const MovieClipUser *user, ImBuf *ibuf);
 
-blender::gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuser);
+gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuser);
 
 void BKE_movieclip_free_gputexture(MovieClip *clip);
 
 /* Dependency graph evaluation. */
 
 void BKE_movieclip_eval_update(Depsgraph *depsgraph, Main *bmain, MovieClip *clip);
+
+}  // namespace blender

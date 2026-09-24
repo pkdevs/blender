@@ -11,6 +11,7 @@
 #include "DNA_customdata_types.h"
 #include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_object_types.h"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
@@ -20,20 +21,24 @@
 #include "BKE_mesh.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_object.hh"
-#include "BKE_object_deform.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 
+#include "IO_validate.hh"
 #include "IO_wavefront_obj.hh"
 #include "importer_mesh_utils.hh"
 #include "obj_export_mtl.hh"
 #include "obj_import_mesh.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 
 Mesh *MeshFromGeometry::create_mesh(const OBJImportParams &import_params)
 {
@@ -44,6 +49,15 @@ Mesh *MeshFromGeometry::create_mesh(const OBJImportParams &import_params)
   }
 
   this->fixup_invalid_faces();
+
+  if (!validate::size_fits_in_int(tot_verts_object) ||
+      !validate::size_fits_in_int(mesh_geometry_.edges_.size()) ||
+      !validate::size_fits_in_int(mesh_geometry_.face_elements_.size()) ||
+      !validate::size_fits_in_int(mesh_geometry_.total_corner_))
+  {
+    CLOG_WARN(&LOG, "OBJ mesh too large to import, exceeds max int size");
+    return nullptr;
+  }
 
   /* Includes explicitly imported edges, not the ones belonging the faces to be created. */
   Mesh *mesh = BKE_mesh_new_nomain(tot_verts_object,
@@ -57,6 +71,7 @@ Mesh *MeshFromGeometry::create_mesh(const OBJImportParams &import_params)
   this->create_uv_verts(mesh);
   this->create_normals(mesh);
   this->create_colors(mesh);
+  this->create_vertex_groups(mesh);
 
   if (import_params.validate_meshes || mesh_geometry_.has_invalid_faces_) {
     bool verbose_validate = false;
@@ -88,7 +103,7 @@ Object *MeshFromGeometry::create_mesh_object(
   }
 
   Object *obj = BKE_object_add_only_object(bmain, OB_MESH, ob_name.c_str());
-  obj->data = BKE_object_obdata_add_from_type(bmain, OB_MESH, ob_name.c_str());
+  obj->data = static_cast<ID *>(BKE_object_obdata_add_from_type(bmain, OB_MESH, ob_name.c_str()));
 
   this->create_materials(bmain,
                          materials,
@@ -97,12 +112,9 @@ Object *MeshFromGeometry::create_mesh_object(
                          import_params.relative_paths,
                          import_params.mtl_name_collision_mode);
 
-  BKE_mesh_nomain_to_mesh(mesh, static_cast<Mesh *>(obj->data), obj);
+  BKE_mesh_nomain_to_mesh(mesh, id_cast<Mesh *>(obj->data), obj);
 
   transform_object(obj, import_params);
-
-  /* NOTE: vertex groups have to be created after final mesh is assigned to the object. */
-  this->create_vertex_groups(obj);
 
   return obj;
 }
@@ -124,9 +136,9 @@ void MeshFromGeometry::fixup_invalid_faces()
      * basically whether it has duplicate vertex indices. */
     bool valid = true;
     Set<int, 8> used_verts;
-    for (int i = 0; i < curr_face.corner_count_; ++i) {
-      int corner_idx = curr_face.start_index_ + i;
-      int vertex_idx = mesh_geometry_.face_corners_[corner_idx].vert_index;
+    for (const int64_t i : IndexRange(curr_face.corner_count_)) {
+      const int64_t corner_idx = curr_face.start_index_ + i;
+      const int vertex_idx = mesh_geometry_.face_corners_[corner_idx].vert_index;
       if (used_verts.contains(vertex_idx)) {
         valid = false;
         break;
@@ -145,8 +157,8 @@ void MeshFromGeometry::fixup_invalid_faces()
     face_verts.reserve(curr_face.corner_count_);
     face_uvs.reserve(curr_face.corner_count_);
     face_normals.reserve(curr_face.corner_count_);
-    for (int i = 0; i < curr_face.corner_count_; ++i) {
-      int corner_idx = curr_face.start_index_ + i;
+    for (const int64_t i : IndexRange(curr_face.corner_count_)) {
+      const int64_t corner_idx = curr_face.start_index_ + i;
       const FaceCorner &corner = mesh_geometry_.face_corners_[corner_idx];
       face_verts.append(corner.vert_index);
       face_normals.append(corner.vertex_normal_index);
@@ -246,7 +258,7 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
      * supported. */
     material_indices.span[face_idx] = std::max(material_indices.span[face_idx], 0);
 
-    for (int idx = 0; idx < curr_face.corner_count_; ++idx) {
+    for (int64_t idx = 0; idx < curr_face.corner_count_; ++idx) {
       const FaceCorner &curr_corner = mesh_geometry_.face_corners_[curr_face.start_index_ + idx];
       corner_verts[corner_index] = mesh_geometry_.global_to_local_vertices_.lookup_default(
           curr_corner.vert_index, 0);
@@ -255,7 +267,7 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
       if (!dverts.is_empty()) {
         const int group_index = curr_face.vertex_group_index;
         /* NOTE: face might not belong to any group. */
-        if (group_index >= 0 || true) {
+        if (group_index >= 0) {
           MDeformWeight *dw = BKE_defvert_ensure_index(&dverts[corner_verts[corner_index]],
                                                        group_index);
           dw->weight = 1.0f;
@@ -283,14 +295,15 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
   sharp_faces.finish();
 }
 
-void MeshFromGeometry::create_vertex_groups(Object *obj)
+void MeshFromGeometry::create_vertex_groups(Mesh *mesh)
 {
-  Mesh *mesh = static_cast<Mesh *>(obj->data);
   if (mesh->deform_verts().is_empty()) {
     return;
   }
   for (const std::string &name : mesh_geometry_.group_order_) {
-    BKE_object_defgroup_add_name(obj, name.data());
+    bDeformGroup *defgroup = MEM_new<bDeformGroup>(__func__);
+    StringRef(name).copy_utf8_truncated(defgroup->name);
+    BLI_addtail(&mesh->vertex_group_names, defgroup);
   }
 }
 
@@ -328,7 +341,7 @@ void MeshFromGeometry::create_uv_verts(Mesh *mesh)
   bool added_uv = false;
 
   for (const FaceElem &curr_face : mesh_geometry_.face_elements_) {
-    for (int idx = 0; idx < curr_face.corner_count_; ++idx) {
+    for (int64_t idx = 0; idx < curr_face.corner_count_; ++idx) {
       const FaceCorner &curr_corner = mesh_geometry_.face_corners_[curr_face.start_index_ + idx];
       if (curr_corner.uv_vert_index >= 0 &&
           curr_corner.uv_vert_index < global_vertices_.uv_vertices.size())
@@ -355,6 +368,10 @@ void MeshFromGeometry::create_uv_verts(Mesh *mesh)
   if (!added_uv) {
     attributes.remove("UVMap");
   }
+  else {
+    mesh->uv_maps_active_set("UVMap");
+    mesh->uv_maps_default_set("UVMap");
+  }
 }
 
 static Material *get_or_create_material(Main *bmain,
@@ -371,7 +388,7 @@ static Material *get_or_create_material(Main *bmain,
   }
 
   /* Check if a material with this name already exists in the main database */
-  Material *existing_mat = (Material *)BKE_libblock_find_name(bmain, ID_MA, name.c_str());
+  Material *existing_mat = id_cast<Material *>(BKE_libblock_find_name(bmain, ID_MA, name.c_str()));
   if (existing_mat != nullptr &&
       mtl_name_collision_mode == OBJ_MTL_NAME_COLLISION_REFERENCE_EXISTING)
   {
@@ -429,7 +446,7 @@ void MeshFromGeometry::create_normals(Mesh *mesh)
   Array<float3> corner_normals(mesh_geometry_.total_corner_);
   int corner_index = 0;
   for (const FaceElem &curr_face : mesh_geometry_.face_elements_) {
-    for (int idx = 0; idx < curr_face.corner_count_; ++idx) {
+    for (int64_t idx = 0; idx < curr_face.corner_count_; ++idx) {
       const FaceCorner &curr_corner = mesh_geometry_.face_corners_[curr_face.start_index_ + idx];
       int n_index = curr_corner.vertex_normal_index;
       float3 normal(0, 0, 0);
@@ -479,4 +496,5 @@ void MeshFromGeometry::create_colors(Mesh *mesh)
   attr.finish();
 }
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

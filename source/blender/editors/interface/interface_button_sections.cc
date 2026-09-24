@@ -9,9 +9,9 @@
  * separated by a separator spacer button.
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
@@ -70,13 +70,13 @@ static Vector<rcti> button_section_bounds_calc(const ARegion *region, const bool
      * active state is only useful during drawing and must be ignored for handling (at which point
      * #Block::active is false for all blocks). */
     const bool is_drawing = region->runtime->do_draw & RGN_DRAWING;
-    LISTBASE_FOREACH (Block *, block, &region->runtime->uiblocks) {
-      if (is_drawing && !block->active) {
+    for (Block &block : region->runtime->uiblocks) {
+      if (is_drawing && !block.active) {
         continue;
       }
 
-      for (const std::unique_ptr<Button> &but : block->buttons) {
-        if (but->type == ButtonType::SeprSpacer) {
+      for (const Button &but : block.buttons()) {
+        if (but.type == ButtonType::SeprSpacer) {
           /* Start a new section. */
           if (has_section_content) {
             finish_section_fn(cur_section_bounds);
@@ -89,7 +89,7 @@ static Vector<rcti> button_section_bounds_calc(const ARegion *region, const bool
         }
 
         rcti but_pixelrect;
-        button_to_pixelrect(&but_pixelrect, region, block, but.get());
+        button_to_pixelrect(&but_pixelrect, region, &block, &but);
         BLI_rcti_do_minmax_rcti(&cur_section_bounds, &but_pixelrect);
         has_section_content = true;
       }
@@ -121,11 +121,11 @@ static Vector<rcti> button_section_bounds_calc(const ARegion *region, const bool
   return section_bounds;
 }
 
-static void ui_draw_button_sections_background(const ARegion *region,
-                                               const Span<rcti> section_bounds,
-                                               const ThemeColorID colorid,
-                                               const ButtonSectionsAlign align,
-                                               const float corner_radius)
+static void draw_button_sections_background(const ARegion *region,
+                                            const Span<rcti> section_bounds,
+                                            const ThemeColorID colorid,
+                                            const ButtonSectionsAlign align,
+                                            const float corner_radius)
 {
   float bg_color[4];
   theme::get_color_4fv(colorid, bg_color);
@@ -153,34 +153,36 @@ static void ui_draw_button_sections_background(const ARegion *region,
 
     rctf bounds_float;
     BLI_rctf_rcti_copy(&bounds_float, &bounds);
-    /* Make space for the separator line. */
-    if (align == ButtonSectionsAlign::Top) {
-      bounds_float.ymax -= UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
+    if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
+      /* Make space for the separator line. */
+      if (align == ButtonSectionsAlign::Top) {
+        bounds_float.ymax -= UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
+      }
+      else if (align == ButtonSectionsAlign::Bottom) {
+        bounds_float.ymin += UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
+      }
     }
-    else if (align == ButtonSectionsAlign::Bottom) {
-      bounds_float.ymin += UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
-    }
-
     draw_roundbox_corner_set(roundbox_corners);
     draw_roundbox_4fv(&bounds_float, true, corner_radius, bg_color);
   }
 }
 
-static void ui_draw_button_sections_alignment_separator(const ARegion *region,
-                                                        const Span<rcti> section_bounds,
-                                                        const ThemeColorID colorid,
-                                                        const ButtonSectionsAlign align,
-                                                        const float corner_radius)
+static void draw_button_sections_alignment_separator(const ARegion *region,
+                                                     const Span<rcti> section_bounds,
+                                                     const ThemeColorID colorid,
+                                                     const ButtonSectionsAlign align,
+                                                     const float corner_radius)
 {
-  const int separator_line_width = UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
-
+  const int separator_line_width = region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER ?
+                                       UI_BUTTON_SECTION_SEPERATOR_LINE_WITH :
+                                       0;
   float bg_color[4];
   theme::get_color_4fv(colorid, bg_color);
 
   GPU_blend(GPU_BLEND_ALPHA);
 
   /* Separator line. */
-  {
+  if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
     GPUVertFormat *format = immVertexFormat();
     const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -226,15 +228,15 @@ void region_button_sections_draw(const ARegion *region,
 
   const Vector<rcti> section_bounds = button_section_bounds_calc(region, true);
 
-  ui_draw_button_sections_background(
+  draw_button_sections_background(
       region, section_bounds, ThemeColorID(colorid), align, corner_radius);
   if (align != ButtonSectionsAlign::None) {
-    ui_draw_button_sections_alignment_separator(region,
-                                                section_bounds,
-                                                ThemeColorID(colorid),
-                                                align,
-                                                /* Slightly bigger corner radius, looks better. */
-                                                corner_radius + 1);
+    draw_button_sections_alignment_separator(region,
+                                             section_bounds,
+                                             ThemeColorID(colorid),
+                                             align,
+                                             /* Slightly bigger corner radius, looks better. */
+                                             corner_radius + 1);
   }
 }
 

@@ -10,11 +10,14 @@
 
 #pragma once
 
+namespace blender {
+
 struct ScrArea;
 struct bContext;
 struct wmEvent;
 struct wmWindow;
-namespace blender::ui {
+
+namespace ui {
 struct Button;
 
 /* `interface_eyedropper.cc` */
@@ -37,6 +40,8 @@ void eyedropper_win_area_find(const bContext *C,
 
 /* interface_eyedropper_color.c (expose for color-band picker) */
 
+struct Eyedropper;
+
 /**
  * \brief get the color from the screen.
  *
@@ -46,7 +51,6 @@ void eyedropper_win_area_find(const bContext *C,
  *
  * \note Exposed by 'eyedropper_intern.hh' for use with color band picking.
  */
-struct Eyedropper;
 bool eyedropper_color_sample_fl(bContext *C,
                                 struct Eyedropper *eye,
                                 const int event_xy[2],
@@ -69,4 +73,5 @@ enum {
   EYE_MODAL_POINT_REMOVE_LAST,
 };
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

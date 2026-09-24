@@ -10,18 +10,21 @@
 
 #include "BKE_nla.hh"
 
+#include "BKE_action.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
+#include "DNA_listBase.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
 #include <optional>
 
+namespace blender {
+
 struct AnimData;
 struct Depsgraph;
 struct ID;
-struct ListBase;
 
 struct ARegion;
 struct ARegionType;
@@ -47,9 +50,15 @@ struct bDopeSheet;
 struct FCurve;
 struct FModifier;
 struct bAction;
+struct AnimKeylist;
+struct bMotionPath;
 
-namespace blender::ui {
+namespace ui {
 struct Block;
+}
+
+namespace ed {
+class AnimTransformable;
 }
 
 struct PointerRNA;
@@ -57,17 +66,27 @@ struct PropertyRNA;
 
 struct MPathTarget;
 
-namespace blender::animrig {
+namespace animrig {
 class Action;
 class Slot;
-}  // namespace blender::animrig
+class Channelbag;
+}  // namespace animrig
 
-/* ************************************************ */
-/* ANIMATION CHANNEL FILTERING */
-/* `anim_filter.cc` */
+/* Motion path needing to be baked (target). */
+struct MPathTarget {
+  bMotionPath *mpath = nullptr; /* Motion path in question. */
+
+  AnimKeylist *keylist = nullptr; /* Temp, to know where the keyframes are. */
+
+  /* Original (Source Objects) */
+  Object *ob = nullptr;          /* Source Object */
+  bPoseChannel *pchan = nullptr; /* Source pose-channel (if applicable). */
+};
 
 /* -------------------------------------------------------------------- */
 /** \name Context
+ *
+ * Animation channel filtering, implemented in `anim_filter.cc`.
  * \{ */
 
 /** Main Data container types. */
@@ -94,6 +113,8 @@ enum eAnimCont_Types {
   ANIMCONT_MASK = 9,
   /** "timeline" editor (#bDopeSheet). */
   ANIMCONT_TIMELINE = 10,
+  /** Cache file (#bDopeSheet). */
+  ANIMCONT_CACHEFILE = 11,
 };
 
 /**
@@ -156,7 +177,7 @@ struct bAnimContext {
   ID *active_action_user;
 
   /** active set of markers */
-  ListBase *markers;
+  ListBaseT<TimeMarker> *markers;
 
   /** pointer to current reports list */
   ReportList *reports;
@@ -296,7 +317,7 @@ struct bAnimListElem {
   /**
    * For data that is owned by a specific slot, its handle.
    *
-   * This is not declared as #blender::animrig::slot_handle_t to avoid all the users of this
+   * This is not declared as #animrig::slot_handle_t to avoid all the users of this
    * header file to get the `animrig` module as extra dependency (which would spread to the undo
    * system, line-art, etc). It's probably best to split off this struct definition from the rest
    * of this header, as most code that uses this header doesn't need to know the definition of this
@@ -489,34 +510,34 @@ ENUM_OPERATORS(eAnimFilter_Flags);
 #define SEL_FCU(fcu) ((fcu)->flag & FCURVE_SELECTED)
 
 /* ShapeKey mode only */
-#define EDITABLE_SHAPEKEY(kb) ((kb->flag & KEYBLOCK_LOCKED) == 0)
-#define SEL_SHAPEKEY(kb) (kb->flag & KEYBLOCK_SEL)
+#define EDITABLE_SHAPEKEY(kb) (((kb)->flag & KEYBLOCK_LOCKED) == 0)
+#define SEL_SHAPEKEY(kb) ((kb)->flag & KEYBLOCK_SEL)
 
 /* Grease Pencil only */
 /** Grease Pencil data-block settings. */
-#define EXPANDED_GPD(gpd) (gpd->flag & GP_DATA_EXPAND)
+#define EXPANDED_GPD(gpd) ((gpd)->flag & GP_DATA_EXPAND)
 /** Grease Pencil Layer settings. */
-#define EDITABLE_GPL(gpl) ((gpl->flag & GP_LAYER_LOCKED) == 0)
-#define SEL_GPL(gpl) (gpl->flag & GP_LAYER_SELECT)
+#define EDITABLE_GPL(gpl) (((gpl)->flag & GP_LAYER_LOCKED) == 0)
+#define SEL_GPL(gpl) ((gpl)->flag & GP_LAYER_SELECT)
 
 /* Mask Only */
-#define EXPANDED_MASK(mask) (mask->flag & MASK_ANIMF_EXPAND)
+#define EXPANDED_MASK(mask) ((mask)->flag & MASK_ANIMF_EXPAND)
 /** Grease Pencil Layer settings. */
-#define EDITABLE_MASK(masklay) ((masklay->flag & MASK_LAYERFLAG_LOCKED) == 0)
-#define SEL_MASKLAY(masklay) (masklay->flag & SELECT)
+#define EDITABLE_MASK(masklay) (((masklay)->flag & MASK_LAYERFLAG_LOCKED) == 0)
+#define SEL_MASKLAY(masklay) ((masklay)->flag & SELECT)
 
 /* NLA only */
-#define SEL_NLT(nlt) (nlt->flag & NLATRACK_SELECTED)
-#define EDITABLE_NLT(nlt) ((nlt->flag & NLATRACK_PROTECTED) == 0)
+#define SEL_NLT(nlt) ((nlt)->flag & NLATRACK_SELECTED)
+#define EDITABLE_NLT(nlt) (((nlt)->flag & NLATRACK_PROTECTED) == 0)
 
 /* Movie clip only */
-#define EXPANDED_MCLIP(clip) (clip->flag & MCLIP_DATA_EXPAND)
+#define EXPANDED_MCLIP(clip) ((clip)->flag & MCLIP_DATA_EXPAND)
 
 /* Palette only */
-#define EXPANDED_PALETTE(palette) (palette->flag & PALETTE_DATA_EXPAND)
+#define EXPANDED_PALETTE(palette) ((palette)->flag & PALETTE_DATA_EXPAND)
 
 /* AnimData - NLA mostly... */
-#define SEL_ANIMDATA(adt) (adt->flag & ADT_UI_SELECTED)
+#define SEL_ANIMDATA(adt) ((adt)->flag & ADT_UI_SELECTED)
 
 /** \} */
 
@@ -526,7 +547,7 @@ ENUM_OPERATORS(eAnimFilter_Flags);
 
 /** NLA track heights */
 #define NLATRACK_FIRST_TOP(ac) \
-  (blender::ui::view2d_scale_get_y(&(ac)->region->v2d) * -UI_TIME_SCRUB_MARGIN_Y - NLATRACK_SKIP)
+  (ui::view2d_scale_get_y(&(ac)->region->v2d) * -UI_TIME_SCRUB_MARGIN_Y - NLATRACK_SKIP)
 #define NLATRACK_HEIGHT(snla) \
   (((snla) && ((snla)->flag & SNLA_NOSTRIPCURVES)) ? (0.8f * U.widget_unit) : \
                                                      (1.2f * U.widget_unit))
@@ -566,9 +587,9 @@ ENUM_OPERATORS(eAnimFilter_Flags);
  * \return The number of items added to `anim_data`.
  */
 size_t ANIM_animfilter_action_slot(bAnimContext *ac,
-                                   ListBase * /* bAnimListElem */ anim_data,
-                                   blender::animrig::Action &action,
-                                   blender::animrig::Slot &slot,
+                                   ListBaseT<bAnimListElem> *anim_data,
+                                   animrig::Action &action,
+                                   animrig::Slot &slot,
                                    eAnimFilter_Flags filter_mode,
                                    ID *animated_id);
 
@@ -581,7 +602,7 @@ size_t ANIM_animfilter_action_slot(bAnimContext *ac,
  * \param filter_mode: how should the data be filtered - bit-mapping accessed flags.
  */
 size_t ANIM_animdata_filter(bAnimContext *ac,
-                            ListBase *anim_data,
+                            ListBaseT<bAnimListElem> *anim_data,
                             eAnimFilter_Flags filter_mode,
                             void *data,
                             eAnimCont_Types datatype);
@@ -610,28 +631,27 @@ bool ANIM_animdata_context_getdata(bAnimContext *ac);
 /**
  * Acts on bAnimListElem eAnim_Update_Flags.
  */
-void ANIM_animdata_update(bAnimContext *ac, ListBase *anim_data);
+void ANIM_animdata_update(bAnimContext *ac, ListBaseT<bAnimListElem> *anim_data);
 
-void ANIM_animdata_freelist(ListBase *anim_data);
+void ANIM_animdata_freelist(ListBaseT<bAnimListElem> *anim_data);
 
 /**
  * Check if the given animation container can contain grease pencil layer keyframes.
  */
 bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type);
 
-bAction *ANIM_active_action_from_area(Scene *scene,
+bAction *ANIM_active_action_from_area(const Main &bmain,
+                                      Scene *scene,
                                       ViewLayer *view_layer,
                                       const ScrArea *area,
                                       ID **r_action_user = nullptr);
-
-/* ************************************************ */
-/* ANIMATION CHANNELS LIST */
-/* anim_channels_*.c */
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Drawing TypeInfo
+ *
+ * Animation channels list, implemented in `anim_channels_*.cc`.
  * \{ */
 
 /** Role or level of anim-channel in the hierarchy. */
@@ -778,7 +798,7 @@ void ANIM_channel_draw(
 void ANIM_channel_draw_widgets(const bContext *C,
                                bAnimContext *ac,
                                bAnimListElem *ale,
-                               blender::ui::Block *block,
+                               ui::Block *block,
                                const rctf *rect,
                                size_t channel_index);
 
@@ -815,7 +835,7 @@ void ANIM_channel_setting_set(bAnimContext *ac,
  * - on: whether the visibility setting has been enabled or disabled
  */
 void ANIM_flush_setting_anim_channels(bAnimContext *ac,
-                                      ListBase *anim_data,
+                                      ListBaseT<bAnimListElem> *anim_data,
                                       bAnimListElem *ale_setting,
                                       eAnimChannel_Settings setting,
                                       eAnimChannels_SetFlag mode);
@@ -853,16 +873,14 @@ bool ANIM_is_active_channel(bAnimListElem *ale);
  */
 void ANIM_deselect_keys_in_animation_editors(bContext *C);
 
-/* ************************************************ */
-/* DRAWING API */
-/* `anim_draw.cc` */
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Current Frame Drawing
  *
  * Main call to draw current-frame indicator in an Animation Editor.
+ *
+ * Implemented in `anim_draw.cc`.
  * \{ */
 
 /* flags for Current Frame Drawing */
@@ -918,13 +936,12 @@ void ANIM_draw_framerange(Scene *scene, View2D *v2d);
 void ANIM_draw_action_framerange(
     AnimData *adt, bAction *action, View2D *v2d, float ymin, float ymax);
 
-/* ************************************************* */
-/* F-MODIFIER TOOLS */
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name UI Panel Drawing
+ *
+ * F-Modifier tools.
  * \{ */
 
 bool ANIM_nla_context_track_ptr(const bContext *C, PointerRNA *r_ptr);
@@ -944,7 +961,7 @@ using uiListPanelIDFromDataFunc = void (*)(void *data_link, char *r_idname);
  */
 void ANIM_fmodifier_panels(const bContext *C,
                            ID *owner_id,
-                           ListBase *fmodifiers,
+                           ListBaseT<FModifier> *fmodifiers,
                            uiListPanelIDFromDataFunc panel_id_fn);
 
 void ANIM_modifier_panels_register_graph_and_NLA(ARegionType *region_type,
@@ -970,21 +987,20 @@ void ANIM_fmodifiers_copybuf_free();
  * assuming that the buffer has been cleared already with #ANIM_fmodifiers_copybuf_free()
  * \param active: Only copy the active modifier.
  */
-bool ANIM_fmodifiers_copy_to_buf(ListBase *modifiers, bool active);
+bool ANIM_fmodifiers_copy_to_buf(ListBaseT<FModifier> *modifiers, bool active);
 
 /**
  * 'Paste' the F-Modifier(s) from the buffer to the specified list
  * \param replace: Free all the existing modifiers to leave only the pasted ones.
  */
-bool ANIM_fmodifiers_paste_from_buf(ListBase *modifiers, bool replace, FCurve *curve);
-
-/* ************************************************* */
-/* ASSORTED TOOLS */
+bool ANIM_fmodifiers_paste_from_buf(ListBaseT<FModifier> *modifiers, bool replace, FCurve *curve);
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Animation F-Curves <-> Icons/Names Mapping
+ *
+ * Assorted tools.
  * \{ */
 
 /* `anim_ipo_utils.cc` */
@@ -1009,9 +1025,7 @@ std::optional<int> getname_anim_fcurve(char *name, ID *id, FCurve *fcu);
  *
  * This function iterates the Slot's users to find an ID that allows it to resolve its RNA path.
  */
-std::string getname_anim_fcurve_for_slot(Main &bmain,
-                                         const blender::animrig::Slot &slot,
-                                         FCurve &fcurve);
+std::string getname_anim_fcurve_for_slot(Main &bmain, const animrig::Slot &slot, FCurve &fcurve);
 
 /**
  * Automatically determine a color for the nth F-Curve.
@@ -1171,10 +1185,10 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
 
 /** \} */
 
-/* `anim_deps.cc` */
-
 /* -------------------------------------------------------------------- */
 /** \name Animation Updates
+ *
+ * Implemented in `anim_deps.cc`.
  * \{ */
 
 /**
@@ -1256,30 +1270,38 @@ void ED_drivers_editor_init(bContext *C, ScrArea *area);
  */
 void ED_anim_ale_fcurve_delete(bAnimContext &ac, bAnimListElem &ale);
 
-/* ************************************************ */
+/** \} */
 
-enum eAnimvizCalcRange {
-  /** Update motion paths at the current frame only. */
-  ANIMVIZ_CALC_RANGE_CURRENT_FRAME,
+/* -------------------------------------------------------------------- */
+/** \name Motion Paths
+ * \{ */
 
-  /** Try to limit updates to a close neighborhood of the current frame. */
-  ANIMVIZ_CALC_RANGE_CHANGED,
-
-  /** Update an entire range of the motion paths. */
-  ANIMVIZ_CALC_RANGE_FULL,
-};
-
+namespace ed::motionpath {
+/**
+ * Tag the motion path for a complete re-evaluation on the next call to `animviz_calc_motionpaths`.
+ * This is cheap to call since it only sets a flag.
+ */
+void tag_for_recalc(bMotionPath &motion_path);
+}  // namespace ed::motionpath
+/**
+ * Build a partial depsgraph with only the IDs of the given `targets`.
+ */
 Depsgraph *animviz_depsgraph_build(Main *bmain,
                                    Scene *scene,
                                    ViewLayer *view_layer,
-                                   blender::Span<MPathTarget *> targets);
+                                   Span<MPathTarget> targets);
 
+/**
+ * Evaluated the given `depsgraph` for all targets.
+ *
+ * \param modified_frame: Determines around which the calculation should be run. It will stop
+ * automatically if it hits an area where the evaluation returns the same result as is already
+ * stored in the motion path. This is to minimize the calculations done.
+ */
 void animviz_calc_motionpaths(Depsgraph *depsgraph,
-                              Main *bmain,
                               Scene *scene,
-                              blender::MutableSpan<MPathTarget *> targets,
-                              eAnimvizCalcRange range,
-                              bool restore);
+                              MutableSpan<MPathTarget> targets,
+                              int modified_frame);
 
 /**
  * Update motion path computation range (in `ob.avs` or `armature.avs`) from user choice in
@@ -1292,15 +1314,71 @@ void animviz_motionpath_compute_range(Object *ob, Scene *scene);
 
 /**
  * Populate the given vector with MPathTarget elements for the given object.
- * Will look for pose bones as well. `animviz_free_motionpath_targets` needs to be called
- * to free the memory allocated in this function.
+ * Will look for pose bones as well.
  */
-void animviz_build_motionpath_targets(Object *ob, blender::Vector<MPathTarget *> &r_targets);
-
-/**
- * Free the elements of the vector populated with `animviz_build_motionpath_targets`.
- * After this function the Vector will have a length of 0.
- */
-void animviz_free_motionpath_targets(blender::Vector<MPathTarget *> &targets);
+void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget> &r_targets);
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name F-Curve Buffers & Rotation Conversion
+ * \{ */
+
+/**
+ * A non owning storage buffer for FCurves where they are sorted by `FCurve.array_index`.
+ */
+class SortedFCurveBuffer {
+  Vector<FCurve *> fcurves_;
+
+ public:
+  void insert_fcurve(FCurve &fcurve);
+  void clear();
+  Span<FCurve *> fcurves() const;
+  /**
+   * Returns the first FCurve with the given array index from the buffer or a nullptr if that index
+   * does not exist.
+   */
+  FCurve *get_fcurve_by_array_index(int array_index) const;
+};
+
+/* FCurves grouped by their RNA path. */
+using RNAFCurveMap = Map<std::string, SortedFCurveBuffer>;
+/* For each Channelbag FCurves grouped by their RNA path. */
+using ChannelbagFCurveMap = Map<animrig::Channelbag *, RNAFCurveMap>;
+
+/**
+ * Convert any keyframe data for the given transformable to the given rotation mode.
+ * This will correctly react to an animated rotation mode.
+ *
+ * \returns true if any animation data was modified.
+ */
+bool convert_rotation_keys(const ed::AnimTransformable &transformable,
+                           ChannelbagFCurveMap &channelbag_fcurve_map,
+                           eRotationModes to_mode);
+
+/**
+ * Creates a map of RNA paths and the rotation FCurves associated with that rna path.
+ * That means `rotation_euler` and `rotation_quaternion` will have different entries in the map.
+ */
+ChannelbagFCurveMap build_rotation_fcurve_map(animrig::Action &action,
+                                              animrig::slot_handle_t slot_handle);
+
+/**
+ * Bake all existing rotation fcurves for the given `transformable`.
+ */
+void bake_rotation_fcurves(const ChannelbagFCurveMap &channelbag_fcurve_map,
+                           const ed::AnimTransformable &transformable);
+
+/**
+ * A high level function that converts the given transformable and the animation on its rotation
+ * channels into a different rotation mode. In contrast to the lower level functions like
+ * `convert_rotation_keys`, this tags the dependency graph for updates and sends WM notifiers.
+ */
+void convert_to_rotation_mode(bContext &C,
+                              ed::AnimTransformable &transformable,
+                              eRotationModes to_mode,
+                              bool bake);
+
+/** \} */
+
+}  // namespace blender

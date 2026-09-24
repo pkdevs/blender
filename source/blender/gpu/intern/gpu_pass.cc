@@ -12,7 +12,7 @@
 
 #include "BLI_map.hh"
 #include "BLI_span.hh"
-#include "BLI_time.h"
+#include "BLI_time.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_capabilities.hh"
@@ -24,7 +24,8 @@
 #include <mutex>
 #include <string>
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu::shader;
 
 static bool gpu_pass_validate(GPUCodegenCreateInfo *create_info);
@@ -38,7 +39,7 @@ struct GPUPass {
 
   GPUCodegenCreateInfo *create_info = nullptr;
   AsyncCompilationHandle compilation_handle = 0;
-  std::atomic<blender::gpu::Shader *> shader = nullptr;
+  std::atomic<gpu::Shader *> shader = nullptr;
   std::atomic<GPUPassStatus> status = GPU_PASS_QUEUED;
   /* Orphaned GPUPasses gets freed by the garbage collector. */
   std::atomic<int> refcount = 1;
@@ -48,8 +49,10 @@ struct GPUPass {
 
   uint64_t compilation_timestamp = 0;
 
-  /** Hint that an optimized variant of this pass should be created.
-   *  Based on a complexity heuristic from pass code generation. */
+  /**
+   * Hint that an optimized variant of this pass should be created.
+   * Based on a complexity heuristic from pass code generation.
+   */
   bool should_optimize = false;
   bool is_optimization_pass = false;
 
@@ -110,7 +113,7 @@ struct GPUPass {
     compilation_timestamp = ++compilation_counts;
 
     if (!shader && !gpu_pass_validate(create_info)) {
-      fprintf(stderr, "blender::gpu::Shader: error: too many samplers in shader.\n");
+      fprintf(stderr, "gpu::Shader: error: too many samplers in shader.\n");
     }
 
     status = shader ? GPU_PASS_SUCCESS : GPU_PASS_FAILED;
@@ -170,7 +173,7 @@ bool GPU_pass_should_optimize(GPUPass *pass)
   return (GPU_backend_get_type() == GPU_BACKEND_METAL) && pass->should_optimize;
 }
 
-blender::gpu::Shader *GPU_pass_shader_get(GPUPass *pass)
+gpu::Shader *GPU_pass_shader_get(GPUPass *pass)
 {
   return pass->shader;
 }
@@ -341,11 +344,7 @@ static bool gpu_pass_validate(GPUCodegenCreateInfo *create_info)
   }
 
   /* Validate against GPU limit. */
-  if ((samplers_len > GPU_max_textures_frag()) || (samplers_len > GPU_max_textures_vert())) {
-    return false;
-  }
-
-  return (samplers_len * 2 <= GPU_max_textures());
+  return samplers_len <= GPU_max_textures();
 }
 
 GPUPass *GPU_generate_pass(GPUMaterial *material,
@@ -404,3 +403,5 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
 }
 
 /** \} */
+
+}  // namespace blender

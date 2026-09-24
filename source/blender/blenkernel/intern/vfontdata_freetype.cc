@@ -16,9 +16,9 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_vfont.hh"
@@ -26,6 +26,8 @@
 
 #include "DNA_packedFile_types.h"
 #include "DNA_vfont_types.h"
+
+namespace blender {
 
 extern const void *builtin_font_data;
 extern int builtin_font_size;
@@ -45,15 +47,15 @@ VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
   }
 
   /* allocate blender font */
-  VFontData *vfd = MEM_callocN<VFontData>("FTVFontData");
+  VFontData *vfd = MEM_new_zeroed<VFontData>("FTVFontData");
 
   /* Get the font name. */
   char *name = BLF_display_name_from_id(fontid);
-  STRNCPY(vfd->name, name);
+  const size_t name_len = STRNCPY_RLEN(vfd->name, name);
   /* BLF_display_name result must be freed. */
-  MEM_freeN(name);
+  MEM_delete(name);
 
-  BLI_str_utf8_invalid_strip(vfd->name, ARRAY_SIZE(vfd->name));
+  BLI_str_utf8_invalid_strip(vfd->name, name_len);
 
   if (!BLF_get_vfont_metrics(
           fontid, &vfd->metrics.ascend_ratio, &vfd->metrics.em_ratio, &vfd->metrics.scale))
@@ -61,7 +63,7 @@ VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
     BKE_vfontdata_metrics_get_defaults(&vfd->metrics);
   }
 
-  vfd->characters = MEM_new<blender::Map<uint, VChar *>>(__func__);
+  vfd->characters = MEM_new<Map<uint, VChar *>>(__func__);
   vfd->characters->reserve(255);
 
   BLF_unload_id(fontid);
@@ -71,10 +73,10 @@ VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
 
 VFontData *BKE_vfontdata_copy(const VFontData *vfont_src, const int /*flag*/)
 {
-  VFontData *vfont_dst = static_cast<VFontData *>(MEM_dupallocN(vfont_src));
+  VFontData *vfont_dst = MEM_dupalloc(vfont_src);
 
   if (vfont_src->characters != nullptr) {
-    vfont_dst->characters = MEM_new<blender::Map<uint, VChar *>>(__func__);
+    vfont_dst->characters = MEM_new<Map<uint, VChar *>>(__func__);
     vfont_dst->characters->reserve(vfont_src->characters->size());
     for (const auto &item : vfont_src->characters->items()) {
       VChar *vchar_src = item.value;
@@ -117,7 +119,7 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, uint character)
     return nullptr;
   }
 
-  VChar *che = MEM_callocN<VChar>("objfnt_char");
+  VChar *che = MEM_new_zeroed<VChar>("objfnt_char");
 
   /* need to set a size for embolden, etc. */
   BLF_size(font_id, 16);
@@ -127,11 +129,12 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, uint character)
                                &che->nurbsbase,
                                vfont->data->metrics.scale,
                                use_fallback,
-                               &che->width))
+                               &che->width,
+                               &che->bounds))
   {
     /* Free but add to the character cache to prevent future lookups
      * from attempting to load the font again. */
-    MEM_freeN(che);
+    MEM_delete(che);
     che = nullptr;
   }
 
@@ -142,10 +145,12 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, uint character)
 
 VChar *BKE_vfontdata_char_copy(const VChar *vchar_src)
 {
-  VChar *vchar_dst = static_cast<VChar *>(MEM_dupallocN(vchar_src));
+  VChar *vchar_dst = MEM_dupalloc(vchar_src);
 
-  BLI_listbase_clear(&vchar_dst->nurbsbase);
+  vchar_dst->nurbsbase.clear_no_delete();
   BKE_nurbList_duplicate(&vchar_dst->nurbsbase, &vchar_src->nurbsbase);
 
   return vchar_dst;
 }
+
+}  // namespace blender

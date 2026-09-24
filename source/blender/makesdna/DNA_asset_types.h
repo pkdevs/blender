@@ -8,28 +8,30 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 #include "DNA_uuid_types.h"
 
-#ifdef __cplusplus
-#  include <memory>
+#include <memory>
 
 namespace blender {
+
 class StringRef;
-}
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
-}  // namespace blender::asset_system
+}  // namespace asset_system
 
-#endif
-
-enum eAssetLibraryType {
+enum eAssetLibraryType : short {
   /** Display assets from the current session (current "Main"). */
   ASSET_LIBRARY_LOCAL = 1,
   ASSET_LIBRARY_ALL = 2,
   /** Display assets bundled with Blender by default. */
   ASSET_LIBRARY_ESSENTIALS = 3,
+  /** Additions to the essentials library that are stored online - displayed in the UI as part of
+   * the normal essentials library. */
+  ASSET_LIBRARY_ONLINE_ESSENTIALS = 4,
 
   /** Display assets from custom asset libraries, as defined in the preferences
    * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname
@@ -39,7 +41,7 @@ enum eAssetLibraryType {
   ASSET_LIBRARY_CUSTOM = 100,
 };
 
-enum eAssetImportMethod {
+enum eAssetImportMethod : int {
   /** Regular data-block linking. */
   ASSET_IMPORT_LINK = 0,
   /** Regular data-block appending (basically linking + "Make Local"). */
@@ -52,8 +54,18 @@ enum eAssetImportMethod {
   ASSET_IMPORT_PACK = 3,
 };
 
-enum eAssetLibrary_Flag {
+enum eAssetLibrary_Flag : int {
   ASSET_LIBRARY_RELATIVE_PATH = (1 << 0),
+  ASSET_LIBRARY_DISABLED = (1 << 1),
+  ASSET_LIBRARY_USE_REMOTE_URL = (1 << 2),
+  ASSET_LIBRARY_USE_AUTH_TOKEN = (1 << 3),
+  ASSET_LIBRARY_PROJECT_DEFINED = (1 << 4),
+};
+
+enum class AssetAccess : int8_t {
+  OnlineAndOffline = 0,
+  OnlyOnline = 1,
+  OnlyOffline = 2,
 };
 
 /**
@@ -65,6 +77,17 @@ struct AssetTag {
   struct AssetTag *next = nullptr, *prev = nullptr;
   char name[/*MAX_NAME*/ 64] = "";
 };
+
+enum AssetMetaDataFlag : int {
+  /**
+   * When the import method is set to "Follow Asset or Preferences", use the asset's own import
+   * method instead of the one from the library. Not used often, but for some assets there's a
+   * specific preferred import method. For example, base mesh objects may always want to use
+   * appending, so they can be edited directly and independently from previous usages.
+   */
+  ASSETDATA_USE_OWN_IMPORT_METHOD = (1 << 0),
+};
+ENUM_OPERATORS(AssetMetaDataFlag);
 
 /**
  * \brief The meta-data of an asset.
@@ -115,6 +138,12 @@ struct AssetMetaData {
    * can always reliably reconstruct it from the list. */
   short tot_tags = 0;
 
+  AssetMetaDataFlag flag = {};
+
+  /** The import method to use when "Follow Asset or Preferences" is used and
+   * #AssetMetaDataFlag::ASSETDATA_USE_OWN_IMPORT_METHOD is set in the flags above. */
+  eAssetImportMethod preferred_import_method = ASSET_IMPORT_APPEND;
+
   char _pad[4] = {};
 
 #if defined(__cplusplus) && !defined(DNA_NO_EXTERNAL_CONSTRUCTORS)
@@ -141,7 +170,7 @@ struct AssetImportSettings {
  * custom library. Otherwise it is not used.
  */
 struct AssetLibraryReference {
-  short type = ASSET_LIBRARY_LOCAL; /* eAssetLibraryType */
+  eAssetLibraryType type = ASSET_LIBRARY_LOCAL;
   char _pad1[2] = {};
   /**
    * If showing a custom asset library (#ASSET_LIBRARY_CUSTOM), this is the index of the
@@ -170,7 +199,7 @@ struct AssetLibraryReference {
 struct AssetWeakReference {
   char _pad[6] = {};
 
-  short asset_library_type = 0; /* #eAssetLibraryType */
+  eAssetLibraryType asset_library_type = {};
   /** If #asset_library_type is not enough to identify the asset library, this string can provide
    * further location info (allocated string). Null otherwise. */
   const char *asset_library_identifier = nullptr;
@@ -194,8 +223,8 @@ struct AssetWeakReference {
   /**
    * See AssetRepresentation::make_weak_reference().
    */
-  static AssetWeakReference make_reference(const blender::asset_system::AssetLibrary &library,
-                                           blender::StringRef library_relative_identifier);
+  static AssetWeakReference make_reference(const asset_system::AssetLibrary &library,
+                                           StringRef library_relative_identifier);
 #endif
 };
 
@@ -203,3 +232,5 @@ struct AssetCatalogPathLink {
   struct AssetCatalogPathLink *next = nullptr, *prev = nullptr;
   char *path = nullptr;
 };
+
+}  // namespace blender

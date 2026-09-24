@@ -313,7 +313,7 @@ GHOST_IContext *GHOST_SystemWin32::createOffscreenContext(GHOST_GPUSettings gpu_
 #ifdef WITH_VULKAN_BACKEND
     case GHOST_kDrawingContextTypeVulkan: {
       GHOST_Context *context = new GHOST_ContextVK(
-          context_params_offscreen, (HWND)0, 1, 2, gpu_settings.preferred_device);
+          context_params_offscreen, (HWND)0, 1, 1, gpu_settings.preferred_device);
       if (context->initializeDrawingContext()) {
         return context;
       }
@@ -325,29 +325,15 @@ GHOST_IContext *GHOST_SystemWin32::createOffscreenContext(GHOST_GPUSettings gpu_
 #ifdef WITH_OPENGL_BACKEND
     case GHOST_kDrawingContextTypeOpenGL: {
 
-      /* OpenGL needs a dummy window to create a context on windows. */
-      HWND wnd = CreateWindowA("STATIC",
-                               "BlenderGLEW",
-                               WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-                               0,
-                               0,
-                               64,
-                               64,
-                               nullptr,
-                               nullptr,
-                               GetModuleHandle(nullptr),
-                               nullptr);
-
-      HDC mHDC = GetDC(wnd);
-      HDC prev_hdc = wglGetCurrentDC();
       HGLRC prev_context = wglGetCurrentContext();
+      HDC prev_hdc = wglGetCurrentDC();
 
       for (int minor = 6; minor >= 3; --minor) {
-        GHOST_Context *context = new GHOST_ContextWGL(
+        GHOST_ContextWGL *context = new GHOST_ContextWGL(
             context_params_offscreen,
             true,
-            wnd,
-            mHDC,
+            nullptr,
+            nullptr,
             WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
             4,
             minor,
@@ -2528,11 +2514,13 @@ GHOST_TSuccess GHOST_SystemWin32::hasClipboardImage(void) const
             WCHAR lpszFile[MAX_PATH] = {0};
             DragQueryFileW(hDrop, 0, lpszFile, MAX_PATH);
             char *filepath = alloc_utf_8_from_16(lpszFile, 0);
-            ImBuf *ibuf = IMB_load_image_from_filepath(filepath,
-                                                       IB_byte_data | IB_multilayer | IB_test);
+            blender::ImBuf *ibuf = blender::IMB_load_image_from_filepath(
+                filepath,
+                blender::ImBufFlags::ByteData | blender::ImBufFlags::MultiLayer |
+                    blender::ImBufFlags::Test);
             free(filepath);
             if (ibuf) {
-              IMB_freeImBuf(ibuf);
+              blender::IMB_freeImBuf(ibuf);
               result = GHOST_kSuccess;
             }
           }
@@ -2565,7 +2553,8 @@ static uint *getClipboardImageFilepath(int *r_width, int *r_height)
   }
 
   if (filepath) {
-    ImBuf *ibuf = IMB_load_image_from_filepath(filepath, IB_byte_data | IB_multilayer);
+    blender::ImBuf *ibuf = blender::IMB_load_image_from_filepath(
+        filepath, blender::ImBufFlags::ByteData | blender::ImBufFlags::MultiLayer);
     free(filepath);
     if (ibuf) {
       *r_width = ibuf->x;
@@ -2573,9 +2562,9 @@ static uint *getClipboardImageFilepath(int *r_width, int *r_height)
       const uint64_t byte_count = static_cast<uint64_t>(ibuf->x) * ibuf->y * 4;
       uint *rgba = static_cast<uint *>(malloc(byte_count));
       if (rgba) {
-        memcpy(rgba, ibuf->byte_buffer.data, byte_count);
+        memcpy(rgba, ibuf->byte_data(), byte_count);
       }
-      IMB_freeImBuf(ibuf);
+      blender::IMB_freeImBuf(ibuf);
       return rgba;
     }
   }
@@ -2612,26 +2601,38 @@ static uint *getClipboardImageDibV5(int *r_width, int *r_height)
   *r_width = width;
   *r_height = height;
 
-  DWORD ColorMasks[4];
-  ColorMasks[0] = bitmapV5Header->bV5RedMask ? bitmapV5Header->bV5RedMask : 0xff;
-  ColorMasks[1] = bitmapV5Header->bV5GreenMask ? bitmapV5Header->bV5GreenMask : 0xff00;
-  ColorMasks[2] = bitmapV5Header->bV5BlueMask ? bitmapV5Header->bV5BlueMask : 0xff0000;
-  ColorMasks[3] = bitmapV5Header->bV5AlphaMask ? bitmapV5Header->bV5AlphaMask : 0xff000000;
-
-  /* Bit shifts needed for the ColorMasks. */
-  DWORD ColorShifts[4];
-  for (int i = 0; i < 4; i++) {
-    _BitScanForward(&ColorShifts[i], ColorMasks[i]);
-  }
-
   uchar *source = (uchar *)buffer;
   uint *rgba = (uint *)malloc(uint64_t(width) * height * 4);
   uint8_t *target = (uint8_t *)rgba;
 
   if (bitmapV5Header->bV5Compression == BI_BITFIELDS && bitcount == 32) {
+    /* It is unclear from the MSDN documentation whether or not the 3 RGB mask values are always
+     * written as part of the main BITMAPV5HEADER header or if they are included after the
+     * structure. In reality there are applications (Windows Snipping Tool) that write both,
+     * and there are applications (Krita, Paint.NET) that only set the header values. Handle
+     * both by checking against our expected size. */
+    const SIZE_T mask_size = sizeof(DWORD) * 3;
+    const SIZE_T actual_size = GlobalSize(hGlobal);
+    const SIZE_T expected_size = offset + (SIZE_T(width) * height * 4);
+    if (expected_size == actual_size - mask_size) {
+      source += mask_size; /* Skip redundant color masks. */
+    }
+
+    DWORD ColorMasks[4];
+    ColorMasks[0] = bitmapV5Header->bV5RedMask ? bitmapV5Header->bV5RedMask : 0xff;
+    ColorMasks[1] = bitmapV5Header->bV5GreenMask ? bitmapV5Header->bV5GreenMask : 0xff00;
+    ColorMasks[2] = bitmapV5Header->bV5BlueMask ? bitmapV5Header->bV5BlueMask : 0xff0000;
+    ColorMasks[3] = bitmapV5Header->bV5AlphaMask ? bitmapV5Header->bV5AlphaMask : 0xff000000;
+
+    /* Bit shifts needed for the ColorMasks. */
+    DWORD ColorShifts[4];
+    for (int i = 0; i < 4; i++) {
+      _BitScanForward(&ColorShifts[i], ColorMasks[i]);
+    }
+
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++, target += 4, source += 4) {
-        DWORD *pix = (DWORD *)source;
+        const DWORD *pix = (DWORD *)source;
         target[0] = uint8_t((*pix & ColorMasks[0]) >> ColorShifts[0]);
         target[1] = uint8_t((*pix & ColorMasks[1]) >> ColorShifts[1]);
         target[2] = uint8_t((*pix & ColorMasks[2]) >> ColorShifts[2]);
@@ -2642,7 +2643,7 @@ static uint *getClipboardImageDibV5(int *r_width, int *r_height)
   else if (bitmapV5Header->bV5Compression == BI_RGB && bitcount == 32) {
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++, target += 4, source += 4) {
-        RGBQUAD *quad = (RGBQUAD *)source;
+        const RGBQUAD *quad = (RGBQUAD *)source;
         target[0] = uint8_t(quad->rgbRed);
         target[1] = uint8_t(quad->rgbGreen);
         target[2] = uint8_t(quad->rgbBlue);
@@ -2655,7 +2656,7 @@ static uint *getClipboardImageDibV5(int *r_width, int *r_height)
     int slack = bytes_per_row - (width * 3);
     for (int h = 0; h < height; h++, source += slack) {
       for (int w = 0; w < width; w++, target += 4, source += 3) {
-        RGBTRIPLE *triple = (RGBTRIPLE *)source;
+        const RGBTRIPLE *triple = (RGBTRIPLE *)source;
         target[0] = uint8_t(triple->rgbtRed);
         target[1] = uint8_t(triple->rgbtGreen);
         target[2] = uint8_t(triple->rgbtBlue);
@@ -2683,16 +2684,16 @@ static uint *getClipboardImageImBuf(int *r_width, int *r_height, UINT format)
 
   uint *rgba = nullptr;
 
-  ImBuf *ibuf = IMB_load_image_from_memory(
-      (uchar *)pMem, GlobalSize(hGlobal), IB_byte_data, "<clipboard>");
+  blender::ImBuf *ibuf = blender::IMB_load_image_from_memory(
+      (uchar *)pMem, GlobalSize(hGlobal), blender::ImBufFlags::ByteData, "<clipboard>");
 
   if (ibuf) {
     *r_width = ibuf->x;
     *r_height = ibuf->y;
     const uint64_t byte_count = uint64_t(ibuf->x) * ibuf->y * 4;
     rgba = (uint *)malloc(byte_count);
-    memcpy(rgba, ibuf->byte_buffer.data, byte_count);
-    IMB_freeImBuf(ibuf);
+    memcpy(rgba, ibuf->byte_data(), byte_count);
+    blender::IMB_freeImBuf(ibuf);
   }
 
   GlobalUnlock(hGlobal);
@@ -2792,31 +2793,34 @@ static bool putClipboardImagePNG(uint *rgba, int width, int height)
   UINT cf = RegisterClipboardFormat("PNG");
 
   /* Load buffer into ImBuf, convert to PNG. */
-  ImBuf *ibuf = IMB_allocFromBuffer(reinterpret_cast<uint8_t *>(rgba), nullptr, width, height, 32);
-  ibuf->ftype = IMB_FTYPE_PNG;
+  blender::ImBuf *ibuf = blender::IMB_allocFromBuffer(
+      reinterpret_cast<uint8_t *>(rgba), nullptr, width, height, 32);
+  ibuf->ftype = blender::IMB_FTYPE_PNG;
   ibuf->foptions.quality = 15;
-  if (!IMB_save_image(ibuf, "<memory>", IB_byte_data | IB_mem)) {
-    IMB_freeImBuf(ibuf);
+  blender::Vector<uint8_t> encoded = blender::IMB_save_image_to_buffer(
+      ibuf, blender::ImBufFlags::ByteData);
+  if (encoded.is_empty()) {
+    blender::IMB_freeImBuf(ibuf);
     return false;
   }
 
-  HGLOBAL hMem = GlobalAlloc(GHND, ibuf->encoded_buffer_size);
+  HGLOBAL hMem = GlobalAlloc(GHND, encoded.size());
   if (!hMem) {
-    IMB_freeImBuf(ibuf);
+    blender::IMB_freeImBuf(ibuf);
     return false;
   }
 
   LPVOID pMem = GlobalLock(hMem);
   if (!pMem) {
-    IMB_freeImBuf(ibuf);
+    blender::IMB_freeImBuf(ibuf);
     GlobalFree(hMem);
     return false;
   }
 
-  memcpy(pMem, ibuf->encoded_buffer.data, ibuf->encoded_buffer_size);
+  memcpy(pMem, encoded.data(), encoded.size());
 
   GlobalUnlock(hMem);
-  IMB_freeImBuf(ibuf);
+  blender::IMB_freeImBuf(ibuf);
 
   if (!SetClipboardData(cf, hMem)) {
     GlobalFree(hMem);

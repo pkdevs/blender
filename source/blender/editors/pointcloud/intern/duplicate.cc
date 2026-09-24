@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edpointcloud
+ */
+
 #include "BLI_array_utils.hh"
 
 #include "BKE_attribute.hh"
@@ -19,10 +23,18 @@ namespace blender::ed::pointcloud {
 
 static void duplicate_points(PointCloud &pointcloud, const IndexMask &mask)
 {
-  PointCloud *new_pointcloud = BKE_pointcloud_new_nomain(pointcloud.totpoint + mask.size());
+  PointCloud *new_pointcloud = BKE_pointcloud_new_nomain(pointcloud.type,
+                                                         pointcloud.totpoint + mask.size());
   bke::MutableAttributeAccessor dst_attributes = new_pointcloud->attributes_for_write();
   pointcloud.attributes().foreach_attribute([&](const bke::AttributeIter &iter) {
     const GVArray src = *iter.get();
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.type(), info.data));
+      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+        return;
+      }
+    }
     bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
     array_utils::copy(src, dst.span.take_front(pointcloud.totpoint));

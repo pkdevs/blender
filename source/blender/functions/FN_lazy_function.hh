@@ -45,6 +45,8 @@
 #include "BLI_linear_allocator.hh"
 #include "BLI_vector.hh"
 
+#include "PRF_profile.hh"
+
 #include "FN_user_data.hh"
 
 #ifndef NDEBUG
@@ -53,7 +55,8 @@
 #  define FN_LAZY_FUNCTION_DEBUG_THREADS
 #endif
 
-namespace blender::fn::lazy_function {
+namespace blender {
+namespace fn::lazy_function {
 
 enum class ValueUsage : uint8_t {
   /**
@@ -337,6 +340,8 @@ inline Span<Output> LazyFunction::outputs() const
 
 inline void LazyFunction::execute(Params &params, const Context &context) const
 {
+  PRF_scope_with_name("LazyFunction", ProfileCategory::Default);
+  PRF_scope_set_dynamic_name("%s", debug_name_);
   BLI_assert(this->always_used_inputs_available(params));
   this->execute_impl(params, context);
 }
@@ -467,8 +472,8 @@ inline void Params::assert_valid_thread() const
 
 /** \} */
 
-}  // namespace blender::fn::lazy_function
+}  // namespace fn::lazy_function
 
-namespace blender {
 namespace lf = fn::lazy_function;
-}
+
+}  // namespace blender

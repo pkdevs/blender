@@ -57,10 +57,12 @@ PUSH_CONSTANT(int, curves_start)
 PUSH_CONSTANT(int, curves_count)
 PUSH_CONSTANT(bool, use_point_weight)
 PUSH_CONSTANT(bool, use_cyclic)
-/** IMPORTANT: For very dumb reasons, on GL the default specialization is compiled and used for
+/**
+ * IMPORTANT: For very dumb reasons, on GL the default specialization is compiled and used for
  * creating the shader interface. If this happens to optimize out some push_constants that are
  * valid in other specialization, we will never be able to set them. So choose the specialization
- * that uses all push_constants. */
+ * that uses all push_constants.
+ */
 SPECIALIZATION_CONSTANT(int, evaluated_type, 3) /* CURVE_TYPE_NURBS */
 TYPEDEF_SOURCE("draw_attribute_shader_shared.hh")
 COMPUTE_SOURCE("draw_curves_interpolation_comp.glsl")
@@ -79,7 +81,6 @@ DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_curves_interpolate_float4_attribute)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 ADDITIONAL_INFO(draw_curves_data)
 STORAGE_BUF(POINT_ATTR_SLOT, read, StoredFloat4, attribute_float4_buf[])
 STORAGE_BUF(EVALUATED_ATTR_SLOT, read_write, StoredFloat4, evaluated_float4_buf[])
@@ -88,7 +89,6 @@ DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_curves_interpolate_float3_attribute)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 ADDITIONAL_INFO(draw_curves_data)
 STORAGE_BUF(POINT_ATTR_SLOT, read, StoredFloat3, attribute_float3_buf[])
 STORAGE_BUF(EVALUATED_ATTR_SLOT, read_write, StoredFloat3, evaluated_float3_buf[])
@@ -97,7 +97,6 @@ DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_curves_interpolate_float2_attribute)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 ADDITIONAL_INFO(draw_curves_data)
 STORAGE_BUF(POINT_ATTR_SLOT, read, StoredFloat2, attribute_float2_buf[])
 STORAGE_BUF(EVALUATED_ATTR_SLOT, read_write, StoredFloat2, evaluated_float2_buf[])
@@ -106,7 +105,6 @@ DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(draw_curves_interpolate_float_attribute)
-BUILTINS(BuiltinBits::NO_BUFFER_TYPE_LINTING)
 ADDITIONAL_INFO(draw_curves_data)
 STORAGE_BUF(POINT_ATTR_SLOT, read, StoredFloat, attribute_float_buf[])
 STORAGE_BUF(EVALUATED_ATTR_SLOT, read_write, StoredFloat, evaluated_float_buf[])

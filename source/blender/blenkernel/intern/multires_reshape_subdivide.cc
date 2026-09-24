@@ -14,13 +14,14 @@
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_multires.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "multires_reshape.hh"
 
+namespace blender {
+
 static void multires_subdivide_create_object_space_linear_grids(Mesh *mesh)
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = mesh->vert_positions();
   const OffsetIndices faces = mesh->faces();
@@ -36,7 +37,6 @@ static void multires_subdivide_create_object_space_linear_grids(Mesh *mesh)
 
       float (*disps)[3] = mdisps[loop_index].disps;
       mdisps[loop_index].totdisp = 4;
-      mdisps[loop_index].level = 1;
 
       int prev_loop_index = l - 1 >= 0 ? loop_index - 1 : loop_index + face.size() - 1;
       int next_loop_index = l + 1 < face.size() ? loop_index + 1 : face.start();
@@ -56,7 +56,7 @@ static void multires_subdivide_create_object_space_linear_grids(Mesh *mesh)
 void multires_subdivide_create_tangent_displacement_linear_grids(Object *object,
                                                                  MultiresModifierData *mmd)
 {
-  Mesh *coarse_mesh = static_cast<Mesh *>(object->data);
+  Mesh *coarse_mesh = id_cast<Mesh *>(object->data);
   multires_force_sculpt_rebuild(object);
 
   MultiresReshapeContext reshape_context;
@@ -86,3 +86,5 @@ void multires_subdivide_create_tangent_displacement_linear_grids(Object *object,
   multires_reshape_object_grids_to_tangent_displacement(&reshape_context);
   multires_reshape_context_free(&reshape_context);
 }
+
+}  // namespace blender

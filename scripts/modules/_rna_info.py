@@ -18,7 +18,15 @@ import bpy
 # use to strip python paths
 script_paths = bpy.utils.script_paths()
 
+_OperatorProperties = bpy.types.OperatorProperties
+
 _FAKE_STRUCT_SUBCLASS = True
+
+# Map RNA type names to Python type names.
+_RNA_TYPE_TO_PYTHON = {
+    "string": "str",
+    "boolean": "bool",
+}
 
 
 def _get_direct_attr(rna_type, attr):
@@ -74,6 +82,12 @@ def float_as_string(f):
     if '.' not in val_str and 'e' not in val_str:
         val_str += '.0'
     return val_str
+
+
+def seq_as_tuple_str(seq):
+    """Format a sequence of strings as a Python tuple literal."""
+    seq = tuple(seq)
+    return ("({:s},)" if len(seq) == 1 else "({:s})").format(", ".join(seq))
 
 
 def get_py_class_from_rna(rna_type):
@@ -236,6 +250,9 @@ class InfoStructRNA:
                 properties_getset.append((identifier, descr))
         return properties_getset
 
+    def is_operator_properties(self):
+        return isinstance(self.bl_rna, _OperatorProperties)
+
     def __str__(self):
 
         txt = ""
@@ -268,6 +285,7 @@ class InfoPropertyRNA:
         "max",
         "array_length",
         "array_dimensions",
+        "is_array",
         "collection_type",
         "type",
         "fixed_type",
@@ -297,7 +315,13 @@ class InfoPropertyRNA:
         self.min = getattr(rna_prop, "hard_min", -1)
         self.max = getattr(rna_prop, "hard_max", -1)
         self.array_length = getattr(rna_prop, "array_length", 0)
-        self.array_dimensions = getattr(rna_prop, "array_dimensions", ())[:]
+        # Strip RNA's trailing zero padding so `len()` gives the dim count.
+        array_dimensions = tuple(getattr(rna_prop, "array_dimensions", ()))
+        while array_dimensions and array_dimensions[-1] == 0:
+            array_dimensions = array_dimensions[:-1]
+        self.array_dimensions = array_dimensions
+        # True for dynamic arrays too, where `array_length` is 0.
+        self.is_array = getattr(rna_prop, "is_array", bool(self.array_length))
         self.collection_type = GetInfoStructRNA(rna_prop.srna)
         self.subtype = getattr(rna_prop, "subtype", "")
         self.is_required = rna_prop.is_required
@@ -332,7 +356,7 @@ class InfoPropertyRNA:
             items_static = tuple(rna_prop.enum_items_static)
             self.enum_items[:] = [(item.identifier, item.name, item.description) for item in items]
             self.is_enum_flag = rna_prop.is_enum_flag
-            # Prioritize static items as this is never going to be allocated data and is therefor
+            # Prioritize static items as this is never going to be allocated data and is therefore
             # will be a stable match to compare against.
             item = (items_static or items)
             if item:
@@ -345,7 +369,7 @@ class InfoPropertyRNA:
 
         if self.array_length:
             self.default = tuple(getattr(rna_prop, "default_array", ()))
-            if self.array_dimensions[1] != 0:  # Multi-dimensional array, convert default flat one accordingly.
+            if len(self.array_dimensions) > 1:  # Multi-dimensional array, convert default flat one accordingly.
                 self.default_str = tuple(float_as_string(v) if self.type == "float" else str(v) for v in self.default)
                 for dim in self.array_dimensions[::-1]:
                     if dim != 0:
@@ -364,18 +388,24 @@ class InfoPropertyRNA:
             self.default = None
             self.default_str = "None"
         elif self.type == "string":
-            self.default_str = "\"{:s}\"".format(self.default)
+            if self.subtype == "BYTE_STRING":
+                self.default_str = "b\"{:s}\"".format(self.default)
+            else:
+                self.default_str = "\"{:s}\"".format(self.default)
         elif self.type == "enum":
             if self.is_enum_flag:
-                # self.default_str = repr(self.default)  # repr or set()
-                self.default_str = "{{{:s}}}".format(repr(list(sorted(self.default)))[1:-1])
+                if self.default:
+                    self.default_str = "{{{:s}}}".format(repr(list(sorted(self.default)))[1:-1])
+                else:
+                    self.default_str = "set()"
             else:
                 self.default_str = repr(self.default)
         elif self.array_length:
-            if self.array_dimensions[1] == 0:  # single dimension array, we already took care of multi-dimensions ones.
-                # special case for floats
+            # Single dimension array, we already took care of multi-dimensions ones.
+            if len(self.array_dimensions) == 1:
+                # Special case for floats.
                 if self.type == "float" and len(self.default) > 0:
-                    self.default_str = "({:s})".format(", ".join(float_as_string(f) for f in self.default))
+                    self.default_str = seq_as_tuple_str(float_as_string(f) for f in self.default)
                 else:
                     self.default_str = str(self.default)
         else:
@@ -403,129 +433,191 @@ class InfoPropertyRNA:
             enum_descr_override=None,
     ):
         """
-        :arg enum_descr_override: Optionally override items for enum.
+        Return a ``(type_hint, type_info)`` pair.
+
+        ``type_hint`` follows Python type-hint conventions as closely as possible
+        (e.g. ``bool``, ``Literal['A', 'B']``, ``Matrix``).
+
+        ``type_info`` is a list of human-readable strings that describe array
+        dimensions, numeric range, default value, and qualifiers such as
+        ``(readonly)`` or ``(never None)``.
+
+        :param enum_descr_override: Optionally override items for enum.
            Otherwise expand the literal items.
         :type enum_descr_override: str | None
         """
         type_str = ""
+        type_info = []
+
         if self.fixed_type is None:
-            type_str += self.type
+            type_str += _RNA_TYPE_TO_PYTHON.get(self.type, self.type)
             if self.type == "string" and self.subtype == "BYTE_STRING":
-                type_str = "byte string"
-            if self.array_length:
-                if self.array_dimensions[1] != 0:
-                    dimension_str = " of {:s} items".format(
-                        " * ".join(str(d) for d in self.array_dimensions if d != 0)
-                    )
-                    type_str += " multi-dimensional array" + dimension_str
+                type_str = "bytes"
+            if self.is_array:
+                array_dimensions_len = len(self.array_dimensions)
+                if self.array_length:
+                    if array_dimensions_len > 1:
+                        type_info.append("multi-dimensional array of {:s} items".format(
+                            " * ".join(str(d) for d in self.array_dimensions)
+                        ))
+                    else:
+                        type_info.append("array of {:d} items".format(self.array_length))
                 else:
-                    dimension_str = " of {:d} items".format(self.array_length)
-                    type_str += " array" + dimension_str
+                    type_info.append("dynamic array")
 
                 # Describe mathutils types; logic mirrors pyrna_math_object_from_array
+                base_type_str = type_str
+                mathutils_type = ""
                 if self.type == "float":
                     if self.subtype == "MATRIX":
                         if self.array_length in {9, 16}:
-                            type_str = (mathutils_fmt.format("Matrix")) + dimension_str
+                            mathutils_type = "Matrix"
                     elif self.subtype in {"COLOR", "COLOR_GAMMA"}:
                         if self.array_length == 3:
-                            type_str = (mathutils_fmt.format("Color")) + dimension_str
+                            mathutils_type = "Color"
                     elif self.subtype in {"EULER", "QUATERNION"}:
                         if self.array_length == 3:
-                            type_str = (mathutils_fmt.format("Euler")) + " rotation" + dimension_str
+                            mathutils_type = "Euler"
                         elif self.array_length == 4:
-                            type_str = (mathutils_fmt.format("Quaternion")) + " rotation" + dimension_str
+                            mathutils_type = "Quaternion"
                     elif self.subtype in {
                             'COORDINATES', 'TRANSLATION', 'DIRECTION', 'VELOCITY',
                             'ACCELERATION', 'XYZ', 'XYZ_LENGTH',
                     }:
                         if 2 <= self.array_length <= 4:
-                            type_str = (mathutils_fmt.format("Vector")) + dimension_str
+                            mathutils_type = "Vector"
+                if mathutils_type:
+                    if as_arg:
+                        # Arguments accept both the mathutils type and plain sequences.
+                        if mathutils_type == "Matrix":
+                            seq_type = "Sequence[Sequence[{:s}]]".format(base_type_str)
+                        else:
+                            seq_type = "Sequence[{:s}]".format(base_type_str)
+                        type_str = "{:s} | {:s}".format(
+                            mathutils_fmt.format(mathutils_type), seq_type)
+                    else:
+                        type_str = mathutils_fmt.format(mathutils_type)
+
+                # Array properties that didn't match a mathutils type above
+                # should not be typed as a bare scalar (e.g. ``float``).
+                if type_str == base_type_str:
+                    # Wrap once per dimension (e.g. 2D -> `X[X[float]]`).
+                    if as_arg:
+                        wrap_fmt = "Sequence[{:s}]"
+                    else:
+                        # Escape the space as: :class:`Class`[X] isn't valid RST.
+                        wrap_fmt = class_fmt.format("bpy_prop_array") + "\\ [{:s}]"
+                    for _ in range(max(array_dimensions_len, 1)):
+                        type_str = wrap_fmt.format(type_str)
 
             if self.type in {"float", "int"}:
-                type_str += " in [{:s}, {:s}]".format(range_str(self.min), range_str(self.max))
+                type_info.append("in [{:s}, {:s}]".format(range_str(self.min), range_str(self.max)))
             elif self.type == "enum":
-                enum_descr = enum_descr_override
-                if not enum_descr:
-                    if self.is_enum_flag:
-                        enum_descr = "{{{:s}}}".format(", ".join((literal_fmt.format(s[0])) for s in self.enum_items))
-                    else:
-                        enum_descr = "[{:s}]".format(", ".join((literal_fmt.format(s[0])) for s in self.enum_items))
-                if self.is_enum_flag:
-                    type_str += " set in {:s}".format(enum_descr)
+                if enum_descr_override:
+                    enum_items_str = enum_descr_override
                 else:
-                    type_str += " in {:s}".format(enum_descr)
-                del enum_descr
-
-            if not (as_arg or as_ret):
-                # write default property, ignore function args for this.
-                match self.type:
-                    case "pointer":
-                        pass
-                    case "enum":
-                        if self.is_enum_flag:
-                            # Can't use `self.default_str`, because need to reformat each item with `literal_fmt`.
-                            if self.default:
-                                default_str = "{{{:s}}}".format(
-                                    ", ".join(literal_fmt.format(s) for s in sorted(self.default))
-                                )
-                            else:
-                                # Needed to account for an empty `{}` being a `dict`, not a `set`.
-                                default_str = "set()"
-                            type_str += ", default {:s}".format(default_str)
-                        else:
-                            # Empty enums typically only occur for enums which are dynamically generated.
-                            # In that case showing a default isn't helpful.
-                            if self.default:
-                                type_str += ", default {:s}".format(literal_fmt.format(self.default))
-                    case _:
-                        type_str += ", default {:s}".format(self.default_str)
+                    enum_items_str = ", ".join("'{:s}'".format(s[0]) for s in self.enum_items)
+                # When the default is an empty string (sentinel for "unset"),
+                # include it in the Literal so the default is type-valid.
+                if as_arg and self.default == '' and enum_items_str:
+                    enum_items_str = "'', " + enum_items_str
+                if not enum_items_str:
+                    # Dynamically generated enums have no static items,
+                    # fall back to a plain string type.
+                    if self.is_enum_flag:
+                        type_str = "set[str]"
+                    else:
+                        type_str = "str"
+                elif self.is_enum_flag:
+                    type_str = "set[Literal[{:s}]]".format(enum_items_str)
+                else:
+                    type_str = "Literal[{:s}]".format(enum_items_str)
 
         else:
             if self.type == "collection":
+                # When class_fmt uses RST inline markup (backtick-delimited),
+                # insert ``\ `` before ``[`` so docutils recognizes the end
+                # of the first role.
+                bracket_open = "\\ [" if "`" in class_fmt else "["
                 if self.collection_type:
-                    collection_str = (
-                        class_fmt.format(self.collection_type.identifier) +
-                        " {:s} of ".format(collection_id)
+                    type_str += "{:s}{:s}{:s}]".format(
+                        class_fmt.format(self.collection_type.identifier),
+                        bracket_open,
+                        class_fmt.format(self.fixed_type.identifier),
                     )
                 else:
-                    collection_str = "{:s} of ".format(collection_id)
+                    # collection_id may already contain ``:class:`` markup.
+                    bracket_open_id = "\\ [" if "`" in collection_id else bracket_open
+                    type_str += "{:s}{:s}{:s}]".format(
+                        collection_id,
+                        bracket_open_id,
+                        class_fmt.format(self.fixed_type.identifier),
+                    )
             else:
-                collection_str = ""
+                type_str += class_fmt.format(self.fixed_type.identifier)
 
-            type_str += collection_str + (class_fmt.format(self.fixed_type.identifier))
+        # Pointer and collection properties can be `None` unless
+        # `is_never_none` is set.  For arguments, check `default_str`
+        # since any parameter defaulting to `None` must accept it.
+        if as_arg and self.default_str == "None" and not self.is_never_none:
+            type_str += " | None"
+        elif not as_arg and self.type == "pointer" and not self.is_never_none:
+            type_str += " | None"
 
-        # setup qualifiers for this value.
-        type_info = []
+        if not (as_arg or as_ret):
+            # Write default property, ignore function args for this.
+            match self.type:
+                case "pointer":
+                    pass
+                case "enum":
+                    if self.is_enum_flag:
+                        if self.default:
+                            default_str = "{{{:s}}}".format(
+                                ", ".join(literal_fmt.format(s) for s in sorted(self.default))
+                            )
+                        else:
+                            # Needed to account for an empty `{}` being a `dict`, not a `set`.
+                            default_str = "set()"
+                        type_info.append("default {:s}".format(default_str))
+                    else:
+                        # Empty enums typically only occur for enums which are dynamically generated.
+                        # In that case showing a default isn't helpful.
+                        if self.default:
+                            type_info.append("default {:s}".format(literal_fmt.format(self.default)))
+                case _:
+                    type_info.append("default {:s}".format(self.default_str))
+
+        # Setup qualifiers for this value.
+        qualifiers = []
         if as_ret:
             pass
         elif as_arg:
             if not self.is_required:
-                type_info.append("optional")
+                qualifiers.append("optional")
             if self.is_argument_optional:
-                type_info.append("optional for registration")
+                qualifiers.append("optional for registration")
         else:  # readonly is only useful for self's, not args
             if self.is_readonly:
-                type_info.append("readonly")
+                qualifiers.append("readonly")
 
         if self.is_never_none:
-            type_info.append("never None")
+            qualifiers.append("never None")
 
         if self.is_path_supports_blend_relative:
-            type_info.append("blend relative ``//`` prefix supported")
+            qualifiers.append("blend relative ``//`` prefix supported")
 
         if self.is_path_supports_templates:
-            type_info.append(
+            qualifiers.append(
                 "Supports `template expressions "
                 "<https://docs.blender.org/manual/en/{:d}.{:d}/files/file_paths.html#path-templates>`_".format(
                     *bpy.app.version[:2],
                 ),
             )
 
-        if type_info:
-            type_str += ", ({:s})".format(", ".join(type_info))
+        if qualifiers:
+            type_info.extend(qualifiers)
 
-        return type_str
+        return type_str, type_info
 
     def __str__(self):
         txt = ""
@@ -714,6 +806,8 @@ def BuildRNAInfo():
     def _bpy_types_iterator():
         # Don't report when these types are ignored.
         suppress_warning = {
+            "BlendDataPathMeta",
+            "ContextTempOverride",
             "GeometrySet",
             "InlineShaderNodes",
             "bpy_func",
@@ -740,7 +834,7 @@ def BuildRNAInfo():
             elif rna_type_name in suppress_warning:
                 pass
             else:
-                print("rna_info.BuildRNAInfo(..): ignoring type", repr(rna_type_name))
+                print("_rna_info.BuildRNAInfo(..): ignoring type", repr(rna_type_name))
 
         # Now, there are some sub-classes in add-ons we also want to include.
         # Cycles for example. These are referenced from the Scene, but not part of

@@ -11,8 +11,8 @@
 #include "doublearea.h"
 #include "flip_avoiding_line_search.h"
 
-#include "BLI_assert.h"
-#include "BLI_math_base.h" /* M_PI */
+#include "BLI_assert.hh"
+#include "BLI_math_base_c.hh" /* M_PI */
 
 #include <vector>
 
@@ -208,8 +208,8 @@ static inline void polar_svd(const Eigen::PlainObjectBase<DerivedA> &A,
                              Eigen::PlainObjectBase<DerivedV> &V)
 {
   using namespace std;
-  Eigen::JacobiSVD<DerivedA> svd;
-  svd.compute(A, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  Eigen::JacobiSVD<DerivedA, Eigen::ComputeFullU | Eigen::ComputeFullV> svd;
+  svd.compute(A);
   U = svd.matrixU();
   V = svd.matrixV();
   S = svd.singularValues();

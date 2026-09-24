@@ -12,9 +12,9 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_rect.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_rect.hh"
 
 #include "DNA_scene_types.h"
 
@@ -24,12 +24,14 @@
 #include "RE_pipeline.h"
 #include "render_types.h"
 
+namespace blender {
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 Object *RE_GetCamera(Render *re)
 {
   Object *camera = re->camera_override ? re->camera_override : re->scene->camera;
-  return BKE_camera_multiview_render(re->scene, camera, re->viewname);
+  return BKE_camera_multiview_render(*re->main, re->scene, camera, re->viewname);
 }
 
 void RE_SetOverrideCamera(Render *re, Object *cam_ob)
@@ -109,3 +111,5 @@ void RE_GetViewPlane(Render *re, rctf *r_viewplane, rcti *r_disprect)
     BLI_rcti_init(r_disprect, 0, 0, 0, 0);
   }
 }
+
+}  // namespace blender

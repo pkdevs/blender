@@ -10,13 +10,17 @@
 
 #pragma once
 
+#include "BLI_array_utils.hh"
+#include "BLI_assert.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_span.hh"
 #include "BLI_virtual_array.hh"
 
 #include "GPU_common.hh"
 #include "GPU_vertex_format.hh"
+
+namespace blender {
 
 enum GPUVertBufStatus {
   /** Initial state. */
@@ -55,22 +59,21 @@ enum GPUUsageType {
 
 ENUM_OPERATORS(GPUUsageType);
 
-namespace blender::gpu {
+namespace gpu {
 class VertBuf;
-}  // namespace blender::gpu
+}  // namespace gpu
 
-void GPU_vertbuf_discard(blender::gpu::VertBuf *);
+void GPU_vertbuf_discard(gpu::VertBuf *);
 
-blender::gpu::VertBuf *GPU_vertbuf_calloc();
-blender::gpu::VertBuf *GPU_vertbuf_create_with_format_ex(const GPUVertFormat &format,
-                                                         GPUUsageType usage);
+gpu::VertBuf *GPU_vertbuf_calloc();
+gpu::VertBuf *GPU_vertbuf_create_with_format_ex(const GPUVertFormat &format, GPUUsageType usage);
 
-static inline blender::gpu::VertBuf *GPU_vertbuf_create_with_format(const GPUVertFormat &format)
+static inline gpu::VertBuf *GPU_vertbuf_create_with_format(const GPUVertFormat &format)
 {
   return GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_STATIC);
 }
 
-namespace blender::gpu {
+namespace gpu {
 
 class VertBufDeleter {
  public:
@@ -141,7 +144,7 @@ class VertBuf {
         GenericVertexFormat<T>::format(), GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY));
     /* GPU formats needs to be aligned to 4 bytes. */
     buf->allocate(ceil_to_multiple_u(data.size_in_bytes(), 4) / sizeof(GenericVertexFormat<T>));
-    buf->data<T>().slice(0, data.size()).copy_from(data);
+    array_utils::copy(data, buf->data<T>().slice(0, data.size()));
     return buf;
   }
 
@@ -153,7 +156,7 @@ class VertBuf {
     /* GPU formats needs to be aligned to 4 bytes. */
     buf->allocate(ceil_to_multiple_u(array.size() * sizeof(T), 4) /
                   sizeof(GenericVertexFormat<T>));
-    array.materialize(buf->data<T>().slice(0, array.size()));
+    array_utils::copy(array, buf->data<T>().slice(0, array.size()));
     return buf;
   }
 
@@ -220,6 +223,22 @@ class VertBuf {
   }
 
   virtual void update_sub(uint start, uint len, const void *data) = 0;
+  /**
+   * \brief Copy from part of source vertex buffer into the vertex buffer.
+   *
+   * \note: format of the vertex buffers should be identical.
+   * \note: asserts when the copy range exceeds the bounds of either vertex buffer.
+   * \note: both vertex buffers must be uploaded to the GPU with GPU_vertbuf_use before calling.
+   *
+   * \param source_buf: source vertex buffer to copy data from.
+   * \param source_first_vertex: starting vertex index to start copying the data from.
+   * \param dest_first_vertex: starting vertex index to copy the data to.
+   * \param vertex_len: the number of vertices to copy.
+   */
+  virtual void copy_sub(VertBuf &source_buf,
+                        uint source_first_vertex,
+                        uint dest_first_vertex,
+                        uint vertex_len) = 0;
   virtual void read(void *data) const = 0;
 
  protected:
@@ -229,31 +248,31 @@ class VertBuf {
   virtual void upload_data() = 0;
 };
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
 /**
  * (Download and) fill data with the data from the vertex buffer.
  * NOTE: caller is responsible to reserve enough memory of the data parameter.
  */
-void GPU_vertbuf_read(const blender::gpu::VertBuf *verts, void *data);
+void GPU_vertbuf_read(const gpu::VertBuf *verts, void *data);
 /** Same as discard but does not free. */
-void GPU_vertbuf_clear(blender::gpu::VertBuf *verts);
+void GPU_vertbuf_clear(gpu::VertBuf *verts);
 
 /**
- * Avoid blender::gpu::VertBuf data-block being free but not its data.
+ * Avoid gpu::VertBuf data-block being free but not its data.
  */
-void GPU_vertbuf_handle_ref_add(blender::gpu::VertBuf *verts);
-void GPU_vertbuf_handle_ref_remove(blender::gpu::VertBuf *verts);
+void GPU_vertbuf_handle_ref_add(gpu::VertBuf *verts);
+void GPU_vertbuf_handle_ref_remove(gpu::VertBuf *verts);
 
-void GPU_vertbuf_init_with_format_ex(blender::gpu::VertBuf &verts,
+void GPU_vertbuf_init_with_format_ex(gpu::VertBuf &verts,
                                      const GPUVertFormat &format,
                                      GPUUsageType);
 
-void GPU_vertbuf_init_build_on_device(blender::gpu::VertBuf &verts,
+void GPU_vertbuf_init_build_on_device(gpu::VertBuf &verts,
                                       const GPUVertFormat &format,
                                       uint v_len);
 
-blender::gpu::VertBuf *GPU_vertbuf_create_on_device(const GPUVertFormat &format, uint v_len);
+gpu::VertBuf *GPU_vertbuf_create_on_device(const GPUVertFormat &format, uint v_len);
 
 #define GPU_vertbuf_init_with_format(verts, format) \
   GPU_vertbuf_init_with_format_ex(verts, format, GPU_USAGE_STATIC)
@@ -261,17 +280,17 @@ blender::gpu::VertBuf *GPU_vertbuf_create_on_device(const GPUVertFormat &format,
 /**
  * Create a new allocation, discarding any existing data.
  */
-void GPU_vertbuf_data_alloc(blender::gpu::VertBuf &verts, uint v_len);
+void GPU_vertbuf_data_alloc(gpu::VertBuf &verts, uint v_len);
 /**
  * Resize buffer keeping existing data.
  */
-void GPU_vertbuf_data_resize(blender::gpu::VertBuf &verts, uint v_len);
+void GPU_vertbuf_data_resize(gpu::VertBuf &verts, uint v_len);
 /**
  * Set vertex count but does not change allocation.
  * Only this many verts will be uploaded to the GPU and rendered.
  * This is useful for streaming data.
  */
-void GPU_vertbuf_data_len_set(blender::gpu::VertBuf &verts, uint v_len);
+void GPU_vertbuf_data_len_set(gpu::VertBuf &verts, uint v_len);
 
 /**
  * The most important #set_attr variant is the untyped one. Get it right first.
@@ -279,20 +298,17 @@ void GPU_vertbuf_data_len_set(blender::gpu::VertBuf &verts, uint v_len);
  * to the vertex attribute's type and component count. They're in control of both, so this
  * should not be a problem.
  */
-void GPU_vertbuf_attr_set(blender::gpu::VertBuf *, uint a_idx, uint v_idx, const void *data);
+void GPU_vertbuf_attr_set(gpu::VertBuf *, uint a_idx, uint v_idx, const void *data);
 
 /** Fills a whole vertex (all attributes). Data must match packed layout. */
-void GPU_vertbuf_vert_set(blender::gpu::VertBuf *verts, uint v_idx, const void *data);
+void GPU_vertbuf_vert_set(gpu::VertBuf *verts, uint v_idx, const void *data);
 
 /**
  * Tightly packed, non interleaved input data.
  */
-void GPU_vertbuf_attr_fill(blender::gpu::VertBuf *, uint a_idx, const void *data);
+void GPU_vertbuf_attr_fill(gpu::VertBuf *, uint a_idx, const void *data);
 
-void GPU_vertbuf_attr_fill_stride(blender::gpu::VertBuf *,
-                                  uint a_idx,
-                                  uint stride,
-                                  const void *data);
+void GPU_vertbuf_attr_fill_stride(gpu::VertBuf *, uint a_idx, uint stride, const void *data);
 
 /**
  * For low level access only.
@@ -317,7 +333,7 @@ GPU_INLINE void *GPU_vertbuf_raw_step(GPUVertBufRaw *a)
 #ifndef NDEBUG
   BLI_assert(data < a->_data_end);
 #endif
-  return (void *)data;
+  return static_cast<void *>(data);
 }
 
 GPU_INLINE uint GPU_vertbuf_raw_used(const GPUVertBufRaw *a)
@@ -325,29 +341,29 @@ GPU_INLINE uint GPU_vertbuf_raw_used(const GPUVertBufRaw *a)
   return ((a->data - a->data_init) / a->stride);
 }
 
-void GPU_vertbuf_attr_get_raw_data(blender::gpu::VertBuf *, uint a_idx, GPUVertBufRaw *access);
+void GPU_vertbuf_attr_get_raw_data(gpu::VertBuf *, uint a_idx, GPUVertBufRaw *access);
 
-const GPUVertFormat *GPU_vertbuf_get_format(const blender::gpu::VertBuf *verts);
-uint GPU_vertbuf_get_vertex_alloc(const blender::gpu::VertBuf *verts);
-uint GPU_vertbuf_get_vertex_len(const blender::gpu::VertBuf *verts);
-GPUVertBufStatus GPU_vertbuf_get_status(const blender::gpu::VertBuf *verts);
-void GPU_vertbuf_tag_dirty(blender::gpu::VertBuf *verts);
+const GPUVertFormat *GPU_vertbuf_get_format(const gpu::VertBuf *verts);
+uint GPU_vertbuf_get_vertex_alloc(const gpu::VertBuf *verts);
+uint GPU_vertbuf_get_vertex_len(const gpu::VertBuf *verts);
+GPUVertBufStatus GPU_vertbuf_get_status(const gpu::VertBuf *verts);
+void GPU_vertbuf_tag_dirty(gpu::VertBuf *verts);
 
 /**
  * Should be rename to #GPU_vertbuf_data_upload.
  */
-void GPU_vertbuf_use(blender::gpu::VertBuf *);
-void GPU_vertbuf_bind_as_ssbo(blender::gpu::VertBuf *verts, int binding);
-void GPU_vertbuf_bind_as_texture(blender::gpu::VertBuf *verts, int binding);
+void GPU_vertbuf_use(gpu::VertBuf *);
+void GPU_vertbuf_bind_as_ssbo(gpu::VertBuf *verts, int binding);
+void GPU_vertbuf_bind_as_texture(gpu::VertBuf *verts, int binding);
 
-void GPU_vertbuf_wrap_handle(blender::gpu::VertBuf *verts, uint64_t handle);
+void GPU_vertbuf_wrap_handle(gpu::VertBuf *verts, uint64_t handle);
 
 /**
  * XXX: do not use!
  * This is just a wrapper for the use of the Hair refine workaround.
  * To be used with #GPU_vertbuf_use().
  */
-void GPU_vertbuf_update_sub(blender::gpu::VertBuf *verts, uint start, uint len, const void *data);
+void GPU_vertbuf_update_sub(gpu::VertBuf *verts, uint start, uint len, const void *data);
 
 /* Metrics */
 uint GPU_vertbuf_get_memory_usage();
@@ -360,3 +376,5 @@ uint GPU_vertbuf_get_memory_usage();
       verts = nullptr; \
     } \
   } while (0)
+
+}  // namespace blender

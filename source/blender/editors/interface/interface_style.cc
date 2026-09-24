@@ -15,11 +15,11 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 
@@ -30,12 +30,12 @@
 #include "interface_intern.hh"
 
 #ifdef WIN32
-#  include "BLI_math_base.h" /* M_PI */
+#  include "BLI_math_base_c.hh" /* M_PI */
 #endif
 
-static CLG_LogRef LOG = {"ui.font"};
-
 namespace blender::ui {
+
+static CLG_LogRef LOG = {"ui.font"};
 
 static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
@@ -58,9 +58,9 @@ static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
 /* ********************************************** */
 
-static uiStyle *ui_style_new(ListBase *styles, const char *name, short uifont_id)
+static uiStyle *style_new(ListBaseT<uiStyle> *styles, const char *name, short uifont_id)
 {
-  uiStyle *style = MEM_callocN<uiStyle>(__func__);
+  uiStyle *style = MEM_new_zeroed<uiStyle>(__func__);
 
   BLI_addtail(styles, style);
   STRNCPY_UTF8(style->name, name);
@@ -114,14 +114,14 @@ static uiStyle *ui_style_new(ListBase *styles, const char *name, short uifont_id
 
 static uiFont *uifont_to_blfont(int id)
 {
-  uiFont *font = static_cast<uiFont *>(U.uifonts.first);
+  uiFont *font = U.uifonts.first();
 
   for (; font; font = font->next) {
     if (font->uifont_id == id) {
       return font;
     }
   }
-  return static_cast<uiFont *>(U.uifonts.first);
+  return U.uifonts.first();
 }
 
 /* *************** draw ************************ */
@@ -137,7 +137,10 @@ void fontstyle_draw_ex(const uiFontStyle *fs,
                        ResultBLF *r_info)
 {
   int xofs = 0, yofs;
-  FontFlags font_flag = BLF_CLIPPING;
+  FontFlags font_flag = {};
+  if (fs_params->word_clip) {
+    font_flag |= BLF_CLIPPING;
+  }
 
   fontstyle_set(fs);
 
@@ -414,7 +417,7 @@ const uiStyle *style_get()
   style = BLI_findstring(&U.uistyles, "Unifont Style", sizeof(style) * 2);
   return (style != nullptr) ? style : U.uistyles.first;
 #else
-  return static_cast<const uiStyle *>(U.uistyles.first);
+  return U.uistyles.first();
 #endif
 }
 
@@ -471,7 +474,7 @@ int fontstyle_height_max(const uiFontStyle *fs)
 
 void style_init()
 {
-  const uiStyle *style = static_cast<uiStyle *>(U.uistyles.first);
+  const uiStyle *style = U.uistyles.first();
 
   /* Recover from uninitialized DPI. */
   if (U.dpi == 0) {
@@ -482,11 +485,11 @@ void style_init()
   /* Needed so that custom fonts are always first. */
   BLF_unload_all();
 
-  uiFont *font_first = static_cast<uiFont *>(U.uifonts.first);
+  uiFont *font_first = U.uifonts.first();
 
   /* default builtin */
   if (font_first == nullptr) {
-    font_first = MEM_callocN<uiFont>(__func__);
+    font_first = MEM_new_zeroed<uiFont>(__func__);
     BLI_addtail(&U.uifonts, font_first);
   }
 
@@ -499,22 +502,22 @@ void style_init()
     font_first->uifont_id = UIFONT_DEFAULT;
   }
 
-  LISTBASE_FOREACH (uiFont *, font, &U.uifonts) {
+  for (uiFont &font : U.uifonts) {
     const bool unique = false;
 
-    if (font->uifont_id == UIFONT_DEFAULT) {
-      font->blf_id = BLF_load_default(unique);
+    if (font.uifont_id == UIFONT_DEFAULT) {
+      font.blf_id = BLF_load_default(unique);
     }
     else {
-      font->blf_id = BLF_load(font->filepath);
-      if (font->blf_id == -1) {
-        font->blf_id = BLF_load_default(unique);
+      font.blf_id = BLF_load(font.filepath);
+      if (font.blf_id == -1) {
+        font.blf_id = BLF_load_default(unique);
       }
     }
 
-    BLF_default_set(font->blf_id);
+    BLF_default_set(font.blf_id);
 
-    if (font->blf_id == -1) {
+    if (font.blf_id == -1) {
       if (G.debug & G_DEBUG) {
         CLOG_WARN(&LOG, "%s: error, no fonts available", __func__);
       }
@@ -522,7 +525,7 @@ void style_init()
   }
 
   if (style == nullptr) {
-    style = ui_style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
+    style = style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
   }
 
   BLF_cache_flush_set_fn(widgetbase_draw_cache_flush);
@@ -567,10 +570,10 @@ void style_init()
       }
     }
 
-    LISTBASE_FOREACH (uiFont *, font, &U.uifonts) {
-      if (font->blf_id != -1) {
-        BLF_disable(font->blf_id, flag_disable);
-        BLF_enable(font->blf_id, flag_enable);
+    for (uiFont &font : U.uifonts) {
+      if (font.blf_id != -1) {
+        BLF_disable(font.blf_id, flag_disable);
+        BLF_enable(font.blf_id, flag_enable);
       }
     }
     if (blf_mono_font != -1) {

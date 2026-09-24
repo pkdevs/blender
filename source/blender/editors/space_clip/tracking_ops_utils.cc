@@ -8,7 +8,7 @@
 
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_tracking.hh"
@@ -17,6 +17,8 @@
 #include "WM_types.hh"
 
 #include "tracking_ops_intern.hh" /* own include */
+
+namespace blender {
 
 void clip_tracking_clear_invisible_track_selection(SpaceClip *sc, MovieClip *clip)
 {
@@ -32,9 +34,9 @@ void clip_tracking_clear_invisible_track_selection(SpaceClip *sc, MovieClip *cli
   }
 
   const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-    if ((track->flag & TRACK_HIDDEN) == 0) {
-      BKE_tracking_track_flag_clear(track, hidden, SELECT);
+  for (MovieTrackingTrack &track : tracking_object->tracks) {
+    if ((track.flag & TRACK_HIDDEN) == 0) {
+      BKE_tracking_track_flag_clear(&track, hidden, TRACK_SELECT);
     }
   }
 }
@@ -50,3 +52,5 @@ void clip_tracking_show_cursor(bContext *C)
   wmWindow *win = CTX_wm_window(C);
   WM_cursor_set(win, WM_CURSOR_DEFAULT);
 }
+
+}  // namespace blender

@@ -2,13 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_id.hh"
 
 #include "DNA_grease_pencil_types.h"
 
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 
 /* -------------------------------------------------------------------- */
 /** \name Geometry Component Implementation
@@ -99,9 +105,9 @@ void GreasePencilComponent::ensure_owns_direct_data()
   }
 }
 
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::bke {
+namespace bke {
 
 std::optional<AttributeAccessor> GreasePencilComponent::attributes() const
 {
@@ -114,4 +120,7 @@ std::optional<MutableAttributeAccessor> GreasePencilComponent::attributes_for_wr
   return MutableAttributeAccessor(grease_pencil, greasepencil::get_attribute_accessor_functions());
 }
 
-}  // namespace blender::bke
+/** \} */
+
+}  // namespace bke
+}  // namespace blender

@@ -15,17 +15,18 @@
 
 #include "BLI_enum_flags.hh"
 
-#ifdef __cplusplus
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 class CurvesGeometry;
 class CurvesGeometryRuntime;
-}  // namespace blender::bke
-using CurvesGeometryRuntimeHandle = blender::bke::CurvesGeometryRuntime;
-#else
-struct CurvesGeometryRuntimeHandle;
-#endif
+}  // namespace bke
 
-enum CurveType {
+namespace draw {
+struct CurvesBatchCache;
+}
+
+enum CurveType : int8_t {
   /**
    * Catmull Rom curves provide automatic smoothness, like Bezier curves with automatic handle
    * positions. This is the default type for the hair system because of the simplicity of
@@ -58,7 +59,7 @@ enum CurveType {
 /* The number of supported curve types. */
 #define CURVE_TYPES_NUM 4
 
-enum HandleType {
+enum HandleType : int8_t {
   /** The handle can be moved anywhere, and doesn't influence the point's other handle. */
   BEZIER_HANDLE_FREE = 0,
   /** The location is automatically calculated to be smooth. */
@@ -71,7 +72,7 @@ enum HandleType {
 #define BEZIER_HANDLES_NUM 4
 
 /** Method used to calculate a NURBS curve's knot vector. */
-enum KnotsMode {
+enum KnotsMode : int8_t {
   NURBS_KNOT_MODE_NORMAL = 0,
   NURBS_KNOT_MODE_ENDPOINT = 1,
   NURBS_KNOT_MODE_BEZIER = 2,
@@ -80,7 +81,7 @@ enum KnotsMode {
 };
 
 /** Method used to calculate the normals of a curve's evaluated points. */
-enum NormalMode {
+enum NormalMode : int8_t {
   /** Calculate normals with the smallest twist around the curve tangent across the whole curve. */
   NORMAL_MODE_MINIMUM_TWIST = 0,
   /**
@@ -93,13 +94,14 @@ enum NormalMode {
 };
 
 /** #Curves.flag */
-enum {
+enum eCurves_Flag : int {
   HA_DS_EXPAND = (1 << 0),
   CV_SCULPT_COLLISION_ENABLED = (1 << 1),
 };
+ENUM_OPERATORS(eCurves_Flag)
 
 /** #Curves.symmetry */
-enum eCurvesSymmetryType {
+enum eCurvesSymmetryType : char {
   CURVES_SYMMETRY_X = 1 << 0,
   CURVES_SYMMETRY_Y = 1 << 1,
   CURVES_SYMMETRY_Z = 1 << 2,
@@ -160,12 +162,12 @@ struct CurvesGeometry {
   int vertex_group_active_index = 0;
 
   /** Set to -1 when none is active. */
-  int attributes_active_index = 0;
+  int attributes_active_index = -1;
 
   /**
    * Runtime data for curves, stored as a pointer to allow defining this as a C++ class.
    */
-  CurvesGeometryRuntimeHandle *runtime = nullptr;
+  bke::CurvesGeometryRuntime *runtime = nullptr;
 
   /**
    * Knot values for NURBS curves with NURBS_KNOT_MODE_CUSTOM mode.
@@ -180,8 +182,8 @@ struct CurvesGeometry {
   char _pad[4] = {};
 
 #ifdef __cplusplus
-  blender::bke::CurvesGeometry &wrap();
-  const blender::bke::CurvesGeometry &wrap() const;
+  bke::CurvesGeometry &wrap();
+  const bke::CurvesGeometry &wrap() const;
 #endif
 };
 
@@ -203,7 +205,7 @@ struct Curves {
   /** Geometry data. */
   CurvesGeometry geometry;
 
-  int flag = 0;
+  eCurves_Flag flag = {};
   int attributes_active_index_legacy = 0;
 
   /* Materials. */
@@ -211,10 +213,10 @@ struct Curves {
   short totcol = 0;
 
   /**
-   * User-defined symmetry flag (#eCurvesSymmetryType) that causes editing operations to maintain
+   * User-defined symmetry flag that causes editing operations to maintain
    * symmetrical geometry.
    */
-  char symmetry = 0;
+  eCurvesSymmetryType symmetry = {};
   /**
    * #AttrDomain. The active domain for edit/sculpt mode selection. Only one selection mode can
    * be active at a time.
@@ -243,8 +245,10 @@ struct Curves {
   char _pad2[4] = {};
 
   /* Draw cache to store data used for viewport drawing. */
-  void *batch_cache = nullptr;
+  draw::CurvesBatchCache *batch_cache = nullptr;
 };
 
 /* Only one material supported currently. */
 #define CURVES_MATERIAL_NR 1
+
+}  // namespace blender

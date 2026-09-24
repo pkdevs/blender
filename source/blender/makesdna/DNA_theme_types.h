@@ -8,6 +8,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+namespace blender {
+#endif
+
 /**
  * Scaling factor for all UI elements, based on the "Resolution Scale" user preference and the
  * DPI/OS Scale of each monitor. This is a read-only, run-time value calculated by
@@ -233,7 +237,8 @@ typedef struct ThemeUI {
   /* Transparent Grid */
   unsigned char transparent_checker_primary[4], transparent_checker_secondary[4];
   unsigned char transparent_checker_size;
-  char _pad1[5];
+  unsigned char link[4];
+  char _pad1[1];
 
   float icon_alpha;
   float icon_saturation;
@@ -294,25 +299,20 @@ typedef struct ThemeSpace {
   char background_type;
   char _pad0[3];
 
-  /** Panel title. */
-  unsigned char title[4];
+  /* General text color. */
   unsigned char text[4];
   unsigned char text_hi[4];
 
-  /* header colors */
-  /** Region background. */
+  /* Header background. */
   unsigned char header[4];
-  /** Unused. */
-  unsigned char header_title[4];
-  unsigned char header_text[4];
-  unsigned char header_text_hi[4];
 
   /* button/tool regions */
   unsigned char shade1[4];
   unsigned char shade2[4];
 
   unsigned char hilite[4];
-  unsigned char grid[4];
+  unsigned char grid[4], grid_major[4];
+  float grid_axis_brightness;
 
   unsigned char view_overlay[4];
 
@@ -560,3 +560,7 @@ typedef struct bTheme {
   (CHECK_TYPE_INLINE(btheme, bTheme *), &((btheme)->space_properties))
 #define UI_THEMESPACE_END(btheme) \
   (CHECK_TYPE_INLINE(btheme, bTheme *), (&((btheme)->space_spreadsheet) + 1))
+
+#ifdef __cplusplus
+}  // namespace blender
+#endif

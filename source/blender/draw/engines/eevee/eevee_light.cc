@@ -57,7 +57,7 @@ static eLightType to_light_type(short blender_light_type,
 void Light::sync(ShadowModule &shadows,
                  float4x4 object_to_world,
                  char visibility_flag,
-                 const ::Light *la,
+                 const blender::Light *la,
                  const LightLinking *light_linking /* = nullptr */,
                  float threshold)
 {
@@ -68,9 +68,10 @@ void Light::sync(ShadowModule &shadows,
     shadow_discard_safe(shadows);
   }
 
-  this->color = BKE_light_power(*la) * BKE_light_color(*la);
+  this->color = BKE_light_color(*la);
+  float base_power = BKE_light_power(*la);
   if (la->mode & LA_UNNORMALIZED) {
-    this->color *= BKE_light_area(*la, object_to_world);
+    base_power *= BKE_light_area(*la, object_to_world);
   }
 
   float3 scale;
@@ -92,17 +93,23 @@ void Light::sync(ShadowModule &shadows,
   const bool transmission_visibility = (visibility_flag & OB_HIDE_TRANSMISSION) == 0;
   const bool volume_visibility = (visibility_flag & OB_HIDE_VOLUME_SCATTER) == 0;
 
-  float shape_power = shape_radiance_get();
-  float point_power = point_radiance_get();
-  this->power[LIGHT_DIFFUSE] = la->diff_fac * shape_power * diffuse_visibility;
-  this->power[LIGHT_SPECULAR] = la->spec_fac * shape_power * glossy_visibility;
-  this->power[LIGHT_TRANSMISSION] = la->transmission_fac * shape_power * transmission_visibility;
-  this->power[LIGHT_VOLUME] = la->volume_fac * point_power * volume_visibility;
+  this->shape_power = base_power * shape_radiance_get();
+  this->point_power = base_power * point_radiance_get();
+  this->power_factor[LIGHT_DIFFUSE] = la->diff_fac * diffuse_visibility;
+  this->power_factor[LIGHT_SPECULAR] = la->spec_fac * glossy_visibility;
+  this->power_factor[LIGHT_TRANSMISSION] = la->transmission_fac * transmission_visibility;
+  this->power_factor[LIGHT_VOLUME] = la->volume_fac * volume_visibility;
 
   this->lod_bias = shadows.global_lod_bias();
   this->lod_min = shadow_lod_min_get(la);
   this->filter_radius = la->shadow_filter_radius;
-  this->shadow_jitter = (la->mode & LA_SHADOW_JITTER) != 0;
+  this->flags = LightFlag(0u);
+  if (la->mode & LA_SHADOW_JITTER) {
+    this->flags = LightFlag(this->flags | LIGHT_USE_SHADOW_JITTER);
+  }
+  if (visibility_flag & OB_HIDE_CAMERA) {
+    this->flags = LightFlag(this->flags | LIGHT_CAMERA_HIDDEN);
+  }
 
   if (la->mode & LA_SHADOW) {
     shadow_ensure(shadows);
@@ -124,7 +131,7 @@ void Light::sync(ShadowModule &shadows,
   this->initialized = true;
 }
 
-float Light::shadow_lod_min_get(const ::Light *la)
+float Light::shadow_lod_min_get(const blender::Light *la)
 {
   /* Property is in mm. Convert to unit. */
   float max_res_unit = la->shadow_maximum_resolution;
@@ -157,7 +164,9 @@ void Light::shadow_ensure(ShadowModule &shadows)
   }
 }
 
-float Light::attenuation_radius_get(const ::Light *la, float light_threshold, float light_power)
+float Light::attenuation_radius_get(const blender::Light *la,
+                                    float light_threshold,
+                                    float light_power)
 {
   if (la->mode & LA_CUSTOM_ATTENUATION) {
     return la->att_dist;
@@ -168,7 +177,7 @@ float Light::attenuation_radius_get(const ::Light *la, float light_threshold, fl
   return sqrtf(light_power / light_threshold);
 }
 
-void Light::shape_parameters_set(const ::Light *la,
+void Light::shape_parameters_set(const blender::Light *la,
                                  const float3 &scale,
                                  const float3 &z_axis,
                                  const float threshold,
@@ -181,7 +190,8 @@ void Light::shape_parameters_set(const ::Light *la,
     LightLocalData &l_local = this->local();
     const float max_power = reduce_max(BKE_light_color(*la)) *
                             fabsf(BKE_light_power(*la) / 100.0f);
-    const float surface_max_power = max(la->diff_fac, la->spec_fac) * max_power;
+    const float surface_max_power = max(max(la->diff_fac, la->spec_fac), la->transmission_fac) *
+                                    max_power;
     const float volume_max_power = la->volume_fac * max_power;
 
     float influence_radius_surface = attenuation_radius_get(la, threshold, surface_max_power);
@@ -337,7 +347,7 @@ float Light::point_radiance_get()
 
 void Light::debug_draw()
 {
-  drw_debug_sphere(transform_location(this->object_to_world),
+  drw_debug_sphere(this->object_to_world.location(),
                    this->local().local.influence_radius_max,
                    float4(0.8f, 0.3f, 0.0f, 1.0f));
 }
@@ -360,7 +370,7 @@ void LightModule::add_world_sun_light(const ObjectKey &key, bool use_diffuse, bo
 {
   /* Create a placeholder light to be fed by the GPU after sunlight extraction.
    * Sunlight is disabled if power is zero. */
-  ::Light la = {};
+  blender::Light la = {};
   la.type = LA_SUN;
   /* Set on the GPU. */
   la.r = la.g = la.b = -1.0f; /* Tag as world sun light. */
@@ -374,6 +384,7 @@ void LightModule::add_world_sun_light(const ObjectKey &key, bool use_diffuse, bo
   int visibility_flag = 0;
   SET_FLAG_FROM_TEST(visibility_flag, !use_diffuse, OB_HIDE_DIFFUSE);
   SET_FLAG_FROM_TEST(visibility_flag, !use_glossy, OB_HIDE_GLOSSY);
+  visibility_flag |= OB_HIDE_CAMERA;
 
   Light &light = light_map_.lookup_or_add_default(key);
   light.used = true;
@@ -419,9 +430,9 @@ void LightModule::begin_sync()
   }
 }
 
-void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
+void LightModule::sync_light(const ObjectRef &ob_ref)
 {
-  const ::Light &la = DRW_object_get_data_for_drawing<const ::Light>(*ob);
+  const blender::Light &la = DRW_object_get_data_for_drawing<const blender::Light>(*ob_ref.object);
   if (use_scene_lights_ == false) {
     return;
   }
@@ -432,15 +443,18 @@ void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
     }
   }
 
-  Light &light = light_map_.lookup_or_add_default(handle.object_key);
+  Light &light = light_map_.lookup_or_add_default(ObjectKey(ob_ref));
   light.used = true;
-  if (handle.recalc != 0 || !light.initialized) {
+  ResourceHandleRange handle = inst_.manager->unique_handle(ob_ref);
+  inst_.manager->extract_all_object_attributes(handle, ob_ref);
+  light.resource_id = handle.index();
+  if (inst_.get_recalc_flags(ob_ref) != 0 || !light.initialized) {
     light.initialized = true;
     light.sync(inst_.shadows,
-               ob->object_to_world(),
-               ob->visibility_flag,
+               ob_ref.object_to_world(),
+               ob_ref.object->visibility_flag,
                &la,
-               ob->light_linking,
+               ob_ref.light_linking(),
                light_threshold_);
   }
   sun_lights_len_ += int(is_sun_light(light.type));
@@ -449,7 +463,7 @@ void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
 
 void LightModule::end_sync()
 {
-  /** IMPORTANT: We cannot add new lights here since the shadow module already executed its
+  /* IMPORTANT: We cannot add new lights here since the shadow module already executed its
    * `end_sync`. Doing so ends up in very bad data access since the shadow data of the new light
    * will not exists on the GPU. */
 
@@ -533,7 +547,25 @@ void LightModule::end_sync()
 
   culling_pass_sync();
   update_pass_sync();
+  shape_display_pass_sync();
   debug_pass_sync();
+}
+
+void LightModule::shape_display_pass_sync()
+{
+  shape_display_ps_.init();
+
+  if (lights_len_ == 0) {
+    return;
+  }
+
+  shape_display_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD |
+                              DRW_STATE_CLIP_CONTROL_UNIT_RANGE | inst_.film.depth.test_state);
+  shape_display_ps_.shader_set(inst_.shaders.static_shader_get(LIGHT_SHAPE_DISPLAY));
+  shape_display_ps_.bind_resources(inst_.uniform_data);
+  shape_display_ps_.bind_resources(inst_.volume.result);
+  shape_display_ps_.bind_resources(inst_.lights);
+  shape_display_ps_.draw_procedural(GPU_PRIM_TRIS, 1, lights_len_ * 6);
 }
 
 void LightModule::culling_pass_sync()
@@ -650,6 +682,12 @@ void LightModule::debug_draw(View &view, gpu::FrameBuffer *view_fb)
     GPU_framebuffer_bind(view_fb);
     inst_.manager->submit(debug_draw_ps_, view);
   }
+}
+
+void LightModule::shape_display_draw(View &view, gpu::FrameBuffer *view_fb)
+{
+  GPU_framebuffer_bind(view_fb);
+  inst_.manager->submit(shape_display_ps_, view);
 }
 
 /** \} */

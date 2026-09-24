@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 /* internal exports only */
 struct ARegion;
 struct ARegionType;
@@ -34,6 +36,7 @@ void draw_image_uv_custom_region(const ARegion *region, const rctf &custom_regio
 /* `image_ops.cc` */
 
 bool space_image_main_region_poll(bContext *C);
+bool space_image_poll(bContext *C);
 bool space_image_view_center_cursor_poll(bContext *C);
 
 void IMAGE_OT_view_all(wmOperatorType *ot);
@@ -95,10 +98,10 @@ void IMAGE_OT_tile_add(wmOperatorType *ot);
 void IMAGE_OT_tile_remove(wmOperatorType *ot);
 void IMAGE_OT_tile_fill(wmOperatorType *ot);
 
-/* image_panels.c */
-
 /**
  * Gets active viewer user.
  */
 ImageUser *ntree_get_active_iuser(bNodeTree *ntree);
 void image_buttons_register(ARegionType *art);
+
+}  // namespace blender

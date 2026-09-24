@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "BKE_node.hh"
@@ -20,7 +24,7 @@ class ClosureSignature {
     const bke::bNodeSocketType *type = nullptr;
     NodeSocketInterfaceStructureType structure_type;
 
-    BLI_STRUCT_EQUALITY_OPERATORS_3(Item, key, type, structure_type);
+    friend bool operator==(const Item &a, const Item &b) = default;
   };
 
   struct ItemKeyGetter {
@@ -43,6 +47,7 @@ class ClosureSignature {
                                                    bool allow_auto_structure_type);
   static ClosureSignature from_evaluate_closure_node(const bNode &node,
                                                      bool allow_auto_structure_type);
+  static ClosureSignature from_closure_to_list_node(const bNode &node);
 
   void set_auto_structure_types();
 };

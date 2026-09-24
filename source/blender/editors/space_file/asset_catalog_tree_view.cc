@@ -14,7 +14,7 @@
 
 #include "BKE_asset.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -38,16 +38,18 @@
 
 #include <fmt/format.h>
 
+namespace blender {
+
 using namespace blender::asset_system;
 
-namespace blender::ed::asset_browser {
+namespace ed::asset_browser {
 
 class AssetCatalogTreeViewAllItem;
 
 class AssetCatalogTreeView : public ui::AbstractTreeView {
   asset_system::AssetLibrary *asset_library_;
   /** The asset catalog tree this tree-view represents. */
-  const asset_system::AssetCatalogTree *catalog_tree_;
+  std::shared_ptr<const asset_system::AssetCatalogTree> catalog_tree_;
   FileAssetSelectParams *params_;
   SpaceFile &space_file_;
 
@@ -106,7 +108,7 @@ class AssetCatalogDragController : public ui::AbstractViewItemDragController {
 
   std::optional<eWM_DragDataType> get_drag_type() const override;
   void *create_drag_data() const override;
-  void on_drag_start(bContext &C) override;
+  void on_drag_start(bContext &C, ui::AbstractViewItem &item) override;
 };
 
 class AssetCatalogDropTarget : public ui::TreeViewItemDropTarget {
@@ -186,7 +188,11 @@ AssetCatalogTreeView::AssetCatalogTreeView(asset_system::AssetLibrary *library,
     : asset_library_(library), params_(params), space_file_(space_file)
 {
   if (library) {
-    catalog_tree_ = &library->catalog_service().catalog_tree();
+    /* Take shared ownership of the catalog service so it can't be freed by a concurrent catalog
+     * reload job (running on a separate thread) while we're reading the catalog tree from it. */
+    std::shared_ptr<asset_system::AssetCatalogService> catalog_service =
+        library->catalog_service_ptr();
+    catalog_tree_ = catalog_service ? catalog_service->catalog_tree() : nullptr;
   }
   else {
     catalog_tree_ = nullptr;
@@ -205,7 +211,14 @@ void AssetCatalogTreeView::build_tree()
     });
   }
 
-  add_unassigned_item();
+  /* Hide the unassigned catalog for the Essentials library, it should be empty in releases. Still
+   * show it when "Unassigned" _is_ active. */
+  const bool is_essentials = params_->asset_library_ref.type == ASSET_LIBRARY_ESSENTIALS;
+  const bool shows_unassigned_item = params_->asset_catalog_visibility ==
+                                     FILE_SHOW_ASSETS_WITHOUT_CATALOG;
+  if (!is_essentials || shows_unassigned_item) {
+    add_unassigned_item();
+  }
 }
 
 ui::BasicTreeViewItem &AssetCatalogTreeView::build_catalog_items_recursive(
@@ -291,7 +304,7 @@ void AssetCatalogTreeViewItem::build_row(ui::Layout &row)
   ui::ButtonViewItem *view_item_but = view_item_button();
   PointerRNA *props;
 
-  props = button_extra_operator_icon_add((ui::Button *)view_item_but,
+  props = button_extra_operator_icon_add(reinterpret_cast<ui::Button *>(view_item_but),
                                          "ASSET_OT_catalog_new",
                                          wm::OpCallContext::InvokeDefault,
                                          ICON_ADD);
@@ -423,8 +436,8 @@ std::string AssetCatalogDropTarget::drop_tooltip_asset_list(const wmDrag &drag) 
 {
   BLI_assert(drag.type == WM_DRAG_ASSET_LIST);
 
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
-  const bool is_multiple_assets = !BLI_listbase_is_single(asset_drags);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
+  const bool is_multiple_assets = !asset_drags->is_single();
 
   /* Don't try to be smart by dynamically adding the 's' for the plural. Just makes translation
    * harder, so use full literals. */
@@ -477,21 +490,21 @@ bool AssetCatalogDropTarget::drop_assets_into_catalog(bContext *C,
                                                       StringRefNull simple_name)
 {
   BLI_assert(drag.type == WM_DRAG_ASSET_LIST);
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
   if (!asset_drags) {
     return false;
   }
 
   bool did_update = false;
-  LISTBASE_FOREACH (wmDragAssetListItem *, asset_item, asset_drags) {
-    if (asset_item->is_external) {
+  for (wmDragAssetListItem &asset_item : *asset_drags) {
+    if (asset_item.is_external) {
       /* Only internal assets can be modified! */
       continue;
     }
 
     did_update = true;
     BKE_asset_metadata_catalog_id_set(
-        asset_item->asset_data.local_id->asset_data, catalog_id, simple_name.c_str());
+        asset_item.asset_data.local_id->asset_data, catalog_id, simple_name.c_str());
 
     /* Trigger re-run of filtering to update visible assets. */
     filelist_tag_needs_filtering(tree_view.space_file_.files);
@@ -520,11 +533,11 @@ AssetCatalog *AssetCatalogDropTarget::get_drag_catalog(
 
 bool AssetCatalogDropTarget::has_droppable_asset(const wmDrag &drag, const char **r_disabled_hint)
 {
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag);
 
   /* There needs to be at least one asset from the current file. */
-  LISTBASE_FOREACH (const wmDragAssetListItem *, asset_item, asset_drags) {
-    if (!asset_item->is_external) {
+  for (const wmDragAssetListItem &asset_item : *asset_drags) {
+    if (!asset_item.is_external) {
       return true;
     }
   }
@@ -563,13 +576,12 @@ std::optional<eWM_DragDataType> AssetCatalogDragController::get_drag_type() cons
 
 void *AssetCatalogDragController::create_drag_data() const
 {
-  wmDragAssetCatalog *drag_catalog = (wmDragAssetCatalog *)MEM_callocN(sizeof(*drag_catalog),
-                                                                       __func__);
+  wmDragAssetCatalog *drag_catalog = MEM_new<wmDragAssetCatalog>(__func__);
   drag_catalog->drag_catalog_id = catalog_item_.get_catalog_id();
   return drag_catalog;
 }
 
-void AssetCatalogDragController::on_drag_start(bContext & /*C*/)
+void AssetCatalogDragController::on_drag_start(bContext & /*C*/, ui::AbstractViewItem & /*item*/)
 {
   AssetCatalogTreeView &tree_view_ = this->get_view<AssetCatalogTreeView>();
   tree_view_.activate_catalog_by_id(catalog_item_.get_catalog_id());
@@ -674,8 +686,8 @@ bool AssetCatalogTreeViewUnassignedItem::DropTarget::can_drop(const wmDrag &drag
 std::string AssetCatalogTreeViewUnassignedItem::DropTarget::drop_tooltip(
     const ui::DragInfo &drag_info) const
 {
-  const ListBase *asset_drags = WM_drag_asset_list_get(&drag_info.drag_data);
-  const bool is_multiple_assets = !BLI_listbase_is_single(asset_drags);
+  const ListBaseT<wmDragAssetListItem> *asset_drags = WM_drag_asset_list_get(&drag_info.drag_data);
+  const bool is_multiple_assets = !asset_drags->is_single();
 
   return is_multiple_assets ? TIP_("Move assets out of any catalog") :
                               TIP_("Move asset out of any catalog");
@@ -713,7 +725,7 @@ void file_delete_asset_catalog_filter_settings(AssetCatalogFilterSettings **filt
 bool file_set_asset_catalog_filter_settings(
     AssetCatalogFilterSettings *filter_settings,
     eFileSel_Params_AssetCatalogVisibility catalog_visibility,
-    const ::bUUID &catalog_id)
+    const bUUID &catalog_id)
 {
   bool needs_update = false;
 
@@ -781,4 +793,6 @@ void file_create_asset_catalog_tree_view_in_layout(const bContext *C,
   ui::TreeViewBuilder::build_tree_view(*C, *tree_view, layout);
 }
 
-}  // namespace blender::ed::asset_browser
+}  // namespace ed::asset_browser
+
+}  // namespace blender

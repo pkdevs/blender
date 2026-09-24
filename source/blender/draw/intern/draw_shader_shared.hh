@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #pragma once
 
 #include "GPU_shader_shared_utils.hh"
@@ -11,12 +15,22 @@
 #  include "GPU_shader.hh"
 #  include "draw_defines.hh"
 
+#  if defined(__cplusplus) && !defined(GPU_SHADER)
+
+/* Defined on windows in `windows.h`. */
+#    undef far
+#    undef near
+
+namespace blender {
+#  endif
+
 struct ViewCullingData;
 struct ViewMatrices;
 struct ObjectMatrices;
 struct ObjectInfos;
 struct ObjectBounds;
 struct VolumeInfos;
+struct GSplatInfos;
 struct CurvesInfos;
 struct ObjectAttribute;
 struct LayerAttribute;
@@ -37,13 +51,13 @@ struct ViewLayer;
 struct GPUUniformAttr;
 struct GPULayerAttr;
 
-namespace blender::draw {
+namespace draw {
 
 class ObjectRef;
 
-}  // namespace blender::draw
+}  // namespace draw
 
-using namespace blender::math;
+using namespace math;
 
 #  endif
 #endif
@@ -119,7 +133,211 @@ struct [[host_shared]] ViewMatrices {
   float4x4 viewinv;
   float4x4 winmat;
   float4x4 wininv;
+
+  /* Returns true if the current view has a perspective projection matrix. */
+  bool is_perspective() const
+  {
+    return winmat[3][3] == 0.0f;
+  }
+
+  /* Returns the view forward vector, going towards the viewer. */
+  float3 forward() const
+  {
+    return viewinv[2].xyz();
+  }
+
+  /* Returns the view up vector. */
+  float3 up() const
+  {
+    return viewinv[1].xyz();
+  }
+
+  /* Returns the view origin. */
+  float3 position() const
+  {
+    return viewinv[3].xyz();
+  }
+
+  /* Positive Z distance from the view origin. Faster than using `drw_point_world_to_view`. */
+  float z_distance(float3 P) const
+  {
+    return dot(P - position(), -forward());
+  }
+
+  /* Returns the projection matrix far clip distance. */
+  float far() const
+  {
+    if (is_perspective()) {
+      return -winmat[3][2] / (winmat[2][2] + 1.0f);
+    }
+    return -(winmat[3][2] - 1.0f) / winmat[2][2];
+  }
+
+  /* Returns the projection matrix near clip distance. */
+  float near() const
+  {
+    if (is_perspective()) {
+      return -winmat[3][2] / (winmat[2][2] - 1.0f);
+    }
+    return -(winmat[3][2] + 1.0f) / winmat[2][2];
+  }
+
+  /**
+   * Returns the world incident vector `V` (going towards the viewer)
+   * from the world position `P` and the current view.
+   */
+  float3 world_incident_vector(float3 P) const
+  {
+    return is_perspective() ? normalize(position() - P) : forward();
+  }
+
+  /**
+   * Returns the view incident vector `vV` (going towards the viewer)
+   * from the view position `vP` and the current view.
+   */
+  float3 view_incident_vector(float3 vP) const
+  {
+    return is_perspective() ? normalize(-vP) : float3(0.0f, 0.0f, 1.0f);
+  }
+
+  /**
+   * Transform position on screen UV space [0..1] to Normalized Device Coordinate space [-1..1].
+   */
+  template<typename T> T screen_to_ndc(T ss_P) const
+  {
+    return ss_P * 2.0f - 1.0f;
+  }
+
+  /**
+   * Transform position in Normalized Device Coordinate [-1..1] to screen UV space [0..1].
+   */
+  template<typename T> T ndc_to_screen(T ndc_P) const
+  {
+    return ndc_P * 0.5f + 0.5f;
+  }
+
+  /* -------------------------------------------------------------------- */
+  /** \name Transform Normal
+   * \{ */
+
+#ifdef GPU_SHADER /* `to_float3x3` doesn't exist on CPU side. */
+  float3 normal_view_to_world(float3 vN) const
+  {
+    return (to_float3x3(viewinv) * vN);
+  }
+
+  float3 normal_world_to_view(float3 N) const
+  {
+    return (to_float3x3(viewmat) * N);
+  }
+#endif
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Transform Position
+   * \{ */
+
+  float3 perspective_divide(float4 hs_P) const
+  {
+    return hs_P.xyz() / hs_P.w;
+  }
+
+  float3 point_view_to_world(float3 vP) const
+  {
+    return (viewinv * float4(vP, 1.0f)).xyz();
+  }
+
+  float4 point_view_to_homogenous(float3 vP) const
+  {
+    return (winmat * float4(vP, 1.0f));
+  }
+
+  float3 point_homogeneous_to_view(float4 hP) const
+  {
+    return (wininv * hP).xyz();
+  }
+
+  float3 point_view_to_ndc(float3 vP) const
+  {
+    return perspective_divide(point_view_to_homogenous(vP));
+  }
+
+  float3 point_world_to_view(float3 P) const
+  {
+    return (viewmat * float4(P, 1.0f)).xyz();
+  }
+
+  float4 point_world_to_homogenous(float3 P) const
+  {
+    return (winmat * (viewmat * float4(P, 1.0f)));
+  }
+
+  float3 point_homogeneous_to_world(float4 hP) const
+  {
+    return point_view_to_world(point_homogeneous_to_view(hP));
+  }
+
+  float3 point_world_to_ndc(float3 P) const
+  {
+    return perspective_divide(point_world_to_homogenous(P));
+  }
+
+  float3 point_ndc_to_view(float3 ssP) const
+  {
+    return perspective_divide(wininv * float4(ssP, 1.0f));
+  }
+
+  float3 point_ndc_to_world(float3 ssP) const
+  {
+    return point_view_to_world(point_ndc_to_view(ssP));
+  }
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Transform Screen Positions
+   * \{ */
+
+  float3 point_view_to_screen(float3 vP) const
+  {
+    return ndc_to_screen(point_view_to_ndc(vP));
+  }
+
+  float3 point_world_to_screen(float3 vP) const
+  {
+    return ndc_to_screen(point_world_to_ndc(vP));
+  }
+
+  float3 point_screen_to_view(float3 ssP) const
+  {
+    return point_ndc_to_view(screen_to_ndc(ssP));
+  }
+
+  float3 point_screen_to_world(float3 ssP) const
+  {
+    return point_view_to_world(point_screen_to_view(ssP));
+  }
+
+  float depth_view_to_screen(float v_depth) const
+  {
+    return point_view_to_screen(float3(0.0f, 0.0f, v_depth)).z;
+  }
+
+  float depth_screen_to_view(float ss_depth) const
+  {
+    return point_screen_to_view(float3(0.0f, 0.0f, ss_depth)).z;
+  }
+
+  /** \} */
 };
+
+template float ViewMatrices::screen_to_ndc<float>(float ss_P) const;
+template float2 ViewMatrices::screen_to_ndc<float2>(float2 ss_P) const;
+template float3 ViewMatrices::screen_to_ndc<float3>(float3 ss_P) const;
+template float ViewMatrices::ndc_to_screen<float>(float ss_P) const;
+template float2 ViewMatrices::ndc_to_screen<float2>(float2 ss_P) const;
+template float3 ViewMatrices::ndc_to_screen<float3>(float3 ss_P) const;
 
 /** \} */
 
@@ -135,6 +353,97 @@ struct [[host_shared]] ObjectMatrices {
   void sync(const Object &object);
   void sync(const float4x4 &model_matrix);
 #endif
+
+#ifdef GPU_SHADER /* `to_float3x3` doesn't exist on CPU side. */
+  /**
+   * Usually Normal matrix is `transpose(inverse(ViewMatrix * ModelMatrix))`.
+   *
+   * But since it is slow to multiply matrices we decompose it. Decomposing
+   * inversion and transposition both invert the product order leaving us with
+   * the same original order:
+   * transpose(ViewMatrixInverse) * transpose(ModelMatrixInverse)
+   *
+   * Knowing that the view matrix is orthogonal, the transpose is also the inverse.
+   * NOTE: This is only valid because we are only using the mat3 of the ViewMatrixInverse.
+   * ViewMatrix * transpose(ModelMatrixInverse)
+   */
+  float3x3 normal() const
+  {
+    return transpose(to_float3x3(model_inverse));
+  }
+  float3x3 normal_inverse() const
+  {
+    return transpose(to_float3x3(model));
+  }
+#endif
+
+  /* -------------------------------------------------------------------- */
+  /** \name Transform Normal
+   *
+   * Space conversion helpers for normal vectors.
+   * \{ */
+
+#ifdef GPU_SHADER /* `to_float3x3` doesn't exist on CPU side. */
+  float3 normal_object_to_world(float3 lN) const
+  {
+    return normal() * lN;
+  }
+
+  float3 normal_world_to_object(float3 N) const
+  {
+    return normal_inverse() * N;
+  }
+
+  float3 normal_object_to_view(ViewMatrices view, float3 lN) const
+  {
+    return to_float3x3(view.viewmat) * (normal() * lN);
+  }
+
+  float3 normal_view_to_object(ViewMatrices view, float3 vN) const
+  {
+    return normal_inverse() * (to_float3x3(view.viewinv) * vN);
+  }
+#endif
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Transform Point
+   *
+   * Space conversion helpers for points (coordinates).
+   * \{ */
+
+  float3 point_object_to_world(float3 lP) const
+  {
+    return (model * float4(lP, 1.0f)).xyz();
+  }
+
+  float3 point_world_to_object(float3 P) const
+  {
+    return (model_inverse * float4(P, 1.0f)).xyz();
+  }
+
+  float3 point_object_to_view(ViewMatrices view, float3 lP) const
+  {
+    return (view.viewmat * (model * float4(lP, 1.0f))).xyz();
+  }
+
+  float3 point_view_to_object(ViewMatrices view, float3 vP) const
+  {
+    return (model_inverse * (view.viewinv * float4(vP, 1.0f))).xyz();
+  }
+
+  float4 point_object_to_homogenous(ViewMatrices view, float3 lP) const
+  {
+    return view.winmat * (view.viewmat * (model * float4(lP, 1.0f)));
+  }
+
+  float3 point_object_to_ndc(ViewMatrices view, float3 lP) const
+  {
+    return view.perspective_divide(point_object_to_homogenous(view, lP));
+  }
+
+  /** \} */
 };
 
 enum [[host_shared]] eObjectInfoFlag : uint32_t {
@@ -175,7 +484,7 @@ struct [[host_shared]] ObjectInfos {
 
 #ifndef GPU_SHADER
   void sync();
-  void sync(const blender::draw::ObjectRef ref, bool is_active_object, bool is_active_edit_mode);
+  void sync(const draw::ObjectRef ref, bool is_active_object, bool is_active_edit_mode);
 #endif
 };
 
@@ -227,8 +536,49 @@ inline bool drw_bounds_are_valid(ObjectBounds bounds)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Data quantization and packing
+ * \{ */
+
+/* Struct to scale a value from [0, 1] to a range [M, N]. Can be used for
+ * quantized packing if the value's boundaries are known. */
+struct [[host_shared]] ScalingRange {
+  packed_float3 range_add;
+  float _pad0;
+  packed_float3 range_mul;
+  float _pad1;
+
+  /** Scale from a value in [0, 1] to a value in the scaling range. */
+  float3 scale_from_unit(float3 value) const
+  {
+    return value * range_mul + range_add;
+  }
+
+#if !defined(GPU_SHADER)
+  /** Scale from a value in the scaling range to a value in[0, 1]. */
+  float3 scale_to_unit(float3 value) const
+  {
+    float3 reciprocal_denom;
+    for (int i = 0; i < 3; ++i) {
+      reciprocal_denom[i] = range_mul[i] == 0.0f ? 1.0f : (1.0f / range_mul[i]);
+    }
+    return math::clamp((value - range_add) * reciprocal_denom, float3(0.0f), float3(1.0f));
+  }
+#endif
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Object attributes
  * \{ */
+
+struct [[host_shared]] GSplatInfos {
+  /* Data ranges for unpacking. */
+  struct ScalingRange splat_mean_range;
+  struct ScalingRange splat_scale_range;
+  struct ScalingRange radiance_base_range;
+  struct ScalingRange radiance_sh_range;
+};
 
 struct [[host_shared]] VolumeInfos {
   /** Object to grid-space. */
@@ -243,9 +593,11 @@ struct [[host_shared]] VolumeInfos {
 
 struct [[host_shared]] CurvesInfos {
   /* TODO(fclem): Make it a single uint. */
-  /** Per attribute scope, follows loading order.
+  /**
+   * Per attribute scope, follows loading order.
    * \note uint as bool in GLSL is 4 bytes.
-   * \note GLSL pad arrays of scalar to 16 bytes (std140). */
+   * \note GLSL pad arrays of scalar to 16 bytes (std140).
+   */
   uint4 is_point_attribute[DRW_ATTRIBUTE_PER_CURVES_MAX];
 
   /* Number of vertex in a segment (including restart vertex for cylinder). */
@@ -257,24 +609,35 @@ struct [[host_shared]] CurvesInfos {
 };
 
 #pragma pack(push, 4)
-struct ObjectAttribute {
+struct [[host_shared]] ObjectAttribute {
   /* Workaround the padding cost from alignment requirements.
    * (see GL spec : 7.6.2.2 Standard Uniform Block Layout) */
-  float data_x, data_y, data_z, data_w;
+  float data_x;
+  float data_y;
+  float data_z;
+  float data_w;
   uint hash_code;
 
 #ifndef GPU_SHADER
   /**
    * Go through all possible source of the given object uniform attribute.
    * Returns true if the attribute was correctly filled.
+   *
+   * \param instance_index: The index of synced the instance within the ObjectRef::duplis_,
+   *                        or just 0 if the ObjectRef doesn't contain any instances.
    */
-  bool sync(const blender::draw::ObjectRef &ref, const GPUUniformAttr &attr);
+  bool sync(const draw::ObjectRef &ref, const GPUUniformAttr &attr, int instance_index);
+  bool sync(const draw::ObjectRef &ref, const char *name, bool use_dupli, int instance_index);
 #endif
 };
 #pragma pack(pop)
-/** \note we only align to 4 bytes and fetch data manually so make sure
- * C++ compiler gives us the same size. */
+/**
+ * \note we only align to 4 bytes and fetch data manually so make sure
+ * C++ compiler gives us the same size.
+ */
+#ifndef GPU_SHADER
 BLI_STATIC_ASSERT_ALIGN(ObjectAttribute, 20)
+#endif
 
 struct [[host_shared]] LayerAttribute {
   float4 data;
@@ -407,3 +770,7 @@ struct [[host_shared]] DRWDebugDrawBuffer {
 #define drw_debug_draw_offset 1
 
 /** \} */
+
+#if !defined(GPU_SHADER)
+}  // namespace blender
+#endif

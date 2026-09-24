@@ -20,6 +20,8 @@
 #  include "BLI_generic_span.hh"
 #  include "BLI_index_mask_fwd.hh"
 
+#  include "FN_field.hh"
+
 namespace blender::bke::volume_grid {
 
 using LeafNodeMask = openvdb::util::NodeMask<3u>;
@@ -62,29 +64,29 @@ constexpr bool is_supported_grid_type = is_same_any_v<GridT,
 template<typename Fn> inline void to_typed_grid(const openvdb::GridBase &grid_base, Fn &&fn)
 {
   const VolumeGridType grid_type = get_type(grid_base);
-  BKE_volume_grid_type_to_static_type(grid_type, [&](auto type_tag) {
-    using GridT = typename decltype(type_tag)::type;
-    if constexpr (is_supported_grid_type<GridT>) {
-      fn(static_cast<const GridT &>(grid_base));
-    }
-    else {
-      BLI_assert_unreachable();
-    }
-  });
+  BKE_volume_grid_type_to_static_type(grid_type,
+                                      [&]<std::derived_from<openvdb::GridBase> GridT>() {
+                                        if constexpr (is_supported_grid_type<GridT>) {
+                                          fn(static_cast<const GridT &>(grid_base));
+                                        }
+                                        else {
+                                          BLI_assert_unreachable();
+                                        }
+                                      });
 }
 
 template<typename Fn> inline void to_typed_grid(openvdb::GridBase &grid_base, Fn &&fn)
 {
   const VolumeGridType grid_type = get_type(grid_base);
-  BKE_volume_grid_type_to_static_type(grid_type, [&](auto type_tag) {
-    using GridT = typename decltype(type_tag)::type;
-    if constexpr (is_supported_grid_type<GridT>) {
-      fn(static_cast<GridT &>(grid_base));
-    }
-    else {
-      BLI_assert_unreachable();
-    }
-  });
+  BKE_volume_grid_type_to_static_type(grid_type,
+                                      [&]<std::derived_from<openvdb::GridBase> GridT>() {
+                                        if constexpr (is_supported_grid_type<GridT>) {
+                                          fn(static_cast<GridT &>(grid_base));
+                                        }
+                                        else {
+                                          BLI_assert_unreachable();
+                                        }
+                                      });
 }
 
 /** Create a grid with the same activated voxels and internal nodes as the given grid. */
@@ -102,6 +104,23 @@ void set_grid_values(openvdb::GridBase &grid_base, GSpan values, Span<openvdb::C
 void set_tile_values(openvdb::GridBase &grid_base, GSpan values, Span<openvdb::CoordBBox> tiles);
 
 /**
+ * Deactivate values for the given voxels in a leaf node. A leaf node must exist at the given
+ * coordinates.
+ */
+void set_leaf_values_off(openvdb::GridBase &grid_base,
+                         const openvdb::Coord &probe_coord,
+                         Span<bool> selection);
+/** Deactivate values for the given voxels in the grid. */
+void set_grid_values_off(openvdb::GridBase &grid_base,
+                         Span<bool> selection,
+                         Span<openvdb::Coord> voxels);
+
+/** Deactivate values for the given tiles in the grid. */
+void set_tile_values_off(openvdb::GridBase &grid_base,
+                         Span<bool> selection,
+                         Span<openvdb::CoordBBox> tiles);
+
+/**
  * Boolean grids are stored as bitmaps, but we often have to process arrays of booleans. This
  * utility sets the bitmap values based on the boolean array.
  */
@@ -111,12 +130,36 @@ void set_mask_leaf_buffer_from_bools(openvdb::BoolGrid &grid,
                                      Span<openvdb::Coord> voxels);
 
 void set_grid_background(openvdb::GridBase &grid_base, const GPointer value);
+void set_inactive_values(openvdb::GridBase &grid_base, const GPointer value);
 
 /** See #openvdb::tools::pruneInactive. */
 void prune_inactive(openvdb::GridBase &grid_base);
 
-}  // namespace blender::bke::volume_grid
+/**
+ * Sample the tree at the given coordinates.
+ *
+ * \param grid_type: Data type of the tree. This is technically redundant but can help a little
+ *   with performance.
+ * \param tree_base: The tree to sample.
+ * \param xs, ys, zs: Coordinates to sample.
+ * \param mask: Subset of indices that should be sampled.
+ * \param r_values: Output buffer to store the sampled values.
+ */
+void sample_tree_indices(const VolumeGridType grid_type,
+                         const openvdb::TreeBase &tree_base,
+                         Span<int> xs,
+                         Span<int> ys,
+                         Span<int> zs,
+                         const IndexMask &mask,
+                         GMutableSpan r_values);
 
-/** \} */
+std::optional<VolumeGridType> cpp_type_to_grid_type(const CPPType &cpp_type);
+
+void evaluate_fields_to_grid(const openvdb::MaskTree &mask_tree,
+                             const openvdb::math::Transform &transform,
+                             Span<fn::GField> fields,
+                             MutableSpan<bke::GVolumeGrid> r_output_grids);
+
+}  // namespace blender::bke::volume_grid
 
 #endif /* WITH_OPENVDB */

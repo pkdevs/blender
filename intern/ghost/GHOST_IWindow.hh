@@ -10,7 +10,7 @@
 #pragma once
 
 #include "GHOST_Rect.hh"
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
 #include <cstdlib>
 #include <string>
@@ -45,12 +45,6 @@ class GHOST_IWindow {
   virtual bool getValid() const = 0;
 
   /**
-   * Returns the associated OS object/handle.
-   * \return The associated OS object/handle.
-   */
-  virtual void *getOSWindow() const = 0;
-
-  /**
    * Returns the type of drawing context used in this window.
    * \return The current type of drawing context.
    */
@@ -77,7 +71,7 @@ class GHOST_IWindow {
 
   /**
    * Returns the title displayed in the title bar.
-   * \param title: The title displayed in the title bar.
+   * \return The title displayed in the title bar.
    */
   virtual std::string getTitle() const = 0;
 
@@ -167,12 +161,6 @@ class GHOST_IWindow {
   virtual void setAcceptDragOperation(bool can_accept) = 0;
 
   /**
-   * Returns acceptance of the dropped object.
-   * Usually called by the "object dropped" event handling function.
-   */
-  virtual bool canAcceptDragOperation() const = 0;
-
-  /**
    * Returns the state of the window (normal, minimized, maximized).
    * \return The state of the window.
    */
@@ -191,12 +179,6 @@ class GHOST_IWindow {
    * \return Indication of success.
    */
   virtual GHOST_TSuccess setModifiedState(bool is_unsaved_changes) = 0;
-
-  /**
-   * Gets the window "modified" status, indicating unsaved changes.
-   * \return True if there are unsaved changes
-   */
-  virtual bool getModifiedState() = 0;
 
   /**
    * Sets the order of the window (bottom, top).
@@ -302,21 +284,10 @@ class GHOST_IWindow {
    */
   virtual GHOST_TSuccess setCursorShape(GHOST_TStandardCursor cursor_shape) = 0;
 
-  /**
-   * Gets the cursor grab region, if unset the window is used.
-   * reset when grab is disabled.
-   */
-  virtual GHOST_TSuccess getCursorGrabBounds(GHOST_Rect &bounds) const = 0;
-
   virtual void getCursorGrabState(GHOST_TGrabCursorMode &mode,
                                   GHOST_TAxisFlag &axis_flag,
                                   GHOST_Rect &bounds,
                                   bool &use_software_cursor) = 0;
-
-  /**
-   * Return true when a software cursor should be used.
-   */
-  virtual bool getCursorGrabUseSoftwareDisplay() = 0;
 
   /**
    * Test if the standard cursor shape is supported by current platform.
@@ -363,7 +334,7 @@ class GHOST_IWindow {
 
   /**
    * Grabs the cursor for a modal operation.
-   * \param grab: The new grab state of the cursor.
+   * \param mode: The new grab mode of the cursor.
    * \return Indication of success.
    */
   virtual GHOST_TSuccess setCursorGrab(GHOST_TGrabCursorMode /*mode*/,
@@ -386,6 +357,26 @@ class GHOST_IWindow {
   virtual uint16_t getDPIHint() = 0;
 
   /**
+   * True when the window's frame-buffer has an alpha channel the compositor blends against the
+   * desktop. Only requested for client-side-decorations (see `WITH_GHOST_CSD`) and only true when
+   * the driver supports it; callers must handle this returning false.
+   */
+  virtual bool hasAlpha() const
+  {
+    return false;
+  }
+
+  /**
+   * Returns which of the window's edges the compositor has tiled, as a bit-mask of
+   * #GHOST_TWindowTiledFlag. Zero when the window is free floating, or on backends that
+   * don't report tiling.
+   */
+  virtual GHOST_TWindowTiledFlag getTiledEdges() const
+  {
+    return GHOST_kWindowTiledNone;
+  }
+
+  /**
    * Returns high dynamic range color information about this window.
    * \return HDR info.
    * */
@@ -395,11 +386,11 @@ class GHOST_IWindow {
   /**
    * Enable IME attached to the given window, i.e. allows user-input
    * events to be dispatched to the IME.
-   * \param x: Requested x-coordinate of the rectangle.
-   * \param y: Requested y-coordinate of the rectangle.
+   * \param x: Requested left of the rectangle.
+   * \param y: Requested lower edge of the rectangle.
    * \param w: Requested width of the rectangle.
    * \param h: Requested height of the rectangle.
-   * \param complete: Whether or not to complete the ongoing composition.
+   * \param completed: Whether or not to complete the ongoing composition.
    * - true:  Start a new composition
    * - false: Move the IME windows to the given position without finishing it.
    */
