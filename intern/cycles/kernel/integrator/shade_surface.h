@@ -776,7 +776,7 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_shade_indirect(
     const bool use_restir,
     ccl_private Reservoir *reservoir)
 {
-  reservoir_finalize(reservoir, use_restir);
+  reservoir_finalize(reservoir);
   bsdf_eval_mul(&reservoir->radiance, reservoir->total_weight);
 
   // if (bsdf_eval_is_zero(&reservoir->radiance)) {
@@ -1006,7 +1006,7 @@ ccl_device
 //     (double)ls.pdf);
 
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
-    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, /*require_valid_reference=*/true); // !!!(Tri)
+    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick); // !!!(Tri)
   }
 
   if (reservoir_is_empty(&reservoir)) {

@@ -350,7 +350,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
         PRNG_SPATIAL_RESAMPLING);
 
     SpatialReservoir neighbor;
-    spatial_reservoir_init(kg, &neighbor, true); // !!!: require_valid_reference
+    spatial_reservoir_init(kg, &neighbor);
 
     if (!restir_unpack_neighbor(
             kg, resampling, current, &neighbor, i, rand, render_buffer, read_prev))
@@ -435,7 +435,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
         neighbor.reservoir.luminance, neighbor_at_canonical,
         /*N0=*/(float)neighbor.reservoir.M * neighbors, /*N1=*/(float)canonical.M);
 
-    spatial_reservoir_add_reservoir(current, neighbor, rand.z, true); // !!!: require_valid_reference
+    spatial_reservoir_add_reservoir(current, neighbor, rand.z);
   }
 
   if (!reservoir_is_empty(&canonical)) {
@@ -450,12 +450,12 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
         PRNG_SPATIAL_RESAMPLING).z;
 
     // current->reservoir.add_reservoir(canonical, rand);
-    spatial_reservoir_add_reservoir(current, canonical, rand, true); // !!!: require_valid_reference
+    spatial_reservoir_add_reservoir(current, canonical, rand);
   }
 
   current->reservoir.total_weight /= valid_neighbors;
 
-  return reservoir_finalize(&current->reservoir, true); // !!!: require_valid_reference
+  return reservoir_finalize(&current->reservoir);
 }
 
 /* Temporal counterpart of streaming_di_samples()'s per-neighbor step. */
@@ -506,7 +506,7 @@ ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack histo
   history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
 
   const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
-  spatial_reservoir_add_reservoir(current, history, rand, true);
+  spatial_reservoir_add_reservoir(current, history, rand);
 
   current->reservoir.M += history.M;
 
@@ -629,7 +629,7 @@ ccl_debug_printf(
   history.total_weight *= mis_weight;
 
   const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
-  spatial_reservoir_add_reservoir(current, history, rand, true);
+  spatial_reservoir_add_reservoir(current, history, rand);
 
   current->reservoir.M += history.M; // !!!: unconditional & doesn't tell whether the historical candidate actually became the selected sample
 
@@ -659,7 +659,7 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
   SpatialReservoir current;
-  spatial_reservoir_init(kg, &current, true);
+  spatial_reservoir_init(kg, &current);
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
   if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) {
@@ -717,7 +717,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
                                                   ccl_global float *ccl_restrict render_buffer)
 {
   SpatialReservoir current;
-  spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
+  spatial_reservoir_init(kg, &current);
 
   Reservoir reservoir;
   reservoir_init(kg, &reservoir);
@@ -753,9 +753,9 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
 
   radiance_eval(kg, state, &current.sd, &reservoir.light, &reservoir.radiance, nullptr); // TODO: Remove &reservoir.reference?
 
-  reservoir_add_reservoir(&current.reservoir, reservoir, 0.0f, true); // !!!: require_valid_reference
+  reservoir_add_reservoir(&current.reservoir, reservoir, 0.0f);
 
-  reservoir_finalize(&current.reservoir, true); // !!!: require_valid_reference
+  reservoir_finalize(&current.reservoir);
 
   bsdf_eval_mul(&current.reservoir.radiance, current.reservoir.total_weight); // !!!: DI Blackout?
 
@@ -937,7 +937,7 @@ ccl_device bool integrator_restir(KernelGlobals kg,
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
   SpatialReservoir current;
-  spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
+  spatial_reservoir_init(kg, &current);
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
   if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) { // !!!: Returns type... So, LIGHT_SUN==false?

@@ -178,7 +178,7 @@ ccl_device_inline int film_write_sample(KernelGlobals kg,
 }
 
 // This is a secondary commit used for adaptive sampling. It writes the contribution to a separate buffer to help Cycles determine if the pixel has converged.
-ccl_device void film_write_adaptive_buffer(KernelGlobals kg,
+ccl_device void film_write_adaptive_buffer(KernelGlobals kg, 
                                            const int sample,
                                            const Spectrum contribution,
                                            ccl_global float *ccl_restrict buffer)
@@ -821,7 +821,7 @@ ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir 
   }
 }
 
-ccl_device_inline void film_write_pass_reservoir(
+ccl_device_inline void film_write_pass_reservoir( 
     KernelGlobals kg,
     ConstIntegratorState state,
     ccl_private const Reservoir *reservoir,
@@ -935,7 +935,7 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
   //     reservoir.reference.flags,
   //     reservoir.reference.type);
 
-  const bool finalize_ok = reservoir_finalize(&reservoir, use_restir);
+  const bool finalize_ok = reservoir_finalize(&reservoir);
 
 if (finalize_ok) {
   ccl_debug_printf(
@@ -1057,7 +1057,7 @@ ccl_device_inline void film_add_reservoir_di(
       kg, rng_state, reservoir.num_light_samples, reservoir.max_samples, PRNG_PICK);
 
   reservoir_add_bsdf_sample(
-      &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick, use_restir);
+      &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick);
 
 /*
  * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 
