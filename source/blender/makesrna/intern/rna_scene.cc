@@ -7786,6 +7786,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_stamp_memory", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "stamp", R_STAMP_MEMORY);
+  RNA_def_property_boolean_default(prop, false);
   RNA_def_property_ui_text(
       prop, "Stamp Peak Memory", "Include the peak memory usage in image metadata");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
