@@ -91,6 +91,39 @@ class VertexGroupRenameTest(unittest.TestCase):
                     finally:
                         self._remove_object_and_data(obj)
 
+    def test_vertex_group_rename_does_not_rename_bones(self):
+        armature_obj = self._new_armature_object_and_data()
+        mesh_obj = self._new_mesh_object_and_data()
+        grease_pencil_obj = self._new_grease_pencil_object_and_data()
+        try:
+            bone_name = armature_obj.data.bones[0].name
+            armature_object_name = armature_obj.name
+            armature_data_name = armature_obj.data.name
+
+            for obj, modifier_type, prop_name in (
+                (mesh_obj, 'ARMATURE', 'vertex_group'),
+                (grease_pencil_obj, 'GREASE_PENCIL_ARMATURE', 'vertex_group_name'),
+            ):
+                with self.subTest(modifier_type=modifier_type):
+                    vg = obj.vertex_groups.new(name=bone_name)
+                    modifier = obj.modifiers.new(name="Modifier", type=modifier_type)
+                    modifier.object = armature_obj
+                    modifier.use_bone_envelopes = True
+                    setattr(modifier, prop_name, vg.name)
+
+                    vg.name = "RenamedGroup"
+
+                    self.assertEqual(getattr(modifier, prop_name), "RenamedGroup")
+
+            self.assertEqual([bone.name for bone in armature_obj.data.bones], [bone_name])
+            self.assertEqual([bone.name for bone in armature_obj.pose.bones], [bone_name])
+            self.assertEqual(armature_obj.name, armature_object_name)
+            self.assertEqual(armature_obj.data.name, armature_data_name)
+        finally:
+            self._remove_object_and_data(mesh_obj)
+            self._remove_object_and_data(grease_pencil_obj)
+            self._remove_object_and_data(armature_obj)
+
     def test_shape_key_mask_updates_on_vertex_group_rename(self):
         obj = self._new_mesh_object_and_data()
         try:
@@ -224,6 +257,18 @@ class VertexGroupRenameTest(unittest.TestCase):
             self._remove_object_and_data(obj)
 
     @staticmethod
+    def _new_armature_object_and_data():
+        armature = bpy.data.armatures.new(name="Armature")
+        obj = bpy.data.objects.new(name="Armature", object_data=armature)
+        bpy.context.collection.objects.link(obj)
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.mode_set(mode='EDIT')
+        armature.edit_bones.new(name="Group")
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return obj
+
+    @staticmethod
     def _new_mesh_object_and_data():
         mesh = bpy.data.meshes.new(name="Mesh")
         obj = bpy.data.objects.new(name="Object", object_data=mesh)
@@ -245,6 +290,8 @@ class VertexGroupRenameTest(unittest.TestCase):
         if data is not None and data.users == 0:
             if isinstance(data, bpy.types.Mesh):
                 bpy.data.meshes.remove(data)
+            elif isinstance(data, bpy.types.Armature):
+                bpy.data.armatures.remove(data)
             elif isinstance(data, bpy.types.GreasePencil):
                 bpy.data.grease_pencils.remove(data)
             elif isinstance(data, bpy.types.Lattice):
