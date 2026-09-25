@@ -137,8 +137,6 @@ set(SRC
   intern/stack.cc
   intern/storage.cc
   intern/straight_skeleton.cc
-  intern/straight_skeleton_motorcycle.cc
-  intern/straight_skeleton_simulation.cc
   intern/string.cc
   intern/string_cursor_utf8.cc
   intern/string_ref.cc
@@ -166,7 +164,6 @@ set(SRC
   intern/winstuff_registration.cc
   # Private headers.
   intern/BLI_mempool_private.h
-  intern/straight_skeleton_intern.hh
 
   # Header as source (included in C files above).
   intern/list_sort_impl.h

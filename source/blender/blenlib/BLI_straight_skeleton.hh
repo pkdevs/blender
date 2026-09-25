@@ -70,18 +70,6 @@ namespace blender::straightskeleton {
  * \{ */
 
 /**
- * Algorithms available for computing the straight skeleton.
- */
-enum class StraightSkeletonAlgorithm {
-  /** Kinetic Delaunay Triangulation (default, Palfrader, Held, Huber 2012). */
-  KINETIC_TRIANGULATION,
-  /** Motorcycle-graph based straight skeleton algorithm (Eppstein-Erickson / Huber-Held). */
-  MOTORCYCLE_GRAPH,
-  /** Naive step-by-step wavefront simulation with spatial acceleration (kdtree). */
-  SIMULATION,
-};
-
-/**
  * Input to the straight skeleton computation.
  * Specifies 1 outer polygon (oriented CCW) and any number of hole polygons (each oriented CW).
  * All indices inside #outer_polygon and #hole_vert_indices refer to positions in #vert.
@@ -130,18 +118,12 @@ class StraightSkeletonInput {
    */
   int segments{1};
 
-  /** Algorithm used to compute the straight skeleton. */
-  StraightSkeletonAlgorithm algorithm{StraightSkeletonAlgorithm::KINETIC_TRIANGULATION};
-
   /** Optional identifying label for debug drawings and logging. */
   const char *label{nullptr};
 
   /** If true, runs extensive validation checks (graph planarity, no edge crossings, face
    * simplicity, and area partition). */
   bool full_verification{false};
-
-  /** If true, uses priority queue acceleration for simulation algorithm. */
-  bool use_priority_queue{false};
 };
 
 /** \} */
@@ -195,8 +177,7 @@ class StraightSkeletonOutput {
 
   /* The following fields are provided for unit testing; users can ignore them. */
 
-  /** True if the event loop was terminated because max_events was reached while events
-   * still remained in the priority queue (e.g. infinite flip event loop). */
+  /** True if the event loop was terminated because max_events was reached. */
   bool hit_max_events{false};
 
   /** Total number of events processed during the simulation. */
