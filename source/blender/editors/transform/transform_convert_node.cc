@@ -34,6 +34,21 @@
 
 namespace blender::ed::transform {
 
+struct ShakeData {
+  using Clock = std::chrono::steady_clock;
+  using TimePoint = Clock::time_point;
+  static constexpr uint8_t shake_distance_threshold = 40;
+  static constexpr uint8_t shake_count = 4;
+  static constexpr std::chrono::milliseconds shake_timeout{300};
+
+  float2 shake_pos;
+  float2 stroke_dir;
+  bool stroke_active;
+  float2 prev_pos;
+  TimePoint prev_time;
+  uint8_t n_shakes;
+};
+
 struct TransCustomDataNode {
   ui::View2DEdgePanData edgepan_data{};
 
@@ -43,6 +58,8 @@ struct TransCustomDataNode {
   bool is_new_node = false;
 
   Map<bNode *, bNode *> old_parent_by_detached_node;
+
+  ShakeData shake_data{};
 };
 
 /* -------------------------------------------------------------------- */
@@ -166,6 +183,13 @@ static void createTransNodeData(bContext * /*C*/, TransInfo *t)
   customdata->viewrect_prev = customdata->edgepan_data.initial_rect;
   customdata->is_new_node = t->remove_on_cancel;
 
+  customdata->shake_data.shake_pos = t->mval;
+  customdata->shake_data.prev_pos = t->mval;
+  customdata->shake_data.stroke_dir = float2(0.0f, 0.0f);
+  customdata->shake_data.stroke_active = false;
+  customdata->shake_data.prev_time = ShakeData::Clock::now();
+  customdata->shake_data.n_shakes = 0;
+
   if (t->region) {
     space_node::node_insert_on_link_flags_set(
         *snode, *t->region, t->modifiers & MOD_NODE_ATTACH, customdata->is_new_node);
@@ -273,6 +297,60 @@ static bool has_selected_parent(const bNode &node)
   return false;
 }
 
+static void update_shake_data(TransInfo *t, ShakeData *shake_data)
+{
+  ShakeData::TimePoint now = ShakeData::Clock::now();
+
+  /* Each stroke of a shake must take place within 300ms. */
+  if (now - shake_data->prev_time > ShakeData::shake_timeout) {
+    shake_data->shake_pos = t->mval;
+    shake_data->prev_pos = t->mval;
+    shake_data->stroke_dir = float2(0.0f, 0.0f);
+    shake_data->stroke_active = false;
+    shake_data->prev_time = now;
+    shake_data->n_shakes = 0;
+    return;
+  }
+
+  float2 stroke;
+  stroke[0] = t->mval[0] - shake_data->shake_pos[0];
+  stroke[1] = t->mval[1] - shake_data->shake_pos[1];
+
+  float dist_sq = math::length_squared(stroke);
+  float threshold_sq = (ShakeData::shake_distance_threshold * ShakeData::shake_distance_threshold);
+
+  if (dist_sq > threshold_sq) {
+    if (!shake_data->stroke_active) {
+      shake_data->stroke_active = true;
+      shake_data->stroke_dir = math::normalize(stroke);
+    }
+
+    /* Detect perpendicular motion and reset if too far. */
+    float perp_dist = std::abs(stroke[0] * shake_data->stroke_dir[1] -
+                               stroke[1] * shake_data->stroke_dir[0]);
+    float max_deviation = ShakeData::shake_distance_threshold * 0.4f;
+    if (perp_dist > max_deviation) {
+      shake_data->shake_pos = t->mval;
+      shake_data->stroke_active = false;
+    }
+    else {
+      float2 prev;
+      prev[0] = t->mval[0] - shake_data->prev_pos[0];
+      prev[1] = t->mval[1] - shake_data->prev_pos[1];
+      float dot_product = math::dot(math::normalize(stroke), math::normalize(prev));
+
+      /* Only count abrupt direction changes >120 degrees. */
+      if (dot_product < -0.5f) {
+        shake_data->prev_time = now;
+        shake_data->shake_pos = t->mval;
+        shake_data->stroke_active = false;
+        ++shake_data->n_shakes;
+      }
+    }
+  }
+  shake_data->prev_pos = t->mval;
+}
+
 static void flushTransNodes(TransInfo *t)
 {
   const float dpi_fac = UI_SCALE_FAC;
@@ -330,6 +408,22 @@ static void flushTransNodes(TransInfo *t)
       for (bNode *node : nodes_to_detach) {
         bke::node_detach_node(*snode->edittree, *node);
       }
+    }
+  }
+
+  update_shake_data(t, &customdata->shake_data);
+  if (customdata->shake_data.n_shakes > ShakeData::shake_count) {
+    Vector<bNode *> nodes_to_detach;
+    for (bNode *node : snode->edittree->all_nodes()) {
+      if (!(node->flag & NODE_SELECT)) {
+        continue;
+      }
+      nodes_to_detach.append(node);
+    }
+
+    if (nodes_to_detach.size() == 1) {
+      bNode *node = nodes_to_detach[0];
+      bke::node_internal_relink(*snode->edittree, *node);
     }
   }
 
