@@ -280,6 +280,93 @@ static double polygon_signed_area(Span<int> cycle, Span<double2> positions)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name 2D Spatial Grid with Overlapping Buckets
+ * \{ */
+
+struct SpatialGrid2D {
+  double x_min{0.0};
+  double y_min{0.0};
+  double inv_cell_dx{1.0};
+  double inv_cell_dy{1.0};
+  int cols{1};
+  int rows{1};
+
+  Array<int> cell_heads;
+  Vector<int> entry_next;
+  Vector<int> entry_item;
+
+  void init(const double domain_xmin,
+            const double domain_ymin,
+            const double domain_xmax,
+            const double domain_ymax,
+            const int num_items)
+  {
+    const double w = std::max(domain_xmax - domain_xmin, 1e-6);
+    const double h = std::max(domain_ymax - domain_ymin, 1e-6);
+    x_min = domain_xmin;
+    y_min = domain_ymin;
+
+    const double aspect = w / h;
+    const int target_cells = std::clamp(num_items, 1, 65536);
+    cols = std::clamp(int(std::round(std::sqrt(double(target_cells) * aspect))), 1, 256);
+    rows = std::clamp(int(std::round(std::sqrt(double(target_cells) / aspect))), 1, 256);
+
+    inv_cell_dx = double(cols) / w;
+    inv_cell_dy = double(rows) / h;
+
+    const int total_cells = cols * rows;
+    cell_heads.reinitialize(total_cells);
+    cell_heads.fill(-1);
+    entry_next.clear();
+    entry_item.clear();
+  }
+
+  void insert(const int item, const double x1, const double y1, const double x2, const double y2)
+  {
+    const int cx1 = std::clamp(int((x1 - x_min) * inv_cell_dx), 0, cols - 1);
+    const int cx2 = std::clamp(int((x2 - x_min) * inv_cell_dx), 0, cols - 1);
+    const int cy1 = std::clamp(int((y1 - y_min) * inv_cell_dy), 0, rows - 1);
+    const int cy2 = std::clamp(int((y2 - y_min) * inv_cell_dy), 0, rows - 1);
+
+    for (int cy = cy1; cy <= cy2; cy++) {
+      const int row_offset = cy * cols;
+      for (int cx = cx1; cx <= cx2; cx++) {
+        const int cell_idx = row_offset + cx;
+        const int entry_id = int(entry_item.size());
+        entry_item.append(item);
+        entry_next.append(cell_heads[cell_idx]);
+        cell_heads[cell_idx] = entry_id;
+      }
+    }
+  }
+
+  template<typename Callback>
+  void for_each_overlapping(const double x1,
+                            const double y1,
+                            const double x2,
+                            const double y2,
+                            const Callback &callback) const
+  {
+    const int cx1 = std::clamp(int((x1 - x_min) * inv_cell_dx), 0, cols - 1);
+    const int cx2 = std::clamp(int((x2 - x_min) * inv_cell_dx), 0, cols - 1);
+    const int cy1 = std::clamp(int((y1 - y_min) * inv_cell_dy), 0, rows - 1);
+    const int cy2 = std::clamp(int((y2 - y_min) * inv_cell_dy), 0, rows - 1);
+
+    for (int cy = cy1; cy <= cy2; cy++) {
+      const int row_offset = cy * cols;
+      for (int cx = cx1; cx <= cx2; cx++) {
+        const int cell_idx = row_offset + cx;
+        for (int e = cell_heads[cell_idx]; e != -1; e = entry_next[e]) {
+          callback(entry_item[e]);
+        }
+      }
+    }
+  }
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Simulation Engine
  * \{ */
 
@@ -327,6 +414,11 @@ class SimulationEngine {
   std::priority_queue<SimEvent, std::vector<SimEvent>, std::greater<SimEvent>> pq_;
   Vector<int> node_version_;
   Vector<int> modified_nodes_;
+
+  SpatialGrid2D grid_;
+  SpatialGrid2D vert_grid_;
+  Vector<int> query_tags_;
+  int current_query_id_{0};
 
  public:
   SimulationEngine(const StraightSkeletonInput &input,
@@ -493,6 +585,7 @@ class SimulationEngine {
      * seam with opposite orientations. Merging them eliminates internal triangulation chords
      * and produces the true, unified straight skeleton face with its V-notch at the saddle point.
      */
+
     /* Group face indices by (orig, orig_edge, band). */
     Map<int64_t, Vector<int>> groups;
     for (const int i : out_faces_.faces.index_range()) {
@@ -635,6 +728,7 @@ class SimulationEngine {
     }
 
     const int total_faces = int(final_faces.size());
+
     Vector<int> face_indices;
     Vector<int> face_lens;
     for (const Vector<int> &f : final_faces) {
@@ -842,7 +936,7 @@ class SimulationEngine {
     }
   }
 
-  double find_earliest_event(double dt, double eps) const
+  double find_earliest_event(double dt, double eps)
   {
     double earliest_t = std::numeric_limits<double>::infinity();
 
@@ -858,45 +952,188 @@ class SimulationEngine {
 
       if (dv_sq > 1e-12 && math::dot(e0, dv) < -1e-12) {
         const double tau = -math::dot(e0, dv) / dv_sq;
-        if (tau >= -1e-9 && tau <= dt + 1e-9) {
+        if (tau > 1e-11 && tau <= dt + 1e-9) {
           const double2 e_tau = e0 + tau * dv;
           if (math::length(e_tau) < std::max(eps, 1e-5) || math::dot(e0, e0 + dt * dv) <= 0.0) {
-            earliest_t = std::min(earliest_t, current_time_ + std::max(0.0, tau));
+            earliest_t = std::min(earliest_t, current_time_ + tau);
           }
         }
       }
     }
 
-    /* 2. Vertex-Edge Split Events. */
-    for (const int w : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[w]) {
+    double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+    int active_nodes_num = 0;
+    Vector<int> reflex_nodes;
+
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
         continue;
       }
-      /* Only reflex vertices can initiate split events. */
+      active_nodes_num++;
+      const double2 &p = wf_nodes_.pos[u];
+      x_min = std::min(x_min, p.x);
+      x_max = std::max(x_max, p.x);
+      y_min = std::min(y_min, p.y);
+      y_max = std::max(y_max, p.y);
+
+      if (is_reflex(u)) {
+        reflex_nodes.append(u);
+      }
+    }
+
+    if (active_nodes_num == 0 || reflex_nodes.is_empty()) {
+      return earliest_t;
+    }
+
+    const double diag = std::max(std::hypot(x_max - x_min, y_max - y_min), 1e-4);
+    const double safety_tol = std::max(eps, 1e-4);
+
+    double max_tau_search = dt;
+    if (!std::isinf(earliest_t)) {
+      max_tau_search = std::min(max_tau_search, earliest_t - current_time_);
+    }
+    if (std::isinf(max_tau_search) || max_tau_search > diag) {
+      max_tau_search = diag;
+    }
+    if (max_tau_search < 0.0) {
+      max_tau_search = 0.0;
+    }
+
+    if (active_nodes_num <= 16) {
+      for (const int w : reflex_nodes) {
+        const int prev_w = wf_nodes_.prev_node[w];
+        const int next_w = wf_nodes_.next_node[w];
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (!wf_nodes_.is_active[u]) {
+            continue;
+          }
+          const int v = wf_nodes_.next_node[u];
+          if (u == w || v == w || prev_w == u || next_w == v) {
+            continue;
+          }
+
+          const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+          const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
+          const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
+
+          if (rate > 1e-8 && d0 > 1e-11) {
+            const double tau = d0 / rate;
+            if (tau > 1e-11 && tau <= dt + 1e-9) {
+              const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
+              const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
+              const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
+              const double2 e_uv = p_v - p_u;
+              const double len_sq = math::length_squared(e_uv);
+
+              if (len_sq > 1e-12) {
+                const double s = math::dot(p_w - p_u, e_uv) / len_sq;
+                if (s > 1e-5 && s < 1.0 - 1e-5) {
+                  earliest_t = std::min(earliest_t, current_time_ + tau);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (const int w : reflex_nodes) {
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (u >= w || !wf_nodes_.is_active[u]) {
+            continue;
+          }
+          if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+            continue;
+          }
+
+          const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
+          const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
+          const double dv_sq = math::length_squared(dv);
+
+          if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
+            const double tau = -math::dot(dp, dv) / dv_sq;
+            if (tau > 1e-11 && tau <= dt + 1e-9) {
+              const double dist_at_tau = math::length(dp + tau * dv);
+              if (dist_at_tau < std::max(eps, 1e-5)) {
+                earliest_t = std::min(earliest_t, current_time_ + tau);
+              }
+            }
+          }
+        }
+      }
+      return earliest_t;
+    }
+
+    /* Spatial grid with overlapping buckets. */
+    x_min -= safety_tol;
+    x_max += safety_tol;
+    y_min -= safety_tol;
+    y_max += safety_tol;
+
+    const double tau_horizon = max_tau_search;
+
+    grid_.init(x_min, y_min, x_max, y_max, active_nodes_num);
+
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      const int v = wf_nodes_.next_node[u];
+      const double2 &p_u0 = wf_nodes_.pos[u];
+      const double2 &p_v0 = wf_nodes_.pos[v];
+      const double2 p_u1 = p_u0 + tau_horizon * wf_nodes_.vel[u];
+      const double2 p_v1 = p_v0 + tau_horizon * wf_nodes_.vel[v];
+
+      const double ex_min = std::min({p_u0.x, p_v0.x, p_u1.x, p_v1.x}) - safety_tol;
+      const double ex_max = std::max({p_u0.x, p_v0.x, p_u1.x, p_v1.x}) + safety_tol;
+      const double ey_min = std::min({p_u0.y, p_v0.y, p_u1.y, p_v1.y}) - safety_tol;
+      const double ey_max = std::max({p_u0.y, p_v0.y, p_u1.y, p_v1.y}) + safety_tol;
+
+      grid_.insert(u, ex_min, ey_min, ex_max, ey_max);
+    }
+
+    if (query_tags_.size() < wf_nodes_.pos.size()) {
+      query_tags_.reinitialize(wf_nodes_.pos.size());
+      query_tags_.fill(0);
+      current_query_id_ = 1;
+    }
+
+    for (const int w : reflex_nodes) {
       const int prev_w = wf_nodes_.prev_node[w];
       const int next_w = wf_nodes_.next_node[w];
-      const double2 n_in = compute_inward_normal(wf_nodes_.pos[prev_w], wf_nodes_.pos[w]);
-      const double2 n_out = compute_inward_normal(wf_nodes_.pos[w], wf_nodes_.pos[next_w]);
-      if (n_in.x * n_out.y - n_in.y * n_out.x > -1e-8) {
-        continue;
-      }
+      const double2 &p_w0 = wf_nodes_.pos[w];
+      const double2 p_w1 = p_w0 + tau_horizon * wf_nodes_.vel[w];
 
-      for (const int u : wf_nodes_.pos.index_range()) {
-        if (!wf_nodes_.is_active[u]) {
-          continue;
+      const double wx_min = std::min(p_w0.x, p_w1.x) - safety_tol;
+      const double wx_max = std::max(p_w0.x, p_w1.x) + safety_tol;
+      const double wy_min = std::min(p_w0.y, p_w1.y) - safety_tol;
+      const double wy_max = std::max(p_w0.y, p_w1.y) + safety_tol;
+
+      current_query_id_++;
+      if (current_query_id_ <= 0) {
+        query_tags_.fill(0);
+        current_query_id_ = 1;
+      }
+      const int qid = current_query_id_;
+
+      grid_.for_each_overlapping(wx_min, wy_min, wx_max, wy_max, [&](const int u) {
+        if (query_tags_[u] == qid) {
+          return;
         }
+        query_tags_[u] = qid;
+
         const int v = wf_nodes_.next_node[u];
         if (u == w || v == w || prev_w == u || next_w == v) {
-          continue;
+          return;
         }
 
+        /* 1. Test split event between reflex w and edge u -> v. */
         const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
         const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
         const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
 
-        if (rate > 1e-8 && d0 >= -1e-7) {
+        if (rate > 1e-8 && d0 > 1e-11) {
           const double tau = d0 / rate;
-          if (tau >= -1e-9 && tau <= dt + 1e-9) {
+          if (tau > 1e-11 && tau <= tau_horizon + 1e-9) {
             const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
             const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
             const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
@@ -906,41 +1143,28 @@ class SimulationEngine {
             if (len_sq > 1e-12) {
               const double s = math::dot(p_w - p_u, e_uv) / len_sq;
               if (s > 1e-5 && s < 1.0 - 1e-5) {
-                earliest_t = std::min(earliest_t, current_time_ + std::max(0.0, tau));
+                earliest_t = std::min(earliest_t, current_time_ + tau);
               }
             }
           }
         }
-      }
-    }
 
-    /* 3. Vertex-Vertex Multi-Split Collisions. */
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
-        continue;
-      }
-      for (const int w : wf_nodes_.pos.index_range()) {
-        if (w <= u || !wf_nodes_.is_active[w]) {
-          continue;
-        }
-        if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
-          continue;
-        }
-
-        const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
-        const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
-        const double dv_sq = math::length_squared(dv);
-
-        if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
-          const double tau = -math::dot(dp, dv) / dv_sq;
-          if (tau >= -1e-9 && tau <= dt + 1e-9) {
-            const double dist_at_tau = math::length(dp + tau * dv);
-            if (dist_at_tau < std::max(eps, 1e-5)) {
-              earliest_t = std::min(earliest_t, current_time_ + std::max(0.0, tau));
+        /* 2. Test vertex collision between reflex w and vertex u. */
+        if (u != w && wf_nodes_.next_node[u] != w && wf_nodes_.next_node[w] != u) {
+          const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
+          const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
+          const double dv_sq = math::length_squared(dv);
+          if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
+            const double tau = -math::dot(dp, dv) / dv_sq;
+            if (tau > 1e-11 && tau <= tau_horizon + 1e-9) {
+              const double dist_at_tau = math::length(dp + tau * dv);
+              if (dist_at_tau < std::max(eps, 1e-5)) {
+                earliest_t = std::min(earliest_t, current_time_ + tau);
+              }
             }
           }
         }
-      }
+      });
     }
 
     return earliest_t;
@@ -976,10 +1200,10 @@ class SimulationEngine {
 
     if (dv_sq > 1e-12 && math::dot(e0, dv) < -1e-12) {
       const double tau = -math::dot(e0, dv) / dv_sq;
-      if (tau >= -1e-9) {
+      if (tau > 1e-11) {
         const double2 e_tau = e0 + tau * dv;
         if (math::length(e_tau) < std::max(eps, 1e-5)) {
-          const double event_t = current_time_ + std::max(0.0, tau);
+          const double event_t = current_time_ + tau;
           pq_.push(SimEvent{event_t,
                             SimEventType::EDGE_COLLAPSE,
                             u,
@@ -1012,9 +1236,9 @@ class SimulationEngine {
     const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
     const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
 
-    if (rate > 1e-8 && d0 >= -1e-7) {
+    if (rate > 1e-8 && d0 > 1e-11) {
       const double tau = d0 / rate;
-      if (tau >= -1e-9) {
+      if (tau > 1e-11) {
         const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
         const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
         const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
@@ -1024,7 +1248,7 @@ class SimulationEngine {
         if (len_sq > 1e-12) {
           const double s = math::dot(p_w - p_u, e_uv) / len_sq;
           if (s > 1e-5 && s < 1.0 - 1e-5) {
-            const double event_t = current_time_ + std::max(0.0, tau);
+            const double event_t = current_time_ + tau;
             pq_.push(SimEvent{event_t,
                               SimEventType::SPLIT,
                               w,
@@ -1054,10 +1278,10 @@ class SimulationEngine {
 
     if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
       const double tau = -math::dot(dp, dv) / dv_sq;
-      if (tau >= -1e-9) {
+      if (tau > 1e-11) {
         const double dist_at_tau = math::length(dp + tau * dv);
         if (dist_at_tau < std::max(eps, 1e-5)) {
-          const double event_t = current_time_ + std::max(0.0, tau);
+          const double event_t = current_time_ + tau;
           pq_.push(SimEvent{event_t,
                             SimEventType::VERT_COLLISION,
                             u,
@@ -1263,6 +1487,9 @@ class SimulationEngine {
   int get_or_create_skel_node(const double2 &pos, double tol)
   {
     for (int i = int(skel_graph_.nodes_pos.size()) - 1; i >= 0; i--) {
+      if (skel_graph_.nodes_time[i] < current_time_ - 1e-9) {
+        break;
+      }
       if (std::abs(skel_graph_.nodes_time[i] - current_time_) < 1e-9 &&
           math::length(skel_graph_.nodes_pos[i] - pos) < tol)
       {
@@ -1284,6 +1511,568 @@ class SimulationEngine {
     Vector<int> split_edges;
   };
 
+  bool try_resolve_opposing_pair(const int e1,
+                                 const int e2,
+                                 const double cluster_tol,
+                                 Vector<std::pair<int, int>> &processed_pairs)
+  {
+    if (!wf_nodes_.is_active[e1] || !wf_nodes_.is_active[e2]) {
+      return false;
+    }
+    if (processed_pairs.contains(std::make_pair(e1, e2))) {
+      return false;
+    }
+    const int u = e1;
+    const int v = wf_nodes_.next_node[u];
+    if (v < 0 || !wf_nodes_.is_active[v]) {
+      return false;
+    }
+    const double2 d1 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+    const double l1 = math::length(d1);
+    if (l1 < cluster_tol) {
+      return false;
+    }
+    const double2 dir1 = d1 / l1;
+    const double2 n1 = double2(-dir1.y, dir1.x);
+
+    const int w = e2;
+    const int z = wf_nodes_.next_node[w];
+    if (z < 0 || !wf_nodes_.is_active[z]) {
+      return false;
+    }
+    const double2 d2 = wf_nodes_.pos[z] - wf_nodes_.pos[w];
+    const double l2 = math::length(d2);
+    if (l2 < cluster_tol) {
+      return false;
+    }
+    const double2 dir2 = d2 / l2;
+    const double2 n2 = double2(-dir2.y, dir2.x);
+
+    if (math::dot(n1, n2) > -0.8) {
+      return false;
+    }
+
+    if (std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n1)) > cluster_tol ||
+        std::abs(math::dot(wf_nodes_.pos[z] - wf_nodes_.pos[u], n1)) > cluster_tol)
+    {
+      return false;
+    }
+
+    const double s_w = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], dir1);
+    const double s_z = math::dot(wf_nodes_.pos[z] - wf_nodes_.pos[u], dir1);
+    const double s_a = std::max(0.0, std::min(s_w, s_z));
+    const double s_b = std::min(l1, std::max(s_w, s_z));
+
+    if (s_b - s_a < cluster_tol) {
+      return false;
+    }
+
+    processed_pairs.append(std::make_pair(e1, e2));
+
+    const double2 p_a = wf_nodes_.pos[u] + s_a * dir1;
+    const double2 p_b = wf_nodes_.pos[u] + s_b * dir1;
+    const int s_a_star = get_or_create_skel_node(p_a, cluster_tol);
+    const int s_b_star = get_or_create_skel_node(p_b, cluster_tol);
+
+    /* Add skeleton ridge edge between s_a_star and s_b_star. */
+    skel_graph_.edges_node1.append(s_a_star);
+    skel_graph_.edges_node2.append(s_b_star);
+    skel_graph_.edges_orig.append(-1);
+    skel_graph_.edges_face.append(wf_nodes_.orig_face[e1]);
+    skel_graph_.edges_time_start.append(current_time_);
+    skel_graph_.edges_time_end.append(current_time_);
+    skel_graph_.edges_is_boundary.append(false);
+
+    const int prev_u = wf_nodes_.prev_node[u];
+    const int prev_w = wf_nodes_.prev_node[w];
+
+    const double end_tol = std::max(cluster_tol, 0.002);
+    const bool match_left = std::abs(std::min(s_w, s_z) - 0.0) < end_tol;
+    const bool match_right = std::abs(std::max(s_w, s_z) - l1) < end_tol;
+    int new_node_id = -1;
+
+    if (match_left && match_right) {
+      /* Case A: Exact coincident match - both edges completely collapse. */
+      if (!dry_run_) {
+        /* Emit face for e1 (u -> v). */
+        Vector<int> face_verts1;
+        face_verts1.append(wf_nodes_.left_trail[e1][0]);
+        for (const int r : wf_nodes_.right_trail[e1]) {
+          if (face_verts1.last() != r) {
+            face_verts1.append(r);
+          }
+        }
+        if (face_verts1.last() != s_b_star) {
+          face_verts1.append(s_b_star);
+        }
+        if (face_verts1.last() != s_a_star) {
+          face_verts1.append(s_a_star);
+        }
+        for (int k = int(wf_nodes_.left_trail[e1].size()) - 1; k >= 1; k--) {
+          const int l = wf_nodes_.left_trail[e1][k];
+          if (face_verts1.last() != l && l != face_verts1[0]) {
+            face_verts1.append(l);
+          }
+        }
+        if (face_verts1.size() >= 3) {
+          out_faces_.faces.append(std::move(face_verts1));
+          out_faces_.face_orig.append(wf_nodes_.orig_face[e1]);
+          out_faces_.face_band.append(current_band_);
+          out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
+        }
+
+        /* Emit face for e2 (w -> z). */
+        Vector<int> face_verts2;
+        face_verts2.append(wf_nodes_.left_trail[e2][0]);
+        for (const int r : wf_nodes_.right_trail[e2]) {
+          if (face_verts2.last() != r) {
+            face_verts2.append(r);
+          }
+        }
+        if (face_verts2.last() != s_a_star) {
+          face_verts2.append(s_a_star);
+        }
+        if (face_verts2.last() != s_b_star) {
+          face_verts2.append(s_b_star);
+        }
+        for (int k = int(wf_nodes_.left_trail[e2].size()) - 1; k >= 1; k--) {
+          const int l = wf_nodes_.left_trail[e2][k];
+          if (face_verts2.last() != l && l != face_verts2[0]) {
+            face_verts2.append(l);
+          }
+        }
+        if (face_verts2.size() >= 3) {
+          out_faces_.faces.append(std::move(face_verts2));
+          out_faces_.face_orig.append(wf_nodes_.orig_face[e2]);
+          out_faces_.face_band.append(current_band_);
+          out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
+        }
+      }
+
+      if (prev_u != w && prev_u >= 0 && z >= 0) {
+        wf_nodes_.next_node[prev_u] = z;
+        wf_nodes_.prev_node[z] = prev_u;
+        if (wf_nodes_.right_trail[prev_u].is_empty() ||
+            wf_nodes_.right_trail[prev_u].last() != s_a_star)
+        {
+          wf_nodes_.right_trail[prev_u].append(s_a_star);
+        }
+        if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star) {
+          wf_nodes_.left_trail[z].append(s_a_star);
+        }
+      }
+
+      if (prev_w != u && prev_w >= 0 && v >= 0) {
+        wf_nodes_.next_node[prev_w] = v;
+        wf_nodes_.prev_node[v] = prev_w;
+        if (wf_nodes_.right_trail[prev_w].is_empty() ||
+            wf_nodes_.right_trail[prev_w].last() != s_b_star)
+        {
+          wf_nodes_.right_trail[prev_w].append(s_b_star);
+        }
+        if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star) {
+          wf_nodes_.left_trail[v].append(s_b_star);
+        }
+      }
+
+      wf_nodes_.is_active[u] = false;
+      wf_nodes_.is_active[w] = false;
+      if (use_priority_queue_) {
+        if (u < node_version_.size()) {
+          node_version_[u]++;
+        }
+        if (w < node_version_.size()) {
+          node_version_[w]++;
+        }
+      }
+    }
+    else {
+      /* Case B: Partial overlap - if an edge is completely covered by the overlap,
+       * it fully collapses and emits its roof face. Surviving suffixes continue. */
+      const bool e1_completely_covered = (s_a < cluster_tol && s_b > l1 - cluster_tol);
+      const double l2 = math::length(wf_nodes_.pos[z] - wf_nodes_.pos[w]);
+      const bool e2_completely_covered = (s_b - s_a > l2 - cluster_tol);
+
+      if (e1_completely_covered) {
+        if (!dry_run_) {
+          Vector<int> face_verts1;
+          face_verts1.append(wf_nodes_.left_trail[e1][0]);
+          for (const int r : wf_nodes_.right_trail[e1]) {
+            if (face_verts1.last() != r) {
+              face_verts1.append(r);
+            }
+          }
+          if (face_verts1.last() != s_b_star) {
+            face_verts1.append(s_b_star);
+          }
+          if (face_verts1.last() != s_a_star) {
+            face_verts1.append(s_a_star);
+          }
+          for (int k = int(wf_nodes_.left_trail[e1].size()) - 1; k >= 1; k--) {
+            const int l = wf_nodes_.left_trail[e1][k];
+            if (face_verts1.last() != l && l != face_verts1[0]) {
+              face_verts1.append(l);
+            }
+          }
+          if (face_verts1.size() >= 3) {
+            out_faces_.faces.append(std::move(face_verts1));
+            out_faces_.face_orig.append(wf_nodes_.orig_face[e1]);
+            out_faces_.face_band.append(current_band_);
+            out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
+          }
+        }
+        wf_nodes_.is_active[u] = false;
+        if (use_priority_queue_ && u < node_version_.size()) {
+          node_version_[u]++;
+        }
+      }
+
+      if (e2_completely_covered) {
+        if (!dry_run_) {
+          Vector<int> face_verts2;
+          face_verts2.append(wf_nodes_.left_trail[e2][0]);
+          for (const int r : wf_nodes_.right_trail[e2]) {
+            if (face_verts2.last() != r) {
+              face_verts2.append(r);
+            }
+          }
+          if (face_verts2.last() != s_a_star) {
+            face_verts2.append(s_a_star);
+          }
+          if (face_verts2.last() != s_b_star) {
+            face_verts2.append(s_b_star);
+          }
+          for (int k = int(wf_nodes_.left_trail[e2].size()) - 1; k >= 1; k--) {
+            const int l = wf_nodes_.left_trail[e2][k];
+            if (face_verts2.last() != l && l != face_verts2[0]) {
+              face_verts2.append(l);
+            }
+          }
+          if (face_verts2.size() >= 3) {
+            out_faces_.faces.append(std::move(face_verts2));
+            out_faces_.face_orig.append(wf_nodes_.orig_face[e2]);
+            out_faces_.face_band.append(current_band_);
+            out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
+          }
+        }
+        wf_nodes_.is_active[w] = false;
+        if (use_priority_queue_ && w < node_version_.size()) {
+          node_version_[w]++;
+        }
+      }
+
+      const bool e1_extends_left = (s_z > end_tol);
+      const bool e2_extends_left = (s_z < -end_tol);
+      const bool e1_extends_right = (l1 > s_w + end_tol);
+      const bool e2_extends_right = (s_w > l1 + end_tol);
+
+      if (e1_extends_left && e1_extends_right) {
+        /* Case B1: Edge 1 extends beyond BOTH ends of Edge 2.
+         * Edge 2 was completely covered and collapsed.
+         * Edge 1 is split into two surviving pieces:
+         *   Piece 1 (node u):  starts at u, ends at p_a -> connects to z.
+         *   Piece 2 (new node u2): starts at p_b, ends at v -> connects from prev_w.
+         */
+        wf_nodes_.next_node[u] = z;
+        wf_nodes_.prev_node[z] = u;
+        wf_nodes_.pos[z] = p_a;
+        wf_nodes_.skel_node[z] = s_a_star;
+
+        Vector<int> orig_rt_u = std::move(wf_nodes_.right_trail[u]);
+        wf_nodes_.right_trail[u].clear();
+        wf_nodes_.right_trail[u].append(s_a_star);
+
+        if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star) {
+          wf_nodes_.left_trail[z].append(s_a_star);
+        }
+
+        if (!dry_run_) {
+          Vector<int> face_verts1;
+          face_verts1.append(wf_nodes_.left_trail[u][0]);
+          for (const int r : orig_rt_u) {
+            if (face_verts1.last() != r) {
+              face_verts1.append(r);
+            }
+          }
+          if (face_verts1.last() != s_b_star) {
+            face_verts1.append(s_b_star);
+          }
+          if (face_verts1.last() != s_a_star) {
+            face_verts1.append(s_a_star);
+          }
+          for (int k = int(wf_nodes_.left_trail[u].size()) - 1; k >= 1; k--) {
+            const int l = wf_nodes_.left_trail[u][k];
+            if (face_verts1.last() != l && l != face_verts1[0]) {
+              face_verts1.append(l);
+            }
+          }
+          if (face_verts1.size() >= 3) {
+            out_faces_.faces.append(std::move(face_verts1));
+            out_faces_.face_orig.append(wf_nodes_.orig_face[u]);
+            out_faces_.face_band.append(current_band_);
+            out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[u]);
+          }
+        }
+
+        const int u2 = int(wf_nodes_.pos.size());
+        new_node_id = u2;
+        wf_nodes_.pos.append(p_b);
+        wf_nodes_.vel.append(wf_nodes_.vel[u]);
+        wf_nodes_.prev_node.append(prev_w);
+        wf_nodes_.next_node.append(v);
+        wf_nodes_.skel_node.append(s_b_star);
+        wf_nodes_.orig_edge.append(wf_nodes_.orig_edge[u]);
+        wf_nodes_.orig_face.append(wf_nodes_.orig_face[u]);
+        wf_nodes_.contour_id.append(wf_nodes_.contour_id[u]);
+        wf_nodes_.is_active.append(true);
+        wf_nodes_.time_birth.append(current_time_);
+        if (use_priority_queue_) {
+          node_version_.append(0);
+        }
+
+        Vector<int> lt2;
+        lt2.append(s_b_star);
+        wf_nodes_.left_trail.append(std::move(lt2));
+
+        if (orig_rt_u.is_empty() || orig_rt_u.last() != wf_nodes_.skel_node[v]) {
+          orig_rt_u.append(wf_nodes_.skel_node[v]);
+        }
+        wf_nodes_.right_trail.append(std::move(orig_rt_u));
+
+        wf_nodes_.prev_node[v] = u2;
+        wf_nodes_.next_node[prev_w] = u2;
+
+        if (wf_nodes_.right_trail[prev_w].is_empty() ||
+            wf_nodes_.right_trail[prev_w].last() != s_b_star)
+        {
+          wf_nodes_.right_trail[prev_w].append(s_b_star);
+        }
+      }
+      else if (e2_extends_left && e2_extends_right) {
+        /* Case B2: Edge 2 extends beyond BOTH ends of Edge 1.
+         * Edge 1 was completely covered and collapsed.
+         * Edge 2 is split into two surviving pieces:
+         *   Piece 1 (new node w2): starts at p_a, ends at z -> connects from prev_u.
+         *   Piece 2 (node w):  starts at w, ends at p_b -> connects to v.
+         */
+        wf_nodes_.next_node[w] = v;
+        wf_nodes_.prev_node[v] = w;
+        wf_nodes_.pos[v] = p_b;
+        wf_nodes_.skel_node[v] = s_b_star;
+
+        Vector<int> orig_rt_w = std::move(wf_nodes_.right_trail[w]);
+        wf_nodes_.right_trail[w].clear();
+        wf_nodes_.right_trail[w].append(s_b_star);
+
+        if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star) {
+          wf_nodes_.left_trail[v].append(s_b_star);
+        }
+
+        if (!dry_run_) {
+          Vector<int> face_verts2;
+          face_verts2.append(wf_nodes_.left_trail[w][0]);
+          for (const int r : orig_rt_w) {
+            if (face_verts2.last() != r) {
+              face_verts2.append(r);
+            }
+          }
+          if (face_verts2.last() != s_a_star) {
+            face_verts2.append(s_a_star);
+          }
+          if (face_verts2.last() != s_b_star) {
+            face_verts2.append(s_b_star);
+          }
+          for (int k = int(wf_nodes_.left_trail[w].size()) - 1; k >= 1; k--) {
+            const int l = wf_nodes_.left_trail[w][k];
+            if (face_verts2.last() != l && l != face_verts2[0]) {
+              face_verts2.append(l);
+            }
+          }
+          if (face_verts2.size() >= 3) {
+            out_faces_.faces.append(std::move(face_verts2));
+            out_faces_.face_orig.append(wf_nodes_.orig_face[w]);
+            out_faces_.face_band.append(current_band_);
+            out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[w]);
+          }
+        }
+
+        const int w2 = int(wf_nodes_.pos.size());
+        new_node_id = w2;
+        wf_nodes_.pos.append(p_a);
+        wf_nodes_.vel.append(wf_nodes_.vel[w]);
+        wf_nodes_.prev_node.append(prev_u);
+        wf_nodes_.next_node.append(z);
+        wf_nodes_.skel_node.append(s_a_star);
+        wf_nodes_.orig_edge.append(wf_nodes_.orig_edge[w]);
+        wf_nodes_.orig_face.append(wf_nodes_.orig_face[w]);
+        wf_nodes_.contour_id.append(wf_nodes_.contour_id[w]);
+        wf_nodes_.is_active.append(true);
+        wf_nodes_.time_birth.append(current_time_);
+        if (use_priority_queue_) {
+          node_version_.append(0);
+        }
+
+        Vector<int> lt2;
+        lt2.append(s_a_star);
+        wf_nodes_.left_trail.append(std::move(lt2));
+
+        if (orig_rt_w.is_empty() || orig_rt_w.last() != wf_nodes_.skel_node[z]) {
+          orig_rt_w.append(wf_nodes_.skel_node[z]);
+        }
+        wf_nodes_.right_trail.append(std::move(orig_rt_w));
+
+        wf_nodes_.prev_node[z] = w2;
+        wf_nodes_.next_node[prev_u] = w2;
+
+        if (wf_nodes_.right_trail[prev_u].is_empty() ||
+            wf_nodes_.right_trail[prev_u].last() != s_a_star)
+        {
+          wf_nodes_.right_trail[prev_u].append(s_a_star);
+        }
+      }
+      else {
+        /* Case B3: Neither edge extends on both ends. */
+        /* Handle left endpoint p_a (s_a): */
+        if (s_z < -cluster_tol) {
+          /* Edge 2 extends to the left of s_a: surviving piece of Edge 2 starts at p_a, goes
+           * to z. */
+          wf_nodes_.pos[w] = p_a;
+          wf_nodes_.skel_node[w] = s_a_star;
+          wf_nodes_.next_node[w] = z;
+          wf_nodes_.prev_node[z] = w;
+          if (prev_u != w && prev_u >= 0) {
+            wf_nodes_.prev_node[w] = prev_u;
+            wf_nodes_.next_node[prev_u] = w;
+          }
+          if (wf_nodes_.right_trail[prev_u].is_empty() ||
+              wf_nodes_.right_trail[prev_u].last() != s_a_star)
+          {
+            wf_nodes_.right_trail[prev_u].append(s_a_star);
+          }
+          if (wf_nodes_.left_trail[w].is_empty() || wf_nodes_.left_trail[w].last() != s_b_star) {
+            wf_nodes_.left_trail[w].append(s_b_star);
+          }
+          if (wf_nodes_.left_trail[w].last() != s_a_star) {
+            wf_nodes_.left_trail[w].append(s_a_star);
+          }
+        }
+        else if (s_z > cluster_tol) {
+          /* Edge 1 extends to the left of s_a: surviving piece of Edge 1 starts at u, ends
+           * at p_a. */
+          wf_nodes_.next_node[u] = z;
+          wf_nodes_.prev_node[z] = u;
+          wf_nodes_.pos[z] = p_a;
+          wf_nodes_.skel_node[z] = s_a_star;
+          if (wf_nodes_.right_trail[u].is_empty() || wf_nodes_.right_trail[u].last() != s_b_star) {
+            wf_nodes_.right_trail[u].append(s_b_star);
+          }
+          if (wf_nodes_.right_trail[u].last() != s_a_star) {
+            wf_nodes_.right_trail[u].append(s_a_star);
+          }
+          if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star) {
+            wf_nodes_.left_trail[z].append(s_a_star);
+          }
+        }
+        else {
+          /* Endpoints coincide at s_a. */
+          if (prev_u != w && prev_u >= 0 && z != u && z >= 0 && wf_nodes_.is_active[prev_u] &&
+              wf_nodes_.is_active[z])
+          {
+            wf_nodes_.next_node[prev_u] = z;
+            wf_nodes_.prev_node[z] = prev_u;
+            if (wf_nodes_.right_trail[prev_u].is_empty() ||
+                wf_nodes_.right_trail[prev_u].last() != s_a_star)
+            {
+              wf_nodes_.right_trail[prev_u].append(s_a_star);
+            }
+            if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star) {
+              wf_nodes_.left_trail[z].append(s_a_star);
+            }
+          }
+        }
+
+        /* Handle right endpoint p_b (s_b): */
+        if (l1 > s_w + cluster_tol) {
+          /* Edge 1 extends to the right of s_b: surviving piece of Edge 1 starts at p_b,
+           * goes to v. */
+          wf_nodes_.pos[u] = p_b;
+          wf_nodes_.skel_node[u] = s_b_star;
+          wf_nodes_.next_node[u] = v;
+          wf_nodes_.prev_node[v] = u;
+          if (prev_w != u && prev_w >= 0 && wf_nodes_.is_active[prev_w]) {
+            wf_nodes_.prev_node[u] = prev_w;
+            wf_nodes_.next_node[prev_w] = u;
+            if (wf_nodes_.right_trail[prev_w].is_empty() ||
+                wf_nodes_.right_trail[prev_w].last() != s_b_star)
+            {
+              wf_nodes_.right_trail[prev_w].append(s_b_star);
+            }
+          }
+          if (wf_nodes_.left_trail[u].is_empty() || wf_nodes_.left_trail[u].last() != s_a_star) {
+            wf_nodes_.left_trail[u].append(s_a_star);
+          }
+          if (wf_nodes_.left_trail[u].last() != s_b_star) {
+            wf_nodes_.left_trail[u].append(s_b_star);
+          }
+        }
+        else if (s_w > l1 + cluster_tol) {
+          /* Edge 2 extends to the right of s_b: surviving piece of Edge 2 starts at w, ends
+           * at p_b. */
+          wf_nodes_.next_node[w] = v;
+          wf_nodes_.prev_node[v] = w;
+          wf_nodes_.pos[v] = p_b;
+          wf_nodes_.skel_node[v] = s_b_star;
+          if (wf_nodes_.right_trail[w].is_empty() || wf_nodes_.right_trail[w].last() != s_a_star) {
+            wf_nodes_.right_trail[w].append(s_a_star);
+          }
+          if (wf_nodes_.right_trail[w].last() != s_b_star) {
+            wf_nodes_.right_trail[w].append(s_b_star);
+          }
+          if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star) {
+            wf_nodes_.left_trail[v].append(s_b_star);
+          }
+        }
+        else {
+          /* Endpoints coincide at s_b. */
+          if (prev_w != u && prev_w >= 0 && v != w && v >= 0 && wf_nodes_.is_active[prev_w] &&
+              wf_nodes_.is_active[v])
+          {
+            wf_nodes_.next_node[prev_w] = v;
+            wf_nodes_.prev_node[v] = prev_w;
+            if (wf_nodes_.right_trail[prev_w].is_empty() ||
+                wf_nodes_.right_trail[prev_w].last() != s_b_star)
+            {
+              wf_nodes_.right_trail[prev_w].append(s_b_star);
+            }
+            if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star) {
+              wf_nodes_.left_trail[v].append(s_b_star);
+            }
+          }
+        }
+      }
+    }
+
+    update_node_velocity(v);
+    update_node_velocity(z);
+    if (prev_u >= 0 && wf_nodes_.is_active[prev_u]) {
+      update_node_velocity(prev_u);
+    }
+    if (prev_w >= 0 && wf_nodes_.is_active[prev_w]) {
+      update_node_velocity(prev_w);
+    }
+    if (wf_nodes_.is_active[u]) {
+      update_node_velocity(u);
+    }
+    if (wf_nodes_.is_active[w]) {
+      update_node_velocity(w);
+    }
+    if (new_node_id >= 0 && wf_nodes_.is_active[new_node_id]) {
+      update_node_velocity(new_node_id);
+    }
+
+    return true;
+  }
+
   void resolve_opposing_overlapping_edges(const double cluster_tol)
   {
     Vector<std::pair<int, int>> processed_pairs;
@@ -1293,394 +2082,111 @@ class SimulationEngine {
       opp_iter++;
       found_opposing = false;
       const int n = int(wf_nodes_.pos.size());
-      for (int e1 = 0; e1 < n; e1++) {
-        if (!wf_nodes_.is_active[e1]) {
+
+      int active_edges_num = 0;
+      double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+      for (int i = 0; i < n; i++) {
+        if (!wf_nodes_.is_active[i]) {
           continue;
         }
-        const int u = e1;
-        const int v = wf_nodes_.next_node[u];
-        if (v < 0 || !wf_nodes_.is_active[v]) {
+        const int next_i = wf_nodes_.next_node[i];
+        if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
           continue;
         }
-        const double2 d1 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-        const double l1 = math::length(d1);
-        if (l1 < cluster_tol) {
-          continue;
+        active_edges_num++;
+        const double2 &p = wf_nodes_.pos[i];
+        x_min = std::min(x_min, p.x);
+        x_max = std::max(x_max, p.x);
+        y_min = std::min(y_min, p.y);
+        y_max = std::max(y_max, p.y);
+      }
+
+      if (active_edges_num <= 1) {
+        break;
+      }
+
+      if (active_edges_num <= 16) {
+        for (int e1 = 0; e1 < n; e1++) {
+          for (int e2 = e1 + 1; e2 < n; e2++) {
+            if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
+              found_opposing = true;
+              break;
+            }
+          }
+          if (found_opposing) {
+            break;
+          }
         }
-        const double2 dir1 = d1 / l1;
-        const double2 n1 = double2(-dir1.y, dir1.x);
+      }
+      else {
+        x_min -= cluster_tol;
+        x_max += cluster_tol;
+        y_min -= cluster_tol;
+        y_max += cluster_tol;
 
-        for (int e2 = e1 + 1; e2 < n; e2++) {
-          if (!wf_nodes_.is_active[e2]) {
+        grid_.init(x_min, y_min, x_max, y_max, active_edges_num);
+        for (int i = 0; i < n; i++) {
+          if (!wf_nodes_.is_active[i]) {
             continue;
           }
-          if (processed_pairs.contains(std::make_pair(e1, e2))) {
+          const int next_i = wf_nodes_.next_node[i];
+          if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
             continue;
           }
-          const int w = e2;
-          const int z = wf_nodes_.next_node[w];
-          if (z < 0 || !wf_nodes_.is_active[z]) {
-            continue;
-          }
-          const double2 d2 = wf_nodes_.pos[z] - wf_nodes_.pos[w];
-          const double l2 = math::length(d2);
-          if (l2 < cluster_tol) {
-            continue;
-          }
-          const double2 dir2 = d2 / l2;
-          const double2 n2 = double2(-dir2.y, dir2.x);
-
-          if (math::dot(n1, n2) > -0.8) {
-            continue;
-          }
-
-          if (std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n1)) > cluster_tol ||
-              std::abs(math::dot(wf_nodes_.pos[z] - wf_nodes_.pos[u], n1)) > cluster_tol)
-          {
-            continue;
-          }
-
-          const double s_w = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], dir1);
-          const double s_z = math::dot(wf_nodes_.pos[z] - wf_nodes_.pos[u], dir1);
-          const double s_a = std::max(0.0, std::min(s_w, s_z));
-          const double s_b = std::min(l1, std::max(s_w, s_z));
-
-          if (s_b - s_a < cluster_tol) {
-            continue;
-          }
-          processed_pairs.append(std::make_pair(e1, e2));
-
-          const double2 p_a = wf_nodes_.pos[u] + s_a * dir1;
-          const double2 p_b = wf_nodes_.pos[u] + s_b * dir1;
-          const int s_a_star = get_or_create_skel_node(p_a, cluster_tol);
-          const int s_b_star = get_or_create_skel_node(p_b, cluster_tol);
-
-          /* Add skeleton ridge edge between s_a_star and s_b_star. */
-          skel_graph_.edges_node1.append(s_a_star);
-          skel_graph_.edges_node2.append(s_b_star);
-          skel_graph_.edges_orig.append(-1);
-          skel_graph_.edges_face.append(wf_nodes_.orig_face[e1]);
-          skel_graph_.edges_time_start.append(current_time_);
-          skel_graph_.edges_time_end.append(current_time_);
-          skel_graph_.edges_is_boundary.append(false);
-
-          const int prev_u = wf_nodes_.prev_node[u];
-          const int prev_w = wf_nodes_.prev_node[w];
-
-          const bool match_left = std::abs(std::min(s_w, s_z) - 0.0) < cluster_tol;
-          const bool match_right = std::abs(std::max(s_w, s_z) - l1) < cluster_tol;
-
-          if (match_left && match_right) {
-            /* Case A: Exact coincident match - both edges completely collapse. */
-            if (!dry_run_) {
-              /* Emit face for e1 (u -> v). */
-              Vector<int> face_verts1;
-              face_verts1.append(wf_nodes_.left_trail[e1][0]);
-              for (const int r : wf_nodes_.right_trail[e1]) {
-                if (face_verts1.last() != r) {
-                  face_verts1.append(r);
-                }
-              }
-              if (face_verts1.last() != s_b_star) {
-                face_verts1.append(s_b_star);
-              }
-              if (face_verts1.last() != s_a_star) {
-                face_verts1.append(s_a_star);
-              }
-              for (int k = int(wf_nodes_.left_trail[e1].size()) - 1; k >= 1; k--) {
-                const int l = wf_nodes_.left_trail[e1][k];
-                if (face_verts1.last() != l && l != face_verts1[0]) {
-                  face_verts1.append(l);
-                }
-              }
-              if (face_verts1.size() >= 3) {
-                out_faces_.faces.append(std::move(face_verts1));
-                out_faces_.face_orig.append(wf_nodes_.orig_face[e1]);
-                out_faces_.face_band.append(current_band_);
-                out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
-              }
-
-              /* Emit face for e2 (w -> z). */
-              Vector<int> face_verts2;
-              face_verts2.append(wf_nodes_.left_trail[e2][0]);
-              for (const int r : wf_nodes_.right_trail[e2]) {
-                if (face_verts2.last() != r) {
-                  face_verts2.append(r);
-                }
-              }
-              if (face_verts2.last() != s_a_star) {
-                face_verts2.append(s_a_star);
-              }
-              if (face_verts2.last() != s_b_star) {
-                face_verts2.append(s_b_star);
-              }
-              for (int k = int(wf_nodes_.left_trail[e2].size()) - 1; k >= 1; k--) {
-                const int l = wf_nodes_.left_trail[e2][k];
-                if (face_verts2.last() != l && l != face_verts2[0]) {
-                  face_verts2.append(l);
-                }
-              }
-              if (face_verts2.size() >= 3) {
-                out_faces_.faces.append(std::move(face_verts2));
-                out_faces_.face_orig.append(wf_nodes_.orig_face[e2]);
-                out_faces_.face_band.append(current_band_);
-                out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
-              }
-            }
-
-            if (prev_u != w && prev_u >= 0 && z >= 0) {
-              wf_nodes_.next_node[prev_u] = z;
-              wf_nodes_.prev_node[z] = prev_u;
-              if (wf_nodes_.right_trail[prev_u].is_empty() ||
-                  wf_nodes_.right_trail[prev_u].last() != s_a_star)
-              {
-                wf_nodes_.right_trail[prev_u].append(s_a_star);
-              }
-              if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star)
-              {
-                wf_nodes_.left_trail[z].append(s_a_star);
-              }
-            }
-
-            if (prev_w != u && prev_w >= 0 && v >= 0) {
-              wf_nodes_.next_node[prev_w] = v;
-              wf_nodes_.prev_node[v] = prev_w;
-              if (wf_nodes_.right_trail[prev_w].is_empty() ||
-                  wf_nodes_.right_trail[prev_w].last() != s_b_star)
-              {
-                wf_nodes_.right_trail[prev_w].append(s_b_star);
-              }
-              if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star)
-              {
-                wf_nodes_.left_trail[v].append(s_b_star);
-              }
-            }
-
-            wf_nodes_.is_active[u] = false;
-            wf_nodes_.is_active[w] = false;
-            if (use_priority_queue_) {
-              if (u < node_version_.size()) {
-                node_version_[u]++;
-              }
-              if (w < node_version_.size()) {
-                node_version_[w]++;
-              }
-            }
-          }
-          else {
-            /* Case B: Partial overlap - if an edge is completely covered by the overlap,
-             * it fully collapses and emits its roof face. Surviving suffixes continue. */
-            const bool e1_completely_covered = (s_a < cluster_tol && s_b > l1 - cluster_tol);
-            const double l2 = math::length(wf_nodes_.pos[z] - wf_nodes_.pos[w]);
-            const bool e2_completely_covered = (s_b - s_a > l2 - cluster_tol);
-
-            if (e1_completely_covered) {
-              if (!dry_run_) {
-                Vector<int> face_verts1;
-                face_verts1.append(wf_nodes_.left_trail[e1][0]);
-                for (const int r : wf_nodes_.right_trail[e1]) {
-                  if (face_verts1.last() != r) {
-                    face_verts1.append(r);
-                  }
-                }
-                if (face_verts1.last() != s_b_star) {
-                  face_verts1.append(s_b_star);
-                }
-                if (face_verts1.last() != s_a_star) {
-                  face_verts1.append(s_a_star);
-                }
-                for (int k = int(wf_nodes_.left_trail[e1].size()) - 1; k >= 1; k--) {
-                  const int l = wf_nodes_.left_trail[e1][k];
-                  if (face_verts1.last() != l && l != face_verts1[0]) {
-                    face_verts1.append(l);
-                  }
-                }
-                if (face_verts1.size() >= 3) {
-                  out_faces_.faces.append(std::move(face_verts1));
-                  out_faces_.face_orig.append(wf_nodes_.orig_face[e1]);
-                  out_faces_.face_band.append(current_band_);
-                  out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
-                }
-              }
-              wf_nodes_.is_active[u] = false;
-              if (use_priority_queue_ && u < node_version_.size()) {
-                node_version_[u]++;
-              }
-            }
-
-            if (e2_completely_covered) {
-              if (!dry_run_) {
-                Vector<int> face_verts2;
-                face_verts2.append(wf_nodes_.left_trail[e2][0]);
-                for (const int r : wf_nodes_.right_trail[e2]) {
-                  if (face_verts2.last() != r) {
-                    face_verts2.append(r);
-                  }
-                }
-                if (face_verts2.last() != s_a_star) {
-                  face_verts2.append(s_a_star);
-                }
-                if (face_verts2.last() != s_b_star) {
-                  face_verts2.append(s_b_star);
-                }
-                for (int k = int(wf_nodes_.left_trail[e2].size()) - 1; k >= 1; k--) {
-                  const int l = wf_nodes_.left_trail[e2][k];
-                  if (face_verts2.last() != l && l != face_verts2[0]) {
-                    face_verts2.append(l);
-                  }
-                }
-                if (face_verts2.size() >= 3) {
-                  out_faces_.faces.append(std::move(face_verts2));
-                  out_faces_.face_orig.append(wf_nodes_.orig_face[e2]);
-                  out_faces_.face_band.append(current_band_);
-                  out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
-                }
-              }
-              wf_nodes_.is_active[w] = false;
-              if (use_priority_queue_ && w < node_version_.size()) {
-                node_version_[w]++;
-              }
-            }
-
-            /* Handle left endpoint p_a (s_a): */
-            if (s_z < -cluster_tol) {
-              /* Edge 2 extends to the left of s_a: surviving piece of Edge 2 starts at p_a, goes
-               * to z. */
-              wf_nodes_.pos[w] = p_a;
-              wf_nodes_.skel_node[w] = s_a_star;
-              wf_nodes_.next_node[w] = z;
-              wf_nodes_.prev_node[z] = w;
-              if (prev_u != w && prev_u >= 0) {
-                wf_nodes_.prev_node[w] = prev_u;
-                wf_nodes_.next_node[prev_u] = w;
-              }
-              if (wf_nodes_.right_trail[prev_u].is_empty() ||
-                  wf_nodes_.right_trail[prev_u].last() != s_a_star)
-              {
-                wf_nodes_.right_trail[prev_u].append(s_a_star);
-              }
-              if (wf_nodes_.left_trail[w].is_empty() || wf_nodes_.left_trail[w].last() != s_b_star)
-              {
-                wf_nodes_.left_trail[w].append(s_b_star);
-              }
-              if (wf_nodes_.left_trail[w].last() != s_a_star) {
-                wf_nodes_.left_trail[w].append(s_a_star);
-              }
-            }
-            else if (s_z > cluster_tol) {
-              /* Edge 1 extends to the left of s_a: surviving piece of Edge 1 starts at u, ends at
-               * p_a. */
-              wf_nodes_.next_node[u] = z;
-              wf_nodes_.prev_node[z] = u;
-              wf_nodes_.pos[z] = p_a;
-              wf_nodes_.skel_node[z] = s_a_star;
-              if (wf_nodes_.right_trail[u].is_empty() ||
-                  wf_nodes_.right_trail[u].last() != s_b_star)
-              {
-                wf_nodes_.right_trail[u].append(s_b_star);
-              }
-              if (wf_nodes_.right_trail[u].last() != s_a_star) {
-                wf_nodes_.right_trail[u].append(s_a_star);
-              }
-              if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star)
-              {
-                wf_nodes_.left_trail[z].append(s_a_star);
-              }
-            }
-            else {
-              /* Endpoints coincide at s_a. */
-              wf_nodes_.next_node[prev_u] = z;
-              wf_nodes_.prev_node[z] = prev_u;
-              if (wf_nodes_.right_trail[prev_u].is_empty() ||
-                  wf_nodes_.right_trail[prev_u].last() != s_a_star)
-              {
-                wf_nodes_.right_trail[prev_u].append(s_a_star);
-              }
-              if (wf_nodes_.left_trail[z].is_empty() || wf_nodes_.left_trail[z].last() != s_a_star)
-              {
-                wf_nodes_.left_trail[z].append(s_a_star);
-              }
-            }
-
-            /* Handle right endpoint p_b (s_b): */
-            if (l1 > s_w + cluster_tol) {
-              /* Edge 1 extends to the right of s_b: surviving piece of Edge 1 starts at p_b, goes
-               * to v. */
-              wf_nodes_.pos[u] = p_b;
-              wf_nodes_.skel_node[u] = s_b_star;
-              wf_nodes_.next_node[u] = v;
-              wf_nodes_.prev_node[v] = u;
-              wf_nodes_.prev_node[u] = prev_w;
-              wf_nodes_.next_node[prev_w] = u;
-              if (wf_nodes_.right_trail[prev_w].is_empty() ||
-                  wf_nodes_.right_trail[prev_w].last() != s_b_star)
-              {
-                wf_nodes_.right_trail[prev_w].append(s_b_star);
-              }
-              if (wf_nodes_.left_trail[u].is_empty() || wf_nodes_.left_trail[u].last() != s_a_star)
-              {
-                wf_nodes_.left_trail[u].append(s_a_star);
-              }
-              if (wf_nodes_.left_trail[u].last() != s_b_star) {
-                wf_nodes_.left_trail[u].append(s_b_star);
-              }
-            }
-            else if (s_w > l1 + cluster_tol) {
-              /* Edge 2 extends to the right of s_b: surviving piece of Edge 2 starts at w, ends at
-               * p_b. */
-              wf_nodes_.next_node[w] = v;
-              wf_nodes_.prev_node[v] = w;
-              wf_nodes_.pos[v] = p_b;
-              wf_nodes_.skel_node[v] = s_b_star;
-              if (wf_nodes_.right_trail[w].is_empty() ||
-                  wf_nodes_.right_trail[w].last() != s_a_star)
-              {
-                wf_nodes_.right_trail[w].append(s_a_star);
-              }
-              if (wf_nodes_.right_trail[w].last() != s_b_star) {
-                wf_nodes_.right_trail[w].append(s_b_star);
-              }
-              if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star)
-              {
-                wf_nodes_.left_trail[v].append(s_b_star);
-              }
-            }
-            else {
-              /* Endpoints coincide at s_b. */
-              wf_nodes_.next_node[prev_w] = v;
-              wf_nodes_.prev_node[v] = prev_w;
-              if (wf_nodes_.right_trail[prev_w].is_empty() ||
-                  wf_nodes_.right_trail[prev_w].last() != s_b_star)
-              {
-                wf_nodes_.right_trail[prev_w].append(s_b_star);
-              }
-              if (wf_nodes_.left_trail[v].is_empty() || wf_nodes_.left_trail[v].last() != s_b_star)
-              {
-                wf_nodes_.left_trail[v].append(s_b_star);
-              }
-            }
-          }
-
-          update_node_velocity(v);
-          update_node_velocity(z);
-          if (prev_u >= 0 && wf_nodes_.is_active[prev_u]) {
-            update_node_velocity(prev_u);
-          }
-          if (prev_w >= 0 && wf_nodes_.is_active[prev_w]) {
-            update_node_velocity(prev_w);
-          }
-          if (wf_nodes_.is_active[u]) {
-            update_node_velocity(u);
-          }
-          if (wf_nodes_.is_active[w]) {
-            update_node_velocity(w);
-          }
-
-          found_opposing = true;
-          break;
+          const double2 &p_u = wf_nodes_.pos[i];
+          const double2 &p_v = wf_nodes_.pos[next_i];
+          const double ex_min = std::min(p_u.x, p_v.x) - cluster_tol;
+          const double ex_max = std::max(p_u.x, p_v.x) + cluster_tol;
+          const double ey_min = std::min(p_u.y, p_v.y) - cluster_tol;
+          const double ey_max = std::max(p_u.y, p_v.y) + cluster_tol;
+          grid_.insert(i, ex_min, ey_min, ex_max, ey_max);
         }
-        if (found_opposing) {
-          break;
+
+        if (query_tags_.size() < wf_nodes_.pos.size()) {
+          query_tags_.reinitialize(wf_nodes_.pos.size());
+          query_tags_.fill(0);
+          current_query_id_ = 1;
+        }
+
+        for (int e1 = 0; e1 < n; e1++) {
+          if (!wf_nodes_.is_active[e1]) {
+            continue;
+          }
+          const int u = e1;
+          const int v = wf_nodes_.next_node[u];
+          if (v < 0 || !wf_nodes_.is_active[v]) {
+            continue;
+          }
+
+          const double qx_min = std::min(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) - cluster_tol;
+          const double qx_max = std::max(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) + cluster_tol;
+          const double qy_min = std::min(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) - cluster_tol;
+          const double qy_max = std::max(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) + cluster_tol;
+
+          current_query_id_++;
+          if (current_query_id_ <= 0) {
+            query_tags_.fill(0);
+            current_query_id_ = 1;
+          }
+          const int qid = current_query_id_;
+
+          grid_.for_each_overlapping(qx_min, qy_min, qx_max, qy_max, [&](const int e2) {
+            if (found_opposing || e2 <= e1 || !wf_nodes_.is_active[e2]) {
+              return;
+            }
+            if (query_tags_[e2] == qid) {
+              return;
+            }
+            query_tags_[e2] = qid;
+
+            if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
+              found_opposing = true;
+            }
+          });
+
+          if (found_opposing) {
+            break;
+          }
         }
       }
     }
@@ -1752,58 +2258,195 @@ class SimulationEngine {
       }
     }
     else {
+      double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+      int active_nodes_num = 0;
+      Vector<int> reflex_nodes;
+
       for (const int u : wf_nodes_.pos.index_range()) {
         if (!wf_nodes_.is_active[u]) {
           continue;
         }
-        for (const int w : wf_nodes_.pos.index_range()) {
-          if (w <= u || !wf_nodes_.is_active[w]) {
-            continue;
-          }
-          if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
-            continue;
-          }
-          if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
-            vert_collisions.append(VertPair{u, w});
-          }
+        active_nodes_num++;
+        const double2 &p = wf_nodes_.pos[u];
+        x_min = std::min(x_min, p.x);
+        x_max = std::max(x_max, p.x);
+        y_min = std::min(y_min, p.y);
+        y_max = std::max(y_max, p.y);
+
+        if (is_reflex(u)) {
+          reflex_nodes.append(u);
         }
       }
 
-      for (const int w : wf_nodes_.pos.index_range()) {
-        if (!wf_nodes_.is_active[w]) {
-          continue;
-        }
-        const int prev_w = wf_nodes_.prev_node[w];
-        const int next_w = wf_nodes_.next_node[w];
-        const double2 n_in = compute_inward_normal(wf_nodes_.pos[prev_w], wf_nodes_.pos[w]);
-        const double2 n_out = compute_inward_normal(wf_nodes_.pos[w], wf_nodes_.pos[next_w]);
-        if (n_in.x * n_out.y - n_in.y * n_out.x > -1e-8) {
-          continue;
-        }
-
+      if (active_nodes_num <= 16) {
         for (const int u : wf_nodes_.pos.index_range()) {
           if (!wf_nodes_.is_active[u]) {
             continue;
           }
-          const int v = wf_nodes_.next_node[u];
-          if (u == w || v == w || prev_w == u || next_w == v) {
-            continue;
+          for (const int w : wf_nodes_.pos.index_range()) {
+            if (w <= u || !wf_nodes_.is_active[w]) {
+              continue;
+            }
+            if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+              continue;
+            }
+            if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
+              vert_collisions.append(VertPair{u, w});
+            }
           }
-          if (collapsing_edges.contains(u)) {
-            continue;
-          }
+        }
 
-          const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
-          const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
-          if (dist < cluster_tol) {
-            const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-            const double len_sq = math::length_squared(e_uv);
-            if (len_sq > 1e-12) {
-              const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
-              if (s > 1e-5 && s < 1.0 - 1e-5) {
-                splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+        for (const int w : reflex_nodes) {
+          const int prev_w = wf_nodes_.prev_node[w];
+          const int next_w = wf_nodes_.next_node[w];
+          for (const int u : wf_nodes_.pos.index_range()) {
+            if (!wf_nodes_.is_active[u]) {
+              continue;
+            }
+            const int v = wf_nodes_.next_node[u];
+            if (u == w || v == w || prev_w == u || next_w == v) {
+              continue;
+            }
+            if (collapsing_edges.contains(u)) {
+              continue;
+            }
+
+            const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+            const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
+            if (dist < cluster_tol) {
+              const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+              const double len_sq = math::length_squared(e_uv);
+              if (len_sq > 1e-12) {
+                const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
+                if (s > 1e-5 && s < 1.0 - 1e-5) {
+                  splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+                }
               }
             }
+          }
+        }
+      }
+      else {
+        x_min -= cluster_tol;
+        x_max += cluster_tol;
+        y_min -= cluster_tol;
+        y_max += cluster_tol;
+
+        vert_grid_.init(x_min, y_min, x_max, y_max, active_nodes_num);
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (!wf_nodes_.is_active[u]) {
+            continue;
+          }
+          const double2 &p = wf_nodes_.pos[u];
+          vert_grid_.insert(
+              u, p.x - cluster_tol, p.y - cluster_tol, p.x + cluster_tol, p.y + cluster_tol);
+        }
+
+        if (query_tags_.size() < wf_nodes_.pos.size()) {
+          query_tags_.reinitialize(wf_nodes_.pos.size());
+          query_tags_.fill(0);
+          current_query_id_ = 1;
+        }
+
+        /* 1. Vertex-vertex collisions. */
+        for (const int u : wf_nodes_.pos.index_range()) {
+          if (!wf_nodes_.is_active[u]) {
+            continue;
+          }
+          const double2 &p_u = wf_nodes_.pos[u];
+          current_query_id_++;
+          if (current_query_id_ <= 0) {
+            query_tags_.fill(0);
+            current_query_id_ = 1;
+          }
+          const int qid = current_query_id_;
+
+          vert_grid_.for_each_overlapping(
+              p_u.x - cluster_tol,
+              p_u.y - cluster_tol,
+              p_u.x + cluster_tol,
+              p_u.y + cluster_tol,
+              [&](const int w) {
+                if (w <= u || !wf_nodes_.is_active[w]) {
+                  return;
+                }
+                if (query_tags_[w] == qid) {
+                  return;
+                }
+                query_tags_[w] = qid;
+
+                if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+                  return;
+                }
+                if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
+                  vert_collisions.append(VertPair{u, w});
+                }
+              });
+        }
+
+        /* 2. Split events at current_time_. */
+        if (!reflex_nodes.is_empty()) {
+          grid_.init(x_min, y_min, x_max, y_max, active_nodes_num);
+          for (const int u : wf_nodes_.pos.index_range()) {
+            if (!wf_nodes_.is_active[u]) {
+              continue;
+            }
+            const int v = wf_nodes_.next_node[u];
+            const double2 &p_u = wf_nodes_.pos[u];
+            const double2 &p_v = wf_nodes_.pos[v];
+            const double ex_min = std::min(p_u.x, p_v.x) - cluster_tol;
+            const double ex_max = std::max(p_u.x, p_v.x) + cluster_tol;
+            const double ey_min = std::min(p_u.y, p_v.y) - cluster_tol;
+            const double ey_max = std::max(p_u.y, p_v.y) + cluster_tol;
+            grid_.insert(u, ex_min, ey_min, ex_max, ey_max);
+          }
+
+          for (const int w : reflex_nodes) {
+            const int prev_w = wf_nodes_.prev_node[w];
+            const int next_w = wf_nodes_.next_node[w];
+            const double2 &p_w = wf_nodes_.pos[w];
+
+            current_query_id_++;
+            if (current_query_id_ <= 0) {
+              query_tags_.fill(0);
+              current_query_id_ = 1;
+            }
+            const int qid = current_query_id_;
+
+            grid_.for_each_overlapping(
+                p_w.x - cluster_tol,
+                p_w.y - cluster_tol,
+                p_w.x + cluster_tol,
+                p_w.y + cluster_tol,
+                [&](const int u) {
+                  if (query_tags_[u] == qid) {
+                    return;
+                  }
+                  query_tags_[u] = qid;
+
+                  const int v = wf_nodes_.next_node[u];
+                  if (u == w || v == w || prev_w == u || next_w == v) {
+                    return;
+                  }
+                  if (collapsing_edges.contains(u)) {
+                    return;
+                  }
+
+                  const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+                  const double dist = std::abs(
+                      math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
+                  if (dist < cluster_tol) {
+                    const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+                    const double len_sq = math::length_squared(e_uv);
+                    if (len_sq > 1e-12) {
+                      const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) /
+                                       len_sq;
+                      if (s > 1e-5 && s < 1.0 - 1e-5) {
+                        splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+                      }
+                    }
+                  }
+                });
           }
         }
       }
@@ -1811,34 +2454,61 @@ class SimulationEngine {
 
     /* 4. Group all interactions into spatial Event Clusters. */
     Vector<EventCluster> clusters;
+    Array<int> vert_to_cluster(wf_nodes_.pos.size(), -1);
+    Array<int> edge_to_cluster(wf_nodes_.pos.size(), -1);
+
+    auto add_edge_to_cluster = [&](const int ci, const int e) {
+      if (edge_to_cluster[e] == -1) {
+        clusters[ci].collapsing_edges.append(e);
+        edge_to_cluster[e] = ci;
+      }
+    };
+
+    auto add_vert_to_cluster = [&](const int ci, const int v) {
+      if (vert_to_cluster[v] == -1) {
+        clusters[ci].colliding_verts.append(v);
+        vert_to_cluster[v] = ci;
+      }
+    };
 
     for (const int e : collapsing_edges) {
       const int v = wf_nodes_.next_node[e];
       const double2 p = 0.5 * (wf_nodes_.pos[e] + wf_nodes_.pos[v]);
       int found_ci = -1;
-      for (const int ci : clusters.index_range()) {
-        if (math::length(clusters[ci].p_star - p) < cluster_tol) {
-          found_ci = ci;
-          break;
+      if (edge_to_cluster[e] != -1) {
+        found_ci = edge_to_cluster[e];
+      }
+      else if (vert_to_cluster[e] != -1) {
+        found_ci = vert_to_cluster[e];
+      }
+      else if (v >= 0 && vert_to_cluster[v] != -1) {
+        found_ci = vert_to_cluster[v];
+      }
+      else {
+        for (const int ci : clusters.index_range()) {
+          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+            found_ci = ci;
+            break;
+          }
         }
       }
+
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        c.collapsing_edges.append(e);
-        c.colliding_verts.append(e);
-        c.colliding_verts.append(v);
+        const int new_ci = int(clusters.size());
         clusters.append(std::move(c));
+        add_edge_to_cluster(new_ci, e);
+        add_vert_to_cluster(new_ci, e);
+        if (v >= 0) {
+          add_vert_to_cluster(new_ci, v);
+        }
       }
       else {
-        if (!clusters[found_ci].collapsing_edges.contains(e)) {
-          clusters[found_ci].collapsing_edges.append(e);
-        }
-        if (!clusters[found_ci].colliding_verts.contains(e)) {
-          clusters[found_ci].colliding_verts.append(e);
-        }
-        if (!clusters[found_ci].colliding_verts.contains(v)) {
-          clusters[found_ci].colliding_verts.append(v);
+        add_edge_to_cluster(found_ci, e);
+        add_vert_to_cluster(found_ci, e);
+        if (v >= 0) {
+          add_vert_to_cluster(found_ci, v);
         }
       }
     }
@@ -1846,54 +2516,62 @@ class SimulationEngine {
     for (const VertPair &vp : vert_collisions) {
       const double2 p = 0.5 * (wf_nodes_.pos[vp.u] + wf_nodes_.pos[vp.w]);
       int found_ci = -1;
-      for (const int ci : clusters.index_range()) {
-        if (math::length(clusters[ci].p_star - p) < cluster_tol ||
-            clusters[ci].colliding_verts.contains(vp.u) ||
-            clusters[ci].colliding_verts.contains(vp.w))
-        {
-          found_ci = ci;
-          break;
+      if (vert_to_cluster[vp.u] != -1) {
+        found_ci = vert_to_cluster[vp.u];
+      }
+      else if (vert_to_cluster[vp.w] != -1) {
+        found_ci = vert_to_cluster[vp.w];
+      }
+      else {
+        for (const int ci : clusters.index_range()) {
+          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+            found_ci = ci;
+            break;
+          }
         }
       }
+
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        c.colliding_verts.append(vp.u);
-        c.colliding_verts.append(vp.w);
+        const int new_ci = int(clusters.size());
         clusters.append(std::move(c));
+        add_vert_to_cluster(new_ci, vp.u);
+        add_vert_to_cluster(new_ci, vp.w);
       }
       else {
-        if (!clusters[found_ci].colliding_verts.contains(vp.u)) {
-          clusters[found_ci].colliding_verts.append(vp.u);
-        }
-        if (!clusters[found_ci].colliding_verts.contains(vp.w)) {
-          clusters[found_ci].colliding_verts.append(vp.w);
-        }
+        add_vert_to_cluster(found_ci, vp.u);
+        add_vert_to_cluster(found_ci, vp.w);
       }
     }
 
     for (const SplitInfo &si : splits) {
       const double2 p = si.pos;
       int found_ci = -1;
-      for (const int ci : clusters.index_range()) {
-        if (math::length(clusters[ci].p_star - p) < cluster_tol ||
-            clusters[ci].colliding_verts.contains(si.reflex_w))
-        {
-          found_ci = ci;
-          break;
+      if (vert_to_cluster[si.reflex_w] != -1) {
+        found_ci = vert_to_cluster[si.reflex_w];
+      }
+      else {
+        for (const int ci : clusters.index_range()) {
+          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+            found_ci = ci;
+            break;
+          }
         }
       }
+
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        c.colliding_verts.append(si.reflex_w);
-        c.split_edges.append(si.edge_u);
+        const int new_ci = int(clusters.size());
         clusters.append(std::move(c));
+        add_vert_to_cluster(new_ci, si.reflex_w);
+        if (!clusters[new_ci].split_edges.contains(si.edge_u)) {
+          clusters[new_ci].split_edges.append(si.edge_u);
+        }
       }
       else {
-        if (!clusters[found_ci].colliding_verts.contains(si.reflex_w)) {
-          clusters[found_ci].colliding_verts.append(si.reflex_w);
-        }
+        add_vert_to_cluster(found_ci, si.reflex_w);
         if (!clusters[found_ci].split_edges.contains(si.edge_u)) {
           clusters[found_ci].split_edges.append(si.edge_u);
         }

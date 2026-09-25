@@ -271,6 +271,11 @@ inline void write_debug_svg(const char *test_name,
   }
 
   bool &debug_new_file = get_debug_new_file();
+  if (const char *app_env = std::getenv("STRAIGHT_SKELETON_APPEND_HTML")) {
+    if (std::string_view(app_env) == "1" || std::string_view(app_env) == "true") {
+      debug_new_file = false;
+    }
+  }
   const std::ios::openmode mode = debug_new_file ? (std::ios::out | std::ios::trunc) :
                                                    (std::ios::out | std::ios::app);
 

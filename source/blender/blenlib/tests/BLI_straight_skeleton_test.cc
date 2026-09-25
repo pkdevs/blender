@@ -19,6 +19,7 @@
 #include "BLI_straight_skeleton.hh"
 #include "BLI_straight_skeleton_test_util.hh"
 #include "BLI_vector.hh"
+#include "intern/straight_skeleton_motorcycle.hh"
 
 /* Debug output mode for tests:
  *   DebugOutputMode::NONE   (0) - No debug output (standard quiet test run, assert failures only).
@@ -40,11 +41,65 @@ enum class DebugOutputMode {
 
 static constexpr DebugOutputMode debug_output_mode = DebugOutputMode::NONE;
 
+/* Algorithm used for tests:
+ * Controlled by default_test_algorithm or overridden via the STRAIGHT_SKELETON_ALGO environment
+ * variable: STRAIGHT_SKELETON_ALGO=simulation STRAIGHT_SKELETON_ALGO=kinetic
+ *   STRAIGHT_SKELETON_ALGO=motorcycle
+ */
+static constexpr blender::straightskeleton::StraightSkeletonAlgorithm default_test_algorithm =
+    blender::straightskeleton::StraightSkeletonAlgorithm::SIMULATION;
+
+static blender::straightskeleton::StraightSkeletonAlgorithm get_test_algorithm()
+{
+  if (const char *env = std::getenv("STRAIGHT_SKELETON_ALGO")) {
+    const std::string_view s(env);
+    if (s == "simulation") {
+      return blender::straightskeleton::StraightSkeletonAlgorithm::SIMULATION;
+    }
+    if (s == "kinetic") {
+      return blender::straightskeleton::StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+    }
+    if (s == "motorcycle") {
+      return blender::straightskeleton::StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH;
+    }
+  }
+  return default_test_algorithm;
+}
+
+/* SVG drawing mode:
+ * Controlled by default_enable_svg_drawing or overridden via STRAIGHT_SKELETON_SVG env var:
+ *   STRAIGHT_SKELETON_SVG=1 / on / true
+ * Also enabled if STRAIGHT_SKELETON_DEBUG=output / 2.
+ */
+static constexpr bool default_enable_svg_drawing = false;
+
+static bool is_svg_drawing_enabled()
+{
+  if (const char *env = std::getenv("STRAIGHT_SKELETON_SVG")) {
+    const std::string_view s(env);
+    if (s == "1" || s == "true" || s == "on") {
+      return true;
+    }
+    if (s == "0" || s == "false" || s == "off") {
+      return false;
+    }
+  }
+  return default_enable_svg_drawing;
+}
+
 namespace blender::straightskeleton::test {
 
 /* -------------------------------------------------------------------- */
 /** \name Input helpers
  * \{ */
+
+static StraightSkeletonInput make_test_input()
+{
+  StraightSkeletonInput input;
+  input.algorithm = get_test_algorithm();
+  input.full_verification = true;
+  return input;
+}
 
 /**
  * Owns the backing storage for a #StraightSkeletonInput.
@@ -108,8 +163,7 @@ static StraightSkeletonInput fill_input_from_string(const char *spec, InputStora
     i++;
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = r_storage.vert.as_span();
   input.outer_polygon = r_storage.outer_polygon.as_span();
   if (!r_storage.hole_offsets_buf.is_empty()) {
@@ -174,11 +228,13 @@ static void print_test_output(const char *test_name,
                                  << output.error_message;
   }
 
+  if (is_svg_drawing_enabled() || get_debug_output_mode() == DebugOutputMode::OUTPUT) {
+    write_debug_svg(test_name, input, output);
+  }
+
   if (get_debug_output_mode() != DebugOutputMode::OUTPUT) {
     return;
   }
-
-  write_debug_svg(test_name, input, output);
 
   std::cout << "\n============================================================\n";
   std::cout << "Straight Skeleton Output: " << (test_name ? test_name : "Test") << "\n";
@@ -702,7 +758,7 @@ TEST(straight_skeleton, OffsetSquarePartial)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 1.0;
@@ -752,7 +808,7 @@ TEST(straight_skeleton, OffsetSquareCollapse)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 5.0;
@@ -793,7 +849,7 @@ TEST(straight_skeleton, OffsetSquareExcess)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 10.0; /* Exceeds max_collapse_time = 5, clamped. */
@@ -834,7 +890,7 @@ TEST(straight_skeleton, OffsetRectangle)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 2.0;
@@ -876,7 +932,7 @@ TEST(straight_skeleton, OffsetLShape)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 0.5;
@@ -914,7 +970,7 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   input.offset = 2.0;
@@ -983,7 +1039,7 @@ TEST(straight_skeleton, FullSkeletonWithSegments)
   storage.vert = verts;
   storage.outer_polygon.extend(face_verts.as_span());
 
-  StraightSkeletonInput input;
+  StraightSkeletonInput input = make_test_input();
   input.vert = storage.vert.as_span();
   input.outer_polygon = storage.outer_polygon.as_span();
   /* Default input.offset = infinity; segments = 2 divides the full skeleton into 2 bands. */
@@ -1448,8 +1504,7 @@ TEST(straight_skeleton, Circle64)
     outer_polygon[i] = i;
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.label = "Circle64";
@@ -1515,14 +1570,12 @@ TEST(straight_skeleton, CircleWithHoles6)
     hole_offsets_buf.append(int(hole_vert_indices.size()));
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
   input.hole_vert_indices = hole_vert_indices.as_span();
   input.label = "CircleWithHoles6";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1572,8 +1625,7 @@ TEST(straight_skeleton, CircleWithHoles24)
     hole_offsets_buf.append(int(hole_vert_indices.size()));
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1629,8 +1681,7 @@ TEST(straight_skeleton, CircleWithHoles48)
     hole_offsets_buf.append(int(hole_vert_indices.size()));
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1685,8 +1736,7 @@ TEST(straight_skeleton, CircleWithHoles96)
     hole_offsets_buf.append(int(hole_vert_indices.size()));
   }
 
-  StraightSkeletonInput input;
-  input.full_verification = true;
+  StraightSkeletonInput input = make_test_input();
   input.vert = verts.as_span();
   input.outer_polygon = outer_polygon.as_span();
   input.hole_offsets = OffsetIndices<int>(hole_offsets_buf.as_span());
@@ -1700,185 +1750,7 @@ TEST(straight_skeleton, CircleWithHoles96)
   EXPECT_EQ(output.face_offsets.size(), 864);
 }
 
-TEST(straight_skeleton, AlgorithmDispatcher)
-{
-  const char *spec = R"(4 1
-0.0 0.0
-10.0 0.0
-10.0 10.0
-0.0 10.0
-0 1 2 3
-)";
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-
-  /* 1. Default algorithm is KINETIC_TRIANGULATION. */
-  EXPECT_EQ(input.algorithm, StraightSkeletonAlgorithm::KINETIC_TRIANGULATION);
-  const StraightSkeletonOutput out_default = straight_skeleton_calc(input);
-  EXPECT_FALSE(out_default.hit_max_events);
-  EXPECT_TRUE(out_default.is_valid);
-  EXPECT_EQ(out_default.face_offsets.size(), 4);
-
-  /* 2. Explicit KINETIC_TRIANGULATION. */
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-  const StraightSkeletonOutput out_kinetic = straight_skeleton_calc(input);
-  EXPECT_FALSE(out_kinetic.hit_max_events);
-  EXPECT_TRUE(out_kinetic.is_valid);
-  EXPECT_EQ(out_kinetic.face_offsets.size(), 4);
-
-  /* 3. MOTORCYCLE_GRAPH stub. */
-  input.algorithm = StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH;
-  const StraightSkeletonOutput out_motorcycle = straight_skeleton_calc(input);
-  EXPECT_EQ(out_motorcycle.vert.size(), 4);
-  EXPECT_FALSE(out_motorcycle.hit_max_events);
-
-  /* 4. SIMULATION algorithm. */
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-  const StraightSkeletonOutput out_sim = straight_skeleton_calc(input);
-  EXPECT_FALSE(out_sim.hit_max_events);
-  EXPECT_TRUE(out_sim.is_valid);
-  EXPECT_EQ(out_sim.face_offsets.size(), 4);
-  EXPECT_EQ(out_sim.vert.size(), 5);
-  EXPECT_NEAR(total_faces_area(out_sim), 100.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationTriangle)
-{
-  const char *spec = R"(3 1
-0.0 0.0
-1.0 0.0
-0.5 0.8660254037844386
-0 1 2
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationTriangle";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 3);
-  EXPECT_EQ(output.vert.size(), 4);
-  EXPECT_NEAR(total_faces_area(output), std::sqrt(3.0) / 4.0, 1e-5);
-}
-
-TEST(straight_skeleton, SimulationRectangle)
-{
-  const char *spec = R"(4 1
-0.0 0.0
-4.0 0.0
-4.0 2.0
-0.0 2.0
-0 1 2 3
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationRectangle";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 4);
-  EXPECT_NEAR(total_faces_area(output), 8.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationSquareOffset)
-{
-  const char *spec = R"(4 1
-0.0 0.0
-10.0 0.0
-10.0 10.0
-0.0 10.0
-0 1 2 3
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationSquareOffset";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-  input.offset = 2.0;
-  input.segments = 1;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  /* 4 side-strip faces + 1 inner square = 5 faces. */
-  EXPECT_EQ(output.face_offsets.size(), 5);
-  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationSquareTwoBands)
-{
-  const char *spec = R"(4 1
-0.0 0.0
-10.0 0.0
-10.0 10.0
-0.0 10.0
-0 1 2 3
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationSquareTwoBands";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-  input.offset = 4.0;
-  input.segments = 2;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  /* Band 0: 4 faces. Band 1: 4 faces + 1 inner face = 9 faces total. */
-  EXPECT_EQ(output.face_offsets.size(), 9);
-  EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationLShape)
-{
-  const char *spec = R"(6 1
-0.0 0.0
-4.0 0.0
-4.0 2.0
-2.0 2.0
-2.0 4.0
-0.0 4.0
-0 1 2 3 4 5
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationLShape";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 6);
-  EXPECT_NEAR(total_faces_area(output), 12.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationMultiSplitHourglass)
-{
-  const char *spec = R"(6 1
-0.0 0.0
-4.0 0.0
-3.0 1.0
-4.0 2.0
-0.0 2.0
-1.0 1.0
-0 1 2 3 4 5
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationMultiSplitHourglass";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 6);
-  EXPECT_NEAR(total_faces_area(output), 6.0, 1e-6);
-}
-
-TEST(straight_skeleton, SimulationSquareWithHole)
+TEST(straight_skeleton, SquareWithHole_FiveSegments)
 {
   const char *spec = R"(8 2
 0.0 0.0
@@ -1895,44 +1767,17 @@ TEST(straight_skeleton, SimulationSquareWithHole)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationSquareWithHole";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 8);
-  EXPECT_NEAR(total_faces_area(output), 84.0, 1e-5);
-}
-
-TEST(straight_skeleton, FullVerificationFlag)
-{
-  const char *spec = R"(8 2
-0.0 0.0
-10.0 0.0
-10.0 10.0
-0.0 10.0
-3.0 7.0
-7.0 7.0
-7.0 3.0
-3.0 3.0
-0 1 2 3
-4 5 6 7
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "FullVerificationTest";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-  input.full_verification = true;
+  input.label = "SquareWithHole_FiveSegments";
   input.segments = 5;
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
   EXPECT_TRUE(output.is_valid);
   EXPECT_TRUE(output.error_message.empty());
   EXPECT_NEAR(total_faces_area(output), 84.0, 1e-4);
 }
 
-TEST(straight_skeleton, SimulationFourWayStarSplit)
+TEST(straight_skeleton, FourWayStarSplit)
 {
   const char *spec = R"(12 1
 -1.0 4.0
@@ -1952,8 +1797,7 @@ TEST(straight_skeleton, SimulationFourWayStarSplit)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationFourWayStarSplit";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "FourWayStarSplit";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1961,7 +1805,7 @@ TEST(straight_skeleton, SimulationFourWayStarSplit)
   EXPECT_NEAR(total_faces_area(output), 28.0, 1e-4);
 }
 
-TEST(straight_skeleton, SimulationDumbbellCollinear)
+TEST(straight_skeleton, DumbbellCollinear)
 {
   const char *spec = R"(12 1
 2.0 1.0
@@ -1981,8 +1825,7 @@ TEST(straight_skeleton, SimulationDumbbellCollinear)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationDumbbellCollinear";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "DumbbellCollinear";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -1990,7 +1833,7 @@ TEST(straight_skeleton, SimulationDumbbellCollinear)
   EXPECT_NEAR(total_faces_area(output), 72.0, 1e-4);
 }
 
-TEST(straight_skeleton, SimulationDoubleCombSplit)
+TEST(straight_skeleton, DoubleCombSplit)
 {
   /* 10-vert comb polygon with 2 reflex notches simultaneously splitting top edge:
    * (-6, 0) -> (-4, 0) -> (-3, 2) [reflex] -> (-2, 0) -> (2, 0) -> (3, 2) [reflex]
@@ -2013,8 +1856,7 @@ TEST(straight_skeleton, SimulationDoubleCombSplit)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec10, storage);
-  input.label = "SimulationDoubleCombSplit";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "DoubleCombSplit";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -2022,92 +1864,7 @@ TEST(straight_skeleton, SimulationDoubleCombSplit)
   EXPECT_NEAR(total_faces_area(output), 44.0, 1e-4);
 }
 
-TEST(straight_skeleton, KineticFourWayStarSplit)
-{
-  const char *spec = R"(12 1
--1.0 4.0
--1.0 1.0
--4.0 1.0
--4.0 -1.0
--1.0 -1.0
--1.0 -4.0
-1.0 -4.0
-1.0 -1.0
-4.0 -1.0
-4.0 1.0
-1.0 1.0
-1.0 4.0
-0 1 2 3 4 5 6 7 8 9 10 11
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticFourWayStarSplit";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 12);
-  EXPECT_NEAR(total_faces_area(output), 28.0, 1e-4);
-}
-
-TEST(straight_skeleton, KineticDumbbellCollinear)
-{
-  const char *spec = R"(12 1
-2.0 1.0
--2.0 1.0
--2.0 4.0
--6.0 4.0
--6.0 -4.0
--2.0 -4.0
--2.0 -1.0
-2.0 -1.0
-2.0 -4.0
-6.0 -4.0
-6.0 4.0
-2.0 4.0
-0 1 2 3 4 5 6 7 8 9 10 11
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticDumbbellCollinear";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 12);
-  EXPECT_NEAR(total_faces_area(output), 72.0, 1e-4);
-}
-
-TEST(straight_skeleton, KineticDoubleCombSplit)
-{
-  const char *spec10 = R"(10 1
--6.0 0.0
--4.0 0.0
--3.0 2.0
--2.0 0.0
-2.0 0.0
-3.0 2.0
-4.0 0.0
-6.0 0.0
-6.0 4.0
--6.0 4.0
-0 1 2 3 4 5 6 7 8 9
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec10, storage);
-  input.label = "KineticDoubleCombSplit";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 10);
-  EXPECT_NEAR(total_faces_area(output), 44.0, 1e-4);
-}
-
-TEST(straight_skeleton, SimulationAsymmetricHourglass)
+TEST(straight_skeleton, AsymmetricHourglass)
 {
   const char *spec = R"(6 1
 -5.0 -3.0
@@ -2121,8 +1878,7 @@ TEST(straight_skeleton, SimulationAsymmetricHourglass)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationAsymmetricHourglass";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "AsymmetricHourglass";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -2130,30 +1886,7 @@ TEST(straight_skeleton, SimulationAsymmetricHourglass)
   EXPECT_NEAR(total_faces_area(output), 29.0, 1e-4);
 }
 
-TEST(straight_skeleton, KineticAsymmetricHourglass)
-{
-  const char *spec = R"(6 1
--5.0 -3.0
-0.0 -1.0
-3.0 -2.0
-3.0 2.0
-0.0 1.0
--5.0 3.0
-0 1 2 3 4 5
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticAsymmetricHourglass";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 6);
-  EXPECT_NEAR(total_faces_area(output), 29.0, 1e-4);
-}
-
-TEST(straight_skeleton, SimulationThreeWayStarSplit)
+TEST(straight_skeleton, ThreeWayStarSplit)
 {
   const char *spec = R"(9 1
 1.0000 4.0000
@@ -2170,8 +1903,7 @@ TEST(straight_skeleton, SimulationThreeWayStarSplit)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationThreeWayStarSplit";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "ThreeWayStarSplit";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -2179,33 +1911,7 @@ TEST(straight_skeleton, SimulationThreeWayStarSplit)
   EXPECT_NEAR(total_faces_area(output), 19.1138, 1e-3);
 }
 
-TEST(straight_skeleton, KineticThreeWayStarSplit)
-{
-  const char *spec = R"(9 1
-1.0000 4.0000
--1.0000 4.0000
--0.69282 0.40000
--3.96410 -1.13397
--2.96410 -2.86603
-0.0000 -0.80000
-2.96410 -2.86603
-3.96410 -1.13397
-0.69282 0.40000
-0 1 2 3 4 5 6 7 8
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticThreeWayStarSplit";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 9);
-  EXPECT_NEAR(total_faces_area(output), 19.1138, 1e-3);
-}
-
-TEST(straight_skeleton, SimulationTShapeSplit)
+TEST(straight_skeleton, TShapeSplit)
 {
   /* 8-vertex T-shaped polygon.
    * Two reflex vertices at (1, 2) and (-1, 2) move towards (0, 3) at speed sqrt(2).
@@ -2226,8 +1932,7 @@ TEST(straight_skeleton, SimulationTShapeSplit)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationTShapeSplit";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "TShapeSplit";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -2235,32 +1940,7 @@ TEST(straight_skeleton, SimulationTShapeSplit)
   EXPECT_NEAR(total_faces_area(output), 20.0, 1e-4);
 }
 
-TEST(straight_skeleton, KineticTShapeSplit)
-{
-  const char *spec = R"(8 1
--3.0 0.0
- 3.0 0.0
- 3.0 2.0
- 1.0 2.0
- 1.0 6.0
--1.0 6.0
--1.0 2.0
--3.0 2.0
-0 1 2 3 4 5 6 7
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticTShapeSplit";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 8);
-  EXPECT_NEAR(total_faces_area(output), 20.0, 1e-4);
-}
-
-TEST(straight_skeleton, SimulationDoubleHourglass)
+TEST(straight_skeleton, DoubleHourglass)
 {
   /* 16-vertex polygon with 3 lobes and 2 necks.
    * Neck 1 at x = -3, Neck 2 at x = 3.
@@ -2290,8 +1970,7 @@ TEST(straight_skeleton, SimulationDoubleHourglass)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationDoubleHourglass";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "DoubleHourglass";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
@@ -2299,7 +1978,7 @@ TEST(straight_skeleton, SimulationDoubleHourglass)
   EXPECT_NEAR(total_faces_area(output), 60.0, 1e-4);
 }
 
-TEST(straight_skeleton, SimulationTwoPeaksHourglass_EightSegments)
+TEST(straight_skeleton, TwoPeaksHourglass_EightSegments)
 {
   /* 8-vertex polygon with two symmetric diamond lobes connected by a narrow hourglass neck.
    * Neck pinches at t ~= 0.35, dividing the wavefront into TWO separate contours.
@@ -2321,8 +2000,7 @@ TEST(straight_skeleton, SimulationTwoPeaksHourglass_EightSegments)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationTwoPeaksHourglass_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "TwoPeaksHourglass_EightSegments";
   input.segments = 8;
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -2330,32 +2008,7 @@ TEST(straight_skeleton, SimulationTwoPeaksHourglass_EightSegments)
   EXPECT_NEAR(total_faces_area(output), 52.8, 1e-3);
 }
 
-TEST(straight_skeleton, KineticTwoPeaksHourglass_EightSegments)
-{
-  const char *spec = R"(8 1
--8.0  0.0
--4.0 -3.0
- 0.0 -0.6
- 4.0 -3.0
- 8.0  0.0
- 4.0  3.0
- 0.0  0.6
--4.0  3.0
-0 1 2 3 4 5 6 7
-)";
-
-  InputStorage storage;
-  StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticTwoPeaksHourglass_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-  input.segments = 8;
-
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_NEAR(total_faces_area(output), 52.8, 1e-3);
-}
-
-TEST(straight_skeleton, SimulationThreePeaksStar_EightSegments)
+TEST(straight_skeleton, ThreePeaksStar_EightSegments)
 {
   /* 12-vertex 3-fold symmetric polygon with 3 pointed lobes and 3 reflex valleys.
    * At t ~= 0.73, the 3 reflex vertices collide at (0, 0), dividing the closed wavefront
@@ -2380,8 +2033,7 @@ TEST(straight_skeleton, SimulationThreePeaksStar_EightSegments)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationThreePeaksStar_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
+  input.label = "ThreePeaksStar_EightSegments";
   input.segments = 8;
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
@@ -2389,8 +2041,306 @@ TEST(straight_skeleton, SimulationThreePeaksStar_EightSegments)
   EXPECT_NEAR(total_faces_area(output), 35.7, 1e-2);
 }
 
-TEST(straight_skeleton, KineticThreePeaksStar_EightSegments)
+TEST(straight_skeleton, ShiftedOverlap_EightSegments)
 {
+  const char *spec = R"(10 1
+ 1.0  1.0
+-3.0  1.0
+-5.0  3.0
+-8.0  0.0
+-5.0 -3.0
+-1.0 -1.0
+ 3.0 -1.0
+ 5.0 -3.0
+ 8.0  0.0
+ 5.0  3.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ShiftedOverlap_EightSegments";
+  input.segments = 8;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 50.0, 1e-3);
+}
+
+TEST(straight_skeleton, DiamondStarSplit)
+{
+  const char *spec = R"(8 1
+ 3.0  0.0
+ 1.0  1.0
+ 0.0  3.0
+-1.0  1.0
+-3.0  0.0
+-1.0 -1.0
+ 0.0 -3.0
+ 1.0 -1.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "DiamondStarSplit";
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_NEAR(total_faces_area(output), 12.0, 1e-3);
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Motorcycle Graph Tests (Phase 1)
+ *
+ * Internal subroutine tests for compute_motorcycle_graph.
+ * Only run when testing the motorcycle graph algorithm.
+ * \{ */
+
+#define SKIP_IF_NOT_MOTORCYCLE() \
+  if (get_test_algorithm() != StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH) { \
+    return; \
+  }
+
+TEST(straight_skeleton, MotorcycleGraph_LShape)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(6 1
+0.0 0.0
+4.0 0.0
+4.0 2.0
+2.0 2.0
+2.0 4.0
+0.0 4.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_LShape";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_LShape.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 1);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_EQ(mg.tracks[0].origin_vert, 3);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.x, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.y, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[0].crash_time, 2.0, 1e-4);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_Hourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+-8.0  0.0
+-4.0 -3.0
+ 0.0 -0.6
+ 4.0 -3.0
+ 8.0  0.0
+ 4.0  3.0
+ 0.0  0.6
+-4.0  3.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_Hourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_Hourglass.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 2);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_TRUE(mg.tracks[1].crashed);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.x, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.y, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[1].crash_pos.x, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[1].crash_pos.y, 0.0, 1e-4);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_AsymmetricHourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(6 1
+-4.0 -3.0
+ 0.0 -0.5
+ 4.0 -3.0
+ 4.0  3.0
+ 0.0  1.0
+-4.0  3.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_AsymmetricHourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_AsymmetricHourglass.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 2);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_TRUE(mg.tracks[1].crashed);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_FourWayStar)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+ 3.0  0.0
+ 1.0  1.0
+ 0.0  3.0
+-1.0  1.0
+-3.0  0.0
+-1.0 -1.0
+ 0.0 -3.0
+ 1.0 -1.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_FourWayStar";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_FourWayStar.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 4);
+  for (int i = 0; i < 4; i++) {
+    EXPECT_TRUE(mg.tracks[i].crashed);
+    EXPECT_NEAR(mg.tracks[i].crash_pos.x, 0.0, 1e-4);
+    EXPECT_NEAR(mg.tracks[i].crash_pos.y, 0.0, 1e-4);
+  }
+}
+
+TEST(straight_skeleton, MotorcycleGraph_DoubleComb)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(10 1
+-6.0 0.0
+-4.0 0.0
+-3.0 2.0
+-2.0 0.0
+ 2.0 0.0
+ 3.0 2.0
+ 4.0 0.0
+ 6.0 0.0
+ 6.0 4.0
+-6.0 4.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_DoubleComb";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_DoubleComb.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 2);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_TRUE(mg.tracks[1].crashed);
+  EXPECT_EQ(mg.tracks[0].crash_type, MotorcycleCrashType::WALL);
+  EXPECT_EQ(mg.tracks[1].crash_type, MotorcycleCrashType::WALL);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.y, 4.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.y, 4.0, 1e-4);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_SquareWithHole)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 2
+-4.0 -4.0
+ 4.0 -4.0
+ 4.0  4.0
+-4.0  4.0
+-2.0 -2.0
+-2.0  2.0
+ 2.0  2.0
+ 2.0 -2.0
+0 1 2 3
+4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_SquareWithHole";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_SquareWithHole.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 4);
+  for (int i = 0; i < 4; i++) {
+    EXPECT_TRUE(mg.tracks[i].crashed);
+    EXPECT_EQ(mg.tracks[i].crash_type, MotorcycleCrashType::WALL);
+  }
+}
+
+TEST(straight_skeleton, MotorcycleGraph_ShiftedOverlap)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(10 1
+ 1.0  1.0
+-3.0  1.0
+-5.0  3.0
+-8.0  0.0
+-5.0 -3.0
+-1.0 -1.0
+ 3.0 -1.0
+ 5.0 -3.0
+ 8.0  0.0
+ 5.0  3.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_ShiftedOverlap";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_ShiftedOverlap.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 4);
+  for (const MotorcycleTrack &m : mg.tracks) {
+    EXPECT_TRUE(m.crashed);
+  }
+}
+
+TEST(straight_skeleton, MotorcycleGraph_TwoPeaksHourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+-8.0  0.0
+-4.0 -3.0
+ 0.0 -0.6
+ 4.0 -3.0
+ 8.0  0.0
+ 4.0  3.0
+ 0.0  0.6
+-4.0  3.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_TwoPeaksHourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_TwoPeaksHourglass.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 2);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_TRUE(mg.tracks[1].crashed);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.x, 0.0, 1e-4);
+  EXPECT_NEAR(mg.tracks[0].crash_pos.y, 0.0, 1e-4);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_ThreePeaksStar)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
   const char *spec = R"(12 1
  1.7500  3.0311
  0.0000  6.0000
@@ -2409,17 +2359,324 @@ TEST(straight_skeleton, KineticThreePeaksStar_EightSegments)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticThreePeaksStar_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-  input.segments = 8;
+  input.label = "MotorcycleGraph_ThreePeaksStar";
 
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_NEAR(total_faces_area(output), 35.7, 1e-2);
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_ThreePeaksStar.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 3);
+  for (const MotorcycleTrack &m : mg.tracks) {
+    EXPECT_TRUE(m.crashed);
+  }
 }
 
-TEST(straight_skeleton, SimulationShiftedOverlap_EightSegments)
+TEST(straight_skeleton, MotorcycleGraph_DoubleHourglass)
 {
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(16 1
+-8.0 -2.0
+-4.0 -2.0
+-3.0 -1.0
+-2.0 -2.0
+2.0 -2.0
+3.0 -1.0
+4.0 -2.0
+8.0 -2.0
+8.0 2.0
+4.0 2.0
+3.0 1.0
+2.0 2.0
+-2.0 2.0
+-3.0 1.0
+-4.0 2.0
+-8.0 2.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_DoubleHourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_DoubleHourglass.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 4);
+  for (const MotorcycleTrack &m : mg.tracks) {
+    EXPECT_TRUE(m.crashed);
+  }
+}
+
+TEST(straight_skeleton, MotorcycleGraph_TShapeSplit)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+-4.0  0.0
+-1.0  0.0
+-1.0 -4.0
+ 1.0 -4.0
+ 1.0  0.0
+ 4.0  0.0
+ 4.0  2.0
+-4.0  2.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_TShapeSplit";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_TShapeSplit.svg");
+
+  EXPECT_EQ(mg.tracks.size(), 3);
+  EXPECT_TRUE(mg.tracks[0].crashed);
+  EXPECT_EQ(mg.tracks[0].crash_type, MotorcycleCrashType::CONCURRENT_MOTORCYCLE);
+  EXPECT_TRUE(mg.tracks[1].crashed);
+  EXPECT_EQ(mg.tracks[1].crash_type, MotorcycleCrashType::CONCURRENT_MOTORCYCLE);
+  EXPECT_TRUE(mg.tracks[2].crashed);
+  EXPECT_EQ(mg.tracks[2].crash_type, MotorcycleCrashType::WALL);
+}
+
+TEST(straight_skeleton, MotorcycleGraph_PaperExample)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(23 1
+1.3 7.9
+0.4 6.0
+2.0 4.6
+0.4 3.6
+0.4 1.8
+1.6 0.0
+5.0 1.4
+6.7 1.1
+6.7 2.4
+9.2 1.3
+11.7 2.4
+11.7 1.1
+15.3 1.9
+13.7 3.5
+14.7 4.5
+14.7 7.9
+15.9 9.1
+14.6 12.8
+10.2 12.8
+8.5 11.7
+7.3 12.8
+1.8 12.8
+0.0 11.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "MotorcycleGraph_PaperExample";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  dump_motorcycle_graph_to_svg(input, mg, "/tmp/MotorcycleGraph_PaperExample.svg");
+
+  EXPECT_GT(mg.tracks.size(), 0);
+  for (const MotorcycleTrack &m : mg.tracks) {
+    EXPECT_TRUE(m.crashed);
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Extended Wavefront Tests (Phase 2)
+ * \{ */
+
+static double input_polygon_interior_area(const StraightSkeletonInput &input)
+{
+  auto contour_area = [&](Span<int> contour) {
+    double a = 0.0;
+    const int n = int(contour.size());
+    for (const int i : IndexRange(n)) {
+      const double2 p1 = input.vert[contour[i]];
+      const double2 p2 = input.vert[contour[(i + 1) % n]];
+      a += 0.5 * (p1.x * p2.y - p1.y * p2.x);
+    }
+    return a;
+  };
+  double total = contour_area(input.outer_polygon);
+  for (const int h : IndexRange(input.hole_offsets.size())) {
+    total += contour_area(input.hole_vert_indices.slice(input.hole_offsets[h]));
+  }
+  return total;
+}
+
+TEST(straight_skeleton, ExtendedWavefront_LShape)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(6 1
+0.0 0.0
+6.0 0.0
+6.0 2.0
+2.0 2.0
+2.0 6.0
+0.0 6.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_LShape";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_LShape.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_Hourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(6 1
+-4.0 -3.0
+ 0.0 -0.5
+ 4.0 -3.0
+ 4.0  3.0
+ 0.0  0.5
+-4.0  3.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_Hourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_Hourglass.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_AsymmetricHourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(6 1
+-4.0 -3.0
+ 0.0 -0.5
+ 4.0 -3.0
+ 4.0  3.0
+ 0.0  1.0
+-4.0  3.0
+0 1 2 3 4 5
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_AsymmetricHourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_AsymmetricHourglass.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_FourWayStar)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+ 3.0  0.0
+ 1.0  1.0
+ 0.0  3.0
+-1.0  1.0
+-3.0  0.0
+-1.0 -1.0
+ 0.0 -3.0
+ 1.0 -1.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_FourWayStar";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_FourWayStar.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_DoubleComb)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(10 1
+-6.0 0.0
+-4.0 0.0
+-3.0 2.0
+-2.0 0.0
+ 2.0 0.0
+ 3.0 2.0
+ 4.0 0.0
+ 6.0 0.0
+ 6.0 4.0
+-6.0 4.0
+0 1 2 3 4 5 6 7 8 9
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_DoubleComb";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_DoubleComb.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_SquareWithHole)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 2
+-4.0 -4.0
+ 4.0 -4.0
+ 4.0  4.0
+-4.0  4.0
+-2.0 -2.0
+-2.0  2.0
+ 2.0  2.0
+ 2.0 -2.0
+0 1 2 3
+4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_SquareWithHole";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_SquareWithHole.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_ShiftedOverlap)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
   const char *spec = R"(10 1
  1.0  1.0
 -3.0  1.0
@@ -2436,41 +2693,191 @@ TEST(straight_skeleton, SimulationShiftedOverlap_EightSegments)
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "SimulationShiftedOverlap_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::SIMULATION;
-  input.segments = 8;
+  input.label = "ExtendedWavefront_ShiftedOverlap";
 
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_NEAR(total_faces_area(output), 50.0, 1e-3);
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_ShiftedOverlap.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
 }
 
-TEST(straight_skeleton, KineticShiftedOverlap_EightSegments)
+TEST(straight_skeleton, ExtendedWavefront_TwoPeaksHourglass)
 {
-  const char *spec = R"(10 1
- 1.0  1.0
--3.0  1.0
--5.0  3.0
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
 -8.0  0.0
--5.0 -3.0
--1.0 -1.0
- 3.0 -1.0
- 5.0 -3.0
+-4.0 -3.0
+ 0.0 -0.6
+ 4.0 -3.0
  8.0  0.0
- 5.0  3.0
-0 1 2 3 4 5 6 7 8 9
+ 4.0  3.0
+ 0.0  0.6
+-4.0  3.0
+0 1 2 3 4 5 6 7
 )";
 
   InputStorage storage;
   StraightSkeletonInput input = fill_input_from_string(spec, storage);
-  input.label = "KineticShiftedOverlap_EightSegments";
-  input.algorithm = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
-  input.segments = 8;
+  input.label = "ExtendedWavefront_TwoPeaksHourglass";
 
-  const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  print_test_output(input.label, input, output);
-  EXPECT_NEAR(total_faces_area(output), 50.0, 1e-3);
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_TwoPeaksHourglass.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
 }
+
+TEST(straight_skeleton, ExtendedWavefront_ThreePeaksStar)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(12 1
+ 1.7500  3.0311
+ 0.0000  6.0000
+-1.7500  3.0311
+-0.6928  0.4000
+-3.5000 -0.0000
+-5.1962 -3.0000
+-1.7500 -3.0311
+-0.0000 -0.8000
+ 1.7500 -3.0311
+ 5.1962 -3.0000
+ 3.5000 -0.0000
+ 0.6928  0.4000
+0 1 2 3 4 5 6 7 8 9 10 11
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_ThreePeaksStar";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_ThreePeaksStar.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_DoubleHourglass)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(16 1
+-8.0 -2.0
+-4.0 -2.0
+-3.0 -1.0
+-2.0 -2.0
+2.0 -2.0
+3.0 -1.0
+4.0 -2.0
+8.0 -2.0
+8.0 2.0
+4.0 2.0
+3.0 1.0
+2.0 2.0
+-2.0 2.0
+-3.0 1.0
+-4.0 2.0
+-8.0 2.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_DoubleHourglass";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_DoubleHourglass.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_TShapeSplit)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(8 1
+-4.0  0.0
+-1.0  0.0
+-1.0 -4.0
+ 1.0 -4.0
+ 1.0  0.0
+ 4.0  0.0
+ 4.0  2.0
+-4.0  2.0
+0 1 2 3 4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_TShapeSplit";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_TShapeSplit.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+TEST(straight_skeleton, ExtendedWavefront_PaperExample)
+{
+  SKIP_IF_NOT_MOTORCYCLE();
+  const char *spec = R"(23 1
+1.3 7.9
+0.4 6.0
+2.0 4.6
+0.4 3.6
+0.4 1.8
+1.6 0.0
+5.0 1.4
+6.7 1.1
+6.7 2.4
+9.2 1.3
+11.7 2.4
+11.7 1.1
+15.3 1.9
+13.7 3.5
+14.7 4.5
+14.7 7.9
+15.9 9.1
+14.6 12.8
+10.2 12.8
+8.5 11.7
+7.3 12.8
+1.8 12.8
+0.0 11.0
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "ExtendedWavefront_PaperExample";
+
+  const MotorcycleGraph mg = compute_motorcycle_graph(input);
+  const ExtendedWavefront ew = build_initial_extended_wavefront(input, mg);
+  dump_extended_wavefront_to_svg(input, ew, "/tmp/ExtendedWavefront_PaperExample.svg");
+
+  EXPECT_TRUE(ew.is_valid);
+  EXPECT_TRUE(ew.all_faces_convex);
+  EXPECT_NEAR(ew.total_interior_area, input_polygon_interior_area(input), 1e-3);
+  EXPECT_GT(ew.queue.size(), 0);
+}
+
+#undef SKIP_IF_NOT_MOTORCYCLE
 
 /** \} */
 

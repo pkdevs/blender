@@ -70,6 +70,9 @@ static StraightSkeletonAlgorithm get_benchmark_algorithm()
     if (std::string_view(env) == "simulation") {
       return StraightSkeletonAlgorithm::SIMULATION;
     }
+    if (std::string_view(env) == "motorcycle" || std::string_view(env) == "motorcycle_graph") {
+      return StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH;
+    }
   }
   return StraightSkeletonAlgorithm::SIMULATION;
 }
@@ -85,9 +88,13 @@ static bool is_debug_drawings_enabled()
 static void print_table_header(const char *title, const char *n_label)
 {
   const StraightSkeletonAlgorithm algo = get_benchmark_algorithm();
-  const char *algo_name = (algo == StraightSkeletonAlgorithm::SIMULATION) ?
-                              "SIMULATION" :
-                              "KINETIC_TRIANGULATION";
+  const char *algo_name = "SIMULATION";
+  if (algo == StraightSkeletonAlgorithm::KINETIC_TRIANGULATION) {
+    algo_name = "KINETIC_TRIANGULATION";
+  }
+  else if (algo == StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH) {
+    algo_name = "MOTORCYCLE_GRAPH";
+  }
   printf("\n#### %s [%s]\n\n", title, algo_name);
   printf("| %s | vertices | full skeleton | 5 segments | events | flips | faces |\n", n_label);
   printf("|---:|---------:|--------------:|-----------:|-------:|------:|------:|\n");

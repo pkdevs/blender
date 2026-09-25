@@ -14,6 +14,93 @@
  * Palfreder and Held (2015).
  */
 
+/* -------------------------------------------------------------------- */
+/** \name Differences and Departures from Published Papers
+ *
+ * This section documents all known areas where this implementation departs from,
+ * extends, or adapts the algorithms published in:
+ *   [1] Palfrader, Held, Huber (2012): "On Computing Straight Skeletons by Means of
+ *       Kinetic Triangulations" (Surfer algorithm).
+ *   [2] Palfreder, Held (2015): "Computing Mitered Offset Curves Based on Straight
+ *       Skeletons".
+ *   [3] Aichholzer, Aurenhammer (1998): "Straight skeletons for general polygonal
+ *       figures in the plane".
+ *
+ * 1. Event Simultaneity and Priority Queue Ordering (Palfrader 2012 Algorithm 3, §3.2):
+ *    - Paper: The paper uses exact or canonical double-precision arithmetic and explicitly
+ *      states: "we carefully avoid the use of precision thresholds for judging whether the
+ *      collapse times of two triangles are identical: On a finite-precision arithmetic this
+ *      would be prone to errors and one could not guarantee that the algorithm will terminate."
+ *      In exact arithmetic, all symmetric events have identical bitwise timestamps.
+ *    - Current Code: When using standard IEEE-754 double precision without exact arithmetic,
+ *      different event formulas produce slight timing discrepancies. Specifically, FLIP times
+ *      computed via the quadratic signed-area formula have O(sqrt(eps_machine)) ≈ 1e-7 error
+ *      near double roots (discriminant ≈ 0), whereas EDGE_COLLAPSE times computed via linear
+ *      closest approach have O(eps_machine) ≈ 1e-15 error. Consequently, the priority queue
+ *      in #pop_with_palfrader_ordering uses a tolerance window (`simultaneous_tol = 1e-5`)
+ *      to cluster simultaneous events. When an EDGE_COLLAPSE is selected from the window,
+ *      competing FLIP events on the same triangle are removed to prevent stale flips.
+ *
+ * 2. 1-Boundary Triangle Event Detection (Palfrader 2015 §4.3.3, §4.4c):
+ *    - Paper: For a triangle with one boundary edge, the collapse time is computed from the
+ *      linear distance from the opposite vertex to the wavefront edge's supporting line,
+ *      avoiding quadratic multiplicity-2 roots.
+ *    - Current Code: Implements this linear approach in `compute_triangle_collapse` (Step 2).
+ *      It computes the projection coordinate `d_along` of the opposite vertex onto the
+ *      boundary edge at the crash time:
+ *        - `d_along < 0` or `d_along > 1`: The apex crosses the supporting line outside the
+ *          segment, generating a FLIP event on the adjacent internal edge.
+ *        - `0 <= d_along <= 1` with a reflex apex: Generates a SPLIT event.
+ *        - `0 <= d_along <= 1` with a convex apex: Generates an EDGE_COLLAPSE towards the
+ *          closer boundary endpoint.
+ *
+ * 3. 2-Boundary Triangle Event Detection (Ear / Arm-Tip Triangles):
+ *    - Paper: Treats all triangles uniformly under the quadratic signed-area polynomial,
+ *      or treats ear collapses through topological edge events.
+ *    - Current Code: A 2-boundary triangle has two boundary edges and one internal chord.
+ *      The area reaches zero when all three vertices become collinear. The code computes the
+ *      quadratic area collapse time `dt_root`. To guard against O(sqrt(eps)) timing error
+ *      causing a spurious FLIP when the boundary edges should actually collapse, the code
+ *      also calculates the linear closest-approach time `dt_lin` of the boundary edges,
+ *      and evaluates flippability at `max(dt_root, dt_lin)`.
+ *
+ * 4. Cascading Edge Collapses and Parallel Wavefronts (Palfrader 2012 §3.1):
+ *    - Paper: When parallel wavefronts overlap, vertices moving at infinite speed are
+ *      introduced and processed by selecting the shorter wavefront edge in the fan and
+ *      collapsing it.
+ *    - Current Code: Implements `handle_infinite_speed_vertex`, but also features an explicit
+ *      iterative cascade loop in `process_edge_collapse_event`. When a boundary edge collapses,
+ *      adjacent connected boundary edges whose endpoints converge within a travel-relative
+ *      threshold (`cascade_tol = epsilon * max(1, travel) * 1e6`) are immediately collapsed
+ *      into the same skeleton node. This merges multi-vertex symmetric collapses (such as
+ *      symmetric polygon centers or Koch star tips) directly into higher-degree skeleton nodes.
+ *
+ * 5. Multi-Split on Internal Edges:
+ *    - Paper: Skeletons split when a reflex wavefront vertex crashes into a wavefront edge
+ *      (or unbounded ray).
+ *    - Current Code: In addition to boundary SPLIT events, `compute_triangle_collapse` (Step 1)
+ *      detects MULTI_SPLIT events on internal triangulation chords when the distance between
+ *      two moving wavefront vertices reaches zero and at least one vertex is reflex.
+ *
+ * 6. Domain and Boundary Representation (Palfrader 2012 §2):
+ *    - Paper: Computes straight skeletons of general Planar Straight-Line Graphs (PSLGs)
+ *      in the unbounded plane by attaching unbounded triangles to the convex hull and mapping
+ *      them to a sphere via stereographic projection.
+ *    - Current Code: Specialised for bounded 2D polygons with optional interior holes. It builds
+ *      a 2D Constrained Delaunay Triangulation (CDT) covering only the interior domain.
+ *
+ * 7. Flip Cycle Journal and Retriangulation (Palfrader 2012 §3.2, Figure 5):
+ *    - Paper: When an infinite loop of flip events is detected (same triangle triple
+ *      re-encountered at the same remaining-triangle count t*), the algorithm rolls back
+ *      flips to T1, determines the least-squares collapse line of polygon P, sorts vertices
+ *      along the line, inserts a monotone path v1...vk, and retriangulates using the sequence
+ *      from Hanke et al. [9].
+ *    - Current Code: Implements `JournalEntry`, `journal_history_`, and `journal_search_`.
+ *      When a cycle is detected, it rolls back flips, sorts vertices along the vector of
+ *      maximum separation, and retriangulates the collapsed polygon into cells fanned to
+ *      opposite exterior vertices v_e (`retriangulate_collapsed_polygon`).
+ * \} */
+
 #include "BLI_straight_skeleton.hh"
 #include "straight_skeleton_intern.hh"
 #include "straight_skeleton_verify.hh"
@@ -556,59 +643,8 @@ struct KineticVertices {
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Skeleton Graph
+/** \name Skeleton Graph Methods
  * \{ */
-
-struct SkeletonNode {
-  /** Node index in SkeletonGraph. */
-  int id{-1};
-  /** 2D position (x, y). */
-  double2 pos{0.0, 0.0};
-  /** Event time / height t (0 for input verts). */
-  double time{0.0};
-  /** Index of coincident input vertex, or -1 for interior nodes. */
-  int orig_vert{-1};
-  /** Incident SkeletonEdge indices. */
-  Vector<int> incident_edges;
-};
-
-struct SkeletonEdge {
-  /** Unique edge index in SkeletonGraph. */
-  int id{-1};
-  /** First endpoint (lower time or start). */
-  int node1{-1};
-  /** Second endpoint (higher time or end). */
-  int node2{-1};
-  /** Coincident input edge index, or -1 for skeleton arcs. */
-  int orig_edge{-1};
-  /** Incident input face index, or -1. */
-  int input_face{-1};
-  /** Side 0 or Side 1. */
-  int side{0};
-  /** Time at node1. */
-  double time_start{0.0};
-  /** Time at node2. */
-  double time_end{0.0};
-  /** True for input edges / face boundaries at t=0. */
-  bool is_input_boundary{false};
-};
-
-class SkeletonGraph {
- public:
-  Vector<SkeletonNode> nodes;
-  Vector<SkeletonEdge> edges;
-  double epsilon{default_epsilon};
-
-  int add_node(const double2 &pos, double time, int orig_vert = -1);
-  int add_edge(int node1,
-               int node2,
-               int orig_edge = -1,
-               int input_face = -1,
-               int side = 0,
-               double time_start = 0.0,
-               double time_end = 0.0,
-               bool is_input_boundary = false);
-};
 
 int SkeletonGraph::add_node(const double2 &pos, const double time, const int orig_vert)
 {
@@ -800,14 +836,38 @@ class TrianglePriorityQueue {
   /**
    * Pop the next event using Palfrader Algorithm 3 (§5.2.1) for event ordering.
    *
-   * When multiple events occur at the same timestamp (using exact bitwise comparison,
-   * following the paper's principle of avoiding precision thresholds for judging whether
-   * collapse times are identical):
+   * When multiple events occur at approximately the same timestamp (within `simultaneous_tol`),
+   * the following ordering is applied:
    * 1. Non-flip events (EDGE_COLLAPSE, SPLIT, MULTI_SPLIT) are preferred over FLIP events,
    *    since they guarantee progress by reducing the triangle count.
    * 2. Among flip events, the one with the longest flipping edge is chosen first.
    *    This guarantees termination via a monotonicity argument (longest edge strictly
    *    decreasing) and processes symmetric events in a geometry-determined order.
+   *
+   * A tolerance (`simultaneous_tol = 1e-5`) is used rather than exact bitwise equality.
+   * FLIP events (computed via the quadratic area formula, O(sqrt(eps_machine) * t) ≈ 1e-7
+   * accurate near a near-zero discriminant) and EDGE_COLLAPSE events (computed via the
+   * linear closest-approach formula, O(eps_machine * t) ≈ 1e-15 accurate) for the same
+   * physical moment disagree by up to ~1e-7. See #solve_quadratic_collapse_time for analysis.
+   *
+   * Priority Ordering Diagram:
+   *
+   *   Time Axis --->
+   *   [ event_time                           event_time + simultaneous_tol ]
+   *   +--------------------------------------------------------------------+
+   *   |  Candidate Events in Simultaneous Window:                          |
+   *   |                                                                    |
+   *   |  1. EDGE_COLLAPSE  (reduces triangle count by 1 or 2)   [PRIORITY] |
+   *   |     v1 -------> <------- v2                                        |
+   *   |                                                                    |
+   *   |  2. MULTI_SPLIT / SPLIT (splits wavefront / creates node)          |
+   *   |     v_reflex ---> | boundary_edge                                  |
+   *   |                                                                    |
+   *   |  3. FLIP (reconfigures triangulation, does not reduce count)       |
+   *   |     If multiple FLIPs exist, choose max |e|:                       |
+   *   |        FLIP A: edge length = 5.2  <--- CHOSEN                      |
+   *   |        FLIP B: edge length = 3.1                                   |
+   *   +--------------------------------------------------------------------+
    */
   TriangleEvent pop_with_palfrader_ordering(const TriangleEdges &triangles,
                                             const KineticVertices &kinetic_verts)
@@ -823,10 +883,17 @@ class TrianglePriorityQueue {
     events_[ti_min].heap_node = nullptr;
     const double event_time = min_ev.time;
 
-    /* Gather all events at the exact same timestamp (bitwise `==`). */
+    /* Gather all events at approximately the same timestamp.
+     * A tolerance is required because FLIP times (from the quadratic area formula) and
+     * EDGE_COLLAPSE times (from the step-1 linear closest-approach formula) for the same
+     * physical simultaneous event disagree by O(sqrt(eps_machine) * t) ≈ 1e-7.
+     * The 1e-5 tolerance bridges this gap. See #solve_quadratic_collapse_time for analysis. */
+    constexpr double simultaneous_tol = 1e-5;
     Vector<int> simultaneous_tis;
     for (const int ti : events_.index_range()) {
-      if (events_[ti].heap_node != nullptr && events_[ti].time == event_time) {
+      if (events_[ti].heap_node != nullptr &&
+          std::abs(events_[ti].time - event_time) <= simultaneous_tol)
+      {
         simultaneous_tis.append(ti);
       }
     }
@@ -859,8 +926,31 @@ class TrianglePriorityQueue {
     }
 
     if (best_nonflip_ti != -1) {
-      /* Put the popped flip event back, return the non-flip event instead. */
-      insert_or_update(ti_min, min_ev);
+      /* The non-flip event wins. Before returning it, remove any queued FLIP events for the
+       * SAME triangle from the entire event queue. A 2-boundary (arm-tip) triangle generates
+       * both an EDGE_COLLAPSE (from the boundary closest-approach formula, O(eps) accurate)
+       * and a FLIP (from the quadratic area formula, O(sqrt(eps)) accurate near a double root).
+       * The FLIP time is slightly earlier due to rounding, so it appears first in the heap.
+       * The Palfrader ordering correctly chooses the EDGE_COLLAPSE, but then re-inserts the
+       * FLIP. When many arm-tips collapse simultaneously, the FLIP for arm-tip A may still be
+       * in the heap when arm-tip B's EDGE_COLLAPSE fires — the simultaneous window then
+       * contains A's FLIP and B's EDGE_COLLAPSE, but they are unrelated. After all EDGE_COLLAPSEs
+       * drain, the remaining FLIPs fire incorrectly. Clearing all FLIPs for the winning
+       * non-flip triangle (not just those in the simultaneous window) prevents this. */
+      const int nonflip_tri = events_[best_nonflip_ti].triangle_index;
+      for (const int ti : events_.index_range()) {
+        if (ti != best_nonflip_ti && events_[ti].heap_node != nullptr &&
+            events_[ti].type == TriangleEventType::FLIP &&
+            events_[ti].triangle_index == nonflip_tri)
+        {
+          remove(ti);
+        }
+      }
+      /* Drop the popped min-flip if it is for the same triangle. */
+      if (min_ev.triangle_index != nonflip_tri) {
+        insert_or_update(ti_min, min_ev);
+      }
+
       TriangleEvent nonflip_ev = events_[best_nonflip_ti];
       remove(best_nonflip_ti);
       return nonflip_ev;
@@ -967,6 +1057,52 @@ static int3 get_sorted_triangle_verts(const TriangleEdges &triangles, const int 
 /** \name Bisector Velocity Calculation
  * \{ */
 
+/**
+ * Computes the 2D velocity vector of a kinetic wavefront vertex formed by two
+ * adjacent wavefront edges with inward unit normals n1 and n2.
+ *
+ * Each wavefront edge moves inward at unit speed parallel to itself. A vertex
+ * at the intersection of edges with normals n1 and n2 must move with velocity
+ * vector `vel` such that its projection onto both normals equals 1:
+ *
+ *        vel · n1 = 1
+ *        vel · n2 = 1
+ *
+ * Geometric visualization:
+ *
+ *          Edge 1 (advancing inward with normal n1)
+ *          ------------------------+
+ *                 |                | \
+ *                 | n1             |   \  Bisector ray: vel
+ *                 v                |     \
+ *                                  |       v (vertex position at t > 0)
+ *                                  |     /
+ *                 ^                |   /
+ *                 | n2             | /
+ *                 |                |/
+ *          ------------------------+
+ *          Edge 2 (advancing inward with normal n2)
+ *
+ * For a corner with interior angle alpha:
+ *
+ *        Convex Corner (alpha < pi):              Reflex Corner (alpha > pi):
+ *
+ *               \    Interior                         \  Polygon Exterior
+ *                \   (Sweep area)                      \
+ *                 \                                     \
+ *                  \  n1 ^                               \
+ *                   \   /                                 \   Interior
+ *                    \ /                                   \  (Sweep area)
+ *                     V                                     V ---------->
+ *                    / \                                   / \    vel
+ *                   /   \  vel                            /   \
+ *                  /     v                               /     \
+ *                 /   n2                                /   n2  \  n1
+ *                /                                     /         \
+ *
+ * The velocity magnitude is |vel| = 1 / sin(alpha / 2).
+ * As alpha -> 0 (antiparallel edges, parallel corridor closing), |vel| -> infinity.
+ */
 static std::pair<double2, bool> compute_bisector_vel(const double2 &n1, const double2 &n2)
 {
   const double det = math::cross(n1, n2);
@@ -1038,6 +1174,68 @@ static bool is_edge_flippable_at_time(const TriangleEdges &triangles,
 /* -------------------------------------------------------------------- */
 /** \name Event Detection
  * \{ */
+
+/**
+ * Returns the smallest valid dt >= 0 satisfying `c0 + c1*dt + c2*dt^2 = 0`,
+ * or -1.0 if no such root exists for the current time context.
+ *
+ * This consolidates the quadratic/linear case handling used in the 2-boundary
+ * and 0-boundary event detection paths of #compute_triangle_collapse.
+ *
+ * # Known limitation: O(sqrt(eps)) accuracy near simultaneous events
+ *
+ * When a FLIP event and an EDGE_COLLAPSE event are physically simultaneous
+ * (e.g., every arm-tip collapse on a Koch snowflake), the discriminant
+ * `disc = c1² - 4*c2*c0` is exactly zero. In floating point it becomes
+ * `disc_computed ≈ eps_machine * c1²`, and `sqrt(disc_computed)` amplifies
+ * the error to `O(sqrt(eps_machine) * t) ≈ 1e-7`. The adjacent EDGE_COLLAPSE
+ * formula (a linear closest-approach) is O(eps_machine * t) ≈ 1e-15, so the
+ * two independently computed times disagree by ~1e-7. The Palfrader ordering
+ * in #pop_with_palfrader_ordering uses `simultaneous_tol = 1e-5` to bridge
+ * this gap and correctly deprioritize the FLIP.
+ *
+ * A cleaner fix would compute the FLIP time via the double-root formula
+ * `t = -c1/(2*c2)` when disc is near zero, achieving O(eps_machine) accuracy.
+ * However, in practice the Koch snowflake also has triangles with genuinely
+ * small-but-nonzero discriminants (two distinct near-simultaneous events), and
+ * distinguishing these from floating-point noise around an exact zero requires
+ * geometric context not available here. The tolerance-based Palfrader ordering
+ * is the pragmatic approach used instead.
+ */
+static double solve_quadratic_collapse_time(const double c0,
+                                            const double c1,
+                                            const double c2,
+                                            const double current_time,
+                                            const double event_time_tol)
+{
+  if (std::abs(c2) > div_by_zero_tol) {
+    const double disc = c1 * c1 - 4.0 * c2 * c0;
+
+    /* Standard quadratic formula. */
+    if (disc >= 0.0) {
+      const double sqrt_disc = std::sqrt(disc);
+      const double r1 = (-c1 - sqrt_disc) / (2.0 * c2);
+      const double r2 = (-c1 + sqrt_disc) / (2.0 * c2);
+      double best_r = std::numeric_limits<double>::infinity();
+      for (const double r : {r1, r2}) {
+        const bool is_valid = (current_time > 0.0 && r >= -event_time_tol) || (r > event_time_tol);
+        if (is_valid && r < best_r) {
+          best_r = r;
+        }
+      }
+      return std::isinf(best_r) ? -1.0 : best_r;
+    }
+    return -1.0;
+  }
+
+  /* Linear case: c2 ≈ 0, solve c0 + c1*t = 0. */
+  if (std::abs(c1) > div_by_zero_tol) {
+    const double r = -c0 / c1;
+    const bool is_valid = (current_time > 0.0 && r >= -event_time_tol) || (r > event_time_tol);
+    return is_valid ? r : -1.0;
+  }
+  return -1.0;
+}
 
 static TriangleEvent compute_triangle_collapse(const int ti,
                                                const TriangleEdges &triangles,
@@ -1112,7 +1310,21 @@ static TriangleEvent compute_triangle_collapse(const int ti,
 
   /* 1. Edge collapse / multi-split: closest approach of edge endpoints.
    * As shown by Palfreder & Held (2015), the derivative of pairwise distance
-   * is linear in time and avoids roots of multiplicity 2. */
+   * is linear in time and avoids roots of multiplicity 2.
+   *
+   *   Closest approach of endpoints p_k and p_{next_k}:
+   *
+   *      p_k (at t=0) -------> v_k
+   *           \
+   *            \  dp(t) = (p_{next_k} - p_k) + t * (v_{next_k} - v_k)
+   *             \
+   *              v
+   *      p_{next_k} (at t=0) -------> v_{next_k}
+   *
+   *   |dp(t)|^2 has a unique minimum at dt = - (dp · dv) / |dv|^2.
+   *   - If ei is a boundary edge: EDGE_COLLAPSE when endpoints meet.
+   *   - If ei is an internal edge and reflex vertex approaches distance ~ 0: MULTI_SPLIT.
+   */
   for (const int k : IndexRange(3)) {
     const int ei = e0 + k;
     const int next_k = (k + 1) % 3;
@@ -1179,6 +1391,25 @@ static TriangleEvent compute_triangle_collapse(const int ti,
    * line. This is numerically more robust than the quadratic area method (§4.3.4, Fig. 14):
    * "slight errors in input will only result in slight errors for the collapse time,
    * not in missing the collapse entirely."
+   *
+   * Geometric State and Classification:
+   *
+   *                       v_opp (opposite vertex)
+   *                       /   \
+   *       internal       /     \       internal
+   *       spoke (k+2)   /   ti  \      spoke (k+1)
+   *                    /         \
+   *                   v_a ------> v_b
+   *                   boundary edge (k)
+   *                       ^ n_hat
+   *                       | (inward wavefront motion)
+   *
+   *   Supporting line of boundary edge at crash time:
+   *
+   *   d_along < 0         d_along = 0        0 < d_along < 1        d_along = 1      d_along > 1
+   *   <-------------------+------------------+----------------------+------------------>
+   *   FLIP internal       EDGE_COLLAPSE      SPLIT (if reflex)      EDGE_COLLAPSE    FLIP internal
+   *   spoke (k+2)         onto v_a           EDGE_COLLAPSE (convex) onto v_b         spoke (k+1)
    *
    * The approach speed is 1 - v_opp · n̂, where n̂ is the wavefront edge's inward normal
    * and the wavefront moves at unit speed in the n̂ direction. */
@@ -1322,8 +1553,36 @@ static TriangleEvent compute_triangle_collapse(const int ti,
   }
 
   /* 2b. Two boundary edges (num_boundary == 2): corner vertex moves towards internal chord.
-   * Area reaches zero when the 3 vertices become collinear. If the internal chord can flip,
-   * a flip event updates the triangulation. */
+   * Area reaches zero when the 3 vertices become collinear. If the internal chord can flip
+   * at the collapse moment, a FLIP event updates the triangulation. Otherwise, the step-1
+   * closest-approach formula already schedules the correct EDGE_COLLAPSE.
+   *
+   * Geometric State of Ear / Arm-Tip Triangle:
+   *
+   *                  v_corner (arm tip / ear apex)
+   *                    / \
+   *   boundary edge   /   \   boundary edge
+   *   (moves inward) /     \  (moves inward)
+   *                 /  ti   \
+   *               v_a ----- v_b
+   *               internal chord (e_int)
+   *
+   *   Two competing events occur as the arm shrinks:
+   *
+   *   (A) EDGE_COLLAPSE:
+   *       Boundary edges shrink to zero length as v_corner meets v_a and v_b simultaneously.
+   *       All 3 vertices collapse to a single point (the skeleton node at the tip of the roof).
+   *
+   *   (B) FLIP:
+   *       v_corner moves past/across chord (v_a, v_b) before boundary edges vanish.
+   *       Chord (v_a, v_b) flips to connect v_corner to the opposite vertex of adjacent triangle.
+   *
+   * A precision subtlety: the quadratic area formula gives dt_root that is O(sqrt(eps_machine))
+   * inaccurate near a double root (e.g. Koch arm-tips at t = 50/3). The flippability check at
+   * dt_root may return true even though the arm-tip corner vertex lands exactly ON the chord at
+   * the true collapse time (making the flip degenerate and wrong). To avoid this, the
+   * flippability is also evaluated at the more accurate step-1 linear estimate of the collapse
+   * time. A FLIP event is only generated if the chord is flippable at BOTH times. */
   if (num_boundary == 2) {
     int k_int = -1;
     for (const int k : IndexRange(3)) {
@@ -1342,34 +1601,8 @@ static TriangleEvent compute_triangle_collapse(const int ti,
       const double c1 = math::cross(e01_p, e02_v) + math::cross(e01_v, e02_p);
       const double c2 = math::cross(e01_v, e02_v);
 
-      double dt_root = -1.0;
-      if (std::abs(c2) > div_by_zero_tol) {
-        const double disc = c1 * c1 - 4.0 * c2 * c0;
-        if (disc >= 0.0) {
-          const double sqrt_disc = std::sqrt(disc);
-          const double r1 = (-c1 - sqrt_disc) / (2.0 * c2);
-          const double r2 = (-c1 + sqrt_disc) / (2.0 * c2);
-          double best_r = std::numeric_limits<double>::infinity();
-          for (const double r : {r1, r2}) {
-            const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) ||
-                                    (r > event_time_tol);
-            if (is_valid_r && r < best_r) {
-              best_r = r;
-            }
-          }
-          if (!std::isinf(best_r)) {
-            dt_root = best_r;
-          }
-        }
-      }
-      else if (std::abs(c1) > div_by_zero_tol) {
-        const double r = -c0 / c1;
-        const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) ||
-                                (r > event_time_tol);
-        if (is_valid_r) {
-          dt_root = r;
-        }
-      }
+      const double dt_root = solve_quadratic_collapse_time(
+          c0, c1, c2, current_time, event_time_tol);
 
       const bool is_valid_dt = (current_time > 0.0 && dt_root >= -event_time_tol) ||
                                (dt_root > event_time_tol);
@@ -1377,7 +1610,32 @@ static TriangleEvent compute_triangle_collapse(const int ti,
         const double eff_dt = std::max(0.0, dt_root);
         const double cand_time = current_time + eff_dt;
         const int e_int = e0 + k_int;
-        if (is_edge_flippable_at_time(triangles, kinetic_verts, e_int, cand_time)) {
+
+        /* Compute the most accurate available estimate of the collapse time by taking the
+         * maximum of the quadratic dt_root and the linear closest-approach estimates for
+         * each boundary edge. For arm-tip triangles near a double root the quadratic is
+         * ~1e-7 too early; the linear estimate is accurate to O(eps_machine). */
+        double dt_linear_max = eff_dt;
+        for (const int k : IndexRange(3)) {
+          if (k == k_int) {
+            continue; /* Skip the internal chord. */
+          }
+          const int next_k = (k + 1) % 3;
+          const double2 dp_e = p[next_k] - p[k];
+          const double2 dv_e = v[next_k] - v[k];
+          const double dv_sq = math::dot(dv_e, dv_e);
+          if (dv_sq > div_by_zero_tol) {
+            const double dt_lin = -math::dot(dp_e, dv_e) / dv_sq;
+            if (dt_lin > dt_linear_max) {
+              dt_linear_max = dt_lin;
+            }
+          }
+        }
+        /* Evaluate flippability at the more accurate linear-estimate time. If the chord is not
+         * flippable there (corner landed on chord endpoint), generate no FLIP — step 1's
+         * EDGE_COLLAPSE will handle the event correctly. */
+        const double check_time = current_time + dt_linear_max;
+        if (is_edge_flippable_at_time(triangles, kinetic_verts, e_int, check_time)) {
           const int k_opp = (k_int + 2) % 3;
           TriangleEvent cand;
           cand.triangle_index = ti;
@@ -1392,7 +1650,22 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     }
   }
 
-  /* 3. Pure internal triangles (num_boundary == 0): area collapse indicates flip event. */
+  /* 3. Pure internal triangles (num_boundary == 0): area collapse indicates flip event.
+   *
+   * Geometric State of Internal Triangle Collapse:
+   *
+   *            v0                                   v0
+   *           /  \                                 /  \
+   *          / ti \      Area shrinks to 0        /    \
+   *         /      \     ----------------->     v1 ==== v2   (collinear segment)
+   *        v1 ----- v2
+   *
+   *   All three edges are internal chords (spokes). As the surrounding wavefronts
+   *   advance, the triangle area vanishes at quadratic root dt_root:
+   *   - If an edge shrinks to zero length (|e| < epsilon): MULTI_SPLIT / EDGE_COLLAPSE.
+   *   - If vertices become collinear with non-zero edge lengths: FLIP the longest
+   *     flippable edge to maintain a valid Delaunay/planar triangulation.
+   */
   if (num_boundary == 0) {
     const double2 e01_p = p[1] - p[0];
     const double2 e02_p = p[2] - p[0];
@@ -1403,33 +1676,7 @@ static TriangleEvent compute_triangle_collapse(const int ti,
     const double c1 = math::cross(e01_p, e02_v) + math::cross(e01_v, e02_p);
     const double c2 = math::cross(e01_v, e02_v);
 
-    double dt_root = -1.0;
-    if (std::abs(c2) > div_by_zero_tol) {
-      const double disc = c1 * c1 - 4.0 * c2 * c0;
-      if (disc >= 0.0) {
-        const double sqrt_disc = std::sqrt(disc);
-        const double r1 = (-c1 - sqrt_disc) / (2.0 * c2);
-        const double r2 = (-c1 + sqrt_disc) / (2.0 * c2);
-        double best_r = std::numeric_limits<double>::infinity();
-        for (const double r : {r1, r2}) {
-          const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) ||
-                                  (r > event_time_tol);
-          if (is_valid_r && r < best_r) {
-            best_r = r;
-          }
-        }
-        if (!std::isinf(best_r)) {
-          dt_root = best_r;
-        }
-      }
-    }
-    else if (std::abs(c1) > div_by_zero_tol) {
-      const double r = -c0 / c1;
-      const bool is_valid_r = (current_time > 0.0 && r >= -event_time_tol) || (r > event_time_tol);
-      if (is_valid_r) {
-        dt_root = r;
-      }
-    }
+    const double dt_root = solve_quadratic_collapse_time(c0, c1, c2, current_time, event_time_tol);
 
     const bool is_valid_dt = (current_time > 0.0 && dt_root >= -event_time_tol) ||
                              (dt_root > event_time_tol);
@@ -1725,6 +1972,27 @@ void StraightSkeletonState::build_initial_kinetic_triangulation()
   journal_clear();
 }
 
+/**
+ * Handles vertices moving at infinite speed caused by overlapping parallel wavefronts
+ * (Palfrader, Held & Huber 2012, Section 3.1, Figure 3a).
+ *
+ * Geometric Situation:
+ *
+ *          Edge 1 (moves downward) ===>  v1 ------------ v2  <=== Edge 2 (moves upward)
+ *                                         \   \  fan  /   /
+ *                                          \   \     /   /
+ *                                           \   \   /   /
+ *                                            \   \ /   /
+ *                                              v_prime (infinitely fast)
+ *
+ * When two parallel wavefront edges meet head-on, their bisector velocity becomes
+ * infinite because the wavefront normals are antiparallel (dot product ≈ -1).
+ * The vertex v_prime is the apex of a fan of one or more collapsing triangles.
+ *
+ * Surfer resolution (§3.1):
+ *   Choose the shorter of the two incident wavefront edges (to v_prev or v_next),
+ *   collapse it, place a straight skeleton arc, and merge vertices.
+ */
 void StraightSkeletonState::handle_infinite_speed_vertex(const int initial_v_prime,
                                                          const int initial_node_id,
                                                          const double event_time,
@@ -2183,6 +2451,32 @@ void StraightSkeletonState::handle_infinite_speed_vertex(const int initial_v_pri
   }
 }
 
+/**
+ * Processes an EDGE_COLLAPSE event on a boundary edge of the wavefront.
+ *
+ * Geometric Transformation:
+ *
+ *        BEFORE COLLAPSE (t < ev.time):          AFTER COLLAPSE (t = ev.time):
+ *
+ *               v_opp                                   v_opp
+ *               /   \                                   /   \
+ *     pe_before/     \ pe_after               pe_before/     \ pe_after
+ *             /  ti   \                               /   *   \
+ *            /         \                             /         \
+ *      v_start ------> v_end                      (   node_id   )
+ *         collapsed boundary edge                     v_prime
+ *
+ *  1. Boundary edge e_coll = (v_start, v_end) shrinks to zero length.
+ *  2. Skeleton node `node_id` is created at the collapse position.
+ *  3. Inward skeleton arcs are added connecting start nodes of v_start and v_end to node_id.
+ *  4. Both v_start and v_end are deactivated.
+ *  5. A new kinetic vertex `v_prime` is born at node_id with the bisector velocity
+ *     formed by the surviving adjacent wavefront edges.
+ *  6. Triangle ti is deleted. The hole is stitched by pairing pe_before with pe_after.
+ *  7. Surviving triangles incident to v_start and v_end are updated to use v_prime.
+ *  8. Immediate cascading collapses of adjacent boundary edges arriving simultaneously
+ *     at the same location are handled iteratively.
+ */
 bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
 {
   PRF_scope(ProfileCategory::Core);
@@ -2445,7 +2739,14 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
         const double2 norm_in(n_in.y, -n_in.x);
         const double h_w = math::dot(p_w - p_prime, norm_in);
 
-        if (dist_w < 0.05 && h_w <= 1e-5) {
+        /* A vertex w on the outgoing boundary edge should be cascaded into this collapse
+         * if it arrives at the same point as v_prime at event time ev.time.
+         * The convergence distance threshold is relative to the total travel distance
+         * of w: |velocity_w| * ev.time. This is scale-independent and accounts for the
+         * size of the polygon (e.g. radius = 100 Koch snowflake inner convergence). */
+        const double w_travel = math::length(kinetic_verts.velocity[w]) * ev.time;
+        const double cascade_tol = epsilon * std::max(1.0, w_travel) * 1e6;
+        if (dist_w < cascade_tol && h_w <= cascade_tol) {
           const int ti_w = out_e / 3;
           const int e_w_after = next_triangle_edge(out_e);
           const int e_w_before = prev_triangle_edge(out_e);
@@ -2575,7 +2876,10 @@ bool StraightSkeletonState::process_edge_collapse_event(const TriangleEvent &ev)
         const double2 norm_out(-n_out.y, n_out.x);
         const double h_u = math::dot(p_u - p_prime, norm_out);
 
-        if (dist_u < 0.05 && h_u <= 1e-5) {
+        /* Use the same travel-distance-relative cascade threshold as for the outgoing edge. */
+        const double u_travel = math::length(kinetic_verts.velocity[u]) * ev.time;
+        const double cascade_tol_u = epsilon * std::max(1.0, u_travel) * 1e6;
+        if (dist_u < cascade_tol_u && h_u <= cascade_tol_u) {
           const int ti_u = in_e / 3;
           const int e_u_after = next_triangle_edge(in_e);
           const int e_u_before = prev_triangle_edge(in_e);
@@ -2788,6 +3092,27 @@ bool StraightSkeletonState::process_next_event()
   return false;
 }
 
+/**
+ * Processes a MULTI_SPLIT event occurring on an internal triangulation edge.
+ *
+ * Geometric Situation:
+ *
+ *             ti1                BEFORE COLLISION:
+ *          \       /
+ *           \  u  /              Vertices u and v move towards each other
+ *            \ | /               along internal spoke e1 (paired with e2).
+ *             \|/ e1             At least one vertex is reflex.
+ *             /|\ e2
+ *            / | \
+ *           /  v  \
+ *          /       \             AFTER COLLISION (t = ev.time):
+ *             ti2
+ *                                Node S is created at collision point.
+ *                                Vertices u and v are terminated.
+ *                                Two new vertices v1_prime, v2_prime are born
+ *                                with bisector velocities for the left & right loops.
+ *                                Hole is stitched across ti1 and ti2.
+ */
 bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev)
 {
   PRF_scope(ProfileCategory::Core);
@@ -3111,6 +3436,33 @@ bool StraightSkeletonState::process_multi_split_event(const TriangleEvent &ev)
   return true;
 }
 
+/**
+ * Processes a SPLIT event where a reflex wavefront vertex crashes into a wavefront edge.
+ *
+ * Geometric Transformation:
+ *
+ *        BEFORE SPLIT (t < ev.time):             AFTER SPLIT (t = ev.time):
+ *
+ *                v_opp (reflex vertex)                    Loop A          Loop B
+ *                / | \                                      |               |
+ *               /  |  \                                     v               v
+ *              /   |   \  internal spokes                 kv_a            kv_b
+ *             /    v    \                                   \               /
+ *            /   vel_opp \                                   \             /
+ *           /     ti      \                                   \     *     /
+ *      v_start ---------> v_end                              (   node_id   )
+ *          hit boundary edge
+ *
+ *  1. Reflex vertex v_opp crashes into wavefront edge e_hit = (v_start, v_end).
+ *  2. Skeleton node `node_id` is created at the split position.
+ *  3. Inward skeleton arc connects start node of v_opp to node_id.
+ *  4. v_opp is deactivated.
+ *  5. The wavefront cycle splits into two independent cycles:
+ *     - Loop A: contains v_start and new kinetic vertex kv_a.
+ *     - Loop B: contains v_end and new kinetic vertex kv_b.
+ *  6. Velocities for kv_a and kv_b are computed from the respective bisectors.
+ *  7. Triangle ti is deleted and surviving adjacent triangles are re-routed.
+ */
 bool StraightSkeletonState::process_split_event(const TriangleEvent &ev)
 {
   PRF_scope(ProfileCategory::Core);
@@ -3314,6 +3666,32 @@ void StraightSkeletonState::journal_record_flip(const int ti1,
   journal_search_.add(sorted_verts, entry_idx);
 }
 
+/**
+ * Retriangulates a polygon P that has collapsed to a line segment during concurrent flips
+ * (Palfrader, Held & Huber 2012, Section 3.2, Figure 5).
+ *
+ * Geometric Situation (Figure 5 in paper):
+ *
+ *               v2        v4        v5                vk
+ *              /  \      /  \      /  \              /
+ *             /    \    /    \    /    \            /
+ *            /      \  /      \  /      \          /
+ *           v1 ====== v3 ====== v4 ====== v5 .... vk   <--- Monotone chain v1...vk
+ *           | \        |                                    along collapse line
+ *           |  \ C(e)  |
+ *         e |   \      |  diagonal to ve
+ *           |    \     |
+ *           v     \    v
+ *                  v_e (apex of attached exterior triangle Delta_e)
+ *
+ *  1. Polygon P (the union of triangles involved in the cycle) has collapsed to a line segment.
+ *  2. Its vertices are sorted along the collapse line: v1, v2, ..., vk.
+ *  3. The monotone chain v1 -> v2 -> ... -> vk is inserted as diagonals.
+ *  4. Each cell C(e) bounded by a boundary edge e of P and the monotone chain is retriangulated
+ *     together with attached exterior triangle Delta_e by fanning diagonals to apex v_e.
+ *  5. This replaces the cyclic flip configuration with a canonical, progress-guaranteeing
+ *     triangulation.
+ */
 bool StraightSkeletonState::retriangulate_collapsed_polygon(const Set<int> &p_triangles,
                                                             const Span<int> p_verts,
                                                             const double /*t_star*/,
@@ -3567,6 +3945,28 @@ bool StraightSkeletonState::retriangulate_collapsed_polygon(const Set<int> &p_tr
   return true;
 }
 
+/**
+ * Detects and breaks infinite flip event cycles (Palfrader et al. 2012, §3.2).
+ *
+ * Cycle Detection in History H:
+ *
+ *   Flip Sequence in Journal History H:
+ *   +-------------+-------------+-----+-------------+-------------+
+ *   | Entry T1    | Entry ...   | ... | Entry T2-1  | Current Ev  |
+ *   | (t*, t, D1) |             |     |             | (t*, t, D1) | <--- REPEATED TRIPLE!
+ *   +-------------+-------------+-----+-------------+-------------+
+ *          ^                                               |
+ *          |================ LOOP DETECTED ================|
+ *
+ *  - t* (number of active triangles) has remained constant (only flips occurred).
+ *  - Event time t is identical (within journal_time_tol).
+ *  - Triangle vertex triple D1 matches an earlier entry T1.
+ *
+ * Resolution (§3.2):
+ *  1. Identify polygon P formed by all triangles flipped between T1 and T2.
+ *  2. Roll back flips from T2-1 down to T1 (undoing them in reverse order).
+ *  3. Retriangulate P and its exterior neighbors via #retriangulate_collapsed_polygon.
+ */
 bool StraightSkeletonState::check_and_handle_flip_cycle(const TriangleEvent &ev)
 {
   PRF_scope(ProfileCategory::Core);
@@ -3715,6 +4115,15 @@ bool StraightSkeletonState::process_flip_event(const TriangleEvent &ev)
   const int h2_2 = prev_triangle_edge(h2_0);
   const int v3 = triangles.start_vert(h2_2);
 
+  /* Check that all four vertices of the flipping quad are still active (not yet collapsed).
+   * A flip event may be stale if it was re-queued by the Palfrader ordering after one of its
+   * vertices was collapsed by a simultaneous edge-collapse event. */
+  if (!kinetic_verts.is_active[v] || !kinetic_verts.is_active[v1] ||
+      !kinetic_verts.is_active[v2] || !kinetic_verts.is_active[v3])
+  {
+    return false;
+  }
+
   const double2 pv = kinetic_verts.position_at(v, ev.time);
   const double2 pv1 = kinetic_verts.position_at(v1, ev.time);
   const double2 pv2 = kinetic_verts.position_at(v2, ev.time);
@@ -3778,6 +4187,33 @@ void StraightSkeletonState::run_event_loop(const int max_events)
 /** \name Output Face Construction
  * \{ */
 
+/**
+ * Reconstructs the 2D polygonal faces (or 3D roof facets) from the straight skeleton graph.
+ *
+ * Each input boundary edge e_i corresponds to exactly one face in the straight skeleton:
+ *
+ *                     Internal ridge (ridge arc between skeleton nodes)
+ *                          node_3 ------------- node_2
+ *                          /                         \
+ *     Bisector ray        /                           \  Bisector ray
+ *     (traced by v_start)/      Roof Face for          \ (traced by v_end)
+ *                       /         Edge e_i              \
+ *                      /                                 \
+ *                  v_start ---------------------------- v_end
+ *                          Input Boundary Edge e_i (t = 0)
+ *
+ * In 3D (where z = t, the event time):
+ *   - The input edge lies at z = 0 with elevation slope = 1.
+ *   - The bisector rays rise upward at slope 1 / sin(alpha / 2).
+ *   - The internal ridge connects higher-elevation nodes.
+ *   - The entire face is planar in 3D.
+ *
+ * Face Extraction Algorithm:
+ *   1. Form a planar embedding from the input boundary edges and skeleton arcs.
+ *   2. Order outgoing half-edges angularly around each node.
+ *   3. Extract minimal CCW faces starting from each input boundary edge.
+ *   4. Prune degenerate zero-area faces and boundary corridors.
+ */
 static void build_output_faces(const StraightSkeletonInput &input,
                                const SkeletonGraph &skel,
                                StraightSkeletonOutput &r_output)
@@ -4043,19 +4479,18 @@ static void build_output_faces(const StraightSkeletonInput &input,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Output Construction
- * \{ */
-
-static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkeletonState &state,
-                                                             const StraightSkeletonInput &input)
+StraightSkeletonOutput build_straight_skeleton_output(const StraightSkeletonInput &input,
+                                                      const SkeletonGraph &skel,
+                                                      const int events_processed_num,
+                                                      const int flips_num,
+                                                      const bool hit_max_events)
 {
   PRF_scope(ProfileCategory::Core);
   StraightSkeletonOutput output;
-  output.hit_max_events = state.hit_max_events_;
-  output.events_processed_num = state.events_processed_num_;
-  output.flips_num = state.flips_count_;
+  output.hit_max_events = hit_max_events;
+  output.events_processed_num = events_processed_num;
+  output.flips_num = flips_num;
 
-  const SkeletonGraph &skel = state.skeleton;
   const int nodes_num = int(skel.nodes.size());
 
   output.vert.reinitialize(nodes_num);
@@ -4437,9 +4872,9 @@ static StraightSkeletonOutput build_straight_skeleton_output(const StraightSkele
   output.edge = Array<int2>(out_edges.as_span());
   output.edge_orig = Array<int>(out_edge_orig.as_span());
 
-  output.hit_max_events = state.hit_max_events_;
-  output.events_processed_num = state.events_processed_num_;
-  output.flips_num = state.flips_count_;
+  output.hit_max_events = hit_max_events;
+  output.events_processed_num = events_processed_num;
+  output.flips_num = flips_num;
 
   return output;
 }
@@ -4633,7 +5068,11 @@ StraightSkeletonOutput straight_skeleton_calc_kinetic(const StraightSkeletonInpu
   state.build_initial_kinetic_triangulation();
   const int max_events = std::max(1000, int(10 * input.vert.size()));
   state.run_event_loop(max_events);
-  StraightSkeletonOutput output = build_straight_skeleton_output(state, input);
+  StraightSkeletonOutput output = build_straight_skeleton_output(input,
+                                                                 state.skeleton,
+                                                                 state.events_processed_num_,
+                                                                 state.flips_count_,
+                                                                 state.hit_max_events_);
 
 #if defined(DEBUG_STRAIGHT_SKELETON_SVG) || defined(DEBUG_SVG)
   write_debug_svg(input, output);
@@ -4655,6 +5094,9 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
     }
     else if (std::string_view(env) == "kinetic") {
       algo = StraightSkeletonAlgorithm::KINETIC_TRIANGULATION;
+    }
+    else if (std::string_view(env) == "motorcycle") {
+      algo = StraightSkeletonAlgorithm::MOTORCYCLE_GRAPH;
     }
   }
 
