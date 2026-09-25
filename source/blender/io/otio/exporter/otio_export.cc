@@ -74,13 +74,13 @@ static void export_transition(const Strip *strip,
                               int &last_strip_end)
 {
   const double media_fps = scene->frames_per_second();
-  const double strip_len = strip->right_handle(scene) - strip->left_handle();
+  const int strip_len = strip->right_handle(scene) - strip->left_handle();
 
   auto transition = SerializableObject::Retainer<Transition>(new Transition(
       strip->name + 2,
       strip->type == STRIP_TYPE_WIPE ? Transition::Type::Custom : Transition::Type::SMPTE_Dissolve,
       RationalTime(strip_len / 2, media_fps),
-      RationalTime(strip_len / 2, media_fps)));
+      RationalTime(strip_len - strip_len / 2, media_fps)));
 
   AnyDictionary metadata;
   metadata["default_fade"] = static_cast<bool>(strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE);
@@ -157,6 +157,15 @@ static void otio_export_recursive(Main *bmain,
       }
     }
     else if (seq::effect_is_transition(strip.type) && strip.type != STRIP_TYPE_COMPOSITOR) {
+      if (!strip.input1 || !strip.input2 || strip.input1->channel != strip.input2->channel) {
+        CLOG_WARN(&LOG, "Skipping transition strip '%s'", strip.name + 2);
+        BKE_reportf(
+            params.reports,
+            RPT_WARNING,
+            "Transition strip '%s' was not exported, its inputs must be on the same channel",
+            strip.name + 2);
+        continue;
+      }
       transition_effects_1[strip.input1] = &strip;
       transition_effects_2[strip.input2] = &strip;
     }
@@ -319,6 +328,13 @@ static void otio_export_recursive(Main *bmain,
         strip_exporter = new GeneratorStripExporter(
             strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
       }
+      else {
+        CLOG_WARN(&LOG, "Skipping strip '%s' of unsupported type", strip->name + 2);
+        BKE_reportf(params.reports,
+                    RPT_WARNING,
+                    "Strip '%s' was not exported, its type is not supported",
+                    strip->name + 2);
+      }
 
       if (strip_exporter) {
         SerializableObject::Retainer<Clip> clip = strip_exporter->export_strip(
@@ -335,16 +351,19 @@ static void otio_export_recursive(Main *bmain,
         if (source_range && transition_effects_1.contains(strip)) {
           Strip *transition_strip = transition_effects_1[strip];
           int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
-          clip->set_source_range(
-              TimeRange{source_range->start_time(),
-                        RationalTime(source_range->duration().to_frames() + strip_len / 2)});
+          RationalTime extension = RationalTime(strip_len / 2, scene->frames_per_second());
+          source_range = TimeRange{source_range->start_time(),
+                                   source_range->duration() + extension};
+          clip->set_source_range(source_range);
         }
-        else if (source_range && transition_effects_2.contains(strip)) {
+        if (source_range && transition_effects_2.contains(strip)) {
           Strip *transition_strip = transition_effects_2[strip];
           int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
-          clip->set_source_range(
-              TimeRange{RationalTime(source_range->start_time().to_frames() - strip_len / 2),
-                        RationalTime(source_range->duration().to_frames() + strip_len / 2)});
+          RationalTime extension = RationalTime(strip_len - strip_len / 2,
+                                                scene->frames_per_second());
+          source_range = TimeRange{source_range->start_time() - extension,
+                                   source_range->duration() + extension};
+          clip->set_source_range(source_range);
         }
 
         delete strip_exporter;
@@ -411,7 +430,16 @@ void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
   export_scene_markers(scene, main_stack);
 
   timeline->set_tracks(main_stack);
-  timeline->to_json_file(params.filepath);
+
+  opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
+  if (!timeline->to_json_file(params.filepath, &error_status)) {
+    CLOG_ERROR(&LOG,
+               "Failed to write OTIO file '%s': %s",
+               params.filepath,
+               error_status.full_description.c_str());
+    BKE_reportf(params.reports, RPT_ERROR, "Failed to write OTIO file '%s'", params.filepath);
+    return;
+  }
 
   BKE_report(params.reports, RPT_INFO, "File exported successfully");
 

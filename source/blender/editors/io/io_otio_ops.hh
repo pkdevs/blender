@@ -13,8 +13,4 @@ struct wmOperatorType;
 
 void WM_OT_otio_export(wmOperatorType *ot);
 
-namespace ed::io {
-void otio_file_handler_add();
-}
-
 }  // namespace blender

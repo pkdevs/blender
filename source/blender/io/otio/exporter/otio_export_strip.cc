@@ -299,26 +299,48 @@ static SerializableObject::Retainer<ImageSequenceReference> create_image_sequenc
   return img_seq_ref;
 }
 
-static bool img_seq_need_fallback(StripElem *se)
+static bool img_seq_get_frame_pattern(const StripElem *se,
+                                      const int img_count,
+                                      char *r_name_prefix,
+                                      char *r_name_suffix,
+                                      int &r_start_frame_nr,
+                                      int &r_frame_step,
+                                      int &r_padding)
 {
-  /* Get sequence number of the first image. */
-  int frame_nr = 0;
-  int num_digits = 0;
-  if (!BLI_path_frame_get(se->filename, &frame_nr, &num_digits)) {
-    return true;
+  if (!BLI_path_frame_get(se[0].filename, &r_start_frame_nr, &r_padding)) {
+    return false;
   }
 
-  /* Get sequence number of the second image. */
-  int frame_nr_2 = 0;
-  int num_digits_2 = 0;
-  if (!BLI_path_frame_get((++se)->filename, &frame_nr_2, &num_digits_2)) {
-    return true;
-  }
-  if (frame_nr_2 - frame_nr < 1) {
-    return true;
+  const char *ext = BLI_path_extension_or_end(se[0].filename);
+  BLI_strncpy(r_name_suffix, ext, FILE_MAX);
+  BLI_strncpy(r_name_prefix, se[0].filename, ext - se[0].filename - r_padding + 1);
+
+  if (img_count > 1) {
+    int second_frame_nr, second_num_digits;
+    if (!BLI_path_frame_get(se[1].filename, &second_frame_nr, &second_num_digits)) {
+      return false;
+    }
+    r_frame_step = second_frame_nr - r_start_frame_nr;
+    if (r_frame_step < 1) {
+      return false;
+    }
   }
 
-  return false;
+  for (int i = 0; i < img_count; i++) {
+    char filename[FILE_MAX];
+    BLI_snprintf(filename,
+                 sizeof(filename),
+                 "%s%0*d%s",
+                 r_name_prefix,
+                 r_padding,
+                 r_start_frame_nr + i * r_frame_step,
+                 r_name_suffix);
+    if (!STREQ(filename, se[i].filename)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 template<typename T>
@@ -1025,46 +1047,18 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
 
     char name_prefix[FILE_MAX];
     char name_suffix[FILE_MAX];
-    BLI_strncpy(name_suffix, BLI_path_extension(se->filename), sizeof(name_suffix));
 
     int frame_step = 1;
     int start_frame_nr = 1;
     int padding = 0;
 
-    if (img_seq_need_fallback(se)) {
+    if (!img_seq_get_frame_pattern(
+            se, img_count, name_prefix, name_suffix, start_frame_nr, frame_step, padding))
+    {
       CLOG_WARN(&LOG,
                 "Strip '%s' contains an image sequence with non-sequential filenames",
                 strip_->name + 2);
       return export_with_missing_reference(single_input_effects);
-    }
-    else {
-      if (!BLI_path_frame_get(se->filename, &start_frame_nr, &padding)) {
-        CLOG_ERROR(&LOG,
-                   "Exporting image sequence strip '%s' with a missing reference",
-                   strip_->name + 2);
-        return export_with_missing_reference(single_input_effects);
-      }
-
-      const char *curr = BLI_path_extension(se->filename);
-
-      /* Copy the name prefix. */
-      for (int i = 0; i < padding; ++i) {
-        --curr;
-      };
-      char *np = name_prefix;
-      char *copy_p = se->filename;
-      while (copy_p != curr) {
-        *np = *copy_p;
-        np++;
-        copy_p++;
-      }
-      *np = '\0';
-
-      if (img_count > 1) {
-        int second_frame_nr, second_num_digits;
-        BLI_path_frame_get((++se)->filename, &second_frame_nr, &second_num_digits);
-        frame_step = second_frame_nr - start_frame_nr;
-      }
     }
 
     add_gap_if_necessary();

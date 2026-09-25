@@ -14,7 +14,6 @@ namespace blender {
 
 struct bContext;
 struct ReportList;
-struct Scene;
 
 struct OTIOExportParams {
   char filepath[FILE_MAX] = "";
@@ -23,7 +22,5 @@ struct OTIOExportParams {
 };
 
 void OTIO_export(bContext *C, const OTIOExportParams &params);
-
-bool OTIO_validate_timeline_blender(ReportList *reports, const Scene *scene);
 
 }  // namespace blender

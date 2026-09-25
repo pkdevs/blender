@@ -16,12 +16,10 @@
 #  include "DNA_windowmanager_enums.h"
 
 #  include "BKE_context.hh"
-#  include "BKE_file_handler.hh"
 #  include "BKE_report.hh"
 
 #  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string_utf8.hh"
 
 #  include "RNA_access.hh"
 #  include "RNA_define.hh"
@@ -37,7 +35,6 @@
 
 #  include "IO_otio.hh"
 #  include "io_otio_ops.hh"
-#  include "io_utils.hh"
 
 namespace blender {
 
@@ -67,10 +64,6 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (!OTIO_validate_timeline_blender(op->reports, scene)) {
-    return OPERATOR_CANCELLED;
-  }
-
   OTIOExportParams export_params;
   RNA_string_get(op->ptr, "filepath", export_params.filepath);
   export_params.reports = op->reports;
@@ -94,7 +87,7 @@ static bool wm_otio_export_check(bContext * /*C*/, wmOperator *op)
   return false;
 }
 
-bool wm_otio_export_poll(bContext *C)
+static bool wm_otio_export_poll(bContext *C)
 {
   if (!WM_operator_winactive(C)) {
     return false;
@@ -133,18 +126,6 @@ void WM_OT_otio_export(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-namespace ed::io {
-void otio_file_handler_add()
-{
-  auto fh = std::make_unique<bke::FileHandlerType>();
-  STRNCPY_UTF8(fh->idname, "IO_FH_otio");
-  STRNCPY_UTF8(fh->export_operator, "WM_OT_otio_export");
-  STRNCPY_UTF8(fh->label, "OpenTimelineIO");
-  STRNCPY_UTF8(fh->file_extensions_str, ".otio");
-  fh->poll_drop = poll_file_object_drop;
-  bke::file_handler_add(std::move(fh));
-}
-}  // namespace ed::io
 }  // namespace blender
 
 #endif
