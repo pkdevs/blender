@@ -1229,23 +1229,23 @@ class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
         active_pos = active_item.position if active_item else -1
 
         if self.item_type == 'INPUT':
-            new_item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='INPUT')
+            item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='INPUT')
         elif self.item_type == 'OUTPUT':
-            new_item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='OUTPUT')
+            item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='OUTPUT')
         elif self.item_type == 'PANEL':
-            new_item = interface.new_panel("Panel")
+            item = interface.new_panel("Panel")
         else:
             return {'CANCELLED'}
 
         if active_item:
             # Insert into active panel if possible, otherwise insert after active item.
-            if active_item.item_type == 'PANEL' and new_item.item_type != 'PANEL':
-                interface.move_to_parent(new_item, active_item, len(active_item.interface_items))
+            if active_item.item_type == 'PANEL' and item.item_type != 'PANEL':
+                interface.move_to_parent(item, active_item, len(active_item.interface_items))
             else:
-                interface.move_to_parent(new_item, active_item.parent, active_pos + 1)
+                interface.move_to_parent(item, active_item.parent, active_pos + 1)
 
         self.clear_interface_selection(interface)
-        interface.active = new_item
+        interface.active = item
 
         return {'FINISHED'}
 
