@@ -6519,6 +6519,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "network_timeout", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "network_timeout");
+  RNA_def_property_int_default(prop, 10);
   RNA_def_property_ui_text(
       prop,
       "Network Timeout",
@@ -6527,6 +6528,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "network_connection_limit", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "network_connection_limit");
+  RNA_def_property_int_default(prop, 5);
   RNA_def_property_ui_text(
       prop,
       "Network Connection Limit",
