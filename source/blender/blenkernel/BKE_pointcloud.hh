@@ -12,13 +12,10 @@
 #include "MEM_guardedalloc.h" /* For `MEM_CXX_CLASS_ALLOC_FUNCS`. */
 
 #include "BLI_bounds_types.hh"
-#include "BLI_index_mask.hh"
 #include "BLI_kdopbvh.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_shared_cache.hh"
 #include "BLI_string_ref.hh"
-
-#include "BKE_attribute_filter.hh"
 
 #include "DNA_pointcloud_types.h"
 
