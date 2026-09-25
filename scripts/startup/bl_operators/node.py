@@ -1178,6 +1178,11 @@ class NodeInterfaceOperator():
             return False
         return True
 
+    @staticmethod
+    def clear_interface_selection(interface):
+        for item in interface.items_tree:
+            item.select = False
+
 
 class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
     """Add a new item to the interface"""
