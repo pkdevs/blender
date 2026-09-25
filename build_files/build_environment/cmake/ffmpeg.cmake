@@ -169,12 +169,15 @@ elseif(ANDROID)
     --nm=${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-nm
   )
 
-  if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
-    set(FFMPEG_EXTRA_FLAGS
-      ${FFMPEG_EXTRA_FLAGS}
-      --pkg-config=/opt/homebrew/bin/pkg-config
-    )
-  endif()
+  # When cross-compiling, FFmpeg looks for a `${cross_prefix}pkg-config`, which the Android NDK
+  # does not provide, and silently falls back to `false`, failing every pkg-config based check.
+  # Point it at the host pkg-config instead. The hint covers macOS, where pkg-config comes from
+  # Homebrew and may not be on PATH.
+  find_program(HOST_PKG_CONFIG_EXECUTABLE NAMES pkg-config HINTS /opt/homebrew/bin REQUIRED)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --pkg-config=${HOST_PKG_CONFIG_EXECUTABLE}
+  )
 elseif(UNIX)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
