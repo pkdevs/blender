@@ -628,7 +628,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Sample History Limit",
         description="Maximum count of Samples to accumulate for temporal history",
         min=0,
-        max=128,
+        max=512,
         default=16,
     )
 
@@ -636,8 +636,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Frame History Limit",
         description="Maximum count of Frames to accumulate for temporal history",
         min=0,
-        max=64,
-        default=2,
+        max=256,
+        default=8,
     )
 
     restir_temporal_normal_threshold: FloatProperty(

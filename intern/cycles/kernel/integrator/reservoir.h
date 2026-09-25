@@ -18,9 +18,8 @@ struct Reservoir {
   float total_weight = 0.0f;
 
   /* Number of samples this reservoir represents. Temporal combination grows
-   * it (capped by restir_temporal_sample_count) as history accumulates
-   * across samples. Spatial-only combination currently ignores this and
-   * treats every neighbor as M == 1; see mis_weight_pairwise() call sites. */
+   * it (capped by restir_temporal_sample/frame_count) as history accumulates
+   * across samples/frames. */
   int M = 1;
 
   int num_light_samples;
@@ -130,6 +129,15 @@ ccl_device_inline float reservoir_power_heuristic(const int num_a,
   const float denominator = weighted_a + weighted_b;
 
   return (denominator > 0.0f) ? sqr(pdf_a) / denominator : 0.0f;
+}
+
+/* Confidence-weighted balance heuristic for reservoir-to-reservoir combination
+ * (Bitterli et al. 2020, "Spatiotemporal Reservoir Resampling", Algorithm 6).
+ * q0/q1: target-function values of the same candidate evaluated at the two
+ * shading points being combined. N0/N1: confidence (M) of each side. */
+ccl_device_inline float reservoir_pairwise_mis_weight(float q0, float q1, float N0, float N1)
+{
+  return (q1 == 0.0f) ? 0.0f : (N0 * q0) / (q0 * N0 + q1 * N1);
 }
 
 ccl_device_inline float reservoir_mis_weight_nee(ccl_private const Reservoir *reservoir,

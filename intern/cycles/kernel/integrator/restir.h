@@ -270,10 +270,16 @@ ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg, // !!!: GI
   return false;
 }
 
+// TODO(Tri): Remove both
 /* TODO(weizhen): move these functions to a more appropriate place. */
+// float mis_weight_pairwise(float pdf_a, float pdf_b, float num) // 
+// {
+//   return (pdf_b == 0.0f) ? 0.0f : (pdf_a * pdf_a * num) / (pdf_a * pdf_a * num + pdf_b * pdf_b);
+// }
+// dropped the squaring, a true balance heuristic; see if fixes spatial dim issues; Change name...
 float mis_weight_pairwise(float pdf_a, float pdf_b, float num)
 {
-  return (pdf_b == 0.0f) ? 0.0f : (pdf_a * pdf_a * num) / (pdf_a * pdf_a * num + pdf_b * pdf_b);
+  return (pdf_b == 0.0f) ? 0.0f : (pdf_a * num) / (pdf_a * num + pdf_b);
 }
 
 float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
@@ -378,8 +384,9 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
       const float canonical_at_neighbor = compute_luminance(kg, radiance);
 
-      canonical_mis_weight += (1.0f - mis_weight_pairwise(
-                                          canonical_at_neighbor, canonical.luminance, neighbors));
+      canonical_mis_weight += (1.0f - reservoir_pairwise_mis_weight(
+          canonical_at_neighbor, canonical.luminance,
+          /*N0=*/(float)neighbor.reservoir.M, /*N1=*/(float)canonical.M));
     }
 
     if (spatial_reservoir_is_empty(&neighbor)) {
@@ -424,8 +431,9 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
     /* TODO(weizhen): either the MIS weight computation should be a member function of
      * SpatialReservoir, or the struct SpatialReservoir should be removed. */
-    neighbor.reservoir.total_weight *= mis_weight_pairwise(
-        neighbor.reservoir.luminance, neighbor_at_canonical, neighbors);
+    neighbor.reservoir.total_weight *= reservoir_pairwise_mis_weight(
+        neighbor.reservoir.luminance, neighbor_at_canonical,
+        /*N0=*/(float)neighbor.reservoir.M * neighbors, /*N1=*/(float)canonical.M);
 
     spatial_reservoir_add_reservoir(current, neighbor, rand.z, true); // !!!: require_valid_reference
   }
@@ -502,7 +510,9 @@ ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack histo
 
   current->reservoir.M += history.M;
 
-ccl_debug_printf("\n--- streaming_temporal_sample(), returned true! total_weight=%f ---\n\n\n",
+ccl_debug_printf("\n--- streaming_temporal_sample(): true! current total_weight=%f M=%d---\n"
+                  "history.total_weight=%f\n\n",
+    (double)current->reservoir.total_weight, current->reservoir.M,
     (double)history.total_weight); // !!!(Tri): Still some occasional zero weights!
   return true;
 }
@@ -602,19 +612,32 @@ ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M
 const float old_M = current->reservoir.M; // TODO(Tri): Remove
 const float history_M = history.M;
 
+// TODO(Tri): change to reservoir_pairwise_mis_weight()?
+  const float mis_weight = mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
 
-  history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
+ccl_debug_printf(
+  "TEMPORAL DEBUG pixel=(%d,%d): "
+  "stored_W=%f stored_L=%f reconstructed_L=%f M=%d MIS=%f\n",
+  x, y,
+  (double)history.total_weight,
+  (double)history.luminance,
+  (double)history_at_current, // If reconstructed_L=0: problem is light reconstruction / visibility / radiance evaluation
+  history.M,
+  (double)mis_weight);
+
+  // history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
+  history.total_weight *= mis_weight;
 
   const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
   spatial_reservoir_add_reservoir(current, history, rand, true);
 
-  current->reservoir.M += history.M;
+  current->reservoir.M += history.M; // !!!: unconditional & doesn't tell whether the historical candidate actually became the selected sample
 
 ccl_debug_printf(
-    "TEMPORAL_FRAME ACCEPT pixel=(%d,%d) M=%f->%f history_M=%f W=%f L=%f\n", 
+    "TEMPORAL_FRAME MERGE pixel=(%d,%d) old_M=%f->%f\n"
+    "history_M=%f history_W=%f history_L=%f\n\n", 
     x, y,
-    (double)old_M,
-    (double)current->reservoir.M,
+    (double)old_M, (double)current->reservoir.M,
     (double)history_M,
     (double)history.total_weight,
     (double)history_at_current);
@@ -678,7 +701,7 @@ ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_tem
                            kernel_data.integrator.restir_spatial_iterations > 0;
   if (!use_spatial) {
     /* Only persist here when integrator_restir() won't run this sample. */
-    film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);
+    film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);  
   }
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
