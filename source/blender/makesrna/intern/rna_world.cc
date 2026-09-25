@@ -341,7 +341,6 @@ void RNA_def_world(BlenderRNA *brna)
   prop = RNA_def_property(srna, "sun_shadow_jitter_overblur", PROP_FLOAT, PROP_PERCENTAGE);
   RNA_def_property_range(prop, 0.0f, 100.0f);
   RNA_def_property_ui_range(prop, 0.0f, 20.0f, 10.0f, 0);
-  RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_ui_text(
       prop,
       "Shadow Jitter Overblur",
