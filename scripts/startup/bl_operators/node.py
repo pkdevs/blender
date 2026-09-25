@@ -1244,16 +1244,13 @@ class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
             else:
                 interface.move_to_parent(new_item, active_item.parent, active_pos + 1)
 
-        # Clear multi-selection
-        for item in interface.items_tree:
-            item.select = False
-
+        self.clear_interface_selection(interface)
         interface.active = new_item
 
         return {'FINISHED'}
 
 
-class NODE_OT_interface_item_new_panel_toggle(Operator):
+class NODE_OT_interface_item_new_panel_toggle(NodeInterfaceOperator, Operator):
     '''Add a checkbox to the currently selected panel'''
     bl_idname = "node.interface_item_new_panel_toggle"
     bl_label = "New Panel Toggle"
@@ -1301,10 +1298,7 @@ class NODE_OT_interface_item_new_panel_toggle(Operator):
         interface.move_to_parent(new_item, active_panel, 0)
         new_item.is_panel_toggle = True
 
-        # Clear multi-selection
-        for item in interface.items_tree:
-            item.select = False
-
+        self.clear_interface_selection(interface)
         return {'FINISHED'}
 
 
@@ -1334,6 +1328,7 @@ class NODE_OT_interface_item_duplicate(NodeInterfaceOperator, Operator):
             item_copy = interface.copy(item)
             interface.active = item_copy
 
+        self.clear_interface_selection(interface)
         return {'FINISHED'}
 
 
@@ -1423,6 +1418,7 @@ class NODE_OT_interface_item_make_panel_toggle(NodeInterfaceOperator, Operator):
         # Make the panel active.
         interface.active = parent_panel
 
+        self.clear_interface_selection(interface)
         return {'FINISHED'}
 
 
@@ -1471,6 +1467,7 @@ class NODE_OT_interface_item_unlink_panel_toggle(NodeInterfaceOperator, Operator
         # Make the socket active.
         interface.active = first_item
 
+        self.clear_interface_selection(interface)
         return {'FINISHED'}
 
 
