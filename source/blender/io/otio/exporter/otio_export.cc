@@ -29,6 +29,7 @@
 #include "opentimelineio/clip.h"
 #include "opentimelineio/color.h"
 #include "opentimelineio/marker.h"
+#include "opentimelineio/missingReference.h"
 #include "opentimelineio/serializableObject.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
@@ -45,6 +46,11 @@ static CLG_LogRef LOG = {"io.otio"};
 namespace io::otio {
 
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
+
+struct UnsupportedStripCounts {
+  int scene_strips = 0;
+  int image_sequences = 0;
+};
 
 static void export_scene_markers(const Scene *scene, SerializableObject::Retainer<Stack> &stack)
 {
@@ -126,7 +132,8 @@ static void otio_export_recursive(Main *bmain,
                                   ListBaseT<Strip> *strips,
                                   int stack_start,
                                   int stack_end,
-                                  const ListBaseT<SeqTimelineChannel> *channel_listbase)
+                                  const ListBaseT<SeqTimelineChannel> *channel_listbase,
+                                  UnsupportedStripCounts &unsupported)
 {
   bool inside_meta = secondary_stack != nullptr;
 
@@ -257,7 +264,8 @@ static void otio_export_recursive(Main *bmain,
                                 seqbase,
                                 strip->left_handle() - 1,
                                 strip->right_handle(scene) - 1,
-                                r_channels);
+                                r_channels,
+                                unsupported);
 
           if (!primary_meta_stack->children().empty()) {
             primary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
@@ -290,6 +298,7 @@ static void otio_export_recursive(Main *bmain,
       else if (strip->type == STRIP_TYPE_SCENE && !(strip->flag & SEQ_SCENE_STRIPS) &&
                strip->scene)
       {
+        unsupported.scene_strips++;
         auto missing_reference_exporter = StripExporter(
             strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
 
@@ -316,6 +325,12 @@ static void otio_export_recursive(Main *bmain,
             bmain, &params, single_input_effects);
         std::optional<TimeRange> source_range = clip->source_range();
         last_strip_end = strip_exporter->last_strip_end;
+
+        if (strip->type == STRIP_TYPE_IMAGE &&
+            dynamic_cast<MissingReference *>(clip->media_reference()))
+        {
+          unsupported.image_sequences++;
+        }
 
         if (source_range && transition_effects_1.contains(strip)) {
           Strip *transition_strip = transition_effects_1[strip];
@@ -379,9 +394,18 @@ void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
   auto timeline = SerializableObject::Retainer<Timeline>(
       new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
 
+  UnsupportedStripCounts unsupported;
   auto main_stack = SerializableObject::Retainer<Stack>(new Stack());
-  otio_export_recursive(
-      bmain, scene, params, &main_stack, nullptr, seqbase, 0, scene->r.efra, &editing->channels);
+  otio_export_recursive(bmain,
+                        scene,
+                        params,
+                        &main_stack,
+                        nullptr,
+                        seqbase,
+                        0,
+                        scene->r.efra,
+                        &editing->channels,
+                        unsupported);
 
   attach_foreign_metadata_scene(scene, timeline);
   export_scene_markers(scene, main_stack);
@@ -390,6 +414,20 @@ void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
   timeline->to_json_file(params.filepath);
 
   BKE_report(params.reports, RPT_INFO, "File exported successfully");
+
+  if (unsupported.scene_strips > 0) {
+    BKE_reportf(params.reports,
+                RPT_WARNING,
+                "%d scene strip(s) found, this is currently unsupported",
+                unsupported.scene_strips);
+  }
+  if (unsupported.image_sequences > 0) {
+    BKE_reportf(params.reports,
+                RPT_WARNING,
+                "%d image sequence(s) with non-sequential filenames found, this is currently "
+                "unsupported",
+                unsupported.image_sequences);
+  }
 }
 
 }  // namespace io::otio
