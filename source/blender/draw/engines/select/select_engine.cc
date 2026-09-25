@@ -244,7 +244,7 @@ struct Instance : public DrawEngine {
                                  const uint initial_index)
   {
     using namespace blender::draw;
-    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
+    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
 
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
@@ -254,22 +254,22 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, bm->totface);
 
-      gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+      Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
       PassSimple::Sub *face_sub = select_face_flat;
       face_sub->push_constant("offset", int(ranges.face.start()));
       face_sub->draw(geom_faces, res_handle);
 
       if (draw_facedot) {
-        gpu::Batch *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(mesh);
+        Mesh *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(mesh);
         face_sub->draw(geom_facedots, res_handle);
       }
     }
     else {
       if (ob->dt >= OB_SOLID) {
 #ifdef USE_CAGE_OCCLUSION
-        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
 #else
-        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_surface(mesh);
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(mesh);
 #endif
         select_face_uniform->draw(geom_faces, res_handle);
       }
@@ -279,7 +279,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_EDGE) {
       ranges.edge = alloc_range(ranges.total, bm->totedge);
 
-      gpu::Batch *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
+      Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
       select_edge->push_constant("offset", int(ranges.edge.start()));
       select_edge->draw(geom_edges, res_handle);
     }
@@ -288,7 +288,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_VERTEX) {
       ranges.vert = alloc_range(ranges.total, bm->totvert);
 
-      gpu::Batch *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
+      Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
       select_vert->push_constant("offset", int(ranges.vert.start()));
       select_vert->draw(geom_verts, res_handle);
     }
@@ -301,12 +301,12 @@ struct Instance : public DrawEngine {
                             const uint initial_index)
   {
     using namespace blender::draw;
-    Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
+    blender::Mesh &mesh = DRW_object_get_data_for_drawing<blender::Mesh>(*ob);
 
     ElemIndexRanges ranges{};
     ranges.total = IndexRange::from_begin_size(initial_index, 0);
 
-    gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
+    Mesh *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(mesh);
     if (select_mode & SCE_SELECT_FACE) {
       ranges.face = alloc_range(ranges.total, mesh.faces_num);
 
@@ -321,7 +321,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_EDGE) {
       ranges.edge = alloc_range(ranges.total, mesh.edges_num);
 
-      gpu::Batch *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
+      Mesh *geom_edges = DRW_mesh_batch_cache_get_edges_with_select_id(mesh);
       select_edge->push_constant("offset", int(ranges.edge.start()));
       select_edge->draw(geom_edges, res_handle);
     }
@@ -329,7 +329,7 @@ struct Instance : public DrawEngine {
     if (select_mode & SCE_SELECT_VERTEX) {
       ranges.vert = alloc_range(ranges.total, mesh.verts_num);
 
-      gpu::Batch *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
+      Mesh *geom_verts = DRW_mesh_batch_cache_get_verts_with_select_id(mesh);
       select_vert->push_constant("offset", int(ranges.vert.start()));
       select_vert->draw(geom_verts, res_handle);
     }
@@ -348,7 +348,8 @@ struct Instance : public DrawEngine {
         /* NOTE: it's important to get the edit-mesh before modifiers have been applied
          * because the evaluated mesh may not have an edit-mesh, see #138715.
          * Match edit-mesh access from #mesh_render_data_create. */
-        const Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(ob) : nullptr;
+        const blender::Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(ob) :
+                                                            nullptr;
         const BMesh *bm = orig_edit_mesh ? BKE_editmesh_bmesh_get(orig_edit_mesh) : nullptr;
 
         if (bm) {
@@ -377,8 +378,8 @@ struct Instance : public DrawEngine {
       if (ob->dt >= OB_SOLID) {
         /* This object is not selectable. It is here to participate in occlusion.
          * This is the case in retopology mode. */
-        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_surface(
-            DRW_object_get_data_for_drawing<Mesh>(*ob));
+        Mesh *geom_faces = DRW_mesh_batch_cache_get_surface(
+            DRW_object_get_data_for_drawing<blender::Mesh>(*ob));
 
         depth_occlude->draw(geom_faces, manager.unique_handle(ob_ref));
       }
@@ -478,7 +479,7 @@ struct Instance : public DrawEngine {
        * Note this is not working correctly for vertex-paint (yet), but has been discussed
        * in #66645 and there is a solution by @mano-wii in P1032.
        * So OB_MODE_VERTEX_PAINT is already included here [required for P1032 I guess]. */
-      Mesh *me_orig = id_cast<Mesh *>(DEG_get_original(ob)->data);
+      blender::Mesh *me_orig = id_cast<blender::Mesh *>(DEG_get_original(ob)->data);
       if (me_orig->editflag & ME_EDIT_PAINT_VERT_SEL) {
         select_mode = SCE_SELECT_VERTEX;
       }

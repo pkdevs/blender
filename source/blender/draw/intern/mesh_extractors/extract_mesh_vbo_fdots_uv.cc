@@ -14,7 +14,7 @@ namespace blender::draw {
 
 static void extract_face_dots_uv_mesh(const MeshRenderData &mr, MutableSpan<float2> vbo_data)
 {
-  const Mesh &mesh = *mr.mesh;
+  const blender::Mesh &mesh = *mr.mesh;
   const StringRef name = mesh.active_uv_map_name();
   const bke::AttributeAccessor attributes = mesh.attributes();
   if (mr.use_subsurf_fdots) {

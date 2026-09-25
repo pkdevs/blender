@@ -392,7 +392,7 @@ static void drw_shgroup_bone_envelope(const Armatures::DrawContext *ctx,
 /* Custom (geometry) */
 
 static void drw_shgroup_bone_custom_solid_mesh(const Armatures::DrawContext *ctx,
-                                               Mesh &mesh,
+                                               blender::Mesh &mesh,
                                                const float (*bone_mat)[4],
                                                const float bone_color[4],
                                                const float hint_color[4],
@@ -406,9 +406,9 @@ static void drw_shgroup_bone_custom_solid_mesh(const Armatures::DrawContext *ctx
    * to assure batch cache is valid. */
   DRW_mesh_batch_cache_validate(mesh);
 
-  gpu::Batch *surf = DRW_mesh_batch_cache_get_surface(mesh);
-  gpu::Batch *edges = DRW_mesh_batch_cache_get_edge_detection(mesh, nullptr);
-  gpu::Batch *loose_edges = DRW_mesh_batch_cache_get_loose_edges(mesh);
+  draw::Mesh *surf = DRW_mesh_batch_cache_get_surface(mesh);
+  draw::Mesh *edges = DRW_mesh_batch_cache_get_edge_detection(mesh, nullptr);
+  draw::Mesh *loose_edges = DRW_mesh_batch_cache_get_loose_edges(mesh);
   draw::overlay::BoneInstanceData inst_data;
 
   if (surf || edges || loose_edges) {
@@ -439,7 +439,7 @@ static void drw_shgroup_bone_custom_solid_mesh(const Armatures::DrawContext *ctx
 }
 
 static void drw_shgroup_bone_custom_mesh_wire(const Armatures::DrawContext *ctx,
-                                              Mesh &mesh,
+                                              blender::Mesh &mesh,
                                               const float (*bone_mat)[4],
                                               const float color[4],
                                               const float wire_width,
@@ -451,7 +451,7 @@ static void drw_shgroup_bone_custom_mesh_wire(const Armatures::DrawContext *ctx,
    * to assure batch cache is valid. */
   DRW_mesh_batch_cache_validate(mesh);
 
-  gpu::Batch *geom = DRW_mesh_batch_cache_get_all_edges(mesh);
+  draw::Mesh *geom = DRW_mesh_batch_cache_get_all_edges(mesh);
   if (geom) {
     draw::overlay::BoneInstanceData inst_data;
     inst_data.mat44 = ctx->ob->object_to_world() * float4x4(bone_mat);
@@ -480,7 +480,7 @@ static void drw_shgroup_custom_bone_curve(const Armatures::DrawContext *ctx,
 
   /* This only handles curves without any surface. The other curve types should have been converted
    * to meshes and rendered in the mesh drawing function. */
-  gpu::Batch *loose_edges = nullptr;
+  draw::Mesh *loose_edges = nullptr;
   if (custom->type == OB_FONT) {
     loose_edges = DRW_cache_text_edge_wire_get(custom);
   }
@@ -514,7 +514,7 @@ static void drw_shgroup_bone_custom_solid(const Armatures::DrawContext *ctx,
    * by #data_eval. This is bad since it gives preference to an object's evaluated mesh over any
    * other data type, but supporting all evaluated geometry components would require a much
    * larger refactor of this area. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
+  blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_solid_mesh(ctx,
                                        DRW_mesh_get_for_drawing(*mesh),
@@ -547,7 +547,7 @@ static void drw_shgroup_bone_custom_wire(const Armatures::DrawContext *ctx,
                                          Object *custom)
 {
   /* See comments in #drw_shgroup_bone_custom_solid. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
+  blender::Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_mesh_wire(
         ctx, DRW_mesh_get_for_drawing(*mesh), bone_mat, color, wire_width, select_id, *custom);
@@ -574,7 +574,7 @@ static void drw_shgroup_bone_custom_empty(const Armatures::DrawContext *ctx,
 {
   using namespace blender::draw;
 
-  gpu::Batch *geom = nullptr;
+  draw::Mesh *geom = nullptr;
   switch (custom->empty_drawtype) {
     case OB_PLAINAXES:
       geom = ctx->res->shapes.plain_axes.get();

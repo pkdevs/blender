@@ -336,7 +336,7 @@ static void draw_subdiv_cache_extra_coarse_face_data_bm(BMesh *bm,
 }
 
 static void draw_subdiv_cache_extra_coarse_face_data_mesh(const MeshRenderData &mr,
-                                                          const Mesh *mesh,
+                                                          const blender::Mesh *mesh,
                                                           MutableSpan<uint32_t> flags_data)
 {
   const OffsetIndices faces = mesh->faces();
@@ -357,7 +357,7 @@ static void draw_subdiv_cache_extra_coarse_face_data_mesh(const MeshRenderData &
   }
 }
 
-static void draw_subdiv_cache_extra_coarse_face_data_mapped(const Mesh *mesh,
+static void draw_subdiv_cache_extra_coarse_face_data_mapped(const blender::Mesh *mesh,
                                                             BMesh *bm,
                                                             MeshRenderData &mr,
                                                             MutableSpan<uint32_t> flags_data)
@@ -383,7 +383,7 @@ static void draw_subdiv_cache_extra_coarse_face_data_mapped(const Mesh *mesh,
 }
 
 static void draw_subdiv_cache_update_extra_coarse_face_data(DRWSubdivCache &cache,
-                                                            const Mesh *mesh,
+                                                            const blender::Mesh *mesh,
                                                             MeshRenderData &mr)
 {
   if (cache.extra_coarse_face_data == nullptr) {
@@ -428,7 +428,7 @@ static DRWSubdivCache &mesh_batch_cache_ensure_subdiv_cache(MeshBatchCache &mbc)
 #ifdef WITH_OPENSUBDIV
 
 static void draw_subdiv_invalidate_evaluator_for_orco(bke::subdiv::Subdiv *subdiv,
-                                                      const Mesh *mesh)
+                                                      const blender::Mesh *mesh)
 {
   if (!(subdiv && subdiv->evaluator)) {
     return;
@@ -461,7 +461,7 @@ static void draw_subdiv_invalidate_evaluator_for_orco(bke::subdiv::Subdiv *subdi
  * \{ */
 
 struct DRWCacheBuildingContext {
-  const Mesh *coarse_mesh;
+  const blender::Mesh *coarse_mesh;
   const bke::subdiv::Subdiv *subdiv;
   const bke::subdiv::ToMeshSettings *settings;
 
@@ -756,7 +756,7 @@ static void build_vert_face_adjacency_maps(DRWSubdivCache &cache)
 
 static bool draw_subdiv_build_cache(DRWSubdivCache &cache,
                                     bke::subdiv::Subdiv *subdiv,
-                                    const Mesh *mesh_eval,
+                                    const blender::Mesh *mesh_eval,
                                     const SubsurfRuntimeData *runtime_data)
 {
   bke::subdiv::ToMeshSettings to_mesh_settings;
@@ -1517,7 +1517,7 @@ void draw_subdiv_build_edituv_stretch_angle_buffer(const DRWSubdivCache &cache,
  * since all sub-faces are contiguous, they all share the same offset.
  */
 static void draw_subdiv_cache_ensure_mat_offsets(DRWSubdivCache &cache,
-                                                 const Mesh *mesh_eval,
+                                                 const blender::Mesh *mesh_eval,
                                                  uint mat_len)
 {
   draw_subdiv_cache_free_material_data(cache);
@@ -1594,7 +1594,7 @@ static uint64_t g_subdiv_evaluator_users = 0;
 static Mutex g_subdiv_eval_mutex;
 
 static bool draw_subdiv_create_requested_buffers(Object &ob,
-                                                 Mesh &mesh,
+                                                 blender::Mesh &mesh,
                                                  MeshBatchCache &batch_cache,
                                                  MeshBufferCache &mbc,
                                                  const Span<IBOType> ibo_requests,
@@ -1614,7 +1614,7 @@ static bool draw_subdiv_create_requested_buffers(Object &ob,
     return false;
   }
 
-  const Mesh *mesh_eval = &mesh;
+  const blender::Mesh *mesh_eval = &mesh;
   BMesh *bm = nullptr;
   if (mesh.runtime->edit_mesh) {
     mesh_eval = BKE_object_get_editmesh_eval_final(&ob);
@@ -1722,7 +1722,7 @@ void DRW_subdivide_loose_geom(DRWSubdivCache &subdiv_cache, const MeshBufferCach
     return;
   }
 
-  const Mesh *coarse_mesh = subdiv_cache.mesh;
+  const blender::Mesh *coarse_mesh = subdiv_cache.mesh;
   const bool is_simple = subdiv_cache.subdiv->settings.is_simple;
   const int resolution = subdiv_cache.resolution;
   const int resolution_1 = resolution - 1;
@@ -1764,7 +1764,7 @@ static LinkNode *gpu_subdiv_free_queue = nullptr;
 static Mutex gpu_subdiv_queue_mutex;
 
 void DRW_create_subdivision(Object &ob,
-                            Mesh &mesh,
+                            blender::Mesh &mesh,
                             MeshBatchCache &batch_cache,
                             MeshBufferCache &mbc,
                             const Span<IBOType> ibo_requests,

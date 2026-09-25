@@ -22,7 +22,7 @@ namespace blender::draw {
  * found, false otherwise. */
 static VectorSet<StringRef> mesh_extract_uv_format_init(GPUVertFormat *format,
                                                         const MeshBatchCache &cache,
-                                                        const Mesh &mesh,
+                                                        const blender::Mesh &mesh,
                                                         const MeshExtractType extract_type)
 {
   GPU_vertformat_deinterleave(format);
@@ -122,7 +122,7 @@ gpu::VertBufPtr extract_uv_maps(const MeshRenderData &mr, const MeshBatchCache &
   return vbo;
 }
 
-static VectorSet<StringRef> all_uv_map_attributes(const Mesh &mesh)
+static VectorSet<StringRef> all_uv_map_attributes(const blender::Mesh &mesh)
 {
   const bke::AttributeAccessor attributes = mesh.attributes();
   VectorSet<StringRef> result;
@@ -137,7 +137,7 @@ static VectorSet<StringRef> all_uv_map_attributes(const Mesh &mesh)
 gpu::VertBufPtr extract_uv_maps_subdiv(const DRWSubdivCache &subdiv_cache,
                                        const MeshBatchCache &cache)
 {
-  const Mesh *coarse_mesh = subdiv_cache.mesh;
+  const blender::Mesh *coarse_mesh = subdiv_cache.mesh;
   GPUVertFormat format = {0};
 
   const VectorSet<StringRef> uv_layers = mesh_extract_uv_format_init(
