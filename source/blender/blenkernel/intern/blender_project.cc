@@ -10,6 +10,7 @@
 #include <shared_mutex>
 
 #include "BKE_preferences.h"
+#include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
 #include "RNA_types.hh"
 
@@ -27,7 +28,11 @@
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
 
+#include "toml.hpp"
+
 namespace blender {
+
+constexpr toml::spec version = toml::spec::v(1, 1, 0);
 
 /**
  * Get a reference to the global Blender project.
@@ -464,6 +469,49 @@ std::string BKE_blender_project_path_make_relative(const StringRef path,
                                                 std::string(path_relative) :
                                                 BKE_path_template_escape(path_relative);
   return "{project_root}/" + path_relative_escaped;
+}
+
+std::optional<std::string> BKE_blender_project_find_root_from_path(StringRefNull path)
+{
+  char curr_dir[FILE_MAX];
+  path.copy_bytes_truncated(curr_dir);
+
+  // Get parent directory if given path is a file
+  if (BLI_is_file(path.c_str())) {
+    BLI_path_parent_dir(curr_dir);
+  }
+
+  char search_path[FILE_MAX];
+  do {
+    BLI_path_join(search_path, sizeof(search_path), curr_dir, ".blender_project");
+    if (BLI_is_dir(search_path)) {
+      return std::string(curr_dir);
+    }
+  } while (BLI_path_parent_dir(curr_dir));
+
+  return std::nullopt;
+}
+
+std::optional<std::string> BKE_blender_project_read_name(StringRefNull root_path)
+{
+  char toml_path[FILE_MAX];
+  BLI_path_join(
+      toml_path, sizeof(toml_path), root_path.c_str(), ".blender_project", "project.toml");
+  if (!BLI_exists(toml_path)) {
+    return std::nullopt;
+  }
+
+  toml::result file_result = toml::try_parse(toml_path, version);
+  if (!file_result.is_ok()) {
+    return std::nullopt;
+  }
+
+  const toml::value &toml_root = file_result.unwrap();
+  if (!toml_root.is_table() || !toml_root.contains("name") || !toml_root.at("name").is_string()) {
+    return std::nullopt;
+  }
+
+  return toml_root.at("name").as_string();
 }
 
 }  // namespace blender

@@ -403,4 +403,19 @@ std::string BKE_blender_project_path_make_relative(StringRef path,
                                                    bool path_is_template,
                                                    const bke::BlenderProject &project);
 
+/**
+ * Find and return the root directory for the project that the given blend path belongs to,
+ * if such a project exists. Otherwise, return nullopt.
+ *
+ * \param path: Path to any directory or file whose project root will be searched for.
+ */
+std::optional<std::string> BKE_blender_project_find_root_from_path(StringRefNull path);
+
+/**
+ * Read and return the name of the project at the given project root path.
+ *
+ * \param root_path: Path to the root of the project
+ */
+std::optional<std::string> BKE_blender_project_read_name(StringRefNull root_path);
+
 }  // namespace blender

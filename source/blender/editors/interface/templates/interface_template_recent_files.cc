@@ -8,6 +8,7 @@
 
 #include <fmt/format.h>
 
+#include "BKE_blender_project.hh"
 #include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
@@ -48,6 +49,18 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
   char filename[FILE_MAX];
   BLI_path_split_dir_file(path, dirname, sizeof(dirname), filename, sizeof(filename));
   tooltip_text_field_add(tip, filename, {}, TIP_STYLE_HEADER, TIP_LC_NORMAL);
+
+  if (const std::optional<std::string> project_dir = BKE_blender_project_find_root_from_path(
+          dirname))
+  {
+    if (const std::optional<std::string> project_name = BKE_blender_project_read_name(
+            *project_dir))
+    {
+      tooltip_text_field_add(tip, {}, {}, TIP_STYLE_SPACER, TIP_LC_NORMAL);
+      tooltip_text_field_add(tip, *project_name, {}, TIP_STYLE_HEADER, TIP_LC_NORMAL);
+    }
+  }
+
   tooltip_text_field_add(tip, dirname, {}, TIP_STYLE_NORMAL, TIP_LC_NORMAL);
 
   tooltip_text_field_add(tip, {}, {}, TIP_STYLE_SPACER, TIP_LC_NORMAL);
