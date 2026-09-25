@@ -17,7 +17,9 @@
 
 #include "BKE_compositor.hh"
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_material.hh"
+#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
 
@@ -74,16 +76,6 @@ static std::function<void(bContext &)> tree_path_handle_func(int i)
   };
 }
 
-static void activate_and_push_node_tree(ARegion *region,
-                                        SpaceNode *snode,
-                                        bNodeTree *group_tree,
-                                        bNode *group_node)
-{
-  bke::node_set_active(*snode->edittree, *group_node);
-  bke::node_set_selected(*group_node, true);
-  ED_node_tree_push(region, snode, group_tree, group_node);
-}
-
 static BIFIconID node_tree_icon(const ID &tree_id)
 {
   if (ID_IS_PACKED(&tree_id)) {
@@ -98,81 +90,87 @@ static BIFIconID node_tree_icon(const ID &tree_id)
   return ICON_NODETREE;
 }
 
-static void navigate_menu_draw(bContext *C, ui::Layout *layout, void *arg)
+static bool node_group_is_enterable(const bNode &node)
+{
+  return node.is_group() && !node.is_custom_group() && node.id && !ID_MISSING(node.id);
+}
+
+static bool node_tree_has_enterable_group(const bNodeTree *ntree)
+{
+  if (ntree == nullptr) {
+    return false;
+  }
+  ntree->ensure_topology_cache();
+  for (const bNode *group_node : ntree->group_nodes()) {
+    if (node_group_is_enterable(*group_node)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void navigate_menu_create(bContext *C, ui::Layout *layout, void *arg)
 {
   if (arg == nullptr) {
     return;
   }
   SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *clicked_tree = nullptr;
+  bNodeTree *parent_tree = nullptr;
   ID *id = static_cast<ID *>(arg);
   if (GS(id->name) == ID_NT) {
-    clicked_tree = id_cast<bNodeTree *>(id);
+    parent_tree = id_cast<bNodeTree *>(id);
   }
   else {
-    clicked_tree = snode->nodetree;
+    parent_tree = snode->nodetree;
   }
-  if (!clicked_tree) {
+  if (!parent_tree) {
     return;
   }
 
-  /* The child of #clicked_tree that the treepath descends into. */
   bNodeTree *child_tree_in_path = nullptr;
   for (bNodeTreePath &path_item : snode->treepath) {
-    if (path_item.nodetree == clicked_tree && path_item.next) {
+    if (path_item.nodetree == parent_tree && path_item.next) {
       child_tree_in_path = path_item.next->nodetree;
       break;
     }
   }
 
-  Set<bNodeTree *> added_groups;
+  parent_tree->ensure_topology_cache();
+  Set<bNodeTree *> visited_groups;
   Vector<bNode *> group_nodes;
-  for (bNode *node : clicked_tree->all_nodes()) {
-    if (!node->is_group() || !node->id) {
+  for (bNode *group_node : parent_tree->group_nodes()) {
+    if (!node_group_is_enterable(*group_node)) {
       continue;
     }
-    if (added_groups.add(id_cast<bNodeTree *>(node->id))) {
-      group_nodes.append(node);
+    if (visited_groups.add(id_cast<bNodeTree *>(group_node->id))) {
+      group_nodes.append(group_node);
     }
   }
   std::ranges::sort(group_nodes, [](const bNode *a, const bNode *b) {
-    return BLI_strcasecmp_natural(a->id->name + 2, b->id->name + 2) < 0;
+    return BLI_strcasecmp_natural(BKE_id_name(*a->id), BKE_id_name(*b->id)) < 0;
   });
 
-  for (bNode *node : group_nodes) {
-    bNodeTree *group = id_cast<bNodeTree *>(node->id);
+  for (bNode *group_node : group_nodes) {
+    bNodeTree *group_tree = id_cast<bNodeTree *>(group_node->id);
 
-    auto enter_group_func = [clicked_tree, node, group](bContext &C) {
+    auto enter_group_fn = [parent_tree, group_node, group_tree](bContext &C) {
       SpaceNode *snode = CTX_wm_space_node(&C);
       ARegion *region = CTX_wm_region(&C);
 
-      while (snode->edittree != clicked_tree) {
+      while (snode->edittree != parent_tree) {
         ED_node_tree_pop(region, snode);
       }
-      activate_and_push_node_tree(region, snode, group, node);
+      bke::node_set_active(*parent_tree, *group_node);
+      ED_node_tree_push(region, snode, group_tree, group_node);
     };
 
     ui::Button *but = layout->button(
-        node->id->name + 2, node_tree_icon(*node->id), enter_group_func);
-    if (group == child_tree_in_path) {
-      /* Highlight the current path item. Side effect: it becomes the default item for Enter. */
+        BKE_id_name(*group_node->id), node_tree_icon(*group_node->id), enter_group_fn);
+    if (group_tree == child_tree_in_path) {
+      /* Highlight the current path item and it becomes the default item for Enter. */
       ui::button_flag_enable(but, ui::BUT_ACTIVE_DEFAULT);
     }
   }
-}
-
-static bool node_tree_has_group_node(const bNodeTree *ntree)
-{
-  if (ntree == nullptr) {
-    return false;
-  }
-
-  for (const bNode *node : ntree->all_nodes()) {
-    if (node->is_group() && node->id != nullptr) {
-      return true;
-    }
-  }
-  return false;
 }
 
 static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
@@ -180,14 +178,14 @@ static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
                                                         StructRNA &rna_type,
                                                         void *ptr)
 {
-  const bool in_root_tree = (snode.nodetree == snode.edittree);
-  const bool has_group = in_root_tree ? node_tree_has_group_node(snode.nodetree) : true;
+  const bool in_root_tree = snode.nodetree == snode.edittree;
+  const bool has_group = in_root_tree ? node_tree_has_enterable_group(snode.nodetree) : true;
   ui::context_path_add_generic(path,
                                rna_type,
                                ptr,
                                ICON_NONE,
                                in_root_tree ? nullptr : tree_path_handle_func(0),
-                               has_group ? navigate_menu_draw : nullptr);
+                               has_group ? navigate_menu_create : nullptr);
 }
 
 static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
@@ -203,17 +201,14 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
       continue;
     }
 
-    const BIFIconID icon = node_tree_icon(path_item.nodetree->id);
-
-    /* We don't need to add handle function to last node-tree. */
-    const bool is_last_path = (&path_item == snode.treepath.last());
-    const bool has_group = is_last_path ? node_tree_has_group_node(path_item.nodetree) : true;
+    const bool is_last_path = &path_item == snode.treepath.last();
+    const bool has_group = is_last_path ? node_tree_has_enterable_group(path_item.nodetree) : true;
     ui::context_path_add_generic(path,
                                  *RNA_NodeTree,
                                  path_item.nodetree,
-                                 icon,
+                                 node_tree_icon(path_item.nodetree->id),
                                  is_last_path ? nullptr : tree_path_handle_func(i),
-                                 has_group ? navigate_menu_draw : nullptr);
+                                 has_group ? navigate_menu_create : nullptr);
   }
 }
 

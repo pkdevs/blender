@@ -78,7 +78,8 @@ void template_breadcrumbs(Layout &layout, Span<ContextPathItem> context_path)
 
     if (context_path[i].menu_func) {
       sub_row.emboss_set(EmbossType::Pulldown);
-      sub_row.menu_fn("", ICON_RIGHTARROW_THIN, context_path[i].menu_func, context_path[i].ptr);
+      sub_row.menu_fn(
+          "", ICON_RIGHTARROW_THIN, context_path[i].menu_func, context_path[i].menu_arg);
     }
     else if (i < context_path.size() - 1) {
       sub_row.label("", ICON_RIGHTARROW_THIN);

@@ -76,9 +76,9 @@ struct ContextPathItem {
   int icon_indicator_number;
 
   std::function<void(bContext &)> handle_func;
+  /* Optional dropdown menu opened by the arrow button. */
   MenuCreateFunc menu_func;
-  /* Pointer to the item's corresponding data. */
-  void *ptr;
+  void *menu_arg;
 };
 
 void context_path_add_generic(Vector<ContextPathItem> &path,
