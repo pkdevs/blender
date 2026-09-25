@@ -784,7 +784,7 @@ int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, cons
   int renamed_count = BKE_object_defgroup_rename_data(ob, old_name, dg->name);
   const bool geometry_references_renamed = renamed_count > 0;
 
-  if (ob->data->us == 1) {
+  if (ID_REAL_USERS(ob->data) == 1) {
     renamed_count += BKE_object_defgroup_rename_users(ob, old_name, dg->name);
     if (renamed_count > 0) {
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
