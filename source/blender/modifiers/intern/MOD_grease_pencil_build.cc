@@ -865,14 +865,14 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilBuild, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   GreasePencilBuildModifierData *mmd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
   callback(mmd->target_vgname,
            sizeof(mmd->target_vgname),
-           MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+           ModifierNameReferenceScope::VertexGroup,
            user_data);
 }
 
@@ -912,7 +912,7 @@ ModifierTypeInfo modifierType_GreasePencilBuild = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

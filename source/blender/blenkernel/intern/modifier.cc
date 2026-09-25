@@ -127,26 +127,13 @@ const ModifierTypeInfo *BKE_modifier_get_info(ModifierType type)
   return nullptr;
 }
 
-void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
-                                           ModifierVGroupReferenceCallback callback,
-                                           void *user_data)
+void BKE_modifier_foreach_name_reference(ModifierData *md,
+                                         ModifierNameReferenceCallback callback,
+                                         void *user_data)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-  if (mti != nullptr && mti->foreach_vgroup_reference != nullptr) {
-    mti->foreach_vgroup_reference(md, callback, user_data);
-  }
-}
-
-void BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
-    GreasePencilModifierInfluenceData *influence,
-    ModifierVGroupReferenceCallback callback,
-    void *user_data)
-{
-  if (influence != nullptr) {
-    callback(influence->vertex_group_name,
-             sizeof(influence->vertex_group_name),
-             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
-             user_data);
+  if (mti != nullptr && mti->foreach_name_reference != nullptr) {
+    mti->foreach_name_reference(md, callback, user_data);
   }
 }
 

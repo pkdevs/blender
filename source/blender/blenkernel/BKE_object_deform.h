@@ -32,23 +32,26 @@ struct bDeformGroup;
  */
 void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
 /**
- * Run `callback` on every vertex-group name reference used by the object: all of its
- * modifiers (see #ModifierTypeInfo.foreach_vgroup_reference), as well as object-level users
- * such as the soft-body goal/spring vertex groups. The callback may modify the names in place.
- * Each visited reference is tagged with its #ModifierVGroupReferenceScope.
+ * Run `callback` on every known name reference associated with the object. This includes
+ * references owned by the object's geometry, including Grease Pencil drawings, and object-owned
+ * references such as modifiers and soft-body settings. Arbitrary strings and node name
+ * references are not discovered by this iterator. A visited name is a stored string that refers
+ * to a named Blender entity. The callback may modify names in place; traversal order is
+ * unspecified.
  */
-void BKE_object_foreach_vgroup_reference(Object *ob,
-                                         ModifierVGroupReferenceCallback callback,
-                                         void *user_data);
+void BKE_object_foreach_name_reference(Object *ob,
+                                       ModifierNameReferenceCallback callback,
+                                       void *user_data);
 /**
- * Update all vertex-group name references used by the object from `old_name` to `new_name`
- * (see #BKE_object_foreach_vgroup_reference).
+ * Update object-owned vertex-group name references from `old_name` to `new_name`.
  *
  * \return The number of references that were updated.
  */
 int BKE_object_defgroup_rename_users(struct Object *ob,
                                      const char *old_name,
                                      const char *new_name);
+/** Update geometry-owned vertex-group name references from `old_name` to `new_name`. */
+int BKE_object_defgroup_rename_data(struct Object *ob, const char *old_name, const char *new_name);
 
 /**
  * Get #MDeformVert vgroup data from given object. Should only be used in Object mode.

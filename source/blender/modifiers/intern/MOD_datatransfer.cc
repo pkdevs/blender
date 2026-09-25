@@ -451,13 +451,15 @@ static void panel_register(ARegionType *region_type)
 
 #undef DT_TYPES_AFFECT_MESH
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   DataTransferModifierData *dmd = reinterpret_cast<DataTransferModifierData *>(md);
-  callback(
-      dmd->defgrp_name, sizeof(dmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(dmd->defgrp_name,
+           sizeof(dmd->defgrp_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_DataTransfer = {
@@ -495,7 +497,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

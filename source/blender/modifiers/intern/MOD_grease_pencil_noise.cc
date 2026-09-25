@@ -326,13 +326,12 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilNoise, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   auto *mmd = reinterpret_cast<GreasePencilNoiseModifierData *>(md);
-  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
-      &mmd->influence, callback, user_data);
+  modifier::greasepencil::foreach_influence_name_reference(&mmd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilNoise = {
@@ -371,7 +370,7 @@ ModifierTypeInfo modifierType_GreasePencilNoise = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

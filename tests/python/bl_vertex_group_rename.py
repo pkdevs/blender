@@ -142,6 +142,43 @@ class VertexGroupRenameTest(unittest.TestCase):
             self._remove_object_and_data(obj1)
             self._remove_object_and_data(obj2)
 
+    def test_shared_geometry_references_update_on_vertex_group_rename(self):
+        mesh = bpy.data.meshes.new(name="Mesh")
+        mesh_obj1 = bpy.data.objects.new(name="MeshObject1", object_data=mesh)
+        mesh_obj2 = bpy.data.objects.new(name="MeshObject2", object_data=mesh)
+        lattice = bpy.data.lattices.new(name="Lattice")
+        lattice_obj1 = bpy.data.objects.new(name="LatticeObject1", object_data=lattice)
+        lattice_obj2 = bpy.data.objects.new(name="LatticeObject2", object_data=lattice)
+        for obj in (mesh_obj1, mesh_obj2, lattice_obj1, lattice_obj2):
+            bpy.context.collection.objects.link(obj)
+        try:
+            mesh_group = mesh_obj1.vertex_groups.new(name="MeshGroup")
+            mesh_obj1.shape_key_add(name="Basis")
+            mesh_key = mesh_obj1.shape_key_add(name="Key")
+            mesh_key.vertex_group = mesh_group.name
+
+            lattice_group = lattice_obj1.vertex_groups.new(name="LatticeGroup")
+            lattice.vertex_group = lattice_group.name
+
+            mesh_group.name = "RenamedMeshGroup"
+            lattice_group.name = "RenamedLatticeGroup"
+
+            self.assertEqual(
+                mesh_obj2.data.shape_keys.key_blocks["Key"].vertex_group,
+                "RenamedMeshGroup",
+                "Shared shape-key mask was not updated after rename",
+            )
+            self.assertEqual(
+                lattice_obj2.data.vertex_group,
+                "RenamedLatticeGroup",
+                "Shared lattice reference was not updated after rename",
+            )
+        finally:
+            self._remove_object_and_data(mesh_obj1)
+            self._remove_object_and_data(mesh_obj2)
+            self._remove_object_and_data(lattice_obj1)
+            self._remove_object_and_data(lattice_obj2)
+
     def test_lattice_influence_group_updates_on_vertex_group_rename(self):
         lattice = bpy.data.lattices.new(name="Lattice")
         obj = bpy.data.objects.new(name="Object", object_data=lattice)

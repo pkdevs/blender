@@ -99,8 +99,8 @@ int BKE_object_defgroup_name_index(const Object *ob, StringRef name);
 void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob);
 /**
  * Rename the vertex group, propagating the change to all of its name references
- * used by `ob` and every other object sharing the same geometry
- * (see #BKE_object_defgroup_rename_users).
+ * used by `ob` and every other object sharing the same geometry. This operation also tags every
+ * affected object for geometry recalculation.
  *
  * \return The number of references that were updated.
  */

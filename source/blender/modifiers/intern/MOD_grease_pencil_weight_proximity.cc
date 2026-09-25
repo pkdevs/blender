@@ -280,18 +280,17 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilWeightProximity, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   GreasePencilWeightProximityModifierData *mmd =
       reinterpret_cast<GreasePencilWeightProximityModifierData *>(md);
   callback(mmd->target_vgname,
            sizeof(mmd->target_vgname),
-           MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+           ModifierNameReferenceScope::VertexGroup,
            user_data);
-  BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
-      &mmd->influence, callback, user_data);
+  modifier::greasepencil::foreach_influence_name_reference(&mmd->influence, callback, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilWeightProximity = {
@@ -330,7 +329,7 @@ ModifierTypeInfo modifierType_GreasePencilWeightProximity = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

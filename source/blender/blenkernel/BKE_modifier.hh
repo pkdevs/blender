@@ -152,24 +152,24 @@ using TexWalkFunc = void (*)(void *user_data,
  * namespaces without false positives. Additional scopes (e.g. bone names) can be added
  * as more reference kinds are visited.
  */
-enum ModifierVGroupReferenceScope {
-  MOD_VGROUP_REF_SCOPE_VERTEX_GROUP = 0,
+enum class ModifierNameReferenceScope {
+  VertexGroup,
 };
 /**
- * Callback for vertex-group reference iterators
- * (see #ModifierTypeInfo.foreach_vgroup_reference).
+ * Callback for name reference iterators
+ * (see #ModifierTypeInfo.foreach_name_reference).
+ *
+ * A visited name is a stored string that refers to a named Blender entity.
  *
  * \param name: Pointer to the stored fixed-size name buffer, may be modified in place.
  * \param name_maxncpy: Size of the buffer in bytes, including the null terminator.
- * \param scope: Namespace the referenced name belongs to, callbacks should ignore
- *               scopes they do not handle.
+ * \param scope: Namespace the referenced name belongs to.
  * \param user_data: Opaque caller data.
- * \return True if the name was modified.
  */
-using ModifierVGroupReferenceCallback = bool (*)(char *name,
-                                                 size_t name_maxncpy,
-                                                 ModifierVGroupReferenceScope scope,
-                                                 void *user_data);
+using ModifierNameReferenceCallback = void (*)(char *name,
+                                               size_t name_maxncpy,
+                                               ModifierNameReferenceScope scope,
+                                               void *user_data);
 
 enum ModifierApplyFlag {
   /** Render time. */
@@ -453,14 +453,14 @@ struct ModifierTypeInfo {
                                       const IDTypeForeachColorFunctionCallback &fn);
 
   /**
-   * Call the given callback for each vertex-group name reference stored by this modifier.
+   * Call the given callback for each name reference stored by this modifier.
    *
-   * The callback may modify the names in place (e.g. to handle renaming a vertex group).
-   * This function is optional (assumes the modifier stores no such references if not present).
+   * The callback may modify the names in place. This function is optional (assumes the modifier
+   * stores no such references if not present).
    */
-  void (*foreach_vgroup_reference)(ModifierData *md,
-                                   ModifierVGroupReferenceCallback callback,
-                                   void *user_data);
+  void (*foreach_name_reference)(ModifierData *md,
+                                 ModifierNameReferenceCallback callback,
+                                 void *user_data);
 };
 
 /** Used to set a modifier's panel type. */
@@ -490,17 +490,9 @@ void BKE_modifier_free(ModifierData *md);
 /**
  * Run `callback` on every vertex-group name reference stored by the modifier.
  */
-void BKE_modifier_foreach_vgroup_reference(ModifierData *md,
-                                           ModifierVGroupReferenceCallback callback,
-                                           void *user_data);
-/**
- * Run `callback` on the vertex-group name stored in a grease-pencil modifier influence.
- * Does nothing if `influence` is null.
- */
-void BKE_modifier_foreach_vgroup_reference_grease_pencil_influence(
-    GreasePencilModifierInfluenceData *influence,
-    ModifierVGroupReferenceCallback callback,
-    void *user_data);
+void BKE_modifier_foreach_name_reference(ModifierData *md,
+                                         ModifierNameReferenceCallback callback,
+                                         void *user_data);
 /**
  * Use instead of `BLI_remlink` when the object's active modifier should change.
  */

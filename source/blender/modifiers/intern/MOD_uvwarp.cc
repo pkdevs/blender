@@ -302,13 +302,15 @@ static void panel_register(ARegionType *region_type)
       region_type, "offset", "Transform", nullptr, transform_panel_draw, panel_type);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   UVWarpModifierData *umd = reinterpret_cast<UVWarpModifierData *>(md);
-  callback(
-      umd->vgroup_name, sizeof(umd->vgroup_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(umd->vgroup_name,
+           sizeof(umd->vgroup_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_UVWarp = {
@@ -346,7 +348,7 @@ ModifierTypeInfo modifierType_UVWarp = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

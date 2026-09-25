@@ -919,12 +919,12 @@ static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
   lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
-  callback(lmd->vgname, sizeof(lmd->vgname), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(lmd->vgname, sizeof(lmd->vgname), ModifierNameReferenceScope::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_GreasePencilLineart = {
@@ -961,7 +961,7 @@ ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

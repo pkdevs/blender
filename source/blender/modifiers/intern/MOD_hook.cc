@@ -534,12 +534,12 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   BLO_read_array_and_validate_size(reader, &hmd->indexar, &hmd->indexar_num);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   HookModifierData *hmd = reinterpret_cast<HookModifierData *>(md);
-  callback(hmd->name, sizeof(hmd->name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(hmd->name, sizeof(hmd->name), ModifierNameReferenceScope::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Hook = {
@@ -576,7 +576,7 @@ ModifierTypeInfo modifierType_Hook = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

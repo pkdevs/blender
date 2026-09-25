@@ -153,13 +153,15 @@ static void panel_register(ARegionType *region_type)
       region_type, "vertex_group", "Vertex Group", nullptr, vertex_group_panel_draw, panel_type);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   WireframeModifierData *wmd = reinterpret_cast<WireframeModifierData *>(md);
-  callback(
-      wmd->defgrp_name, sizeof(wmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(wmd->defgrp_name,
+           sizeof(wmd->defgrp_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_Wireframe = {
@@ -196,7 +198,7 @@ ModifierTypeInfo modifierType_Wireframe = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

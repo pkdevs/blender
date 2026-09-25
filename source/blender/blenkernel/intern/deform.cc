@@ -770,27 +770,37 @@ void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob)
 
 int BKE_object_defgroup_set_name(Main *bmain, bDeformGroup *dg, Object *ob, const char *new_name)
 {
-  std::string old_name = dg->name;
+  char old_name[sizeof(dg->name)];
+  BLI_strncpy_utf8(old_name, dg->name, sizeof(old_name));
   STRNCPY_UTF8(dg->name, new_name);
   BKE_object_defgroup_unique_name(dg, ob);
 
-  if (ob->type == OB_GREASE_PENCIL) {
-    BKE_grease_pencil_vgroup_name_update(ob, old_name.c_str(), dg->name);
+  if (STREQ(old_name, dg->name)) {
+    return 0;
   }
 
   /* Vertex groups are owned by the geometry ID, which may be shared by several objects:
    * update the references of all objects using the same geometry. */
-  int renamed_count = 0;
-  for (Object &co_user : bmain->objects) {
-    if (co_user.data == ob->data) {
-      const int user_renamed_count = BKE_object_defgroup_rename_users(
-          &co_user, old_name.c_str(), dg->name);
-      /* Tag co-users for recalc, the renamed object itself is covered by the RNA update. */
-      if (user_renamed_count > 0 && &co_user != ob) {
-        DEG_id_tag_update(&co_user.id, ID_RECALC_GEOMETRY);
-      }
-      renamed_count += user_renamed_count;
+  int renamed_count = BKE_object_defgroup_rename_data(ob, old_name, dg->name);
+  const bool geometry_references_renamed = renamed_count > 0;
+
+  if (ob->data->us == 1) {
+    renamed_count += BKE_object_defgroup_rename_users(ob, old_name, dg->name);
+    if (renamed_count > 0) {
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
     }
+    return renamed_count;
+  }
+
+  for (Object &co_user : bmain->objects) {
+    if (co_user.data != ob->data) {
+      continue;
+    }
+    const int user_renamed_count = BKE_object_defgroup_rename_users(&co_user, old_name, dg->name);
+    if (geometry_references_renamed || user_renamed_count > 0) {
+      DEG_id_tag_update(&co_user.id, ID_RECALC_GEOMETRY);
+    }
+    renamed_count += user_renamed_count;
   }
   return renamed_count;
 }

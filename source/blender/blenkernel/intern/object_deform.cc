@@ -36,6 +36,7 @@
 #include "BKE_armature.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_vertex_groups.hh"
 #include "BKE_key.hh"
 #include "BKE_mesh.hh"
@@ -96,46 +97,66 @@ void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
   }
 }
 
-void BKE_object_foreach_vgroup_reference(Object *ob,
-                                         ModifierVGroupReferenceCallback callback,
-                                         void *user_data)
+static void foreach_geometry_name_reference(Object *ob,
+                                            ModifierNameReferenceCallback callback,
+                                            void *user_data)
 {
-  for (ModifierData &md : ob->modifiers) {
-    BKE_modifier_foreach_vgroup_reference(&md, callback, user_data);
-  }
-
   if (Key *key = BKE_key_from_object(ob)) {
     for (KeyBlock &kb : key->block) {
-      callback(kb.vgroup, sizeof(kb.vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+      callback(kb.vgroup, sizeof(kb.vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
     }
   }
 
   if (ob->type == OB_LATTICE) {
     Lattice *lt = id_cast<Lattice *>(ob->data);
-    callback(lt->vgroup, sizeof(lt->vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+    callback(lt->vgroup, sizeof(lt->vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
     if (lt->editlatt != nullptr) {
       Lattice *edit_latt = lt->editlatt->latt;
       callback(edit_latt->vgroup,
                sizeof(edit_latt->vgroup),
-               MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+               ModifierNameReferenceScope::VertexGroup,
                user_data);
     }
+  }
+
+  if (ob->type == OB_GREASE_PENCIL) {
+    GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
+    BKE_grease_pencil_foreach_vgroup_name(grease_pencil, [&](char *name, size_t name_maxncpy) {
+      callback(name, name_maxncpy, ModifierNameReferenceScope::VertexGroup, user_data);
+    });
+  }
+}
+
+static void foreach_object_name_reference(Object *ob,
+                                          ModifierNameReferenceCallback callback,
+                                          void *user_data)
+{
+  for (ModifierData &md : ob->modifiers) {
+    BKE_modifier_foreach_name_reference(&md, callback, user_data);
   }
 
   if (ob->soft) {
     callback(ob->soft->namedVG_Mass,
              sizeof(ob->soft->namedVG_Mass),
-             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             ModifierNameReferenceScope::VertexGroup,
              user_data);
     callback(ob->soft->namedVG_Softgoal,
              sizeof(ob->soft->namedVG_Softgoal),
-             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             ModifierNameReferenceScope::VertexGroup,
              user_data);
     callback(ob->soft->namedVG_Spring_K,
              sizeof(ob->soft->namedVG_Spring_K),
-             MOD_VGROUP_REF_SCOPE_VERTEX_GROUP,
+             ModifierNameReferenceScope::VertexGroup,
              user_data);
   }
+}
+
+void BKE_object_foreach_name_reference(Object *ob,
+                                       ModifierNameReferenceCallback callback,
+                                       void *user_data)
+{
+  foreach_geometry_name_reference(ob, callback, user_data);
+  foreach_object_name_reference(ob, callback, user_data);
 }
 
 struct DefgroupRenameData {
@@ -144,27 +165,33 @@ struct DefgroupRenameData {
   int renamed_count = 0;
 };
 
-static bool defgroup_rename_callback(char *name,
+static void defgroup_rename_callback(char *name,
                                      size_t name_maxncpy,
-                                     ModifierVGroupReferenceScope scope,
+                                     ModifierNameReferenceScope scope,
                                      void *user_data)
 {
-  if (scope != MOD_VGROUP_REF_SCOPE_VERTEX_GROUP) {
-    return false;
+  if (scope != ModifierNameReferenceScope::VertexGroup) {
+    return;
   }
   DefgroupRenameData *data = static_cast<DefgroupRenameData *>(user_data);
   if (!STREQ(name, data->old_name)) {
-    return false;
+    return;
   }
   BLI_strncpy_utf8(name, data->new_name, name_maxncpy);
   data->renamed_count++;
-  return true;
 }
 
 int BKE_object_defgroup_rename_users(Object *ob, const char *old_name, const char *new_name)
 {
   DefgroupRenameData data{old_name, new_name};
-  BKE_object_foreach_vgroup_reference(ob, defgroup_rename_callback, &data);
+  foreach_object_name_reference(ob, defgroup_rename_callback, &data);
+  return data.renamed_count;
+}
+
+int BKE_object_defgroup_rename_data(Object *ob, const char *old_name, const char *new_name)
+{
+  DefgroupRenameData data{old_name, new_name};
+  foreach_geometry_name_reference(ob, defgroup_rename_callback, &data);
   return data.renamed_count;
 }
 

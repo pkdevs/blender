@@ -202,13 +202,15 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Smooth, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(md);
-  callback(
-      smd->defgrp_name, sizeof(smd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(smd->defgrp_name,
+           sizeof(smd->defgrp_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_Smooth = {
@@ -246,7 +248,7 @@ ModifierTypeInfo modifierType_Smooth = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

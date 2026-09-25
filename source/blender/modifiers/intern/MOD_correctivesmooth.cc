@@ -828,13 +828,15 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   csmd->delta_cache.deltas_num = 0;
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   CorrectiveSmoothModifierData *csmd = reinterpret_cast<CorrectiveSmoothModifierData *>(md);
-  callback(
-      csmd->defgrp_name, sizeof(csmd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(csmd->defgrp_name,
+           sizeof(csmd->defgrp_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_CorrectiveSmooth = {
@@ -871,7 +873,7 @@ ModifierTypeInfo modifierType_CorrectiveSmooth = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

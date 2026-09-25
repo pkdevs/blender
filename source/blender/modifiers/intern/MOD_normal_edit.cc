@@ -672,13 +672,15 @@ static void panel_register(ARegionType *region_type)
       region_type, "offset", "Offset", nullptr, offset_panel_draw, panel_type);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(md);
-  callback(
-      nemd->defgrp_name, sizeof(nemd->defgrp_name), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(nemd->defgrp_name,
+           sizeof(nemd->defgrp_name),
+           ModifierNameReferenceScope::VertexGroup,
+           user_data);
 }
 
 ModifierTypeInfo modifierType_NormalEdit = {
@@ -716,7 +718,7 @@ ModifierTypeInfo modifierType_NormalEdit = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

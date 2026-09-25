@@ -775,12 +775,12 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Mask, panel_draw);
 }
 
-static void foreach_vgroup_reference(ModifierData *md,
-                                     ModifierVGroupReferenceCallback callback,
-                                     void *user_data)
+static void foreach_name_reference(ModifierData *md,
+                                   ModifierNameReferenceCallback callback,
+                                   void *user_data)
 {
   MaskModifierData *mmd = reinterpret_cast<MaskModifierData *>(md);
-  callback(mmd->vgroup, sizeof(mmd->vgroup), MOD_VGROUP_REF_SCOPE_VERTEX_GROUP, user_data);
+  callback(mmd->vgroup, sizeof(mmd->vgroup), ModifierNameReferenceScope::VertexGroup, user_data);
 }
 
 ModifierTypeInfo modifierType_Mask = {
@@ -819,7 +819,7 @@ ModifierTypeInfo modifierType_Mask = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
-    /*foreach_vgroup_reference*/ foreach_vgroup_reference,
+    /*foreach_name_reference*/ foreach_name_reference,
 };
 
 }  // namespace blender

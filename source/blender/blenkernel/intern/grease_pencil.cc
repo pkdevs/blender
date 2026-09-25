@@ -2416,17 +2416,18 @@ void BKE_grease_pencil_nomain_to_grease_pencil(GreasePencil *grease_pencil_src,
   BKE_id_free(nullptr, grease_pencil_src);
 }
 
-void BKE_grease_pencil_vgroup_name_update(Object *ob, const char *old_name, const char *new_name)
+void BKE_grease_pencil_foreach_vgroup_name(
+    GreasePencil &grease_pencil, FunctionRef<void(char *name, size_t name_maxncpy)> callback)
 {
   using namespace blender::bke::greasepencil;
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
   for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
+    if (base->type != GP_DRAWING) {
+      continue;
+    }
     Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
     CurvesGeometry &curves = drawing.strokes_for_write();
     for (bDeformGroup &vgroup : curves.vertex_group_names) {
-      if (STREQ(vgroup.name, old_name)) {
-        STRNCPY_UTF8(vgroup.name, new_name);
-      }
+      callback(vgroup.name, sizeof(vgroup.name));
     }
   }
 }

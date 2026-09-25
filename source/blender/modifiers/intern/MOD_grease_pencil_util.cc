@@ -74,6 +74,18 @@ void foreach_influence_ID_link(GreasePencilModifierInfluenceData *influence_data
   walk(user_data, ob, reinterpret_cast<ID **>(&influence_data->material), IDWALK_CB_USER);
 }
 
+void foreach_influence_name_reference(GreasePencilModifierInfluenceData *influence,
+                                      ModifierNameReferenceCallback callback,
+                                      void *user_data)
+{
+  if (influence != nullptr) {
+    callback(influence->vertex_group_name,
+             sizeof(influence->vertex_group_name),
+             ModifierNameReferenceScope::VertexGroup,
+             user_data);
+  }
+}
+
 void write_influence_data(BlendWriter *writer,
                           const GreasePencilModifierInfluenceData *influence_data)
 {

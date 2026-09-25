@@ -12,6 +12,7 @@
 #include <atomic>
 
 #include "BLI_color_types.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_implicit_sharing_ptr.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
@@ -1179,7 +1180,8 @@ void BKE_grease_pencil_copy_layer_group_parameters(const bke::greasepencil::Laye
 void BKE_grease_pencil_nomain_to_grease_pencil(GreasePencil *grease_pencil_src,
                                                GreasePencil *grease_pencil_dst);
 
-void BKE_grease_pencil_vgroup_name_update(Object *ob, const char *old_name, const char *new_name);
+void BKE_grease_pencil_foreach_vgroup_name(
+    GreasePencil &grease_pencil, FunctionRef<void(char *name, size_t name_maxncpy)> callback);
 
 void BKE_grease_pencil_eval_geometry(Depsgraph *depsgraph, GreasePencil *grease_pencil);
 void BKE_object_eval_grease_pencil(Depsgraph *depsgraph, Scene *scene, Object *object);
