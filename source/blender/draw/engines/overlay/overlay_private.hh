@@ -24,6 +24,7 @@
 #include "DRW_render.hh"
 #include "UI_resources.hh"
 #include "draw_manager.hh"
+#include "draw_meshlet.hh"
 #include "draw_pass.hh"
 #include "draw_view_data.hh"
 #include "gpu_shader_create_info.hh"
@@ -329,87 +330,78 @@ struct VertexTriple {
  * Contains all overlay generic geometry batches.
  */
 class ShapeCache {
- private:
-  struct BatchDeleter {
-    void operator()(gpu::Batch *shader)
-    {
-      GPU_BATCH_DISCARD_SAFE(shader);
-    }
-  };
-  using BatchPtr = std::unique_ptr<gpu::Batch, BatchDeleter>;
-
  public:
-  BatchPtr bone_box;
-  BatchPtr bone_box_wire;
-  BatchPtr bone_envelope;
-  BatchPtr bone_envelope_wire;
-  BatchPtr bone_octahedron;
-  BatchPtr bone_octahedron_wire;
-  BatchPtr bone_sphere;
-  BatchPtr bone_sphere_wire;
-  BatchPtr bone_stick;
+  DrawMeshPtr bone_box;
+  DrawMeshPtr bone_box_wire;
+  DrawMeshPtr bone_envelope;
+  DrawMeshPtr bone_envelope_wire;
+  DrawMeshPtr bone_octahedron;
+  DrawMeshPtr bone_octahedron_wire;
+  DrawMeshPtr bone_sphere;
+  DrawMeshPtr bone_sphere_wire;
+  DrawMeshPtr bone_stick;
 
-  BatchPtr bone_degrees_of_freedom;
-  BatchPtr bone_degrees_of_freedom_wire;
+  DrawMeshPtr bone_degrees_of_freedom;
+  DrawMeshPtr bone_degrees_of_freedom_wire;
 
-  BatchPtr grid;
-  BatchPtr cube_solid;
+  DrawMeshPtr grid;
+  DrawMeshPtr cube_solid;
 
-  BatchPtr cursor_circle;
-  BatchPtr cursor_lines;
+  DrawMeshPtr cursor_circle;
+  DrawMeshPtr cursor_lines;
 
-  BatchPtr quad_wire;
-  BatchPtr quad_solid;
-  BatchPtr plain_axes;
-  BatchPtr single_arrow;
-  BatchPtr cube;
-  BatchPtr circle;
-  BatchPtr empty_sphere;
-  BatchPtr empty_cone;
-  BatchPtr cylinder;
-  BatchPtr capsule_body;
-  BatchPtr capsule_cap;
-  BatchPtr arrows;
-  BatchPtr metaball_wire_circle;
+  DrawMeshPtr quad_wire;
+  DrawMeshPtr quad_solid;
+  DrawMeshPtr plain_axes;
+  DrawMeshPtr single_arrow;
+  DrawMeshPtr cube;
+  DrawMeshPtr circle;
+  DrawMeshPtr empty_sphere;
+  DrawMeshPtr empty_cone;
+  DrawMeshPtr cylinder;
+  DrawMeshPtr capsule_body;
+  DrawMeshPtr capsule_cap;
+  DrawMeshPtr arrows;
+  DrawMeshPtr metaball_wire_circle;
 
-  BatchPtr speaker;
+  DrawMeshPtr speaker;
 
-  BatchPtr camera_distances;
-  BatchPtr camera_frame;
-  BatchPtr camera_tria_wire;
-  BatchPtr camera_tria;
+  DrawMeshPtr camera_distances;
+  DrawMeshPtr camera_frame;
+  DrawMeshPtr camera_tria_wire;
+  DrawMeshPtr camera_tria;
 
-  BatchPtr camera_volume;
-  BatchPtr camera_volume_wire;
+  DrawMeshPtr camera_volume;
+  DrawMeshPtr camera_volume_wire;
 
-  BatchPtr sphere_low_detail;
+  DrawMeshPtr sphere_low_detail;
 
-  BatchPtr ground_line;
+  DrawMeshPtr ground_line;
 
   /* Batch drawing a quad with coordinate [0..1] at 0.75 depth. */
-  BatchPtr image_quad;
+  DrawMeshPtr image_quad;
 
-  BatchPtr light_icon_outer_lines;
-  BatchPtr light_icon_inner_lines;
-  BatchPtr light_icon_sun_rays;
-  BatchPtr light_point_lines;
-  BatchPtr light_sun_lines;
-  BatchPtr light_spot_lines;
-  BatchPtr light_area_disk_lines;
-  BatchPtr light_area_square_lines;
-  BatchPtr light_spot_volume;
+  DrawMeshPtr light_icon_outer_lines;
+  DrawMeshPtr light_icon_inner_lines;
+  DrawMeshPtr light_icon_sun_rays;
+  DrawMeshPtr light_point_lines;
+  DrawMeshPtr light_sun_lines;
+  DrawMeshPtr light_spot_lines;
+  DrawMeshPtr light_area_disk_lines;
+  DrawMeshPtr light_area_square_lines;
+  DrawMeshPtr light_spot_volume;
 
-  BatchPtr field_force;
-  BatchPtr field_wind;
-  BatchPtr field_vortex;
-  BatchPtr field_curve;
-  BatchPtr field_sphere_limit;
-  BatchPtr field_tube_limit;
-  BatchPtr field_cone_limit;
+  DrawMeshPtr field_force;
+  DrawMeshPtr field_wind;
+  DrawMeshPtr field_vortex;
+  DrawMeshPtr field_curve;
+  DrawMeshPtr field_sphere_limit;
+  DrawMeshPtr field_tube_limit;
+  DrawMeshPtr field_cone_limit;
 
-  BatchPtr lightprobe_cube;
-  BatchPtr lightprobe_planar;
-  BatchPtr lightprobe_grid;
+  DrawMeshPtr lightprobe_cube;
+  DrawMeshPtr lightprobe_planar;
+  DrawMeshPtr lightprobe_grid;
 
   ShapeCache();
 
@@ -1000,7 +992,7 @@ struct Resources : public select::SelectMap {
 /* Reference to a flat object.
  * Allow deferred rendering condition of flat object for special purpose. */
 struct FlatObjectRef {
-  gpu::Batch *geom;
+  draw::DrawMesh *geom;
   ResourceHandleRange handle;
   int flattened_axis_id;
 
@@ -1047,7 +1039,7 @@ struct FlatObjectRef {
     return -1;
   }
 
-  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceID handle)>;
+  using Callback = FunctionRef<void(draw::DrawMesh *geom, ResourceID handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
@@ -1093,7 +1085,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
     data_buf.append(data);
   }
 
-  void end_sync(PassSimple::Sub &pass, gpu::Batch *shape)
+  void end_sync(PassSimple::Sub &pass, draw::DrawMesh *shape)
   {
     if (data_buf.is_empty()) {
       return;
@@ -1105,7 +1097,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
   }
 
   void end_sync(PassSimple::Sub &pass,
-                gpu::Batch *shape,
+                draw::DrawMesh *shape,
                 GPUPrimType primitive_type,
                 uint primitive_len)
   {

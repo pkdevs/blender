@@ -27,6 +27,7 @@ struct GPUMaterial;
 
 namespace draw {
 
+struct DrawMesh;
 struct GSplatModule;
 struct GSplatBatchCache;
 
@@ -57,11 +58,11 @@ struct GSplatEvalCache {
   /* --- Batches. --- */
 
   /* Triangle primitive types. */
-  gpu::Batch *surface;
-  gpu::Batch **surface_per_mat;
+  draw::DrawMesh *surface;
+  draw::DrawMesh **surface_per_mat;
   /* Dot primitive types. */
-  gpu::Batch *dots;
-  gpu::Batch *edit_dots;
+  draw::DrawMesh *dots;
+  draw::DrawMesh *edit_dots;
 
   /* --- Builtin attribute buffers. --- */
 
@@ -131,9 +132,9 @@ struct GSplatEvalCache {
   gpu::VertBuf **attributes_get(uint request_i);
 
   /* Request pointers to batches that may not be filled yet, see `ensure_requested()`. */
-  gpu::Batch *dots_get();
-  gpu::Batch *edit_dots_get();
-  gpu::Batch *surface_get(const PointCloud &pointcloud);
+  draw::DrawMesh *dots_get();
+  draw::DrawMesh *edit_dots_get();
+  draw::DrawMesh *surface_get(const PointCloud &pointcloud);
 
   /** Fill and build all requested buffers/batches. */
   void ensure_requested(PointCloud &pointcloud);

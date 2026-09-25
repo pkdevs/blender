@@ -31,9 +31,22 @@ class MotionPath : Overlay {
   PassSimple::Sub *line_ps_ = nullptr;
   PassSimple::Sub *vert_ps_ = nullptr;
 
+  /**
+   * Persistent non-owning #DrawMesh wrappers around the motion path batches.
+   *
+   * The motion path batches are owned by the motion path data and not by the draw system. The
+   * commands recorded this frame reference these wrappers until the pass is submitted, so the
+   * wrappers must outlive the command recording. They are released at the start of the next
+   * sync, once the previous frame has been submitted.
+   */
+  Vector<DrawMeshPtr> motion_path_draw_meshes_;
+
  public:
   void begin_sync(Resources &res, const State &state) final
   {
+    /* Commands of the previous frame have been submitted, the recorded #DrawMesh wrappers can be
+     * released. */
+    motion_path_draw_meshes_.clear();
     enabled_ = state.v3d && state.show_motion_paths() && !res.is_selection();
     if (!enabled_) {
       /* Not used. But release the data. */
@@ -179,9 +192,16 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      gpu::Batch *geom = mpath_batch_points_get(mpath);
+      /* The motion path batch is owned by the motion path data and not by the draw system.
+       * Store a non-owning #DrawMesh wrapper that lives until the pass is submitted. */
+      motion_path_draw_meshes_.append(make_draw_mesh(mpath_batch_points_get(mpath), false));
       /* Only draw the required range. */
-      sub.draw_expand(geom, GPU_PRIM_TRIS, 2, 1, frame_range.size() - 1, start_index);
+      sub.draw_expand(motion_path_draw_meshes_.last().get(),
+                      GPU_PRIM_TRIS,
+                      2,
+                      1,
+                      frame_range.size() - 1,
+                      start_index);
     }
 
     /* Draw points. */
@@ -196,9 +216,11 @@ class MotionPath : Overlay {
       sub.push_constant("custom_color_post", color_post);
       sub.push_constant("camera_object_persinv", camera_matrix);
 
-      gpu::Batch *geom = mpath_batch_points_get(mpath);
+      /* The motion path batch is owned by the motion path data and not by the draw system.
+       * Store a non-owning #DrawMesh wrapper that lives until the pass is submitted. */
+      motion_path_draw_meshes_.append(make_draw_mesh(mpath_batch_points_get(mpath), false));
       /* Only draw the required range. */
-      sub.draw(geom, 1, frame_range.size(), start_index);
+      sub.draw(motion_path_draw_meshes_.last().get(), 1, frame_range.size(), start_index);
     }
 
     /* Draw frame numbers at each frame-step value. */

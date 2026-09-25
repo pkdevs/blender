@@ -14,6 +14,9 @@
 namespace blender::gpu {
 class Batch;
 }
+namespace blender::draw {
+struct DrawMesh;
+}
 namespace blender::draw::command {
 #endif
 
@@ -60,7 +63,7 @@ struct [[host_shared]] DrawGroup {
    * Can be used by GPU but needs to be initialized by GPU before usage. */
 #ifndef GPU_SHADER
   struct {
-    /* Specific range of vertex to draw from the #gpu::Batch. */
+    /* Specific range of vertex to draw from the #DrawMesh. */
     uint32_t vertex_first;
     /* Ugly packing to support expanded draws without inflating the struct.
      * Makes vertex range restricted to smaller range for expanded draw. */
@@ -69,7 +72,7 @@ struct [[host_shared]] DrawGroup {
     uint32_t vertex_len : 25;
 
     /** Needed to create the correct draw call. */
-    gpu::Batch *gpu_batch;
+    draw::DrawMesh *draw_mesh;
     uint64_t _cpu_pad0;
   } desc;
 #else

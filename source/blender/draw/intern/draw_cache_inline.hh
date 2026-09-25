@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "DRW_render.hh"
 #include "GPU_batch.hh"
 #include "GPU_ray_tracing.hh"
 
@@ -28,6 +29,7 @@ namespace blender {
     (flag |= DRW_ibo_requested(ibo) ? (value) : 0)
 #endif
 
+// TODO: Deprecated
 inline gpu::Batch *DRW_batch_request(gpu::Batch **batch)
 {
   /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
@@ -35,6 +37,14 @@ inline gpu::Batch *DRW_batch_request(gpu::Batch **batch)
     *batch = GPU_batch_calloc();
   }
   return *batch;
+}
+inline draw::DrawMesh *DRW_batch_request(draw::DrawMesh **draw_mesh)
+{
+  /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
+  if (*draw_mesh == nullptr) {
+    *draw_mesh = MEM_new<draw::DrawMesh>(__func__, GPU_batch_calloc());
+  }
+  return *draw_mesh;
 }
 
 inline bool DRW_batch_requested(gpu::Batch *batch, GPUPrimType prim_type)

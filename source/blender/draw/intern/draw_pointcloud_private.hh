@@ -19,11 +19,13 @@ struct GPUMaterial;
 
 namespace draw {
 
+struct DrawMesh;
+
 gpu::VertBuf *pointcloud_position_and_radius_get(PointCloud *pointcloud);
-gpu::Batch **pointcloud_surface_shaded_get(PointCloud *pointcloud,
-                                           GPUMaterial **gpu_materials,
-                                           int mat_len);
-gpu::Batch *pointcloud_surface_get(PointCloud *pointcloud);
+draw::DrawMesh **pointcloud_surface_shaded_get(PointCloud *pointcloud,
+                                               GPUMaterial **gpu_materials,
+                                               int mat_len);
+draw::DrawMesh *pointcloud_surface_get(PointCloud *pointcloud);
 
 }  // namespace draw
 }  // namespace blender
