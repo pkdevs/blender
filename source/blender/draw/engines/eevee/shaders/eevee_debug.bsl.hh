@@ -21,9 +21,10 @@
 #include "eevee_shadow.bsl.hh"
 #include "eevee_shadow_shared.hh"
 #include "eevee_shadow_tilemap_lib.bsl.hh"
-#include "gpu_shader_debug_gradients_lib.glsl"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
+#include "gpu_shader_debug_gradients.bsl.hh"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 
 namespace eevee {
 
@@ -246,12 +247,12 @@ ShadowDebugOutput debug_atlas_values([[resource_table]] const ShadowDebug &srt,
 
   ShadowCoordinates coord = srt.debug_coord_get(P, light);
   float depth = srd.read_depth(coord);
-  return {
-      .valid = true,
-      .color_add = float4((depth == -1) ? float3(1.0f, 0.0f, 0.0f) : float3(1.0f / depth), 0.0f) *
-                   0.5f,
-      .color_mul = float4(0.5f),
-      .depth = default_depth};
+  return {.valid = true,
+          .color_add = float4((depth == -1.0f) ? float3(1.0f, 0.0f, 0.0f) : float3(1.0f / depth),
+                              0.0f) *
+                       0.5f,
+          .color_mul = float4(0.5f),
+          .depth = default_depth};
 }
 
 struct AtomicCostCtx {

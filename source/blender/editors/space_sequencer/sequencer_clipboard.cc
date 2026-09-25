@@ -29,6 +29,7 @@
 #include "BLI_path_utils.hh"
 
 #include "BKE_anim_data.hh"
+#include "BKE_animsys.hh"
 #include "BKE_appdir.hh"
 #include "BKE_blender_copybuffer.hh"
 #include "BKE_blendfile.hh"
@@ -257,7 +258,7 @@ static bool sequencer_write_copy_paste_file(Main *bmain_src,
     }
 
     ID *id_dst = nullptr;
-    const ID_Type id_type = GS((id_src)->name);
+    const ID_Type id_type = id_src->id_type();
     /* Only add (and follow) IDs which usage is marked as 'never null', or are from following
      * types: #bSound, #MovieClip, #Image, #Text, #VFont, #bAction, #bNodeTree, #Mask. */
     if (ELEM(id_type, VSE_COPYBUFFER_IDTYPES) || (cb_data->cb_flag & IDWALK_CB_NEVER_NULL)) {
@@ -268,7 +269,7 @@ static bool sequencer_write_copy_paste_file(Main *bmain_src,
                                                      PartialWriteContext::IDAddOptions /*options*/)
           -> PartialWriteContext::IDAddOperations {
         ID *id_deps_src = *cb_deps_data->id_pointer;
-        const ID_Type id_type = GS((id_deps_src)->name);
+        const ID_Type id_type = id_deps_src->id_type();
         if (ELEM(id_type, VSE_COPYBUFFER_IDTYPES) ||
             (cb_deps_data->cb_flag & IDWALK_CB_NEVER_NULL))
         {
@@ -308,7 +309,7 @@ wmOperatorStatus sequencer_clipboard_copy_exec(bContext *C, wmOperator *op)
 
   VectorSet<Strip *> effect_chain;
   effect_chain.add_multiple(selected);
-  seq::iterator_set_expand(ed, effect_chain, seq::query_strip_effect_chain);
+  seq::expand_strips(ed, effect_chain, seq::StripRelation::EffectChain);
 
   VectorSet<Strip *> expanded;
   for (Strip *strip : effect_chain) {
@@ -492,10 +493,10 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
   }
   BKE_id_delete(bmain_dst, scene_src);
 
-  Strip *iseq_first = static_cast<Strip *>(nseqbase.first);
+  Strip *iseq_first = nseqbase.first();
   BLI_movelisttolist(ed_dst->current_strips(), &nseqbase);
   /* Restore "first" pointer as BLI_movelisttolist sets it to nullptr */
-  nseqbase.first = iseq_first;
+  nseqbase.first_ = iseq_first;
 
   int2 strip_mean_pos = {0, 0};
   int image_strip_count = 0;
@@ -505,7 +506,7 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
     }
     /* Make sure, that pasted strips have unique names. This has to be done after
      * adding strips to seqbase, for lookup cache to work correctly. */
-    seq::ensure_unique_name(*bmain_dst, &istrip, scene_dst);
+    seq::ensure_unique_name(&istrip, scene_dst, {});
 
     if (region->regiontype == RGN_TYPE_PREVIEW && istrip.type != STRIP_TYPE_SOUND &&
         seq::must_render_strip(seq::query_all_strips(&nseqbase), &istrip))

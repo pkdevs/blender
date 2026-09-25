@@ -9,7 +9,7 @@
 #include "eevee_shadow_tilemap_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "eevee_utility_tx.bsl.hh"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee {
 
@@ -48,7 +48,7 @@ struct ShadowRenderData {
 
   float punctual_sample_get(LightData light, float3 P) const
   {
-    float3 shadow_position = light.local().local.shadow_position;
+    float3 shadow_position = light.local.local.shadow_position;
     float3 lP = transform_point_inversed(light.object_to_world, P);
     lP -= shadow_position;
     int face_id = shadow_punctual_face_index_get(lP);
