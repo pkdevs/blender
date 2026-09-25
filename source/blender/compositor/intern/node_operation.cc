@@ -96,12 +96,7 @@ void NodeOperation::compute_results_reference_counts(const Schedule &schedule)
       continue;
     }
 
-    const int reference_count = number_of_inputs_linked_to_output_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return schedule.nodes.contains(&input.owner_node()) &&
-                 !schedule.unneeded_inputs.contains(&input);
-        });
-
+    const int reference_count = compute_output_reference_count(*output, schedule);
     this->get_result(output->identifier).set_reference_count(reference_count);
   }
 }
@@ -114,11 +109,6 @@ void NodeOperation::set_compute_context(const ComputeContext &compute_context)
 const ComputeContext &NodeOperation::get_compute_context() const
 {
   return *compute_context_;
-}
-
-void NodeOperation::set_needs_node_previews(const bool needed)
-{
-  needs_node_previews_ = needed;
 }
 
 void NodeOperation::add_warning(nodes::NodeWarningType type, std::string message)
@@ -229,8 +219,11 @@ void NodeOperation::log_data()
                                              get_image_info_log(tree_logger.allocator, result)});
   }
 
-  /* Log node preview. */
-  if (needs_node_previews_ && is_node_preview_needed(this->node())) {
+  /* Log node preview if they are needed and the node group is active. */
+  const bool node_needs_preview = is_node_preview_needed(this->node());
+  const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::NodePreviews);
+  if (node_needs_preview && needs_node_previews) {
     const Result *result = this->get_preview_result();
     if (result && !result->is_single_value()) {
       ImBuf *preview = compositor::compute_preview(this->context(), *result);
