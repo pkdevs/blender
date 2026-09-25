@@ -1555,6 +1555,10 @@ class VIEW3D_MT_view(Menu):
 
         layout.separator()
 
+        layout.prop(view, "use_sync_view")
+
+        layout.separator()
+
         layout.menu("VIEW3D_MT_view_cameras", text="Cameras")
 
         layout.separator()
@@ -6524,6 +6528,9 @@ class VIEW3D_PT_view3d_properties(Panel):
         col = layout.column(align=True)
         col.prop(view, "use_render_border")
         col.active = view.region_3d.view_perspective != 'CAMERA'
+
+        col = layout.column(heading="Synchronize")
+        col.prop(view, "use_sync_view", text="Across Workspaces")
 
 
 class VIEW3D_PT_view3d_lock(Panel):

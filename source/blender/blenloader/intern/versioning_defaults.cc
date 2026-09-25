@@ -931,6 +931,25 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
       scene.grease_pencil_settings.motion_blur_steps = 8;
     }
   }
+
+  {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        bool found = false;
+        for (SpaceLink &sl : area.spacedata) {
+          if (sl.spacetype == SPACE_VIEW3D) {
+            View3D *v3d = reinterpret_cast<View3D *>(&sl);
+            v3d->flag2 |= V3D_SYNC_VIEW_ACCROSS_WORKSPACES;
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          break;
+        }
+      }
+    }
+  }
 }
 
 }  // namespace blender
