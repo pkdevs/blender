@@ -8,428 +8,481 @@
 
 #include <algorithm>
 #include <map>
+#include <tuple>
 
 #include "BKE_context.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
+#include "BLI_index_range.hh"
 #include "BLI_listbase_iterator.hh"
+#include "BLI_path_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_vector.hh"
 
 #include "CLG_log.h"
 
-#include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
 #include "SEQ_channels.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_sequencer.hh"
+#include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
 
 #include "opentimelineio/clip.h"
 #include "opentimelineio/color.h"
+#include "opentimelineio/externalReference.h"
+#include "opentimelineio/gap.h"
+#include "opentimelineio/imageSequenceReference.h"
 #include "opentimelineio/marker.h"
 #include "opentimelineio/missingReference.h"
-#include "opentimelineio/serializableObject.h"
+#include "opentimelineio/stack.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
-#include "opentimelineio/transition.h"
 
-#include "IO_otio.hh"
 #include "otio_export.hh"
-#include "otio_export_strip.hh"
+#include "otio_export_metadata.hh"
 
-namespace blender {
+namespace blender::io::otio {
 
 static CLG_LogRef LOG = {"io.otio"};
 
-namespace io::otio {
-
-using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
-
-struct UnsupportedStripCounts {
-  int scene_strips = 0;
-  int image_sequences = 0;
+struct StripExportContext {
+  Main *bmain;
+  Scene *scene;
+  const OTIOExportParams &params;
+  double fps;
+  int unsupported_scene_strips = 0;
+  int unsupported_image_sequences = 0;
 };
 
-static void export_scene_markers(const Scene *scene, SerializableObject::Retainer<Stack> &stack)
+struct PlacedItem {
+  const Strip *strip;
+  int start;
+  int end;
+  SerializableObject::Retainer<Composable> composable;
+};
+
+struct ChannelItems {
+  Vector<PlacedItem> video;
+  Vector<PlacedItem> audio;
+};
+
+struct Tracks {
+  Vector<SerializableObject::Retainer<Track>> video;
+  Vector<SerializableObject::Retainer<Track>> audio;
+};
+
+static RationalTime frames(const StripExportContext &ctx, const int count)
 {
-  std::vector<SerializableObject::Retainer<Marker>> &otio_markers = stack->markers();
-
-  for (const TimeMarker &blender_marker : scene->markers) {
-    TimeRange marked_range = TimeRange(
-        RationalTime(blender_marker.frame, scene->frames_per_second()),
-        RationalTime(1, scene->frames_per_second()));
-
-    auto marker = SerializableObject::Retainer<Marker>(
-        new Marker(blender_marker.name, marked_range, Color::white));
-
-    otio_markers.push_back(marker);
-  }
+  return RationalTime(count, ctx.fps);
 }
 
-static void export_transition(const Strip *strip,
-                              const Scene *scene,
-                              SerializableObject::Retainer<Track> &track,
-                              int &last_strip_end)
+static TimeRange frame_range(const StripExportContext &ctx, const int start, const int duration)
 {
-  const double media_fps = scene->frames_per_second();
-  const int strip_len = strip->right_handle(scene) - strip->left_handle();
-
-  auto transition = SerializableObject::Retainer<Transition>(new Transition(
-      strip->name + 2,
-      strip->type == STRIP_TYPE_WIPE ? Transition::Type::Custom : Transition::Type::SMPTE_Dissolve,
-      RationalTime(strip_len / 2, media_fps),
-      RationalTime(strip_len - strip_len / 2, media_fps)));
-
-  AnyDictionary metadata;
-  metadata["default_fade"] = static_cast<bool>(strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE);
-  metadata["effect_fader"] = static_cast<double>(strip->effect_fader);
-
-  if (strip->type == STRIP_TYPE_WIPE) {
-    const WipeVars *wipe = static_cast<WipeVars *>(strip->effectdata);
-
-    metadata["name"] = "Wipe";
-    metadata["edgeWidth"] = static_cast<double>(wipe->edgeWidth);
-    metadata["angle"] = static_cast<double>(wipe->angle);
-    metadata["forward"] = static_cast<int64_t>(wipe->forward);
-    metadata["wipetype"] = static_cast<int64_t>(wipe->wipetype);
-  }
-  else {
-    metadata["name"] = strip->type == STRIP_TYPE_GAMCROSS ? "Gamma Crossfade" : "Crossfade";
-    metadata["gamma"] = strip->type == STRIP_TYPE_GAMCROSS;
-  }
-
-  transition->metadata()["blender"] = metadata;
-  attach_foreign_metadata_strip(strip, transition);
-  track->append_child(transition);
-  last_strip_end = strip->right_handle(scene);
+  return TimeRange(frames(ctx, start), frames(ctx, duration));
 }
 
-/**
- * We need two stacks when we have meta strips with both video and audio strips. It is not as
- * straight forward as separating clips to video or audio channels as metastrips can also contain
- * other metastrips. Even if we separate the clips inside a meta strip to video and audio tracks,
- * the metastrip will still be multi-media and could not be classified as a video/visual clip or
- * audio clip. Hence, no mono-media track could be used to hold the metastrip.
- *
- * So, for every metastrip in the `main_stack` (root stack), we create two stacks: `primary_stack`
- * and `secondary_stack`. Both stacks are identical in terms of nesting of metastrips but
- * `primary_stack` holds only video/visual clips and metastrips which contain only video/visual
- * clips whereas the `secondary_stack` holds audio clips and metastrips which contain only audio
- * clips.
- *
- * In simple words, in `primary_stack` the audio clips are omitted and in `secondary_stack` the
- * video/visual clips are omitted.
- *
- * NOTE: `secondary_stack` is nullptr when the function is not inside a metastrip.
- */
-static void otio_export_recursive(Main *bmain,
-                                  Scene *scene,
-                                  const OTIOExportParams &params,
-                                  SerializableObject::Retainer<Stack> *primary_stack,
-                                  SerializableObject::Retainer<Stack> *secondary_stack,
-                                  ListBaseT<Strip> *strips,
-                                  int stack_start,
-                                  int stack_end,
-                                  const ListBaseT<SeqTimelineChannel> *channel_listbase,
-                                  UnsupportedStripCounts &unsupported)
+static bool is_single_input_effect(const Strip &strip)
 {
-  bool inside_meta = secondary_stack != nullptr;
+  return ELEM(strip.type, STRIP_TYPE_GAUSSIAN_BLUR, STRIP_TYPE_GLOW, STRIP_TYPE_SPEED);
+}
 
-  /* Separate video and audio channels.
-   * Use negative channel number as key in std::map to store the sound strips.
-   */
-  std::map<int, std::vector<Strip *>> channels;
-  std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> single_input_effects;
-  /* Store input1 -> transition strip mapping. */
-  std::unordered_map<Strip *, Strip *> transition_effects_1;
-  /* Store input2 -> transition strip mapping. */
-  std::unordered_map<Strip *, Strip *> transition_effects_2;
+static bool is_transition(const Strip &strip)
+{
+  /* Compositor strips are not yet supported, if we support them then remove this function. */
+  return seq::effect_is_transition(strip.type) && strip.type != STRIP_TYPE_COMPOSITOR;
+}
 
-  for (Strip &strip : *strips) {
-    if (ELEM(strip.type, STRIP_TYPE_SOUND)) {
-      channels[-strip.channel].push_back(&strip);
-    }
-    else if (ELEM(strip.type, STRIP_TYPE_GAUSSIAN_BLUR, STRIP_TYPE_GLOW, STRIP_TYPE_SPEED)) {
-      if (strip.input1) {
-        single_input_effects[strip.input1].insert(&strip);
-      }
-    }
-    else if (seq::effect_is_transition(strip.type) && strip.type != STRIP_TYPE_COMPOSITOR) {
-      if (!strip.input1 || !strip.input2 || strip.input1->channel != strip.input2->channel) {
-        CLOG_WARN(&LOG, "Skipping transition strip '%s'", strip.name + 2);
-        BKE_reportf(
-            params.reports,
-            RPT_WARNING,
-            "Transition strip '%s' was not exported, its inputs must be on the same channel",
-            strip.name + 2);
-        continue;
-      }
-      transition_effects_1[strip.input1] = &strip;
-      transition_effects_2[strip.input2] = &strip;
-    }
-    else {
-      channels[strip.channel].push_back(&strip);
-    }
+static bool is_nested(const Strip &strip)
+{
+  return strip.type == STRIP_TYPE_META ||
+         (strip.type == STRIP_TYPE_SCENE && (strip.flag & SEQ_SCENE_STRIPS));
+}
+
+static int media_length(const StripExportContext &ctx, const Strip &strip)
+{
+  if (seq::transform_single_image_check(&strip)) {
+    return strip.right_handle(ctx.scene) - strip.left_handle();
+  }
+  return strip.anim_startofs + strip.content_length() + strip.anim_endofs;
+}
+
+static std::string media_filepath(const StripExportContext &ctx, const Strip &strip)
+{
+  char filepath[FILE_MAX];
+  BLI_path_join(filepath, sizeof(filepath), strip.data->dirpath, strip.data->stripdata->filename);
+  BLI_path_abs(filepath, BKE_main_blendfile_path(ctx.bmain));
+  return filepath;
+}
+
+/* Return `false` if the image sequence in Blender cannot be represented natively in the
+ * OTIO specification (e.g. arbitrarily named filepaths with no digits). */
+static bool image_sequence_pattern_get(const StripElem *elems,
+                                       const int elems_num,
+                                       char *r_name_prefix,
+                                       char *r_name_suffix,
+                                       int &r_start_frame,
+                                       int &r_frame_step,
+                                       int &r_padding)
+{
+  unsigned short digits_len;
+  r_start_frame = BLI_path_sequence_decode(
+      elems[0].filename, r_name_prefix, FILE_MAX, r_name_suffix, FILE_MAX, &digits_len);
+  r_padding = digits_len;
+  if (digits_len == 0) {
+    return false;
   }
 
-  /* Iterate through the channels and strips to create OTIO timeine. */
-  for (auto [original_channel, strips] : channels) {
-    /* Sort the strips in the channel. */
-    std::stable_sort(strips.begin(), strips.end(), [scene](const Strip *a, const Strip *b) {
-      if (a->left_handle() != b->left_handle()) {
-        return a->left_handle() < b->left_handle();
-      }
-      if (a->right_handle(scene) != b->right_handle(scene)) {
-        return a->right_handle(scene) < b->right_handle(scene);
-      }
+  r_frame_step = 1;
+  if (elems_num > 1) {
+    r_frame_step = BLI_path_sequence_decode(elems[1].filename, nullptr, 0, nullptr, 0, nullptr) -
+                   r_start_frame;
+    if (r_frame_step < 1) {
       return false;
-    });
-
-    bool is_enabled = true;
-    if (channel_listbase) {
-      const SeqTimelineChannel *ch = seq::channel_get_by_index(channel_listbase, original_channel);
-      if (ch && ch->is_muted()) {
-        is_enabled = false;
-      }
-    }
-
-    const std::string track_type = original_channel < 0 ? Track::Kind::audio : Track::Kind::video;
-
-    auto track_source_range = otio::TimeRange(
-        RationalTime(0, scene->frames_per_second()),
-        RationalTime(stack_end - stack_start, scene->frames_per_second()));
-
-    auto track = SerializableObject::Retainer<Track>(
-        new Track("", track_source_range, track_type));
-
-    auto meta_video_track = SerializableObject::Retainer<Track>(
-        new Track("", track_source_range, Track::Kind::video));
-
-    auto meta_audio_track = SerializableObject::Retainer<Track>(
-        new Track("", track_source_range, Track::Kind::audio));
-
-    track->set_enabled(is_enabled);
-    meta_video_track->set_enabled(is_enabled);
-    meta_audio_track->set_enabled(is_enabled);
-
-    int last_strip_end = 0;
-
-    /* Append all the strips of this channel in the track. */
-    for (Strip *strip : strips) {
-      if (transition_effects_2.contains(strip)) {
-        CLOG_INFO(&LOG, "Exporting transition '%s'", transition_effects_2[strip]->name + 2);
-        export_transition(transition_effects_2[strip],
-                          scene,
-                          inside_meta ? meta_video_track : track,
-                          last_strip_end);
-      }
-      CLOG_INFO(&LOG, "Exporting strip '%s'", strip->name + 2);
-
-      StripExporter *strip_exporter = nullptr;
-
-      if (strip->type == STRIP_TYPE_MOVIE) {
-        strip_exporter = new MovieStripExporter(
-            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-      }
-      else if (strip->type == STRIP_TYPE_SOUND) {
-        strip_exporter = new SoundStripExporter(
-            strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
-      }
-      else if (strip->type == STRIP_TYPE_IMAGE) {
-        strip_exporter = new ImageStripExporter(
-            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-      }
-      /* Nested Strips (Meta, Sequencer Scene). */
-      else if (strip->type == STRIP_TYPE_META ||
-               ((strip->type == STRIP_TYPE_SCENE) && (strip->flag & SEQ_SCENE_STRIPS)))
-      {
-        int r_offset;
-        ListBaseT<SeqTimelineChannel> *r_channels;
-        ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
-
-        if (!seqbase) {
-          CLOG_WARN(&LOG, "No seqbase in meta or scene strip '%s'", strip->name + 2);
-
-          StripExporter missing_reference_exporter_video = StripExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-
-          StripExporter missing_reference_exporter_audio = StripExporter(
-              strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
-
-          missing_reference_exporter_video.export_with_missing_reference(single_input_effects);
-          missing_reference_exporter_audio.export_with_missing_reference(single_input_effects);
-        }
-        else {
-          auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
-          auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
-
-          otio_export_recursive(bmain,
-                                scene,
-                                params,
-                                &primary_meta_stack,
-                                &secondary_meta_stack,
-                                seqbase,
-                                strip->left_handle() - 1,
-                                strip->right_handle(scene) - 1,
-                                r_channels,
-                                unsupported);
-
-          if (!primary_meta_stack->children().empty()) {
-            primary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
-            add_strip_metadata(strip, primary_meta_stack);
-            attach_foreign_metadata_strip(strip, primary_meta_stack);
-            add_effects_to_clip(scene, strip, primary_meta_stack, single_input_effects);
-            StripExporter::add_gap_if_necessary(meta_video_track,
-                                                last_strip_end + 1,
-                                                strip->left_handle() - 1,
-                                                scene->frames_per_second());
-            meta_video_track->append_child(primary_meta_stack);
-          }
-
-          if (!secondary_meta_stack->children().empty()) {
-            secondary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
-            add_strip_metadata(strip, secondary_meta_stack);
-            attach_foreign_metadata_strip(strip, secondary_meta_stack);
-            add_effects_to_clip(scene, strip, secondary_meta_stack, single_input_effects);
-            StripExporter::add_gap_if_necessary(meta_audio_track,
-                                                last_strip_end + 1,
-                                                strip->left_handle() - 1,
-                                                scene->frames_per_second());
-            meta_audio_track->append_child(secondary_meta_stack);
-          }
-
-          last_strip_end = strip->right_handle(scene) - 1;
-        }
-      }
-      /* 3D Scene Strip. */
-      else if (strip->type == STRIP_TYPE_SCENE && !(strip->flag & SEQ_SCENE_STRIPS) &&
-               strip->scene)
-      {
-        unsupported.scene_strips++;
-        auto missing_reference_exporter = StripExporter(
-            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-
-        missing_reference_exporter.export_with_missing_reference(single_input_effects);
-      }
-      /* Color, Adjustment, Text, etc. Strips. */
-      else if (ELEM(strip->type,
-                    STRIP_TYPE_COLOR,
-                    STRIP_TYPE_ADJUSTMENT,
-                    STRIP_TYPE_TEXT,
-                    STRIP_TYPE_ADD,
-                    STRIP_TYPE_SUB,
-                    STRIP_TYPE_MUL,
-                    STRIP_TYPE_ALPHAOVER,
-                    STRIP_TYPE_ALPHAUNDER,
-                    STRIP_TYPE_COLORMIX))
-      {
-        strip_exporter = new GeneratorStripExporter(
-            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-      }
-      else {
-        CLOG_WARN(&LOG, "Skipping strip '%s' of unsupported type", strip->name + 2);
-        BKE_reportf(params.reports,
-                    RPT_WARNING,
-                    "Strip '%s' was not exported, its type is not supported",
-                    strip->name + 2);
-      }
-
-      if (strip_exporter) {
-        SerializableObject::Retainer<Clip> clip = strip_exporter->export_strip(
-            bmain, &params, single_input_effects);
-        std::optional<TimeRange> source_range = clip->source_range();
-        last_strip_end = strip_exporter->last_strip_end;
-
-        if (strip->type == STRIP_TYPE_IMAGE &&
-            dynamic_cast<MissingReference *>(clip->media_reference()))
-        {
-          unsupported.image_sequences++;
-        }
-
-        if (source_range && transition_effects_1.contains(strip)) {
-          Strip *transition_strip = transition_effects_1[strip];
-          int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
-          RationalTime extension = RationalTime(strip_len / 2, scene->frames_per_second());
-          source_range = TimeRange{source_range->start_time(),
-                                   source_range->duration() + extension};
-          clip->set_source_range(source_range);
-        }
-        if (source_range && transition_effects_2.contains(strip)) {
-          Strip *transition_strip = transition_effects_2[strip];
-          int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
-          RationalTime extension = RationalTime(strip_len - strip_len / 2,
-                                                scene->frames_per_second());
-          source_range = TimeRange{source_range->start_time() - extension,
-                                   source_range->duration() + extension};
-          clip->set_source_range(source_range);
-        }
-
-        delete strip_exporter;
-      }
-    }
-
-    if (!track->children().empty()) {
-      StripExporter::add_gap_if_necessary(
-          track, last_strip_end + 1, stack_end, scene->frames_per_second());
-
-      (*primary_stack)->append_child(track);
-    }
-    if (!meta_video_track->children().empty()) {
-      StripExporter::add_gap_if_necessary(
-          meta_video_track, last_strip_end + 1, stack_end, scene->frames_per_second());
-
-      (*primary_stack)->append_child(meta_video_track);
-    }
-    if (!meta_audio_track->children().empty()) {
-      StripExporter::add_gap_if_necessary(
-          meta_audio_track, last_strip_end + 1, stack_end, scene->frames_per_second());
-
-      if (inside_meta) {
-        (*secondary_stack)->append_child(meta_audio_track);
-      }
-      else {
-        (*primary_stack)->append_child(meta_audio_track);
-      }
     }
   }
 
-  TimeRange source_range = TimeRange(
-      RationalTime(0, scene->frames_per_second()),
-      RationalTime(stack_end - stack_start, scene->frames_per_second()));
-  (*primary_stack)->set_source_range(source_range);
-  if (secondary_stack) {
-    (*secondary_stack)->set_source_range(source_range);
+  for (const int i : IndexRange(elems_num)) {
+    char filename[FILE_MAX];
+    BLI_path_sequence_encode(filename,
+                             sizeof(filename),
+                             r_name_prefix,
+                             r_name_suffix,
+                             digits_len,
+                             r_start_frame + i * r_frame_step);
+    if (!STREQ(filename, elems[i].filename)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static SerializableObject::Retainer<MediaReference> image_sequence_reference(
+    StripExportContext &ctx, const Strip &strip)
+{
+  char name_prefix[FILE_MAX], name_suffix[FILE_MAX];
+  int start_frame, frame_step, padding;
+  if (!image_sequence_pattern_get(strip.data->stripdata,
+                                  strip.data->stripdata_num,
+                                  name_prefix,
+                                  name_suffix,
+                                  start_frame,
+                                  frame_step,
+                                  padding))
+  {
+    ctx.unsupported_image_sequences++;
+    return new MissingReference(strip.name + 2);
+  }
+
+  char dirpath[FILE_MAX];
+  BLI_strncpy(dirpath, strip.data->dirpath, sizeof(dirpath));
+  BLI_path_abs(dirpath, BKE_main_blendfile_path(ctx.bmain));
+
+  return new ImageSequenceReference(dirpath,
+                                    name_prefix,
+                                    name_suffix,
+                                    start_frame,
+                                    frame_step,
+                                    ctx.fps,
+                                    padding,
+                                    ImageSequenceReference::MissingFramePolicy::error,
+                                    frame_range(ctx, 0, media_length(ctx, strip)));
+}
+
+static SerializableObject::Retainer<MediaReference> media_reference(StripExportContext &ctx,
+                                                                    const Strip &strip)
+{
+  const bool has_media = strip.data && strip.data->stripdata;
+
+  switch (strip.type) {
+    case STRIP_TYPE_MOVIE:
+    case STRIP_TYPE_SOUND:
+      if (!has_media) {
+        return new MissingReference(strip.name + 2);
+      }
+      return new ExternalReference(media_filepath(ctx, strip),
+                                   frame_range(ctx, 0, media_length(ctx, strip)));
+
+    case STRIP_TYPE_IMAGE:
+      if (!has_media) {
+        return new MissingReference(strip.name + 2);
+      }
+      if (seq::transform_single_image_check(&strip)) {
+        return new ExternalReference(media_filepath(ctx, strip),
+                                     frame_range(ctx, 0, media_length(ctx, strip)));
+      }
+      return image_sequence_reference(ctx, strip);
+
+    case STRIP_TYPE_COLOR:
+    case STRIP_TYPE_ADJUSTMENT:
+    case STRIP_TYPE_TEXT:
+    case STRIP_TYPE_ADD:
+    case STRIP_TYPE_SUB:
+    case STRIP_TYPE_MUL:
+    case STRIP_TYPE_ALPHAOVER:
+    case STRIP_TYPE_ALPHAUNDER:
+    case STRIP_TYPE_COLORMIX: {
+      SerializableObject::Retainer<GeneratorReference> reference = create_generator_reference(
+          &strip);
+      reference->set_available_range(frame_range(ctx, 0, media_length(ctx, strip)));
+      return reference.value;
+    }
+
+    case STRIP_TYPE_SCENE:
+      ctx.unsupported_scene_strips++;
+      return new MissingReference(strip.name + 2);
+
+    default:
+      return nullptr;
   }
 }
 
-void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
+static void add_strip_data(const StripExportContext &ctx,
+                           Editing &editing,
+                           const Strip &strip,
+                           Item &item)
 {
-  Editing *editing = seq::editing_get(scene);
+  item.set_enabled(!(strip.flag & SEQ_MUTE));
+  add_strip_metadata(&strip, &item);
+  add_foreign_metadata(strip.system_properties, &item);
+  for (const Strip *effect : seq::lookup_effects_by_strip(&editing, &strip)) {
+    if (is_single_input_effect(*effect)) {
+      add_strip_effect(ctx.scene, &strip, effect, &item);
+    }
+  }
+}
 
-  ListBaseT<Strip> *seqbase = &editing->seqbase;
+static SerializableObject::Retainer<Clip> strip_to_clip(StripExportContext &ctx,
+                                                        Editing &editing,
+                                                        const Strip &strip)
+{
+  SerializableObject::Retainer<MediaReference> reference = media_reference(ctx, strip);
+  if (!reference) {
+    CLOG_WARN(&LOG, "Skipping strip '%s' of unsupported type", strip.name + 2);
+    BKE_reportf(ctx.params.reports,
+                RPT_WARNING,
+                "Strip '%s' was not exported, its type is not supported",
+                strip.name + 2);
+    return nullptr;
+  }
+
+  const int duration = strip.right_handle(ctx.scene) - strip.left_handle();
+  int source_start = strip.left_handle() - int(strip.content_start()) + strip.anim_startofs;
+  if (seq::transform_single_image_check(&strip)) {
+    source_start = 0;
+  }
+
+  auto clip = SerializableObject::Retainer<Clip>(
+      new Clip(strip.name + 2, reference, frame_range(ctx, source_start, duration)));
+  add_strip_data(ctx, editing, strip, *clip);
+  return clip;
+}
+
+static Tracks export_strips(StripExportContext &ctx,
+                            Editing &editing,
+                            ListBaseT<Strip> &seqbase,
+                            const ListBaseT<SeqTimelineChannel> *channels,
+                            int origin);
+
+static bool add_nested_items(StripExportContext &ctx,
+                             Editing &editing,
+                             const Strip &strip,
+                             ChannelItems &items)
+{
+  ListBaseT<SeqTimelineChannel> *channels;
+  int origin;
+  ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(
+      const_cast<Strip *>(&strip), &channels, &origin);
+  if (!seqbase) {
+    return false;
+  }
+
+  Editing &nested_editing = strip.type == STRIP_TYPE_SCENE ? *seq::editing_get(strip.scene) :
+                                                             editing;
+  const Tracks tracks = export_strips(ctx, nested_editing, *seqbase, channels, origin);
+  const int start = strip.left_handle();
+  const int end = strip.right_handle(ctx.scene);
+  const TimeRange range = frame_range(ctx, start - int(strip.content_start()), end - start);
+
+  for (const bool is_audio : {false, true}) {
+    const Vector<SerializableObject::Retainer<Track>> &nested = is_audio ? tracks.audio :
+                                                                           tracks.video;
+    if (nested.is_empty()) {
+      continue;
+    }
+    auto stack = SerializableObject::Retainer<Stack>(new Stack(strip.name + 2, range));
+    for (const SerializableObject::Retainer<Track> &track : nested) {
+      stack->append_child(track);
+    }
+    add_strip_data(ctx, editing, strip, *stack);
+    (is_audio ? items.audio : items.video).append({&strip, start, end, stack.value});
+  }
+  return true;
+}
+
+static PlacedItem *find_item(Vector<PlacedItem> &items, const Strip *strip)
+{
+  for (PlacedItem &item : items) {
+    if (item.strip == strip) {
+      return &item;
+    }
+  }
+  return nullptr;
+}
+
+static void extend_source_range(PlacedItem &item,
+                                const RationalTime before,
+                                const RationalTime after)
+{
+  Item *otio_item = dynamic_cast<Item *>(item.composable.value);
+  const TimeRange range = otio_item->trimmed_range();
+  otio_item->set_source_range(
+      TimeRange(range.start_time() - before, range.duration() + before + after));
+}
+
+static void add_transition(const StripExportContext &ctx,
+                           const Strip &transition,
+                           std::map<int, ChannelItems> &channel_items)
+{
+  const Strip *input1 = transition.input1;
+  const Strip *input2 = transition.input2;
+  PlacedItem *from = nullptr;
+  PlacedItem *to = nullptr;
+  if (input1 && input2 && input1->channel == input2->channel) {
+    Vector<PlacedItem> &items = channel_items[input1->channel].video;
+    from = find_item(items, input1);
+    to = find_item(items, input2);
+  }
+  if (from && to && from->start > to->start) {
+    std::swap(from, to);
+  }
+  if (!from || !to || from->end >= to->start) {
+    CLOG_WARN(&LOG, "Skipping transition strip '%s'", transition.name + 2);
+    BKE_reportf(ctx.params.reports,
+                RPT_WARNING,
+                "Transition strip '%s' was not exported, its inputs must be on the same channel",
+                transition.name + 2);
+    return;
+  }
+
+  const int length = to->start - from->end;
+  const int in_offset = length / 2;
+  const int out_offset = length - in_offset;
+  extend_source_range(*from, frames(ctx, 0), frames(ctx, in_offset));
+  extend_source_range(*to, frames(ctx, out_offset), frames(ctx, 0));
+  from->end += in_offset;
+  to->start -= out_offset;
+
+  const int cut = from->end;
+  channel_items[input1->channel].video.append(
+      {&transition,
+       cut,
+       cut,
+       create_transition(&transition, frames(ctx, in_offset), frames(ctx, out_offset)).value});
+}
+
+static SerializableObject::Retainer<Track> build_track(const StripExportContext &ctx,
+                                                       Vector<PlacedItem> &items,
+                                                       const std::string &kind,
+                                                       const SeqTimelineChannel *channel,
+                                                       const int origin)
+{
+  std::stable_sort(items.begin(), items.end(), [](const PlacedItem &a, const PlacedItem &b) {
+    return std::tie(a.start, a.end) < std::tie(b.start, b.end);
+  });
+
+  auto track = SerializableObject::Retainer<Track>(
+      new Track(channel ? channel->name : "", std::nullopt, kind));
+  track->set_enabled(!(channel && channel->is_muted()));
+
+  int cursor = origin;
+  for (PlacedItem &item : items) {
+    if (item.start > cursor) {
+      track->append_child(new Gap(frames(ctx, item.start - cursor)));
+    }
+    track->append_child(item.composable);
+    cursor = item.end;
+  }
+  return track;
+}
+
+static Tracks export_strips(StripExportContext &ctx,
+                            Editing &editing,
+                            ListBaseT<Strip> &seqbase,
+                            const ListBaseT<SeqTimelineChannel> *channels,
+                            const int origin)
+{
+  std::map<int, ChannelItems> channel_items;
+  for (const Strip &strip : seqbase) {
+    if (is_single_input_effect(strip) || is_transition(strip)) {
+      continue;
+    }
+    ChannelItems &items = channel_items[strip.channel];
+    if (is_nested(strip) && add_nested_items(ctx, editing, strip, items)) {
+      continue;
+    }
+    if (SerializableObject::Retainer<Clip> clip = strip_to_clip(ctx, editing, strip)) {
+      (strip.type == STRIP_TYPE_SOUND ? items.audio : items.video)
+          .append({&strip, strip.left_handle(), strip.right_handle(ctx.scene), clip.value});
+    }
+  }
+
+  for (const Strip &strip : seqbase) {
+    if (is_transition(strip)) {
+      add_transition(ctx, strip, channel_items);
+    }
+  }
+
+  Tracks tracks;
+  for (auto &[channel_index, items] : channel_items) {
+    const SeqTimelineChannel *channel = channels ?
+                                            seq::channel_get_by_index(channels, channel_index) :
+                                            nullptr;
+    if (!items.video.is_empty()) {
+      tracks.video.append(build_track(ctx, items.video, Track::Kind::video, channel, origin));
+    }
+    if (!items.audio.is_empty()) {
+      tracks.audio.append(build_track(ctx, items.audio, Track::Kind::audio, channel, origin));
+    }
+  }
+  return tracks;
+}
+
+static void export_markers(const StripExportContext &ctx, const int origin, Stack &stack)
+{
+  for (const TimeMarker &marker : ctx.scene->markers) {
+    stack.markers().push_back(
+        new Marker(marker.name, frame_range(ctx, marker.frame - origin, 1), Color::white));
+  }
+}
+
+void exporter_main(bContext *C, const OTIOExportParams &params)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Editing *editing = seq::editing_get(scene);
+  StripExportContext ctx{bmain, scene, params, scene->frames_per_second()};
+
+  int origin = scene->r.sfra;
+  for (const Strip &strip : editing->seqbase) {
+    origin = std::min(origin, strip.left_handle());
+  }
+
+  const Tracks tracks = export_strips(ctx, *editing, editing->seqbase, &editing->channels, origin);
 
   auto timeline = SerializableObject::Retainer<Timeline>(
-      new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
-
-  UnsupportedStripCounts unsupported;
-  auto main_stack = SerializableObject::Retainer<Stack>(new Stack());
-  otio_export_recursive(bmain,
-                        scene,
-                        params,
-                        &main_stack,
-                        nullptr,
-                        seqbase,
-                        0,
-                        scene->r.efra,
-                        &editing->channels,
-                        unsupported);
-
-  attach_foreign_metadata_scene(scene, timeline);
-  export_scene_markers(scene, main_stack);
-
-  timeline->set_tracks(main_stack);
+      new Timeline(scene->id.name + 2, frames(ctx, origin)));
+  for (const SerializableObject::Retainer<Track> &track : tracks.video) {
+    timeline->tracks()->append_child(track);
+  }
+  for (const SerializableObject::Retainer<Track> &track : tracks.audio) {
+    timeline->tracks()->append_child(track);
+  }
+  export_markers(ctx, origin, *timeline->tracks());
+  add_foreign_metadata(scene->id.system_properties, timeline.value);
 
   opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
   if (!timeline->to_json_file(params.filepath, &error_status)) {
@@ -443,20 +496,19 @@ void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params)
 
   BKE_report(params.reports, RPT_INFO, "File exported successfully");
 
-  if (unsupported.scene_strips > 0) {
+  if (ctx.unsupported_scene_strips > 0) {
     BKE_reportf(params.reports,
                 RPT_WARNING,
                 "%d scene strip(s) found, this is currently unsupported",
-                unsupported.scene_strips);
+                ctx.unsupported_scene_strips);
   }
-  if (unsupported.image_sequences > 0) {
+  if (ctx.unsupported_image_sequences > 0) {
     BKE_reportf(params.reports,
                 RPT_WARNING,
                 "%d image sequence(s) with non-sequential filenames found, this is currently "
                 "unsupported",
-                unsupported.image_sequences);
+                ctx.unsupported_image_sequences);
   }
 }
 
-}  // namespace io::otio
-}  // namespace blender
+}  // namespace blender::io::otio

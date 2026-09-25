@@ -12,12 +12,11 @@
 
 namespace blender {
 
-struct Main;
-struct Scene;
+struct bContext;
 
 namespace io::otio {
 
-void exporter_main(Main *bmain, Scene *scene, const OTIOExportParams &params);
+void exporter_main(bContext *C, const OTIOExportParams &params);
 
 }  // namespace io::otio
 }  // namespace blender

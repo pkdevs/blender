@@ -6,8 +6,6 @@
  * \ingroup otio
  */
 
-#include "BKE_context.hh"
-
 #include "IO_otio.hh"
 #include "otio_export.hh"
 
@@ -15,7 +13,7 @@ namespace blender {
 
 void OTIO_export(bContext *C, const OTIOExportParams &params)
 {
-  io::otio::exporter_main(CTX_data_main(C), CTX_data_sequencer_scene(C), params);
+  io::otio::exporter_main(C, params);
 }
 
 }  // namespace blender

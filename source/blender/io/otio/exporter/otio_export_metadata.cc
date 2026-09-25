@@ -6,19 +6,11 @@
  * \ingroup otio
  */
 
-#include <cstring>
-
 #include "BKE_idprop.hh"
-#include "BKE_main.hh"
 
+#include "BLI_index_range.hh"
 #include "BLI_listbase_iterator.hh"
-#include "BLI_math_base_c.hh"
-#include "BLI_path_utils.hh"
-#include "BLI_string.hh"
 
-#include "CLG_log.h"
-
-#include "DNA_ID.h"
 #include "DNA_color_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -26,95 +18,16 @@
 #include "DNA_vec_types.h"
 #include "DNA_vfont_types.h"
 
-#include "SEQ_transform.hh"
-
 #include "opentimelineio/anyDictionary.h"
 #include "opentimelineio/anyVector.h"
-#include "opentimelineio/clip.h"
 #include "opentimelineio/deserialization.h"
 #include "opentimelineio/effect.h"
-#include "opentimelineio/externalReference.h"
 #include "opentimelineio/freezeFrame.h"
-#include "opentimelineio/gap.h"
-#include "opentimelineio/generatorReference.h"
-#include "opentimelineio/imageSequenceReference.h"
 #include "opentimelineio/linearTimeWarp.h"
-#include "opentimelineio/missingReference.h"
-#include "opentimelineio/serializableObject.h"
-#include "opentimelineio/stack.h"
-#include "opentimelineio/timeline.h"
-#include "opentimelineio/track.h"
-#include "opentimelineio/transition.h"
 
-#include "IO_otio.hh"
-#include "otio_export_strip.hh"
+#include "otio_export_metadata.hh"
 
 namespace blender::io::otio {
-
-static CLG_LogRef LOG = {"io.otio"};
-
-using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
-
-/************** Helper Functions. **************/
-
-static void get_media_filename(const Strip *strip, char *filename_out)
-{
-  BLI_strncpy(filename_out, strip->data->stripdata->filename, FILE_MAX);
-}
-
-static void get_media_filepath(const Main *bmain, const Strip *strip, char *filepath_out)
-{
-  BLI_path_join(filepath_out, FILE_MAX, strip->data->dirpath, strip->data->stripdata->filename);
-  BLI_path_abs(filepath_out, BKE_main_blendfile_path(bmain));
-}
-
-static int get_strip_duration(const Strip *strip, const Scene *scene)
-{
-  return strip->right_handle(scene) - strip->left_handle();
-}
-
-static TimeRange get_media_available_range(const Strip *strip,
-                                           const Scene *scene,
-                                           const float media_fps)
-{
-  int media_length = strip->len;
-  if (strip->type == STRIP_TYPE_IMAGE && seq::transform_single_image_check(strip)) {
-    media_length = get_strip_duration(strip, scene);
-  }
-
-  return TimeRange(otio::RationalTime(0, media_fps), otio::RationalTime(media_length, media_fps));
-}
-
-static TimeRange get_strip_source_range(const Strip *strip,
-                                        const Scene *scene,
-                                        const float media_fps)
-{
-  /* The strips could be moved left of the timeline start and could have negative left handle.
-   * Most NLEs don't have the concept of moving a strip left of the timeline. */
-  int strip_timeline_start = max_ii(1, strip->left_handle());
-  int left_offset = strip_timeline_start - strip->start;
-
-  return TimeRange(RationalTime(left_offset, media_fps),
-                   RationalTime(strip->right_handle(scene) - strip_timeline_start, media_fps));
-}
-
-static SerializableObject::Retainer<ExternalReference> create_external_reference(
-    const Main *bmain, const Strip *strip, const Scene *scene, float media_fps)
-{
-  char media_filename[FILE_MAX];
-  char media_filepath[FILE_MAX];
-  get_media_filename(strip, media_filename);
-  get_media_filepath(bmain, strip, media_filepath);
-
-  TimeRange media_available_range = get_media_available_range(strip, scene, media_fps);
-
-  auto external_reference = SerializableObject::Retainer<ExternalReference>(
-      new ExternalReference(media_filepath, media_available_range));
-
-  external_reference->set_name(media_filename);
-
-  return external_reference;
-}
 
 static void set_color_strip_params(const Strip *strip, AnyDictionary &params)
 {
@@ -178,8 +91,7 @@ static void set_text_strip_params(const Strip *strip, AnyDictionary &params)
                                       static_cast<double>(text->outline_color[3])};
 }
 
-static SerializableObject::Retainer<GeneratorReference> create_generator_reference(
-    const Strip *strip)
+SerializableObject::Retainer<GeneratorReference> create_generator_reference(const Strip *strip)
 {
   auto generator_reference = SerializableObject::Retainer<GeneratorReference>(
       new GeneratorReference());
@@ -273,78 +185,7 @@ static SerializableObject::Retainer<GeneratorReference> create_generator_referen
   return generator_reference;
 }
 
-static SerializableObject::Retainer<ImageSequenceReference> create_image_sequence_reference(
-    const Strip *strip,
-    const Scene *scene,
-    const char *target_url_base,
-    const char *name_prefix,
-    const char *name_suffix,
-    const int start_frame_nr,
-    const int frame_step,
-    const float fps,
-    const int num_digits)
-{
-  TimeRange media_available_range = get_media_available_range(strip, scene, fps);
-  auto img_seq_ref = SerializableObject::Retainer<ImageSequenceReference>(
-      new ImageSequenceReference(target_url_base,
-                                 name_prefix,
-                                 name_suffix,
-                                 start_frame_nr,
-                                 frame_step,
-                                 fps,
-                                 num_digits,
-                                 ImageSequenceReference::MissingFramePolicy::error,
-                                 media_available_range));
-
-  return img_seq_ref;
-}
-
-static bool img_seq_get_frame_pattern(const StripElem *se,
-                                      const int img_count,
-                                      char *r_name_prefix,
-                                      char *r_name_suffix,
-                                      int &r_start_frame_nr,
-                                      int &r_frame_step,
-                                      int &r_padding)
-{
-  if (!BLI_path_frame_get(se[0].filename, &r_start_frame_nr, &r_padding)) {
-    return false;
-  }
-
-  const char *ext = BLI_path_extension_or_end(se[0].filename);
-  BLI_strncpy(r_name_suffix, ext, FILE_MAX);
-  BLI_strncpy(r_name_prefix, se[0].filename, ext - se[0].filename - r_padding + 1);
-
-  if (img_count > 1) {
-    int second_frame_nr, second_num_digits;
-    if (!BLI_path_frame_get(se[1].filename, &second_frame_nr, &second_num_digits)) {
-      return false;
-    }
-    r_frame_step = second_frame_nr - r_start_frame_nr;
-    if (r_frame_step < 1) {
-      return false;
-    }
-  }
-
-  for (int i = 0; i < img_count; i++) {
-    char filename[FILE_MAX];
-    BLI_snprintf(filename,
-                 sizeof(filename),
-                 "%s%0*d%s",
-                 r_name_prefix,
-                 r_padding,
-                 r_start_frame_nr + i * r_frame_step,
-                 r_name_suffix);
-    if (!STREQ(filename, se[i].filename)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-template<typename T>
-static void attach_foreign_metadata(IDProperty *idp, SerializableObject::Retainer<T> &clip)
+void add_foreign_metadata(IDProperty *idp, SerializableObjectWithMetadata *object)
 {
   if (!idp || idp->type != IDP_GROUP) {
     return;
@@ -363,33 +204,48 @@ static void attach_foreign_metadata(IDProperty *idp, SerializableObject::Retaine
     if (deserialize_json_from_string(
             static_cast<const char *>(prop->data.pointer), &dest, nullptr))
     {
-      clip->metadata()[prop->name] = dest;
+      object->metadata()[prop->name] = dest;
     }
   });
 }
 
-void attach_foreign_metadata_scene(const Scene *scene,
-                                   SerializableObject::Retainer<Timeline> &timeline)
+SerializableObject::Retainer<Transition> create_transition(const Strip *strip,
+                                                           RationalTime in_offset,
+                                                           RationalTime out_offset)
 {
-  attach_foreign_metadata(scene->id.system_properties, timeline);
+  auto transition = SerializableObject::Retainer<Transition>(new Transition(
+      strip->name + 2,
+      strip->type == STRIP_TYPE_WIPE ? Transition::Type::Custom : Transition::Type::SMPTE_Dissolve,
+      in_offset,
+      out_offset));
+
+  AnyDictionary metadata;
+  metadata["default_fade"] = static_cast<bool>(strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE);
+  metadata["effect_fader"] = static_cast<double>(strip->effect_fader);
+
+  if (strip->type == STRIP_TYPE_WIPE) {
+    const WipeVars *wipe = static_cast<WipeVars *>(strip->effectdata);
+
+    metadata["name"] = "Wipe";
+    metadata["edgeWidth"] = static_cast<double>(wipe->edgeWidth);
+    metadata["angle"] = static_cast<double>(wipe->angle);
+    metadata["forward"] = static_cast<int64_t>(wipe->forward);
+    metadata["wipetype"] = static_cast<int64_t>(wipe->wipetype);
+  }
+  else {
+    metadata["name"] = strip->type == STRIP_TYPE_GAMCROSS ? "Gamma Crossfade" : "Crossfade";
+    metadata["gamma"] = strip->type == STRIP_TYPE_GAMCROSS;
+  }
+
+  transition->metadata()["blender"] = metadata;
+  add_foreign_metadata(strip->system_properties, transition.value);
+  return transition;
 }
 
-template<typename T>
-void attach_foreign_metadata_strip(const Strip *strip, SerializableObject::Retainer<T> &clip)
-{
-  attach_foreign_metadata(strip->system_properties, clip);
-}
-
-template void attach_foreign_metadata_strip(const Strip *strip,
-                                            SerializableObject::Retainer<Stack> &clip);
-template void attach_foreign_metadata_strip(const Strip *strip,
-                                            SerializableObject::Retainer<Transition> &clip);
-
-template<typename T>
 static void handle_speed_effect_strip(const Scene *scene,
                                       const Strip *strip,
                                       const Strip *effect_strip,
-                                      SerializableObject::Retainer<T> &clip)
+                                      Item *item)
 {
   float speed_factor = 1.0f;
   const SpeedControlVars *speed = static_cast<const SpeedControlVars *>(effect_strip->effectdata);
@@ -419,20 +275,18 @@ static void handle_speed_effect_strip(const Scene *scene,
     auto ltw = SerializableObject::Retainer<LinearTimeWarp>(
         new LinearTimeWarp(effect_strip->name + 2, "Speed"));
     ltw->set_time_scalar(speed_factor);
-    attach_foreign_metadata_strip(effect_strip, ltw);
-    clip->effects().push_back(static_cast<SerializableObject::Retainer<otio::Effect>>(ltw.value));
+    add_foreign_metadata(effect_strip->system_properties, ltw.value);
+    item->effects().push_back(static_cast<SerializableObject::Retainer<otio::Effect>>(ltw.value));
   }
   else {
     auto ff = SerializableObject::Retainer<FreezeFrame>(new FreezeFrame(effect_strip->name + 2));
     ff->set_effect_name("Speed");
-    attach_foreign_metadata_strip(effect_strip, ff);
-    clip->effects().push_back(static_cast<SerializableObject::Retainer<otio::Effect>>(ff.value));
+    add_foreign_metadata(effect_strip->system_properties, ff.value);
+    item->effects().push_back(static_cast<SerializableObject::Retainer<otio::Effect>>(ff.value));
   }
 }
 
-template<typename T>
-static void handle_gaussian_blur_effect_strip(const Strip *effect_strip,
-                                              SerializableObject::Retainer<T> &clip)
+static void handle_gaussian_blur_effect_strip(const Strip *effect_strip, Item *item)
 {
   const GaussianBlurVars *blur = static_cast<const GaussianBlurVars *>(effect_strip->effectdata);
 
@@ -444,14 +298,12 @@ static void handle_gaussian_blur_effect_strip(const Strip *effect_strip,
   metadata["size_x"] = static_cast<double>(blur->size_x);
   metadata["size_y"] = static_cast<double>(blur->size_y);
   eff->metadata()["blender"] = metadata;
-  attach_foreign_metadata_strip(effect_strip, eff);
+  add_foreign_metadata(effect_strip->system_properties, eff.value);
 
-  clip->effects().push_back(eff);
+  item->effects().push_back(eff);
 }
 
-template<typename T>
-static void handle_glow_effect_strip(const Strip *effect_strip,
-                                     SerializableObject::Retainer<T> &clip)
+static void handle_glow_effect_strip(const Strip *effect_strip, Item *item)
 {
   const GlowVars *glow = static_cast<const GlowVars *>(effect_strip->effectdata);
 
@@ -467,52 +319,35 @@ static void handle_glow_effect_strip(const Strip *effect_strip,
   metadata["dQuality"] = static_cast<int64_t>(glow->dQuality);
   metadata["bNoComp"] = static_cast<int64_t>(glow->bNoComp);
   eff->metadata()["blender"] = metadata;
-  attach_foreign_metadata_strip(effect_strip, eff);
+  add_foreign_metadata(effect_strip->system_properties, eff.value);
 
-  clip->effects().push_back(eff);
+  item->effects().push_back(eff);
 }
 
-template<typename T>
-void add_effects_to_clip(
-    const Scene *scene,
-    Strip *strip,
-    SerializableObject::Retainer<T> &clip,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+void add_strip_effect(const Scene *scene,
+                      const Strip *strip,
+                      const Strip *effect_strip,
+                      Item *item)
 {
-  if (!single_input_effects.contains(strip)) {
-    return;
-  }
+  switch (effect_strip->type) {
+    case STRIP_TYPE_SPEED:
+      handle_speed_effect_strip(scene, strip, effect_strip, item);
+      break;
 
-  for (Strip *effect_strip : single_input_effects[strip]) {
-    switch (effect_strip->type) {
-      case STRIP_TYPE_SPEED:
-        handle_speed_effect_strip(scene, strip, effect_strip, clip);
-        break;
+    case STRIP_TYPE_GAUSSIAN_BLUR:
+      handle_gaussian_blur_effect_strip(effect_strip, item);
+      break;
 
-      case STRIP_TYPE_GAUSSIAN_BLUR:
-        handle_gaussian_blur_effect_strip(effect_strip, clip);
-        break;
+    case STRIP_TYPE_GLOW:
+      handle_glow_effect_strip(effect_strip, item);
+      break;
 
-      case STRIP_TYPE_GLOW:
-        handle_glow_effect_strip(effect_strip, clip);
-        break;
-
-      default:
-        break;
-    }
+    default:
+      break;
   }
 }
 
-/* Force instantiate `add_effects_to_clip<Stack>` as compiler won't do it implicitly as it is being
- * called from a different translation unit (`otio_export.cc`). */
-template void add_effects_to_clip(
-    const Scene *scene,
-    Strip *strip,
-    SerializableObject::Retainer<Stack> &clip,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects);
-
-template<typename T>
-static void add_strip_metadata_sound(const Strip *strip, SerializableObject::Retainer<T> &clip)
+static void add_strip_metadata_sound(const Strip *strip, SerializableObjectWithMetadata *object)
 {
   if (!strip->sound) {
     return;
@@ -532,15 +367,14 @@ static void add_strip_metadata_sound(const Strip *strip, SerializableObject::Ret
   }
 
   try {
-    std::any_cast<AnyDictionary &>(clip->metadata()["blender"])["sound"] = metadata;
+    std::any_cast<AnyDictionary &>(object->metadata()["blender"])["sound"] = metadata;
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
   }
 }
 
-template<typename T>
-static void add_strip_metadata_crop(const Strip *strip, SerializableObject::Retainer<T> &clip)
+static void add_strip_metadata_crop(const Strip *strip, SerializableObjectWithMetadata *object)
 {
   if (!strip->data || !strip->data->crop) {
     return;
@@ -554,15 +388,15 @@ static void add_strip_metadata_crop(const Strip *strip, SerializableObject::Reta
   metadata["right"] = static_cast<int64_t>(crop->right);
 
   try {
-    std::any_cast<AnyDictionary &>(clip->metadata()["blender"])["crop"] = metadata;
+    std::any_cast<AnyDictionary &>(object->metadata()["blender"])["crop"] = metadata;
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
   }
 }
 
-template<typename T>
-static void add_strip_metadata_transform(const Strip *strip, SerializableObject::Retainer<T> &clip)
+static void add_strip_metadata_transform(const Strip *strip,
+                                         SerializableObjectWithMetadata *object)
 {
   if (!strip->data || !strip->data->transform) {
     return;
@@ -582,16 +416,15 @@ static void add_strip_metadata_transform(const Strip *strip, SerializableObject:
   metadata["flipy"] = static_cast<bool>(strip->flag & SEQ_FLIPY);
 
   try {
-    std::any_cast<AnyDictionary &>(clip->metadata()["blender"])["transform"] = metadata;
+    std::any_cast<AnyDictionary &>(object->metadata()["blender"])["transform"] = metadata;
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
   }
 }
 
-template<typename T>
 static void add_strip_metadata_compositing(const Strip *strip,
-                                           SerializableObject::Retainer<T> &clip)
+                                           SerializableObjectWithMetadata *object)
 {
   AnyDictionary metadata;
 
@@ -599,15 +432,14 @@ static void add_strip_metadata_compositing(const Strip *strip,
   metadata["blend_opacity"] = static_cast<double>(strip->blend_opacity);
 
   try {
-    std::any_cast<AnyDictionary &>(clip->metadata()["blender"])["compositing"] = metadata;
+    std::any_cast<AnyDictionary &>(object->metadata()["blender"])["compositing"] = metadata;
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
   }
 }
 
-template<typename T>
-static void add_strip_metadata_color(const Strip *strip, SerializableObject::Retainer<T> &clip)
+static void add_strip_metadata_color(const Strip *strip, SerializableObjectWithMetadata *object)
 {
   AnyDictionary metadata;
 
@@ -617,7 +449,7 @@ static void add_strip_metadata_color(const Strip *strip, SerializableObject::Ret
   metadata["convert_to_float"] = static_cast<bool>(strip->flag & SEQ_MAKE_FLOAT);
 
   try {
-    std::any_cast<AnyDictionary &>(clip->metadata()["blender"])["color"] = metadata;
+    std::any_cast<AnyDictionary &>(object->metadata()["blender"])["color"] = metadata;
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
@@ -759,7 +591,7 @@ static AnyDictionary serialize_curve_mapping(const CurveMapping *cmp)
                             static_cast<double>(cmp->white[2])};
 
   AnyVector curve_maps;
-  for (int c = 0; c < 4; ++c) {
+  for (const int c : IndexRange(4)) {
     const CurveMap &cm = cmp->cm[c];
     AnyDictionary cm_dict;
 
@@ -768,7 +600,7 @@ static AnyDictionary serialize_curve_mapping(const CurveMapping *cmp)
 
     AnyVector curve;
     curve.reserve(cm.totpoint);
-    for (int i = 0; i < cm.totpoint; ++i) {
+    for (const int i : IndexRange(cm.totpoint)) {
       AnyDictionary point;
       point["x"] = static_cast<double>(cm.curve[i].x);
       point["y"] = static_cast<double>(cm.curve[i].y);
@@ -818,11 +650,11 @@ static void add_modifier_metadata_curves(StripModifierData &smd, AnyVector &cont
   add_modifier_metadata_to_container(metadata, container, smd);
 }
 
-template<typename T>
-static void add_strip_metadata_modifiers(const Strip *strip, SerializableObject::Retainer<T> &clip)
+static void add_strip_metadata_modifiers(const Strip *strip,
+                                         SerializableObjectWithMetadata *object)
 {
-  if (!clip->metadata().has_key("blender")) {
-    clip->metadata()["blender"] = AnyDictionary();
+  if (!object->metadata().has_key("blender")) {
+    object->metadata()["blender"] = AnyDictionary();
   }
 
   AnyVector container;
@@ -865,7 +697,7 @@ static void add_strip_metadata_modifiers(const Strip *strip, SerializableObject:
   }
 
   try {
-    AnyDictionary &bDict = std::any_cast<AnyDictionary &>(clip->metadata()["blender"]);
+    AnyDictionary &bDict = std::any_cast<AnyDictionary &>(object->metadata()["blender"]);
     if (!bDict.has_key("modifiers")) {
       bDict["modifiers"] = container;
     }
@@ -875,241 +707,29 @@ static void add_strip_metadata_modifiers(const Strip *strip, SerializableObject:
   }
 }
 
-template<typename T>
-void add_strip_metadata(const Strip *strip, SerializableObject::Retainer<T> &clip)
+void add_strip_metadata(const Strip *strip, SerializableObjectWithMetadata *object)
 {
-  if (!clip->metadata().has_key("blender")) {
-    clip->metadata()["blender"] = AnyDictionary();
+  if (!object->metadata().has_key("blender")) {
+    object->metadata()["blender"] = AnyDictionary();
   }
   if (strip->type == STRIP_TYPE_SOUND) {
-    add_strip_metadata_sound(strip, clip);
+    add_strip_metadata_sound(strip, object);
   }
   else {
-    add_strip_metadata_transform(strip, clip);
-    add_strip_metadata_crop(strip, clip);
-    add_strip_metadata_compositing(strip, clip);
-    add_strip_metadata_color(strip, clip);
+    add_strip_metadata_transform(strip, object);
+    add_strip_metadata_crop(strip, object);
+    add_strip_metadata_compositing(strip, object);
+    add_strip_metadata_color(strip, object);
   }
-  add_strip_metadata_modifiers(strip, clip);
+  add_strip_metadata_modifiers(strip, object);
 
   try {
     std::any_cast<AnyDictionary &>(
-        clip->metadata()["blender"])["original_channel"] = static_cast<int64_t>(strip->channel);
+        object->metadata()["blender"])["original_channel"] = static_cast<int64_t>(strip->channel);
   }
   catch (const std::bad_any_cast & /*e*/) {
     return;
   }
-}
-
-/* Force instantiate `add_strip_metadata<Stack>`. */
-template void add_strip_metadata(const Strip *strip, SerializableObject::Retainer<Stack> &clip);
-
-void StripExporter::add_gap_if_necessary()
-{
-  int space_between = strip_->left_handle() - last_strip_end - 1;
-  if (space_between > 0) {
-    auto gap_duration = RationalTime(space_between, scene_->frames_per_second());
-    auto gap = SerializableObject::Retainer<Gap>(new Gap(gap_duration));
-    track_->append_child(gap);
-  }
-  last_strip_end = strip_->right_handle(scene_) - 1;
-}
-
-void StripExporter::add_gap_if_necessary(SerializableObject::Retainer<Track> &track,
-                                         int start_frame,
-                                         int end_frame,
-                                         double scene_fps)
-{
-  int space_between = end_frame - start_frame + 1;
-  if (space_between > 0) {
-    auto gap_duration = RationalTime(space_between, scene_fps);
-    auto gap = SerializableObject::Retainer<Gap>(new Gap(gap_duration));
-    track->append_child(gap);
-  }
-}
-
-SerializableObject::Retainer<Clip> StripExporter::export_with_missing_reference(
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-{
-  add_gap_if_necessary();
-
-  float media_fps = scene_->frames_per_second();
-
-  TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
-
-  const char *filename = nullptr;
-  if (strip_->data && strip_->data->stripdata) {
-    filename = strip_->data->stripdata->filename;
-  }
-
-  auto missing_reference = SerializableObject::Retainer<MissingReference>(
-      new MissingReference(filename ? filename : ""));
-
-  auto clip = otio::SerializableObject::Retainer<otio::Clip>(
-      new Clip(strip_->name + 2, missing_reference, strip_source_range));
-  clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-  add_strip_metadata(strip_, clip);
-  attach_foreign_metadata_strip(strip_, clip);
-  add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-  track_->append_child(clip);
-  return clip;
-}
-
-/***** Handle Export for each strip type. *****/
-
-SerializableObject::Retainer<Clip> MovieStripExporter::export_strip(
-    Main *bmain,
-    const OTIOExportParams * /*export_params*/,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-{
-  add_gap_if_necessary();
-
-  float media_fps = scene_->frames_per_second();
-
-  TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
-  SerializableObject::Retainer<ExternalReference> external_reference = create_external_reference(
-      bmain, strip_, scene_, media_fps);
-
-  auto clip = otio::SerializableObject::Retainer<otio::Clip>(
-      new Clip(strip_->name + 2, external_reference, strip_source_range));
-  clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-  add_strip_metadata(strip_, clip);
-  attach_foreign_metadata_strip(strip_, clip);
-  add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-  track_->append_child(clip);
-  return clip;
-}
-
-SerializableObject::Retainer<Clip> SoundStripExporter::export_strip(
-    Main *bmain,
-    const OTIOExportParams * /*export_params*/,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-{
-  add_gap_if_necessary();
-
-  float media_fps = scene_->frames_per_second();
-
-  TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
-  SerializableObject::Retainer<ExternalReference> external_reference = create_external_reference(
-      bmain, strip_, scene_, media_fps);
-
-  auto clip = otio::SerializableObject::Retainer<otio::Clip>(
-      new Clip(strip_->name + 2, external_reference, strip_source_range));
-  clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-  add_strip_metadata(strip_, clip);
-  attach_foreign_metadata_strip(strip_, clip);
-  add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-  track_->append_child(clip);
-  return clip;
-}
-
-SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
-    Main *bmain,
-    const OTIOExportParams * /*export_params*/,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-{
-  float media_fps = scene_->frames_per_second();
-
-  if (seq::transform_single_image_check(strip_)) {
-    add_gap_if_necessary();
-
-    TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
-    SerializableObject::Retainer<ExternalReference> external_reference = create_external_reference(
-        bmain, strip_, scene_, media_fps);
-
-    auto clip = otio::SerializableObject::Retainer<otio::Clip>(
-        new Clip(strip_->name + 2, external_reference, strip_source_range));
-    clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-    add_strip_metadata(strip_, clip);
-    attach_foreign_metadata_strip(strip_, clip);
-    add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-    track_->append_child(clip);
-    return clip;
-  }
-  else {
-    /* Image Sequence. */
-    if (!strip_->data || !strip_->data->stripdata) {
-      CLOG_ERROR(
-          &LOG, "Exporting image sequence strip '%s' with a missing reference", strip_->name + 2);
-      return export_with_missing_reference(single_input_effects);
-    }
-
-    StripElem *se = strip_->data->stripdata;
-    size_t img_count = MEM_allocN_len(se) / sizeof(*se);
-
-    char target_url_base[FILE_MAX];
-    BLI_strncpy(target_url_base, strip_->data->dirpath, sizeof(target_url_base));
-    BLI_path_abs(target_url_base, BKE_main_blendfile_path(bmain));
-
-    char name_prefix[FILE_MAX];
-    char name_suffix[FILE_MAX];
-
-    int frame_step = 1;
-    int start_frame_nr = 1;
-    int padding = 0;
-
-    if (!img_seq_get_frame_pattern(
-            se, img_count, name_prefix, name_suffix, start_frame_nr, frame_step, padding))
-    {
-      CLOG_WARN(&LOG,
-                "Strip '%s' contains an image sequence with non-sequential filenames",
-                strip_->name + 2);
-      return export_with_missing_reference(single_input_effects);
-    }
-
-    add_gap_if_necessary();
-
-    SerializableObject::Retainer<ImageSequenceReference> img_seq_ref =
-        create_image_sequence_reference(strip_,
-                                        scene_,
-                                        target_url_base,
-                                        name_prefix,
-                                        name_suffix,
-                                        start_frame_nr,
-                                        frame_step,
-                                        media_fps,
-                                        padding);
-    TimeRange source_range = get_strip_source_range(strip_, scene_, scene_->frames_per_second());
-
-    auto clip = SerializableObject::Retainer<Clip>(
-        new Clip(strip_->name + 2, img_seq_ref, source_range));
-    clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-    add_strip_metadata(strip_, clip);
-    attach_foreign_metadata_strip(strip_, clip);
-    add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-    track_->append_child(clip);
-    return clip;
-  }
-}
-
-SerializableObject::Retainer<Clip> GeneratorStripExporter::export_strip(
-    Main * /*bmain*/,
-    const OTIOExportParams * /*export_params*/,
-    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
-{
-  add_gap_if_necessary();
-
-  float media_fps = scene_->frames_per_second();
-
-  TimeRange strip_source_range = get_strip_source_range(strip_, scene_, media_fps);
-  SerializableObject::Retainer<GeneratorReference> generator_reference =
-      create_generator_reference(strip_);
-  generator_reference->set_available_range(strip_source_range);
-
-  auto clip = otio::SerializableObject::Retainer<otio::Clip>(
-      new Clip(strip_->name + 2, generator_reference, strip_source_range));
-  clip->set_enabled(!(strip_->flag & SEQ_MUTE));
-
-  add_strip_metadata(strip_, clip);
-  attach_foreign_metadata_strip(strip_, clip);
-  add_effects_to_clip(scene_, strip_, clip, single_input_effects);
-  track_->append_child(clip);
-  return clip;
 }
 
 }  // namespace blender::io::otio

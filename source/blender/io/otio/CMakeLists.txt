@@ -14,11 +14,11 @@ set(INC_SYS
 
 set(SRC
   IO_otio.cc
-  exporter/otio_export_strip.cc
+  exporter/otio_export_metadata.cc
   exporter/otio_export.cc
 
   IO_otio.hh
-  exporter/otio_export_strip.hh
+  exporter/otio_export_metadata.hh
   exporter/otio_export.hh
 )
 
