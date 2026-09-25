@@ -34,6 +34,10 @@ elseif(ANDROID)
   set(OIDN_EXTRA_ARGS
     ${OIDN_EXTRA_ARGS}
     -DISPC_TARGET_OS=--target-os=android
+    # Android NDK toolchain sets the find root path modes to ONLY,
+    # which prevents TBB to be found using TBB_ROOT.
+    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH
+    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH
   )
 else()
   set(OIDN_EXTRA_ARGS
