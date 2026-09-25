@@ -167,18 +167,18 @@
 #include <cmath>
 #include <limits>
 #include <sstream>
-#include <vector>
 
 #include "BLI_array.hh"
 #include "BLI_map.hh"
+#include "BLI_math_geom.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
-#include "BLI_time.hh"
-#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender::straightskeleton {
 
@@ -266,8 +266,7 @@ static double2 compute_inward_normal(const double2 &p_u, const double2 &p_v)
   if (len < 1e-12) {
     return double2(0.0, 0.0);
   }
-  const double2 u = d / len;
-  return double2(-u.y, u.x);
+  return math::orthogonal(d / len);
 }
 
 /**
@@ -308,7 +307,7 @@ static double2 compute_inward_normal(const double2 &p_u, const double2 &p_v)
  */
 static double2 compute_bisector_velocity(const double2 &n1, const double2 &n2, const double2 &d2)
 {
-  const double det = n1.x * n2.y - n1.y * n2.x;
+  const double det = math::cross(n1, n2);
   if (std::abs(det) > 1e-7) {
     double2 v((n2.y - n1.y) / det, (n1.x - n2.x) / det);
     const double speed = math::length(v);
@@ -337,7 +336,7 @@ static double polygon_signed_area(Span<int> cycle, Span<double2> positions)
   for (const int i : IndexRange(n)) {
     const double2 p1 = positions[cycle[i]];
     const double2 p2 = positions[cycle[(i + 1) % n]];
-    area += (p1.x * p2.y - p2.x * p1.y);
+    area += math::cross(p1, p2);
   }
   return 0.5 * area;
 }
@@ -454,7 +453,7 @@ struct SpatialGrid2D {
 
 static double orient2d(const double2 &a, const double2 &b, const double2 &c)
 {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  return math::cross(b - a, c - a);
 }
 
 static bool point_on_segment_interior(const double2 &p,
@@ -462,20 +461,16 @@ static bool point_on_segment_interior(const double2 &p,
                                       const double2 &b,
                                       const double tol = 1e-6)
 {
-  const double2 ab = b - a;
-  const double len_sq = math::length_squared(ab);
+  const double len_sq = math::distance_squared(a, b);
   if (len_sq < tol * tol) {
     return false;
   }
-  const double cross = std::abs(orient2d(a, b, p));
-  if (cross / std::sqrt(len_sq) > tol) {
+  const double fac = math::line_point_factor(p, a, b);
+  const double tol_fac = tol / std::sqrt(len_sq);
+  if (fac <= tol_fac || fac >= 1.0 - tol_fac) {
     return false;
   }
-  const double dot = math::dot(p - a, ab);
-  if (dot > tol * std::sqrt(len_sq) && dot < len_sq - tol * std::sqrt(len_sq)) {
-    return true;
-  }
-  return false;
+  return math::dist_squared_to_line_segment(p, a, b) <= tol * tol;
 }
 
 /**
@@ -539,10 +534,10 @@ static bool segments_intersect_improper(const double2 &a,
   }
 
   /* Collinear overlap check if endpoints match. */
-  const bool a_c = math::length(a - c) < tol;
-  const bool a_d = math::length(a - d) < tol;
-  const bool b_c = math::length(b - c) < tol;
-  const bool b_d = math::length(b - d) < tol;
+  const bool a_c = math::distance(a, c) < tol;
+  const bool a_d = math::distance(a, d) < tol;
+  const bool b_c = math::distance(b, c) < tol;
+  const bool b_d = math::distance(b, d) < tol;
   /* If segments share both endpoints (same segment in either direction), they are identical. */
   if ((a_c && b_d) || (a_d && b_c)) {
     return false;
@@ -598,6 +593,8 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
                                      const StraightSkeletonOutput &output,
                                      std::string &r_error)
 {
+  PRF_scope(ProfileCategory::Core);
+
   std::ostringstream err;
 
   /* 1. Vertex Validity: no NaN, Inf, or negative times. */
@@ -637,7 +634,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
     for (const int i : IndexRange(n)) {
       const double2 p1 = output.vert[fvi[r[i]]];
       const double2 p2 = output.vert[fvi[r[(i + 1) % n]]];
-      area += (p1.x * p2.y - p2.x * p1.y);
+      area += math::cross(p1, p2);
     }
     area *= 0.5;
 
@@ -705,7 +702,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
     for (const int i : IndexRange(outer_num)) {
       const double2 p1 = input.vert[input.outer_polygon[i]];
       const double2 p2 = input.vert[input.outer_polygon[(i + 1) % outer_num]];
-      domain_area += (p1.x * p2.y - p2.x * p1.y);
+      domain_area += math::cross(p1, p2);
     }
     domain_area *= 0.5;
 
@@ -716,7 +713,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
       for (const int i : IndexRange(h_num)) {
         const double2 p1 = input.vert[input.hole_vert_indices[r[i]]];
         const double2 p2 = input.vert[input.hole_vert_indices[r[(i + 1) % h_num]]];
-        hole_area += (p1.x * p2.y - p2.x * p1.y);
+        hole_area += math::cross(p1, p2);
       }
       /* CW holes have negative signed area, so subtracting their absolute value: */
       domain_area -= std::abs(0.5 * hole_area);
@@ -761,6 +758,10 @@ class SimulationEngine {
   Vector<int> query_tags_;
   int current_query_id_{0};
 
+  Array<double2> orig_edge_normal_;
+  Array<bool> orig_edge_has_antiparallel_;
+  bool has_any_antiparallel_edges_{false};
+
  public:
   SimulationEngine(const StraightSkeletonInput &input,
                    double target_offset,
@@ -787,6 +788,8 @@ class SimulationEngine {
    */
   double run()
   {
+    PRF_scope(ProfileCategory::Core);
+
     init_state();
 
     const double eps = (input_.epsilon > 0.0) ? input_.epsilon : 1e-8;
@@ -841,7 +844,9 @@ class SimulationEngine {
         max_collapse_time_ = std::max(max_collapse_time_, current_time_);
 
         /* Resolve any events that coincide with segment threshold. */
-        resolve_events_at_current_time(eps);
+        if (!std::isinf(event_t) && std::abs(event_t - next_seg_time) < 1e-9) {
+          resolve_events_at_current_time(eps);
+        }
 
         if (!dry_run_) {
           emit_segment_boundary_faces();
@@ -865,6 +870,8 @@ class SimulationEngine {
 
   StraightSkeletonOutput build_output()
   {
+    PRF_scope(ProfileCategory::Core);
+
     StraightSkeletonOutput output;
     if (dry_run_) {
       return output;
@@ -1154,6 +1161,8 @@ class SimulationEngine {
    */
   void init_state()
   {
+    PRF_scope(ProfileCategory::Core);
+
     /* 1. Initialize Skeleton Nodes from input vertices. */
     const int input_verts_num = int(input_.vert.size());
     for (const int i : IndexRange(input_verts_num)) {
@@ -1231,7 +1240,61 @@ class SimulationEngine {
       }
     }
 
-    /* 4. Compute Initial Bisector Velocities. */
+    /* 4. Precompute Original Edge Inward Normals and Antiparallel Edge Flags (O(E)). */
+    const int total_orig_edges = outer_num + int(input_.hole_vert_indices.size());
+    orig_edge_normal_.reinitialize(total_orig_edges);
+    for (const int i : IndexRange(outer_num)) {
+      const int v1 = input_.outer_polygon[i];
+      const int v2 = input_.outer_polygon[(i + 1) % outer_num];
+      orig_edge_normal_[i] = compute_inward_normal(input_.vert[v1], input_.vert[v2]);
+    }
+    for (const int hole_i : input_.hole_offsets.index_range()) {
+      const IndexRange r = input_.hole_offsets[hole_i];
+      const int hole_len = int(r.size());
+      for (const int i : IndexRange(hole_len)) {
+        const int e_idx = outer_num + r[i];
+        const int v1 = input_.hole_vert_indices[r[i]];
+        const int v2 = input_.hole_vert_indices[r[(i + 1) % hole_len]];
+        orig_edge_normal_[e_idx] = compute_inward_normal(input_.vert[v1], input_.vert[v2]);
+      }
+    }
+
+    constexpr int NUM_ANGLE_BINS = 16;
+    Array<int> bin_counts(NUM_ANGLE_BINS, 0);
+    Array<int> edge_bins(total_orig_edges);
+
+    for (const int e : IndexRange(total_orig_edges)) {
+      const double2 &n = orig_edge_normal_[e];
+      double theta = std::atan2(n.y, n.x);
+      if (theta < 0.0) {
+        theta += 2.0 * M_PI;
+      }
+      const int bin = std::clamp(
+          int((theta / (2.0 * M_PI)) * double(NUM_ANGLE_BINS)), 0, NUM_ANGLE_BINS - 1);
+      edge_bins[e] = bin;
+      bin_counts[bin]++;
+    }
+
+    orig_edge_has_antiparallel_.reinitialize(total_orig_edges);
+    has_any_antiparallel_edges_ = false;
+
+    for (const int e : IndexRange(total_orig_edges)) {
+      const int b = edge_bins[e];
+      bool found = false;
+      for (int offset = 6; offset <= 10; offset++) {
+        const int opp_b = (b + offset) % NUM_ANGLE_BINS;
+        if (bin_counts[opp_b] > 0) {
+          found = true;
+          break;
+        }
+      }
+      orig_edge_has_antiparallel_[e] = found;
+      if (found) {
+        has_any_antiparallel_edges_ = true;
+      }
+    }
+
+    /* 5. Compute Initial Bisector Velocities. */
     for (const int i : wf_nodes_.pos.index_range()) {
       update_node_velocity(i);
     }
@@ -1249,8 +1312,7 @@ class SimulationEngine {
     const double2 n2 = compute_inward_normal(wf_nodes_.pos[i], wf_nodes_.pos[next_i]);
 
     const double2 d = wf_nodes_.pos[next_i] - wf_nodes_.pos[i];
-    const double len = math::length(d);
-    const double2 d2 = (len > 1e-12) ? d / len : double2(0.0, 0.0);
+    const double2 d2 = math::normalize(d);
 
     wf_nodes_.vel[i] = compute_bisector_velocity(n1, n2, d2);
   }
@@ -1348,6 +1410,8 @@ class SimulationEngine {
    */
   double find_earliest_event(double dt, double eps)
   {
+    PRF_scope(ProfileCategory::Core);
+
     double earliest_t = std::numeric_limits<double>::infinity();
 
     /* 1. Edge Collapse Events. */
@@ -1371,7 +1435,7 @@ class SimulationEngine {
       }
     }
 
-    double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+    double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
     int active_nodes_num = 0;
     Vector<int> reflex_nodes;
 
@@ -1380,11 +1444,7 @@ class SimulationEngine {
         continue;
       }
       active_nodes_num++;
-      const double2 &p = wf_nodes_.pos[u];
-      x_min = std::min(x_min, p.x);
-      x_max = std::max(x_max, p.x);
-      y_min = std::min(y_min, p.y);
-      y_max = std::max(y_max, p.y);
+      math::min_max(wf_nodes_.pos[u], bbox_min, bbox_max);
 
       if (is_reflex(u)) {
         reflex_nodes.append(u);
@@ -1394,6 +1454,9 @@ class SimulationEngine {
     if (active_nodes_num == 0 || reflex_nodes.is_empty()) {
       return earliest_t;
     }
+
+    double x_min = bbox_min.x, x_max = bbox_max.x;
+    double y_min = bbox_min.y, y_max = bbox_max.y;
 
     const double diag = std::max(std::hypot(x_max - x_min, y_max - y_min), 1e-4);
     const double safety_tol = std::max(eps, 1e-4);
@@ -1432,14 +1495,9 @@ class SimulationEngine {
               const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
               const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
               const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
-              const double2 e_uv = p_v - p_u;
-              const double len_sq = math::length_squared(e_uv);
-
-              if (len_sq > 1e-12) {
-                const double s = math::dot(p_w - p_u, e_uv) / len_sq;
-                if (s > 1e-5 && s < 1.0 - 1e-5) {
-                  earliest_t = std::min(earliest_t, current_time_ + tau);
-                }
+              const double s = math::line_point_factor(p_w, p_u, p_v);
+              if (s > 1e-5 && s < 1.0 - 1e-5) {
+                earliest_t = std::min(earliest_t, current_time_ + tau);
               }
             }
           }
@@ -1547,14 +1605,9 @@ class SimulationEngine {
             const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
             const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
             const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
-            const double2 e_uv = p_v - p_u;
-            const double len_sq = math::length_squared(e_uv);
-
-            if (len_sq > 1e-12) {
-              const double s = math::dot(p_w - p_u, e_uv) / len_sq;
-              if (s > 1e-5 && s < 1.0 - 1e-5) {
-                earliest_t = std::min(earliest_t, current_time_ + tau);
-              }
+            const double s = math::line_point_factor(p_w, p_u, p_v);
+            if (s > 1e-5 && s < 1.0 - 1e-5) {
+              earliest_t = std::min(earliest_t, current_time_ + tau);
             }
           }
         }
@@ -1656,6 +1709,15 @@ class SimulationEngine {
     if (!wf_nodes_.is_active[e1] || !wf_nodes_.is_active[e2]) {
       return false;
     }
+    const int orig1 = wf_nodes_.orig_edge[e1];
+    const int orig2 = wf_nodes_.orig_edge[e2];
+    if (orig1 >= 0 && orig2 >= 0 && orig1 < orig_edge_normal_.size() &&
+        orig2 < orig_edge_normal_.size())
+    {
+      if (math::dot(orig_edge_normal_[orig1], orig_edge_normal_[orig2]) > -0.8) {
+        return false;
+      }
+    }
     if (processed_pairs.contains(std::make_pair(e1, e2))) {
       return false;
     }
@@ -1665,12 +1727,12 @@ class SimulationEngine {
       return false;
     }
     const double2 d1 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-    const double l1 = math::length(d1);
+    double l1;
+    const double2 dir1 = math::normalize_and_get_length(d1, l1);
     if (l1 < cluster_tol) {
       return false;
     }
-    const double2 dir1 = d1 / l1;
-    const double2 n1 = double2(-dir1.y, dir1.x);
+    const double2 n1 = math::orthogonal(dir1);
 
     const int w = e2;
     const int z = wf_nodes_.next_node[w];
@@ -1678,12 +1740,12 @@ class SimulationEngine {
       return false;
     }
     const double2 d2 = wf_nodes_.pos[z] - wf_nodes_.pos[w];
-    const double l2 = math::length(d2);
+    double l2;
+    const double2 dir2 = math::normalize_and_get_length(d2, l2);
     if (l2 < cluster_tol) {
       return false;
     }
-    const double2 dir2 = d2 / l2;
-    const double2 n2 = double2(-dir2.y, dir2.x);
+    const double2 n2 = math::orthogonal(dir2);
 
     if (math::dot(n1, n2) > -0.8) {
       return false;
@@ -2192,16 +2254,23 @@ class SimulationEngine {
 
   void resolve_opposing_overlapping_edges(const double cluster_tol)
   {
+    PRF_scope(ProfileCategory::Core);
+
+    if (!has_any_antiparallel_edges_) {
+      return;
+    }
+
     Vector<std::pair<int, int>> processed_pairs;
     int opp_iter = 0;
     bool found_opposing = true;
+    bool any_opposing_resolved = false;
     while (found_opposing && opp_iter < 50) {
       opp_iter++;
       found_opposing = false;
       const int n = int(wf_nodes_.pos.size());
 
       int active_edges_num = 0;
-      double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+      double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
       for (int i = 0; i < n; i++) {
         if (!wf_nodes_.is_active[i]) {
           continue;
@@ -2210,23 +2279,44 @@ class SimulationEngine {
         if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
           continue;
         }
+        const int orig_e = wf_nodes_.orig_edge[i];
+        if (orig_e >= 0 && orig_e < orig_edge_has_antiparallel_.size() &&
+            !orig_edge_has_antiparallel_[orig_e])
+        {
+          continue;
+        }
+        if (math::distance_squared(wf_nodes_.pos[i], wf_nodes_.pos[next_i]) <
+            cluster_tol * cluster_tol)
+        {
+          continue;
+        }
         active_edges_num++;
-        const double2 &p = wf_nodes_.pos[i];
-        x_min = std::min(x_min, p.x);
-        x_max = std::max(x_max, p.x);
-        y_min = std::min(y_min, p.y);
-        y_max = std::max(y_max, p.y);
+        math::min_max(wf_nodes_.pos[i], bbox_min, bbox_max);
+        math::min_max(wf_nodes_.pos[next_i], bbox_min, bbox_max);
       }
 
       if (active_edges_num <= 1) {
         break;
       }
 
+      double x_min = bbox_min.x, x_max = bbox_max.x;
+      double y_min = bbox_min.y, y_max = bbox_max.y;
+
       if (active_edges_num <= 16) {
         for (int e1 = 0; e1 < n; e1++) {
+          if (!wf_nodes_.is_active[e1]) {
+            continue;
+          }
+          const int orig1 = wf_nodes_.orig_edge[e1];
+          if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
+              !orig_edge_has_antiparallel_[orig1])
+          {
+            continue;
+          }
           for (int e2 = e1 + 1; e2 < n; e2++) {
             if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
               found_opposing = true;
+              any_opposing_resolved = true;
               break;
             }
           }
@@ -2248,6 +2338,17 @@ class SimulationEngine {
           }
           const int next_i = wf_nodes_.next_node[i];
           if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
+            continue;
+          }
+          const int orig_e = wf_nodes_.orig_edge[i];
+          if (orig_e >= 0 && orig_e < orig_edge_has_antiparallel_.size() &&
+              !orig_edge_has_antiparallel_[orig_e])
+          {
+            continue;
+          }
+          if (math::distance_squared(wf_nodes_.pos[i], wf_nodes_.pos[next_i]) <
+              cluster_tol * cluster_tol)
+          {
             continue;
           }
           const double2 &p_u = wf_nodes_.pos[i];
@@ -2274,6 +2375,17 @@ class SimulationEngine {
           if (v < 0 || !wf_nodes_.is_active[v]) {
             continue;
           }
+          const int orig1 = wf_nodes_.orig_edge[e1];
+          if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
+              !orig_edge_has_antiparallel_[orig1])
+          {
+            continue;
+          }
+          if (math::distance_squared(wf_nodes_.pos[u], wf_nodes_.pos[v]) <
+              cluster_tol * cluster_tol)
+          {
+            continue;
+          }
 
           const double qx_min = std::min(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) - cluster_tol;
           const double qx_max = std::max(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) + cluster_tol;
@@ -2298,6 +2410,7 @@ class SimulationEngine {
 
             if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
               found_opposing = true;
+              any_opposing_resolved = true;
             }
           });
 
@@ -2307,27 +2420,120 @@ class SimulationEngine {
         }
       }
     }
-    rebuild_active_contours();
+    if (any_opposing_resolved) {
+      rebuild_active_contours();
+    }
   }
 
   void resolve_events_at_current_time(double eps)
   {
+    PRF_scope(ProfileCategory::Core);
+
     const double cluster_tol = std::max(eps, 1e-4);
 
-    /* 0. Resolve any opposing collinear/overlapping wavefront edges first. */
-    resolve_opposing_overlapping_edges(cluster_tol);
-
     /* 1. Identify all collapsing edges at current_time_. */
+    Array<bool> is_edge_collapsing(wf_nodes_.pos.size(), false);
     Vector<int> collapsing_edges;
     for (const int u : wf_nodes_.pos.index_range()) {
       if (!wf_nodes_.is_active[u]) {
         continue;
       }
       const int v = wf_nodes_.next_node[u];
-      if (math::length(wf_nodes_.pos[v] - wf_nodes_.pos[u]) < cluster_tol) {
+      if (math::distance_squared(wf_nodes_.pos[v], wf_nodes_.pos[u]) < cluster_tol * cluster_tol) {
         collapsing_edges.append(u);
+        is_edge_collapsing[u] = true;
       }
     }
+
+    /* Fast Path: Complete Contour Annihilation (e.g. circles, regular polygons, triangles).
+     * If an entire active contour has all its edges collapsing at the current time,
+     * they all converge to a single center point p*. We can emit its roof faces and retire
+     * all nodes in strictly O(N) time without quadratic pairwise checks. */
+    if (!collapsing_edges.is_empty()) {
+      bool any_contour_collapsed = false;
+      for (const int cid : wf_contours_.is_active.index_range()) {
+        if (!wf_contours_.is_active[cid]) {
+          continue;
+        }
+        const int head = wf_contours_.head_node[cid];
+        if (head < 0 || !wf_nodes_.is_active[head]) {
+          continue;
+        }
+
+        int curr = head;
+        int active_count = 0;
+        int collapsing_count = 0;
+        double2 p_sum(0.0, 0.0);
+
+        do {
+          active_count++;
+          p_sum += wf_nodes_.pos[curr];
+          if (is_edge_collapsing[curr]) {
+            collapsing_count++;
+          }
+          curr = wf_nodes_.next_node[curr];
+        } while (curr != head && curr >= 0 && active_count < int(wf_nodes_.pos.size()));
+
+        if (active_count >= 3 && collapsing_count == active_count) {
+          const double2 p_star = p_sum / double(active_count);
+          const int s_star = get_or_create_skel_node(p_star, cluster_tol);
+
+          curr = head;
+          do {
+            const int next_curr = wf_nodes_.next_node[curr];
+            if (!dry_run_) {
+              Vector<int> face_verts;
+              face_verts.append(wf_nodes_.left_trail[curr][0]);
+              for (const int r : wf_nodes_.right_trail[curr]) {
+                if (face_verts.last() != r) {
+                  face_verts.append(r);
+                }
+              }
+              if (face_verts.last() != s_star) {
+                face_verts.append(s_star);
+              }
+              for (int k = int(wf_nodes_.left_trail[curr].size()) - 1; k >= 1; k--) {
+                const int l = wf_nodes_.left_trail[curr][k];
+                if (face_verts.last() != l && l != face_verts[0]) {
+                  face_verts.append(l);
+                }
+              }
+              if (face_verts.size() >= 3) {
+                out_faces_.faces.append(std::move(face_verts));
+                out_faces_.face_orig.append(wf_nodes_.orig_face[curr]);
+                out_faces_.face_band.append(current_band_);
+                out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[curr]);
+              }
+            }
+
+            skel_graph_.edges_node1.append(wf_nodes_.skel_node[curr]);
+            skel_graph_.edges_node2.append(s_star);
+            skel_graph_.edges_orig.append(-1);
+            skel_graph_.edges_face.append(wf_nodes_.orig_face[curr]);
+            skel_graph_.edges_time_start.append(wf_nodes_.time_birth[curr]);
+            skel_graph_.edges_time_end.append(current_time_);
+            skel_graph_.edges_is_boundary.append(false);
+
+            wf_nodes_.is_active[curr] = false;
+            curr = next_curr;
+          } while (curr != head && curr >= 0);
+
+          wf_contours_.is_active[cid] = false;
+          any_contour_collapsed = true;
+        }
+      }
+
+      if (any_contour_collapsed) {
+        if (!has_active_contours()) {
+          events_processed_count_++;
+          return;
+        }
+        collapsing_edges.remove_if([&](const int e) { return !wf_nodes_.is_active[e]; });
+      }
+    }
+
+    /* 0. Resolve any opposing collinear/overlapping wavefront edges. */
+    resolve_opposing_overlapping_edges(cluster_tol);
 
     /* 2. Identify all vertex-vertex collisions at current_time_. */
     struct VertPair {
@@ -2344,7 +2550,7 @@ class SimulationEngine {
     };
     Vector<SplitInfo> splits;
 
-    double x_min = 1e30, x_max = -1e30, y_min = 1e30, y_max = -1e30;
+    double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
     int active_nodes_num = 0;
     Vector<int> reflex_nodes;
 
@@ -2353,16 +2559,15 @@ class SimulationEngine {
         continue;
       }
       active_nodes_num++;
-      const double2 &p = wf_nodes_.pos[u];
-      x_min = std::min(x_min, p.x);
-      x_max = std::max(x_max, p.x);
-      y_min = std::min(y_min, p.y);
-      y_max = std::max(y_max, p.y);
+      math::min_max(wf_nodes_.pos[u], bbox_min, bbox_max);
 
       if (is_reflex(u)) {
         reflex_nodes.append(u);
       }
     }
+
+    double x_min = bbox_min.x, x_max = bbox_max.x;
+    double y_min = bbox_min.y, y_max = bbox_max.y;
 
     if (active_nodes_num <= 16) {
       for (const int u : wf_nodes_.pos.index_range()) {
@@ -2400,13 +2605,10 @@ class SimulationEngine {
           const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
           const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
           if (dist < cluster_tol) {
-            const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-            const double len_sq = math::length_squared(e_uv);
-            if (len_sq > 1e-12) {
-              const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
-              if (s > 1e-5 && s < 1.0 - 1e-5) {
-                splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
-              }
+            const double s = math::line_point_factor(
+                wf_nodes_.pos[w], wf_nodes_.pos[u], wf_nodes_.pos[v]);
+            if (s > 1e-5 && s < 1.0 - 1e-5) {
+              splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
             }
           }
         }
@@ -2521,13 +2723,10 @@ class SimulationEngine {
                 const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
                 const double dist = std::abs(math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv));
                 if (dist < cluster_tol) {
-                  const double2 e_uv = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-                  const double len_sq = math::length_squared(e_uv);
-                  if (len_sq > 1e-12) {
-                    const double s = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], e_uv) / len_sq;
-                    if (s > 1e-5 && s < 1.0 - 1e-5) {
-                      splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
-                    }
+                  const double s = math::line_point_factor(
+                      wf_nodes_.pos[w], wf_nodes_.pos[u], wf_nodes_.pos[v]);
+                  if (s > 1e-5 && s < 1.0 - 1e-5) {
+                    splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
                   }
                 }
               });
@@ -2754,6 +2953,8 @@ class SimulationEngine {
 
   void resolve_cluster(const EventCluster &cluster)
   {
+    PRF_scope(ProfileCategory::Core);
+
     const double2 p_star = cluster.p_star;
     const int s_star = cluster.s_star;
 
@@ -2988,6 +3189,8 @@ class SimulationEngine {
    */
   void emit_segment_boundary_faces()
   {
+    PRF_scope(ProfileCategory::Core);
+
     /* 1. Allocate a single skeleton node for each active wavefront vertex. */
     Array<int> new_skel_node(wf_nodes_.pos.size(), -1);
     for (const int i : wf_nodes_.pos.index_range()) {
@@ -3065,6 +3268,8 @@ class SimulationEngine {
    */
   void emit_inner_polygon_faces()
   {
+    PRF_scope(ProfileCategory::Core);
+
     Vector<bool> visited(wf_nodes_.pos.size(), false);
 
     for (const int start_u : wf_nodes_.pos.index_range()) {
@@ -3100,6 +3305,8 @@ class SimulationEngine {
 
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input)
 {
+  PRF_scope(ProfileCategory::Core);
+
   /* Validate input: polygon must have at least 3 vertices. */
   if (input.outer_polygon.size() < 3) {
     StraightSkeletonOutput output;

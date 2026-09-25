@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "BLI_array.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_set.hh"
@@ -475,7 +476,7 @@ static double total_faces_area(const StraightSkeletonOutput &output)
     for (const int i : IndexRange(n)) {
       const double2 p1 = output.vert[fvi[r[i]]];
       const double2 p2 = output.vert[fvi[r[(i + 1) % n]]];
-      area += (p1.x * p2.y - p2.x * p1.y);
+      area += math::cross(p1, p2);
     }
     total += 0.5 * area;
   }
@@ -536,7 +537,7 @@ static void print_test_output(const char *test_name,
     for (const int i : IndexRange(n)) {
       const double2 p1 = output.vert[fvi[r[i]]];
       const double2 p2 = output.vert[fvi[r[(i + 1) % n]]];
-      area += (p1.x * p2.y - p2.x * p1.y);
+      area += math::cross(p1, p2);
     }
     area *= 0.5;
     total_area += area;
