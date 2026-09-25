@@ -142,11 +142,24 @@ if(APPLE)
     --x86asmexe=${LIBDIR}/nasm/bin/nasm
   )
 elseif(ANDROID)
+  if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set(FFMPEG_ARCH aarch64)
+  elseif(ANDROID_ABI STREQUAL "x86_64")
+    set(FFMPEG_ARCH x86_64)
+    # The x86 assembler is a host tool, fetch it from the host deps build.
+    set(FFMPEG_EXTRA_FLAGS
+      ${FFMPEG_EXTRA_FLAGS}
+      --x86asmexe=${HOST_LIBDIR}/nasm/bin/nasm
+    )
+  else()
+    message(FATAL_ERROR "Unsupported Android ABI \"${ANDROID_ABI}\".")
+  endif()
+
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
     --enable-cross-compile
     --target-os=android
-    --arch=aarch64
+    --arch=${FFMPEG_ARCH}
 
     --cross-prefix=${ANDROID_TOOLCHAIN_PREFIX}
     --as=${ANDROID_CC}
