@@ -1256,7 +1256,7 @@ static void rna_SpaceView3D_camera_update(Main *bmain, Scene *scene, PointerRNA 
 
 static void rna_View3D_use_sync_view_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  View3D *v3d = (View3D *)(ptr->data);
+  const View3D *v3d = static_cast<View3D *>(ptr->data);
   if (!(v3d->flag2 & V3D_SYNC_VIEW_ACCROSS_WORKSPACES)) {
     return;
   }

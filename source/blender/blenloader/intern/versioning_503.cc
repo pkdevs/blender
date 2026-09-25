@@ -639,21 +639,39 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
-    for (bScreen &screen : bmain->screens) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 25)) {
+    const auto find_v3d_to_sync_fn = [](bScreen &screen,
+                                        const bool allow_camera_view) -> View3D * {
       for (ScrArea &area : screen.areabase) {
-        bool found = false;
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_VIEW3D) {
-            View3D *v3d = reinterpret_cast<View3D *>(&sl);
-            v3d->flag2 |= V3D_SYNC_VIEW_ACCROSS_WORKSPACES;
-            found = true;
-            break;
+            for (ARegion &region : &sl == area.spacedata.first() ? area.regionbase : sl.regionbase)
+            {
+              if (region.regiontype != RGN_TYPE_WINDOW) {
+                continue;
+              }
+              View3D *v3d = reinterpret_cast<View3D *>(&sl);
+              RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
+              if (ELEM(rv3d->persp, RV3D_PERSP, RV3D_ORTHO)) {
+                return v3d;
+              }
+              if (allow_camera_view && rv3d->persp == RV3D_CAMOB) {
+                return v3d;
+              }
+            }
           }
         }
-        if (found) {
-          break;
-        }
+      }
+      return nullptr;
+    };
+
+    for (bScreen &screen : bmain->screens) {
+      View3D *v3d_to_sync = find_v3d_to_sync_fn(screen, false);
+      if (!v3d_to_sync) {
+        v3d_to_sync = find_v3d_to_sync_fn(screen, true);
+      }
+      if (v3d_to_sync) {
+        v3d_to_sync->flag2 |= V3D_SYNC_VIEW_ACCROSS_WORKSPACES;
       }
     }
   }
