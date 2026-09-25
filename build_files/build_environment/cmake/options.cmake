@@ -351,7 +351,9 @@ else()
       export AR=${CMAKE_AR} &&
       export LD=${CMAKE_C_COMPILER_LINKER} &&
       export RANLIB=${CMAKE_RANLIB} &&
-      export STRIP=${CMAKE_STRIP}
+      export STRIP=${CMAKE_STRIP} &&
+      # Keep pkg-config from leaking host packages into the cross-compiled build.
+      export PKG_CONFIG_LIBDIR=${LIBDIR}/pkgconfig
     )
 
     # For Meson projects, a similar cross-compilation environment is defined via a cross-file.
