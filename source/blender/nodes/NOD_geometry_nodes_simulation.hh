@@ -26,7 +26,10 @@ constexpr StringRefNull angular_velocity = "angular_velocity";
 constexpr StringRefNull external_force = "external_force";
 constexpr StringRefNull external_torque = "external_torque";
 constexpr StringRefNull mass = "mass";
+/* TODO maybe rename "inertia_diagonal". */
 constexpr StringRefNull moment_of_inertia = "moment_of_inertia";
+/* Rotation to bring moment of inertia tensor into diagonal form (usually zero). */
+constexpr StringRefNull inertia_rotation = "inertia_rotation";
 constexpr StringRefNull static_friction = "static_friction";
 constexpr StringRefNull dynamic_friction = "dynamic_friction";
 constexpr StringRefNull radius = "radius";

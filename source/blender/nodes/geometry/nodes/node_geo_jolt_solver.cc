@@ -16,6 +16,8 @@
 
 #include "GEO_jolt.hh"
 
+#include <Jolt/Physics/Body/AllowedDOFs.h>
+#include <Jolt/Physics/Body/MotionType.h>
 #include <fmt/format.h>
 
 #ifdef WITH_JOLT
@@ -257,6 +259,9 @@ struct GeometryData {
   Span<int> reference_handles;
   Span<int> instance_ids;
 
+  bke::SpanAttributeWriter<float> mass_attr;
+  bke::SpanAttributeWriter<float3> inertia_diagonal_attr;
+  bke::SpanAttributeWriter<math::Quaternion> inertia_rotation_attr;
   bke::SpanAttributeWriter<float4x4> transform_attr;
   bke::SpanAttributeWriter<float3> velocity_attr;
   bke::SpanAttributeWriter<float3> angular_velocity_attr;
@@ -470,6 +475,12 @@ class JoltSolverStep {
       // geo_data.temp_positions.reinitialize(geo_data.size);
       // geo_data.temp_rotations.reinitialize(geo_data.size);
 
+      geo_data.mass_attr = simulation::ensure_attribute<float>(
+          geo_data.attributes, attribute_names::mass, domain);
+      geo_data.inertia_diagonal_attr = simulation::ensure_attribute<float3>(
+          geo_data.attributes, attribute_names::moment_of_inertia, domain);
+      geo_data.inertia_rotation_attr = simulation::ensure_attribute<math::Quaternion>(
+          geo_data.attributes, attribute_names::inertia_rotation, domain);
       geo_data.transform_attr = simulation::ensure_attribute<float4x4>(
           geo_data.attributes, attribute_names::instance_transform, domain);
       geo_data.velocity_attr = simulation::ensure_attribute<float3>(
@@ -481,10 +492,6 @@ class JoltSolverStep {
           data_key_i, attribute_names::external_force, domain, float3(0, 0, 0));
       geo_data.external_torque_attr = this->lookup_attribute_default<float3>(
           data_key_i, attribute_names::external_torque, domain, float3(0, 0, 0));
-      // geo_data.masses = this->lookup_attribute_default<float>(
-      //     data_key_i, attribute_names::mass, domain, 1.0f);
-      // geo_data.moments_of_inertia = this->lookup_attribute_default<float3>(
-      //     data_key_i, attribute_names::moment_of_inertia, domain, float3(1.0f));
 
       geo_data.collision_shape_types = this->lookup_attribute_default<int>(
           data_key_i, attribute_names::collision_shape_type, geo_data.domain, 0);
@@ -577,8 +584,9 @@ class JoltSolverStep {
       if (!motion_type) {
         continue;
       }
-      JPH::ObjectLayer object_layer = (*motion_type == JPH::EMotionType::Dynamic ? ObjectLayers::moving :
-                                                        ObjectLayers::non_moving);
+      JPH::ObjectLayer object_layer = (*motion_type == JPH::EMotionType::Dynamic ?
+                                           ObjectLayers::moving :
+                                           ObjectLayers::non_moving);
 
       const GeometrySet &reference_geometry = reference_geometry_sets[reference_i];
       const std::optional<Bounds<float3>> bounds =
@@ -632,17 +640,41 @@ class JoltSolverStep {
         JPH::Body *jolt_body = body_interface.CreateBody(jolt_body_settings);
         body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
         rigid_body = JoltRigidBody{jolt_body};
-      }
-      else if (motion_type != rigid_body->body->GetMotionType()){
-        /* TODO Skip activation if changing to static/kinematic? */
-        body_interface.SetMotionType(rigid_body->body->GetID(), *motion_type, JPH::EActivation::Activate);
-        body_interface.SetObjectLayer(rigid_body->body->GetID(), object_layer);
+
+        float &mass = geo_data.mass_attr.span[instance_i];
+        float3 &inertia_diagonal = geo_data.inertia_diagonal_attr.span[instance_i];
+        math::Quaternion &inertia_rotation = geo_data.inertia_rotation_attr.span[instance_i];
+        if (*motion_type == JPH::EMotionType::Dynamic) {
+          const JPH::MotionProperties &motion_props = *jolt_body->GetMotionPropertiesUnchecked();
+          mass = math::rcp(motion_props.GetInverseMassUnchecked());
+          inertia_diagonal = math::rcp(
+              geometry::jolt::convert_vec3(motion_props.GetInverseInertiaDiagonal()));
+          inertia_rotation = geometry::jolt::convert_quat(motion_props.GetInertiaRotation());
+        }
+        else {
+          mass = 0.0f;
+          inertia_diagonal = float3(0.0f);
+          inertia_rotation = math::Quaternion::identity();
+        }
       }
 
       body_interface.SetShape(
           rigid_body->body->GetID(), collision_shape.Get(), true, JPH::EActivation::Activate);
       rigid_body->body->SetFriction(friction);
       rigid_body->body->SetRestitution(bounciness);
+
+      if (motion_type != rigid_body->body->GetMotionType()) {
+        /* TODO Skip activation if changing to static/kinematic? */
+        body_interface.SetMotionType(
+            rigid_body->body->GetID(), *motion_type, JPH::EActivation::Activate);
+        body_interface.SetObjectLayer(rigid_body->body->GetID(), object_layer);
+
+        /* Update mass properties. */
+        if (*motion_type == JPH::EMotionType::Dynamic) {
+          rigid_body->body->GetMotionPropertiesUnchecked()->SetMassProperties(
+              JPH::EAllowedDOFs::All, rigid_body->body->GetShape()->GetMassProperties());
+        }
+      }
 
       if (motion_type == JPH::EMotionType::Kinematic) {
         body_interface.SetPositionAndRotationWhenChanged(
@@ -686,7 +718,7 @@ class JoltSolverStep {
         float3 &velocity = geo_data.velocity_attr.span[instance_i];
         float3 &angular_velocity = geo_data.angular_velocity_attr.span[instance_i];
 
-        /* Scale is not simulated to Jolt, so keep the scale of the original geometry. */
+        /* Scale is not simulated in Jolt, so keep the scale of the original geometry. */
         transform = math::from_loc_rot_scale<float4x4>(
             geometry::jolt::convert_dvec3(jolt_body.GetPosition()),
             geometry::jolt::convert_quat(jolt_body.GetRotation()),
@@ -702,6 +734,9 @@ class JoltSolverStep {
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       GeometryData &geo_data = *geometries_.data[data_key_i];
 
+      geo_data.mass_attr.finish();
+      geo_data.inertia_diagonal_attr.finish();
+      geo_data.inertia_rotation_attr.finish();
       geo_data.transform_attr.finish();
       geo_data.velocity_attr.finish();
       geo_data.angular_velocity_attr.finish();
