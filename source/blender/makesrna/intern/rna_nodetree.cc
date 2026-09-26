@@ -11383,6 +11383,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeSplitToInstances");
   define("GeometryNode", "GeometryNodeStoreNamedAttribute");
   define("GeometryNode", "GeometryNodeStoreNamedGrid");
+  define("GeometryNode", "GeometryNodeStraightSkeleton");
   define("GeometryNode", "GeometryNodeStringJoin");
   define("GeometryNode", "GeometryNodeStringToCurves");
   define("GeometryNode", "GeometryNodeSubdivideCurve");

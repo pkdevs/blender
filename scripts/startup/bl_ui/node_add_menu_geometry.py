@@ -293,6 +293,7 @@ class NODE_MT_gn_geometry_operations_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeMergeByDistance")
         self.node_operator(layout, "GeometryNodeMergePoints")
         self.node_operator(layout, "GeometryNodeSortElements")
+        self.node_operator(layout, "GeometryNodeStraightSkeleton")
         self.node_operator(layout, "GeometryNodeTransform", search_weight=1.0)
         layout.separator()
         self.node_operator(layout, "GeometryNodeGetGeometryComponent")
