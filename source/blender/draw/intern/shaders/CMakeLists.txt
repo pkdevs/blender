@@ -35,7 +35,6 @@ set(SRC_GLSL_COMP
   # Failed because of mixed definition of ObjectInfos
   # draw_resource_finalize_comp.glsl
   draw_view_finalize_comp.glsl
-  draw_visibility_comp.glsl
 
   draw_curves_topology_comp.glsl
   draw_curves_interpolation_comp.glsl
