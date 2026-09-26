@@ -6313,6 +6313,14 @@ static void rna_def_userdef_system(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "sequencer_proxy_setup");
   RNA_def_property_ui_text(prop, "Proxy Setup", "When and how proxies are created");
 
+  /* Video hardware acceleration */
+  prop = RNA_def_property(srna, "use_hardware_video_decoding", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gpu_flag", USER_GPU_FLAG_VIDEO_DECODING);
+  RNA_def_property_ui_text(prop,
+                           "Hardware Video Decoding",
+                           "Use the GPU to decode videos when supported. Videos that are already "
+                           "open are not affected");
+
   prop = RNA_def_property(srna, "scrollback", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "scrollback");
   RNA_def_property_range(prop, 32, 32768);
@@ -6503,37 +6511,6 @@ static void rna_def_userdef_system(BlenderRNA *brna)
                            "but might compile shaders faster on some systems. "
                            "Requires restarting Blender for changes to take effect. "
                            "(OpenGL only)");
-
-  /* Video hardware acceleration */
-  static const EnumPropertyItem video_decode_backend_items[] = {
-      {USER_VIDEO_DECODE_NONE,
-       "NONE",
-       0,
-       "None",
-       "Disable hardware acceleration, use software decoding"},
-      {USER_VIDEO_DECODE_AUTO,
-       "AUTO",
-       0,
-       "Auto",
-       "Automatically select the best hardware accelerator for this system"},
-#  if defined(_WIN32)
-      {USER_VIDEO_DECODE_D3D11VA, "D3D11VA", 0, "D3D11VA", "Use Direct3D 11 Video Acceleration"},
-      {USER_VIDEO_DECODE_CUDA, "CUDA", 0, "CUDA", "Nvidia NVDEC hardware acceleration"},
-#  elif defined(__APPLE__)
-      {USER_VIDEO_DECODE_VIDEOTOOLBOX, "VIDEOTOOLBOX", 0, "VideoToolbox", "Use Video Toolbox"},
-#  elif defined(__linux__)
-      {USER_VIDEO_DECODE_VAAPI, "VAAPI", 0, "VA-API", "Use Video Acceleration API"},
-      {USER_VIDEO_DECODE_CUDA, "CUDA", 0, "CUDA", "Nvidia NVDEC hardware acceleration"},
-#  endif
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  prop = RNA_def_property(srna, "video_decode_backend", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "video_decode_backend");
-  RNA_def_property_enum_items(prop, video_decode_backend_items);
-  RNA_def_property_enum_default(prop, USER_VIDEO_DECODE_AUTO);
-  RNA_def_property_ui_text(
-      prop, "Video Decoding API", "Hardware accelerated video decoding backend");
 
   /* Network. */
 

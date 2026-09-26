@@ -200,6 +200,7 @@ enum eUserpref_GPU_Flag : char {
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
   USER_GPU_FLAG_FRESNEL_EDIT = (1 << 4),
+  USER_GPU_FLAG_VIDEO_DECODING = (1 << 5),
 };
 ENUM_OPERATORS(eUserpref_GPU_Flag)
 
@@ -216,16 +217,6 @@ enum eUserPref_GPUBackendType : short {
 #else
   USER_GPU_BACKEND_DEFAULT = USER_GPU_BACKEND_VULKAN,
 #endif
-};
-
-/** #UserDef.video_decode_backend */
-enum eUserPref_VideoDecodeBackend : char {
-  USER_VIDEO_DECODE_NONE = 0,
-  USER_VIDEO_DECODE_AUTO = 1,
-  USER_VIDEO_DECODE_D3D11VA = 2,
-  USER_VIDEO_DECODE_CUDA = 3,
-  USER_VIDEO_DECODE_VAAPI = 4,
-  USER_VIDEO_DECODE_VIDEOTOOLBOX = 5,
 };
 
 /** #UserDef.tablet_api */
@@ -1012,7 +1003,8 @@ struct UserDef {
                              USER_SAVE_PROMPT;
   eUserpref_UI_Flag2 uiflag2 = USER_REGION_OVERLAP;
   eUserpref_GPU_Flag gpu_flag = USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE |
-                                USER_GPU_FLAG_SUBDIVISION_EVALUATION;
+                                USER_GPU_FLAG_SUBDIVISION_EVALUATION |
+                                USER_GPU_FLAG_VIDEO_DECODING;
 
   /** #date_string::DateFormat */
   char date_format = 0;
@@ -1198,9 +1190,6 @@ struct UserDef {
 
   /** #GPUBackendType */
   eUserPref_GPUBackendType gpu_backend = USER_GPU_BACKEND_DEFAULT;
-  /** Video hardware decode backend: #eUserPref_VideoDecodeBackend. */
-  eUserPref_VideoDecodeBackend video_decode_backend = USER_VIDEO_DECODE_AUTO;
-  char _pad_vdec[7] = {};
 
   /** Number of samples for FPS display calculations. */
   short playback_fps_samples = 8;

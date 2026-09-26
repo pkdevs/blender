@@ -489,47 +489,17 @@ static int startffmpeg(MovieReader *anim)
   pCodecCtx->opaque = anim;
   anim->hw_pix_fmt = -1;
 
-  const char user_backend = U.video_decode_backend;
-
-  if (user_backend != USER_VIDEO_DECODE_NONE) {
+  if (U.gpu_flag & USER_GPU_FLAG_VIDEO_DECODING) {
     blender::Vector<enum AVHWDeviceType> candidate_types;
 
-    if (user_backend == USER_VIDEO_DECODE_AUTO) {
 #  if defined(_WIN32)
-      candidate_types.append_as(AV_HWDEVICE_TYPE_D3D11VA);
-      candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
+    candidate_types.append_as(AV_HWDEVICE_TYPE_D3D11VA);
+    candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
 #  elif defined(__APPLE__)
-      candidate_types.append_as(AV_HWDEVICE_TYPE_VIDEOTOOLBOX);
+    candidate_types.append_as(AV_HWDEVICE_TYPE_VIDEOTOOLBOX);
 #  elif defined(__linux__)
-      candidate_types.append_as(AV_HWDEVICE_TYPE_VAAPI);
-      candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
+    candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
 #  endif
-    }
-    else {
-      switch (user_backend) {
-#  if defined(_WIN32)
-        case USER_VIDEO_DECODE_D3D11VA:
-          candidate_types.append_as(AV_HWDEVICE_TYPE_D3D11VA);
-          break;
-        case USER_VIDEO_DECODE_CUDA:
-          candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
-          break;
-#  elif defined(__APPLE__)
-        case USER_VIDEO_DECODE_VIDEOTOOLBOX:
-          candidate_types.append_as(AV_HWDEVICE_TYPE_VIDEOTOOLBOX);
-          break;
-#  elif defined(__linux__)
-        case USER_VIDEO_DECODE_VAAPI:
-          candidate_types.append_as(AV_HWDEVICE_TYPE_VAAPI);
-          break;
-        case USER_VIDEO_DECODE_CUDA:
-          candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
-          break;
-#  endif
-        default:
-          break;
-      }
-    }
 
     for (const enum AVHWDeviceType target_device : candidate_types) {
       bool codec_supports_hw = false;
