@@ -379,10 +379,11 @@ static AVFormatContext *init_format_context_vpx_workarounds(const char *filepath
 #  if OS_MAC
 static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_VIDEOTOOLBOX};
 #  elif OS_WINDOWS
-static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_D3D11VA,
-                                                            AV_HWDEVICE_TYPE_CUDA};
+static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {
+    AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_CUDA, AV_HWDEVICE_TYPE_VULKAN};
 #  else
-static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_CUDA};
+static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_CUDA,
+                                                            AV_HWDEVICE_TYPE_VULKAN};
 #  endif
 
 static bool ffmpeg_hw_codec_supports_device(const AVCodec *codec, const AVHWDeviceType device_type)
