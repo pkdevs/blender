@@ -908,7 +908,7 @@ static void do_texture_effector(EffectorCache *eff,
     madd_v3_v3fl(tex_co, efd->nor, fac);
   }
 
-  hasrgb = multitex_ext(eff->pd->tex, tex_co, result, 0, nullptr, true, false);
+  hasrgb = multitex_ext(eff->pd->tex, tex_co, result, 0, nullptr, true, false, 0, false);
 
   if (hasrgb && mode == PFIELD_TEX_RGB) {
     force[0] = (0.5f - result->trgba[0]) * strength;
@@ -919,15 +919,15 @@ static void do_texture_effector(EffectorCache *eff,
     strength /= nabla;
 
     tex_co[0] += nabla;
-    multitex_ext(eff->pd->tex, tex_co, result + 1, 0, nullptr, true, false);
+    multitex_ext(eff->pd->tex, tex_co, result + 1, 0, nullptr, true, false, 0, false);
 
     tex_co[0] -= nabla;
     tex_co[1] += nabla;
-    multitex_ext(eff->pd->tex, tex_co, result + 2, 0, nullptr, true, false);
+    multitex_ext(eff->pd->tex, tex_co, result + 2, 0, nullptr, true, false, 0, false);
 
     tex_co[1] -= nabla;
     tex_co[2] += nabla;
-    multitex_ext(eff->pd->tex, tex_co, result + 3, 0, nullptr, true, false);
+    multitex_ext(eff->pd->tex, tex_co, result + 3, 0, nullptr, true, false, 0, false);
 
     if (mode == PFIELD_TEX_GRAD || !hasrgb) { /* if we don't have rgb fall back to grad */
       /* generate intensity if texture only has rgb value */

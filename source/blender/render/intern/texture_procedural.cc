@@ -926,18 +926,20 @@ int multitex_ext(Tex *tex,
                  const short thread,
                  ImagePool *pool,
                  bool scene_color_manage,
-                 const bool skip_load_image)
+                 const bool skip_load_image,
+                 short which_output,
+                 bool texnode_preview)
 {
   return multitex_nodes_intern(tex,
                                texvec,
                                texres,
                                thread,
-                               0,
+                               which_output,
                                nullptr,
                                pool,
                                scene_color_manage,
                                skip_load_image,
-                               false,
+                               texnode_preview,
                                true);
 }
 

@@ -1178,6 +1178,9 @@ static void shader_preview_texture(ShaderPreview *sp, Tex *tex, Scene *sce, Rend
   ImagePool *img_pool = BKE_image_pool_new();
   BKE_texture_fetch_images_for_pool(tex, img_pool);
 
+  /* Brush texture slots choose which Output node to preview. */
+  const short which_output = sp->slot ? sp->slot->which_output : 0;
+
   /* Fill in image buffer. */
   float *rect_float = rv_ibuf->float_data_for_write();
   float tex_coord[3] = {0.0f, 0.0f, 0.0f};
@@ -1189,9 +1192,16 @@ static void shader_preview_texture(ShaderPreview *sp, Tex *tex, Scene *sce, Rend
     for (int x = 0; x < width; x++) {
       tex_coord[0] = (float(x) / float(height)) * 2.0f - 1.0f;
 
-      /* Evaluate texture at tex_coord. */
+      /* Evaluate texture at tex_coord that passes through the node tree, not only the base type,
+       * using slot's output node. */
       TexResult texres = {0};
-      BKE_texture_get_value_ex(tex, tex_coord, &texres, img_pool, true);
+      const int result_type = multitex_ext(
+          tex, tex_coord, &texres, 0, img_pool, true, false, which_output, true);
+      /* Without nodes, procedural textures return only an intensity and leave the color channels
+       * at zero. Spread it to RGB so they preview as gray rather than black.*/
+      if (!(result_type & TEX_RGB)) {
+        copy_v3_fl(texres.trgba, texres.tin);
+      }
       copy_v4_fl4(rect_float,
                   texres.trgba[0],
                   texres.trgba[1],
@@ -1283,7 +1293,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 
   /* entire cycle for render engine */
   if (idtype == ID_TE) {
-    shader_preview_texture(sp, id_cast<Tex *>(id), sce, re);
+    shader_preview_texture(sp, sp->texcopy, sce, re);
   }
   else {
     /* Render preview scene */

@@ -68,6 +68,11 @@ struct TexResult {
  * otherwise you may use uninitialized values.
  *
  * Use it for stuff which is out of render pipeline.
+ *
+ * \param which_output: is used for node-based textures and passing 0 selects the first Output node
+ *
+ * \param texnode_preview: is used for UI previews only and render and brush evaluation must pass
+ * false
  */
 int multitex_ext(struct Tex *tex,
                  const float texvec[3],
@@ -75,7 +80,9 @@ int multitex_ext(struct Tex *tex,
                  short thread,
                  struct ImagePool *pool,
                  bool scene_color_manage,
-                 bool skip_load_image);
+                 bool skip_load_image,
+                 short which_output,
+                 bool texnode_preview);
 
 /**
  * Nodes disabled.
