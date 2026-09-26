@@ -937,12 +937,15 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
       }
     }
 
-    if (anim->img_convert_ctx == nullptr || anim->src_pix_fmt != input->format) {
+    if (anim->img_convert_ctx == nullptr || anim->src_pix_fmt != input->format ||
+        anim->dst_pix_fmt != dst_format)
+    {
       if (anim->img_convert_ctx) {
         ffmpeg_sws_release_context(anim->img_convert_ctx);
         anim->img_convert_ctx = nullptr;
       }
       anim->src_pix_fmt = input->format;
+      anim->dst_pix_fmt = dst_format;
 
       const AVColorSpace colorspace = (input->colorspace != AVCOL_SPC_UNSPECIFIED) ?
                                           input->colorspace :
@@ -951,8 +954,11 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
                                      (input->color_range == AVCOL_RANGE_JPEG) :
                                      (anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG);
 
-      anim->img_convert_ctx = ffmpeg_sws_get_context(input->width,
-                                                     input->height,
+      const int src_width = (input->width > 0) ? input->width : anim->x;
+      const int src_height = (input->height > 0) ? input->height : anim->y;
+
+      anim->img_convert_ctx = ffmpeg_sws_get_context(src_width,
+                                                     src_height,
                                                      static_cast<AVPixelFormat>(input->format),
                                                      is_full_range,
                                                      colorspace,
@@ -966,8 +972,14 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
     }
   }
 
+  if (anim->img_convert_ctx == nullptr) {
+    CLOG_ERROR(&LOG, "Could not create swscale conversion context.");
+    return;
+  }
+
   bool already_rotated = false;
   if (anim->is_float) {
+    BLI_assert(ibuf->float_buffer.data != nullptr);
     /* Float images are converted into planar GBRA layout by swscale (since
      * it does not support direct YUV->RGBA float interleaved conversion).
      * Do vertical flip and interleave into RGBA manually. */
@@ -978,6 +990,7 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
     already_rotated = true;
   }
   else {
+    BLI_assert(ibuf->byte_buffer.data != nullptr);
     /* If final destination image layout matches that of decoded RGB frame (including
      * any line padding done by ffmpeg for SIMD alignment), we can directly
      * decode into that, doing the vertical flip in the same step. Otherwise have
@@ -1485,6 +1498,42 @@ static ImBuf *ffmpeg_fetchibuf(MovieReader *anim, int position)
   anim->x = anim->pCodecCtx->width;
   anim->y = anim->pCodecCtx->height;
 
+  AVFrame *final_frame = ffmpeg_frame_by_pts_get(anim, pts_to_search);
+  if (final_frame == nullptr) {
+    /* No valid frame was decoded for requested PTS, fall back on most recent decoded frame, even
+     * if it is incorrect. */
+    final_frame = ffmpeg_double_buffer_frame_fallback_get(anim);
+  }
+
+  /* If the frame is a GPU surface, transfer only this frame to system RAM */
+  if (final_frame != nullptr) {
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(
+        static_cast<AVPixelFormat>(final_frame->format));
+    if ((final_frame->hw_frames_ctx != nullptr) ||
+        (desc && (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)))
+    {
+      av_frame_unref(anim->pFrameSW);
+      const int ret = av_hwframe_transfer_data(anim->pFrameSW, final_frame, 0);
+      if (ret == 0) {
+        av_frame_copy_props(anim->pFrameSW, final_frame);
+        anim->pFrameSW->width = final_frame->width;
+        anim->pFrameSW->height = final_frame->height;
+        av_buffer_unref(&anim->pFrameSW->hw_frames_ctx);
+        final_frame = anim->pFrameSW;
+      }
+      else {
+        CLOG_WARN(
+            &LOG, "Hardware frame transfer failed, setting frame to nullptr (error %d)", ret);
+        final_frame = nullptr;
+      }
+    }
+
+    if (final_frame != nullptr && final_frame->format != AV_PIX_FMT_NONE) {
+      anim->is_float = calc_pix_fmt_max_component_bits(
+                           static_cast<AVPixelFormat>(final_frame->format)) > 8;
+    }
+  }
+
   const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(anim->pCodecCtx->pix_fmt);
 
   ImColorMode color_mode = ImColorMode::RGBA;
@@ -1507,33 +1556,13 @@ static ImBuf *ffmpeg_fetchibuf(MovieReader *anim, int position)
     cur_frame_final->assign_byte_data(buffer_data);
   }
 
-  AVFrame *final_frame = ffmpeg_frame_by_pts_get(anim, pts_to_search);
-  if (final_frame == nullptr) {
-    /* No valid frame was decoded for requested PTS, fall back on most recent decoded frame, even
-     * if it is incorrect. */
-    final_frame = ffmpeg_double_buffer_frame_fallback_get(anim);
-  }
-
-  /* If the final frame is a GPU surface, transfer only this frame to system RAM */
-  if (final_frame != nullptr && anim->hw_pix_fmt != -1 && final_frame->format == anim->hw_pix_fmt)
-  {
-    av_frame_unref(anim->pFrameSW);
-    int ret = av_hwframe_transfer_data(anim->pFrameSW, final_frame, 0);
-    if (ret == 0) {
-      av_frame_copy_props(anim->pFrameSW, final_frame);
-      av_buffer_unref(&anim->pFrameSW->hw_frames_ctx);
-      final_frame = anim->pFrameSW;
-    }
-    else {
-      CLOG_WARN(&LOG, "Hardware frame transfer failed, setting frame to nullptr (error %d)", ret);
-      final_frame = nullptr;
-    }
-  }
-
   /* Even with the fallback from above it is possible that the current decode frame is nullptr. In
    * this case skip post-processing and return current image buffer. */
   if (final_frame != nullptr) {
     ffmpeg_postprocess(anim, final_frame, cur_frame_final);
+  }
+  else {
+    memset(buffer_data, 0, pixel_size * anim->x * anim->y);
   }
 
   if (anim->is_float) {

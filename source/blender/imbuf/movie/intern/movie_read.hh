@@ -67,6 +67,7 @@ struct MovieReader {
   int hw_pix_fmt = -1;
   AVFrame *pFrameSW = nullptr;
   int src_pix_fmt = -1;
+  int dst_pix_fmt = -1;
   bool pFrame_complete = false;
   AVFrame *pFrame_backup = nullptr;
   bool pFrame_backup_complete = false;
