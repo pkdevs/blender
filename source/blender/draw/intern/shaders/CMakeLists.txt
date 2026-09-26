@@ -31,7 +31,6 @@ set(SRC_GLSL_FRAG
 )
 
 set(SRC_GLSL_COMP
-  draw_command_generate_comp.glsl
   # Failed because of mixed definition of ObjectInfos
   # draw_resource_finalize_comp.glsl
   draw_view_finalize_comp.glsl

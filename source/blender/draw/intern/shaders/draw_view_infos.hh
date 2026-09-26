@@ -135,24 +135,6 @@ COMPUTE_SOURCE("draw_view_finalize_comp.glsl")
 ADDITIONAL_INFO(draw_view)
 GPU_SHADER_CREATE_END()
 
-GPU_SHADER_CREATE_INFO(draw_command_generate)
-DO_STATIC_COMPILATION()
-TYPEDEF_SOURCE("draw_shader_shared.hh")
-TYPEDEF_SOURCE("draw_command_shared.hh")
-LOCAL_GROUP_SIZE(DRW_COMMAND_GROUP_SIZE)
-STORAGE_BUF(0, read_write, DrawGroup, group_buf[])
-STORAGE_BUF(1, read, uint, visibility_buf[])
-STORAGE_BUF(2, read, DrawPrototype, prototype_buf[])
-STORAGE_BUF(3, write, DrawCommand, command_buf[])
-STORAGE_BUF(DRW_RESOURCE_ID_SLOT, write, uint, resource_id_buf[])
-PUSH_CONSTANT(int, prototype_len)
-PUSH_CONSTANT(int, visibility_word_per_draw)
-PUSH_CONSTANT(int, view_shift)
-PUSH_CONSTANT(int, view_len)
-PUSH_CONSTANT(bool, use_custom_ids)
-COMPUTE_SOURCE("draw_command_generate_comp.glsl")
-GPU_SHADER_CREATE_END()
-
 /** \} */
 
 /* Stub needs to be after all definitions to avoid conflict with legacy definitions. */
