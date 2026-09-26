@@ -10,6 +10,7 @@
 #include <map>
 #include <tuple>
 
+#include "BKE_blender_version.h"
 #include "BKE_context.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
@@ -25,6 +26,9 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
+#include "RNA_access.hh"
+#include "RNA_prototypes.hh"
+
 #include "SEQ_channels.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_sequencer.hh"
@@ -33,17 +37,22 @@
 
 #include "opentimelineio/clip.h"
 #include "opentimelineio/color.h"
+#include "opentimelineio/effect.h"
 #include "opentimelineio/externalReference.h"
+#include "opentimelineio/freezeFrame.h"
 #include "opentimelineio/gap.h"
+#include "opentimelineio/generatorReference.h"
 #include "opentimelineio/imageSequenceReference.h"
+#include "opentimelineio/linearTimeWarp.h"
 #include "opentimelineio/marker.h"
 #include "opentimelineio/missingReference.h"
 #include "opentimelineio/stack.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
+#include "opentimelineio/transition.h"
 
 #include "otio_export.hh"
-#include "otio_export_metadata.hh"
+#include "otio_metadata.hh"
 
 namespace blender::io::otio {
 
@@ -116,6 +125,28 @@ static std::string media_filepath(const StripExportContext &ctx, const Strip &st
   BLI_path_join(filepath, sizeof(filepath), strip.data->dirpath, strip.data->stripdata->filename);
   BLI_path_abs(filepath, BKE_main_blendfile_path(ctx.bmain));
   return filepath;
+}
+
+static std::string strip_type_identifier(const StripExportContext &ctx, const Strip &strip)
+{
+  PointerRNA ptr = RNA_pointer_create_discrete(
+      &ctx.scene->id, RNA_Strip, const_cast<Strip *>(&strip));
+  const char *identifier = "";
+  RNA_property_enum_identifier(
+      nullptr, &ptr, RNA_struct_find_property(&ptr, "type"), strip.type, &identifier);
+  return identifier;
+}
+
+static void add_strip_metadata(const StripExportContext &ctx,
+                               const Strip &strip,
+                               SerializableObjectWithMetadata &object)
+{
+  PointerRNA ptr = RNA_pointer_create_discrete(
+      &ctx.scene->id, RNA_Strip, const_cast<Strip *>(&strip));
+  AnyDictionary data;
+  data["strip"] = rna_to_dictionary(ptr);
+  object.metadata()["blender"] = data;
+  add_foreign_metadata(strip.prop, object);
 }
 
 /* Return `false` if the image sequence in Blender cannot be represented natively in the
@@ -225,10 +256,9 @@ static SerializableObject::Retainer<MediaReference> media_reference(StripExportC
     case STRIP_TYPE_ALPHAOVER:
     case STRIP_TYPE_ALPHAUNDER:
     case STRIP_TYPE_COLORMIX: {
-      SerializableObject::Retainer<GeneratorReference> reference = create_generator_reference(
-          &strip);
-      reference->set_available_range(frame_range(ctx, 0, media_length(ctx, strip)));
-      return reference.value;
+      return new GeneratorReference(strip.name + 2,
+                                    strip_type_identifier(ctx, strip),
+                                    frame_range(ctx, 0, media_length(ctx, strip)));
     }
 
     case STRIP_TYPE_SCENE:
@@ -240,17 +270,53 @@ static SerializableObject::Retainer<MediaReference> media_reference(StripExportC
   }
 }
 
+static float speed_factor(const StripExportContext &ctx,
+                          const Strip &input,
+                          const Strip &speed_strip)
+{
+  const SpeedControlVars *speed = static_cast<const SpeedControlVars *>(speed_strip.effectdata);
+  switch (speed->speed_control_type) {
+    case SEQ_SPEED_STRETCH: {
+      const float speed_length = speed_strip.right_handle(ctx.scene) - speed_strip.left_handle();
+      return speed_length != 0.0f ? (input.length(ctx.scene) - input.startofs) / speed_length :
+                                    0.0f;
+    }
+    case SEQ_SPEED_MULTIPLY:
+      return speed->speed_fader;
+    default:
+      return 0.0f;
+  }
+}
+
+static SerializableObject::Retainer<otio::Effect> strip_to_effect(const StripExportContext &ctx,
+                                                                  const Strip &input,
+                                                                  const Strip &effect_strip)
+{
+  const std::string name = effect_strip.name + 2;
+  SerializableObject::Retainer<otio::Effect> effect;
+  if (effect_strip.type != STRIP_TYPE_SPEED) {
+    effect = new otio::Effect(name, strip_type_identifier(ctx, effect_strip));
+  }
+  else if (const float factor = speed_factor(ctx, input, effect_strip); factor != 0.0f) {
+    effect = new LinearTimeWarp(name, "", factor);
+  }
+  else {
+    effect = new FreezeFrame(name);
+  }
+  add_strip_metadata(ctx, effect_strip, *effect);
+  return effect;
+}
+
 static void add_strip_data(const StripExportContext &ctx,
                            Editing &editing,
                            const Strip &strip,
                            Item &item)
 {
   item.set_enabled(!(strip.flag & SEQ_MUTE));
-  add_strip_metadata(&strip, &item);
-  add_foreign_metadata(strip.system_properties, &item);
-  for (const Strip *effect : seq::lookup_effects_by_strip(&editing, &strip)) {
-    if (is_single_input_effect(*effect)) {
-      add_strip_effect(ctx.scene, &strip, effect, &item);
+  add_strip_metadata(ctx, strip, item);
+  for (const Strip *effect_strip : seq::lookup_effects_by_strip(&editing, &strip)) {
+    if (is_single_input_effect(*effect_strip)) {
+      item.effects().push_back(strip_to_effect(ctx, strip, *effect_strip));
     }
   }
 }
@@ -269,8 +335,8 @@ static SerializableObject::Retainer<Clip> strip_to_clip(StripExportContext &ctx,
     return nullptr;
   }
 
-  const int duration = strip.right_handle(ctx.scene) - strip.left_handle();
   int source_start = strip.left_handle() - int(strip.content_start()) + strip.anim_startofs;
+  const int duration = strip.right_handle(ctx.scene) - strip.left_handle();
   if (seq::transform_single_image_check(&strip)) {
     source_start = 0;
   }
@@ -376,18 +442,23 @@ static void add_transition(const StripExportContext &ctx,
   from->end += in_offset;
   to->start -= out_offset;
 
+  auto otio_transition = SerializableObject::Retainer<Transition>(
+      new Transition(transition.name + 2,
+                     transition.type == STRIP_TYPE_WIPE ? Transition::Type::Custom :
+                                                          Transition::Type::SMPTE_Dissolve,
+                     frames(ctx, in_offset),
+                     frames(ctx, out_offset)));
+  add_strip_metadata(ctx, transition, *otio_transition);
+
   const int cut = from->end;
-  channel_items[input1->channel].video.append(
-      {&transition,
-       cut,
-       cut,
-       create_transition(&transition, frames(ctx, in_offset), frames(ctx, out_offset)).value});
+  channel_items[input1->channel].video.append({&transition, cut, cut, otio_transition.value});
 }
 
 static SerializableObject::Retainer<Track> build_track(const StripExportContext &ctx,
                                                        Vector<PlacedItem> &items,
                                                        const std::string &kind,
                                                        const SeqTimelineChannel *channel,
+                                                       const int channel_index,
                                                        const int origin)
 {
   std::stable_sort(items.begin(), items.end(), [](const PlacedItem &a, const PlacedItem &b) {
@@ -397,6 +468,9 @@ static SerializableObject::Retainer<Track> build_track(const StripExportContext 
   auto track = SerializableObject::Retainer<Track>(
       new Track(channel ? channel->name : "", std::nullopt, kind));
   track->set_enabled(!(channel && channel->is_muted()));
+  AnyDictionary data;
+  data["channel"] = int64_t(channel_index);
+  track->metadata()["blender"] = data;
 
   int cursor = origin;
   for (PlacedItem &item : items) {
@@ -442,10 +516,12 @@ static Tracks export_strips(StripExportContext &ctx,
                                             seq::channel_get_by_index(channels, channel_index) :
                                             nullptr;
     if (!items.video.is_empty()) {
-      tracks.video.append(build_track(ctx, items.video, Track::Kind::video, channel, origin));
+      tracks.video.append(
+          build_track(ctx, items.video, Track::Kind::video, channel, channel_index, origin));
     }
     if (!items.audio.is_empty()) {
-      tracks.audio.append(build_track(ctx, items.audio, Track::Kind::audio, channel, origin));
+      tracks.audio.append(
+          build_track(ctx, items.audio, Track::Kind::audio, channel, channel_index, origin));
     }
   }
   return tracks;
@@ -482,7 +558,11 @@ void exporter_main(bContext *C, const OTIOExportParams &params)
     timeline->tracks()->append_child(track);
   }
   export_markers(ctx, origin, *timeline->tracks());
-  add_foreign_metadata(scene->id.system_properties, timeline.value);
+  AnyDictionary data;
+  data["version"] = int64_t(BLENDER_FILE_VERSION);
+  data["subversion"] = int64_t(BLENDER_FILE_SUBVERSION);
+  timeline->metadata()["blender"] = data;
+  add_foreign_metadata(scene->id.properties, *timeline);
 
   opentimelineio::OPENTIMELINEIO_VERSION_NS::ErrorStatus error_status;
   if (!timeline->to_json_file(params.filepath, &error_status)) {

@@ -5,8 +5,10 @@
 set(INC
   .
   exporter
+  intern
   ../../editors/include
   ../../makesrna
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
@@ -14,12 +16,12 @@ set(INC_SYS
 
 set(SRC
   IO_otio.cc
-  exporter/otio_export_metadata.cc
   exporter/otio_export.cc
+  intern/otio_metadata.cc
 
   IO_otio.hh
-  exporter/otio_export_metadata.hh
   exporter/otio_export.hh
+  intern/otio_metadata.hh
 )
 
 set(LIB
@@ -36,4 +38,5 @@ set(LIB
 
 
 blender_add_lib(bf_io_otio "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+add_dependencies(bf_io_otio bf_rna)
 
