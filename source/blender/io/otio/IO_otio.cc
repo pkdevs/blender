@@ -41,6 +41,8 @@
 
 namespace blender {
 
+static CLG_LogRef LOG = {"io.otio"};
+
 void OTIO_export(bContext *C, const OTIOExportParams &params)
 {
   io::otio::exporter_main(C, params);
@@ -81,7 +83,7 @@ bool OTIO_import(bContext *C, const char *filepath, bool restore_channel, Report
     BKE_id_rename(*bmain, scene->id, scene_name, IDNewNameMode::RenameExistingNever);
   }
   seq::editing_ensure(scene);
-  build_blender_timeline(bmain, scene, timeline, restore_channel, reports);
+  io::otio::build_blender_timeline(bmain, scene, timeline, restore_channel, reports);
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_FPS | ID_RECALC_SEQUENCER_STRIPS);

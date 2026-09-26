@@ -107,10 +107,12 @@ static void image_strip_init(
 
   /* Initialize `StripElem.filename` for all other frames if it's an Image Sequence. */
   for (int i = 1; i < params->count; ++i) {
-    STRNCPY(filename, params->name_prefix);
-    path_append_sequence_number(
-        filename, filename, params->start_frame + i, params->padding, false);
-    BLI_strncat(filename, params->name_suffix, sizeof(filename));
+    BLI_path_sequence_encode(filename,
+                             sizeof(filename),
+                             params->name_prefix,
+                             params->name_suffix,
+                             params->padding,
+                             params->start_frame + i);
 
     missing_frames_error |= missing_frame_policy_impl(
         filename, filename_prev, dirpath, params->missing_policy);
@@ -469,11 +471,17 @@ static Strip *add_item_recursive(Main *bmain,
       image_params.padding = img_seq_ref->frame_zero_padding();
       image_params.missing_policy = img_seq_ref->missing_frame_policy();
 
-      STRNCPY(load_data.path, img_seq_ref->target_url_base().c_str());
-      BLI_path_append(load_data.path, sizeof(load_data.path), image_params.name_prefix);
-      path_append_sequence_number(
-          load_data.path, load_data.path, image_params.start_frame, image_params.padding, false);
-      BLI_strncat(load_data.path, image_params.name_suffix, sizeof(load_data.path));
+      char filename[FILE_MAX];
+      BLI_path_sequence_encode(filename,
+                               sizeof(filename),
+                               image_params.name_prefix,
+                               image_params.name_suffix,
+                               image_params.padding,
+                               image_params.start_frame);
+      BLI_path_join(load_data.path,
+                    sizeof(load_data.path),
+                    img_seq_ref->target_url_base().c_str(),
+                    filename);
     }
     else if (auto gen_ref = dynamic_cast<GeneratorReference *>(clip->media_reference())) {
       strip = add_generator_reference_effect(

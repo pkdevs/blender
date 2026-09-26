@@ -34,10 +34,7 @@
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
 
-#include "WM_types.hh"
-
 #include "IO_otio.hh"
-#include "exporter/otio_export.hh"
 
 #include <opentimelineio/anyVector.h>
 #include <opentimelineio/clip.h>
@@ -126,24 +123,21 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     }
   }
 
-  void export_scene(Main *bmain,
-                    Scene *scene,
-                    const std::string &filepath,
-                    ReportList *reports,
-                    const OTIOExportParams &params = {})
+  void export_scene(Main *bmain, Scene *scene, const std::string &filepath, ReportList *reports)
   {
-    ExportJobData job_data{};
-    job_data.bmain = bmain;
-    job_data.scene = scene;
-    job_data.params = params;
-    STRNCPY(job_data.filepath, filepath.c_str());
+    PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
+    Vector<std::unique_ptr<bContextStore>> context_store;
+    const bContextStore *previous_store = CTX_store_get(context);
+    CTX_store_set(context, CTX_store_add(context_store, "sequencer_scene", &scene_ptr));
+    CTX_data_main_set(context, bmain);
+    CTX_data_scene_set(context, scene);
 
-    wmJobWorkerStatus worker_status{};
-    worker_status.reports = reports;
+    OTIOExportParams params;
+    STRNCPY(params.filepath, filepath.c_str());
+    params.reports = reports;
+    OTIO_export(context, params);
+    CTX_store_set(context, previous_store);
 
-    otio_export_job_start(&job_data, &worker_status);
-
-    ASSERT_FLOAT_EQ(worker_status.progress, 1.0f);
     ASSERT_TRUE(BLI_exists(filepath.c_str()));
   }
 
@@ -232,7 +226,7 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     return std::any_cast<AnyDictionary>(&metadata.at(key));
   }
 
-  void image_sequence_round_trip(const ImgSeqFallback fallback, const bool sequenced_filenames)
+  void image_sequence_round_trip()
   {
     constexpr char timeline_name[] = "Image Sequence Timeline";
     constexpr char strip_name[] = "Image Sequence";
@@ -240,10 +234,7 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     constexpr int strip_start = 4;
     constexpr int image_count = 3;
 
-    const std::vector<std::string> filenames =
-        sequenced_filenames ?
-            std::vector<std::string>{"shot.0101.png", "shot.0102.png", "shot.0103.png"} :
-            std::vector<std::string>{"first.png", "second.png", "third.png"};
+    const std::vector<std::string> filenames{"shot.0101.png", "shot.0102.png", "shot.0103.png"};
     for (const std::string &filename : filenames) {
       ASSERT_TRUE(copy_test_image(filename.c_str()));
     }
@@ -264,9 +255,7 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     EXPECT_EQ(image_strip->left_handle(), strip_start);
     EXPECT_EQ(image_strip->right_handle(scene), strip_start + image_count);
 
-    OTIOExportParams export_params{};
-    export_params.img_sequence_fallback = fallback;
-    export_scene(bmain, scene, output_path, &reports, export_params);
+    export_scene(bmain, scene, output_path, &reports);
 
     ErrorStatus error_status;
     SerializableObject::Retainer<Timeline> timeline(
@@ -297,81 +286,26 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     EXPECT_TRUE(source_range->start_time().strictly_equal(RationalTime(0, frame_rate)));
     EXPECT_TRUE(source_range->duration().strictly_equal(RationalTime(image_count, frame_rate)));
 
-    const bool rendered_as_movie = !sequenced_filenames && fallback == ImgSeqFallback::RenderMovie;
-    std::string imported_media_directory;
-    std::vector<std::string> imported_filenames;
-    std::string rendered_filepath;
+    ImageSequenceReference *reference = dynamic_cast<ImageSequenceReference *>(
+        clip->media_reference());
+    ASSERT_NE(reference, nullptr);
 
-    if (rendered_as_movie) {
-      ExternalReference *reference = dynamic_cast<ExternalReference *>(clip->media_reference());
-      ASSERT_NE(reference, nullptr);
+    EXPECT_EQ(
+        BLI_path_cmp_normalized(reference->target_url_base().c_str(), media_directory.c_str()), 0);
+    EXPECT_EQ(reference->name_prefix(), "shot.");
+    EXPECT_EQ(reference->name_suffix(), ".png");
+    EXPECT_EQ(reference->start_frame(), 101);
+    EXPECT_EQ(reference->frame_step(), 1);
+    EXPECT_DOUBLE_EQ(reference->rate(), frame_rate);
+    EXPECT_EQ(reference->frame_zero_padding(), 4);
+    EXPECT_EQ(reference->missing_frame_policy(),
+              ImageSequenceReference::MissingFramePolicy::error);
+    EXPECT_EQ(reference->number_of_images_in_sequence(), image_count);
 
-      char expected_render_path[FILE_MAX];
-      BLI_path_join(expected_render_path,
-                    sizeof(expected_render_path),
-                    test_directory.c_str(),
-                    "BL_render",
-                    "Image Sequence.C1.[04-06].mp4");
-      rendered_filepath = expected_render_path;
-
-      EXPECT_EQ(
-          BLI_path_cmp_normalized(reference->target_url().c_str(), rendered_filepath.c_str()), 0);
-      EXPECT_EQ(reference->name(), "Image Sequence.C1.[04-06].mp4");
-      EXPECT_TRUE(BLI_exists(rendered_filepath.c_str()));
-
-      const std::optional<TimeRange> available_range = reference->available_range();
-      ASSERT_TRUE(available_range.has_value());
-      EXPECT_TRUE(available_range->start_time().strictly_equal(RationalTime(0, frame_rate)));
-      EXPECT_TRUE(
-          available_range->duration().strictly_equal(RationalTime(image_count, frame_rate)));
-    }
-    else {
-      ImageSequenceReference *reference = dynamic_cast<ImageSequenceReference *>(
-          clip->media_reference());
-      ASSERT_NE(reference, nullptr);
-
-      imported_media_directory = media_directory;
-      if (!sequenced_filenames && fallback == ImgSeqFallback::Symlink) {
-        imported_media_directory += SEP_STR "BL_links";
-      }
-
-      imported_filenames = sequenced_filenames ? filenames :
-                                                 std::vector<std::string>{"first.01.png",
-                                                                          "first.02.png",
-                                                                          "first.03.png"};
-
-      EXPECT_EQ(BLI_path_cmp_normalized(reference->target_url_base().c_str(),
-                                        imported_media_directory.c_str()),
-                0);
-      EXPECT_EQ(reference->name_prefix(), sequenced_filenames ? "shot." : "first.");
-      EXPECT_EQ(reference->name_suffix(), ".png");
-      EXPECT_EQ(reference->start_frame(), sequenced_filenames ? 101 : 1);
-      EXPECT_EQ(reference->frame_step(), 1);
-      EXPECT_DOUBLE_EQ(reference->rate(), frame_rate);
-      EXPECT_EQ(reference->frame_zero_padding(), sequenced_filenames ? 4 : 2);
-      EXPECT_EQ(reference->missing_frame_policy(),
-                ImageSequenceReference::MissingFramePolicy::error);
-      EXPECT_EQ(reference->number_of_images_in_sequence(), image_count);
-
-      const std::optional<TimeRange> available_range = reference->available_range();
-      ASSERT_TRUE(available_range.has_value());
-      EXPECT_TRUE(available_range->start_time().strictly_equal(RationalTime(0, frame_rate)));
-      EXPECT_TRUE(
-          available_range->duration().strictly_equal(RationalTime(image_count, frame_rate)));
-
-      for (const std::string &filename : imported_filenames) {
-        char filepath[FILE_MAX];
-        BLI_path_join(
-            filepath, sizeof(filepath), imported_media_directory.c_str(), filename.c_str());
-        EXPECT_TRUE(BLI_exists(filepath));
-      }
-
-      if (!sequenced_filenames && fallback == ImgSeqFallback::Rename) {
-        char old_filepath[FILE_MAX];
-        BLI_path_join(old_filepath, sizeof(old_filepath), media_directory.c_str(), "second.png");
-        EXPECT_FALSE(BLI_exists(old_filepath));
-      }
-    }
+    const std::optional<TimeRange> available_range = reference->available_range();
+    ASSERT_TRUE(available_range.has_value());
+    EXPECT_TRUE(available_range->start_time().strictly_equal(RationalTime(0, frame_rate)));
+    EXPECT_TRUE(available_range->duration().strictly_equal(RationalTime(image_count, frame_rate)));
 
     BKE_id_rename(*bmain, scene->id, "Source Scene", IDNewNameMode::RenameExistingNever);
     Scene *imported_scene = BKE_scene_add(bmain, "Import Target");
@@ -389,25 +323,15 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     EXPECT_EQ(imported_strip->left_handle(), strip_start);
     EXPECT_EQ(imported_strip->right_handle(imported_scene), strip_start + image_count);
 
-    if (rendered_as_movie) {
-      EXPECT_EQ(imported_strip->type, STRIP_TYPE_MOVIE);
-      EXPECT_EQ(BLI_path_cmp_normalized(strip_filepath(imported_strip).c_str(),
-                                        rendered_filepath.c_str()),
+    EXPECT_EQ(imported_strip->type, STRIP_TYPE_IMAGE);
+    EXPECT_EQ(imported_strip->content_length(), image_count);
+    EXPECT_FALSE(imported_strip->flag & SEQ_SINGLE_FRAME_CONTENT);
+    for (int i = 0; i < image_count; ++i) {
+      char expected_path[FILE_MAX];
+      BLI_path_join(
+          expected_path, sizeof(expected_path), media_directory.c_str(), filenames[i].c_str());
+      EXPECT_EQ(BLI_path_cmp_normalized(strip_filepath(imported_strip, i).c_str(), expected_path),
                 0);
-    }
-    else {
-      EXPECT_EQ(imported_strip->type, STRIP_TYPE_IMAGE);
-      EXPECT_EQ(imported_strip->content_length(), image_count);
-      EXPECT_FALSE(imported_strip->flag & SEQ_SINGLE_FRAME_CONTENT);
-      for (int i = 0; i < image_count; ++i) {
-        char expected_path[FILE_MAX];
-        BLI_path_join(expected_path,
-                      sizeof(expected_path),
-                      imported_media_directory.c_str(),
-                      imported_filenames[i].c_str());
-        EXPECT_EQ(
-            BLI_path_cmp_normalized(strip_filepath(imported_strip, i).c_str(), expected_path), 0);
-      }
     }
   }
 };
@@ -580,30 +504,7 @@ TEST_F(OTIORoundTripTest, ImageClip)
 
 TEST_F(OTIORoundTripTest, ImageSequence)
 {
-  image_sequence_round_trip(ImgSeqFallback::Symlink, true);
-}
-
-TEST_F(OTIORoundTripTest, ImageSequenceNonSequencedRename)
-{
-  image_sequence_round_trip(ImgSeqFallback::Rename, false);
-}
-
-TEST_F(OTIORoundTripTest, ImageSequenceNonSequencedSymlink)
-{
-#ifdef WIN32
-  GTEST_SKIP() << "Symbolic-link fallback is unavailable";
-#else
-  image_sequence_round_trip(ImgSeqFallback::Symlink, false);
-#endif
-}
-
-TEST_F(OTIORoundTripTest, ImageSequenceNonSequencedRenderMovie)
-{
-#ifndef WITH_FFMPEG
-  GTEST_SKIP() << "FFmpeg support is unavailable";
-#else
-  image_sequence_round_trip(ImgSeqFallback::RenderMovie, false);
-#endif
+  image_sequence_round_trip();
 }
 
 TEST_F(OTIORoundTripTest, MovieClip)

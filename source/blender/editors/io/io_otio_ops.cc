@@ -38,8 +38,12 @@
 
 #  include "SEQ_sequencer.hh"
 
+#  include "UI_interface_layout.hh"
+#  include "UI_resources.hh"
+
 #  include "IO_otio.hh"
 #  include "io_otio_ops.hh"
+#  include "io_utils.hh"
 
 namespace blender {
 
