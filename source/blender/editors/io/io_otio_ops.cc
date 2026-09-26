@@ -16,6 +16,7 @@
 #  include "DNA_windowmanager_enums.h"
 
 #  include "BKE_context.hh"
+#  include "BKE_file_handler.hh"
 #  include "BKE_report.hh"
 
 #  include "BLI_listbase.hh"
@@ -209,7 +210,7 @@ void WM_OT_otio_import(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO | OPTYPE_PRESET;
 
   WM_operator_properties_filesel(ot,
-                                 FILE_TYPE_FOLDER | FILE_TYPE_OTIO,
+                                 FILE_TYPE_FOLDER,
                                  FILE_BLENDER,
                                  FILE_OPENFILE,
                                  WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_SHOW_PROPS |
@@ -226,6 +227,24 @@ void WM_OT_otio_import(wmOperatorType *ot)
                   "Restore Channel",
                   "Try to restore the original channel of the strip from metadata");
 }
+
+namespace ed::io {
+static bool otio_poll_drop(const bContext *C, bke::FileHandlerType * /*fh*/)
+{
+  return CTX_wm_space_seq(C) != nullptr;
+}
+
+void otio_file_handler_add()
+{
+  auto fh = std::make_unique<bke::FileHandlerType>();
+  STRNCPY_UTF8(fh->idname, "IO_FH_otio");
+  STRNCPY_UTF8(fh->import_operator, "WM_OT_otio_import");
+  STRNCPY_UTF8(fh->label, "OpenTimelineIO");
+  STRNCPY_UTF8(fh->file_extensions_str, ".otio");
+  fh->poll_drop = otio_poll_drop;
+  bke::file_handler_add(std::move(fh));
+}
+}  // namespace ed::io
 }  // namespace blender
 
 #endif
