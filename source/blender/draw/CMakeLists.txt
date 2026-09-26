@@ -352,7 +352,6 @@ set(GLSL_SRC
 
   engines/workbench/shaders/infos/workbench_depth_infos.hh
   engines/workbench/shaders/infos/workbench_effect_antialiasing_infos.hh
-  engines/workbench/shaders/infos/workbench_effect_outline_infos.hh
   engines/workbench/shaders/infos/workbench_prepass_infos.hh
   engines/workbench/shaders/infos/workbench_transparent_resolve_infos.hh
 
@@ -515,7 +514,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_composite.bsl.hh
   engines/workbench/shaders/workbench_curvature.bsl.hh
   engines/workbench/shaders/workbench_fx_dof.bsl.hh
-  engines/workbench/shaders/workbench_effect_outline_frag.glsl
+  engines/workbench/shaders/workbench_fx_outline.bsl.hh
   engines/workbench/shaders/workbench_effect_smaa_frag.glsl
   engines/workbench/shaders/workbench_effect_smaa_vert.glsl
   engines/workbench/shaders/workbench_effect_taa_frag.glsl

@@ -11,6 +11,7 @@
 #include "workbench_composite.bsl.hh"         /* IWYU pragma: export */
 #include "workbench_curvature.bsl.hh"         /* IWYU pragma: export */
 #include "workbench_fx_dof.bsl.hh"            /* IWYU pragma: export */
+#include "workbench_fx_outline.bsl.hh"        /* IWYU pragma: export */
 #include "workbench_image.bsl.hh"             /* IWYU pragma: export */
 #include "workbench_matcap.bsl.hh"            /* IWYU pragma: export */
 #include "workbench_material.bsl.hh"          /* IWYU pragma: export */
