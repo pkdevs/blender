@@ -77,8 +77,8 @@ static bool is_debug_drawings_enabled()
 static void print_table_header(const char *title, const char *n_label)
 {
   printf("\n#### %s\n\n", title);
-  printf("| %s | vertices | full skeleton | 5 segments | events | flips | faces |\n", n_label);
-  printf("|---:|---------:|--------------:|-----------:|-------:|------:|------:|\n");
+  printf("| %s | vertices | full skeleton | 5 segments | events | faces |\n", n_label);
+  printf("|---:|---------:|--------------:|-----------:|-------:|------:|\n");
   fflush(stdout);
 }
 
@@ -101,10 +101,7 @@ inline void write_debug_svg(const char *test_name,
                             const StraightSkeletonOutput &output,
                             const char *html_filepath = "/tmp/straight_skeleton.html")
 {
-  const OffsetIndices<int> face_offsets = output.face_offsets_data.is_empty() ?
-                                              output.face_offsets :
-                                              OffsetIndices<int>(
-                                                  output.face_offsets_data.as_span());
+  const OffsetIndices<int> face_offsets = output.face_offsets();
 
   /* Build the inline SVG content into a string first, then append it to the HTML file. */
 
@@ -621,10 +618,8 @@ static void run_benchmark_row(const char *name, const int n, const GeneratedPoly
   printf("| %3d | %8d |", n, int(geom.vert.size()));
   print_time(time_full);
   print_time(time_segmented);
-  printf(" %6d | %5d | %5d |\n",
-         output_full.events_processed_num,
-         output_full.flips_num,
-         int(output_full.face_offsets.size()));
+  printf(
+      " %6d | %5d |\n", output_full.events_processed_num, int(output_full.face_offsets().size()));
   fflush(stdout);
 }
 

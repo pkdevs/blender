@@ -108,34 +108,16 @@ class StraightSkeletonInput {
   /**
    * Inward or outward offset distance for polygon offsetting.
    *
-   * - `infinity` (default): the full straight skeleton is computed. The algorithm
-   *   determines the maximum collapse time automatically and uses it as the effective
-   *   offset for the purposes of band subdivision (see #segments).
-   * - A finite positive value `d`: the polygon is inset (wavefronts advance on CCW side
-   *   of outer polygon and CW side of holes). For closed polygons, the roof is clipped
-   *   at height `t = min(d, max_collapse_time)`. When #edge_chain is provided, the open
-   *   polyline is offset by distance `d` into a closed offset band.
-   * - A finite negative value `d`: the polygon is outset (wavefronts advance on the CW
-   *   side of the outer polygon into the exterior, and on the CCW side of inner hole
-   *   polygons into each hole cavity) by distance `|d|`. Negative offset is a no-op for
-   *   the #edge_chain case.
+   * - `infinity` (default): the full straight skeleton is computed.
+   * - A finite positive value `d`: the polygon or chain is inset until d is reached.
+   * - A finite negative value `d`: the polygon is outset until |d| is reached.
    */
   double offset{std::numeric_limits<double>::infinity()};
 
-  /**
-   * Number of equal-width offset bands to subdivide the effective offset into.
-   *
-   * - `1` (default): a single output at the effective offset. When #offset is
-   *   infinite this produces the complete roof tiling as one set of faces (band 0).
-   * - `k > 1`: the range `[0, effective_offset]` is divided into `k` bands of equal
-   *   width (`effective_offset / k` each) by instantiating intermediate wavefronts at
-   *   `t_i = effective_offset * i / k` for `i = 1 ... k-1`.
-   *   Each band `b` (0-indexed, outermost first) spans `[t_b, t_{b+1}]` and produces
-   *   its own side-strip faces plus the inner polygon at `t_{b+1}`.
-   *   When #offset is infinite, #segments still applies using the computed
-   *   `max_collapse_time` as the effective 100% mark.
-   */
+  /** Number of equal-width offset bands to subdivide the effective offset into. */
   int segments{1};
+
+  /* The following are used only for debugging and testing. */
 
   /** Optional identifying label for debug drawings and logging. */
   const char *label{nullptr};
@@ -164,11 +146,14 @@ class StraightSkeletonOutput {
   /** Output edges as pairs of indices into #vert. */
   Array<int2> edge;
 
-  /** Storage backing face_offsets. */
+  /** Storage backing face_offsets(). */
   Array<int> face_offsets_data;
 
   /** Per-face vertex ranges into #face_vert_indices. */
-  OffsetIndices<int> face_offsets;
+  OffsetIndices<int> face_offsets() const
+  {
+    return OffsetIndices<int>(face_offsets_data.as_span());
+  }
 
   /** Concatenated list of vertex indices for all output faces. */
   Array<int> face_vert_indices;
@@ -185,16 +170,10 @@ class StraightSkeletonOutput {
   /** For each output face, the index of the input face it was derived from. */
   Array<int> face_orig;
 
-  /**
-   * For each output face, the zero-based band index it belongs to.
-   *
-   * Band 0 is the outermost ring (side-strip faces adjacent to the input boundary at t = 0).
-   * Band `k-1` is the innermost ring (includes the inner polygon at the effective offset).
-   * When #StraightSkeletonInput::segments is 1 every entry is 0.
-   */
+  /** For each output face, the zero-based band index it belongs to. Zero is outermost. */
   Array<int> face_band;
 
-  /* The following fields are provided for unit testing; users can ignore them. */
+  /* The following fields are for testing; users can ignore them. */
 
   /** True if the event loop was terminated because max_events was reached. */
   bool hit_max_events{false};
@@ -202,71 +181,11 @@ class StraightSkeletonOutput {
   /** Total number of events processed during the simulation. */
   int events_processed_num{0};
 
-  /** Total number of flip events processed. */
-  int flips_num{0};
-
   /** If full_verification was requested, true if all validation checks passed. */
   bool is_valid{true};
 
   /** Detailed diagnostic message if validation failed. */
   std::string error_message;
-
-  StraightSkeletonOutput() = default;
-
-  StraightSkeletonOutput(const StraightSkeletonOutput &other)
-  {
-    *this = other;
-  }
-
-  StraightSkeletonOutput(StraightSkeletonOutput &&other) noexcept
-  {
-    *this = std::move(other);
-  }
-
-  StraightSkeletonOutput &operator=(const StraightSkeletonOutput &other)
-  {
-    if (this != &other) {
-      vert = other.vert;
-      edge = other.edge;
-      face_offsets_data = other.face_offsets_data;
-      face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
-      face_vert_indices = other.face_vert_indices;
-      vert_time = other.vert_time;
-      vert_orig = other.vert_orig;
-      edge_orig = other.edge_orig;
-      face_orig = other.face_orig;
-      face_band = other.face_band;
-      hit_max_events = other.hit_max_events;
-      events_processed_num = other.events_processed_num;
-      flips_num = other.flips_num;
-      is_valid = other.is_valid;
-      error_message = other.error_message;
-    }
-    return *this;
-  }
-
-  StraightSkeletonOutput &operator=(StraightSkeletonOutput &&other) noexcept
-  {
-    if (this != &other) {
-      vert = std::move(other.vert);
-      edge = std::move(other.edge);
-      face_offsets_data = std::move(other.face_offsets_data);
-      face_offsets = OffsetIndices<int>(face_offsets_data.as_span());
-      face_vert_indices = std::move(other.face_vert_indices);
-      vert_time = std::move(other.vert_time);
-      vert_orig = std::move(other.vert_orig);
-      edge_orig = std::move(other.edge_orig);
-      face_orig = std::move(other.face_orig);
-      face_band = std::move(other.face_band);
-      hit_max_events = other.hit_max_events;
-      events_processed_num = other.events_processed_num;
-      flips_num = other.flips_num;
-      is_valid = other.is_valid;
-      error_message = std::move(other.error_message);
-      other.face_offsets = OffsetIndices<int>();
-    }
-    return *this;
-  }
 };
 
 /** \} */
@@ -278,17 +197,6 @@ class StraightSkeletonOutput {
 /**
  * Compute the straight skeleton of the polygon with holes described by \a input,
  * optionally clipped and subdivided into offset bands.
- *
- * When `input.offset` is infinity (the default) and `input.segments` is 1,
- * the complete roof tiling is returned -- one face per input boundary edge plus
- * the inner skeleton faces.
- *
- * When `input.offset` is finite, or `input.segments > 1`, the output is
- * divided into `input.segments` equal-width bands spanning
- * `[0, effective_offset]`, where `effective_offset = min(input.offset,
- * max_collapse_time)`. Each band produces side-strip faces and an inner
- * polygon. #StraightSkeletonOutput::face_band identifies the band (0 =
- * outermost) for each output face.
  */
 StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input);
 

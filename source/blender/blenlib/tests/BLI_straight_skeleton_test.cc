@@ -77,10 +77,7 @@ inline void write_debug_svg(const char *test_name,
                             const StraightSkeletonOutput &output,
                             const char *html_filepath = "/tmp/straight_skeleton.html")
 {
-  const OffsetIndices<int> face_offsets = output.face_offsets_data.is_empty() ?
-                                              output.face_offsets :
-                                              OffsetIndices<int>(
-                                                  output.face_offsets_data.as_span());
+  const OffsetIndices<int> face_offsets = output.face_offsets();
 
   /* Build the inline SVG content into a string first, then append it to the HTML file. */
 
@@ -475,8 +472,8 @@ static double total_faces_area(const StraightSkeletonOutput &output)
 {
   double total = 0.0;
   const Span<int> fvi = output.face_vert_indices;
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange r = output.face_offsets()[fi];
     const int n = int(r.size());
     double area = 0.0;
     for (const int i : IndexRange(n)) {
@@ -533,11 +530,11 @@ static void print_test_output(const char *test_name,
     std::cout << "\n";
   }
 
-  std::cout << "\nFaces (" << output.face_offsets.size() << "):\n";
+  std::cout << "\nFaces (" << output.face_offsets().size() << "):\n";
   const Span<int> fvi = output.face_vert_indices;
   double total_area = 0.0;
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange r = output.face_offsets()[fi];
     const int n = int(r.size());
     double area = 0.0;
     for (const int i : IndexRange(n)) {
@@ -601,11 +598,11 @@ TEST(straight_skeleton, Triangle)
 
   /* Triangle skeleton: 3 original verts + 1 incenter = 4 verts, 3 output faces. */
   EXPECT_EQ(output.vert.size(), 4);
-  EXPECT_EQ(output.face_offsets.size(), 3);
+  EXPECT_EQ(output.face_offsets().size(), 3);
 
   /* Every output face should be a triangle (3 verts). */
-  for (const int fi : output.face_offsets.index_range()) {
-    EXPECT_EQ(output.face_offsets[fi].size(), 3);
+  for (const int fi : output.face_offsets().index_range()) {
+    EXPECT_EQ(output.face_offsets()[fi].size(), 3);
   }
 
   /* vert_orig: the first 3 output verts should map back to input verts 0,1,2;
@@ -623,7 +620,7 @@ TEST(straight_skeleton, Triangle)
   EXPECT_EQ(new_verts_count, 1);
 
   /* face_orig: every output face should derive from input face 0. */
-  EXPECT_EQ(output.face_orig.size(), int64_t(output.face_offsets.size()));
+  EXPECT_EQ(output.face_orig.size(), int64_t(output.face_offsets().size()));
   for (const int fi : IndexRange(output.face_orig.size())) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
@@ -676,7 +673,7 @@ TEST(straight_skeleton, PaperExample)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), 23);
+  EXPECT_EQ(output.face_offsets().size(), 23);
   EXPECT_NEAR(total_faces_area(output), 159.835, 1e-3);
 }
 
@@ -701,9 +698,9 @@ TEST(straight_skeleton, NotchedPolygonFull)
   print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 12);
   EXPECT_EQ(output.edge.size(), 18);
-  EXPECT_EQ(output.face_offsets.size(), 7);
+  EXPECT_EQ(output.face_offsets().size(), 7);
   EXPECT_NEAR(total_faces_area(output), 71.1, 1e-4);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -726,10 +723,10 @@ TEST(straight_skeleton, Square)
   print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 5);
   EXPECT_EQ(output.edge.size(), 8);
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
   EXPECT_NEAR(total_faces_area(output), 4.0, 1e-6);
-  for (const int fi : output.face_offsets.index_range()) {
-    EXPECT_EQ(output.face_offsets[fi].size(), 3);
+  for (const int fi : output.face_offsets().index_range()) {
+    EXPECT_EQ(output.face_offsets()[fi].size(), 3);
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -754,9 +751,9 @@ TEST(straight_skeleton, LShape)
   print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 9);
   EXPECT_EQ(output.edge.size(), 14);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   EXPECT_NEAR(total_faces_area(output), 12.0, 1e-6);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -792,9 +789,9 @@ TEST(straight_skeleton, RectangleEdgeCollapse)
   }
   EXPECT_EQ(new_verts_count, 2);
 
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
   EXPECT_NEAR(total_faces_area(output), 8.0, 1e-6);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -835,9 +832,9 @@ TEST(straight_skeleton, ElongatedRectangleInfiniteSpeed)
   }
   EXPECT_EQ(new_verts_count, 2);
 
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
   EXPECT_NEAR(total_faces_area(output), 16.0, 1e-6);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -862,9 +859,9 @@ TEST(straight_skeleton, MultiSplitHourglass)
   print_test_output(input.label, input, output);
   EXPECT_EQ(output.vert.size(), 9);
   EXPECT_EQ(output.edge.size(), 14);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   EXPECT_NEAR(total_faces_area(output), 6.0, 1e-6);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -912,9 +909,9 @@ TEST(straight_skeleton, Flipper)
   for (const double2 &v : output.vert) {
     EXPECT_GE(v.y, -1e-6);
   }
-  EXPECT_EQ(output.face_offsets.size(), 20);
+  EXPECT_EQ(output.face_offsets().size(), 20);
   EXPECT_NEAR(total_faces_area(output), 1.021875, 1e-5);
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_orig[fi], 0);
   }
 }
@@ -952,7 +949,7 @@ TEST(straight_skeleton, LShape_FiveSegments)
 
   /* All face_band values must be in [0, 4]. */
   bool bands_seen[5] = {false, false, false, false, false};
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     const int b = output.face_band[fi];
     EXPECT_GE(b, 0);
     EXPECT_LT(b, 5);
@@ -997,7 +994,7 @@ TEST(straight_skeleton, NotchedPolygonFull_FiveSegments)
 
   /* All face_band values must be in [0, 4]. */
   bool bands_seen[5] = {false, false, false, false, false};
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     const int b = output.face_band[fi];
     EXPECT_GE(b, 0);
     EXPECT_LT(b, 5);
@@ -1043,7 +1040,7 @@ TEST(straight_skeleton, OffsetSquarePartial)
   print_test_output(input.label, input, output);
 
   /* 4 side-strip trapezoids + 1 inner square. */
-  EXPECT_EQ(output.face_offsets.size(), 5);
+  EXPECT_EQ(output.face_offsets().size(), 5);
 
   /* Output contains only 4 input corners + 4 cut vertices (the apex at t = 5 is omitted). */
   EXPECT_EQ(output.vert.size(), 8);
@@ -1063,7 +1060,7 @@ TEST(straight_skeleton, OffsetSquarePartial)
   EXPECT_NEAR(total_faces_area(output), 100.0, 1e-6);
 
   /* All faces are in band 0. */
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     EXPECT_EQ(output.face_band[fi], 0);
   }
 }
@@ -1093,7 +1090,7 @@ TEST(straight_skeleton, OffsetSquareCollapse)
   print_test_output(input.label, input, output);
 
   /* 4 side-strip triangles (apex at center). */
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
 
   /* The apex vertex is at (5, 5) with vert_time == 5. */
   bool found_apex = false;
@@ -1134,7 +1131,7 @@ TEST(straight_skeleton, OffsetSquareExcess)
   print_test_output(input.label, input, output);
 
   /* Same as OffsetSquareCollapse: 4 triangular strips to the apex. */
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
 
   bool found_apex = false;
   for (const int vi : output.vert.index_range()) {
@@ -1174,7 +1171,7 @@ TEST(straight_skeleton, OffsetRectangle)
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
 
-  EXPECT_EQ(output.face_offsets.size(), 5);
+  EXPECT_EQ(output.face_offsets().size(), 5);
 
   /* Output contains only 4 input corners + 4 cut vertices (ridge nodes at t = 5 are omitted). */
   EXPECT_EQ(output.vert.size(), 8);
@@ -1216,7 +1213,7 @@ TEST(straight_skeleton, OffsetLShape)
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
 
-  EXPECT_EQ(output.face_offsets.size(), 7); /* 6 side-strips + 1 inner L-shape. */
+  EXPECT_EQ(output.face_offsets().size(), 7); /* 6 side-strips + 1 inner L-shape. */
 
   /* Output contains only 6 input corners + 6 cut vertices (skeleton nodes at t = 1 are omitted).
    */
@@ -1257,7 +1254,7 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
   /* Band 0 (t=0..1): 4 side-strip trapezoids.
    * Band 1 (t=1..2): 4 side-strip trapezoids + 1 inner square.
    * Total = 9 faces. */
-  EXPECT_EQ(output.face_offsets.size(), 9);
+  EXPECT_EQ(output.face_offsets().size(), 9);
 
   /* Output contains only 4 input corners + 4 cut vertices (t=1) + 4 cut vertices (t=2).
    * Apex at t = 5 is omitted. */
@@ -1269,7 +1266,7 @@ TEST(straight_skeleton, OffsetSquare_TwoBands)
   /* Check band assignments. */
   int band0_count = 0;
   int band1_count = 0;
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     const int b = output.face_band[fi];
     EXPECT_TRUE(b == 0 || b == 1);
     if (b == 0) {
@@ -1327,7 +1324,7 @@ TEST(straight_skeleton, FullSkeletonWithSegments)
    * Band 1 (t=2.5..5): 4 side-strip triangles converging to the apex.
    *   The apex inner polygon degenerates to a point (area ~= 0) and is silently omitted.
    * Total = 8 faces. */
-  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_EQ(output.face_offsets().size(), 8);
 
   /* Band boundary vertices at t = 2.5 must exist. */
   bool found_mid = false;
@@ -1386,9 +1383,9 @@ TEST(straight_skeleton, OneFaceBevel)
   print_test_output(input.label, input, output);
 
   /* 19 input boundary edges produce 19 bevel faces. */
-  EXPECT_EQ(output.face_offsets.size(), 19);
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
+  EXPECT_EQ(output.face_offsets().size(), 19);
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange face_r = output.face_offsets()[fi];
     Set<int> unique_verts;
     for (const int i : face_r) {
       EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
@@ -1446,7 +1443,7 @@ TEST(straight_skeleton, SquareWithHole)
   /* 4 outer + 4 hole + 8 spoke + 4 ridge = 20 edges. */
   EXPECT_EQ(output.edge.size(), 20);
   /* 4 outer trapezoids + 4 hole trapezoids = 8 faces. */
-  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_EQ(output.face_offsets().size(), 8);
 
   /* Total area = 10x10 outer - 4x4 hole = 84. */
   EXPECT_NEAR(total_faces_area(output), 84.0, 1e-5);
@@ -1474,9 +1471,9 @@ TEST(straight_skeleton, SquareWithHole)
    * 4 hole faces have face_orig == 1 (area 8.25 each). */
   int outer_faces_count = 0;
   int hole_faces_count = 0;
-  for (const int fi : output.face_offsets.index_range()) {
+  for (const int fi : output.face_offsets().index_range()) {
     const int orig = output.face_orig[fi];
-    const IndexRange r = output.face_offsets[fi];
+    const IndexRange r = output.face_offsets()[fi];
     EXPECT_EQ(r.size(), 4); /* All are trapezoids. */
     if (orig == 0) {
       outer_faces_count++;
@@ -1563,8 +1560,8 @@ TEST(straight_skeleton, FatCrossPushedOutWithHoles)
   }
 
   /* Every face has at least 3 unique vertices. */
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange face_r = output.face_offsets()[fi];
     EXPECT_GE(face_r.size(), 3);
     Set<int> unique_verts;
     for (const int i : face_r) {
@@ -1648,8 +1645,8 @@ TEST(straight_skeleton, FatCrossAxisAlignedWithHoles)
   }
 
   /* Every face has at least 3 unique vertices. */
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange face_r = output.face_offsets()[fi];
     EXPECT_GE(face_r.size(), 3);
     Set<int> unique_verts;
     for (const int i : face_r) {
@@ -1704,7 +1701,7 @@ TEST(straight_skeleton, OpposingNotchesConcurrentFlips)
     EXPECT_FALSE(output.hit_max_events)
         << "Infinite flip loop detected: hit_max_events is true at shift " << shift;
     EXPECT_NEAR(total_faces_area(output), 68.0, 1e-4);
-    EXPECT_EQ(output.face_offsets.size(), 15);
+    EXPECT_EQ(output.face_offsets().size(), 15);
   }
 }
 
@@ -1787,11 +1784,11 @@ TEST(straight_skeleton, Circle64)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), n);
+  EXPECT_EQ(output.face_offsets().size(), n);
 
   /* All faces must be triangles connecting consecutive boundary vertices to the center node. */
-  for (const int fi : output.face_offsets.index_range()) {
-    EXPECT_EQ(output.face_offsets[fi].size(), 3);
+  for (const int fi : output.face_offsets().index_range()) {
+    EXPECT_EQ(output.face_offsets()[fi].size(), 3);
   }
 
   /* Exactly 65 vertices in the output: 64 perimeter vertices + 1 center node. */
@@ -1855,7 +1852,7 @@ TEST(straight_skeleton, CircleWithHoles6)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), 54);
+  EXPECT_EQ(output.face_offsets().size(), 54);
 }
 
 TEST(straight_skeleton, CircleWithHoles24)
@@ -1910,7 +1907,7 @@ TEST(straight_skeleton, CircleWithHoles24)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), 216);
+  EXPECT_EQ(output.face_offsets().size(), 216);
   EXPECT_NEAR(total_faces_area(output), 29641.554, 1e-2);
 }
 
@@ -1966,7 +1963,7 @@ TEST(straight_skeleton, CircleWithHoles48)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), 432);
+  EXPECT_EQ(output.face_offsets().size(), 432);
 }
 
 TEST(straight_skeleton, CircleWithHoles96)
@@ -2021,7 +2018,7 @@ TEST(straight_skeleton, CircleWithHoles96)
   print_test_output(input.label, input, output);
 
   EXPECT_FALSE(output.hit_max_events);
-  EXPECT_EQ(output.face_offsets.size(), 864);
+  EXPECT_EQ(output.face_offsets().size(), 864);
 }
 
 TEST(straight_skeleton, SquareWithHole_FiveSegments)
@@ -2082,11 +2079,11 @@ TEST(straight_skeleton, SquareWithHole_AnnularOffset)
 
   /* Side strips: 4 outer + 4 hole = 8 faces.
    * Cap: 2 annular split faces. Total = 10 faces. */
-  EXPECT_EQ(output.face_offsets.size(), 10);
+  EXPECT_EQ(output.face_offsets().size(), 10);
 
   /* Verify no vertex repeats in any face. */
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange face_r = output.face_offsets()[fi];
     EXPECT_GE(face_r.size(), 3);
     Set<int> unique_verts;
     for (const int i : face_r) {
@@ -2224,14 +2221,14 @@ TEST(straight_skeleton, LetterBWithHoles)
   EXPECT_TRUE(output.error_message.empty());
 
   /* All 106 boundary edges must have corresponding valid roof faces. */
-  EXPECT_EQ(output.face_offsets.size(), 106);
+  EXPECT_EQ(output.face_offsets().size(), 106);
 
   /* Total area must match the domain area: 0.273197 - 0.038033 - 0.051810 ~= 0.18335. */
   EXPECT_NEAR(total_faces_area(output), 0.18335, 1e-4);
 
   /* Verify no vertex repeats in any face. */
-  for (const int fi : output.face_offsets.index_range()) {
-    const IndexRange face_r = output.face_offsets[fi];
+  for (const int fi : output.face_offsets().index_range()) {
+    const IndexRange face_r = output.face_offsets()[fi];
     EXPECT_GE(face_r.size(), 3);
     Set<int> unique_verts;
     for (const int i : face_r) {
@@ -2264,7 +2261,7 @@ TEST(straight_skeleton, FourWayStarSplit)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_EQ(output.face_offsets().size(), 12);
   EXPECT_NEAR(total_faces_area(output), 28.0, 1e-4);
 }
 
@@ -2292,7 +2289,7 @@ TEST(straight_skeleton, DumbbellCollinear)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_EQ(output.face_offsets().size(), 12);
   EXPECT_NEAR(total_faces_area(output), 72.0, 1e-4);
 }
 
@@ -2323,7 +2320,7 @@ TEST(straight_skeleton, DoubleCombSplit)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 10);
+  EXPECT_EQ(output.face_offsets().size(), 10);
   EXPECT_NEAR(total_faces_area(output), 44.0, 1e-4);
 }
 
@@ -2345,7 +2342,7 @@ TEST(straight_skeleton, AsymmetricHourglass)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   EXPECT_NEAR(total_faces_area(output), 29.0, 1e-4);
 }
 
@@ -2370,7 +2367,7 @@ TEST(straight_skeleton, ThreeWayStarSplit)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 9);
+  EXPECT_EQ(output.face_offsets().size(), 9);
   EXPECT_NEAR(total_faces_area(output), 19.1138, 1e-3);
 }
 
@@ -2399,7 +2396,7 @@ TEST(straight_skeleton, TShapeSplit)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_EQ(output.face_offsets().size(), 8);
   EXPECT_NEAR(total_faces_area(output), 20.0, 1e-4);
 }
 
@@ -2437,7 +2434,7 @@ TEST(straight_skeleton, DoubleHourglass)
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
   print_test_output(input.label, input, output);
-  EXPECT_EQ(output.face_offsets.size(), 16);
+  EXPECT_EQ(output.face_offsets().size(), 16);
   EXPECT_NEAR(total_faces_area(output), 60.0, 1e-4);
 }
 
@@ -2574,7 +2571,7 @@ TEST(straight_skeleton, EdgeChain_SingleSegment)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
   /* (10 + 2*2) * (2*2) = 14 * 4 = 56.0. */
   EXPECT_NEAR(total_faces_area(output), 56.0, 1e-5);
   for (const int b : output.face_band) {
@@ -2599,7 +2596,7 @@ TEST(straight_skeleton, EdgeChain_SingleSegment_TwoBands)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 8);
+  EXPECT_EQ(output.face_offsets().size(), 8);
   EXPECT_NEAR(total_faces_area(output), 56.0, 1e-5);
 
   int band0_count = 0;
@@ -2633,7 +2630,7 @@ TEST(straight_skeleton, EdgeChain_LShape)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
 }
 
@@ -2649,7 +2646,7 @@ TEST(straight_skeleton, EdgeChain_NegativeOffset_NoOp)
   input.label = "EdgeChain_NegativeOffset_NoOp";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets.size(), 0);
+  EXPECT_EQ(output.face_offsets().size(), 0);
   EXPECT_EQ(output.vert.size(), 0);
 }
 
@@ -2665,7 +2662,7 @@ TEST(straight_skeleton, EdgeChain_InfiniteOffset_NoOp)
   input.label = "EdgeChain_InfiniteOffset_NoOp";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets.size(), 0);
+  EXPECT_EQ(output.face_offsets().size(), 0);
   EXPECT_EQ(output.vert.size(), 0);
 }
 
@@ -2693,7 +2690,7 @@ TEST(straight_skeleton, NegativeOffset_Square)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 4);
+  EXPECT_EQ(output.face_offsets().size(), 4);
   /* Outset expands from [0, 10]^2 to [-2, 12]^2. Frame area = 14*14 - 100 = 96.0. */
   EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
   for (const int b : output.face_band) {
@@ -2719,7 +2716,7 @@ TEST(straight_skeleton, NegativeOffset_Square_ThreeBands)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_EQ(output.face_offsets().size(), 12);
   /* Outset expands to [-3, 13]^2. Frame area = 16*16 - 100 = 156.0. */
   EXPECT_NEAR(total_faces_area(output), 156.0, 1e-4);
 
@@ -2785,7 +2782,7 @@ TEST(straight_skeleton, NegativeOffset_InvalidInfinite)
   input.label = "NegativeOffset_InvalidInfinite";
 
   const StraightSkeletonOutput output = straight_skeleton_calc(input);
-  EXPECT_EQ(output.face_offsets.size(), 0);
+  EXPECT_EQ(output.face_offsets().size(), 0);
   EXPECT_EQ(output.vert.size(), 0);
 }
 
@@ -2806,7 +2803,7 @@ TEST(straight_skeleton, EdgeChain_ThreeSegments_Collinear)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   EXPECT_NEAR(total_faces_area(output), 56.0, 1e-4);
 }
 
@@ -2827,7 +2824,7 @@ TEST(straight_skeleton, EdgeChain_LShape_ThreeBands)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 18);
+  EXPECT_EQ(output.face_offsets().size(), 18);
   EXPECT_NEAR(total_faces_area(output), 156.0, 1e-4);
 
   Array<int> band_counts(3, 0);
@@ -2865,7 +2862,7 @@ TEST(straight_skeleton, NegativeOffset_LShape)
   print_test_output(input.label, input, output);
 
   EXPECT_TRUE(output.is_valid);
-  EXPECT_EQ(output.face_offsets.size(), 6);
+  EXPECT_EQ(output.face_offsets().size(), 6);
   /* Outset expands from domain area 75 to area 171. Frame area = 171 - 75 = 96.0. */
   EXPECT_NEAR(total_faces_area(output), 96.0, 1e-4);
 }
@@ -2895,7 +2892,7 @@ TEST(straight_skeleton, EdgeChain_RectilinearSpiralSplit)
 
   EXPECT_TRUE(output.is_valid);
   EXPECT_GT(output.events_processed_num, 0);
-  EXPECT_EQ(output.face_offsets.size(), 12);
+  EXPECT_EQ(output.face_offsets().size(), 12);
   EXPECT_NEAR(total_faces_area(output), 68.0, 1e-4);
   for (const int b : output.face_band) {
     EXPECT_EQ(b, 0);
@@ -2958,7 +2955,7 @@ TEST(straight_skeleton, MutualExclusionValidation)
     input.edge_chain = chain.as_span();
     input.offset = 1.0;
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets.size(), 0);
+    EXPECT_EQ(output.face_offsets().size(), 0);
   }
 
   /* Neither provided: invalid. */
@@ -2967,7 +2964,7 @@ TEST(straight_skeleton, MutualExclusionValidation)
     input.vert = verts.as_span();
     input.offset = 1.0;
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets.size(), 0);
+    EXPECT_EQ(output.face_offsets().size(), 0);
   }
 
   /* edge_chain with hole: invalid. */
@@ -2981,7 +2978,7 @@ TEST(straight_skeleton, MutualExclusionValidation)
     input.hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
     input.offset = 1.0;
     const StraightSkeletonOutput output = straight_skeleton_calc(input);
-    EXPECT_EQ(output.face_offsets.size(), 0);
+    EXPECT_EQ(output.face_offsets().size(), 0);
   }
 }
 

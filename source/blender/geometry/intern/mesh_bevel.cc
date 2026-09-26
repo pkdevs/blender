@@ -7848,7 +7848,7 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
     const straightskeleton::StraightSkeletonOutput skel_out =
         straightskeleton::straight_skeleton_calc(skel_input);
 
-    if (skel_out.face_offsets.size() == 0) {
+    if (skel_out.face_offsets().size() == 0) {
       return;
     }
 
@@ -7872,8 +7872,8 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
 
     /* Emit new output faces (side-strip quads + inner inset face(s)).
      * Use the original face as the attribute representative for all new faces. */
-    for (const int fi : skel_out.face_offsets.index_range()) {
-      const IndexRange face_r = skel_out.face_offsets[fi];
+    for (const int fi : skel_out.face_offsets().index_range()) {
+      const IndexRange face_r = skel_out.face_offsets()[fi];
       const int face_verts_num = int(face_r.size());
       Array<int> mesh_verts(face_verts_num);
       for (const int i : IndexRange(face_verts_num)) {

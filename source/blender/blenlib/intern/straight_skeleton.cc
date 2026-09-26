@@ -800,10 +800,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
   }
 
   /* 2. Face Offsets and Simplicity. */
-  const OffsetIndices<int> face_offsets = output.face_offsets_data.is_empty() ?
-                                              output.face_offsets :
-                                              OffsetIndices<int>(
-                                                  output.face_offsets_data.as_span());
+  const OffsetIndices<int> face_offsets = output.face_offsets();
   const Span<int> fvi = output.face_vert_indices;
   double total_face_area = 0.0;
 
@@ -1280,7 +1277,6 @@ class SimulationEngine {
     for (const int i : IndexRange(total_faces)) {
       output.face_offsets_data[i + 1] = output.face_offsets_data[i] + face_lens[i];
     }
-    output.face_offsets = OffsetIndices<int>(output.face_offsets_data.as_span());
     output.face_vert_indices = Array<int>(face_indices.as_span());
     output.face_orig = Array<int>(final_face_orig.as_span());
     output.face_band = Array<int>(final_face_band.as_span());
@@ -1308,7 +1304,6 @@ class SimulationEngine {
 
     output.hit_max_events = false;
     output.events_processed_num = events_processed_count_;
-    output.flips_num = 0;
 
     if (input_.full_verification) {
       output.is_valid = verify_straight_skeleton(input_, output, output.error_message);
@@ -4100,7 +4095,6 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
   StraightSkeletonOutput empty_output;
   empty_output.hit_max_events = false;
   empty_output.events_processed_num = 0;
-  empty_output.flips_num = 0;
 
   const bool has_chain = !input.edge_chain.is_empty();
   const bool has_poly = !input.outer_polygon.is_empty();

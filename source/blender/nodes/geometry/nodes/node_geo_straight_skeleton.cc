@@ -1149,7 +1149,7 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
     const straightskeleton::StraightSkeletonOutput &out = results[i].ss_output;
     vert_counts[i] = out.vert.size();
     edge_counts[i] = out.edge.size();
-    face_counts[i] = out.face_offsets.size();
+    face_counts[i] = out.face_offsets().size();
     corner_counts[i] = out.face_vert_indices.size();
   }
 
@@ -1197,8 +1197,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
 
       MutableSpan<int> face_offsets = all_face_offsets.slice(faces_range);
       MutableSpan<int> corner_verts = all_corner_verts.slice(corners_range);
-      for (const int f : out.face_offsets.index_range()) {
-        face_offsets[f] = out.face_offsets[f].start() + corners_range.start();
+      for (const int f : out.face_offsets().index_range()) {
+        face_offsets[f] = out.face_offsets()[f].start() + corners_range.start();
       }
       for (const int c : out.face_vert_indices.index_range()) {
         corner_verts[c] = out.face_vert_indices[c] + verts_range.start();
