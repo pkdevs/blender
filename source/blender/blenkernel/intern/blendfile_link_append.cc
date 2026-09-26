@@ -1881,11 +1881,11 @@ void BKE_blendfile_override(BlendfileLinkAppendContext *lapp_context,
   BLI_assert((lapp_context->params->flag & FILE_LINK) != 0);
 
   const bool set_runtime = (flags & BKE_LIBLINK_OVERRIDE_CREATE_RUNTIME) != 0;
-  const bool do_use_exisiting_liboverrides = (flags &
-                                              BKE_LIBLINK_OVERRIDE_USE_EXISTING_LIBOVERRIDES) != 0;
+  const bool do_use_existing_liboverrides = (flags &
+                                             BKE_LIBLINK_OVERRIDE_USE_EXISTING_LIBOVERRIDES) != 0;
 
   Map<ID *, ID *> linked_ids_to_local_liboverrides;
-  if (do_use_exisiting_liboverrides) {
+  if (do_use_existing_liboverrides) {
     ID *id_iter;
     FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
       if (ID_IS_LINKED(id_iter)) {
@@ -1915,7 +1915,7 @@ void BKE_blendfile_override(BlendfileLinkAppendContext *lapp_context,
     }
     BLI_assert(item.userdata == nullptr);
 
-    if (do_use_exisiting_liboverrides) {
+    if (do_use_existing_liboverrides) {
       item.liboverride_id = linked_ids_to_local_liboverrides.lookup_default(id, nullptr);
     }
     if (item.liboverride_id == nullptr) {
