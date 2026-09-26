@@ -2,10 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/workbench_depth_infos.hh"
-#include "infos/workbench_effect_antialiasing_infos.hh"
+#include "infos/workbench_transparent_resolve_infos.hh"
 
-VERTEX_SHADER_CREATE_INFO(workbench_merge_depth)
+VERTEX_SHADER_CREATE_INFO(workbench_transparent_resolve)
 
 #include "gpu_shader_fullscreen.bsl.hh"
 

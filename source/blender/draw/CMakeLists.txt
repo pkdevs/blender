@@ -350,7 +350,6 @@ set(GLSL_SRC
 
   engines/select/shaders/infos/select_id_infos.hh
 
-  engines/workbench/shaders/infos/workbench_depth_infos.hh
   engines/workbench/shaders/infos/workbench_effect_antialiasing_infos.hh
   engines/workbench/shaders/infos/workbench_prepass_infos.hh
   engines/workbench/shaders/infos/workbench_transparent_resolve_infos.hh
@@ -524,8 +523,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_matcap_lib.glsl
   engines/workbench/shaders/workbench_matcap.bsl.hh
   engines/workbench/shaders/workbench_material.bsl.hh
-  engines/workbench/shaders/workbench_merge_depth_frag.glsl
-  engines/workbench/shaders/workbench_overlay_depth_frag.glsl
+  engines/workbench/shaders/workbench_depth.bsl.hh
   engines/workbench/shaders/workbench_prepass.bsl.hh
   engines/workbench/shaders/workbench_shadow.bsl.hh
   engines/workbench/shaders/workbench_shadow_raytrace.bsl.hh
