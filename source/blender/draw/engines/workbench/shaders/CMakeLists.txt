@@ -26,12 +26,10 @@ set(INC_GLSL
 
 set(SRC_GLSL_VERT
   workbench_effect_smaa_vert.glsl
-  workbench_fullscreen_vert.glsl
 )
 
 set(SRC_GLSL_FRAG
   workbench_effect_smaa_frag.glsl
-  workbench_transparent_resolve_frag.glsl
 )
 
 set(SRC_GLSL_LIB
