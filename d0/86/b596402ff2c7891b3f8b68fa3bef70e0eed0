@@ -1,2 +1,3 @@
 Referenced by pull request #156670, Fix crash caused by uninitialized memory use in the sequencer
 Referenced by commit 8c78c7528ade9fb377f694a6e8771bb4af59911c, Fix crash caused by uninitialized memory use in the sequencer
+Referenced by issue #164336, Text strip changes color of Rec.1886 background video
