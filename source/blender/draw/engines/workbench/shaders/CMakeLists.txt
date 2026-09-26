@@ -30,11 +30,6 @@ set(SRC_GLSL_VERT
 )
 
 set(SRC_GLSL_FRAG
-  workbench_effect_dof_prepare_frag.glsl
-  workbench_effect_dof_downsample_frag.glsl
-  workbench_effect_dof_blur1_frag.glsl
-  workbench_effect_dof_blur2_frag.glsl
-  workbench_effect_dof_resolve_frag.glsl
   workbench_effect_outline_frag.glsl
   workbench_effect_smaa_frag.glsl
   workbench_effect_taa_frag.glsl
@@ -44,7 +39,6 @@ set(SRC_GLSL_FRAG
 )
 
 set(SRC_GLSL_LIB
-  workbench_effect_dof_lib.glsl
   workbench_common_lib.glsl
   workbench_image_lib.glsl
   workbench_matcap_lib.glsl
