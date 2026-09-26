@@ -410,19 +410,10 @@ static void ffmpeg_hw_setup_decode(const MovieReader *anim,
     if (!ffmpeg_hw_codec_supports_device(codec, device_type)) {
       continue;
     }
-    if (const int err = av_hwdevice_ctx_create(
-            &codec_ctx->hw_device_ctx, device_type, nullptr, nullptr, 0);
-        err < 0)
-    {
-      char error_str[AV_ERROR_MAX_STRING_SIZE];
-      av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, err);
-      CLOG_INFO(&LOG,
-                "ffmpeg: couldn't create %s decoding device: %s",
-                av_hwdevice_get_type_name(device_type),
-                error_str);
-      continue;
+    if (AVBufferRef *hw_device_ctx = ffmpeg_hw_device_get(device_type)) {
+      codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+      return;
     }
-    return;
   }
 }
 
