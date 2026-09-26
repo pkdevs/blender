@@ -577,6 +577,9 @@ class JoltSolverStep {
       if (!motion_type) {
         continue;
       }
+      JPH::ObjectLayer object_layer = (*motion_type == JPH::EMotionType::Dynamic ? ObjectLayers::moving :
+                                                        ObjectLayers::non_moving);
+
       const GeometrySet &reference_geometry = reference_geometry_sets[reference_i];
       const std::optional<Bounds<float3>> bounds =
           reference_geometry.compute_boundbox_without_instances(true);
@@ -622,14 +625,18 @@ class JoltSolverStep {
             geometry::jolt::convert_dvec3(instance_position),
             geometry::jolt::convert_quat(instance_rotation),
             *motion_type,
-            *motion_type == JPH::EMotionType::Dynamic ? ObjectLayers::moving :
-                                                        ObjectLayers::non_moving};
+            object_layer};
         jolt_body_settings.mLinearVelocity = geometry::jolt::convert_vec3(linear_velocity);
         jolt_body_settings.mAngularVelocity = geometry::jolt::convert_vec3(angular_velocity);
 
         JPH::Body *jolt_body = body_interface.CreateBody(jolt_body_settings);
         body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
         rigid_body = JoltRigidBody{jolt_body};
+      }
+      else if (motion_type != rigid_body->body->GetMotionType()){
+        /* TODO Skip activation if changing to static/kinematic? */
+        body_interface.SetMotionType(rigid_body->body->GetID(), *motion_type, JPH::EActivation::Activate);
+        body_interface.SetObjectLayer(rigid_body->body->GetID(), object_layer);
       }
 
       body_interface.SetShape(
