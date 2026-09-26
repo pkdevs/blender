@@ -14,6 +14,8 @@
  *   void *allocate(size_t size, size_t alignment, const char *name);
  *   void deallocate(void *ptr);
  *
+ * Allocation failure throws #std::bad_alloc instead of returning null.
+ *
  * We don't use the std::allocator interface, because it does more than is really necessary for an
  * allocator and has some other quirks. It mixes the concepts of allocation and construction. It is
  * essentially forced to be a template, even though the allocator should not care about the type.
@@ -27,12 +29,21 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <new>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_utildefines.hh"
 
 namespace blender {
+
+inline void *throw_bad_alloc_if_null(void *ptr)
+{
+  if (ptr == nullptr) [[unlikely]] {
+    throw std::bad_alloc();
+  }
+  return ptr;
+}
 
 /**
  * Use Blender's guarded allocator (aka MEM_*). This should always be used except there is a
@@ -44,7 +55,7 @@ class GuardedAllocator {
   {
     /* Should we use MEM_new_uninitialized, when alignment is small? If yes, how small must
      * alignment be? */
-    return MEM_new_uninitialized_aligned(size, alignment, name);
+    return throw_bad_alloc_if_null(MEM_new_uninitialized_aligned(size, alignment, name));
   }
   void *allocate_zero(size_t size, size_t alignment, const char *name)
   {
@@ -54,7 +65,7 @@ class GuardedAllocator {
       memset(ptr, 0, size);
       return ptr;
     }
-    return MEM_new_zeroed(size, name);
+    return throw_bad_alloc_if_null(MEM_new_zeroed(size, name));
   }
 
   void deallocate(void *ptr)
@@ -74,7 +85,8 @@ template<size_t Alignment = 64ul> class GuardedAlignedAllocator {
 
   void *allocate(size_t size, size_t alignment, const char *name)
   {
-    return MEM_new_uninitialized_aligned(size, std::max(alignment, min_alignment), name);
+    return throw_bad_alloc_if_null(
+        MEM_new_uninitialized_aligned(size, std::max(alignment, min_alignment), name));
   }
   void *allocate_zero(size_t size, size_t alignment, const char *name)
   {
@@ -84,7 +96,7 @@ template<size_t Alignment = 64ul> class GuardedAlignedAllocator {
       memset(ptr, 0, size);
       return ptr;
     }
-    return MEM_new_zeroed(size, name);
+    return throw_bad_alloc_if_null(MEM_new_zeroed(size, name));
   }
 
   void deallocate(void *ptr)
@@ -108,7 +120,7 @@ class RawAllocator {
   void *allocate(size_t size, size_t alignment, const char * /*name*/)
   {
     BLI_assert(is_power_of_2(int(alignment)));
-    void *ptr = malloc(size + alignment + sizeof(MemHead));
+    void *ptr = throw_bad_alloc_if_null(malloc(size + alignment + sizeof(MemHead)));
     void *used_ptr = reinterpret_cast<void *>(
         uintptr_t(POINTER_OFFSET(ptr, alignment + sizeof(MemHead))) & ~(uintptr_t(alignment) - 1));
     int offset = int(intptr_t(used_ptr) - intptr_t(ptr));

@@ -1021,5 +1021,12 @@ TEST(vector, ReleaseAllocated)
   MEM_delete(data.data);
 }
 
+TEST(vector, AllocationFailureThrows)
+{
+  Vector<int> vec = {1, 2, 3};
+  EXPECT_THROW(vec.reserve(int64_t(1) << 58), std::bad_alloc);
+  EXPECT_EQ(vec.as_span(), Span({1, 2, 3}));
+}
+
 }  // namespace
 }  // namespace blender::tests

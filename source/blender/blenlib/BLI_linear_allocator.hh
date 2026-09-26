@@ -304,8 +304,10 @@ template<typename Allocator = GuardedAllocator> class LinearAllocator : NonCopya
 
   void *allocated_owned(const int64_t size, const int64_t alignment)
   {
+    /* Reserve first, so the buffer does not leak if growing the vector throws. */
+    owned_buffers_.reserve(owned_buffers_.size() + 1);
     void *buffer = allocator_.allocate(size, alignment, __func__);
-    owned_buffers_.append(buffer);
+    owned_buffers_.append_unchecked(buffer);
 #ifdef BLI_DEBUG_LINEAR_ALLOCATOR_SIZE
     owned_allocation_size_ += size;
 #endif
