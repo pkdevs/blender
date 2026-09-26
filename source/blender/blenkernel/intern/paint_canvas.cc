@@ -117,9 +117,10 @@ std::string BKE_paint_canvas_key_get(ImagePaintSettings &settings, Object *ob)
 {
   std::stringstream ss;
   ss << "UV_MAP:" << BKE_paint_canvas_uvmap_name_get(settings, ob).value_or("");
-  const bool is_mask_brush = settings.paint.brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
+  const Brush *brush = settings.paint.brush;
+  const bool is_mask_brush = brush && brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
 
-  Image *image;
+  Image *image = nullptr;
   ImageUser tile_user;
 
   if (is_mask_brush) {

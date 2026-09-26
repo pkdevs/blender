@@ -535,7 +535,10 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
   texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
   texture_paint_data->mask_data = ImageData::init_mask(*settings_);
-  if (!texture_paint_data->image_data) {
+  if (!texture_paint_data->image_data ||
+      (this->brush && this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK &&
+       !texture_paint_data->mask_data))
+  {
     BLI_assert(0);
     return false;
   }
@@ -627,11 +630,11 @@ static void do_brush_action(const Depsgraph &depsgraph,
   IndexMaskMemory memory;
 
   const bool is_mask_brush = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
-  Image image = is_mask_brush ? *mode_data->mask_data->image : *mode_data->image_data->image;
+  Image *image = is_mask_brush ? mode_data->mask_data->image : mode_data->image_data->image;
   ImageUser image_user = is_mask_brush ? mode_data->mask_data->image_user_get() :
                                          mode_data->image_data->image_user_get();
 
-  bke::pbvh::build_pixels(depsgraph, ob, image, image_user);
+  bke::pbvh::build_pixels(depsgraph, ob, *image, image_user);
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
@@ -735,7 +738,9 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
 
   if (stroke_started) {
     TexturePaintData *mode_data = static_cast<TexturePaintData *>(mode_data_.get());
-    Image *image = mode_data->image_data->image;
+    const bool is_mask_brush = this->brush &&
+                               this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
+    Image *image = is_mask_brush ? mode_data->mask_data->image : mode_data->image_data->image;
 
     WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
     WM_event_add_notifier(this->evil_C, NC_IMAGE | NA_PAINTING, image);
