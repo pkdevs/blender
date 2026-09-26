@@ -40,7 +40,9 @@
 #include "IO_otio.hh"
 #include "otio_metadata.hh"
 
+#include "opentimelineio/anyVector.h"
 #include "opentimelineio/clip.h"
+#include "opentimelineio/effect.h"
 #include "opentimelineio/externalReference.h"
 #include "opentimelineio/gap.h"
 #include "opentimelineio/generatorReference.h"
@@ -547,6 +549,71 @@ TEST_F(OTIOTest, ForeignTiming)
   EXPECT_EQ(strip->left_handle(), 90010);
   EXPECT_EQ(strip->right_handle(imported), 90030);
   EXPECT_EQ(BLI_path_cmp(strip->data->dirpath, "/a b/"), 0);
+}
+
+static AnyDictionary resolve_effect(const std::string &name,
+                                    const std::vector<std::pair<std::string, std::any>> &values)
+{
+  AnyVector parameters;
+  for (const auto &[id, value] : values) {
+    AnyDictionary parameter;
+    parameter["Parameter ID"] = id;
+    parameter["Parameter Value"] = value;
+    parameters.push_back(parameter);
+  }
+  AnyDictionary effect;
+  effect["Effect Name"] = name;
+  effect["Enabled"] = true;
+  effect["Parameters"] = parameters;
+  return effect;
+}
+
+TEST_F(OTIOTest, ResolveMetadata)
+{
+  const TimeRange range(RationalTime(0, 24), RationalTime(10, 24));
+  auto generator = new GeneratorReference("Solid Color", "Solid Color", range);
+  generator->parameters()["Resolve_OTIO"] = AnyVector{
+      resolve_effect("Solid Color", {{"color", std::string("#ff8000")}})};
+  auto clip = SerializableObject::Retainer<Clip>(new Clip("Solid Color", generator, range));
+
+  auto add_effect = [&](const AnyDictionary &resolve) {
+    auto effect = new otio::Effect("", "Resolve Effect");
+    effect->metadata()["Resolve_OTIO"] = resolve;
+    clip->effects().push_back(effect);
+  };
+  add_effect(resolve_effect("Transform",
+                            {{"transformationZoomX", 2.0},
+                             {"transformationPan", 0.25},
+                             {"transformationRotationAngle", 90.0}}));
+  add_effect(resolve_effect("Composite", {{"composite mode", int64_t(5)}, {"opacity", 50.0}}));
+
+  auto track = SerializableObject::Retainer<Track>(new Track("V1"));
+  AnyDictionary track_resolve;
+  track_resolve["Locked"] = true;
+  track->metadata()["Resolve_OTIO"] = track_resolve;
+  track->append_child(clip);
+  auto timeline = SerializableObject::Retainer<Timeline>(new Timeline("Resolve"));
+  timeline->tracks()->append_child(track);
+  write_otio(timeline);
+
+  Scene *imported = import_otio();
+  ASSERT_NE(imported, nullptr);
+  Strip *strip = seq::lookup_strip_by_name(imported->ed, "Solid Color");
+  ASSERT_NE(strip, nullptr);
+  ASSERT_EQ(strip->type, STRIP_TYPE_COLOR);
+  const SolidColorVars *color = static_cast<const SolidColorVars *>(strip->effectdata);
+  EXPECT_FLOAT_EQ(color->col[0], 1.0f);
+  EXPECT_NEAR(color->col[1], 128.0f / 255.0f, 1e-5f);
+  EXPECT_FLOAT_EQ(color->col[2], 0.0f);
+  EXPECT_FLOAT_EQ(strip->data->transform->scale_x, 2.0f);
+  EXPECT_FLOAT_EQ(strip->data->transform->scale_y, 1.0f);
+  EXPECT_FLOAT_EQ(strip->data->transform->xofs, 0.25f * imported->r.xsch);
+  EXPECT_NEAR(strip->data->transform->rotation, M_PI_2, 1e-5f);
+  EXPECT_EQ(strip->blend_mode, STRIP_BLEND_SCREEN);
+  EXPECT_FLOAT_EQ(strip->blend_opacity, 50.0f);
+  EXPECT_STREQ(seq::channel_get_by_index(&imported->ed->channels, 1)->name, "V1");
+  EXPECT_TRUE(seq::channel_get_by_index(&imported->ed->channels, 1)->is_locked());
+  EXPECT_NE(IDP_GetPropertyFromGroup(strip->prop, "otio_metadata"), nullptr);
 }
 
 }  // namespace blender::io::otio

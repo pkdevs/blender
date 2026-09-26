@@ -57,6 +57,7 @@
 #include "opentimelineio/transition.h"
 
 #include "otio_import.hh"
+#include "otio_import_resolve.hh"
 #include "otio_metadata.hh"
 
 namespace blender::io::otio {
@@ -240,7 +241,10 @@ static Strip *clip_to_strip(StripImportContext &ctx,
 
   if (auto *generator = dynamic_cast<GeneratorReference *>(reference)) {
     const std::string kind = generator->generator_kind();
-    const std::optional<StripType> type = strip_type_from_identifier(&kind);
+    std::optional<StripType> type = strip_type_from_identifier(&kind);
+    if (!type) {
+      type = resolve_generator_type(*generator);
+    }
     if (type && seq::effect_type_get_min_num_inputs(*type) == 2) {
       ctx.pending_effects.append({&clip, &seqbase, channel, start, duration, *type});
       return nullptr;
@@ -420,6 +424,7 @@ static void import_stack(StripImportContext &ctx,
         STRNCPY_UTF8(timeline_channel->name, track->name().c_str());
       }
       SET_FLAG_FROM_TEST(timeline_channel->flag, !track->enabled(), SEQ_CHANNEL_MUTE);
+      SET_FLAG_FROM_TEST(timeline_channel->flag, resolve_track_locked(*track), SEQ_CHANNEL_LOCK);
     }
     import_track(ctx, *track, seqbase, channel, origin);
   }
@@ -505,8 +510,10 @@ Scene *importer_main(bContext *C, const OTIOImportParams &params)
   import_stack(ctx, *timeline->tracks(), scene->ed->seqbase, scene->ed->channels, origin);
   add_pending_effects(ctx);
   for (auto &[strip, otio_object] : ctx.strip_metadata) {
+    PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_Strip, strip);
+    rna_from_dictionary(
+        bmain, scene->ed, resolve_strip_properties(*scene, *strip, *otio_object), ptr);
     if (const AnyDictionary *metadata = strip_metadata(*otio_object)) {
-      PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_Strip, strip);
       rna_from_dictionary(bmain, scene->ed, *metadata, ptr);
     }
     store_foreign_metadata(*otio_object, strip->prop);
