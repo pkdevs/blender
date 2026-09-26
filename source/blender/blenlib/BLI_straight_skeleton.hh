@@ -17,18 +17,25 @@
  *
  * Input
  * -----
- * The input is a set of 2D vertices, a single outer polygon oriented counter-clockwise (CCW),
- * and any number of hole polygons each oriented clockwise (CW).
+ * The input is a set of 2D vertices, and either:
+ *   - A single outer polygon oriented counter-clockwise (CCW), and any number of hole
+ *     polygons each oriented clockwise (CW); OR
+ *   - An open polyline (#StraightSkeletonInput::edge_chain) of at least 2 vertices.
  *
  * Vertices are given as 2D coordinates (double precision). Callers working in 3D
  * should project to the polygon plane before calling.
  *
  * Offset and Segments
  * -------------------
- * #StraightSkeletonInput::offset controls the inward offset distance. When left at
- * its default of infinity, the complete straight skeleton (full roof tiling) is returned.
- * When set to a finite value d, the roof is clipped at height t = d; if d exceeds the
- * maximum collapse time it is silently clamped so that no bands are empty.
+ * #StraightSkeletonInput::offset controls the inward/outward offset distance:
+ *   - When left at infinity (the default for closed polygons), the complete straight
+ *     skeleton (full roof tiling) is returned.
+ *   - When set to a finite positive value d, a closed polygon is inset up to distance d,
+ *     clipped at height t = d (clamped to maximum collapse time). When an edge chain is
+ *     supplied, it is offset by distance d into a surrounding offset band.
+ *   - When set to a finite negative value d, a closed polygon is outset (exterior offset
+ *     advancing on the CW side of the outer polygon, and on the CCW side of inner holes)
+ *     by distance |d|. Negative offset is a no-op for an edge chain.
  *
  * #StraightSkeletonInput::segments divides the effective offset range into that many
  * equal-width bands. Band 0 is the outermost ring (adjacent to the input boundary);
@@ -88,18 +95,30 @@ class StraightSkeletonInput {
   /** Concatenated list of vertex indices in #vert for all hole polygons (each oriented CW). */
   Span<int> hole_vert_indices;
 
+  /**
+   * Vertex indices in #vert of an open polyline (edge chain) to offset.
+   * Either (#outer_polygon with optional holes) OR #edge_chain must be provided, but not both.
+   * When #edge_chain is provided, #offset must be a finite positive distance.
+   */
+  Span<int> edge_chain;
+
   /** Coincidence threshold. Pass 0.0 to use the default (1e-8). */
   double epsilon{0.0};
 
   /**
-   * Inward offset distance for polygon offsetting.
+   * Inward or outward offset distance for polygon offsetting.
    *
    * - `infinity` (default): the full straight skeleton is computed. The algorithm
    *   determines the maximum collapse time automatically and uses it as the effective
    *   offset for the purposes of band subdivision (see #segments).
-   * - A finite non-negative value `d`: the roof is clipped at height
-   *   `t = min(d, max_collapse_time)`. Silently clamping to the maximum collapse
-   *   time ensures all bands have uniform width and none are empty.
+   * - A finite positive value `d`: the polygon is inset (wavefronts advance on CCW side
+   *   of outer polygon and CW side of holes). For closed polygons, the roof is clipped
+   *   at height `t = min(d, max_collapse_time)`. When #edge_chain is provided, the open
+   *   polyline is offset by distance `d` into a closed offset band.
+   * - A finite negative value `d`: the polygon is outset (wavefronts advance on the CW
+   *   side of the outer polygon into the exterior, and on the CCW side of inner hole
+   *   polygons into each hole cavity) by distance `|d|`. Negative offset is a no-op for
+   *   the #edge_chain case.
    */
   double offset{std::numeric_limits<double>::infinity()};
 

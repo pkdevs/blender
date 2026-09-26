@@ -826,8 +826,8 @@ class SimulationEngine {
       /* Detect events occurring in [current_time_, current_time_ + max_lookahead]. */
       const double event_t = find_earliest_event(max_lookahead, eps);
 
-      if (!std::isinf(event_t) && event_t <= next_seg_time + 1e-9 &&
-          event_t <= target_offset_ + 1e-9)
+      if (!std::isinf(event_t) && event_t < next_seg_time - 1e-9 &&
+          event_t < target_offset_ - 1e-9)
       {
         /* Advance simulation to event timestamp. */
         advance_positions(event_t - current_time_);
@@ -858,8 +858,10 @@ class SimulationEngine {
       }
     }
 
-    /* If finished with finite target offset and surviving contours remain, emit inner polygon. */
-    if (!dry_run_ && !std::isinf(input_.offset) && has_active_contours() &&
+    /* If finished with finite target offset and surviving contours remain, emit inner polygon.
+     * Note: Inner polygon cap is only emitted for positive offsets of closed polygons. */
+    if (!dry_run_ && !std::isinf(input_.offset) && input_.offset > 0.0 &&
+        input_.edge_chain.is_empty() && has_active_contours() &&
         current_time_ >= target_offset_ - 1e-7)
     {
       emit_inner_polygon_faces();
@@ -1171,6 +1173,58 @@ class SimulationEngine {
       skel_graph_.nodes_orig.append(i);
     }
 
+    if (!input_.edge_chain.is_empty()) {
+      init_edge_chain_state();
+    }
+    else if (input_.offset < 0.0) {
+      init_negative_offset_state();
+    }
+    else {
+      init_polygon_state();
+    }
+  }
+
+  void init_antiparallel_bins()
+  {
+    const int total_orig_edges = int(orig_edge_normal_.size());
+    constexpr int NUM_ANGLE_BINS = 16;
+    Array<int> bin_counts(NUM_ANGLE_BINS, 0);
+    Array<int> edge_bins(total_orig_edges);
+
+    for (const int e : IndexRange(total_orig_edges)) {
+      const double2 &n = orig_edge_normal_[e];
+      double theta = std::atan2(n.y, n.x);
+      if (theta < 0.0) {
+        theta += 2.0 * M_PI;
+      }
+      const int bin = std::clamp(
+          int((theta / (2.0 * M_PI)) * double(NUM_ANGLE_BINS)), 0, NUM_ANGLE_BINS - 1);
+      edge_bins[e] = bin;
+      bin_counts[bin]++;
+    }
+
+    orig_edge_has_antiparallel_.reinitialize(total_orig_edges);
+    has_any_antiparallel_edges_ = false;
+
+    for (const int e : IndexRange(total_orig_edges)) {
+      const int b = edge_bins[e];
+      bool found = false;
+      for (int offset = 6; offset <= 10; offset++) {
+        const int opp_b = (b + offset) % NUM_ANGLE_BINS;
+        if (bin_counts[opp_b] > 0) {
+          found = true;
+          break;
+        }
+      }
+      orig_edge_has_antiparallel_[e] = found;
+      if (found) {
+        has_any_antiparallel_edges_ = true;
+      }
+    }
+  }
+
+  void init_polygon_state()
+  {
     /* 2. Initialize Outer Wavefront Contour (CCW). */
     const int outer_num = int(input_.outer_polygon.size());
     const int outer_start_idx = 0;
@@ -1259,45 +1313,232 @@ class SimulationEngine {
       }
     }
 
-    constexpr int NUM_ANGLE_BINS = 16;
-    Array<int> bin_counts(NUM_ANGLE_BINS, 0);
-    Array<int> edge_bins(total_orig_edges);
-
-    for (const int e : IndexRange(total_orig_edges)) {
-      const double2 &n = orig_edge_normal_[e];
-      double theta = std::atan2(n.y, n.x);
-      if (theta < 0.0) {
-        theta += 2.0 * M_PI;
-      }
-      const int bin = std::clamp(
-          int((theta / (2.0 * M_PI)) * double(NUM_ANGLE_BINS)), 0, NUM_ANGLE_BINS - 1);
-      edge_bins[e] = bin;
-      bin_counts[bin]++;
-    }
-
-    orig_edge_has_antiparallel_.reinitialize(total_orig_edges);
-    has_any_antiparallel_edges_ = false;
-
-    for (const int e : IndexRange(total_orig_edges)) {
-      const int b = edge_bins[e];
-      bool found = false;
-      for (int offset = 6; offset <= 10; offset++) {
-        const int opp_b = (b + offset) % NUM_ANGLE_BINS;
-        if (bin_counts[opp_b] > 0) {
-          found = true;
-          break;
-        }
-      }
-      orig_edge_has_antiparallel_[e] = found;
-      if (found) {
-        has_any_antiparallel_edges_ = true;
-      }
-    }
+    init_antiparallel_bins();
 
     /* 5. Compute Initial Bisector Velocities. */
     for (const int i : wf_nodes_.pos.index_range()) {
       update_node_velocity(i);
     }
+  }
+
+  void init_negative_offset_state()
+  {
+    /* Outer polygon traversed in reverse (CW) so inward normal points outward into exterior. */
+    const int outer_num = int(input_.outer_polygon.size());
+    wf_contours_.head_node.append(0);
+    wf_contours_.is_hole.append(false);
+    wf_contours_.is_active.append(true);
+
+    for (const int j : IndexRange(outer_num)) {
+      const int idx = outer_num - 1 - j;
+      const int vi = input_.outer_polygon[idx];
+      const int prev_node = (j == 0) ? outer_num - 1 : j - 1;
+      const int next_node = (j + 1 == outer_num) ? 0 : j + 1;
+      const int next_idx = (idx == 0) ? outer_num - 1 : idx - 1;
+      const int orig_e = next_idx;
+
+      wf_nodes_.pos.append(input_.vert[vi]);
+      wf_nodes_.vel.append(double2(0.0, 0.0));
+      wf_nodes_.prev_node.append(prev_node);
+      wf_nodes_.next_node.append(next_node);
+      wf_nodes_.skel_node.append(vi);
+      wf_nodes_.orig_edge.append(orig_e);
+      wf_nodes_.orig_face.append(0);
+      wf_nodes_.contour_id.append(0);
+      wf_nodes_.is_active.append(true);
+      wf_nodes_.time_birth.append(0.0);
+
+      Vector<int> lt;
+      lt.append(vi);
+      wf_nodes_.left_trail.append(std::move(lt));
+
+      Vector<int> rt;
+      rt.append(input_.outer_polygon[next_idx]);
+      wf_nodes_.right_trail.append(std::move(rt));
+    }
+
+    /* Holes traversed in reverse (CCW) so inward normal points into hole cavity. */
+    for (const int hole_i : input_.hole_offsets.index_range()) {
+      const IndexRange r = input_.hole_offsets[hole_i];
+      const int hole_len = int(r.size());
+      const int hole_start = int(wf_nodes_.pos.size());
+      const int contour_id = int(wf_contours_.head_node.size());
+
+      wf_contours_.head_node.append(hole_start);
+      wf_contours_.is_hole.append(true);
+      wf_contours_.is_active.append(true);
+
+      for (const int j : IndexRange(hole_len)) {
+        const int idx = hole_len - 1 - j;
+        const int vi = input_.hole_vert_indices[r[idx]];
+        const int prev_node = hole_start + ((j == 0) ? hole_len - 1 : j - 1);
+        const int next_node = hole_start + ((j + 1 == hole_len) ? 0 : j + 1);
+        const int next_idx = (idx == 0) ? hole_len - 1 : idx - 1;
+        const int orig_e = outer_num + r[next_idx];
+
+        wf_nodes_.pos.append(input_.vert[vi]);
+        wf_nodes_.vel.append(double2(0.0, 0.0));
+        wf_nodes_.prev_node.append(prev_node);
+        wf_nodes_.next_node.append(next_node);
+        wf_nodes_.skel_node.append(vi);
+        wf_nodes_.orig_edge.append(orig_e);
+        wf_nodes_.orig_face.append(1 + hole_i);
+        wf_nodes_.contour_id.append(contour_id);
+        wf_nodes_.is_active.append(true);
+        wf_nodes_.time_birth.append(0.0);
+
+        Vector<int> lt;
+        lt.append(vi);
+        wf_nodes_.left_trail.append(std::move(lt));
+
+        Vector<int> rt;
+        rt.append(input_.hole_vert_indices[r[next_idx]]);
+        wf_nodes_.right_trail.append(std::move(rt));
+      }
+    }
+
+    /* Precompute Original Edge Normals for negative offset (pointing outward/inward). */
+    const int total_orig_edges = outer_num + int(input_.hole_vert_indices.size());
+    orig_edge_normal_.reinitialize(total_orig_edges);
+    for (const int i : IndexRange(outer_num)) {
+      const int v1 = input_.outer_polygon[i];
+      const int v2 = input_.outer_polygon[(i + 1) % outer_num];
+      orig_edge_normal_[i] = compute_inward_normal(input_.vert[v2], input_.vert[v1]);
+    }
+    for (const int hole_i : input_.hole_offsets.index_range()) {
+      const IndexRange r = input_.hole_offsets[hole_i];
+      const int hole_len = int(r.size());
+      for (const int i : IndexRange(hole_len)) {
+        const int e_idx = outer_num + r[i];
+        const int v1 = input_.hole_vert_indices[r[i]];
+        const int v2 = input_.hole_vert_indices[r[(i + 1) % hole_len]];
+        orig_edge_normal_[e_idx] = compute_inward_normal(input_.vert[v2], input_.vert[v1]);
+      }
+    }
+
+    init_antiparallel_bins();
+
+    for (const int i : wf_nodes_.pos.index_range()) {
+      update_node_velocity(i);
+    }
+  }
+
+  void init_edge_chain_state()
+  {
+    Vector<int> chain;
+    for (const int v : input_.edge_chain) {
+      if (chain.is_empty() ||
+          math::distance_squared(input_.vert[v], input_.vert[chain.last()]) > 1e-12)
+      {
+        chain.append(v);
+      }
+    }
+    const int m = int(chain.size());
+    if (m < 2) {
+      return;
+    }
+
+    /* Segments: m - 1 segments. */
+    Array<double2> u_dir(m - 1);
+    Array<double2> n_left(m - 1);
+    for (const int k : IndexRange(m - 1)) {
+      const double2 d = input_.vert[chain[k + 1]] - input_.vert[chain[k]];
+      u_dir[k] = math::normalize(d);
+      n_left[k] = math::orthogonal(u_dir[k]);
+    }
+
+    const int total_nodes = 2 * m;
+    const int contour_id = 0;
+    wf_contours_.head_node.append(0);
+    wf_contours_.is_hole.append(false);
+    wf_contours_.is_active.append(true);
+
+    /* Forward nodes: 0 .. m - 1. */
+    for (const int k : IndexRange(m)) {
+      const int vi = chain[k];
+      const int prev_node = (k == 0) ? total_nodes - 1 : k - 1;
+      const int next_node = k + 1;
+      const int orig_e = (k < m - 1) ? k : m - 1;
+
+      wf_nodes_.pos.append(input_.vert[vi]);
+      wf_nodes_.vel.append(double2(0.0, 0.0));
+      wf_nodes_.prev_node.append(prev_node);
+      wf_nodes_.next_node.append(next_node);
+      wf_nodes_.skel_node.append(vi);
+      wf_nodes_.orig_edge.append(orig_e);
+      wf_nodes_.orig_face.append(0);
+      wf_nodes_.contour_id.append(contour_id);
+      wf_nodes_.is_active.append(true);
+      wf_nodes_.time_birth.append(0.0);
+
+      Vector<int> lt;
+      lt.append(vi);
+      wf_nodes_.left_trail.append(std::move(lt));
+
+      Vector<int> rt;
+      rt.append((k < m - 1) ? chain[k + 1] : vi);
+      wf_nodes_.right_trail.append(std::move(rt));
+    }
+
+    /* Return nodes: m .. 2m - 1 (j in 0 .. m - 1, k = m - 1 - j). */
+    for (const int j : IndexRange(m)) {
+      const int k = m - 1 - j;
+      const int vi = chain[k];
+      const int prev_node = (j == 0) ? m - 1 : m + j - 1;
+      const int next_node = (j == m - 1) ? 0 : m + j + 1;
+      const int orig_e = (j < m - 1) ? m + (m - 2 - j) : total_nodes - 1;
+
+      wf_nodes_.pos.append(input_.vert[vi]);
+      wf_nodes_.vel.append(double2(0.0, 0.0));
+      wf_nodes_.prev_node.append(prev_node);
+      wf_nodes_.next_node.append(next_node);
+      wf_nodes_.skel_node.append(vi);
+      wf_nodes_.orig_edge.append(orig_e);
+      wf_nodes_.orig_face.append(0);
+      wf_nodes_.contour_id.append(contour_id);
+      wf_nodes_.is_active.append(true);
+      wf_nodes_.time_birth.append(0.0);
+
+      Vector<int> lt;
+      lt.append(vi);
+      wf_nodes_.left_trail.append(std::move(lt));
+
+      Vector<int> rt;
+      rt.append((j < m - 1) ? chain[k - 1] : vi);
+      wf_nodes_.right_trail.append(std::move(rt));
+    }
+
+    /* Initial node velocities.
+     * At terminal edges, wavefront vertices advance at 45 degrees on each side of the terminal
+     * end. */
+    wf_nodes_.vel[0] = -u_dir[0] + n_left[0];
+
+    for (int k = 1; k < m - 1; k++) {
+      wf_nodes_.vel[k] = compute_bisector_velocity(n_left[k - 1], n_left[k], u_dir[k]);
+    }
+
+    wf_nodes_.vel[m - 1] = u_dir[m - 2] + n_left[m - 2];
+    wf_nodes_.vel[m] = u_dir[m - 2] - n_left[m - 2];
+
+    for (int j = 1; j < m - 1; j++) {
+      const int k = m - 1 - j;
+      wf_nodes_.vel[m + j] = compute_bisector_velocity(-n_left[k], -n_left[k - 1], -u_dir[k - 1]);
+    }
+
+    wf_nodes_.vel[total_nodes - 1] = -u_dir[0] - n_left[0];
+
+    /* Precompute Original Edge Normals. Total edges = 2m. */
+    orig_edge_normal_.reinitialize(total_nodes);
+    for (const int k : IndexRange(m - 1)) {
+      orig_edge_normal_[k] = n_left[k];
+    }
+    orig_edge_normal_[m - 1] = u_dir[m - 2];
+    for (const int k : IndexRange(m - 1)) {
+      orig_edge_normal_[m + k] = -n_left[k];
+    }
+    orig_edge_normal_[total_nodes - 1] = -u_dir[0];
+
+    init_antiparallel_bins();
   }
 
   void update_node_velocity(int i)
@@ -3307,23 +3548,85 @@ StraightSkeletonOutput straight_skeleton_calc(const StraightSkeletonInput &input
 {
   PRF_scope(ProfileCategory::Core);
 
-  /* Validate input: polygon must have at least 3 vertices. */
-  if (input.outer_polygon.size() < 3) {
-    StraightSkeletonOutput output;
-    output.hit_max_events = false;
-    output.events_processed_num = 0;
-    output.flips_num = 0;
-    return output;
+  StraightSkeletonOutput empty_output;
+  empty_output.hit_max_events = false;
+  empty_output.events_processed_num = 0;
+  empty_output.flips_num = 0;
+
+  const bool has_chain = !input.edge_chain.is_empty();
+  const bool has_poly = !input.outer_polygon.is_empty();
+
+  /* Must provide either outer_polygon OR edge_chain, but not both. */
+  if (has_chain == has_poly) {
+    return empty_output;
   }
 
-  /* Two-Pass Strategy:
+  /* Holes cannot be provided with edge_chain. */
+  if (has_chain && (input.hole_offsets.size() > 0 || !input.hole_vert_indices.is_empty())) {
+    return empty_output;
+  }
+
+  const int segments = std::max(1, input.segments);
+
+  /* Case 1: Open Edge Chain */
+  if (has_chain) {
+    /* Negative, infinite, NaN, or zero offset is invalid/no-op for edge chain. */
+    if (input.offset <= 0.0 || std::isinf(input.offset) || std::isnan(input.offset)) {
+      return empty_output;
+    }
+    if (input.edge_chain.size() < 2) {
+      return empty_output;
+    }
+    for (const int v : input.edge_chain) {
+      if (v < 0 || v >= input.vert.size()) {
+        return empty_output;
+      }
+    }
+
+    SimulationEngine engine(input, input.offset, segments, false);
+    engine.run();
+    return engine.build_output();
+  }
+
+  /* Case 2: Closed Polygon (with optional holes) */
+  if (input.outer_polygon.size() < 3) {
+    return empty_output;
+  }
+  for (const int v : input.outer_polygon) {
+    if (v < 0 || v >= input.vert.size()) {
+      return empty_output;
+    }
+  }
+  for (const int v : input.hole_vert_indices) {
+    if (v < 0 || v >= input.vert.size()) {
+      return empty_output;
+    }
+  }
+
+  if (std::isnan(input.offset) || input.offset == 0.0) {
+    return empty_output;
+  }
+
+  /* Negative offset: wavefronts advance on CW side of outer polygon and CCW side of holes. */
+  if (input.offset < 0.0) {
+    if (std::isinf(input.offset)) {
+      /* Unbounded exterior offset to infinity is not supported. */
+      return empty_output;
+    }
+
+    SimulationEngine engine(input, std::abs(input.offset), segments, false);
+    engine.run();
+    return engine.build_output();
+  }
+
+  /* Positive offset / full skeleton:
+   * Two-Pass Strategy:
    * When offset is infinite or exceeds collapse time with segments > 1:
    *   Pass 1: Dry-run simulation with offset = infinity, segments = 1 to find exact
    *           max_collapse_time.
    *   Pass 2: Real simulation run with effective_offset = min(input.offset, max_collapse_time)
    *           divided into input.segments bands. */
   double target_offset = input.offset;
-  const int segments = std::max(1, input.segments);
 
   if (segments > 1 || !std::isinf(input.offset)) {
     SimulationEngine dry_engine(input, std::numeric_limits<double>::infinity(), 1, true);
