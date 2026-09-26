@@ -341,6 +341,193 @@ static double polygon_signed_area(Span<int> cycle, Span<double2> positions)
   return 0.5 * area;
 }
 
+/** Test if 2D triangle (a, b, c) is counter-clockwise. */
+static bool is_ccw_v2(const double2 &a, const double2 &b, const double2 &c)
+{
+  return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+}
+
+/** Test whether 2D segments (p1, p2) and (p3, p4) strictly cross each other. */
+static bool segments_cross_v2(const double2 &p1,
+                              const double2 &p2,
+                              const double2 &p3,
+                              const double2 &p4)
+{
+  return (is_ccw_v2(p1, p3, p4) != is_ccw_v2(p2, p3, p4)) &&
+         (is_ccw_v2(p1, p2, p3) != is_ccw_v2(p1, p2, p4));
+}
+
+/** Test whether 2D segment (p1, p2) crosses or passes too close to (p3, p4). */
+static bool segment_crosses_or_touches_v2(const double2 &p1,
+                                          const double2 &p2,
+                                          const double2 &p3,
+                                          const double2 &p4,
+                                          const double eps_sq = 1e-12)
+{
+  if (segments_cross_v2(p1, p2, p3, p4)) {
+    return true;
+  }
+  if (math::dist_squared_to_line_segment(p3, p1, p2) < eps_sq ||
+      math::dist_squared_to_line_segment(p4, p1, p2) < eps_sq ||
+      math::dist_squared_to_line_segment(p1, p3, p4) < eps_sq ||
+      math::dist_squared_to_line_segment(p2, p3, p4) < eps_sq)
+  {
+    return true;
+  }
+  return false;
+}
+
+/** Test whether point pt is strictly inside 2D polygon using ray casting. */
+static bool isect_point_polygon_v2(const double2 &pt, Span<double2> poly)
+{
+  const int nr = int(poly.size());
+  bool inside = false;
+  for (int i = 0, j = nr - 1; i < nr; j = i++) {
+    if (((poly[i].y > pt.y) != (poly[j].y > pt.y)) &&
+        (pt.x < (poly[j].x - poly[i].x) * (pt.y - poly[i].y) / (poly[j].y - poly[i].y + 1e-20) +
+                    poly[i].x))
+    {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Extract an arc of vertex indices from cyclic loop from start_idx to end_idx (inclusive). */
+static Vector<int> get_cyclic_arc(Span<int> loop, const int start_idx, const int end_idx)
+{
+  Vector<int> arc;
+  const int n = int(loop.size());
+  int curr = start_idx;
+  while (true) {
+    arc.append(loop[curr]);
+    if (curr == end_idx) {
+      break;
+    }
+    curr = (curr + 1) % n;
+  }
+  return arc;
+}
+
+/**
+ * Clean consecutive duplicate vertices and retraced spikes / antennas from a cyclic polygon.
+ *
+ * Geometric Situation:
+ * ====================
+ * ```
+ *                  (b) Spike / Antenna (zero area)
+ *                 / ^
+ *                /   \
+ *               v     \
+ *             (a)     (a)
+ *             /         \
+ *           ...         ...
+ * ```
+ * When an edge goes out from (a) to (b) and immediately retraces from (b) back to (a),
+ * the edge pair (a, b) and (b, a) encloses zero area and leaves duplicate vertex (a) in
+ * the polygon loop. Such spikes can arise when merging sub-faces sharing multi-edge seams.
+ * Removing the spike collapses [a, b, a] to [a], restoring a simple manifold face boundary.
+ */
+static Vector<int> clean_polygon_spikes_and_duplicates(Span<int> polygon)
+{
+  Vector<int> result(polygon);
+
+  bool modified = true;
+  while (modified) {
+    modified = false;
+
+    /* 1. Remove consecutive duplicates (v == next_v). */
+    Vector<int> clean_consecutive;
+    for (const int v : result) {
+      if (clean_consecutive.is_empty() || clean_consecutive.last() != v) {
+        clean_consecutive.append(v);
+      }
+    }
+    while (clean_consecutive.size() >= 2 && clean_consecutive.first() == clean_consecutive.last())
+    {
+      clean_consecutive.pop_last();
+    }
+    if (clean_consecutive.size() != result.size()) {
+      result = std::move(clean_consecutive);
+      modified = true;
+    }
+
+    if (result.size() < 3) {
+      break;
+    }
+
+    /* 2. Remove spikes / antennas (prev_v == next_v). */
+    const int n = int(result.size());
+    for (int i = 0; i < n; i++) {
+      const int prev_v = result[(i - 1 + n) % n];
+      const int next_v = result[(i + 1) % n];
+      if (prev_v == next_v) {
+        result.remove(i);
+        modified = true;
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Recursively split a polygon containing pinch (duplicate non-consecutive) vertices
+ * into simple polygons.
+ */
+static void split_pinch_polygon(Span<int> polygon, Vector<Vector<int>> &r_simple_faces)
+{
+  Vector<int> cleaned = clean_polygon_spikes_and_duplicates(polygon);
+  if (cleaned.size() < 3) {
+    return;
+  }
+
+  /* Look for duplicate vertices. */
+  Map<int, int> first_occurrence;
+  int pinch_v = -1;
+  int idx_first = -1;
+  int idx_second = -1;
+
+  for (int i = 0; i < cleaned.size(); i++) {
+    const int v = cleaned[i];
+    if (const int *first_idx = first_occurrence.lookup_ptr(v)) {
+      pinch_v = v;
+      idx_first = *first_idx;
+      idx_second = i;
+      break;
+    }
+    first_occurrence.add(v, i);
+  }
+
+  if (pinch_v == -1) {
+    /* No duplicates! It is a simple polygon. */
+    r_simple_faces.append(std::move(cleaned));
+    return;
+  }
+
+  /* Polygon is pinched at pinch_v!
+   * Split into two loops:
+   * Loop 1: from idx_first to idx_second - 1 (starts with pinch_v)
+   * Loop 2: from idx_second to end + from 0 to idx_first - 1 (starts with pinch_v) */
+  Vector<int> loop1;
+  for (int k = idx_first; k < idx_second; k++) {
+    loop1.append(cleaned[k]);
+  }
+
+  Vector<int> loop2;
+  for (int k = idx_second; k < cleaned.size(); k++) {
+    loop2.append(cleaned[k]);
+  }
+  for (int k = 0; k < idx_first; k++) {
+    loop2.append(cleaned[k]);
+  }
+
+  /* Recursively resolve both loops in case either still has duplicates. */
+  split_pinch_polygon(loop1.as_span(), r_simple_faces);
+  split_pinch_polygon(loop2.as_span(), r_simple_faces);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -902,21 +1089,11 @@ class SimulationEngine {
     /* 1. Ensure all initial faces are clean and CCW. */
     for (const int fi : out_faces_.faces.index_range()) {
       Vector<int> &f = out_faces_.faces[fi];
-      Vector<int> clean_f;
-      for (const int v : f) {
-        if (clean_f.is_empty() || clean_f.last() != v) {
-          clean_f.append(v);
-        }
-      }
-      while (clean_f.size() >= 2 && clean_f.first() == clean_f.last()) {
-        clean_f.pop_last();
-      }
-      if (clean_f.size() >= 3 &&
-          polygon_signed_area(clean_f.as_span(), skel_graph_.nodes_pos.as_span()) < 0.0)
+      f = clean_polygon_spikes_and_duplicates(f.as_span());
+      if (f.size() >= 3 && polygon_signed_area(f.as_span(), skel_graph_.nodes_pos.as_span()) < 0.0)
       {
-        std::reverse(clean_f.begin(), clean_f.end());
+        std::reverse(f.begin(), f.end());
       }
-      f = std::move(clean_f);
     }
 
     /* 2. Merge sub-faces of the same generator edge and band that share an internal seam.
@@ -1013,16 +1190,8 @@ class SimulationEngine {
                 merged.append(f2[(match_j + k) % n2]);
               }
 
-              /* Clean consecutive duplicates. */
-              Vector<int> clean;
-              for (const int v : merged) {
-                if (clean.is_empty() || clean.last() != v) {
-                  clean.append(v);
-                }
-              }
-              while (clean.size() >= 2 && clean.first() == clean.last()) {
-                clean.pop_last();
-              }
+              /* Clean consecutive duplicates and retraced spikes / antennas. */
+              Vector<int> clean = clean_polygon_spikes_and_duplicates(merged.as_span());
 
               if (clean.size() >= 3) {
                 out_faces_.faces[i] = std::move(clean);
@@ -1063,29 +1232,38 @@ class SimulationEngine {
     Vector<int> final_face_band;
 
     for (const int fi : out_faces_.faces.index_range()) {
-      Vector<int> clean_f = out_faces_.faces[fi];
-      if (clean_f.size() < 3) {
+      if (out_faces_.faces[fi].size() < 3) {
         continue;
       }
 
-      /* Ensure positive signed area (counter-clockwise). */
-      if (polygon_signed_area(clean_f.as_span(), skel_graph_.nodes_pos.as_span()) < 0.0) {
-        std::reverse(clean_f.begin(), clean_f.end());
-      }
+      /* Clean spikes and split any pinch (figure-8) vertices into simple polygons. */
+      Vector<Vector<int>> simple_faces;
+      split_pinch_polygon(out_faces_.faces[fi].as_span(), simple_faces);
 
-      for (int &v : clean_f) {
-        if (old_to_new[v] == -1) {
-          old_to_new[v] = int(compact_vert.size());
-          compact_vert.append(skel_graph_.nodes_pos[v]);
-          compact_vert_time.append(skel_graph_.nodes_time[v]);
-          compact_vert_orig.append(skel_graph_.nodes_orig[v]);
+      for (Vector<int> &clean_f : simple_faces) {
+        if (clean_f.size() < 3) {
+          continue;
         }
-        v = old_to_new[v];
-      }
 
-      final_faces.append(std::move(clean_f));
-      final_face_orig.append(out_faces_.face_orig[fi]);
-      final_face_band.append(out_faces_.face_band[fi]);
+        /* Ensure positive signed area (counter-clockwise). */
+        if (polygon_signed_area(clean_f.as_span(), skel_graph_.nodes_pos.as_span()) < 0.0) {
+          std::reverse(clean_f.begin(), clean_f.end());
+        }
+
+        for (int &v : clean_f) {
+          if (old_to_new[v] == -1) {
+            old_to_new[v] = int(compact_vert.size());
+            compact_vert.append(skel_graph_.nodes_pos[v]);
+            compact_vert_time.append(skel_graph_.nodes_time[v]);
+            compact_vert_orig.append(skel_graph_.nodes_orig[v]);
+          }
+          v = old_to_new[v];
+        }
+
+        final_faces.append(std::move(clean_f));
+        final_face_orig.append(out_faces_.face_orig[fi]);
+        final_face_band.append(out_faces_.face_band[fi]);
+      }
     }
 
     const int total_faces = int(final_faces.size());
@@ -1558,6 +1736,13 @@ class SimulationEngine {
     wf_nodes_.vel[i] = compute_bisector_velocity(n1, n2, d2);
   }
 
+  void deactivate_node(int i)
+  {
+    if (i >= 0 && i < int(wf_nodes_.pos.size())) {
+      wf_nodes_.is_active[i] = false;
+    }
+  }
+
   bool has_active_contours() const
   {
     for (const bool active : wf_contours_.is_active) {
@@ -1655,6 +1840,30 @@ class SimulationEngine {
 
     double earliest_t = std::numeric_limits<double>::infinity();
 
+    const double cluster_tol = std::max(eps, 1e-4);
+
+    /* 0. Already-collapsed edges at current_time_ (shrinking or degenerate). */
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      const int v = wf_nodes_.next_node[u];
+      if (v >= 0 && wf_nodes_.is_active[v]) {
+        const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+        const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
+        if (math::length_squared(e0) < cluster_tol * cluster_tol) {
+          if (math::length_squared(e0) < 1e-12) {
+            if (math::length_squared(dv) < 1e-12) {
+              return current_time_;
+            }
+          }
+          else if (math::dot(e0, dv) < -1e-12) {
+            return current_time_;
+          }
+        }
+      }
+    }
+
     /* 1. Edge Collapse Events. */
     for (const int u : wf_nodes_.pos.index_range()) {
       if (!wf_nodes_.is_active[u]) {
@@ -1669,7 +1878,9 @@ class SimulationEngine {
         const double tau = -math::dot(e0, dv) / dv_sq;
         if (tau > 1e-11 && tau <= dt + 1e-9) {
           const double2 e_tau = e0 + tau * dv;
-          if (math::length(e_tau) < std::max(eps, 1e-5) || math::dot(e0, e0 + dt * dv) <= 0.0) {
+          if (math::length(e_tau) < std::max(eps, 1e-3) ||
+              (!std::isinf(dt) && math::dot(e0, e0 + dt * dv) <= 0.0))
+          {
             earliest_t = std::min(earliest_t, current_time_ + tau);
           }
         }
@@ -1722,7 +1933,7 @@ class SimulationEngine {
             continue;
           }
           const int v = wf_nodes_.next_node[u];
-          if (u == w || v == w || prev_w == u || next_w == v) {
+          if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
             continue;
           }
 
@@ -1831,7 +2042,7 @@ class SimulationEngine {
         query_tags_[u] = qid;
 
         const int v = wf_nodes_.next_node[u];
-        if (u == w || v == w || prev_w == u || next_w == v) {
+        if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
           return;
         }
 
@@ -2115,8 +2326,8 @@ class SimulationEngine {
         }
       }
 
-      wf_nodes_.is_active[u] = false;
-      wf_nodes_.is_active[w] = false;
+      deactivate_node(u);
+      deactivate_node(w);
     }
     else {
       /* Case B: Partial overlap - if an edge is completely covered by the overlap,
@@ -2153,7 +2364,7 @@ class SimulationEngine {
             out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e1]);
           }
         }
-        wf_nodes_.is_active[u] = false;
+        deactivate_node(u);
       }
 
       if (e2_completely_covered) {
@@ -2184,7 +2395,7 @@ class SimulationEngine {
             out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[e2]);
           }
         }
-        wf_nodes_.is_active[w] = false;
+        deactivate_node(w);
       }
 
       const bool e1_extends_left = (s_z > end_tol);
@@ -2755,7 +2966,7 @@ class SimulationEngine {
             skel_graph_.edges_time_end.append(current_time_);
             skel_graph_.edges_is_boundary.append(false);
 
-            wf_nodes_.is_active[curr] = false;
+            deactivate_node(curr);
             curr = next_curr;
           } while (curr != head && curr >= 0);
 
@@ -2836,7 +3047,7 @@ class SimulationEngine {
             continue;
           }
           const int v = wf_nodes_.next_node[u];
-          if (u == w || v == w || prev_w == u || next_w == v) {
+          if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
             continue;
           }
           if (collapsing_edges.contains(u)) {
@@ -2954,7 +3165,7 @@ class SimulationEngine {
                 query_tags_[u] = qid;
 
                 const int v = wf_nodes_.next_node[u];
-                if (u == w || v == w || prev_w == u || next_w == v) {
+                if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
                   return;
                 }
                 if (collapsing_edges.contains(u)) {
@@ -3146,7 +3357,6 @@ class SimulationEngine {
             }
           }
           if (face_verts.size() >= 3) {
-
             out_faces_.faces.append(std::move(face_verts));
             out_faces_.face_orig.append(wf_nodes_.orig_face[e]);
             out_faces_.face_band.append(current_band_);
@@ -3163,7 +3373,7 @@ class SimulationEngine {
         skel_graph_.edges_is_boundary.append(false);
 
         const int prev_u = wf_nodes_.prev_node[u];
-        wf_nodes_.is_active[u] = false;
+        deactivate_node(u);
 
         if (prev_u != u && prev_u != v && prev_u >= 0 && v >= 0) {
           wf_nodes_.next_node[prev_u] = v;
@@ -3184,11 +3394,20 @@ class SimulationEngine {
 
     /* 7. Phase 4: Resolve remaining clusters via Radial Gap Pairing. */
     for (const EventCluster &cluster : clusters) {
-      resolve_cluster(cluster);
+      if (!cluster.split_edges.is_empty() || cluster.collapsing_edges.is_empty()) {
+        resolve_cluster(cluster);
+      }
     }
 
     /* 9. Rebuild and synchronize active contour loops. */
     rebuild_active_contours();
+
+    for (const int i : wf_nodes_.pos.index_range()) {
+      if (wf_nodes_.is_active[i]) {
+        update_node_velocity(i);
+      }
+    }
+
     events_processed_count_++;
   }
 
@@ -3274,7 +3493,7 @@ class SimulationEngine {
 
     /* Retire all colliding vertices. */
     for (const int v : cluster.colliding_verts) {
-      wf_nodes_.is_active[v] = false;
+      deactivate_node(v);
     }
 
     if (rays.size() < 2) {
@@ -3507,11 +3726,21 @@ class SimulationEngine {
    *            v4                          v3
    * ```
    */
+  /**
+   * Emit closed inner polygon face(s) at effective offset threshold.
+   *
+   * When inner holes are present and wavefronts from the outer boundary and inner holes
+   * do not meet, an annular region is formed. Because Blender meshes cannot represent
+   * faces with holes or repeating vertices, annular regions are split into simple disk
+   * faces by adding non-crossing bridge chords approximately on opposite sides.
+   */
   void emit_inner_polygon_faces()
   {
     PRF_scope(ProfileCategory::Core);
 
+    /* 1. Extract all active wavefront loops. */
     Vector<bool> visited(wf_nodes_.pos.size(), false);
+    Vector<Vector<int>> all_loops;
 
     for (const int start_u : wf_nodes_.pos.index_range()) {
       if (!wf_nodes_.is_active[start_u] || visited[start_u]) {
@@ -3527,13 +3756,333 @@ class SimulationEngine {
           break;
         }
       }
-
       if (loop.size() >= 3) {
+        all_loops.append(std::move(loop));
+      }
+    }
+
+    if (all_loops.is_empty()) {
+      return;
+    }
+
+    /* 2. Classify loops into outer (CCW, signed area > 0) and holes (CW, signed area < 0). */
+    Vector<Vector<int>> outer_loops;
+    Vector<Vector<int>> hole_loops;
+
+    for (Vector<int> &loop : all_loops) {
+      const double area = polygon_signed_area(loop.as_span(), skel_graph_.nodes_pos.as_span());
+      if (area > 1e-9) {
+        outer_loops.append(std::move(loop));
+      }
+      else if (area < -1e-9) {
+        hole_loops.append(std::move(loop));
+      }
+    }
+
+    /* If there are no holes, emit outer loops directly as simple polygon caps. */
+    if (hole_loops.is_empty()) {
+      for (Vector<int> &loop : outer_loops) {
         out_faces_.faces.append(std::move(loop));
         out_faces_.face_orig.append(0);
-        out_faces_.face_band.append(std::max(0, segments_num_ - 1));
+        out_faces_.face_band.append(math::max(0, segments_num_ - 1));
         out_faces_.face_orig_edge.append(-1);
       }
+      return;
+    }
+
+    /* 3. Associate each hole with its enclosing outer loop. */
+    struct Region {
+      Vector<int> outer;
+      Vector<Vector<int>> holes;
+    };
+    Vector<Region> regions;
+    regions.reserve(outer_loops.size());
+    for (Vector<int> &outer : outer_loops) {
+      regions.append(Region{std::move(outer), {}});
+    }
+
+    for (Vector<int> &hole : hole_loops) {
+      const double2 test_pt = skel_graph_.nodes_pos[hole[0]];
+      int best_region = -1;
+      for (const int r_idx : regions.index_range()) {
+        Vector<double2> outer_coords;
+        outer_coords.reserve(regions[r_idx].outer.size());
+        for (const int v : regions[r_idx].outer) {
+          outer_coords.append(skel_graph_.nodes_pos[v]);
+        }
+        if (isect_point_polygon_v2(test_pt, outer_coords.as_span())) {
+          best_region = r_idx;
+          break;
+        }
+      }
+      if (best_region != -1) {
+        regions[best_region].holes.append(std::move(hole));
+      }
+      else if (!regions.is_empty()) {
+        regions[0].holes.append(std::move(hole));
+      }
+    }
+
+    /* 4. Resolve multiply-connected regions with holes into simple faces via bridge chords. */
+    Vector<Region> worklist = std::move(regions);
+
+    while (!worklist.is_empty()) {
+      Region current = worklist.pop_last();
+      if (current.holes.is_empty()) {
+        out_faces_.faces.append(std::move(current.outer));
+        out_faces_.face_orig.append(0);
+        out_faces_.face_band.append(math::max(0, segments_num_ - 1));
+        out_faces_.face_orig_edge.append(-1);
+        continue;
+      }
+
+      /* Pick the first hole to bridge. */
+      Vector<int> hole = current.holes.pop_last();
+
+      const Span<int> outer_indices = current.outer.as_span();
+      const Span<int> hole_indices = hole.as_span();
+      const int n_outer = int(outer_indices.size());
+      const int n_hole = int(hole_indices.size());
+
+      Vector<double2> outer_coords;
+      outer_coords.reserve(n_outer);
+      for (const int v : outer_indices) {
+        outer_coords.append(skel_graph_.nodes_pos[v]);
+      }
+
+      Vector<double2> hole_coords;
+      hole_coords.reserve(n_hole);
+      for (const int v : hole_indices) {
+        hole_coords.append(skel_graph_.nodes_pos[v]);
+      }
+
+      Vector<Vector<double2>> other_holes_coords;
+      for (const Vector<int> &h : current.holes) {
+        Vector<double2> coords;
+        coords.reserve(h.size());
+        for (const int v : h) {
+          coords.append(skel_graph_.nodes_pos[v]);
+        }
+        other_holes_coords.append(std::move(coords));
+      }
+
+      auto is_in_annular_domain = [&](const double2 &pt) -> bool {
+        if (!isect_point_polygon_v2(pt, outer_coords.as_span())) {
+          return false;
+        }
+        if (isect_point_polygon_v2(pt, hole_coords.as_span())) {
+          return false;
+        }
+        for (const Vector<double2> &h_coords : other_holes_coords) {
+          if (isect_point_polygon_v2(pt, h_coords.as_span())) {
+            return false;
+          }
+        }
+        return true;
+      };
+
+      /* Compute hole centroid and bounding box scale for normalization. */
+      double2 hole_centroid(0.0, 0.0);
+      for (const double2 &p : hole_coords) {
+        hole_centroid += p;
+      }
+      hole_centroid /= double(n_hole);
+
+      double max_extent = 1.0;
+      for (const double2 &p : outer_coords) {
+        max_extent = math::max(max_extent, math::distance(p, hole_centroid));
+      }
+
+      /* Find all valid candidate bridge chords u_i -> v_j. */
+      struct CandidateChord {
+        int i_outer;
+        int j_hole;
+        double dist;
+      };
+      Vector<CandidateChord> valid_chords;
+
+      for (const int i : IndexRange(n_outer)) {
+        const double2 &u = outer_coords[i];
+        for (const int j : IndexRange(n_hole)) {
+          const double2 &v = hole_coords[j];
+
+          /* 1. Midpoint and near-endpoints containment. */
+          const double2 mid = 0.5 * (u + v);
+          if (!is_in_annular_domain(mid)) {
+            continue;
+          }
+          const double2 p_near_u = u + 0.05 * (v - u);
+          const double2 p_near_v = v - 0.05 * (v - u);
+          if (!is_in_annular_domain(p_near_u) || !is_in_annular_domain(p_near_v)) {
+            continue;
+          }
+
+          /* 2. Check crossing non-incident edges of outer loop. */
+          bool crosses = false;
+          for (const int k : IndexRange(n_outer)) {
+            if (k == i || (k + 1) % n_outer == i) {
+              continue;
+            }
+            if (segment_crosses_or_touches_v2(
+                    u, v, outer_coords[k], outer_coords[(k + 1) % n_outer]))
+            {
+              crosses = true;
+              break;
+            }
+          }
+          if (crosses) {
+            continue;
+          }
+
+          /* 3. Check crossing non-incident edges of hole loop. */
+          for (const int k : IndexRange(n_hole)) {
+            if (k == j || (k + 1) % n_hole == j) {
+              continue;
+            }
+            if (segment_crosses_or_touches_v2(u, v, hole_coords[k], hole_coords[(k + 1) % n_hole]))
+            {
+              crosses = true;
+              break;
+            }
+          }
+          if (crosses) {
+            continue;
+          }
+
+          /* 4. Check crossing edges of any other holes. */
+          for (const Vector<double2> &h_coords : other_holes_coords) {
+            const int m = int(h_coords.size());
+            for (const int k : IndexRange(m)) {
+              if (segment_crosses_or_touches_v2(u, v, h_coords[k], h_coords[(k + 1) % m])) {
+                crosses = true;
+                break;
+              }
+            }
+            if (crosses) {
+              break;
+            }
+          }
+          if (crosses) {
+            continue;
+          }
+
+          valid_chords.append(CandidateChord{i, j, math::distance(u, v)});
+        }
+      }
+
+      /* Select the best non-crossing chord pair on approximately opposite sides. */
+      int best_idx1 = -1;
+      int best_idx2 = -1;
+      double best_score = std::numeric_limits<double>::infinity();
+
+      const int num_chords = int(valid_chords.size());
+      for (const int idx1 : IndexRange(num_chords)) {
+        const CandidateChord &c1 = valid_chords[idx1];
+        const double2 &u1 = outer_coords[c1.i_outer];
+        const double2 &v1 = hole_coords[c1.j_hole];
+        const double2 d1 = u1 - hole_centroid;
+        const double len_d1 = math::length(d1);
+        if (len_d1 < 1e-12) {
+          continue;
+        }
+        const double2 dir1 = d1 / len_d1;
+
+        for (int idx2 = idx1 + 1; idx2 < num_chords; idx2++) {
+          const CandidateChord &c2 = valid_chords[idx2];
+          if (c1.i_outer == c2.i_outer || c1.j_hole == c2.j_hole) {
+            continue;
+          }
+          const double2 &u2 = outer_coords[c2.i_outer];
+          const double2 &v2 = hole_coords[c2.j_hole];
+
+          /* Chords must not cross each other. */
+          if (segment_crosses_or_touches_v2(u1, v1, u2, v2)) {
+            continue;
+          }
+
+          const double2 d2 = u2 - hole_centroid;
+          const double len_d2 = math::length(d2);
+          if (len_d2 < 1e-12) {
+            continue;
+          }
+          const double2 dir2 = d2 / len_d2;
+
+          /* Dot product is -1 for diametrically opposite chords. */
+          const double dot = math::dot(dir1, dir2);
+          const double score = dot + 0.05 * (c1.dist + c2.dist) / max_extent;
+
+          if (score < best_score) {
+            best_score = score;
+            best_idx1 = idx1;
+            best_idx2 = idx2;
+          }
+        }
+      }
+
+      /* Fallback if no valid chord pair was found. */
+      if (best_idx1 == -1 || best_idx2 == -1) {
+        out_faces_.faces.append(std::move(current.outer));
+        out_faces_.face_orig.append(0);
+        out_faces_.face_band.append(math::max(0, segments_num_ - 1));
+        out_faces_.face_orig_edge.append(-1);
+        continue;
+      }
+
+      const CandidateChord &c_a = valid_chords[best_idx1];
+      const CandidateChord &c_b = valid_chords[best_idx2];
+      const int i_a = c_a.i_outer;
+      const int j_p = c_a.j_hole;
+      const int i_b = c_b.i_outer;
+      const int j_q = c_b.j_hole;
+
+      /* Construct the two split faces.
+       * Face 1: outer arc from i_a to i_b, jump to j_q, hole arc from j_q to j_p, jump to i_a.
+       * Face 2: outer arc from i_b to i_a, jump to j_p, hole arc from j_p to j_q, jump to i_b. */
+      Vector<int> outer_arc_1 = get_cyclic_arc(outer_indices, i_a, i_b);
+      Vector<int> outer_arc_2 = get_cyclic_arc(outer_indices, i_b, i_a);
+
+      Vector<int> hole_arc_1 = get_cyclic_arc(hole_indices, j_q, j_p);
+      Vector<int> hole_arc_2 = get_cyclic_arc(hole_indices, j_p, j_q);
+
+      Vector<int> face1 = outer_arc_1;
+      face1.extend(hole_arc_1.as_span());
+
+      Vector<int> face2 = outer_arc_2;
+      face2.extend(hole_arc_2.as_span());
+
+      /* Check signed areas; if negative, swap the hole arc endpoints. */
+      const double area1 = polygon_signed_area(face1.as_span(), skel_graph_.nodes_pos.as_span());
+      const double area2 = polygon_signed_area(face2.as_span(), skel_graph_.nodes_pos.as_span());
+      if (area1 < 0.0 || area2 < 0.0) {
+        face1 = outer_arc_1;
+        face1.extend(hole_arc_2.as_span());
+
+        face2 = outer_arc_2;
+        face2.extend(hole_arc_1.as_span());
+      }
+
+      /* Partition remaining holes between face1 and face2. */
+      Vector<Region> new_regions;
+      new_regions.append(Region{std::move(face1), {}});
+      new_regions.append(Region{std::move(face2), {}});
+
+      for (Vector<int> &rem_hole : current.holes) {
+        const double2 rem_test_pt = skel_graph_.nodes_pos[rem_hole[0]];
+        Vector<double2> f1_coords;
+        f1_coords.reserve(new_regions[0].outer.size());
+        for (const int v : new_regions[0].outer) {
+          f1_coords.append(skel_graph_.nodes_pos[v]);
+        }
+        if (isect_point_polygon_v2(rem_test_pt, f1_coords.as_span())) {
+          new_regions[0].holes.append(std::move(rem_hole));
+        }
+        else {
+          new_regions[1].holes.append(std::move(rem_hole));
+        }
+      }
+
+      worklist.append(std::move(new_regions[0]));
+      worklist.append(std::move(new_regions[1]));
     }
   }
 };

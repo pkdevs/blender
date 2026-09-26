@@ -67,7 +67,8 @@ static void node_declare(NodeDeclarationBuilder &b)
                        GeometryComponent::Type::Curve,
                        GeometryComponent::Type::GreasePencil})
       .description(
-          "The input geometry (projected onto the X-Y plane). Must form either an outer polygon with "
+          "The input geometry (projected onto the X-Y plane). Must form either an outer polygon "
+          "with "
           "optional holes, or an open edge chain");
   b.add_input<decl::Int>("Group ID"_ustr)
       .evaluated_geometry_field()
@@ -358,7 +359,8 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
   if (outer_count > 1) {
     r_result.is_error = true;
     r_result.error_message = fmt::format(
-        "Group contains multiple outer boundaries ({} disjoint outer loops). Each island must have "
+        "Group contains multiple outer boundaries ({} disjoint outer loops). Each island must "
+        "have "
         "its own Group ID.",
         outer_count);
     return;
@@ -434,8 +436,7 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
       const IndexRange hr = hole_offsets[h];
       for (int i = 0; i < hr.size(); i++) {
         const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-        boundary_edges.append(
-            int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
+        boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
       }
     }
     r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
@@ -707,7 +708,7 @@ static void calc_mesh_group(const Mesh &mesh,
           continue;
         }
         if (loop_bounds[j].contains(loop_bounds[i].min) &&
-          loop_bounds[j].contains(loop_bounds[i].max))
+            loop_bounds[j].contains(loop_bounds[i].max))
         {
           if (math::isect_point_poly(loop_coords_float[i][0], loop_coords_float[j].as_span())) {
             depth[i]++;
@@ -794,8 +795,7 @@ static void calc_mesh_group(const Mesh &mesh,
         const IndexRange hr = hole_offsets[h];
         for (int i = 0; i < hr.size(); i++) {
           const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-          boundary_edges.append(
-              int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
+          boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
         }
       }
       r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
@@ -935,7 +935,8 @@ static void calc_mesh_group(const Mesh &mesh,
     loop_areas[i] = polygon_signed_area_2d(loop_coords[i].as_span());
   }
 
-  /* In a manifold mesh with CCW corner ordering, the outer boundary has area > 0 and holes have area < 0. */
+  /* In a manifold mesh with CCW corner ordering, the outer boundary has area > 0 and holes have
+   * area < 0. */
   int outer_idx = -1;
   int outer_count = 0;
   for (int i = 0; i < cycles_num; i++) {
@@ -1029,8 +1030,7 @@ static void calc_mesh_group(const Mesh &mesh,
       const IndexRange hr = hole_offsets[h];
       for (int i = 0; i < hr.size(); i++) {
         const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-        boundary_edges.append(
-            int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
+        boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
       }
     }
     r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
@@ -1214,7 +1214,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
       continue;
     }
     const IndexRange verts_range = vert_groups[i];
-    const AttributeAccessor src_accessor = (results[i].domain == SourceComponent::Mesh && src_mesh) ?
+    const AttributeAccessor src_accessor = (results[i].domain == SourceComponent::Mesh &&
+                                            src_mesh) ?
                                                src_mesh->attributes() :
                                                src_curves->attributes();
     gather_point_attributes(src_accessor,
@@ -1226,9 +1227,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
 
   /* Output Anonymous Attribute: Distance (Point domain). */
   if (distance_attr_id) {
-    if (SpanAttributeWriter<float> dst_dist =
-            dst_attributes.lookup_or_add_for_write_span<float>(*distance_attr_id,
-                                                              bke::AttrDomain::Point))
+    if (SpanAttributeWriter<float> dst_dist = dst_attributes.lookup_or_add_for_write_span<float>(
+            *distance_attr_id, bke::AttrDomain::Point))
     {
       for (int i = 0; i < results.size(); i++) {
         if (results[i].is_error) {
@@ -1247,9 +1247,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
 
   /* Output Anonymous Attribute: Is Skeleton (Point domain). */
   if (is_skeleton_attr_id) {
-    if (SpanAttributeWriter<bool> dst_skel =
-            dst_attributes.lookup_or_add_for_write_span<bool>(*is_skeleton_attr_id,
-                                                             bke::AttrDomain::Point))
+    if (SpanAttributeWriter<bool> dst_skel = dst_attributes.lookup_or_add_for_write_span<bool>(
+            *is_skeleton_attr_id, bke::AttrDomain::Point))
     {
       for (int i = 0; i < results.size(); i++) {
         if (results[i].is_error) {
@@ -1268,9 +1267,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
 
   /* Output Anonymous Attribute: Face Band (Face domain). */
   if (face_band_attr_id && face_groups.total_size() > 0) {
-    if (SpanAttributeWriter<int> dst_band =
-            dst_attributes.lookup_or_add_for_write_span<int>(*face_band_attr_id,
-                                                            bke::AttrDomain::Face))
+    if (SpanAttributeWriter<int> dst_band = dst_attributes.lookup_or_add_for_write_span<int>(
+            *face_band_attr_id, bke::AttrDomain::Face))
     {
       for (int i = 0; i < results.size(); i++) {
         if (results[i].is_error) {
@@ -1289,9 +1287,8 @@ static Mesh *build_result_mesh(const Span<GroupResult> results,
 
   /* Output Anonymous Attribute: Original Face (Face domain). */
   if (orig_face_attr_id && face_groups.total_size() > 0) {
-    if (SpanAttributeWriter<int> dst_orig_f =
-            dst_attributes.lookup_or_add_for_write_span<int>(*orig_face_attr_id,
-                                                            bke::AttrDomain::Face))
+    if (SpanAttributeWriter<int> dst_orig_f = dst_attributes.lookup_or_add_for_write_span<int>(
+            *orig_face_attr_id, bke::AttrDomain::Face))
     {
       for (int i = 0; i < results.size(); i++) {
         if (results[i].is_error) {
@@ -1362,8 +1359,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         FieldEvaluator evaluator(context, mesh->verts_num);
         evaluator.add(group_index);
         evaluator.evaluate();
-        mesh_masks = IndexMask::from_group_ids(
-            evaluator.get_evaluated<int>(0), memory, mesh_ids);
+        mesh_masks = IndexMask::from_group_ids(evaluator.get_evaluated<int>(0), memory, mesh_ids);
       }
 
       if (curves && !curves->is_empty()) {
@@ -1543,7 +1539,8 @@ static void node_register()
   geo_node_type_base(&ntype, "GeometryNodeStraightSkeleton"_ustr);
   ntype.ui_name = "Straight Skeleton";
   ntype.ui_description =
-      "Compute the 2D straight skeleton and offset bands for polygons with holes or open edge chains "
+      "Compute the 2D straight skeleton and offset bands for polygons with holes or open edge "
+      "chains "
       "projected onto the X-Y plane";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;

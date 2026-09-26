@@ -2051,6 +2051,195 @@ TEST(straight_skeleton, SquareWithHole_FiveSegments)
   EXPECT_NEAR(total_faces_area(output), 84.0, 1e-4);
 }
 
+TEST(straight_skeleton, SquareWithHole_AnnularOffset)
+{
+  const char *spec = R"(8 2
+0.0 0.0
+10.0 0.0
+10.0 10.0
+0.0 10.0
+3.0 7.0
+7.0 7.0
+7.0 3.0
+3.0 3.0
+0 1 2 3
+4 5 6 7
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "SquareWithHole_AnnularOffset";
+  input.offset = 0.5;
+  input.segments = 1;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_TRUE(output.error_message.empty());
+
+  /* Total area must equal initial domain area 100 - 16 = 84. */
+  EXPECT_NEAR(total_faces_area(output), 84.0, 1e-4);
+
+  /* Side strips: 4 outer + 4 hole = 8 faces.
+   * Cap: 2 annular split faces. Total = 10 faces. */
+  EXPECT_EQ(output.face_offsets.size(), 10);
+
+  /* Verify no vertex repeats in any face. */
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange face_r = output.face_offsets[fi];
+    EXPECT_GE(face_r.size(), 3);
+    Set<int> unique_verts;
+    for (const int i : face_r) {
+      EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
+    }
+  }
+}
+
+TEST(straight_skeleton, LetterBWithHoles)
+{
+  /* Letter 'B' with an outer boundary loop (52 vertices) and two inner counter holes
+   * (27 vertices each), totaling 106 vertices. Tests micro-contour resolution and
+   * reflex split detection on adjacent edges without stalling or producing pinch vertices. */
+  const char *spec = R"(106 3
+0.075000 0.000000
+0.309000 0.000000
+0.349526 0.001977
+0.385708 0.007648
+0.417703 0.016625
+0.445667 0.028519
+0.469755 0.042940
+0.490125 0.059500
+0.506932 0.077810
+0.520333 0.097481
+0.530484 0.118125
+0.537542 0.139352
+0.541662 0.160773
+0.543000 0.182000
+0.541721 0.204466
+0.537935 0.225810
+0.531719 0.245953
+0.523148 0.264815
+0.512300 0.282315
+0.499250 0.298375
+0.484075 0.312914
+0.466852 0.325852
+0.447656 0.337109
+0.426565 0.346606
+0.403654 0.354263
+0.379000 0.360000
+0.379000 0.362000
+0.395961 0.369609
+0.411356 0.377954
+0.425203 0.387063
+0.437519 0.396963
+0.448320 0.407683
+0.457625 0.419250
+0.465451 0.431692
+0.471815 0.445037
+0.476734 0.459312
+0.480227 0.474546
+0.482310 0.490766
+0.483000 0.508000
+0.481675 0.529490
+0.477653 0.550750
+0.470859 0.571469
+0.461222 0.591333
+0.448668 0.610031
+0.433125 0.627250
+0.414519 0.642677
+0.392778 0.656000
+0.367828 0.666906
+0.339597 0.675083
+0.308012 0.680219
+0.273000 0.682000
+0.075000 0.682000
+0.173000 0.594000
+0.263000 0.594000
+0.284248 0.593105
+0.303065 0.590505
+0.319562 0.586328
+0.333852 0.580704
+0.346044 0.573760
+0.356250 0.565625
+0.364581 0.556428
+0.371148 0.546296
+0.376062 0.535359
+0.379435 0.523745
+0.381377 0.511583
+0.382000 0.499000
+0.381019 0.481520
+0.378069 0.465579
+0.373141 0.451172
+0.366222 0.438296
+0.357304 0.426948
+0.346375 0.417125
+0.333425 0.408822
+0.318444 0.402037
+0.301422 0.396766
+0.282347 0.393005
+0.261210 0.390751
+0.238000 0.390000
+0.173000 0.390000
+0.173000 0.302000
+0.291000 0.302000
+0.315608 0.301098
+0.337949 0.298454
+0.358047 0.294156
+0.375926 0.288296
+0.391611 0.280964
+0.405125 0.272250
+0.416494 0.262244
+0.425741 0.251037
+0.432891 0.238719
+0.437968 0.225380
+0.440996 0.211110
+0.442000 0.196000
+0.441324 0.183161
+0.439171 0.170292
+0.435359 0.157609
+0.429704 0.145333
+0.422020 0.133682
+0.412125 0.122875
+0.399834 0.113130
+0.384963 0.104667
+0.367328 0.097703
+0.346745 0.092458
+0.323031 0.089151
+0.296000 0.088000
+0.173000 0.088000
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51
+52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78
+79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105
+)";
+
+  InputStorage storage;
+  StraightSkeletonInput input = fill_input_from_string(spec, storage);
+  input.label = "LetterBWithHoles";
+  input.offset = std::numeric_limits<double>::infinity();
+  input.segments = 1;
+
+  const StraightSkeletonOutput output = straight_skeleton_calc(input);
+  print_test_output(input.label, input, output);
+  EXPECT_TRUE(output.is_valid);
+  EXPECT_TRUE(output.error_message.empty());
+
+  /* All 106 boundary edges must have corresponding valid roof faces. */
+  EXPECT_EQ(output.face_offsets.size(), 106);
+
+  /* Total area must match the domain area: 0.273197 - 0.038033 - 0.051810 ~= 0.18335. */
+  EXPECT_NEAR(total_faces_area(output), 0.18335, 1e-4);
+
+  /* Verify no vertex repeats in any face. */
+  for (const int fi : output.face_offsets.index_range()) {
+    const IndexRange face_r = output.face_offsets[fi];
+    EXPECT_GE(face_r.size(), 3);
+    Set<int> unique_verts;
+    for (const int i : face_r) {
+      EXPECT_TRUE(unique_verts.add(output.face_vert_indices[i]));
+    }
+  }
+}
+
 TEST(straight_skeleton, FourWayStarSplit)
 {
   const char *spec = R"(12 1
