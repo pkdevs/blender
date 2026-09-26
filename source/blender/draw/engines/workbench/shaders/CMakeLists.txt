@@ -31,7 +31,6 @@ set(SRC_GLSL_VERT
 
 set(SRC_GLSL_FRAG
   workbench_effect_smaa_frag.glsl
-  workbench_effect_taa_frag.glsl
   workbench_merge_depth_frag.glsl
   workbench_overlay_depth_frag.glsl
   workbench_transparent_resolve_frag.glsl

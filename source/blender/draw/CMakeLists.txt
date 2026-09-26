@@ -517,7 +517,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_fx_outline.bsl.hh
   engines/workbench/shaders/workbench_effect_smaa_frag.glsl
   engines/workbench/shaders/workbench_effect_smaa_vert.glsl
-  engines/workbench/shaders/workbench_effect_taa_frag.glsl
+  engines/workbench/shaders/workbench_fx_taa.bsl.hh
   engines/workbench/shaders/workbench_fullscreen_vert.glsl
   engines/workbench/shaders/workbench_image_lib.glsl
   engines/workbench/shaders/workbench_image.bsl.hh
