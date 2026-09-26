@@ -31,6 +31,7 @@
 #include "RNA_prototypes.hh"
 
 #include "SEQ_add.hh"
+#include "SEQ_channels.hh"
 #include "SEQ_modifier.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
@@ -369,7 +370,17 @@ TEST_F(OTIOTest, Layout)
   meta->handles_set(scene, 27, 33);
 
   add_color(scene, "High Channel", 7, 30, 5);
-  expect_round_trip(scene);
+  SeqTimelineChannel *channel = seq::channel_get_by_index(&scene->ed->channels, 7);
+  STRNCPY(channel->name, "Titles");
+  channel->flag |= SEQ_CHANNEL_MUTE;
+
+  Scene *imported = round_trip(scene);
+  ASSERT_NE(imported, nullptr);
+  expect_same_strips(scene, scene->ed->seqbase, imported, imported->ed->seqbase);
+  const SeqTimelineChannel *imported_channel = seq::channel_get_by_index(&imported->ed->channels,
+                                                                         7);
+  EXPECT_STREQ(imported_channel->name, "Titles");
+  EXPECT_TRUE(imported_channel->is_muted());
 }
 
 TEST_F(OTIOTest, MixedMeta)

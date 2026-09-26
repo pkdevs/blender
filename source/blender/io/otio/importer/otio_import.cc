@@ -17,6 +17,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -35,6 +36,7 @@
 #include "RNA_prototypes.hh"
 
 #include "SEQ_add.hh"
+#include "SEQ_channels.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
@@ -311,6 +313,7 @@ static void add_strip_effects(StripImportContext &ctx,
 static void import_stack(StripImportContext &ctx,
                          Stack &stack,
                          ListBaseT<Strip> &seqbase,
+                         ListBaseT<SeqTimelineChannel> &channels,
                          int origin);
 
 static Strip *import_item(StripImportContext &ctx,
@@ -329,8 +332,11 @@ static Strip *import_item(StripImportContext &ctx,
     seq::LoadData load_data;
     seq::add_load_data_init(&load_data, stack->name().c_str(), nullptr, start, channel);
     strip = seq::add_meta_strip(ctx.scene, &seqbase, &load_data);
-    import_stack(
-        ctx, *stack, strip->seqbase, start - to_frames(ctx, item.trimmed_range().start_time()));
+    import_stack(ctx,
+                 *stack,
+                 strip->seqbase,
+                 strip->channels,
+                 start - to_frames(ctx, item.trimmed_range().start_time()));
     seq::time_update_meta_strip_range(ctx.scene, strip);
   }
 
@@ -397,6 +403,7 @@ static void import_track(StripImportContext &ctx,
 static void import_stack(StripImportContext &ctx,
                          Stack &stack,
                          ListBaseT<Strip> &seqbase,
+                         ListBaseT<SeqTimelineChannel> &channels,
                          const int origin)
 {
   int channel = 0;
@@ -408,6 +415,12 @@ static void import_stack(StripImportContext &ctx,
     const std::any *track_channel = blender_metadata(*track, "channel");
     const int64_t *channel_index = track_channel ? std::any_cast<int64_t>(track_channel) : nullptr;
     channel = channel_index ? int(*channel_index) : channel + 1;
+    if (SeqTimelineChannel *timeline_channel = seq::channel_get_by_index(&channels, channel)) {
+      if (!track->name().empty()) {
+        STRNCPY_UTF8(timeline_channel->name, track->name().c_str());
+      }
+      SET_FLAG_FROM_TEST(timeline_channel->flag, !track->enabled(), SEQ_CHANNEL_MUTE);
+    }
     import_track(ctx, *track, seqbase, channel, origin);
   }
 }
@@ -489,7 +502,7 @@ Scene *importer_main(bContext *C, const OTIOImportParams &params)
   scene->r.sfra = origin;
   scene->r.efra = origin + std::max(duration - 1, 0);
 
-  import_stack(ctx, *timeline->tracks(), scene->ed->seqbase, origin);
+  import_stack(ctx, *timeline->tracks(), scene->ed->seqbase, scene->ed->channels, origin);
   add_pending_effects(ctx);
   for (auto &[strip, otio_object] : ctx.strip_metadata) {
     if (const AnyDictionary *metadata = strip_metadata(*otio_object)) {
