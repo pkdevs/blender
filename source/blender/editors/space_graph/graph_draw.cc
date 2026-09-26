@@ -12,9 +12,9 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_anim_types.h"
@@ -39,6 +39,8 @@
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
+namespace blender {
+
 static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu);
 
 /* -------------------------------------------------------------------- */
@@ -55,9 +57,9 @@ static float fcurve_display_alpha(const FCurve *fcu)
 }
 
 /** Get the first and last index to the bezt array that are just outside min and max. */
-static blender::IndexRange get_bounding_bezt_index_range(const FCurve *fcu,
-                                                         const float min,
-                                                         const float max)
+static IndexRange get_bounding_bezt_index_range(const FCurve *fcu,
+                                                const float min,
+                                                const float max)
 {
   bool replace;
   int first, last;
@@ -69,16 +71,14 @@ static blender::IndexRange get_bounding_bezt_index_range(const FCurve *fcu,
   last = clamp_i(last, 0, fcu->totvert - 1);
   /* Iterating over index range is exclusive of the last index.
    * But we need `last` to be visited. */
-  return blender::IndexRange(first, (last - first) + 1);
+  return IndexRange(first, (last - first) + 1);
 }
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name FCurve Modifier Drawing
+/** \name F-Curve Modifier Drawing
  * \{ */
-
-/* Envelope -------------- */
 
 /* TODO: draw a shaded poly showing the region of influence too!!! */
 /**
@@ -89,13 +89,13 @@ static void draw_fcurve_modifier_controls_envelope(FModifier *fcm,
                                                    View2D *v2d,
                                                    bAnimListElem *ale_nla_remap)
 {
-  FMod_Envelope *env = (FMod_Envelope *)fcm->data;
+  FMod_Envelope *env = static_cast<FMod_Envelope *>(fcm->data);
   FCM_EnvelopeData *fed;
   const float fac = 0.05f * BLI_rctf_size_x(&v2d->cur);
   int i;
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   GPU_line_width(1.0f);
 
@@ -126,7 +126,7 @@ static void draw_fcurve_modifier_controls_envelope(FModifier *fcm,
     /* set size of vertices (non-adjustable for now) */
     GPU_point_size(2.0f);
 
-    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
 
     /* for now, point color is fixed, and is white */
     immUniformColor3f(1.0f, 1.0f, 1.0f);
@@ -155,10 +155,8 @@ static void draw_fcurve_modifier_controls_envelope(FModifier *fcm,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name FCurve Modifier Drawing
+/** \name F-Curve Points
  * \{ */
-
-/* Points ---------------- */
 
 /* helper func - set color to draw F-Curve data with */
 static void set_fcurve_vertex_color(FCurve *fcu, bool sel)
@@ -169,11 +167,11 @@ static void set_fcurve_vertex_color(FCurve *fcu, bool sel)
   /* Set color of curve vertex based on state of curve (i.e. 'Edit' Mode) */
   if ((fcu->flag & FCURVE_PROTECTED) == 0) {
     /* Curve's points ARE BEING edited */
-    UI_GetThemeColor3fv(sel ? TH_VERTEX_SELECT : TH_VERTEX, color);
+    ui::theme::get_color_3fv(sel ? TH_VERTEX_SELECT : TH_VERTEX, color);
   }
   else {
     /* Curve's points CANNOT BE edited */
-    UI_GetThemeColorShade4fv(TH_HEADER, 50, color);
+    ui::theme::get_color_shade_4fv(TH_HEADER, 50, color);
   }
 
   /* Fade the 'intensity' of the vertices based on the selection of the curves too
@@ -213,7 +211,7 @@ static void draw_cross(float position[2], const float scale[2], uint attr_id)
 static void draw_fcurve_selected_keyframe_vertices(FCurve *fcu,
                                                    bool sel,
                                                    uint pos,
-                                                   const blender::IndexRange index_range)
+                                                   const IndexRange index_range)
 {
   set_fcurve_vertex_color(fcu, sel);
 
@@ -265,15 +263,14 @@ static void draw_fcurve_keyframe_vertices(FCurve *fcu, View2D *v2d, const uint p
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
 
   if ((fcu->flag & FCURVE_PROTECTED) == 0) {
-    immUniform1f("size", UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC);
+    immUniform1f("size", ui::theme::get_value_f(TH_VERTEX_SIZE) * UI_SCALE_FAC);
   }
   else {
     /* Draw keyframes on locked curves slightly smaller to give them less visual weight. */
-    immUniform1f("size", (UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC) * 0.8f);
+    immUniform1f("size", (ui::theme::get_value_f(TH_VERTEX_SIZE) * UI_SCALE_FAC) * 0.8f);
   }
 
-  const blender::IndexRange index_range = get_bounding_bezt_index_range(
-      fcu, v2d->cur.xmin, v2d->cur.xmax);
+  const IndexRange index_range = get_bounding_bezt_index_range(fcu, v2d->cur.xmin, v2d->cur.xmax);
   draw_fcurve_selected_keyframe_vertices(fcu, false, pos, index_range);
   draw_fcurve_selected_keyframe_vertices(fcu, true, pos, index_range);
   draw_fcurve_active_vertex(fcu, v2d, pos);
@@ -285,12 +282,11 @@ static void draw_fcurve_keyframe_vertices(FCurve *fcu, View2D *v2d, const uint p
 static void draw_fcurve_selected_handle_vertices(
     FCurve *fcu, View2D *v2d, bool sel, bool sel_handle_only, uint pos)
 {
-  const blender::IndexRange index_range = get_bounding_bezt_index_range(
-      fcu, v2d->cur.xmin, v2d->cur.xmax);
+  const IndexRange index_range = get_bounding_bezt_index_range(fcu, v2d->cur.xmin, v2d->cur.xmax);
 
   /* set handle color */
   float hcolor[3];
-  UI_GetThemeColor3fv(sel ? TH_HANDLE_VERTEX_SELECT : TH_HANDLE_VERTEX, hcolor);
+  ui::theme::get_color_3fv(sel ? TH_HANDLE_VERTEX_SELECT : TH_HANDLE_VERTEX, hcolor);
   immUniform4f("outlineColor", hcolor[0], hcolor[1], hcolor[2], 1.0f);
   immUniformColor3fvAlpha(hcolor, 0.01f); /* almost invisible - only keep for smoothness */
 
@@ -312,7 +308,7 @@ static void draw_fcurve_selected_handle_vertices(
           (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)))
       {
         if ((bezt->f1 & SELECT) == sel
-            /* && v2d->cur.xmin < bezt->vec[0][0] < v2d->cur.xmax) */)
+            /* && v2d->cur.xmin < bezt->vec[0][0] < v2d->cur.xmax */)
         {
           immVertex2fv(pos, bezt->vec[0]);
         }
@@ -320,7 +316,7 @@ static void draw_fcurve_selected_handle_vertices(
 
       if (bezt->ipo == BEZT_IPO_BEZ) {
         if ((bezt->f3 & SELECT) == sel
-            /* && v2d->cur.xmin < bezt->vec[2][0] < v2d->cur.xmax) */)
+            /* && v2d->cur.xmin < bezt->vec[2][0] < v2d->cur.xmax */)
         {
           immVertex2fv(pos, bezt->vec[2]);
         }
@@ -351,7 +347,7 @@ static void draw_fcurve_active_handle_vertices(const FCurve *fcu,
   }
 
   float active_col[4];
-  UI_GetThemeColor4fv(TH_VERTEX_ACTIVE, active_col);
+  ui::theme::get_color_4fv(TH_VERTEX_ACTIVE, active_col);
   immUniform4fv("outlineColor", active_col);
   immUniformColor3fvAlpha(active_col, 0.01f); /* Almost invisible - only keep for smoothness. */
   immBeginAtMost(GPU_PRIM_POINTS, 2);
@@ -374,7 +370,7 @@ static void draw_fcurve_handle_vertices(FCurve *fcu, View2D *v2d, bool sel_handl
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA);
 
   /* set handle size */
-  immUniform1f("size", (1.4f * UI_GetThemeValuef(TH_HANDLE_VERTEX_SIZE)) * UI_SCALE_FAC);
+  immUniform1f("size", (1.4f * ui::theme::get_value_f(TH_HANDLE_VERTEX_SIZE)) * UI_SCALE_FAC);
   immUniform1f("outlineWidth", 1.5f * UI_SCALE_FAC);
 
   draw_fcurve_selected_handle_vertices(fcu, v2d, false, sel_handle_only, pos);
@@ -398,8 +394,7 @@ static void draw_fcurve_vertices(ARegion *region,
    *   (keyframes are more important for users).
    */
 
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   GPU_blend(GPU_BLEND_ALPHA);
   GPU_program_point_size(true);
@@ -417,7 +412,11 @@ static void draw_fcurve_vertices(ARegion *region,
   GPU_blend(GPU_BLEND_NONE);
 }
 
-/* Handles ---------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name F-Curve Handles
+ * \{ */
 
 static bool draw_fcurve_handles_check(const SpaceGraph *sipo, const FCurve *fcu)
 {
@@ -443,12 +442,9 @@ static bool draw_fcurve_handles_check(const SpaceGraph *sipo, const FCurve *fcu)
  * NOTE: draw_fcurve_handles_check must be checked before running this. */
 static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve *fcu)
 {
-  using namespace blender;
-
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
-  uint color = GPU_vertformat_attr_add(
-      format, "color", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  uint color = GPU_vertformat_attr_add(format, "color", gpu::VertAttrType::SFLOAT_32_32_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_FLAT_COLOR);
   if (U.animation_flag & USER_ANIM_HIGH_QUALITY_DRAWING) {
     GPU_line_smooth(true);
@@ -486,7 +482,7 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve 
         if ((!prevbezt && (bezt->ipo == BEZT_IPO_BEZ)) ||
             (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)))
         {
-          UI_GetThemeColor3fv(basecol + bezt->h1, col);
+          ui::theme::get_color_3fv(basecol + bezt->h1, col);
           col[3] = fcurve_display_alpha(fcu);
           immAttr4fv(color, col);
           immVertex2fv(pos, bezt->vec[0]);
@@ -496,7 +492,7 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve 
 
         /* only draw second handle if this segment is bezier */
         if (bezt->ipo == BEZT_IPO_BEZ) {
-          UI_GetThemeColor3fv(basecol + bezt->h2, col);
+          ui::theme::get_color_3fv(basecol + bezt->h2, col);
           col[3] = fcurve_display_alpha(fcu);
           immAttr4fv(color, col);
           immVertex2fv(pos, bezt->vec[1]);
@@ -509,7 +505,7 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve 
         if (((bezt->f1 & SELECT) == sel) && ((!prevbezt && (bezt->ipo == BEZT_IPO_BEZ)) ||
                                              (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ))))
         {
-          UI_GetThemeColor3fv(basecol + bezt->h1, col);
+          ui::theme::get_color_3fv(basecol + bezt->h1, col);
           col[3] = fcurve_display_alpha(fcu);
           immAttr4fv(color, col);
           immVertex2fv(pos, bezt->vec[0]);
@@ -519,7 +515,7 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve 
 
         /* only draw second handle if this segment is bezier, and selection is ok */
         if (((bezt->f3 & SELECT) == sel) && (bezt->ipo == BEZT_IPO_BEZ)) {
-          UI_GetThemeColor3fv(basecol + bezt->h2, col);
+          ui::theme::get_color_3fv(basecol + bezt->h2, col);
           col[3] = fcurve_display_alpha(fcu);
           immAttr4fv(color, col);
           immVertex2fv(pos, bezt->vec[1]);
@@ -539,7 +535,11 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, const FCurve 
   }
 }
 
-/* Samples ---------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name F-Curve Samples
+ * \{ */
 
 /* helper func - draw keyframe vertices only for an F-Curve */
 static void draw_fcurve_samples(ARegion *region, const FCurve *fcu, const float unit_scale)
@@ -548,8 +548,8 @@ static void draw_fcurve_samples(ARegion *region, const FCurve *fcu, const float 
   float scale[2];
 
   /* get view settings */
-  const float hsize = UI_GetThemeValuef(TH_VERTEX_SIZE);
-  UI_view2d_scale_get(&region->v2d, &scale[0], &scale[1]);
+  const float hsize = ui::theme::get_value_f(TH_VERTEX_SIZE);
+  ui::view2d_scale_get(&region->v2d, &scale[0], &scale[1]);
 
   scale[0] /= hsize;
   scale[1] /= hsize / unit_scale;
@@ -566,8 +566,7 @@ static void draw_fcurve_samples(ARegion *region, const FCurve *fcu, const float 
     }
     GPU_blend(GPU_BLEND_ALPHA);
 
-    uint pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     immUniformThemeColor((fcu->flag & FCURVE_SELECTED) ? TH_TEXT_HI : TH_TEXT);
@@ -584,7 +583,11 @@ static void draw_fcurve_samples(ARegion *region, const FCurve *fcu, const float 
   }
 }
 
-/* Curve ---------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name F-Curve Drawing
+ * \{ */
 
 /* Helper func - just draw the F-Curve by sampling the visible region
  * (for drawing curves with modifiers). */
@@ -600,7 +603,7 @@ static void draw_fcurve_curve(bAnimContext *ac,
 
   /* when opening a blend file on a different sized screen or while dragging the toolbar this can
    * happen best just bail out in this case. */
-  if (UI_view2d_scale_get_x(v2d) <= 0.0f) {
+  if (ui::view2d_scale_get_x(v2d) <= 0.0f) {
     return;
   }
 
@@ -629,7 +632,7 @@ static void draw_fcurve_curve(bAnimContext *ac,
   /* TODO: perhaps we should have 1.0 frames
    * as upper limit so that curves don't get too distorted? */
   float pixels_per_sample = 1.5f;
-  float samplefreq = pixels_per_sample / UI_view2d_scale_get_x(v2d);
+  float samplefreq = pixels_per_sample / ui::view2d_scale_get_x(v2d);
 
   if (!(U.animation_flag & USER_ANIM_HIGH_QUALITY_DRAWING)) {
     /* Low Precision = coarse lower-bound clamping
@@ -824,17 +827,17 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
 
 static int calculate_bezt_draw_resolution(BezTriple *bezt,
                                           BezTriple *prevbezt,
-                                          const blender::float2 pixels_per_unit)
+                                          const float2 pixels_per_unit)
 {
   const float points_per_pixel = 0.25f;
   const int resolution_x = int(((bezt->vec[1][0] - prevbezt->vec[1][0]) * pixels_per_unit[0]) *
                                points_per_pixel);
   /* Include the handles in the resolution calculation to cover the case where keys have the same
    * y-value, but their handles are offset to create an arc. */
-  const float min_y = min_ffff(
-      bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]);
-  const float max_y = max_ffff(
-      bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]);
+  const float min_y = std::min(
+      {bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]});
+  const float max_y = std::max(
+      {bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]});
   const int resolution_y = int(((max_y - min_y) * pixels_per_unit[1]) * points_per_pixel);
 
   /* Using a simple sum instead of calculating the diagonal. This gives a slightly higher
@@ -850,7 +853,7 @@ static int calculate_bezt_draw_resolution(BezTriple *bezt,
 static void add_bezt_vertices(BezTriple *bezt,
                               BezTriple *prevbezt,
                               int resolution,
-                              blender::Vector<blender::float2> &curve_vertices)
+                              Vector<float2> &curve_vertices)
 {
   if (resolution < 2) {
     curve_vertices.append({prevbezt->vec[1][0], prevbezt->vec[1][1]});
@@ -864,7 +867,8 @@ static void add_bezt_vertices(BezTriple *bezt,
   float prev_key[2], prev_handle[2], bez_handle[2], bez_key[2];
   /* Allocation needs +1 on resolution because BKE_curve_forward_diff_bezier uses it to iterate
    * inclusively. */
-  float *bezier_diff_points = MEM_malloc_arrayN<float>(((resolution + 1) * 2), "Draw bezt data");
+  float *bezier_diff_points = MEM_new_array_uninitialized<float>(((resolution + 1) * 2),
+                                                                 "Draw bezt data");
 
   prev_key[0] = prevbezt->vec[1][0];
   prev_key[1] = prevbezt->vec[1][1];
@@ -898,12 +902,12 @@ static void add_bezt_vertices(BezTriple *bezt,
     const float y = *(fp + 1);
     curve_vertices.append({x, y});
   }
-  MEM_freeN(bezier_diff_points);
+  MEM_delete(bezier_diff_points);
 }
 
 static void add_extrapolation_point_left(const FCurve *fcu,
                                          const float v2d_xmin,
-                                         blender::Vector<blender::float2> &curve_vertices)
+                                         Vector<float2> &curve_vertices)
 {
   /* left-side of view comes before first keyframe, so need to extend as not cyclic */
   float vertex_position[2];
@@ -940,7 +944,7 @@ static void add_extrapolation_point_left(const FCurve *fcu,
 
 static void add_extrapolation_point_right(const FCurve *fcu,
                                           const float v2d_xmax,
-                                          blender::Vector<blender::float2> &curve_vertices)
+                                          Vector<float2> &curve_vertices)
 {
   float vertex_position[2];
   vertex_position[0] = v2d_xmax;
@@ -974,19 +978,19 @@ static void add_extrapolation_point_right(const FCurve *fcu,
   curve_vertices.append(vertex_position);
 }
 
-static blender::float2 calculate_pixels_per_unit(View2D *v2d, const float unit_scale)
+static float2 calculate_pixels_per_unit(View2D *v2d, const float unit_scale)
 {
   const int window_width = BLI_rcti_size_x(&v2d->mask);
   const int window_height = BLI_rcti_size_y(&v2d->mask);
 
   const float v2d_frame_range = BLI_rctf_size_x(&v2d->cur);
   const float v2d_value_range = BLI_rctf_size_y(&v2d->cur);
-  const blender::float2 pixels_per_unit = {window_width / v2d_frame_range,
-                                           (window_height / v2d_value_range) * unit_scale};
+  const float2 pixels_per_unit = {window_width / v2d_frame_range,
+                                  (window_height / v2d_value_range) * unit_scale};
   return pixels_per_unit;
 }
 
-static float calculate_pixel_distance(const rctf &bounds, const blender::float2 pixels_per_unit)
+static float calculate_pixel_distance(const rctf &bounds, const float2 pixels_per_unit)
 {
   return BLI_rctf_size_x(&bounds) * pixels_per_unit[0] +
          BLI_rctf_size_y(&bounds) * pixels_per_unit[1];
@@ -997,10 +1001,10 @@ static void expand_key_bounds(const BezTriple *left_key, const BezTriple *right_
   bounds.xmax = right_key->vec[1][0];
   if (left_key->ipo == BEZT_IPO_BEZ) {
     /* Respect handles of bezier keys. */
-    bounds.ymin = min_ffff(
-        bounds.ymin, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]);
-    bounds.ymax = max_ffff(
-        bounds.ymax, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]);
+    bounds.ymin = std::min(
+        {bounds.ymin, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]});
+    bounds.ymax = std::max(
+        {bounds.ymax, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]});
   }
   else {
     bounds.ymax = max_ff(bounds.ymax, right_key->vec[1][1]);
@@ -1012,7 +1016,6 @@ static void expand_key_bounds(const BezTriple *left_key, const BezTriple *right_
 static void draw_fcurve_curve_keys(
     bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, uint pos, const bool draw_extrapolation)
 {
-  using namespace blender;
   if (!draw_extrapolation && fcu->totvert == 1) {
     return;
   }
@@ -1139,7 +1142,7 @@ static void draw_fcurve_curve_keys(
 
 static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAnimListElem *ale)
 {
-  FCurve *fcu = (FCurve *)ale->key_data;
+  FCurve *fcu = static_cast<FCurve *>(ale->key_data);
   FModifier *fcm = find_active_fmodifier(&fcu->modifiers);
 
   /* map keyframes for drawing if scaled F-Curve */
@@ -1153,12 +1156,12 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
    */
 
   /* 1) draw curve line */
-  if (((fcu->modifiers.first) || (fcu->flag & FCURVE_INT_VALUES)) ||
+  if (((fcu->modifiers.first_) || (fcu->flag & FCURVE_INT_VALUES)) ||
       (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)))
   {
     /* set color/drawing style for curve itself */
     /* draw active F-Curve thicker than the rest to make it stand out */
-    if (fcu->flag & FCURVE_ACTIVE && !BKE_fcurve_is_protected(fcu)) {
+    if (fcu->flag & FCURVE_ACTIVE && !BKE_fcurve_is_protected(*fcu)) {
       GPU_line_width(2.5);
     }
     else {
@@ -1172,12 +1175,12 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
     GPU_blend(GPU_BLEND_ALPHA);
 
     const uint shdr_pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+        immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
 
-    if (BKE_fcurve_is_protected(fcu)) {
+    if (BKE_fcurve_is_protected(*fcu)) {
       /* Protected curves (non editable) are drawn with dotted lines. */
       immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
       immUniform2f(
@@ -1206,7 +1209,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
 
     const bool draw_extrapolation = (sipo->flag & SIPO_NO_DRAW_EXTRAPOLATION) == 0;
     /* draw F-Curve */
-    if ((fcu->modifiers.first) || (fcu->flag & FCURVE_INT_VALUES)) {
+    if ((fcu->modifiers.first_) || (fcu->flag & FCURVE_INT_VALUES)) {
       /* draw a curve affected by modifiers or only allowed to have integer values
        * by sampling it at various small-intervals over the visible region
        */
@@ -1253,12 +1256,14 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
   if (!(U.animation_flag & USER_ANIM_ONLY_SHOW_SELECTED_CURVE_KEYS) ||
       (fcu->flag & FCURVE_SELECTED))
   {
-    if (!BKE_fcurve_are_keyframes_usable(fcu) && !(fcu->fpt && fcu->totvert)) {
+    if (!BKE_fcurve_are_keyframes_usable(*fcu) && !(fcu->fpt && fcu->totvert)) {
       /* only draw controls if this is the active modifier */
       if ((fcu->flag & FCURVE_ACTIVE) && (fcm)) {
         switch (fcm->type) {
           case FMODIFIER_TYPE_ENVELOPE: /* envelope */
             draw_fcurve_modifier_controls_envelope(fcm, &region->v2d, ale);
+            break;
+          default:
             break;
         }
       }
@@ -1306,7 +1311,11 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
   ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
 }
 
-/* Debugging -------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Driver Debugging
+ * \{ */
 
 /* Draw indicators which show the value calculated from the driver,
  * and how this is mapped to the value that comes out of it. This
@@ -1322,7 +1331,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
   float unitfac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
   float viewport_size[4];
@@ -1334,7 +1343,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
   /* No curve to modify/visualize the result?
    * => We still want to show the 1-1 default...
    */
-  if ((fcu->totvert == 0) && BLI_listbase_is_empty(&fcu->modifiers)) {
+  if ((fcu->totvert == 0) && fcu->modifiers.is_empty()) {
     float t;
 
     /* draw with thin dotted lines in style of what curve would have been */
@@ -1362,7 +1371,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
   if ((driver->flag & DRIVER_FLAG_INVALID) == 0) {
     /* grab "coordinates" for driver outputs */
     float x = driver->curval;
-    float y = fcu->curval * unitfac;
+    float y = fcu->runtime->curval * unitfac;
 
     /* Only draw indicators if the point is in range. */
     if (x >= v2d->cur.xmin) {
@@ -1425,7 +1434,11 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
   immUnbindProgram();
 }
 
-/* Public Curve-Drawing API  ---------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public Curve-Drawing API
+ * \{ */
 
 void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region)
 {
@@ -1439,7 +1452,7 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
   GPU_blend(GPU_BLEND_ALPHA);
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -1456,15 +1469,15 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
    * See issue #109920 for details. */
   const bool draw_extrapolation = false;
   /* the ghost curves are simply sampled F-Curves stored in sipo->runtime.ghost_curves */
-  LISTBASE_FOREACH (FCurve *, fcu, &sipo->runtime.ghost_curves) {
+  for (FCurve &fcu : sipo->runtime.ghost_curves) {
     /* set whatever color the curve has set
      * - this is set by the function which creates these
      * - draw with a fixed opacity of 2
      */
-    immUniformColor3fvAlpha(fcu->color, 0.5f);
+    immUniformColor3fvAlpha(fcu.color, 0.5f);
 
     /* simply draw the stored samples */
-    draw_fcurve_curve_samples(ac, nullptr, fcu, &region->v2d, shdr_pos, draw_extrapolation);
+    draw_fcurve_curve_samples(ac, nullptr, &fcu, &region->v2d, shdr_pos, draw_extrapolation);
   }
 
   immUnbindProgram();
@@ -1477,7 +1490,7 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
 
 void graph_draw_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, short sel)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   int filter;
 
   /* build list of curves to draw */
@@ -1491,13 +1504,13 @@ void graph_draw_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, shor
    * the data will be layered correctly
    */
   bAnimListElem *ale_active_fcurve = nullptr;
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    const FCurve *fcu = (FCurve *)ale->key_data;
+  for (bAnimListElem &ale : anim_data) {
+    const FCurve *fcu = static_cast<FCurve *>(ale.key_data);
     if ((fcu->flag & FCURVE_ACTIVE) && !ale_active_fcurve) {
-      ale_active_fcurve = ale;
+      ale_active_fcurve = &ale;
       continue;
     }
-    draw_fcurve(ac, sipo, region, ale);
+    draw_fcurve(ac, sipo, region, &ale);
   }
 
   /* Draw the active FCurve last so that it (especially the active keyframe)
@@ -1519,7 +1532,7 @@ void graph_draw_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, shor
 void graph_draw_channel_names(bContext *C,
                               bAnimContext *ac,
                               ARegion *region,
-                              const ListBase /*bAnimListElem*/ &anim_data)
+                              const ListBaseT<bAnimListElem> &anim_data)
 {
   bAnimListElem *ale;
 
@@ -1532,9 +1545,7 @@ void graph_draw_channel_names(bContext *C,
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-         ale = ale->next, ymax -= channel_step, channel_index++)
-    {
+    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++) {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
       /* check if visible */
@@ -1547,16 +1558,14 @@ void graph_draw_channel_names(bContext *C,
     }
   }
   { /* second pass: widgets */
-    uiBlock *block = UI_block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
+    ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
     /* set blending again, as may not be set in previous step */
     GPU_blend(GPU_BLEND_ALPHA);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-         ale = ale->next, ymax -= channel_step, channel_index++)
-    {
+    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++) {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
       /* check if visible */
@@ -1570,11 +1579,13 @@ void graph_draw_channel_names(bContext *C,
       }
     }
 
-    UI_block_end(C, block);
-    UI_block_draw(C, block);
+    block_end(C, block);
+    block_draw(C, block);
 
     GPU_blend(GPU_BLEND_NONE);
   }
 }
 
 /** \} */
+
+}  // namespace blender

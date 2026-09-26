@@ -6,9 +6,9 @@
  * \ingroup draw
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_rect.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_colortools.hh"
 
@@ -23,6 +23,7 @@
 #include "render_types.h"
 
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "gpencil_engine_private.hh"
 
@@ -80,29 +81,31 @@ static void render_init_buffers(const DRWContext *draw_ctx,
   RenderPass *rpass_z_src = RE_pass_find_by_name(render_layer, RE_PASSNAME_DEPTH, viewname);
   RenderPass *rpass_col_src = RE_pass_find_by_name(render_layer, RE_PASSNAME_COMBINED, viewname);
 
-  float *pix_z = (rpass_z_src) ? rpass_z_src->ibuf->float_buffer.data : nullptr;
-  float *pix_col = (rpass_col_src) ? rpass_col_src->ibuf->float_buffer.data : nullptr;
+  float *pix_z = (rpass_z_src) ? rpass_z_src->ibuf->float_data_for_write() : nullptr;
+  float *pix_col = (rpass_col_src) ? rpass_col_src->ibuf->float_data_for_write() : nullptr;
 
   if (!pix_z || !pix_col) {
-    RE_engine_set_error_message(
-        engine, "Warning: To render Grease Pencil, enable Combined and Depth passes.");
+    RE_engine_set_error_message(engine,
+                                "Warning: To correctly render occluded Grease Pencil objects, "
+                                "enable Combined and Depth passes.");
   }
 
   if (pix_z) {
     /* Depth need to be remapped to [0..1] range. */
-    pix_z = static_cast<float *>(MEM_dupallocN(pix_z));
+    pix_z = MEM_dupalloc(pix_z);
     remap_depth(view, {pix_z, rpass_z_src->rectx * rpass_z_src->recty});
   }
 
-  const bool do_region = (!use_separated_pass) && !(rect->xmin == 0 && rect->ymin == 0 &&
-                                                    rect->xmax == size.x && rect->ymax == size.y);
+  const bool has_full_rect = (rect->xmin == 0 && rect->ymin == 0 && rect->xmax == size.x &&
+                              rect->ymax == size.y);
+  const bool do_region = !use_separated_pass && !has_full_rect;
   const bool do_clear_z = !pix_z || do_region;
   const bool do_clear_col = use_separated_pass || (!pix_col) || do_region;
 
   /* FIXME(fclem): we have a precision loss in the depth buffer because of this re-upload.
    * Find where it comes from! */
   /* In multi view render the textures can be reused. */
-  if (inst.render_depth_tx.is_valid() && !do_clear_z) {
+  if (inst.render_depth_tx.is_valid() && !do_clear_z && has_full_rect) {
     GPU_texture_update(inst.render_depth_tx, GPU_DATA_FLOAT, pix_z);
   }
   else {
@@ -111,7 +114,7 @@ static void render_init_buffers(const DRWContext *draw_ctx,
     inst.render_depth_tx.ensure_2d(
         gpu::TextureFormat::SFLOAT_32_DEPTH, int2(size), usage, do_region ? nullptr : pix_z);
   }
-  if (inst.render_color_tx.is_valid() && !do_clear_col) {
+  if (inst.render_color_tx.is_valid() && !do_clear_col && has_full_rect) {
     GPU_texture_update(inst.render_color_tx, GPU_DATA_FLOAT, pix_col);
   }
   else {
@@ -128,8 +131,7 @@ static void render_init_buffers(const DRWContext *draw_ctx,
     /* To avoid unpredictable result, clear buffers that have not be initialized. */
     GPU_framebuffer_bind(inst.render_fb);
     if (do_clear_col) {
-      const float clear_col[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-      GPU_framebuffer_clear_color(inst.render_fb, clear_col);
+      GPU_framebuffer_clear_color(inst.render_fb, {0.0, 0.0, 0.0, 0.0});
     }
     if (do_clear_z) {
       GPU_framebuffer_clear_depth(inst.render_fb, 1.0f);
@@ -149,7 +151,7 @@ static void render_init_buffers(const DRWContext *draw_ctx,
     }
   }
 
-  MEM_SAFE_FREE(pix_z);
+  MEM_SAFE_DELETE(pix_z);
 }
 
 static void render_result_z(const DRWContext *draw_ctx,
@@ -167,7 +169,7 @@ static void render_result_z(const DRWContext *draw_ctx,
     return;
   }
 
-  float *ro_buffer_data = rp->ibuf->float_buffer.data;
+  float *ro_buffer_data = rp->ibuf->float_data_for_write();
 
   GPU_framebuffer_read_depth(instance.render_fb,
                              rect->xmin,
@@ -208,30 +210,11 @@ static void render_result_z(const DRWContext *draw_ctx,
       }
     }
   }
+
+  IMB_partial_update_mark_full(rp->ibuf);
 }
 
-static void render_result_combined(RenderLayer *rl,
-                                   const char *viewname,
-                                   Instance &instance,
-                                   const rcti *rect)
-{
-  RenderPass *rp = RE_pass_find_by_name(rl, RE_PASSNAME_COMBINED, viewname);
-
-  Framebuffer read_fb;
-  read_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(instance.accumulation_tx));
-  GPU_framebuffer_bind(read_fb);
-  GPU_framebuffer_read_color(read_fb,
-                             rect->xmin,
-                             rect->ymin,
-                             BLI_rcti_size_x(rect),
-                             BLI_rcti_size_y(rect),
-                             4,
-                             0,
-                             GPU_DATA_FLOAT,
-                             rp->ibuf->float_buffer.data);
-}
-
-static void render_result_separated_pass(float *data, Instance &instance, const rcti *rect)
+static void render_result_color(ImBuf *ibuf, Instance &instance, const rcti *rect)
 {
   Framebuffer read_fb;
   read_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(instance.accumulation_tx));
@@ -244,10 +227,12 @@ static void render_result_separated_pass(float *data, Instance &instance, const 
                              4,
                              0,
                              GPU_DATA_FLOAT,
-                             data);
+                             ibuf->float_data_for_write());
+
+  IMB_partial_update_mark_full(ibuf);
 }
 
-/* This is taken from blender::eevee::Sampling::cdf_from_curvemapping. */
+/* This is taken from eevee::Sampling::cdf_from_curvemapping. */
 static void cdf_from_curvemapping(const CurveMapping &curve, Array<float> &cdf)
 {
   BLI_assert(cdf.size() > 1);
@@ -265,7 +250,7 @@ static void cdf_from_curvemapping(const CurveMapping &curve, Array<float> &cdf)
   cdf.last() = 1.0f;
 }
 
-/* This is taken from blender::eevee::Sampling::cdf_invert. */
+/* This is taken from eevee::Sampling::cdf_invert. */
 static void cdf_invert(Array<float> &cdf, Array<float> &inverted_cdf)
 {
   BLI_assert(cdf.first() == 0.0f && cdf.last() == 1.0f);
@@ -281,7 +266,7 @@ static void cdf_invert(Array<float> &cdf, Array<float> &inverted_cdf)
   }
 }
 
-/* This is taken from blender::eevee::MotionBlurModule::shutter_time_to_scene_time. */
+/* This is taken from eevee::MotionBlurModule::shutter_time_to_scene_time. */
 static float shutter_time_to_scene_time(const int shutter_position,
                                         const float shutter_time,
                                         const float frame_time,
@@ -430,12 +415,14 @@ void Engine::render_to_image(RenderEngine *engine, RenderLayer *render_layer, co
   render_init_buffers(draw_ctx, inst, engine, render_layer, &rect, false);
 
   render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, false);
-  render_result_combined(render_layer, viewname, inst, &rect);
+  ImBuf *combined_ibuf = RE_RenderLayerGetPassImBuf(render_layer, RE_PASSNAME_COMBINED, viewname);
+  render_result_color(combined_ibuf, inst, &rect);
 
-  float *pass_data = RE_RenderLayerGetPass(render_layer, RE_PASSNAME_GREASE_PENCIL, viewname);
-  if (pass_data) {
+  ImBuf *gpencil_ibuf = RE_RenderLayerGetPassImBuf(
+      render_layer, RE_PASSNAME_GREASE_PENCIL, viewname);
+  if (gpencil_ibuf) {
     render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, true);
-    render_result_separated_pass(pass_data, inst, &rect);
+    render_result_color(gpencil_ibuf, inst, &rect);
   }
 
   /* Transfer depth in the last step, because if we need to render separate pass, we need original

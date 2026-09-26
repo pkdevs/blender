@@ -6,8 +6,8 @@
  * \ingroup draw
  */
 
-#include "BLI_rand.h"
-#include "BLI_smaa_textures.h"
+#include "BLI_rand_c.hh"
+#include "BLI_smaa_textures.hh"
 
 #include "DNA_scene_types.h"
 #include "DRW_render.hh"
@@ -54,8 +54,8 @@ void Instance::antialiasing_init()
 
   {
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-    this->smaa_edge_tx.acquire(size, gpu::TextureFormat::UNORM_8_8, usage);
-    this->smaa_weight_tx.acquire(size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
+    this->smaa_edge_tx.acquire_2d(size, gpu::TextureFormat::UNORM_8_8, usage);
+    this->smaa_weight_tx.acquire_2d(size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
 
     this->smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(this->smaa_edge_tx));
     this->smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(this->smaa_weight_tx));
@@ -120,9 +120,17 @@ void Instance::antialiasing_draw(Manager &manager)
   GPU_framebuffer_bind(this->scene_fb);
   manager.submit(this->smaa_resolve_ps);
 
-  if (this->use_separate_pass) {
+  if (this->need_grease_pencil_pass) {
     GPU_framebuffer_bind(this->gpencil_pass_fb);
-    GPU_framebuffer_clear(this->gpencil_pass_fb, GPU_COLOR_BIT, float4(0, 0, 0, 0), 0, 0);
+    GPU_framebuffer_clear(this->gpencil_pass_fb, GPU_COLOR_BIT, {0, 0, 0, 0}, 0, 0);
+    manager.submit(this->smaa_resolve_ps);
+  }
+
+  /* The engine might not support passes, so check if the combined pass actually exists before
+   * rendering grease pencil to it. */
+  const bool combined_pass_exists = DRW_viewport_pass_texture_exists(RE_PASSNAME_COMBINED);
+  if (this->need_combined_pass && combined_pass_exists) {
+    GPU_framebuffer_bind(this->combined_pass_fb);
     manager.submit(this->smaa_resolve_ps);
   }
 }

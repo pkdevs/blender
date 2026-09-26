@@ -2,7 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
+
+#include "BLI_vector.hh"
 
 #include "BKE_geometry_set.hh"
 

@@ -9,11 +9,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -44,6 +44,8 @@
 #include "uvedit_intern.hh"
 
 #include "UI_view2d.hh"
+
+namespace blender {
 
 namespace {
 
@@ -172,10 +174,12 @@ static float calc_strength(const UvSculptData *sculptdata, float p, const float 
   return strength;
 }
 
-/*********** Improved Laplacian Relaxation Operator ************************/
-/* original code by Raul Fernandez Hernandez "farsthary"                   *
- * adapted to uv smoothing by Antony Riakiatakis                           *
- ***************************************************************************/
+/* -------------------------------------------------------------------- */
+/** \name Improved Laplacian Relaxation Operator
+ *
+ * Original code by Raul Fernandez Hernandez "farsthary"
+ * adapted to uv smoothing by Antony Riakiatakis
+ * \{ */
 
 struct Temp_UVData {
   float sum_co[2], p[2], b[2], sum_b[2];
@@ -193,8 +197,8 @@ static void HC_relaxation_iteration_uv(UvSculptData *sculptdata,
   int i;
   const float radius = sqrtf(radius_sq);
 
-  Temp_UVData *tmp_uvdata = MEM_calloc_arrayN<Temp_UVData>(sculptdata->totalUniqueUvs,
-                                                           "Temporal data");
+  Temp_UVData *tmp_uvdata = MEM_new_array_zeroed<Temp_UVData>(sculptdata->totalUniqueUvs,
+                                                              "Temporal data");
 
   /* counting neighbors */
   for (i = 0; i < sculptdata->totalUvEdges; i++) {
@@ -257,7 +261,7 @@ static void HC_relaxation_iteration_uv(UvSculptData *sculptdata,
     }
   }
 
-  MEM_SAFE_FREE(tmp_uvdata);
+  MEM_SAFE_DELETE(tmp_uvdata);
 }
 
 /* Legacy version which only does laplacian relaxation.
@@ -278,8 +282,8 @@ static void laplacian_relaxation_iteration_uv(UvSculptData *sculptdata,
   int i;
   const float radius = sqrtf(radius_sq);
 
-  Temp_UVData *tmp_uvdata = MEM_calloc_arrayN<Temp_UVData>(sculptdata->totalUniqueUvs,
-                                                           "Temporal data");
+  Temp_UVData *tmp_uvdata = MEM_new_array_zeroed<Temp_UVData>(sculptdata->totalUniqueUvs,
+                                                              "Temporal data");
 
   /* counting neighbors */
   for (i = 0; i < sculptdata->totalUvEdges; i++) {
@@ -334,7 +338,7 @@ static void laplacian_relaxation_iteration_uv(UvSculptData *sculptdata,
     }
   }
 
-  MEM_SAFE_FREE(tmp_uvdata);
+  MEM_SAFE_DELETE(tmp_uvdata);
 }
 
 static void add_weighted_edge(float (*delta_buf)[3],
@@ -400,7 +404,7 @@ static void relaxation_iteration_uv(UvSculptData *sculptdata,
   UvElement **head_table = BM_uv_element_map_ensure_head_table(sculptdata->elementMap);
 
   const int total_uvs = sculptdata->elementMap->total_uvs;
-  float (*delta_buf)[3] = (float (*)[3])MEM_callocN(total_uvs * sizeof(float[3]), __func__);
+  float (*delta_buf)[3] = MEM_new_array_zeroed<float[3]>(total_uvs, __func__);
 
   const UvElement *storage = sculptdata->elementMap->storage;
   for (int j = 0; j < total_uvs; j++) {
@@ -476,8 +480,10 @@ static void relaxation_iteration_uv(UvSculptData *sculptdata,
     }
   }
 
-  MEM_SAFE_FREE(delta_buf);
+  MEM_SAFE_DELETE(delta_buf);
 }
+
+/** \} */
 
 static void uv_sculpt_stroke_apply(bContext *C,
                                    wmOperator *op,
@@ -485,14 +491,14 @@ static void uv_sculpt_stroke_apply(bContext *C,
                                    Object *obedit)
 {
   ARegion *region = CTX_wm_region(C);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  UvSculptData *sculptdata = (UvSculptData *)op->customdata;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+  UvSculptData *sculptdata = static_cast<UvSculptData *>(op->customdata);
   eBrushUVSculptTool tool = eBrushUVSculptTool(sculptdata->tool);
   int invert = sculptdata->invert ? -1 : 1;
   float alpha = sculptdata->uvsculpt->strength;
 
   float co[2];
-  UI_view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
+  ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
 
   SpaceImage *sima = CTX_wm_space_image(C);
 
@@ -508,7 +514,7 @@ static void uv_sculpt_stroke_apply(bContext *C,
   /* We will compare squares to save some computation */
   const float radius_sq = radius * radius;
 
-  const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
+  const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
 
   switch (tool) {
     case UV_SCULPT_BRUSH_TYPE_PINCH: {
@@ -599,14 +605,14 @@ static void uv_sculpt_stroke_exit(bContext *C, wmOperator *op)
   }
   BM_uv_element_map_free(data->elementMap);
   data->elementMap = nullptr;
-  MEM_SAFE_FREE(data->uv);
-  MEM_SAFE_FREE(data->uvedges);
+  MEM_SAFE_DELETE(data->uv);
+  MEM_SAFE_DELETE(data->uvedges);
   if (data->initial_stroke) {
-    MEM_SAFE_FREE(data->initial_stroke->initialSelection);
-    MEM_SAFE_FREE(data->initial_stroke);
+    MEM_SAFE_DELETE(data->initial_stroke->initialSelection);
+    MEM_SAFE_DELETE(data->initial_stroke);
   }
 
-  MEM_SAFE_FREE(data);
+  MEM_SAFE_DELETE(data);
   op->customdata = nullptr;
 }
 
@@ -655,9 +661,8 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
   Scene *scene = CTX_data_scene(C);
   Object *obedit = CTX_data_edit_object(C);
   ToolSettings *ts = scene->toolsettings;
-  UvSculptData *data = MEM_callocN<UvSculptData>(__func__);
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  UvSculptData *data = MEM_new_zeroed<UvSculptData>(__func__);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   op->customdata = data;
 
@@ -705,7 +710,7 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
   }
 
   /* Mouse coordinates, useful for some functions like grab and sculpt all islands */
-  UI_view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
+  ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
 
   /* We need to find the active island here. */
   if (do_island_optimization) {
@@ -725,15 +730,15 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
   }
 
   /* Allocate the unique uv buffers */
-  data->uv = MEM_calloc_arrayN<UvAdjacencyElement>(unique_uvs, __func__);
+  data->uv = MEM_new_array_zeroed<UvAdjacencyElement>(unique_uvs, __func__);
   /* Holds, for each UvElement in elementMap, an index of its unique UV. */
-  int *uniqueUv = MEM_malloc_arrayN<int>(data->elementMap->total_uvs, __func__);
+  int *uniqueUv = MEM_new_array_uninitialized<int>(data->elementMap->total_uvs, __func__);
   GHash *edgeHash = BLI_ghash_new(uv_edge_hash, uv_edge_compare, "uv_brush_edge_hash");
   /* we have at most totalUVs edges */
-  UvEdge *edges = MEM_calloc_arrayN<UvEdge>(data->elementMap->total_uvs, __func__);
+  UvEdge *edges = MEM_new_array_zeroed<UvEdge>(data->elementMap->total_uvs, __func__);
   if (!data->uv || !uniqueUv || !edgeHash || !edges) {
-    MEM_SAFE_FREE(edges);
-    MEM_SAFE_FREE(uniqueUv);
+    MEM_SAFE_DELETE(edges);
+    MEM_SAFE_DELETE(uniqueUv);
     if (edgeHash) {
       BLI_ghash_free(edgeHash, nullptr, nullptr);
     }
@@ -745,7 +750,7 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
   /* Index for the UvElements. */
   int counter = -1;
 
-  const BMUVOffsets offsets = BM_uv_map_offsets_get(em->bm);
+  const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
   /* initialize the unique UVs */
   for (int i = 0; i < bm->totvert; i++) {
     UvElement *element = data->elementMap->vertex[i];
@@ -778,7 +783,7 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
 
   /* Now, on to generate our uv connectivity data */
   counter = 0;
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
       int itmp1 = uv_element_offset_from_face_get(
           data->elementMap, l, island_index, do_island_optimization);
@@ -815,13 +820,13 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
     }
   }
 
-  MEM_SAFE_FREE(uniqueUv);
+  MEM_SAFE_DELETE(uniqueUv);
 
   /* Allocate connectivity data, we allocate edges once */
-  data->uvedges = MEM_calloc_arrayN<UvEdge>(BLI_ghash_len(edgeHash), __func__);
+  data->uvedges = MEM_new_array_zeroed<UvEdge>(BLI_ghash_len(edgeHash), __func__);
   if (!data->uvedges) {
     BLI_ghash_free(edgeHash, nullptr, nullptr);
-    MEM_SAFE_FREE(edges);
+    MEM_SAFE_DELETE(edges);
     uv_sculpt_stroke_exit(C, op);
     return nullptr;
   }
@@ -830,14 +835,14 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
   {
     int i = 0;
     GHASH_ITER (gh_iter, edgeHash) {
-      data->uvedges[i++] = *((UvEdge *)BLI_ghashIterator_getKey(&gh_iter));
+      data->uvedges[i++] = *(static_cast<UvEdge *>(BLI_ghashIterator_getKey(&gh_iter)));
     }
     data->totalUvEdges = BLI_ghash_len(edgeHash);
   }
 
   /* cleanup temporary stuff */
   BLI_ghash_free(edgeHash, nullptr, nullptr);
-  MEM_SAFE_FREE(edges);
+  MEM_SAFE_DELETE(edges);
 
   /* transfer boundary edge property to UVs */
   for (int i = 0; i < data->totalUvEdges; i++) {
@@ -871,12 +876,11 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
     const float radius_sq = radius * radius;
 
     /* Allocate selection stack */
-    data->initial_stroke = static_cast<UVInitialStroke *>(
-        MEM_mallocN(sizeof(*data->initial_stroke), __func__));
+    data->initial_stroke = MEM_new_uninitialized<UVInitialStroke>(__func__);
     if (!data->initial_stroke) {
       uv_sculpt_stroke_exit(C, op);
     }
-    data->initial_stroke->initialSelection = MEM_malloc_arrayN<UVInitialStrokeElement>(
+    data->initial_stroke->initialSelection = MEM_new_array_uninitialized<UVInitialStrokeElement>(
         data->totalUniqueUvs, __func__);
     if (!data->initial_stroke->initialSelection) {
       uv_sculpt_stroke_exit(C, op);
@@ -939,7 +943,7 @@ static wmOperatorStatus uv_sculpt_stroke_invoke(bContext *C, wmOperator *op, con
 
 static wmOperatorStatus uv_sculpt_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  UvSculptData *data = (UvSculptData *)op->customdata;
+  UvSculptData *data = static_cast<UvSculptData *>(op->customdata);
   Object *obedit = CTX_data_edit_object(C);
 
   switch (event->type) {
@@ -964,7 +968,7 @@ static wmOperatorStatus uv_sculpt_stroke_modal(bContext *C, wmOperator *op, cons
 
   ED_region_tag_redraw(CTX_wm_region(C));
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
-  DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
+  DEG_id_tag_update(obedit->data, ID_RECALC_GEOMETRY);
   return OPERATOR_RUNNING_MODAL;
 }
 
@@ -1043,3 +1047,5 @@ void SCULPT_OT_uv_sculpt_pinch(wmOperatorType *ot)
 
   register_common_props(ot);
 }
+
+}  // namespace blender

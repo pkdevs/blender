@@ -10,11 +10,14 @@
 
 #include "intern/bmesh_operator_api.hh"
 
+namespace blender {
+
 /* See comments in `intern/bmesh_opdefines.cc` for documentation of specific operators. */
 
 /*--------defines/enumerations for specific operators-------*/
 
 /* Quad `innervert` values. */
+
 enum {
   SUBD_CORNER_INNERVERT,
   SUBD_CORNER_PATH,
@@ -141,6 +144,58 @@ enum {
   FACE_STRENGTH_STRONG = 16384,
 };
 
+/** Interpolation method used for spacing vertices. */
+enum SpaceInterpolationMethod {
+  SPACE_EDGE_LOOPS_EVENLY_INTERP_CUBIC = 0,
+  SPACE_EDGE_LOOPS_EVENLY_INTERP_LINEAR = 1,
+};
+
+/** Interpolation method used for relaxing vertices. */
+enum RelaxInterpolationMethod {
+  RELAX_EDGE_LOOPS_INTERP_CUBIC = 0,
+  RELAX_EDGE_LOOPS_INTERP_LINEAR = 1,
+};
+
+/**
+ * Methods for determining the orientation of flattening the plane.
+ */
+enum FlattenMethod {
+  FLATTEN_BEST_FIT = 0,
+  FLATTEN_NORMAL = 1,
+  FLATTEN_VIEW = 2,
+};
+
+/**
+ * Mappings from a location on the surface of a cube onto a sphere,
+ * used by the quad sphere primitive.
+ *
+ * \note regarding supporting multiple methods at all.
+ *
+ * - Even-area: provides a more even "shape", edges don't bunch up between the poles
+ *   and the resulting subdivision surface is more spherical.
+ * - Even-angle: has the advantage that on an axis - the vertices make a perfect circle,
+ *   useful for cutting in half and joining to cylinders/UV-spheres etc.
+ */
+enum QuadSphereMethod {
+  /**
+   * Scale the angle so each face covers a similar area.
+   *
+   * Treating the angle as an input which is solved for the least area distortion gives a wider
+   * angle than #QUADSPHERE_METHOD_EQUI_ANGULAR, which halves the error, see table 1 & 3 of:
+   * "Cube-to-sphere Projections for Procedural Texturing and Beyond",
+   * Zucker & Higashi, Journal of Computer Graphics Techniques 7(2), 2018.
+   * https://jcgt.org/published/0007/02/01/
+   */
+  QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA = 0,
+  /**
+   * An equal angle between vertices.
+   *
+   * The Equi-Angular Cube-map (EAC), where the profile on each axis is a perfect circle,
+   * see: https://en.wikipedia.org/wiki/360_video_projection
+   */
+  QUADSPHERE_METHOD_EQUI_ANGULAR = 1,
+};
+
 extern const BMOpDefine *bmo_opdefines[];
 extern const int bmo_opdefines_total;
 
@@ -217,5 +272,7 @@ void BM_mesh_calc_uvs_cone(BMesh *bm,
  * \param oflag: The flag to check faces with.
  */
 void BM_mesh_calc_uvs_cube(BMesh *bm, short oflag);
+
+}  // namespace blender
 
 #include "intern/bmesh_operator_api_inline.hh" /* IWYU pragma: export */

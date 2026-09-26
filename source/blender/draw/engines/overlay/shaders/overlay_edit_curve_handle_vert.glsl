@@ -11,7 +11,7 @@ VERTEX_SHADER_CREATE_INFO(overlay_edit_curve_handle)
 #include "draw_view_lib.glsl"
 #include "gpu_shader_attribute_load_lib.glsl"
 #include "gpu_shader_index_load_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 struct VertIn {
   /* Local Position. */
@@ -99,7 +99,7 @@ void output_vertex_pair(const uint line_id,
 void geometry_main(VertOut geom_in[2],
                    uint out_vertex_id,
                    uint out_primitive_id,
-                   uint out_invocation_id)
+                   uint /*out_invocation_id*/)
 {
   float4 v1 = geom_in[0].gpu_position;
   float4 v2 = geom_in[1].gpu_position;

@@ -2,11 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw
+ */
+
 #ifdef GPU_SHADER
 #  pragma once
 #  include "gpu_shader_compat.hh"
 
 #  include "draw_shader_shared.hh"
+#endif
+
+#ifdef GLSL_CPP_STUBS
 #  define DRW_DEBUG_DRAW
 #endif
 

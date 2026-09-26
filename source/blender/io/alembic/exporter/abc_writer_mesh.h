@@ -8,14 +8,17 @@
  */
 
 #include "abc_writer_abstract.h"
+#include "abc_writer_attribute.h"
 #include "intern/abc_customdata.h"
 
 #include <Alembic/AbcGeom/OPolyMesh.h>
 #include <Alembic/AbcGeom/OSubD.h>
 
+namespace blender {
+
 struct ModifierData;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* Writer for Alembic geometry. Does not assume the object is a mesh object. */
 class ABCGenericMeshWriter : public ABCAbstractWriter {
@@ -28,6 +31,10 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   Alembic::AbcGeom::OSubD abc_subdiv_;
   Alembic::AbcGeom::OSubDSchema abc_subdiv_schema_;
 
+  Alembic::AbcGeom::OCompoundProperty abc_custom_data_container_;
+  Alembic::AbcGeom::OInt32Property abc_subdiv_render_levels_;
+  Alembic::AbcGeom::OInt32Property abc_subdiv_viewport_levels_;
+
   /* Determines whether a poly mesh or a subdivision surface is exported.
    * The value is set by an export option but only true if there is a subdivision modifier on the
    * exported object. */
@@ -35,6 +42,7 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   ModifierData *subsurf_modifier_;
 
   CDStreamConfig m_custom_data_config;
+  std::unique_ptr<AttributeParamMaps> attribute_maps_ = nullptr;
 
  public:
   explicit ABCGenericMeshWriter(const ABCWriterConstructorArgs &args);
@@ -57,11 +65,12 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   void write_subd(HierarchyContext &context, Mesh *mesh);
   template<typename Schema> void write_face_sets(Object *object, Mesh *mesh, Schema &schema);
 
-  void write_arb_geo_params(Mesh *mesh);
-  bool get_velocities(Mesh *mesh, std::vector<Imath::V3f> &vels);
+  void write_arb_geo_params(Mesh *mesh, const Object &object, const size_t num_geom_samples);
   void get_geo_groups(Object *object,
                       Mesh *mesh,
                       std::map<std::string, std::vector<int32_t>> &geo_groups);
+
+  AttributeParamMaps &get_attribute_param_maps();
 };
 
 /* Writer for Alembic geometry of Blender Mesh objects. */
@@ -73,4 +82,5 @@ class ABCMeshWriter : public ABCGenericMeshWriter {
   Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

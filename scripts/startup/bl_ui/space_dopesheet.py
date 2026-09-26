@@ -205,7 +205,12 @@ class DOPESHEET_HT_header(Header):
         st = context.space_data
 
         layout.template_header()
-        layout.prop(st, "ui_mode", text="")
+
+        if st.mode != 'TIMELINE':
+            # Timeline mode is special, as it's presented as a sub-type of the
+            # dope sheet editor, rather than a mode. So this shouldn't show the
+            # mode selector.
+            layout.prop(st, "ui_mode", text="")
 
         DOPESHEET_MT_editor_menus.draw_collapsible(context, layout)
         DOPESHEET_HT_editor_buttons.draw_header(context, layout)
@@ -217,7 +222,12 @@ class DOPESHEET_HT_editor_buttons:
     @classmethod
     def draw_header(cls, context, layout):
         st = context.space_data
-        tool_settings = context.tool_settings
+
+        if st.mode == 'TIMELINE':
+            playback_controls(layout, context)
+            layout.separator()
+            cls._draw_overlay_selector(context, layout)
+            return
 
         if st.mode in {'ACTION', 'SHAPEKEY'} and context.object:
             layout.separator_spacer()
@@ -262,6 +272,8 @@ class DOPESHEET_HT_editor_buttons:
             icon='FILTER',
         )
 
+        tool_settings = context.tool_settings
+
         # Grease Pencil mode doesn't need snapping, as it's frame-aligned only
         if st.mode != 'GPENCIL':
             row = layout.row(align=True)
@@ -283,8 +295,14 @@ class DOPESHEET_HT_editor_buttons:
             icon_only=True,
             panel="DOPESHEET_PT_proportional_edit",
         )
-        overlays = st.overlays
 
+        cls._draw_overlay_selector(context, layout)
+
+    @classmethod
+    def _draw_overlay_selector(cls, context, layout):
+        st = context.space_data
+
+        overlays = st.overlays
         row = layout.row(align=True)
         row.prop(overlays, "show_overlays", text="", icon='OVERLAY')
         sub = row.row(align=True)
@@ -304,7 +322,7 @@ class DOPESHEET_HT_editor_buttons:
         row.template_action(animated_id, new="action.new", unlink="action.unlink")
 
         adt = animated_id and animated_id.animation_data
-        if not adt or not adt.action or not adt.action.is_action_layered:
+        if not adt or not adt.action:
             return
 
         # Store the animated ID in the context, so that the new/unlink operators
@@ -379,6 +397,21 @@ class DOPESHEET_MT_editor_menus(Menu):
         layout = self.layout
         st = context.space_data
         active_action = context.active_action
+
+        if st.mode == 'TIMELINE':
+            # Draw the 'timeline' menus, which are simpler. Most importantly, the
+            # 'selected only' toggle is in the menu, and actually stored as a scene
+            # flag instead of the space data.
+            horizontal = (layout.direction == 'VERTICAL')
+            if horizontal:
+                row = layout.row()
+                sub = row.row(align=True)
+            else:
+                sub = layout
+            sub.menu("TIME_MT_view")
+            if st.show_markers:
+                sub.menu("DOPESHEET_MT_marker")
+            return
 
         layout.menu("DOPESHEET_MT_view")
         layout.menu("DOPESHEET_MT_select")
@@ -489,6 +522,7 @@ class DOPESHEET_MT_cache(Menu):
         col.prop(st, "cache_softbody")
         col.prop(st, "cache_particles")
         col.prop(st, "cache_cloth")
+        col.prop(st, "cache_compositor")
         col.prop(st, "cache_simulation_nodes")
         col.prop(st, "cache_smoke")
         col.prop(st, "cache_dynamicpaint")
@@ -519,6 +553,7 @@ class DOPESHEET_MT_select(Menu):
 
             layout.separator()
             layout.operator("action.select_linked")
+            layout.operator_menu_enum("action.select_by_type", "type")
 
         layout.separator()
         layout.operator("action.select_column", text="Columns on Selected Keys").mode = 'KEYS'
@@ -572,7 +607,7 @@ class DOPESHEET_MT_channel(Menu):
         layout.operator("action.clean", text="Clean Channels").channels = True
 
         layout.separator()
-        layout.operator("anim.channels_group")
+        layout.operator("anim.channels_group", text="Group Channels...")
         layout.operator("anim.channels_ungroup")
 
         layout.separator()
@@ -589,7 +624,7 @@ class DOPESHEET_MT_channel(Menu):
         layout.operator("anim.channels_collapse")
 
         layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Move Channels")
 
         layout.separator()
         layout.operator("anim.channels_fcurves_enable")
@@ -608,6 +643,9 @@ class DOPESHEET_MT_action(Menu):
         layout = self.layout
         layout.operator("anim.merge_animation")
         layout.operator("anim.separate_slots")
+        layout.operator("anim.replace_action", text="Replace Action...")
+        layout.operator("anim.replace_action_new")
+        layout.operator("anim.replace_action_duplicate")
 
         layout.separator()
         layout.operator("anim.slot_channels_move_to_new_action")
@@ -626,21 +664,23 @@ class DOPESHEET_MT_key(Menu):
 
         layout.menu("DOPESHEET_MT_key_transform", text="Transform")
 
-        layout.operator_menu_enum("action.snap", "type", text="Snap")
         layout.operator_menu_enum("action.mirror", "type", text="Mirror")
+        layout.operator_menu_enum("action.snap", "type", text="Snap")
 
+        layout.separator()
+        layout.operator("action.frame_jump", text="Jump to Selected")
+
+        layout.separator()
+
+        layout.operator("action.copy", icon='COPYDOWN')
+        layout.operator("action.paste", icon='PASTEDOWN')
+        layout.operator("action.paste", text="Paste Flipped", icon='PASTEFLIPDOWN').flipped = True
         layout.separator()
         layout.operator("action.keyframe_insert")
+        layout.operator("action.duplicate_move", icon='DUPLICATE')
 
         layout.separator()
-        layout.operator("action.frame_jump")
 
-        layout.separator()
-        layout.operator("action.copy")
-        layout.operator("action.paste")
-        layout.operator("action.paste", text="Paste Flipped").flipped = True
-        layout.operator("action.duplicate_move")
-        layout.operator("action.delete")
         if ob and ob.type == 'GREASEPENCIL':
             layout.operator("grease_pencil.delete_breakdown")
 
@@ -656,6 +696,8 @@ class DOPESHEET_MT_key(Menu):
 
         layout.separator()
         layout.operator("graph.euler_filter", text="Discontinuity (Euler) Filter")
+        layout.separator()
+        layout.operator("action.delete", icon='X')
 
 
 class DOPESHEET_MT_key_transform(Menu):
@@ -744,7 +786,7 @@ class DOPESHEET_PT_action_slot(Panel):
         except (KeyError, IndexError, AttributeError) as ex:
             idtype_label = str(ex)
 
-        split = layout.split(factor=0.4)
+        split = layout.split(factor=layout.property_split_factor)
         split.alignment = 'RIGHT'
         split.label(text="Type")
         split.alignment = 'LEFT'
@@ -779,7 +821,7 @@ class DOPESHEET_MT_gpencil_channel(Menu):
         # layout.operator("anim.channels_collapse")
 
         layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Move Channels")
 
         layout.separator()
         layout.operator("anim.channels_view_selected")
@@ -811,7 +853,10 @@ class DOPESHEET_MT_context_menu(Menu):
         layout.operator("action.copy", text="Copy", icon='COPYDOWN')
         layout.operator("action.paste", text="Paste", icon='PASTEDOWN')
         layout.operator("action.paste", text="Paste Flipped", icon='PASTEFLIPDOWN').flipped = True
+        layout.separator()
 
+        layout.operator("action.keyframe_insert").type = 'SEL'
+        layout.operator("action.duplicate_move", icon='DUPLICATE')
         layout.separator()
 
         layout.operator_menu_enum("action.keyframe_type", "type", text="Keyframe Type")
@@ -821,22 +866,19 @@ class DOPESHEET_MT_context_menu(Menu):
             layout.operator_menu_enum("action.interpolation_type", "type", text="Interpolation Mode")
             layout.operator_menu_enum("action.easing_type", "type", text="Easing Mode")
 
-        layout.separator()
-
-        layout.operator("action.keyframe_insert").type = 'SEL'
-        layout.operator("action.duplicate_move")
-
         if st.mode == 'GPENCIL':
             layout.separator()
             layout.operator("grease_pencil.delete_breakdown")
-
-        layout.operator_context = 'EXEC_REGION_WIN'
-        layout.operator("action.delete")
 
         layout.separator()
 
         layout.operator_menu_enum("action.mirror", "type", text="Mirror")
         layout.operator_menu_enum("action.snap", "type", text="Snap")
+
+        layout.separator()
+
+        layout.operator_context = 'EXEC_REGION_WIN'
+        layout.operator("action.delete", icon='X')
 
 
 class DOPESHEET_MT_channel_context_menu(Menu):
@@ -860,7 +902,7 @@ class DOPESHEET_MT_channel_context_menu(Menu):
         layout.operator("anim.channels_setting_disable", text="Unprotect Channels").type = 'PROTECT'
 
         layout.separator()
-        layout.operator("anim.channels_group")
+        layout.operator("anim.channels_group", text="Group Channels...")
         layout.operator("anim.channels_ungroup")
 
         layout.separator()
@@ -874,6 +916,7 @@ class DOPESHEET_MT_channel_context_menu(Menu):
 
         if is_graph_editor:
             layout.operator_menu_enum("graph.fmodifier_add", "type", text="Add F-Curve Modifier").only_active = False
+            layout.operator("graph.fmodifier_delete", text="Delete F-Curve Modifiers")
             layout.separator()
             layout.operator("graph.hide", text="Hide Selected Curves").unselected = False
             layout.operator("graph.hide", text="Hide Unselected Curves").unselected = True
@@ -884,7 +927,7 @@ class DOPESHEET_MT_channel_context_menu(Menu):
         layout.operator("anim.channels_collapse")
 
         layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
+        layout.operator_menu_enum("anim.channels_move", "direction", text="Move Channels")
 
         layout.separator()
 
@@ -1025,7 +1068,7 @@ class DOPESHEET_PT_overlay(Panel):
     bl_space_type = 'DOPESHEET_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Overlays"
-    bl_ui_units_x = 13
+    bl_ui_units_x = 10
 
     def draw(self, _context):
         pass
@@ -1036,6 +1079,7 @@ class DOPESHEET_PT_dopesheet_overlay(Panel):
     bl_region_type = 'HEADER'
     bl_parent_id = "DOPESHEET_PT_overlay"
     bl_label = "Dope Sheet Overlays"
+    bl_options = {'HIDE_HEADER'}
 
     def draw(self, context):
         st = context.space_data

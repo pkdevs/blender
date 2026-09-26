@@ -1,6 +1,11 @@
 /* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup balembic
+ */
+
 #pragma once
 
 #include "IO_abstract_hierarchy_iterator.h"
@@ -11,10 +16,12 @@
 
 #include <memory>
 
+namespace blender {
+
 struct IDProperty;
 struct Object;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 class ABCAbstractWriter : public AbstractHierarchyWriter {
  protected:
@@ -97,4 +104,5 @@ class ABCAbstractWriter : public AbstractHierarchyWriter {
   }
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

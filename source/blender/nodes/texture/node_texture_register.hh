@@ -2,7 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
+
+namespace blender {
 
 void register_node_tree_type_tex();
 
@@ -41,3 +47,5 @@ void register_node_type_tex_translate();
 void register_node_type_tex_valtonor();
 void register_node_type_tex_valtorgb();
 void register_node_type_tex_viewer();
+
+}  // namespace blender

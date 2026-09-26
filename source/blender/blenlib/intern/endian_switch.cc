@@ -6,8 +6,10 @@
  * \ingroup bli
  */
 
-#include "BLI_endian_switch.h"
-#include "BLI_sys_types.h"
+#include "BLI_endian_switch.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 void BLI_endian_switch_int16_array(short *val, const int size)
 {
@@ -88,3 +90,5 @@ void BLI_endian_switch_double_array(double *val, const int size)
     }
   }
 }
+
+}  // namespace blender

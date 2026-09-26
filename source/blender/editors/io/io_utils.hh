@@ -2,25 +2,31 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editor/io
+ */
+
 #pragma once
 
 #include "WM_types.hh"
 
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct wmOperator;
 
-namespace blender::bke {
-}  // namespace blender::bke
+namespace bke {
+}  // namespace bke
 
-namespace blender::ed::io {
+namespace ed::io {
 /**
  * Shows a import dialog if the operator was invoked with filepath properties set,
  * otherwise invokes the file-select window.
  */
 wmOperatorStatus filesel_drop_import_invoke(bContext *C, wmOperator *op, const wmEvent *event);
 
-bool poll_file_object_drop(const bContext *C, blender::bke::FileHandlerType *fh);
+bool poll_file_object_drop(const bContext *C, bke::FileHandlerType *fh);
 
 /**
  * Return all paths stored in the pointer.
@@ -30,4 +36,5 @@ bool poll_file_object_drop(const bContext *C, blender::bke::FileHandlerType *fh)
  */
 Vector<std::string> paths_from_operator_properties(PointerRNA *ptr);
 void paths_to_operator_properties(PointerRNA *ptr, const Span<std::string> paths);
-}  // namespace blender::ed::io
+}  // namespace ed::io
+}  // namespace blender

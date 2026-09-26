@@ -11,11 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_main_invariants.hh"
@@ -35,7 +35,7 @@
 namespace blender::ed::transform {
 
 struct TransCustomDataNode {
-  View2DEdgePanData edgepan_data{};
+  ui::View2DEdgePanData edgepan_data{};
 
   /* Compare if the view has changed so we can update with `transformViewUpdate`. */
   rctf viewrect_prev{};
@@ -88,7 +88,7 @@ static void create_transform_data_for_node(TransData &td,
 static bool is_node_parent_select(const bNode *node)
 {
   while ((node = node->parent)) {
-    if (node->flag & NODE_SELECT) {
+    if (node->is_selected()) {
       return true;
     }
   }
@@ -116,7 +116,7 @@ static bool transform_tied_to_other_node(bNode *node, VectorSet<bNode *> transfo
 
   /* Now check for child nodes of manually resized frames. */
   while ((node = node->parent)) {
-    const NodeFrame *parent_data = (const NodeFrame *)node->storage;
+    const NodeFrame *parent_data = static_cast<const NodeFrame *>(node->storage);
     const bool parent_shrinking = parent_data->flag & NODE_FRAME_SHRINK;
     const bool parent_transformed = transformed_nodes.contains(node);
 
@@ -134,7 +134,7 @@ static VectorSet<bNode *> get_transformed_nodes(bNodeTree &node_tree)
 
   /* Keep only nodes that are selected or inside a frame that is selected. */
   nodes.remove_if([&](bNode *node) {
-    const bool node_selected = node->flag & NODE_SELECT;
+    const bool node_selected = node->is_selected();
     const bool parent_selected = is_node_parent_select(node);
     return (!node_selected && !parent_selected);
   });
@@ -145,9 +145,9 @@ static VectorSet<bNode *> get_transformed_nodes(bNodeTree &node_tree)
   return nodes;
 }
 
-static void createTransNodeData(bContext *C, TransInfo *t)
+static void createTransNodeData(bContext * /*C*/, TransInfo *t)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(t->area->spacedata.first);
+  SpaceNode *snode = t->area->spacedata.first_as<SpaceNode>();
   bNodeTree *node_tree = snode->edittree;
   if (!node_tree) {
     return;
@@ -155,20 +155,22 @@ static void createTransNodeData(bContext *C, TransInfo *t)
 
   /* Custom data to enable edge panning during the node transform. */
   TransCustomDataNode *customdata = MEM_new<TransCustomDataNode>(__func__);
-  UI_view2d_edge_pan_init(t->context,
-                          &customdata->edgepan_data,
-                          NODE_EDGE_PAN_INSIDE_PAD,
-                          NODE_EDGE_PAN_OUTSIDE_PAD,
-                          NODE_EDGE_PAN_SPEED_RAMP,
-                          NODE_EDGE_PAN_MAX_SPEED,
-                          NODE_EDGE_PAN_DELAY,
-                          NODE_EDGE_PAN_ZOOM_INFLUENCE);
+  view2d_edge_pan_init(t->context,
+                       &customdata->edgepan_data,
+                       NODE_EDGE_PAN_INSIDE_PAD,
+                       NODE_EDGE_PAN_OUTSIDE_PAD,
+                       NODE_EDGE_PAN_SPEED_RAMP,
+                       NODE_EDGE_PAN_MAX_SPEED,
+                       NODE_EDGE_PAN_DELAY,
+                       NODE_EDGE_PAN_ZOOM_INFLUENCE);
   customdata->viewrect_prev = customdata->edgepan_data.initial_rect;
   customdata->is_new_node = t->remove_on_cancel;
 
-  space_node::node_insert_on_link_flags_set(
-      *snode, *t->region, t->modifiers & MOD_NODE_ATTACH, customdata->is_new_node);
-  space_node::node_insert_on_frame_flag_set(*C, *snode, int2(t->mval));
+  if (t->region) {
+    space_node::node_insert_on_link_flags_set(
+        *snode, *t->region, t->modifiers & MOD_NODE_ATTACH, customdata->is_new_node);
+    space_node::node_insert_on_frame_flag_set(*snode, *t->region, int2(t->mval));
+  }
 
   t->custom.type.data = customdata;
   t->custom.type.free_cb = [](TransInfo *, TransDataContainer *, TransCustomData *custom_data) {
@@ -188,8 +190,8 @@ static void createTransNodeData(bContext *C, TransInfo *t)
   }
 
   tc->data_len = nodes.size();
-  tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, __func__);
-  tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, __func__);
+  tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, __func__);
+  tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, __func__);
 
   for (const int i : nodes.index_range()) {
     create_transform_data_for_node(tc->data[i], tc->data_2d[i], *nodes[i], UI_SCALE_FAC);
@@ -264,7 +266,7 @@ static void move_child_nodes(bNode &node, const float2 &delta)
 static bool has_selected_parent(const bNode &node)
 {
   for (bNode *parent = node.parent; parent; parent = parent->parent) {
-    if (parent->flag & NODE_SELECT) {
+    if (parent->is_selected()) {
       return true;
     }
   }
@@ -274,13 +276,13 @@ static bool has_selected_parent(const bNode &node)
 static void flushTransNodes(TransInfo *t)
 {
   const float dpi_fac = UI_SCALE_FAC;
-  SpaceNode *snode = static_cast<SpaceNode *>(t->area->spacedata.first);
+  SpaceNode *snode = t->area->spacedata.first_as<SpaceNode>();
 
-  TransCustomDataNode *customdata = (TransCustomDataNode *)t->custom.type.data;
+  TransCustomDataNode *customdata = static_cast<TransCustomDataNode *>(t->custom.type.data);
 
   if (t->options & CTX_VIEW2D_EDGE_PAN) {
     if (t->state == TRANS_CANCEL) {
-      UI_view2d_edge_pan_cancel(t->context, &customdata->edgepan_data);
+      view2d_edge_pan_cancel(t->context, &customdata->edgepan_data);
     }
     else {
       /* Edge panning functions expect window coordinates, mval is relative to region. */
@@ -288,13 +290,15 @@ static void flushTransNodes(TransInfo *t)
           t->region->winrct.xmin + int(t->mval[0]),
           t->region->winrct.ymin + int(t->mval[1]),
       };
-      UI_view2d_edge_pan_apply(t->context, &customdata->edgepan_data, xy);
+      ui::view2d_edge_pan_apply(t->context, &customdata->edgepan_data, xy);
     }
   }
 
   float offset[2] = {0.0f, 0.0f};
   if (t->state != TRANS_CANCEL) {
-    if (!BLI_rctf_compare(&customdata->viewrect_prev, &t->region->v2d.cur, FLT_EPSILON)) {
+    if (t->region &&
+        !BLI_rctf_compare(&customdata->viewrect_prev, &t->region->v2d.cur, FLT_EPSILON))
+    {
       /* Additional offset due to change in view2D rect. */
       BLI_rctf_transform_pt_v(&t->region->v2d.cur, &customdata->viewrect_prev, offset, offset);
       transformViewUpdate(t);
@@ -306,7 +310,7 @@ static void flushTransNodes(TransInfo *t)
     t->modifiers &= ~MOD_NODE_FRAME;
     Vector<bNode *> nodes_to_detach;
     for (bNode *node : snode->edittree->all_nodes()) {
-      if (!(node->flag & NODE_SELECT)) {
+      if (!node->is_selected()) {
         continue;
       }
       if (has_selected_parent(*node)) {
@@ -357,7 +361,9 @@ static void flushTransNodes(TransInfo *t)
       space_node::node_insert_on_link_flags_set(
           *snode, *t->region, t->modifiers & MOD_NODE_ATTACH, customdata->is_new_node);
     }
-    space_node::node_insert_on_frame_flag_set(*t->context, *snode, int2(t->mval));
+    if (t->region) {
+      space_node::node_insert_on_frame_flag_set(*snode, *t->region, int2(t->mval));
+    }
   }
 }
 
@@ -370,9 +376,9 @@ static void flushTransNodes(TransInfo *t)
 static void special_aftertrans_update__node(bContext *C, TransInfo *t)
 {
   Main *bmain = CTX_data_main(C);
-  SpaceNode *snode = (SpaceNode *)t->area->spacedata.first;
+  SpaceNode *snode = t->area->spacedata.first_as<SpaceNode>();
   bNodeTree *ntree = snode->edittree;
-  const TransCustomDataNode &customdata = *(TransCustomDataNode *)t->custom.type.data;
+  const TransCustomDataNode &customdata = *static_cast<TransCustomDataNode *>(t->custom.type.data);
 
   const bool canceled = (t->state == TRANS_CANCEL);
 
@@ -384,9 +390,9 @@ static void special_aftertrans_update__node(bContext *C, TransInfo *t)
   if (canceled && t->remove_on_cancel) {
     /* Remove selected nodes on cancel. */
     if (ntree) {
-      LISTBASE_FOREACH_MUTABLE (bNode *, node, &ntree->nodes) {
-        if (node->flag & NODE_SELECT) {
-          bke::node_remove_node(bmain, *ntree, *node, true);
+      for (bNode &node : ntree->nodes.items_mutable()) {
+        if (node.is_selected()) {
+          bke::node_remove_node(bmain, *ntree, node, true);
         }
       }
       BKE_main_ensure_invariants(*bmain, ntree->id);
@@ -405,8 +411,7 @@ static void special_aftertrans_update__node(bContext *C, TransInfo *t)
 
   wmOperatorType *ot = WM_operatortype_find("NODE_OT_insert_offset", true);
   BLI_assert(ot);
-  PointerRNA ptr;
-  WM_operator_properties_create_ptr(&ptr, ot);
+  PointerRNA ptr = WM_operator_properties_create_ptr(ot);
   WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &ptr, nullptr);
   WM_operator_properties_free(&ptr);
 }

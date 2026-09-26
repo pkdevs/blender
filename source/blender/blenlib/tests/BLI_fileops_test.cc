@@ -8,17 +8,17 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_system.h"
-#include "BLI_tempfile.h"
-#include "BLI_threads.h"
+#include "BLI_string.hh"
+#include "BLI_system.hh"
+#include "BLI_tempfile.hh"
+#include "BLI_threads.hh"
 
 #include BLI_SYSTEM_PID_H
 
 namespace blender::tests {
 
 /*
- * General `BLI_fileops.h` tests.
+ * General `BLI_fileops.hh` tests.
  */
 
 class FileOpsTest : public testing::Test {
@@ -176,12 +176,12 @@ TEST_F(FileOpsTest, dir_create_recursive)
 }
 
 /*
- * blender::fstream tests.
+ * fstream tests.
  */
 
 TEST(fileops, fstream_open_string_filename)
 {
-  const std::string test_files_dir = blender::tests::flags_test_asset_dir();
+  const std::string test_files_dir = flags_test_asset_dir();
   if (test_files_dir.empty()) {
     FAIL();
   }
@@ -196,7 +196,7 @@ TEST(fileops, fstream_open_string_filename)
 
 TEST(fileops, fstream_open_charptr_filename)
 {
-  const std::string test_files_dir = blender::tests::flags_test_asset_dir();
+  const std::string test_files_dir = flags_test_asset_dir();
   if (test_files_dir.empty()) {
     FAIL();
   }

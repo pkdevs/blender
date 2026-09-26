@@ -1,7 +1,14 @@
 /* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup io
+ */
+
 #pragma once
+
+namespace blender {
 
 /** Method used to reference paths. Equivalent of bpy_extras.io_utils.path_reference_mode. */
 enum ePathReferenceMode {
@@ -18,3 +25,5 @@ enum ePathReferenceMode {
   /** Copy the file to the destination path. */
   PATH_REFERENCE_COPY = 5,
 };
+
+}  // namespace blender

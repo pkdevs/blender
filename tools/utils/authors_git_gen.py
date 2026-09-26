@@ -53,6 +53,15 @@ AUTHOR_LINES_SKIP = 4
 # Stop counting after this line limit.
 AUTHOR_LINES_LIMIT = 100
 
+AUTHOR_DIRECTORIES_SKIP: tuple[bytes, ...] = (
+    b"blender/extern/",
+    b"blender/intern/opennl/",
+    # Will have own authors file.
+    b"intern/cycles/",
+    # Will have own authors file.
+    b"intern/libmv/libmv/",
+)
+
 
 # -----------------------------------------------------------------------------
 # Lookup Table to clean up the authors
@@ -63,6 +72,7 @@ AUTHOR_LINES_LIMIT = 100
 # Some projects prefer not to have their developers listed.
 author_exclude_individuals = {
     "Jason Fielder <jason-fielder@noreply.localhost>",  # `@apple.com` developer.
+    "LLM Assistant <llm-assistant>",  # Set as a co-author for some commits.
     "Michael B Johnson <wave@noreply.localhost>",  # `@apple.com` developer.
 }
 
@@ -138,16 +148,7 @@ class Credits:
 
     @classmethod
     def is_credit_commit_valid(cls, c: GitCommit) -> bool:
-        ignore_dir = (
-            b"blender/extern/",
-            b"blender/intern/opennl/",
-            # Will have own authors file.
-            b"intern/cycles/",
-            # Will have own authors file.
-            b"intern/libmv/libmv/"
-        )
-
-        if not any(f for f in c.files if not f.startswith(ignore_dir)):
+        if not any(f for f in c.files if not f.startswith(AUTHOR_DIRECTORIES_SKIP)):
             return False
 
         return True
@@ -254,7 +255,15 @@ class Credits:
             for match_glob in author_exclude_glob
         )
 
-        sorted_authors = dict(sorted(self.users.items()))
+        # Normalize using decomposed strings for sorting.
+        # That makes letters with diacritics grouped with the undiacritized variant.
+        # Collation is not perfect, but better than having non-English letters at the very bottom of the list.
+        from unicodedata import normalize
+        sorted_authors = dict(sorted(
+            self.users.items(),
+            key=lambda item: (normalize('NFD', item[0]).casefold(), item[1].commit_total),
+        ))
+
         for author_with_email, cu in sorted_authors.items():
             if author_with_email.endswith(" <>"):
                 if verbose:
@@ -263,10 +272,6 @@ class Credits:
             if cu.lines_change <= AUTHOR_LINES_SKIP:
                 if verbose:
                     print("Skipping:", author_with_email, cu.lines_change, "line(s) changed.")
-                continue
-            if author_with_email in author_exclude_individuals:
-                if verbose:
-                    print("Skipping:", author_with_email, "explicit exclusion requested.")
                 continue
             if author_with_email in author_exclude_individuals:
                 if verbose:
@@ -362,6 +367,17 @@ def argparse_create() -> argparse.ArgumentParser:
         default=False,
         help="Add commits & changed lines as metadata after the author."
     )
+    parser.add_argument(
+        "--all-authors",
+        action='store_true',
+        dest="all_authors",
+        default=False,
+        help=(
+            "Include all authors (don't skip based on paths or commit count/size). "
+            "This can be useful when updating: "
+            "'./tools/utils/git_data_canonical_authors.py' which is also used for credit generation."
+        )
+    )
 
     return parser
 
@@ -370,11 +386,19 @@ def argparse_create() -> argparse.ArgumentParser:
 # Main Function
 
 def main() -> int:
+    global AUTHOR_DIRECTORIES_SKIP
+    global AUTHOR_LINES_SKIP
+    global AUTHOR_LINES_LIMIT
 
     # ----------
     # Parse Args
 
     args = argparse_create().parse_args()
+
+    if args.all_authors:
+        AUTHOR_DIRECTORIES_SKIP = ()
+        AUTHOR_LINES_SKIP = 0
+        AUTHOR_LINES_LIMIT = 0
 
     credits = Credits()
     # commit_range = "HEAD~10..HEAD"

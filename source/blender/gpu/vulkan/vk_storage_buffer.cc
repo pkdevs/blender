@@ -15,9 +15,11 @@
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
+namespace gpu {
 
 VKStorageBuffer::VKStorageBuffer(size_t size, GPUUsageType usage, const char *name)
     : StorageBuf(size, name), usage_(usage)
@@ -83,13 +85,11 @@ void VKStorageBuffer::allocate()
                                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   buffer_.create(size_in_bytes_,
                  buffer_usage_flags,
-                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                 VkMemoryPropertyFlags(0),
+                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                  VmaAllocationCreateFlags(0),
-                 0.8f);
-  if (buffer_.is_allocated()) {
-    debug::object_label(buffer_.vk_handle(), name_);
-  }
+                 0.8f,
+                 false,
+                 name_);
 }
 
 void VKStorageBuffer::bind(int slot)
@@ -122,8 +122,8 @@ void VKStorageBuffer::copy_sub(VertBuf *src, uint dst_offset, uint src_offset, u
   src_vertex_buffer.upload();
 
   render_graph::VKCopyBufferNode::CreateInfo copy_buffer = {};
-  copy_buffer.src_buffer = src_vertex_buffer.vk_handle();
-  copy_buffer.dst_buffer = vk_handle();
+  copy_buffer.src_buffer = src_vertex_buffer.resource();
+  copy_buffer.dst_buffer = resource();
   copy_buffer.region.srcOffset = src_offset;
   copy_buffer.region.dstOffset = dst_offset;
   copy_buffer.region.size = copy_size;
@@ -158,4 +158,5 @@ void VKStorageBuffer::read(void *data)
   async_read_buffer_ = nullptr;
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

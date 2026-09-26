@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 
 #include <optional>
@@ -10,9 +14,11 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry {
+namespace geometry {
 
 /**
  * Calculates the bounds of a radial primitive.
@@ -28,4 +34,5 @@ Mesh *create_uv_sphere_mesh(float radius,
                             int rings,
                             std::optional<StringRef> uv_map_id);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

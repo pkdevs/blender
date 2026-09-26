@@ -11,12 +11,12 @@
 #include "DNA_listBase.h"
 
 #include "ANIM_action.hh"
+struct SeqAnimationBackup;
+namespace blender {
 
-struct ListBase;
 struct Scene;
 struct Strip;
-struct SeqAnimationBackup;
-namespace blender::seq {
+namespace seq {
 
 bool animation_keyframes_exist(const Scene *scene);
 bool animation_drivers_exist(Scene *scene);
@@ -27,15 +27,10 @@ void offset_animdata(const Scene *scene, Strip *strip, float ofs);
  * Return whether the fcurve targets the given strip.
  */
 bool fcurve_matches(const Strip &strip, const FCurve &fcurve);
-struct AnimationBackup {
-  /* `curves` and `channelbag` here represent effectively the same data (the
-   * fcurves that animate the Scene that the sequence belongs to), just for
-   * legacy and layered actions, respectively. Therefore only one or the other
-   * should ever have data stored in them, never both. */
-  ListBase curves;
-  blender::animrig::Channelbag channelbag;
 
-  ListBase drivers;
+struct AnimationBackup {
+  animrig::Channelbag channelbag;
+  ListBaseT<FCurve> drivers;
 };
 /**
  * Move all F-Curves and drivers from `scene` to `backup`.
@@ -50,4 +45,5 @@ void animation_restore_original(Scene *scene, AnimationBackup *backup);
  */
 void animation_duplicate_backup_to_scene(Scene *scene, Strip *strip, AnimationBackup *backup);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

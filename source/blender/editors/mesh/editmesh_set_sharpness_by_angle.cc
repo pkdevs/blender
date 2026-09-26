@@ -33,17 +33,18 @@ static wmOperatorStatus set_sharpness_by_angle_exec(bContext *C, wmOperator *op)
 {
   const float angle_limit_cos = std::cos(RNA_float_get(op->ptr, "angle"));
   const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const Main *bmain = CTX_data_main(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_view3d(C));
+      *bmain, CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_view3d(C));
 
   for (Object *object : objects) {
-    Mesh &mesh = *static_cast<Mesh *>(object->data);
-    BMEditMesh *em = mesh.runtime->edit_mesh.get();
+    Mesh &mesh = *id_cast<Mesh *>(object->data);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(&mesh);
 
     bool changed = false;
     BMIter iter;
     BMEdge *e;
-    BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
+    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
       if (!BM_elem_flag_test(e, BM_ELEM_SELECT)) {
         continue;
       }
@@ -62,7 +63,7 @@ static wmOperatorStatus set_sharpness_by_angle_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      BKE_editmesh_lnorspace_update(em);
+      BKE_editmesh_lnorspace_update(bm);
       DEG_id_tag_update(&mesh.id, ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, &mesh.id);
     }

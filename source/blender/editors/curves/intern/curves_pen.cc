@@ -32,7 +32,6 @@
 #include "DNA_material_types.h"
 
 #include "ED_curves.hh"
-#include "ED_grease_pencil.hh"
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
 
@@ -307,6 +306,10 @@ static ClosestElement find_closest_element(const PenToolOperation &ptd, const fl
     const bke::CurvesGeometry &curves = ptd.get_curves(curves_index);
     const float4x4 layer_to_object = ptd.layer_to_object_per_curves[curves_index];
 
+    if (curves.is_empty()) {
+      continue;
+    }
+
     IndexMaskMemory memory;
     const IndexMask bezier_points = ptd.visible_bezier_handle_points(curves_index, memory);
     const IndexMask editable_curves = ptd.editable_curves(curves_index, memory);
@@ -437,98 +440,101 @@ static bool move_handles_in_curve(const PenToolOperation &ptd,
   const VArray<bool> right_selected = *attributes.lookup_or_default<bool>(
       ".selection_handle_right", bke::AttrDomain::Point, true);
 
-  selection.foreach_index(GrainSize(2048), [&](const int64_t point_i) {
-    const float3 depth_point = positions[point_i];
-    float2 offset = ptd.xy - ptd.prev_xy;
+  selection.foreach_index(
+      [&](const int64_t point_i) {
+        const float3 depth_point = positions[point_i];
+        float2 offset = ptd.xy - ptd.prev_xy;
 
-    if ((ptd.move_point && !ptd.point_added &&
-         !(left_selected[point_i] || right_selected[point_i])) ||
-        ptd.move_entire)
-    {
-      const float2 pos = ptd.layer_to_screen(layer_to_object, positions[point_i]);
-      const float2 pos_left = ptd.layer_to_screen(layer_to_object, handles_left[point_i]);
-      const float2 pos_right = ptd.layer_to_screen(layer_to_object, handles_right[point_i]);
-      positions[point_i] = ptd.screen_to_layer(layer_to_world, pos + offset, depth_point);
-      handles_left[point_i] = ptd.screen_to_layer(layer_to_world, pos_left + offset, depth_point);
-      handles_right[point_i] = ptd.screen_to_layer(
-          layer_to_world, pos_right + offset, depth_point);
-      return;
-    }
+        if ((ptd.move_point && !ptd.point_added &&
+             !(left_selected[point_i] || right_selected[point_i])) ||
+            ptd.move_entire)
+        {
+          const float2 pos = ptd.layer_to_screen(layer_to_object, positions[point_i]);
+          const float2 pos_left = ptd.layer_to_screen(layer_to_object, handles_left[point_i]);
+          const float2 pos_right = ptd.layer_to_screen(layer_to_object, handles_right[point_i]);
+          positions[point_i] = ptd.screen_to_layer(layer_to_world, pos + offset, depth_point);
+          handles_left[point_i] = ptd.screen_to_layer(
+              layer_to_world, pos_left + offset, depth_point);
+          handles_right[point_i] = ptd.screen_to_layer(
+              layer_to_world, pos_right + offset, depth_point);
+          return;
+        }
 
-    const bool is_left = !right_selected[point_i];
-    if (ptd.move_handle) {
-      if (is_left) {
-        const float2 pos_left = ptd.layer_to_screen(layer_to_object, handles_left[point_i]);
-        handles_left[point_i] = ptd.screen_to_layer(
-            layer_to_world, pos_left + offset, depth_point);
-      }
-      else {
-        const float2 pos_right = ptd.layer_to_screen(layer_to_object, handles_right[point_i]);
-        handles_right[point_i] = ptd.screen_to_layer(
-            layer_to_world, pos_right + offset, depth_point);
-      }
-      handle_types_left[point_i] = BEZIER_HANDLE_FREE;
-      handle_types_right[point_i] = BEZIER_HANDLE_FREE;
-      return;
-    }
+        const bool is_left = !right_selected[point_i];
+        if (ptd.move_handle) {
+          if (is_left) {
+            const float2 pos_left = ptd.layer_to_screen(layer_to_object, handles_left[point_i]);
+            handles_left[point_i] = ptd.screen_to_layer(
+                layer_to_world, pos_left + offset, depth_point);
+          }
+          else {
+            const float2 pos_right = ptd.layer_to_screen(layer_to_object, handles_right[point_i]);
+            handles_right[point_i] = ptd.screen_to_layer(
+                layer_to_world, pos_right + offset, depth_point);
+          }
+          handle_types_left[point_i] = BEZIER_HANDLE_FREE;
+          handle_types_right[point_i] = BEZIER_HANDLE_FREE;
+          return;
+        }
 
-    const float2 center_point = ptd.layer_to_screen(layer_to_object, depth_point);
-    offset = ptd.mouse_co - ptd.center_of_mass_co;
+        const float2 center_point = ptd.layer_to_screen(layer_to_object, depth_point);
+        offset = ptd.mouse_co - ptd.center_of_mass_co;
 
-    if (ptd.snap_angle) {
-      offset = snap_8_angles(offset);
-    }
+        if (ptd.snap_angle) {
+          offset = snap_8_angles(offset);
+        }
 
-    /* Set both handles to be `Aligned` if this point is newly added or is
-     * no longer control freely. */
-    if (ptd.point_added || ptd.handle_moved) {
-      handle_types_left[point_i] = BEZIER_HANDLE_ALIGN;
-      handle_types_right[point_i] = BEZIER_HANDLE_ALIGN;
-    }
+        /* Set both handles to be `Aligned` if this point is newly added or is
+         * no longer control freely. */
+        if (ptd.point_added || ptd.handle_moved) {
+          handle_types_left[point_i] = BEZIER_HANDLE_ALIGN;
+          handle_types_right[point_i] = BEZIER_HANDLE_ALIGN;
+        }
 
-    if (is_left) {
-      if (handle_types_right[point_i] == BEZIER_HANDLE_AUTO) {
-        handle_types_right[point_i] = BEZIER_HANDLE_ALIGN;
-      }
-      handle_types_left[point_i] = handle_types_right[point_i];
-      if (handle_types_right[point_i] == BEZIER_HANDLE_VECTOR) {
-        handle_types_left[point_i] = BEZIER_HANDLE_FREE;
-      }
+        if (is_left) {
+          if (handle_types_right[point_i] == BEZIER_HANDLE_AUTO) {
+            handle_types_right[point_i] = BEZIER_HANDLE_ALIGN;
+          }
+          handle_types_left[point_i] = handle_types_right[point_i];
+          if (handle_types_right[point_i] == BEZIER_HANDLE_VECTOR) {
+            handle_types_left[point_i] = BEZIER_HANDLE_FREE;
+          }
 
-      if (ptd.point_added) {
-        handles_left[point_i] = ptd.project(center_point + offset);
-      }
-      else {
-        handles_left[point_i] = ptd.screen_to_layer(
-            layer_to_world, center_point + offset, depth_point);
-      }
+          if (ptd.point_added) {
+            handles_left[point_i] = ptd.project(center_point + offset);
+          }
+          else {
+            handles_left[point_i] = ptd.screen_to_layer(
+                layer_to_world, center_point + offset, depth_point);
+          }
 
-      if (handle_types_right[point_i] == BEZIER_HANDLE_ALIGN) {
-        handles_right[point_i] = 2.0f * depth_point - handles_left[point_i];
-      }
-    }
-    else {
-      if (handle_types_left[point_i] == BEZIER_HANDLE_AUTO) {
-        handle_types_left[point_i] = BEZIER_HANDLE_ALIGN;
-      }
-      handle_types_right[point_i] = handle_types_left[point_i];
-      if (handle_types_left[point_i] == BEZIER_HANDLE_VECTOR) {
-        handle_types_right[point_i] = BEZIER_HANDLE_FREE;
-      }
+          if (handle_types_right[point_i] == BEZIER_HANDLE_ALIGN) {
+            handles_right[point_i] = 2.0f * depth_point - handles_left[point_i];
+          }
+        }
+        else {
+          if (handle_types_left[point_i] == BEZIER_HANDLE_AUTO) {
+            handle_types_left[point_i] = BEZIER_HANDLE_ALIGN;
+          }
+          handle_types_right[point_i] = handle_types_left[point_i];
+          if (handle_types_left[point_i] == BEZIER_HANDLE_VECTOR) {
+            handle_types_right[point_i] = BEZIER_HANDLE_FREE;
+          }
 
-      if (ptd.point_added) {
-        handles_right[point_i] = ptd.project(center_point + offset);
-      }
-      else {
-        handles_right[point_i] = ptd.screen_to_layer(
-            layer_to_world, center_point + offset, depth_point);
-      }
+          if (ptd.point_added) {
+            handles_right[point_i] = ptd.project(center_point + offset);
+          }
+          else {
+            handles_right[point_i] = ptd.screen_to_layer(
+                layer_to_world, center_point + offset, depth_point);
+          }
 
-      if (handle_types_left[point_i] == BEZIER_HANDLE_ALIGN) {
-        handles_left[point_i] = 2.0f * depth_point - handles_right[point_i];
-      }
-    }
-  });
+          if (handle_types_left[point_i] == BEZIER_HANDLE_ALIGN) {
+            handles_left[point_i] = 2.0f * depth_point - handles_right[point_i];
+          }
+        }
+      },
+      exec_mode::grain_size(2048));
 
   curves.calculate_bezier_auto_handles();
 
@@ -677,7 +683,7 @@ static std::optional<bke::CurvesGeometry> extrude_curves(const PenToolOperation 
     const VArray<int8_t> knot_modes = dst.nurbs_knots_modes();
     const OffsetIndices<int> dst_points_by_curve = dst.points_by_curve();
     const IndexMask include_curves = IndexMask::from_predicate(
-        src.curves_range(), GrainSize(512), memory, [&](const int64_t curve_index) {
+        src.curves_range(), memory, [&](const int64_t curve_index) {
           return curve_types[curve_index] == CURVE_TYPE_NURBS &&
                  knot_modes[curve_index] == NURBS_KNOT_MODE_CUSTOM &&
                  points_by_curve[curve_index].size() == dst_points_by_curve[curve_index].size();
@@ -782,7 +788,7 @@ static void insert_point_to_curve(const PenToolOperation &ptd, bke::CurvesGeomet
     const VArray<int8_t> knot_modes = dst.nurbs_knots_modes();
     const OffsetIndices<int> dst_points_by_curve = dst.points_by_curve();
     const IndexMask include_curves = IndexMask::from_predicate(
-        src.curves_range(), GrainSize(512), memory, [&](const int64_t curve_index) {
+        src.curves_range(), memory, [&](const int64_t curve_index) {
           return curve_types[curve_index] == CURVE_TYPE_NURBS &&
                  knot_modes[curve_index] == NURBS_KNOT_MODE_CUSTOM &&
                  points_by_curve[curve_index].size() == dst_points_by_curve[curve_index].size();
@@ -804,7 +810,11 @@ static void add_single_point_and_curve(const PenToolOperation &ptd,
 {
   const float3 depth_point = ptd.project(ptd.mouse_co);
 
-  ed::greasepencil::add_single_curve(curves, true);
+  /* Add single curve to the end. */
+  const int num_old_points = curves.points_num();
+  curves.resize(curves.points_num() + 1, curves.curves_num() + 1);
+  curves.offsets_for_write().last(1) = num_old_points;
+
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
   Set<std::string> curve_attributes_to_skip;
@@ -821,9 +831,7 @@ static void add_single_point_and_curve(const PenToolOperation &ptd,
   const int material_index = ptd.vc.obact->actcol - 1;
   if (material_index != -1) {
     bke::SpanAttributeWriter<int> material_indexes = attributes.lookup_or_add_for_write_span<int>(
-        "material_index",
-        bke::AttrDomain::Curve,
-        bke::AttributeInitVArray(VArray<int>::from_single(0, curves.curves_num())));
+        "material_index", bke::AttrDomain::Curve, bke::AttributeInitValue(0));
     material_indexes.span.last() = material_index;
     material_indexes.finish();
     curve_attributes_to_skip.add("material_index");
@@ -1103,7 +1111,7 @@ static IndexMask retrieve_visible_bezier_handle_points(const bke::CurvesGeometry
   if (handle_display == CURVE_HANDLE_NONE) {
     return IndexMask(0);
   }
-  else if (handle_display == CURVE_HANDLE_ALL) {
+  if (handle_display == CURVE_HANDLE_ALL) {
     return curves.points_range();
   }
   /* else handle_display == CURVE_HANDLE_SELECTED */
@@ -1123,7 +1131,7 @@ static IndexMask retrieve_visible_bezier_handle_points(const bke::CurvesGeometry
       ".selection_handle_right", bke::AttrDomain::Point, true);
 
   const IndexMask selected_points = IndexMask::from_predicate(
-      curves.points_range(), GrainSize(4096), memory, [&](const int64_t point_i) {
+      curves.points_range(), memory, [&](const int64_t point_i) {
         const bool is_selected = selected_point[point_i] || selected_left[point_i] ||
                                  selected_right[point_i];
         const bool is_bezier = types[point_to_curve_map[point_i]] == CURVE_TYPE_BEZIER;
@@ -1178,7 +1186,8 @@ wmOperatorStatus PenToolOperation::invoke(bContext *C, wmOperator *op, const wmE
   this->move_point = RNA_boolean_get(op->ptr, "move_point");
   this->cycle_handle_type = RNA_boolean_get(op->ptr, "cycle_handle_type");
   this->extrude_handle = RNA_enum_get(op->ptr, "extrude_handle");
-  this->radius = RNA_float_get(op->ptr, "radius");
+  /* Size is stored as the diameter. */
+  this->radius = RNA_float_get(op->ptr, "size") / 2.0f;
 
   this->move_entire = false;
   this->snap_angle = false;
@@ -1207,10 +1216,6 @@ wmOperatorStatus PenToolOperation::modal(bContext *C, wmOperator *op, const wmEv
   this->xy = float2(event->xy);
   this->prev_xy = float2(event->prev_xy);
 
-  if (event->type == EVENT_NONE) {
-    return OPERATOR_RUNNING_MODAL;
-  }
-
   if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
     return OPERATOR_FINISHED;
   }
@@ -1237,32 +1242,33 @@ wmOperatorStatus PenToolOperation::modal(bContext *C, wmOperator *op, const wmEv
 
   std::atomic<bool> changed = false;
   this->center_of_mass_co = calculate_center_of_mass(*this, false);
+  if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+    if (this->move_seg && this->closest_element.element_mode == ElementMode::Edge) {
+      const int curves_index = this->closest_element.drawing_index;
+      const float4x4 &layer_to_world = this->layer_to_world_per_curves[curves_index];
+      bke::CurvesGeometry &curves = this->get_curves(curves_index);
 
-  if (this->move_seg && this->closest_element.element_mode == ElementMode::Edge) {
-    const int curves_index = this->closest_element.drawing_index;
-    const float4x4 &layer_to_world = this->layer_to_world_per_curves[curves_index];
-    bke::CurvesGeometry &curves = this->get_curves(curves_index);
+      move_segment(*this, curves, layer_to_world);
+      this->tag_curve_changed(curves_index);
+      changed.store(true, std::memory_order_relaxed);
+    }
+    else {
+      threading::parallel_for(this->curves_range(), 1, [&](const IndexRange curves_range) {
+        for (const int curves_index : curves_range) {
+          bke::CurvesGeometry &curves = this->get_curves(curves_index);
+          const float4x4 &layer_to_object = this->layer_to_object_per_curves[curves_index];
+          const float4x4 &layer_to_world = this->layer_to_world_per_curves[curves_index];
 
-    move_segment(*this, curves, layer_to_world);
-    this->tag_curve_changed(curves_index);
-    changed.store(true, std::memory_order_relaxed);
-  }
-  else {
-    threading::parallel_for(this->curves_range(), 1, [&](const IndexRange curves_range) {
-      for (const int curves_index : curves_range) {
-        bke::CurvesGeometry &curves = this->get_curves(curves_index);
-        const float4x4 &layer_to_object = this->layer_to_object_per_curves[curves_index];
-        const float4x4 &layer_to_world = this->layer_to_world_per_curves[curves_index];
+          IndexMaskMemory memory;
+          const IndexMask selection = this->all_selected_points(curves_index, memory);
 
-        IndexMaskMemory memory;
-        const IndexMask selection = this->all_selected_points(curves_index, memory);
-
-        if (move_handles_in_curve(*this, curves, selection, layer_to_world, layer_to_object)) {
-          changed.store(true, std::memory_order_relaxed);
-          this->tag_curve_changed(curves_index);
+          if (move_handles_in_curve(*this, curves, selection, layer_to_world, layer_to_object)) {
+            changed.store(true, std::memory_order_relaxed);
+            this->tag_curve_changed(curves_index);
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   pen_status_indicators(C, op);
@@ -1278,20 +1284,21 @@ class CurvesPenToolOperation : public PenToolOperation {
  public:
   Vector<Curves *> all_curves;
 
-  float3 project(const float2 &screen_co) const
+  float3 project(const float2 &screen_co) const override
   {
     const float4x4 &layer_to_world = this->layer_to_world_per_curves[*this->active_drawing_index];
     return this->screen_to_layer(layer_to_world, screen_co, float3(0.0f));
   }
 
-  IndexMask all_selected_points(const int curves_index, IndexMaskMemory &memory) const
+  IndexMask all_selected_points(const int curves_index, IndexMaskMemory &memory) const override
   {
     const Curves *curves_id = this->all_curves[curves_index];
     const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
     return retrieve_all_selected_points(curves, this->vc.v3d->overlay.handle_display, memory);
   }
 
-  IndexMask visible_bezier_handle_points(const int curves_index, IndexMaskMemory &memory) const
+  IndexMask visible_bezier_handle_points(const int curves_index,
+                                         IndexMaskMemory &memory) const override
   {
     const Curves *curves_id = this->all_curves[curves_index];
     const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
@@ -1299,37 +1306,37 @@ class CurvesPenToolOperation : public PenToolOperation {
         curves, this->vc.v3d->overlay.handle_display, memory);
   }
 
-  IndexMask editable_curves(const int curves_index, IndexMaskMemory & /*memory*/) const
+  IndexMask editable_curves(const int curves_index, IndexMaskMemory & /*memory*/) const override
   {
     const Curves *curves_id = this->all_curves[curves_index];
     const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
     return curves.curves_range();
   }
 
-  void tag_curve_changed(const int curves_index) const
+  void tag_curve_changed(const int curves_index) const override
   {
     Curves *curves_id = this->all_curves[curves_index];
     bke::CurvesGeometry &curves = curves_id->geometry.wrap();
     curves.tag_topology_changed();
   }
 
-  bke::CurvesGeometry &get_curves(const int curves_index) const
+  bke::CurvesGeometry &get_curves(const int curves_index) const override
   {
     Curves *curves_id = this->all_curves[curves_index];
     return curves_id->geometry.wrap();
   }
 
-  IndexRange curves_range() const
+  IndexRange curves_range() const override
   {
     return this->all_curves.index_range();
   }
 
-  void single_point_attributes(bke::CurvesGeometry & /*curves*/, const int /*curves_index*/) const
+  void single_point_attributes(bke::CurvesGeometry & /*curves*/,
+                               const int /*curves_index*/) const override
   {
-    return;
   }
 
-  bool can_create_new_curve(wmOperator *op) const
+  bool can_create_new_curve(wmOperator *op) const override
   {
     if (this->active_drawing_index == std::nullopt) {
       BKE_report(op->reports, RPT_ERROR, "No active Curves Object");
@@ -1339,7 +1346,7 @@ class CurvesPenToolOperation : public PenToolOperation {
     return true;
   }
 
-  void update_view(bContext *C) const
+  void update_view(bContext *C) const override
   {
     for (Curves *curves_id : this->all_curves) {
       DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
@@ -1350,7 +1357,7 @@ class CurvesPenToolOperation : public PenToolOperation {
 
   std::optional<wmOperatorStatus> initialize(bContext *C,
                                              wmOperator * /*op*/,
-                                             const wmEvent * /*event*/)
+                                             const wmEvent * /*event*/) override
   {
     this->active_drawing_index = std::nullopt;
     VectorSet<Curves *> unique_curves;
@@ -1359,14 +1366,14 @@ class CurvesPenToolOperation : public PenToolOperation {
 
     Object *object = CTX_data_active_object(C);
     if (object && object_has_editable_curves(bmain, *object)) {
-      unique_curves.add_new(static_cast<Curves *>(object->data));
+      unique_curves.add_new(id_cast<Curves *>(object->data));
       this->layer_to_world_per_curves.append(object->object_to_world());
       this->active_drawing_index = 0;
     }
 
     CTX_DATA_BEGIN (C, Object *, object, selected_objects) {
       if (object_has_editable_curves(bmain, *object)) {
-        if (unique_curves.add(static_cast<Curves *>(object->data))) {
+        if (unique_curves.add(id_cast<Curves *>(object->data))) {
           this->layer_to_world_per_curves.append(object->object_to_world());
         }
       }
@@ -1445,7 +1452,8 @@ void pen_tool_common_props(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "delete_point", false, "Delete Point", "Delete an existing point");
   RNA_def_boolean(
       ot->srna, "insert_point", false, "Insert Point", "Insert Point into a curve segment");
-  RNA_def_boolean(ot->srna, "move_segment", false, "Move Segment", "Delete an existing point");
+  RNA_def_boolean(
+      ot->srna, "move_segment", false, "Move Segment", "Move an existing curve segment");
   RNA_def_boolean(
       ot->srna, "select_point", false, "Select Point", "Select a point or its handles");
   RNA_def_boolean(ot->srna, "move_point", false, "Move Point", "Move a point or its handles");
@@ -1454,7 +1462,8 @@ void pen_tool_common_props(wmOperatorType *ot)
                   false,
                   "Cycle Handle Type",
                   "Cycle between all four handle types");
-  RNA_def_float_distance(ot->srna, "radius", 0.01f, 0.0f, FLT_MAX, "Radius", "", 0.0f, 10.0f);
+  RNA_def_float_distance(
+      ot->srna, "size", 0.01f, 0.0f, FLT_MAX, "Size", "Diameter of new points", 0.0f, 10.0f);
 }
 
 wmKeyMap *ensure_keymap(wmKeyConfig *keyconf)

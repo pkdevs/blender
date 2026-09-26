@@ -12,6 +12,8 @@
 
 #include "bmesh.hh"
 
+namespace blender {
+
 struct BMesh;
 struct BMEdge;
 struct BMElem;
@@ -49,44 +51,44 @@ extern PyTypeObject BPy_BMIter_Type;
 
 /* cast from _any_ bmesh type - they all have BMesh first */
 struct BPy_BMGeneric {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
 };
 
 /* BPy_BMVert/BPy_BMEdge/BPy_BMFace/BPy_BMLoop can cast to this */
 struct BPy_BMElem {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMElem *ele;
 };
 
 struct BPy_BMesh {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   int flag;
 };
 
 /* element types */
 struct BPy_BMVert {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMVert *v;
 };
 
 struct BPy_BMEdge {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMEdge *e;
 };
 
 struct BPy_BMFace {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMFace *f;
 };
 
 struct BPy_BMLoop {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMLoop *l;
 };
@@ -101,7 +103,7 @@ struct BPy_BMLoop {
  * - BPy_BMLoopSeq_Type
  */
 struct BPy_BMElemSeq {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
 
   /* if this is a sequence on an existing element,
@@ -118,7 +120,7 @@ struct BPy_BMElemSeq {
 };
 
 struct BPy_BMIter {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   BMIter iter;
 };
@@ -235,12 +237,12 @@ enum {
                                                  const char *error_prefix);
 
 #define BPY_BM_CHECK_OBJ(obj) \
-  if (UNLIKELY(bpy_bm_generic_valid_check((BPy_BMGeneric *)obj) == -1)) { \
+  if (bpy_bm_generic_valid_check((BPy_BMGeneric *)obj) == -1) [[unlikely]] { \
     return NULL; \
   } \
   (void)0
 #define BPY_BM_CHECK_INT(obj) \
-  if (UNLIKELY(bpy_bm_generic_valid_check((BPy_BMGeneric *)obj) == -1)) { \
+  if (bpy_bm_generic_valid_check((BPy_BMGeneric *)obj) == -1) [[unlikely]] { \
     return -1; \
   } \
   (void)0
@@ -251,8 +253,8 @@ enum {
 #define BPY_BM_CHECK_SOURCE_OBJ(bm, errmsg, ...) \
   { \
     void *_args[] = {__VA_ARGS__}; \
-    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1)) \
-    { \
+    if (bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1) \
+        [[unlikely]] { \
       return NULL; \
     } \
   } \
@@ -260,8 +262,8 @@ enum {
 #define BPY_BM_CHECK_SOURCE_INT(bm, errmsg, ...) \
   { \
     void *_args[] = {__VA_ARGS__}; \
-    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1)) \
-    { \
+    if (bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1) \
+        [[unlikely]] { \
       return -1; \
     } \
   } \
@@ -277,3 +279,5 @@ enum {
            (bpy_bmelemseq)->py_ele ? ((BPy_BMElem *)(bpy_bmelemseq)->py_ele)->ele : NULL); \
        ele; \
        BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter))
+
+}  // namespace blender

@@ -189,11 +189,12 @@ class ThicknessModifierMixIn:
         fe = sv.fedge
         nature = fe.nature
         if (nature & Nature.BORDER):
+            normal = fe.normal if fe.is_smooth else fe.normal_left
             if self.persp_camera:
                 point = -sv.point_3d.normalized()
-                dir = point.dot(fe.normal_left)
+                dir = point.dot(normal)
             else:
-                dir = fe.normal_left.z
+                dir = normal.z
             if dir < 0.0:  # the back side is visible
                 outer, inner = inner, outer
         elif (nature & Nature.SILHOUETTE):
@@ -1206,7 +1207,7 @@ def get_dashed_pattern(linestyle):
 
 
 def get_grouped_objects(group):
-    for ob in group.objects:
+    for ob in group.all_objects:
         if ob.instance_type == 'COLLECTION' and ob.instance_collection is not None:
             for dupli in get_grouped_objects(ob.instance_collection):
                 yield dupli
@@ -1228,6 +1229,9 @@ def process(layer_name, lineset_name):
     layer = scene.view_layers[layer_name]
     lineset = layer.freestyle_settings.linesets[lineset_name]
     linestyle = lineset.linestyle
+
+    if linestyle is None:
+        return
 
     # execute line set pre-processing callback functions
     for fn in callbacks_lineset_pre:

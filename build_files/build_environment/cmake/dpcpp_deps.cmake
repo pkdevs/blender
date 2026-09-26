@@ -17,7 +17,7 @@ ExternalProject_Add(external_vcintrinsics
 )
 
 # opencl headers do not have to be unpacked, dpcpp will do it
-# but it wouldn't hurt to do it anyway as an opertunity to validate
+# but it wouldn't hurt to do it anyway as an opportunity to validate
 # the hash is correct.
 ExternalProject_Add(external_openclheaders
   URL file://${PACKAGE_DIR}/${OPENCLHEADERS_FILE}
@@ -30,7 +30,7 @@ ExternalProject_Add(external_openclheaders
 )
 
 # icdloader does not have to be unpacked, dpcpp will do it
-# but it wouldn't hurt to do it anyway as an opertunity to validate
+# but it wouldn't hurt to do it anyway as an opportunity to validate
 # the hash is correct.
 ExternalProject_Add(external_icdloader
   URL file://${PACKAGE_DIR}/${ICDLOADER_FILE}
@@ -47,19 +47,6 @@ ExternalProject_Add(external_dpcpp_spirvheaders
   URL_HASH ${DPCPP_SPIRV_HEADERS_HASH_TYPE}=${DPCPP_SPIRV_HEADERS_HASH}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   PREFIX ${BUILD_DIR}/dpcpp_spirvheaders
-  CONFIGURE_COMMAND echo .
-  BUILD_COMMAND echo .
-  INSTALL_COMMAND echo .
-)
-
-ExternalProject_Add(external_unifiedruntime
-  URL file://${PACKAGE_DIR}/${UNIFIED_RUNTIME_FILE}
-  URL_HASH ${UNIFIED_RUNTIME_HASH_TYPE}=${UNIFIED_RUNTIME_HASH}
-  DOWNLOAD_DIR ${DOWNLOAD_DIR}
-  PREFIX ${BUILD_DIR}/unifiedruntime
-  PATCH_COMMAND ${PATCH_CMD} -p 1 -d
-    ${BUILD_DIR}/unifiedruntime/src/external_unifiedruntime <
-    ${PATCH_DIR}/unifiedruntime.diff
   CONFIGURE_COMMAND echo .
   BUILD_COMMAND echo .
   INSTALL_COMMAND echo .

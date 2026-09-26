@@ -29,7 +29,7 @@ if(WIN32)
 elseif(UNIX)
   set(USD_PLATFORM_FLAGS
     # Workaround USD not linking correctly with static Python library, where it would embed
-    # part of the interpret in the USD library. Allow undefined Python symbols and replace
+    # part of the interpreter in the USD library. Allow undefined Python symbols and replace
     # Python library with TBB so it doesn't complain about missing library.
     # NOTE(@ideasman42): Setting the root is needed, without this an older version of Python
     # is detected from the system. Referencing the root-directory may remove the need
@@ -151,7 +151,20 @@ ExternalProject_Add(external_usd
     ${CMAKE_COMMAND} -E remove ${BUILD_DIR}/usd/src/external_usd/pxr/imaging/hgiVulkan/vk_mem_alloc.h &&
     ${PATCH_CMD} -p 1 -d
       ${BUILD_DIR}/usd/src/external_usd <
-      ${PATCH_DIR}/usd_storm_vulkan.diff
+      ${PATCH_DIR}/usd_storm_vulkan.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd <
+      ${PATCH_DIR}/usd_vulkan_headless_3931.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd 
+     -i ${PATCH_DIR}/usd_f595276c1ac231bb0bc632697f398a681a963e3f.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd  
+     -i ${PATCH_DIR}/usd_a609a89a750f1c70f5bfd61bb418d5a09eaa6585.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd  
+     -i ${PATCH_DIR}/usd_5744a98789c934e8810058b0f21d22f344df28b0.diff
+
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd
     -Wno-dev
@@ -174,7 +187,7 @@ add_dependencies(
   external_vulkan_utility_libraries
   external_shaderc
   external_spirv_reflect
-  openvdb
+  external_openvdb
 )
 
 # Since USD 21.11 the libraries are prefixed with "usd_",

@@ -7,9 +7,17 @@
 
 #include "AS_asset_representation.hh"
 
-#include "DNA_asset_types.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 
-#include "BLI_string.h"
+#if defined(WIN32)
+#  include "BLI_string.hh"
+#endif
+
+#include "DNA_asset_types.h"
+#include "DNA_object_types.h"
+
+#include "ED_asset_mark_clear.hh"
 
 #include "../intern/utils.hh"
 
@@ -36,10 +44,39 @@ class AssetRepresentationTest : public AssetLibraryTestBase {
   {
     std::unique_ptr<AssetMetaData> dummy_metadata = std::make_unique<AssetMetaData>();
     return *library
-                .add_external_asset(relative_path, "Some asset name", 0, std::move(dummy_metadata))
+                .add_external_on_disk_asset(
+                    relative_path, "Some asset name", 0, std::move(dummy_metadata))
                 .lock();
   }
+
+  AssetRepresentation &add_dummy_id_asset(AssetLibrary &library, ID &id)
+  {
+    /* Ensure ID is marked as asset (no-op if already marked). */
+    ed::asset::mark_id(&id);
+
+    return *library.add_local_id_asset(id).lock();
+  }
 };
+
+TEST_F(AssetRepresentationTest, library_relative_identifier__id_name_change)
+{
+  Main *bmain = BKE_main_new();
+  Object *object = BKE_id_new<Object>(bmain, "Before rename");
+
+  AssetLibrary *library = get_builtin_library_from_type(ASSET_LIBRARY_LOCAL);
+
+  AssetRepresentation &asset = add_dummy_id_asset(*library, object->id);
+
+  EXPECT_EQ(asset.library_relative_identifier(), "Object" SEP_STR "Before rename");
+
+  BKE_id_rename(*bmain, object->id, "Renamed!");
+  EXPECT_EQ(asset.library_relative_identifier(), "Object" SEP_STR "Renamed!");
+
+  BKE_id_rename(*bmain, object->id, "Name/With\\Slashes/");
+  EXPECT_EQ(asset.library_relative_identifier(), "Object" SEP_STR "Name/With\\Slashes/");
+
+  BKE_main_free(bmain);
+}
 
 TEST_F(AssetRepresentationTest, weak_reference__current_file)
 {
@@ -69,6 +106,42 @@ TEST_F(AssetRepresentationTest, weak_reference__custom_library)
   }
 }
 
+/* Test if new weak references the ID name changes. */
+TEST_F(AssetRepresentationTest, weak_reference__id_name_change)
+{
+  Main *bmain = BKE_main_new();
+  Object *object = BKE_id_new<Object>(bmain, "Before rename");
+
+  AssetLibrary *library = get_builtin_library_from_type(ASSET_LIBRARY_LOCAL);
+
+  AssetRepresentation &asset = add_dummy_id_asset(*library, object->id);
+
+  {
+    AssetWeakReference weak_ref = asset.make_weak_reference();
+    EXPECT_EQ(weak_ref.asset_library_type, ASSET_LIBRARY_LOCAL);
+    EXPECT_STREQ(weak_ref.asset_library_identifier, nullptr);
+    EXPECT_STREQ(weak_ref.relative_asset_identifier, "Object" SEP_STR "Before rename");
+  }
+
+  BKE_id_rename(*bmain, object->id, "Renamed!");
+  {
+    AssetWeakReference weak_ref = asset.make_weak_reference();
+    EXPECT_EQ(weak_ref.asset_library_type, ASSET_LIBRARY_LOCAL);
+    EXPECT_STREQ(weak_ref.asset_library_identifier, nullptr);
+    EXPECT_STREQ(weak_ref.relative_asset_identifier, "Object" SEP_STR "Renamed!");
+  }
+
+  BKE_id_rename(*bmain, object->id, "Name/With\\Slashes/");
+  {
+    AssetWeakReference weak_ref = asset.make_weak_reference();
+    EXPECT_EQ(weak_ref.asset_library_type, ASSET_LIBRARY_LOCAL);
+    EXPECT_STREQ(weak_ref.asset_library_identifier, nullptr);
+    EXPECT_STREQ(weak_ref.relative_asset_identifier, "Object" SEP_STR "Name/With\\Slashes/");
+  }
+
+  BKE_main_free(bmain);
+}
+
 TEST_F(AssetRepresentationTest, weak_reference__compare)
 {
   {
@@ -78,7 +151,8 @@ TEST_F(AssetRepresentationTest, weak_reference__compare)
 
     /* Arbitrary individual member changes to test how it affects the comparison. */
     b.asset_library_identifier = "My lib";
-    EXPECT_NE(a, b);
+    /* Asset library identifier should be ignored unless the type is #ASSET_LIBRARY_CUSTOM. */
+    EXPECT_EQ(a, b);
     a.asset_library_identifier = "My lib";
     EXPECT_EQ(a, b);
     a.asset_library_type = ASSET_LIBRARY_ESSENTIALS;
@@ -188,7 +262,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_full_path__custom_lib
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string expected_path = utils::normalize_path(asset_library_root_ + "/" + "path/") +
+  std::string expected_path = utils::resolve_path(asset_library_root_ + "/" + "path/") +
                               "to/an/asset";
   std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref);
 
@@ -205,7 +279,7 @@ TEST_F(AssetRepresentationTest,
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string expected_path = utils::normalize_path(asset_library_root_ + "\\" + "path\\") +
+  std::string expected_path = utils::resolve_path(asset_library_root_ + "\\" + "path\\") +
                               "to\\an\\asset";
   std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref);
 
@@ -221,7 +295,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_exploded_path__curren
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string expected_full_path = utils::normalize_path("path/to/an/asset", 5);
+  std::string expected_full_path = utils::resolve_path("path/to/an/asset", 5);
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
       service->resolve_asset_weak_reference_to_exploded_path(weak_ref);
 
@@ -242,8 +316,8 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_exploded_path__custom
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string expected_full_path = utils::normalize_path(asset_library_root_ +
-                                                         "/some.blend/Material/") +
+  std::string expected_full_path = utils::resolve_path(asset_library_root_ +
+                                                       "/some.blend/Material/") +
                                    "asset/name";
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
       service->resolve_asset_weak_reference_to_exploded_path(weak_ref);
@@ -268,8 +342,8 @@ TEST_F(AssetRepresentationTest,
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string expected_full_path = utils::normalize_path(asset_library_root_ +
-                                                         "\\some.blend\\Material\\") +
+  std::string expected_full_path = utils::resolve_path(asset_library_root_ +
+                                                       "\\some.blend\\Material\\") +
                                    "asset/name";
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
       service->resolve_asset_weak_reference_to_exploded_path(weak_ref);

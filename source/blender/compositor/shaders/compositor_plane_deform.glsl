@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_bicubic_sampler_lib.glsl"
+#include "infos/compositor_plane_deform_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(compositor_plane_deform)
+
+#include "gpu_shader_bicubic_sampler.bsl.hh"
 #include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()

@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "BLI_math_color.h" /* IWYU pragma: keep. Used in macros. */
+#include "BLI_math_color_c.hh" /* IWYU pragma: keep. Used in macros. */
+
+namespace blender {
 
 #define BRICONT \
   texres->tin = (texres->tin - 0.5f) * tex->contrast + tex->bright - 0.5f; \
@@ -81,3 +83,5 @@ void image_sample(struct Image *ima,
                   float dy,
                   float result[4],
                   struct ImagePool *pool);
+
+}  // namespace blender

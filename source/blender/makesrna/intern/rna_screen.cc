@@ -18,6 +18,13 @@
 
 #include "DNA_screen_types.h"
 
+#include "UI_interface_c.hh"
+
+#include "WM_api.hh"
+#include "WM_types.hh"
+
+namespace blender {
+
 const EnumPropertyItem rna_enum_region_type_items[] = {
     {RGN_TYPE_WINDOW, "WINDOW", 0, "Window", ""},
     {RGN_TYPE_HEADER, "HEADER", 0, "Header", ""},
@@ -35,24 +42,25 @@ const EnumPropertyItem rna_enum_region_type_items[] = {
     {RGN_TYPE_FOOTER, "FOOTER", 0, "Footer", ""},
     {RGN_TYPE_TOOL_HEADER, "TOOL_HEADER", 0, "Tool Header", ""},
     {RGN_TYPE_XR, "XR", 0, "XR", ""},
+    {RGN_TYPE_SCRUBBING, "SCRUBBING", 0, "Scrubbing", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static const EnumPropertyItem rna_enum_region_panel_category_items[] = {
+const EnumPropertyItem rna_enum_region_panel_category_items[] = {
     {-1, "UNSUPPORTED", 0, "Not Supported", "This region does not support panel categories"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-#include "UI_interface_c.hh"
-
-#include "WM_api.hh"
-#include "WM_types.hh"
+}  // namespace blender
 
 #ifdef RNA_RUNTIME
+
+#  include "BLI_listbase.hh"
 
 #  include "RNA_access.hh"
 
 #  include "BKE_global.hh"
+#  include "BKE_main.hh"
 #  include "BKE_screen.hh"
 #  include "BKE_workspace.hh"
 
@@ -66,20 +74,24 @@ static const EnumPropertyItem rna_enum_region_panel_category_items[] = {
 
 #  include "BLT_translation.hh"
 
+#  include "rna_screen_utils.hh"
+
 #  ifdef WITH_PYTHON
 #    include "BPY_extern.hh"
 #  endif
 
+namespace blender {
+
 static void rna_Screen_bar_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->data;
+  bScreen *screen = static_cast<bScreen *>(ptr->data);
   screen->do_draw = true;
   screen->do_refresh = true;
 }
 
 static void rna_Screen_redraw_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->data;
+  bScreen *screen = static_cast<bScreen *>(ptr->data);
 
   /* the settings for this are currently only available from a menu in the TimeLine,
    * hence refresh=SPACE_ACTION, as timeline is now in there
@@ -90,13 +102,13 @@ static void rna_Screen_redraw_update(Main * /*bmain*/, Scene * /*scene*/, Pointe
 static bool rna_Screen_is_animation_playing_get(PointerRNA * /*ptr*/)
 {
   /* can be nullptr on file load, #42619 */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = G_MAIN->wm.first();
   return wm ? (ED_screen_animation_playing(wm) != nullptr) : 0;
 }
 
 static bool rna_Screen_is_scrubbing_get(PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->data;
+  bScreen *screen = static_cast<bScreen *>(ptr->data);
   return screen->scrubbing;
 }
 
@@ -108,13 +120,13 @@ static int rna_Region_alignment_get(PointerRNA *ptr)
 
 static bool rna_Screen_fullscreen_get(PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->data;
+  bScreen *screen = static_cast<bScreen *>(ptr->data);
   return (screen->state == SCREENMAXIMIZED || screen->state == SCREENFULL);
 }
 
 static int rna_Area_type_get(PointerRNA *ptr)
 {
-  ScrArea *area = (ScrArea *)ptr->data;
+  ScrArea *area = static_cast<ScrArea *>(ptr->data);
   /* Usually 'spacetype' is used. It lags behind a bit while switching area
    * type though, then we use 'butspacetype' instead (#41435). */
   return (area->butspacetype == SPACE_EMPTY) ? area->spacetype : area->butspacetype;
@@ -129,7 +141,7 @@ static void rna_Area_type_set(PointerRNA *ptr, int value)
     return;
   }
 
-  ScrArea *area = (ScrArea *)ptr->data;
+  ScrArea *area = static_cast<ScrArea *>(ptr->data);
   /* Empty areas are locked. */
   if ((value == SPACE_EMPTY) || (area->spacetype == SPACE_EMPTY)) {
     return;
@@ -140,8 +152,8 @@ static void rna_Area_type_set(PointerRNA *ptr, int value)
 
 static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->owner_id;
-  ScrArea *area = (ScrArea *)ptr->data;
+  bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  ScrArea *area = static_cast<ScrArea *>(ptr->data);
 
   /* Running update without having called 'set', see: #64049 */
   if (area->butspacetype == SPACE_EMPTY) {
@@ -151,7 +163,7 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win;
   /* XXX this call still use context, so we trick it to work in the right context */
-  for (win = static_cast<wmWindow *>(wm->windows.first); win; win = win->next) {
+  for (win = wm->windows.first(); win; win = win->next) {
     if (screen == WM_window_get_active_screen(win)) {
       wmWindow *prevwin = CTX_wm_window(C);
       ScrArea *prevsa = CTX_wm_area(C);
@@ -161,7 +173,7 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
       CTX_wm_area_set(C, area);
       CTX_wm_region_set(C, nullptr);
 
-      ED_area_newspace(C, area, area->butspacetype, true);
+      ED_area_newspace(C, area, area->butspacetype, false);
       ED_area_tag_redraw(area);
 
       /* Unset so that rna_Area_type_get uses spacetype instead. */
@@ -172,7 +184,7 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
         DEG_tag_on_visible_update(CTX_data_main(C), false);
       }
       else if (area->spacetype == SPACE_NODE) {
-        blender::ed::space_node::snode_set_context(*C);
+        ed::space_node::snode_set_context(*C);
       }
 
       CTX_wm_window_set(C, prevwin);
@@ -195,7 +207,7 @@ static const EnumPropertyItem *rna_Area_ui_type_itemf(bContext *C,
   EnumPropertyItem *item = nullptr;
   int totitem = 0;
 
-  ScrArea *area = (ScrArea *)ptr->data;
+  ScrArea *area = static_cast<ScrArea *>(ptr->data);
   const EnumPropertyItem *item_from = rna_enum_space_type_items;
   if (area->spacetype != SPACE_EMPTY) {
     item_from += 1; /* +1 to skip SPACE_EMPTY */
@@ -208,7 +220,7 @@ static const EnumPropertyItem *rna_Area_ui_type_itemf(bContext *C,
 
     SpaceType *st = item_from->identifier[0] ? BKE_spacetype_from_id(item_from->value) : nullptr;
     int totitem_prev = totitem;
-    if (st && st->space_subtype_item_extend != nullptr) {
+    if (C && st && st->space_subtype_item_extend != nullptr) {
       st->space_subtype_item_extend(C, &item, &totitem);
       while (totitem_prev < totitem) {
         item[totitem_prev++].value |= item_from->value << 16;
@@ -229,7 +241,7 @@ static int rna_Area_ui_type_get(PointerRNA *ptr)
 {
   ScrArea *area = static_cast<ScrArea *>(ptr->data);
   /* This is for the Python API which may inspect empty areas. */
-  if (UNLIKELY(area->spacetype == SPACE_EMPTY)) {
+  if (area->spacetype == SPACE_EMPTY) [[unlikely]] {
     return SPACE_EMPTY;
   }
   const int area_type = rna_Area_type_get(ptr);
@@ -284,7 +296,6 @@ static void rna_Area_ui_type_update(bContext *C, PointerRNA *ptr)
 
 static PointerRNA rna_Region_data_get(PointerRNA *ptr)
 {
-  bScreen *screen = (bScreen *)ptr->owner_id;
   ARegion *region = static_cast<ARegion *>(ptr->data);
 
   if (region->regiondata != nullptr) {
@@ -293,19 +304,25 @@ static PointerRNA rna_Region_data_get(PointerRNA *ptr)
       SpaceType *st = BKE_spacetype_from_id(SPACE_VIEW3D);
       if (region->runtime->type == BKE_regiontype_from_id(st, region->regiontype)) {
         PointerRNA newptr = RNA_pointer_create_discrete(
-            &screen->id, &RNA_RegionView3D, region->regiondata);
+            ptr->owner_id, RNA_RegionView3D, region->regiondata);
         return newptr;
       }
     }
   }
-  return PointerRNA_NULL;
+  return {};
+}
+
+static int rna_region_has_panel_categories(const ARegion *region)
+{
+  return !region->runtime->panels_category.is_empty();
 }
 
 static int rna_Region_active_panel_category_editable_get(const PointerRNA *ptr,
                                                          const char **r_info)
 {
+
   ARegion *region = static_cast<ARegion *>(ptr->data);
-  if (BLI_listbase_is_empty(&region->runtime->panels_category)) {
+  if (!rna_region_has_panel_categories(region)) {
     if (r_info) {
       *r_info = N_("This region does not support panel categories");
     }
@@ -314,29 +331,32 @@ static int rna_Region_active_panel_category_editable_get(const PointerRNA *ptr,
   return PROP_EDITABLE;
 }
 
+int rna_region_active_panel_category_get(ARegion *region)
+{
+  const char *idname = ui::panel_category_active_get(region, true);
+  return ui::panel_category_index_find(region, idname);
+}
 static int rna_Region_active_panel_category_get(PointerRNA *ptr)
 {
   ARegion *region = static_cast<ARegion *>(ptr->data);
-  const char *idname = UI_panel_category_active_get(region, false);
-  return UI_panel_category_index_find(region, idname);
+  return rna_region_active_panel_category_get(region);
 }
 
-static void rna_Region_active_panel_category_set(PointerRNA *ptr, int value)
+void rna_region_active_panel_category_set(ARegion *region, const int value)
 {
-  BLI_assert(rna_Region_active_panel_category_editable_get(ptr, nullptr));
-
+  ui::panel_category_index_active_set(region, value);
+}
+static void rna_Region_active_panel_category_set(PointerRNA *ptr, const int value)
+{
   ARegion *region = static_cast<ARegion *>(ptr->data);
-  UI_panel_category_index_active_set(region, value);
+  BLI_assert(rna_region_has_panel_categories(region));
+
+  rna_region_active_panel_category_set(region, value);
 }
 
-static const EnumPropertyItem *rna_Region_active_panel_category_itemf(bContext * /*C*/,
-                                                                      PointerRNA *ptr,
-                                                                      PropertyRNA * /*prop*/,
-                                                                      bool *r_free)
+const EnumPropertyItem *rna_region_active_panel_category_itemf(const ARegion *region, bool *r_free)
 {
-  ARegion *region = static_cast<ARegion *>(ptr->data);
-
-  if (!rna_Region_active_panel_category_editable_get(ptr, nullptr)) {
+  if (!rna_region_has_panel_categories(region)) {
     *r_free = false;
     return rna_enum_region_panel_category_items;
   }
@@ -344,13 +364,11 @@ static const EnumPropertyItem *rna_Region_active_panel_category_itemf(bContext *
   EnumPropertyItem *items = nullptr;
   EnumPropertyItem item = {0, "", 0, "", ""};
   int totitems = 0;
-  int category_index;
-  LISTBASE_FOREACH_INDEX (
-      PanelCategoryDyn *, pc_dyn, &region->runtime->panels_category, category_index)
-  {
+
+  for (const auto [category_index, pc_dyn] : region->runtime->panels_category.enumerate()) {
     item.value = category_index;
-    item.identifier = pc_dyn->idname;
-    item.name = pc_dyn->idname;
+    item.identifier = pc_dyn.idname;
+    item.name = pc_dyn.idname;
     RNA_enum_item_add(&items, &totitems, &item);
   }
 
@@ -358,19 +376,27 @@ static const EnumPropertyItem *rna_Region_active_panel_category_itemf(bContext *
   *r_free = true;
   return items;
 }
+static const EnumPropertyItem *rna_Region_active_panel_category_itemf(bContext * /*C*/,
+                                                                      PointerRNA *ptr,
+                                                                      PropertyRNA * /*prop*/,
+                                                                      bool *r_free)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+  return rna_region_active_panel_category_itemf(region, r_free);
+}
 
 static void rna_View2D_region_to_view(View2D *v2d, float x, float y, float result[2])
 {
-  UI_view2d_region_to_view(v2d, x, y, &result[0], &result[1]);
+  ui::view2d_region_to_view(v2d, x, y, &result[0], &result[1]);
 }
 
 static void rna_View2D_view_to_region(View2D *v2d, float x, float y, bool clip, int result[2])
 {
   if (clip) {
-    UI_view2d_view_to_region_clip(v2d, x, y, &result[0], &result[1]);
+    ui::view2d_view_to_region_clip(v2d, x, y, &result[0], &result[1]);
   }
   else {
-    UI_view2d_view_to_region(v2d, x, y, &result[0], &result[1]);
+    ui::view2d_view_to_region(v2d, x, y, &result[0], &result[1]);
   }
 }
 
@@ -388,7 +414,46 @@ static void rna_Region_tag_refresh_ui(ARegion *region, ReportList *reports)
   ED_region_tag_refresh_ui(region);
 }
 
+static void rna_Region_search_filter_get(PointerRNA *ptr, char *value)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+  strcpy(value, region->runtime->search_filter.c_str());
+}
+
+static int rna_Region_search_filter_length(PointerRNA *ptr)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+  return region->runtime->search_filter.size();
+}
+
+static void rna_Region_search_filter_set(PointerRNA *ptr, const char *value)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+  region->runtime->search_filter = value ? value : "";
+}
+
+static int rna_Region_search_filter_editable(const PointerRNA *ptr, const char **r_info)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+
+  if (!BKE_region_panel_categories_search_filter_visible(region)) {
+    *r_info = N_("Only for side-panels");
+    return 0;
+  }
+  return PROP_EDITABLE;
+}
+
+static void rna_Region_search_filter_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  ARegion *region = static_cast<ARegion *>(ptr->data);
+  ED_region_search_filter_update(nullptr, region);
+}
+
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 /* Area.spaces */
 static void rna_def_area_spaces(BlenderRNA *brna, PropertyRNA *cprop)
@@ -402,7 +467,7 @@ static void rna_def_area_spaces(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_struct_ui_text(srna, "Area Spaces", "Collection of spaces");
 
   prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "spacedata.first");
+  RNA_def_property_pointer_sdna(prop, nullptr, "spacedata.first_");
   RNA_def_property_struct_type(prop, "Space");
   RNA_def_property_ui_text(prop, "Active Space", "Space currently being displayed in this area");
 }
@@ -429,6 +494,7 @@ static void rna_def_area(BlenderRNA *brna)
 
   srna = RNA_def_struct(brna, "Area", nullptr);
   RNA_def_struct_ui_text(srna, "Area", "Area in a subdivided screen, containing an editor");
+  RNA_def_struct_path_func(srna, "BKE_screen_path_to_area");
   RNA_def_struct_sdna(srna, "ScrArea");
 
   prop = RNA_def_property(srna, "spaces", PROP_COLLECTION, PROP_NONE);
@@ -668,6 +734,18 @@ static void rna_def_region(BlenderRNA *brna)
       "support this feature (NOTE: these categories are generated at runtime, so list may be "
       "empty at initialization, before any drawing took place)");
 
+  prop = RNA_def_property(srna, "search_filter", PROP_STRING, PROP_NONE);
+  /* The search filter is stored in the region's runtime as #std::string, so use the getter /
+   * setter here. */
+  RNA_def_property_string_funcs(prop,
+                                "rna_Region_search_filter_get",
+                                "rna_Region_search_filter_length",
+                                "rna_Region_search_filter_set");
+  RNA_def_property_editable_func(prop, "rna_Region_search_filter_editable");
+  RNA_def_property_ui_text(prop, "Display Filter", "Live search filtering string");
+  RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_Region_search_filter_update");
+
   rna_def_region_api(srna);
 }
 
@@ -680,7 +758,7 @@ static void rna_def_screen(BlenderRNA *brna)
   PropertyRNA *parm;
 
   srna = RNA_def_struct(brna, "Screen", "ID");
-  RNA_def_struct_sdna(srna, "Screen"); /* Actually #bScreen but for 2.5 the DNA is patched! */
+  RNA_def_struct_sdna(srna, "bScreen");
   RNA_def_struct_ui_text(
       srna, "Screen", "Screen data-block, defining the layout of areas in a window");
   RNA_def_struct_ui_icon(srna, ICON_WORKSPACE);
@@ -784,5 +862,7 @@ void RNA_def_screen(BlenderRNA *brna)
   rna_def_region(brna);
   rna_def_view2d(brna);
 }
+
+}  // namespace blender
 
 #endif

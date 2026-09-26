@@ -17,6 +17,7 @@ import bpy
 from bpy.types import (
     Context, Object, Operator, PoseBone,
     Camera, ID, ActionChannelbag,
+    Depsgraph,
 )
 from mathutils import Matrix
 
@@ -303,7 +304,7 @@ class OBJECT_OT_paste_transform(Operator):
         try:
             floats = tuple(tuple(float(item) for item in line.split()) for line in lines)
         except ValueError:
-            # Apprently not the expected format.
+            # Apparently not the expected format.
             return None
         return Matrix(floats)
 
@@ -318,7 +319,7 @@ class OBJECT_OT_paste_transform(Operator):
         try:
             floats = tuple(tuple(float(item.strip()) for item in line.strip()[1:-1].split(',')) for line in lines)
         except ValueError:
-            # Apprently not the expected format.
+            # Apparently not the expected format.
             return None
         return Matrix(floats)
 
@@ -484,11 +485,11 @@ class Transformable(metaclass=abc.ABCMeta):
         pass
 
     def set_matrix_world(self, context: Context, matrix: Matrix) -> None:
-        """Set the world matrix, without autokeying."""
+        """Set the world matrix, without auto-keying."""
         self._set_matrix_world(context, matrix)
 
     def set_matrix_world_autokey(self, context: Context, matrix: Matrix) -> None:
-        """Set the world matrix, and autokey the resulting transform."""
+        """Set the world matrix, and auto-key the resulting transform."""
         self._set_matrix_world(context, matrix)
         self._autokey_matrix_world(context)
 
@@ -643,7 +644,7 @@ class FixToCameraCommon:
             case 'POSE':
                 transformables = self._transformable_pbones(context)
             case mode:
-                self.report({'ERROR'}, 'Unsupported mode: %r' % mode)
+                self.report({'ERROR'}, "Unsupported mode: {!r}".format(mode))
                 return {'CANCELLED'}
 
         restore_frame = context.scene.frame_current
@@ -691,19 +692,26 @@ class OBJECT_OT_fix_to_camera(FixToCameraCommon, Operator):
         default=True,
     )
 
-    def _get_matrices(self, camera: Camera, transformables: list[Transformable]) -> dict[Transformable, Matrix]:
-        camera_mat_inv = camera.matrix_world.inverted()
+    def _get_camera_matrix(self, depsgraph: Depsgraph, camera_object: Object) -> Matrix:
+        camera_eval = camera_object.evaluated_get(depsgraph)
+        return camera_eval.matrix_world @ camera_object.calc_matrix_camera(depsgraph).inverted()
+
+    def _get_transformable_matrices(self, camera_matrix: Matrix,
+                                    transformables: list[Transformable]) -> dict[Transformable, Matrix]:
+        camera_mat_inv = camera_matrix.inverted()
         return {t: camera_mat_inv @ t.matrix_world() for t in transformables}
 
     def _execute(self, context: Context, transformables: list[Transformable]) -> None:
         from bpy_extras.anim_utils import AutoKeying
+        from bpy_extras.wm_utils import progress_report
+
         depsgraph = context.view_layer.depsgraph
         scene = context.scene
 
         scene.frame_set(scene.frame_start)
-        camera_eval = scene.camera.evaluated_get(depsgraph)
         last_camera_name = scene.camera.name
-        matrices = self._get_matrices(camera_eval, transformables)
+        camera_mat = self._get_camera_matrix(depsgraph, scene.camera)
+        matrices = self._get_transformable_matrices(camera_mat, transformables)
 
         if scene.use_preview_range:
             frame_start = scene.frame_preview_start
@@ -712,27 +720,38 @@ class OBJECT_OT_fix_to_camera(FixToCameraCommon, Operator):
             frame_start = scene.frame_start
             frame_end = scene.frame_end
 
-        with AutoKeying.options(
-            keytype=self.keytype,
-            use_loc=self.use_location,
-            use_rot=self.use_rotation,
-            use_scale=self.use_scale,
-            force_autokey=True,
+        with (
+            AutoKeying.options(
+                keytype=self.keytype,
+                use_loc=self.use_location,
+                use_rot=self.use_rotation,
+                use_scale=self.use_scale,
+                force_autokey=True,
+            ),
+            progress_report.ProgressReport(context.window_manager) as progress,
         ):
-            for frame in range(frame_start, frame_end + scene.frame_step, scene.frame_step):
-                scene.frame_set(frame)
+            frames_to_visit = range(frame_start, frame_end + scene.frame_step, scene.frame_step)
+            progress.enter_substeps(len(frames_to_visit))
 
-                camera_eval = scene.camera.evaluated_get(depsgraph)
-                cam_matrix_world = camera_eval.matrix_world
-                camera_mat_inv = cam_matrix_world.inverted()
+            for frame in frames_to_visit:
+                scene.frame_set(frame)
+                progress.step()
+
+                camera_mat = self._get_camera_matrix(depsgraph, scene.camera)
+                camera_mat_inv = camera_mat.inverted()
 
                 if scene.camera.name != last_camera_name:
                     # The scene camera changed, so the previous
                     # relative-to-camera matrices can no longer be used.
-                    matrices = self._get_matrices(camera_eval, transformables)
+                    matrices = self._get_transformable_matrices(camera_mat, transformables)
                     last_camera_name = scene.camera.name
 
                 for t, camera_rel_matrix in matrices.items():
+                    if isinstance(t, TransformableObject) and t.object == scene.camera:
+                        # Avoid fixing the camera to itself. We don't want to implode the universe.
+                        # This has to happen here, as each frame can have a different active camera.
+                        continue
+
                     key_info = t.key_info()
                     key_type = key_info.get(frame, "")
                     if key_type not in {self.keytype, ""}:
@@ -741,7 +760,7 @@ class OBJECT_OT_fix_to_camera(FixToCameraCommon, Operator):
                         continue
 
                     # No key, or a generated one. Overwrite it with a new transform.
-                    t.set_matrix_world_autokey(context, cam_matrix_world @ camera_rel_matrix)
+                    t.set_matrix_world_autokey(context, camera_mat @ camera_rel_matrix)
 
 
 class OBJECT_OT_delete_fix_to_camera_keys(Operator, FixToCameraCommon):
@@ -763,7 +782,7 @@ class OBJECT_OT_delete_fix_to_camera_keys(Operator, FixToCameraCommon):
             t.remove_keys_of_type(self.keytype, frame_start=frame_start, frame_end=frame_end)
 
 
-# Messagebus subscription to monitor changes & refresh panels.
+# MessageBus subscription to monitor changes & refresh panels.
 _msgbus_owner = object()
 
 

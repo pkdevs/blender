@@ -2,8 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * Shared code between host and client codebases.
+/** \file
+ * \ingroup eevee
+ *
+ * Shared code between host and client code-bases.
  */
 
 #pragma once
@@ -14,7 +16,7 @@
 namespace blender::eevee {
 #endif
 
-struct VolumesInfoData {
+struct [[host_shared]] VolumesInfoData {
   /* During object voxelization, we need to use an infinite projection matrix to avoid clipping
    * faces. But they cannot be used for recovering the view position from froxel position as they
    * are not invertible. We store the finite projection matrix and use it for this purpose. */
@@ -57,7 +59,6 @@ struct VolumesInfoData {
 
   float _pad1;
 };
-BLI_STATIC_ASSERT_ALIGN(VolumesInfoData, 16)
 
 #ifndef GPU_SHADER
 }  // namespace blender::eevee

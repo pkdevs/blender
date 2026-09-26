@@ -6,12 +6,17 @@
  * \ingroup gpu
  *
  * GPUBackend derived class contain allocators that do not need a context bound.
- * The backend is init at startup and is accessible using GPU_backend_get() */
+ * The backend is init at startup and is accessible using GPU_backend_get()
+ */
 
 #pragma once
 
 #include "BLI_color_types.hh"
 #include "BLI_string_ref.hh"
+
+#include "GHOST_IContext.hh"
+#include "GHOST_IWindow.hh"
+
 #include "GPU_vertex_buffer.hh"
 
 namespace blender::gpu {
@@ -27,9 +32,13 @@ class QueryPool;
 class Shader;
 class ShaderCompiler;
 class Texture;
+class TexturePool;
 class UniformBuf;
 class StorageBuf;
 class VertBuf;
+class TopLevelAS;
+class BottomLevelAS;
+class WorkInFlight;
 
 class GPUBackend {
  protected:
@@ -50,23 +59,26 @@ class GPUBackend {
     return compiler_;
   }
 
-  virtual void samplers_update() = 0;
   virtual void compute_dispatch(int groups_x_len, int groups_y_len, int groups_z_len) = 0;
   virtual void compute_dispatch_indirect(StorageBuf *indirect_buf) = 0;
 
-  virtual Context *context_alloc(void *ghost_window, void *ghost_context) = 0;
+  virtual Context *context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context) = 0;
 
   virtual Batch *batch_alloc() = 0;
   virtual Fence *fence_alloc() = 0;
+  virtual WorkInFlight *work_in_flight_alloc(unsigned int max_in_flight) = 0;
   virtual FrameBuffer *framebuffer_alloc(const char *name) = 0;
   virtual IndexBuf *indexbuf_alloc() = 0;
   virtual PixelBuffer *pixelbuf_alloc(size_t size) = 0;
   virtual QueryPool *querypool_alloc() = 0;
   virtual Shader *shader_alloc(const char *name) = 0;
   virtual Texture *texture_alloc(const char *name) = 0;
+  virtual TexturePool *texturepool_alloc() = 0;
   virtual UniformBuf *uniformbuf_alloc(size_t size, const char *name) = 0;
   virtual StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) = 0;
   virtual VertBuf *vertbuf_alloc() = 0;
+  virtual TopLevelAS *tlas_alloc(const char *name) = 0;
+  virtual BottomLevelAS *blas_alloc(const char *name) = 0;
   virtual void shader_cache_dir_clear_old() = 0;
 
   /* Render Frame Coordination --
@@ -77,7 +89,7 @@ class GPUBackend {
 };
 
 namespace debug {
-static blender::ColorTheme4f GPU_DEBUG_GROUP_COLOR_DEFAULT = {};
+static ColorTheme4f GPU_DEBUG_GROUP_COLOR_DEFAULT = {};
 
 static inline ColorTheme4f get_debug_group_color(StringRefNull name)
 {
@@ -111,5 +123,4 @@ static inline ColorTheme4f get_debug_group_color(StringRefNull name)
   return GPU_DEBUG_GROUP_COLOR_DEFAULT;
 }
 }  // namespace debug
-
 }  // namespace blender::gpu

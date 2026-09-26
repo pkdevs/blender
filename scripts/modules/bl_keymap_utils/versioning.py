@@ -30,6 +30,13 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
         for km_name, _km_params, km_items_data in keyconfig_data:
             if km_name == "Transform Modal Map":
                 return km_items_data
+        return None
+
+    def get_ui_keymap():
+        for km_name, _km_params, km_items_data in keyconfig_data:
+            if km_name == "User Interface":
+                return km_items_data
+        return None
 
     def remove_properties(op_prop_map):
         nonlocal keyconfig_data
@@ -249,7 +256,7 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                     toggle_path_index = -1
                     toggle_path_identifier = ""
 
-                    for prop_idx, (prop_id, prop_path) in enumerate(item_prop["properties"]):
+                    for prop_index, (prop_id, prop_path) in enumerate(item_prop["properties"]):
                         if prop_id == "data_path_primary":
                             if re_toolsetting_brush.fullmatch(prop_path):
                                 # Example:
@@ -264,7 +271,7 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                                 # 'tool_settings.unified_paint_settings.size'
                                 # results in
                                 # 'size'
-                                secondary_path_index = prop_idx
+                                secondary_path_index = prop_index
                                 secondary_path_identifier = prop_path.split(".", 2)[-1]
                         elif prop_id == "use_secondary":
                             if prop_path.startswith("tool_settings.unified_paint_settings."):
@@ -272,7 +279,7 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                                 # 'tool_settings.unified_paint_settings.use_unified_size'
                                 # results in
                                 # 'use_unified_size'
-                                toggle_path_index = prop_idx
+                                toggle_path_index = prop_index
                                 toggle_path_identifier = prop_path.split(".", 2)[-1]
 
                     if updated_path_elements and secondary_path_index != -1 and toggle_path_index != -1:
@@ -280,5 +287,123 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                             "data_path_secondary", ".".join((*updated_path_elements, secondary_path_identifier)))
                         item_prop["properties"][toggle_path_index] = (
                             "use_secondary", ".".join((*updated_path_elements, toggle_path_identifier)))
+
+    if keyconfig_version < (5, 1, 6):
+        has_view_select = False
+        has_view_scroll = False
+
+        if km_ui_items_data := get_ui_keymap():
+            for (item_op, _item_event, _item_prop) in km_ui_items_data["items"]:
+                if item_op == "ui.view_item_select":
+                    has_view_select = True
+                if item_op == "ui.view_scroll":
+                    has_view_scroll = True
+
+            if not has_view_select:
+                if not has_copy:
+                    keyconfig_data = copy.deepcopy(keyconfig_data)
+                    has_copy = True
+                    km_ui_items_data = get_ui_keymap()
+
+                select_items = [
+                    ("ui.view_item_select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+                    ("ui.view_item_select", {"type": 'LEFTMOUSE', "value": 'PRESS', "ctrl": True},
+                     {"properties": [("extend", True)]}),
+                    ("ui.view_item_select", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+                     {"properties": [("range_select", True)]}),
+                ]
+
+                km_ui_items_data["items"].extend(select_items)
+
+            if not has_view_scroll:
+                if not has_copy:
+                    keyconfig_data = copy.deepcopy(keyconfig_data)
+                    has_copy = True
+                    km_ui_items_data = get_ui_keymap()
+
+                scroll_items = [
+                    ("ui.view_scroll", {"type": 'WHEELUPMOUSE', "value": 'ANY'}, None),
+                    ("ui.view_scroll", {"type": 'WHEELDOWNMOUSE', "value": 'ANY'}, None),
+                    ("ui.view_scroll", {"type": 'TRACKPADPAN', "value": 'ANY'}, None),
+                ]
+                km_ui_items_data["items"].extend(scroll_items)
+        else:
+            print("Error versioning keymap: Missing \"User Interface\" keymap")
+
+    if keyconfig_version < (5, 1, 11):
+        rename_keymap({"Grease Pencil Paint Mode": "Grease Pencil Draw Mode"})
+
+    if keyconfig_version < (5, 2, 21):
+        if not has_copy:
+            keyconfig_data = copy.deepcopy(keyconfig_data)
+            has_copy = True
+
+        for _km_name, _km_parms, km_items_data in keyconfig_data:
+            for (item_op, _item_event, item_prop) in km_items_data["items"]:
+                if item_op in {
+                    "grease_pencil.brush_stroke",
+                    "grease_pencil.sculpt_paint",
+                    "paint.image_paint",
+                    "paint.vertex_paint",
+                    "paint.weight_paint",
+                    "sculpt.brush_stroke",
+                    "sculpt_curves.brush_stroke",
+                } and item_prop:
+                    index_to_fix = -1
+                    value_to_copy = None
+                    for prop_index, (prop_id, prop_value) in enumerate(item_prop["properties"]):
+                        if prop_id == "mode" and prop_value != 'INVERT':
+                            # The 'INVERT' value does not need to be migrated, as it is still a valid enum value
+                            index_to_fix = prop_index
+                            value_to_copy = prop_value
+                            break
+                    if index_to_fix != -1:
+                        item_prop["properties"][index_to_fix] = ("brush_toggle", value_to_copy)
+
+    if keyconfig_version < (5, 3, 16):
+        if not has_copy:
+            keyconfig_data = copy.deepcopy(keyconfig_data)
+            has_copy = True
+
+        # The `use_unified_*` toggle for radial controls was moved from the paint mode's
+        # `unified_paint_settings` to brushes.
+        #
+        # The following conversion maps from the old values of
+        # `tool_settings.<paint_mode>.unified_paint_settings.use_unified_<property_name>`
+        # to
+        # `tool_settings.<paint_mode>.brush.use_unified_<property_name>`
+        #
+        # It also updates the color override test path:
+        # `tool_settings.<paint_mode>.unified_paint_settings.use_unified_color`
+        # becomes
+        # `tool_settings.<paint_mode>.brush.use_unified_color`
+
+        re_unified_paint_settings = re.compile(r"^(tool_settings)\.([a-z_]+)\.(unified_paint_settings)\.(.*)")
+
+        for _km_name, _km_parms, km_items_data in keyconfig_data:
+            for item_op, _item_event, item_prop in km_items_data["items"]:
+
+                if item_op == "wm.radial_control":
+                    use_secondary_path_index = -1
+                    new_use_secondary_path = ""
+                    fill_color_override_test_path_index = -1
+                    new_fill_color_override_test_path = ""
+
+                    for prop_index, (prop_id, prop_path) in enumerate(item_prop["properties"]):
+                        if (prop_id == "use_secondary" and re_unified_paint_settings.fullmatch(prop_path)):
+
+                            use_secondary_path_index = prop_index
+                            new_use_secondary_path = prop_path.replace("unified_paint_settings", "brush")
+                        elif (prop_id == "fill_color_override_test_path" and re_unified_paint_settings.fullmatch(prop_path)):
+
+                            fill_color_override_test_path_index = prop_index
+                            new_fill_color_override_test_path = prop_path.replace("unified_paint_settings", "brush")
+
+                    if (use_secondary_path_index != -1 and new_use_secondary_path):
+                        item_prop["properties"][use_secondary_path_index] = (
+                            "use_secondary", new_use_secondary_path)
+                    if (fill_color_override_test_path_index != -1 and new_fill_color_override_test_path):
+                        item_prop["properties"][fill_color_override_test_path_index] = (
+                            "fill_color_override_test_path", new_fill_color_override_test_path)
 
     return keyconfig_data

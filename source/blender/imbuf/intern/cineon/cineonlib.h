@@ -6,12 +6,13 @@
  * \ingroup imbcineon
  *
  * Cineon image file format library definitions.
- * Also handles DPX files (almost)
  */
 
 #pragma once
 
 #include "logImageCore.h"
+
+namespace blender {
 
 #define CINEON_FILE_MAGIC 0x802A5FD7
 #define CINEON_UNDEFINED_U8 0xFF
@@ -109,6 +110,7 @@ struct CineonMainHeader {
 };
 
 void cineonSetVerbose(int);
-LogImageFile *cineonOpen(const uchar *byteStuff, int fromMemory, size_t bufferSize);
-LogImageFile *cineonCreate(
-    const char *filepath, int width, int height, int bitsPerSample, const char *creator);
+LogImageFile *cineonOpen(const uchar *buffer, size_t bufferSize);
+LogImageFile *cineonCreate(const char *filepath, int width, int height, const char *creator);
+
+}  // namespace blender

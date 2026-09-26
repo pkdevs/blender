@@ -31,9 +31,7 @@ C_SOURCE_HEADER = r'''/* SPDX-FileCopyrightText: 2018 Blender Authors
  * Do not hand edit this file!
  */
 
-#include "DNA_userdef_types.h"
-
-#include "BLO_userdef_default.h"
+#include "DNA_theme_types.h"
 
 /* clang-format off */
 
@@ -158,7 +156,7 @@ def theme_data(userpref_filename):
     dna_rename_defs(blend)
     u = next((c for c in blend.blocks if c.code == b'USER'), None)
     # theme_type = b.sdna_index_from_id[b'bTheme']
-    t = u.get_pointer((b'themes', b'first'))
+    t = u.get_pointer((b'themes', b'first_'))
     t.refine_type(b'bTheme')
     return blend, t
 
