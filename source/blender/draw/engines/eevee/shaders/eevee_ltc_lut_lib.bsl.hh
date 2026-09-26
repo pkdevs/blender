@@ -21,7 +21,7 @@ struct CoordParam {
 /**
  * Given UV coordintes of an isotropic LTC LUT, return BxDF parameters.
  */
-CoordParam from_isotropic_coords(const float2 coords)
+CoordParam from_isotropic_coords(const float3 coords)
 {
   const float roughness = coords.x;
   /* `sqrt(1 - cos(theta))` is very close to `theta`, this parametrization avoids computing
@@ -54,7 +54,6 @@ float3x3 unpack_isotropic_matrix(const float4 v)
 {
   return float3x3(float3(v.x, 0, v.y), float3(0, 1, 0), float3(v.z, 0, v.w));
 }
-
 }  // namespace ltc
 
 /**
@@ -169,6 +168,23 @@ struct LTCData {
         util_tx, N, V, cos_theta, roughness, UTIL_LTC_MAT_GGX_LAYER);
     /* LTC attenuation linearly disappears from roughness 0.15 to 0.375. */
     ltc_data.attenuation_factor = saturate((roughness - 0.15f) * 2.5f);
+    ltc_data.pack_to(cl);
+  }
+
+  /**
+   * Sample matrix data from the isotropic Oren-Nayar LTC LUT and store to ClosureLight packing.
+   */
+  static void pack_oren_nayar_lut(ClosureLight &cl,
+                                  const UtilityTexture &util_tx,
+                                  const float3 N,
+                                  const float3 V,
+                                  const float cos_theta,
+                                  const float roughness)
+
+  {
+    LTCData ltc_data = LTCData::sample_lut(
+        util_tx, N, V, cos_theta, roughness, UTIL_LTC_MAT_OREN_NAYAR_LAYER);
+    ltc_data.attenuation_factor = 1.0f;
     ltc_data.pack_to(cl);
   }
 

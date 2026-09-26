@@ -82,6 +82,19 @@ struct GGXBrdfClosure {
 
     return brdf;
   }
+
+  static GGXBrdfClosure from_ltc_coords(const float3 coords)
+  {
+    const ltc::CoordParam coord_param = ltc::from_isotropic_coords(coords);
+    const float roughness = square(coord_param.roughness);
+    const float cos_theta = coord_param.cos_theta;
+
+    /* Avoid numerical issues at grazing angles. */
+    const float NV = max(cos_theta, 1e-4f);
+    const float3 V = float3(sin_from_cos(NV), 0.0f, NV);
+
+    return {.closure = GGXBrdf::init(roughness), .V = V};
+  }
 };
 
 /**
@@ -164,6 +177,62 @@ struct GGXBsdfLUT {
     }
 
     return bsdf;
+  }
+};
+
+/**
+ * Generate Oren Nayar LUT.
+ *
+ * Reference:
+ *
+ * [portsmouth2024] Jamie Portsmouth, Peter Kutz and Stephen Hill.
+ *                  EON: A practical energy-preserving rough diffuse BRDF (2024)
+ *                  https://arxiv.org/pdf/2410.18026
+ *
+ * The 2D LUT is parameterized as:
+ * - `x = roughness`,
+ * - `y = cos(theta)`,
+ *
+ * and output is interpreted as:
+ * - `reflectance = color * Ess + Fms * Ems`,
+ * where `Fms = color^2 * Eavg / (1 - Eavg) / (1 - color * (1 - Eavg))` and is computed during
+ * runtime.
+ *
+ */
+
+struct OrenNayarClosure {
+  OrenNayar closure;
+  float3 V;
+
+  static OrenNayarClosure from_coords(const float3 coords)
+  {
+    const float roughness = coords.x;
+    const float NV = coords.y;
+    const float3 V = float3(sin_from_cos(NV), 0.0f, NV);
+
+    return {.closure = OrenNayar::init(roughness), .V = V};
+  }
+
+  static OrenNayarClosure from_ltc_coords(const float3 coords)
+  {
+    const ltc::CoordParam coord_param = ltc::from_isotropic_coords(coords);
+    const float roughness = coord_param.roughness;
+    const float cos_theta = coord_param.cos_theta;
+    /* Avoid numerical issues at grazing angles. */
+    const float NV = max(cos_theta, 1e-4f);
+    const float3 V = float3(sin_from_cos(NV), 0.0f, NV);
+
+    return {.closure = OrenNayar::init(roughness), .V = V};
+  }
+
+  OrenNayarData eval(const float3 rand) const
+  {
+    const float3 L = sample_cos_hemisphere(rand);
+    const float nl = max(L.z, 0.0f);
+    const float nv = max(V.z, 0.0f);
+
+    return {closure.single_scatter(L, V, nl, nv),
+            saturate(1.0f - closure.E(nv)) * saturate(1.0f - closure.E(nl))};
   }
 };
 
@@ -310,12 +379,290 @@ template<typename F> float4 integrate(const F &func)
 template float4 integrate<GGXBrdfClosure>(const GGXBrdfClosure &);
 template float4 integrate<GGXBsdfLUT>(const GGXBsdfLUT &);
 template float4 integrate<GGXBtdfGt1Closure>(const GGXBtdfGt1Closure &);
+template float4 integrate<OrenNayarClosure>(const OrenNayarClosure &);
 
 struct LUT {
   [[image(0, read_write, SFLOAT_32_32_32_32)]] image3D image;
   [[push_constant]] const int type;
   [[push_constant]] const int3 extent;
 };
+
+template<typename T> float3 average_light_dir(const T &lut)
+{
+  /* Geometric normal. */
+  constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
+
+  float3 average_dir = float3(0.0f);
+  constexpr uint sample_count = 50u * 50u;
+
+  for (uint i = 1u; i <= sample_count; i++) {
+    /* Warp sequence to a point on the unit cylinder. */
+    const float3 rand = sample_cylinder(random::hammersley_2d(i, sample_count));
+    const float3 L = lut.closure.bsdf_sample(rand, lut.V).direction;
+    if (L.z > 0.0f) {
+      average_dir += lut.closure.bsdf_eval(N, L, lut.V).weight * L;
+    }
+  }
+
+  /* Clear y component, which should be zero with isotropic BRDFs. */
+  average_dir.y = 0.0f;
+
+  return normalize(average_dir);
+}
+
+template float3 average_light_dir<GGXBrdfClosure>(const GGXBrdfClosure &);
+template float3 average_light_dir<OrenNayarClosure>(const OrenNayarClosure &);
+
+struct FitLTC {
+  LtcData ltc;
+  bool isotropic;
+
+  static FitLTC init(LtcData &ltc_, bool isotropic_)
+  {
+    return {.ltc = ltc_, .isotropic = isotropic_};
+  }
+
+  void update(const float4 params)
+  {
+    constexpr float MIN_ALPHA = 0.0001f;
+    float m11 = max(params.x, MIN_ALPHA);
+    float m22 = max(params.y, MIN_ALPHA);
+    float m13 = params.z;
+    float m23 = params.w;
+
+    if (isotropic) {
+      ltc.m11 = m11;
+      ltc.m22 = m11;
+      ltc.m13 = 0.0f;
+      ltc.m23 = 0.0f;
+    }
+    else {
+      ltc.m11 = m11;
+      ltc.m22 = m22;
+      ltc.m13 = m13;
+      ltc.m23 = m23;
+    }
+    ltc.update();
+  }
+};
+
+template<typename LUT> float error_(const FitLTC &fitter, const LUT &lut, const float3 L)
+{
+  /* Geometric normal. */
+  constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
+
+  const BsdfEval eval_closure = lut.closure.bsdf_eval(N, L, lut.V);
+  const BsdfEval eval_ltc = fitter.ltc.eval(L);
+  const float error = abs(eval_closure.throughput - eval_ltc.throughput);
+
+  /* L3 error with MIS weight. */
+  return (error * error * error) / (eval_ltc.pdf + eval_closure.pdf);
+}
+
+template float error_<GGXBrdfClosure>(const FitLTC &, const GGXBrdfClosure &, const float3);
+template float error_<OrenNayarClosure>(const FitLTC &, const OrenNayarClosure &, const float3);
+
+template<typename LUT> float compute_error(FitLTC &fitter, const float4 params, const LUT &lut)
+{
+  fitter.update(params);
+
+  float error = 0.0f;
+  constexpr int Nsample = 50;
+
+  /* Importance sample LTC. */
+  for (int j = 0; j < Nsample; ++j) {
+    for (int i = 0; i < Nsample; ++i) {
+      const float U1 = (i + 0.5f) / float(Nsample);
+      const float U2 = (j + 0.5f) / float(Nsample);
+
+      const float3 L = fitter.ltc.sample_light(U1, U2);
+      error += error_(fitter, lut, L);
+    }
+  }
+
+  constexpr uint sample_count = uint(Nsample * Nsample);
+  /* Importance sample BRDF. */
+  for (uint i = 1u; i <= sample_count; i++) {
+    const float3 rand = sample_cylinder(random::hammersley_2d(i, sample_count));
+    const float3 L = lut.closure.bsdf_sample(rand, lut.V).direction;
+    error += error_(fitter, lut, L);
+  }
+
+  return error / float(Nsample * Nsample);
+}
+
+template float compute_error<GGXBrdfClosure>(FitLTC &, const float4, const GGXBrdfClosure &);
+template float compute_error<OrenNayarClosure>(FitLTC &, const float4, const OrenNayarClosure &);
+
+// Downhill simplex solver:
+// http://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method#One_possible_variation_of_the_NM_algorithm
+// using the termination criterion from Numerical Recipes in C++ (3rd Ed.)
+template<typename Closure>
+float NelderMead(float4 &pmin,
+                 const float4 start,
+                 float delta,
+                 float tolerance,
+                 int maxIters,
+                 FitLTC objectiveFn,
+                 const Closure &closure)
+{
+  constexpr int DIM = 4;
+  // standard coefficients from Nelder-Mead
+  const float reflect = 1.0f;
+  const float expand = 2.0f;
+  const float contract = 0.5f;
+  const float shrink = 0.5f;
+
+  constexpr int NB_POINTS = DIM + 1;
+
+  float4 s[NB_POINTS];
+  float f[NB_POINTS];
+
+  // initialise simplex
+  s[0] = start;
+  for (int i = 1; i < NB_POINTS; i++) {
+    s[i] = start;
+    s[i][i - 1] += delta;
+  }
+
+  // evaluate function at each point on simplex
+  for (int i = 0; i < NB_POINTS; i++) {
+    f[i] = compute_error(objectiveFn, s[i], closure);
+  }
+
+  int lo = 0, hi, nh;
+
+  for (int j = 0; j < maxIters; j++) {
+    // find lowest, highest and next highest
+    lo = hi = nh = 0;
+    for (int i = 1; i < NB_POINTS; i++) {
+      if (f[i] < f[lo]) {
+        lo = i;
+      }
+      if (f[i] > f[hi]) {
+        nh = hi;
+        hi = i;
+      }
+      else if (f[i] > f[nh]) {
+        nh = i;
+      }
+    }
+
+    // stop if we've reached the required tolerance level
+    float a = abs(f[lo]);
+    float b = abs(f[hi]);
+    if (2.0f * abs(a - b) < (a + b) * tolerance) {
+      break;
+    }
+
+    // compute centroid (excluding the worst point)
+    float4 o = float4(0.0f);
+    for (int i = 0; i < NB_POINTS; i++) {
+      if (i == hi) {
+        continue;
+      }
+      o += s[i];
+    }
+
+    for (int i = 0; i < DIM; i++) {
+      o[i] /= DIM;
+    }
+
+    // reflection
+    float4 r;
+    for (int i = 0; i < DIM; i++) {
+      r[i] = o[i] + reflect * (o[i] - s[hi][i]);
+    }
+
+    float fr = compute_error(objectiveFn, r, closure);
+    if (fr < f[nh]) {
+      if (fr < f[lo]) {
+        // expansion
+        float4 e;
+        for (int i = 0; i < DIM; i++) {
+          e[i] = o[i] + expand * (o[i] - s[hi][i]);
+        }
+
+        float fe = compute_error(objectiveFn, e, closure);
+        if (fe < fr) {
+          s[hi] = e;
+          f[hi] = fe;
+          continue;
+        }
+      }
+
+      s[hi] = r;
+      f[hi] = fr;
+      continue;
+    }
+
+    // contraction
+    float4 c;
+    for (int i = 0; i < DIM; i++) {
+      c[i] = o[i] - contract * (o[i] - s[hi][i]);
+    }
+
+    float fc = compute_error(objectiveFn, c, closure);
+    if (fc < f[hi]) {
+      s[hi] = c;
+      f[hi] = fc;
+      continue;
+    }
+
+    // reduction
+    for (int k = 0; k < NB_POINTS; k++) {
+      if (k == lo) {
+        continue;
+      }
+      for (int i = 0; i < DIM; i++) {
+        s[k][i] = s[lo][i] + shrink * (s[k][i] - s[lo][i]);
+      }
+      f[k] = compute_error(objectiveFn, s[k], closure);
+    }
+  }
+
+  // return best point and its value
+  pmin = s[lo];
+  return f[lo];
+}
+template float NelderMead<GGXBrdfClosure>(
+    float4 &, const float4, float, float, int, FitLTC, const GGXBrdfClosure &);
+template float NelderMead<OrenNayarClosure>(
+    float4 &, const float4, float, float, int, FitLTC, const OrenNayarClosure &);
+
+template<typename C>
+void fit(LtcData &ltc, const C &closure, const bool isotropic = false, const float epsilon = 0.05f)
+{
+  float4 resultFit;
+
+  FitLTC fitter = FitLTC::init(ltc, isotropic);
+
+  /* Find best-fit LTC lobe (scale, alphax, alphay) */
+  /* float error = */ NelderMead(resultFit, ltc.pack(), epsilon, 1e-5f, 100, fitter, closure);
+
+  /* Update LTC with best fitting values */
+  fitter.update(resultFit);
+  ltc = fitter.ltc;
+}
+template void fit<GGXBrdfClosure>(LtcData &, const GGXBrdfClosure &, const bool, const float);
+template void fit<OrenNayarClosure>(LtcData &, const OrenNayarClosure &, const bool, const float);
+
+template<typename LUT> float4 fitLTC(const LUT &lut, LtcData &ltc)
+{
+  const bool isotropic = (lut.V.z == 1.0f);
+
+  const float3 L = average_light_dir(lut);
+  ltc.X = float3(L.z, 0, -L.x);
+  ltc.Y = float3(0.0f, 1.0f, 0.0f);
+  ltc.Z = L;
+  ltc.update();
+
+  fit(ltc, lut, isotropic);
+
+  return ltc.pack_inverse();
+}
+template float4 fitLTC<GGXBrdfClosure>(const GGXBrdfClosure &, LtcData &);
+template float4 fitLTC<OrenNayarClosure>(const OrenNayarClosure &, LtcData &);
 
 [[compute]] [[local_size(LUT_WORKGROUP_SIZE, LUT_WORKGROUP_SIZE)]]
 void comp_main([[global_invocation_id]] const uint3 global_id, [[resource_table]] LUT &lut)
@@ -341,6 +688,26 @@ void comp_main([[global_invocation_id]] const uint3 global_id, [[resource_table]
     case LUT_RANDOM_WALK_SSS_PROFILE:
       result = random_walk_sss_translucency(lut_normalized_coordinate);
       break;
+    case LUT_OREN_NAYAR:
+      result = integrate(OrenNayarClosure::from_coords(lut_normalized_coordinate));
+      break;
+    case LUT_OREN_NAYAR_LTC: {
+      /* Initialize with diffuse. Note this works because Oren Nayar is diffuse. For GGX we need
+       * better initial guess. */
+      LtcData init;
+      init.m13 = init.m23 = 0.0f;
+      init.m11 = init.m22 = 1.0f;
+      result = fitLTC(OrenNayarClosure::from_ltc_coords(lut_normalized_coordinate), init);
+      break;
+    }
+    case LUT_GGX_BRDF_LTC: {
+      /* NOTE: this part is not tested due to bad initialization. */
+      LtcData init;
+      init.m13 = init.m23 = 0.0f;
+      init.m11 = init.m22 = 1.0f;
+      result = fitLTC(GGXBrdfClosure::from_ltc_coords(lut_normalized_coordinate), init);
+      break;
+    }
   }
 
   imageStore(lut.image, int3(global_id), result);

@@ -10,6 +10,7 @@
 #pragma once
 
 #include "eevee_defines.hh"
+#include "eevee_ltc_lut_lib.bsl.hh"
 #include "eevee_utility_tx.bsl.hh"
 #include "gpu_shader_compat.hh"
 #include "gpu_shader_math_base.bsl.hh"
@@ -105,6 +106,41 @@ struct GGXBsdfData {
 };
 
 /**
+ * Output from the 2D Oren Nayar LUT.
+ *
+ * The result is interpreted as:
+ * - `reflectance = color * Ess + Fms * Ems`.
+ */
+struct OrenNayarData {
+  float Ess;
+  float Ems;
+
+  float4 pack() const
+  {
+    return float4(Ess, Ems, 0.0f, 0.0f);
+  }
+
+  static OrenNayarData unpack(const float4 data)
+  {
+    return {.Ess = data.x, .Ems = data.y};
+  }
+
+  static float3 lut_coords_get(const float cos_theta, const float roughness)
+  {
+    return saturate(float3(roughness, cos_theta, 0.0f));
+  }
+
+  static OrenNayarData sample_utility_tx(const UtilityTexture &util_tx,
+                                         const float cos_theta,
+                                         const float roughness)
+  {
+    const float3 coords = lut_coords_get(cos_theta, roughness);
+    const float4 data = util_tx.sample_lut(coords.xy, UTIL_OREN_NAYAR_LAYER);
+    return unpack(data);
+  }
+};
+
+/**
  * Output from the 3D GGX BTDF LUT, for IOR > 1.
  *
  * The result is interpreted as:
@@ -139,4 +175,58 @@ struct GGXBtdfGt1Data {
   }
 };
 
+struct LtcData {
+  float m11, m22, m13, m23;
+
+  float3 X, Y, Z;
+  float3x3 M;
+  float3x3 invM;
+  float detM;
+
+  float4 pack() const
+  {
+    return float4(m11, m22, m13, m23);
+  }
+
+  static LtcData unpack(const float4 data)
+  {
+    return {.m11 = data.x, .m22 = data.y, .m13 = data.y, .m23 = data.z};
+  }
+
+  float4 pack_inverse() const
+  {
+    return ltc::pack_isotropic_matrix(invM);
+  }
+
+  void update()  // compute matrix from parameters
+  {
+    M = float3x3(X, Y, Z) * float3x3(m11, 0, 0, 0, m22, 0, m13, m23, 1);
+    invM = inverse(M);
+    detM = abs(determinant(M));
+  }
+
+  BsdfEval eval(const float3 &L) const
+  {
+    const float3 Loriginal = normalize(invM * L);
+    const float3 L_ = M * Loriginal;
+
+    const float l = length(L_);
+    const float Jacobian = detM / (l * l * l);
+
+    const float D = M_1_PI * max(0.0f, Loriginal.z);
+
+    const float throughput = D / Jacobian;
+
+    return {.throughput = throughput, .pdf = throughput, .weight = 1.0f};
+  }
+
+  float3 sample_light(const float U1, const float U2) const
+  {
+    const float theta = acos(sqrtf(U1));
+    const float phi = M_TAU * U2;
+    const float3 L = normalize(M *
+                               float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)));
+    return L;
+  }
+};
 }  // namespace eevee::lut

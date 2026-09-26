@@ -296,6 +296,7 @@ void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
       switch (cl.type) {
         case CLOSURE_BSSRDF_BURLEY_ID:
         case CLOSURE_BSDF_DIFFUSE_ID:
+        case CLOSURE_BSDF_OREN_NAYAR_ID:
         case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
           albedo_front += cl.color;
           break;
@@ -432,6 +433,7 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
         }
         case CLOSURE_BSSRDF_BURLEY_ID:
         case CLOSURE_BSDF_DIFFUSE_ID:
+        case CLOSURE_BSDF_OREN_NAYAR_ID:
           albedo_front += cl.color;
           break;
         case CLOSURE_BSDF_TRANSLUCENT_ID:
