@@ -224,6 +224,10 @@ if(WITH_CYCLES_OSL)
   add_definitions(-DWITH_OSL)
 endif()
 
+if(WITH_CYCLES_OPENPBR_SPEC)
+  add_definitions(-DWITH_OPENPBR_SPEC)
+endif()
+
 if(WITH_CYCLES_DEVICE_CUDA OR WITH_CYCLES_DEVICE_OPTIX)
   add_definitions(-DWITH_CUDA)
 

@@ -2825,7 +2825,11 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
 {
-  compiler.add(this, "node_open_pbr_bsdf");
+#if defined(WITH_OPENPBR_SPEC)
+  compiler.add(this, "node_open_pbr_spec_bsdf");
+#else
+  compiler.add(this, "node_open_pbr_materialx_bsdf");
+#endif
 }
 
 bool OpenPBRBsdfNode::has_surface_transparent()

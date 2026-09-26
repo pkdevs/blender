@@ -632,6 +632,8 @@ option(WITH_CYCLES_OSL "Build Cycles with OpenShadingLanguage support" ON)
 option(WITH_CYCLES_PATH_GUIDING "Build Cycles with path guiding support" ON)
 option(WITH_CYCLES_DEBUG "Build Cycles with options useful for debugging (e.g., MIS)" OFF)
 
+option(WITH_CYCLES_OPENPBR_SPEC "Build Cycles with OpenPBR support according to the spec" ON)
+
 option(WITH_CYCLES_STANDALONE "Build Cycles standalone application" OFF)
 option(WITH_CYCLES_STANDALONE_GUI "Build Cycles standalone with GUI" OFF)
 option(WITH_CYCLES_PRECOMPUTE "Build Cycles data precomputation tool" OFF)
