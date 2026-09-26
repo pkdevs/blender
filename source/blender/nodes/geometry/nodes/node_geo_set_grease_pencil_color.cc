@@ -18,12 +18,6 @@
 
 namespace blender::nodes::node_geo_set_grease_pencil_color_cc {
 
-enum class Mode : int8_t {
-  Stroke = GEO_NODE_GREASE_PENCIL_STROKE,
-  Fill = GEO_NODE_GREASE_PENCIL_FILL,
-  Both = GEO_NODE_GREASE_PENCIL_BOTH,
-};
-
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
@@ -54,7 +48,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->custom1 = int(Mode::Stroke);
+  node->custom1 = int(GEO_NODE_GREASE_PENCIL_STROKE);
 }
 
 static void set_gp_color(GeometrySet &geometry_set,
@@ -100,7 +94,7 @@ static void set_gp_color(GeometrySet &geometry_set,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const auto mode = params.get_input<Mode>("Mode"_ustr);
+  const auto mode = params.get_input<NodeGeometryGreasePencilStrokeType>("Mode"_ustr);
 
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Grease Pencil"_ustr);
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
@@ -108,7 +102,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       "Color"_ustr);
   const Field<float> opacity_field = params.extract_input<Field<float>>("Opacity"_ustr);
 
-  if (ELEM(mode, Mode::Stroke, Mode::Both)) {
+  if (ELEM(mode, GEO_NODE_GREASE_PENCIL_STROKE, GEO_NODE_GREASE_PENCIL_BOTH)) {
     set_gp_color(geometry_set,
                  AttrDomain::Point,
                  "vertex_color",
@@ -117,7 +111,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                  color_field,
                  opacity_field);
   }
-  if (ELEM(mode, Mode::Fill, Mode::Both)) {
+  if (ELEM(mode, GEO_NODE_GREASE_PENCIL_FILL, GEO_NODE_GREASE_PENCIL_BOTH)) {
     set_gp_color(geometry_set,
                  AttrDomain::Curve,
                  "fill_color",
