@@ -152,7 +152,9 @@ class TEXT_PT_find(Panel):
         row = col.row(align=True)
         row.prop(st, "find_text", icon='VIEWZOOM', text="")
         row.operator("text.find_set_selected", text="", icon='EYEDROPPER')
-        col.operator("text.find")
+        row = col.row(align=True)
+        row.operator("text.find", text="Find Next")
+        row.operator("text.find_previous", text="Find Previous")
 
         layout.separator()
 
@@ -411,6 +413,8 @@ class TEXT_MT_edit(Menu):
         layout.separator()
 
         layout.operator("text.start_find", text="Find & Replace...")
+        layout.operator("text.find", text="Find Next")
+        layout.operator("text.find_previous", text="Find Previous")
         layout.operator("text.find_set_selected")
         layout.operator("text.jump", text="Jump To...")
 

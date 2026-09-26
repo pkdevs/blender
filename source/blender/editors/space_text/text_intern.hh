@@ -173,6 +173,7 @@ void TEXT_OT_line_number(wmOperatorType *ot);
 
 /* The term: `find` means: find indicated text. */
 void TEXT_OT_find(wmOperatorType *ot);
+void TEXT_OT_find_previous(wmOperatorType *ot);
 void TEXT_OT_find_set_selected(wmOperatorType *ot);
 void TEXT_OT_replace(wmOperatorType *ot);
 void TEXT_OT_replace_set_selected(wmOperatorType *ot);

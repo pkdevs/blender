@@ -1648,6 +1648,80 @@ bool txt_find_string(Text *text, const char *findstr, int wrap, int match_case)
   return false;
 }
 
+static const char *txt_find_prev_in_line(const char *line,
+                                         const char *findstr,
+                                         int limit_index,
+                                         bool match_case)
+{
+  const char *last_match = nullptr;
+  const char *p = line;
+  const size_t findstr_len = strlen(findstr);
+
+  if (findstr_len == 0) {
+    return nullptr;
+  }
+
+  while (*p) {
+    const char *match = match_case ? strstr(p, findstr) : BLI_strcasestr(p, findstr);
+    if (!match) {
+      break;
+    }
+    const int match_idx = int(match - line);
+    if (limit_index >= 0 && match_idx >= limit_index) {
+      break;
+    }
+    last_match = match;
+    p = match + 1;
+  }
+
+  return last_match;
+}
+
+bool txt_find_string_backwards(Text *text, const char *findstr, int wrap, int match_case)
+{
+  TextLine *tl, *startl;
+  const char *s = nullptr;
+
+  if (!text->curl || !text->sell) {
+    return false;
+  }
+
+  txt_order_cursors(text, false);
+
+  tl = startl = text->curl;
+
+  /* First line: only search matches starting before the current cursor position (curc). */
+  s = txt_find_prev_in_line(tl->line, findstr, text->curc, match_case != 0);
+
+  while (!s) {
+    tl = tl->prev;
+    if (!tl) {
+      if (wrap) {
+        tl = text->lines.last();
+      }
+      else {
+        break;
+      }
+    }
+
+    s = txt_find_prev_in_line(tl->line, findstr, -1, match_case != 0);
+
+    if (tl == startl) {
+      break;
+    }
+  }
+
+  if (s) {
+    int newl = txt_get_span(text->lines.first(), tl);
+    int newc = int(s - tl->line);
+    txt_move_to(text, newl, newc, false);
+    txt_move_to(text, newl, newc + strlen(findstr), true);
+    return true;
+  }
+
+  return false;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

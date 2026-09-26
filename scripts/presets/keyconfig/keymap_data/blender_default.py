@@ -2966,6 +2966,7 @@ def km_text_generic(params):
         ("text.start_find", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("text.jump", {"type": 'J', "value": 'PRESS', "ctrl": True}, None),
         ("text.find_set_selected", {"type": 'G', "value": 'PRESS', "ctrl": True}, None),
+        ("text.find_previous", {"type": 'G', "value": 'PRESS', "shift": True, "ctrl": True}, None),
         ("text.replace", {"type": 'H', "value": 'PRESS', "ctrl": True}, None),
     ])
 

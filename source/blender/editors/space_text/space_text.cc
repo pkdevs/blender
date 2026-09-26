@@ -251,6 +251,7 @@ static void text_operatortypes()
   WM_operatortype_append(TEXT_OT_insert);
 
   WM_operatortype_append(TEXT_OT_find);
+  WM_operatortype_append(TEXT_OT_find_previous);
   WM_operatortype_append(TEXT_OT_find_set_selected);
   WM_operatortype_append(TEXT_OT_replace);
   WM_operatortype_append(TEXT_OT_replace_set_selected);

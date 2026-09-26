@@ -3778,7 +3778,10 @@ enum {
   TEXT_REPLACE = 1,
 };
 
-static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short mode)
+static wmOperatorStatus text_find_and_replace(bContext *C,
+                                              wmOperator *op,
+                                              short mode,
+                                              bool backwards = false)
 {
   Main *bmain = CTX_data_main(C);
   SpaceText *st = CTX_wm_space_text(C);
@@ -3824,19 +3827,37 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
     tmp = nullptr;
   }
 
-  /* Find next. */
-  if (txt_find_string(text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE)) {
+  /* Find next/previous. */
+  const bool found_match =
+      backwards ? txt_find_string_backwards(
+                      text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE) :
+                  txt_find_string(text, st->findstr, flags & ST_FIND_WRAP, flags & ST_MATCH_CASE);
+
+  if (found_match) {
     space_text_update_cursor_moved(C);
     WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, text);
   }
   else if (flags & ST_FIND_ALL) {
-    if (text->id.next) {
-      text = st->text = static_cast<Text *>(text->id.next);
+    if (backwards) {
+      if (text->id.prev) {
+        text = st->text = static_cast<Text *>(text->id.prev);
+      }
+      else {
+        text = st->text = bmain->texts.last();
+      }
+      const int last_line_idx = txt_get_span(text->lines.first(), text->lines.last());
+      txt_move_toline(text, last_line_idx, false);
+      txt_move_eol(text, false);
     }
     else {
-      text = st->text = bmain->texts.first();
+      if (text->id.next) {
+        text = st->text = static_cast<Text *>(text->id.next);
+      }
+      else {
+        text = st->text = bmain->texts.first();
+      }
+      txt_move_toline(text, 0, false);
     }
-    txt_move_toline(text, 0, false);
     space_text_update_cursor_moved(C);
     WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, text);
   }
@@ -3851,7 +3872,8 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
 
 static wmOperatorStatus text_find_exec(bContext *C, wmOperator *op)
 {
-  return text_find_and_replace(C, op, TEXT_FIND);
+  const bool reverse = RNA_boolean_get(op->ptr, "reverse");
+  return text_find_and_replace(C, op, TEXT_FIND, reverse);
 }
 
 void TEXT_OT_find(wmOperatorType *ot)
@@ -3863,6 +3885,26 @@ void TEXT_OT_find(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = text_find_exec;
+  ot->poll = text_space_edit_poll;
+
+  /* Properties. */
+  RNA_def_boolean(ot->srna, "reverse", false, "Reverse", "Search backwards");
+}
+
+static wmOperatorStatus text_find_prev_exec(bContext *C, wmOperator *op)
+{
+  return text_find_and_replace(C, op, TEXT_FIND, true);
+}
+
+void TEXT_OT_find_previous(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Find Previous";
+  ot->idname = "TEXT_OT_find_previous";
+  ot->description = "Find previous occurrence of specified text";
+
+  /* API callbacks. */
+  ot->exec = text_find_prev_exec;
   ot->poll = text_space_edit_poll;
 }
 
