@@ -12,15 +12,14 @@
 #include <climits>
 #include <cmath>
 #include <cstdio>
-#include <mutex>
 #include <sys/types.h>
 
+#include "BLI_build_config.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 #include "BLI_utildefines.hh"
-#include "BLI_vector.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -48,7 +47,6 @@ extern "C" {
 #  include <libavformat/avformat.h>
 #  include <libavutil/hwcontext.h>
 #  include <libavutil/imgutils.h>
-#  include <libavutil/pixdesc.h>
 #  include <libavutil/rational.h>
 #  include <libswscale/swscale.h>
 
@@ -377,79 +375,84 @@ static AVFormatContext *init_format_context_vpx_workarounds(const char *filepath
   return format_ctx;
 }
 
-namespace {
-void ffmpeg_release_shared_hw_device_ctx(AVBufferRef **ctx)
+/* Device types are listed in order of priority. */
+#  if OS_MAC
+static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_VIDEOTOOLBOX};
+#  elif OS_WINDOWS
+static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_D3D11VA,
+                                                            AV_HWDEVICE_TYPE_CUDA};
+#  else
+static constexpr AVHWDeviceType ffmpeg_hw_device_types[] = {AV_HWDEVICE_TYPE_CUDA};
+#  endif
+
+static bool ffmpeg_hw_codec_supports_device(const AVCodec *codec, const AVHWDeviceType device_type)
 {
-  if (ctx && *ctx) {
-    av_buffer_unref(ctx);
-    *ctx = nullptr;
+  for (int i = 0; const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i); i++) {
+    if ((config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) &&
+        config->device_type == device_type)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void ffmpeg_hw_setup_decode(const MovieReader *anim,
+                                   AVCodecContext *codec_ctx,
+                                   const AVCodec *codec)
+{
+  if ((U.gpu_flag & USER_GPU_FLAG_VIDEO_DECODING) == 0 ||
+      flag_is_set(anim->ib_flags, ImBufFlags::Deinterlace))
+  {
+    return;
+  }
+  for (const AVHWDeviceType device_type : ffmpeg_hw_device_types) {
+    if (!ffmpeg_hw_codec_supports_device(codec, device_type)) {
+      continue;
+    }
+    if (const int err = av_hwdevice_ctx_create(
+            &codec_ctx->hw_device_ctx, device_type, nullptr, nullptr, 0);
+        err < 0)
+    {
+      char error_str[AV_ERROR_MAX_STRING_SIZE];
+      av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, err);
+      CLOG_INFO(&LOG,
+                "ffmpeg: couldn't create %s decoding device: %s",
+                av_hwdevice_get_type_name(device_type),
+                error_str);
+      continue;
+    }
+    return;
   }
 }
-}  // namespace
 
-static enum AVPixelFormat ffmpeg_get_hw_format(AVCodecContext *ctx,
-                                               const enum AVPixelFormat *pix_fmts)
+static AVPixelFormat ffmpeg_codec_pix_fmt_get(const AVCodecContext *codec_ctx)
 {
-  MovieReader *anim = static_cast<MovieReader *>(ctx->opaque);
-  if (!anim || !ctx->hw_device_ctx) {
-    return pix_fmts[0];
+  /* If using hwaccel, #pix_fmt does not have the nominal codec format and only refers to the
+   * hardware frame format. However, we can't just always choose #sw_pix_fmt, as it's not set until
+   * the first frame is decoded. */
+  const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(codec_ctx->pix_fmt);
+  return (desc->flags & AV_PIX_FMT_FLAG_HWACCEL) ? codec_ctx->sw_pix_fmt : codec_ctx->pix_fmt;
+}
+
+static void ffmpeg_free_decoder(MovieReader *anim)
+{
+  avcodec_free_context(&anim->pCodecCtx);
+  avformat_close_input(&anim->pFormatCtx);
+  av_packet_free(&anim->cur_packet);
+
+  av_frame_free(&anim->pFrame);
+  av_frame_free(&anim->pFrameSW);
+  av_frame_free(&anim->pFrame_backup);
+  av_frame_free(&anim->pFrameRGB);
+  if (anim->pFrameDeinterlaced->data[0] != nullptr) {
+    MEM_delete(anim->pFrameDeinterlaced->data[0]);
   }
-
-  AVHWDeviceContext *hwctx = reinterpret_cast<AVHWDeviceContext *>(ctx->hw_device_ctx->data);
-  const enum AVHWDeviceType dev_type = hwctx ? hwctx->type : AV_HWDEVICE_TYPE_NONE;
-
-  const enum AVPixelFormat target_pix_fmt = [&]() {
-    switch (dev_type) {
-      case AV_HWDEVICE_TYPE_D3D11VA:
-        return AV_PIX_FMT_D3D11;
-      case AV_HWDEVICE_TYPE_CUDA:
-        return AV_PIX_FMT_CUDA;
-      case AV_HWDEVICE_TYPE_VAAPI:
-        return AV_PIX_FMT_VAAPI;
-      case AV_HWDEVICE_TYPE_VIDEOTOOLBOX:
-        return AV_PIX_FMT_VIDEOTOOLBOX;
-      default:
-        return AV_PIX_FMT_NONE;
-    }
-  }();
-
-  for (const enum AVPixelFormat *p = pix_fmts; *p != -1; p++) {
-    if (*p == target_pix_fmt) {
-      anim->hw_pix_fmt = *p;
-      CLOG_INFO(&LOG, "Selected hardware pixel format: %s", av_get_pix_fmt_name(*p));
-      return *p;
-    }
-  }
-
-  CLOG_INFO(&LOG, "Hardware pixel format unavailable, falling back to software decoding");
-  anim->hw_pix_fmt = -1;
-
-  if (anim->img_convert_ctx) {
+  av_frame_free(&anim->pFrameDeinterlaced);
+  if (anim->img_convert_ctx != nullptr) {
     ffmpeg_sws_release_context(anim->img_convert_ctx);
     anim->img_convert_ctx = nullptr;
-    const AVPixelFormat dst_format = anim->is_float ? AV_PIX_FMT_GBRAPF32LE : AV_PIX_FMT_RGBA;
-    anim->img_convert_ctx = ffmpeg_sws_get_context(
-        anim->x,
-        anim->y,
-        pix_fmts[0],
-        anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG,
-        anim->pCodecCtx->colorspace,
-        anim->x,
-        anim->y,
-        dst_format,
-        false,
-        -1,
-        SWS_POINT | SWS_FULL_CHR_H_INT | SWS_ACCURATE_RND);
   }
-
-  for (const enum AVPixelFormat *p = pix_fmts; *p != -1; p++) {
-    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(*p);
-    if (desc && !(desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
-      return *p;
-    }
-  }
-
-  return AV_PIX_FMT_NONE;
 }
 
 static int startffmpeg(MovieReader *anim)
@@ -486,54 +489,15 @@ static int startffmpeg(MovieReader *anim)
     pCodecCtx->thread_type = FF_THREAD_SLICE;
   }
 
-  pCodecCtx->opaque = anim;
-  anim->hw_pix_fmt = -1;
-
-  if (U.gpu_flag & USER_GPU_FLAG_VIDEO_DECODING) {
-    blender::Vector<enum AVHWDeviceType> candidate_types;
-
-#  if defined(_WIN32)
-    candidate_types.append_as(AV_HWDEVICE_TYPE_D3D11VA);
-    candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
-#  elif defined(__APPLE__)
-    candidate_types.append_as(AV_HWDEVICE_TYPE_VIDEOTOOLBOX);
-#  elif defined(__linux__)
-    candidate_types.append_as(AV_HWDEVICE_TYPE_CUDA);
-#  endif
-
-    for (const enum AVHWDeviceType target_device : candidate_types) {
-      bool codec_supports_hw = false;
-      for (int i = 0;; i++) {
-        const AVCodecHWConfig *config = avcodec_get_hw_config(pCodec, i);
-        if (!config) {
-          break;
-        }
-        if ((config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) &&
-            config->device_type == target_device)
-        {
-          codec_supports_hw = true;
-          break;
-        }
-      }
-
-      if (codec_supports_hw) {
-        if (av_hwdevice_ctx_create(&anim->hw_device_ctx, target_device, nullptr, nullptr, 0) == 0)
-        {
-          pCodecCtx->hw_device_ctx = av_buffer_ref(anim->hw_device_ctx);
-          pCodecCtx->get_format = ffmpeg_get_hw_format;
-          pCodecCtx->thread_count = 1;
-          pCodecCtx->thread_type = 0;
-          break;
-        }
-      }
-    }
-  }
+  ffmpeg_hw_setup_decode(anim, pCodecCtx, pCodec);
 
   if (avcodec_open2(pCodecCtx, pCodec, nullptr) < 0) {
-    if (anim->hw_device_ctx) {
-      av_buffer_unref(&anim->hw_device_ctx);
-      anim->hw_device_ctx = nullptr;
-    }
+    avcodec_free_context(&pCodecCtx);
+    avformat_close_input(&pFormatCtx);
+    return -1;
+  }
+  if (pCodecCtx->pix_fmt == AV_PIX_FMT_NONE) {
+    avcodec_free_context(&pCodecCtx);
     avformat_close_input(&pFormatCtx);
     return -1;
   }
@@ -573,10 +537,7 @@ static int startffmpeg(MovieReader *anim)
   anim->video_rotation = ffmpeg_get_video_rotation(video_stream);
 
   /* Decode >8bit videos into floating point image. */
-  const int bit_depth = std::max({video_stream->codecpar->bits_per_raw_sample,
-                                  calc_pix_fmt_max_component_bits(static_cast<AVPixelFormat>(
-                                      video_stream->codecpar->format))});
-  anim->is_float = bit_depth > 8;
+  anim->is_float = calc_pix_fmt_max_component_bits(ffmpeg_codec_pix_fmt_get(pCodecCtx)) > 8;
 
   anim->pFormatCtx = pFormatCtx;
   anim->pCodecCtx = pCodecCtx;
@@ -603,42 +564,10 @@ static int startffmpeg(MovieReader *anim)
   anim->pFrameRGB->width = anim->x;
   anim->pFrameRGB->height = anim->y;
 
-  if (anim->pFrame == nullptr || anim->pFrameSW == nullptr || anim->pFrame_backup == nullptr ||
-      anim->pFrameRGB == nullptr)
-  {
-    CLOG_ERROR(&LOG, "Could not allocate video frame structures.");
-    avcodec_free_context(&anim->pCodecCtx);
-    avformat_close_input(&pFormatCtx);
-    av_packet_free(&anim->cur_packet);
-    av_frame_free(&anim->pFrame);
-    av_frame_free(&anim->pFrameSW);
-    av_frame_free(&anim->pFrame_backup);
-    av_frame_free(&anim->pFrameRGB);
-    av_frame_free(&anim->pFrameDeinterlaced);
-    if (anim->hw_device_ctx) {
-      av_buffer_unref(&anim->hw_device_ctx);
-      anim->hw_device_ctx = nullptr;
-    }
-    anim->pCodecCtx = nullptr;
-    return -1;
-  }
-
   const size_t align = ffmpeg_get_buffer_alignment();
   if (av_frame_get_buffer(anim->pFrameRGB, align) < 0) {
     CLOG_ERROR(&LOG, "Could not allocate frame data.");
-    avcodec_free_context(&anim->pCodecCtx);
-    avformat_close_input(&anim->pFormatCtx);
-    av_packet_free(&anim->cur_packet);
-    av_frame_free(&anim->pFrameRGB);
-    av_frame_free(&anim->pFrameDeinterlaced);
-    av_frame_free(&anim->pFrame);
-    av_frame_free(&anim->pFrameSW);
-    if (anim->hw_device_ctx) {
-      av_buffer_unref(&anim->hw_device_ctx);
-      anim->hw_device_ctx = nullptr;
-    }
-    av_frame_free(&anim->pFrame_backup);
-    anim->pCodecCtx = nullptr;
+    ffmpeg_free_decoder(anim);
     return -1;
   }
 
@@ -659,10 +588,7 @@ static int startffmpeg(MovieReader *anim)
         1);
   }
 
-  AVPixelFormat sw_src_format = anim->pCodecCtx->pix_fmt;
-  if (anim->hw_device_ctx != nullptr) {
-    sw_src_format = (anim->is_float) ? AV_PIX_FMT_P010LE : AV_PIX_FMT_NV12;
-  }
+  anim->src_pix_fmt = ffmpeg_codec_pix_fmt_get(anim->pCodecCtx);
 
   /* Use full_chroma_int + accurate_rnd YUV->RGB conversion flags. Otherwise
    * the conversion is not fully accurate and introduces some banding and color
@@ -670,7 +596,7 @@ static int startffmpeg(MovieReader *anim)
    * ffmpeg ticket https://trac.ffmpeg.org/ticket/1582 */
   anim->img_convert_ctx = ffmpeg_sws_get_context(anim->x,
                                                  anim->y,
-                                                 sw_src_format,
+                                                 anim->src_pix_fmt,
                                                  anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG,
                                                  anim->pCodecCtx->colorspace,
                                                  anim->x,
@@ -684,22 +610,10 @@ static int startffmpeg(MovieReader *anim)
   if (!anim->img_convert_ctx) {
     CLOG_ERROR(&LOG,
                "ffmpeg: swscale can't transform from pixel format %s to %s (%s)",
-               av_get_pix_fmt_name(anim->pCodecCtx->pix_fmt),
+               av_get_pix_fmt_name(anim->src_pix_fmt),
                av_get_pix_fmt_name((AVPixelFormat)anim->pFrameRGB->format),
                anim->filepath);
-    avcodec_free_context(&anim->pCodecCtx);
-    avformat_close_input(&anim->pFormatCtx);
-    av_packet_free(&anim->cur_packet);
-    av_frame_free(&anim->pFrameRGB);
-    av_frame_free(&anim->pFrameDeinterlaced);
-    av_frame_free(&anim->pFrame);
-    if (anim->hw_device_ctx) {
-      av_buffer_unref(&anim->hw_device_ctx);
-      anim->hw_device_ctx = nullptr;
-    }
-    av_frame_free(&anim->pFrameSW);
-    av_frame_free(&anim->pFrame_backup);
-    anim->pCodecCtx = nullptr;
+    ffmpeg_free_decoder(anim);
     return -1;
   }
 
@@ -891,65 +805,37 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
     }
   }
 
-  if (input->format != AV_PIX_FMT_NONE) {
-    anim->is_float = calc_pix_fmt_max_component_bits(static_cast<AVPixelFormat>(input->format)) >
-                     8;
-    const AVPixelFormat dst_format = anim->is_float ? AV_PIX_FMT_GBRAPF32LE : AV_PIX_FMT_RGBA;
-
-    if (anim->pFrameRGB->format != dst_format) {
-      av_frame_unref(anim->pFrameRGB);
-      anim->pFrameRGB->format = dst_format;
-      anim->pFrameRGB->width = anim->x;
-      anim->pFrameRGB->height = anim->y;
-      if (av_frame_get_buffer(anim->pFrameRGB, ffmpeg_get_buffer_alignment()) < 0) {
-        CLOG_ERROR(&LOG, "Could not allocate converted frame buffer.");
-        return;
-      }
-    }
-
-    if (anim->img_convert_ctx == nullptr || anim->src_pix_fmt != input->format ||
-        anim->dst_pix_fmt != dst_format)
-    {
-      if (anim->img_convert_ctx) {
-        ffmpeg_sws_release_context(anim->img_convert_ctx);
-        anim->img_convert_ctx = nullptr;
-      }
-      anim->src_pix_fmt = input->format;
-      anim->dst_pix_fmt = dst_format;
-
-      const AVColorSpace colorspace = (input->colorspace != AVCOL_SPC_UNSPECIFIED) ?
-                                          input->colorspace :
-                                          anim->pCodecCtx->colorspace;
-      const bool is_full_range = (input->color_range != AVCOL_RANGE_UNSPECIFIED) ?
-                                     (input->color_range == AVCOL_RANGE_JPEG) :
-                                     (anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG);
-
-      const int src_width = (input->width > 0) ? input->width : anim->x;
-      const int src_height = (input->height > 0) ? input->height : anim->y;
-
-      anim->img_convert_ctx = ffmpeg_sws_get_context(src_width,
-                                                     src_height,
-                                                     static_cast<AVPixelFormat>(input->format),
-                                                     is_full_range,
-                                                     colorspace,
-                                                     anim->x,
-                                                     anim->y,
-                                                     dst_format,
-                                                     false,
-                                                     -1,
-                                                     SWS_POINT | SWS_FULL_CHR_H_INT |
-                                                         SWS_ACCURATE_RND);
-    }
+  /* Hardware-decoded frames from the GPU might be in a different format than the video's original
+   * format, e.g. we might get NV12 from a YUV420P video. Even with software decoding, the format
+   * can change mid-stream, e.g. 8-bit to 10-bit, so try to resync the swscale context. */
+  if (input->format != anim->src_pix_fmt && anim->img_convert_ctx != nullptr) {
+    ffmpeg_sws_release_context(anim->img_convert_ctx);
+    anim->src_pix_fmt = AVPixelFormat(input->format);
+    anim->img_convert_ctx = ffmpeg_sws_get_context(
+        anim->x,
+        anim->y,
+        anim->src_pix_fmt,
+        anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG,
+        anim->pCodecCtx->colorspace,
+        anim->x,
+        anim->y,
+        anim->pFrameRGB->format,
+        false,
+        -1,
+        SWS_POINT | SWS_FULL_CHR_H_INT | SWS_ACCURATE_RND);
   }
 
   if (anim->img_convert_ctx == nullptr) {
-    CLOG_ERROR(&LOG, "Could not create swscale conversion context.");
+    CLOG_ERROR(&LOG,
+               "ffmpeg: swscale can't transform from pixel format %s to %s (%s)",
+               av_get_pix_fmt_name(anim->src_pix_fmt),
+               av_get_pix_fmt_name(AVPixelFormat(anim->pFrameRGB->format)),
+               anim->filepath);
     return;
   }
 
   bool already_rotated = false;
   if (anim->is_float) {
-    BLI_assert(ibuf->float_buffer.data != nullptr);
     /* Float images are converted into planar GBRA layout by swscale (since
      * it does not support direct YUV->RGBA float interleaved conversion).
      * Do vertical flip and interleave into RGBA manually. */
@@ -960,7 +846,6 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
     already_rotated = true;
   }
   else {
-    BLI_assert(ibuf->byte_buffer.data != nullptr);
     /* If final destination image layout matches that of decoded RGB frame (including
      * any line padding done by ffmpeg for SIMD alignment), we can directly
      * decode into that, doing the vertical flip in the same step. Otherwise have
@@ -1110,7 +995,6 @@ static int ffmpeg_decode_video_frame(MovieReader *anim)
 {
   av_log(anim->pFormatCtx, AV_LOG_DEBUG, "  DECODE VIDEO FRAME\n");
 
-  av_frame_unref(anim->pFrame);
   /* Sometimes, decoder returns more than one frame per sent packet. Check if frames are available.
    * This frames must be read, otherwise decoding will fail. See #91405. */
   anim->pFrame_complete = avcodec_receive_frame(anim->pCodecCtx, anim->pFrame) == 0;
@@ -1140,8 +1024,6 @@ static int ffmpeg_decode_video_frame(MovieReader *anim)
            (anim->cur_packet->flags & AV_PKT_FLAG_KEY) ? " KEY" : "");
 
     avcodec_send_packet(anim->pCodecCtx, anim->cur_packet);
-
-    av_frame_unref(anim->pFrame);
     anim->pFrame_complete = avcodec_receive_frame(anim->pCodecCtx, anim->pFrame) == 0;
 
     if (anim->pFrame_complete) {
@@ -1155,8 +1037,6 @@ static int ffmpeg_decode_video_frame(MovieReader *anim)
   if (rval == AVERROR_EOF) {
     /* Flush any remaining frames out of the decoder. */
     avcodec_send_packet(anim->pCodecCtx, nullptr);
-
-    av_frame_unref(anim->pFrame);
     anim->pFrame_complete = avcodec_receive_frame(anim->pCodecCtx, anim->pFrame) == 0;
 
     if (anim->pFrame_complete) {
@@ -1468,43 +1348,8 @@ static ImBuf *ffmpeg_fetchibuf(MovieReader *anim, int position)
   anim->x = anim->pCodecCtx->width;
   anim->y = anim->pCodecCtx->height;
 
-  AVFrame *final_frame = ffmpeg_frame_by_pts_get(anim, pts_to_search);
-  if (final_frame == nullptr) {
-    /* No valid frame was decoded for requested PTS, fall back on most recent decoded frame, even
-     * if it is incorrect. */
-    final_frame = ffmpeg_double_buffer_frame_fallback_get(anim);
-  }
-
-  /* If the frame is a GPU surface, transfer only this frame to system RAM */
-  if (final_frame != nullptr) {
-    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(
-        static_cast<AVPixelFormat>(final_frame->format));
-    if ((final_frame->hw_frames_ctx != nullptr) ||
-        (desc && (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)))
-    {
-      av_frame_unref(anim->pFrameSW);
-      const int ret = av_hwframe_transfer_data(anim->pFrameSW, final_frame, 0);
-      if (ret == 0) {
-        av_frame_copy_props(anim->pFrameSW, final_frame);
-        anim->pFrameSW->width = final_frame->width;
-        anim->pFrameSW->height = final_frame->height;
-        av_buffer_unref(&anim->pFrameSW->hw_frames_ctx);
-        final_frame = anim->pFrameSW;
-      }
-      else {
-        CLOG_WARN(
-            &LOG, "Hardware frame transfer failed, setting frame to nullptr (error %d)", ret);
-        final_frame = nullptr;
-      }
-    }
-
-    if (final_frame != nullptr && final_frame->format != AV_PIX_FMT_NONE) {
-      anim->is_float = calc_pix_fmt_max_component_bits(
-                           static_cast<AVPixelFormat>(final_frame->format)) > 8;
-    }
-  }
-
-  const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(anim->pCodecCtx->pix_fmt);
+  const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(
+      ffmpeg_codec_pix_fmt_get(anim->pCodecCtx));
 
   ImColorMode color_mode = ImColorMode::RGBA;
   if ((pix_fmt_descriptor->flags & AV_PIX_FMT_FLAG_ALPHA) == 0) {
@@ -1524,6 +1369,29 @@ static ImBuf *ffmpeg_fetchibuf(MovieReader *anim, int position)
   }
   else {
     cur_frame_final->assign_byte_data(buffer_data);
+  }
+
+  AVFrame *final_frame = ffmpeg_frame_by_pts_get(anim, pts_to_search);
+  if (final_frame == nullptr) {
+    /* No valid frame was decoded for requested PTS, fall back on most recent decoded frame, even
+     * if it is incorrect. */
+    final_frame = ffmpeg_double_buffer_frame_fallback_get(anim);
+  }
+
+  /* If the final frame is a GPU surface, transfer only this frame to system RAM */
+  if (final_frame != nullptr && final_frame->hw_frames_ctx != nullptr) {
+    av_frame_unref(anim->pFrameSW);
+    const int ret = av_hwframe_transfer_data(anim->pFrameSW, final_frame, 0);
+    if (ret < 0) {
+      char error_str[AV_ERROR_MAX_STRING_SIZE];
+      av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
+      CLOG_ERROR(&LOG, "ffmpeg: couldn't transfer frame from the decoding device: %s", error_str);
+      final_frame = nullptr;
+    }
+    else {
+      av_frame_copy_props(anim->pFrameSW, final_frame);
+      final_frame = anim->pFrameSW;
+    }
   }
 
   /* Even with the fallback from above it is possible that the current decode frame is nullptr. In
@@ -1572,26 +1440,7 @@ static void free_anim_ffmpeg(MovieReader *anim)
   }
 
   if (anim->pCodecCtx) {
-    av_frame_free(&anim->pFrame);
-    av_frame_free(&anim->pFrameSW);
-    av_frame_free(&anim->pFrame_backup);
-    av_frame_free(&anim->pFrameRGB);
-    if (anim->pFrameDeinterlaced && anim->pFrameDeinterlaced->data[0] != nullptr) {
-      MEM_delete(anim->pFrameDeinterlaced->data[0]);
-    }
-    av_frame_free(&anim->pFrameDeinterlaced);
-
-    if (anim->hw_device_ctx) {
-      av_buffer_unref(&anim->hw_device_ctx);
-      anim->hw_device_ctx = nullptr;
-    }
-
-    avcodec_free_context(&anim->pCodecCtx);
-    avformat_close_input(&anim->pFormatCtx);
-    av_packet_free(&anim->cur_packet);
-
-    ffmpeg_sws_release_context(anim->img_convert_ctx);
-    anim->img_convert_ctx = nullptr;
+    ffmpeg_free_decoder(anim);
   }
   anim->duration_in_frames = 0;
 }

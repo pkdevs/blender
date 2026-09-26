@@ -19,11 +19,11 @@ struct AVCodec;
 struct AVFrame;
 struct AVPacket;
 struct SwsContext;
-struct AVBufferRef;
 
 #ifdef WITH_FFMPEG
 
 extern "C" {
+#  include <libavutil/pixfmt.h>
 #  include <libavutil/rational.h>
 }
 
@@ -63,14 +63,12 @@ struct MovieReader {
   int videoStream = 0;
 
   AVFrame *pFrame = nullptr;
-  AVBufferRef *hw_device_ctx = nullptr;
-  int hw_pix_fmt = -1;
-  AVFrame *pFrameSW = nullptr;
-  int src_pix_fmt = -1;
-  int dst_pix_fmt = -1;
   bool pFrame_complete = false;
   AVFrame *pFrame_backup = nullptr;
   bool pFrame_backup_complete = false;
+
+  AVFrame *pFrameSW = nullptr;
+  AVPixelFormat src_pix_fmt = AV_PIX_FMT_NONE;
 
   int64_t cur_pts = 0;
   int64_t cur_key_frame_pts = 0;
