@@ -5,8 +5,8 @@
 set(INC
   .
   exporter
-  intern
   importer
+  intern
   ../../editors/include
   ../../makesrna
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -19,18 +19,16 @@ set(SRC
   IO_otio.cc
   exporter/otio_export.cc
   exporter/otio_export_resolve.cc
+  importer/otio_import.cc
   intern/otio_metadata.cc
   intern/otio_resolve.cc
-  importer/otio_import.cc
-  importer/otio_import_metadata.cc
 
   IO_otio.hh
   exporter/otio_export.hh
   exporter/otio_export_resolve.hh
+  importer/otio_import.hh
   intern/otio_metadata.hh
   intern/otio_resolve.hh
-  importer/otio_import.hh
-  importer/otio_import_metadata.hh
 )
 
 set(LIB

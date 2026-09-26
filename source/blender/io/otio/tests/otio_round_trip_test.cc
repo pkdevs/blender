@@ -150,7 +150,10 @@ class OTIORoundTripTest : public BlendfileLoadingBaseTest {
     CTX_data_main_set(context, bmain);
     CTX_data_scene_set(context, scene);
 
-    const bool success = OTIO_import(context, filepath.c_str(), false, reports);
+    OTIOImportParams params;
+    STRNCPY(params.filepath, filepath.c_str());
+    params.reports = reports;
+    const bool success = OTIO_import(context, params) != nullptr;
     CTX_store_set(context, previous_store);
 
     ASSERT_TRUE(success);

@@ -14,6 +14,7 @@ namespace blender {
 
 struct bContext;
 struct ReportList;
+struct Scene;
 
 struct OTIOExportParams {
   char filepath[FILE_MAX] = "";
@@ -22,7 +23,13 @@ struct OTIOExportParams {
   ReportList *reports = nullptr;
 };
 
+struct OTIOImportParams {
+  char filepath[FILE_MAX] = "";
+
+  ReportList *reports = nullptr;
+};
+
 void OTIO_export(bContext *C, const OTIOExportParams &params);
-bool OTIO_import(bContext *C, const char *filepath, bool restore_channel, ReportList *reports);
+Scene *OTIO_import(bContext *C, const OTIOImportParams &params);
 
 }  // namespace blender

@@ -14,6 +14,7 @@
 #  include "DNA_sequence_types.h"
 #  include "DNA_space_enums.h"
 #  include "DNA_windowmanager_enums.h"
+#  include "DNA_workspace_types.h"
 
 #  include "BKE_context.hh"
 #  include "BKE_file_handler.hh"
@@ -38,9 +39,6 @@
 #  include "WM_types.hh"
 
 #  include "SEQ_sequencer.hh"
-
-#  include "UI_interface_layout.hh"
-#  include "UI_resources.hh"
 
 #  include "IO_otio.hh"
 #  include "io_otio_ops.hh"
@@ -156,6 +154,9 @@ static wmOperatorStatus wm_otio_import_invoke(bContext *C, wmOperator *op, const
 
 static wmOperatorStatus wm_otio_import_exec(bContext *C, wmOperator *op)
 {
+  OTIOImportParams params;
+  params.reports = op->reports;
+
   const auto paths = ed::io::paths_from_operator_properties(op->ptr);
 
   if (paths.is_empty()) {
@@ -163,38 +164,25 @@ static wmOperatorStatus wm_otio_import_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  bool restore_channel = RNA_boolean_get(op->ptr, "restore_channel");
-
-  int count = 0;
+  Scene *scene = nullptr;
   for (const auto &path : paths) {
-    char filepath[FILE_MAX];
-    STRNCPY(filepath, path.c_str());
-    if (OTIO_import(C, filepath, restore_channel, op->reports)) {
-      ++count;
+    STRNCPY(params.filepath, path.c_str());
+    if (Scene *imported_scene = OTIO_import(C, params)) {
+      scene = imported_scene;
     }
   }
 
-  BKE_reportf(op->reports,
-              RPT_INFO,
-              "OTIO Import: %d file%s imported successfully",
-              count,
-              count == 1 ? "" : "s");
+  if (scene && scene != CTX_data_sequencer_scene(C)) {
+    if (WorkSpace *workspace = CTX_wm_workspace(C)) {
+      workspace->sequencer_scene = scene;
+    }
+    WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), scene);
+    BKE_reportf(
+        op->reports, RPT_WARNING, TIP_("Active scene changed to '%s'"), scene->id.name + 2);
+  }
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
 
   return OPERATOR_FINISHED;
-}
-
-static void wm_otio_import_draw(bContext *C, wmOperator *op)
-{
-  ui::Layout &layout = *op->layout;
-  PointerRNA *ptr = op->ptr;
-
-  layout.use_property_split_set(true);
-  layout.use_property_decorate_set(false);
-
-  if (ui::Layout *panel = layout.panel(C, "OTIO_import_strip", false, IFACE_("Strip"))) {
-    ui::Layout *col = &panel->column(false);
-    col->prop(ptr, "restore_channel", UI_ITEM_NONE, IFACE_("Restore Channel"), ICON_NONE);
-  }
 }
 
 void WM_OT_otio_import(wmOperatorType *ot)
@@ -203,29 +191,22 @@ void WM_OT_otio_import(wmOperatorType *ot)
   ot->description = "Import OpenTimelineIO Timeline into Sequencer Scene";
   ot->idname = "WM_OT_otio_import";
 
-  ot->ui = wm_otio_import_draw;
   ot->invoke = wm_otio_import_invoke;
   ot->exec = wm_otio_import_exec;
   ot->poll = WM_operator_winactive;
-  ot->flag = OPTYPE_UNDO | OPTYPE_PRESET;
+  ot->flag = OPTYPE_UNDO;
 
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER,
                                  FILE_BLENDER,
                                  FILE_OPENFILE,
-                                 WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_SHOW_PROPS |
-                                     WM_FILESEL_DIRECTORY | WM_FILESEL_FILES,
+                                 WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_DIRECTORY |
+                                     WM_FILESEL_FILES,
                                  FILE_DEFAULTDISPLAY,
                                  FILE_SORT_DEFAULT);
 
   PropertyRNA *prop = RNA_def_string(ot->srna, "filter_glob", "*.otio", 0, "", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
-
-  RNA_def_boolean(ot->srna,
-                  "restore_channel",
-                  true,
-                  "Restore Channel",
-                  "Try to restore the original channel of the strip from metadata");
 }
 
 namespace ed::io {
