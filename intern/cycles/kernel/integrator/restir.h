@@ -183,6 +183,7 @@ ccl_device_inline void ray_setup(KernelGlobals kg,
 
     // !!!: cache_miss
     int cache_miss = 0;
+// !!!: Works for spatial, but not for temporal since poses are new; use kcam->motion_pass_pre/motion_pass_post
     Spectrum T = integrate_camera_sample(kg, sample, x, y, rng_pixel, ray, cache_miss);
     if (cache_miss) {
       // !!!
@@ -207,6 +208,7 @@ ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
   // !!!: PathRayVisibility path_visibility
   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
 
+  /* Cast a ray, intersect, then surface_shader_eval() to populate closures */
   /* TODO(weizhen): what features are needed here? Is this the right state? */
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>( // !!!: The code path that pulls in OSL evaluation.
       kg, state, &reservoir->sd, render_buffer, path_visibility, reservoir->path_flag);
@@ -270,18 +272,7 @@ ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg, // !!!: GI
   return false;
 }
 
-// TODO(Tri): Remove both
-/* TODO(weizhen): move these functions to a more appropriate place. */
-// float mis_weight_pairwise(float pdf_a, float pdf_b, float num) // 
-// {
-//   return (pdf_b == 0.0f) ? 0.0f : (pdf_a * pdf_a * num) / (pdf_a * pdf_a * num + pdf_b * pdf_b);
-// }
-// dropped the squaring, a true balance heuristic; see if fixes spatial dim issues; Change name...
-float mis_weight_pairwise(float pdf_a, float pdf_b, float num)
-{
-  return (pdf_b == 0.0f) ? 0.0f : (pdf_a * num) / (pdf_a * num + pdf_b);
-}
-
+/* TODO(Tri): move this function to a more appropriate place. */
 float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
 {
   return dot(spectrum_to_rgb(radiance.sum), float4_to_float3(kernel_data.film.rgb_to_y));
@@ -359,7 +350,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
     }
 
     valid_neighbors++;
-    shader_data_setup_from_restir(kg, state, &neighbor, render_buffer);
+    shader_data_setup_from_restir(kg, state, &neighbor, render_buffer); //
 
     /* Calculate canonical MIS weight. */
     if (!reservoir_is_empty(&canonical)) {
@@ -370,7 +361,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
       /* Evaluate current sample from the neighbor shading point. */
       // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &canonical_ls); // !!!
-      light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
+      light_sample_from_reference(
           kg,
           &canonical.reference,
           neighbor.sd.P,
@@ -394,7 +385,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
     }
 
     // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &neighbor.reservoir.ls); // !!!
-    light_sample_from_reference(kg, // !!!: Re-Constructs DI analytic lights only
+    light_sample_from_reference(kg,
                                 &neighbor.reservoir.reference,
                                 neighbor.sd.P,
                                 neighbor.sd.N,
@@ -411,7 +402,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
     /* Evaluate neighbor sample from the current shading point. */
     // light_sample_from_uv(kg, &current->sd, current->path_flag, &neighbor.reservoir.light); // !!!
-    light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
+    light_sample_from_reference(
         kg,
         &neighbor.reservoir.reference,
         current->sd.P,
@@ -503,7 +494,9 @@ ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack histo
    * used by the spatial loop; this is the one place temporal and spatial
    * pairwise weighting genuinely differ; unifying them into a single
    * combined-M estimator is a follow-up once this is validated in isolation. */
-  history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
+  history.total_weight *= reservoir_pairwise_mis_weight(
+      history.luminance, history_at_current,
+      /*N0=*/(float)history.M, /*N1=*/(float)current->reservoir.M);
 
   const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
   spatial_reservoir_add_reservoir(current, history, rand);
@@ -517,7 +510,6 @@ ccl_debug_printf("\n--- streaming_temporal_sample(): true! current total_weight=
   return true;
 }
 
-// TODO(Tri): Cam motion isn't accounted for here yet (Only object motion is handled)
 // TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
 /* Object-motion reprojection only; camera motion is not yet folded into
  * get_previous_pixel()'s back-projection: check out Camera::update()'s
@@ -605,15 +597,33 @@ ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M
   light_sample_from_reference(kg, &history.reference, current->sd.P, current->sd.N,
                               current->sd.time, current->sd.shader, current->path_flag, &history.light);
 
+  /* A history sample that was valid from last frame's shading point can
+   * legitimately become invalid here; radiance_eval() returns pdf<=0, zero
+   * luminance whenever light_sample_from_reference() reconstructs a
+   * direction/PDF outside this frame's shading point's valid domain.
+   * Sub-pixel jitter alone shifts the shading point frame-to-frame even on
+   * a fully static scene, and lights with hard sampling-domain boundaries
+   * are sensitive to that shift. Observed in practice for samples whose
+   * stored luminance was already small/near-boundary; large, well-inside
+   * samples reproject cleanly. */
   radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
   const float history_at_current = compute_luminance(kg, history.radiance);
 
-// !!!: 0 for the majority of pixels,
 const float old_M = current->reservoir.M; // TODO(Tri): Remove
 const float history_M = history.M;
 
-// TODO(Tri): change to reservoir_pairwise_mis_weight()?
-  const float mis_weight = mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
+  const float mis_weight = reservoir_pairwise_mis_weight(
+      history.luminance, history_at_current,
+      /*N0=*/(float)history.M, /*N1=*/(float)current->reservoir.M);
+
+// TODO(Tri): Reweigh the canonical sample itself: by evaluating canonical's own selected sample at each neighbor's shading point
+/* TODO(Tri): Asymmetric relative to streaming_di_samples()/Falcor's
+  * kUsePairwiseMIS path: only history's own weight is reduced by its
+  * mismatch with the current point (above). The canonical (current)
+  * reservoir is not symmetrically reweighted by its mismatch with
+  * history's original point.
+  * Need the persisted cross-frame buffer with reconstructable position data 
+  * (similar to shader_data_setup_from_restir() re-intersects spatial neighbors from SURFACE_DATA). */
 
 ccl_debug_printf(
   "TEMPORAL DEBUG pixel=(%d,%d): "
@@ -672,7 +682,7 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
 
-  const bool visibility = kernel_data.integrator.restir_unbiased;
+  const bool visibility = kernel_data.integrator.restir_unbiased; //
 
   // !!!: Sets current->reservoir.M
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
@@ -958,7 +968,7 @@ ccl_device bool integrator_restir(KernelGlobals kg,
   const int radius = kernel_data.integrator.restir_spatial_radius;
   SpatialResampling spatial_resampling(tile, radius);
 
-  const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics
+  const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics 
 
   // TODO(Tri): M is only incremented with spatial_iteration?
 

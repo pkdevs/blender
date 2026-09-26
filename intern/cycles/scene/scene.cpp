@@ -446,15 +446,19 @@ bool Scene::need_motion_blur() const
 // exclusive if/else chain:
 Scene::MotionType Scene::need_motion() const
 {
-// !!!(Tri): MOTION_BLUR still wins for anything not yet updated to know about coexistence 
+// !!!(Tri): MOTION_BLUR still wins for anything not yet updated to know about coexistence
   if (need_motion_blur()) return MOTION_BLUR;
   if (need_motion_pass()) return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
   return MOTION_NONE;
 }
 
+// TODO(Tri): Brecht/Sergey:
+// !!!: a single motion[] array, sampled at a single shutter time, cannot simultaneously hanlde 
+// motion-blur's sub-frame interpolation and motion-pass's frame-stepping semantics.
+// likely a second motion[] sampling pass will be needed...
 float Scene::motion_shutter_time()
 {
-  if (need_motion() == Scene::MOTION_PASS || need_motion() == Scene::MOTION_PASS_INTERACTIVE) {
+  if (need_motion_pass()) {
     return 2.0f;
   }
   return camera->get_shuttertime();
