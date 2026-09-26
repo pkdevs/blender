@@ -26,12 +26,20 @@
 #include "BKE_node_tree_interface.hh"
 
 #include "NOD_socket_usage_inference_fwd.hh"
+#include "NOD_warning.hh"
 
 namespace blender {
 
 struct bNode;
 struct bNodeSocket;
 struct bNodeTree;
+
+struct bNodeInternalLink {
+  bNodeSocket *in = nullptr;
+  bNodeSocket *out = nullptr;
+
+  friend bool operator==(const bNodeInternalLink &a, const bNodeInternalLink &b) = default;
+};
 
 namespace nodes {
 struct EvalDependencies;
@@ -204,9 +212,9 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
 
   /**
    * Error messages for shading nodes. Those don't have more contextual information yet. Maps
-   * #bNode::identifier to error messages.
+   * #bNode::identifier to warnings.
    */
-  Map<int32_t, VectorSet<std::string>> shader_node_errors;
+  Map<int32_t, VectorSet<nodes::NodeWarning>> shader_node_errors;
   Mutex shader_node_errors_mutex;
 
   /**
@@ -387,7 +395,7 @@ class bNodeRuntime : NonCopyable, NonMovable {
   float anim_ofsx;
 
   /** List of cached internal links (input to output), for muted nodes and operators. */
-  Vector<bNodeLink> internal_links;
+  Vector<bNodeInternalLink> internal_links;
 
   /** Eagerly maintained cache of the node's index in the tree. */
   int index_in_tree = -1;
@@ -880,6 +888,11 @@ inline bool bNode::is_muted() const
   return this->flag & NODE_MUTED;
 }
 
+inline bool bNode::is_selected() const
+{
+  return this->flag & NODE_SELECT;
+}
+
 inline bool bNode::is_reroute() const
 {
   return this->type_legacy == NODE_REROUTE;
@@ -920,7 +933,7 @@ inline bool bNode::is_type(const UString query_idname) const
   return this->typeinfo->is_type(query_idname);
 }
 
-inline Span<bNodeLink> bNode::internal_links() const
+inline Span<bNodeInternalLink> bNode::internal_links() const
 {
   return this->runtime->internal_links;
 }

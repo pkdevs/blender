@@ -23,6 +23,7 @@
 #include "BKE_path_templates.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 namespace blender {
 
@@ -141,7 +142,7 @@ static std::optional<StringRef> find_format_specifier(const StringRef format)
   return std::nullopt;
 }
 
-/** Returns the index of the next unescaped '{', the string size, or -1 on error.*/
+/** Returns the index of the next unescaped '{', the string size, or -1 on error. */
 static int64_t find_next_format_start_or_end(const StringRef format,
                                              const int64_t start,
                                              std::string &r_out,
@@ -808,7 +809,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeFormatString"_ustr);
+  common_node_type_base(&ntype, "FunctionNodeFormatString"_ustr);
   ntype.ui_name = "Format String";
   ntype.ui_description =
       "Insert values into a string using a Python and path template compatible formatting syntax";

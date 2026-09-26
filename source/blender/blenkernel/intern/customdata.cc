@@ -4814,7 +4814,7 @@ static void blend_write_layer_data(BlendWriter *writer,
         int datasize = structnum * count;
         writer->write_struct_array_by_name(structname, datasize, layer.data);
       }
-      else if (!BLO_write_is_undo(writer)) { /* Do not warn on undo. */
+      else if (!writer->is_undo()) { /* Do not warn on undo. */
         printf("%s error: layer '%s':%d - can't be written to file\n",
                __func__,
                structname,
@@ -4832,13 +4832,13 @@ void CustomData_blend_write(BlendWriter *writer,
                             ID *id)
 {
   /* write external customdata (not for undo) */
-  if (data->external && !BLO_write_is_undo(writer)) {
-    CustomData_external_write(data, BLO_write_filepath(writer), id, cddata_mask, count, 0);
+  if (data->external && !writer->is_undo()) {
+    CustomData_external_write(data, writer->filepath(), id, cddata_mask, count, 0);
   }
 
   for (const CustomDataLayer &layer : layers_to_write) {
     const size_t size_in_bytes = CustomData_sizeof(eCustomDataType(layer.type)) * count;
-    BLO_write_shared(writer, layer.data, size_in_bytes, layer.sharing_info, [&]() {
+    writer->write_shared(layer.data, size_in_bytes, layer.sharing_info, [&]() {
       blend_write_layer_data(writer, layer, count);
     });
   }
@@ -5019,20 +5019,17 @@ void CustomData_debug_info_from_layers(const CustomData *data, const char *inden
       const char *name = CustomData_layertype_name(type);
       const int size = CustomData_sizeof(type);
       const void *pt = CustomData_get_layer(data, type);
-      const int pt_size = pt ? int(MEM_allocN_len(pt) / size) : 0;
       const char *structname;
       int structnum;
       get_type_file_write_info(type, &structname, &structnum);
-      BLI_dynstr_appendf(
-          dynstr,
-          "%sdict(name='%s', struct='%s', type=%d, ptr='%p', elem=%d, length=%d),\n",
-          indent,
-          name,
-          structname,
-          type,
-          pt,
-          size,
-          pt_size);
+      BLI_dynstr_appendf(dynstr,
+                         "%sdict(name='%s', struct='%s', type=%d, ptr='%p', elem=%d),\n",
+                         indent,
+                         name,
+                         structname,
+                         type,
+                         pt,
+                         size);
     }
   }
 }

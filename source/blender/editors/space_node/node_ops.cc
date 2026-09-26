@@ -40,6 +40,7 @@ void node_operatortypes()
   WM_operatortype_append(NODE_OT_view_selected);
 
   WM_operatortype_append(NODE_OT_mute_toggle);
+  WM_operatortype_append(NODE_OT_comment_edit);
   WM_operatortype_append(NODE_OT_collapse_toggle);
   WM_operatortype_append(NODE_OT_preview_toggle);
   WM_operatortype_append(NODE_OT_options_toggle);
@@ -248,7 +249,7 @@ void ED_operatormacros_node()
                                     "New Compositing Node Group",
                                     "Duplicate the currently assigned compositing node group.",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
-  WM_operatortype_macro_define(ot, "NODE_OT_duplicate_compositing_modifier_node_group");
+  WM_operatortype_macro_define(ot, "SCENE_OT_duplicate_compositor_effect_node_group");
 }
 
 }  // namespace blender
