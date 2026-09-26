@@ -641,21 +641,7 @@ class JoltSolverStep {
         body_interface.AddBody(jolt_body->GetID(), JPH::EActivation::Activate);
         rigid_body = JoltRigidBody{jolt_body};
 
-        float &mass = geo_data.mass_attr.span[instance_i];
-        float3 &inertia_diagonal = geo_data.inertia_diagonal_attr.span[instance_i];
-        math::Quaternion &inertia_rotation = geo_data.inertia_rotation_attr.span[instance_i];
-        if (*motion_type == JPH::EMotionType::Dynamic) {
-          const JPH::MotionProperties &motion_props = *jolt_body->GetMotionPropertiesUnchecked();
-          mass = math::rcp(motion_props.GetInverseMassUnchecked());
-          inertia_diagonal = math::rcp(
-              geometry::jolt::convert_vec3(motion_props.GetInverseInertiaDiagonal()));
-          inertia_rotation = geometry::jolt::convert_quat(motion_props.GetInertiaRotation());
-        }
-        else {
-          mass = 0.0f;
-          inertia_diagonal = float3(0.0f);
-          inertia_rotation = math::Quaternion::identity();
-        }
+        this->write_mass_attributes(*jolt_body, geo_data, instance_i);
       }
 
       body_interface.SetShape(
@@ -673,6 +659,7 @@ class JoltSolverStep {
         if (*motion_type == JPH::EMotionType::Dynamic) {
           rigid_body->body->GetMotionPropertiesUnchecked()->SetMassProperties(
               JPH::EAllowedDOFs::All, rigid_body->body->GetShape()->GetMassProperties());
+          this->write_mass_attributes(*rigid_body->body, geo_data, instance_i);
         }
       }
 
@@ -726,6 +713,27 @@ class JoltSolverStep {
         velocity = geometry::jolt::convert_vec3(jolt_body.GetLinearVelocity());
         angular_velocity = geometry::jolt::convert_vec3(jolt_body.GetAngularVelocity());
       }
+    }
+  }
+
+  void write_mass_attributes(const JPH::Body &body,
+                             const GeometryData &geo_data,
+                             const int instance_i)
+  {
+    float &mass = geo_data.mass_attr.span[instance_i];
+    float3 &inertia_diagonal = geo_data.inertia_diagonal_attr.span[instance_i];
+    math::Quaternion &inertia_rotation = geo_data.inertia_rotation_attr.span[instance_i];
+    if (body.GetMotionType() == JPH::EMotionType::Dynamic) {
+      const JPH::MotionProperties &motion_props = *body.GetMotionPropertiesUnchecked();
+      mass = math::rcp(motion_props.GetInverseMassUnchecked());
+      inertia_diagonal = math::rcp(
+          geometry::jolt::convert_vec3(motion_props.GetInverseInertiaDiagonal()));
+      inertia_rotation = geometry::jolt::convert_quat(motion_props.GetInertiaRotation());
+    }
+    else {
+      mass = 0.0f;
+      inertia_diagonal = float3(0.0f);
+      inertia_rotation = math::Quaternion::identity();
     }
   }
 
