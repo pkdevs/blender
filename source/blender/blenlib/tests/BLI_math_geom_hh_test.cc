@@ -371,6 +371,21 @@ TEST(math_geom_hh, AreaPoly)
   EXPECT_NEAR(1.0f, area_poly(tri), 1e-6f);
 }
 
+TEST(math_geom_hh, AreaPolySigned)
+{
+  /* CCW square: area = +1. */
+  Vector<float2> ccw_square = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+  EXPECT_NEAR(1.0f, area_poly_signed(ccw_square.as_span()), 1e-6f);
+
+  /* CW square: area = -1. */
+  Vector<float2> cw_square = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+  EXPECT_NEAR(-1.0f, area_poly_signed(cw_square.as_span()), 1e-6f);
+
+  /* double2 support. */
+  Vector<double2> d_ccw_square = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+  EXPECT_NEAR(1.0, area_poly_signed(d_ccw_square.as_span()), 1e-9);
+}
+
 TEST(math_geom_hh, InterpWeightsPoly)
 {
   /* Centroid of a unit square: all four weights should be 0.25. */

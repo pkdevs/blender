@@ -415,10 +415,35 @@ template<typename T>
  * \param verts: The polygon vertices, in order (CW or CCW).
  * \return True when \a pt is inside the polygon.
  */
+template<typename T>
+[[nodiscard]] inline bool isect_point_poly(const VecBase<T, 2> &pt, Span<VecBase<T, 2>> verts)
+{
+  const int64_t nr = verts.size();
+  bool inside = false;
+  for (int64_t i = 0, j = nr - 1; i < nr; j = i++) {
+    if (((verts[i].y > pt.y) != (verts[j].y > pt.y)) &&
+        (pt.x <
+         (verts[j].x - verts[i].x) * (pt.y - verts[i].y) / (verts[j].y - verts[i].y) + verts[i].x))
+    {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 [[nodiscard]] inline bool isect_point_poly(const float2 &pt, Span<float2> verts)
 {
-  return isect_point_poly_v2(
-      pt, reinterpret_cast<const float (*)[2]>(verts.data()), uint(verts.size()));
+  return isect_point_poly<float>(pt, verts);
+}
+
+[[nodiscard]] inline bool isect_point_poly(const double2 &pt, Span<double2> verts)
+{
+  return isect_point_poly<double>(pt, verts);
+}
+
+[[nodiscard]] inline bool isect_point_poly(const int2 &pt, Span<int2> verts)
+{
+  return isect_point_poly<int>(pt, verts);
 }
 
 /** \} */
@@ -469,6 +494,30 @@ template<typename T>
 [[nodiscard]] inline float area_poly(Span<float2> verts)
 {
   return area_poly_v2(reinterpret_cast<const float (*)[2]>(verts.data()), uint(verts.size()));
+}
+
+/**
+ * Compute the signed area of a 2D polygon given its vertices.
+ * Positive if counter-clockwise (CCW), negative if clockwise (CW).
+ */
+[[nodiscard]] inline float area_poly_signed(Span<float2> verts)
+{
+  return area_poly_signed_v2(reinterpret_cast<const float (*)[2]>(verts.data()), uint(verts.size()));
+}
+
+template<typename T>
+[[nodiscard]] inline T area_poly_signed(Span<VecBase<T, 2>> verts)
+{
+  if (verts.size() < 3) {
+    return T(0);
+  }
+  T area = T(0);
+  const int64_t n = verts.size();
+  for (int64_t i = 0; i < n; i++) {
+    const int64_t next = (i + 1 == n) ? 0 : i + 1;
+    area += cross(verts[i], verts[next]);
+  }
+  return T(0.5) * area;
 }
 
 /**

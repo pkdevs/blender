@@ -436,7 +436,7 @@ static Vector<int> clean_polygon_spikes_and_duplicates(Span<int> polygon)
   while (modified) {
     modified = false;
 
-    /* 1. Remove consecutive duplicates (v == next_v). */
+    /* Remove consecutive duplicates (v == next_v). */
     Vector<int> clean_consecutive;
     for (const int v : result) {
       if (clean_consecutive.is_empty() || clean_consecutive.last() != v) {
@@ -456,7 +456,7 @@ static Vector<int> clean_polygon_spikes_and_duplicates(Span<int> polygon)
       break;
     }
 
-    /* 2. Remove spikes / antennas (prev_v == next_v). */
+    /* Remove spikes / antennas (prev_v == next_v). */
     const int n = int(result.size());
     for (int i = 0; i < n; i++) {
       const int prev_v = result[(i - 1 + n) % n];
@@ -784,7 +784,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
 
   std::ostringstream err;
 
-  /* 1. Vertex Validity: no NaN, Inf, or negative times. */
+  /* Vertex Validity: no NaN, Inf, or negative times. */
   for (const int i : output.vert.index_range()) {
     const double2 p = output.vert[i];
     if (std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y)) {
@@ -799,7 +799,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
     }
   }
 
-  /* 2. Face Offsets and Simplicity. */
+  /* Face Offsets and Simplicity. */
   const OffsetIndices<int> face_offsets = output.face_offsets();
   const Span<int> fvi = output.face_vert_indices;
   double total_face_area = 0.0;
@@ -850,7 +850,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
     }
   }
 
-  /* 3. Skeleton Graph Planarity: test all edge pairs for improper intersection. */
+  /* Skeleton Graph Planarity: test all edge pairs for improper intersection. */
   const int edge_count = int(output.edge.size());
   for (int i = 0; i < edge_count; i++) {
     const int2 e1 = output.edge[i];
@@ -879,7 +879,7 @@ static bool verify_straight_skeleton(const StraightSkeletonInput &input,
     }
   }
 
-  /* 4. Domain Area Partition (for full skeleton with segments = 1 and infinite offset). */
+  /* Domain Area Partition (for full skeleton with segments = 1 and infinite offset). */
   if (input.segments <= 1 && std::isinf(input.offset)) {
     double domain_area = 0.0;
     const int outer_num = int(input.outer_polygon.size());
@@ -1083,7 +1083,7 @@ class SimulationEngine {
       compact_vert_orig.append(skel_graph_.nodes_orig[i]);
     }
 
-    /* 1. Ensure all initial faces are clean and CCW. */
+    /* Ensure all initial faces are clean and CCW. */
     for (const int fi : out_faces_.faces.index_range()) {
       Vector<int> &f = out_faces_.faces[fi];
       f = clean_polygon_spikes_and_duplicates(f.as_span());
@@ -1093,7 +1093,7 @@ class SimulationEngine {
       }
     }
 
-    /* 2. Merge sub-faces of the same generator edge and band that share an internal seam.
+    /* Merge sub-faces of the same generator edge and band that share an internal seam.
      *
      * Geometric Situation:
      * ====================
@@ -1223,7 +1223,7 @@ class SimulationEngine {
     out_faces_.face_band.resize(write_idx);
     out_faces_.face_orig_edge.resize(write_idx);
 
-    /* 3. Remap vertices referenced by output faces. */
+    /* Remap vertices referenced by output faces. */
     Vector<Vector<int>> final_faces;
     Vector<int> final_face_orig;
     Vector<int> final_face_band;
@@ -1338,7 +1338,7 @@ class SimulationEngine {
   {
     PRF_scope(ProfileCategory::Core);
 
-    /* 1. Initialize Skeleton Nodes from input vertices. */
+    /* Initialize Skeleton Nodes from input vertices. */
     const int input_verts_num = int(input_.vert.size());
     for (const int i : IndexRange(input_verts_num)) {
       skel_graph_.nodes_pos.append(input_.vert[i]);
@@ -1398,7 +1398,7 @@ class SimulationEngine {
 
   void init_polygon_state()
   {
-    /* 2. Initialize Outer Wavefront Contour (CCW). */
+    /* Initialize Outer Wavefront Contour (CCW). */
     const int outer_num = int(input_.outer_polygon.size());
     const int outer_start_idx = 0;
     wf_contours_.head_node.append(outer_start_idx);
@@ -1430,7 +1430,7 @@ class SimulationEngine {
       wf_nodes_.right_trail.append(std::move(rt));
     }
 
-    /* 3. Initialize Hole Contours (CW). */
+    /* Initialize Hole Contours (CW). */
     for (const int hole_i : input_.hole_offsets.index_range()) {
       const IndexRange r = input_.hole_offsets[hole_i];
       const int hole_len = int(r.size());
@@ -1467,7 +1467,7 @@ class SimulationEngine {
       }
     }
 
-    /* 4. Precompute Original Edge Inward Normals and Antiparallel Edge Flags (O(E)). */
+    /* Precompute Original Edge Inward Normals and Antiparallel Edge Flags (O(E)). */
     const int total_orig_edges = outer_num + int(input_.hole_vert_indices.size());
     orig_edge_normal_.reinitialize(total_orig_edges);
     for (const int i : IndexRange(outer_num)) {
@@ -1488,7 +1488,7 @@ class SimulationEngine {
 
     init_antiparallel_bins();
 
-    /* 5. Compute Initial Bisector Velocities. */
+    /* Compute Initial Bisector Velocities. */
     for (const int i : wf_nodes_.pos.index_range()) {
       update_node_velocity(i);
     }
@@ -1829,162 +1829,84 @@ class SimulationEngine {
    *                   p*
    * ```
    */
-  double find_earliest_event(double dt, double eps)
+  double find_earliest_reflex_event_brute_force(const double dt,
+                                                const double eps,
+                                                const Span<int> reflex_nodes)
   {
-    PRF_scope(ProfileCategory::Core);
-
     double earliest_t = std::numeric_limits<double>::infinity();
 
-    const double cluster_tol = std::max(eps, 1e-4);
-
-    /* 0. Already-collapsed edges at current_time_ (shrinking or degenerate). */
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
-        continue;
-      }
-      const int v = wf_nodes_.next_node[u];
-      if (v >= 0 && wf_nodes_.is_active[v]) {
-        const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-        const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
-        if (math::length_squared(e0) < cluster_tol * cluster_tol) {
-          if (math::length_squared(e0) < 1e-12) {
-            if (math::length_squared(dv) < 1e-12) {
-              return current_time_;
-            }
-          }
-          else if (math::dot(e0, dv) < -1e-12) {
-            return current_time_;
-          }
+    for (const int w : reflex_nodes) {
+      const int prev_w = wf_nodes_.prev_node[w];
+      const int next_w = wf_nodes_.next_node[w];
+      for (const int u : wf_nodes_.pos.index_range()) {
+        if (!wf_nodes_.is_active[u]) {
+          continue;
         }
-      }
-    }
-
-    /* 1. Edge Collapse Events. */
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
-        continue;
-      }
-      const int v = wf_nodes_.next_node[u];
-      const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
-      const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
-      const double dv_sq = math::length_squared(dv);
-
-      if (dv_sq > 1e-12 && math::dot(e0, dv) < -1e-12) {
-        const double tau = -math::dot(e0, dv) / dv_sq;
-        if (tau > 1e-11 && tau <= dt + 1e-9) {
-          const double2 e_tau = e0 + tau * dv;
-          if (math::length(e_tau) < std::max(eps, 1e-3) ||
-              (!std::isinf(dt) && math::dot(e0, e0 + dt * dv) <= 0.0))
-          {
-            earliest_t = std::min(earliest_t, current_time_ + tau);
-          }
+        const int v = wf_nodes_.next_node[u];
+        if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
+          continue;
         }
-      }
-    }
 
-    double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
-    int active_nodes_num = 0;
-    Vector<int> reflex_nodes;
+        const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
+        const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
+        const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
 
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
-        continue;
-      }
-      active_nodes_num++;
-      math::min_max(wf_nodes_.pos[u], bbox_min, bbox_max);
-
-      if (is_reflex(u)) {
-        reflex_nodes.append(u);
-      }
-    }
-
-    if (active_nodes_num == 0 || reflex_nodes.is_empty()) {
-      return earliest_t;
-    }
-
-    double x_min = bbox_min.x, x_max = bbox_max.x;
-    double y_min = bbox_min.y, y_max = bbox_max.y;
-
-    const double diag = std::max(std::hypot(x_max - x_min, y_max - y_min), 1e-4);
-    const double safety_tol = std::max(eps, 1e-4);
-
-    double max_tau_search = dt;
-    if (!std::isinf(earliest_t)) {
-      max_tau_search = std::min(max_tau_search, earliest_t - current_time_);
-    }
-    if (std::isinf(max_tau_search) || max_tau_search > diag) {
-      max_tau_search = diag;
-    }
-    if (max_tau_search < 0.0) {
-      max_tau_search = 0.0;
-    }
-
-    if (active_nodes_num <= 16) {
-      for (const int w : reflex_nodes) {
-        const int prev_w = wf_nodes_.prev_node[w];
-        const int next_w = wf_nodes_.next_node[w];
-        for (const int u : wf_nodes_.pos.index_range()) {
-          if (!wf_nodes_.is_active[u]) {
-            continue;
-          }
-          const int v = wf_nodes_.next_node[u];
-          if (u == w || v == w || u == prev_w || v == prev_w || u == next_w || v == next_w) {
-            continue;
-          }
-
-          const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
-          const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
-          const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
-
-          if (rate > 1e-8 && d0 > 1e-11) {
-            const double tau = d0 / rate;
-            if (tau > 1e-11 && tau <= dt + 1e-9) {
-              const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
-              const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
-              const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
-              const double s = math::line_point_factor(p_w, p_u, p_v);
-              if (s > 1e-5 && s < 1.0 - 1e-5) {
-                earliest_t = std::min(earliest_t, current_time_ + tau);
-              }
+        if (rate > 1e-8 && d0 > 1e-11) {
+          const double tau = d0 / rate;
+          if (tau > 1e-11 && tau <= dt + 1e-9) {
+            const double2 p_w = wf_nodes_.pos[w] + tau * wf_nodes_.vel[w];
+            const double2 p_u = wf_nodes_.pos[u] + tau * wf_nodes_.vel[u];
+            const double2 p_v = wf_nodes_.pos[v] + tau * wf_nodes_.vel[v];
+            const double s = math::line_point_factor(p_w, p_u, p_v);
+            if (s > 1e-5 && s < 1.0 - 1e-5) {
+              earliest_t = std::min(earliest_t, current_time_ + tau);
             }
           }
         }
       }
+    }
 
-      for (const int w : reflex_nodes) {
-        for (const int u : wf_nodes_.pos.index_range()) {
-          if (u >= w || !wf_nodes_.is_active[u]) {
-            continue;
-          }
-          if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
-            continue;
-          }
+    for (const int w : reflex_nodes) {
+      for (const int u : wf_nodes_.pos.index_range()) {
+        if (u >= w || !wf_nodes_.is_active[u]) {
+          continue;
+        }
+        if (wf_nodes_.next_node[u] == w || wf_nodes_.next_node[w] == u) {
+          continue;
+        }
 
-          const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
-          const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
-          const double dv_sq = math::length_squared(dv);
+        const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
+        const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
+        const double dv_sq = math::length_squared(dv);
 
-          if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
-            const double tau = -math::dot(dp, dv) / dv_sq;
-            if (tau > 1e-11 && tau <= dt + 1e-9) {
-              const double dist_at_tau = math::length(dp + tau * dv);
-              if (dist_at_tau < std::max(eps, 1e-5)) {
-                earliest_t = std::min(earliest_t, current_time_ + tau);
-              }
+        if (dv_sq > 1e-12 && math::dot(dp, dv) < -1e-12) {
+          const double tau = -math::dot(dp, dv) / dv_sq;
+          if (tau > 1e-11 && tau <= dt + 1e-9) {
+            const double dist_at_tau = math::length(dp + tau * dv);
+            if (dist_at_tau < std::max(eps, 1e-5)) {
+              earliest_t = std::min(earliest_t, current_time_ + tau);
             }
           }
         }
       }
-      return earliest_t;
     }
+    return earliest_t;
+  }
 
-    /* Spatial grid with overlapping buckets. */
-    x_min -= safety_tol;
-    x_max += safety_tol;
-    y_min -= safety_tol;
-    y_max += safety_tol;
+  double find_earliest_reflex_event_grid(const double eps,
+                                         const Span<int> reflex_nodes,
+                                         const double tau_horizon,
+                                         const double safety_tol,
+                                         const double2 &bbox_min,
+                                         const double2 &bbox_max,
+                                         const int active_nodes_num)
+  {
+    double earliest_t = std::numeric_limits<double>::infinity();
 
-    const double tau_horizon = max_tau_search;
+    const double x_min = bbox_min.x - safety_tol;
+    const double x_max = bbox_max.x + safety_tol;
+    const double y_min = bbox_min.y - safety_tol;
+    const double y_max = bbox_max.y + safety_tol;
 
     grid_.init(x_min, y_min, x_max, y_max, active_nodes_num);
 
@@ -2041,7 +1963,7 @@ class SimulationEngine {
           return;
         }
 
-        /* 1. Test split event between reflex w and edge u -> v. */
+        /* Test split event between reflex w and edge u -> v. */
         const double2 n_uv = compute_inward_normal(wf_nodes_.pos[u], wf_nodes_.pos[v]);
         const double d0 = math::dot(wf_nodes_.pos[w] - wf_nodes_.pos[u], n_uv);
         const double rate = 1.0 - math::dot(wf_nodes_.vel[w], n_uv);
@@ -2059,7 +1981,7 @@ class SimulationEngine {
           }
         }
 
-        /* 2. Test vertex collision between reflex w and vertex u. */
+        /* Test vertex collision between reflex w and vertex u. */
         if (u != w && wf_nodes_.next_node[u] != w && wf_nodes_.next_node[w] != u) {
           const double2 dp = wf_nodes_.pos[w] - wf_nodes_.pos[u];
           const double2 dv = wf_nodes_.vel[w] - wf_nodes_.vel[u];
@@ -2078,6 +2000,104 @@ class SimulationEngine {
     }
 
     return earliest_t;
+  }
+
+  double find_earliest_event(double dt, double eps)
+  {
+    PRF_scope(ProfileCategory::Core);
+
+    double earliest_t = std::numeric_limits<double>::infinity();
+
+    const double cluster_tol = std::max(eps, 1e-4);
+
+    /* Already-collapsed edges at current_time_ (shrinking or degenerate). */
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      const int v = wf_nodes_.next_node[u];
+      if (v >= 0 && wf_nodes_.is_active[v]) {
+        const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+        const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
+        if (math::length_squared(e0) < cluster_tol * cluster_tol) {
+          if (math::length_squared(e0) < 1e-12) {
+            if (math::length_squared(dv) < 1e-12) {
+              return current_time_;
+            }
+          }
+          else if (math::dot(e0, dv) < -1e-12) {
+            return current_time_;
+          }
+        }
+      }
+    }
+
+    /* Edge Collapse Events. */
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      const int v = wf_nodes_.next_node[u];
+      const double2 e0 = wf_nodes_.pos[v] - wf_nodes_.pos[u];
+      const double2 dv = wf_nodes_.vel[v] - wf_nodes_.vel[u];
+      const double dv_sq = math::length_squared(dv);
+
+      if (dv_sq > 1e-12 && math::dot(e0, dv) < -1e-12) {
+        const double tau = -math::dot(e0, dv) / dv_sq;
+        if (tau > 1e-11 && tau <= dt + 1e-9) {
+          const double2 e_tau = e0 + tau * dv;
+          if (math::length(e_tau) < std::max(eps, 1e-3) ||
+              (!std::isinf(dt) && math::dot(e0, e0 + dt * dv) <= 0.0))
+          {
+            earliest_t = std::min(earliest_t, current_time_ + tau);
+          }
+        }
+      }
+    }
+
+    double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
+    int active_nodes_num = 0;
+    Vector<int> reflex_nodes;
+
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      active_nodes_num++;
+      math::min_max(wf_nodes_.pos[u], bbox_min, bbox_max);
+
+      if (is_reflex(u)) {
+        reflex_nodes.append(u);
+      }
+    }
+
+    if (active_nodes_num == 0 || reflex_nodes.is_empty()) {
+      return earliest_t;
+    }
+
+    const double diag = std::max(std::hypot(bbox_max.x - bbox_min.x, bbox_max.y - bbox_min.y),
+                                 1e-4);
+    const double safety_tol = std::max(eps, 1e-4);
+
+    double max_tau_search = dt;
+    if (!std::isinf(earliest_t)) {
+      max_tau_search = std::min(max_tau_search, earliest_t - current_time_);
+    }
+    if (std::isinf(max_tau_search) || max_tau_search > diag) {
+      max_tau_search = diag;
+    }
+    if (max_tau_search < 0.0) {
+      max_tau_search = 0.0;
+    }
+
+    if (active_nodes_num <= 16) {
+      const double reflex_t = find_earliest_reflex_event_brute_force(dt, eps, reflex_nodes);
+      return std::min(earliest_t, reflex_t);
+    }
+
+    const double grid_t = find_earliest_reflex_event_grid(
+        eps, reflex_nodes, max_tau_search, safety_tol, bbox_min, bbox_max, active_nodes_num);
+    return std::min(earliest_t, grid_t);
   }
 
   bool is_reflex(int w) const
@@ -2120,6 +2140,28 @@ class SimulationEngine {
     Vector<int> colliding_verts;
     Vector<int> collapsing_edges;
     Vector<int> split_edges;
+  };
+
+  struct VertPair {
+    int u;
+    int w;
+  };
+
+  struct SplitInfo {
+    int reflex_w;
+    int edge_u;
+    double2 pos;
+  };
+
+  struct Region {
+    Vector<int> outer;
+    Vector<Vector<int>> holes;
+  };
+
+  struct CandidateChord {
+    int i_outer;
+    int j_hole;
+    double dist;
   };
 
   /**
@@ -2699,6 +2741,129 @@ class SimulationEngine {
     return true;
   }
 
+  bool find_and_resolve_opposing_brute_force(const double cluster_tol,
+                                             Vector<std::pair<int, int>> &processed_pairs)
+  {
+    const int n = int(wf_nodes_.pos.size());
+    for (int e1 = 0; e1 < n; e1++) {
+      if (!wf_nodes_.is_active[e1]) {
+        continue;
+      }
+      const int orig1 = wf_nodes_.orig_edge[e1];
+      if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
+          !orig_edge_has_antiparallel_[orig1])
+      {
+        continue;
+      }
+      for (int e2 = e1 + 1; e2 < n; e2++) {
+        if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool find_and_resolve_opposing_grid(const double cluster_tol,
+                                      const double2 &bbox_min,
+                                      const double2 &bbox_max,
+                                      const int active_edges_num,
+                                      Vector<std::pair<int, int>> &processed_pairs)
+  {
+    const int n = int(wf_nodes_.pos.size());
+    const double x_min = bbox_min.x - cluster_tol;
+    const double x_max = bbox_max.x + cluster_tol;
+    const double y_min = bbox_min.y - cluster_tol;
+    const double y_max = bbox_max.y + cluster_tol;
+
+    grid_.init(x_min, y_min, x_max, y_max, active_edges_num);
+    for (int i = 0; i < n; i++) {
+      if (!wf_nodes_.is_active[i]) {
+        continue;
+      }
+      const int next_i = wf_nodes_.next_node[i];
+      if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
+        continue;
+      }
+      const int orig_e = wf_nodes_.orig_edge[i];
+      if (orig_e >= 0 && orig_e < orig_edge_has_antiparallel_.size() &&
+          !orig_edge_has_antiparallel_[orig_e])
+      {
+        continue;
+      }
+      if (math::distance_squared(wf_nodes_.pos[i], wf_nodes_.pos[next_i]) <
+          cluster_tol * cluster_tol)
+      {
+        continue;
+      }
+      const double2 &p_u = wf_nodes_.pos[i];
+      const double2 &p_v = wf_nodes_.pos[next_i];
+      const double ex_min = std::min(p_u.x, p_v.x) - cluster_tol;
+      const double ex_max = std::max(p_u.x, p_v.x) + cluster_tol;
+      const double ey_min = std::min(p_u.y, p_v.y) - cluster_tol;
+      const double ey_max = std::max(p_u.y, p_v.y) + cluster_tol;
+      grid_.insert(i, ex_min, ey_min, ex_max, ey_max);
+    }
+
+    if (query_tags_.size() < wf_nodes_.pos.size()) {
+      query_tags_.reinitialize(wf_nodes_.pos.size());
+      query_tags_.fill(0);
+      current_query_id_ = 1;
+    }
+
+    for (int e1 = 0; e1 < n; e1++) {
+      if (!wf_nodes_.is_active[e1]) {
+        continue;
+      }
+      const int u = e1;
+      const int v = wf_nodes_.next_node[u];
+      if (v < 0 || !wf_nodes_.is_active[v]) {
+        continue;
+      }
+      const int orig1 = wf_nodes_.orig_edge[e1];
+      if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
+          !orig_edge_has_antiparallel_[orig1])
+      {
+        continue;
+      }
+      if (math::distance_squared(wf_nodes_.pos[u], wf_nodes_.pos[v]) < cluster_tol * cluster_tol) {
+        continue;
+      }
+
+      const double qx_min = std::min(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) - cluster_tol;
+      const double qx_max = std::max(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) + cluster_tol;
+      const double qy_min = std::min(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) - cluster_tol;
+      const double qy_max = std::max(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) + cluster_tol;
+
+      current_query_id_++;
+      if (current_query_id_ <= 0) {
+        query_tags_.fill(0);
+        current_query_id_ = 1;
+      }
+      const int qid = current_query_id_;
+
+      bool found_opposing = false;
+      grid_.for_each_overlapping(qx_min, qy_min, qx_max, qy_max, [&](const int e2) {
+        if (found_opposing || e2 <= e1 || !wf_nodes_.is_active[e2]) {
+          return;
+        }
+        if (query_tags_[e2] == qid) {
+          return;
+        }
+        query_tags_[e2] = qid;
+
+        if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
+          found_opposing = true;
+        }
+      });
+
+      if (found_opposing) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void resolve_opposing_overlapping_edges(const double cluster_tol)
   {
     PRF_scope(ProfileCategory::Core);
@@ -2746,125 +2911,15 @@ class SimulationEngine {
         break;
       }
 
-      double x_min = bbox_min.x, x_max = bbox_max.x;
-      double y_min = bbox_min.y, y_max = bbox_max.y;
-
       if (active_edges_num <= 16) {
-        for (int e1 = 0; e1 < n; e1++) {
-          if (!wf_nodes_.is_active[e1]) {
-            continue;
-          }
-          const int orig1 = wf_nodes_.orig_edge[e1];
-          if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
-              !orig_edge_has_antiparallel_[orig1])
-          {
-            continue;
-          }
-          for (int e2 = e1 + 1; e2 < n; e2++) {
-            if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
-              found_opposing = true;
-              any_opposing_resolved = true;
-              break;
-            }
-          }
-          if (found_opposing) {
-            break;
-          }
-        }
+        found_opposing = find_and_resolve_opposing_brute_force(cluster_tol, processed_pairs);
       }
       else {
-        x_min -= cluster_tol;
-        x_max += cluster_tol;
-        y_min -= cluster_tol;
-        y_max += cluster_tol;
-
-        grid_.init(x_min, y_min, x_max, y_max, active_edges_num);
-        for (int i = 0; i < n; i++) {
-          if (!wf_nodes_.is_active[i]) {
-            continue;
-          }
-          const int next_i = wf_nodes_.next_node[i];
-          if (next_i < 0 || !wf_nodes_.is_active[next_i]) {
-            continue;
-          }
-          const int orig_e = wf_nodes_.orig_edge[i];
-          if (orig_e >= 0 && orig_e < orig_edge_has_antiparallel_.size() &&
-              !orig_edge_has_antiparallel_[orig_e])
-          {
-            continue;
-          }
-          if (math::distance_squared(wf_nodes_.pos[i], wf_nodes_.pos[next_i]) <
-              cluster_tol * cluster_tol)
-          {
-            continue;
-          }
-          const double2 &p_u = wf_nodes_.pos[i];
-          const double2 &p_v = wf_nodes_.pos[next_i];
-          const double ex_min = std::min(p_u.x, p_v.x) - cluster_tol;
-          const double ex_max = std::max(p_u.x, p_v.x) + cluster_tol;
-          const double ey_min = std::min(p_u.y, p_v.y) - cluster_tol;
-          const double ey_max = std::max(p_u.y, p_v.y) + cluster_tol;
-          grid_.insert(i, ex_min, ey_min, ex_max, ey_max);
-        }
-
-        if (query_tags_.size() < wf_nodes_.pos.size()) {
-          query_tags_.reinitialize(wf_nodes_.pos.size());
-          query_tags_.fill(0);
-          current_query_id_ = 1;
-        }
-
-        for (int e1 = 0; e1 < n; e1++) {
-          if (!wf_nodes_.is_active[e1]) {
-            continue;
-          }
-          const int u = e1;
-          const int v = wf_nodes_.next_node[u];
-          if (v < 0 || !wf_nodes_.is_active[v]) {
-            continue;
-          }
-          const int orig1 = wf_nodes_.orig_edge[e1];
-          if (orig1 >= 0 && orig1 < orig_edge_has_antiparallel_.size() &&
-              !orig_edge_has_antiparallel_[orig1])
-          {
-            continue;
-          }
-          if (math::distance_squared(wf_nodes_.pos[u], wf_nodes_.pos[v]) <
-              cluster_tol * cluster_tol)
-          {
-            continue;
-          }
-
-          const double qx_min = std::min(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) - cluster_tol;
-          const double qx_max = std::max(wf_nodes_.pos[u].x, wf_nodes_.pos[v].x) + cluster_tol;
-          const double qy_min = std::min(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) - cluster_tol;
-          const double qy_max = std::max(wf_nodes_.pos[u].y, wf_nodes_.pos[v].y) + cluster_tol;
-
-          current_query_id_++;
-          if (current_query_id_ <= 0) {
-            query_tags_.fill(0);
-            current_query_id_ = 1;
-          }
-          const int qid = current_query_id_;
-
-          grid_.for_each_overlapping(qx_min, qy_min, qx_max, qy_max, [&](const int e2) {
-            if (found_opposing || e2 <= e1 || !wf_nodes_.is_active[e2]) {
-              return;
-            }
-            if (query_tags_[e2] == qid) {
-              return;
-            }
-            query_tags_[e2] = qid;
-
-            if (try_resolve_opposing_pair(e1, e2, cluster_tol, processed_pairs)) {
-              found_opposing = true;
-              any_opposing_resolved = true;
-            }
-          });
-
-          if (found_opposing) {
-            break;
-          }
-        }
+        found_opposing = find_and_resolve_opposing_grid(
+            cluster_tol, bbox_min, bbox_max, active_edges_num, processed_pairs);
+      }
+      if (found_opposing) {
+        any_opposing_resolved = true;
       }
     }
     if (any_opposing_resolved) {
@@ -2872,131 +2927,89 @@ class SimulationEngine {
     }
   }
 
-  void resolve_events_at_current_time(double eps)
+  bool annihilate_collapsing_contours(const Span<bool> is_edge_collapsing,
+                                      const double cluster_tol)
   {
-    PRF_scope(ProfileCategory::Core);
-
-    const double cluster_tol = std::max(eps, 1e-4);
-
-    /* 1. Identify all collapsing edges at current_time_. */
-    Array<bool> is_edge_collapsing(wf_nodes_.pos.size(), false);
-    Vector<int> collapsing_edges;
-    for (const int u : wf_nodes_.pos.index_range()) {
-      if (!wf_nodes_.is_active[u]) {
+    bool any_contour_collapsed = false;
+    for (const int cid : wf_contours_.is_active.index_range()) {
+      if (!wf_contours_.is_active[cid]) {
         continue;
       }
-      const int v = wf_nodes_.next_node[u];
-      if (math::distance_squared(wf_nodes_.pos[v], wf_nodes_.pos[u]) < cluster_tol * cluster_tol) {
-        collapsing_edges.append(u);
-        is_edge_collapsing[u] = true;
+      const int head = wf_contours_.head_node[cid];
+      if (head < 0 || !wf_nodes_.is_active[head]) {
+        continue;
       }
-    }
 
-    /* Fast Path: Complete Contour Annihilation (e.g. circles, regular polygons, triangles).
-     * If an entire active contour has all its edges collapsing at the current time,
-     * they all converge to a single center point p*. We can emit its roof faces and retire
-     * all nodes in strictly O(N) time without quadratic pairwise checks. */
-    if (!collapsing_edges.is_empty()) {
-      bool any_contour_collapsed = false;
-      for (const int cid : wf_contours_.is_active.index_range()) {
-        if (!wf_contours_.is_active[cid]) {
-          continue;
+      int curr = head;
+      int active_count = 0;
+      int collapsing_count = 0;
+      double2 p_sum(0.0, 0.0);
+
+      do {
+        active_count++;
+        p_sum += wf_nodes_.pos[curr];
+        if (is_edge_collapsing[curr]) {
+          collapsing_count++;
         }
-        const int head = wf_contours_.head_node[cid];
-        if (head < 0 || !wf_nodes_.is_active[head]) {
-          continue;
-        }
+        curr = wf_nodes_.next_node[curr];
+      } while (curr != head && curr >= 0 && active_count < int(wf_nodes_.pos.size()));
 
-        int curr = head;
-        int active_count = 0;
-        int collapsing_count = 0;
-        double2 p_sum(0.0, 0.0);
+      if (active_count >= 3 && collapsing_count == active_count) {
+        const double2 p_star = p_sum / double(active_count);
+        const int s_star = get_or_create_skel_node(p_star, cluster_tol);
 
+        curr = head;
         do {
-          active_count++;
-          p_sum += wf_nodes_.pos[curr];
-          if (is_edge_collapsing[curr]) {
-            collapsing_count++;
-          }
-          curr = wf_nodes_.next_node[curr];
-        } while (curr != head && curr >= 0 && active_count < int(wf_nodes_.pos.size()));
-
-        if (active_count >= 3 && collapsing_count == active_count) {
-          const double2 p_star = p_sum / double(active_count);
-          const int s_star = get_or_create_skel_node(p_star, cluster_tol);
-
-          curr = head;
-          do {
-            const int next_curr = wf_nodes_.next_node[curr];
-            if (!dry_run_) {
-              Vector<int> face_verts;
-              face_verts.append(wf_nodes_.left_trail[curr][0]);
-              for (const int r : wf_nodes_.right_trail[curr]) {
-                if (face_verts.last() != r) {
-                  face_verts.append(r);
-                }
-              }
-              if (face_verts.last() != s_star) {
-                face_verts.append(s_star);
-              }
-              for (int k = int(wf_nodes_.left_trail[curr].size()) - 1; k >= 1; k--) {
-                const int l = wf_nodes_.left_trail[curr][k];
-                if (face_verts.last() != l && l != face_verts[0]) {
-                  face_verts.append(l);
-                }
-              }
-              if (face_verts.size() >= 3) {
-                out_faces_.faces.append(std::move(face_verts));
-                out_faces_.face_orig.append(wf_nodes_.orig_face[curr]);
-                out_faces_.face_band.append(current_band_);
-                out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[curr]);
+          const int next_curr = wf_nodes_.next_node[curr];
+          if (!dry_run_) {
+            Vector<int> face_verts;
+            face_verts.append(wf_nodes_.left_trail[curr][0]);
+            for (const int r : wf_nodes_.right_trail[curr]) {
+              if (face_verts.last() != r) {
+                face_verts.append(r);
               }
             }
+            if (face_verts.last() != s_star) {
+              face_verts.append(s_star);
+            }
+            for (int k = int(wf_nodes_.left_trail[curr].size()) - 1; k >= 1; k--) {
+              const int l = wf_nodes_.left_trail[curr][k];
+              if (face_verts.last() != l && l != face_verts[0]) {
+                face_verts.append(l);
+              }
+            }
+            if (face_verts.size() >= 3) {
+              out_faces_.faces.append(std::move(face_verts));
+              out_faces_.face_orig.append(wf_nodes_.orig_face[curr]);
+              out_faces_.face_band.append(current_band_);
+              out_faces_.face_orig_edge.append(wf_nodes_.orig_edge[curr]);
+            }
+          }
 
-            skel_graph_.edges_node1.append(wf_nodes_.skel_node[curr]);
-            skel_graph_.edges_node2.append(s_star);
-            skel_graph_.edges_orig.append(-1);
-            skel_graph_.edges_face.append(wf_nodes_.orig_face[curr]);
-            skel_graph_.edges_time_start.append(wf_nodes_.time_birth[curr]);
-            skel_graph_.edges_time_end.append(current_time_);
-            skel_graph_.edges_is_boundary.append(false);
+          skel_graph_.edges_node1.append(wf_nodes_.skel_node[curr]);
+          skel_graph_.edges_node2.append(s_star);
+          skel_graph_.edges_orig.append(-1);
+          skel_graph_.edges_face.append(wf_nodes_.orig_face[curr]);
+          skel_graph_.edges_time_start.append(wf_nodes_.time_birth[curr]);
+          skel_graph_.edges_time_end.append(current_time_);
+          skel_graph_.edges_is_boundary.append(false);
 
-            deactivate_node(curr);
-            curr = next_curr;
-          } while (curr != head && curr >= 0);
+          deactivate_node(curr);
+          curr = next_curr;
+        } while (curr != head && curr >= 0);
 
-          wf_contours_.is_active[cid] = false;
-          any_contour_collapsed = true;
-        }
-      }
-
-      if (any_contour_collapsed) {
-        if (!has_active_contours()) {
-          events_processed_count_++;
-          return;
-        }
-        collapsing_edges.remove_if([&](const int e) { return !wf_nodes_.is_active[e]; });
+        wf_contours_.is_active[cid] = false;
+        any_contour_collapsed = true;
       }
     }
+    return any_contour_collapsed;
+  }
 
-    /* 0. Resolve any opposing collinear/overlapping wavefront edges. */
-    resolve_opposing_overlapping_edges(cluster_tol);
-
-    /* 2. Identify all vertex-vertex collisions at current_time_. */
-    struct VertPair {
-      int u;
-      int w;
-    };
-    Vector<VertPair> vert_collisions;
-
-    /* 3. Identify all split events at current_time_. */
-    struct SplitInfo {
-      int reflex_w;
-      int edge_u;
-      double2 pos;
-    };
-    Vector<SplitInfo> splits;
-
+  void collect_simultaneous_events(const Vector<int> &collapsing_edges,
+                                   const double cluster_tol,
+                                   Vector<VertPair> &r_vert_collisions,
+                                   Vector<SplitInfo> &r_splits)
+  {
     double2 bbox_min(1e30, 1e30), bbox_max(-1e30, -1e30);
     int active_nodes_num = 0;
     Vector<int> reflex_nodes;
@@ -3029,7 +3042,7 @@ class SimulationEngine {
             continue;
           }
           if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
-            vert_collisions.append(VertPair{u, w});
+            r_vert_collisions.append(VertPair{u, w});
           }
         }
       }
@@ -3055,7 +3068,7 @@ class SimulationEngine {
             const double s = math::line_point_factor(
                 wf_nodes_.pos[w], wf_nodes_.pos[u], wf_nodes_.pos[v]);
             if (s > 1e-5 && s < 1.0 - 1e-5) {
-              splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+              r_splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
             }
           }
         }
@@ -3083,7 +3096,7 @@ class SimulationEngine {
         current_query_id_ = 1;
       }
 
-      /* 1. Vertex-vertex collisions. */
+      /* Vertex-vertex collisions. */
       for (const int u : wf_nodes_.pos.index_range()) {
         if (!wf_nodes_.is_active[u]) {
           continue;
@@ -3114,12 +3127,12 @@ class SimulationEngine {
                 return;
               }
               if (math::length(wf_nodes_.pos[w] - wf_nodes_.pos[u]) < cluster_tol) {
-                vert_collisions.append(VertPair{u, w});
+                r_vert_collisions.append(VertPair{u, w});
               }
             });
       }
 
-      /* 2. Split events at current_time_. */
+      /* Split events at current_time_. */
       if (!reflex_nodes.is_empty()) {
         grid_.init(x_min, y_min, x_max, y_max, active_nodes_num);
         for (const int u : wf_nodes_.pos.index_range()) {
@@ -3173,29 +3186,34 @@ class SimulationEngine {
                   const double s = math::line_point_factor(
                       wf_nodes_.pos[w], wf_nodes_.pos[u], wf_nodes_.pos[v]);
                   if (s > 1e-5 && s < 1.0 - 1e-5) {
-                    splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
+                    r_splits.append(SplitInfo{w, u, wf_nodes_.pos[w]});
                   }
                 }
               });
         }
       }
     }
+  }
 
-    /* 4. Group all interactions into spatial Event Clusters. */
-    Vector<EventCluster> clusters;
+  void group_events_into_clusters(const double cluster_tol,
+                                  const Vector<int> &collapsing_edges,
+                                  const Vector<VertPair> &vert_collisions,
+                                  const Vector<SplitInfo> &splits,
+                                  Vector<EventCluster> &r_clusters)
+  {
     Array<int> vert_to_cluster(wf_nodes_.pos.size(), -1);
     Array<int> edge_to_cluster(wf_nodes_.pos.size(), -1);
 
     auto add_edge_to_cluster = [&](const int ci, const int e) {
       if (edge_to_cluster[e] == -1) {
-        clusters[ci].collapsing_edges.append(e);
+        r_clusters[ci].collapsing_edges.append(e);
         edge_to_cluster[e] = ci;
       }
     };
 
     auto add_vert_to_cluster = [&](const int ci, const int v) {
       if (vert_to_cluster[v] == -1) {
-        clusters[ci].colliding_verts.append(v);
+        r_clusters[ci].colliding_verts.append(v);
         vert_to_cluster[v] = ci;
       }
     };
@@ -3214,8 +3232,8 @@ class SimulationEngine {
         found_ci = vert_to_cluster[v];
       }
       else {
-        for (const int ci : clusters.index_range()) {
-          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+        for (const int ci : r_clusters.index_range()) {
+          if (math::length(r_clusters[ci].p_star - p) < cluster_tol) {
             found_ci = ci;
             break;
           }
@@ -3225,8 +3243,8 @@ class SimulationEngine {
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        const int new_ci = int(clusters.size());
-        clusters.append(std::move(c));
+        const int new_ci = int(r_clusters.size());
+        r_clusters.append(std::move(c));
         add_edge_to_cluster(new_ci, e);
         add_vert_to_cluster(new_ci, e);
         if (v >= 0) {
@@ -3252,8 +3270,8 @@ class SimulationEngine {
         found_ci = vert_to_cluster[vp.w];
       }
       else {
-        for (const int ci : clusters.index_range()) {
-          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+        for (const int ci : r_clusters.index_range()) {
+          if (math::length(r_clusters[ci].p_star - p) < cluster_tol) {
             found_ci = ci;
             break;
           }
@@ -3263,8 +3281,8 @@ class SimulationEngine {
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        const int new_ci = int(clusters.size());
-        clusters.append(std::move(c));
+        const int new_ci = int(r_clusters.size());
+        r_clusters.append(std::move(c));
         add_vert_to_cluster(new_ci, vp.u);
         add_vert_to_cluster(new_ci, vp.w);
       }
@@ -3281,8 +3299,8 @@ class SimulationEngine {
         found_ci = vert_to_cluster[si.reflex_w];
       }
       else {
-        for (const int ci : clusters.index_range()) {
-          if (math::length(clusters[ci].p_star - p) < cluster_tol) {
+        for (const int ci : r_clusters.index_range()) {
+          if (math::length(r_clusters[ci].p_star - p) < cluster_tol) {
             found_ci = ci;
             break;
           }
@@ -3292,22 +3310,25 @@ class SimulationEngine {
       if (found_ci == -1) {
         EventCluster c;
         c.p_star = p;
-        const int new_ci = int(clusters.size());
-        clusters.append(std::move(c));
+        const int new_ci = int(r_clusters.size());
+        r_clusters.append(std::move(c));
         add_vert_to_cluster(new_ci, si.reflex_w);
-        if (!clusters[new_ci].split_edges.contains(si.edge_u)) {
-          clusters[new_ci].split_edges.append(si.edge_u);
+        if (!r_clusters[new_ci].split_edges.contains(si.edge_u)) {
+          r_clusters[new_ci].split_edges.append(si.edge_u);
         }
       }
       else {
         add_vert_to_cluster(found_ci, si.reflex_w);
-        if (!clusters[found_ci].split_edges.contains(si.edge_u)) {
-          clusters[found_ci].split_edges.append(si.edge_u);
+        if (!r_clusters[found_ci].split_edges.contains(si.edge_u)) {
+          r_clusters[found_ci].split_edges.append(si.edge_u);
         }
       }
     }
+  }
 
-    /* 5. Phase 1: Create Skeleton Nodes and bind colliding vertices across all clusters. */
+  void process_event_clusters(Vector<EventCluster> &clusters, const double cluster_tol)
+  {
+    /* Create Skeleton Nodes and bind colliding vertices across all clusters. */
     for (EventCluster &cluster : clusters) {
       double2 p_sum(0.0, 0.0);
       int count = 0;
@@ -3324,7 +3345,7 @@ class SimulationEngine {
       }
     }
 
-    /* 6. Phase 2: Emit Roof Faces for point-collapsing edges and splice topology. */
+    /* Emit Roof Faces for point-collapsing edges and splice topology. */
     for (EventCluster &cluster : clusters) {
       const int s_star = cluster.s_star;
       for (const int e : cluster.collapsing_edges) {
@@ -3387,14 +3408,60 @@ class SimulationEngine {
       }
     }
 
-    /* 7. Phase 4: Resolve remaining clusters via Radial Gap Pairing. */
+    /* Resolve remaining clusters via Radial Gap Pairing. */
     for (const EventCluster &cluster : clusters) {
       if (!cluster.split_edges.is_empty() || cluster.collapsing_edges.is_empty()) {
         resolve_cluster(cluster);
       }
     }
+  }
 
-    /* 9. Rebuild and synchronize active contour loops. */
+  void resolve_events_at_current_time(double eps)
+  {
+    PRF_scope(ProfileCategory::Core);
+
+    const double cluster_tol = std::max(eps, 1e-4);
+
+    /* Identify all collapsing edges at current_time_. */
+    Array<bool> is_edge_collapsing(wf_nodes_.pos.size(), false);
+    Vector<int> collapsing_edges;
+    for (const int u : wf_nodes_.pos.index_range()) {
+      if (!wf_nodes_.is_active[u]) {
+        continue;
+      }
+      const int v = wf_nodes_.next_node[u];
+      if (math::distance_squared(wf_nodes_.pos[v], wf_nodes_.pos[u]) < cluster_tol * cluster_tol) {
+        collapsing_edges.append(u);
+        is_edge_collapsing[u] = true;
+      }
+    }
+
+    if (!collapsing_edges.is_empty()) {
+      if (annihilate_collapsing_contours(is_edge_collapsing.as_span(), cluster_tol)) {
+        if (!has_active_contours()) {
+          events_processed_count_++;
+          return;
+        }
+        collapsing_edges.remove_if([&](const int e) { return !wf_nodes_.is_active[e]; });
+      }
+    }
+
+    /* Resolve any opposing collinear/overlapping wavefront edges. */
+    resolve_opposing_overlapping_edges(cluster_tol);
+
+    /* Identify all vertex collisions and split events at current_time_. */
+    Vector<VertPair> vert_collisions;
+    Vector<SplitInfo> splits;
+    collect_simultaneous_events(collapsing_edges, cluster_tol, vert_collisions, splits);
+
+    /* Group all interactions into spatial Event Clusters. */
+    Vector<EventCluster> clusters;
+    group_events_into_clusters(cluster_tol, collapsing_edges, vert_collisions, splits, clusters);
+
+    /* Process event clusters. */
+    process_event_clusters(clusters, cluster_tol);
+
+    /* Rebuild and synchronize active contour loops. */
     rebuild_active_contours();
 
     for (const int i : wf_nodes_.pos.index_range()) {
@@ -3646,7 +3713,7 @@ class SimulationEngine {
   {
     PRF_scope(ProfileCategory::Core);
 
-    /* 1. Allocate a single skeleton node for each active wavefront vertex. */
+    /* Allocate a single skeleton node for each active wavefront vertex. */
     Array<int> new_skel_node(wf_nodes_.pos.size(), -1);
     for (const int i : wf_nodes_.pos.index_range()) {
       if (wf_nodes_.is_active[i]) {
@@ -3657,7 +3724,7 @@ class SimulationEngine {
       }
     }
 
-    /* 2. Emit swept face for each active wavefront edge. */
+    /* Emit swept face for each active wavefront edge. */
     for (const int u : wf_nodes_.pos.index_range()) {
       if (!wf_nodes_.is_active[u]) {
         continue;
@@ -3729,11 +3796,9 @@ class SimulationEngine {
    * faces with holes or repeating vertices, annular regions are split into simple disk
    * faces by adding non-crossing bridge chords approximately on opposite sides.
    */
-  void emit_inner_polygon_faces()
+  void extract_and_classify_loops(Vector<Vector<int>> &r_outer_loops,
+                                  Vector<Vector<int>> &r_hole_loops)
   {
-    PRF_scope(ProfileCategory::Core);
-
-    /* 1. Extract all active wavefront loops. */
     Vector<bool> visited(wf_nodes_.pos.size(), false);
     Vector<Vector<int>> all_loops;
 
@@ -3756,22 +3821,332 @@ class SimulationEngine {
       }
     }
 
-    if (all_loops.is_empty()) {
-      return;
-    }
-
-    /* 2. Classify loops into outer (CCW, signed area > 0) and holes (CW, signed area < 0). */
-    Vector<Vector<int>> outer_loops;
-    Vector<Vector<int>> hole_loops;
-
     for (Vector<int> &loop : all_loops) {
       const double area = polygon_signed_area(loop.as_span(), skel_graph_.nodes_pos.as_span());
       if (area > 1e-9) {
-        outer_loops.append(std::move(loop));
+        r_outer_loops.append(std::move(loop));
       }
       else if (area < -1e-9) {
-        hole_loops.append(std::move(loop));
+        r_hole_loops.append(std::move(loop));
       }
+    }
+  }
+
+  void associate_holes_with_regions(const Vector<Vector<int>> &outer_loops,
+                                    Vector<Vector<int>> &hole_loops,
+                                    Vector<Region> &r_regions)
+  {
+    r_regions.reserve(outer_loops.size());
+    for (const Vector<int> &outer : outer_loops) {
+      r_regions.append(Region{outer, {}});
+    }
+
+    for (Vector<int> &hole : hole_loops) {
+      const double2 test_pt = skel_graph_.nodes_pos[hole[0]];
+      int best_region = -1;
+      for (const int r_idx : r_regions.index_range()) {
+        Vector<double2> outer_coords;
+        outer_coords.reserve(r_regions[r_idx].outer.size());
+        for (const int v : r_regions[r_idx].outer) {
+          outer_coords.append(skel_graph_.nodes_pos[v]);
+        }
+        if (isect_point_polygon_v2(test_pt, outer_coords.as_span())) {
+          best_region = r_idx;
+          break;
+        }
+      }
+      if (best_region != -1) {
+        r_regions[best_region].holes.append(std::move(hole));
+      }
+      else if (!r_regions.is_empty()) {
+        r_regions[0].holes.append(std::move(hole));
+      }
+    }
+  }
+
+  void find_valid_bridge_chords(const Span<double2> outer_coords,
+                                const Span<double2> hole_coords,
+                                const Span<Vector<double2>> other_holes_coords,
+                                Vector<CandidateChord> &r_valid_chords)
+  {
+    const int n_outer = int(outer_coords.size());
+    const int n_hole = int(hole_coords.size());
+
+    auto is_in_annular_domain = [&](const double2 &pt) -> bool {
+      if (!isect_point_polygon_v2(pt, outer_coords)) {
+        return false;
+      }
+      if (isect_point_polygon_v2(pt, hole_coords)) {
+        return false;
+      }
+      for (const Vector<double2> &h_coords : other_holes_coords) {
+        if (isect_point_polygon_v2(pt, h_coords.as_span())) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    for (const int i : IndexRange(n_outer)) {
+      const double2 &u = outer_coords[i];
+      for (const int j : IndexRange(n_hole)) {
+        const double2 &v = hole_coords[j];
+
+        /* Midpoint and near-endpoints containment. */
+        const double2 mid = 0.5 * (u + v);
+        if (!is_in_annular_domain(mid)) {
+          continue;
+        }
+        const double2 p_near_u = u + 0.05 * (v - u);
+        const double2 p_near_v = v - 0.05 * (v - u);
+        if (!is_in_annular_domain(p_near_u) || !is_in_annular_domain(p_near_v)) {
+          continue;
+        }
+
+        /* Check crossing non-incident edges of outer loop. */
+        bool crosses = false;
+        for (const int k : IndexRange(n_outer)) {
+          if (k == i || (k + 1) % n_outer == i) {
+            continue;
+          }
+          if (segment_crosses_or_touches_v2(
+                  u, v, outer_coords[k], outer_coords[(k + 1) % n_outer]))
+          {
+            crosses = true;
+            break;
+          }
+        }
+        if (crosses) {
+          continue;
+        }
+
+        /* Check crossing non-incident edges of hole loop. */
+        for (const int k : IndexRange(n_hole)) {
+          if (k == j || (k + 1) % n_hole == j) {
+            continue;
+          }
+          if (segment_crosses_or_touches_v2(u, v, hole_coords[k], hole_coords[(k + 1) % n_hole])) {
+            crosses = true;
+            break;
+          }
+        }
+        if (crosses) {
+          continue;
+        }
+
+        /* Check crossing edges of any other holes. */
+        for (const Vector<double2> &h_coords : other_holes_coords) {
+          const int m = int(h_coords.size());
+          for (const int k : IndexRange(m)) {
+            if (segment_crosses_or_touches_v2(u, v, h_coords[k], h_coords[(k + 1) % m])) {
+              crosses = true;
+              break;
+            }
+          }
+          if (crosses) {
+            break;
+          }
+        }
+        if (crosses) {
+          continue;
+        }
+
+        r_valid_chords.append(CandidateChord{i, j, math::distance(u, v)});
+      }
+    }
+  }
+
+  void find_best_opposing_chord_pair(const Vector<CandidateChord> &valid_chords,
+                                     const Span<double2> outer_coords,
+                                     const Span<double2> hole_coords,
+                                     const double2 hole_centroid,
+                                     const double max_extent,
+                                     int &r_best_idx1,
+                                     int &r_best_idx2)
+  {
+    r_best_idx1 = -1;
+    r_best_idx2 = -1;
+    double best_score = std::numeric_limits<double>::infinity();
+
+    const int num_chords = int(valid_chords.size());
+    for (const int idx1 : IndexRange(num_chords)) {
+      const CandidateChord &c1 = valid_chords[idx1];
+      const double2 &u1 = outer_coords[c1.i_outer];
+      const double2 &v1 = hole_coords[c1.j_hole];
+      const double2 d1 = u1 - hole_centroid;
+      const double len_d1 = math::length(d1);
+      if (len_d1 < 1e-12) {
+        continue;
+      }
+      const double2 dir1 = d1 / len_d1;
+
+      for (int idx2 = idx1 + 1; idx2 < num_chords; idx2++) {
+        const CandidateChord &c2 = valid_chords[idx2];
+        if (c1.i_outer == c2.i_outer || c1.j_hole == c2.j_hole) {
+          continue;
+        }
+        const double2 &u2 = outer_coords[c2.i_outer];
+        const double2 &v2 = hole_coords[c2.j_hole];
+
+        /* Chords must not cross each other. */
+        if (segment_crosses_or_touches_v2(u1, v1, u2, v2)) {
+          continue;
+        }
+
+        const double2 d2 = u2 - hole_centroid;
+        const double len_d2 = math::length(d2);
+        if (len_d2 < 1e-12) {
+          continue;
+        }
+        const double2 dir2 = d2 / len_d2;
+
+        /* Dot product is -1 for diametrically opposite chords. */
+        const double dot = math::dot(dir1, dir2);
+        const double score = dot + 0.05 * (c1.dist + c2.dist) / max_extent;
+
+        if (score < best_score) {
+          best_score = score;
+          r_best_idx1 = idx1;
+          r_best_idx2 = idx2;
+        }
+      }
+    }
+  }
+
+  void bridge_hole_in_region(Region current, Vector<Region> &worklist)
+  {
+    /* Pick the first hole to bridge. */
+    Vector<int> hole = current.holes.pop_last();
+
+    const Span<int> outer_indices = current.outer.as_span();
+    const Span<int> hole_indices = hole.as_span();
+    const int n_outer = int(outer_indices.size());
+    const int n_hole = int(hole_indices.size());
+
+    Vector<double2> outer_coords;
+    outer_coords.reserve(n_outer);
+    for (const int v : outer_indices) {
+      outer_coords.append(skel_graph_.nodes_pos[v]);
+    }
+
+    Vector<double2> hole_coords;
+    hole_coords.reserve(n_hole);
+    for (const int v : hole_indices) {
+      hole_coords.append(skel_graph_.nodes_pos[v]);
+    }
+
+    Vector<Vector<double2>> other_holes_coords;
+    for (const Vector<int> &h : current.holes) {
+      Vector<double2> coords;
+      coords.reserve(h.size());
+      for (const int v : h) {
+        coords.append(skel_graph_.nodes_pos[v]);
+      }
+      other_holes_coords.append(std::move(coords));
+    }
+
+    /* Compute hole centroid and bounding box scale for normalization. */
+    double2 hole_centroid(0.0, 0.0);
+    for (const double2 &p : hole_coords) {
+      hole_centroid += p;
+    }
+    hole_centroid /= double(n_hole);
+
+    double max_extent = 1.0;
+    for (const double2 &p : outer_coords) {
+      max_extent = math::max(max_extent, math::distance(p, hole_centroid));
+    }
+
+    /* Find all valid candidate bridge chords u_i -> v_j. */
+    Vector<CandidateChord> valid_chords;
+    find_valid_bridge_chords(
+        outer_coords.as_span(), hole_coords.as_span(), other_holes_coords.as_span(), valid_chords);
+
+    /* Select the best non-crossing chord pair on approximately opposite sides. */
+    int best_idx1 = -1;
+    int best_idx2 = -1;
+    find_best_opposing_chord_pair(valid_chords,
+                                  outer_coords.as_span(),
+                                  hole_coords.as_span(),
+                                  hole_centroid,
+                                  max_extent,
+                                  best_idx1,
+                                  best_idx2);
+
+    /* Fallback if no valid chord pair was found. */
+    if (best_idx1 == -1 || best_idx2 == -1) {
+      out_faces_.faces.append(std::move(current.outer));
+      out_faces_.face_orig.append(0);
+      out_faces_.face_band.append(math::max(0, segments_num_ - 1));
+      out_faces_.face_orig_edge.append(-1);
+      return;
+    }
+
+    const CandidateChord &c_a = valid_chords[best_idx1];
+    const CandidateChord &c_b = valid_chords[best_idx2];
+    const int i_a = c_a.i_outer;
+    const int j_p = c_a.j_hole;
+    const int i_b = c_b.i_outer;
+    const int j_q = c_b.j_hole;
+
+    /* Construct the two split faces. */
+    Vector<int> outer_arc_1 = get_cyclic_arc(outer_indices, i_a, i_b);
+    Vector<int> outer_arc_2 = get_cyclic_arc(outer_indices, i_b, i_a);
+
+    Vector<int> hole_arc_1 = get_cyclic_arc(hole_indices, j_q, j_p);
+    Vector<int> hole_arc_2 = get_cyclic_arc(hole_indices, j_p, j_q);
+
+    Vector<int> face1 = outer_arc_1;
+    face1.extend(hole_arc_1.as_span());
+
+    Vector<int> face2 = outer_arc_2;
+    face2.extend(hole_arc_2.as_span());
+
+    /* Check signed areas; if negative, swap the hole arc endpoints. */
+    const double area1 = polygon_signed_area(face1.as_span(), skel_graph_.nodes_pos.as_span());
+    const double area2 = polygon_signed_area(face2.as_span(), skel_graph_.nodes_pos.as_span());
+    if (area1 < 0.0 || area2 < 0.0) {
+      face1 = outer_arc_1;
+      face1.extend(hole_arc_2.as_span());
+
+      face2 = outer_arc_2;
+      face2.extend(hole_arc_1.as_span());
+    }
+
+    /* Partition remaining holes between face1 and face2. */
+    Vector<Region> new_regions;
+    new_regions.append(Region{std::move(face1), {}});
+    new_regions.append(Region{std::move(face2), {}});
+
+    for (Vector<int> &rem_hole : current.holes) {
+      const double2 rem_test_pt = skel_graph_.nodes_pos[rem_hole[0]];
+      Vector<double2> f1_coords;
+      f1_coords.reserve(new_regions[0].outer.size());
+      for (const int v : new_regions[0].outer) {
+        f1_coords.append(skel_graph_.nodes_pos[v]);
+      }
+      if (isect_point_polygon_v2(rem_test_pt, f1_coords.as_span())) {
+        new_regions[0].holes.append(std::move(rem_hole));
+      }
+      else {
+        new_regions[1].holes.append(std::move(rem_hole));
+      }
+    }
+
+    worklist.append(std::move(new_regions[0]));
+    worklist.append(std::move(new_regions[1]));
+  }
+
+  void emit_inner_polygon_faces()
+  {
+    PRF_scope(ProfileCategory::Core);
+
+    Vector<Vector<int>> outer_loops;
+    Vector<Vector<int>> hole_loops;
+    extract_and_classify_loops(outer_loops, hole_loops);
+
+    if (outer_loops.is_empty()) {
+      return;
     }
 
     /* If there are no holes, emit outer loops directly as simple polygon caps. */
@@ -3785,42 +4160,10 @@ class SimulationEngine {
       return;
     }
 
-    /* 3. Associate each hole with its enclosing outer loop. */
-    struct Region {
-      Vector<int> outer;
-      Vector<Vector<int>> holes;
-    };
     Vector<Region> regions;
-    regions.reserve(outer_loops.size());
-    for (Vector<int> &outer : outer_loops) {
-      regions.append(Region{std::move(outer), {}});
-    }
+    associate_holes_with_regions(outer_loops, hole_loops, regions);
 
-    for (Vector<int> &hole : hole_loops) {
-      const double2 test_pt = skel_graph_.nodes_pos[hole[0]];
-      int best_region = -1;
-      for (const int r_idx : regions.index_range()) {
-        Vector<double2> outer_coords;
-        outer_coords.reserve(regions[r_idx].outer.size());
-        for (const int v : regions[r_idx].outer) {
-          outer_coords.append(skel_graph_.nodes_pos[v]);
-        }
-        if (isect_point_polygon_v2(test_pt, outer_coords.as_span())) {
-          best_region = r_idx;
-          break;
-        }
-      }
-      if (best_region != -1) {
-        regions[best_region].holes.append(std::move(hole));
-      }
-      else if (!regions.is_empty()) {
-        regions[0].holes.append(std::move(hole));
-      }
-    }
-
-    /* 4. Resolve multiply-connected regions with holes into simple faces via bridge chords. */
     Vector<Region> worklist = std::move(regions);
-
     while (!worklist.is_empty()) {
       Region current = worklist.pop_last();
       if (current.holes.is_empty()) {
@@ -3831,253 +4174,7 @@ class SimulationEngine {
         continue;
       }
 
-      /* Pick the first hole to bridge. */
-      Vector<int> hole = current.holes.pop_last();
-
-      const Span<int> outer_indices = current.outer.as_span();
-      const Span<int> hole_indices = hole.as_span();
-      const int n_outer = int(outer_indices.size());
-      const int n_hole = int(hole_indices.size());
-
-      Vector<double2> outer_coords;
-      outer_coords.reserve(n_outer);
-      for (const int v : outer_indices) {
-        outer_coords.append(skel_graph_.nodes_pos[v]);
-      }
-
-      Vector<double2> hole_coords;
-      hole_coords.reserve(n_hole);
-      for (const int v : hole_indices) {
-        hole_coords.append(skel_graph_.nodes_pos[v]);
-      }
-
-      Vector<Vector<double2>> other_holes_coords;
-      for (const Vector<int> &h : current.holes) {
-        Vector<double2> coords;
-        coords.reserve(h.size());
-        for (const int v : h) {
-          coords.append(skel_graph_.nodes_pos[v]);
-        }
-        other_holes_coords.append(std::move(coords));
-      }
-
-      auto is_in_annular_domain = [&](const double2 &pt) -> bool {
-        if (!isect_point_polygon_v2(pt, outer_coords.as_span())) {
-          return false;
-        }
-        if (isect_point_polygon_v2(pt, hole_coords.as_span())) {
-          return false;
-        }
-        for (const Vector<double2> &h_coords : other_holes_coords) {
-          if (isect_point_polygon_v2(pt, h_coords.as_span())) {
-            return false;
-          }
-        }
-        return true;
-      };
-
-      /* Compute hole centroid and bounding box scale for normalization. */
-      double2 hole_centroid(0.0, 0.0);
-      for (const double2 &p : hole_coords) {
-        hole_centroid += p;
-      }
-      hole_centroid /= double(n_hole);
-
-      double max_extent = 1.0;
-      for (const double2 &p : outer_coords) {
-        max_extent = math::max(max_extent, math::distance(p, hole_centroid));
-      }
-
-      /* Find all valid candidate bridge chords u_i -> v_j. */
-      struct CandidateChord {
-        int i_outer;
-        int j_hole;
-        double dist;
-      };
-      Vector<CandidateChord> valid_chords;
-
-      for (const int i : IndexRange(n_outer)) {
-        const double2 &u = outer_coords[i];
-        for (const int j : IndexRange(n_hole)) {
-          const double2 &v = hole_coords[j];
-
-          /* 1. Midpoint and near-endpoints containment. */
-          const double2 mid = 0.5 * (u + v);
-          if (!is_in_annular_domain(mid)) {
-            continue;
-          }
-          const double2 p_near_u = u + 0.05 * (v - u);
-          const double2 p_near_v = v - 0.05 * (v - u);
-          if (!is_in_annular_domain(p_near_u) || !is_in_annular_domain(p_near_v)) {
-            continue;
-          }
-
-          /* 2. Check crossing non-incident edges of outer loop. */
-          bool crosses = false;
-          for (const int k : IndexRange(n_outer)) {
-            if (k == i || (k + 1) % n_outer == i) {
-              continue;
-            }
-            if (segment_crosses_or_touches_v2(
-                    u, v, outer_coords[k], outer_coords[(k + 1) % n_outer]))
-            {
-              crosses = true;
-              break;
-            }
-          }
-          if (crosses) {
-            continue;
-          }
-
-          /* 3. Check crossing non-incident edges of hole loop. */
-          for (const int k : IndexRange(n_hole)) {
-            if (k == j || (k + 1) % n_hole == j) {
-              continue;
-            }
-            if (segment_crosses_or_touches_v2(u, v, hole_coords[k], hole_coords[(k + 1) % n_hole]))
-            {
-              crosses = true;
-              break;
-            }
-          }
-          if (crosses) {
-            continue;
-          }
-
-          /* 4. Check crossing edges of any other holes. */
-          for (const Vector<double2> &h_coords : other_holes_coords) {
-            const int m = int(h_coords.size());
-            for (const int k : IndexRange(m)) {
-              if (segment_crosses_or_touches_v2(u, v, h_coords[k], h_coords[(k + 1) % m])) {
-                crosses = true;
-                break;
-              }
-            }
-            if (crosses) {
-              break;
-            }
-          }
-          if (crosses) {
-            continue;
-          }
-
-          valid_chords.append(CandidateChord{i, j, math::distance(u, v)});
-        }
-      }
-
-      /* Select the best non-crossing chord pair on approximately opposite sides. */
-      int best_idx1 = -1;
-      int best_idx2 = -1;
-      double best_score = std::numeric_limits<double>::infinity();
-
-      const int num_chords = int(valid_chords.size());
-      for (const int idx1 : IndexRange(num_chords)) {
-        const CandidateChord &c1 = valid_chords[idx1];
-        const double2 &u1 = outer_coords[c1.i_outer];
-        const double2 &v1 = hole_coords[c1.j_hole];
-        const double2 d1 = u1 - hole_centroid;
-        const double len_d1 = math::length(d1);
-        if (len_d1 < 1e-12) {
-          continue;
-        }
-        const double2 dir1 = d1 / len_d1;
-
-        for (int idx2 = idx1 + 1; idx2 < num_chords; idx2++) {
-          const CandidateChord &c2 = valid_chords[idx2];
-          if (c1.i_outer == c2.i_outer || c1.j_hole == c2.j_hole) {
-            continue;
-          }
-          const double2 &u2 = outer_coords[c2.i_outer];
-          const double2 &v2 = hole_coords[c2.j_hole];
-
-          /* Chords must not cross each other. */
-          if (segment_crosses_or_touches_v2(u1, v1, u2, v2)) {
-            continue;
-          }
-
-          const double2 d2 = u2 - hole_centroid;
-          const double len_d2 = math::length(d2);
-          if (len_d2 < 1e-12) {
-            continue;
-          }
-          const double2 dir2 = d2 / len_d2;
-
-          /* Dot product is -1 for diametrically opposite chords. */
-          const double dot = math::dot(dir1, dir2);
-          const double score = dot + 0.05 * (c1.dist + c2.dist) / max_extent;
-
-          if (score < best_score) {
-            best_score = score;
-            best_idx1 = idx1;
-            best_idx2 = idx2;
-          }
-        }
-      }
-
-      /* Fallback if no valid chord pair was found. */
-      if (best_idx1 == -1 || best_idx2 == -1) {
-        out_faces_.faces.append(std::move(current.outer));
-        out_faces_.face_orig.append(0);
-        out_faces_.face_band.append(math::max(0, segments_num_ - 1));
-        out_faces_.face_orig_edge.append(-1);
-        continue;
-      }
-
-      const CandidateChord &c_a = valid_chords[best_idx1];
-      const CandidateChord &c_b = valid_chords[best_idx2];
-      const int i_a = c_a.i_outer;
-      const int j_p = c_a.j_hole;
-      const int i_b = c_b.i_outer;
-      const int j_q = c_b.j_hole;
-
-      /* Construct the two split faces.
-       * Face 1: outer arc from i_a to i_b, jump to j_q, hole arc from j_q to j_p, jump to i_a.
-       * Face 2: outer arc from i_b to i_a, jump to j_p, hole arc from j_p to j_q, jump to i_b. */
-      Vector<int> outer_arc_1 = get_cyclic_arc(outer_indices, i_a, i_b);
-      Vector<int> outer_arc_2 = get_cyclic_arc(outer_indices, i_b, i_a);
-
-      Vector<int> hole_arc_1 = get_cyclic_arc(hole_indices, j_q, j_p);
-      Vector<int> hole_arc_2 = get_cyclic_arc(hole_indices, j_p, j_q);
-
-      Vector<int> face1 = outer_arc_1;
-      face1.extend(hole_arc_1.as_span());
-
-      Vector<int> face2 = outer_arc_2;
-      face2.extend(hole_arc_2.as_span());
-
-      /* Check signed areas; if negative, swap the hole arc endpoints. */
-      const double area1 = polygon_signed_area(face1.as_span(), skel_graph_.nodes_pos.as_span());
-      const double area2 = polygon_signed_area(face2.as_span(), skel_graph_.nodes_pos.as_span());
-      if (area1 < 0.0 || area2 < 0.0) {
-        face1 = outer_arc_1;
-        face1.extend(hole_arc_2.as_span());
-
-        face2 = outer_arc_2;
-        face2.extend(hole_arc_1.as_span());
-      }
-
-      /* Partition remaining holes between face1 and face2. */
-      Vector<Region> new_regions;
-      new_regions.append(Region{std::move(face1), {}});
-      new_regions.append(Region{std::move(face2), {}});
-
-      for (Vector<int> &rem_hole : current.holes) {
-        const double2 rem_test_pt = skel_graph_.nodes_pos[rem_hole[0]];
-        Vector<double2> f1_coords;
-        f1_coords.reserve(new_regions[0].outer.size());
-        for (const int v : new_regions[0].outer) {
-          f1_coords.append(skel_graph_.nodes_pos[v]);
-        }
-        if (isect_point_polygon_v2(rem_test_pt, f1_coords.as_span())) {
-          new_regions[0].holes.append(std::move(rem_hole));
-        }
-        else {
-          new_regions[1].holes.append(std::move(rem_hole));
-        }
-      }
-
-      worklist.append(std::move(new_regions[0]));
-      worklist.append(std::move(new_regions[1]));
+      bridge_hole_in_region(std::move(current), worklist);
     }
   }
 };

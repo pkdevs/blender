@@ -116,27 +116,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 }
 
 /* -------------------------------------------------------------------- */
-/** \name 2D Geometry Helper Functions
- * \{ */
-
-/* 2D signed area of a polygon loop using 2D cross product. Positive if CCW, negative if CW. */
-static double polygon_signed_area_2d(const Span<double2> poly)
-{
-  if (poly.size() < 3) {
-    return 0.0;
-  }
-  double area = 0.0;
-  const int64_t n = poly.size();
-  for (int64_t i = 0; i < n; i++) {
-    const int64_t next = (i + 1 == n) ? 0 : i + 1;
-    area += math::cross(poly[i], poly[next]);
-  }
-  return 0.5 * area;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Group Data Structures
  * \{ */
 
@@ -169,137 +148,126 @@ struct GroupResult {
 /** \name Curves Topology Ingestion
  * \{ */
 
-static void calc_curve_group(const bke::CurvesGeometry &curves,
-                             const IndexMask &curve_mask,
-                             const StraightSkeletonMode mode,
-                             const double offset,
-                             const int segments,
-                             const double epsilon,
-                             GroupResult &r_result)
+struct CurveLoopData {
+  Vector<Array<double2>> loop_coords;
+  Vector<Array<float2>> loop_coords_float;
+  Vector<Array<int>> loop_orig_points;
+  Vector<double> loop_areas;
+  int outer_idx{-1};
+  Vector<int> hole_indices;
+};
+
+static void calc_open_curve_group(const bke::CurvesGeometry &curves,
+                                  const IndexMask &curve_mask,
+                                  const StraightSkeletonMode mode,
+                                  const double offset,
+                                  const int segments,
+                                  const double epsilon,
+                                  GroupResult &r_result)
 {
-  r_result.domain = SourceComponent::Curve;
+  if (curve_mask.size() > 1) {
+    r_result.is_error = true;
+    r_result.error_message =
+        "Group contains multiple open curves. Each open edge chain must have its own Group ID.";
+    return;
+  }
+
   const OffsetIndices points_by_curve = curves.evaluated_points_by_curve();
   const Span<float3> positions = curves.evaluated_positions();
-  const VArray<bool> cyclic = curves.cyclic();
 
-  /* Check whether curves are all open or all cyclic. */
-  int open_count = 0;
-  int cyclic_count = 0;
-  curve_mask.foreach_index([&](const int64_t curve) {
-    if (cyclic[curve]) {
-      cyclic_count++;
-    }
-    else {
-      open_count++;
-    }
-  });
-
-  if (open_count > 0 && cyclic_count > 0) {
+  const int curve_idx = int(curve_mask[0]);
+  const IndexRange curve_points = points_by_curve[curve_idx];
+  if (curve_points.size() < 2) {
     r_result.is_error = true;
-    r_result.error_message = "Group contains both open curves and closed curves.";
+    r_result.error_message = "Edge chain must have at least 2 points.";
     return;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Case 1: Open curve(s) -> Edge Chain                                */
-  /* ------------------------------------------------------------------ */
-  if (open_count > 0) {
-    if (curve_mask.size() > 1) {
-      r_result.is_error = true;
-      r_result.error_message =
-          "Group contains multiple open curves. Each open edge chain must have its own Group ID.";
-      return;
-    }
-
-    const int curve_idx = int(curve_mask[0]);
-    const IndexRange curve_points = points_by_curve[curve_idx];
-    if (curve_points.size() < 2) {
-      r_result.is_error = true;
-      r_result.error_message = "Edge chain must have at least 2 points.";
-      return;
-    }
-
-    if (offset < 0.0) {
-      r_result.is_error = true;
-      r_result.error_message = "Edge chain does not support negative offset / outset.";
-      return;
-    }
-
-    if (mode == StraightSkeletonMode::FullSkeleton) {
-      r_result.is_error = true;
-      r_result.error_message =
-          "Edge chain requires a finite offset distance (Full Skeleton is not applicable to open "
-          "edge chains).";
-      return;
-    }
-
-    const int n = int(curve_points.size());
-    Array<double2> chain_verts(n);
-    Array<int> dst_to_src(n);
-    for (int i = 0; i < n; i++) {
-      const int orig_pt = int(curve_points[i]);
-      chain_verts[i] = double2(positions[orig_pt].x, positions[orig_pt].y);
-      dst_to_src[i] = orig_pt;
-    }
-
-    /* Distance == 0.0 is a no-op returning the original edge chain. */
-    if (offset == 0.0) {
-      r_result.is_noop = true;
-      r_result.ss_output.vert = std::move(chain_verts);
-      r_result.ss_output.vert_time.reinitialize(n);
-      r_result.ss_output.vert_time.fill(0.0);
-      r_result.ss_output.vert_orig.reinitialize(n);
-      for (int i = 0; i < n; i++) {
-        r_result.ss_output.vert_orig[i] = i;
-      }
-      r_result.ss_output.edge.reinitialize(n - 1);
-      for (int i = 0; i < n - 1; i++) {
-        r_result.ss_output.edge[i] = int2(i, i + 1);
-      }
-      r_result.dst_point_to_src_point = std::move(dst_to_src);
-      return;
-    }
-
-    Array<int> chain_indices(n);
-    for (int i = 0; i < n; i++) {
-      chain_indices[i] = i;
-    }
-
-    straightskeleton::StraightSkeletonInput input;
-    input.vert = chain_verts.as_span();
-    input.edge_chain = chain_indices.as_span();
-    input.offset = offset;
-    input.segments = math::max(1, segments);
-    input.epsilon = epsilon;
-
-    r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
-    if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
-      r_result.is_error = true;
-      r_result.error_message = r_result.ss_output.error_message.empty() ?
-                                   "Straight skeleton calculation failed on edge chain." :
-                                   r_result.ss_output.error_message;
-      return;
-    }
-
-    r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
-    r_result.dst_point_to_src_point.fill(-1);
-    for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
-      const int orig_local = r_result.ss_output.vert_orig[i];
-      if (orig_local >= 0 && orig_local < n) {
-        r_result.dst_point_to_src_point[i] = dst_to_src[orig_local];
-      }
-    }
+  if (offset < 0.0) {
+    r_result.is_error = true;
+    r_result.error_message = "Edge chain does not support negative offset / outset.";
     return;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Case 2: Closed curve(s) -> Outer polygon + holes                   */
-  /* ------------------------------------------------------------------ */
+  if (mode == StraightSkeletonMode::FullSkeleton) {
+    r_result.is_error = true;
+    r_result.error_message =
+        "Edge chain requires a finite offset distance (Full Skeleton is not applicable to open "
+        "edge chains).";
+    return;
+  }
+
+  const int n = int(curve_points.size());
+  Array<double2> chain_verts(n);
+  Array<int> dst_to_src(n);
+  for (int i = 0; i < n; i++) {
+    const int orig_pt = int(curve_points[i]);
+    chain_verts[i] = double2(positions[orig_pt].x, positions[orig_pt].y);
+    dst_to_src[i] = orig_pt;
+  }
+
+  /* Distance == 0.0 is a no-op returning the original edge chain. */
+  if (offset == 0.0) {
+    r_result.is_noop = true;
+    r_result.ss_output.vert = std::move(chain_verts);
+    r_result.ss_output.vert_time.reinitialize(n);
+    r_result.ss_output.vert_time.fill(0.0);
+    r_result.ss_output.vert_orig.reinitialize(n);
+    for (int i = 0; i < n; i++) {
+      r_result.ss_output.vert_orig[i] = i;
+    }
+    r_result.ss_output.edge.reinitialize(n - 1);
+    for (int i = 0; i < n - 1; i++) {
+      r_result.ss_output.edge[i] = int2(i, i + 1);
+    }
+    r_result.dst_point_to_src_point = std::move(dst_to_src);
+    return;
+  }
+
+  Array<int> chain_indices(n);
+  for (int i = 0; i < n; i++) {
+    chain_indices[i] = i;
+  }
+
+  straightskeleton::StraightSkeletonInput input;
+  input.vert = chain_verts.as_span();
+  input.edge_chain = chain_indices.as_span();
+  input.offset = offset;
+  input.segments = math::max(1, segments);
+  input.epsilon = epsilon;
+
+  r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
+  if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
+    r_result.is_error = true;
+    r_result.error_message = r_result.ss_output.error_message.empty() ?
+                                 "Straight skeleton calculation failed on edge chain." :
+                                 r_result.ss_output.error_message;
+    return;
+  }
+
+  r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
+  r_result.dst_point_to_src_point.fill(-1);
+  for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
+    const int orig_local = r_result.ss_output.vert_orig[i];
+    if (orig_local >= 0 && orig_local < n) {
+      r_result.dst_point_to_src_point[i] = dst_to_src[orig_local];
+    }
+  }
+}
+
+static bool collect_and_validate_curve_loops(const bke::CurvesGeometry &curves,
+                                             const IndexMask &curve_mask,
+                                             CurveLoopData &r_loops,
+                                             GroupResult &r_result)
+{
+  const OffsetIndices points_by_curve = curves.evaluated_points_by_curve();
+  const Span<float3> positions = curves.evaluated_positions();
+
   const int curves_num = int(curve_mask.size());
-  Vector<Array<double2>> loop_coords(curves_num);
-  Vector<Array<float2>> loop_coords_float(curves_num);
-  Vector<Array<int>> loop_orig_points(curves_num);
-  Vector<double> loop_areas(curves_num);
+  r_loops.loop_coords.reinitialize(curves_num);
+  r_loops.loop_coords_float.reinitialize(curves_num);
+  r_loops.loop_orig_points.reinitialize(curves_num);
+  r_loops.loop_areas.reinitialize(curves_num);
   Vector<Bounds<float2>> loop_bounds(curves_num);
 
   for (int i = 0; i < curves_num; i++) {
@@ -309,20 +277,20 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
     if (n < 3) {
       r_result.is_error = true;
       r_result.error_message = "Closed curve must have at least 3 points.";
-      return;
+      return false;
     }
-    loop_coords[i].reinitialize(n);
-    loop_coords_float[i].reinitialize(n);
-    loop_orig_points[i].reinitialize(n);
+    r_loops.loop_coords[i].reinitialize(n);
+    r_loops.loop_coords_float[i].reinitialize(n);
+    r_loops.loop_orig_points[i].reinitialize(n);
     for (int j = 0; j < n; j++) {
       const int orig_pt = int(curve_points[j]);
       const float2 pt_f(positions[orig_pt].x, positions[orig_pt].y);
-      loop_coords[i][j] = double2(pt_f);
-      loop_coords_float[i][j] = pt_f;
-      loop_orig_points[i][j] = orig_pt;
+      r_loops.loop_coords[i][j] = double2(pt_f);
+      r_loops.loop_coords_float[i][j] = pt_f;
+      r_loops.loop_orig_points[i][j] = orig_pt;
     }
-    loop_areas[i] = polygon_signed_area_2d(loop_coords[i].as_span());
-    loop_bounds[i] = *bounds::min_max(loop_coords_float[i].as_span());
+    r_loops.loop_areas[i] = math::area_poly_signed(r_loops.loop_coords[i].as_span());
+    loop_bounds[i] = *bounds::min_max(r_loops.loop_coords_float[i].as_span());
   }
 
   /* Compute containment depth for each loop using library functions. */
@@ -335,26 +303,27 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
       if (loop_bounds[j].contains(loop_bounds[i].min) &&
           loop_bounds[j].contains(loop_bounds[i].max))
       {
-        if (math::isect_point_poly(loop_coords_float[i][0], loop_coords_float[j].as_span())) {
+        if (math::isect_point_poly(r_loops.loop_coords_float[i][0],
+                                   r_loops.loop_coords_float[j].as_span()))
+        {
           depth[i]++;
         }
       }
     }
   }
 
-  int outer_idx = -1;
   int outer_count = 0;
   for (int i = 0; i < curves_num; i++) {
     if (depth[i] == 0) {
       outer_count++;
-      outer_idx = i;
+      r_loops.outer_idx = i;
     }
   }
 
   if (outer_count == 0) {
     r_result.is_error = true;
     r_result.error_message = "No outer boundary loop found in closed curves.";
-    return;
+    return false;
   }
   if (outer_count > 1) {
     r_result.is_error = true;
@@ -363,32 +332,81 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
         "have "
         "its own Group ID.",
         outer_count);
-    return;
+    return false;
   }
 
   /* All other curves must be directly inside the outer curve (depth == 1). */
   for (int i = 0; i < curves_num; i++) {
-    if (i != outer_idx && depth[i] != 1) {
+    if (i != r_loops.outer_idx && depth[i] != 1) {
       r_result.is_error = true;
       r_result.error_message = "Nested holes within holes are not supported in the same group.";
-      return;
+      return false;
+    }
+    if (i != r_loops.outer_idx) {
+      r_loops.hole_indices.append(i);
     }
   }
 
-  /* Orient outer CCW and holes CW. */
-  if (loop_areas[outer_idx] < 0.0) {
-    std::ranges::reverse(loop_coords[outer_idx]);
-    std::ranges::reverse(loop_orig_points[outer_idx]);
+  return true;
+}
+
+static void handle_closed_curve_zero_offset(Span<double2> all_verts,
+                                            Span<int> orig_pt_map,
+                                            Span<int> outer_polygon,
+                                            OffsetIndices<int> hole_offsets,
+                                            Span<int> hole_vert_indices,
+                                            GroupResult &r_result)
+{
+  r_result.is_noop = true;
+  const int total_verts = all_verts.size();
+  r_result.ss_output.vert = Array<double2>(all_verts);
+  r_result.ss_output.vert_time.reinitialize(total_verts);
+  r_result.ss_output.vert_time.fill(0.0);
+  r_result.ss_output.vert_orig.reinitialize(total_verts);
+  for (int i = 0; i < total_verts; i++) {
+    r_result.ss_output.vert_orig[i] = i;
+  }
+  Vector<int2> boundary_edges;
+  for (int i = 0; i < outer_polygon.size(); i++) {
+    const int next = (i + 1 == outer_polygon.size()) ? 0 : i + 1;
+    boundary_edges.append(int2(outer_polygon[i], outer_polygon[next]));
+  }
+  for (int h = 0; h < hole_offsets.size(); h++) {
+    const IndexRange hr = hole_offsets[h];
+    for (int i = 0; i < hr.size(); i++) {
+      const int next = (i + 1 == hr.size()) ? 0 : i + 1;
+      boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
+    }
+  }
+  r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
+  r_result.dst_point_to_src_point = Array<int>(orig_pt_map);
+}
+
+static void calc_closed_curve_group(const bke::CurvesGeometry &curves,
+                                    const IndexMask &curve_mask,
+                                    const StraightSkeletonMode mode,
+                                    const double offset,
+                                    const int segments,
+                                    const double epsilon,
+                                    GroupResult &r_result)
+{
+  CurveLoopData loops;
+  if (!collect_and_validate_curve_loops(curves, curve_mask, loops, r_result)) {
+    return;
   }
 
-  Vector<int> hole_indices;
-  for (int i = 0; i < curves_num; i++) {
-    if (i != outer_idx) {
-      if (loop_areas[i] > 0.0) {
-        std::ranges::reverse(loop_coords[i]);
-        std::ranges::reverse(loop_orig_points[i]);
-      }
-      hole_indices.append(i);
+  const int outer_idx = loops.outer_idx;
+
+  /* Orient outer CCW and holes CW. */
+  if (loops.loop_areas[outer_idx] < 0.0) {
+    std::ranges::reverse(loops.loop_coords[outer_idx]);
+    std::ranges::reverse(loops.loop_orig_points[outer_idx]);
+  }
+
+  for (const int i : loops.hole_indices) {
+    if (loops.loop_areas[i] > 0.0) {
+      std::ranges::reverse(loops.loop_coords[i]);
+      std::ranges::reverse(loops.loop_orig_points[i]);
     }
   }
 
@@ -396,20 +414,20 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
   Vector<double2> all_verts;
   Vector<int> orig_pt_map;
   Vector<int> outer_polygon;
-  for (int j = 0; j < loop_coords[outer_idx].size(); j++) {
-    const int local_idx = int(all_verts.append_and_get_index(loop_coords[outer_idx][j]));
-    orig_pt_map.append(loop_orig_points[outer_idx][j]);
+  for (int j = 0; j < loops.loop_coords[outer_idx].size(); j++) {
+    const int local_idx = int(all_verts.append_and_get_index(loops.loop_coords[outer_idx][j]));
+    orig_pt_map.append(loops.loop_orig_points[outer_idx][j]);
     outer_polygon.append(local_idx);
   }
 
   Vector<int> hole_vert_indices;
-  Array<int> hole_offsets_data(hole_indices.size() + 1);
-  for (int h = 0; h < hole_indices.size(); h++) {
+  Array<int> hole_offsets_data(loops.hole_indices.size() + 1);
+  for (int h = 0; h < loops.hole_indices.size(); h++) {
     hole_offsets_data[h] = int(hole_vert_indices.size());
-    const int loop_i = hole_indices[h];
-    for (int j = 0; j < loop_coords[loop_i].size(); j++) {
-      const int local_idx = int(all_verts.append_and_get_index(loop_coords[loop_i][j]));
-      orig_pt_map.append(loop_orig_points[loop_i][j]);
+    const int loop_i = loops.hole_indices[h];
+    for (int j = 0; j < loops.loop_coords[loop_i].size(); j++) {
+      const int local_idx = int(all_verts.append_and_get_index(loops.loop_coords[loop_i][j]));
+      orig_pt_map.append(loops.loop_orig_points[loop_i][j]);
       hole_vert_indices.append(local_idx);
     }
   }
@@ -418,29 +436,8 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
 
   /* Distance == 0.0 is a no-op returning the boundary loops. */
   if (mode == StraightSkeletonMode::Offset && offset == 0.0) {
-    r_result.is_noop = true;
-    const int total_verts = all_verts.size();
-    r_result.ss_output.vert = Array<double2>(all_verts.as_span());
-    r_result.ss_output.vert_time.reinitialize(total_verts);
-    r_result.ss_output.vert_time.fill(0.0);
-    r_result.ss_output.vert_orig.reinitialize(total_verts);
-    for (int i = 0; i < total_verts; i++) {
-      r_result.ss_output.vert_orig[i] = i;
-    }
-    Vector<int2> boundary_edges;
-    for (int i = 0; i < outer_polygon.size(); i++) {
-      const int next = (i + 1 == outer_polygon.size()) ? 0 : i + 1;
-      boundary_edges.append(int2(outer_polygon[i], outer_polygon[next]));
-    }
-    for (int h = 0; h < hole_offsets.size(); h++) {
-      const IndexRange hr = hole_offsets[h];
-      for (int i = 0; i < hr.size(); i++) {
-        const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-        boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
-      }
-    }
-    r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
-    r_result.dst_point_to_src_point = Array<int>(orig_pt_map.as_span());
+    handle_closed_curve_zero_offset(
+        all_verts, orig_pt_map, outer_polygon, hole_offsets, hole_vert_indices, r_result);
     return;
   }
 
@@ -472,380 +469,410 @@ static void calc_curve_group(const bke::CurvesGeometry &curves,
   }
 }
 
+static void calc_curve_group(const bke::CurvesGeometry &curves,
+                             const IndexMask &curve_mask,
+                             const StraightSkeletonMode mode,
+                             const double offset,
+                             const int segments,
+                             const double epsilon,
+                             GroupResult &r_result)
+{
+  r_result.domain = SourceComponent::Curve;
+  const VArray<bool> cyclic = curves.cyclic();
+
+  /* Check whether curves are all open or all cyclic. */
+  int open_count = 0;
+  int cyclic_count = 0;
+  curve_mask.foreach_index([&](const int64_t curve) {
+    if (cyclic[curve]) {
+      cyclic_count++;
+    }
+    else {
+      open_count++;
+    }
+  });
+
+  if (open_count > 0 && cyclic_count > 0) {
+    r_result.is_error = true;
+    r_result.error_message = "Group contains both open curves and closed curves.";
+    return;
+  }
+
+  if (open_count > 0) {
+    calc_open_curve_group(curves, curve_mask, mode, offset, segments, epsilon, r_result);
+  }
+  else {
+    calc_closed_curve_group(curves, curve_mask, mode, offset, segments, epsilon, r_result);
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Topology Ingestion
  * \{ */
 
-static void calc_mesh_group(const Mesh &mesh,
-                            const GroupMasks &group,
-                            const StraightSkeletonMode mode,
-                            const double offset,
-                            const int segments,
-                            const double epsilon,
-                            GroupResult &r_result)
+static void calc_wire_open_chain_group(const Span<float3> positions,
+                                       const Map<int, Vector<int, 2>> &adj,
+                                       const Vector<int, 2> &endpoints,
+                                       const StraightSkeletonMode mode,
+                                       const double offset,
+                                       const int segments,
+                                       const double epsilon,
+                                       GroupResult &r_result)
 {
-  r_result.domain = SourceComponent::Mesh;
+  if (offset < 0.0) {
+    r_result.is_error = true;
+    r_result.error_message = "Edge chain does not support negative offset / outset.";
+    return;
+  }
+  if (mode == StraightSkeletonMode::FullSkeleton) {
+    r_result.is_error = true;
+    r_result.error_message =
+        "Edge chain requires a finite offset distance (Full Skeleton is not applicable to open "
+        "edge chains).";
+    return;
+  }
+
+  /* Trace open path from start endpoint to end endpoint. */
+  Vector<int> path;
+  int curr = endpoints[0];
+  int prev = -1;
+  Set<int> visited;
+  while (true) {
+    path.append(curr);
+    visited.add(curr);
+    if (curr == endpoints[1] && path.size() > 1) {
+      break;
+    }
+    const Vector<int, 2> &neighbors = adj.lookup(curr);
+    int next = -1;
+    for (const int nb : neighbors) {
+      if (nb != prev && !visited.contains(nb)) {
+        next = nb;
+        break;
+      }
+    }
+    if (next == -1) {
+      break;
+    }
+    prev = curr;
+    curr = next;
+  }
+
+  if (path.size() != adj.size()) {
+    r_result.is_error = true;
+    r_result.error_message =
+        "Mesh wire edges contain multiple disconnected components. Each edge chain must have its "
+        "own Group ID.";
+    return;
+  }
+
+  const int n = path.size();
+  Array<double2> chain_verts(n);
+  Array<int> dst_to_src(n);
+  for (int i = 0; i < n; i++) {
+    chain_verts[i] = double2(positions[path[i]].x, positions[path[i]].y);
+    dst_to_src[i] = path[i];
+  }
+
+  /* Distance == 0.0 is a no-op returning the wire edge chain. */
+  if (offset == 0.0) {
+    r_result.is_noop = true;
+    r_result.ss_output.vert = std::move(chain_verts);
+    r_result.ss_output.vert_time.reinitialize(n);
+    r_result.ss_output.vert_time.fill(0.0);
+    r_result.ss_output.vert_orig.reinitialize(n);
+    for (int i = 0; i < n; i++) {
+      r_result.ss_output.vert_orig[i] = i;
+    }
+    r_result.ss_output.edge.reinitialize(n - 1);
+    for (int i = 0; i < n - 1; i++) {
+      r_result.ss_output.edge[i] = int2(i, i + 1);
+    }
+    r_result.dst_point_to_src_point = std::move(dst_to_src);
+    return;
+  }
+
+  Array<int> chain_indices(n);
+  for (int i = 0; i < n; i++) {
+    chain_indices[i] = i;
+  }
+
+  straightskeleton::StraightSkeletonInput input;
+  input.vert = chain_verts.as_span();
+  input.edge_chain = chain_indices.as_span();
+  input.offset = offset;
+  input.segments = math::max(1, segments);
+  input.epsilon = epsilon;
+
+  r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
+  if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
+    r_result.is_error = true;
+    r_result.error_message = r_result.ss_output.error_message.empty() ?
+                                 "Straight skeleton calculation failed on mesh edge chain." :
+                                 r_result.ss_output.error_message;
+    return;
+  }
+
+  r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
+  r_result.dst_point_to_src_point.fill(-1);
+  for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
+    const int orig_local = r_result.ss_output.vert_orig[i];
+    if (orig_local >= 0 && orig_local < n) {
+      r_result.dst_point_to_src_point[i] = dst_to_src[orig_local];
+    }
+  }
+}
+
+static Vector<Vector<int>> collect_wire_closed_cycles(const Map<int, Vector<int, 2>> &adj)
+{
+  Vector<Vector<int>> cycles;
+  for (const auto &[start, _] : adj.items()) {
+    int curr = start;
+    int prev = -1;
+    Vector<int> cycle;
+    while (true) {
+      if (cycle.contains(curr)) {
+        break;
+      }
+      cycle.append(curr);
+      const Vector<int, 2> &neighbors = adj.lookup(curr);
+      int next = (neighbors[0] == prev) ? neighbors[1] : neighbors[0];
+      if (next == start) {
+        break;
+      }
+      prev = curr;
+      curr = next;
+    }
+    if (cycle.size() >= 3) {
+      bool already_have = false;
+      for (const Vector<int> &c : cycles) {
+        if (c.contains(cycle[0])) {
+          already_have = true;
+          break;
+        }
+      }
+      if (!already_have) {
+        cycles.append(std::move(cycle));
+      }
+    }
+  }
+  return cycles;
+}
+
+static void calc_wire_closed_loops_group(const Span<float3> positions,
+                                         const Map<int, Vector<int, 2>> &adj,
+                                         const StraightSkeletonMode mode,
+                                         const double offset,
+                                         const int segments,
+                                         const double epsilon,
+                                         GroupResult &r_result)
+{
+  Vector<Vector<int>> cycles = collect_wire_closed_cycles(adj);
+  if (cycles.is_empty()) {
+    r_result.is_error = true;
+    r_result.error_message = "No valid wire loops found in mesh.";
+    return;
+  }
+
+  const int cycles_num = int(cycles.size());
+  Vector<Array<double2>> loop_coords(cycles_num);
+  Vector<Array<float2>> loop_coords_float(cycles_num);
+  Vector<double> loop_areas(cycles_num);
+  Vector<Bounds<float2>> loop_bounds(cycles_num);
+  for (int i = 0; i < cycles_num; i++) {
+    const int n = int(cycles[i].size());
+    loop_coords[i].reinitialize(n);
+    loop_coords_float[i].reinitialize(n);
+    for (int j = 0; j < n; j++) {
+      const float2 pt_f(positions[cycles[i][j]].x, positions[cycles[i][j]].y);
+      loop_coords[i][j] = double2(pt_f);
+      loop_coords_float[i][j] = pt_f;
+    }
+    loop_areas[i] = math::area_poly_signed(loop_coords[i].as_span());
+    loop_bounds[i] = *bounds::min_max(loop_coords_float[i].as_span());
+  }
+
+  Array<int> depth(cycles_num, 0);
+  for (int i = 0; i < cycles_num; i++) {
+    for (int j = 0; j < cycles_num; j++) {
+      if (i == j) {
+        continue;
+      }
+      if (loop_bounds[j].contains(loop_bounds[i].min) &&
+          loop_bounds[j].contains(loop_bounds[i].max))
+      {
+        if (math::isect_point_poly(loop_coords_float[i][0], loop_coords_float[j].as_span())) {
+          depth[i]++;
+        }
+      }
+    }
+  }
+
+  int outer_idx = -1;
+  int outer_count = 0;
+  for (int i = 0; i < cycles_num; i++) {
+    if (depth[i] == 0) {
+      outer_count++;
+      outer_idx = i;
+    }
+  }
+
+  if (outer_count != 1) {
+    r_result.is_error = true;
+    r_result.error_message = outer_count == 0 ?
+                                 "No outer boundary loop found in wire mesh." :
+                                 fmt::format(
+                                     "Group contains multiple outer wire loops ({} disjoint outer "
+                                     "loops). Each island must have its own Group ID.",
+                                     outer_count);
+    return;
+  }
+
+  if (loop_areas[outer_idx] < 0.0) {
+    std::ranges::reverse(loop_coords[outer_idx]);
+    std::ranges::reverse(cycles[outer_idx]);
+  }
+
+  Vector<int> hole_indices;
+  for (int i = 0; i < cycles_num; i++) {
+    if (i != outer_idx) {
+      if (loop_areas[i] > 0.0) {
+        std::ranges::reverse(loop_coords[i]);
+        std::ranges::reverse(cycles[i]);
+      }
+      hole_indices.append(i);
+    }
+  }
+
+  Vector<double2> all_verts;
+  Vector<int> orig_pt_map;
+  Vector<int> outer_polygon;
+  for (int j = 0; j < loop_coords[outer_idx].size(); j++) {
+    const int local_idx = int(all_verts.append_and_get_index(loop_coords[outer_idx][j]));
+    orig_pt_map.append(cycles[outer_idx][j]);
+    outer_polygon.append(local_idx);
+  }
+
+  Vector<int> hole_vert_indices;
+  Array<int> hole_offsets_data(hole_indices.size() + 1);
+  for (int h = 0; h < hole_indices.size(); h++) {
+    hole_offsets_data[h] = int(hole_vert_indices.size());
+    const int loop_i = hole_indices[h];
+    for (int j = 0; j < loop_coords[loop_i].size(); j++) {
+      const int local_idx = int(all_verts.append_and_get_index(loop_coords[loop_i][j]));
+      orig_pt_map.append(cycles[loop_i][j]);
+      hole_vert_indices.append(local_idx);
+    }
+  }
+  hole_offsets_data.last() = int(hole_vert_indices.size());
+  const OffsetIndices<int> hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
+
+  if (mode == StraightSkeletonMode::Offset && offset == 0.0) {
+    handle_closed_curve_zero_offset(
+        all_verts, orig_pt_map, outer_polygon, hole_offsets, hole_vert_indices, r_result);
+    return;
+  }
+
+  straightskeleton::StraightSkeletonInput input;
+  input.vert = all_verts.as_span();
+  input.outer_polygon = outer_polygon.as_span();
+  input.hole_offsets = hole_offsets;
+  input.hole_vert_indices = hole_vert_indices.as_span();
+  input.offset = offset;
+  input.segments = math::max(1, segments);
+  input.epsilon = epsilon;
+
+  r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
+  if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
+    r_result.is_error = true;
+    r_result.error_message = r_result.ss_output.error_message.empty() ?
+                                 "Straight skeleton calculation failed on closed wire mesh." :
+                                 r_result.ss_output.error_message;
+    return;
+  }
+
+  r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
+  r_result.dst_point_to_src_point.fill(-1);
+  for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
+    const int orig_local = r_result.ss_output.vert_orig[i];
+    if (orig_local >= 0 && orig_local < orig_pt_map.size()) {
+      r_result.dst_point_to_src_point[i] = orig_pt_map[orig_local];
+    }
+  }
+}
+
+static void calc_wire_mesh_group(const Mesh &mesh,
+                                 const GroupMasks &group,
+                                 const StraightSkeletonMode mode,
+                                 const double offset,
+                                 const int segments,
+                                 const double epsilon,
+                                 GroupResult &r_result)
+{
+  if (group.mesh_loose_edges.is_empty()) {
+    return;
+  }
+
   const Span<float3> positions = mesh.vert_positions();
   const Span<int2> mesh_edges = mesh.edges();
 
-  /* ------------------------------------------------------------------ */
-  /* Subcase 1: Wire mesh (edges only, no faces)                        */
-  /* ------------------------------------------------------------------ */
-  if (group.mesh_faces.is_empty()) {
-    if (group.mesh_loose_edges.is_empty()) {
-      return;
+  /* Build adjacency map for wire edges in this group. */
+  Map<int, Vector<int, 2>> adj;
+  group.mesh_loose_edges.foreach_index([&](const int64_t e_idx) {
+    const int v1 = mesh_edges[e_idx][0];
+    const int v2 = mesh_edges[e_idx][1];
+    adj.lookup_or_add_default(v1).append(v2);
+    adj.lookup_or_add_default(v2).append(v1);
+  });
+
+  int degree_1_count = 0;
+  int degree_other_count = 0;
+  Vector<int, 2> endpoints;
+  for (const auto &[v, neighbors] : adj.items()) {
+    const int deg = neighbors.size();
+    if (deg == 1) {
+      degree_1_count++;
+      endpoints.append(v);
     }
-
-    /* Build adjacency map for wire edges in this group. */
-    Map<int, Vector<int, 2>> adj;
-    group.mesh_loose_edges.foreach_index([&](const int64_t e_idx) {
-      const int v1 = mesh_edges[e_idx][0];
-      const int v2 = mesh_edges[e_idx][1];
-      adj.lookup_or_add_default(v1).append(v2);
-      adj.lookup_or_add_default(v2).append(v1);
-    });
-
-    int degree_1_count = 0;
-    int degree_other_count = 0;
-    Vector<int, 2> endpoints;
-    for (const auto &[v, neighbors] : adj.items()) {
-      const int deg = neighbors.size();
-      if (deg == 1) {
-        degree_1_count++;
-        endpoints.append(v);
-      }
-      else if (deg != 2) {
-        degree_other_count++;
-      }
+    else if (deg != 2) {
+      degree_other_count++;
     }
-
-    if (degree_other_count > 0) {
-      r_result.is_error = true;
-      r_result.error_message =
-          "Mesh wire edges contain branching junctions (vertex degree > 2) or isolated vertices.";
-      return;
-    }
-
-    /* Open Edge Chain: exactly two endpoints with degree 1. */
-    if (degree_1_count == 2) {
-      if (offset < 0.0) {
-        r_result.is_error = true;
-        r_result.error_message = "Edge chain does not support negative offset / outset.";
-        return;
-      }
-      if (mode == StraightSkeletonMode::FullSkeleton) {
-        r_result.is_error = true;
-        r_result.error_message =
-            "Edge chain requires a finite offset distance (Full Skeleton is not applicable to "
-            "open edge chains).";
-        return;
-      }
-
-      /* Trace open path from start endpoint to end endpoint. */
-      Vector<int> path;
-      int curr = endpoints[0];
-      int prev = -1;
-      Set<int> visited;
-      while (true) {
-        path.append(curr);
-        visited.add(curr);
-        if (curr == endpoints[1] && path.size() > 1) {
-          break;
-        }
-        const Vector<int, 2> &neighbors = adj.lookup(curr);
-        int next = -1;
-        for (const int nb : neighbors) {
-          if (nb != prev && !visited.contains(nb)) {
-            next = nb;
-            break;
-          }
-        }
-        if (next == -1) {
-          break;
-        }
-        prev = curr;
-        curr = next;
-      }
-
-      if (path.size() != adj.size()) {
-        r_result.is_error = true;
-        r_result.error_message =
-            "Mesh wire edges contain multiple disconnected components. Each edge chain must have "
-            "its own Group ID.";
-        return;
-      }
-
-      const int n = path.size();
-      Array<double2> chain_verts(n);
-      Array<int> dst_to_src(n);
-      for (int i = 0; i < n; i++) {
-        chain_verts[i] = double2(positions[path[i]].x, positions[path[i]].y);
-        dst_to_src[i] = path[i];
-      }
-
-      /* Distance == 0.0 is a no-op returning the wire edge chain. */
-      if (offset == 0.0) {
-        r_result.is_noop = true;
-        r_result.ss_output.vert = std::move(chain_verts);
-        r_result.ss_output.vert_time.reinitialize(n);
-        r_result.ss_output.vert_time.fill(0.0);
-        r_result.ss_output.vert_orig.reinitialize(n);
-        for (int i = 0; i < n; i++) {
-          r_result.ss_output.vert_orig[i] = i;
-        }
-        r_result.ss_output.edge.reinitialize(n - 1);
-        for (int i = 0; i < n - 1; i++) {
-          r_result.ss_output.edge[i] = int2(i, i + 1);
-        }
-        r_result.dst_point_to_src_point = std::move(dst_to_src);
-        return;
-      }
-
-      Array<int> chain_indices(n);
-      for (int i = 0; i < n; i++) {
-        chain_indices[i] = i;
-      }
-
-      straightskeleton::StraightSkeletonInput input;
-      input.vert = chain_verts.as_span();
-      input.edge_chain = chain_indices.as_span();
-      input.offset = offset;
-      input.segments = math::max(1, segments);
-      input.epsilon = epsilon;
-
-      r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
-      if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
-        r_result.is_error = true;
-        r_result.error_message = r_result.ss_output.error_message.empty() ?
-                                     "Straight skeleton calculation failed on mesh edge chain." :
-                                     r_result.ss_output.error_message;
-        return;
-      }
-
-      r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
-      r_result.dst_point_to_src_point.fill(-1);
-      for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
-        const int orig_local = r_result.ss_output.vert_orig[i];
-        if (orig_local >= 0 && orig_local < n) {
-          r_result.dst_point_to_src_point[i] = dst_to_src[orig_local];
-        }
-      }
-      return;
-    }
-
-    if (degree_1_count != 0) {
-      r_result.is_error = true;
-      r_result.error_message =
-          "Mesh wire edges do not form a single open chain or valid closed loops without "
-          "branches.";
-      return;
-    }
-
-    /* Closed Wire Loops: trace all cycles. */
-    Vector<Vector<int>> cycles;
-    for (const auto &[start, _] : adj.items()) {
-      int curr = start;
-      int prev = -1;
-      Vector<int> cycle;
-      while (true) {
-        if (cycle.contains(curr)) {
-          break;
-        }
-        cycle.append(curr);
-        const Vector<int, 2> &neighbors = adj.lookup(curr);
-        int next = (neighbors[0] == prev) ? neighbors[1] : neighbors[0];
-        if (next == start) {
-          break;
-        }
-        prev = curr;
-        curr = next;
-      }
-      if (cycle.size() >= 3) {
-        bool already_have = false;
-        for (const Vector<int> &c : cycles) {
-          if (c.contains(cycle[0])) {
-            already_have = true;
-            break;
-          }
-        }
-        if (!already_have) {
-          cycles.append(std::move(cycle));
-        }
-      }
-    }
-
-    if (cycles.is_empty()) {
-      r_result.is_error = true;
-      r_result.error_message = "No valid wire loops found in mesh.";
-      return;
-    }
-
-    /* Convert wire cycles to 2D coords and evaluate containment using library functions. */
-    const int cycles_num = int(cycles.size());
-    Vector<Array<double2>> loop_coords(cycles_num);
-    Vector<Array<float2>> loop_coords_float(cycles_num);
-    Vector<double> loop_areas(cycles_num);
-    Vector<Bounds<float2>> loop_bounds(cycles_num);
-    for (int i = 0; i < cycles_num; i++) {
-      const int n = int(cycles[i].size());
-      loop_coords[i].reinitialize(n);
-      loop_coords_float[i].reinitialize(n);
-      for (int j = 0; j < n; j++) {
-        const float2 pt_f(positions[cycles[i][j]].x, positions[cycles[i][j]].y);
-        loop_coords[i][j] = double2(pt_f);
-        loop_coords_float[i][j] = pt_f;
-      }
-      loop_areas[i] = polygon_signed_area_2d(loop_coords[i].as_span());
-      loop_bounds[i] = *bounds::min_max(loop_coords_float[i].as_span());
-    }
-
-    Array<int> depth(cycles_num, 0);
-    for (int i = 0; i < cycles_num; i++) {
-      for (int j = 0; j < cycles_num; j++) {
-        if (i == j) {
-          continue;
-        }
-        if (loop_bounds[j].contains(loop_bounds[i].min) &&
-            loop_bounds[j].contains(loop_bounds[i].max))
-        {
-          if (math::isect_point_poly(loop_coords_float[i][0], loop_coords_float[j].as_span())) {
-            depth[i]++;
-          }
-        }
-      }
-    }
-
-    int outer_idx = -1;
-    int outer_count = 0;
-    for (int i = 0; i < cycles_num; i++) {
-      if (depth[i] == 0) {
-        outer_count++;
-        outer_idx = i;
-      }
-    }
-
-    if (outer_count != 1) {
-      r_result.is_error = true;
-      r_result.error_message =
-          outer_count == 0 ? "No outer boundary loop found in wire mesh." :
-                             fmt::format(
-                                 "Group contains multiple outer wire loops ({} disjoint outer "
-                                 "loops). Each island must have its own Group ID.",
-                                 outer_count);
-      return;
-    }
-
-    if (loop_areas[outer_idx] < 0.0) {
-      std::ranges::reverse(loop_coords[outer_idx]);
-      std::ranges::reverse(cycles[outer_idx]);
-    }
-
-    Vector<int> hole_indices;
-    for (int i = 0; i < cycles_num; i++) {
-      if (i != outer_idx) {
-        if (loop_areas[i] > 0.0) {
-          std::ranges::reverse(loop_coords[i]);
-          std::ranges::reverse(cycles[i]);
-        }
-        hole_indices.append(i);
-      }
-    }
-
-    Vector<double2> all_verts;
-    Vector<int> orig_pt_map;
-    Vector<int> outer_polygon;
-    for (int j = 0; j < loop_coords[outer_idx].size(); j++) {
-      const int local_idx = int(all_verts.append_and_get_index(loop_coords[outer_idx][j]));
-      orig_pt_map.append(cycles[outer_idx][j]);
-      outer_polygon.append(local_idx);
-    }
-
-    Vector<int> hole_vert_indices;
-    Array<int> hole_offsets_data(hole_indices.size() + 1);
-    for (int h = 0; h < hole_indices.size(); h++) {
-      hole_offsets_data[h] = int(hole_vert_indices.size());
-      const int loop_i = hole_indices[h];
-      for (int j = 0; j < loop_coords[loop_i].size(); j++) {
-        const int local_idx = int(all_verts.append_and_get_index(loop_coords[loop_i][j]));
-        orig_pt_map.append(cycles[loop_i][j]);
-        hole_vert_indices.append(local_idx);
-      }
-    }
-    hole_offsets_data.last() = int(hole_vert_indices.size());
-    const OffsetIndices<int> hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
-
-    if (mode == StraightSkeletonMode::Offset && offset == 0.0) {
-      r_result.is_noop = true;
-      const int total_verts = all_verts.size();
-      r_result.ss_output.vert = Array<double2>(all_verts.as_span());
-      r_result.ss_output.vert_time.reinitialize(total_verts);
-      r_result.ss_output.vert_time.fill(0.0);
-      r_result.ss_output.vert_orig.reinitialize(total_verts);
-      for (int i = 0; i < total_verts; i++) {
-        r_result.ss_output.vert_orig[i] = i;
-      }
-      Vector<int2> boundary_edges;
-      for (int i = 0; i < outer_polygon.size(); i++) {
-        const int next = (i + 1 == outer_polygon.size()) ? 0 : i + 1;
-        boundary_edges.append(int2(outer_polygon[i], outer_polygon[next]));
-      }
-      for (int h = 0; h < hole_offsets.size(); h++) {
-        const IndexRange hr = hole_offsets[h];
-        for (int i = 0; i < hr.size(); i++) {
-          const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-          boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
-        }
-      }
-      r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
-      r_result.dst_point_to_src_point = Array<int>(orig_pt_map.as_span());
-      return;
-    }
-
-    straightskeleton::StraightSkeletonInput input;
-    input.vert = all_verts.as_span();
-    input.outer_polygon = outer_polygon.as_span();
-    input.hole_offsets = hole_offsets;
-    input.hole_vert_indices = hole_vert_indices.as_span();
-    input.offset = offset;
-    input.segments = math::max(1, segments);
-    input.epsilon = epsilon;
-
-    r_result.ss_output = straightskeleton::straight_skeleton_calc(input);
-    if (!r_result.ss_output.is_valid || r_result.ss_output.hit_max_events) {
-      r_result.is_error = true;
-      r_result.error_message = r_result.ss_output.error_message.empty() ?
-                                   "Straight skeleton calculation failed on closed wire mesh." :
-                                   r_result.ss_output.error_message;
-      return;
-    }
-
-    r_result.dst_point_to_src_point.reinitialize(r_result.ss_output.vert.size());
-    r_result.dst_point_to_src_point.fill(-1);
-    for (int i = 0; i < r_result.ss_output.vert.size(); i++) {
-      const int orig_local = r_result.ss_output.vert_orig[i];
-      if (orig_local >= 0 && orig_local < orig_pt_map.size()) {
-        r_result.dst_point_to_src_point[i] = orig_pt_map[orig_local];
-      }
-    }
-    return;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Subcase 2: Mesh with Faces                                         */
-  /* ------------------------------------------------------------------ */
-  if (!group.mesh_loose_edges.is_empty()) {
+  if (degree_other_count > 0) {
     r_result.is_error = true;
-    r_result.error_message = "Group contains both loose edges and faces.";
+    r_result.error_message =
+        "Mesh wire edges contain branching junctions (vertex degree > 2) or isolated vertices.";
     return;
   }
 
+  if (degree_1_count == 2) {
+    calc_wire_open_chain_group(
+        positions, adj, endpoints, mode, offset, segments, epsilon, r_result);
+    return;
+  }
+
+  if (degree_1_count != 0) {
+    r_result.is_error = true;
+    r_result.error_message =
+        "Mesh wire edges do not form a single open chain or valid closed loops without "
+        "branches.";
+    return;
+  }
+
+  calc_wire_closed_loops_group(positions, adj, mode, offset, segments, epsilon, r_result);
+}
+
+static Vector<Vector<int>> trace_mesh_faces_boundary_cycles(const Mesh &mesh,
+                                                            const GroupMasks &group,
+                                                            GroupResult &r_result)
+{
   const OffsetIndices faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int> corner_edges = mesh.corner_edges();
 
-  /* Count face incidence for all edges used by faces in this group. */
   Map<int, int> edge_face_count;
   Map<int, int2> boundary_edge_directed;
   group.mesh_faces.foreach_index([&](const int64_t face_idx) {
@@ -861,14 +888,13 @@ static void calc_mesh_group(const Mesh &mesh,
     }
   });
 
-  /* Filter boundary edges (incident to exactly 1 face in this group). */
   Map<int, int> next_boundary_vert;
   Set<int> boundary_verts_in;
   for (const auto &[edge_i, count] : edge_face_count.items()) {
     if (count > 2) {
       r_result.is_error = true;
       r_result.error_message = "Mesh contains non-manifold edges incident to more than 2 faces.";
-      return;
+      return {};
     }
     if (count == 1) {
       const int2 directed = boundary_edge_directed.lookup(edge_i);
@@ -877,7 +903,7 @@ static void calc_mesh_group(const Mesh &mesh,
       if (next_boundary_vert.contains(u) || boundary_verts_in.contains(v)) {
         r_result.is_error = true;
         r_result.error_message = "Mesh boundary contains a self-touching pinch vertex.";
-        return;
+        return {};
       }
       next_boundary_vert.add(u, v);
       boundary_verts_in.add(v);
@@ -888,10 +914,9 @@ static void calc_mesh_group(const Mesh &mesh,
     r_result.is_error = true;
     r_result.error_message =
         "Mesh has no boundary edges; straight skeleton requires a planar boundary or edge chain.";
-    return;
+    return {};
   }
 
-  /* Trace directed boundary cycles. */
   Vector<Vector<int>> boundary_cycles;
   Set<int> visited_v;
   for (const auto &[start, _] : next_boundary_vert.items()) {
@@ -917,11 +942,35 @@ static void calc_mesh_group(const Mesh &mesh,
     else {
       r_result.is_error = true;
       r_result.error_message = "Mesh boundary edges do not form closed cycles.";
-      return;
+      return {};
     }
   }
+  return boundary_cycles;
+}
 
-  /* Compute 2D signed area for all boundary cycles. */
+static void calc_faces_mesh_group(const Mesh &mesh,
+                                  const GroupMasks &group,
+                                  const StraightSkeletonMode mode,
+                                  const double offset,
+                                  const int segments,
+                                  const double epsilon,
+                                  GroupResult &r_result)
+{
+  if (!group.mesh_loose_edges.is_empty()) {
+    r_result.is_error = true;
+    r_result.error_message = "Group contains both loose edges and faces.";
+    return;
+  }
+
+  Vector<Vector<int>> boundary_cycles = trace_mesh_faces_boundary_cycles(mesh, group, r_result);
+  if (r_result.is_error) {
+    return;
+  }
+
+  const Span<float3> positions = mesh.vert_positions();
+  const OffsetIndices faces = mesh.faces();
+  const Span<int> corner_verts = mesh.corner_verts();
+
   const int cycles_num = int(boundary_cycles.size());
   Vector<Array<double2>> loop_coords(cycles_num);
   Vector<double> loop_areas(cycles_num);
@@ -932,11 +981,9 @@ static void calc_mesh_group(const Mesh &mesh,
       loop_coords[i][j] = double2(positions[boundary_cycles[i][j]].x,
                                   positions[boundary_cycles[i][j]].y);
     }
-    loop_areas[i] = polygon_signed_area_2d(loop_coords[i].as_span());
+    loop_areas[i] = math::area_poly_signed(loop_coords[i].as_span());
   }
 
-  /* In a manifold mesh with CCW corner ordering, the outer boundary has area > 0 and holes have
-   * area < 0. */
   int outer_idx = -1;
   int outer_count = 0;
   for (int i = 0; i < cycles_num; i++) {
@@ -957,7 +1004,6 @@ static void calc_mesh_group(const Mesh &mesh,
     return;
   }
 
-  /* Verify area coverage: sum of face areas should match outer area + hole areas. */
   double total_face_area = 0.0;
   group.mesh_faces.foreach_index([&](const int64_t face_idx) {
     const IndexRange face_range = faces[face_idx];
@@ -966,7 +1012,7 @@ static void calc_mesh_group(const Mesh &mesh,
       const int v = corner_verts[face_range[c]];
       face_coords[c] = double2(positions[v].x, positions[v].y);
     }
-    total_face_area += polygon_signed_area_2d(face_coords.as_span());
+    total_face_area += math::area_poly_signed(face_coords.as_span());
   });
 
   double expected_area = loop_areas[outer_idx];
@@ -986,7 +1032,6 @@ static void calc_mesh_group(const Mesh &mesh,
     return;
   }
 
-  /* Gather straight skeleton input vertices and indices. */
   Vector<double2> all_verts;
   Vector<int> orig_pt_map;
   Vector<int> outer_polygon;
@@ -1010,31 +1055,9 @@ static void calc_mesh_group(const Mesh &mesh,
   hole_offsets_data.last() = int(hole_vert_indices.size());
   const OffsetIndices<int> hole_offsets = OffsetIndices<int>(hole_offsets_data.as_span());
 
-  /* Distance == 0.0 is a no-op returning the boundary loops. */
   if (mode == StraightSkeletonMode::Offset && offset == 0.0) {
-    r_result.is_noop = true;
-    const int total_verts = all_verts.size();
-    r_result.ss_output.vert = Array<double2>(all_verts.as_span());
-    r_result.ss_output.vert_time.reinitialize(total_verts);
-    r_result.ss_output.vert_time.fill(0.0);
-    r_result.ss_output.vert_orig.reinitialize(total_verts);
-    for (int i = 0; i < total_verts; i++) {
-      r_result.ss_output.vert_orig[i] = i;
-    }
-    Vector<int2> boundary_edges;
-    for (int i = 0; i < outer_polygon.size(); i++) {
-      const int next = (i + 1 == outer_polygon.size()) ? 0 : i + 1;
-      boundary_edges.append(int2(outer_polygon[i], outer_polygon[next]));
-    }
-    for (int h = 0; h < hole_offsets.size(); h++) {
-      const IndexRange hr = hole_offsets[h];
-      for (int i = 0; i < hr.size(); i++) {
-        const int next = (i + 1 == hr.size()) ? 0 : i + 1;
-        boundary_edges.append(int2(hole_vert_indices[hr[i]], hole_vert_indices[hr[next]]));
-      }
-    }
-    r_result.ss_output.edge = Array<int2>(boundary_edges.as_span());
-    r_result.dst_point_to_src_point = Array<int>(orig_pt_map.as_span());
+    handle_closed_curve_zero_offset(
+        all_verts, orig_pt_map, outer_polygon, hole_offsets, hole_vert_indices, r_result);
     return;
   }
 
@@ -1063,6 +1086,23 @@ static void calc_mesh_group(const Mesh &mesh,
     if (orig_local >= 0 && orig_local < orig_pt_map.size()) {
       r_result.dst_point_to_src_point[i] = orig_pt_map[orig_local];
     }
+  }
+}
+
+static void calc_mesh_group(const Mesh &mesh,
+                            const GroupMasks &group,
+                            const StraightSkeletonMode mode,
+                            const double offset,
+                            const int segments,
+                            const double epsilon,
+                            GroupResult &r_result)
+{
+  r_result.domain = SourceComponent::Mesh;
+  if (group.mesh_faces.is_empty()) {
+    calc_wire_mesh_group(mesh, group, mode, offset, segments, epsilon, r_result);
+  }
+  else {
+    calc_faces_mesh_group(mesh, group, mode, offset, segments, epsilon, r_result);
   }
 }
 
