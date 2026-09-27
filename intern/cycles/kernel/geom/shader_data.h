@@ -428,8 +428,6 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals kg,
 #endif
 }
 
-// shader_data.h (or wherever shader_setup_from_restir currently lives)
-
 ccl_device_inline void shader_setup_geometry_from_restir(KernelGlobals kg,
                                                          ccl_private ShaderData *ccl_restrict sd)
 {

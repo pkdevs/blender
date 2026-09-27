@@ -245,6 +245,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
 {
   if (!(ls->pdf > 0.0f)) {
     bsdf_eval_init(radiance, zero_spectrum());
+ccl_debug_printf("\n--- radiance_eval() returned 0: ls->pdf <= 0 ---\n\n"); // occasional output of temporal candidates...
     return 0.0f;
   }
 
@@ -253,7 +254,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
 
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
   Spectrum light_eval = zero_spectrum();
-  const ShaderEvalResult shader_result = light_sample_shader_eval(
+  const ShaderEvalResult shader_result = light_sample_shader_eval( 
       kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
 
     // if (shader_result == SHADER_EVAL_CACHE_MISS) {
@@ -764,7 +765,7 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
 }
 
 /* Ordinary NEE epilogue: used for every bounce that is not the ReSTIR-DI
- * primary connection — i.e. Indirect Ullumination, or Direct Illumination
+ * primary connection — i.e. Indirect Illumination, or Direct Illumination
  * when ReSTIR is disabled entirely. RIS over the sampled candidates is still
  * used to pick a good light, but the reservoir is finalized and shaded
  * immediately: no persistent state, no deferred shadow ray, no reuse. */
@@ -773,7 +774,6 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_shade_indirect(
     IntegratorState state,
     ccl_private ShaderData *sd,
     ccl_private const RNGState *rng_state,
-    const bool use_restir,
     ccl_private Reservoir *reservoir)
 {
   reservoir_finalize(reservoir);
@@ -979,7 +979,7 @@ ccl_device
     kernel_assert(light_reference_is_valid(&reference));
 
     /* Evaluate light shader. */
-    const bool check_visibility = kernel_data.integrator.restir_unbiased;
+    const bool check_visibility = kernel_data.integrator.restir_unbiased; // 
 
     /* Evaluates light emission, BSDF response, and the geometry conversion. */
     const float bsdf_pdf = radiance_eval(kg, state, sd, &ls, &radiance, &reference, check_visibility);
@@ -1024,7 +1024,7 @@ ccl_device
     return integrate_surface_nee_write_restir_di(kg, state, &reservoir, render_buffer);
   }
   else {
-    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, /*use_restir=*/true, &reservoir);
+    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, &reservoir);
   }
 }
 
