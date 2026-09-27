@@ -331,18 +331,27 @@ void rotation_from_quat(float rot[3], const float viewquat[4], const char align_
   }
 }
 
-void rotation_from_view(bContext *C, float rot[3], const char align_axis)
+void rotation_from_view(bContext *C, wmOperator *op, float rot[3], const char align_axis)
 {
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   BLI_assert(align_axis >= 'X' && align_axis <= 'Z');
+  float viewquat[4];
   if (rv3d) {
-    float viewquat[4];
     copy_qt_qt(viewquat, rv3d->viewquat);
     viewquat[0] *= -1.0f;
-    rotation_from_quat(rot, viewquat, align_axis);
+    RNA_float_set_array(op->ptr, "view_quaternion", viewquat);
   }
   else {
-    zero_v3(rot);
+    RNA_float_get_array(op->ptr, "view_quaternion", viewquat);
+  }
+
+  if (rot) {
+    if (is_zero_v4(viewquat)) {
+      zero_v3(rot);
+    }
+    else {
+      rotation_from_quat(rot, viewquat, align_axis);
+    }
   }
 }
 
@@ -479,6 +488,18 @@ void add_generic_props(wmOperatorType *ot, bool do_editmode)
                                   -1000.0f,
                                   1000.0f);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+  prop = RNA_def_float_array(ot->srna,
+                             "view_quaternion",
+                             4,
+                             nullptr,
+                             -FLT_MAX,
+                             FLT_MAX,
+                             "View Quaternion",
+                             "Viewport orientation stored for view alignment",
+                             -FLT_MAX,
+                             FLT_MAX);
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 void add_mesh_props(wmOperatorType *ot)
@@ -549,6 +570,7 @@ void add_generic_get_opts(bContext *C,
     if (!r_rot) {
       r_rot = _rot;
     }
+    rotation_from_view(C, op, nullptr, view_align_axis);
 
     if (RNA_struct_property_is_set(op->ptr, "rotation")) {
       /* If rotation is set, always use it. Alignment (and corresponding user preference)
@@ -587,7 +609,7 @@ void add_generic_get_opts(bContext *C,
           RNA_float_get_array(op->ptr, "rotation", r_rot);
           break;
         case ALIGN_VIEW:
-          rotation_from_view(C, r_rot, view_align_axis);
+          rotation_from_view(C, op, r_rot, view_align_axis);
           RNA_float_set_array(op->ptr, "rotation", r_rot);
           break;
         case ALIGN_CURSOR: {

@@ -313,7 +313,7 @@ bool editmode_load(Main *bmain, Object *obedit);
 
 void location_from_view(bContext *C, float loc[3]);
 void rotation_from_quat(float rot[3], const float quat[4], char align_axis);
-void rotation_from_view(bContext *C, float rot[3], char align_axis);
+void rotation_from_view(bContext *C, wmOperator *op, float rot[3], char align_axis);
 void init_transform_on_add(Object *object, const float loc[3], const float rot[3]);
 /**
  * Uses context to figure out transform for primitive.
