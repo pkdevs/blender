@@ -6,6 +6,7 @@
 
 #include "kernel/globals.h"
 #include "kernel/types.h"
+#include "kernel/util/differential.h"
 
 #include "kernel/svm/types.h"
 
@@ -224,11 +225,19 @@ ccl_device_inline float4 svm_node_get_data_float4(KernelGlobals kg, const int of
 
 ccl_device_forceinline float3 dPdx(const ccl_private ShaderData *sd)
 {
+  if (sd->type & PRIMITIVE_ANY_POINT) {
+    return differential_from_compact(sd->Ng, sd->dP).dx;
+  }
+
   return sd->dPdu * sd->du.dx + sd->dPdv * sd->dv.dx;
 }
 
 ccl_device_forceinline float3 dPdy(const ccl_private ShaderData *sd)
 {
+  if (sd->type & PRIMITIVE_ANY_POINT) {
+    return differential_from_compact(sd->Ng, sd->dP).dy;
+  }
+
   return sd->dPdu * sd->du.dy + sd->dPdv * sd->dv.dy;
 }
 
