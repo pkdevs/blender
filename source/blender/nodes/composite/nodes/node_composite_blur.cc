@@ -140,12 +140,11 @@ class BlurOperation : public NodeOperation {
         Result padded_input = this->context().create_result(input.type());
         const int2 padding_size = int2(math::ceil(this->get_blur_size()));
         pad(this->context(), input, padded_input, padding_size, PaddingMethod::Zero);
-        dual_kawase_blur(
-            this->context(), padded_input, output, math::average(this->get_blur_size()));
+        dual_kawase_blur(this->context(), padded_input, output, this->get_blur_size());
         padded_input.release();
       }
       else {
-        dual_kawase_blur(this->context(), input, output, math::average(this->get_blur_size()));
+        dual_kawase_blur(this->context(), input, output, this->get_blur_size());
       }
     }
     else if (this->get_type() == CMP_NODE_BLUR_TYPE_FAST_GAUSS) {

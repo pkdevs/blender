@@ -29,7 +29,7 @@ GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(compositor_dual_kawase_mix)
 LOCAL_GROUP_SIZE(16, 16)
-PUSH_CONSTANT(float, ratio)
+PUSH_CONSTANT(float, input_weight)
 SAMPLER(0, sampler2D, input_tx)
 IMAGE(0, SFLOAT_16_16_16_16, read_write, image2D, output_img)
 COMPUTE_SOURCE("compositor_dual_kawase_mix.glsl")

@@ -4,11 +4,13 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
+
 namespace blender::compositor {
 
 class Context;
 class Result;
 
-void dual_kawase_blur(Context &context, const Result &input, Result &output, float radius);
+void dual_kawase_blur(Context &context, const Result &input, Result &output, float2 radius);
 
 }  // namespace blender::compositor

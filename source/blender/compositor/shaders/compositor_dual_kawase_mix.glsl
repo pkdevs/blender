@@ -13,6 +13,6 @@ void main()
   int2 texel = int2(gl_GlobalInvocationID.xy);
   float4 curr = texture_load(input_tx, texel);
   float4 next = imageLoad(output_img, texel);
-  float4 pix = mix(curr, next, ratio);
+  float4 pix = mix(next, curr, input_weight);
   imageStore(output_img, texel, pix);
 }
