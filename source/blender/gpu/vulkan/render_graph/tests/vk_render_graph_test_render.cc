@@ -465,8 +465,9 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
 
   submit(render_graph, command_buffer);
 
-  /* Verify that the synchronization barrier for the input attachment read is recorded inside the
-   * rendering scope, before the draw that consumes the attachment. */
+  /* Verify that the synchronization barrier for the input attachment read is generated.
+   * When using dynamic rendering local read, it must be recorded inside the rendering scope
+   * before the draw that consumes the attachment. */
   const char *expected_access = use_dynamic_rendering_local_read ?
                                     "VK_ACCESS_INPUT_ATTACHMENT_READ_BIT" :
                                     "VK_ACCESS_SHADER_READ_BIT";
@@ -490,11 +491,13 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
       << "Missing synchronization barrier for input attachment read after color attachment write. "
          "See #158501.";
   EXPECT_NE(-1, draw_index);
-  EXPECT_LT(begin_rendering_index, sync_barrier_index)
-      << "Synchronization barrier must be recorded inside the rendering scope.";
-  EXPECT_LT(sync_barrier_index, draw_index)
-      << "Synchronization barrier must be recorded before the draw that consumes the input "
-         "attachment.";
+  if (use_dynamic_rendering_local_read) {
+      EXPECT_LT(begin_rendering_index, sync_barrier_index)
+          << "Synchronization barrier must be recorded inside the rendering scope.";
+      EXPECT_LT(sync_barrier_index, draw_index)
+          << "Synchronization barrier must be recorded before the draw that consumes the input "
+             "attachment.";
+    }
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
