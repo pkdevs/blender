@@ -87,6 +87,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
   /* Extract barriers. */
   group_pre_barriers_.clear();
   group_post_barriers_.clear();
+  node_pre_barriers_.clear();
   node_pre_barriers_.resize(node_handles.size());
 
   /* Keep track of the post barriers that needs to be added. The pre barriers will be stored
@@ -250,6 +251,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
         build_pipeline_barriers(
             render_graph, node_handle, node.pipeline_stage_get(), image_tracker, barrier, true);
         if (!barrier.is_empty()) {
+          node_pre_barriers_[node_handle] =
+              IndexRange::from_begin_size(node_pre_barriers.size(), 1);
           node_pre_barriers.append(barrier);
         }
       }
