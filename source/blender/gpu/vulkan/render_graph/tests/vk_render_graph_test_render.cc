@@ -492,12 +492,12 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
          "See #158501.";
   EXPECT_NE(-1, draw_index);
   if (use_dynamic_rendering_local_read) {
-      EXPECT_LT(begin_rendering_index, sync_barrier_index)
-          << "Synchronization barrier must be recorded inside the rendering scope.";
-      EXPECT_LT(sync_barrier_index, draw_index)
-          << "Synchronization barrier must be recorded before the draw that consumes the input "
-             "attachment.";
-    }
+    EXPECT_LT(begin_rendering_index, sync_barrier_index)
+        << "Synchronization barrier must be recorded inside the rendering scope.";
+    EXPECT_LT(sync_barrier_index, draw_index)
+        << "Synchronization barrier must be recorded before the draw that consumes the input "
+           "attachment.";
+ }
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
