@@ -114,6 +114,9 @@ AUD_Device BKE_sound_mixdown(const Scene *scene,
 void BKE_sound_create_scene(Scene *scene);
 void BKE_sound_ensure_scene(Scene *scene);
 
+/** Mark the evaluated #Scene's audio animation cache dirty. */
+void BKE_sound_invalidate_scene_audio_animation_cache(Scene *scene);
+
 void BKE_sound_destroy_scene(Scene *scene);
 
 void BKE_sound_lock();

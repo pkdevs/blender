@@ -393,6 +393,12 @@ bSound *BKE_sound_new_file_exists(Main *bmain, const char *filepath, short strea
   return sound_new_file_exists_ex(bmain, filepath, stream_index);
 }
 
+void BKE_sound_invalidate_scene_audio_animation_cache(Scene *scene)
+{
+  BLI_assert(DEG_is_evaluated(scene));
+  scene->runtime->audio.animation_cache_dirty = true;
+}
+
 static void sound_free_audio(bSound *sound)
 {
 #ifdef WITH_AUDASPACE

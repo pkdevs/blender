@@ -56,6 +56,8 @@ struct SceneAudioRuntime {
   AUD_Handle playback_handle;
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
+  /* Set by the depsgraph when an input to this evaluated #Scene's animation cache changes. */
+  bool animation_cache_dirty = true;
 };
 
 class SceneRuntime : NonCopyable, NonMovable {
