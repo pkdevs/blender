@@ -282,6 +282,17 @@ class VKCommandBuilder {
                          VkImageLayout new_image_layout,
                          VkImageAspectFlags aspect_mask,
                          const VKSubImageRange &subimage);
+
+  /**
+   * Append an image barrier without attempting to merge it with existing barriers.
+   */
+  void append_image_barrier(VkImage vk_image,
+                            VkAccessFlags src_access_mask,
+                            VkAccessFlags dst_access_mask,
+                            VkImageLayout old_image_layout,
+                            VkImageLayout new_image_layout,
+                            VkImageAspectFlags aspect_mask,
+                            const VKSubImageRange &subimage);
   void add_image_read_barriers(VKRenderGraph &render_graph,
                                NodeHandle node_handle,
                                VkPipelineStageFlags node_stages,

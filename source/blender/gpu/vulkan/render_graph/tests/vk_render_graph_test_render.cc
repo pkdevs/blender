@@ -353,6 +353,171 @@ TEST_P(VKRenderGraphTestRender, begin_draw_end__layered)
 }
 
 /**
+ * Test tracking multiple subresources of the same image across a suspended rendering scope.
+ *
+ * The dispatch suspends rendering between accesses to two different mip levels. Both subresource
+ * layout changes must remain tracked and be restored independently when rendering ends.
+ */
+TEST_P(VKRenderGraphTestRender, begin_draw_dispatch_draw_end__multiple_subresources)
+{
+  VkHandle<VkImage> image(1u);
+  VkHandle<VkImageView> image_view(2u);
+  VkHandle<VkPipeline> graphics_pipeline(3u);
+  VkHandle<VkPipelineLayout> graphics_pipeline_layout(4u);
+
+  VKTrackedHandle<VkBuffer> buffer(5u);
+  VkHandle<VkPipeline> compute_pipeline(6u);
+  VkHandle<VkPipelineLayout> compute_pipeline_layout(7u);
+  VkHandle<VkDescriptorSet> compute_descriptor_set(8u);
+
+  resources.add_image(image, true);
+  buffer.set_resource_handle(resources.add_buffer(buffer));
+
+  {
+    VKResourceAccessInfo access_info = {};
+    access_info.images.append(
+        {image,
+         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+         VK_IMAGE_ASPECT_COLOR_BIT,
+         {0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}});
+
+    VKBeginRenderingNode::CreateInfo begin_rendering(access_info);
+    begin_rendering.node_data.color_attachments[0].sType =
+        VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+    begin_rendering.node_data.color_attachments[0].imageLayout = color_attachment_layout();
+    begin_rendering.node_data.color_attachments[0].imageView = image_view;
+    begin_rendering.node_data.color_attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    begin_rendering.node_data.color_attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    begin_rendering.node_data.vk_rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    begin_rendering.node_data.vk_rendering_info.colorAttachmentCount = 1;
+    begin_rendering.node_data.vk_rendering_info.layerCount = 1;
+    begin_rendering.node_data.vk_rendering_info.pColorAttachments =
+        begin_rendering.node_data.color_attachments;
+
+    render_graph->add_node(begin_rendering);
+  }
+
+  {
+    VKResourceAccessInfo access_info = {};
+    access_info.images.append(
+        {image, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, {0, 1, 0, 1}});
+
+    VKNodeData<VKDrawNode> node = render_graph->alloc_node<VKDrawNode>();
+    node.data.first_instance = 0;
+    node.data.first_vertex = 0;
+    node.data.instance_count = 1;
+    node.data.vertex_count = 4;
+    node.data.graphics.pipeline_data.push_constants_range = IndexRange(0);
+    node.data.graphics.pipeline_data.vk_descriptor_set = VK_NULL_HANDLE;
+    node.data.graphics.pipeline_data.vk_pipeline = graphics_pipeline;
+    node.data.graphics.pipeline_data.vk_pipeline_layout = graphics_pipeline_layout;
+    node.data.graphics.viewport.viewports.append(VkViewport{});
+    node.data.graphics.viewport.scissors.append(VkRect2D{});
+
+    VKDrawNode::CreateInfo draw_create_info(access_info);
+    node.finalize(*render_graph, draw_create_info);
+  }
+
+  {
+    VKResourceAccessInfo access_info = {};
+    access_info.buffers.append(
+        {buffer.get_resource_handle(), VK_ACCESS_SHADER_WRITE_BIT});
+
+    VKDispatchNode::CreateInfo dispatch_info(access_info);
+    dispatch_info.dispatch_node.pipeline_data.vk_pipeline = compute_pipeline;
+    dispatch_info.dispatch_node.pipeline_data.vk_pipeline_layout = compute_pipeline_layout;
+    dispatch_info.dispatch_node.pipeline_data.vk_descriptor_set = compute_descriptor_set;
+    dispatch_info.dispatch_node.group_count_x = 1;
+    dispatch_info.dispatch_node.group_count_y = 1;
+    dispatch_info.dispatch_node.group_count_z = 1;
+    render_graph->add_node(dispatch_info);
+  }
+
+  {
+    VKResourceAccessInfo access_info = {};
+    access_info.images.append(
+        {image, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, {1, 1, 0, 1}});
+
+    VKNodeData<VKDrawNode> node = render_graph->alloc_node<VKDrawNode>();
+    node.data.first_instance = 0;
+    node.data.first_vertex = 0;
+    node.data.instance_count = 1;
+    node.data.vertex_count = 4;
+    node.data.graphics.pipeline_data.push_constants_range = IndexRange(0);
+    node.data.graphics.pipeline_data.vk_descriptor_set = VK_NULL_HANDLE;
+    node.data.graphics.pipeline_data.vk_pipeline = graphics_pipeline;
+    node.data.graphics.pipeline_data.vk_pipeline_layout = graphics_pipeline_layout;
+    node.data.graphics.viewport.viewports.append(VkViewport{});
+    node.data.graphics.viewport.scissors.append(VkRect2D{});
+
+    VKDrawNode::CreateInfo draw_create_info(access_info);
+    node.finalize(*render_graph, draw_create_info);
+  }
+
+  {
+    VKEndRenderingNode::CreateInfo end_rendering = {};
+    render_graph->add_node(end_rendering);
+  }
+
+  submit(render_graph, command_buffer);
+
+  /* Resuming rendering must restore the tracked mipmap layout after the dispatch and before the
+   * resumed draw. */
+  int64_t dispatch_index = -1;
+  int64_t resume_barrier_index = -1;
+  int64_t resumed_draw_index = -1;
+
+  for (const int64_t index : log.index_range()) {
+    const std::string &entry = log[index];
+
+    if (entry.find("dispatch(") != std::string::npos) {
+      dispatch_index = index;
+    }
+
+    if (dispatch_index != -1 &&
+        entry.find("old_layout=" + color_attachment_layout_str()) != std::string::npos &&
+        entry.find("new_layout=VK_IMAGE_LAYOUT_GENERAL") != std::string::npos &&
+        entry.find("base_mip_level=0, level_count=1, base_array_layer=0, layer_count=1") !=
+            std::string::npos)
+    {
+      resume_barrier_index = index;
+    }
+
+    if (resume_barrier_index != -1 && entry.find("draw(") != std::string::npos) {
+      resumed_draw_index = index;
+      break;
+    }
+  }
+
+  EXPECT_NE(-1, dispatch_index);
+  EXPECT_NE(-1, resume_barrier_index);
+  EXPECT_NE(-1, resumed_draw_index);
+  EXPECT_LT(dispatch_index, resume_barrier_index);
+  EXPECT_LT(resume_barrier_index, resumed_draw_index);
+
+  /* Both subresources must be restored by the final barrier. */
+  const std::string mipmap_0 =
+      "base_mip_level=0, level_count=1, base_array_layer=0, layer_count=1";
+  const std::string mipmap_1 =
+      "base_mip_level=1, level_count=1, base_array_layer=0, layer_count=1";
+
+  bool has_combined_restore = false;
+  for (const std::string &entry : log) {
+    if (entry.find("old_layout=VK_IMAGE_LAYOUT_GENERAL") != std::string::npos &&
+        entry.find("new_layout=" + color_attachment_layout_str()) != std::string::npos &&
+        entry.find(mipmap_0) != std::string::npos &&
+        entry.find(mipmap_1) != std::string::npos)
+    {
+      has_combined_restore = true;
+      break;
+    }
+  }
+
+  EXPECT_TRUE(has_combined_restore)
+      << "Expected both independently tracked subresource ranges to be restored.";
+}
+
+/**
  * Tests that a synchronization barrier is generated for input attachment reads on layered images
  * after a color attachment write. Regression test for #158501.
  */

@@ -971,6 +971,24 @@ void VKCommandBuilder::add_image_barrier(VkImage vk_image,
     }
   }
 
+  append_image_barrier(vk_image,
+                       src_access_mask,
+                       dst_access_mask,
+                       old_image_layout,
+                       new_image_layout,
+                       aspect_mask,
+                       subimage);
+}
+
+void VKCommandBuilder::append_image_barrier(VkImage vk_image,
+                                            VkAccessFlags src_access_mask,
+                                            VkAccessFlags dst_access_mask,
+                                            VkImageLayout old_image_layout,
+                                            VkImageLayout new_image_layout,
+                                            VkImageAspectFlags aspect_mask,
+                                            const VKSubImageRange &subimage)
+{
+  BLI_assert(aspect_mask != VK_IMAGE_ASPECT_NONE);
   vk_image_memory_barriers_.append({VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                                     nullptr,
                                     src_access_mask,
@@ -1017,17 +1035,18 @@ void VKCommandBuilder::ImageTracker::update(VkImage vk_image,
                                             Barrier &r_barrier)
 {
   for (const SubImageChange &change : changes) {
-    if (change.vk_image == vk_image && ((subimage.layer_count != VK_REMAINING_ARRAY_LAYERS &&
-                                         change.subimage.layer_base == subimage.layer_base) ||
-                                        (subimage.mipmap_count != VK_REMAINING_MIP_LEVELS &&
-                                         change.subimage.mipmap_level == subimage.mipmap_level)))
+    if (change.vk_image == vk_image && change.vk_image_aspect == aspect &&
+        change.subimage.mipmap_level == subimage.mipmap_level &&
+        change.subimage.mipmap_count == subimage.mipmap_count &&
+        change.subimage.layer_base == subimage.layer_base &&
+        change.subimage.layer_count == subimage.layer_count)
     {
       BLI_assert_msg(
           change.vk_image_layout == new_layout,
           "We don't support more that one change of the same subimage multiple times during a "
           "rendering scope.");
-      /* Early exit as layer is in correct layout. This is a normal case as we expect multiple
-       * draw commands to take place during a rendering scope with the same layer access. */
+      /* Early exit as the subimage is already in the correct layout. This is a normal case as we
+       * expect multiple draw commands to access the same subimage during a rendering scope. */
       return;
     }
   }
@@ -1070,7 +1089,6 @@ void VKCommandBuilder::ImageTracker::end(Barrier &r_barrier, bool use_local_read
 }
 
 void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier, bool use_local_read)
-
 {
   if (changes.is_empty()) {
     return;
@@ -1083,9 +1101,8 @@ void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier, bool use_local_
   int64_t start_index = command_builder.vk_image_memory_barriers_.size();
   r_barrier.image_memory_barriers = IndexRange::from_begin_size(start_index, 0);
   for (const SubImageChange &change : changes) {
-    command_builder.add_image_barrier(
+    command_builder.append_image_barrier(
         change.vk_image,
-        r_barrier,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -1125,9 +1142,8 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_r
   r_barrier.image_memory_barriers = IndexRange::from_begin_size(start_index, 0);
 
   for (const SubImageChange &change : changes) {
-    command_builder.add_image_barrier(
+    command_builder.append_image_barrier(
         change.vk_image,
-        r_barrier,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -1138,6 +1154,9 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_r
         change.vk_image_layout,
         change.vk_image_aspect,
         change.subimage);
+    r_barrier.image_memory_barriers = r_barrier.image_memory_barriers.with_new_end(
+        command_builder.vk_image_memory_barriers_.size());
+
 #if 0
     std::cout << __func__ << ": transition layout image=" << change.vk_image
               << ", layer=" << change.subimage.layer_base
