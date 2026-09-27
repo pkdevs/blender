@@ -1339,38 +1339,24 @@ static void layerInterp_propfloat2(const void **sources,
                                    int count,
                                    void *dest)
 {
-  /* UV interpolation can change a component even when it has the same value in every source,
-   * because rounding errors affect the normalized weights. We preserve that component by
-   * interpolating offsets from a source value. The source with the largest weight serves as
-   * the reference to reduce cancellation near a source corner. */
+  /* UV interpolation relative to the highest weight source. This does two things:
+   * - Improve precision summing values that are far from the origin and near
+   *   each other.
+   * - Make it so all zero weights from degenerate geometry return the first
+   *   value rather than zero. */
   int reference_index = 0;
-  float weight_sum = 0.0f;
-  bool has_negative_weight = false;
-  for (int i = 0; i < count; i++) {
-    weight_sum += weights[i];
-    has_negative_weight |= weights[i] < 0.0f;
+  for (int i = 1; i < count; i++) {
     if (weights[i] > weights[reference_index]) {
       reference_index = i;
     }
   }
-  if (!has_negative_weight && weight_sum > 0.0f) {
-    const float2 reference = *static_cast<const float2 *>(sources[reference_index]);
-    float2 offset_sum(0.0f);
-    for (int i = 0; i < count; i++) {
-      offset_sum += (*static_cast<const float2 *>(sources[i]) - reference) * weights[i];
-    }
-    *static_cast<float2 *>(dest) = reference + offset_sum / weight_sum;
-    return;
-  }
 
-  /* Keep the existing arithmetic for extrapolation, where cancellation can amplify rounding. */
-  vec2f result = {0.0f, 0.0f};
+  const float2 reference = *static_cast<const float2 *>(sources[reference_index]);
+  float2 offset_sum(0.0f);
   for (int i = 0; i < count; i++) {
-    const float interp_weight = weights[i];
-    const vec2f *src = static_cast<const vec2f *>(sources[i]);
-    madd_v2_v2fl(&result.x, &src->x, interp_weight);
+    offset_sum += (*static_cast<const float2 *>(sources[i]) - reference) * weights[i];
   }
-  copy_v2_v2(static_cast<float *>(dest), &result.x);
+  *static_cast<float2 *>(dest) = reference + offset_sum;
 }
 
 static void layerMultiply_propfloat2(void *data, const float fac)

@@ -782,6 +782,7 @@ if(WITH_GTESTS)
     intern/bpath_test.cc
     intern/brush_test.cc
     intern/cryptomatte_test.cc
+    intern/customdata_test.cc
     intern/curves_geometry_test.cc
     intern/deform_test.cc
     intern/fcurve_test.cc
