@@ -1252,10 +1252,12 @@ void PathTrace::save_restir_temporal_history()
   }
 }
 
-void PathTrace::bind_restir_temporal_history(float *reprojection_surface, float *temporal_reservoir)
+void PathTrace::bind_restir_temporal_history(
+    float *reprojection_surface, float *temporal_reservoir, float *surface_data)
 {
   for (auto &&path_trace_work : path_trace_works_) {
-    path_trace_work->set_restir_temporal_history_storage(reprojection_surface, temporal_reservoir);
+    path_trace_work->set_restir_temporal_history_storage(
+        reprojection_surface, temporal_reservoir, surface_data);
   }
 }
 

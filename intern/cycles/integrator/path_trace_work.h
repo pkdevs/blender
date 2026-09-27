@@ -138,7 +138,8 @@ class PathTraceWork {
   /* Point this work's temporal-frame reuse at externally-owned persistent
    * storage (owned above Session's lifetime). */
   virtual void set_restir_temporal_history_storage(float * /*reprojection_surface*/,
-                                                   float * /*temporal_reservoir*/) {}
+                                                   float * /*temporal_reservoir*/,
+                                                   float * /*surface_data*/) {}
 
   /* Denoise Volume Scattering Probability Guiding buffers. */
   virtual void denoise_volume_guiding_buffers() = 0;

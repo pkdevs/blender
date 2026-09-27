@@ -77,6 +77,7 @@ struct ThreadKernelGlobalsCPU : public KernelGlobalsCPU {
 
   ccl_global const float *restir_prev_reprojection_surface = nullptr;
   ccl_global const float *restir_prev_temporal_reservoir = nullptr;
+  ccl_global const float *restir_prev_surface_data = nullptr;
 
   void start_profiling();
   void stop_profiling();

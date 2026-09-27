@@ -800,9 +800,10 @@ void Session::save_restir_temporal_history()
   path_trace_->save_restir_temporal_history();
 }
 
-void Session::bind_restir_temporal_history(float *reprojection_surface, float *temporal_reservoir)
+void Session::bind_restir_temporal_history(
+    float *reprojection_surface, float *temporal_reservoir, float *surface_data)
 {
-  path_trace_->bind_restir_temporal_history(reprojection_surface, temporal_reservoir);
+  path_trace_->bind_restir_temporal_history(reprojection_surface, temporal_reservoir, surface_data);
 }
 
 void Session::device_free()

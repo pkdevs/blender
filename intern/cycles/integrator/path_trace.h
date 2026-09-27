@@ -160,7 +160,8 @@ class PathTrace {
 
   void save_restir_temporal_history();
 
-  void bind_restir_temporal_history(float *reprojection_surface, float *temporal_reservoir);
+  void bind_restir_temporal_history(
+      float *reprojection_surface, float *temporal_reservoir, float *surface_data);
 
   /* Get size and offset (relative to the buffer's full x/y) of the currently rendering tile.
    * In the case of tiled rendering this will return full-frame after all tiles has been rendered.

@@ -155,7 +155,8 @@ class Session {
 
   void save_restir_temporal_history();
 
-  void bind_restir_temporal_history(float *reprojection_surface, float *temporal_reservoir);
+  void bind_restir_temporal_history(
+      float *reprojection_surface, float *temporal_reservoir, float *surface_data);
 
   /* Returns the rendering progress or 0 if no progress can be determined
    * (for example, when rendering with unlimited samples). */

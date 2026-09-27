@@ -64,6 +64,7 @@ CCL_NAMESPACE_BEGIN
 
 #define RESTIR_REPROJECTION_SURFACE_STRIDE 7
 #define RESTIR_RESERVOIR_STRIDE 9
+#define RESTIR_PREV_SURFACE_DATA_STRIDE 8
 
 /* Reconnection only happens if the ray length from the reconnection vertex to the previous vertex
  * is longer than this threshold. */

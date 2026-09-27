@@ -162,6 +162,7 @@ class BlenderSession {
 
   vector<float> restir_prev_reprojection_surface_;
   vector<float> restir_prev_temporal_reservoir_;
+  vector<float> restir_prev_surface_data_;
 
   /* (Re)size storage to the current frame dimensions if needed, and (re)bind
    * it into the current Session's PathTraceWork(s). Safe and cheap to call

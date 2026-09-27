@@ -95,7 +95,8 @@ class PathTraceWorkCPU : public PathTraceWork {
   void save_restir_temporal_history() override;
 
   void set_restir_temporal_history_storage(float *reprojection_surface,
-                                           float *temporal_reservoir) override;
+                                           float *temporal_reservoir,
+                                           float *surface_data) override;
 
   /* Pushes the collected training data/samples of a path to the global sample storage.
    * This function is called at the end of a random walk/path generation. */
@@ -134,6 +135,7 @@ class PathTraceWorkCPU : public PathTraceWork {
    * reuse is disabled or not yet bound. */
   float *restir_prev_reprojection_surface_ = nullptr;
   float *restir_prev_temporal_reservoir_ = nullptr;
+  float *restir_prev_surface_data_ = nullptr;
 };
 
 CCL_NAMESPACE_END

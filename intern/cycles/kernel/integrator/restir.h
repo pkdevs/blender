@@ -75,6 +75,7 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   /* TODO(weizhen): only Huang Hair BSDF needs LCG now. Can we find a way to remove the usage? */
   /* TODO(weizhen): check if we can compute `lcg_state` after we support curve. */
   sd->lcg_state = (uint)buffer[i];
+  /* Not necessary to read prevoius frame's time at index 7. */
 
   /* TODO(weizhen): do I need to write to this? */
   // sd->closure_transparent_extinction;
@@ -213,6 +214,62 @@ ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>( // !!!: The code path that pulls in OSL evaluation.
       kg, state, &reservoir->sd, render_buffer, path_visibility, reservoir->path_flag);
   /* TODO(weizhen): do we call `surface_shader_prepare_closures()` here? */
+}
+
+/* TODO(Tri): For genuinely deforming geometry (vertex-animated) between frames, prim's vertex 
+   positions this frame differ from last's, & reconstruction would use the wrong shape... */
+/* Reconstruct a fully-shaded ShaderData (with evaluated closures) at a point from
+ * the PREVIOUS animation frame, from persisted SURFACE_DATA identifiers rather than
+ * a live ray/intersection.
+ *
+ * Geometry (P, N, Ng) is re-derived by intersecting the same barycentric uv against
+ * THIS frame's mesh, exact under rigid/animated-transform motion (the same
+ * principle motion_triangle_vertices() relies on for motion blur), but only
+ * APPROXIMATE for genuinely vertex-deforming geometry, since prim's vertex
+ * positions this frame differ from last frame's and no previous-frame mesh is
+ * persisted to intersect instead.
+ *
+ * The ray is synthesized from the historical camera position, 
+ * derived from kernel_data.cam.motion_pass_pre toward the reconstructed P,
+ * rather than ray_setup()'s current-camera path used for same-frame neighbors. */
+ccl_device_inline void shader_data_setup_from_restir_history(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private ShaderData *ccl_restrict sd,
+    ccl_global const float *ccl_restrict prev_surface_data,
+    ccl_global float *ccl_restrict render_buffer,
+    ccl_private uint32_t *ccl_restrict path_flag_out)
+{
+  int i = 0;
+  *path_flag_out = (uint32_t)prev_surface_data[i++];
+  sd->u = prev_surface_data[i++];
+  sd->v = prev_surface_data[i++];
+  sd->type = (uint)prev_surface_data[i++];
+  sd->object = (int)prev_surface_data[i++];
+  sd->prim = (int)prev_surface_data[i++];
+  sd->lcg_state = (uint)prev_surface_data[i];
+  /* Previous frame's actual shading time */
+  sd->time = prev_surface_data[i];
+
+  shader_setup_geometry_from_restir(kg, sd);
+
+  Ray ray;
+  const Transform prev_cam_to_world = transform_inverse(kernel_data.cam.motion_pass_pre);
+  ray.P = transform_get_column(&prev_cam_to_world, 3);
+  ray.D = normalize(sd->P - ray.P);
+  ray.tmin = 0.0f;
+  ray.tmax = FLT_MAX;
+  ray.time = sd->time;
+#ifdef __RAY_DIFFERENTIALS__
+  ray.dP = 0.0f;
+  ray.dD = 0.0f;
+#endif
+
+  shader_setup_finish_from_restir(kg, &ray, sd);
+
+  const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
+  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
+      kg, state, sd, render_buffer, path_visibility, *path_flag_out);
 }
 
 ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg,
@@ -511,10 +568,7 @@ ccl_debug_printf("\n--- streaming_temporal_sample(): true! current total_weight=
 }
 
 // TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
-/* Object-motion reprojection only; camera motion is not yet folded into
- * get_previous_pixel()'s back-projection: check out Camera::update()'s
- * need_motion_pass() block & kcam->motion_pass_pre/post, which this
- * doesn't read yet. */
+/* Object-motion  + camera motion reprojection. */
 ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                                  IntegratorState state,
                                                  const ccl_private TemporalReprojection *reprojection,
@@ -609,21 +663,51 @@ ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M
   radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
   const float history_at_current = compute_luminance(kg, history.radiance);
 
+  uint32_t history_path_flag;
+  ShaderData history_sd;
+  // shader_data_setup_from_restir_history( // !!!(Tri): Causes a crash... Trace & fix
+  //     kg, state, &history_sd,
+  //     kg->restir_prev_surface_data + prev_pixel.z * RESTIR_PREV_SURFACE_DATA_STRIDE,
+  //     render_buffer, &history_path_flag);
+
+  LightSample current_at_history_ls = current->reservoir.light;
+  light_sample_from_reference(kg, &current->reservoir.reference, history_sd.P, history_sd.N,
+                              history_sd.time, history_sd.shader, history_path_flag,
+                              &current_at_history_ls);
+  BsdfEval current_at_history_radiance;
+  radiance_eval(kg, state, &history_sd, &current_at_history_ls, &current_at_history_radiance,
+               nullptr, visibility);
+  const float current_at_history = compute_luminance(kg, current_at_history_radiance);
+
+// TODO(Tri): Mergin' both streaming_temporal_sample()s should fix this?
+  /* Capture current's own state BEFORE either side is reweighted. matches
+   * spatial's canonical/neighbor treatment where both weight computations use
+   * the pre-combine luminance/M of each side, not values already mutated by
+   * this or an earlier combine step.
+   *
+   !!!(Tri): current->reservoir.total_weight may already include an additive
+   * contribution from same-pixel streaming_temporal_sample() if both
+   * t-samples & t-frames are enabled together. the *= below retroactively 
+   * scales that contribution too, unlike spatial's canonical, which is a fresh 
+   * local never touched before its one multiply. */
+  const float current_luminance_before = current->reservoir.luminance;
+  const float current_M_before = (float)current->reservoir.M;
+
 const float old_M = current->reservoir.M; // TODO(Tri): Remove
 const float history_M = history.M;
 
-  const float mis_weight = reservoir_pairwise_mis_weight(
-      history.luminance, history_at_current,
-      /*N0=*/(float)history.M, /*N1=*/(float)current->reservoir.M);
+  /* Canonical (current) reweight, generalized to a single "neighbor" (history) 
+   * rather than a sum over several. */
+  const float canonical_pairwise = reservoir_pairwise_mis_weight(
+      current_at_history, current_luminance_before,
+      /*N0=*/(float)history.M, /*N1=*/current_M_before);
 
-// TODO(Tri): Reweigh the canonical sample itself: by evaluating canonical's own selected sample at each neighbor's shading point
-/* TODO(Tri): Asymmetric relative to streaming_di_samples()/Falcor's
-  * kUsePairwiseMIS path: only history's own weight is reduced by its
-  * mismatch with the current point (above). The canonical (current)
-  * reservoir is not symmetrically reweighted by its mismatch with
-  * history's original point.
-  * Need the persisted cross-frame buffer with reconstructable position data 
-  * (similar to shader_data_setup_from_restir() re-intersects spatial neighbors from SURFACE_DATA). */
+  current->reservoir.total_weight *= (1.0f + (1.0f - canonical_pairwise));
+
+  /* History's own reweight, symmetric to spatial's neighbor term. */
+  const float history_mis_weight = reservoir_pairwise_mis_weight(
+      history.luminance, history_at_current,
+      /*N0=*/(float)history.M, /*N1=*/current_M_before);
 
 ccl_debug_printf(
   "TEMPORAL DEBUG pixel=(%d,%d): "
@@ -633,10 +717,10 @@ ccl_debug_printf(
   (double)history.luminance,
   (double)history_at_current, // If reconstructed_L=0: problem is light reconstruction / visibility / radiance evaluation
   history.M,
-  (double)mis_weight);
+  (double)history_mis_weight);
 
   // history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
-  history.total_weight *= mis_weight;
+  history.total_weight *= history_mis_weight;
 
   const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
   spatial_reservoir_add_reservoir(current, history, rand);

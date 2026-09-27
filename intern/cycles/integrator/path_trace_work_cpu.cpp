@@ -224,7 +224,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });
   }
 
-  /* TODO(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
+  /* TODO(Weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
   /* Spatial Resampling. */
   int i = 0;
   if (device_scene_->data.integrator.use_restir) {
@@ -456,14 +456,20 @@ void PathTraceWorkCPU::save_restir_temporal_history()
     memcpy(&restir_prev_temporal_reservoir_[i * RESTIR_RESERVOIR_STRIDE],
            render_buffer + i * pass_stride + device_scene_->data.film.pass_restir_temporal_history_reservoir,
            RESTIR_RESERVOIR_STRIDE * sizeof(float));
+
+    memcpy(&restir_prev_surface_data_[i * RESTIR_PREV_SURFACE_DATA_STRIDE],
+           render_buffer + i * pass_stride + device_scene_->data.film.pass_surface_data,
+           RESTIR_PREV_SURFACE_DATA_STRIDE * sizeof(float));
   }
 }
 
 void PathTraceWorkCPU::set_restir_temporal_history_storage(float *reprojection_surface,
-                                                            float *temporal_reservoir)
+                                                           float *temporal_reservoir,
+                                                           float *surface_data)
 {
   restir_prev_reprojection_surface_ = reprojection_surface;
   restir_prev_temporal_reservoir_ = temporal_reservoir;
+  restir_prev_surface_data_ = surface_data;
 }
 
 void PathTraceWorkCPU::copy_to_display(PathTraceDisplay *display,
@@ -521,7 +527,7 @@ bool PathTraceWorkCPU::zero_render_buffers()
 }
 
 int PathTraceWorkCPU::adaptive_sampling_converge_filter_count_active(const float threshold,
-                                                                     bool reset)
+                                                                     bool reset) // !!!
 {
   const int full_x = effective_buffer_params_.full_x;
   const int full_y = effective_buffer_params_.full_y;
@@ -544,7 +550,7 @@ int PathTraceWorkCPU::adaptive_sampling_converge_filter_count_active(const float
       bool row_converged = true;
       uint num_row_pixels_active = 0;
       for (int x = 0; x < width; ++x) {
-        if (!kernels_.adaptive_sampling_convergence_check(
+        if (!kernels_.adaptive_sampling_convergence_check( // !!!
                 kernel_globals, render_buffer, full_x + x, y, threshold, reset, offset, stride))
         {
           ++num_row_pixels_active;
@@ -688,6 +694,7 @@ void PathTraceWorkCPU::restir_init_kernel_globals()
   for (ThreadKernelGlobalsCPU &kg : *kernel_thread_globals_) {
     kg.restir_prev_reprojection_surface = restir_prev_reprojection_surface_;
     kg.restir_prev_temporal_reservoir = restir_prev_temporal_reservoir_;
+    kg.restir_prev_surface_data = restir_prev_surface_data_;
   }
 }
 

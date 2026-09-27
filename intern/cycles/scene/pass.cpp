@@ -422,7 +422,7 @@ PassInfo Pass::get_info(const PassType type,
       pass_info.num_components = 6;
       break;
 	  case PASS_SURFACE_DATA:
-      pass_info.num_components = 7;
+      pass_info.num_components = 8;
       break;
 
     default:
