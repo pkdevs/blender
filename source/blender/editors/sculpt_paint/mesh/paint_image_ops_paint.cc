@@ -535,13 +535,11 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
   texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
   texture_paint_data->mask_data = ImageData::init_mask(*settings_);
-  if (!texture_paint_data->image_data) {
-    BLI_assert(0);
-    return false;
-  }
-  if (this->brush && this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK &&
-      !texture_paint_data->mask_data)
+  if (!texture_paint_data->image_data ||
+      (this->brush && this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK &&
+       !texture_paint_data->mask_data))
   {
+    BLI_assert(0);
     return false;
   }
   mode_data_ = std::move(texture_paint_data);
