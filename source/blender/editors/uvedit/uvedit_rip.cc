@@ -944,6 +944,14 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
     }
   }
 
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      *bmain, scene, view_layer, nullptr);
+
+  if (!uvedit_select_is_any_selected_multi(scene, objects)) {
+    BKE_report(op->reports, RPT_ERROR, "No UVs selected");
+    return OPERATOR_CANCELLED;
+  }
+
   bool changed_multi = false;
 
   float co[2];
@@ -956,9 +964,6 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
     ED_uvedit_get_aspect(obedit, &aspx, &aspy);
   }
   const float aspect_y = aspx / aspy;
-
-  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      *bmain, scene, view_layer, nullptr);
 
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     /* While this is almost always true, any mis-match (from multiple scenes for example).
@@ -983,6 +988,10 @@ static wmOperatorStatus uv_rip_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus uv_rip_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  if (event == nullptr) {
+    return uv_rip_exec(C, op);
+  }
+
   ARegion *region = CTX_wm_region(C);
   float co[2];
 
@@ -992,18 +1001,31 @@ static wmOperatorStatus uv_rip_invoke(bContext *C, wmOperator *op, const wmEvent
   return uv_rip_exec(C, op);
 }
 
+static bool uv_rip_depends_on_cursor(bContext &C, wmOperatorType & /*ot*/, PointerRNA * /*ptr*/)
+{
+  const Main *bmain = CTX_data_main(&C);
+  Scene *scene = CTX_data_scene(&C);
+  ViewLayer *view_layer = CTX_data_view_layer(&C);
+
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      *bmain, scene, view_layer, nullptr);
+
+  return uvedit_select_is_any_selected_multi(scene, objects);
+}
+
 void UV_OT_rip(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Rip UVs";
   ot->description = "Rip selected vertices or a selected region";
   ot->idname = "UV_OT_rip";
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* API callbacks. */
   ot->exec = uv_rip_exec;
   ot->invoke = uv_rip_invoke;
   ot->poll = ED_operator_uvedit;
+  ot->depends_on_cursor = uv_rip_depends_on_cursor;
 
   /* translation data */
   ed::transform::properties_register(ot, P_MIRROR_DUMMY);
