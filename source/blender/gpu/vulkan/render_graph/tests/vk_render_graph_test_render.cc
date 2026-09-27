@@ -465,23 +465,36 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
 
   submit(render_graph, command_buffer);
 
-  /* Verify that a barrier with the read access flag is generated.
-   * Without the fix for #158501, this barrier would be missing because
-   * the image tracker skipped access flag synchronization for tracked
-   * layered color attachments. */
+  /* Verify that the synchronization barrier for the input attachment read is recorded inside the
+   * rendering scope, before the draw that consumes the attachment. */
   const char *expected_access = use_dynamic_rendering_local_read ?
                                     "VK_ACCESS_INPUT_ATTACHMENT_READ_BIT" :
                                     "VK_ACCESS_SHADER_READ_BIT";
-  bool has_sync_barrier = false;
-  for (const std::string &entry : log) {
-    if (entry.find(expected_access) != std::string::npos) {
-      has_sync_barrier = true;
-      break;
+  int64_t sync_barrier_index = -1;
+  int64_t begin_rendering_index = -1;
+  int64_t draw_index = -1;
+  for (const int64_t index : log.index_range()) {
+    if (log[index].find("begin_rendering(") != std::string::npos) {
+      begin_rendering_index = index;
+    }
+    if (log[index].find(expected_access) != std::string::npos) {
+      sync_barrier_index = index;
+    }
+    if (log[index].find("draw(") != std::string::npos) {
+      draw_index = index;
     }
   }
-  EXPECT_TRUE(has_sync_barrier)
+
+  EXPECT_NE(-1, begin_rendering_index);
+  EXPECT_NE(-1, sync_barrier_index)
       << "Missing synchronization barrier for input attachment read after color attachment write. "
          "See #158501.";
+  EXPECT_NE(-1, draw_index);
+  EXPECT_LT(begin_rendering_index, sync_barrier_index)
+      << "Synchronization barrier must be recorded inside the rendering scope.";
+  EXPECT_LT(sync_barrier_index, draw_index)
+      << "Synchronization barrier must be recorded before the draw that consumes the input "
+         "attachment.";
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
