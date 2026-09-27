@@ -367,6 +367,16 @@
 #  else
 #    define ARCH_CPU_BIG_ENDIAN 1
 #  endif
+#elif defined(__sparc)
+#  define ARCH_CPU_SPARC_FAMILY 1
+#  if defined(__LP64__)
+#    define ARCH_CPU_SPARC64 1
+#    define ARCH_CPU_64_BITS 1
+#  else
+#    define ARCH_CPU_SPARC 1
+#    define ARCH_CPU_32_BITS 1
+#  endif
+#  define ARCH_CPU_BIG_ENDIAN 1
 #else
 #  error Please add support for your architecture in build/build_config.h
 #endif
@@ -408,6 +418,9 @@
 #endif
 #if !defined(ARCH_CPU_RISCV_FAMILY)
 #  define ARCH_CPU_RISCV_FAMILY 0
+#endif
+#if !defined(ARCH_CPU_SPARC_FAMILY)
+#  define ARCH_CPU_SPARC_FAMILY 0
 #endif
 
 #endif  // LIBMV_BUILD_BUILD_CONFIG_H_
