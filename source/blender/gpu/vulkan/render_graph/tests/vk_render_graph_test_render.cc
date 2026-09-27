@@ -362,8 +362,10 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
   VkHandle<VkImageView> image_view(2u);
   VkHandle<VkPipelineLayout> pipeline_layout(4u);
   VkHandle<VkPipeline> pipeline(3u);
+  VKTrackedHandle<VkBuffer> buffer(5u);
 
   resources.add_image(image, true);
+  buffer.set_resource_handle(resources.add_buffer(buffer));
 
   /* First rendering scope: write to image as color attachment. */
   {
@@ -442,6 +444,9 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
                                input_access,
                                VK_IMAGE_ASPECT_COLOR_BIT,
                                {0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}});
+    access_info.buffers.append(
+        {buffer.get_resource_handle(), VK_ACCESS_SHADER_WRITE_BIT});
+
     VKNodeData<VKDrawNode> node = render_graph->alloc_node<VKDrawNode>();
     node.data.first_instance = 0;
     node.data.first_vertex = 0;
@@ -474,12 +479,14 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
   int64_t sync_barrier_index = -1;
   int64_t begin_rendering_index = -1;
   int64_t draw_index = -1;
+  bool sync_barrier_has_buffer = false;
   for (const int64_t index : log.index_range()) {
     if (log[index].find("begin_rendering(") != std::string::npos) {
       begin_rendering_index = index;
     }
     if (log[index].find(expected_access) != std::string::npos) {
       sync_barrier_index = index;
+      sync_barrier_has_buffer = log[index].find("buffer_barrier(") != std::string::npos;
     }
     if (log[index].find("draw(") != std::string::npos) {
       draw_index = index;
@@ -497,7 +504,9 @@ TEST_P(VKRenderGraphTestRender, begin_draw_begin_draw_end__layered_input_attachm
     EXPECT_LT(sync_barrier_index, draw_index)
         << "Synchronization barrier must be recorded before the draw that consumes the input "
            "attachment.";
- }
+    EXPECT_FALSE(sync_barrier_has_buffer)
+        << "The local-read node barrier must not include unrelated buffer barriers.";
+  }
 }
 
 TEST_P(VKRenderGraphTestRender, begin_draw_end__layered_depth)
