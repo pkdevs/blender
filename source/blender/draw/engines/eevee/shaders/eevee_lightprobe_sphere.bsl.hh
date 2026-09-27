@@ -8,10 +8,10 @@
 #include "eevee_defines.hh"
 #include "eevee_lightprobe_shared.hh"
 #include "eevee_octahedron_lib.bsl.hh"
-#include "eevee_spherical_harmonics.bsl.hh"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_fast_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_fast.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 namespace eevee {
 
@@ -202,7 +202,7 @@ struct LightprobeSphereRenderData {
     for (int index = 0; index < SPHERE_PROBE_MAX; index++) {
       SphereProbeData probe_data = lightprobe_sphere_buf[index];
       /* SphereProbeData doesn't contain any gap, exit at first item that is invalid. */
-      if (probe_data.atlas_coord.layer == -1) {
+      if (probe_data.atlas_coord.layer == -1.0f) {
         /* We hit the end of the array. Return last valid index. */
         return index - 1;
       }

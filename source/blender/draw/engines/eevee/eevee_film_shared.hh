@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup eevee
+ *
  * Shared code between host and client code-bases.
  */
 
@@ -14,7 +16,7 @@
 namespace blender::eevee {
 #endif
 
-#define FILM_PRECOMP_SAMPLE_MAX 16
+static constexpr int FILM_PRECOMP_SAMPLE_MAX = 16;
 
 enum [[host_shared]] eFilmWeightLayerIndex : uint32_t {
   FILM_WEIGHT_LAYER_ACCUMULATION,
@@ -37,7 +39,9 @@ enum [[host_shared]] PassCategory : uint32_t {
   PASS_CATEGORY_CRYPTOMATTE = 1u << 5,
   PASS_CATEGORY_DENOISE = 1u << 6,
 };
+#ifndef GPU_SHADER
 ENUM_OPERATORS(PassCategory)
+#endif
 
 struct [[host_shared]] FilmSample {
   int2 texel;

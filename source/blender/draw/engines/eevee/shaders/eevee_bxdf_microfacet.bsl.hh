@@ -8,12 +8,12 @@
 #include "eevee_ltc_lut_lib.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
-#include "gpu_shader_math_base_lib.glsl"
-#include "gpu_shader_math_fast_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
-#include "gpu_shader_ray_lib.glsl"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_math_base.bsl.hh"
+#include "gpu_shader_math_fast.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
+#include "gpu_shader_ray.bsl.hh"
+#include "gpu_shader_utildefines.bsl.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Microfacet GGX distribution
@@ -412,7 +412,7 @@ Ray bxdf_ggx_ray_amend_transmission(ClosureUndetermined cl, float3 V, Ray ray, T
   return ray;
 }
 
-ClosureLight bxdf_ggx_light_reflection([[resource_table]] const UtilityTexture &util_tx,
+ClosureLight bxdf_ggx_light_reflection(const UtilityTexture &util_tx,
                                        ClosureReflection cl,
                                        float3 V)
 {
@@ -426,7 +426,7 @@ ClosureLight bxdf_ggx_light_reflection([[resource_table]] const UtilityTexture &
   return light;
 }
 
-ClosureLight bxdf_ggx_light_transmission([[resource_table]] const UtilityTexture &util_tx,
+ClosureLight bxdf_ggx_light_transmission(const UtilityTexture &util_tx,
                                          ClosureRefraction cl,
                                          float3 V,
                                          Thickness thickness)
@@ -440,7 +440,7 @@ ClosureLight bxdf_ggx_light_transmission([[resource_table]] const UtilityTexture
     float3 L = bxdf_ggx_dominant_direction_transmission(cl.N, V, cl.ior, perceptual_roughness);
     cl.N = -thickness.shape_intersect(cl.N, L).hit_N;
 
-    /* TODO(not_mark): fix #151205 by e.g. amending V to V_transmitted up the callstack. */
+    /* TODO(not_mark): fix #151205 by e.g. amending V to V_transmitted up the call-stack. */
     V_transmitted = -L;
   }
 
@@ -456,8 +456,9 @@ ClosureLight bxdf_ggx_light_transmission([[resource_table]] const UtilityTexture
   return light;
 }
 
-ClosureLight bxdf_ggx_light_thin_glass_transmission(
-    [[resource_table]] const UtilityTexture &util_tx, ClosureThinRefraction cl, float3 V)
+ClosureLight bxdf_ggx_light_thin_glass_transmission(const UtilityTexture &util_tx,
+                                                    ClosureThinRefraction cl,
+                                                    float3 V)
 {
   float cos_theta = dot(cl.N, V);
 
