@@ -27,7 +27,7 @@ static Result kawase_downsample(
     GPU_shader_bind(shader);
     GPU_texture_filter_mode(input, true);
     GPU_texture_extend_mode(input, GPU_SAMPLER_EXTEND_MODE_EXTEND);
-    GPU_shader_uniform_2fv(shader, "step", step);
+    GPU_shader_uniform_2fv(shader, "uv_step", step);
     input.bind_as_texture(shader, "input_tx");
     output.bind_as_image(shader, "output_img");
     compute_dispatch_threads_at_least(shader, output.domain().data_size);
@@ -69,7 +69,7 @@ static Result kawase_upsample(
     GPU_shader_bind(shader);
     GPU_texture_filter_mode(input, true);
     GPU_texture_extend_mode(input, GPU_SAMPLER_EXTEND_MODE_EXTEND);
-    GPU_shader_uniform_2fv(shader, "step", step);
+    GPU_shader_uniform_2fv(shader, "uv_step", step);
     input.bind_as_texture(shader, "input_tx");
     output.bind_as_image(shader, "output_img");
     compute_dispatch_threads_at_least(shader, output.domain().data_size);
@@ -186,7 +186,8 @@ void dual_kawase_blur(Context &context, const Result &input, Result &output, flo
     curr_is_input = false;
   }
 
-  output.steal_data(curr);
+  output.share_data(curr);
+  curr.release();
 }
 
 }  // namespace blender::compositor
