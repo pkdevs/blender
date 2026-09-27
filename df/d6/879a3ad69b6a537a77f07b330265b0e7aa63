@@ -1,3 +1,3 @@
 Referenced by issue #164336, Text strip changes color of Rec.1886 background video
-Referenced by issue #164339, sRGB videos are imported into the video sequencer as Rec.1886
+Referenced by issue #164339, Some videos are incorrectly imported into the video sequencer as Rec.1886
 Referenced by pull request #164354, Fix #164339: Most videos are imported as Rec.1886
