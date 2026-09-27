@@ -52,7 +52,7 @@ void edit_flag_for_removal(Scene *scene, Strip *strip);
  * Remove all flagged strips, return true if strip is removed.
  */
 void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase);
-void edit_update_muting(Editing *ed);
+void edit_update_muting(const Scene *scene);
 
 enum eSplitMethod {
   SPLIT_SOFT,

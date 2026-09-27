@@ -6693,6 +6693,9 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
         }
         else {
           sad->flag &= ~ANIMPLAY_FLAG_REVERSE;
+          if (depsgraph != nullptr) {
+            BKE_sound_ensure_playback_audio_animation(bmain, scene, depsgraph);
+          }
           BKE_sound_play_scene(scene_eval);
           scene->r.cfra = start_frame + 1;
         }
@@ -6733,6 +6736,10 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
      * being removed. For example, calling `screen.animation_cancel` inside `frame_change_post`. */
     if (wt->flags & WM_TIMER_TAGGED_FOR_REMOVAL) {
       return OPERATOR_FINISHED;
+    }
+
+    if ((sad->flag & ANIMPLAY_FLAG_REVERSE) == 0) {
+      BKE_sound_ensure_playback_audio_animation(bmain, scene, depsgraph);
     }
   }
 
@@ -6993,6 +7000,7 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
 
   /* Only play sound when playing forward. Reverse sound playback is not implemented. */
   if (mode == 1) {
+    BKE_sound_ensure_playback_audio_animation(bmain, scene, depsgraph);
     BKE_sound_play_scene(scene_eval);
   }
 
