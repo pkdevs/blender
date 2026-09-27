@@ -12,6 +12,7 @@
 
 #include "BLI_bit_vector.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_string.hh"
 #include "BLI_sys_types.hh" /* for bool */
@@ -321,6 +322,18 @@ bool BKE_animsys_read_from_rna_path(PathResolvedRNA *anim_rna, float *r_value);
 bool BKE_animsys_write_to_rna_path(PathResolvedRNA *anim_rna,
                                    float value,
                                    bool force_write = false);
+
+/**
+ * Evaluate the Action and NLA data for the given ID without evaluating drivers or overrides.
+ *
+ * \param rna_path_filter: when given, only properties with these RNA paths are evaluated and
+ * written. Other properties are left untouched.
+ */
+void BKE_animsys_evaluate_action_nla(ID *id,
+                                     AnimData *adt,
+                                     const AnimationEvalContext *anim_eval_context,
+                                     bool flush_to_original,
+                                     const Set<ParsedRNAPathRef> *rna_path_filter = nullptr);
 
 /**
  * Evaluation loop for evaluation animation data
