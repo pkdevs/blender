@@ -1300,7 +1300,6 @@ void BKE_fcurve_update_handle_flag_from_opposite(BezTriple &key, const HandleSid
       break;
 
     case HD_VECT:
-      /* Vector can be combined with align so the align handle matches the vector direction. */
       if (!ELEM(*target, HD_VECT, HD_ALIGN)) {
         *target = HD_FREE;
       }
