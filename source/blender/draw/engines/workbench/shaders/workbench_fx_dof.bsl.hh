@@ -195,7 +195,7 @@ struct DownSampleOut {
  * Outputs vertical blur and combined blur in MRT
  */
 
-#define dof_sample_count 49
+static constexpr int dof_sample_count = 49;
 
 struct Blur1 {
   [[sampler(0)]] sampler2D input_coc_tx;
@@ -279,6 +279,56 @@ struct Blur2Out {
   [[frag_color(0)]] float4 color;
 };
 
+[[force_inline]] void s2(float4 &a, float4 &b)
+{
+  float4 temp = a;
+  a = min(a, b);
+  b = max(temp, b);
+}
+
+[[force_inline]] void mn3(float4 &a, float4 &b, float4 &c)
+{
+  s2(a, b);
+  s2(a, c);
+}
+
+[[force_inline]] void mx3(float4 &a, float4 &b, float4 &c)
+{
+  s2(b, c);
+  s2(a, c);
+}
+
+[[force_inline]] void mnmx3(float4 &a, float4 &b, float4 &c)
+{
+  mx3(a, b, c);
+  s2(a, b); /* 3 exchanges */
+}
+
+[[force_inline]] void mnmx4(float4 &a, float4 &b, float4 &c, float4 &d)
+{
+  s2(a, b);
+  s2(c, d);
+  s2(a, c);
+  s2(b, d); /* 4 exchanges */
+}
+
+[[force_inline]] void mnmx5(float4 &a, float4 &b, float4 &c, float4 &d, float4 &e)
+{
+  s2(a, b);
+  s2(c, d);
+  mn3(a, c, e);
+  mx3(b, d, e); /* 6 exchanges */
+}
+
+[[force_inline]] void mnmx6(float4 &a, float4 &b, float4 &c, float4 &d, float4 &e, float4 &f)
+{
+  s2(a, d);
+  s2(b, e);
+  s2(c, f);
+  mn3(a, b, c);
+  mx3(d, e, f); /* 7 exchanges */
+}
+
 [[fragment]] void blur2([[resource_table]] Blur2 &srt,
                         [[out]] Blur2Out &out,
                         [[frag_coord]] const float4 frag_co)
@@ -292,37 +342,6 @@ struct Blur2Out {
    * and can bleed a bit. */
   float rad = clamp(coc - 9.0f, 0.0f, 1.0f);
 
-#define s2(a, b) \
-  temp = a; \
-  a = min(a, b); \
-  b = max(temp, b);
-#define mn3(a, b, c) \
-  s2(a, b); \
-  s2(a, c);
-#define mx3(a, b, c) \
-  s2(b, c); \
-  s2(a, c);
-
-#define mnmx3(a, b, c) \
-  mx3(a, b, c); \
-  s2(a, b); /* 3 exchanges */
-#define mnmx4(a, b, c, d) \
-  s2(a, b); \
-  s2(c, d); \
-  s2(a, c); \
-  s2(b, d); /* 4 exchanges */
-#define mnmx5(a, b, c, d, e) \
-  s2(a, b); \
-  s2(c, d); \
-  mn3(a, c, e); \
-  mx3(b, d, e); /* 6 exchanges */
-#define mnmx6(a, b, c, d, e, f) \
-  s2(a, d); \
-  s2(b, e); \
-  s2(c, f); \
-  mn3(a, b, c); \
-  mx3(d, e, f); /* 7 exchanges */
-
   float4 v[9];
 
   /* Add the pixels which make up our window to the pixel array. */
@@ -335,8 +354,6 @@ struct Blur2Out {
       v[(dX + 1) * 3 + (dY + 1)] = texture(srt.blur_tx, uv + offset * pixel_size * rad);
     }
   }
-
-  float4 temp;
 
   /* Starting with a subset of size 6, remove the min and max each time */
   mnmx6(v[0], v[1], v[2], v[3], v[4], v[5]);
