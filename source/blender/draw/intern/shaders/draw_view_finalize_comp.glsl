@@ -2,14 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
+/** \file
+ * \ingroup draw
+ *
  * Compute culling data for each views of a given view buffer.
  */
 
 #include "draw_view_infos.hh"
 
 #include "draw_view_lib.glsl"
-#include "gpu_shader_math_matrix_transform_lib.glsl"
+#include "gpu_shader_math_matrix_transform.bsl.hh"
 
 COMPUTE_SHADER_CREATE_INFO(draw_view_finalize)
 
@@ -129,7 +131,7 @@ void main()
     return;
   }
 
-  /* Read frustom_corners from device memory, update, and write back. */
+  /* Read frustum_corners from device memory, update, and write back. */
   FrustumCorners frustum_corners = view_culling_buf[drw_view_id].frustum_corners;
   frustum_boundbox_calc(drw_view().winmat, drw_view().viewinv, frustum_corners);
   view_culling_buf[drw_view_id].frustum_corners = frustum_corners;

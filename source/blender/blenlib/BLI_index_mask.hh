@@ -23,7 +23,6 @@
 #include "BLI_task.hh"
 #include "BLI_unique_sorted_indices.hh"
 #include "BLI_vector.hh"
-#include "BLI_vector_set.hh"
 #include "BLI_virtual_array_fwd.hh"
 
 namespace blender {
@@ -324,14 +323,15 @@ class IndexMask : private IndexMaskData {
                           Fn &&get_group_index,
                           MutableSpan<IndexMask> r_masks);
 
-  /** Creates an index mask for every unique group id. */
+  /**
+   * Creates an index mask for every unique group ID in the universe, in the order that the IDs
+   * first appear. The ID of each group is the ID of the first index in its mask.
+   */
   static Vector<IndexMask, 4> from_group_ids(const VArray<int> &group_ids,
-                                             LinearAllocator<> &memory,
-                                             VectorSet<int> &r_index_by_group_id);
+                                             LinearAllocator<> &memory);
   static Vector<IndexMask, 4> from_group_ids(const IndexMask &universe,
                                              const VArray<int> &group_ids,
-                                             LinearAllocator<> &memory,
-                                             VectorSet<int> &r_index_by_group_id);
+                                             LinearAllocator<> &memory);
 
   int64_t size() const;
   bool is_empty() const;
@@ -1206,7 +1206,7 @@ inline void fill_segment(T *__restrict data, const T &value, const SegmentT segm
 {
   if constexpr (std::is_same_v<SegmentT, IndexRange>) {
     if constexpr (std::is_trivially_copy_assignable_v<T>) {
-      if (value_is_zero(value)) {
+      if (value_is_zero_memory(value)) {
         const IndexRange range = segment;
 /* GCC warns about memset on types without trivial copy-assignment even when guarded by
  * `if constexpr (std::is_trivially_copy_assignable_v<T>)`. Quiet the compiler bug. */

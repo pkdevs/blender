@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include <algorithm>
 
 #include "CLG_log.h"
@@ -853,7 +857,7 @@ void attribute_storage_blend_write_prepare(AttributeStorage &data,
     }
 
     write_data.attributes.append(attribute_dna);
-    BLO_write_generated_pointer_tag(write_data.writer, attribute_dna.data);
+    write_data.writer->generated_pointer_tag(attribute_dna.data);
   }
   data.runtime = nullptr;
 }
@@ -865,7 +869,7 @@ static void write_shared_array(BlendWriter &writer,
                                const ImplicitSharingInfo *sharing_info)
 {
   const CPPType &cpp_type = attribute_type_to_cpp_type(data_type);
-  BLO_write_shared(&writer, data, cpp_type.size * size, sharing_info, [&]() {
+  writer.write_shared(data, cpp_type.size * size, sharing_info, [&]() {
     write_array_data(writer, data_type, data, size);
   });
 }
@@ -878,16 +882,14 @@ AttributeStorage::BlendWriteData::BlendWriteData(BlendWriter *writer, ResourceSc
 static void write_string_offsets(BlendWriter &writer, AttributeStringOffsets *data_dna)
 {
   const OffsetIndices offsets(Span(data_dna->offsets, data_dna->size + 1));
-  BLO_write_shared(&writer,
-                   data_dna->offsets,
-                   sizeof(int) * (data_dna->size + 1),
-                   data_dna->offsets_sharing_info,
-                   [&]() { writer.write_int32_array(data_dna->size + 1, data_dna->offsets); });
-  BLO_write_shared(&writer,
-                   data_dna->data,
-                   sizeof(char) * offsets.total_size(),
-                   data_dna->data_sharing_info,
-                   [&]() { writer.write_char_array(offsets.total_size(), data_dna->data); });
+  writer.write_shared(data_dna->offsets,
+                      sizeof(int) * (data_dna->size + 1),
+                      data_dna->offsets_sharing_info,
+                      [&]() { writer.write_int32_array(data_dna->size + 1, data_dna->offsets); });
+  writer.write_shared(data_dna->data,
+                      sizeof(char) * offsets.total_size(),
+                      data_dna->data_sharing_info,
+                      [&]() { writer.write_char_array(offsets.total_size(), data_dna->data); });
   writer.write_struct(data_dna);
 }
 
@@ -898,7 +900,7 @@ void AttributeStorage::blend_write(BlendWriter &writer,
   writer.write_struct_array_by_name("Attribute",
                                     write_data.attributes.size(),
                                     write_data.attributes.data(),
-                                    [](BlendStructWriter &struct_writer) {
+                                    [](BlendStructWriterVoid &struct_writer) {
                                       struct_writer.generated_ptr(
                                           offsetof(blender::Attribute, data));
                                     });
