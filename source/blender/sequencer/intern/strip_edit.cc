@@ -198,7 +198,7 @@ bool edit_move_strip_to_seqbase(Scene *scene,
   relations_invalidate_cache(scene, strip);
 
   /* Update meta. */
-  transform_shuffle_vertical(dst_seqbase, strip, scene);
+  transform_shuffle_vertical(dst_seqbase, {strip}, scene);
 
   return true;
 }

@@ -279,7 +279,7 @@ static void seq_transform_cancel(TransInfo *t, Span<Strip *> transformed_strips)
   for (Strip *strip : transformed_strips) {
     /* Handle pre-existing overlapping strips even when operator is canceled.
      * This is necessary for #SEQUENCER_OT_duplicate_move macro for example. */
-    seq::transform_shuffle_vertical(seqbase, strip, scene);
+    seq::transform_shuffle_vertical(seqbase, {strip}, scene);
   }
 }
 

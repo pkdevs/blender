@@ -703,9 +703,7 @@ static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> s
   if (should_move_strips_after_add(op) ||
       (!overlap_mode_is_set && overlap_mode == SEQ_OVERLAP_SHUFFLE))
   {
-    for (Strip *strip : strips) {
-      seq::transform_shuffle_vertical(ed->current_strips(), strip, scene);
-    }
+    seq::transform_shuffle_vertical(ed->current_strips(), strips, scene);
     return;
   }
 

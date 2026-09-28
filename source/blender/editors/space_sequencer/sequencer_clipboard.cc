@@ -546,9 +546,7 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
   const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                  SEQ_MARKER_TRANS) != 0;
   if (seq::tool_settings_overlap_mode_get(scene_dst) == SEQ_OVERLAP_SHUFFLE) {
-    for (Strip *strip : pasted_strips) {
-      seq::transform_shuffle_vertical(ed_dst->current_strips(), strip, scene_dst);
-    }
+    seq::transform_shuffle_vertical(ed_dst->current_strips(), pasted_strips, scene_dst);
   }
   else {
     seq::transform_handle_overlap(

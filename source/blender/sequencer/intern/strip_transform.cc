@@ -198,38 +198,50 @@ static bool shuffle_channel_is_free(const Scene *scene,
          !transform_test_overlap(scene, seqbasep, strip);
 }
 
-void transform_shuffle_vertical_ex(ListBaseT<Strip> *seqbasep,
-                                   Strip *strip,
-                                   Scene *scene,
-                                   const int channel_delta)
+void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep,
+                                Span<Strip *> strips,
+                                Scene *scene,
+                                const int channel_delta)
 {
   BLI_assert(ELEM(channel_delta, -1, 1));
 
-  if (!transform_test_overlap(scene, seqbasep, strip)) {
+  if (!std::ranges::any_of(
+          strips, [&](Strip *strip) { return transform_test_overlap(scene, seqbasep, strip); }))
+  {
     return;
   }
 
   const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(editing_get(scene));
-  const int orig_channel = strip->channel;
+  Vector<int> orig_channels;
+  int min_channel = MAX_CHANNELS;
+  int max_channel = 1;
+  for (Strip *strip : strips) {
+    orig_channels.append(strip->channel);
+    min_channel = math::min(min_channel, strip->channel);
+    max_channel = math::max(max_channel, strip->channel);
+  }
 
-  for (int channel = orig_channel + channel_delta; channel >= 1 && channel <= MAX_CHANNELS;
-       channel += channel_delta)
+  for (int delta = channel_delta; min_channel + delta >= 1 && max_channel + delta <= MAX_CHANNELS;
+       delta += channel_delta)
   {
-    /* Temporarily override the strip's channel to easily check for overlaps. */
-    strip->channel_set(channel);
-    if (shuffle_channel_is_free(scene, seqbasep, channels, strip)) {
+    /* Temporarily override the strips' channels to easily check for overlaps. */
+    for (const int i : strips.index_range()) {
+      strips[i]->channel_set(orig_channels[i] + delta);
+    }
+    if (std::ranges::all_of(strips,
+                            [&](Strip *strip) {
+                              return shuffle_channel_is_free(scene, seqbasep, channels, strip);
+                            }))
+    {
       return;
     }
   }
 
-  /* Strip cannot be moved to next free channel, fallback to horizontal shuffling. */
-  strip->channel_set(orig_channel);
-  transform_shuffle_horizontal(scene, seqbasep, {&strip, 1}, {}, false);
-}
-
-void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep, Strip *strip, Scene *scene)
-{
-  transform_shuffle_vertical_ex(seqbasep, strip, scene, 1);
+  /* Strips cannot be moved to next free channel, fallback to horizontal shuffling. */
+  for (const int i : strips.index_range()) {
+    strips[i]->channel_set(orig_channels[i]);
+  }
+  transform_shuffle_horizontal(scene, seqbasep, strips, {}, false);
 }
 
 static VectorSet<Strip *> extract_standalone_strips(Span<Strip *> transformed_strips)
@@ -711,7 +723,7 @@ void transform_handle_overlap(Scene *scene,
    * strip on top of its effect, on top of a locked strip, or inside a transition (split fails).
    */
   for (Strip *strip : source_strips) {
-    transform_shuffle_vertical(seqbasep, strip, scene);
+    transform_shuffle_vertical(seqbasep, {strip}, scene);
     strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
   }
 }

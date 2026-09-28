@@ -39,11 +39,10 @@ bool transform_single_image_check(const Strip *strip);
 bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
 bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
 void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta);
-void transform_shuffle_vertical_ex(ListBaseT<Strip> *seqbasep,
-                                   Strip *strip,
-                                   Scene *scene,
-                                   int channel_delta);
-void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep, Strip *strip, Scene *scene);
+void transform_shuffle_vertical(ListBaseT<Strip> *seqbasep,
+                                Span<Strip *> strips,
+                                Scene *scene,
+                                int channel_delta = 1);
 
 void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,

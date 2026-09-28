@@ -1759,7 +1759,7 @@ static wmOperatorStatus sequencer_reassign_inputs_exec(bContext *C, wmOperator *
 
   Editing *ed = seq::editing_get(scene);
   ListBaseT<Strip> *active_seqbase = seq::active_seqbase_get(ed);
-  seq::transform_shuffle_vertical(active_seqbase, active_strip, scene);
+  seq::transform_shuffle_vertical(active_seqbase, {active_strip}, scene);
 
   seq::relations_invalidate_cache(scene, active_strip);
   seq::offset_animdata(scene, active_strip, (active_strip->start - old_start));
@@ -2502,7 +2502,7 @@ static wmOperatorStatus sequencer_add_duplicate_exec(bContext *C, wmOperator *op
    * translated. */
   if (region->regiontype == RGN_TYPE_PREVIEW && sequencer_view_preview_only_poll(C)) {
     for (Strip *strip = strip_last->next; strip; strip = strip->next) {
-      seq::transform_shuffle_vertical(ed->current_strips(), strip, scene);
+      seq::transform_shuffle_vertical(ed->current_strips(), {strip}, scene);
       strip->runtime->flag &= ~seq::StripRuntimeFlag::IgnoreChannelLock;
     }
   }
@@ -3665,7 +3665,7 @@ static wmOperatorStatus sequencer_swap_exec(bContext *C, wmOperator *op)
           (strip_is_parent(&istrip, active_strip) || strip_is_parent(&istrip, strip)))
       {
         /* This may now overlap. */
-        seq::transform_shuffle_vertical(seqbase, &istrip, scene);
+        seq::transform_shuffle_vertical(seqbase, {&istrip}, scene);
       }
     }
 
