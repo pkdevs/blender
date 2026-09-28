@@ -1,2 +1,3 @@
 Referenced by issue #163662, Blender cli: asset_listing download fails with a python AttributeError
 Referenced by pull request #164417, Fix: Shader lighting node link error appears only every other update
+Referenced by commit 58083a941fc21b3c0becf9273c3b899c32037ca1, Fix: Shader lighting node link error appears only every other update
