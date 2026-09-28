@@ -86,7 +86,8 @@ void context_path_add_generic(Vector<ContextPathItem> &path,
                               void *ptr,
                               const BIFIconID icon_override = ICON_NONE,
                               std::function<void(bContext &)> handle_func = nullptr,
-                              MenuCreateFunc menu_func = nullptr);
+                              MenuCreateFunc menu_func = nullptr,
+                              void *menu_arg = nullptr);
 
 void template_breadcrumbs(Layout &layout, Span<ContextPathItem> context_path);
 

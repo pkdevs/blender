@@ -111,34 +111,24 @@ static bool node_tree_has_enterable_group(const bNodeTree *ntree)
 
 static void navigate_menu_create(bContext *C, ui::Layout *layout, void *arg)
 {
-  if (arg == nullptr) {
-    return;
-  }
   SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *parent_tree = nullptr;
-  ID *id = static_cast<ID *>(arg);
-  if (GS(id->name) == ID_NT) {
-    parent_tree = id_cast<bNodeTree *>(id);
-  }
-  else {
-    parent_tree = snode->nodetree;
-  }
-  if (!parent_tree) {
+  bNodeTree *tree = static_cast<bNodeTree *>(arg);
+  if (!snode || !tree) {
     return;
   }
 
   bNodeTree *child_tree_in_path = nullptr;
   for (bNodeTreePath &path_item : snode->treepath) {
-    if (path_item.nodetree == parent_tree && path_item.next) {
+    if (path_item.nodetree == tree && path_item.next) {
       child_tree_in_path = path_item.next->nodetree;
       break;
     }
   }
 
-  parent_tree->ensure_topology_cache();
+  tree->ensure_topology_cache();
   Set<bNodeTree *> visited_groups;
   Vector<bNode *> group_nodes;
-  for (bNode *group_node : parent_tree->group_nodes()) {
+  for (bNode *group_node : tree->group_nodes()) {
     if (!node_group_is_enterable(*group_node)) {
       continue;
     }
@@ -153,14 +143,14 @@ static void navigate_menu_create(bContext *C, ui::Layout *layout, void *arg)
   for (bNode *group_node : group_nodes) {
     bNodeTree *group_tree = id_cast<bNodeTree *>(group_node->id);
 
-    auto enter_group_fn = [parent_tree, group_node, group_tree](bContext &C) {
+    auto enter_group_fn = [tree, group_node, group_tree](bContext &C) {
       SpaceNode *snode = CTX_wm_space_node(&C);
       ARegion *region = CTX_wm_region(&C);
 
-      while (snode->edittree != parent_tree) {
+      while (snode->edittree != tree) {
         ED_node_tree_pop(region, snode);
       }
-      bke::node_set_active(*parent_tree, *group_node);
+      bke::node_set_active(*tree, *group_node);
       ED_node_tree_push(region, snode, group_tree, group_node);
     };
 
@@ -176,16 +166,18 @@ static void navigate_menu_create(bContext *C, ui::Layout *layout, void *arg)
 static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
                                                         Vector<ui::ContextPathItem> &path,
                                                         StructRNA &rna_type,
-                                                        void *ptr)
+                                                        void *ptr,
+                                                        bNodeTree *tree)
 {
   const bool in_root_tree = snode.nodetree == snode.edittree;
-  const bool has_group = in_root_tree ? node_tree_has_enterable_group(snode.nodetree) : true;
+  const bool has_group = in_root_tree ? node_tree_has_enterable_group(tree) : true;
   ui::context_path_add_generic(path,
                                rna_type,
                                ptr,
                                ICON_NONE,
                                in_root_tree ? nullptr : tree_path_handle_func(0),
-                               has_group ? navigate_menu_create : nullptr);
+                               has_group ? navigate_menu_create : nullptr,
+                               tree);
 }
 
 static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
@@ -208,7 +200,8 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
                                  path_item.nodetree,
                                  node_tree_icon(path_item.nodetree->id),
                                  is_last_path ? nullptr : tree_path_handle_func(i),
-                                 has_group ? navigate_menu_create : nullptr);
+                                 has_group ? navigate_menu_create : nullptr,
+                                 path_item.nodetree);
   }
 }
 
@@ -221,7 +214,8 @@ static void get_context_path_node_shader(const bContext &C,
       Scene *scene = CTX_data_scene(&C);
       ui::context_path_add_generic(path, *RNA_Scene, scene);
       if (scene != nullptr) {
-        context_path_add_top_level_shader_node_tree(snode, path, *RNA_World, scene->world);
+        context_path_add_top_level_shader_node_tree(
+            snode, path, *RNA_World, scene->world, snode.nodetree);
       }
       /* Skip the base node tree here, because the world contains a node tree already. */
       context_path_add_node_tree_and_node_groups(snode, path, true);
@@ -238,13 +232,15 @@ static void get_context_path_node_shader(const bContext &C,
         context_path_add_object_data(path, *object);
       }
       Material *material = BKE_object_material_get(object, object->actcol);
-      context_path_add_top_level_shader_node_tree(snode, path, *RNA_Material, material);
+      context_path_add_top_level_shader_node_tree(
+          snode, path, *RNA_Material, material, snode.nodetree);
     }
     else if (snode.shaderfrom == SNODE_SHADER_WORLD) {
       Scene *scene = CTX_data_scene(&C);
       ui::context_path_add_generic(path, *RNA_Scene, scene);
       if (scene != nullptr) {
-        context_path_add_top_level_shader_node_tree(snode, path, *RNA_World, scene->world);
+        context_path_add_top_level_shader_node_tree(
+            snode, path, *RNA_World, scene->world, snode.nodetree);
       }
     }
 #ifdef WITH_FREESTYLE
@@ -292,7 +288,8 @@ static void get_context_path_node_compositor(const bContext &C,
         }
 
         if (node_group != nullptr) {
-          context_path_add_top_level_shader_node_tree(snode, path, *RNA_NodeTree, node_group);
+          context_path_add_top_level_shader_node_tree(
+              snode, path, *RNA_NodeTree, node_group, node_group);
           skip_base = true;
         }
       }
