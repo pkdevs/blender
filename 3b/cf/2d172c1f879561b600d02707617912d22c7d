@@ -1,2 +1,3 @@
 Referenced by commit 180be4ab76fbe81a9e65227b0c99b80a0623b877, Fix: EEVEE: Vector Transform functions name mismatch
 Referenced by pull request #164421, Fix: Missing link error for Light Attribute node
+Referenced by commit b2e7faa4b20ac613e8392fab7015adf42abf05c6, Fix: Missing link error for Light Attribute node
