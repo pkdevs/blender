@@ -1448,6 +1448,7 @@ def km_outliner(params):
         # Copy/paste.
         ("outliner.id_copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
         ("outliner.id_paste", {"type": 'V', "value": 'PRESS', "ctrl": True}, None),
+        ("outliner.group_objects_collection", {"type": 'G', "value": 'PRESS', "ctrl": True}, None),
         *_template_object_hide_collection_from_number_keys(),
     ])
 

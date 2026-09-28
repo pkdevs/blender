@@ -1703,5 +1703,88 @@ void OUTLINER_OT_collection_color_tag_set(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Group Objects into Collection
+ * \{ */
+
+static Collection *find_parent_collection(bContext *C, TreeElement *te)
+ {
+   if (te->parent) {
+     for (TreeElement *te_parent = te->parent; te_parent; te_parent = te_parent->parent) {
+       if (outliner_is_collection_tree_element(te_parent)) {
+         return outliner_collection_from_tree_element(te_parent);
+       }
+     }
+   }
+
+   const Scene *scene = CTX_data_scene(C);
+   return scene->master_collection;
+ }
+
+static wmOperatorStatus outliner_group_objects_collection_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+
+  IDsSelectedData data = {{nullptr}};
+  outliner_tree_traverse(space_outliner,
+                         &space_outliner->runtime->tree,
+                         0,
+                         TSE_SELECTED,
+                         outliner_collect_selected_objects,
+                         &data);
+
+  if (data.selected_array.is_empty()) {
+    BKE_report(op->reports, RPT_ERROR, "No object selected for grouping");
+    return OPERATOR_CANCELLED;
+  }
+
+  Collection *parent_collection = view_layer->active_collection ? view_layer->active_collection->collection :
+                                                 scene->master_collection;
+
+  Collection *collection = BKE_collection_add(bmain, parent_collection, "Group");
+
+  for (LinkData &link : data.selected_array) {
+    TreeElement *selected_te = static_cast<TreeElement *>(link.data);
+		TreeStoreElem *tselem = TREESTORE(selected_te);
+    Object *ob = id_cast<Object *>(tselem->id);
+    BKE_collection_object_move(bmain, scene, collection, find_parent_collection(C, selected_te), ob);
+  }
+
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+  if (LayerCollection *layer_collection = BKE_layer_collection_first_from_scene_collection(
+          view_layer, collection))
+  {
+    BKE_layer_collection_activate(view_layer, layer_collection);
+    ED_outliner_select_sync_from_collection_tag(C);
+    ED_outliner_select_sync_flag_outliners(C);
+  }
+
+  BLI_freelistN(&data.selected_array);
+  DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
+  DEG_relations_tag_update(bmain);
+  WM_main_add_notifier(NC_SCENE | ND_LAYER, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_group_objects_collection(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Group objects";
+  ot->idname = "OUTLINER_OT_group_objects_collection";
+  ot->description = "Group selected objects into a collection";
+
+  ot->exec = outliner_group_objects_collection_exec;
+  ot->poll = collection_new_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
 }  // namespace ed::outliner
 }  // namespace blender

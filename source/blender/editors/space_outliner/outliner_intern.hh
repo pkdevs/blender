@@ -601,6 +601,8 @@ void OUTLINER_OT_unhide_all(wmOperatorType *ot);
 
 void OUTLINER_OT_collection_color_tag_set(wmOperatorType *ot);
 
+void OUTLINER_OT_group_objects_collection(wmOperatorType *ot);
+
 /* `outliner_utils.cc` */
 
 void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc);

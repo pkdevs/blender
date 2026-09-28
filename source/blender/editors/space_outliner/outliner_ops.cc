@@ -103,6 +103,8 @@ void outliner_operatortypes()
   WM_operatortype_append(OUTLINER_OT_unhide_all);
 
   WM_operatortype_append(OUTLINER_OT_collection_color_tag_set);
+
+  WM_operatortype_append(OUTLINER_OT_group_objects_collection);
 }
 
 void outliner_keymap(wmKeyConfig *keyconf)
