@@ -1109,7 +1109,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       if (!mesh_by_layer.is_empty()) {
         auto instances = std::make_unique<bke::Instances>(mesh_by_layer.size());
         MutableSpan<int> handles = instances->reference_handles_for_write();
-        instances->transforms_for_write().fill(float4x4::identity());
+        MutableSpan<float4x4> transforms = instances->transforms_for_write();
         for (const int i : mesh_by_layer.index_range()) {
           Mesh *mesh = mesh_by_layer[i];
           if (!mesh) {
@@ -1117,10 +1117,12 @@ static void node_geo_exec(GeoNodeExecParams params)
              * This makes it easy to reconstruct the layers afterwards and keep their attributes.
              * Although in this particular case we don't propagate the attributes. */
             handles[i] = instances->add_reference(bke::InstanceReference());
+            transforms[i] = float4x4::identity();
             continue;
           }
           GeometrySet temp_set = GeometrySet::from_mesh(mesh);
           handles[i] = instances->add_reference(bke::InstanceReference{temp_set});
+          transforms[i] = grease_pencil.layer(i).local_transform();
         }
         auto &dst_component = geometry.get_component_for_write<InstancesComponent>();
         GeometrySet new_instances = geometry::join_geometries(
