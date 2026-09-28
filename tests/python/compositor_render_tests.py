@@ -59,9 +59,9 @@ def create_argparse():
 
 BLOCKLIST_OPENGL_LINUX = [
     # Unknown failure than can not be reproduced locally.
-    "node_integer_math.blend",
-    "Fire2.blend",
-    "node_keying_matte.blend",
+    # "node_integer_math.blend",
+    # "Fire2.blend",
+    # "node_keying_matte.blend",
 ]
 
 
