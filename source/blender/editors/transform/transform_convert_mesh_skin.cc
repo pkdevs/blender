@@ -69,7 +69,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
   BLI_assert(t->mode == TFM_SKIN_RESIZE);
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
     BMVert *eve;
     BMIter iter;
     float mtx[3][3], smtx[3][3];
@@ -127,7 +127,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
       const bool calc_island_axismtx = false;
 
       transform_convert_mesh_islands_calc(
-          em, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
+          em, bm, calc_single_islands, calc_island_center, calc_island_axismtx, &island_data);
     }
 
     copy_m3_m4(mtx, tc->obedit->object_to_world().ptr());
@@ -144,12 +144,12 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
       if (is_island_center) {
         dists_index = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
       }
-      transform_convert_mesh_connectivity_distance(em->bm, mtx, dists, dists_index);
+      transform_convert_mesh_connectivity_distance(bm, mtx, dists, dists_index);
     }
 
     /* Create TransDataMirror. */
     if (tc->use_mirror_axis_any) {
-      transform_convert_mesh_mirrordata_calc(tc->obedit, em, &mirror_data);
+      transform_convert_mesh_mirrordata_calc(tc->obedit, bm, &mirror_data);
 
       if (mirror_data.vert_map) {
         tc->data_mirror_len = mirror_data.mirror_elem_len;
@@ -167,7 +167,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
     }
 
     /* Detect CrazySpace [TM]. */
-    transform_convert_mesh_crazyspace_detect(t, tc, em, &crazyspace_data);
+    transform_convert_mesh_crazyspace_detect(t, tc, &crazyspace_data);
 
     /* Create TransData. */
     BLI_assert(data_len >= 1);
@@ -286,7 +286,7 @@ static void recalcData_mesh_skin(TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     DEG_id_tag_update(tc->obedit->data, ID_RECALC_GEOMETRY);
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-    BKE_editmesh_looptris_and_normals_calc(em);
+    BKE_editmesh_looptris_and_normals_calc(em, BKE_editmesh_bmesh_get_for_write(tc->obedit));
   }
 }
 
