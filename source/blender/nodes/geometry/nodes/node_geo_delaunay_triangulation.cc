@@ -503,9 +503,15 @@ static void calc_group_triangulation(const Mesh *mesh,
        * index refers to a position in the concatenated CDT input vertex array. */
       const int src_point = verts.first();
       if (!src_points_by_component[component_i].contains(src_point)) {
-        BLI_assert(component_i + 1 < group.point_source_domains.size());
-        BLI_assert(src_points_by_component[component_i + 1].contains(src_point));
-        component_i++;
+        /* Since merged vertices get discarded, it can happen that an entire component is skipped.
+         * So we loop until the next available component. */
+        while (component_i < group.point_source_domains.size() &&
+               !src_points_by_component[component_i].contains(src_point))
+        {
+          component_i++;
+        }
+        BLI_assert(src_points_by_component[component_i].contains(src_point));
+        BLI_assert(count > 0);
         component_points_offsets.append(count);
         count = 0;
       }
@@ -952,6 +958,11 @@ static Mesh *cdts_to_mesh(const Span<TriangulationResult> results,
       const OffsetIndices dst_points_range_by_component = result.dst_points_range_by_component();
       const Span<int> src_point_by_dst_point = result.src_point_by_dst_point.as_span();
       for (const int component_i : result.point_source_domains.index_range()) {
+        /* There might be more source components than components in the result, because overlapping
+         * points are merged and duplicates get discarded. */
+        if (component_i >= dst_points_range_by_component.size()) {
+          break;
+        }
         const SourceComponent domain = result.point_source_domains[component_i];
         const IndexRange dst_range = dst_points_range_by_component[component_i];
 
