@@ -1708,18 +1708,18 @@ void OUTLINER_OT_collection_color_tag_set(wmOperatorType *ot)
  * \{ */
 
 static Collection *find_parent_collection(bContext *C, TreeElement *te)
- {
-   if (te->parent) {
-     for (TreeElement *te_parent = te->parent; te_parent; te_parent = te_parent->parent) {
-       if (outliner_is_collection_tree_element(te_parent)) {
-         return outliner_collection_from_tree_element(te_parent);
-       }
-     }
-   }
+{
+  if (te->parent) {
+    for (TreeElement *te_parent = te->parent; te_parent; te_parent = te_parent->parent) {
+      if (outliner_is_collection_tree_element(te_parent)) {
+        return outliner_collection_from_tree_element(te_parent);
+      }
+    }
+  }
 
-   const Scene *scene = CTX_data_scene(C);
-   return scene->master_collection;
- }
+  const Scene *scene = CTX_data_scene(C);
+  return scene->master_collection;
+}
 
 static wmOperatorStatus outliner_group_objects_collection_exec(bContext *C, wmOperator *op)
 {
@@ -1741,16 +1741,18 @@ static wmOperatorStatus outliner_group_objects_collection_exec(bContext *C, wmOp
     return OPERATOR_CANCELLED;
   }
 
-  Collection *parent_collection = view_layer->active_collection ? view_layer->active_collection->collection :
-                                                 scene->master_collection;
+  Collection *parent_collection = view_layer->active_collection ?
+                                      view_layer->active_collection->collection :
+                                      scene->master_collection;
 
   Collection *collection = BKE_collection_add(bmain, parent_collection, "Group");
 
   for (LinkData &link : data.selected_array) {
     TreeElement *selected_te = static_cast<TreeElement *>(link.data);
-		TreeStoreElem *tselem = TREESTORE(selected_te);
+    TreeStoreElem *tselem = TREESTORE(selected_te);
     Object *ob = id_cast<Object *>(tselem->id);
-    BKE_collection_object_move(bmain, scene, collection, find_parent_collection(C, selected_te), ob);
+    BKE_collection_object_move(
+        bmain, scene, collection, find_parent_collection(C, selected_te), ob);
   }
 
   BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
