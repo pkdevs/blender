@@ -541,7 +541,7 @@ static void outliner_sort(Vector<TreeElement *> *tree)
       tree->clear();
       tp = tear;
       for (int i = 0; i < totelem; i++, tp++) {
-       tree->append(tp->te);
+        tree->append(tp->te);
       }
     }
   }
@@ -559,7 +559,7 @@ static void outliner_sort_custom(Main *bmain,
   if (tree->is_empty()) {
     return;
   }
-  
+
   TreeElement *last_te = tree->last();
   if (last_te == nullptr) {
     return;

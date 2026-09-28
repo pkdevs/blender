@@ -1253,7 +1253,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
   }
 
   if (ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
-    const TreeElement *parent_te = outliner_find_parent_element(space_outliner->runtime->tree, nullptr, te);
+    const TreeElement *parent_te = outliner_find_parent_element(
+        space_outliner->runtime->tree, nullptr, te);
     if (parent_te != nullptr && parent_te->idcode == ID_OB) {
       const Object *parent_ob = id_cast<Object *>(TREESTORE(parent_te)->id);
       for (const wmDragID &drag_id : drag->ids) {
@@ -1325,7 +1326,7 @@ static std::string collection_drop_tooltip(bContext *C,
   CollectionDrop data;
   if (event && collection_drop_init(C, drag, xy, &data)) {
     const bool is_link = !data.from || ((event->modifier & (KM_SHIFT | KM_CTRL)) == KM_CTRL);
-    
+
     /* Test if we are moving within same parent collection. */
     bool same_level = false;
     for (CollectionParent &parent : data.to->runtime->parents) {
@@ -1333,36 +1334,36 @@ static std::string collection_drop_tooltip(bContext *C,
         same_level = true;
       }
     }
-    
+
     TreeElement *te = data.te;
-    
+
     const bool target_is_object_row = is_object_element(te);
     const bool target_is_collection_row = is_collection_element(te);
-    
+
     if (!target_is_object_row && !target_is_collection_row) {
       return "";
     }
     const bool tooltip_link = (is_link && !same_level);
-    
+
     /* Adapt the tooltip based on whether the hovered row is an object or collection. */
     const char *tooltip_before = tooltip_link ?
-    (target_is_object_row ? TIP_("Link before object") :
-     TIP_("Link before collection")) :
-    (target_is_object_row ? TIP_("Move before object") :
-     TIP_("Move before collection"));
-    
+                                     (target_is_object_row ? TIP_("Link before object") :
+                                                             TIP_("Link before collection")) :
+                                     (target_is_object_row ? TIP_("Move before object") :
+                                                             TIP_("Move before collection"));
+
     const char *tooltip_between = tooltip_link ?
-    (target_is_object_row ? TIP_("Link between objects") :
-     TIP_("Link between collections")) :
-    (target_is_object_row ? TIP_("Move between objects") :
-     TIP_("Move between collections"));
-    
+                                      (target_is_object_row ? TIP_("Link between objects") :
+                                                              TIP_("Link between collections")) :
+                                      (target_is_object_row ? TIP_("Move between objects") :
+                                                              TIP_("Move between collections"));
+
     const char *tooltip_after = tooltip_link ?
-    (target_is_object_row ? TIP_("Link after object") :
-     TIP_("Link after collection")) :
-    (target_is_object_row ? TIP_("Move after object") :
-     TIP_("Move after collection"));
-    
+                                    (target_is_object_row ? TIP_("Link after object") :
+                                                            TIP_("Link after collection")) :
+                                    (target_is_object_row ? TIP_("Move after object") :
+                                                            TIP_("Move after collection"));
+
     /* Choose the tooltip text based on where the drop will go. */
     switch (data.insert_type) {
       case TE_INSERT_BEFORE: {
@@ -1370,7 +1371,9 @@ static std::string collection_drop_tooltip(bContext *C,
         const int index = subtree.first_index(te);
         if (index > 0) {
           TreeElement *te_prev = subtree[index - 1];
-          if (target_is_object_row ? is_object_element(te_prev) : outliner_is_collection_tree_element(te_prev)) {
+          if (target_is_object_row ? is_object_element(te_prev) :
+                                     outliner_is_collection_tree_element(te_prev))
+          {
             return tooltip_between;
           }
         }
@@ -1382,7 +1385,8 @@ static std::string collection_drop_tooltip(bContext *C,
         if (index < subtree.size() - 1) {
           TreeElement *te_next = subtree[index + 1];
           if ((target_is_object_row ? is_object_element(te_next) :
-               outliner_is_collection_tree_element(te_next))) {
+                                      outliner_is_collection_tree_element(te_next)))
+          {
             return tooltip_between;
           }
         }
@@ -1392,7 +1396,7 @@ static std::string collection_drop_tooltip(bContext *C,
         if (is_link) {
           return TIP_("Link inside collection");
         }
-        
+
         /* Check the type of the drag IDs to avoid the incorrect "Shift to parent"
          * for collections. Checking the type of the first ID works fine here since
          * all drag IDs are the same type. */
@@ -1403,8 +1407,8 @@ static std::string collection_drop_tooltip(bContext *C,
             return TIP_("Move parent object inside collection");
           }
           return TIP_(
-                      "Move inside collection (Ctrl to link, Shift to parent, "
-                      "Ctrl + Shift to move only parent)");
+              "Move inside collection (Ctrl to link, Shift to parent, "
+              "Ctrl + Shift to move only parent)");
         }
         return TIP_("Move inside collection (Ctrl to link)");
       }
