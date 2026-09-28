@@ -96,7 +96,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
-  if (!(path_flag & PATH_RAY_SINGLE_PASS_DONE)) {
+  if (!(path_flag & PATH_RAY_SINGLE_PASS_DONE)) { 
     if (INTEGRATOR_STATE(state, path, sample) == 0) {
       if (flag & PASSMASK(DEPTH)) {
         const float depth = camera_z_depth(kg, sd->P);
@@ -114,12 +114,10 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
         const float3 position = sd->P;
         film_overwrite_pass_float3(buffer + kernel_data.film.pass_position, position);
       }
-      if (kernel_data.integrator.use_temporal_frames) {
-        film_write_restir_reprojection_surface_pass(kg, sd, buffer);
-      }
     }
 
-    // !!!: Store first-hit receiver data for later ReSTIR surface reconstruction. 
+    // !!!: SURFACE_DATA gets overwritten on every sample for a pixel until PATH_RAY_SINGLE_PASS_DONE gets set
+    /* Store first-hit receiver data for later ReSTIR surface reconstruction. */
     if (flag & PASSMASK(SURFACE_DATA)) {
       ccl_global float *ptr = buffer + kernel_data.film.pass_surface_data;
       film_overwrite_pass_float(ptr++, (float)path_flag);
@@ -133,6 +131,11 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
       /* Needed to reconstruct shader_setup_object_transforms()'s time 
        * when this pixel is later *re-shaded* as temporal-frame history. */
       film_overwrite_pass_float(ptr, sd->time);
+
+      /* ReprojectionSurface must describe the SAME hit as SURFACE_DATA. */
+      if (kernel_data.integrator.use_temporal_frames) {
+        film_write_restir_reprojection_surface_pass(kg, sd, buffer);
+      }
     }
 
     if (!(sd->flag & (SD_TRANSPARENT | SD_RAY_PORTAL)) ||

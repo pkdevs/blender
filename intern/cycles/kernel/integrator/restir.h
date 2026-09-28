@@ -74,7 +74,8 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   sd->prim = (int)buffer[i++];
   /* TODO(weizhen): only Huang Hair BSDF needs LCG now. Can we find a way to remove the usage? */
   /* TODO(weizhen): check if we can compute `lcg_state` after we support curve. */
-  sd->lcg_state = (uint)buffer[i];
+  sd->lcg_state = (uint)buffer[i++];
+  sd->time = buffer[i];
   /* Not necessary to read prevoius frame's time at index 7. */
 
   /* TODO(weizhen): do I need to write to this? */
@@ -184,8 +185,7 @@ ccl_device_inline void ray_setup(KernelGlobals kg,
 
     // !!!: cache_miss
     int cache_miss = 0;
-// !!!: Works for spatial, but not for temporal since poses are new; use kcam->motion_pass_pre/motion_pass_post
-    Spectrum T = integrate_camera_sample(kg, sample, x, y, rng_pixel, ray, cache_miss);
+    Spectrum T = integrate_camera_sample(kg, sample, x, y, rng_pixel, ray, cache_miss); // !!!(Tri):
     if (cache_miss) {
       // !!!
     }
@@ -232,7 +232,7 @@ ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
  * The ray is synthesized from the historical camera position, 
  * derived from kernel_data.cam.motion_pass_pre toward the reconstructed P,
  * rather than ray_setup()'s current-camera path used for same-frame neighbors. */
-ccl_device_inline void shader_data_setup_from_restir_history(
+ccl_device_inline bool shader_data_setup_from_restir_history(
     KernelGlobals kg,
     IntegratorState state,
     ccl_private ShaderData *ccl_restrict sd,
@@ -251,9 +251,22 @@ ccl_device_inline void shader_data_setup_from_restir_history(
   /* Previous frame's actual shading time */
   sd->time = prev_surface_data[i];
 
+  // TODO(Tri):
+  /* Curve/point-cloud history reconstruction not yet supported (shader_setup_geometry_from_restir())
+   * also covers a pixel whose SURFACE_DATA was never finalized 
+   * (PATH_RAY_SINGLE_PASS_DONE not set last frame) & is left at stale PRIMITIVE_NONE state. */
+  if (!(sd->type & PRIMITIVE_TRIANGLE)) {
+    return false;
+  }
+
+ccl_debug_printf("\n--- shader_data_setup_from_restir_history() prior to shader_setup_geometry_from_restir() ---\n\n\n");
+
   shader_setup_geometry_from_restir(kg, sd);
 
-  Ray ray;
+  /* Zero-initialize everything, including RaySelfPrimitives self. */
+  Ray ray = {};
+  // Ray ray ccl_optional_struct_init;
+
   const Transform prev_cam_to_world = transform_inverse(kernel_data.cam.motion_pass_pre);
   ray.P = transform_get_column(&prev_cam_to_world, 3);
   ray.D = normalize(sd->P - ray.P);
@@ -265,11 +278,17 @@ ccl_device_inline void shader_data_setup_from_restir_history(
   ray.dD = 0.0f;
 #endif
 
+ccl_debug_printf("shader_data_setup_from_restir_history() prior to shader_setup_finish_from_restir()\n");
+
   shader_setup_finish_from_restir(kg, &ray, sd);
 
   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
+
+ccl_debug_printf("shader_data_setup_from_restir_history() prior to surface_shader_eval()\n");
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
       kg, state, sd, render_buffer, path_visibility, *path_flag_out);
+
+  return true;
 }
 
 ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg,
@@ -567,8 +586,9 @@ ccl_debug_printf("\n--- streaming_temporal_sample(): true! current total_weight=
   return true;
 }
 
+// TODO(Tri): Render mode only (no viewport) since it's using kcam->motion_pass_pre/motion_pass_post
 // TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
-/* Object-motion  + camera motion reprojection. */
+/* Object-motion + camera motion reprojection. */
 ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                                  IntegratorState state,
                                                  const ccl_private TemporalReprojection *reprojection,
@@ -665,10 +685,15 @@ ccl_debug_printf("TEMPORAL_FRAME min function: history.M=%f current->reservoir.M
 
   uint32_t history_path_flag;
   ShaderData history_sd;
-  // shader_data_setup_from_restir_history( // !!!(Tri): Causes a crash... Trace & fix
-  //     kg, state, &history_sd,
-  //     kg->restir_prev_surface_data + prev_pixel.z * RESTIR_PREV_SURFACE_DATA_STRIDE,
-  //     render_buffer, &history_path_flag);
+  const bool sd_setup = shader_data_setup_from_restir_history(
+      kg, state, &history_sd,
+      kg->restir_prev_surface_data + prev_pixel.z * RESTIR_PREV_SURFACE_DATA_STRIDE,
+      render_buffer, &history_path_flag);
+
+  if (!sd_setup) {
+    /* Before proceeding to the symmetric-reweight math. */
+    return false;
+  }
 
   LightSample current_at_history_ls = current->reservoir.light;
   light_sample_from_reference(kg, &current->reservoir.reference, history_sd.P, history_sd.N,
