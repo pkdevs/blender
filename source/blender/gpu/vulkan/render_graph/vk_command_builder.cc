@@ -574,6 +574,7 @@ void VKCommandBuilder::build_pipeline_barriers(VKRenderGraph &render_graph,
       render_graph, node_handle, pipeline_stage, image_tracker, r_barrier, within_rendering);
   if (!within_rendering) {
     add_buffer_barriers(render_graph, node_handle, pipeline_stage, r_barrier);
+  }
 }
 
 /** \} */
