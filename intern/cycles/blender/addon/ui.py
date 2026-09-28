@@ -554,7 +554,7 @@ class CYCLES_RENDER_PT_sampling_lights_restir(CyclesButtonsPanel, Panel):
         # col.prop(cscene, "restir_heuristics")
         
         col.prop(cscene, "restir_temporal_normal_threshold", text="Normal Threshold")
-        col.prop(cscene, "restir_temporal_depth_threshold", text="Relative Threshold")
+        col.prop(cscene, "restir_temporal_depth_threshold", text="Depth Threshold")
 
 
 class CYCLES_RENDER_PT_sampling_lights_restir_initial(CyclesButtonsPanel, Panel):

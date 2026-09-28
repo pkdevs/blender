@@ -63,6 +63,7 @@ ccl_device_inline bool point_light_sample(const ccl_global KernelLight *klight,
     /* Point light with ad-hoc radius based on oriented disk. */
     ls->P = klight->co;
     if (r_sq > 0.0f) {
+      /* Build disk Orientation by lightN. */
       ls->P += disk_light_sample(lightN, rand) * klight->spot.radius;
     }
 
@@ -88,7 +89,7 @@ ccl_device_forceinline float sphere_light_pdf(
   return has_transmission ? M_1_2PI_F * 0.5f : pdf_cos_hemisphere(N, D);
 }
 
-ccl_device_forceinline float2 point_light_uv(KernelGlobals kg, // !!!
+ccl_device_forceinline float2 point_light_uv(KernelGlobals kg,
                                              const ccl_global KernelLight *klight,
                                              const float3 Ng)
 {
@@ -188,6 +189,8 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
   return true;
 }
 
+/* Resampling. */
+
 ccl_device_inline bool point_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
@@ -219,15 +222,22 @@ ccl_device_inline bool point_light_reference_from_sample(
   }
   /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
   else {
-    /*
-     * Non-spherical point light:
-     * The persistent identity is simply the Point emitter itself,
-     * with no additional geometric parameter.
-     */
-    reference->type = LIGHT_POINT;
-    reference->object = ls->object;
-    reference->prim = ls->prim;
     reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
+
+    const float radius = klight->spot.radius;
+    if (radius > 0.0f) {
+      /* Recover the receiver that produced this sample: ls->D / ls->t point from it to ls->P. */
+      const float3 source_P = ls->P - ls->D * ls->t;
+      const float3 to_source = source_P - klight->co;
+      if (!(len_squared(to_source) > 0.0f)) {
+        return false;
+      }
+      const float3 lightN = normalize(to_source);
+
+      reference->param = disk_light_offset_to_uv(lightN, ls->P - klight->co, radius);
+      reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+    }
+    /* radius == 0: true delta light, identity alone is the sample. */
 
     return true;
   }
@@ -268,8 +278,7 @@ ccl_device_inline bool point_light_sample_from_reference(
   ls->group = object_lightgroup(kg, ls->object);
   ls->eval_fac = klight->spot.eval_fac;
 
-  /*
-   * These are not available from the current reference contract. Callers must
+  /* These are not available from the current reference contract. Callers must
    * restore them from emitter-selection state before using the sample for MIS.
    */
   ls->pdf_selection = 0.0f;
@@ -297,42 +306,33 @@ ccl_device_inline bool point_light_sample_from_reference(
   }
   /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
   else {
-    /*
-     * Non-spherical point light:
-     * The emitter degenerates to a single point at klight->co.
-     * There is no persistent geometric parameter to decode.
-     * Therefore: ls->P = klight->co
-     *
-     * and all remaining quantities are reconstructed relative
-     * to the current target P.
-     */
+    const float radius = klight->spot.radius;
+
+    /* Billboard normal used, from the new receiver. */
+    float3 lightN = P - klight->co;
+    const float d_sq = len_squared(lightN);
+    if (!(d_sq > 0.0f)) {
+      return false;
+    }
+    lightN /= sqrtf(d_sq);
 
     ls->P = klight->co;
+    if (r_sq > 0.0f) {
+      if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+        return false;
+      }
+      ls->P += disk_light_uv_to_offset(lightN, reference->param, radius);
+    }
 
-    /* Target-dependent direction and distance. */
     ls->D = safe_normalize_len(ls->P - P, &ls->t);
-
     if (!isfinite(ls->t) || ls->t < 0.0f) {
       return false;
     }
-
     ls->Ng = -ls->D;
 
-    /* Restore the metadata. */
-    ls->type = LIGHT_POINT;
-    ls->shader = klight->shader_id;
-    ls->object = klight->object_id;
-    ls->prim = reference->prim;
-    ls->group = object_lightgroup(kg, ls->object);
-
-    ls->pdf_selection = 0.0f;
-    ls->emitter_id = EMITTER_NONE;
-
-    /*
-     * Match point_light_sample(): a non-spherical zero-radius
-     * Point light has no finite-area parameterization.
-     */
-    ls->pdf = 1.0f;
+    /* Identical to point_light_sample(). */
+    const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
+    ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ls->D, ls->t);
 
     return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
   }

@@ -32,19 +32,37 @@ ccl_device_inline float3 rectangle_sample(const float3 ru, const float3 rv, cons
   return ru * (2.0f * rand.x - 1.0f) + rv * (2.0f * rand.y - 1.0f);
 }
 
-ccl_device float3 disk_light_sample(const float3 n, const float2 rand)
+ccl_device float3 disk_light_sample(const float3 n, const float2 rand) 
 {
   float3 ru;
   float3 rv;
 
-  make_orthonormals(n, &ru, &rv); // !!!
-  /*
-  Cycles' existing spot sampling disk is not actually a fixed XY disk in the 
-  spot's local coordinate system. Its orientation is constructed from:
-  lightN = normalize(P - klight->co);
-  */
-
+  make_orthonormals(n, &ru, &rv);
   return ellipse_sample(ru, rv, rand);
+}
+
+/* Receiver-relative disk parameterization for resampling. */
+ccl_device_inline float2 disk_light_offset_to_uv(const float3 n,
+                                                 const float3 offset,
+                                                 const float radius)
+{
+  float3 ru;
+  float3 rv;
+  make_orthonormals(n, &ru, &rv);
+
+  const float inv_radius = 1.0f / radius;
+  return make_float2(dot(offset, ru) * inv_radius, dot(offset, rv) * inv_radius);
+}
+
+ccl_device_inline float3 disk_light_uv_to_offset(const float3 n,
+                                                 const float2 uv,
+                                                 const float radius)
+{
+  float3 ru;
+  float3 rv;
+  make_orthonormals(n, &ru, &rv);
+
+  return (ru * uv.x + rv * uv.y) * radius;
 }
 
 ccl_device float light_pdf_area_to_solid_angle(const float3 Ng, const float3 I, const float t)
