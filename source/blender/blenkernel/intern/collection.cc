@@ -433,6 +433,7 @@ IDTypeInfo IDType_ID_GR = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = collection_owner_pointer_get,
 
     .blend_write = collection_blend_write,
@@ -558,8 +559,7 @@ void BKE_collection_exporter_name_set(const ListBaseT<CollectionExport> *exporte
 {
   /* Only use the new name if it's not empty. */
   if (newname && newname[0] != '\0') {
-    ListBaseT<CollectionExport> list = exporters ? *exporters :
-                                                   ListBaseT<CollectionExport>{data, data};
+    ListBaseT<CollectionExport> list = exporters ? *exporters : BLI_listbase_from_link(data);
 
     STRNCPY(data->name, newname);
     BLI_uniquename(
@@ -1437,6 +1437,44 @@ Collection *BKE_collection_parent_editable_find_recursive(const ViewLayer *view_
   }
 
   return nullptr;
+}
+
+CollectionObject *BKE_collection_object_find_in(const Collection &collection, const Object &ob)
+{
+  collection_gobject_hash_ensure(const_cast<Collection *>(&collection));
+  return collection.runtime->gobject_hash->lookup_default(&ob, nullptr);
+}
+
+void BKE_collection_object_parented_sort_index_reset(Main &bmain, Object &ob)
+{
+  Collection *collection = nullptr;
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
+    if (cob != nullptr) {
+      cob->parented_sort_index = -1;
+    }
+  }
+}
+
+void BKE_collection_object_parent_clear_sort_index_reset(Main &bmain, Object &ob)
+{
+  Collection *collection = nullptr;
+  while ((collection = BKE_collection_object_find(&bmain, nullptr, collection, &ob))) {
+    CollectionObject *cob = BKE_collection_object_find_in(*collection, ob);
+    if (cob != nullptr) {
+      cob->parented_sort_index = -1;
+      if (ob.parent != nullptr) {
+        for (Object *parent_iter = ob.parent; parent_iter != nullptr;
+             parent_iter = parent_iter->parent)
+        {
+          if (BKE_collection_object_find_in(*collection, *parent_iter) != nullptr) {
+            cob->sort_index = -1;
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 static bool collection_object_add(Main *bmain,

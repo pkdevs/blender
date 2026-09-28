@@ -151,13 +151,20 @@ enum eSpaceOutliner_Flag : short {
   /* SO_NEWSELECTED = (1 << 1), */        /* UNUSED */
   SO_FLAG_UNUSED_1 = (1 << 2),            /* cleared */
   /* SO_HIDE_KEYINGSETINFO = (1 << 3), */ /* UNUSED */
-  SO_SKIP_SORT_ALPHA = (1 << 4),
+  SO_FLAG_UNUSED_4 = (1 << 4),            /* cleared */
   SO_SYNC_SELECT = (1 << 5),
   SO_MODE_COLUMN = (1 << 6),
   SO_SCROLL_TO_ACTIVE = (1 << 7),
   SO_EXPAND_ON_FOCUS = (1 << 8),
 };
 ENUM_OPERATORS(eSpaceOutliner_Flag)
+
+/** #SpaceOutliner.sort_method */
+enum eSpaceOutliner_SortMethod : short {
+  SO_SORT_NONE = 0,
+  SO_SORT_ALPHA = 1,
+  SO_SORT_CUSTOM = 2,
+};
 
 /** #SpaceOutliner.filter */
 enum eSpaceOutliner_Filter : int {
@@ -905,6 +912,7 @@ enum eSpaceNodeOverlay_Flag : int {
    */
   SN_OVERLAY_SHOW_REROUTE_AUTO_LABELS = (1 << 7),
   SN_OVERLAY_SHOW_RENDER_REGION = (1 << 8),
+  SN_OVERLAY_SHOW_TEXT_INFO = (1 << 9),
 };
 ENUM_OPERATORS(eSpaceNodeOverlay_Flag)
 
