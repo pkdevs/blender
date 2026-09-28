@@ -331,7 +331,7 @@ void LookdevModule::init(const rcti *visible_rect)
 float LookdevModule::calc_viewport_scale()
 {
   const float viewport_scale = clamp_f(
-      BLI_rcti_size_x(&visible_rect_) / (2000.0f * UI_SCALE_FAC), 0.5f, 1.0f);
+      BLI_rcti_size_x(&visible_rect_) / (2000.0f * UI_SCALE_FAC), 0.25f, 1.0f);
   return viewport_scale;
 }
 
@@ -352,9 +352,8 @@ LookdevModule::SphereLOD LookdevModule::calc_level_of_detail(const float viewpor
 static int calc_sphere_extent(const float viewport_scale)
 {
   const int sphere_radius = U.lookdev_sphere_size * UI_SCALE_FAC * viewport_scale;
-  return sphere_radius * 2;
+  return max_ii(sphere_radius * 2, 4);
 }
-
 void LookdevModule::sync()
 {
   if (!use_reference_spheres_) {
