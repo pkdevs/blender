@@ -1082,6 +1082,24 @@ class WM_OT_url_open(Operator):
         version = bpy.app.version_string
         return "blender-" + version.replace(" ", "-").lower()
 
+    def invoke(self, context, event):
+        complete_url = self._add_utm_param_to_url(self.url, self._get_utm_source())
+        from urllib.parse import urlparse
+        url_hostname: str = urlparse(complete_url).hostname
+
+        if url_hostname is None:
+            return {'CANCELLED'}
+
+        # Show an alert when accesing external websites.
+        if ".".join(url_hostname.split('.')[-2:]) != "blender.org":
+            return context.window_manager.invoke_confirm(
+                self,
+                event,
+                title="You are about to access an external website, are you sure?",
+                confirm_text="Go to Website")
+
+        return self.execute(context)
+
     def execute(self, _context):
         import webbrowser
         complete_url = self._add_utm_param_to_url(self.url, self._get_utm_source())
