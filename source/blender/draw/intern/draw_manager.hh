@@ -59,11 +59,6 @@ class Manager {
   using ObjectInfosBuf = StorageArrayBuffer<ObjectInfos, 128>;
   using ObjectAttributeBuf = StorageArrayBuffer<ObjectAttribute, 128>;
   using LayerAttributeBuf = UniformArrayBuffer<LayerAttribute, 512>;
-  /**
-   * TODO(@fclem): Remove once we get rid of old EEVEE code-base.
-   * `DRW_RESOURCE_CHUNK_LEN = 512`.
-   */
-  using ObjectAttributeLegacyBuf = UniformArrayBuffer<float4, 8 * 512>;
 
  public:
   struct SubmitDebugOutput {
@@ -586,8 +581,8 @@ inline void Manager::register_layer_attributes(GPUMaterial *material)
 
   if (attr_list != nullptr) {
     for (const GPULayerAttr &attr : *attr_list) {
-      /** Since layer attributes are global to the whole render pass,
-       *  this only collects a table of their names. */
+      /* Since layer attributes are global to the whole render pass,
+       * this only collects a table of their names. */
       layer_attributes.add(attr.hash_code, *&attr);
     }
   }

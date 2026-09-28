@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_composite.hh"
 #include "NOD_geometry.hh"
 #include "NOD_register.hh"
@@ -168,6 +172,7 @@ void register_nodes()
   register_node_type_frame();
   register_node_type_reroute();
   register_node_type_implicit_conversion();
+  register_node_type_comment();
   register_node_type_group_input();
   register_node_type_group_output();
 

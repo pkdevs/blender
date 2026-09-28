@@ -794,7 +794,7 @@ std::optional<std::string> button_online_manual_id(const Button *but)
 
 std::optional<std::string> button_online_manual_id_from_active(const bContext *C)
 {
-  if (Button *but = context_active_but_get(C)) {
+  if (Button *but = context_active_but_get_respect_popup(C)) {
     return button_online_manual_id(but);
   }
   return std::nullopt;
@@ -1012,12 +1012,12 @@ void butstore_update(Block *block)
 {
   /* move this list to the new block */
   if (block->oldblock) {
-    if (block->oldblock->butstore.first) {
+    if (block->oldblock->butstore.first_) {
       BLI_movelisttolist(&block->butstore, &block->oldblock->butstore);
     }
   }
 
-  if (block->butstore.first == nullptr) [[likely]] {
+  if (block->butstore.first_ == nullptr) [[likely]] {
     return;
   }
 

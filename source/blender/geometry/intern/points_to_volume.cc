@@ -2,10 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "BLI_color.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_rotation.hh"
 #include "BLI_string_utils.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_attribute_math.hh"
 #include "BKE_volume.hh"
@@ -499,9 +504,9 @@ struct KernelTransferBase : public openvdb::points::TransformTransfer,
    * For each point, compute its relative index space position in the destination tree and
    * sum a function of per-point values.
    *
-   * \param ijk Point voxel coordinate.
-   * \param point_index_range Range of points inside the point voxel bounds.
-   * \param target_bounds Coordinate region of the destination tree to add into.
+   * \param ijk: Point voxel coordinate.
+   * \param point_index_range: Range of points inside the point voxel bounds.
+   * \param target_bounds: Coordinate region of the destination tree to add into.
    */
   template<typename ValueFn>
   void add_points_to_voxels(const openvdb::Coord &ijk,

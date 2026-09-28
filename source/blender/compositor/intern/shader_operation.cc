@@ -37,6 +37,7 @@
 #include "BKE_type_conversions.hh"
 
 #include "COM_context.hh"
+#include "COM_node_tree_evaluator.hh"
 #include "COM_pixel_operation.hh"
 #include "COM_result.hh"
 #include "COM_scheduler.hh"
@@ -47,12 +48,13 @@
 namespace blender::compositor {
 
 ShaderOperation::ShaderOperation(Context &context,
-                                 CompileState &compile_state,
+                                 NodeTreeEvaluator &node_tree_evaluator,
                                  const ComputeContext &compute_context)
-    : PixelOperation(context, compile_state, compute_context, false)
+    : PixelOperation(context, node_tree_evaluator, compute_context, false)
 {
+  const int64_t uuid = this->context().get_precision() == ResultPrecision::Full ? 0 : 1;
   material_ = GPU_material_from_callbacks(
-      GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this);
+      GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this, uuid);
 }
 
 ShaderOperation::~ShaderOperation()
@@ -125,7 +127,7 @@ void ShaderOperation::construct_material(void *thunk, GPUMaterial *material)
 {
   ShaderOperation *operation = static_cast<ShaderOperation *>(thunk);
   operation->material_ = material;
-  for (const bNode *node : operation->compile_state_.get_pixel_compile_unit()) {
+  for (const bNode *node : operation->node_tree_evaluator_.pixel_compile_unit()) {
     operation->shader_nodes_.add_new(node, std::make_unique<ShaderNode>(*node));
 
     operation->link_node_inputs(*node);
@@ -146,7 +148,7 @@ void ShaderOperation::link_node_inputs(const bNode &node)
       continue;
     }
 
-    if (compile_state_.get_schedule().unneeded_inputs.contains(input)) {
+    if (node_tree_evaluator_.schedule().unneeded_inputs.contains(input)) {
       this->link_node_input_unavailable(*input);
       continue;
     }
@@ -166,7 +168,7 @@ void ShaderOperation::link_node_inputs(const bNode &node)
 
     /* If the source node is part of the shader operation, then the link is internal to the GPU
      * material graph and is linked appropriately. */
-    if (compile_state_.get_pixel_compile_unit().contains(&output->owner_node())) {
+    if (node_tree_evaluator_.pixel_compile_unit().contains(&output->owner_node())) {
       this->link_node_input_internal(*input, *output);
     }
     else {
@@ -470,7 +472,7 @@ void ShaderOperation::link_node_input_external(const bNodeSocket &input_socket,
   /* The output is a single value, so create an internal constant link instead of declaring an
    * input for it, it follows that the result needs to be released since it will no longer be
    * referenced by the operation. */
-  Result &result = compile_state_.get_result_from_output_socket(output_socket);
+  Result &result = node_tree_evaluator_.get_result_from_output_socket(output_socket);
   if (result.is_single_value()) {
     /* Single only types do not support GPU code path. */
     if (Result::is_single_value_only_type(result.type())) {
@@ -559,10 +561,8 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
   const bool node_needs_preview = is_node_preview_needed(node);
   const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
                                                SideEffectOutputTypes::NodePreviews);
-  const bool is_active_context = compute_context_.hash() ==
-                                 this->context().get_active_compute_context_hash();
   const bNodeSocket *preview_output = nullptr;
-  if (node_needs_preview && needs_node_previews && is_active_context) {
+  if (node_needs_preview && needs_node_previews) {
     preview_output = find_preview_output_socket(node);
   }
 
@@ -571,14 +571,12 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
       continue;
     }
 
-    /* If any of the nodes linked to the output are not part of the shader operation but are part
-     * of the execution schedule, then an output result needs to be populated for it. */
-    const bool is_operation_output = is_output_linked_to_input_conditioned(
-        *output, [&](const bNodeSocket &input) {
-          return compile_state_.get_schedule().nodes.contains(&input.owner_node()) &&
-                 !compile_state_.get_schedule().unneeded_inputs.contains(&input) &&
-                 !compile_state_.get_pixel_compile_unit().contains(&input.owner_node());
-        });
+    /* If the output is referenced by the schedule outside of the pixel compile unit, then an
+     * output result needs to be populated for it. */
+    const bool is_operation_output = compute_output_reference_count(
+                                         *output,
+                                         node_tree_evaluator_.schedule(),
+                                         &node_tree_evaluator_.pixel_compile_unit()) != 0;
 
     /* If the output is used as the node preview, then an output result needs to be populated for
      * it, and we additionally keep track of that output to later compute the previews from. */

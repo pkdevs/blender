@@ -454,7 +454,7 @@ if(DEFINED OpenImageIO_DIR)
 endif()
 add_bundled_libraries(openimageio/lib)
 
-find_package_wrapper(OpenColorIO 2.0.0 REQUIRED)
+find_package_wrapper(OpenColorIO 2.3.0 REQUIRED)
 if(DEFINED OpenColorIO_DIR)
   mark_as_advanced(OpenColorIO_DIR)
 endif()
@@ -721,6 +721,15 @@ if(WITH_SYSTEM_AUDASPACE)
   find_package_wrapper(Audaspace)
   set(AUDASPACE_FOUND ${AUDASPACE_FOUND} AND ${AUDASPACE_C_FOUND})
   set_and_warn_library_found("External Audaspace" AUDASPACE_FOUND WITH_SYSTEM_AUDASPACE)
+endif()
+
+# Reading desktop settings (the light/dark theme preference) from the XDG desktop portal.
+# Only the headers are needed when `WITH_GHOST_DBUS_DYNLOAD` is enabled, `libdbus` itself is
+# then an optional runtime dependency.
+if(WITH_GHOST_DBUS)
+  find_package(PkgConfig)
+  pkg_check_modules(dbus dbus-1)
+  set_and_warn_library_found("dbus-1" dbus_FOUND WITH_GHOST_DBUS)
 endif()
 
 if(WITH_GHOST_WAYLAND)

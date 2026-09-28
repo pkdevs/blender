@@ -373,7 +373,7 @@ static bool seq_input_have_to_preprocess(const Strip *strip)
     return true;
   }
 
-  if (strip->modifiers.first) {
+  if (strip->modifiers.first_) {
     return true;
   }
 
@@ -666,7 +666,7 @@ static SeqResult input_preprocess(const RenderData *context,
   const bool do_scale_to_render_size = seq_need_scale_to_render_size(strip, is_proxy_image);
   const float image_scale_factor = do_scale_to_render_size ? preview_scale_factor : 1.0f;
 
-  if (strip->modifiers.first) {
+  if (strip->modifiers.first_) {
     result.image = IMB_makeSingleUser(result.image);
     float3x3 matrix = calc_strip_transform_matrix(scene,
                                                   strip,
@@ -886,7 +886,7 @@ static ImBuf *seq_render_image_strip_view(
   }
 
   if (prefix[0] == '\0') {
-    ibuf = IMB_load_image_from_filepath(filepath, flag, strip->data->colorspace_settings.name);
+    ibuf = IMB_load_image_from_filepath(filepath, flag, &strip->data->colorspace_settings);
   }
   else {
     char filepath_view[FILE_MAX];
@@ -895,8 +895,7 @@ static ImBuf *seq_render_image_strip_view(
     {
       return nullptr;
     }
-    ibuf = IMB_load_image_from_filepath(
-        filepath_view, flag, strip->data->colorspace_settings.name);
+    ibuf = IMB_load_image_from_filepath(filepath_view, flag, &strip->data->colorspace_settings);
   }
 
   if (ibuf == nullptr) {
@@ -1039,7 +1038,7 @@ static ImBuf *seq_render_movie_strip_custom_file_proxy(const RenderData *context
       /* Sequencer takes care of colorspace conversion of the result. The input is the best to be
        * kept unchanged for the performance reasons. */
       proxy->anim = openanim(
-          filepath, ImBufFlags::Zero, 0, true, strip->data->colorspace_settings.name);
+          filepath, ImBufFlags::Zero, 0, true, &strip->data->colorspace_settings);
     }
     if (proxy->anim == nullptr) {
       return nullptr;

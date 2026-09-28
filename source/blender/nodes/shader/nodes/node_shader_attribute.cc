@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 
 #include "node_util.hh"
@@ -68,19 +72,23 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
         cd_attr = GPU_constant(error_attr);
       }
       else if (STREQ(attr->name, "is_sun")) {
-        GPU_link(mat, "node_attribute_light_is_sun", in[0].link, &cd_attr);
+        GPU_link(mat, "node_attribute_light_is_sun", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_point")) {
-        GPU_link(mat, "node_attribute_light_is_point", in[0].link, &cd_attr);
+        GPU_link(mat, "node_attribute_light_is_point", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_spot")) {
-        GPU_link(mat, "node_attribute_light_is_spot", in[0].link, &cd_attr);
+        GPU_link(mat, "node_attribute_light_is_spot", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "is_area")) {
-        GPU_link(mat, "node_attribute_light_is_area", in[0].link, &cd_attr);
+        GPU_link(mat, "node_attribute_light_is_area", in[0].link, GPU_kernel_globals(), &cd_attr);
       }
       else if (STREQ(attr->name, "cutoff_distance")) {
-        GPU_link(mat, "node_attribute_light_cutoff_distance", in[0].link, &cd_attr);
+        GPU_link(mat,
+                 "node_attribute_light_cutoff_distance",
+                 in[0].link,
+                 GPU_kernel_globals(),
+                 &cd_attr);
       }
       else {
         GPU_material_flag_set(mat, GPU_MATFLAG_LIGHT_ATTRIBUTE);
@@ -89,7 +97,12 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
         uint hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (use_dupli ? 0 : 1);
 
         attr_hash = *reinterpret_cast<float *>(&hash_code);
-        GPU_link(mat, "node_attribute_light", in[0].link, GPU_uniform(&attr_hash), &cd_attr);
+        GPU_link(mat,
+                 "node_attribute_light",
+                 in[0].link,
+                 GPU_uniform(&attr_hash),
+                 GPU_kernel_globals(),
+                 &cd_attr);
       }
       break;
     }
@@ -97,10 +110,13 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
       cd_attr = GPU_attribute(mat, CD_AUTO_FROM_NAME, attr->name);
 
       if (STREQ(attr->name, "color")) {
-        GPU_link(mat, "node_attribute_color", cd_attr, &cd_attr);
+        GPU_link(mat, "node_attribute_color", GPU_kernel_globals(), cd_attr, &cd_attr);
       }
       else if (STREQ(attr->name, "temperature")) {
-        GPU_link(mat, "node_attribute_temperature", cd_attr, &cd_attr);
+        GPU_link(mat, "node_attribute_temperature", GPU_kernel_globals(), cd_attr, &cd_attr);
+      }
+      else if (STREQ(attr->name, "radiance")) {
+        GPU_link(mat, "node_attribute_radiance", GPU_kernel_globals(), cd_attr, &cd_attr);
       }
       break;
     }
@@ -115,7 +131,13 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
                                       attr->type == SHD_ATTRIBUTE_INSTANCER,
                                       reinterpret_cast<uint32_t *>(&attr_hash));
 
-      GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
+      GPU_link(mat,
+               "node_attribute_uniform",
+               cd_attr,
+               GPU_constant(&attr_hash),
+               GPU_kernel_globals(),
+               GPU_shading_data(),
+               &cd_attr);
       break;
     }
   }
