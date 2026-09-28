@@ -1,3 +1,4 @@
 Referenced by pull request #162620, Fix missing sycl8.dll when compiling without Cycles on Windows
 Referenced by pull request #162657, Fix: Windows builds with Cycles disabled
 Referenced by commit 1643f8648258ec5f0b7f7f9d28e20c61d5271c1e, Fix: missing sycl8.dll when compiling without Cycles on Windows
+Referenced by issue #164409, Hair Curves on edges resist grooming
