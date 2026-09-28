@@ -28,8 +28,11 @@ static void node_geo_exec(GeoNodeExecParams params)
     const int grids_num = BKE_volume_num_grids(volume);
     names.reserve(grids_num);
     for (const int i : IndexRange(grids_num)) {
-      names.append(BKE_volume_grid_get(volume, i)->name());
+      if (const bke::VolumeGridData *grid = BKE_volume_grid_get(volume, i)) {
+        names.append(grid->name());
+      }
     }
+    std::sort(names.begin(), names.end());
   }
   params.set_output("Names"_ustr, GList::from_container(std::move(names)));
 #else
