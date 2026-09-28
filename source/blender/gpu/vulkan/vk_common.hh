@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "GPU_texture.hh"
 #include <typeinfo>
 
 #ifdef _WIN32
@@ -27,6 +28,7 @@
 #include "vk_mem_alloc.h"
 
 #include "GPU_index_buffer.hh"
+#include "GPU_ray_tracing.hh"
 #include "GPU_state.hh"
 #include "gpu_query.hh"
 #include "gpu_shader_create_info.hh"
@@ -76,6 +78,15 @@ template<typename HandleType> struct VKResourceWithHandle {
   {
     return vk_handle;
   }
+
+  bool operator==(const VKResourceWithHandle<HandleType> &other) const
+  {
+    return other.resource_handle == resource_handle && other.vk_handle == vk_handle;
+  }
+  uint64_t hash() const
+  {
+    return get_default_hash(resource_handle, vk_handle);
+  }
 };
 
 VkImageAspectFlags to_vk_image_aspect_flag_bits(const TextureFormat format);
@@ -110,6 +121,15 @@ VkImageCreateFlags to_vk_image_create(const GPUTextureType texture_type,
 VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
                                     const GPUTextureFormatFlag format_flag,
                                     bool use_image_host_copy);
+
+/**
+ * Test if these settings need EXTENDED_USAGE to be able to bind the
+ * texture as a (writable) storage image.
+ */
+bool vk_need_extended_usage_for_storage_image(const eGPUTextureUsage usage,
+                                              const GPUTextureFormatFlag format_flag);
+/** Other format to use for binding a storage image when the format itself is not supported. */
+VkFormat vk_extended_usage_storage_image_format(const VkFormat format);
 
 template<typename T> VkObjectType to_vk_object_type(T /*vk_obj*/)
 {
