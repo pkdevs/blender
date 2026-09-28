@@ -30,6 +30,9 @@ def update_factory_startup_scenes():
         if scene.name == "Edit":
             scene.tool_settings.use_keyframe_insert_auto = False
 
+        if scene.world:
+            scene.world.color = (1.0, 1.0, 1.0)
+
 
 def update_factory_startup_grease_pencils():
     for grease_pencil in bpy.data.grease_pencils:
